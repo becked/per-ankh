@@ -13,9 +13,22 @@
 --           Production, Events, Time-series, Politics, Narrative
 
 -- ============================================================================
--- SECTION 1: MATCH IDENTITY
+-- SECTION 1: MATCH IDENTITY & ID MAPPING
 -- ============================================================================
 -- Core match/game identification and configuration
+
+-- ID Mapping Table for Stable Database IDs
+-- Preserves XML→DB ID mappings across re-imports to maintain referential integrity
+CREATE TABLE id_mappings (
+    match_id BIGINT NOT NULL,
+    entity_type VARCHAR NOT NULL,  -- 'player', 'character', 'city', 'unit', 'tile', 'family', 'religion', 'tribe'
+    xml_id INTEGER NOT NULL,
+    db_id BIGINT NOT NULL,
+    PRIMARY KEY (match_id, entity_type, xml_id)
+);
+
+CREATE INDEX idx_id_mappings_match ON id_mappings(match_id);
+CREATE INDEX idx_id_mappings_lookup ON id_mappings(match_id, entity_type, xml_id);
 
 CREATE TABLE matches (
     match_id BIGINT NOT NULL PRIMARY KEY,
@@ -96,6 +109,7 @@ GROUP BY m.match_id, m.game_name, m.save_date, m.total_turns,
 CREATE TABLE players (
     player_id INTEGER NOT NULL,
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML Player ID for debugging and reference
     player_name VARCHAR NOT NULL,
     player_name_normalized VARCHAR NOT NULL,
     -- Identity
@@ -158,6 +172,7 @@ CREATE TABLE player_council (
 CREATE TABLE characters (
     character_id INTEGER NOT NULL,
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML Character ID for debugging and reference
     -- Identity
     first_name VARCHAR,
     gender VARCHAR, -- GENDER_MALE, GENDER_FEMALE
@@ -284,6 +299,7 @@ ORDER BY c.match_id, c.player_id, c.became_leader_turn;
 CREATE TABLE families (
     family_id BIGINT NOT NULL PRIMARY KEY,
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML Family ID for debugging and reference
     player_id INTEGER NOT NULL,
     family_name VARCHAR NOT NULL, -- FAMILY_SARGONID, FAMILY_HANNONID, etc.
     family_class VARCHAR NOT NULL, -- FAMILYCLASS_CHAMPIONS, FAMILYCLASS_TRADERS, etc.
@@ -322,6 +338,7 @@ CREATE TABLE family_law_opinions (
 CREATE TABLE religions (
     religion_id BIGINT NOT NULL PRIMARY KEY,
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML Religion ID for debugging and reference
     religion_name VARCHAR NOT NULL, -- RELIGION_ZOROASTRIANISM, RELIGION_JUDAISM, etc.
     founded_turn INTEGER,
     founder_player_id INTEGER,
@@ -350,6 +367,7 @@ CREATE TABLE religion_opinion_history (
 CREATE TABLE tribes (
     tribe_id VARCHAR NOT NULL, -- TRIBE_SCYTHIANS, TRIBE_DANES, etc.
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML Tribe ID for debugging and reference
     leader_character_id INTEGER,
     allied_player_id INTEGER,
     religion VARCHAR,
@@ -367,6 +385,7 @@ CREATE TABLE tribes (
 CREATE TABLE cities (
     city_id INTEGER NOT NULL,
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML City ID for debugging and reference
     player_id INTEGER NOT NULL,
     tile_id INTEGER NOT NULL,
     -- Identity
@@ -468,6 +487,7 @@ CREATE TABLE city_projects_completed (
 CREATE TABLE tiles (
     tile_id INTEGER NOT NULL,
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML Tile ID for debugging and reference
     x INTEGER NOT NULL,
     y INTEGER NOT NULL,
     -- Terrain
@@ -543,6 +563,7 @@ CREATE TABLE tile_visibility (
 CREATE TABLE units (
     unit_id INTEGER NOT NULL,
     match_id BIGINT NOT NULL,
+    xml_id INTEGER,  -- Original XML Unit ID for debugging and reference
     unit_type VARCHAR NOT NULL, -- UNIT_SPEARMAN, UNIT_ARCHER, etc.
     player_id INTEGER,
     tribe VARCHAR, -- For tribal units
