@@ -87,15 +87,107 @@ src-tauri/src/
 **Steps:**
 1. Validate file exists and is readable
 2. Open ZIP archive using `zip` crate
-3. Locate XML file inside (single file with `.xml` extension)
-4. Extract XML to memory (11-12 MB typical)
-5. Parse XML using `quick-xml` into DOM-like structure
-6. Validate root element is `<Root>`
+3. Validate ZIP security (size limits, single XML file, no path traversal)
+4. Locate XML file inside (single file with `.xml` extension)
+5. Extract XML to memory (11-12 MB typical, enforced limits)
+6. Parse XML using `roxmltree` into DOM tree structure
+7. Validate root element is `<Root>`
+
+**Security Constraints:**
+- Maximum compressed size: 50 MB
+- Maximum uncompressed size: 100 MB
+- Maximum entries: 10
+- Reject path traversal attempts (paths with `..` or starting with `/`)
+- Only accept files with `.xml` extension
 
 **Error Handling:**
 - Invalid ZIP → `ParseError::InvalidZipFile`
 - Multiple/no XML files → `ParseError::InvalidArchiveStructure`
-- XML parse failure → `ParseError::MalformedXML(line_number)`
+- File too large → `ParseError::FileTooLarge(size)`
+- Path traversal → `ParseError::SecurityViolation(message)`
+- XML parse failure → `ParseError::MalformedXML { location, message, context }`
+
+**ZIP Security Validation Implementation:**
+```rust
+const MAX_COMPRESSED_SIZE: u64 = 50 * 1024 * 1024;   // 50 MB
+const MAX_UNCOMPRESSED_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
+const MAX_ENTRIES: usize = 10;
+
+fn validate_and_extract_xml(file_path: &str) -> Result<String> {
+    use zip::ZipArchive;
+    use std::io::Read;
+
+    let file = std::fs::File::open(file_path)?;
+    let file_size = file.metadata()?.len();
+
+    // Check compressed file size
+    if file_size > MAX_COMPRESSED_SIZE {
+        return Err(ParseError::FileTooLarge(file_size, MAX_COMPRESSED_SIZE));
+    }
+
+    let mut archive = ZipArchive::new(file)
+        .map_err(|e| ParseError::InvalidZipFile(e.to_string()))?;
+
+    // Check number of entries
+    if archive.len() > MAX_ENTRIES {
+        return Err(ParseError::InvalidArchiveStructure(
+            format!("Too many entries: {} (max: {})", archive.len(), MAX_ENTRIES)
+        ));
+    }
+
+    // Find and validate XML file
+    let mut xml_file = None;
+    for i in 0..archive.len() {
+        let file = archive.by_index(i)?;
+
+        // Security: Check for path traversal
+        let file_name = file.name();
+        if file_name.contains("..") || file_name.starts_with('/') {
+            return Err(ParseError::SecurityViolation(
+                format!("Path traversal attempt: {}", file_name)
+            ));
+        }
+
+        // Security: Check uncompressed size
+        if file.size() > MAX_UNCOMPRESSED_SIZE {
+            return Err(ParseError::FileTooLarge(file.size(), MAX_UNCOMPRESSED_SIZE));
+        }
+
+        // Security: Check compression ratio (zip bomb detection)
+        let compression_ratio = if file.compressed_size() > 0 {
+            file.size() as f64 / file.compressed_size() as f64
+        } else {
+            1.0
+        };
+        if compression_ratio > 100.0 {
+            return Err(ParseError::SecurityViolation(
+                format!("Suspicious compression ratio: {:.1}x", compression_ratio)
+            ));
+        }
+
+        // Find XML file
+        if file_name.ends_with(".xml") {
+            if xml_file.is_some() {
+                return Err(ParseError::InvalidArchiveStructure(
+                    "Multiple XML files found".to_string()
+                ));
+            }
+            xml_file = Some(i);
+        }
+    }
+
+    // Extract XML content
+    let xml_index = xml_file.ok_or_else(|| {
+        ParseError::InvalidArchiveStructure("No XML file found".to_string())
+    })?;
+
+    let mut file = archive.by_index(xml_index)?;
+    let mut xml_content = String::new();
+    file.read_to_string(&mut xml_content)?;
+
+    Ok(xml_content)
+}
+```
 
 ---
 
@@ -117,18 +209,140 @@ src-tauri/src/
    - Log: "Creating new match {game_id}"
 
 **Update-and-Replace Strategy:**
-When updating existing match:
-```sql
--- Delete in reverse foreign key order
-DELETE FROM yield_history WHERE match_id = ?;
-DELETE FROM points_history WHERE match_id = ?;
-DELETE FROM character_traits WHERE match_id = ?;
-DELETE FROM characters WHERE match_id = ?;
-DELETE FROM cities WHERE match_id = ?;
-DELETE FROM players WHERE match_id = ?;
--- ... etc
--- Then re-insert all data
+When updating existing match, delete all data in **strict reverse foreign key order**:
+
+```rust
+/// Complete deletion order respecting all foreign key constraints
+const DELETE_ORDER: &[&str] = &[
+    // Leaf tables (no children) - delete first
+    "unit_promotions",
+    "character_traits",
+    "character_stats",
+    "character_missions",
+    "character_relationships",
+    "character_marriages",
+    "city_yields",
+    "city_culture",
+    "city_religions",
+    "city_production_queue",
+    "city_units_produced",
+    "city_projects_completed",
+    "tile_changes",
+    "tile_visibility",
+    "player_resources",
+    "player_council",
+    "family_opinion_history",
+    "family_law_opinions",
+    "religion_opinion_history",
+    "technologies_completed",
+    "technology_progress",
+    "technology_states",
+    "laws",
+    "diplomacy",
+    "player_goals",
+    "story_events",
+    "story_choices",
+    "event_outcomes",
+    "event_logs",
+    "yield_history",
+    "points_history",
+    "military_history",
+    "legitimacy_history",
+    "yield_prices",
+
+    // Parent entities (referenced by children above)
+    "units",
+    "tiles",
+    "cities",
+    "characters",
+    "families",
+    "religions",
+    "tribes",
+    "players",
+
+    // Match data last (but don't delete from matches table itself)
+    "match_settings",
+    // NOTE: id_mappings is preserved - not deleted
+    // NOTE: matches row is updated, not deleted
+];
+
+/// Execute deletion for update
+fn delete_existing_match_data(tx: &Transaction, match_id: i64) -> Result<()> {
+    for table in DELETE_ORDER {
+        tx.execute(
+            &format!("DELETE FROM {} WHERE match_id = ?", table),
+            params![match_id]
+        )?;
+    }
+    Ok(())
+}
 ```
+
+**Important Notes:**
+- `id_mappings` table is **preserved** to maintain ID stability
+- `matches` table row is **updated**, not deleted (preserves match_id)
+- Order tested against schema.sql foreign key constraints
+- Then re-insert all data with stable database IDs
+
+**Concurrency Control:**
+To prevent race conditions when two imports of the same GameId run concurrently:
+
+```rust
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
+/// Global lock manager for concurrent imports
+lazy_static! {
+    static ref IMPORT_LOCKS: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
+        Arc::new(Mutex::new(HashMap::new()));
+}
+
+/// Acquire exclusive lock for a GameId
+pub fn acquire_game_lock(game_id: &str) -> Arc<Mutex<()>> {
+    let mut locks = IMPORT_LOCKS.lock().unwrap();
+    locks.entry(game_id.to_string())
+        .or_insert_with(|| Arc::new(Mutex::new(())))
+        .clone()
+}
+
+/// Import with concurrency protection
+pub fn import_save_file<P: ProgressCallback>(
+    file_path: &str,
+    db_path: &str,
+    progress: P
+) -> Result<ImportResult> {
+    let xml_content = validate_and_extract_xml(file_path)?;
+    let doc = roxmltree::Document::parse(&xml_content)?;
+
+    // Extract GameId to determine lock
+    let game_id = doc.root_element()
+        .attribute("GameId")
+        .ok_or(ParseError::MissingAttribute("Root.GameId"))?;
+
+    // Acquire lock for this GameId (blocks if another import is running)
+    let _lock = acquire_game_lock(game_id).lock().unwrap();
+
+    // Now safe to proceed - we have exclusive access for this GameId
+    import_save_file_internal(&doc, db_path, progress)
+}
+```
+
+**Alternative: Database-Level Locking**
+```sql
+-- Add unique constraint to prevent duplicate game_id
+ALTER TABLE matches ADD CONSTRAINT unique_game_id UNIQUE (game_id);
+
+-- Or use advisory locks in DuckDB (if supported)
+SELECT pg_advisory_lock(hashtext('game_id_value'));
+-- ... perform import ...
+SELECT pg_advisory_unlock(hashtext('game_id_value'));
+```
+
+**Why This Matters:**
+- Without locking, two parallel imports of same GameId could interleave DELETE/INSERT operations
+- Results in corrupted or incomplete data
+- Lock ensures serialization: second import waits for first to complete
+- Separate GameIds can still import in parallel
 
 ---
 
@@ -143,18 +357,180 @@ pub struct IdMapper {
     match_id: i64,
 
     // XML ID → Database ID mappings
+    players: HashMap<i32, i64>,
     characters: HashMap<i32, i64>,
     cities: HashMap<i32, i64>,
     units: HashMap<i32, i64>,
     tiles: HashMap<i32, i64>,
+    families: HashMap<i32, i64>,
+    religions: HashMap<i32, i64>,
+    tribes: HashMap<i32, i64>,
 
     // Sequence generators
+    next_player_id: i64,
     next_character_id: i64,
     next_city_id: i64,
     next_unit_id: i64,
+    next_tile_id: i64,
+    next_family_id: i64,
+    next_religion_id: i64,
+    next_tribe_id: i64,
 }
 
 impl IdMapper {
+    /// Create new IdMapper, optionally loading existing mappings for updates
+    pub fn new(match_id: i64, conn: &Connection, is_new: bool) -> Result<Self> {
+        if is_new {
+            // Start fresh with ID 1 for all entity types
+            Ok(Self {
+                match_id,
+                players: HashMap::new(),
+                characters: HashMap::new(),
+                cities: HashMap::new(),
+                units: HashMap::new(),
+                tiles: HashMap::new(),
+                families: HashMap::new(),
+                religions: HashMap::new(),
+                tribes: HashMap::new(),
+                next_player_id: 1,
+                next_character_id: 1,
+                next_city_id: 1,
+                next_unit_id: 1,
+                next_tile_id: 1,
+                next_family_id: 1,
+                next_religion_id: 1,
+                next_tribe_id: 1,
+            })
+        } else {
+            // Load existing mappings from id_mappings table
+            Self::load_existing_mappings(conn, match_id)
+        }
+    }
+
+    /// Load existing XML → DB ID mappings for match update
+    fn load_existing_mappings(conn: &Connection, match_id: i64) -> Result<Self> {
+        let mut mapper = Self {
+            match_id,
+            players: HashMap::new(),
+            characters: HashMap::new(),
+            cities: HashMap::new(),
+            units: HashMap::new(),
+            tiles: HashMap::new(),
+            families: HashMap::new(),
+            religions: HashMap::new(),
+            tribes: HashMap::new(),
+            next_player_id: 1,
+            next_character_id: 1,
+            next_city_id: 1,
+            next_unit_id: 1,
+            next_tile_id: 1,
+            next_family_id: 1,
+            next_religion_id: 1,
+            next_tribe_id: 1,
+        };
+
+        // Query id_mappings table
+        let mut stmt = conn.prepare(
+            "SELECT entity_type, xml_id, db_id FROM id_mappings WHERE match_id = ?"
+        )?;
+        let rows = stmt.query_map(params![match_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i32>(1)?,
+                row.get::<_, i64>(2)?,
+            ))
+        })?;
+
+        // Populate hashmaps and track max IDs
+        for row in rows {
+            let (entity_type, xml_id, db_id) = row?;
+            match entity_type.as_str() {
+                "player" => {
+                    mapper.players.insert(xml_id, db_id);
+                    mapper.next_player_id = mapper.next_player_id.max(db_id + 1);
+                }
+                "character" => {
+                    mapper.characters.insert(xml_id, db_id);
+                    mapper.next_character_id = mapper.next_character_id.max(db_id + 1);
+                }
+                "city" => {
+                    mapper.cities.insert(xml_id, db_id);
+                    mapper.next_city_id = mapper.next_city_id.max(db_id + 1);
+                }
+                "unit" => {
+                    mapper.units.insert(xml_id, db_id);
+                    mapper.next_unit_id = mapper.next_unit_id.max(db_id + 1);
+                }
+                "tile" => {
+                    mapper.tiles.insert(xml_id, db_id);
+                    mapper.next_tile_id = mapper.next_tile_id.max(db_id + 1);
+                }
+                "family" => {
+                    mapper.families.insert(xml_id, db_id);
+                    mapper.next_family_id = mapper.next_family_id.max(db_id + 1);
+                }
+                "religion" => {
+                    mapper.religions.insert(xml_id, db_id);
+                    mapper.next_religion_id = mapper.next_religion_id.max(db_id + 1);
+                }
+                "tribe" => {
+                    mapper.tribes.insert(xml_id, db_id);
+                    mapper.next_tribe_id = mapper.next_tribe_id.max(db_id + 1);
+                }
+                _ => {} // Ignore unknown types for forward compatibility
+            }
+        }
+
+        Ok(mapper)
+    }
+
+    /// Save all mappings to database for future updates
+    pub fn save_mappings(&self, conn: &Connection) -> Result<()> {
+        let mut stmt = conn.prepare(
+            "INSERT INTO id_mappings (match_id, entity_type, xml_id, db_id)
+             VALUES (?, ?, ?, ?)
+             ON CONFLICT (match_id, entity_type, xml_id)
+             DO UPDATE SET db_id = excluded.db_id"
+        )?;
+
+        // Save all entity type mappings
+        for (&xml_id, &db_id) in &self.players {
+            stmt.execute(params![self.match_id, "player", xml_id, db_id])?;
+        }
+        for (&xml_id, &db_id) in &self.characters {
+            stmt.execute(params![self.match_id, "character", xml_id, db_id])?;
+        }
+        for (&xml_id, &db_id) in &self.cities {
+            stmt.execute(params![self.match_id, "city", xml_id, db_id])?;
+        }
+        for (&xml_id, &db_id) in &self.units {
+            stmt.execute(params![self.match_id, "unit", xml_id, db_id])?;
+        }
+        for (&xml_id, &db_id) in &self.tiles {
+            stmt.execute(params![self.match_id, "tile", xml_id, db_id])?;
+        }
+        for (&xml_id, &db_id) in &self.families {
+            stmt.execute(params![self.match_id, "family", xml_id, db_id])?;
+        }
+        for (&xml_id, &db_id) in &self.religions {
+            stmt.execute(params![self.match_id, "religion", xml_id, db_id])?;
+        }
+        for (&xml_id, &db_id) in &self.tribes {
+            stmt.execute(params![self.match_id, "tribe", xml_id, db_id])?;
+        }
+
+        Ok(())
+    }
+
+    // Map XML ID to database ID (create if doesn't exist)
+    pub fn map_player(&mut self, xml_id: i32) -> i64 {
+        *self.players.entry(xml_id).or_insert_with(|| {
+            let id = self.next_player_id;
+            self.next_player_id += 1;
+            id
+        })
+    }
+
     pub fn map_character(&mut self, xml_id: i32) -> i64 {
         *self.characters.entry(xml_id).or_insert_with(|| {
             let id = self.next_character_id;
@@ -162,13 +538,133 @@ impl IdMapper {
             id
         })
     }
+
+    pub fn map_city(&mut self, xml_id: i32) -> i64 {
+        *self.cities.entry(xml_id).or_insert_with(|| {
+            let id = self.next_city_id;
+            self.next_city_id += 1;
+            id
+        })
+    }
+
+    pub fn map_unit(&mut self, xml_id: i32) -> i64 {
+        *self.units.entry(xml_id).or_insert_with(|| {
+            let id = self.next_unit_id;
+            self.next_unit_id += 1;
+            id
+        })
+    }
+
+    pub fn map_tile(&mut self, xml_id: i32) -> i64 {
+        *self.tiles.entry(xml_id).or_insert_with(|| {
+            let id = self.next_tile_id;
+            self.next_tile_id += 1;
+            id
+        })
+    }
+
+    pub fn map_family(&mut self, xml_id: i32) -> i64 {
+        *self.families.entry(xml_id).or_insert_with(|| {
+            let id = self.next_family_id;
+            self.next_family_id += 1;
+            id
+        })
+    }
+
+    pub fn map_religion(&mut self, xml_id: i32) -> i64 {
+        *self.religions.entry(xml_id).or_insert_with(|| {
+            let id = self.next_religion_id;
+            self.next_religion_id += 1;
+            id
+        })
+    }
+
+    pub fn map_tribe(&mut self, xml_id: i32) -> i64 {
+        *self.tribes.entry(xml_id).or_insert_with(|| {
+            let id = self.next_tribe_id;
+            self.next_tribe_id += 1;
+            id
+        })
+    }
+
+    // Get existing database ID (error if not mapped)
+    pub fn get_player(&self, xml_id: i32) -> Result<i64> {
+        self.players.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownPlayerId(xml_id))
+    }
+
+    pub fn get_character(&self, xml_id: i32) -> Result<i64> {
+        self.characters.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownCharacterId(xml_id))
+    }
+
+    pub fn get_city(&self, xml_id: i32) -> Result<i64> {
+        self.cities.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownCityId(xml_id))
+    }
+
+    pub fn get_unit(&self, xml_id: i32) -> Result<i64> {
+        self.units.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownUnitId(xml_id))
+    }
+
+    pub fn get_tile(&self, xml_id: i32) -> Result<i64> {
+        self.tiles.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownTileId(xml_id))
+    }
+
+    pub fn get_family(&self, xml_id: i32) -> Result<i64> {
+        self.families.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownFamilyId(xml_id))
+    }
+
+    pub fn get_religion(&self, xml_id: i32) -> Result<i64> {
+        self.religions.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownReligionId(xml_id))
+    }
+
+    pub fn get_tribe(&self, xml_id: i32) -> Result<i64> {
+        self.tribes.get(&xml_id)
+            .copied()
+            .ok_or_else(|| ParseError::UnknownTribeId(xml_id))
+    }
 }
 ```
 
+**ID Stability Strategy:**
+- For **new matches**: Start all IDs at 1, create fresh mappings
+- For **match updates**: Load existing XML→DB mappings from `id_mappings` table
+- Database IDs remain **stable** across re-imports of same GameId
+- Prevents breaking external references or saved queries
+- IdMapper saves all mappings after successful import
+
+**Required Database Table:**
+```sql
+CREATE TABLE IF NOT EXISTS id_mappings (
+    match_id BIGINT NOT NULL,
+    entity_type VARCHAR NOT NULL,  -- 'player', 'character', 'city', etc.
+    xml_id INTEGER NOT NULL,
+    db_id BIGINT NOT NULL,
+    PRIMARY KEY (match_id, entity_type, xml_id),
+    FOREIGN KEY (match_id) REFERENCES matches(match_id) ON DELETE CASCADE
+);
+
+CREATE INDEX idx_id_mappings_match ON id_mappings(match_id);
+```
+
 **Why this works:**
-- Each save file gets fresh ID mappings
-- Same XML ID in different saves → different database IDs (unless same GameId)
+- Each new match gets fresh ID mappings
+- Same XML ID in different matches → different database IDs
+- Re-importing same match preserves database IDs via id_mappings table
 - Handles forward/backward references gracefully
+- External tools can rely on stable database IDs
 
 ---
 
@@ -322,18 +818,33 @@ pub fn parse_timeseries(xml: &XmlDocument, db: &Connection,
 </Root>
 ```
 
-**Parsing Code:**
+**Parsing Code (using roxmltree):**
 ```rust
-pub fn parse_cities(xml: &XmlDocument, tx: &Transaction,
+pub fn parse_cities(doc: &roxmltree::Document, tx: &Transaction,
                     id_mapper: &mut IdMapper) -> Result<()> {
-    for city_elem in xml.root.children_with_name("City") {
-        let xml_id = city_elem.attr("ID")?.parse::<i32>()?;
+    // Find all City elements as direct children of Root
+    for city_node in doc.root_element().children().filter(|n| n.has_tag_name("City")) {
+        let xml_id = city_node.attribute("ID")
+            .ok_or(ParseError::MissingAttribute("City.ID"))?
+            .parse::<i32>()?;
         let db_id = id_mapper.map_city(xml_id);
-        let player_id = city_elem.attr("Player")?.parse::<i32>()?;
-        let db_player_id = id_mapper.get_player(player_id)?;
 
-        let name = city_elem.child_text("Name")?;
-        let founded_turn = city_elem.child_text("Founded")?.parse::<i32>()?;
+        let player_xml_id = city_node.attribute("Player")
+            .ok_or(ParseError::MissingAttribute("City.Player"))?
+            .parse::<i32>()?;
+        let db_player_id = id_mapper.get_player(player_xml_id)?;
+
+        // Find child elements
+        let name = city_node.children()
+            .find(|n| n.has_tag_name("Name"))
+            .and_then(|n| n.text())
+            .ok_or(ParseError::MissingElement("City.Name"))?;
+
+        let founded_turn = city_node.children()
+            .find(|n| n.has_tag_name("Founded"))
+            .and_then(|n| n.text())
+            .ok_or(ParseError::MissingElement("City.Founded"))?
+            .parse::<i32>()?;
 
         tx.execute(
             "INSERT INTO cities (city_id, match_id, player_id, city_name,
@@ -363,14 +874,20 @@ pub fn parse_cities(xml: &XmlDocument, tx: &Transaction,
 </Player>
 ```
 
-**Parsing Code:**
+**Parsing Code (using roxmltree):**
 ```rust
-pub fn parse_player_resources(player_elem: &XmlElement, tx: &Transaction,
+pub fn parse_player_resources(player_node: &roxmltree::Node, tx: &Transaction,
                                player_id: i64, match_id: i64) -> Result<()> {
-    if let Some(yields_elem) = player_elem.child("YieldStockpile") {
-        for yield_elem in yields_elem.children() {
-            let yield_type = yield_elem.name(); // "YIELD_CIVICS"
-            let amount = yield_elem.text()?.parse::<i32>()?;
+    // Find YieldStockpile child element
+    if let Some(yields_node) = player_node.children()
+        .find(|n| n.has_tag_name("YieldStockpile")) {
+
+        // Iterate over all child elements (YIELD_CIVICS, YIELD_TRAINING, etc.)
+        for yield_node in yields_node.children().filter(|n| n.is_element()) {
+            let yield_type = yield_node.tag_name().name(); // "YIELD_CIVICS"
+            let amount = yield_node.text()
+                .ok_or(ParseError::MissingElement("YieldStockpile child text"))?
+                .parse::<i32>()?;
 
             tx.execute(
                 "INSERT INTO player_resources
@@ -398,22 +915,33 @@ pub fn parse_player_resources(player_elem: &XmlElement, tx: &Transaction,
 </YieldPriceHistory>
 ```
 
-**Parsing Code:**
+**Parsing Code (using roxmltree):**
 ```rust
-pub fn parse_yield_price_history(xml: &XmlDocument, tx: &Transaction,
+pub fn parse_yield_price_history(doc: &roxmltree::Document, tx: &Transaction,
                                   match_id: i64) -> Result<()> {
-    if let Some(history_elem) = xml.root.child("YieldPriceHistory") {
-        for yield_elem in history_elem.children() {
-            let yield_type = yield_elem.name(); // "YIELD_GROWTH"
+    // Find YieldPriceHistory element
+    if let Some(history_node) = doc.descendants()
+        .find(|n| n.has_tag_name("YieldPriceHistory")) {
 
-            for turn_elem in yield_elem.children() {
+        // Iterate over yield types (YIELD_GROWTH, etc.)
+        for yield_node in history_node.children().filter(|n| n.is_element()) {
+            let yield_type = yield_node.tag_name().name(); // "YIELD_GROWTH"
+
+            // Iterate over turn elements (T2, T45, etc.)
+            for turn_node in yield_node.children().filter(|n| n.is_element()) {
                 // Parse "T45" → turn number 45
-                let turn_tag = turn_elem.name();
+                let turn_tag = turn_node.tag_name().name();
                 if !turn_tag.starts_with('T') {
                     continue; // Skip non-turn elements
                 }
-                let turn = turn_tag[1..].parse::<i32>()?;
-                let price = turn_elem.text()?.parse::<i32>()?;
+                let turn = turn_tag[1..].parse::<i32>()
+                    .map_err(|_| ParseError::InvalidFormat(
+                        format!("Invalid turn tag: {}", turn_tag)
+                    ))?;
+
+                let price = turn_node.text()
+                    .ok_or(ParseError::MissingElement("Turn value"))?
+                    .parse::<i32>()?;
 
                 tx.execute(
                     "INSERT INTO yield_prices
@@ -443,16 +971,29 @@ pub fn parse_yield_price_history(xml: &XmlDocument, tx: &Transaction,
 
 **Two-Pass Solution:**
 
-**Pass 1 - Core Data:**
+**Pass 1 - Core Data (using roxmltree):**
 ```rust
-pub fn parse_characters_core(xml: &XmlDocument, tx: &Transaction,
+pub fn parse_characters_core(doc: &roxmltree::Document, tx: &Transaction,
                              id_mapper: &mut IdMapper) -> Result<()> {
-    for char_elem in xml.root.children_with_name("Character") {
-        let xml_id = char_elem.attr("ID")?.parse::<i32>()?;
+    for char_node in doc.root_element().children()
+        .filter(|n| n.has_tag_name("Character")) {
+
+        let xml_id = char_node.attribute("ID")
+            .ok_or(ParseError::MissingAttribute("Character.ID"))?
+            .parse::<i32>()?;
         let db_id = id_mapper.map_character(xml_id);
 
-        let first_name = char_elem.child_text("FirstName").ok();
-        let birth_turn = char_elem.child_text("BirthTurn")?.parse::<i32>()?;
+        // Optional first name
+        let first_name = char_node.children()
+            .find(|n| n.has_tag_name("FirstName"))
+            .and_then(|n| n.text())
+            .map(|s| s.to_string());
+
+        let birth_turn = char_node.children()
+            .find(|n| n.has_tag_name("BirthTurn"))
+            .and_then(|n| n.text())
+            .ok_or(ParseError::MissingElement("Character.BirthTurn"))?
+            .parse::<i32>()?;
 
         // Insert WITHOUT parent links (set to NULL)
         tx.execute(
@@ -468,16 +1009,21 @@ pub fn parse_characters_core(xml: &XmlDocument, tx: &Transaction,
 }
 ```
 
-**Pass 2 - Relationships:**
+**Pass 2 - Relationships (using roxmltree):**
 ```rust
-pub fn update_character_parents(xml: &XmlDocument, tx: &Transaction,
+pub fn update_character_parents(doc: &roxmltree::Document, tx: &Transaction,
                                 id_mapper: &IdMapper) -> Result<()> {
-    for char_elem in xml.root.children_with_name("Character") {
-        let xml_id = char_elem.attr("ID")?.parse::<i32>()?;
+    for char_node in doc.root_element().children()
+        .filter(|n| n.has_tag_name("Character")) {
+
+        let xml_id = char_node.attribute("ID")
+            .ok_or(ParseError::MissingAttribute("Character.ID"))?
+            .parse::<i32>()?;
         let db_id = id_mapper.get_character(xml_id)?;
 
-        if let Some(father_xml_id) = char_elem.attr("Father") {
-            let father_xml_id = father_xml_id.parse::<i32>()?;
+        // Update father relationship if present
+        if let Some(father_xml_id_str) = char_node.attribute("Father") {
+            let father_xml_id = father_xml_id_str.parse::<i32>()?;
             let father_db_id = id_mapper.get_character(father_xml_id)?;
 
             tx.execute(
@@ -487,8 +1033,9 @@ pub fn update_character_parents(xml: &XmlDocument, tx: &Transaction,
             )?;
         }
 
-        if let Some(mother_xml_id) = char_elem.attr("Mother") {
-            let mother_xml_id = mother_xml_id.parse::<i32>()?;
+        // Update mother relationship if present
+        if let Some(mother_xml_id_str) = char_node.attribute("Mother") {
+            let mother_xml_id = mother_xml_id_str.parse::<i32>()?;
             let mother_db_id = id_mapper.get_character(mother_xml_id)?;
 
             tx.execute(
@@ -517,8 +1064,18 @@ pub enum ParseError {
     #[error("Invalid archive structure: {0}")]
     InvalidArchiveStructure(String),
 
-    #[error("Malformed XML at line {0}: {1}")]
-    MalformedXML(usize, String),
+    #[error("File too large: {0} bytes (max: {1} bytes)")]
+    FileTooLarge(u64, u64),
+
+    #[error("Security violation: {0}")]
+    SecurityViolation(String),
+
+    #[error("Malformed XML at {location}: {message}\nContext: {context}")]
+    MalformedXML {
+        location: String,  // "line 45, col 12" or "element path"
+        message: String,
+        context: String,   // Excerpt of problematic XML
+    },
 
     #[error("Missing required attribute: {0}")]
     MissingAttribute(String),
@@ -529,17 +1086,38 @@ pub enum ParseError {
     #[error("Invalid data format: {0}")]
     InvalidFormat(String),
 
+    #[error("Schema not initialized: missing table {0}")]
+    SchemaNotInitialized(String),
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] duckdb::Error),
 
     #[error("IO error: {0}")]
     IoError(#[from] std::io::Error),
 
+    #[error("Unknown player ID: {0}")]
+    UnknownPlayerId(i32),
+
     #[error("Unknown character ID: {0}")]
     UnknownCharacterId(i32),
 
     #[error("Unknown city ID: {0}")]
     UnknownCityId(i32),
+
+    #[error("Unknown unit ID: {0}")]
+    UnknownUnitId(i32),
+
+    #[error("Unknown tile ID: {0}")]
+    UnknownTileId(i32),
+
+    #[error("Unknown family ID: {0}")]
+    UnknownFamilyId(i32),
+
+    #[error("Unknown religion ID: {0}")]
+    UnknownReligionId(i32),
+
+    #[error("Unknown tribe ID: {0}")]
+    UnknownTribeId(i32),
 }
 ```
 
@@ -842,16 +1420,33 @@ mod proptests {
 
 **Deliverables:**
 - [ ] Database module with schema initialization from `schema.sql`
-- [ ] ZIP extraction and XML loading
-- [ ] `IdMapper` implementation
+- [ ] Add `id_mappings` table to schema for ID stability
+- [ ] ZIP extraction with security validation (size limits, path traversal checks, zip bomb detection)
+- [ ] XML loading using `roxmltree`
+- [ ] Complete `IdMapper` implementation with all entity types
+- [ ] ID stability mechanism (load/save mappings)
+- [ ] Concurrency control (GameId-based locking)
 - [ ] Match metadata parser
 - [ ] Player parser (basic fields only)
-- [ ] Transaction coordinator
+- [ ] Transaction coordinator with complete DELETE cascade order
+- [ ] Progress reporting infrastructure (`ProgressCallback` trait)
+- [ ] Tauri command with `spawn_blocking` for async handling
 - [ ] Unit tests for core infrastructure
+
+**Dependencies to Add:**
+- `roxmltree = "0.19"` (replace quick-xml)
+- `thiserror = "1.0"`
+- `log = "0.4"`
+- `env_logger = "0.11"`
+- `lazy_static = "1.4"` (for lock manager)
 
 **Success Criteria:**
 - Can import a save file and create match + players records
 - Transactions roll back properly on error
+- ZIP security validation rejects malicious files
+- Progress updates emit during import
+- Database IDs remain stable across re-imports
+- Concurrent imports of same GameId serialize correctly
 
 ---
 
@@ -1001,14 +1596,25 @@ mod proptests {
 #[tauri::command]
 pub async fn import_save_file(
     file_path: String,
-    app_handle: tauri::AppHandle
+    app_handle: tauri::AppHandle,
+    window: tauri::Window,
 ) -> Result<ImportResult, String> {
     // Get database path from Tauri app data dir
-    let db_path = app_handle
+    let app_data_dir = app_handle
         .path_resolver()
         .app_data_dir()
-        .ok_or("Failed to get app data dir")?
-        .join("game_data.db");
+        .ok_or("Failed to get app data dir")?;
+
+    // Ensure app data directory exists
+    if !app_data_dir.exists() {
+        std::fs::create_dir_all(&app_data_dir)
+            .map_err(|e| format!("Failed to create app data directory: {}", e))?;
+    }
+
+    let db_path = app_data_dir.join("game_data.db");
+    let db_path_str = db_path.to_str()
+        .ok_or("Invalid database path")?
+        .to_string();
 
     // Ensure database exists and schema is initialized
     if !db_path.exists() {
@@ -1016,11 +1622,41 @@ pub async fn import_save_file(
             .map_err(|e| e.to_string())?;
     }
 
-    // Import save file
-    crate::parser::save_file::import_save_file(
-        &file_path,
-        db_path.to_str().unwrap()
-    ).map_err(|e| e.to_string())
+    // Run import on blocking thread pool to avoid blocking UI
+    // This is critical for long-running operations (10-15 seconds)
+    tauri::async_runtime::spawn_blocking(move || {
+        // Create progress callback that emits Tauri events
+        let progress_callback = TauriProgressCallback::new(window);
+
+        // Import save file with progress updates
+        crate::parser::save_file::import_save_file(
+            &file_path,
+            &db_path_str,
+            progress_callback
+        ).map_err(|e| e.to_string())
+    })
+    .await
+    .map_err(|e| format!("Task failed: {}", e))?
+}
+
+/// Progress callback that emits Tauri events to frontend
+struct TauriProgressCallback {
+    window: tauri::Window,
+}
+
+impl TauriProgressCallback {
+    fn new(window: tauri::Window) -> Self {
+        Self { window }
+    }
+}
+
+impl ProgressCallback for TauriProgressCallback {
+    fn on_progress(&self, phase: &str, percent: u8) {
+        let _ = self.window.emit("import_progress", serde_json::json!({
+            "phase": phase,
+            "percent": percent
+        }));
+    }
 }
 
 #[derive(serde::Serialize)]
@@ -1106,32 +1742,87 @@ pub fn import_save_file(file_path: &str, db_path: &str) -> Result<ImportResult> 
 }
 ```
 
-### Progress Reporting (Future Enhancement)
+### Progress Reporting Strategy
+
+**Why Important:** Import takes 10-15 seconds; progress feedback is essential UX.
+
+**Implementation:**
 
 ```rust
-#[tauri::command]
-pub async fn import_save_file_with_progress(
-    file_path: String,
-    window: tauri::Window
-) -> Result<ImportResult, String> {
+/// Trait for progress callbacks
+pub trait ProgressCallback: Send + Sync {
+    fn on_progress(&self, phase: &str, percent: u8);
+}
 
-    window.emit("import_progress", json!({
-        "phase": "extracting",
-        "percent": 5
-    }))?;
+/// Update import_save_file signature to accept progress callback
+pub fn import_save_file<P: ProgressCallback>(
+    file_path: &str,
+    db_path: &str,
+    progress: P
+) -> Result<ImportResult> {
+    progress.on_progress("Extracting ZIP", 5);
+    let xml = extract_xml(file_path)?;
 
-    let xml = extract_xml(&file_path)?;
+    progress.on_progress("Parsing XML", 10);
+    let doc = roxmltree::Document::parse(&xml)?;
 
-    window.emit("import_progress", json!({
-        "phase": "parsing_metadata",
-        "percent": 10
-    }))?;
+    progress.on_progress("Match metadata", 15);
+    let (match_id, is_new) = identify_match(&doc, db_path)?;
 
-    // ... continue emitting progress ...
+    progress.on_progress("Initializing ID mapper", 20);
+    let mut id_mapper = IdMapper::new(match_id, &conn, is_new)?;
 
+    progress.on_progress("Parsing players", 25);
+    parse_players(&doc, &tx, &mut id_mapper)?;
+
+    progress.on_progress("Parsing characters", 35);
+    parse_characters_core(&doc, &tx, &mut id_mapper)?;
+
+    progress.on_progress("Parsing cities", 45);
+    parse_cities(&doc, &tx, &mut id_mapper)?;
+
+    progress.on_progress("Parsing tiles", 50);
+    parse_tiles(&doc, &tx, &mut id_mapper)?;
+
+    progress.on_progress("Parsing units", 55);
+    parse_units(&doc, &tx, &mut id_mapper)?;
+
+    progress.on_progress("Updating relationships", 65);
+    update_character_parents(&doc, &tx, &id_mapper)?;
+
+    progress.on_progress("Parsing time-series data", 75);
+    parse_timeseries(&doc, &tx, &id_mapper)?;
+
+    progress.on_progress("Saving ID mappings", 95);
+    id_mapper.save_mappings(&conn)?;
+
+    progress.on_progress("Complete", 100);
     Ok(result)
 }
+
+/// No-op progress callback for tests
+pub struct NoOpProgress;
+impl ProgressCallback for NoOpProgress {
+    fn on_progress(&self, _phase: &str, _percent: u8) {}
+}
 ```
+
+**Progress Milestones:**
+- 5% - ZIP extracted
+- 10% - XML parsed
+- 15% - Match identified
+- 20% - ID mapper initialized
+- 25% - Players parsed
+- 35% - Characters parsed
+- 45% - Cities parsed
+- 50% - Tiles parsed
+- 55% - Units parsed
+- 65% - Relationships updated
+- 75% - Time-series parsing started
+- 95% - ID mappings saved
+- 100% - Complete
+
+**Note:** This is part of Milestone 1, not a future enhancement
 
 ---
 
@@ -1177,6 +1868,19 @@ This implementation plan provides a comprehensive roadmap for building a robust,
 
 ---
 
-**Document Version:** 1.0
+**Document Version:** 2.0
 **Last Updated:** 2025-11-05
-**Status:** Draft - Pending Review
+**Status:** Revised - Ready for Implementation
+
+**Revision Summary (v2.0):**
+- Switched from `quick-xml` to `roxmltree` for DOM-based parsing
+- Added complete `IdMapper` API with all entity types
+- Implemented ID stability strategy with `id_mappings` table
+- Added comprehensive ZIP security validation
+- Added concurrency control for parallel imports
+- Moved progress reporting from future enhancement to Milestone 1
+- Added `spawn_blocking` for Tauri async handling
+- Documented complete DELETE cascade order
+- Enhanced error types with better provenance
+- Updated all code examples to use `roxmltree`
+- Addressed all critical issues from architectural reviews
