@@ -24,4 +24,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 duckdb = { version = "1.1", features = ["bundled"] }
 anyhow = "1.0"  # Better error handling
+zip = "2.2"  # ZIP archive handling for save files
+quick-xml = { version = "0.36", features = ["serialize"] }  # XML parsing
 
