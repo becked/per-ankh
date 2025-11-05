@@ -53,6 +53,12 @@ Cargo.lock
 *.duckdb
 *.duckdb.wal
 
+# Test Data / Save Files
+test-data/saves/*
+!test-data/saves/.gitkeep
+!test-data/saves/sample.xml
+!test-data/saves/README.md
+
 # Python (from old experiments/demos)
 __pycache__/
 *.py[cod]
