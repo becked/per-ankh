@@ -1,4 +1,4 @@
--- Old World Game Data Schema v2.0
+-- Old World Game Data Schema v2.2
 -- DuckDB Schema for Multi-Match Game Save Analysis
 --
 -- Design Principles:
@@ -29,6 +29,17 @@ CREATE TABLE id_mappings (
 
 CREATE INDEX idx_id_mappings_match ON id_mappings(match_id);
 CREATE INDEX idx_id_mappings_lookup ON id_mappings(match_id, entity_type, xml_id);
+
+-- Lock table for cross-process synchronization during imports
+-- Prevents multiple app instances from corrupting data when importing same GameId
+CREATE TABLE match_locks (
+    game_id VARCHAR NOT NULL PRIMARY KEY,
+    locked_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    locked_by INTEGER, -- Process ID for debugging
+    CONSTRAINT unique_game_lock UNIQUE (game_id)
+);
+
+CREATE INDEX idx_match_locks_stale ON match_locks(locked_at);
 
 CREATE TABLE matches (
     match_id BIGINT NOT NULL PRIMARY KEY,
@@ -978,7 +989,8 @@ CREATE TABLE schema_migrations (
 );
 
 INSERT INTO schema_migrations (version, description) VALUES
-('2.0.0', 'Clean greenfield schema for multi-match Old World game analysis - 85% XML coverage');
+('2.0.0', 'Clean greenfield schema for multi-match Old World game analysis - 85% XML coverage'),
+('2.2.0', 'Added match_locks table for multi-process concurrency control');
 
 
 -- ============================================================================
@@ -986,7 +998,7 @@ INSERT INTO schema_migrations (version, description) VALUES
 -- ============================================================================
 --
 -- Schema Statistics:
--- - 53 tables (entities + time-series + aggregates + reference + views)
+-- - 54 tables (entities + time-series + aggregates + reference + views + locks)
 -- - ~85% coverage of XML data structures
 -- - Optimized for multi-match analytical queries
 -- - Full character/family/religion system for political analysis
