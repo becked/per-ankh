@@ -895,11 +895,15 @@ GROUP BY u.match_id, u.player_id, u.unit_type;
 -- Match lookups
 CREATE INDEX idx_matches_hash ON matches(file_hash);
 CREATE INDEX idx_matches_game_name ON matches(game_name);
+-- Prevent duplicate game_id entries (one match per GameId)
+CREATE UNIQUE INDEX idx_matches_game_id ON matches(game_id) WHERE game_id IS NOT NULL;
 
 -- Player lookups
 CREATE INDEX idx_players_match ON players(match_id);
 CREATE INDEX idx_players_name ON players(player_name_normalized);
 CREATE INDEX idx_players_nation ON players(nation);
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_players_xml_id ON players(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
 -- Character lookups (critical for genealogy queries)
 CREATE INDEX idx_characters_match ON characters(match_id);
@@ -909,6 +913,8 @@ CREATE INDEX idx_characters_father ON characters(birth_father_id, match_id);
 CREATE INDEX idx_characters_mother ON characters(birth_mother_id, match_id);
 CREATE INDEX idx_characters_life ON characters(birth_turn, death_turn);
 CREATE INDEX idx_characters_leader ON characters(became_leader_turn) WHERE became_leader_turn IS NOT NULL;
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_characters_xml_id ON characters(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
 -- Unit lookups
 CREATE INDEX idx_units_match ON units(match_id);
@@ -916,18 +922,24 @@ CREATE INDEX idx_units_player ON units(player_id, match_id);
 CREATE INDEX idx_units_tile ON units(tile_id, match_id);
 CREATE INDEX idx_units_type ON units(unit_type);
 CREATE INDEX idx_units_general ON units(general_id, match_id) WHERE general_id IS NOT NULL;
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_units_xml_id ON units(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
 -- City lookups
 CREATE INDEX idx_cities_match ON cities(match_id);
 CREATE INDEX idx_cities_player ON cities(player_id, match_id);
 CREATE INDEX idx_cities_tile ON cities(tile_id, match_id);
 CREATE INDEX idx_cities_family ON cities(family);
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_cities_xml_id ON cities(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
 -- Tile lookups
 CREATE INDEX idx_tiles_match ON tiles(match_id);
 CREATE INDEX idx_tiles_coords ON tiles(x, y);
 CREATE INDEX idx_tiles_owner ON tiles(owner_player_id, match_id);
 CREATE INDEX idx_tiles_city ON tiles(owner_city_id, match_id);
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_tiles_xml_id ON tiles(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
 -- Time-series performance
 CREATE INDEX idx_yield_history_lookup ON yield_history(match_id, player_id, turn);
@@ -943,7 +955,16 @@ CREATE INDEX idx_story_events_character ON story_events(primary_character_id, ma
 -- Family/Religion lookups
 CREATE INDEX idx_families_match ON families(match_id);
 CREATE INDEX idx_families_player ON families(player_id, match_id);
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_families_xml_id ON families(match_id, xml_id) WHERE xml_id IS NOT NULL;
+
 CREATE INDEX idx_religions_match ON religions(match_id);
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_religions_xml_id ON religions(match_id, xml_id) WHERE xml_id IS NOT NULL;
+
+-- Tribe lookups
+-- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
+CREATE UNIQUE INDEX idx_tribes_xml_id ON tribes(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
 
 -- ============================================================================
