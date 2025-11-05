@@ -90,8 +90,50 @@ src-tauri/src/
 3. Validate ZIP security (size limits, single XML file, no path traversal)
 4. Locate XML file inside (single file with `.xml` extension)
 5. Extract XML to memory (11-12 MB typical, enforced limits)
-6. Parse XML using `roxmltree` into DOM tree structure
+6. **Parse XML using hybrid strategy:**
+   - For files < 20 MB: Full DOM with `roxmltree`
+   - For files ≥ 20 MB: Hybrid streaming + targeted DOM
 7. Validate root element is `<Root>`
+
+**Hybrid Streaming Strategy (for large files):**
+```rust
+pub enum XmlParseStrategy {
+    FullDom(roxmltree::Document),
+    StreamingHybrid {
+        xml_content: String,
+        // Track byte ranges for top-level elements
+        entity_ranges: HashMap<String, Vec<(usize, usize)>>,
+    },
+}
+
+pub fn parse_xml(xml_content: String) -> Result<XmlParseStrategy> {
+    if xml_content.len() < 20 * 1024 * 1024 {
+        // Small file: full DOM
+        let doc = roxmltree::Document::parse(&xml_content)?;
+        Ok(XmlParseStrategy::FullDom(doc))
+    } else {
+        // Large file: hybrid streaming
+        let entity_ranges = identify_entity_ranges(&xml_content)?;
+        Ok(XmlParseStrategy::StreamingHybrid {
+            xml_content,
+            entity_ranges,
+        })
+    }
+}
+
+/// Parse specific entity subtrees from byte ranges
+pub fn parse_entity_subtree(xml_content: &str, range: (usize, usize))
+    -> Result<roxmltree::Document> {
+    let subtree = &xml_content[range.0..range.1];
+    roxmltree::Document::parse(subtree)
+}
+```
+
+**Why Hybrid Approach:**
+- Saves can grow > 20 MB with long games
+- Full DOM wasteful for sequential entity parsing
+- Stream at root level, DOM for targeted subtrees
+- Time-series data can be streamed directly to column buffers
 
 **Security Constraints:**
 - Maximum compressed size: 50 MB
@@ -208,13 +250,29 @@ fn validate_and_extract_xml(file_path: &str) -> Result<String> {
    - Generate new `match_id` (auto-increment or UUID)
    - Log: "Creating new match {game_id}"
 
-**Update-and-Replace Strategy:**
-When updating existing match, delete all data in **strict reverse foreign key order**:
+**Update Strategy: UPSERT for Core Entities, DELETE for Derived Data**
+
+For match updates, use **UPSERT** on core entities (stable IDs) and **DELETE-then-INSERT** for derived/aggregate tables. This approach:
+- Reduces churn and temporary FK holes
+- Maintains referential integrity during import
+- More resilient if concurrent read occurs mid-update
 
 ```rust
-/// Complete deletion order respecting all foreign key constraints
+/// Core entities use UPSERT (INSERT...ON CONFLICT UPDATE)
+const UPSERT_ENTITIES: &[&str] = &[
+    "players",
+    "characters",
+    "families",
+    "religions",
+    "tribes",
+    "cities",
+    "tiles",
+    "units",
+];
+
+/// Derived/child tables use DELETE (then reinsert)
 const DELETE_ORDER: &[&str] = &[
-    // Leaf tables (no children) - delete first
+    // Child/relationship tables
     "unit_promotions",
     "character_traits",
     "character_stats",
@@ -244,30 +302,18 @@ const DELETE_ORDER: &[&str] = &[
     "story_choices",
     "event_outcomes",
     "event_logs",
+    // Time-series tables (heavy, simpler to replace)
     "yield_history",
     "points_history",
     "military_history",
     "legitimacy_history",
     "yield_prices",
-
-    // Parent entities (referenced by children above)
-    "units",
-    "tiles",
-    "cities",
-    "characters",
-    "families",
-    "religions",
-    "tribes",
-    "players",
-
-    // Match data last (but don't delete from matches table itself)
+    // Match settings
     "match_settings",
-    // NOTE: id_mappings is preserved - not deleted
-    // NOTE: matches row is updated, not deleted
 ];
 
-/// Execute deletion for update
-fn delete_existing_match_data(tx: &Transaction, match_id: i64) -> Result<()> {
+/// Execute cleanup for update (delete derived data only)
+fn delete_derived_match_data(tx: &Transaction, match_id: i64) -> Result<()> {
     for table in DELETE_ORDER {
         tx.execute(
             &format!("DELETE FROM {} WHERE match_id = ?", table),
@@ -276,13 +322,30 @@ fn delete_existing_match_data(tx: &Transaction, match_id: i64) -> Result<()> {
     }
     Ok(())
 }
+
+/// Example UPSERT for core entity
+fn upsert_player(tx: &Transaction, player: &Player) -> Result<()> {
+    tx.execute(
+        "INSERT INTO players (player_id, match_id, xml_id, player_name, ...)
+         VALUES (?, ?, ?, ?, ...)
+         ON CONFLICT (player_id, match_id)
+         DO UPDATE SET
+             player_name = excluded.player_name,
+             nation = excluded.nation,
+             legitimacy = excluded.legitimacy,
+             ...",
+        params![player.player_id, player.match_id, player.xml_id, ...]
+    )?;
+    Ok(())
+}
 ```
 
 **Important Notes:**
-- `id_mappings` table is **preserved** to maintain ID stability
-- `matches` table row is **updated**, not deleted (preserves match_id)
-- Order tested against schema.sql foreign key constraints
-- Then re-insert all data with stable database IDs
+- Core entities: **UPSERT** preserves stable database IDs
+- Derived tables: **DELETE-then-INSERT** for simplicity
+- `id_mappings` table **preserved** (not deleted, only updated via UPSERT)
+- `matches` table row **UPSERT** to update metadata
+- Requires **unique constraint** on `(player_id, match_id)` for each core entity (see schema updates)
 
 **Concurrency Control:**
 To prevent race conditions when two imports of the same GameId run concurrently:
@@ -484,8 +547,9 @@ impl IdMapper {
         Ok(mapper)
     }
 
-    /// Save all mappings to database for future updates
-    pub fn save_mappings(&self, conn: &Connection) -> Result<()> {
+    /// Save specific entity type mappings to database (for phased persistence)
+    pub fn save_mappings_partial(&self, conn: &Connection,
+                                  entity_types: &[&str]) -> Result<()> {
         let mut stmt = conn.prepare(
             "INSERT INTO id_mappings (match_id, entity_type, xml_id, db_id)
              VALUES (?, ?, ?, ?)
@@ -493,33 +557,33 @@ impl IdMapper {
              DO UPDATE SET db_id = excluded.db_id"
         )?;
 
-        // Save all entity type mappings
-        for (&xml_id, &db_id) in &self.players {
-            stmt.execute(params![self.match_id, "player", xml_id, db_id])?;
-        }
-        for (&xml_id, &db_id) in &self.characters {
-            stmt.execute(params![self.match_id, "character", xml_id, db_id])?;
-        }
-        for (&xml_id, &db_id) in &self.cities {
-            stmt.execute(params![self.match_id, "city", xml_id, db_id])?;
-        }
-        for (&xml_id, &db_id) in &self.units {
-            stmt.execute(params![self.match_id, "unit", xml_id, db_id])?;
-        }
-        for (&xml_id, &db_id) in &self.tiles {
-            stmt.execute(params![self.match_id, "tile", xml_id, db_id])?;
-        }
-        for (&xml_id, &db_id) in &self.families {
-            stmt.execute(params![self.match_id, "family", xml_id, db_id])?;
-        }
-        for (&xml_id, &db_id) in &self.religions {
-            stmt.execute(params![self.match_id, "religion", xml_id, db_id])?;
-        }
-        for (&xml_id, &db_id) in &self.tribes {
-            stmt.execute(params![self.match_id, "tribe", xml_id, db_id])?;
+        for entity_type in entity_types {
+            let mappings = match *entity_type {
+                "player" => &self.players,
+                "character" => &self.characters,
+                "city" => &self.cities,
+                "unit" => &self.units,
+                "tile" => &self.tiles,
+                "family" => &self.families,
+                "religion" => &self.religions,
+                "tribe" => &self.tribes,
+                _ => continue,
+            };
+
+            for (&xml_id, &db_id) in mappings {
+                stmt.execute(params![self.match_id, entity_type, xml_id, db_id])?;
+            }
         }
 
         Ok(())
+    }
+
+    /// Save all mappings to database for future updates
+    pub fn save_mappings(&self, conn: &Connection) -> Result<()> {
+        self.save_mappings_partial(conn, &[
+            "player", "character", "city", "unit",
+            "tile", "family", "religion", "tribe"
+        ])
     }
 
     // Map XML ID to database ID (create if doesn't exist)
@@ -1154,25 +1218,32 @@ pub fn import_save_file(file_path: &str, db_path: &str) -> Result<ImportResult> 
 }
 ```
 
-**Nested Transactions for Phases:**
+**Nested Transactions for Phases with Atomic ID Mapping:**
 
-DuckDB supports savepoints for finer-grained rollback:
+DuckDB supports savepoints for finer-grained rollback. **Critical:** Save id_mappings within the same transaction to prevent desynchronization on crash.
 
 ```rust
-pub fn parse_save_file_internal(file_path: &str, tx: &Transaction)
-    -> Result<ImportStats> {
+pub fn parse_save_file_internal(file_path: &str, tx: &Transaction,
+                                 mut id_mapper: IdMapper) -> Result<ImportStats> {
 
-    // Phase 1: Foundation
+    // Phase 1: Foundation entities
     tx.execute("SAVEPOINT phase1")?;
     match parse_foundation_entities(xml, tx, &mut id_mapper) {
-        Ok(_) => tx.execute("RELEASE SAVEPOINT phase1")?,
+        Ok(_) => {
+            // Persist ID mappings IMMEDIATELY after entities inserted
+            // This ensures atomicity: if transaction fails, mappings roll back too
+            id_mapper.save_mappings_partial(tx, &["player", "character", "city",
+                                                   "unit", "tile", "family",
+                                                   "religion", "tribe"])?;
+            tx.execute("RELEASE SAVEPOINT phase1")?;
+        }
         Err(e) => {
             tx.execute("ROLLBACK TO SAVEPOINT phase1")?;
             return Err(e);
         }
     }
 
-    // Phase 2: Relationships
+    // Phase 2: Relationships (updates only, no new entities)
     tx.execute("SAVEPOINT phase2")?;
     match parse_relationships(xml, tx, &id_mapper) {
         Ok(_) => tx.execute("RELEASE SAVEPOINT phase2")?,
@@ -1182,7 +1253,7 @@ pub fn parse_save_file_internal(file_path: &str, tx: &Transaction)
         }
     }
 
-    // Phase 3: Time-series
+    // Phase 3: Time-series (inserts only, no ID mapping needed)
     tx.execute("SAVEPOINT phase3")?;
     match parse_timeseries(xml, tx, &id_mapper) {
         Ok(_) => tx.execute("RELEASE SAVEPOINT phase3")?,
@@ -1195,6 +1266,12 @@ pub fn parse_save_file_internal(file_path: &str, tx: &Transaction)
     Ok(stats)
 }
 ```
+
+**Why This Matters:**
+- ID mappings saved in Phase 1 transaction, not deferred to end
+- Crash after entity INSERT but before mapping save → no desync
+- Mappings roll back with entities on error
+- Phase 2/3 don't create new entities, so no additional mapping needed
 
 ---
 
@@ -1249,9 +1326,97 @@ let nation = player_elem.attr("Nation")?;
 
 **Rationale:** Game patches may add new values; storing strings keeps parser forward-compatible.
 
+### 3.5. Schema Validation on Startup
+
+Validate schema integrity before parsing to catch configuration errors early:
+
+```rust
+pub fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
+    let mut warnings = Vec::new();
+
+    // Check critical tables exist
+    let required_tables = vec![
+        "matches", "id_mappings", "players", "characters",
+        "families", "religions", "tribes", "cities",
+        "tiles", "units"
+    ];
+
+    for table in required_tables {
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = ?)",
+            params![table],
+            |row| row.get(0)
+        )?;
+
+        if !exists {
+            return Err(ParseError::SchemaNotInitialized(table.to_string()));
+        }
+    }
+
+    // Validate DELETE_ORDER tables exist
+    for table in DELETE_ORDER {
+        let exists: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.tables WHERE table_name = ?)",
+            params![table],
+            |row| row.get(0)
+        )?;
+
+        if !exists {
+            warnings.push(format!("Table in DELETE_ORDER not found: {}", table));
+        }
+    }
+
+    // Check unique constraints for UPSERT support
+    for table in &["players", "characters", "cities", "tiles", "units", "families", "religions"] {
+        let has_xml_id_index: bool = conn.query_row(
+            "SELECT EXISTS(SELECT 1 FROM information_schema.indexes
+             WHERE table_name = ? AND index_name LIKE '%xml_id%')",
+            params![table],
+            |row| row.get(0)
+        ).unwrap_or(false);
+
+        if !has_xml_id_index {
+            warnings.push(format!("Missing xml_id unique index on table: {}", table));
+        }
+    }
+
+    Ok(warnings)
+}
+
+/// Initialize and validate schema on first run
+pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
+    let conn = Connection::open(db_path)?;
+
+    // Create app data dir if needed (race-safe)
+    if let Some(parent) = db_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+
+    // Initialize schema from schema.sql
+    if !db_path.exists() {
+        let schema_sql = include_str!("../../../docs/schema.sql");
+        conn.execute_batch(schema_sql)?;
+    }
+
+    // Validate schema integrity
+    let warnings = validate_schema(&conn)?;
+    for warning in warnings {
+        log::warn!("Schema validation: {}", warning);
+    }
+
+    Ok(())
+}
+```
+
+**Benefits:**
+- Catches missing tables before import starts
+- Validates DELETE_ORDER against actual schema
+- Detects missing UPSERT indexes
+- Prevents cryptic SQL errors during import
+
 ### 4. Large Batch Inserts
 
-Time-series data can be thousands of rows. Use prepared statements:
+Time-series data can be thousands of rows. Use prepared statements with batching:
 
 ```rust
 pub fn insert_yield_history_batch(data: &[YieldHistoryRow],
@@ -1262,21 +1427,190 @@ pub fn insert_yield_history_batch(data: &[YieldHistoryRow],
          VALUES (?, ?, ?, ?, ?)"
     )?;
 
-    for row in data {
-        stmt.execute(params![
-            row.player_id,
-            row.match_id,
-            row.turn,
-            row.yield_type,
-            row.amount
-        ])?;
+    // Batch in chunks to balance memory and performance
+    for chunk in data.chunks(1000) {
+        for row in chunk {
+            stmt.execute(params![
+                row.player_id,
+                row.match_id,
+                row.turn,
+                row.yield_type,
+                row.amount
+            ])?;
+        }
     }
 
     Ok(())
 }
 ```
 
-**Optimization:** Consider using DuckDB's `COPY` or `APPEND` for bulk inserts if performance becomes an issue.
+**Advanced Optimization (for > 10k rows):**
+```rust
+// Option A: Build column vectors and use DuckDB appender
+pub fn insert_yield_history_columnar(data: &[YieldHistoryRow],
+                                      tx: &Transaction) -> Result<()> {
+    // Build per-column vectors
+    let player_ids: Vec<i64> = data.iter().map(|r| r.player_id).collect();
+    let match_ids: Vec<i64> = data.iter().map(|r| r.match_id).collect();
+    let turns: Vec<i32> = data.iter().map(|r| r.turn).collect();
+    let yield_types: Vec<&str> = data.iter().map(|r| r.yield_type.as_str()).collect();
+    let amounts: Vec<i32> = data.iter().map(|r| r.amount).collect();
+
+    // Use DuckDB's column-oriented insert (if supported by crate)
+    // Otherwise fall back to prepared statement batching
+}
+
+// Option B: Write to temporary Parquet and COPY
+pub fn insert_yield_history_parquet(data: &[YieldHistoryRow],
+                                     tx: &Transaction) -> Result<()> {
+    let temp_path = write_temp_parquet(data)?;
+    tx.execute(
+        &format!("COPY yield_history FROM '{}'", temp_path),
+        []
+    )?;
+    std::fs::remove_file(temp_path)?;
+    Ok(())
+}
+```
+
+**Benchmark Targets:**
+- < 1,000 rows: Prepared statements (~100ms)
+- 1,000-10,000 rows: Batched prepared statements (~500ms)
+- > 10,000 rows: Consider Parquet COPY (~1-2 seconds)
+
+---
+
+## XML Parsing Helpers
+
+To ensure consistent parsing and better error messages, use these helper traits:
+
+```rust
+// src-tauri/src/parser/xml_helpers.rs
+
+use roxmltree::Node;
+
+/// Extension trait for roxmltree nodes with better error handling
+pub trait XmlNodeExt {
+    /// Get required attribute with error context
+    fn req_attr<T: FromStr>(&self, name: &str) -> Result<T>;
+
+    /// Get optional attribute
+    fn opt_attr<T: FromStr>(&self, name: &str) -> Option<T>;
+
+    /// Get optional attribute, treating sentinel value as None
+    fn opt_attr_sentinel<T: FromStr + PartialEq>(
+        &self, name: &str, sentinel: T
+    ) -> Option<T>;
+
+    /// Get required child element text
+    fn req_child_text<T: FromStr>(&self, name: &str) -> Result<T>;
+
+    /// Get optional child element text
+    fn opt_child_text<T: FromStr>(&self, name: &str) -> Option<T>;
+
+    /// Get element path for error messages (e.g., "/Root/Player[ID=0]/Character[ID=5]")
+    fn element_path(&self) -> String;
+}
+
+impl<'a, 'input: 'a> XmlNodeExt for Node<'a, 'input> {
+    fn req_attr<T: FromStr>(&self, name: &str) -> Result<T> {
+        let path = self.element_path();
+        self.attribute(name)
+            .ok_or_else(|| ParseError::MissingAttribute(format!("{}.{}", path, name)))?
+            .parse()
+            .map_err(|_| ParseError::InvalidFormat(format!("{}.{}", path, name)))
+    }
+
+    fn opt_attr<T: FromStr>(&self, name: &str) -> Option<T> {
+        self.attribute(name)
+            .and_then(|s| s.parse().ok())
+    }
+
+    fn opt_attr_sentinel<T: FromStr + PartialEq>(
+        &self, name: &str, sentinel: T
+    ) -> Option<T> {
+        self.attribute(name)
+            .and_then(|s| s.parse().ok())
+            .and_then(|v| if v == sentinel { None } else { Some(v) })
+    }
+
+    fn req_child_text<T: FromStr>(&self, name: &str) -> Result<T> {
+        let path = self.element_path();
+        self.children()
+            .find(|n| n.has_tag_name(name))
+            .and_then(|n| n.text())
+            .ok_or_else(|| ParseError::MissingElement(format!("{}/{}", path, name)))?
+            .parse()
+            .map_err(|_| ParseError::InvalidFormat(format!("{}/{}", path, name)))
+    }
+
+    fn opt_child_text<T: FromStr>(&self, name: &str) -> Option<T> {
+        self.children()
+            .find(|n| n.has_tag_name(name))
+            .and_then(|n| n.text())
+            .and_then(|s| s.parse().ok())
+    }
+
+    fn element_path(&self) -> String {
+        let mut path = String::new();
+        let mut current = Some(*self);
+
+        while let Some(node) = current {
+            if let Some(tag_name) = node.tag_name().name().into() {
+                // Add ID attribute if present for disambiguation
+                let id_suffix = node.attribute("ID")
+                    .map(|id| format!("[ID={}]", id))
+                    .unwrap_or_default();
+
+                path = format!("/{}{}{}", tag_name, id_suffix, path);
+            }
+            current = node.parent_element();
+        }
+
+        if path.is_empty() { "/".to_string() } else { path }
+    }
+}
+
+/// Centralized sentinel value constants
+pub mod sentinels {
+    pub const ID_NONE: i32 = -1;
+    pub const TURN_INVALID: i32 = -1;
+}
+
+/// Example usage in parser
+pub fn parse_character_with_helpers(node: &Node, tx: &Transaction,
+                                     id_mapper: &mut IdMapper) -> Result<()> {
+    use xml_helpers::{XmlNodeExt, sentinels};
+
+    // Required attributes - includes element path in errors
+    let xml_id: i32 = node.req_attr("ID")?;
+    let db_id = id_mapper.map_character(xml_id);
+
+    // Optional attribute with sentinel normalization
+    let chosen_heir_id: Option<i64> = node
+        .opt_attr_sentinel("ChosenHeirID", sentinels::ID_NONE)
+        .and_then(|xml_heir_id| id_mapper.get_character(xml_heir_id).ok());
+
+    // Required child elements
+    let birth_turn: i32 = node.req_child_text("BirthTurn")?;
+
+    // Optional child elements
+    let first_name: Option<String> = node.opt_child_text("FirstName");
+
+    // If error occurs, element_path() provides context:
+    // Error: Missing attribute: /Root/Character[ID=5].ID
+    // Error: Invalid format: /Root/Character[ID=5]/BirthTurn
+
+    Ok(())
+}
+```
+
+**Benefits:**
+- **Consistent**: All parsers use same patterns
+- **Error Context**: Automatic element paths in errors
+- **Sentinel Handling**: Centralized `-1` → `None` conversion
+- **Type Safety**: Generic over `FromStr` types
+- **Debugging**: Clear path shows exact XML location of error
 
 ---
 
@@ -1749,9 +2083,52 @@ pub fn import_save_file(file_path: &str, db_path: &str) -> Result<ImportResult> 
 **Implementation:**
 
 ```rust
-/// Trait for progress callbacks
+/// Progress information with counts for better user feedback
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct ProgressInfo {
+    pub phase: String,
+    pub percent: u8,
+    pub count_current: Option<usize>,
+    pub count_total: Option<usize>,
+    pub message: Option<String>,
+}
+
+/// Trait for progress callbacks with count support
 pub trait ProgressCallback: Send + Sync {
-    fn on_progress(&self, phase: &str, percent: u8);
+    fn on_progress(&self, info: ProgressInfo);
+}
+
+/// Helper to create progress with counts
+impl ProgressInfo {
+    pub fn new(phase: &str, percent: u8) -> Self {
+        Self {
+            phase: phase.to_string(),
+            percent,
+            count_current: None,
+            count_total: None,
+            message: None,
+        }
+    }
+
+    pub fn with_counts(phase: &str, percent: u8, current: usize, total: usize) -> Self {
+        Self {
+            phase: phase.to_string(),
+            percent,
+            count_current: Some(current),
+            count_total: Some(total),
+            message: Some(format!("{}/{}", current, total)),
+        }
+    }
+
+    pub fn with_message(phase: &str, percent: u8, message: &str) -> Self {
+        Self {
+            phase: phase.to_string(),
+            percent,
+            count_current: None,
+            count_total: None,
+            message: Some(message.to_string()),
+        }
+    }
 }
 
 /// Update import_save_file signature to accept progress callback
@@ -1760,67 +2137,87 @@ pub fn import_save_file<P: ProgressCallback>(
     db_path: &str,
     progress: P
 ) -> Result<ImportResult> {
-    progress.on_progress("Extracting ZIP", 5);
+    progress.on_progress(ProgressInfo::new("Extracting ZIP", 5));
     let xml = extract_xml(file_path)?;
 
-    progress.on_progress("Parsing XML", 10);
+    progress.on_progress(ProgressInfo::with_message(
+        "Parsing XML",
+        10,
+        &format!("{:.1} MB", xml.len() as f64 / 1024.0 / 1024.0)
+    ));
     let doc = roxmltree::Document::parse(&xml)?;
 
-    progress.on_progress("Match metadata", 15);
+    progress.on_progress(ProgressInfo::new("Match identification", 15));
     let (match_id, is_new) = identify_match(&doc, db_path)?;
 
-    progress.on_progress("Initializing ID mapper", 20);
+    progress.on_progress(ProgressInfo::new("Initializing ID mapper", 20));
     let mut id_mapper = IdMapper::new(match_id, &conn, is_new)?;
 
-    progress.on_progress("Parsing players", 25);
-    parse_players(&doc, &tx, &mut id_mapper)?;
+    // Count entities for progress reporting
+    let player_count = count_elements(&doc, "Player");
+    let character_count = count_elements(&doc, "Character");
+    let city_count = count_elements(&doc, "City");
+    let tile_count = count_elements(&doc, "Tile");
+    let unit_count = count_elements(&doc, "Unit");
 
-    progress.on_progress("Parsing characters", 35);
-    parse_characters_core(&doc, &tx, &mut id_mapper)?;
+    progress.on_progress(ProgressInfo::with_counts("Parsing players", 25, 0, player_count));
+    parse_players(&doc, &tx, &mut id_mapper, &progress)?;
 
-    progress.on_progress("Parsing cities", 45);
-    parse_cities(&doc, &tx, &mut id_mapper)?;
+    progress.on_progress(ProgressInfo::with_counts("Parsing characters", 35, 0, character_count));
+    parse_characters_core(&doc, &tx, &mut id_mapper, &progress)?;
 
-    progress.on_progress("Parsing tiles", 50);
-    parse_tiles(&doc, &tx, &mut id_mapper)?;
+    progress.on_progress(ProgressInfo::with_counts("Parsing cities", 45, 0, city_count));
+    parse_cities(&doc, &tx, &mut id_mapper, &progress)?;
 
-    progress.on_progress("Parsing units", 55);
-    parse_units(&doc, &tx, &mut id_mapper)?;
+    progress.on_progress(ProgressInfo::with_counts("Parsing tiles", 50, 0, tile_count));
+    parse_tiles(&doc, &tx, &mut id_mapper, &progress)?;
 
-    progress.on_progress("Updating relationships", 65);
+    progress.on_progress(ProgressInfo::with_counts("Parsing units", 55, 0, unit_count));
+    parse_units(&doc, &tx, &mut id_mapper, &progress)?;
+
+    progress.on_progress(ProgressInfo::new("Updating relationships", 65));
     update_character_parents(&doc, &tx, &id_mapper)?;
 
-    progress.on_progress("Parsing time-series data", 75);
-    parse_timeseries(&doc, &tx, &id_mapper)?;
+    progress.on_progress(ProgressInfo::new("Parsing time-series data", 75));
+    parse_timeseries(&doc, &tx, &id_mapper, &progress)?;
 
-    progress.on_progress("Saving ID mappings", 95);
+    progress.on_progress(ProgressInfo::new("Saving ID mappings", 95));
     id_mapper.save_mappings(&conn)?;
 
-    progress.on_progress("Complete", 100);
+    progress.on_progress(ProgressInfo::with_message(
+        "Complete",
+        100,
+        &format!("{} entities imported", stats.total_entities)
+    ));
     Ok(result)
 }
 
 /// No-op progress callback for tests
 pub struct NoOpProgress;
 impl ProgressCallback for NoOpProgress {
-    fn on_progress(&self, _phase: &str, _percent: u8) {}
+    fn on_progress(&self, _info: ProgressInfo) {}
 }
 ```
 
-**Progress Milestones:**
+**Progress Milestones with Counts:**
 - 5% - ZIP extracted
-- 10% - XML parsed
+- 10% - XML parsed (show file size)
 - 15% - Match identified
 - 20% - ID mapper initialized
-- 25% - Players parsed
-- 35% - Characters parsed
-- 45% - Cities parsed
-- 50% - Tiles parsed
-- 55% - Units parsed
-- 65% - Relationships updated
-- 75% - Time-series parsing started
-- 95% - ID mappings saved
-- 100% - Complete
+- 25% - Parsing players (0/6)
+- 35% - Parsing characters (125/450)
+- 45% - Parsing cities (8/15)
+- 50% - Parsing tiles (2500/12000)
+- 55% - Parsing units (45/120)
+- 65% - Updating relationships
+- 75% - Parsing time-series (5000/50000 rows)
+- 95% - Saving ID mappings
+- 100% - Complete (5432 entities imported)
+
+**Frontend Display Example:**
+```
+[████████░░] 75% - Parsing time-series data (5000/50000 rows)
+```
 
 **Note:** This is part of Milestone 1, not a future enhancement
 
@@ -1868,9 +2265,19 @@ This implementation plan provides a comprehensive roadmap for building a robust,
 
 ---
 
-**Document Version:** 2.0
+**Document Version:** 2.1
 **Last Updated:** 2025-11-05
-**Status:** Revised - Ready for Implementation
+**Status:** Production-Ready Implementation Plan
+
+**Revision Summary (v2.1 - Production Hardening):**
+- **Atomicity**: ID mappings now saved within same transaction as entities
+- **UPSERT Strategy**: Core entities use INSERT...ON CONFLICT for stability
+- **Unique Constraints**: Added (match_id, xml_id) indexes for idempotent updates
+- **Hybrid Streaming**: Support files > 20 MB with streaming + targeted DOM
+- **Bulk Insert**: Added Parquet COPY strategy for > 10k row time-series
+- **Parsing Helpers**: XmlNodeExt trait with element paths and sentinel normalization
+- **Progress Fidelity**: Enhanced with entity counts and detailed messages
+- **Schema Validation**: Startup checks for tables, indexes, and DELETE_ORDER
 
 **Revision Summary (v2.0):**
 - Switched from `quick-xml` to `roxmltree` for DOM-based parsing
