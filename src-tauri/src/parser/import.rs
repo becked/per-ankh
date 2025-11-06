@@ -220,14 +220,12 @@ fn import_save_file_internal(
     // 6. Families (parsed from global FamilyClass and per-player family data)
     let families_count = super::entities::parse_families(doc, tx, &mut id_mapper)?;
 
-    // NOTE: Religions are not exported as separate top-level entities in the XML
-    // They are referenced by name (e.g., RELIGION_JUDAISM) but not defined separately.
-    // They may need to be parsed from player/city context later.
-    // let religions_count = super::entities::parse_religions(doc, tx, &mut id_mapper)?;
+    // 7. Religions (parsed from aggregate containers: ReligionFounded, ReligionHeadID, etc.)
+    let religions_count = super::entities::parse_religions(doc, tx, &mut id_mapper)?;
 
     log::info!(
-        "Parsed entities: {} players, {} tribes, {} characters, {} tiles, {} cities, {} families",
-        players_count, tribes_count, characters_count, tiles_count, cities_count, families_count
+        "Parsed entities: {} players, {} tribes, {} characters, {} tiles, {} cities, {} families, {} religions",
+        players_count, tribes_count, characters_count, tiles_count, cities_count, families_count, religions_count
     );
 
     // Parse aggregate unit production data (derived from entities)
@@ -378,6 +376,7 @@ fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMappe
 /// Parse character extended data (Milestone 5)
 ///
 /// This function parses character-specific nested data:
+/// - Genealogy (Parent IDs, birth city) -> characters table (Pass 2 update)
 /// - Stats (Rating, Stat) -> character_stats table
 /// - Traits (TraitTurn) -> character_traits table
 /// - Relationships (RelationshipList) -> character_relationships table
@@ -389,7 +388,7 @@ fn parse_character_extended_data_all(
     let root = doc.root_element();
     let match_id = id_mapper.match_id;
 
-    let mut totals = (0, 0, 0); // stats, traits, relationships
+    let mut totals = (0, 0, 0, 0); // genealogy, stats, traits, relationships
     let mut character_count = 0;
 
     for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
@@ -402,21 +401,29 @@ fn parse_character_extended_data_all(
         })?;
         let character_id = id_mapper.get_character(character_xml_id)?;
 
+        // Parse genealogy (Pass 2: now that all characters exist)
+        let has_genealogy = super::entities::parse_character_genealogy(&character_node, tx, id_mapper, character_id)?;
+        if has_genealogy {
+            totals.0 += 1;
+        }
+
+        // Parse other extended data
         let (stats, traits, relationships) =
             super::entities::parse_character_extended_data(&character_node, tx, id_mapper, character_id, match_id)?;
 
-        totals.0 += stats;
-        totals.1 += traits;
-        totals.2 += relationships;
+        totals.1 += stats;
+        totals.2 += traits;
+        totals.3 += relationships;
         character_count += 1;
     }
 
     log::info!(
-        "Parsed character extended data for {} characters: {} stats, {} traits, {} relationships",
+        "Parsed character extended data for {} characters: {} genealogy, {} stats, {} traits, {} relationships",
         character_count,
         totals.0,
         totals.1,
-        totals.2
+        totals.2,
+        totals.3
     );
 
     Ok(())
@@ -601,6 +608,46 @@ fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper)
     Ok(())
 }
 
+/// Parse version string from Root element
+/// Format: "Version: 1.0.70671+DLC1+DLC2+...=-123456"
+/// Returns (version_number, dlc_list_string)
+fn parse_version_string(version: &str) -> (Option<String>, Option<String>) {
+    // Split by '+' to separate version and DLCs
+    let parts: Vec<&str> = version.split('+').collect();
+    if parts.is_empty() {
+        return (None, None);
+    }
+
+    // First part is "Version: 1.0.70671"
+    let version_num = parts[0]
+        .strip_prefix("Version: ")
+        .map(|v| v.to_string());
+
+    // Remaining parts are DLCs (join back, exclude checksum at end)
+    let dlcs = if parts.len() > 1 {
+        let dlc_parts: Vec<&str> = parts[1..]
+            .iter()
+            .map(|s| s.split('=').next().unwrap_or(s))
+            .collect();
+        Some(dlc_parts.join("+"))
+    } else {
+        None
+    };
+
+    (version_num, dlcs)
+}
+
+/// Parse SaveDate string to timestamp
+/// Format: "31 January 2024" or similar
+fn parse_save_date(date_str: &str) -> Option<String> {
+    use chrono::NaiveDate;
+
+    // Try parsing "31 January 2024" format
+    NaiveDate::parse_from_str(date_str, "%d %B %Y")
+        .ok()
+        .map(|d| d.format("%Y-%m-%d").to_string())
+}
+
 /// Insert match metadata (fresh import only - no UPSERT)
 fn insert_match_metadata(
     tx: &Connection,
@@ -618,9 +665,6 @@ fn insert_match_metadata(
         .and_then(|n| n.to_str())
         .unwrap_or("unknown.zip");
 
-    // Extract basic metadata from XML
-    let game_name = root.opt_child_text("GameName");
-
     // Get Turn from Game element
     let game_node = root
         .children()
@@ -631,10 +675,90 @@ fn insert_match_metadata(
         .and_then(|t| t.parse().ok())
         .ok_or_else(|| ParseError::MissingElement("Game.Turn".to_string()))?;
 
+    // Extract all Root attributes
+    // Version and DLC information
+    let (game_version, enabled_dlc) = root
+        .opt_attr("Version")
+        .map(parse_version_string)
+        .unwrap_or((None, None));
+
+    // Save date
+    let save_date = root
+        .opt_attr("SaveDate")
+        .and_then(parse_save_date);
+
+    // Map configuration
+    let map_width: Option<i32> = root.opt_attr("MapWidth").and_then(|s| s.parse().ok());
+    let map_height = map_width; // MapHeight not in XML, using MapWidth as square map assumption
+    let min_latitude: Option<i32> = root.opt_attr("MinLatitude").and_then(|s| s.parse().ok());
+    let max_latitude: Option<i32> = root.opt_attr("MaxLatitude").and_then(|s| s.parse().ok());
+    let map_size = root.opt_attr("MapSize");
+    let map_class = root.opt_attr("MapClass");
+    let map_aspect_ratio = root.opt_attr("MapAspectRatio"); // Available in newer game versions
+
+    // Game settings
+    let game_name = root.opt_attr("GameName").or_else(|| root.opt_child_text("GameName"));
+    let game_mode = root.opt_attr("GameMode");
+    let turn_style = root.opt_attr("TurnStyle");
+    let turn_timer = root.opt_attr("TurnTimer");
+    let turn_scale = root.opt_attr("TurnScale");
+    let simultaneous_turns: Option<i32> = None; // Not in current XML format
+
+    // Difficulty and balance
+    let opponent_level = root.opt_attr("OpponentLevel");
+    let tribe_level = root.opt_attr("TribeLevel");
+    let development = root.opt_attr("Development");
+    let advantage = root.opt_attr("Advantage");
+
+    // Rules
+    let succession_gender = root.opt_attr("SuccessionGender");
+    let succession_order = root.opt_attr("SuccessionOrder");
+    let mortality = root.opt_attr("Mortality");
+    let event_level = root.opt_attr("EventLevel");
+    let victory_point_modifier = root.opt_attr("VictoryPointModifier");
+    let force_march = root.opt_attr("ForceMarch");
+    let team_nation = root.opt_attr("TeamNation");
+
+    // Seeds
+    let first_seed: Option<i64> = root.opt_attr("FirstSeed").and_then(|s| s.parse().ok());
+    let map_seed: Option<i64> = root.opt_attr("MapSeed").and_then(|s| s.parse().ok());
+
     tx.execute(
-        "INSERT INTO matches (match_id, file_name, file_hash, game_id, game_name, total_turns)
-         VALUES (?, ?, ?, ?, ?, ?)",
-        params![match_id, file_name, file_hash, game_id, game_name, total_turns],
+        "INSERT INTO matches (
+            match_id, file_name, file_hash, game_id, game_name, save_date,
+            total_turns,
+            map_width, map_height, map_size, map_class, map_aspect_ratio,
+            min_latitude, max_latitude,
+            game_mode, turn_style, turn_timer, turn_scale, simultaneous_turns,
+            opponent_level, tribe_level, development, advantage,
+            succession_gender, succession_order, mortality, event_level,
+            victory_point_modifier, force_march, team_nation,
+            first_seed, map_seed,
+            game_version, enabled_dlc
+        ) VALUES (
+            ?, ?, ?, ?, ?, ?,
+            ?,
+            ?, ?, ?, ?, ?,
+            ?, ?,
+            ?, ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?, ?,
+            ?, ?, ?,
+            ?, ?,
+            ?, ?
+        )",
+        params![
+            match_id, file_name, file_hash, game_id, game_name, save_date,
+            total_turns,
+            map_width, map_height, map_size, map_class, map_aspect_ratio,
+            min_latitude, max_latitude,
+            game_mode, turn_style, turn_timer, turn_scale, simultaneous_turns,
+            opponent_level, tribe_level, development, advantage,
+            succession_gender, succession_order, mortality, event_level,
+            victory_point_modifier, force_march, team_nation,
+            first_seed, map_seed,
+            game_version, enabled_dlc
+        ],
     )?;
 
     Ok(())

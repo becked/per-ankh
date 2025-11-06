@@ -216,7 +216,7 @@ pub fn parse_character_relationships(
             // Parse related character ID (optional - skip relationships without target)
             let related_character_id = match rel_data_node
                 .children()
-                .find(|n| n.has_tag_name("ID"))
+                .find(|n| n.has_tag_name("CharacterID"))
                 .and_then(|n| n.text())
             {
                 Some(xml_id_str) => {
@@ -272,6 +272,79 @@ pub fn parse_character_relationships(
     }
 
     Ok(count)
+}
+
+/// Parse character genealogy (parent relationships and birth city)
+///
+/// Updates existing character records with parent relationships and birth city.
+/// This must be called AFTER all characters have been inserted (Pass 2).
+///
+/// XML Structure:
+/// ```xml
+/// <Character ID="20">
+///   <FatherID>4</FatherID>
+///   <MotherID>19</MotherID>
+///   <BirthFatherID>4</BirthFatherID>
+///   <BirthMotherID>19</BirthMotherID>
+///   <BirthCityID>0</BirthCityID>
+/// </Character>
+/// ```
+///
+/// Note: BirthFatherID/BirthMotherID are biological parents (never change),
+/// while FatherID/MotherID can change through adoption (not currently tracked).
+pub fn parse_character_genealogy(
+    character_node: &Node,
+    conn: &Connection,
+    id_mapper: &IdMapper,
+    character_id: i64,
+) -> Result<bool> {
+    // Parse parent IDs from XML
+    let birth_father_xml_id: Option<i32> = character_node
+        .children()
+        .find(|n| n.has_tag_name("BirthFatherID"))
+        .and_then(|n| n.text())
+        .and_then(|s| s.parse().ok());
+
+    let birth_mother_xml_id: Option<i32> = character_node
+        .children()
+        .find(|n| n.has_tag_name("BirthMotherID"))
+        .and_then(|n| n.text())
+        .and_then(|s| s.parse().ok());
+
+    let birth_city_xml_id: Option<i32> = character_node
+        .children()
+        .find(|n| n.has_tag_name("BirthCityID"))
+        .and_then(|n| n.text())
+        .and_then(|s| s.parse().ok());
+
+    // Map XML IDs to database IDs
+    let birth_father_id = match birth_father_xml_id {
+        Some(xml_id) => Some(id_mapper.get_character(xml_id)?),
+        None => None,
+    };
+
+    let birth_mother_id = match birth_mother_xml_id {
+        Some(xml_id) => Some(id_mapper.get_character(xml_id)?),
+        None => None,
+    };
+
+    let birth_city_id = match birth_city_xml_id {
+        Some(xml_id) => Some(id_mapper.get_city(xml_id)?),
+        None => None,
+    };
+
+    // Only update if we have at least one parent or birth city
+    if birth_father_id.is_some() || birth_mother_id.is_some() || birth_city_id.is_some() {
+        conn.execute(
+            "UPDATE characters
+             SET birth_father_id = ?, birth_mother_id = ?, birth_city_id = ?
+             WHERE character_id = ?",
+            params![birth_father_id, birth_mother_id, birth_city_id, character_id],
+        )?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
 }
 
 /// Parse all character extended data for a single character
