@@ -435,11 +435,13 @@ fn parse_character_extended_data_all(
 /// - Production queue (BuildQueue) -> city_production_queue table
 /// - Completed builds (CompletedBuild) -> city_projects_completed table
 /// - Culture and happiness (TeamCulture, TeamHappinessLevel) -> city_culture table
+/// - Yields (YieldProgress) -> city_yields table
+/// - Religions (Religion) -> city_religions table
 fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
     let match_id = id_mapper.match_id;
 
-    let mut totals = (0, 0, 0); // queue items, completed builds, culture records
+    let mut totals = (0, 0, 0, 0, 0); // queue items, completed builds, culture records, yields, religions
     let mut city_count = 0;
 
     for city_node in root.children().filter(|n| n.has_tag_name("City")) {
@@ -449,21 +451,25 @@ fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
         })?;
         let city_id = id_mapper.get_city(city_xml_id)?;
 
-        let (queue, completed, culture) =
+        let (queue, completed, culture, yields, religions) =
             super::entities::parse_city_extended_data(&city_node, tx, city_id, match_id)?;
 
         totals.0 += queue;
         totals.1 += completed;
         totals.2 += culture;
+        totals.3 += yields;
+        totals.4 += religions;
         city_count += 1;
     }
 
     log::info!(
-        "Parsed city extended data for {} cities: {} queue items, {} completed build types, {} culture records",
+        "Parsed city extended data for {} cities: {} queue items, {} completed builds, {} culture records, {} yields, {} religions",
         city_count,
         totals.0,
         totals.1,
-        totals.2
+        totals.2,
+        totals.3,
+        totals.4
     );
 
     Ok(())
