@@ -114,22 +114,68 @@ import_all() {
     print_success "Import complete: $success succeeded, $failed failed out of $count total"
 }
 
+# Get the Tauri app data directory path
+get_app_data_dir() {
+    local os_type="$(uname -s)"
+    case "$os_type" in
+        Darwin*)
+            echo "$HOME/Library/Application Support/com.becked.per-ankh"
+            ;;
+        Linux*)
+            echo "$HOME/.local/share/com.becked.per-ankh"
+            ;;
+        MINGW*|MSYS*|CYGWIN*)
+            echo "$APPDATA/com.becked.per-ankh"
+            ;;
+        *)
+            print_error "Unsupported operating system: $os_type"
+            return 1
+            ;;
+    esac
+}
+
 # Remove the database
 clean_db() {
     local db_path="${1:-$DEFAULT_DB}"
+    local removed=0
 
+    # Clean development/test database (current directory)
     if [ -f "$db_path" ]; then
-        print_warning "Removing database: $db_path"
+        print_warning "Removing development database: $db_path"
         rm -f "$db_path"
-        print_success "Database removed"
+        print_success "Development database removed"
+        removed=1
+
+        # Also remove any .wal or .shm files (SQLite/DuckDB journal files)
+        if [ -f "${db_path}.wal" ]; then
+            rm -f "${db_path}.wal"
+            print_info "Removed WAL file"
+        fi
     else
-        print_info "Database not found: $db_path"
+        print_info "Development database not found: $db_path"
     fi
 
-    # Also remove any .wal or .shm files (SQLite/DuckDB journal files)
-    if [ -f "${db_path}.wal" ]; then
-        rm -f "${db_path}.wal"
-        print_info "Removed WAL file"
+    # Clean Tauri app database (platform-specific location)
+    local app_data_dir=$(get_app_data_dir)
+    if [ $? -eq 0 ]; then
+        local app_db_path="$app_data_dir/per-ankh.db"
+        if [ -f "$app_db_path" ]; then
+            print_warning "Removing Tauri app database: $app_db_path"
+            rm -f "$app_db_path"
+            print_success "Tauri app database removed"
+            removed=1
+
+            if [ -f "${app_db_path}.wal" ]; then
+                rm -f "${app_db_path}.wal"
+                print_info "Removed app WAL file"
+            fi
+        else
+            print_info "Tauri app database not found: $app_db_path"
+        fi
+    fi
+
+    if [ $removed -eq 0 ]; then
+        print_warning "No databases found to clean"
     fi
 }
 
@@ -204,19 +250,40 @@ format_code() {
 # Show database info
 db_info() {
     local db_path="${1:-$DEFAULT_DB}"
+    local found=0
 
-    if [ ! -f "$db_path" ]; then
-        print_error "Database not found: $db_path"
-        exit 1
+    # Show development database info
+    if [ -f "$db_path" ]; then
+        print_info "Development database: $db_path"
+        local size=$(du -h "$db_path" | cut -f1)
+        echo "  Size: $size"
+        echo "  Modified: $(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$db_path" 2>/dev/null || stat -c '%y' "$db_path" 2>/dev/null | cut -d'.' -f1)"
+        found=1
+        echo ""
+    else
+        print_info "Development database not found: $db_path"
+        echo ""
     fi
 
-    print_info "Database info for: $db_path"
+    # Show Tauri app database info
+    local app_data_dir=$(get_app_data_dir)
+    if [ $? -eq 0 ]; then
+        local app_db_path="$app_data_dir/per-ankh.db"
+        if [ -f "$app_db_path" ]; then
+            print_info "Tauri app database: $app_db_path"
+            local size=$(du -h "$app_db_path" | cut -f1)
+            echo "  Size: $size"
+            echo "  Modified: $(stat -f '%Sm' -t '%Y-%m-%d %H:%M:%S' "$app_db_path" 2>/dev/null || stat -c '%y' "$app_db_path" 2>/dev/null | cut -d'.' -f1)"
+            found=1
+        else
+            print_info "Tauri app database not found: $app_db_path"
+        fi
+    fi
 
-    # Show file size
-    local size=$(du -h "$db_path" | cut -f1)
-    echo "Size: $size"
-
-    # Could add more info here using DuckDB CLI if available
+    if [ $found -eq 0 ]; then
+        print_warning "No databases found"
+        exit 1
+    fi
 }
 
 # Display help
@@ -234,7 +301,7 @@ Commands:
                                Example: $0 import-all
                                Example: $0 import-all ./my-saves custom.db "OW-Greece*.zip"
 
-  clean [db]                   Remove database file (default: per-ankh.db)
+  clean [db]                   Remove database files (dev + Tauri app databases)
                                Example: $0 clean
 
   dev                          Run the application in development mode
@@ -256,7 +323,7 @@ Commands:
   format                       Format Rust code
                                Example: $0 format
 
-  db-info [db]                 Show database information
+  db-info [db]                 Show database information (dev + Tauri app databases)
                                Example: $0 db-info
 
   help                         Show this help message
