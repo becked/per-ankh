@@ -90,7 +90,6 @@ pub fn parse_families(
         // Step 4: Insert/update family records
         for family_name in player_families {
             // Get family class from global lookup (defaults to empty if not found)
-            // NOTE: FamilyClass element is not being found in parsed XML - see docs/issues/familyclass-parsing-issue.md
             let family_class = family_classes.get(&family_name).map(|s| s.as_str()).unwrap_or("");
 
             // Generate a stable xml_id for the family based on name hash
@@ -154,20 +153,49 @@ pub fn parse_families(
 
 /// Parse the global FamilyClass element to get all family names and their classes
 ///
-/// NOTE: There is a known issue where the FamilyClass element exists in the raw XML
-/// but is not appearing in the parsed DOM tree. See docs/issues/familyclass-parsing-issue.md
-/// Until resolved, this function returns an empty map and families will have empty family_class.
+/// Tries multiple strategies to find the FamilyClass element:
+/// 1. Search direct children of root (expected location)
+/// 2. Search all descendants (in case it's nested)
 fn parse_family_classes(root: &roxmltree::Node) -> Result<HashMap<String, String>> {
     let mut family_classes = HashMap::new();
 
+    // Strategy 1: Try direct children first (expected location)
     if let Some(class_node) = root.children().find(|n| n.has_tag_name("FamilyClass")) {
+        log::debug!("Found FamilyClass as direct child of Root");
         for family_elem in class_node.children().filter(|n| n.is_element()) {
             let family_name = family_elem.tag_name().name().to_string();
             if let Some(class) = family_elem.text() {
                 family_classes.insert(family_name, class.to_string());
             }
         }
+        log::info!("Parsed {} family classes from FamilyClass element", family_classes.len());
+        return Ok(family_classes);
     }
+
+    // Strategy 2: Search all descendants (in case element is nested)
+    log::debug!("FamilyClass not found in direct children, searching descendants...");
+    if let Some(class_node) = root.descendants().find(|n| n.has_tag_name("FamilyClass")) {
+        log::info!("Found FamilyClass in descendants (not direct child)");
+        for family_elem in class_node.children().filter(|n| n.is_element()) {
+            let family_name = family_elem.tag_name().name().to_string();
+            if let Some(class) = family_elem.text() {
+                family_classes.insert(family_name, class.to_string());
+            }
+        }
+        log::info!("Parsed {} family classes from FamilyClass element", family_classes.len());
+        return Ok(family_classes);
+    }
+
+    // If we get here, FamilyClass wasn't found
+    log::warn!("FamilyClass element not found in XML document");
+
+    // Debug: List first 50 direct children to help diagnose
+    let child_names: Vec<String> = root.children()
+        .filter(|n| n.is_element())
+        .take(50)
+        .map(|n| n.tag_name().name().to_string())
+        .collect();
+    log::debug!("First 50 root children: {:?}", child_names);
 
     Ok(family_classes)
 }

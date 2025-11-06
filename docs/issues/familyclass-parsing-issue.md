@@ -1,8 +1,9 @@
 # FamilyClass Parsing Issue
 
-**Status:** Open
+**Status:** ✅ Resolved
 **Priority:** Medium
 **Date:** 2025-11-06
+**Resolution Date:** 2025-11-06
 **Component:** `src/parser/entities/families.rs`
 
 ## Summary
@@ -217,3 +218,34 @@ lazy_static! {
 - roxmltree documentation: https://docs.rs/roxmltree/
 - XML structure confirmed in: `test-data/saves/OW-Rome-Year97-2025-10-09-00-13-02.zip`
 - Debug logs from commit: fd3b9b5 (event stories fix)
+
+---
+
+## Resolution
+
+**Root Cause:** The `FamilyClass` element is **not a direct child of `<Root>`** as initially assumed from XML indentation. Instead, it exists somewhere deeper in the document tree. The `children()` iterator only searches immediate children, so it never found the element.
+
+**Solution:** Modified `parse_family_classes()` in `src/parser/entities/families.rs` to use a two-strategy approach:
+
+1. **Strategy 1:** Try `root.children()` first (expected location for direct children)
+2. **Strategy 2:** Fall back to `root.descendants()` which searches the entire document tree
+
+**Code Changes:**
+- Updated `parse_family_classes()` to try both `children()` and `descendants()`
+- Added debug logging to identify which strategy succeeds
+- Added diagnostic logging of first 50 root children if element not found
+
+**Test Results:**
+```
+[INFO] Found FamilyClass in descendants (not direct child)
+[INFO] Parsed 36 family classes from FamilyClass element
+```
+
+The fix successfully parses all family classes. The descendant search found the element where the direct child search failed.
+
+**Impact:**
+- Family classes (FAMILYCLASS_CHAMPIONS, FAMILYCLASS_HUNTERS, etc.) are now correctly populated
+- No data loss for family archetypes
+- Minimal performance impact (descendants search only runs if children search fails)
+
+**Commit:** [To be added after commit]
