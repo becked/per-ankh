@@ -201,6 +201,103 @@ pub fn parse_city_completed_builds(
     Ok(inserted)
 }
 
+/// Parse city culture and happiness per team
+///
+/// # XML Structure
+/// ```xml
+/// <City ID="0">
+///   <TeamCulture>
+///     <TEAM_0>5</TEAM_0>
+///     <TEAM_1>2</TEAM_1>
+///   </TeamCulture>
+///   <TeamHappinessLevel>
+///     <TEAM_0>3</TEAM_0>
+///   </TeamHappinessLevel>
+/// </City>
+/// ```
+///
+/// # Schema
+/// ```sql
+/// CREATE TABLE city_culture (
+///     city_id INTEGER NOT NULL,
+///     match_id BIGINT NOT NULL,
+///     team_id INTEGER NOT NULL,
+///     culture_level INTEGER DEFAULT 0,
+///     happiness_level INTEGER DEFAULT 0,
+///     PRIMARY KEY (city_id, match_id, team_id)
+/// );
+/// ```
+pub fn parse_city_culture_happiness(
+    city_node: &Node,
+    conn: &Connection,
+    city_id: i64,
+    match_id: i64,
+) -> Result<usize> {
+    let mut count = 0;
+
+    // Parse TeamCulture
+    let team_culture = if let Some(culture_node) = city_node
+        .children()
+        .find(|n| n.has_tag_name("TeamCulture"))
+    {
+        culture_node
+            .children()
+            .filter(|n| n.is_element())
+            .filter_map(|team_node| {
+                let team_tag = team_node.tag_name().name(); // "TEAM_0"
+                let team_id: i32 = team_tag.strip_prefix("TEAM_")?.parse().ok()?;
+                let culture: i32 = team_node.text()?.parse().ok()?;
+                Some((team_id, culture))
+            })
+            .collect::<std::collections::HashMap<i32, i32>>()
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    // Parse TeamHappinessLevel
+    let team_happiness = if let Some(happiness_node) = city_node
+        .children()
+        .find(|n| n.has_tag_name("TeamHappinessLevel"))
+    {
+        happiness_node
+            .children()
+            .filter(|n| n.is_element())
+            .filter_map(|team_node| {
+                let team_tag = team_node.tag_name().name(); // "TEAM_0"
+                let team_id: i32 = team_tag.strip_prefix("TEAM_")?.parse().ok()?;
+                let happiness: i32 = team_node.text()?.parse().ok()?;
+                Some((team_id, happiness))
+            })
+            .collect::<std::collections::HashMap<i32, i32>>()
+    } else {
+        std::collections::HashMap::new()
+    };
+
+    // Combine and insert records for all teams that have either culture or happiness
+    let mut all_teams = std::collections::HashSet::new();
+    all_teams.extend(team_culture.keys());
+    all_teams.extend(team_happiness.keys());
+
+    for &team_id in &all_teams {
+        let culture_level = team_culture.get(&team_id).copied().unwrap_or(0);
+        let happiness_level = team_happiness.get(&team_id).copied().unwrap_or(0);
+
+        conn.execute(
+            "INSERT INTO city_culture
+             (city_id, match_id, team_id, culture_level, culture_progress, happiness_level)
+             VALUES (?, ?, ?, ?, 0, ?)
+             ON CONFLICT (city_id, match_id, team_id)
+             DO UPDATE SET
+                 culture_level = excluded.culture_level,
+                 happiness_level = excluded.happiness_level",
+            params![city_id, match_id, team_id, culture_level, happiness_level],
+        )?;
+        count += 1;
+    }
+
+    Ok(count)
+}
+
 /// Parse all city extended data for a single city
 ///
 /// This is a convenience function that calls all city data parsers.
@@ -209,11 +306,12 @@ pub fn parse_city_extended_data(
     conn: &Connection,
     city_id: i64,
     match_id: i64,
-) -> Result<(usize, usize)> {
+) -> Result<(usize, usize, usize)> {
     let queue_count = parse_city_production_queue(city_node, conn, city_id, match_id)?;
     let completed_count = parse_city_completed_builds(city_node, conn, city_id, match_id)?;
+    let culture_count = parse_city_culture_happiness(city_node, conn, city_id, match_id)?;
 
-    Ok((queue_count, completed_count))
+    Ok((queue_count, completed_count, culture_count))
 }
 
 #[cfg(test)]
