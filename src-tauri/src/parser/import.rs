@@ -391,7 +391,7 @@ fn parse_character_extended_data_all(
     let root = doc.root_element();
     let match_id = id_mapper.match_id;
 
-    let mut totals = (0, 0, 0, 0); // genealogy, stats, traits, relationships
+    let mut totals = (0, 0, 0, 0, 0); // genealogy, stats, traits, relationships, marriages
     let mut character_count = 0;
 
     for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
@@ -411,22 +411,24 @@ fn parse_character_extended_data_all(
         }
 
         // Parse other extended data
-        let (stats, traits, relationships) =
+        let (stats, traits, relationships, marriages) =
             super::entities::parse_character_extended_data(&character_node, tx, id_mapper, character_id, match_id)?;
 
         totals.1 += stats;
         totals.2 += traits;
         totals.3 += relationships;
+        totals.4 += marriages;
         character_count += 1;
     }
 
     log::info!(
-        "Parsed character extended data for {} characters: {} genealogy, {} stats, {} traits, {} relationships",
+        "Parsed character extended data for {} characters: {} genealogy, {} stats, {} traits, {} relationships, {} marriages",
         character_count,
         totals.0,
         totals.1,
         totals.2,
-        totals.3
+        totals.3,
+        totals.4
     );
 
     Ok(())

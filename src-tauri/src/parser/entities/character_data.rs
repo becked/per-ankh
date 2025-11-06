@@ -347,6 +347,78 @@ pub fn parse_character_genealogy(
     }
 }
 
+/// Parse character marriages from Spouses element
+///
+/// # XML Structure
+/// ```xml
+/// <Character ID="4">
+///   <Spouses>
+///     <ID>19</ID>
+///     <ID>25</ID>
+///   </Spouses>
+/// </Character>
+/// ```
+///
+/// # Schema
+/// ```sql
+/// CREATE TABLE character_marriages (
+///     character_id INTEGER NOT NULL,
+///     match_id BIGINT NOT NULL,
+///     spouse_id INTEGER NOT NULL,
+///     married_turn INTEGER,
+///     divorced_turn INTEGER,
+///     PRIMARY KEY (character_id, match_id, spouse_id)
+/// );
+/// ```
+///
+/// Note: Each marriage is stored from both character perspectives (symmetric storage).
+/// Character 4 married to 19 creates two rows: (4, 19) and (19, 4).
+pub fn parse_character_marriages(
+    character_node: &Node,
+    conn: &Connection,
+    id_mapper: &IdMapper,
+    character_id: i64,
+    match_id: i64,
+) -> Result<usize> {
+    let mut count = 0;
+
+    // Find Spouses element
+    let spouses_node = match character_node.children().find(|n| n.has_tag_name("Spouses")) {
+        Some(node) => node,
+        None => return Ok(0), // No spouses for this character
+    };
+
+    // Iterate over ID elements (each is a spouse)
+    for id_node in spouses_node.children().filter(|n| n.has_tag_name("ID")) {
+        let spouse_xml_id_str = id_node
+            .text()
+            .ok_or_else(|| ParseError::MissingElement("Spouses.ID text".to_string()))?;
+
+        let spouse_xml_id: i32 = spouse_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!(
+                "Invalid spouse ID: {}",
+                spouse_xml_id_str
+            ))
+        })?;
+
+        // Map XML ID to database ID
+        let spouse_id = id_mapper.get_character(spouse_xml_id)?;
+
+        // Insert marriage record
+        // Note: married_turn and divorced_turn are left NULL since we don't have that data
+        conn.execute(
+            "INSERT INTO character_marriages (character_id, match_id, spouse_id, married_turn, divorced_turn)
+             VALUES (?, ?, ?, NULL, NULL)
+             ON CONFLICT (character_id, match_id, spouse_id) DO NOTHING",
+            params![character_id, match_id, spouse_id],
+        )?;
+
+        count += 1;
+    }
+
+    Ok(count)
+}
+
 /// Parse all character extended data for a single character
 ///
 /// This is a convenience function that calls all character data parsers.
@@ -356,13 +428,15 @@ pub fn parse_character_extended_data(
     id_mapper: &IdMapper,
     character_id: i64,
     match_id: i64,
-) -> Result<(usize, usize, usize)> {
+) -> Result<(usize, usize, usize, usize)> {
     let stats_count = parse_character_stats(character_node, conn, character_id, match_id)?;
     let traits_count = parse_character_traits(character_node, conn, character_id, match_id)?;
     let relationships_count =
         parse_character_relationships(character_node, conn, id_mapper, character_id, match_id)?;
+    let marriages_count =
+        parse_character_marriages(character_node, conn, id_mapper, character_id, match_id)?;
 
-    Ok((stats_count, traits_count, relationships_count))
+    Ok((stats_count, traits_count, relationships_count, marriages_count))
 }
 
 #[cfg(test)]
