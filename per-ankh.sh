@@ -13,7 +13,7 @@ NC='\033[0m' # No Color
 
 # Configuration
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-DEFAULT_DB="per-ankh.db"
+DEFAULT_DB="src-tauri/per-ankh.db"
 TEST_SAVES_DIR="$PROJECT_ROOT/test-data/saves"
 RUST_DIR="$PROJECT_ROOT/src-tauri"
 
@@ -297,6 +297,35 @@ db_info() {
     fi
 }
 
+# Analyze database contents (empty tables, empty columns)
+db_analyze() {
+    local db_path="${1:-$DEFAULT_DB}"
+
+    if [ ! -f "$db_path" ]; then
+        print_error "Database not found: $db_path"
+        exit 1
+    fi
+
+    # Convert to absolute path (needed since we cd to src-tauri)
+    local abs_db_path
+    if [[ "$db_path" = /* ]]; then
+        # Already absolute
+        abs_db_path="$db_path"
+    else
+        # Make relative path absolute from project root
+        abs_db_path="$PROJECT_ROOT/$db_path"
+    fi
+
+    print_info "Analyzing database: $db_path"
+    print_info "This may take a moment for large databases..."
+    echo ""
+
+    cd "$RUST_DIR"
+    cargo run --example analyze_database --release -- "$abs_db_path"
+
+    print_success "Analysis complete"
+}
+
 # Display help
 show_help() {
     cat << EOF
@@ -337,10 +366,13 @@ Commands:
   db-info [db]                 Show database information (dev + Tauri app databases)
                                Example: $0 db-info
 
+  db-analyze [db]              Analyze database contents (empty tables, empty columns)
+                               Example: $0 db-analyze
+
   help                         Show this help message
 
 Options:
-  db                           Database file path (default: per-ankh.db)
+  db                           Database file path (default: src-tauri/per-ankh.db)
   dir                          Directory containing save files (default: test-data/saves)
   pat                          File pattern to match (default: *.zip)
 
@@ -417,6 +449,10 @@ main() {
             ;;
         db-info)
             db_info "$@"
+            ;;
+        db-analyze)
+            check_requirements
+            db_analyze "$@"
             ;;
         help|--help|-h)
             show_help

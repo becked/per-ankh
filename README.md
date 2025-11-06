@@ -47,6 +47,12 @@ Use the `per-ankh.sh` helper script for common operations:
 # Format code
 ./per-ankh.sh format
 
+# Show database info
+./per-ankh.sh db-info
+
+# Analyze database contents (empty tables, empty columns)
+./per-ankh.sh db-analyze
+
 # Show all available commands
 ./per-ankh.sh help
 ```
@@ -74,3 +80,19 @@ Run the full integration test suite using the helper script:
 The database schema is defined in `docs/schema.sql`. The parser implements Milestones 1-6 as documented in:
 - `docs/plans/xml-parser-implementation.md`
 - `docs/plans/xml-parser-milestone-4-6-updates.md`
+
+### Database Analysis
+
+Analyze the database to check table population and identify empty tables or columns:
+
+```bash
+./per-ankh.sh db-analyze
+```
+
+This command:
+- Shows row counts for all tables
+- Identifies completely empty tables
+- Identifies columns that are empty (all NULL) in populated tables
+- Calculates overall data completeness percentage
+
+The analysis helps track parser implementation progress and identify data gaps. See `docs/database-analysis-2025-11-06.md` for the most recent analysis report.
