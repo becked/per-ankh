@@ -220,8 +220,16 @@ fn import_save_file_internal(
     // 4. Cities (depends on players, tiles)
     let cities_count = super::entities::parse_cities(doc, tx, &mut id_mapper)?;
 
-    // Pass 2b - Parse birth cities after cities are created
-    log::info!("Parsing character birth cities (Pass 2b)...");
+    // Pass 2b - Update tile city ownership after cities are created
+    log::info!("Updating tile city ownership (Pass 2b)...");
+    super::entities::update_tile_city_ownership(doc, tx, &id_mapper)?;
+
+    // Pass 2c - Parse tile ownership history after city ownership is set
+    log::info!("Parsing tile ownership history (Pass 2c)...");
+    super::entities::parse_tile_ownership_history(doc, tx, &id_mapper)?;
+
+    // Pass 2d - Parse birth cities after cities are created
+    log::info!("Parsing character birth cities (Pass 2d)...");
     parse_character_birth_cities_pass2b(doc, tx, &id_mapper)?;
 
     // 5. Tribes (references characters via leader_character_id)

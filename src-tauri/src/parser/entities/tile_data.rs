@@ -2,7 +2,10 @@
 //
 // This module handles parsing of tile-specific nested data:
 // - Tile visibility (RevealedTurn, RevealedOwner) -> tile_visibility table
-// - Tile history (OwnerHistory, TerrainHistory, etc.) -> tile_changes table
+// - Tile terrain history (TerrainHistory) -> tile_changes table
+// - Tile vegetation history (VegetationHistory) -> tile_changes table
+//
+// NOTE: Ownership history is handled by tiles.rs -> tile_ownership_history table
 //
 // XML Structure:
 // ```xml
@@ -14,10 +17,6 @@
 //   <RevealedOwner>
 //     <TEAM_0>0</TEAM_0>
 //   </RevealedOwner>
-//   <OwnerHistory>
-//     <T10>0</T10>
-//     <T25>1</T25>
-//   </OwnerHistory>
 //   <TerrainHistory>
 //     <T5>TERRAIN_TEMPERATE</T5>
 //   </TerrainHistory>
@@ -139,35 +138,8 @@ pub fn parse_tile_history(
 ) -> Result<usize> {
     let mut count = 0;
 
-    // Parse OwnerHistory
-    if let Some(owner_history) = tile_node
-        .children()
-        .find(|n| n.has_tag_name("OwnerHistory"))
-    {
-        for turn_node in owner_history.children().filter(|n| n.is_element()) {
-            let turn_tag = turn_node.tag_name().name();
-            if let Some(turn_str) = turn_tag.strip_prefix('T') {
-                let turn: i32 = turn_str.parse().map_err(|_| {
-                    ParseError::InvalidFormat(format!("Invalid turn tag: {}", turn_tag))
-                })?;
-
-                let new_owner = turn_node
-                    .text()
-                    .ok_or_else(|| ParseError::MissingElement(format!("OwnerHistory.{}", turn_tag)))?;
-
-                let change_id = *next_change_id;
-                *next_change_id += 1;
-
-                conn.execute(
-                    "INSERT INTO tile_changes
-                     (change_id, tile_id, match_id, turn, change_type, old_value, new_value)
-                     VALUES (?, ?, ?, ?, 'owner', NULL, ?)",
-                    params![change_id, tile_id, match_id, turn, new_owner],
-                )?;
-                count += 1;
-            }
-        }
-    }
+    // NOTE: OwnerHistory is handled by tiles.rs -> tile_ownership_history table
+    // This parser only handles terrain and vegetation changes
 
     // Parse TerrainHistory
     if let Some(terrain_history) = tile_node
@@ -281,27 +253,18 @@ mod tests {
     fn test_parse_tile_history_structure() {
         let xml = r#"
             <Tile ID="0">
-                <OwnerHistory>
-                    <T10>0</T10>
-                    <T25>1</T25>
-                </OwnerHistory>
                 <TerrainHistory>
                     <T5>TERRAIN_TEMPERATE</T5>
+                    <T10>TERRAIN_ARID</T10>
                 </TerrainHistory>
+                <VegetationHistory>
+                    <T15>VEGETATION_TREES</T15>
+                </VegetationHistory>
             </Tile>
         "#;
 
         let doc = Document::parse(xml).unwrap();
         let tile_node = doc.root_element();
-
-        let owner_history = tile_node
-            .children()
-            .find(|n| n.has_tag_name("OwnerHistory"))
-            .unwrap();
-        assert_eq!(
-            owner_history.children().filter(|n| n.is_element()).count(),
-            2
-        );
 
         let terrain_history = tile_node
             .children()
@@ -309,6 +272,15 @@ mod tests {
             .unwrap();
         assert_eq!(
             terrain_history.children().filter(|n| n.is_element()).count(),
+            2
+        );
+
+        let vegetation_history = tile_node
+            .children()
+            .find(|n| n.has_tag_name("VegetationHistory"))
+            .unwrap();
+        assert_eq!(
+            vegetation_history.children().filter(|n| n.is_element()).count(),
             1
         );
     }

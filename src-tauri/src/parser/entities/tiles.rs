@@ -5,7 +5,7 @@ use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
 
-/// Parse all tiles from the XML document
+/// Parse all tiles from the XML document (Pass 1: Core data only, no ownership history)
 pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let root = doc.root_element();
     let mut count = 0;
@@ -75,26 +75,43 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             .and_then(|s| s.parse::<bool>().ok())
             .unwrap_or(false);
 
-        // Ownership (filter out -1 for unowned tiles)
-        let owner_player_xml_id = tile_node
-            .opt_child_text("OwnerPlayer")
-            .and_then(|s| s.parse::<i32>().ok())
-            .filter(|&id| id >= 0);
-        let owner_player_db_id = match owner_player_xml_id {
-            Some(id) => Some(id_mapper.get_player(id)?),
-            None => None,
-        };
+        // City ownership (which city's territory this tile belongs to)
+        // NOTE: owner_city_id is NOT set here because cities haven't been parsed yet.
+        // It will be populated in a second pass after cities are created (see import.rs).
+        let owner_city_db_id: Option<i32> = None;
 
-        let owner_city_xml_id = tile_node
-            .opt_child_text("OwnerCity")
-            .and_then(|s| s.parse::<i32>().ok());
-        let owner_city_db_id = match owner_city_xml_id {
-            Some(id) => {
-                // City might not be parsed yet, so we use map instead of get
-                Some(id_mapper.map_city(id))
+        // Parse ownership history to derive current owner
+        // NOTE: Ownership history is NOT inserted here - it will be inserted in a separate pass
+        // after cities are created and tile city ownership is set (see parse_tile_ownership_history).
+        let mut owner_player_db_id = None;
+        if let Some(history_node) = tile_node.children().find(|n| n.has_tag_name("OwnerHistory")) {
+            let mut max_turn = -1;
+            let mut latest_owner_xml_id = None;
+
+            // Find the latest ownership change to set current owner
+            for turn_node in history_node.children() {
+                if let Some(tag_name) = turn_node.tag_name().name().strip_prefix('T') {
+                    if let Ok(turn) = tag_name.parse::<i32>() {
+                        if let Some(text) = turn_node.text() {
+                            if let Ok(owner_xml_id) = text.parse::<i32>() {
+                                // Track latest ownership change
+                                if turn > max_turn {
+                                    max_turn = turn;
+                                    latest_owner_xml_id = Some(owner_xml_id);
+                                }
+                            }
+                        }
+                    }
+                }
             }
-            None => None,
-        };
+
+            // Set current owner from latest history entry
+            if let Some(owner_xml_id) = latest_owner_xml_id {
+                if owner_xml_id >= 0 {
+                    owner_player_db_id = Some(id_mapper.get_player(owner_xml_id)?);
+                }
+            }
+        }
 
         // Sites
         let is_city_site = tile_node
@@ -147,6 +164,100 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
         count += 1;
     }
 
-    log::info!("Parsed {} tiles", count);
+    // Explicitly drop appender to ensure data is flushed
+    drop(app);
+
+    log::info!("Parsed {} tiles (core data only)", count);
+    Ok(count)
+}
+
+/// Update tile city ownership (Pass 2 - called after cities are parsed)
+///
+/// This function must be called AFTER cities have been inserted into the database.
+/// It populates the owner_city_id field in the tiles table by parsing the CityTerritory
+/// elements from the XML.
+pub fn update_tile_city_ownership(
+    doc: &XmlDocument,
+    conn: &Connection,
+    id_mapper: &IdMapper,
+) -> Result<usize> {
+    let root = doc.root_element();
+    let mut count = 0;
+
+    // Find all Tile elements with CityTerritory
+    for tile_node in root.children().filter(|n| n.has_tag_name("Tile")) {
+        if let Some(city_territory_str) = tile_node.opt_child_text("CityTerritory") {
+            if let Ok(city_xml_id) = city_territory_str.parse::<i32>() {
+                let tile_xml_id = tile_node.req_attr("ID")?.parse::<i32>()?;
+                let tile_db_id = id_mapper.get_tile(tile_xml_id)?;
+                let city_db_id = id_mapper.get_city(city_xml_id)?;
+
+                // Update the tile's owner_city_id
+                conn.execute(
+                    "UPDATE tiles SET owner_city_id = ? WHERE tile_id = ? AND match_id = ?",
+                    params![city_db_id, tile_db_id, id_mapper.match_id],
+                )?;
+                count += 1;
+            }
+        }
+    }
+
+    log::info!("Updated {} tiles with city ownership", count);
+    Ok(count)
+}
+
+/// Parse tile ownership history (Pass 3 - called after tile city ownership is updated)
+///
+/// This function must be called AFTER tiles have been fully populated with city ownership.
+/// It inserts records into the tile_ownership_history table.
+pub fn parse_tile_ownership_history(
+    doc: &XmlDocument,
+    conn: &Connection,
+    id_mapper: &IdMapper,
+) -> Result<usize> {
+    let root = doc.root_element();
+    let mut count = 0;
+
+    // Create appender for ownership history
+    let mut ownership_app = conn.appender("tile_ownership_history")?;
+
+    // Find all Tile elements with OwnerHistory
+    for tile_node in root.children().filter(|n| n.has_tag_name("Tile")) {
+        let tile_xml_id = tile_node.req_attr("ID")?.parse::<i32>()?;
+        let tile_db_id = id_mapper.get_tile(tile_xml_id)?;
+
+        if let Some(history_node) = tile_node.children().find(|n| n.has_tag_name("OwnerHistory")) {
+            // Parse all ownership changes
+            for turn_node in history_node.children() {
+                if let Some(tag_name) = turn_node.tag_name().name().strip_prefix('T') {
+                    if let Ok(turn) = tag_name.parse::<i32>() {
+                        if let Some(text) = turn_node.text() {
+                            if let Ok(owner_xml_id) = text.parse::<i32>() {
+                                // Insert into ownership history (-1 means unowned)
+                                let owner_db_id = if owner_xml_id >= 0 {
+                                    Some(id_mapper.get_player(owner_xml_id)?)
+                                } else {
+                                    None
+                                };
+
+                                ownership_app.append_row(params![
+                                    tile_db_id,         // tile_id
+                                    id_mapper.match_id, // match_id
+                                    turn,               // turn
+                                    owner_db_id,        // owner_player_id (NULL if -1)
+                                ])?;
+                                count += 1;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Explicitly drop appender to ensure data is flushed
+    drop(ownership_app);
+
+    log::info!("Parsed {} tile ownership history records", count);
     Ok(count)
 }
