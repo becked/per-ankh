@@ -20,6 +20,7 @@ pub struct IdMapper {
     tiles: HashMap<i32, i64>,
     families: HashMap<i32, i64>,
     religions: HashMap<i32, i64>,
+    religion_names: HashMap<String, i64>, // For religions identified by name
     tribes: HashMap<i32, i64>,
 
     // Sequence generators (next available ID)
@@ -52,6 +53,7 @@ impl IdMapper {
                 tiles: HashMap::new(),
                 families: HashMap::new(),
                 religions: HashMap::new(),
+                religion_names: HashMap::new(),
                 tribes: HashMap::new(),
                 next_player_id: 1,
                 next_character_id: 1,
@@ -79,6 +81,7 @@ impl IdMapper {
             tiles: HashMap::new(),
             families: HashMap::new(),
             religions: HashMap::new(),
+            religion_names: HashMap::new(),
             tribes: HashMap::new(),
             next_player_id: 1,
             next_character_id: 1,
@@ -240,6 +243,14 @@ impl IdMapper {
 
     pub fn map_religion(&mut self, xml_id: i32) -> i64 {
         *self.religions.entry(xml_id).or_insert_with(|| {
+            let id = self.next_religion_id;
+            self.next_religion_id += 1;
+            id
+        })
+    }
+
+    pub fn map_religion_by_name(&mut self, name: &str) -> i64 {
+        *self.religion_names.entry(name.to_string()).or_insert_with(|| {
             let id = self.next_religion_id;
             self.next_religion_id += 1;
             id

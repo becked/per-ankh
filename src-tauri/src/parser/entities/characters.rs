@@ -77,19 +77,8 @@ pub fn parse_characters_core(
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(1);
 
-        // Core attributes (1-10)
-        let wisdom = char_node
-            .opt_child_text("Wisdom")
-            .and_then(|s| s.parse::<i32>().ok());
-        let charisma = char_node
-            .opt_child_text("Charisma")
-            .and_then(|s| s.parse::<i32>().ok());
-        let courage = char_node
-            .opt_child_text("Courage")
-            .and_then(|s| s.parse::<i32>().ok());
-        let discipline = char_node
-            .opt_child_text("Discipline")
-            .and_then(|s| s.parse::<i32>().ok());
+        // Note: Core attributes (wisdom, charisma, courage, discipline) are stored in
+        // character_stats table via Rating elements, not as direct columns on characters
 
         // Status flags
         let is_royal = char_node
@@ -130,10 +119,6 @@ pub fn parse_characters_core(
             portrait,               // portrait
             xp,                     // xp
             level,                  // level
-            wisdom,                 // wisdom
-            charisma,               // charisma
-            courage,                // courage
-            discipline,             // discipline
             is_royal,               // is_royal
             is_infertile,           // is_infertile
             became_leader_turn,     // became_leader_turn
