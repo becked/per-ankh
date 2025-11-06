@@ -230,9 +230,13 @@ fn import_save_file_internal(
     log::info!("Parsing character extended data (stats, traits, relationships)...");
     parse_character_extended_data_all(doc, tx, &id_mapper)?;
 
-    // Parse city extended data (Milestone 5)
-    log::info!("Parsing city extended data (production queues, completed builds)...");
+    // Parse city extended data (Milestone 5 + 6)
+    log::info!("Parsing city extended data (production, culture, happiness)...");
     parse_city_extended_data_all(doc, tx, &id_mapper)?;
+
+    // Parse tile extended data (Milestone 6)
+    log::info!("Parsing tile extended data (visibility, history)...");
+    parse_tile_extended_data_all(doc, tx, &id_mapper)?;
 
     // Parse event stories (Milestone 5)
     log::info!("Parsing event stories...");
@@ -392,16 +396,17 @@ fn parse_character_extended_data_all(
     Ok(())
 }
 
-/// Parse city extended data (Milestone 5)
+/// Parse city extended data (Milestone 5 + 6)
 ///
 /// This function parses city-specific nested data:
 /// - Production queue (BuildQueue) -> city_production_queue table
 /// - Completed builds (CompletedBuild) -> city_projects_completed table
+/// - Culture and happiness (TeamCulture, TeamHappinessLevel) -> city_culture table
 fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
     let match_id = id_mapper.match_id;
 
-    let mut totals = (0, 0); // queue items, completed builds
+    let mut totals = (0, 0, 0); // queue items, completed builds, culture records
     let mut city_count = 0;
 
     for city_node in root.children().filter(|n| n.has_tag_name("City")) {
@@ -411,17 +416,65 @@ fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
         })?;
         let city_id = id_mapper.get_city(city_xml_id)?;
 
-        let (queue, completed) =
+        let (queue, completed, culture) =
             super::entities::parse_city_extended_data(&city_node, tx, city_id, match_id)?;
 
         totals.0 += queue;
         totals.1 += completed;
+        totals.2 += culture;
         city_count += 1;
     }
 
     log::info!(
-        "Parsed city extended data for {} cities: {} queue items, {} completed build types",
+        "Parsed city extended data for {} cities: {} queue items, {} completed build types, {} culture records",
         city_count,
+        totals.0,
+        totals.1,
+        totals.2
+    );
+
+    Ok(())
+}
+
+/// Parse tile extended data (Milestone 6)
+///
+/// This function parses tile-specific nested data:
+/// - Tile visibility (RevealedTurn, RevealedOwner) -> tile_visibility table
+/// - Tile history (OwnerHistory, TerrainHistory, VegetationHistory) -> tile_changes table
+fn parse_tile_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
+    let root = doc.root_element();
+    let match_id = id_mapper.match_id;
+
+    // Track next change_id across all tiles
+    // Start from match_id * 1_000_000 to ensure uniqueness across matches
+    let mut next_change_id = match_id * 1_000_000;
+
+    let mut totals = (0, 0); // visibility records, history changes
+    let mut tile_count = 0;
+
+    for tile_node in root.children().filter(|n| n.has_tag_name("Tile")) {
+        let tile_xml_id_str: &str = tile_node.req_attr("ID")?;
+        let tile_xml_id: i32 = tile_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!("Tile ID must be an integer: {}", tile_xml_id_str))
+        })?;
+        let tile_id = id_mapper.get_tile(tile_xml_id)?;
+
+        let (visibility, history) = super::entities::parse_tile_extended_data(
+            &tile_node,
+            tx,
+            tile_id,
+            match_id,
+            &mut next_change_id,
+        )?;
+
+        totals.0 += visibility;
+        totals.1 += history;
+        tile_count += 1;
+    }
+
+    log::info!(
+        "Parsed tile extended data for {} tiles: {} visibility records, {} history changes",
+        tile_count,
         totals.0,
         totals.1
     );
