@@ -21,6 +21,9 @@ pub fn parse_characters_core(
     let root = doc.root_element();
     let mut count = 0;
 
+    // Use Appender for bulk insert performance
+    let mut app = conn.appender("characters")?;
+
     // Find all Character elements as direct children of Root
     for char_node in root.children().filter(|n| n.has_tag_name("Character")) {
         let xml_id = char_node.req_attr("ID")?.parse::<i32>()?;
@@ -103,72 +106,43 @@ pub fn parse_characters_core(
             .opt_child_text("BecameLeaderTurn")
             .and_then(|s| s.parse::<i32>().ok());
 
-        // Insert character using UPSERT (Pass 1: NULL for parent relationships)
-        // Note: character_id is NOT updated on conflict - it must remain stable
-        conn.execute(
-            "INSERT INTO characters (
-                character_id, match_id, xml_id, first_name, gender, player_id, tribe,
-                birth_turn, death_turn, death_reason,
-                birth_father_id, birth_mother_id,
-                family, nation, religion,
-                cognomen, archetype, portrait,
-                xp, level,
-                wisdom, charisma, courage, discipline,
-                is_royal, is_infertile, became_leader_turn
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (match_id, xml_id) DO UPDATE SET
-                first_name = excluded.first_name,
-                gender = excluded.gender,
-                player_id = excluded.player_id,
-                tribe = excluded.tribe,
-                birth_turn = excluded.birth_turn,
-                death_turn = excluded.death_turn,
-                death_reason = excluded.death_reason,
-                family = excluded.family,
-                nation = excluded.nation,
-                religion = excluded.religion,
-                cognomen = excluded.cognomen,
-                archetype = excluded.archetype,
-                portrait = excluded.portrait,
-                xp = excluded.xp,
-                level = excluded.level,
-                wisdom = excluded.wisdom,
-                charisma = excluded.charisma,
-                courage = excluded.courage,
-                discipline = excluded.discipline,
-                is_royal = excluded.is_royal,
-                is_infertile = excluded.is_infertile,
-                became_leader_turn = excluded.became_leader_turn",
-            params![
-                db_id,
-                id_mapper.match_id,
-                xml_id,
-                first_name,
-                gender,
-                player_db_id,
-                tribe,
-                birth_turn,
-                death_turn,
-                death_reason,
-                // birth_father_id and birth_mother_id are NULL in Pass 1
-                family,
-                nation,
-                religion,
-                cognomen,
-                archetype,
-                portrait,
-                xp,
-                level,
-                wisdom,
-                charisma,
-                courage,
-                discipline,
-                is_royal,
-                is_infertile,
-                became_leader_turn
-            ],
-        )?;
+        // Insert character using Appender (Pass 1: NULL for parent relationships)
+        // Must match schema column order exactly
+        app.append_row(params![
+            db_id,                  // character_id
+            id_mapper.match_id,     // match_id
+            xml_id,                 // xml_id
+            first_name,             // first_name
+            gender,                 // gender
+            player_db_id,           // player_id
+            tribe,                  // tribe
+            birth_turn,             // birth_turn
+            None::<i32>,            // birth_city_id - not parsed yet
+            death_turn,             // death_turn
+            death_reason,           // death_reason
+            None::<i64>,            // birth_father_id - NULL in Pass 1
+            None::<i64>,            // birth_mother_id - NULL in Pass 1
+            family,                 // family
+            nation,                 // nation
+            religion,               // religion
+            cognomen,               // cognomen
+            archetype,              // archetype
+            portrait,               // portrait
+            xp,                     // xp
+            level,                  // level
+            wisdom,                 // wisdom
+            charisma,               // charisma
+            courage,                // courage
+            discipline,             // discipline
+            is_royal,               // is_royal
+            is_infertile,           // is_infertile
+            became_leader_turn,     // became_leader_turn
+            None::<i32>,            // abdicated_turn - not parsed yet
+            false,                  // was_religion_head - default false
+            false,                  // was_family_head - default false
+            None::<i32>,            // nation_joined_turn - not parsed yet
+            None::<i64>             // seed - not parsed yet
+        ])?;
 
         count += 1;
     }

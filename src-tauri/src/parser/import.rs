@@ -137,42 +137,66 @@ fn import_save_file_internal(
     tx: &Connection,
     game_id: &str,
 ) -> Result<ImportResult> {
-    // Compute file hash
-    let file_hash = compute_file_hash(file_path)?;
+    // Extract turn number from XML (Turn is inside Game element)
+    let root = doc.root_element();
+    let game_node = root
+        .children()
+        .find(|n| n.has_tag_name("Game"))
+        .ok_or_else(|| ParseError::MissingElement("Game".to_string()))?;
 
-    // Check if match exists
-    let existing_match: Option<i64> = tx
+    let turn_number: i32 = game_node
+        .opt_child_text("Turn")
+        .and_then(|t| t.parse().ok())
+        .ok_or_else(|| ParseError::MissingElement("Game.Turn".to_string()))?;
+
+    log::info!("Save is from turn {}", turn_number);
+
+    // Check if this exact save (game_id, turn) already exists
+    let existing_match: Option<(i64, String)> = tx
         .query_row(
-            "SELECT match_id FROM matches WHERE game_id = ?",
-            params![game_id],
-            |row| row.get(0),
+            "SELECT match_id, file_name FROM matches WHERE game_id = ? AND total_turns = ?",
+            params![game_id, turn_number],
+            |row| Ok((row.get(0)?, row.get(1)?)),
         )
         .ok();
 
-    let (match_id, is_new) = if let Some(id) = existing_match {
-        log::info!("Updating existing match {} (GameId: {})", id, game_id);
-        (id, false)
-    } else {
-        // Generate new match_id
-        let new_id = tx
-            .query_row("SELECT COALESCE(MAX(match_id), 0) + 1 FROM matches", [], |row| {
-                row.get(0)
-            })
-            .unwrap_or(1);
-        log::info!("Creating new match {} (GameId: {})", new_id, game_id);
-        (new_id, true)
-    };
-
-    // Create or update IdMapper
-    let mut id_mapper = IdMapper::new(match_id, tx, is_new)?;
-
-    // Insert/update match record
-    upsert_match_metadata(tx, match_id, game_id, file_path, &file_hash, doc)?;
-
-    // If updating, delete derived data (core entities handled by UPSERT)
-    if !is_new {
-        delete_derived_match_data(tx, match_id)?;
+    if let Some((existing_id, existing_file)) = existing_match {
+        log::info!(
+            "Save already imported as match {} (file: {}). Skipping re-import.",
+            existing_id,
+            existing_file
+        );
+        return Ok(ImportResult {
+            success: true,
+            match_id: Some(existing_id),
+            game_id: game_id.to_string(),
+            is_new: false,
+            error: None,
+        });
     }
+
+    // Generate new match_id
+    let match_id: i64 = tx
+        .query_row("SELECT COALESCE(MAX(match_id), 0) + 1 FROM matches", [], |row| {
+            row.get(0)
+        })
+        .unwrap_or(1);
+
+    log::info!(
+        "Creating new match {} (GameId: {}, Turn: {})",
+        match_id,
+        game_id,
+        turn_number
+    );
+
+    // Compute file hash
+    let file_hash = compute_file_hash(file_path)?;
+
+    // Create IdMapper for fresh import (is_new = true)
+    let mut id_mapper = IdMapper::new(match_id, tx, true)?;
+
+    // Insert match record (no UPSERT - always fresh import)
+    insert_match_metadata(tx, match_id, game_id, file_path, &file_hash, doc)?;
 
     // Parse foundation entities (Pass 1: Core data only)
     log::info!("Parsing foundation entities...");
@@ -251,7 +275,7 @@ fn import_save_file_internal(
         success: true,
         match_id: Some(match_id),
         game_id: game_id.to_string(),
-        is_new,
+        is_new: true, // Always true - we skip re-imports upfront
         error: None,
     })
 }
@@ -577,8 +601,8 @@ fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper)
     Ok(())
 }
 
-/// Insert or update match metadata
-fn upsert_match_metadata(
+/// Insert match metadata (fresh import only - no UPSERT)
+fn insert_match_metadata(
     tx: &Connection,
     match_id: i64,
     game_id: &str,
@@ -594,81 +618,24 @@ fn upsert_match_metadata(
         .and_then(|n| n.to_str())
         .unwrap_or("unknown.zip");
 
-    // Extract basic metadata from XML (more fields can be added later)
+    // Extract basic metadata from XML
     let game_name = root.opt_child_text("GameName");
-    let total_turns: Option<i32> = root.opt_child_text("Turn").and_then(|t| t.parse().ok());
+
+    // Get Turn from Game element
+    let game_node = root
+        .children()
+        .find(|n| n.has_tag_name("Game"))
+        .ok_or_else(|| ParseError::MissingElement("Game".to_string()))?;
+    let total_turns: i32 = game_node
+        .opt_child_text("Turn")
+        .and_then(|t| t.parse().ok())
+        .ok_or_else(|| ParseError::MissingElement("Game.Turn".to_string()))?;
 
     tx.execute(
         "INSERT INTO matches (match_id, file_name, file_hash, game_id, game_name, total_turns)
-         VALUES (?, ?, ?, ?, ?, ?)
-         ON CONFLICT (match_id) DO UPDATE SET
-             file_name = excluded.file_name,
-             file_hash = excluded.file_hash,
-             game_name = excluded.game_name,
-             total_turns = excluded.total_turns,
-             processed_date = CAST(now() AS TIMESTAMP)",
+         VALUES (?, ?, ?, ?, ?, ?)",
         params![match_id, file_name, file_hash, game_id, game_name, total_turns],
     )?;
-
-    Ok(())
-}
-
-/// Delete derived data for match update (preserves core entities for UPSERT)
-fn delete_derived_match_data(tx: &Connection, match_id: i64) -> Result<()> {
-    // Order matters: delete children before parents to respect FK constraints
-    let delete_order = &[
-        // Child/relationship tables (deepest dependencies first)
-        "unit_promotions",
-        "character_traits",
-        "character_stats",
-        "character_missions",
-        "character_relationships",
-        "character_marriages",
-        "city_yields",
-        "city_culture",
-        "city_religions",
-        "city_production_queue",
-        "city_units_produced",
-        "city_projects_completed",
-        "tile_changes",
-        "tile_visibility",
-        "player_resources",
-        "player_units_produced",
-        "player_council",
-        "family_opinion_history",
-        "family_law_opinions",
-        "religion_opinion_history",
-        "technologies_completed",
-        "technology_progress",
-        "technology_states",
-        "laws",
-        "diplomacy",
-        "player_goals",
-        "story_events",
-        "story_choices",
-        "event_outcomes",
-        "event_logs",
-        // Time-series tables (heavy, simpler to replace)
-        "yield_history",
-        "points_history",
-        "military_history",
-        "legitimacy_history",
-        "yield_prices",
-        // Match settings
-        "match_settings",
-    ];
-
-    for table in delete_order {
-        let result = tx.execute(
-            &format!("DELETE FROM {} WHERE match_id = ?", table),
-            params![match_id],
-        );
-
-        // Ignore errors for tables that might not exist yet (graceful degradation)
-        if let Err(e) = result {
-            log::warn!("Failed to delete from {}: {}", table, e);
-        }
-    }
 
     Ok(())
 }
