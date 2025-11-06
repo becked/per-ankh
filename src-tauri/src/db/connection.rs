@@ -10,7 +10,19 @@ use tauri::Manager;
 /// Get the database file path in the user's data directory
 ///
 /// Uses Tauri's app_data_dir for cross-platform compatibility
+/// In debug builds, uses local per-ankh.db for development
 pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
+    // In debug mode, use local database for development
+    #[cfg(debug_assertions)]
+    {
+        let local_db = PathBuf::from("per-ankh.db");
+        if local_db.exists() {
+            log::info!("Using local database: {:?}", local_db);
+            return Ok(local_db);
+        }
+    }
+
+    // Production: use app data directory
     let app_data_dir = app_handle
         .path()
         .app_data_dir()
