@@ -288,9 +288,11 @@ fn import_save_file_internal(
 /// - CouncilCharacter → player_council
 /// - ActiveLaw → laws
 /// - GoalList → player_goals
+/// - PermanentLogList/LogData → event_logs
 fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
-    let mut totals = (0, 0, 0, 0, 0, 0, 0); // resources, tech_progress, tech_completed, tech_states, council, laws, goals
+    let mut totals = (0, 0, 0, 0, 0, 0, 0, 0); // resources, tech_progress, tech_completed, tech_states, council, laws, goals, log_events
+    let mut next_log_id: i64 = 1;
 
     // Iterate through all Player elements
     for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
@@ -308,11 +310,12 @@ fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &Id
         totals.4 += super::entities::parse_player_council(&player_node, tx, id_mapper, player_id, match_id)?;
         totals.5 += super::entities::parse_laws(&player_node, tx, player_id, match_id)?;
         totals.6 += super::entities::parse_player_goals(&player_node, tx, id_mapper, player_id, match_id)?;
+        totals.7 += super::entities::parse_player_log_events(&player_node, tx, player_id, match_id, &mut next_log_id)?;
     }
 
     log::info!(
-        "Parsed player gameplay data: {} resources, {} tech_progress, {} tech_completed, {} tech_states, {} council, {} laws, {} goals",
-        totals.0, totals.1, totals.2, totals.3, totals.4, totals.5, totals.6
+        "Parsed player gameplay data: {} resources, {} tech_progress, {} tech_completed, {} tech_states, {} council, {} laws, {} goals, {} log_events",
+        totals.0, totals.1, totals.2, totals.3, totals.4, totals.5, totals.6, totals.7
     );
 
     Ok(())
