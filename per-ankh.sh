@@ -83,10 +83,15 @@ import_save() {
     print_info "Importing save file: $save_file"
     print_info "Database: $db_path"
 
-    cd "$RUST_DIR"
-    cargo run --example import_save --release -- "$abs_save_file" --db "$abs_db_path"
+    (cd "$RUST_DIR" && cargo run --example import_save --release -- "$abs_save_file" --db "$abs_db_path")
+    local result=$?
 
-    print_success "Import completed"
+    if [ $result -eq 0 ]; then
+        print_success "Import completed"
+        return 0
+    else
+        return $result
+    fi
 }
 
 # Import all save files in a directory
@@ -108,7 +113,18 @@ import_all() {
     local success=0
     local failed=0
 
-    for save_file in "$saves_dir"/$pattern; do
+    # Use nullglob to handle case where no files match
+    shopt -s nullglob
+
+    # Build array of matching files (enables proper glob expansion)
+    local files=("$saves_dir"/$pattern)
+
+    # Restore default glob behavior
+    shopt -u nullglob
+
+    print_info "Found ${#files[@]} matching files"
+
+    for save_file in "${files[@]}"; do
         if [ -f "$save_file" ]; then
             count=$((count + 1))
             print_info "[$count] Importing: $(basename "$save_file")"
