@@ -7,6 +7,20 @@ This document outlines remaining parser implementation work, prioritized by valu
 
 ---
 
+## ⚠️ Important: Multi-Match Support
+
+**All entity tables now use composite PRIMARY KEYs `(id, match_id)`** to support importing multiple game saves into the same database without conflicts.
+
+**Design Principles:**
+- Entity IDs are `INTEGER` (not `BIGINT`) and scoped per match
+- Each match maintains independent ID sequences (1, 2, 3, ...)
+- All UPDATE/DELETE queries must include `match_id` in WHERE clauses
+- Foreign keys must reference both `entity_id` AND `match_id`
+
+If you create new tables, follow this pattern. See `docs/schema-fix-composite-primary-keys.md` for details.
+
+---
+
 ## 🎯 Quick Wins (High Value, Low Effort)
 
 ### 1. LogData Events Parser
@@ -16,7 +30,7 @@ This document outlines remaining parser implementation work, prioritized by valu
 
 **Status:**
 - ✅ XML data exists and verified: `/Root/Player/PermanentLogList/LogData`
-- ✅ Schema table exists: `event_logs` (currently empty)
+- ✅ Schema table exists: `event_logs` with composite PK `(log_id, match_id)` (currently empty)
 - ❌ Parser not implemented
 
 **XML Structure:**
@@ -45,7 +59,7 @@ This document outlines remaining parser implementation work, prioritized by valu
 **Schema:**
 ```sql
 CREATE TABLE event_logs (
-    log_id BIGINT NOT NULL PRIMARY KEY,
+    log_id INTEGER NOT NULL,
     player_id INTEGER NOT NULL,
     match_id BIGINT NOT NULL,
     event_type VARCHAR NOT NULL,
@@ -53,7 +67,8 @@ CREATE TABLE event_logs (
     turn INTEGER NOT NULL,
     data1 VARCHAR,
     data2 VARCHAR,
-    data3 VARCHAR
+    data3 VARCHAR,
+    PRIMARY KEY (log_id, match_id)
 );
 ```
 
@@ -136,12 +151,12 @@ CREATE TABLE character_marriages (
 
 ### 4. MemoryData System
 **Priority:** High (if data is valuable)
-**Effort:** Medium (requires schema addition)
+**Effort:** Low-Medium
 **Impact:** AI diplomatic memory tracking
 
 **Status:**
 - ✅ XML data exists: `/Root/Player/MemoryList/MemoryData`
-- ❌ No schema table exists
+- ✅ Schema table exists: `memory_data` with composite PK `(memory_id, match_id)`
 - ❌ Parser not implemented
 
 **XML Structure:**
@@ -163,24 +178,12 @@ CREATE TABLE character_marriages (
 ```
 
 **Action Required:**
-1. **First:** Investigate several save files to understand data structure variations
-2. **Then:** Design schema table for `player_memories` or `diplomatic_memories`
-3. **Finally:** Implement parser
+1. Investigate several save files to understand data structure variations
+2. Implement parser following composite key pattern
+3. Ensure IdMapper generates memory_id per match
 
-**Proposed Schema:**
-```sql
-CREATE TABLE player_memories (
-    memory_id BIGINT NOT NULL PRIMARY KEY,
-    player_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
-    memory_type VARCHAR NOT NULL,
-    target_player_id INTEGER,
-    target_family VARCHAR,
-    target_character_id INTEGER,
-    turn INTEGER NOT NULL,
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
-);
-```
+**Schema Reference:**
+See `memory_data` table in `docs/schema.sql` - already includes composite PK and proper foreign keys.
 
 ---
 
@@ -215,7 +218,7 @@ xmllint --xpath "//Tile[1]" save-file.xml
 
 **Status:**
 - ❓ May not exist in XML (outcomes might be implicit in LogData text)
-- ✅ Schema table exists: `event_outcomes` (empty)
+- ✅ Schema table exists: `event_outcomes` with composite PK `(outcome_id, match_id)` (empty)
 
 **Action Required:**
 1. Search multiple save files for outcome-related elements
@@ -264,11 +267,12 @@ Action: Create corrected version based on actual XML inspection.
 
 These have been implemented:
 
-1. ✅ **Character Genealogy** - `parse_character_genealogy()` (Nov 6, 2025)
-2. ✅ **City Yields** - `parse_city_yields()` (Nov 6, 2025)
-3. ✅ **City Religions** - `parse_city_religions()` (Nov 6, 2025)
-4. ✅ **City Culture Fix** - Corrected T. prefix parsing (Nov 6, 2025)
-5. ✅ **Unit Tables Removed** - YAGNI cleanup (Nov 6, 2025)
+1. ✅ **Composite Primary Keys** - All entity tables updated for multi-match support (Nov 6, 2025)
+2. ✅ **Character Genealogy** - `parse_character_genealogy()` (Nov 6, 2025)
+3. ✅ **City Yields** - `parse_city_yields()` (Nov 6, 2025)
+4. ✅ **City Religions** - `parse_city_religions()` (Nov 6, 2025)
+5. ✅ **City Culture Fix** - Corrected T. prefix parsing (Nov 6, 2025)
+6. ✅ **Unit Tables Removed** - YAGNI cleanup (Nov 6, 2025)
 
 ---
 
