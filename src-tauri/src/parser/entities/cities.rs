@@ -32,7 +32,11 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
         let tile_xml_id = city_node.req_attr("TileID")?.parse::<i32>()?;
         let tile_db_id = id_mapper.get_tile(tile_xml_id)?;
 
-        let city_name = city_node.req_child_text("NameType")?; // City name is in NameType element
+        // City name: older saves use "NameType", newer saves use "Name"
+        let city_name = city_node
+            .opt_child_text("NameType")
+            .or_else(|| city_node.opt_child_text("Name"))
+            .unwrap_or("Unknown City");
         let founded_turn = city_node.req_attr("Founded")?.parse::<i32>()?;
 
         // Optional fields

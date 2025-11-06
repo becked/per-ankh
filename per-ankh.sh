@@ -69,11 +69,22 @@ import_save() {
         exit 1
     fi
 
+    # Convert to absolute paths (needed since we cd to src-tauri)
+    local abs_save_file="$(cd "$(dirname "$save_file")" && pwd)/$(basename "$save_file")"
+    local abs_db_path
+    if [[ "$db_path" = /* ]]; then
+        # Already absolute
+        abs_db_path="$db_path"
+    else
+        # Make relative path absolute from project root
+        abs_db_path="$PROJECT_ROOT/$db_path"
+    fi
+
     print_info "Importing save file: $save_file"
     print_info "Database: $db_path"
 
     cd "$RUST_DIR"
-    cargo run --example import_save --release -- "$save_file" --db "$db_path"
+    cargo run --example import_save --release -- "$abs_save_file" --db "$abs_db_path"
 
     print_success "Import completed"
 }
