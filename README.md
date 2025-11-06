@@ -12,49 +12,61 @@ Per-Ankh imports Old World game save files and provides data visualizations and 
 
 [VS Code](https://code.visualstudio.com/) + [Svelte](https://marketplace.visualstudio.com/items?itemName=svelte.svelte-vscode) + [Tauri](https://marketplace.visualstudio.com/items?itemName=tauri-apps.tauri-vscode) + [rust-analyzer](https://marketplace.visualstudio.com/items?itemName=rust-lang.rust-analyzer).
 
-### Testing Save File Imports
+### Common Development Tasks
 
-#### CLI Import Tool
-
-The fastest way to test save file imports is using the standalone CLI tool:
+Use the `per-ankh.sh` helper script for common operations:
 
 ```bash
-cd src-tauri
-cargo run --example import_save -- path/to/savefile.zip
-```
+# Import a single save file
+./per-ankh.sh import test-data/saves/OW-Greece-Year74-2022-01-02-20-28-07.zip
 
-This will create a database (`per-ankh.db`) in the current directory and import the save file, showing detailed statistics about what was imported.
+# Import all test saves
+./per-ankh.sh import-all
 
-**Options:**
+# Import only Greece saves
+./per-ankh.sh import-all test-data/saves per-ankh.db "OW-Greece*.zip"
 
-```bash
-# Use custom database location
-cargo run --example import_save -- path/to/savefile.zip --db /path/to/database.db
+# Clean database and reimport all saves
+./per-ankh.sh clean && ./per-ankh.sh import-all
 
-# Test all saves in the test-data directory
-for save in test-data/saves/*.zip; do
-  cargo run --example import_save -- "$save"
-done
+# Run the app in development mode
+./per-ankh.sh dev
+
+# Build for distribution
+./per-ankh.sh build
+
+# Run tests
+./per-ankh.sh test
+
+# Run specific test
+./per-ankh.sh test test_import_babylonia_save
+
+# Check code quality (cargo check, clippy, fmt)
+./per-ankh.sh check
+
+# Format code
+./per-ankh.sh format
+
+# Show all available commands
+./per-ankh.sh help
 ```
 
 #### Integration Tests
 
-Run the full integration test suite:
+Run the full integration test suite using the helper script:
 
 ```bash
-cd src-tauri
+# Run all tests
+./per-ankh.sh test-release
 
 # Test importing a single save file
-cargo test test_import_babylonia_save --release -- --nocapture
+./per-ankh.sh test-release test_import_babylonia_save
 
 # Test reimporting the same save (update-and-replace)
-cargo test test_reimport_same_save --release -- --nocapture
+./per-ankh.sh test-release test_reimport_same_save
 
 # Test importing multiple different saves
-cargo test test_import_multiple_saves --release -- --nocapture
-
-# Run all tests
-cargo test --release -- --nocapture
+./per-ankh.sh test-release test_import_multiple_saves
 ```
 
 ### Database Schema
