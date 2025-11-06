@@ -226,6 +226,18 @@ fn import_save_file_internal(
     log::info!("Parsing time-series data...");
     parse_timeseries_data(doc, tx, &id_mapper)?;
 
+    // Parse character extended data (Milestone 5)
+    log::info!("Parsing character extended data (stats, traits, relationships)...");
+    parse_character_extended_data_all(doc, tx, &id_mapper)?;
+
+    // Parse city extended data (Milestone 5)
+    log::info!("Parsing city extended data (production queues, completed builds)...");
+    parse_city_extended_data_all(doc, tx, &id_mapper)?;
+
+    // Parse event stories (Milestone 5)
+    log::info!("Parsing event stories...");
+    parse_event_stories(doc, tx, &id_mapper)?;
+
     // Save ID mappings
     id_mapper.save_mappings(tx)?;
 
@@ -329,6 +341,177 @@ fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMappe
         player_totals.4,
         player_totals.5
     );
+
+    Ok(())
+}
+
+/// Parse character extended data (Milestone 5)
+///
+/// This function parses character-specific nested data:
+/// - Stats (Rating, Stat) -> character_stats table
+/// - Traits (TraitTurn) -> character_traits table
+/// - Relationships (RelationshipList) -> character_relationships table
+fn parse_character_extended_data_all(
+    doc: &XmlDocument,
+    tx: &Connection,
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let root = doc.root_element();
+    let match_id = id_mapper.match_id;
+
+    let mut totals = (0, 0, 0); // stats, traits, relationships
+    let mut character_count = 0;
+
+    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
+        let character_xml_id_str: &str = character_node.req_attr("ID")?;
+        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!(
+                "Character ID must be an integer: {}",
+                character_xml_id_str
+            ))
+        })?;
+        let character_id = id_mapper.get_character(character_xml_id)?;
+
+        let (stats, traits, relationships) =
+            super::entities::parse_character_extended_data(&character_node, tx, id_mapper, character_id, match_id)?;
+
+        totals.0 += stats;
+        totals.1 += traits;
+        totals.2 += relationships;
+        character_count += 1;
+    }
+
+    log::info!(
+        "Parsed character extended data for {} characters: {} stats, {} traits, {} relationships",
+        character_count,
+        totals.0,
+        totals.1,
+        totals.2
+    );
+
+    Ok(())
+}
+
+/// Parse city extended data (Milestone 5)
+///
+/// This function parses city-specific nested data:
+/// - Production queue (BuildQueue) -> city_production_queue table
+/// - Completed builds (CompletedBuild) -> city_projects_completed table
+fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
+    let root = doc.root_element();
+    let match_id = id_mapper.match_id;
+
+    let mut totals = (0, 0); // queue items, completed builds
+    let mut city_count = 0;
+
+    for city_node in root.children().filter(|n| n.has_tag_name("City")) {
+        let city_xml_id_str: &str = city_node.req_attr("ID")?;
+        let city_xml_id: i32 = city_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!("City ID must be an integer: {}", city_xml_id_str))
+        })?;
+        let city_id = id_mapper.get_city(city_xml_id)?;
+
+        let (queue, completed) =
+            super::entities::parse_city_extended_data(&city_node, tx, city_id, match_id)?;
+
+        totals.0 += queue;
+        totals.1 += completed;
+        city_count += 1;
+    }
+
+    log::info!(
+        "Parsed city extended data for {} cities: {} queue items, {} completed build types",
+        city_count,
+        totals.0,
+        totals.1
+    );
+
+    Ok(())
+}
+
+/// Parse event stories (Milestone 5)
+///
+/// This function parses event stories from all entity types:
+/// - Player-level: AllEventStoryTurn, FamilyEventStoryTurn, etc.
+/// - Character-level: EventStoryTurn
+/// - City-level: EventStoryTurn
+fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
+    let root = doc.root_element();
+    let match_id = id_mapper.match_id;
+
+    // Track next event_id across all entity types
+    // Start from match_id * 1_000_000 to ensure uniqueness across matches
+    let mut next_event_id = match_id * 1_000_000;
+
+    let mut total_events = 0;
+
+    // Parse player-level events
+    for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
+        let player_xml_id_str: &str = player_node.req_attr("ID")?;
+        let player_xml_id: i32 = player_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!("Player ID must be an integer: {}", player_xml_id_str))
+        })?;
+        let player_id = id_mapper.get_player(player_xml_id)?;
+
+        total_events +=
+            super::entities::parse_player_events(&player_node, tx, player_id, match_id, &mut next_event_id)?;
+    }
+
+    // Parse character-level events
+    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
+        let character_xml_id_str: &str = character_node.req_attr("ID")?;
+        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!(
+                "Character ID must be an integer: {}",
+                character_xml_id_str
+            ))
+        })?;
+        let character_id = id_mapper.get_character(character_xml_id)?;
+
+        // Need to find player_id for this character
+        // Characters have a Player attribute
+        let player_xml_id: i32 = character_node
+            .opt_attr("Player")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        let player_id = id_mapper.get_player(player_xml_id)?;
+
+        total_events += super::entities::parse_character_events(
+            &character_node,
+            tx,
+            character_id,
+            player_id,
+            match_id,
+            &mut next_event_id,
+        )?;
+    }
+
+    // Parse city-level events
+    for city_node in root.children().filter(|n| n.has_tag_name("City")) {
+        let city_xml_id_str: &str = city_node.req_attr("ID")?;
+        let city_xml_id: i32 = city_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!("City ID must be an integer: {}", city_xml_id_str))
+        })?;
+        let city_id = id_mapper.get_city(city_xml_id)?;
+
+        // Cities have a Player attribute
+        let player_xml_id: i32 = city_node
+            .opt_attr("Player")
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        let player_id = id_mapper.get_player(player_xml_id)?;
+
+        total_events += super::entities::parse_city_events(
+            &city_node,
+            tx,
+            city_id,
+            player_id,
+            match_id,
+            &mut next_event_id,
+        )?;
+    }
+
+    log::info!("Parsed {} event stories", total_events);
 
     Ok(())
 }
