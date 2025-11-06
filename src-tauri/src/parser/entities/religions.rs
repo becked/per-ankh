@@ -99,21 +99,14 @@ pub fn parse_religions(
             .founder_player_xml_id
             .and_then(|id| id_mapper.get_player(id).ok());
 
-        // Insert religion using UPSERT (on religion_id, the primary key)
+        // Insert religion (fresh import - no UPSERT needed)
         conn.execute(
             "INSERT INTO religions (
                 religion_id, match_id, xml_id,
                 religion_name, founded_turn, founder_player_id,
                 head_character_id, holy_city_id
             )
-            VALUES (?, ?, NULL, ?, ?, ?, ?, ?)
-            ON CONFLICT (religion_id) DO UPDATE SET
-                match_id = excluded.match_id,
-                religion_name = excluded.religion_name,
-                founded_turn = excluded.founded_turn,
-                founder_player_id = excluded.founder_player_id,
-                head_character_id = excluded.head_character_id,
-                holy_city_id = excluded.holy_city_id",
+            VALUES (?, ?, NULL, ?, ?, ?, ?, ?)",
             params![
                 db_id,
                 id_mapper.match_id,

@@ -325,8 +325,8 @@ pub fn parse_character_parent_relationships(
         conn.execute(
             "UPDATE characters
              SET birth_father_id = ?, birth_mother_id = ?
-             WHERE character_id = ?",
-            params![birth_father_id, birth_mother_id, character_id],
+             WHERE character_id = ? AND match_id = ?",
+            params![birth_father_id, birth_mother_id, character_id, id_mapper.match_id],
         )?;
         Ok(true)
     } else {
@@ -367,8 +367,8 @@ pub fn parse_character_birth_city(
         conn.execute(
             "UPDATE characters
              SET birth_city_id = ?
-             WHERE character_id = ?",
-            params![city_id, character_id],
+             WHERE character_id = ? AND match_id = ?",
+            params![city_id, character_id, id_mapper.match_id],
         )?;
         Ok(true)
     } else {
