@@ -397,7 +397,7 @@ CREATE TABLE cities (
     city_id INTEGER NOT NULL,
     match_id BIGINT NOT NULL,
     xml_id INTEGER,  -- Original XML City ID for debugging and reference
-    player_id INTEGER NOT NULL,
+    player_id INTEGER,  -- NULL for cities in anarchy/being captured (Player="-1" in XML)
     tile_id INTEGER NOT NULL,
     -- Identity
     city_name VARCHAR NOT NULL,

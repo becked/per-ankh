@@ -30,4 +30,8 @@ roxmltree = "0.19"  # DOM-based XML parsing (replaced quick-xml)
 log = "0.4"  # Logging facade
 env_logger = "0.11"  # Logging implementation for development
 lazy_static = "1.4"  # Global state for import locks
+sha256 = "1.5"  # SHA-256 hashing for file integrity
+
+[dev-dependencies]
+tempfile = "3.8"  # Temporary directories for tests
 
