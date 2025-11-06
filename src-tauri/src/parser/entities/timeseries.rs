@@ -177,19 +177,13 @@ pub fn parse_game_yield_prices(
         return Ok(0);
     }
 
-    // Batch insert using prepared statement
-    let mut stmt = conn.prepare(
-        "INSERT INTO yield_prices (match_id, turn, yield_type, price)
-         VALUES (?, ?, ?, ?)",
-    )?;
-
-    let mut count = 0;
+    // Bulk insert using Appender API for better performance
+    let mut app = conn.appender("yield_prices")?;
     for (yield_type, turn, price) in &data {
-        stmt.execute(params![match_id, turn, yield_type, price])?;
-        count += 1;
+        app.append_row(params![match_id, turn, yield_type, price])?;
     }
 
-    Ok(count)
+    Ok(data.len())
 }
 
 /// Parse player military power history
@@ -216,18 +210,12 @@ pub fn parse_military_power_history(
         return Ok(0);
     }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO military_history (player_id, match_id, turn, military_power)
-         VALUES (?, ?, ?, ?)",
-    )?;
-
-    let mut count = 0;
+    let mut app = conn.appender("military_history")?;
     for (turn, military_power) in &data {
-        stmt.execute(params![player_id, match_id, turn, military_power])?;
-        count += 1;
+        app.append_row(params![player_id, match_id, turn, military_power])?;
     }
 
-    Ok(count)
+    Ok(data.len())
 }
 
 /// Parse player points history
@@ -253,18 +241,12 @@ pub fn parse_points_history(
         return Ok(0);
     }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO points_history (player_id, match_id, turn, points)
-         VALUES (?, ?, ?, ?)",
-    )?;
-
-    let mut count = 0;
+    let mut app = conn.appender("points_history")?;
     for (turn, points) in &data {
-        stmt.execute(params![player_id, match_id, turn, points])?;
-        count += 1;
+        app.append_row(params![player_id, match_id, turn, points])?;
     }
 
-    Ok(count)
+    Ok(data.len())
 }
 
 /// Parse player legitimacy history
@@ -290,18 +272,12 @@ pub fn parse_legitimacy_history(
         return Ok(0);
     }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO legitimacy_history (player_id, match_id, turn, legitimacy)
-         VALUES (?, ?, ?, ?)",
-    )?;
-
-    let mut count = 0;
+    let mut app = conn.appender("legitimacy_history")?;
     for (turn, legitimacy) in &data {
-        stmt.execute(params![player_id, match_id, turn, legitimacy])?;
-        count += 1;
+        app.append_row(params![player_id, match_id, turn, legitimacy])?;
     }
 
-    Ok(count)
+    Ok(data.len())
 }
 
 /// Parse player yield rate history (per-yield type)
@@ -332,18 +308,12 @@ pub fn parse_yield_rate_history(
         return Ok(0);
     }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO yield_history (player_id, match_id, turn, yield_type, amount)
-         VALUES (?, ?, ?, ?, ?)",
-    )?;
-
-    let mut count = 0;
+    let mut app = conn.appender("yield_history")?;
     for (yield_type, turn, amount) in &data {
-        stmt.execute(params![player_id, match_id, turn, yield_type, amount])?;
-        count += 1;
+        app.append_row(params![player_id, match_id, turn, yield_type, amount])?;
     }
 
-    Ok(count)
+    Ok(data.len())
 }
 
 /// Parse player family opinion history (per-family)
@@ -374,18 +344,12 @@ pub fn parse_family_opinion_history(
         return Ok(0);
     }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO family_opinion_history (player_id, match_id, family_name, turn, opinion)
-         VALUES (?, ?, ?, ?, ?)",
-    )?;
-
-    let mut count = 0;
+    let mut app = conn.appender("family_opinion_history")?;
     for (family_name, turn, opinion) in &data {
-        stmt.execute(params![player_id, match_id, family_name, turn, opinion])?;
-        count += 1;
+        app.append_row(params![player_id, match_id, family_name, turn, opinion])?;
     }
 
-    Ok(count)
+    Ok(data.len())
 }
 
 /// Parse player religion opinion history (per-religion)
@@ -416,18 +380,12 @@ pub fn parse_religion_opinion_history(
         return Ok(0);
     }
 
-    let mut stmt = conn.prepare(
-        "INSERT INTO religion_opinion_history (player_id, match_id, religion_name, turn, opinion)
-         VALUES (?, ?, ?, ?, ?)",
-    )?;
-
-    let mut count = 0;
+    let mut app = conn.appender("religion_opinion_history")?;
     for (religion_name, turn, opinion) in &data {
-        stmt.execute(params![player_id, match_id, religion_name, turn, opinion])?;
-        count += 1;
+        app.append_row(params![player_id, match_id, religion_name, turn, opinion])?;
     }
 
-    Ok(count)
+    Ok(data.len())
 }
 
 /// Parse all player-level time-series data
