@@ -577,6 +577,17 @@ CREATE TABLE tile_visibility (
     FOREIGN KEY (tile_id, match_id) REFERENCES tiles(tile_id, match_id)
 );
 
+-- Tile ownership history (for territorial expansion and conquest analysis)
+CREATE TABLE tile_ownership_history (
+    tile_id INTEGER NOT NULL,
+    match_id BIGINT NOT NULL,
+    turn INTEGER NOT NULL,
+    owner_player_id INTEGER,  -- NULL if unowned (-1 in XML OwnerHistory)
+    PRIMARY KEY (tile_id, match_id, turn),
+    FOREIGN KEY (tile_id, match_id) REFERENCES tiles(tile_id, match_id),
+    FOREIGN KEY (owner_player_id, match_id) REFERENCES players(player_id, match_id)
+);
+
 
 -- ============================================================================
 -- SECTION 9: UNITS (Military)
@@ -904,6 +915,10 @@ CREATE INDEX idx_tiles_owner ON tiles(owner_player_id, match_id);
 CREATE INDEX idx_tiles_city ON tiles(owner_city_id, match_id);
 -- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
 CREATE UNIQUE INDEX idx_tiles_xml_id ON tiles(match_id, xml_id) WHERE xml_id IS NOT NULL;
+
+-- Tile ownership history lookups
+CREATE INDEX idx_tile_ownership_history_lookup ON tile_ownership_history(match_id, turn);
+CREATE INDEX idx_tile_ownership_history_player ON tile_ownership_history(owner_player_id, match_id) WHERE owner_player_id IS NOT NULL;
 
 -- Time-series performance
 CREATE INDEX idx_yield_history_lookup ON yield_history(match_id, player_id, turn);

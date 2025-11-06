@@ -24,7 +24,7 @@ pub mod events;
 pub use players::parse_players;
 pub use characters::parse_characters_core;
 pub use cities::parse_cities;
-pub use tiles::parse_tiles;
+pub use tiles::{parse_tiles, update_tile_city_ownership, parse_tile_ownership_history};
 pub use families::parse_families;
 pub use religions::parse_religions;
 pub use tribes::parse_tribes;
