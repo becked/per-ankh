@@ -222,6 +222,10 @@ fn import_save_file_internal(
     let diplomacy_count = super::entities::parse_diplomacy(doc, tx, &id_mapper, match_id)?;
     log::info!("Parsed {} diplomacy relations", diplomacy_count);
 
+    // Parse time-series data (Milestone 4)
+    log::info!("Parsing time-series data...");
+    parse_timeseries_data(doc, tx, &id_mapper)?;
+
     // Save ID mappings
     id_mapper.save_mappings(tx)?;
 
@@ -269,6 +273,61 @@ fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &Id
     log::info!(
         "Parsed player gameplay data: {} resources, {} tech_progress, {} tech_completed, {} tech_states, {} council, {} laws, {} goals",
         totals.0, totals.1, totals.2, totals.3, totals.4, totals.5, totals.6
+    );
+
+    Ok(())
+}
+
+/// Parse time-series data (Milestone 4)
+///
+/// This function parses both game-level and player-level time-series data:
+/// - Game-level: YieldPriceHistory
+/// - Player-level: MilitaryPowerHistory, PointsHistory, LegitimacyHistory,
+///                 YieldRateHistory, FamilyOpinionHistory, ReligionOpinionHistory
+fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
+    let root = doc.root_element();
+    let match_id = id_mapper.match_id;
+
+    // Parse game-level yield prices
+    let yield_prices_count = if let Some(game_node) = root.children().find(|n| n.has_tag_name("Game")) {
+        super::entities::parse_game_yield_prices(&game_node, tx, match_id)?
+    } else {
+        log::warn!("No <Game> element found, skipping yield price history");
+        0
+    };
+
+    // Parse player-level time-series data
+    let mut player_totals = (0, 0, 0, 0, 0, 0); // military, points, legitimacy, yields, family_opinions, religion_opinions
+    let mut player_count = 0;
+
+    for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
+        let player_xml_id_str: &str = player_node.req_attr("ID")?;
+        let player_xml_id: i32 = player_xml_id_str.parse()
+            .map_err(|_| ParseError::InvalidFormat(format!("Player ID must be an integer: {}", player_xml_id_str)))?;
+        let player_id = id_mapper.get_player(player_xml_id)?;
+
+        let (military, points, legitimacy, yields, family_opinions, religion_opinions) =
+            super::entities::parse_player_timeseries(&player_node, tx, player_id, match_id)?;
+
+        player_totals.0 += military;
+        player_totals.1 += points;
+        player_totals.2 += legitimacy;
+        player_totals.3 += yields;
+        player_totals.4 += family_opinions;
+        player_totals.5 += religion_opinions;
+        player_count += 1;
+    }
+
+    log::info!(
+        "Parsed time-series data: {} yield prices, {} players with {} military, {} points, {} legitimacy, {} yields, {} family opinions, {} religion opinions",
+        yield_prices_count,
+        player_count,
+        player_totals.0,
+        player_totals.1,
+        player_totals.2,
+        player_totals.3,
+        player_totals.4,
+        player_totals.5
     );
 
     Ok(())
