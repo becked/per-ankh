@@ -193,15 +193,17 @@ fn import_save_file_internal(
     // 5. Cities (depends on players, tiles)
     let cities_count = super::entities::parse_cities(doc, tx, &mut id_mapper)?;
 
-    // NOTE: Families and Religions are not exported as separate top-level entities in the XML
-    // They are referenced by name (e.g., FAMILY_BARCID, RELIGION_JUDAISM) but not defined
-    // separately. They may need to be parsed from player/city context later.
-    // let families_count = super::entities::parse_families(doc, tx, &mut id_mapper)?;
+    // 6. Families (parsed from global FamilyClass and per-player family data)
+    let families_count = super::entities::parse_families(doc, tx, &mut id_mapper)?;
+
+    // NOTE: Religions are not exported as separate top-level entities in the XML
+    // They are referenced by name (e.g., RELIGION_JUDAISM) but not defined separately.
+    // They may need to be parsed from player/city context later.
     // let religions_count = super::entities::parse_religions(doc, tx, &mut id_mapper)?;
 
     log::info!(
-        "Parsed entities: {} players, {} tribes, {} characters, {} tiles, {} cities",
-        players_count, tribes_count, characters_count, tiles_count, cities_count
+        "Parsed entities: {} players, {} tribes, {} characters, {} tiles, {} cities, {} families",
+        players_count, tribes_count, characters_count, tiles_count, cities_count, families_count
     );
 
     // Parse aggregate unit production data (derived from entities)
