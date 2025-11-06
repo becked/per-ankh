@@ -523,20 +523,23 @@ fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper)
 
         // Need to find player_id for this character
         // Characters have a Player attribute
-        let player_xml_id: i32 = character_node
+        // Skip events for tribal characters (Player=-1)
+        let player_xml_id: Option<i32> = character_node
             .opt_attr("Player")
             .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let player_id = id_mapper.get_player(player_xml_id)?;
+            .filter(|&id| id >= 0); // Filter out -1 and other negative values
 
-        total_events += super::entities::parse_character_events(
-            &character_node,
-            tx,
-            character_id,
-            player_id,
-            match_id,
-            &mut next_event_id,
-        )?;
+        if let Some(player_xml_id) = player_xml_id {
+            let player_id = id_mapper.get_player(player_xml_id)?;
+            total_events += super::entities::parse_character_events(
+                &character_node,
+                tx,
+                character_id,
+                player_id,
+                match_id,
+                &mut next_event_id,
+            )?;
+        }
     }
 
     // Parse city-level events
@@ -548,20 +551,23 @@ fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper)
         let city_id = id_mapper.get_city(city_xml_id)?;
 
         // Cities have a Player attribute
-        let player_xml_id: i32 = city_node
+        // Skip events for cities in anarchy/being captured (Player=-1)
+        let player_xml_id: Option<i32> = city_node
             .opt_attr("Player")
             .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-        let player_id = id_mapper.get_player(player_xml_id)?;
+            .filter(|&id| id >= 0); // Filter out -1 and other negative values
 
-        total_events += super::entities::parse_city_events(
-            &city_node,
-            tx,
-            city_id,
-            player_id,
-            match_id,
-            &mut next_event_id,
-        )?;
+        if let Some(player_xml_id) = player_xml_id {
+            let player_id = id_mapper.get_player(player_xml_id)?;
+            total_events += super::entities::parse_city_events(
+                &city_node,
+                tx,
+                city_id,
+                player_id,
+                match_id,
+                &mut next_event_id,
+            )?;
+        }
     }
 
     log::info!("Parsed {} event stories", total_events);
