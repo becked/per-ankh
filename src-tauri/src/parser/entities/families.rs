@@ -1,9 +1,38 @@
 // Family entity parser
+//
+// Families are stored differently than other entities in the XML:
+// 1. Global FamilyClass element maps family names to their classes
+// 2. Each Player has FamilyHeadID, FamilySeatCityID, and FamilyTurnsNoLeader elements
+//    that map family names to their current state
+//
+// Example structure:
+// ```xml
+// <Root>
+//   <FamilyClass>
+//     <FAMILY_FABIUS>FAMILYCLASS_CHAMPIONS</FAMILY_FABIUS>
+//     <FAMILY_VALERIUS>FAMILYCLASS_LANDOWNERS</FAMILY_VALERIUS>
+//   </FamilyClass>
+//   <Player ID="0">
+//     <FamilyHeadID>
+//       <FAMILY_FABIUS>68</FAMILY_FABIUS>
+//       <FAMILY_VALERIUS>95</FAMILY_VALERIUS>
+//     </FamilyHeadID>
+//     <FamilySeatCityID>
+//       <FAMILY_FABIUS>2</FAMILY_FABIUS>
+//       <FAMILY_VALERIUS>4</FAMILY_VALERIUS>
+//     </FamilySeatCityID>
+//     <FamilyTurnsNoLeader>
+//       <FAMILY_JULIUS>96</FAMILY_JULIUS>
+//     </FamilyTurnsNoLeader>
+//   </Player>
+// </Root>
+// ```
 
 use crate::parser::id_mapper::IdMapper;
 use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
-use crate::parser::{ParseError, Result};
+use crate::parser::Result;
 use duckdb::{params, Connection};
+use std::collections::{HashMap, HashSet};
 
 /// Parse all families from the XML document
 pub fn parse_families(
@@ -14,74 +43,162 @@ pub fn parse_families(
     let root = doc.root_element();
     let mut count = 0;
 
-    // Find all Family elements as direct children of Root
-    for family_node in root.children().filter(|n| n.has_tag_name("Family")) {
-        let xml_id = family_node.req_attr("ID")?.parse::<i32>()?;
-        let db_id = id_mapper.map_family(xml_id);
+    // Step 1: Parse global FamilyClass to get all family names and their classes
+    let family_classes = parse_family_classes(&root)?;
 
-        // Required fields
-        let player_xml_id = family_node
-            .req_child_text("Player")?
-            .parse::<i32>()?;
+    // Step 2: Parse per-player family data
+    for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
+        let player_xml_id: i32 = player_node.req_attr("ID")?.parse()?;
         let player_db_id = id_mapper.get_player(player_xml_id)?;
 
-        let family_name = family_node.req_child_text("FamilyName")?;
-        let family_class = family_node.req_child_text("FamilyClass")?;
-
-        // Optional fields
-        let head_xml_id = family_node
-            .opt_child_text("Head")
-            .and_then(|s| s.parse::<i32>().ok());
-        let head_db_id = match head_xml_id {
-            Some(id) => Some(id_mapper.get_character(id)?),
-            None => None,
+        // Parse FamilyHeadID
+        let family_heads = if let Some(head_node) = player_node
+            .children()
+            .find(|n| n.has_tag_name("FamilyHeadID"))
+        {
+            parse_family_mapping(&head_node)
+        } else {
+            HashMap::new()
         };
 
-        let seat_city_xml_id = family_node
-            .opt_child_text("SeatCity")
-            .and_then(|s| s.parse::<i32>().ok());
-        let seat_city_db_id = match seat_city_xml_id {
-            Some(id) => Some(id_mapper.get_city(id)?),
-            None => None,
+        // Parse FamilySeatCityID
+        let family_seats = if let Some(seat_node) = player_node
+            .children()
+            .find(|n| n.has_tag_name("FamilySeatCityID"))
+        {
+            parse_family_mapping(&seat_node)
+        } else {
+            HashMap::new()
         };
 
-        let turns_without_leader = family_node
-            .opt_child_text("TurnsWithoutLeader")
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
+        // Parse FamilyTurnsNoLeader
+        let family_turns_no_leader = if let Some(turns_node) = player_node
+            .children()
+            .find(|n| n.has_tag_name("FamilyTurnsNoLeader"))
+        {
+            parse_family_mapping(&turns_node)
+        } else {
+            HashMap::new()
+        };
 
-        // Insert family using UPSERT
-        conn.execute(
-            "INSERT INTO families (
-                family_id, match_id, xml_id, player_id,
-                family_name, family_class,
-                head_character_id, seat_city_id, turns_without_leader
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (match_id, xml_id) DO UPDATE SET
-                family_id = excluded.family_id,
-                player_id = excluded.player_id,
-                family_name = excluded.family_name,
-                family_class = excluded.family_class,
-                head_character_id = excluded.head_character_id,
-                seat_city_id = excluded.seat_city_id,
-                turns_without_leader = excluded.turns_without_leader",
-            params![
-                db_id,
-                id_mapper.match_id,
-                xml_id,
-                player_db_id,
-                family_name,
-                family_class,
-                head_db_id,
-                seat_city_db_id,
-                turns_without_leader
-            ],
-        )?;
+        // Step 3: Collect all families that belong to this player
+        let mut player_families = HashSet::new();
+        player_families.extend(family_heads.keys().cloned());
+        player_families.extend(family_seats.keys().cloned());
+        player_families.extend(family_turns_no_leader.keys().cloned());
 
-        count += 1;
+        // Step 4: Insert/update family records
+        for family_name in player_families {
+            // Get family class from global lookup (defaults to empty if not found)
+            // NOTE: FamilyClass element is not being found in parsed XML - see docs/issues/familyclass-parsing-issue.md
+            let family_class = family_classes.get(&family_name).map(|s| s.as_str()).unwrap_or("");
+
+            // Generate a stable xml_id for the family based on name hash
+            // This ensures consistent IDs across imports
+            let xml_id = generate_family_xml_id(&family_name);
+            let db_id = id_mapper.map_family(xml_id);
+
+            // Get head character ID (if any)
+            let head_character_xml_id = family_heads.get(&family_name).copied();
+            let head_character_db_id = match head_character_xml_id {
+                Some(id) => Some(id_mapper.get_character(id)?),
+                None => None,
+            };
+
+            // Get seat city ID (if any)
+            let seat_city_xml_id = family_seats.get(&family_name).copied();
+            let seat_city_db_id = match seat_city_xml_id {
+                Some(id) => Some(id_mapper.get_city(id)?),
+                None => None,
+            };
+
+            // Get turns without leader
+            let turns_without_leader = family_turns_no_leader.get(&family_name).copied().unwrap_or(0);
+
+            // Insert family using UPSERT
+            conn.execute(
+                "INSERT INTO families (
+                    family_id, match_id, xml_id, player_id,
+                    family_name, family_class,
+                    head_character_id, seat_city_id, turns_without_leader
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT (match_id, xml_id) DO UPDATE SET
+                    family_id = excluded.family_id,
+                    player_id = excluded.player_id,
+                    family_name = excluded.family_name,
+                    family_class = excluded.family_class,
+                    head_character_id = excluded.head_character_id,
+                    seat_city_id = excluded.seat_city_id,
+                    turns_without_leader = excluded.turns_without_leader",
+                params![
+                    db_id,
+                    id_mapper.match_id,
+                    xml_id,
+                    player_db_id,
+                    &family_name,
+                    family_class,
+                    head_character_db_id,
+                    seat_city_db_id,
+                    turns_without_leader
+                ],
+            )?;
+
+            count += 1;
+        }
     }
 
     log::info!("Parsed {} families", count);
     Ok(count)
+}
+
+/// Parse the global FamilyClass element to get all family names and their classes
+///
+/// NOTE: There is a known issue where the FamilyClass element exists in the raw XML
+/// but is not appearing in the parsed DOM tree. See docs/issues/familyclass-parsing-issue.md
+/// Until resolved, this function returns an empty map and families will have empty family_class.
+fn parse_family_classes(root: &roxmltree::Node) -> Result<HashMap<String, String>> {
+    let mut family_classes = HashMap::new();
+
+    if let Some(class_node) = root.children().find(|n| n.has_tag_name("FamilyClass")) {
+        for family_elem in class_node.children().filter(|n| n.is_element()) {
+            let family_name = family_elem.tag_name().name().to_string();
+            if let Some(class) = family_elem.text() {
+                family_classes.insert(family_name, class.to_string());
+            }
+        }
+    }
+
+    Ok(family_classes)
+}
+
+/// Parse a family mapping element (FamilyHeadID, FamilySeatCityID, or FamilyTurnsNoLeader)
+/// Returns a map of family_name -> ID
+fn parse_family_mapping(parent_node: &roxmltree::Node) -> HashMap<String, i32> {
+    let mut mapping = HashMap::new();
+
+    for elem in parent_node.children().filter(|n| n.is_element()) {
+        let family_name = elem.tag_name().name().to_string();
+        if let Some(value_str) = elem.text() {
+            if let Ok(value) = value_str.parse::<i32>() {
+                mapping.insert(family_name, value);
+            }
+        }
+    }
+
+    mapping
+}
+
+/// Generate a stable xml_id for a family based on its name
+/// Uses a simple hash to convert the family name to an i32
+fn generate_family_xml_id(family_name: &str) -> i32 {
+    use std::collections::hash_map::DefaultHasher;
+    use std::hash::{Hash, Hasher};
+
+    let mut hasher = DefaultHasher::new();
+    family_name.hash(&mut hasher);
+    let hash = hasher.finish();
+
+    // Take lower 31 bits to ensure positive i32
+    (hash & 0x7FFF_FFFF) as i32
 }
