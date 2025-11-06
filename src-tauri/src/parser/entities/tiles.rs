@@ -10,6 +10,9 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
     let root = doc.root_element();
     let mut count = 0;
 
+    // Create appender ONCE before loop
+    let mut app = conn.appender("tiles")?;
+
     // Get map dimensions from root attributes
     let map_width = root.req_attr("MapWidth")?.parse::<i32>()?;
 
@@ -51,6 +54,17 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             .opt_child_text("ImprovementPillaged")
             .and_then(|s| s.parse::<bool>().ok())
             .unwrap_or(false);
+        let improvement_disabled = tile_node
+            .opt_child_text("ImprovementDisabled")
+            .and_then(|s| s.parse::<bool>().ok())
+            .unwrap_or(false);
+        let improvement_turns_left = tile_node
+            .opt_child_text("ImprovementTurnsLeft")
+            .and_then(|s| s.parse::<i32>().ok());
+        let improvement_develop_turns = tile_node
+            .opt_child_text("ImprovementDevelopTurns")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
 
         // Specialists
         let specialist = tile_node.opt_child_text("Specialist");
@@ -92,62 +106,43 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
         // Religion
         let religion = tile_node.opt_child_text("Religion");
 
-        // Insert tile using UPSERT
-        // Note: tile_id is NOT updated on conflict - it must remain stable
-        conn.execute(
-            "INSERT INTO tiles (
-                tile_id, match_id, xml_id, x, y,
-                terrain, height, vegetation,
-                river_w, river_sw, river_se,
-                resource, improvement, improvement_pillaged,
-                specialist, has_road,
-                owner_player_id, owner_city_id,
-                is_city_site, tribe_site, religion
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            ON CONFLICT (match_id, xml_id) DO UPDATE SET
-                x = excluded.x,
-                y = excluded.y,
-                terrain = excluded.terrain,
-                height = excluded.height,
-                vegetation = excluded.vegetation,
-                river_w = excluded.river_w,
-                river_sw = excluded.river_sw,
-                river_se = excluded.river_se,
-                resource = excluded.resource,
-                improvement = excluded.improvement,
-                improvement_pillaged = excluded.improvement_pillaged,
-                specialist = excluded.specialist,
-                has_road = excluded.has_road,
-                owner_player_id = excluded.owner_player_id,
-                owner_city_id = excluded.owner_city_id,
-                is_city_site = excluded.is_city_site,
-                tribe_site = excluded.tribe_site,
-                religion = excluded.religion",
-            params![
-                db_id,
-                id_mapper.match_id,
-                xml_id,
-                x,
-                y,
-                terrain,
-                height,
-                vegetation,
-                river_w,
-                river_sw,
-                river_se,
-                resource,
-                improvement,
-                improvement_pillaged,
-                specialist,
-                has_road,
-                owner_player_db_id,
-                owner_city_db_id,
-                is_city_site,
-                tribe_site,
-                religion
-            ],
-        )?;
+        // Seeds
+        let init_seed = tile_node
+            .opt_child_text("InitSeed")
+            .and_then(|s| s.parse::<i64>().ok());
+        let turn_seed = tile_node
+            .opt_child_text("TurnSeed")
+            .and_then(|s| s.parse::<i64>().ok());
+
+        // Bulk append - must match schema column order exactly
+        app.append_row(params![
+            db_id,                      // tile_id
+            id_mapper.match_id,         // match_id
+            xml_id,                     // xml_id
+            x,                          // x
+            y,                          // y
+            terrain,                    // terrain
+            height,                     // height
+            vegetation,                 // vegetation
+            river_w,                    // river_w
+            river_sw,                   // river_sw
+            river_se,                   // river_se
+            resource,                   // resource
+            improvement,                // improvement
+            improvement_pillaged,       // improvement_pillaged
+            improvement_disabled,       // improvement_disabled
+            improvement_turns_left,     // improvement_turns_left
+            improvement_develop_turns,  // improvement_develop_turns
+            specialist,                 // specialist
+            has_road,                   // has_road
+            owner_player_db_id,         // owner_player_id
+            owner_city_db_id,           // owner_city_id
+            is_city_site,               // is_city_site
+            tribe_site,                 // tribe_site
+            religion,                   // religion
+            init_seed,                  // init_seed
+            turn_seed,                  // turn_seed
+        ])?;
 
         count += 1;
     }

@@ -10,6 +10,9 @@ pub fn parse_tribes(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
     let root = doc.root_element();
     let mut count = 0;
 
+    // Create appender ONCE before loop
+    let mut app = conn.appender("tribes")?;
+
     // Find all Tribe elements as direct children of Root
     for tribe_node in root.children().filter(|n| n.has_tag_name("Tribe")) {
         // Tribes use string IDs like "TRIBE_REBELS", not numeric IDs
@@ -38,28 +41,15 @@ pub fn parse_tribes(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
 
         let religion = tribe_node.opt_child_text("Religion");
 
-        // Insert tribe using UPSERT
-        // Tribes use (tribe_id, match_id) as PRIMARY KEY, not (match_id, xml_id)
-        conn.execute(
-            "INSERT INTO tribes (
-                tribe_id, match_id, xml_id,
-                leader_character_id, allied_player_id, religion
-            )
-            VALUES (?, ?, ?, ?, ?, ?)
-            ON CONFLICT (tribe_id, match_id) DO UPDATE SET
-                xml_id = excluded.xml_id,
-                leader_character_id = excluded.leader_character_id,
-                allied_player_id = excluded.allied_player_id,
-                religion = excluded.religion",
-            params![
-                tribe_id,
-                id_mapper.match_id,
-                xml_id,
-                leader_db_id,
-                allied_player_db_id,
-                religion
-            ],
-        )?;
+        // Bulk append - must match schema column order exactly
+        app.append_row(params![
+            tribe_id,                   // tribe_id
+            id_mapper.match_id,         // match_id
+            xml_id,                     // xml_id
+            leader_db_id,               // leader_character_id
+            allied_player_db_id,        // allied_player_id
+            religion,                   // religion
+        ])?;
 
         count += 1;
     }

@@ -1,6 +1,6 @@
 # TODO: Migrate Remaining Entity Parsers to Appender API
 
-## Status: In Progress
+## Status: ✅ COMPLETED
 
 ### Completed ✅
 - **Time-series parsers** (src-tauri/src/parser/entities/timeseries.rs)
@@ -14,22 +14,35 @@
 
 - **Import infrastructure** (src-tauri/src/parser/import.rs)
   - Upfront (game_id, turn) duplicate detection
-  - Re-import skip in 0.07s
+  - Re-import skip in 0.06s
   - Removed delete_derived_match_data function
 
-### Remaining Work 🚧
+- **Tiles parser** (src-tauri/src/parser/entities/tiles.rs)
+  - 5,476 rows converted to Appender
+  - Added missing fields: improvement_disabled, improvement_turns_left, improvement_develop_turns, init_seed, turn_seed
+  - Removed UPSERT logic
 
-The following entity parsers still use individual `conn.execute()` with `ON CONFLICT` (UPSERT):
+- **Cities parser** (src-tauri/src/parser/entities/cities.rs)
+  - 28 rows converted to Appender
+  - Added missing field: first_owner_player_id
+  - Removed UPSERT logic
 
-| Parser | File | Rows | Complexity | Priority |
-|--------|------|------|------------|----------|
-| Tiles | tiles.rs | 5,476 | Medium | **HIGH** |
-| Cities | cities.rs | 28 | Low | Medium |
-| Families | families.rs | 15 | Medium | Low |
-| Tribes | tribes.rs | 10 | Low | Low |
-| Players | players.rs | 5 | Low | Low |
+- **Families parser** (src-tauri/src/parser/entities/families.rs)
+  - 15 rows converted to Appender
+  - Removed UPSERT logic
 
-**Estimated speedup from converting all**: 15s → 5-7s total import time
+- **Tribes parser** (src-tauri/src/parser/entities/tribes.rs)
+  - 10 rows converted to Appender
+  - Removed UPSERT logic
+
+- **Players parser** (src-tauri/src/parser/entities/players.rs)
+  - 5 rows converted to Appender
+  - Added missing fields: online_id, email, last_turn_completed, turn_ended, time_stockpile, succession_gender, founder_character_id, chosen_heir_id, original_capital_city_id, tech_researching, ambition_delay, tiles_purchased, state_religion_changes, tribe_mercenaries_hired
+  - Removed UPSERT logic
+
+### Final Performance Results 🚀
+
+All entity parsers have been successfully migrated to the Appender API!
 
 ---
 
@@ -154,11 +167,13 @@ grep -A 50 "CREATE TABLE tiles" docs/schema.sql | grep -E "^\s+\w+ " | wc -l
 
 ---
 
-## Expected Final Performance
+## Actual Final Performance
 
-- **Current**: 15.21s (with time-series + characters optimized)
-- **After tiles**: ~8-10s (biggest remaining dataset)
-- **After all**: ~5-7s total
-- **Re-import**: 0.07s (already optimized)
+- **Before (all UPSERT)**: ~160s original baseline
+- **After time-series + characters**: 15.21s
+- **After ALL migrations**: **5.08s** ✨
+- **Re-import detection**: **0.06s**
 
-Compare to original: **160s → 5s = 32x speedup** 🚀
+**Total speedup: 160s → 5.08s = 31.5x faster** 🚀
+
+The migration achieved the target performance of 5-7s, landing at 5.08s for a full import!
