@@ -213,21 +213,26 @@ pub fn parse_character_relationships(
                     ParseError::MissingElement("RelationshipData.Type".to_string())
                 })?;
 
-            // Parse related character ID
-            let related_xml_id_str = rel_data_node
+            // Parse related character ID (optional - skip relationships without target)
+            let related_character_id = match rel_data_node
                 .children()
                 .find(|n| n.has_tag_name("ID"))
                 .and_then(|n| n.text())
-                .ok_or_else(|| ParseError::MissingElement("RelationshipData.ID".to_string()))?;
-
-            let related_xml_id: i32 = related_xml_id_str.parse().map_err(|_| {
-                ParseError::InvalidFormat(format!(
-                    "Invalid character ID in relationship: {}",
-                    related_xml_id_str
-                ))
-            })?;
-
-            let related_character_id = id_mapper.get_character(related_xml_id)?;
+            {
+                Some(xml_id_str) => {
+                    let xml_id: i32 = xml_id_str.parse().map_err(|_| {
+                        ParseError::InvalidFormat(format!(
+                            "Invalid character ID in relationship: {}",
+                            xml_id_str
+                        ))
+                    })?;
+                    id_mapper.get_character(xml_id)?
+                }
+                None => {
+                    // Skip relationships without target ID (likely self-relationships or special cases)
+                    continue;
+                }
+            };
 
             // Parse started turn (optional)
             let started_turn: Option<i32> = rel_data_node
