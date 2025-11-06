@@ -420,91 +420,214 @@ pub fn parse_player_memories(
 ) -> Result<usize> {
     let mut count = 0;
 
-    // Find MemoryList element
-    let memory_list_node = match player_node
+    // Try 2025 format first (unified MemoryList)
+    if let Some(memory_list_node) = player_node
         .children()
         .find(|n| n.has_tag_name("MemoryList"))
     {
-        Some(node) => node,
-        None => return Ok(0), // No memories for this player
-    };
-
-    // Iterate over MemoryData elements
-    for memory_node in memory_list_node
-        .children()
-        .filter(|n| n.has_tag_name("MemoryData"))
-    {
-        // Extract required fields
-        let memory_type = memory_node
+        // Iterate over MemoryData elements
+        for memory_node in memory_list_node
             .children()
-            .find(|n| n.has_tag_name("Type"))
-            .and_then(|n| n.text())
-            .ok_or_else(|| ParseError::MissingElement("MemoryData.Type".to_string()))?;
+            .filter(|n| n.has_tag_name("MemoryData"))
+        {
+            // Extract required fields
+            let memory_type = memory_node
+                .children()
+                .find(|n| n.has_tag_name("Type"))
+                .and_then(|n| n.text())
+                .ok_or_else(|| ParseError::MissingElement("MemoryData.Type".to_string()))?;
 
-        let turn: i32 = memory_node
-            .children()
-            .find(|n| n.has_tag_name("Turn"))
-            .and_then(|n| n.text())
-            .ok_or_else(|| ParseError::MissingElement("MemoryData.Turn".to_string()))?
-            .parse()
-            .map_err(|_| {
-                ParseError::InvalidFormat("MemoryData.Turn must be integer".to_string())
-            })?;
+            let turn: i32 = memory_node
+                .children()
+                .find(|n| n.has_tag_name("Turn"))
+                .and_then(|n| n.text())
+                .ok_or_else(|| ParseError::MissingElement("MemoryData.Turn".to_string()))?
+                .parse()
+                .map_err(|_| {
+                    ParseError::InvalidFormat("MemoryData.Turn must be integer".to_string())
+                })?;
 
-        // Extract optional target fields (only one will be present based on memory type)
-        let target_player_id = memory_node
-            .children()
-            .find(|n| n.has_tag_name("Player"))
-            .and_then(|n| n.text())
-            .and_then(|t| t.parse::<i32>().ok());
+            // Extract optional target fields (only one will be present based on memory type)
+            let target_player_id = memory_node
+                .children()
+                .find(|n| n.has_tag_name("Player"))
+                .and_then(|n| n.text())
+                .and_then(|t| t.parse::<i32>().ok());
 
-        let target_character_id = memory_node
-            .children()
-            .find(|n| n.has_tag_name("CharacterID"))
-            .and_then(|n| n.text())
-            .and_then(|t| t.parse::<i32>().ok());
+            let target_character_id = memory_node
+                .children()
+                .find(|n| n.has_tag_name("CharacterID"))
+                .and_then(|n| n.text())
+                .and_then(|t| t.parse::<i32>().ok());
 
-        let target_family = memory_node
-            .children()
-            .find(|n| n.has_tag_name("Family"))
-            .and_then(|n| n.text());
+            let target_family = memory_node
+                .children()
+                .find(|n| n.has_tag_name("Family"))
+                .and_then(|n| n.text());
 
-        let target_tribe = memory_node
-            .children()
-            .find(|n| n.has_tag_name("Tribe"))
-            .and_then(|n| n.text());
+            let target_tribe = memory_node
+                .children()
+                .find(|n| n.has_tag_name("Tribe"))
+                .and_then(|n| n.text());
 
-        let target_religion = memory_node
-            .children()
-            .find(|n| n.has_tag_name("Religion"))
-            .and_then(|n| n.text());
+            let target_religion = memory_node
+                .children()
+                .find(|n| n.has_tag_name("Religion"))
+                .and_then(|n| n.text());
 
-        let memory_id = *next_memory_id;
-        *next_memory_id += 1;
+            let memory_id = *next_memory_id;
+            *next_memory_id += 1;
 
-        conn.execute(
-            "INSERT INTO memory_data
-             (memory_id, player_id, match_id, memory_type, turn,
-              target_player_id, target_character_id, target_family, target_tribe, target_religion)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            params![
-                memory_id,
-                player_id,
-                match_id,
-                memory_type,
-                turn,
-                target_player_id,
-                target_character_id,
-                target_family,
-                target_tribe,
-                target_religion
-            ],
-        )?;
+            conn.execute(
+                "INSERT INTO memory_data
+                 (memory_id, player_id, match_id, memory_type, turn,
+                  target_player_id, target_character_id, target_family, target_tribe, target_religion)
+                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                params![
+                    memory_id,
+                    player_id,
+                    match_id,
+                    memory_type,
+                    turn,
+                    target_player_id,
+                    target_character_id,
+                    target_family,
+                    target_tribe,
+                    target_religion
+                ],
+            )?;
 
-        count += 1;
+            count += 1;
+        }
+    }
+
+    // Fall back to 2024 format (separate Memory*List elements)
+    if count == 0 {
+        count += parse_legacy_memory_lists(player_node, conn, player_id, match_id, next_memory_id)?;
     }
 
     Ok(count)
+}
+
+/// Parse legacy 2024 format with separate Memory*List elements
+fn parse_legacy_memory_lists(
+    player_node: &Node,
+    conn: &Connection,
+    player_id: i64,
+    match_id: i64,
+    next_memory_id: &mut i64,
+) -> Result<usize> {
+    let mut count = 0;
+
+    // List of legacy list types to check
+    let legacy_lists = [
+        "MemoryPlayerList",
+        "MemoryFamilyList",
+        "MemoryCharacterList",
+        "MemoryTribeList",
+        "MemoryReligionList",
+    ];
+
+    for list_name in &legacy_lists {
+        if let Some(list_node) = player_node.children().find(|n| n.has_tag_name(*list_name)) {
+            // Determine child element name (e.g., MemoryPlayerData)
+            let data_element_name = list_name.replace("List", "Data");
+
+            for memory_node in list_node
+                .children()
+                .filter(|n| n.has_tag_name(data_element_name.as_str()))
+            {
+                count += parse_legacy_memory_data(
+                    &memory_node,
+                    conn,
+                    player_id,
+                    match_id,
+                    next_memory_id,
+                )?;
+            }
+        }
+    }
+
+    Ok(count)
+}
+
+/// Parse a single legacy Memory*Data element
+fn parse_legacy_memory_data(
+    memory_node: &Node,
+    conn: &Connection,
+    player_id: i64,
+    match_id: i64,
+    next_memory_id: &mut i64,
+) -> Result<usize> {
+    // Extract Type and Turn (required)
+    let memory_type = memory_node
+        .children()
+        .find(|n| n.has_tag_name("Type"))
+        .and_then(|n| n.text())
+        .ok_or_else(|| ParseError::MissingElement("Memory*Data.Type".to_string()))?;
+
+    let turn: i32 = memory_node
+        .children()
+        .find(|n| n.has_tag_name("Turn"))
+        .and_then(|n| n.text())
+        .ok_or_else(|| ParseError::MissingElement("Memory*Data.Turn".to_string()))?
+        .parse()
+        .map_err(|_| {
+            ParseError::InvalidFormat("Memory*Data.Turn must be integer".to_string())
+        })?;
+
+    // Extract optional targets (one will be present)
+    // YAGNI: Store numeric IDs as strings rather than mapping to names
+    let target_player_id = memory_node
+        .children()
+        .find(|n| n.has_tag_name("Player"))
+        .and_then(|n| n.text())
+        .and_then(|t| t.parse::<i32>().ok());
+
+    let target_character_id = memory_node
+        .children()
+        .find(|n| n.has_tag_name("CharacterID"))
+        .and_then(|n| n.text())
+        .and_then(|t| t.parse::<i32>().ok());
+
+    let target_family = memory_node
+        .children()
+        .find(|n| n.has_tag_name("Family"))
+        .and_then(|n| n.text());
+
+    let target_tribe = memory_node
+        .children()
+        .find(|n| n.has_tag_name("Tribe"))
+        .and_then(|n| n.text());
+
+    let target_religion = memory_node
+        .children()
+        .find(|n| n.has_tag_name("Religion"))
+        .and_then(|n| n.text());
+
+    let memory_id = *next_memory_id;
+    *next_memory_id += 1;
+
+    conn.execute(
+        "INSERT INTO memory_data
+         (memory_id, player_id, match_id, memory_type, turn,
+          target_player_id, target_character_id, target_family, target_tribe, target_religion)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+        params![
+            memory_id,
+            player_id,
+            match_id,
+            memory_type,
+            turn,
+            target_player_id,
+            target_character_id,
+            target_family,
+            target_tribe,
+            target_religion
+        ],
+    )?;
+
+    Ok(1)
 }
 
 #[cfg(test)]
