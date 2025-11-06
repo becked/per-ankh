@@ -46,7 +46,7 @@ CREATE TABLE matches (
     file_name VARCHAR NOT NULL,
     file_hash VARCHAR NOT NULL UNIQUE,
     game_name VARCHAR,
-    game_id VARCHAR, -- XML GameId (UUID)
+    game_id VARCHAR NOT NULL, -- XML GameId (UUID) - each campaign has unique ID
     save_date TIMESTAMP,
     processed_date TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     -- Map configuration
@@ -78,11 +78,13 @@ CREATE TABLE matches (
     team_nation VARCHAR,
     -- Victory
     victory_conditions VARCHAR, -- Serialized list
-    total_turns INTEGER,
+    total_turns INTEGER NOT NULL, -- Turn number from save - identifies snapshot
     winner_player_id BIGINT,
     -- Seeds for analysis
     first_seed BIGINT,
-    map_seed BIGINT
+    map_seed BIGINT,
+    -- Uniqueness: Each (game_id, turn) pair is a unique snapshot
+    UNIQUE (game_id, total_turns)
 );
 
 CREATE TABLE match_settings (
