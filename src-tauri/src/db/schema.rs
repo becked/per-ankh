@@ -114,7 +114,6 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
             CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_game_id ON matches(game_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_players_xml_id ON players(match_id, xml_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_xml_id ON characters(match_id, xml_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_units_xml_id ON units(match_id, xml_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_cities_xml_id ON cities(match_id, xml_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_tiles_xml_id ON tiles(match_id, xml_id);
             CREATE UNIQUE INDEX IF NOT EXISTS idx_families_xml_id ON families(match_id, xml_id);
@@ -183,7 +182,6 @@ fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
         "tribes",
         "cities",
         "tiles",
-        "units",
     ];
 
     log::info!("Checking {} required tables...", required_tables.len());

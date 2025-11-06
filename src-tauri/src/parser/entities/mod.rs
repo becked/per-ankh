@@ -35,7 +35,10 @@ pub use player_data::{
 };
 pub use diplomacy::parse_diplomacy;
 pub use timeseries::{parse_game_yield_prices, parse_player_timeseries};
-pub use character_data::{parse_character_extended_data, parse_character_genealogy};
+pub use character_data::{
+    parse_character_extended_data, parse_character_parent_relationships,
+    parse_character_birth_city,
+};
 pub use city_data::parse_city_extended_data;
 pub use tile_data::parse_tile_extended_data;
-pub use events::{parse_player_events, parse_character_events, parse_city_events, parse_player_log_events};
+pub use events::{parse_player_events, parse_character_events, parse_city_events, parse_player_log_events, parse_player_memories};

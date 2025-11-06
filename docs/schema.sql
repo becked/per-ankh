@@ -229,9 +229,13 @@ CREATE TABLE characters (
     seed BIGINT, -- Random seed for character generation
     PRIMARY KEY (character_id, match_id),
     FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (birth_father_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (birth_mother_id, match_id) REFERENCES characters(character_id, match_id)
+    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    -- TODO: Self-referential foreign keys disabled due to DuckDB limitation
+    -- DuckDB blocks UPDATE statements on rows referenced by other rows, even with DEFERRABLE
+    -- This prevents updating parent relationships when a character is also a parent
+    -- We validate parent relationships at application level instead
+    -- FOREIGN KEY (birth_father_id, match_id) REFERENCES characters(character_id, match_id),
+    -- FOREIGN KEY (birth_mother_id, match_id) REFERENCES characters(character_id, match_id)
 );
 
 CREATE TABLE character_traits (
@@ -734,6 +738,20 @@ CREATE TABLE event_outcomes (
     FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
 );
 
+CREATE TABLE memory_data (
+    memory_id BIGINT NOT NULL PRIMARY KEY,
+    player_id INTEGER NOT NULL,
+    match_id BIGINT NOT NULL,
+    memory_type VARCHAR NOT NULL, -- MEMORYPLAYER_ATTACKED_CITY, MEMORYFAMILY_FOUNDED_CITY, etc.
+    turn INTEGER NOT NULL,
+    target_player_id INTEGER,
+    target_character_id INTEGER,
+    target_family VARCHAR,
+    target_tribe VARCHAR,
+    target_religion VARCHAR,
+    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+);
+
 
 -- ============================================================================
 -- SECTION 15: TIME-SERIES DATA (Historical Metrics)
@@ -831,19 +849,6 @@ FROM characters c
 LEFT JOIN characters f ON c.birth_father_id = f.character_id AND c.match_id = f.match_id
 LEFT JOIN characters m ON c.birth_mother_id = m.character_id AND c.match_id = m.match_id;
 
--- Active military composition
-CREATE VIEW military_composition AS
-SELECT
-    u.match_id,
-    u.player_id,
-    u.unit_type,
-    COUNT(*) as unit_count,
-    AVG(u.level) as avg_level,
-    AVG(u.xp) as avg_xp,
-    SUM(u.damage) as total_damage,
-    COUNT(DISTINCT u.general_id) as generals_commanding
-FROM units u
-GROUP BY u.match_id, u.player_id, u.unit_type;
 
 
 -- ============================================================================
