@@ -15,6 +15,7 @@ pub mod tribes;
 pub mod unit_production;
 pub mod player_data;
 pub mod diplomacy;
+pub mod timeseries;
 
 pub use players::parse_players;
 pub use characters::parse_characters_core;
@@ -29,3 +30,4 @@ pub use player_data::{
     parse_technology_states, parse_player_council, parse_laws, parse_player_goals,
 };
 pub use diplomacy::parse_diplomacy;
+pub use timeseries::{parse_game_yield_prices, parse_player_timeseries};
