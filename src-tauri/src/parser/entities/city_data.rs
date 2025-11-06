@@ -201,6 +201,113 @@ pub fn parse_city_completed_builds(
     Ok(inserted)
 }
 
+/// Parse city yield progress (YieldProgress element)
+///
+/// # XML Structure
+/// ```xml
+/// <City ID="0">
+///   <YieldProgress>
+///     <YIELD_GROWTH>380</YIELD_GROWTH>
+///     <YIELD_CULTURE>4918</YIELD_CULTURE>
+///     <YIELD_HAPPINESS>390</YIELD_HAPPINESS>
+///   </YieldProgress>
+/// </City>
+/// ```
+///
+/// # Schema
+/// ```sql
+/// CREATE TABLE city_yields (
+///     city_id INTEGER NOT NULL,
+///     match_id BIGINT NOT NULL,
+///     yield_type VARCHAR NOT NULL,
+///     progress INTEGER DEFAULT 0,
+///     PRIMARY KEY (city_id, match_id, yield_type)
+/// );
+/// ```
+pub fn parse_city_yields(
+    city_node: &Node,
+    conn: &Connection,
+    city_id: i64,
+    match_id: i64,
+) -> Result<usize> {
+    let mut count = 0;
+
+    if let Some(yield_node) = city_node
+        .children()
+        .find(|n| n.has_tag_name("YieldProgress"))
+    {
+        for yield_elem in yield_node.children().filter(|n| n.is_element()) {
+            let yield_type = yield_elem.tag_name().name(); // YIELD_GROWTH, YIELD_CULTURE, etc.
+            let progress: i32 = yield_elem
+                .text()
+                .and_then(|s| s.parse().ok())
+                .unwrap_or(0);
+
+            conn.execute(
+                "INSERT INTO city_yields (city_id, match_id, yield_type, progress, overflow, level)
+                 VALUES (?, ?, ?, ?, 0, 0)
+                 ON CONFLICT (city_id, match_id, yield_type)
+                 DO UPDATE SET progress = excluded.progress",
+                params![city_id, match_id, yield_type, progress],
+            )?;
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
+/// Parse city religions (Religion element)
+///
+/// # XML Structure
+/// ```xml
+/// <City ID="0">
+///   <Religion>
+///     <RELIGION_PAGAN_CARTHAGE/>
+///     <RELIGION_JUDAISM/>
+///   </Religion>
+/// </City>
+/// ```
+///
+/// # Schema
+/// ```sql
+/// CREATE TABLE city_religions (
+///     city_id INTEGER NOT NULL,
+///     match_id BIGINT NOT NULL,
+///     religion VARCHAR NOT NULL,
+///     acquired_turn INTEGER,
+///     PRIMARY KEY (city_id, match_id, religion)
+/// );
+/// ```
+pub fn parse_city_religions(
+    city_node: &Node,
+    conn: &Connection,
+    city_id: i64,
+    match_id: i64,
+) -> Result<usize> {
+    let mut count = 0;
+
+    if let Some(religion_node) = city_node
+        .children()
+        .find(|n| n.has_tag_name("Religion"))
+    {
+        for religion_elem in religion_node.children().filter(|n| n.is_element()) {
+            let religion = religion_elem.tag_name().name(); // RELIGION_PAGAN_CARTHAGE, etc.
+
+            conn.execute(
+                "INSERT INTO city_religions (city_id, match_id, religion, acquired_turn)
+                 VALUES (?, ?, ?, NULL)
+                 ON CONFLICT (city_id, match_id, religion)
+                 DO NOTHING",
+                params![city_id, match_id, religion],
+            )?;
+            count += 1;
+        }
+    }
+
+    Ok(count)
+}
+
 /// Parse city culture and happiness per team
 ///
 /// # XML Structure
@@ -235,7 +342,7 @@ pub fn parse_city_culture_happiness(
 ) -> Result<usize> {
     let mut count = 0;
 
-    // Parse TeamCulture
+    // Parse TeamCulture (note: culture values may be strings like "CULTURE_DEVELOPING" - skip those for now)
     let team_culture = if let Some(culture_node) = city_node
         .children()
         .find(|n| n.has_tag_name("TeamCulture"))
@@ -244,8 +351,10 @@ pub fn parse_city_culture_happiness(
             .children()
             .filter(|n| n.is_element())
             .filter_map(|team_node| {
-                let team_tag = team_node.tag_name().name(); // "TEAM_0"
-                let team_id: i32 = team_tag.strip_prefix("TEAM_")?.parse().ok()?;
+                let team_tag = team_node.tag_name().name(); // "T.0" format
+                let team_id: i32 = team_tag.strip_prefix("T.")?.parse().ok()?;
+                // Try to parse as integer (some versions may have integer culture levels)
+                // If it's a string like "CULTURE_DEVELOPING", skip it for now
                 let culture: i32 = team_node.text()?.parse().ok()?;
                 Some((team_id, culture))
             })
@@ -263,8 +372,8 @@ pub fn parse_city_culture_happiness(
             .children()
             .filter(|n| n.is_element())
             .filter_map(|team_node| {
-                let team_tag = team_node.tag_name().name(); // "TEAM_0"
-                let team_id: i32 = team_tag.strip_prefix("TEAM_")?.parse().ok()?;
+                let team_tag = team_node.tag_name().name(); // "T.0" format
+                let team_id: i32 = team_tag.strip_prefix("T.")?.parse().ok()?;
                 let happiness: i32 = team_node.text()?.parse().ok()?;
                 Some((team_id, happiness))
             })
@@ -306,12 +415,14 @@ pub fn parse_city_extended_data(
     conn: &Connection,
     city_id: i64,
     match_id: i64,
-) -> Result<(usize, usize, usize)> {
+) -> Result<(usize, usize, usize, usize, usize)> {
     let queue_count = parse_city_production_queue(city_node, conn, city_id, match_id)?;
     let completed_count = parse_city_completed_builds(city_node, conn, city_id, match_id)?;
     let culture_count = parse_city_culture_happiness(city_node, conn, city_id, match_id)?;
+    let yields_count = parse_city_yields(city_node, conn, city_id, match_id)?;
+    let religions_count = parse_city_religions(city_node, conn, city_id, match_id)?;
 
-    Ok((queue_count, completed_count, culture_count))
+    Ok((queue_count, completed_count, culture_count, yields_count, religions_count))
 }
 
 #[cfg(test)]
