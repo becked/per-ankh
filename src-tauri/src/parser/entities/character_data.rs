@@ -274,25 +274,23 @@ pub fn parse_character_relationships(
     Ok(count)
 }
 
-/// Parse character genealogy (parent relationships and birth city)
+/// Parse character parent relationships ONLY (Pass 2a)
 ///
-/// Updates existing character records with parent relationships and birth city.
-/// This must be called AFTER all characters have been inserted (Pass 2).
+/// Updates existing character records with parent relationships.
+/// CRITICAL: This must be called BEFORE any tables reference characters via FK
+/// (tribes, cities, player_goals, etc.) to avoid DuckDB FK constraint violations.
 ///
 /// XML Structure:
 /// ```xml
 /// <Character ID="20">
-///   <FatherID>4</FatherID>
-///   <MotherID>19</MotherID>
 ///   <BirthFatherID>4</BirthFatherID>
 ///   <BirthMotherID>19</BirthMotherID>
-///   <BirthCityID>0</BirthCityID>
 /// </Character>
 /// ```
 ///
 /// Note: BirthFatherID/BirthMotherID are biological parents (never change),
 /// while FatherID/MotherID can change through adoption (not currently tracked).
-pub fn parse_character_genealogy(
+pub fn parse_character_parent_relationships(
     character_node: &Node,
     conn: &Connection,
     id_mapper: &IdMapper,
@@ -311,12 +309,6 @@ pub fn parse_character_genealogy(
         .and_then(|n| n.text())
         .and_then(|s| s.parse().ok());
 
-    let birth_city_xml_id: Option<i32> = character_node
-        .children()
-        .find(|n| n.has_tag_name("BirthCityID"))
-        .and_then(|n| n.text())
-        .and_then(|s| s.parse().ok());
-
     // Map XML IDs to database IDs
     let birth_father_id = match birth_father_xml_id {
         Some(xml_id) => Some(id_mapper.get_character(xml_id)?),
@@ -328,18 +320,55 @@ pub fn parse_character_genealogy(
         None => None,
     };
 
+    // Only update if we have at least one parent
+    if birth_father_id.is_some() || birth_mother_id.is_some() {
+        conn.execute(
+            "UPDATE characters
+             SET birth_father_id = ?, birth_mother_id = ?
+             WHERE character_id = ?",
+            params![birth_father_id, birth_mother_id, character_id],
+        )?;
+        Ok(true)
+    } else {
+        Ok(false)
+    }
+}
+
+/// Parse character birth city (Pass 2b)
+///
+/// Updates existing character records with birth city.
+/// This must be called AFTER cities have been inserted.
+///
+/// XML Structure:
+/// ```xml
+/// <Character ID="20">
+///   <BirthCityID>0</BirthCityID>
+/// </Character>
+/// ```
+pub fn parse_character_birth_city(
+    character_node: &Node,
+    conn: &Connection,
+    id_mapper: &IdMapper,
+    character_id: i64,
+) -> Result<bool> {
+    let birth_city_xml_id: Option<i32> = character_node
+        .children()
+        .find(|n| n.has_tag_name("BirthCityID"))
+        .and_then(|n| n.text())
+        .and_then(|s| s.parse().ok());
+
     let birth_city_id = match birth_city_xml_id {
         Some(xml_id) => Some(id_mapper.get_city(xml_id)?),
         None => None,
     };
 
-    // Only update if we have at least one parent or birth city
-    if birth_father_id.is_some() || birth_mother_id.is_some() || birth_city_id.is_some() {
+    // Only update if we have a birth city
+    if let Some(city_id) = birth_city_id {
         conn.execute(
             "UPDATE characters
-             SET birth_father_id = ?, birth_mother_id = ?, birth_city_id = ?
+             SET birth_city_id = ?
              WHERE character_id = ?",
-            params![birth_father_id, birth_mother_id, birth_city_id, character_id],
+            params![city_id, character_id],
         )?;
         Ok(true)
     } else {
@@ -405,11 +434,11 @@ pub fn parse_character_marriages(
         let spouse_id = id_mapper.get_character(spouse_xml_id)?;
 
         // Insert marriage record
-        // Note: married_turn and divorced_turn are left NULL since we don't have that data
+        // Note: marriage_turn uses -1 as sentinel for unknown, ended_turn is NULL since we don't have that data
         conn.execute(
-            "INSERT INTO character_marriages (character_id, match_id, spouse_id, married_turn, divorced_turn)
-             VALUES (?, ?, ?, NULL, NULL)
-             ON CONFLICT (character_id, match_id, spouse_id) DO NOTHING",
+            "INSERT INTO character_marriages (character_id, match_id, spouse_id, marriage_turn, ended_turn)
+             VALUES (?, ?, ?, -1, NULL)
+             ON CONFLICT (character_id, match_id, spouse_id, marriage_turn) DO NOTHING",
             params![character_id, match_id, spouse_id],
         )?;
 

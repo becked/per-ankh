@@ -371,10 +371,216 @@ pub fn parse_player_log_events(
     Ok(count)
 }
 
+/// Parse player memory data from MemoryList/MemoryData
+///
+/// # XML Structure
+/// ```xml
+/// <Player ID="0">
+///   <MemoryList>
+///     <MemoryData>
+///       <Type>MEMORYPLAYER_ATTACKED_CITY</Type>
+///       <Player>1</Player>
+///       <Turn>30</Turn>
+///     </MemoryData>
+///     <MemoryData>
+///       <Type>MEMORYFAMILY_FOUNDED_CITY</Type>
+///       <Family>FAMILY_DIDONIAN</Family>
+///       <Turn>21</Turn>
+///     </MemoryData>
+///     <MemoryData>
+///       <Type>MEMORYCHARACTER_UPGRADED_RECENTLY</Type>
+///       <CharacterID>12</CharacterID>
+///       <Turn>38</Turn>
+///     </MemoryData>
+///   </MemoryList>
+/// </Player>
+/// ```
+///
+/// # Schema
+/// ```sql
+/// CREATE TABLE memory_data (
+///     memory_id BIGINT NOT NULL PRIMARY KEY,
+///     player_id INTEGER NOT NULL,
+///     match_id BIGINT NOT NULL,
+///     memory_type VARCHAR NOT NULL,
+///     turn INTEGER NOT NULL,
+///     target_player_id INTEGER,
+///     target_character_id INTEGER,
+///     target_family VARCHAR,
+///     target_tribe VARCHAR,
+///     target_religion VARCHAR
+/// );
+/// ```
+pub fn parse_player_memories(
+    player_node: &Node,
+    conn: &Connection,
+    player_id: i64,
+    match_id: i64,
+    next_memory_id: &mut i64,
+) -> Result<usize> {
+    let mut count = 0;
+
+    // Find MemoryList element
+    let memory_list_node = match player_node
+        .children()
+        .find(|n| n.has_tag_name("MemoryList"))
+    {
+        Some(node) => node,
+        None => return Ok(0), // No memories for this player
+    };
+
+    // Iterate over MemoryData elements
+    for memory_node in memory_list_node
+        .children()
+        .filter(|n| n.has_tag_name("MemoryData"))
+    {
+        // Extract required fields
+        let memory_type = memory_node
+            .children()
+            .find(|n| n.has_tag_name("Type"))
+            .and_then(|n| n.text())
+            .ok_or_else(|| ParseError::MissingElement("MemoryData.Type".to_string()))?;
+
+        let turn: i32 = memory_node
+            .children()
+            .find(|n| n.has_tag_name("Turn"))
+            .and_then(|n| n.text())
+            .ok_or_else(|| ParseError::MissingElement("MemoryData.Turn".to_string()))?
+            .parse()
+            .map_err(|_| {
+                ParseError::InvalidFormat("MemoryData.Turn must be integer".to_string())
+            })?;
+
+        // Extract optional target fields (only one will be present based on memory type)
+        let target_player_id = memory_node
+            .children()
+            .find(|n| n.has_tag_name("Player"))
+            .and_then(|n| n.text())
+            .and_then(|t| t.parse::<i32>().ok());
+
+        let target_character_id = memory_node
+            .children()
+            .find(|n| n.has_tag_name("CharacterID"))
+            .and_then(|n| n.text())
+            .and_then(|t| t.parse::<i32>().ok());
+
+        let target_family = memory_node
+            .children()
+            .find(|n| n.has_tag_name("Family"))
+            .and_then(|n| n.text());
+
+        let target_tribe = memory_node
+            .children()
+            .find(|n| n.has_tag_name("Tribe"))
+            .and_then(|n| n.text());
+
+        let target_religion = memory_node
+            .children()
+            .find(|n| n.has_tag_name("Religion"))
+            .and_then(|n| n.text());
+
+        let memory_id = *next_memory_id;
+        *next_memory_id += 1;
+
+        conn.execute(
+            "INSERT INTO memory_data
+             (memory_id, player_id, match_id, memory_type, turn,
+              target_player_id, target_character_id, target_family, target_tribe, target_religion)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            params![
+                memory_id,
+                player_id,
+                match_id,
+                memory_type,
+                turn,
+                target_player_id,
+                target_character_id,
+                target_family,
+                target_tribe,
+                target_religion
+            ],
+        )?;
+
+        count += 1;
+    }
+
+    Ok(count)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use roxmltree::Document;
+
+    #[test]
+    fn test_parse_player_memories_structure() {
+        let xml = r#"
+            <Player ID="0">
+                <MemoryList>
+                    <MemoryData>
+                        <Type>MEMORYPLAYER_ATTACKED_CITY</Type>
+                        <Player>1</Player>
+                        <Turn>30</Turn>
+                    </MemoryData>
+                    <MemoryData>
+                        <Type>MEMORYFAMILY_FOUNDED_CITY</Type>
+                        <Family>FAMILY_DIDONIAN</Family>
+                        <Turn>21</Turn>
+                    </MemoryData>
+                    <MemoryData>
+                        <Type>MEMORYCHARACTER_UPGRADED_RECENTLY</Type>
+                        <CharacterID>12</CharacterID>
+                        <Turn>38</Turn>
+                    </MemoryData>
+                    <MemoryData>
+                        <Type>MEMORYTRIBE_ATTACKED_UNIT</Type>
+                        <Tribe>TRIBE_NUMIDIANS</Tribe>
+                        <Turn>20</Turn>
+                    </MemoryData>
+                    <MemoryData>
+                        <Type>MEMORYRELIGION_SPREAD_RELIGION</Type>
+                        <Religion>RELIGION_MANICHAEISM</Religion>
+                        <Turn>132</Turn>
+                    </MemoryData>
+                </MemoryList>
+            </Player>
+        "#;
+
+        let doc = Document::parse(xml).unwrap();
+        let player_node = doc.root_element();
+
+        let memory_list = player_node
+            .children()
+            .find(|n| n.has_tag_name("MemoryList"))
+            .unwrap();
+
+        let memories: Vec<_> = memory_list
+            .children()
+            .filter(|n| n.has_tag_name("MemoryData"))
+            .collect();
+
+        assert_eq!(memories.len(), 5);
+
+        // Verify different target types
+        let first_memory = memories[0];
+        assert_eq!(
+            first_memory.children().find(|n| n.has_tag_name("Type")).unwrap().text().unwrap(),
+            "MEMORYPLAYER_ATTACKED_CITY"
+        );
+        assert!(first_memory.children().any(|n| n.has_tag_name("Player")));
+
+        let family_memory = memories[1];
+        assert!(family_memory.children().any(|n| n.has_tag_name("Family")));
+
+        let char_memory = memories[2];
+        assert!(char_memory.children().any(|n| n.has_tag_name("CharacterID")));
+
+        let tribe_memory = memories[3];
+        assert!(tribe_memory.children().any(|n| n.has_tag_name("Tribe")));
+
+        let religion_memory = memories[4];
+        assert!(religion_memory.children().any(|n| n.has_tag_name("Religion")));
+    }
 
     #[test]
     fn test_parse_player_events_structure() {

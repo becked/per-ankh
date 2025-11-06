@@ -205,17 +205,27 @@ fn import_save_file_internal(
     // 1. Players (no dependencies)
     let players_count = super::entities::parse_players(doc, tx, &mut id_mapper)?;
 
-    // 2. Tribes (no dependencies)
-    let tribes_count = super::entities::parse_tribes(doc, tx, &mut id_mapper)?;
-
-    // 3. Characters - Pass 1: Core data only (no relationships yet)
+    // 2. Characters - Pass 1: Core data only (no relationships yet)
     let characters_count = super::entities::parse_characters_core(doc, tx, &mut id_mapper)?;
 
-    // 4. Tiles (depends on players for ownership)
+    // CRITICAL FIX: Pass 2a - Parse parent relationships immediately after characters
+    // This MUST happen BEFORE any tables reference characters via FK (tribes, cities, etc.)
+    // DuckDB prevents updating a row that's already referenced by another table's FK.
+    log::info!("Parsing character parent relationships (Pass 2a)...");
+    parse_character_parent_relationships_pass2a(doc, tx, &id_mapper)?;
+
+    // 3. Tiles (depends on players for ownership)
     let tiles_count = super::entities::parse_tiles(doc, tx, &mut id_mapper)?;
 
-    // 5. Cities (depends on players, tiles)
+    // 4. Cities (depends on players, tiles)
     let cities_count = super::entities::parse_cities(doc, tx, &mut id_mapper)?;
+
+    // Pass 2b - Parse birth cities after cities are created
+    log::info!("Parsing character birth cities (Pass 2b)...");
+    parse_character_birth_cities_pass2b(doc, tx, &id_mapper)?;
+
+    // 5. Tribes (references characters via leader_character_id)
+    let tribes_count = super::entities::parse_tribes(doc, tx, &mut id_mapper)?;
 
     // 6. Families (parsed from global FamilyClass and per-player family data)
     let families_count = super::entities::parse_families(doc, tx, &mut id_mapper)?;
@@ -289,10 +299,12 @@ fn import_save_file_internal(
 /// - ActiveLaw → laws
 /// - GoalList → player_goals
 /// - PermanentLogList/LogData → event_logs
+/// - MemoryList/MemoryData → memory_data
 fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
-    let mut totals = (0, 0, 0, 0, 0, 0, 0, 0); // resources, tech_progress, tech_completed, tech_states, council, laws, goals, log_events
+    let mut totals = (0, 0, 0, 0, 0, 0, 0, 0, 0); // resources, tech_progress, tech_completed, tech_states, council, laws, goals, log_events, memories
     let mut next_log_id: i64 = 1;
+    let mut next_memory_id: i64 = 1;
 
     // Iterate through all Player elements
     for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
@@ -311,11 +323,12 @@ fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &Id
         totals.5 += super::entities::parse_laws(&player_node, tx, player_id, match_id)?;
         totals.6 += super::entities::parse_player_goals(&player_node, tx, id_mapper, player_id, match_id)?;
         totals.7 += super::entities::parse_player_log_events(&player_node, tx, player_id, match_id, &mut next_log_id)?;
+        totals.8 += super::entities::parse_player_memories(&player_node, tx, player_id, match_id, &mut next_memory_id)?;
     }
 
     log::info!(
-        "Parsed player gameplay data: {} resources, {} tech_progress, {} tech_completed, {} tech_states, {} council, {} laws, {} goals, {} log_events",
-        totals.0, totals.1, totals.2, totals.3, totals.4, totals.5, totals.6, totals.7
+        "Parsed player gameplay data: {} resources, {} tech_progress, {} tech_completed, {} tech_states, {} council, {} laws, {} goals, {} log_events, {} memories",
+        totals.0, totals.1, totals.2, totals.3, totals.4, totals.5, totals.6, totals.7, totals.8
     );
 
     Ok(())
@@ -376,13 +389,82 @@ fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMappe
     Ok(())
 }
 
+/// Parse character parent relationships (Pass 2a)
+///
+/// This function updates the characters table with parent relationships ONLY.
+/// CRITICAL: This must be called BEFORE any tables reference characters via FK
+/// (tribes, cities, player_goals, etc.) to avoid DuckDB FK constraint violations.
+fn parse_character_parent_relationships_pass2a(
+    doc: &XmlDocument,
+    tx: &Connection,
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let root = doc.root_element();
+    let mut parent_count = 0;
+
+    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
+        let character_xml_id_str: &str = character_node.req_attr("ID")?;
+        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!(
+                "Character ID must be an integer: {}",
+                character_xml_id_str
+            ))
+        })?;
+        let character_id = id_mapper.get_character(character_xml_id)?;
+
+        // Parse parent relationships (now that all characters exist)
+        let has_parents = super::entities::parse_character_parent_relationships(&character_node, tx, id_mapper, character_id)?;
+        if has_parents {
+            parent_count += 1;
+        }
+    }
+
+    log::info!("Updated {} characters with parent relationships", parent_count);
+    Ok(())
+}
+
+/// Parse character birth cities (Pass 2b)
+///
+/// This function updates the characters table with birth city references.
+/// This must be called AFTER cities have been inserted.
+fn parse_character_birth_cities_pass2b(
+    doc: &XmlDocument,
+    tx: &Connection,
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let root = doc.root_element();
+    let mut city_count = 0;
+
+    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
+        let character_xml_id_str: &str = character_node.req_attr("ID")?;
+        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
+            ParseError::InvalidFormat(format!(
+                "Character ID must be an integer: {}",
+                character_xml_id_str
+            ))
+        })?;
+        let character_id = id_mapper.get_character(character_xml_id)?;
+
+        // Parse birth city (now that all cities exist)
+        let has_birth_city = super::entities::parse_character_birth_city(&character_node, tx, id_mapper, character_id)?;
+        if has_birth_city {
+            city_count += 1;
+        }
+    }
+
+    log::info!("Updated {} characters with birth city", city_count);
+    Ok(())
+}
+
 /// Parse character extended data (Milestone 5)
 ///
 /// This function parses character-specific nested data:
-/// - Genealogy (Parent IDs, birth city) -> characters table (Pass 2 update)
 /// - Stats (Rating, Stat) -> character_stats table
 /// - Traits (TraitTurn) -> character_traits table
 /// - Relationships (RelationshipList) -> character_relationships table
+/// - Marriages (Spouses) -> character_marriages table
+///
+/// Note: Genealogy (parent relationships) is now parsed earlier in Pass 2
 fn parse_character_extended_data_all(
     doc: &XmlDocument,
     tx: &Connection,
@@ -391,7 +473,7 @@ fn parse_character_extended_data_all(
     let root = doc.root_element();
     let match_id = id_mapper.match_id;
 
-    let mut totals = (0, 0, 0, 0, 0); // genealogy, stats, traits, relationships, marriages
+    let mut totals = (0, 0, 0, 0); // stats, traits, relationships, marriages
     let mut character_count = 0;
 
     for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
@@ -404,31 +486,24 @@ fn parse_character_extended_data_all(
         })?;
         let character_id = id_mapper.get_character(character_xml_id)?;
 
-        // Parse genealogy (Pass 2: now that all characters exist)
-        let has_genealogy = super::entities::parse_character_genealogy(&character_node, tx, id_mapper, character_id)?;
-        if has_genealogy {
-            totals.0 += 1;
-        }
-
-        // Parse other extended data
+        // Parse extended data (genealogy was already parsed in Pass 2)
         let (stats, traits, relationships, marriages) =
             super::entities::parse_character_extended_data(&character_node, tx, id_mapper, character_id, match_id)?;
 
-        totals.1 += stats;
-        totals.2 += traits;
-        totals.3 += relationships;
-        totals.4 += marriages;
+        totals.0 += stats;
+        totals.1 += traits;
+        totals.2 += relationships;
+        totals.3 += marriages;
         character_count += 1;
     }
 
     log::info!(
-        "Parsed character extended data for {} characters: {} genealogy, {} stats, {} traits, {} relationships, {} marriages",
+        "Parsed character extended data for {} characters: {} stats, {} traits, {} relationships, {} marriages",
         character_count,
         totals.0,
         totals.1,
         totals.2,
-        totals.3,
-        totals.4
+        totals.3
     );
 
     Ok(())
