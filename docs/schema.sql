@@ -634,7 +634,7 @@ CREATE TABLE technology_states (
     match_id BIGINT NOT NULL,
     tech VARCHAR NOT NULL,
     state VARCHAR NOT NULL, -- 'available', 'passed', 'trashed', 'locked', 'targeted'
-    PRIMARY KEY (player_id, match_id, tech),
+    PRIMARY KEY (player_id, match_id, tech, state),
     FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
 );
 
