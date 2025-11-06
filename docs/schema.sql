@@ -83,6 +83,9 @@ CREATE TABLE matches (
     -- Seeds for analysis
     first_seed BIGINT,
     map_seed BIGINT,
+    -- Version information
+    game_version VARCHAR, -- Game version number (e.g., "1.0.70671")
+    enabled_dlc TEXT, -- DLC list (e.g., "New Portraits+Nobles of the Settled Lands 1+...")
     -- Uniqueness: Each (game_id, turn) pair is a unique snapshot
     UNIQUE (game_id, total_turns)
 );
@@ -211,11 +214,8 @@ CREATE TABLE characters (
     -- Progression
     xp INTEGER DEFAULT 0,
     level INTEGER DEFAULT 1,
-    -- Core attributes (1-10)
-    wisdom INTEGER,
-    charisma INTEGER,
-    courage INTEGER,
-    discipline INTEGER,
+    -- Note: Core attributes (wisdom, charisma, courage, discipline) are stored in
+    -- character_stats table as RATING_WISDOM, RATING_CHARISMA, RATING_COURAGE, RATING_DISCIPLINE
     -- Status flags
     is_royal BOOLEAN DEFAULT false,
     is_infertile BOOLEAN DEFAULT false,
@@ -572,64 +572,9 @@ CREATE TABLE tile_visibility (
 -- ============================================================================
 -- SECTION 9: UNITS (Military)
 -- ============================================================================
-
-CREATE TABLE units (
-    unit_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
-    xml_id INTEGER,  -- Original XML Unit ID for debugging and reference
-    unit_type VARCHAR NOT NULL, -- UNIT_SPEARMAN, UNIT_ARCHER, etc.
-    player_id INTEGER,
-    tribe VARCHAR, -- For tribal units
-    tile_id INTEGER NOT NULL,
-    -- Leadership
-    general_id INTEGER, -- Commanding character
-    player_family VARCHAR, -- Family affiliation
-    -- Combat state
-    damage INTEGER DEFAULT 0,
-    xp INTEGER DEFAULT 0,
-    level INTEGER DEFAULT 1,
-    promotion_level INTEGER DEFAULT 0,
-    -- Timing
-    created_turn INTEGER NOT NULL,
-    turns_inactive INTEGER DEFAULT 0,
-    -- Status
-    facing VARCHAR,
-    is_anchored BOOLEAN DEFAULT false,
-    is_unlimbered BOOLEAN DEFAULT false, -- Siege weapons
-    -- Cooldowns
-    cooldown_type VARCHAR,
-    cooldown_turns INTEGER DEFAULT 0,
-    -- Orders
-    march_destination VARCHAR,
-    move_target_tile_id INTEGER,
-    -- Ownership history
-    original_player_id INTEGER,
-    original_tribe VARCHAR,
-    -- Generation
-    seed BIGINT,
-    PRIMARY KEY (unit_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (tile_id, match_id) REFERENCES tiles(tile_id, match_id),
-    FOREIGN KEY (general_id, match_id) REFERENCES characters(character_id, match_id)
-);
-
-CREATE TABLE unit_promotions (
-    unit_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
-    promotion VARCHAR NOT NULL, -- PROMOTION_COMBAT1, PROMOTION_STRIKE1, PROMOTION_BRAVE, etc.
-    acquired_turn INTEGER,
-    PRIMARY KEY (unit_id, match_id, promotion),
-    FOREIGN KEY (unit_id, match_id) REFERENCES units(unit_id, match_id)
-);
-
--- Reference data for unit types
-CREATE TABLE unit_types (
-    unit_type VARCHAR NOT NULL PRIMARY KEY,
-    category VARCHAR NOT NULL, -- 'infantry', 'cavalry', 'ranged', 'siege', 'naval'
-    role VARCHAR NOT NULL, -- 'melee', 'ranged', 'support'
-    description VARCHAR
-);
+-- NOTE: Individual unit tracking (units, unit_promotions, unit_types tables) has been removed.
+-- Analysis of save file XML structure shows individual unit state is NOT persisted in save files.
+-- Only aggregate unit production statistics are available (see tables below).
 
 -- Aggregate production statistics
 CREATE TABLE player_units_produced (
@@ -928,15 +873,6 @@ CREATE INDEX idx_characters_life ON characters(birth_turn, death_turn);
 CREATE INDEX idx_characters_leader ON characters(became_leader_turn) WHERE became_leader_turn IS NOT NULL;
 -- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
 CREATE UNIQUE INDEX idx_characters_xml_id ON characters(match_id, xml_id) WHERE xml_id IS NOT NULL;
-
--- Unit lookups
-CREATE INDEX idx_units_match ON units(match_id);
-CREATE INDEX idx_units_player ON units(player_id, match_id);
-CREATE INDEX idx_units_tile ON units(tile_id, match_id);
-CREATE INDEX idx_units_type ON units(unit_type);
-CREATE INDEX idx_units_general ON units(general_id, match_id) WHERE general_id IS NOT NULL;
--- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
-CREATE UNIQUE INDEX idx_units_xml_id ON units(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
 -- City lookups
 CREATE INDEX idx_cities_match ON cities(match_id);
