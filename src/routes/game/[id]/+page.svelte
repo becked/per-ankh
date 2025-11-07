@@ -159,62 +159,58 @@
   );
 </script>
 
-<main class="container">
+<main class="flex-1 pt-4 px-8 pb-8 overflow-y-auto bg-blue-gray">
     {#if loading}
       <p>Loading game details...</p>
     {:else if error}
-      <p class="error">Error: {error}</p>
+      <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
     {:else if gameDetails}
-      <h1>{gameDetails.game_name || `Game ${gameDetails.match_id}`}</h1>
+      <h1 class="mb-8 text-gray-200 text-4xl font-bold border-b-[3px] border-orange pb-2">{gameDetails.game_name || `Game ${gameDetails.match_id}`}</h1>
 
       <!-- Summary Section -->
-      <div class="summary-section">
-        <div class="summary-grid">
-          <div class="summary-item">
-            <span class="summary-label">Save Date</span>
-            <span class="summary-value">{formatDate(gameDetails.save_date)}</span>
+      <div class="bg-gray-200 p-6 border-2 border-black rounded-lg mb-6">
+        <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
+          <div class="flex flex-col gap-2 text-center">
+            <span class="font-bold text-brown text-sm uppercase tracking-wide">Save Date</span>
+            <span class="text-black text-2xl font-bold">{formatDate(gameDetails.save_date)}</span>
           </div>
-          <div class="summary-item">
-            <span class="summary-label">Players</span>
-            <span class="summary-value">{gameDetails.players.length}</span>
+          <div class="flex flex-col gap-2 text-center">
+            <span class="font-bold text-brown text-sm uppercase tracking-wide">Players</span>
+            <span class="text-black text-2xl font-bold">{gameDetails.players.length}</span>
           </div>
-          <div class="summary-item">
-            <span class="summary-label">Human Nation</span>
-            <span class="summary-value">{formatNation(humanNation)}</span>
+          <div class="flex flex-col gap-2 text-center">
+            <span class="font-bold text-brown text-sm uppercase tracking-wide">Human Nation</span>
+            <span class="text-black text-2xl font-bold">{formatNation(humanNation)}</span>
           </div>
-          <div class="summary-item">
-            <span class="summary-label">Turns</span>
-            <span class="summary-value">{gameDetails.total_turns}</span>
+          <div class="flex flex-col gap-2 text-center">
+            <span class="font-bold text-brown text-sm uppercase tracking-wide">Turns</span>
+            <span class="text-black text-2xl font-bold">{gameDetails.total_turns}</span>
           </div>
         </div>
       </div>
 
       <!-- Tab Navigation -->
-      <div class="tabs">
+      <div class="flex gap-2 mb-6 border-b-2 border-black">
         <button
-          class="tab"
-          class:active={activeTab === "events"}
+          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'events' ? 'bg-gray-200' : 'bg-tan'}"
           onclick={() => (activeTab = "events")}
         >
           Events
         </button>
         <button
-          class="tab"
-          class:active={activeTab === "laws"}
+          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'laws' ? 'bg-gray-200' : 'bg-tan'}"
           onclick={() => (activeTab = "laws")}
         >
           Laws & Technology
         </button>
         <button
-          class="tab"
-          class:active={activeTab === "economics"}
+          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'economics' ? 'bg-gray-200' : 'bg-tan'}"
           onclick={() => (activeTab = "economics")}
         >
           Economics
         </button>
         <button
-          class="tab"
-          class:active={activeTab === "settings"}
+          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'settings' ? 'bg-gray-200' : 'bg-tan'}"
           onclick={() => (activeTab = "settings")}
         >
           Game Settings
@@ -222,88 +218,88 @@
       </div>
 
       <!-- Tab Content -->
-      <div class="tab-content">
+      <div class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px]">
         {#if activeTab === "events"}
           <div class="tab-pane">
-            <h2>Game History</h2>
+            <h2 class="text-black font-bold mb-4 mt-0">Game History</h2>
             {#if pointsChartOption}
-              <div class="chart-section">
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={pointsChartOption} height="400px" />
               </div>
             {/if}
 
             {#if militaryChartOption}
-              <div class="chart-section">
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={militaryChartOption} height="400px" />
               </div>
             {/if}
 
             {#if legitimacyChartOption}
-              <div class="chart-section">
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={legitimacyChartOption} height="400px" />
               </div>
             {/if}
           </div>
         {:else if activeTab === "laws"}
           <div class="tab-pane">
-            <h2>Laws & Technology</h2>
-            <p class="placeholder">Coming soon...</p>
+            <h2 class="text-black font-bold mb-4 mt-0">Laws & Technology</h2>
+            <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
           </div>
         {:else if activeTab === "economics"}
           <div class="tab-pane">
-            <h2>Economics</h2>
-            <p class="placeholder">Coming soon...</p>
+            <h2 class="text-black font-bold mb-4 mt-0">Economics</h2>
+            <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
           </div>
         {:else if activeTab === "settings"}
           <div class="tab-pane">
-            <h2>Game Settings</h2>
-            <div class="settings-grid">
+            <h2 class="text-black font-bold mb-4 mt-0">Game Settings</h2>
+            <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8">
               {#if gameDetails.map_size}
-                <div class="info-item">
-                  <span class="info-label">Map Size:</span>
-                  <span class="info-value">{gameDetails.map_size.replace("MAPSIZE_", "")}</span>
+                <div class="flex flex-col gap-1">
+                  <span class="font-bold text-brown text-sm">Map Size:</span>
+                  <span class="text-black text-base">{gameDetails.map_size.replace("MAPSIZE_", "")}</span>
                 </div>
               {/if}
               {#if gameDetails.map_width && gameDetails.map_height}
-                <div class="info-item">
-                  <span class="info-label">Map Dimensions:</span>
-                  <span class="info-value">{gameDetails.map_width} × {gameDetails.map_height}</span>
+                <div class="flex flex-col gap-1">
+                  <span class="font-bold text-brown text-sm">Map Dimensions:</span>
+                  <span class="text-black text-base">{gameDetails.map_width} × {gameDetails.map_height}</span>
                 </div>
               {/if}
               {#if gameDetails.game_mode}
-                <div class="info-item">
-                  <span class="info-label">Game Mode:</span>
-                  <span class="info-value">{gameDetails.game_mode}</span>
+                <div class="flex flex-col gap-1">
+                  <span class="font-bold text-brown text-sm">Game Mode:</span>
+                  <span class="text-black text-base">{gameDetails.game_mode}</span>
                 </div>
               {/if}
               {#if gameDetails.opponent_level}
-                <div class="info-item">
-                  <span class="info-label">Difficulty:</span>
-                  <span class="info-value">{gameDetails.opponent_level.replace("LEVEL_", "")}</span>
+                <div class="flex flex-col gap-1">
+                  <span class="font-bold text-brown text-sm">Difficulty:</span>
+                  <span class="text-black text-base">{gameDetails.opponent_level.replace("LEVEL_", "")}</span>
                 </div>
               {/if}
             </div>
 
-            <div class="players-section">
-              <h3>Players</h3>
-              <table>
+            <div class="mt-8">
+              <h3 class="text-black font-bold mb-4 mt-8 text-xl">Players</h3>
+              <table class="w-full mt-2">
                 <thead>
                   <tr>
-                    <th>Player</th>
-                    <th>Nation</th>
-                    <th>Type</th>
-                    <th>Legitimacy</th>
-                    <th>State Religion</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Nation</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Type</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Legitimacy</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">State Religion</th>
                   </tr>
                 </thead>
                 <tbody>
                   {#each gameDetails.players as player}
-                    <tr>
-                      <td>{player.player_name}</td>
-                      <td>{formatNation(player.nation)}</td>
-                      <td>{player.is_human ? "Human" : "AI"}</td>
-                      <td>{player.legitimacy ?? "—"}</td>
-                      <td>{player.state_religion ? player.state_religion.replace("RELIGION_", "") : "—"}</td>
+                    <tr class="transition-colors duration-200 hover:bg-tan">
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.player_name}</td>
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{formatNation(player.nation)}</td>
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.is_human ? "Human" : "AI"}</td>
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.legitimacy ?? "—"}</td>
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.state_religion ? player.state_religion.replace("RELIGION_", "") : "—"}</td>
                     </tr>
                   {/each}
                 </tbody>
@@ -316,208 +312,17 @@
 </main>
 
 <style>
-.container {
-  flex: 1;
-  padding: 1rem 2rem 2rem 2rem;
-  overflow-y: auto;
-  background: var(--color-blue-gray);
-}
-
-h1 {
-  margin-bottom: 2rem;
-  color: #eeeeee;
-  font-size: 2rem;
-  font-weight: bold;
-  border-bottom: 3px solid var(--color-orange);
-  padding-bottom: 0.5rem;
-}
-
-h2 {
-  color: var(--color-black);
-  font-weight: bold;
-  margin-bottom: 1rem;
-  margin-top: 0;
-}
-
-h3 {
-  color: var(--color-black);
-  font-weight: bold;
-  margin-bottom: 1rem;
-  margin-top: 2rem;
-  font-size: 1.25rem;
-}
-
-.error {
-  color: var(--color-white);
-  background: var(--color-brown);
-  padding: 1rem;
-  border: 2px solid var(--color-orange);
-  border-radius: 4px;
-  font-weight: bold;
-}
-
-/* Summary Section */
-.summary-section {
-  background: #eeeeee;
-  padding: 1.5rem;
-  border: 2px solid var(--color-black);
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-}
-
-.summary-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 1.5rem;
-}
-
-.summary-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.5rem;
-  text-align: center;
-}
-
-.summary-label {
-  font-weight: bold;
-  color: var(--color-brown);
-  font-size: 0.875rem;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-}
-
-.summary-value {
-  color: var(--color-black);
-  font-size: 1.5rem;
-  font-weight: bold;
-}
-
-/* Tabs */
-.tabs {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1.5rem;
-  border-bottom: 2px solid var(--color-black);
-}
-
-.tab {
-  padding: 0.75rem 1.5rem;
-  background: var(--color-tan);
-  border: 2px solid var(--color-black);
-  border-bottom: none;
-  border-radius: 8px 8px 0 0;
-  font-weight: bold;
-  color: var(--color-black);
-  cursor: pointer;
-  transition: background 0.2s, transform 0.1s;
-  position: relative;
-  bottom: -2px;
-}
-
-.tab:hover {
-  background: #d4c4a8;
-}
-
-.tab.active {
-  background: #eeeeee;
-  color: var(--color-black);
-}
-
-/* Tab Content */
-.tab-content {
-  background: #eeeeee;
-  padding: 2rem;
-  border: 2px solid var(--color-black);
-  border-radius: 0 8px 8px 8px;
-  min-height: 400px;
-}
-
-.tab-pane {
-  animation: fadeIn 0.3s;
-}
-
-@keyframes fadeIn {
-  from {
-    opacity: 0;
+  /* Custom fade-in animation for tab switching */
+  .tab-pane {
+    animation: fadeIn 0.3s;
   }
-  to {
-    opacity: 1;
+
+  @keyframes fadeIn {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
   }
-}
-
-.placeholder {
-  color: var(--color-brown);
-  font-style: italic;
-  text-align: center;
-  padding: 2rem;
-  font-size: 1.125rem;
-}
-
-/* Settings Grid */
-.settings-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.info-item {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-}
-
-.info-label {
-  font-weight: bold;
-  color: var(--color-brown);
-  font-size: 0.875rem;
-}
-
-.info-value {
-  color: var(--color-black);
-  font-size: 1rem;
-}
-
-/* Chart Section */
-.chart-section {
-  background: white;
-  padding: 1rem;
-  border: 2px solid var(--color-tan);
-  border-radius: 8px;
-  margin-bottom: 1.5rem;
-}
-
-/* Players Section */
-.players-section {
-  margin-top: 2rem;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 0.5rem;
-}
-
-th,
-td {
-  padding: 0.75rem;
-  text-align: left;
-  border-bottom: 2px solid var(--color-tan);
-  color: var(--color-black);
-}
-
-th {
-  font-weight: bold;
-  background: transparent;
-  color: var(--color-black);
-  border-bottom: 2px solid var(--color-black);
-}
-
-tbody tr:hover {
-  background: var(--color-tan);
-}
-
-tbody tr {
-  transition: background 0.2s;
-}
 </style>

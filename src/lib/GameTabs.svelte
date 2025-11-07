@@ -68,24 +68,23 @@
   }
 </script>
 
-<aside class="game-tabs">
-  <div class="tabs-container">
-    <button class="game-tab summary-tab" type="button" onclick={navigateToSummary}>
-      <div class="game-title">SUMMARY</div>
-      <div class="game-subtitle">All Games</div>
+<aside class="w-[250px] h-screen bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
+  <div class="tabs-container overflow-y-auto flex-1 pt-4 px-2 pb-2">
+    <button class="w-full mb-6 cursor-pointer text-left pb-2 pt-4 border-b-[3px] border-orange transition-opacity hover:opacity-80" type="button" onclick={navigateToSummary}>
+      <div class="text-2xl font-bold text-gray-200">SUMMARY</div>
     </button>
 
     {#if loading}
-      <div class="loading">Loading games...</div>
+      <div class="p-4 text-center text-tan">Loading games...</div>
     {:else if error}
-      <div class="error">Error: {error}</div>
+      <div class="p-4 text-center text-orange font-bold">Error: {error}</div>
     {:else if games.length === 0}
-      <div class="empty">No games found</div>
+      <div class="p-4 text-center text-tan">No games found</div>
     {:else}
       {#each games as game (game.match_id)}
-        <button class="game-tab" type="button" onclick={() => navigateToGame(game.match_id)}>
-          <div class="game-title">{formatGameTitle(game)}</div>
-          <div class="game-subtitle">{formatGameSubtitle(game)}</div>
+        <button class="w-full p-3 mb-2 bg-tan border-2 border-black rounded cursor-pointer text-left transition-all duration-200 hover:bg-white hover:border-orange hover:translate-x-0.5 active:bg-white" type="button" onclick={() => navigateToGame(game.match_id)}>
+          <div class="text-sm font-semibold mb-1 text-black">{formatGameTitle(game)}</div>
+          <div class="text-xs text-brown text-right font-normal">{formatGameSubtitle(game)}</div>
         </button>
       {/each}
     {/if}
@@ -93,87 +92,7 @@
 </aside>
 
 <style>
-  .game-tabs {
-    width: 250px;
-    height: 100vh;
-    background: var(--color-blue-gray);
-    border-right: 2px solid var(--color-black);
-    display: flex;
-    flex-direction: column;
-    overflow: hidden;
-  }
-
-  h2 {
-    margin: 0;
-    padding: 1rem;
-    font-size: 1.25rem;
-    border-bottom: 2px solid var(--color-black);
-    background: transparent;
-    color: var(--color-white);
-    font-weight: bold;
-  }
-
-  .tabs-container {
-    overflow-y: auto;
-    flex: 1;
-    padding: 1rem 0.5rem 0.5rem 0.5rem;
-  }
-
-  .game-tab {
-    width: 100%;
-    padding: 0.75rem;
-    margin-bottom: 0.5rem;
-    background: var(--color-tan);
-    border: 2px solid var(--color-black);
-    border-radius: 4px;
-    cursor: pointer;
-    text-align: left;
-    transition: all 0.2s;
-  }
-
-  .game-tab:hover {
-    background: var(--color-white);
-    border-color: var(--color-orange);
-    transform: translateX(2px);
-  }
-
-  .game-tab:active {
-    background: var(--color-white);
-  }
-
-  .summary-tab {
-    font-weight: 600;
-    font-size: 1.1rem;
-  }
-
-  .game-title {
-    font-size: 0.95rem;
-    font-weight: 600;
-    margin-bottom: 0.25rem;
-    color: var(--color-black);
-  }
-
-  .game-subtitle {
-    font-size: 0.75rem;
-    color: var(--color-brown);
-    text-align: right;
-    font-weight: normal;
-  }
-
-  .loading,
-  .error,
-  .empty {
-    padding: 1rem;
-    text-align: center;
-    color: var(--color-tan);
-  }
-
-  .error {
-    color: var(--color-orange);
-    font-weight: bold;
-  }
-
-  /* Scrollbar styling */
+  /* Custom scrollbar styling - not available in Tailwind */
   .tabs-container::-webkit-scrollbar {
     width: 8px;
   }
@@ -183,11 +102,11 @@
   }
 
   .tabs-container::-webkit-scrollbar-thumb {
-    background: var(--color-tan);
+    background: #D2B48C;
     border-radius: 4px;
   }
 
   .tabs-container::-webkit-scrollbar-thumb:hover {
-    background: var(--color-orange);
+    background: #FFA500;
   }
 </style>

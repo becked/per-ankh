@@ -28,17 +28,6 @@
   });
 </script>
 
-<div class="chart-container" style="height: {height}">
-  <div bind:this={chartContainer} class="chart"></div>
+<div class="w-full" style="height: {height}">
+  <div bind:this={chartContainer} class="w-full h-full"></div>
 </div>
-
-<style>
-  .chart-container {
-    width: 100%;
-  }
-
-  .chart {
-    width: 100%;
-    height: 100%;
-  }
-</style>
