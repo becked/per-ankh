@@ -4,34 +4,45 @@ This document defines the color palettes used throughout the Per-Ankh applicatio
 
 ## UI Color Palette
 
-The application's UI color scheme is defined in `src/app.css:6-14` using CSS custom properties. These colors are used for backgrounds, borders, text, and general interface elements.
+The application's UI color scheme is defined in `src/app.css:6-17` using CSS custom properties (the single source of truth). Tailwind CSS is configured to reference these variables in `tailwind.config.js`.
 
-| Color | Hex Code | CSS Variable | Usage |
-|-------|----------|--------------|-------|
-| **Black** | `#000000` | `--color-black` | Borders, outlines |
-| **Brown** | `#A52A2A` | `--color-brown` | Labels, accents |
-| **Orange** | `#FFA500` | `--color-orange` | Highlights, borders |
-| **Tan** | `#D2B48C` | `--color-tan` | Tabs, hover states |
-| **White** | `#FFFFFF` | `--color-white` | Text on dark backgrounds |
-| **Yellow** | `#FFFF00` | `--color-yellow` | Reserved for future use |
-| **Blue-Gray** | `#4A5568` | `--color-blue-gray` | Main background |
+| Color | Hex Code | CSS Variable | Tailwind Class | Usage |
+|-------|----------|--------------|----------------|-------|
+| **Black** | `#000000` | `--color-black` | `bg-black`, `text-black`, `border-black` | Borders, outlines, text |
+| **Brown** | `#A52A2A` | `--color-brown` | `bg-brown`, `text-brown`, `border-brown` | Labels, accents |
+| **Orange** | `#FFA500` | `--color-orange` | `bg-orange`, `text-orange`, `border-orange` | Highlights, borders |
+| **Tan** | `#D2B48C` | `--color-tan` | `bg-tan`, `text-tan`, `border-tan` | Tabs, backgrounds |
+| **Tan Hover** | `#dfcaae` | `--color-tan-hover` | `bg-tan-hover`, `hover:bg-tan-hover` | Hover states |
+| **White** | `#FFFFFF` | `--color-white` | `bg-white`, `text-white`, `border-white` | Text on dark backgrounds |
+| **Yellow** | `#FFFF00` | `--color-yellow` | `bg-yellow`, `text-yellow`, `border-yellow` | Reserved for future use |
+| **Blue-Gray** | `#211A12` | `--color-blue-gray` | `bg-blue-gray` | Main background |
+| **Border Gray** | `#1C160F` | `--color-border-gray` | `bg-border-gray`, `border-border-gray` | Alternative borders |
+| **Gray 200** | `#eeeeee` | `--color-gray-200` | `bg-gray-200`, `text-gray-200` | Light backgrounds |
 
 ### Default Theme
 
 The application uses the following default colors:
 
-- **Background**: Blue-Gray (`#4A5568` / `var(--color-blue-gray)`)
+- **Background**: Blue-Gray (`#211A12` / `var(--color-blue-gray)`)
 - **Text**: White (`#FFFFFF` / `var(--color-white)`)
 
 ### Using UI Colors
 
-To use these colors in your components, reference the CSS variables:
+**Best Practice**: Use Tailwind classes in your Svelte components for consistency:
+
+```svelte
+<!-- Example: Using Tailwind classes -->
+<div class="bg-brown text-tan border-2 border-black">
+  Content here
+</div>
+```
+
+For custom CSS where Tailwind isn't available, reference the CSS variables directly:
 
 ```css
-/* Example usage */
-.my-element {
-  background-color: var(--color-brown);
-  color: var(--color-tan);
+/* Example: Custom scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-tan);
 }
 ```
 
@@ -52,31 +63,46 @@ The application uses a separate color palette for data visualization in charts. 
 
 ### Using Chart Colors
 
-Import the chart colors in your TypeScript/Svelte components:
+Import chart colors and theme from the config module:
 
 ```typescript
-import { CHART_COLORS, getChartColor } from "$lib/config/charts";
+import { CHART_COLORS, CHART_THEME, getChartColor } from "$lib/config";
 
-// Use directly
+// Use individual colors directly
 const color = CHART_COLORS[0]; // "#C87941"
 
-// Or use the helper function for automatic wrapping
+// Use the helper function for automatic wrapping (RECOMMENDED)
 const color = getChartColor(7); // Wraps to CHART_COLORS[1]
+
+// Apply the theme to chart options (RECOMMENDED)
+const chartOption: EChartsOption = {
+  ...CHART_THEME,  // Includes colors, title styling, tooltip defaults
+  title: {
+    ...CHART_THEME.title,
+    text: "My Chart Title",  // Override specific properties
+  },
+  // ... rest of chart config
+};
 ```
 
 ### Design Rationale: Why Separate Palettes?
 
 The application maintains two distinct color palettes for different purposes:
 
-1. **UI Palette** - For interface elements (backgrounds, borders, text)
-   - Fixed set of 7 colors with semantic meaning
+1. **UI Palette** (CSS Variables + Tailwind)
+   - For interface elements (backgrounds, borders, text)
+   - Fixed set of colors with semantic meaning
+   - Defined in CSS for maximum flexibility
    - Optimized for UI consistency and branding
+   - Runtime themeable if needed
 
-2. **Chart Palette** - For data visualization
+2. **Chart Palette** (TypeScript Constants)
+   - For data visualization in ECharts
    - Optimized for visual distinction between data series
    - Higher contrast requirements for readability
    - Needs more variation for multi-player scenarios (6+ colors)
    - Color selection based on perceptual difference rather than branding
+   - Type-safe with helper functions
 
 ---
 
@@ -112,18 +138,26 @@ The application uses specific colors for each Old World nation and tribe. These 
 
 ### Using Nation and Tribe Colors
 
-Import the colors in your TypeScript/Svelte components:
+Import from the central config module:
 
 ```typescript
-import { NATION_COLORS, TRIBE_COLORS, getNationColor, getCivilizationColor } from "$lib/config/nations";
+import { NATION_COLORS, TRIBE_COLORS, getNationColor, getCivilizationColor } from "$lib/config";
 
-// Use directly
+// Use directly with type safety
 const egyptColor = NATION_COLORS.EGYPT; // "#BC6304"
 const gaulsColor = TRIBE_COLORS.GAULS; // "#C84732"
 
-// Or use helper functions
+// Use helper functions (handles string conversion and lookup)
 const color = getNationColor("EGYPT"); // "#BC6304"
 const color2 = getCivilizationColor("GAULS"); // "#C84732" (checks both nations and tribes)
+
+// Example: Use in chart series
+series: playerHistory.map((player, i) => ({
+  name: player.player_name,
+  type: "line",
+  data: player.history.map((h) => h.points),
+  itemStyle: { color: getCivilizationColor(player.nation) ?? getChartColor(i) },
+}))
 ```
 
 ---
