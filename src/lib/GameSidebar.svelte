@@ -86,7 +86,7 @@
 </script>
 
 <aside class="w-[175px] h-screen bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
-  <div class="tabs-container overflow-y-auto flex-1 pt-4 px-2 pb-2">
+  <div class="sidebar-content overflow-y-auto flex-1 pt-4 px-2 pb-2">
     <button class="w-full mb-6 cursor-pointer text-left pb-2 pt-4 border-b-[3px] border-orange transition-opacity hover:opacity-80" type="button" onclick={navigateToSummary}>
       <div class="text-3xl font-bold text-gray-200">☥ Per Ankh</div>
     </button>
@@ -122,20 +122,20 @@
 
 <style>
   /* Custom scrollbar styling - not available in Tailwind */
-  .tabs-container::-webkit-scrollbar {
+  .sidebar-content::-webkit-scrollbar {
     width: 8px;
   }
 
-  .tabs-container::-webkit-scrollbar-track {
+  .sidebar-content::-webkit-scrollbar-track {
     background: rgba(0, 0, 0, 0.2);
   }
 
-  .tabs-container::-webkit-scrollbar-thumb {
+  .sidebar-content::-webkit-scrollbar-thumb {
     background: #D2B48C;
     border-radius: 4px;
   }
 
-  .tabs-container::-webkit-scrollbar-thumb:hover {
+  .sidebar-content::-webkit-scrollbar-thumb:hover {
     background: #FFA500;
   }
 </style>
