@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
+  import { api } from "$lib/api";
   import type { GameStatistics } from "$lib/types";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
@@ -54,7 +54,7 @@
 
   onMount(async () => {
     try {
-      stats = await invoke<GameStatistics>("get_game_statistics");
+      stats = await api.getGameStatistics();
     } catch (err) {
       error = String(err);
     } finally {
