@@ -1,6 +1,7 @@
 // City entity parser
 
 use crate::parser::id_mapper::IdMapper;
+use crate::parser::utils::deduplicate_rows_last_wins;
 use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
@@ -8,10 +9,9 @@ use duckdb::{params, Connection};
 /// Parse all cities from the XML document
 pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let root = doc.root_element();
-    let mut count = 0;
 
-    // Create appender ONCE before loop
-    let mut app = conn.appender("cities")?;
+    // Collect all city rows first
+    let mut cities = Vec::new();
 
     // Find all City elements as direct children of Root
     for city_node in root.children().filter(|n| n.has_tag_name("City")) {
@@ -39,11 +39,12 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
         let city_name = city_node
             .opt_child_text("NameType")
             .or_else(|| city_node.opt_child_text("Name"))
-            .unwrap_or("Unknown City");
+            .unwrap_or("Unknown City")
+            .to_string();
         let founded_turn = city_node.req_attr("Founded")?.parse::<i32>()?;
 
         // Optional fields
-        let family = city_node.opt_attr("Family");
+        let family = city_node.opt_attr("Family").map(|s| s.to_string());
 
         // Capital status is indicated by presence of <Capital /> element
         let is_capital = city_node
@@ -108,8 +109,8 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
             None => None,
         };
 
-        // Bulk append - must match schema column order exactly
-        app.append_row(params![
+        // Collect row data - must match schema column order exactly
+        cities.push((
             db_id,                          // city_id
             id_mapper.match_id,             // match_id
             xml_id,                         // xml_id
@@ -128,10 +129,33 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
             hurry_money_count,              // hurry_money_count
             specialist_count,               // specialist_count
             first_owner_player_db_id,       // first_owner_player_id
-        ])?;
-
-        count += 1;
+        ));
     }
+
+    // Deduplicate (last-wins strategy)
+    // Primary key: (city_id, match_id)
+    let unique_cities = deduplicate_rows_last_wins(
+        cities,
+        |(city_id, match_id, ..)| (*city_id, *match_id)
+    );
+
+    let count = unique_cities.len();
+
+    // Bulk insert deduplicated rows
+    let mut app = conn.appender("cities")?;
+    for (db_id, match_id, xml_id, player_db_id, tile_db_id, city_name, family, founded_turn,
+         is_capital, citizens, growth_progress, governor_db_id, general_db_id, agent_db_id,
+         hurry_civics_count, hurry_money_count, specialist_count, first_owner_player_db_id) in unique_cities
+    {
+        app.append_row(params![
+            db_id, match_id, xml_id, player_db_id, tile_db_id, city_name, family, founded_turn,
+            is_capital, citizens, growth_progress, governor_db_id, general_db_id, agent_db_id,
+            hurry_civics_count, hurry_money_count, specialist_count, first_owner_player_db_id
+        ])?;
+    }
+
+    // Flush appender to commit all rows
+    drop(app);
 
     log::info!("Parsed {} cities", count);
     Ok(count)

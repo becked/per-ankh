@@ -11,6 +11,7 @@ pub mod xml_loader;
 pub mod id_mapper;
 pub mod import;
 pub mod entities;
+pub mod utils;
 
 #[cfg(test)]
 mod tests;
