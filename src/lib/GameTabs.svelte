@@ -18,18 +18,30 @@
     }
   });
 
+  function formatNation(nation: string | null): string | null {
+    if (!nation) return null;
+    // Convert NATION_ASSYRIA to Assyria
+    return nation.replace("NATION_", "").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+  }
+
   function formatGameTitle(game: GameInfo): string {
-    if (game.game_name) {
+    // Check if game_name is a real name (not auto-generated "Game{number}")
+    const isRealName = game.game_name && !game.game_name.match(/^Game\d+$/);
+
+    if (isRealName) {
       return game.game_name;
     }
 
+    // Format nation by removing NATION_ prefix and capitalizing
+    const formattedNation = formatNation(game.human_nation);
+
     // Fallback: use nation and turns if available
-    if (game.human_nation && game.total_turns) {
-      return `${game.human_nation} - Turn ${game.total_turns}`;
+    if (formattedNation && game.total_turns) {
+      return `${formattedNation} - Turn ${game.total_turns}`;
     }
 
-    if (game.human_nation) {
-      return game.human_nation;
+    if (formattedNation) {
+      return formattedNation;
     }
 
     if (game.total_turns) {
