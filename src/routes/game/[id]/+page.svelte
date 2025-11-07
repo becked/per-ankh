@@ -6,7 +6,7 @@
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
   import { formatEnum } from "$lib/utils/formatting";
-  import { CHART_COLORS } from "$lib/config/charts";
+  import { CHART_THEME, getChartColor } from "$lib/config";
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
@@ -18,13 +18,10 @@
   const pointsChartOption = $derived<EChartsOption | null>(
     playerHistory
       ? {
+          ...CHART_THEME,
           title: {
+            ...CHART_THEME.title,
             text: "Victory Points",
-            left: "center",
-            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
-          },
-          tooltip: {
-            trigger: "axis",
           },
           legend: {
             data: playerHistory.map((p) => p.player_name),
@@ -43,7 +40,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.points),
-            itemStyle: { color: CHART_COLORS[i % CHART_COLORS.length] },
+            itemStyle: { color: getChartColor(i) },
           })),
         }
       : null
@@ -52,13 +49,10 @@
   const militaryChartOption = $derived<EChartsOption | null>(
     playerHistory
       ? {
+          ...CHART_THEME,
           title: {
+            ...CHART_THEME.title,
             text: "Military Power",
-            left: "center",
-            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
-          },
-          tooltip: {
-            trigger: "axis",
           },
           legend: {
             data: playerHistory.map((p) => p.player_name),
@@ -77,7 +71,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.military_power),
-            itemStyle: { color: CHART_COLORS[i % CHART_COLORS.length] },
+            itemStyle: { color: getChartColor(i) },
           })),
         }
       : null
@@ -86,13 +80,10 @@
   const legitimacyChartOption = $derived<EChartsOption | null>(
     playerHistory
       ? {
+          ...CHART_THEME,
           title: {
+            ...CHART_THEME.title,
             text: "Legitimacy",
-            left: "center",
-            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
-          },
-          tooltip: {
-            trigger: "axis",
           },
           legend: {
             data: playerHistory.map((p) => p.player_name),
@@ -111,7 +102,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.legitimacy),
-            itemStyle: { color: CHART_COLORS[i % CHART_COLORS.length] },
+            itemStyle: { color: getChartColor(i) },
           })),
         }
       : null
@@ -190,28 +181,28 @@
         <Tabs.List class="flex gap-2 mb-6 border-b-2 border-black">
           <Tabs.Trigger
             value="events"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
           >
             Events
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="laws"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
           >
             Laws & Technology
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="economics"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
           >
             Economics
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="settings"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
           >
             Game Settings
           </Tabs.Trigger>
@@ -325,7 +316,7 @@
 
 <style>
   /* Custom fade-in animation for tab switching */
-  .tab-pane {
+  :global(.tab-pane) {
     animation: fadeIn 0.3s;
   }
 

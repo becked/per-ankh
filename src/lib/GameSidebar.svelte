@@ -29,7 +29,7 @@
     // Check if game_name is a real name (not auto-generated "Game{number}")
     const isRealName = game.game_name && !game.game_name.match(/^Game\d+$/);
 
-    if (isRealName) {
+    if (isRealName && game.game_name) {
       return game.game_name;
     }
 
@@ -131,11 +131,11 @@
   }
 
   .sidebar-content::-webkit-scrollbar-thumb {
-    background: #D2B48C;
+    background: var(--color-tan);
     border-radius: 4px;
   }
 
   .sidebar-content::-webkit-scrollbar-thumb:hover {
-    background: #FFA500;
+    background: var(--color-orange);
   }
 </style>
