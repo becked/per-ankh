@@ -1,11 +1,119 @@
 <script lang="ts">
   import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
-  import type { GameDetails } from "$lib/types";
+  import type { GameDetails, PlayerHistory } from "$lib/types";
+  import type { EChartsOption } from "echarts";
+  import Chart from "$lib/Chart.svelte";
 
   let gameDetails = $state<GameDetails | null>(null);
+  let playerHistory = $state<PlayerHistory[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
+
+  const colors = ["#C87941", "#8B4513", "#CD853F", "#A0522D", "#D2691E", "#B8860B"];
+
+  // Generate chart options for each metric
+  const pointsChartOption = $derived<EChartsOption | null>(
+    playerHistory
+      ? {
+          title: {
+            text: "Victory Points",
+            left: "center",
+            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
+          },
+          tooltip: {
+            trigger: "axis",
+          },
+          legend: {
+            data: playerHistory.map((p) => p.player_name),
+            top: 30,
+          },
+          xAxis: {
+            type: "category",
+            name: "Turn",
+            data: playerHistory[0]?.history.map((h) => h.turn) || [],
+          },
+          yAxis: {
+            type: "value",
+            name: "Points",
+          },
+          series: playerHistory.map((player, i) => ({
+            name: player.player_name,
+            type: "line",
+            data: player.history.map((h) => h.points),
+            itemStyle: { color: colors[i % colors.length] },
+          })),
+        }
+      : null
+  );
+
+  const militaryChartOption = $derived<EChartsOption | null>(
+    playerHistory
+      ? {
+          title: {
+            text: "Military Power",
+            left: "center",
+            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
+          },
+          tooltip: {
+            trigger: "axis",
+          },
+          legend: {
+            data: playerHistory.map((p) => p.player_name),
+            top: 30,
+          },
+          xAxis: {
+            type: "category",
+            name: "Turn",
+            data: playerHistory[0]?.history.map((h) => h.turn) || [],
+          },
+          yAxis: {
+            type: "value",
+            name: "Military Power",
+          },
+          series: playerHistory.map((player, i) => ({
+            name: player.player_name,
+            type: "line",
+            data: player.history.map((h) => h.military_power),
+            itemStyle: { color: colors[i % colors.length] },
+          })),
+        }
+      : null
+  );
+
+  const legitimacyChartOption = $derived<EChartsOption | null>(
+    playerHistory
+      ? {
+          title: {
+            text: "Legitimacy",
+            left: "center",
+            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
+          },
+          tooltip: {
+            trigger: "axis",
+          },
+          legend: {
+            data: playerHistory.map((p) => p.player_name),
+            top: 30,
+          },
+          xAxis: {
+            type: "category",
+            name: "Turn",
+            data: playerHistory[0]?.history.map((h) => h.turn) || [],
+          },
+          yAxis: {
+            type: "value",
+            name: "Legitimacy",
+          },
+          series: playerHistory.map((player, i) => ({
+            name: player.player_name,
+            type: "line",
+            data: player.history.map((h) => h.legitimacy),
+            itemStyle: { color: colors[i % colors.length] },
+          })),
+        }
+      : null
+  );
 
   // Reactively load game details when the route parameter changes
   $effect(() => {
@@ -14,10 +122,15 @@
     loading = true;
     error = null;
     gameDetails = null;
+    playerHistory = null;
 
-    invoke<GameDetails>("get_game_details", { matchId })
-      .then((details) => {
+    Promise.all([
+      invoke<GameDetails>("get_game_details", { matchId }),
+      invoke<PlayerHistory[]>("get_player_history", { matchId }),
+    ])
+      .then(([details, history]) => {
         gameDetails = details;
+        playerHistory = history;
       })
       .catch((err) => {
         error = String(err);
@@ -111,6 +224,24 @@
           </tbody>
         </table>
       </div>
+
+      {#if pointsChartOption}
+        <div class="chart-section">
+          <Chart option={pointsChartOption} height="400px" />
+        </div>
+      {/if}
+
+      {#if militaryChartOption}
+        <div class="chart-section">
+          <Chart option={militaryChartOption} height="400px" />
+        </div>
+      {/if}
+
+      {#if legitimacyChartOption}
+        <div class="chart-section">
+          <Chart option={legitimacyChartOption} height="400px" />
+        </div>
+      {/if}
     {/if}
 </main>
 
@@ -147,7 +278,8 @@ h2 {
 }
 
 .game-info-section,
-.players-section {
+.players-section,
+.chart-section {
   background: #eeeeee;
   padding: 1.5rem;
   border: 2px solid var(--color-black);
