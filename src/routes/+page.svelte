@@ -4,6 +4,7 @@
   import type { GameStatistics } from "$lib/types";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
+  import { formatEnum } from "$lib/utils/formatting";
 
   let stats = $state<GameStatistics | null>(null);
   let loading = $state(true);
@@ -23,7 +24,7 @@
           },
           xAxis: {
             type: "category",
-            data: stats.nations.map((n) => n.nation.replace("NATION_", "")),
+            data: stats.nations.map((n) => formatEnum(n.nation, "NATION_")),
             axisLabel: {
               rotate: 45,
               interval: 0,
@@ -91,7 +92,7 @@
         <tbody>
           {#each stats.nations as nation}
             <tr class="transition-colors duration-200 hover:bg-tan">
-              <td class="p-3 text-left border-b-2 border-tan text-black">{nation.nation.replace("NATION_", "")}</td>
+              <td class="p-3 text-left border-b-2 border-tan text-black">{formatEnum(nation.nation, "NATION_")}</td>
               <td class="p-3 text-left border-b-2 border-tan text-black">{nation.games_played}</td>
             </tr>
           {/each}

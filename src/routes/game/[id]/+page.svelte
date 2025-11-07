@@ -5,6 +5,7 @@
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
+  import { formatEnum } from "$lib/utils/formatting";
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
@@ -142,12 +143,6 @@
       });
   });
 
-  function formatNation(nation: string | null): string {
-    if (!nation) return "Unknown";
-    // Convert NATION_ASSYRIA to Assyria
-    return nation.replace("NATION_", "").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
-  }
-
   function formatDate(dateStr: string | null): string {
     if (!dateStr) return "Unknown";
     const date = new Date(dateStr);
@@ -181,7 +176,7 @@
           </div>
           <div class="flex flex-col gap-2 text-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide">Human Nation</span>
-            <span class="text-black text-2xl font-bold">{formatNation(humanNation)}</span>
+            <span class="text-black text-2xl font-bold">{formatEnum(humanNation, "NATION_")}</span>
           </div>
           <div class="flex flex-col gap-2 text-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide">Turns</span>
@@ -276,7 +271,7 @@
             {#if gameDetails.map_size}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Map Size:</span>
-                <span class="text-black text-base">{gameDetails.map_size.replace("MAPSIZE_", "")}</span>
+                <span class="text-black text-base">{formatEnum(gameDetails.map_size, "MAPSIZE_")}</span>
               </div>
             {/if}
             {#if gameDetails.map_width && gameDetails.map_height}
@@ -294,7 +289,7 @@
             {#if gameDetails.opponent_level}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Difficulty:</span>
-                <span class="text-black text-base">{gameDetails.opponent_level.replace("LEVEL_", "")}</span>
+                <span class="text-black text-base">{formatEnum(gameDetails.opponent_level, "LEVEL_")}</span>
               </div>
             {/if}
           </div>
@@ -315,10 +310,10 @@
                 {#each gameDetails.players as player}
                   <tr class="transition-colors duration-200 hover:bg-tan">
                     <td class="p-3 text-left border-b-2 border-tan text-black">{player.player_name}</td>
-                    <td class="p-3 text-left border-b-2 border-tan text-black">{formatNation(player.nation)}</td>
+                    <td class="p-3 text-left border-b-2 border-tan text-black">{formatEnum(player.nation, "NATION_")}</td>
                     <td class="p-3 text-left border-b-2 border-tan text-black">{player.is_human ? "Human" : "AI"}</td>
                     <td class="p-3 text-left border-b-2 border-tan text-black">{player.legitimacy ?? "—"}</td>
-                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.state_religion ? player.state_religion.replace("RELIGION_", "") : "—"}</td>
+                    <td class="p-3 text-left border-b-2 border-tan text-black">{formatEnum(player.state_religion, "RELIGION_")}</td>
                   </tr>
                 {/each}
               </tbody>
