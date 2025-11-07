@@ -186,6 +186,9 @@ fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
 
     log::info!("Checking {} required tables...", required_tables.len());
     for table in required_tables {
+        // NOTE: Table names cannot be parameterized in SQL, so we use format! here.
+        // This is safe because `table` comes from a hardcoded whitelist above (required_tables),
+        // not from user input, preventing SQL injection.
         let query = format!("SELECT COUNT(*) FROM {}", table);
         log::debug!("Checking table '{}' with query: {}", table, query);
         let result = conn.query_row(&query, [], |row| row.get::<_, i64>(0));
