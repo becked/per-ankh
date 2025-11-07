@@ -2,7 +2,8 @@ import { invoke } from "@tauri-apps/api/core";
 import type {
   GameStatistics,
   GameDetails,
-  PlayerHistory
+  PlayerHistory,
+  YieldHistory
 } from "$lib/types";
 
 /**
@@ -26,4 +27,7 @@ export const api = {
 
   getPlayerHistory: (matchId: number) =>
     invoke<PlayerHistory[]>("get_player_history", { matchId }),
+
+  getYieldHistory: (matchId: number, yieldTypes: string[]) =>
+    invoke<YieldHistory[]>("get_yield_history", { matchId, yieldTypes }),
 } as const;
