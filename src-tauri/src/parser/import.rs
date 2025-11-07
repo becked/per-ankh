@@ -15,6 +15,7 @@ use duckdb::{params, Connection};
 use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
+use std::time::Instant;
 
 /// In-process lock manager for same-process concurrency
 lazy_static! {
@@ -85,8 +86,19 @@ pub struct ImportResult {
 pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResult> {
     // Phase 1: Extract and parse XML
     log::info!("Importing save file: {}", file_path);
+
+    let t_start = Instant::now();
+    let t_zip = Instant::now();
     let xml_content = validate_and_extract_xml(file_path)?;
+    let zip_time = t_zip.elapsed();
+    log::info!("⏱️  ZIP extraction: {:?}", zip_time);
+    eprintln!("⏱️  ZIP extraction: {:?}", zip_time);
+
+    let t_parse = Instant::now();
     let doc = parse_xml(xml_content)?;
+    let parse_time = t_parse.elapsed();
+    log::info!("⏱️  XML parsing: {:?}", parse_time);
+    eprintln!("⏱️  XML parsing: {:?}", parse_time);
 
     // Phase 2: Extract GameId to determine lock
     let game_id = doc
@@ -97,19 +109,34 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
     log::info!("Detected GameId: {}", game_id);
 
     // Acquire in-process lock (prevents same-app concurrency)
+    let t_lock = Instant::now();
     let process_lock_arc = acquire_process_lock(&game_id);
     let _process_lock = process_lock_arc.lock().unwrap();
 
     // Begin transaction and acquire DB-level lock (prevents cross-process concurrency)
     let tx = conn.unchecked_transaction()?;
     acquire_db_lock(&tx, &game_id)?;
+    let lock_time = t_lock.elapsed();
+    log::info!("⏱️  Lock acquisition: {:?}", lock_time);
+    eprintln!("⏱️  Lock acquisition: {:?}", lock_time);
 
     // Now safe to proceed - we have exclusive access for this GameId
+    let t_internal = Instant::now();
     match import_save_file_internal(file_path, &doc, &tx, &game_id) {
         Ok(result) => {
+            let internal_time = t_internal.elapsed();
+            log::info!("⏱️  Internal import: {:?}", internal_time);
+            eprintln!("⏱️  Internal import: {:?}", internal_time);
             // Release DB lock and commit
+            let t_commit = Instant::now();
             release_db_lock(&tx, &game_id)?;
             tx.commit()?;
+            let commit_time = t_commit.elapsed();
+            log::info!("⏱️  Commit: {:?}", commit_time);
+            eprintln!("⏱️  Commit: {:?}", commit_time);
+            let total_time = t_start.elapsed();
+            log::info!("⏱️  TOTAL IMPORT TIME: {:?}", total_time);
+            eprintln!("⏱️  TOTAL IMPORT TIME: {:?}", total_time);
             log::info!(
                 "Successfully imported match {} (GameId: {})",
                 result.match_id.unwrap(),
@@ -139,6 +166,8 @@ fn import_save_file_internal(
     tx: &Connection,
     game_id: &str,
 ) -> Result<ImportResult> {
+    let t_setup = Instant::now();
+
     // Extract turn number from XML (Turn is inside Game element)
     let root = doc.root_element();
     let game_node = root
@@ -200,94 +229,182 @@ fn import_save_file_internal(
     // Insert match record (no UPSERT - always fresh import)
     insert_match_metadata(tx, match_id, game_id, file_path, &file_hash, doc)?;
 
+    let setup_time = t_setup.elapsed();
+    log::info!("⏱️  Match setup: {:?}", setup_time);
+    eprintln!("⏱️  Match setup: {:?}", setup_time);
+
     // Parse foundation entities (Pass 1: Core data only)
     log::info!("Parsing foundation entities...");
+    let t_foundation = Instant::now();
 
     // Order matters due to foreign keys:
     // 1. Players (no dependencies)
+    let t_players = Instant::now();
     let players_count = super::entities::parse_players(doc, tx, &mut id_mapper)?;
+    let players_time = t_players.elapsed();
+    log::info!("⏱️    Players: {:?} ({} players)", players_time, players_count);
+    eprintln!("⏱️    Players: {:?} ({} players)", players_time, players_count);
 
     // 2. Characters - Pass 1: Core data only (no relationships yet)
+    let t_characters = Instant::now();
     let characters_count = super::entities::parse_characters_core(doc, tx, &mut id_mapper)?;
+    let characters_time = t_characters.elapsed();
+    log::info!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
+    eprintln!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
 
     // CRITICAL FIX: Pass 2a - Parse parent relationships immediately after characters
     // This MUST happen BEFORE any tables reference characters via FK (tribes, cities, etc.)
     // DuckDB prevents updating a row that's already referenced by another table's FK.
     log::info!("Parsing character parent relationships (Pass 2a)...");
+    let t_parents = Instant::now();
     parse_character_parent_relationships_pass2a(doc, tx, &id_mapper)?;
+    let parents_time = t_parents.elapsed();
+    log::info!("⏱️    Character parents: {:?}", parents_time);
+    eprintln!("⏱️    Character parents: {:?}", parents_time);
 
     // 3. Tiles (depends on players for ownership)
+    let t_tiles = Instant::now();
     let tiles_count = super::entities::parse_tiles(doc, tx, &mut id_mapper)?;
+    let tiles_time = t_tiles.elapsed();
+    log::info!("⏱️    Tiles: {:?} ({} tiles)", tiles_time, tiles_count);
+    eprintln!("⏱️    Tiles: {:?} ({} tiles)", tiles_time, tiles_count);
 
     // 4. Cities (depends on players, tiles)
+    let t_cities = Instant::now();
     let cities_count = super::entities::parse_cities(doc, tx, &mut id_mapper)?;
+    let cities_time = t_cities.elapsed();
+    log::info!("⏱️    Cities: {:?} ({} cities)", cities_time, cities_count);
+    eprintln!("⏱️    Cities: {:?} ({} cities)", cities_time, cities_count);
 
     // Pass 2b - Update tile city ownership after cities are created
     log::info!("Updating tile city ownership (Pass 2b)...");
+    let t_tile_city = Instant::now();
     super::entities::update_tile_city_ownership(doc, tx, &id_mapper)?;
+    let tile_city_time = t_tile_city.elapsed();
+    log::info!("⏱️    Tile city ownership: {:?}", tile_city_time);
+    eprintln!("⏱️    Tile city ownership: {:?}", tile_city_time);
 
     // Pass 2c - Parse tile ownership history after city ownership is set
     log::info!("Parsing tile ownership history (Pass 2c)...");
+    let t_tile_history = Instant::now();
     super::entities::parse_tile_ownership_history(doc, tx, &id_mapper)?;
+    let tile_history_time = t_tile_history.elapsed();
+    log::info!("⏱️    Tile ownership history: {:?}", tile_history_time);
+    eprintln!("⏱️    Tile ownership history: {:?}", tile_history_time);
 
     // Pass 2d - Parse birth cities after cities are created
     log::info!("Parsing character birth cities (Pass 2d)...");
+    let t_birth_cities = Instant::now();
     parse_character_birth_cities_pass2b(doc, tx, &id_mapper)?;
+    let birth_cities_time = t_birth_cities.elapsed();
+    log::info!("⏱️    Character birth cities: {:?}", birth_cities_time);
+    eprintln!("⏱️    Character birth cities: {:?}", birth_cities_time);
 
     // 5. Tribes (references characters via leader_character_id)
+    let t_tribes = Instant::now();
     let tribes_count = super::entities::parse_tribes(doc, tx, &mut id_mapper)?;
+    let tribes_time = t_tribes.elapsed();
+    log::info!("⏱️    Tribes: {:?} ({} tribes)", tribes_time, tribes_count);
+    eprintln!("⏱️    Tribes: {:?} ({} tribes)", tribes_time, tribes_count);
 
     // 6. Families (parsed from global FamilyClass and per-player family data)
+    let t_families = Instant::now();
     let families_count = super::entities::parse_families(doc, tx, &mut id_mapper)?;
+    let families_time = t_families.elapsed();
+    log::info!("⏱️    Families: {:?} ({} families)", families_time, families_count);
+    eprintln!("⏱️    Families: {:?} ({} families)", families_time, families_count);
 
     // 7. Religions (parsed from aggregate containers: ReligionFounded, ReligionHeadID, etc.)
+    let t_religions = Instant::now();
     let religions_count = super::entities::parse_religions(doc, tx, &mut id_mapper)?;
+    let religions_time = t_religions.elapsed();
+    log::info!("⏱️    Religions: {:?} ({} religions)", religions_time, religions_count);
+    eprintln!("⏱️    Religions: {:?} ({} religions)", religions_time, religions_count);
 
     log::info!(
         "Parsed entities: {} players, {} tribes, {} characters, {} tiles, {} cities, {} families, {} religions",
         players_count, tribes_count, characters_count, tiles_count, cities_count, families_count, religions_count
     );
+    let foundation_total = t_foundation.elapsed();
+    log::info!("⏱️  Foundation entities total: {:?}", foundation_total);
+    eprintln!("⏱️  Foundation entities total: {:?}", foundation_total);
 
     // Parse aggregate unit production data (derived from entities)
     log::info!("Parsing aggregate unit production data...");
+    let t_units = Instant::now();
     let player_units_count = super::entities::parse_player_units_produced(doc, tx, &id_mapper)?;
     let city_units_count = super::entities::parse_city_units_produced(doc, tx, &id_mapper)?;
     log::info!(
         "Parsed unit production: {} player records, {} city records",
         player_units_count, city_units_count
     );
+    let units_time = t_units.elapsed();
+    log::info!("⏱️  Unit production: {:?}", units_time);
+    eprintln!("⏱️  Unit production: {:?}", units_time);
 
     // Parse player-nested gameplay data (Milestone 3)
     log::info!("Parsing player-nested gameplay data...");
+    let t_gameplay = Instant::now();
     parse_player_gameplay_data(doc, tx, &id_mapper)?;
+    let gameplay_time = t_gameplay.elapsed();
+    log::info!("⏱️  Player gameplay data: {:?}", gameplay_time);
+    eprintln!("⏱️  Player gameplay data: {:?}", gameplay_time);
 
     // Parse game-level diplomacy
     log::info!("Parsing diplomacy...");
+    let t_diplomacy = Instant::now();
     let diplomacy_count = super::entities::parse_diplomacy(doc, tx, &id_mapper, match_id)?;
     log::info!("Parsed {} diplomacy relations", diplomacy_count);
+    let diplomacy_time = t_diplomacy.elapsed();
+    log::info!("⏱️  Diplomacy: {:?}", diplomacy_time);
+    eprintln!("⏱️  Diplomacy: {:?}", diplomacy_time);
 
     // Parse time-series data (Milestone 4)
     log::info!("Parsing time-series data...");
+    let t_timeseries = Instant::now();
     parse_timeseries_data(doc, tx, &id_mapper)?;
+    let timeseries_time = t_timeseries.elapsed();
+    log::info!("⏱️  Time-series data: {:?}", timeseries_time);
+    eprintln!("⏱️  Time-series data: {:?}", timeseries_time);
 
     // Parse character extended data (Milestone 5)
     log::info!("Parsing character extended data (stats, traits, relationships)...");
+    let t_char_ext = Instant::now();
     parse_character_extended_data_all(doc, tx, &id_mapper)?;
+    let char_ext_time = t_char_ext.elapsed();
+    log::info!("⏱️  Character extended data: {:?}", char_ext_time);
+    eprintln!("⏱️  Character extended data: {:?}", char_ext_time);
 
     // Parse city extended data (Milestone 5 + 6)
     log::info!("Parsing city extended data (production, culture, happiness)...");
+    let t_city_ext = Instant::now();
     parse_city_extended_data_all(doc, tx, &id_mapper)?;
+    let city_ext_time = t_city_ext.elapsed();
+    log::info!("⏱️  City extended data: {:?}", city_ext_time);
+    eprintln!("⏱️  City extended data: {:?}", city_ext_time);
 
     // Parse tile extended data (Milestone 6)
     log::info!("Parsing tile extended data (visibility, history)...");
+    let t_tile_ext = Instant::now();
     parse_tile_extended_data_all(doc, tx, &id_mapper)?;
+    let tile_ext_time = t_tile_ext.elapsed();
+    log::info!("⏱️  Tile extended data: {:?}", tile_ext_time);
+    eprintln!("⏱️  Tile extended data: {:?}", tile_ext_time);
 
     // Parse event stories (Milestone 5)
     log::info!("Parsing event stories...");
+    let t_events = Instant::now();
     parse_event_stories(doc, tx, &id_mapper)?;
+    let events_time = t_events.elapsed();
+    log::info!("⏱️  Event stories: {:?}", events_time);
+    eprintln!("⏱️  Event stories: {:?}", events_time);
 
     // Save ID mappings
+    let t_id_save = Instant::now();
     id_mapper.save_mappings(tx)?;
+    let id_save_time = t_id_save.elapsed();
+    log::info!("⏱️  Save ID mappings: {:?}", id_save_time);
+    eprintln!("⏱️  Save ID mappings: {:?}", id_save_time);
 
     Ok(ImportResult {
         success: true,
