@@ -61,38 +61,38 @@
   });
 </script>
 
-<main class="container">
-  <h1>Per-Ankh - Old World Stats</h1>
+<main class="flex-1 pt-4 px-8 pb-8 overflow-y-auto bg-blue-gray">
+  <h1 class="mb-8 text-gray-200 text-4xl font-bold border-b-[3px] border-orange pb-2">Per-Ankh - Old World Stats</h1>
 
   {#if loading}
     <p>Loading...</p>
   {:else if error}
-    <p class="error">Error: {error}</p>
+    <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
   {:else if stats}
-    <div class="stats-summary">
-      <h2>Games Played: {stats.total_games}</h2>
+    <div class="mb-8 bg-gray-200 p-6 border-2 border-black rounded-lg">
+      <h2 class="text-black font-bold">Games Played: {stats.total_games}</h2>
     </div>
 
     {#if chartOption}
-      <div class="chart-section">
+      <div class="bg-gray-200 p-6 border-2 border-black rounded-lg mb-8">
         <Chart option={chartOption} height="400px" />
       </div>
     {/if}
 
-    <div class="nations-section">
-      <h2>Nations</h2>
-      <table>
+    <div class="bg-gray-200 p-6 border-2 border-black rounded-lg">
+      <h2 class="text-brown font-bold">Nations</h2>
+      <table class="w-full mt-4">
         <thead>
           <tr>
-            <th>Nation</th>
-            <th>Games Played</th>
+            <th class="p-3 text-left border-b-2 border-black text-black font-bold">Nation</th>
+            <th class="p-3 text-left border-b-2 border-black text-black font-bold">Games Played</th>
           </tr>
         </thead>
         <tbody>
           {#each stats.nations as nation}
-            <tr>
-              <td>{nation.nation.replace("NATION_", "")}</td>
-              <td>{nation.games_played}</td>
+            <tr class="transition-colors duration-200 hover:bg-tan">
+              <td class="p-3 text-left border-b-2 border-tan text-black">{nation.nation.replace("NATION_", "")}</td>
+              <td class="p-3 text-left border-b-2 border-tan text-black">{nation.games_played}</td>
             </tr>
           {/each}
         </tbody>
@@ -100,91 +100,3 @@
     </div>
   {/if}
 </main>
-
-<style>
-.container {
-  flex: 1;
-  padding: 1rem 2rem 2rem 2rem;
-  overflow-y: auto;
-  background: var(--color-blue-gray);
-}
-
-h1 {
-  margin-bottom: 2rem;
-  color: #eeeeee;
-  font-size: 2rem;
-  font-weight: bold;
-  border-bottom: 3px solid var(--color-orange);
-  padding-bottom: 0.5rem;
-}
-
-h2 {
-  color: var(--color-brown);
-  font-weight: bold;
-}
-
-.stats-summary {
-  margin-bottom: 2rem;
-  background: #eeeeee;
-  padding: 1.5rem;
-  border: 2px solid var(--color-black);
-  border-radius: 8px;
-}
-
-.stats-summary h2 {
-  color: var(--color-black);
-}
-
-.error {
-  color: var(--color-white);
-  background: var(--color-brown);
-  padding: 1rem;
-  border: 2px solid var(--color-orange);
-  border-radius: 4px;
-  font-weight: bold;
-}
-
-.chart-section {
-  background: #eeeeee;
-  padding: 1.5rem;
-  border: 2px solid var(--color-black);
-  border-radius: 8px;
-  margin-bottom: 2rem;
-}
-
-.nations-section {
-  background: #eeeeee;
-  padding: 1.5rem;
-  border: 2px solid var(--color-black);
-  border-radius: 8px;
-}
-
-table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 1rem;
-}
-
-th,
-td {
-  padding: 0.75rem;
-  text-align: left;
-  border-bottom: 2px solid var(--color-tan);
-  color: var(--color-black);
-}
-
-th {
-  font-weight: bold;
-  background: transparent;
-  color: var(--color-black);
-  border-bottom: 2px solid var(--color-black);
-}
-
-tbody tr:hover {
-  background: var(--color-tan);
-}
-
-tbody tr {
-  transition: background 0.2s;
-}
-</style>
