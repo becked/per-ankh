@@ -6,19 +6,30 @@
   let { option, height = "400px" }: { option: EChartsOption; height?: string } = $props();
 
   let chartContainer: HTMLDivElement;
-  let chart: echarts.ECharts;
+  let chart: echarts.ECharts | null = null;
 
   onMount(() => {
-    chart = echarts.init(chartContainer);
-    // Type assertion needed due to echarts type definition incompatibility
-    chart.setOption(option as any);
+    // Wait for container to have dimensions before initializing
+    const initChart = () => {
+      if (chartContainer.clientWidth === 0 || chartContainer.clientHeight === 0) {
+        // Container not ready yet, try again soon
+        setTimeout(initChart, 50);
+        return;
+      }
 
-    const handleResize = () => chart.resize();
+      chart = echarts.init(chartContainer);
+      // Type assertion needed due to echarts type definition incompatibility
+      chart.setOption(option as any);
+    };
+
+    initChart();
+
+    const handleResize = () => chart?.resize();
     window.addEventListener("resize", handleResize);
 
     return () => {
       window.removeEventListener("resize", handleResize);
-      chart.dispose();
+      chart?.dispose();
     };
   });
 
@@ -26,6 +37,8 @@
     if (chart) {
       // Type assertion needed due to echarts type definition incompatibility
       chart.setOption(option as any, true);
+      // Force resize to handle tab visibility changes
+      chart.resize();
     }
   });
 </script>

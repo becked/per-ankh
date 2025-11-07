@@ -1,7 +1,7 @@
 <script lang="ts">
   import { page } from "$app/stores";
   import { api } from "$lib/api";
-  import type { GameDetails, PlayerHistory } from "$lib/types";
+  import type { GameDetails, PlayerHistory, YieldHistory } from "$lib/types";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
@@ -10,23 +10,20 @@
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
+  let yieldHistory = $state<YieldHistory[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
 
   // Helper to get player color based on nation
   function getPlayerColor(nation: string | null | undefined, fallbackIndex: number): string {
-    console.log(`getPlayerColor called with nation: "${nation}", fallbackIndex: ${fallbackIndex}`);
     if (nation) {
       // Strip "NATION_" prefix if present (database stores as "NATION_CARTHAGE" but color map expects "CARTHAGE")
       const cleanNation = nation.replace(/^NATION_/, '');
       const nationColor = getCivilizationColor(cleanNation);
-      console.log(`  getCivilizationColor("${cleanNation}") returned: ${nationColor}`);
       if (nationColor) return nationColor;
     }
-    const fallback = getChartColor(fallbackIndex);
-    console.log(`  Using fallback color: ${fallback}`);
-    return fallback;
+    return getChartColor(fallbackIndex);
   }
 
   // Generate chart options for each metric
@@ -42,14 +39,24 @@
             data: playerHistory.map((p) => p.player_name),
             top: 30,
           },
+          grid: {
+            left: 60,
+            right: 40,
+            top: 80,
+            bottom: 60,
+          },
           xAxis: {
             type: "category",
             name: "Turn",
+            nameLocation: "middle",
+            nameGap: 30,
             data: playerHistory[0]?.history.map((h) => h.turn) ?? [],
           },
           yAxis: {
             type: "value",
             name: "Points",
+            nameLocation: "middle",
+            nameGap: 40,
           },
           series: playerHistory.map((player, i) => ({
             name: player.player_name,
@@ -123,6 +130,47 @@
       : null
   );
 
+  const scienceChartOption = $derived<EChartsOption | null>(
+    yieldHistory && yieldHistory.length > 0
+      ? {
+          ...CHART_THEME,
+          title: {
+            ...CHART_THEME.title,
+            text: "Science Production",
+          },
+          legend: {
+            data: yieldHistory.map((y) => y.player_name),
+            top: 30,
+          },
+          grid: {
+            left: 60,
+            right: 40,
+            top: 80,
+            bottom: 60,
+          },
+          xAxis: {
+            type: "category",
+            name: "Turn",
+            nameLocation: "middle",
+            nameGap: 30,
+            data: yieldHistory[0]?.data.map((d) => d.turn) ?? [],
+          },
+          yAxis: {
+            type: "value",
+            name: "Science per Turn",
+            nameLocation: "middle",
+            nameGap: 40,
+          },
+          series: yieldHistory.map((playerYield, i) => ({
+            name: playerYield.player_name,
+            type: "line",
+            data: playerYield.data.map((d) => d.amount),
+            itemStyle: { color: getPlayerColor(playerYield.nation, i) },
+          })),
+        }
+      : null
+  );
+
   // Reactively load game details when the route parameter changes
   $effect(() => {
     const matchId = Number($page.params.id);
@@ -131,14 +179,17 @@
     error = null;
     gameDetails = null;
     playerHistory = null;
+    yieldHistory = null;
 
     Promise.all([
       api.getGameDetails(matchId),
       api.getPlayerHistory(matchId),
+      api.getYieldHistory(matchId, ["YIELD_SCIENCE"]),
     ])
-      .then(([details, history]) => {
+      .then(([details, history, yields]) => {
         gameDetails = details;
         playerHistory = history;
+        yieldHistory = yields;
       })
       .catch((err) => {
         error = String(err);
@@ -263,7 +314,15 @@
           class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
         >
           <h2 class="text-black font-bold mb-4 mt-0">Economics</h2>
-          <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
+          {#if scienceChartOption}
+            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <Chart option={scienceChartOption} height="400px" />
+            </div>
+          {:else if yieldHistory === null}
+            <p class="text-brown italic text-center p-8">Loading yield data...</p>
+          {:else}
+            <p class="text-brown italic text-center p-8">No yield data available</p>
+          {/if}
         </Tabs.Content>
 
         <!-- Tab Content: Settings -->

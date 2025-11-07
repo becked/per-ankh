@@ -85,6 +85,24 @@ pub struct PlayerHistory {
     pub history: Vec<PlayerHistoryPoint>,
 }
 
+#[derive(Debug, Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct YieldDataPoint {
+    pub turn: i32,
+    /// Display value (already converted from fixed-point by dividing by 10)
+    pub amount: Option<f64>,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct YieldHistory {
+    pub player_id: i32,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub yield_type: String,
+    pub data: Vec<YieldDataPoint>,
+}
+
 // Initialize logging
 fn init_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -329,6 +347,70 @@ async fn get_player_history(
     .map_err(|e| e.to_string())
 }
 
+/// Tauri command to get yield history data for specific yield types
+///
+/// Returns time-series data for requested yield types (e.g., YIELD_SCIENCE, YIELD_CIVICS)
+#[tauri::command]
+async fn get_yield_history(
+    match_id: i64,
+    yield_types: Vec<String>,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<YieldHistory>, String> {
+    pool.with_connection(|conn| {
+        // Get all players for this match
+        let mut players_stmt = conn
+            .prepare(
+                "SELECT player_id, player_name, nation
+                 FROM players
+                 WHERE match_id = ?
+                 ORDER BY player_name"
+            )?;
+
+        let players: Vec<(i32, String, Option<String>)> = players_stmt
+            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut result = Vec::new();
+
+        // For each player and each yield type, get the history
+        for (player_id, player_name, nation) in players {
+            for yield_type in &yield_types {
+                // Query yield history for this player and yield type
+                // Convert from fixed-point (divide by 10) to display values
+                let mut yield_stmt = conn
+                    .prepare(
+                        "SELECT turn, amount / 10.0 AS display_amount
+                         FROM yield_history
+                         WHERE match_id = ? AND player_id = ? AND yield_type = ?
+                         ORDER BY turn"
+                    )?;
+
+                let params: [&dyn duckdb::ToSql; 3] = [&match_id, &(player_id as i64), &yield_type.as_str()];
+                let data: Vec<YieldDataPoint> = yield_stmt
+                    .query_map(&params[..], |row| {
+                        Ok(YieldDataPoint {
+                            turn: row.get(0)?,
+                            amount: row.get(1)?,
+                        })
+                    })?
+                    .collect::<std::result::Result<Vec<_>, _>>()?;
+
+                result.push(YieldHistory {
+                    player_id,
+                    player_name: player_name.clone(),
+                    nation: nation.clone(),
+                    yield_type: yield_type.clone(),
+                    data,
+                });
+            }
+        }
+
+        Ok(result)
+    })
+    .context("Failed to get yield history")
+    .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -340,7 +422,8 @@ pub fn run() {
             get_game_statistics,
             get_games_list,
             get_game_details,
-            get_player_history
+            get_player_history,
+            get_yield_history
         ]);
 
     builder
