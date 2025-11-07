@@ -8,9 +8,12 @@
   --color-brown: #A52A2A;
   --color-orange: #FFA500;
   --color-tan: #D2B48C;
+  --color-tan-hover: #dfcaae;
   --color-white: #FFFFFF;
   --color-yellow: #FFFF00;
-  --color-blue-gray: #4A5568;
+  --color-blue-gray: #211A12;
+  --color-border-gray: #1C160F;
+  --color-gray-200: #eeeeee;
 }
 
 * {
