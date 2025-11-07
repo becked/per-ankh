@@ -131,6 +131,41 @@ const color = getCivilizationColor(player.nation) ?? getChartColor(i);
 
 **Reference**: See `docs/reference/color-scheme.md` for complete color palette documentation.
 
+### Frontend: API Layer
+
+**Policy**: Use the centralized API layer (`src/lib/api.ts`) for all Tauri backend calls.
+
+```typescript
+import { api } from "$lib/api";
+
+// ✅ CORRECT: Use API layer
+const stats = await api.getGameStatistics();
+const details = await api.getGameDetails(matchId);
+
+// ❌ WRONG: Direct invoke calls
+import { invoke } from "@tauri-apps/api/core";
+const stats = await invoke<GameStatistics>("get_game_statistics");
+```
+
+**Benefits**:
+- Single source of truth for backend command names
+- Easy refactoring when command names change
+- Type-safe function signatures
+- Documents all available backend commands in one place
+
+**Adding new commands**:
+```typescript
+// src/lib/api.ts
+export const api = {
+  // ... existing commands ...
+
+  getEconomicData: (matchId: number) =>
+    invoke<EconomicData>("get_economic_data", { matchId }),
+} as const;
+```
+
+**Future**: When `api.ts` grows to 30-40+ functions, split into domain modules (games, players, economics, etc.).
+
 ### Backend: SQL Query Safety
 
 **Policy**: Always use parameterized queries to prevent SQL injection.

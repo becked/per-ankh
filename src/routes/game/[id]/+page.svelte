@@ -1,6 +1,6 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
   import { page } from "$app/stores";
+  import { api } from "$lib/api";
   import type { GameDetails, PlayerHistory } from "$lib/types";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
@@ -118,8 +118,8 @@
     playerHistory = null;
 
     Promise.all([
-      invoke<GameDetails>("get_game_details", { matchId }),
-      invoke<PlayerHistory[]>("get_player_history", { matchId }),
+      api.getGameDetails(matchId),
+      api.getPlayerHistory(matchId),
     ])
       .then(([details, history]) => {
         gameDetails = details;
