@@ -38,7 +38,7 @@
 
     // Fallback: use nation and turns if available
     if (formattedNation && game.total_turns) {
-      return `${formattedNation} - Turn ${game.total_turns}`;
+      return `${formattedNation} - ${game.total_turns} turns`;
     }
 
     if (formattedNation) {
@@ -85,7 +85,7 @@
   );
 </script>
 
-<aside class="w-[250px] h-screen bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
+<aside class="w-[175px] h-screen bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
   <div class="tabs-container overflow-y-auto flex-1 pt-4 px-2 pb-2">
     <button class="w-full mb-6 cursor-pointer text-left pb-2 pt-4 border-b-[3px] border-orange transition-opacity hover:opacity-80" type="button" onclick={navigateToSummary}>
       <div class="text-2xl font-bold text-gray-200">SUMMARY</div>
@@ -111,9 +111,9 @@
       </div>
     {:else}
       {#each filteredGames as game (game.match_id)}
-        <button class="w-full p-3 mb-2 bg-tan border-2 border-black rounded cursor-pointer text-left transition-all duration-200 hover:bg-white hover:border-orange hover:translate-x-0.5 active:bg-white" type="button" onclick={() => navigateToGame(game.match_id)}>
-          <div class="text-sm font-semibold mb-1 text-black">{formatGameTitle(game)}</div>
-          <div class="text-xs text-brown text-right font-normal">{formatGameSubtitle(game)}</div>
+        <button class="w-full p-2 mb-2 bg-tan border-2 border-black rounded cursor-pointer text-left transition-all duration-200 hover:bg-white hover:border-orange hover:translate-x-0.5 active:bg-white" type="button" onclick={() => navigateToGame(game.match_id)}>
+          <div class="text-xs font-semibold mb-0.5 text-black">{formatGameTitle(game)}</div>
+          <div class="text-[8px] text-brown text-left font-normal">{formatGameSubtitle(game)}</div>
         </button>
       {/each}
     {/if}
