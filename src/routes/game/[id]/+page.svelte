@@ -4,6 +4,7 @@
   import type { GameDetails, PlayerHistory } from "$lib/types";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
+  import { Tabs } from "bits-ui";
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
@@ -189,125 +190,142 @@
         </div>
       </div>
 
-      <!-- Tab Navigation -->
-      <div class="flex gap-2 mb-6 border-b-2 border-black">
-        <button
-          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'events' ? 'bg-gray-200' : 'bg-tan'}"
-          onclick={() => (activeTab = "events")}
-        >
-          Events
-        </button>
-        <button
-          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'laws' ? 'bg-gray-200' : 'bg-tan'}"
-          onclick={() => (activeTab = "laws")}
-        >
-          Laws & Technology
-        </button>
-        <button
-          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'economics' ? 'bg-gray-200' : 'bg-tan'}"
-          onclick={() => (activeTab = "economics")}
-        >
-          Economics
-        </button>
-        <button
-          class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] {activeTab === 'settings' ? 'bg-gray-200' : 'bg-tan'}"
-          onclick={() => (activeTab = "settings")}
-        >
-          Game Settings
-        </button>
-      </div>
+      <!-- Tabs with Bits UI -->
+      <Tabs.Root bind:value={activeTab}>
+        <!-- Tab Navigation -->
+        <Tabs.List class="flex gap-2 mb-6 border-b-2 border-black">
+          <Tabs.Trigger
+            value="events"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+          >
+            Events
+          </Tabs.Trigger>
 
-      <!-- Tab Content -->
-      <div class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px]">
-        {#if activeTab === "events"}
-          <div class="tab-pane">
-            <h2 class="text-black font-bold mb-4 mt-0">Game History</h2>
-            {#if pointsChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
-                <Chart option={pointsChartOption} height="400px" />
-              </div>
-            {/if}
+          <Tabs.Trigger
+            value="laws"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+          >
+            Laws & Technology
+          </Tabs.Trigger>
 
-            {#if militaryChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
-                <Chart option={militaryChartOption} height="400px" />
-              </div>
-            {/if}
+          <Tabs.Trigger
+            value="economics"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+          >
+            Economics
+          </Tabs.Trigger>
 
-            {#if legitimacyChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
-                <Chart option={legitimacyChartOption} height="400px" />
-              </div>
-            {/if}
-          </div>
-        {:else if activeTab === "laws"}
-          <div class="tab-pane">
-            <h2 class="text-black font-bold mb-4 mt-0">Laws & Technology</h2>
-            <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
-          </div>
-        {:else if activeTab === "economics"}
-          <div class="tab-pane">
-            <h2 class="text-black font-bold mb-4 mt-0">Economics</h2>
-            <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
-          </div>
-        {:else if activeTab === "settings"}
-          <div class="tab-pane">
-            <h2 class="text-black font-bold mb-4 mt-0">Game Settings</h2>
-            <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8">
-              {#if gameDetails.map_size}
-                <div class="flex flex-col gap-1">
-                  <span class="font-bold text-brown text-sm">Map Size:</span>
-                  <span class="text-black text-base">{gameDetails.map_size.replace("MAPSIZE_", "")}</span>
-                </div>
-              {/if}
-              {#if gameDetails.map_width && gameDetails.map_height}
-                <div class="flex flex-col gap-1">
-                  <span class="font-bold text-brown text-sm">Map Dimensions:</span>
-                  <span class="text-black text-base">{gameDetails.map_width} × {gameDetails.map_height}</span>
-                </div>
-              {/if}
-              {#if gameDetails.game_mode}
-                <div class="flex flex-col gap-1">
-                  <span class="font-bold text-brown text-sm">Game Mode:</span>
-                  <span class="text-black text-base">{gameDetails.game_mode}</span>
-                </div>
-              {/if}
-              {#if gameDetails.opponent_level}
-                <div class="flex flex-col gap-1">
-                  <span class="font-bold text-brown text-sm">Difficulty:</span>
-                  <span class="text-black text-base">{gameDetails.opponent_level.replace("LEVEL_", "")}</span>
-                </div>
-              {/if}
+          <Tabs.Trigger
+            value="settings"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-[#d4c4a8] data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+          >
+            Game Settings
+          </Tabs.Trigger>
+        </Tabs.List>
+
+        <!-- Tab Content: Events -->
+        <Tabs.Content
+          value="events"
+          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+        >
+          <h2 class="text-black font-bold mb-4 mt-0">Game History</h2>
+          {#if pointsChartOption}
+            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <Chart option={pointsChartOption} height="400px" />
             </div>
+          {/if}
 
-            <div class="mt-8">
-              <h3 class="text-black font-bold mb-4 mt-8 text-xl">Players</h3>
-              <table class="w-full mt-2">
-                <thead>
-                  <tr>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Nation</th>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Type</th>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Legitimacy</th>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">State Religion</th>
+          {#if militaryChartOption}
+            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <Chart option={militaryChartOption} height="400px" />
+            </div>
+          {/if}
+
+          {#if legitimacyChartOption}
+            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <Chart option={legitimacyChartOption} height="400px" />
+            </div>
+          {/if}
+        </Tabs.Content>
+
+        <!-- Tab Content: Laws -->
+        <Tabs.Content
+          value="laws"
+          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+        >
+          <h2 class="text-black font-bold mb-4 mt-0">Laws & Technology</h2>
+          <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
+        </Tabs.Content>
+
+        <!-- Tab Content: Economics -->
+        <Tabs.Content
+          value="economics"
+          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+        >
+          <h2 class="text-black font-bold mb-4 mt-0">Economics</h2>
+          <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
+        </Tabs.Content>
+
+        <!-- Tab Content: Settings -->
+        <Tabs.Content
+          value="settings"
+          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+        >
+          <h2 class="text-black font-bold mb-4 mt-0">Game Settings</h2>
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8">
+            {#if gameDetails.map_size}
+              <div class="flex flex-col gap-1">
+                <span class="font-bold text-brown text-sm">Map Size:</span>
+                <span class="text-black text-base">{gameDetails.map_size.replace("MAPSIZE_", "")}</span>
+              </div>
+            {/if}
+            {#if gameDetails.map_width && gameDetails.map_height}
+              <div class="flex flex-col gap-1">
+                <span class="font-bold text-brown text-sm">Map Dimensions:</span>
+                <span class="text-black text-base">{gameDetails.map_width} × {gameDetails.map_height}</span>
+              </div>
+            {/if}
+            {#if gameDetails.game_mode}
+              <div class="flex flex-col gap-1">
+                <span class="font-bold text-brown text-sm">Game Mode:</span>
+                <span class="text-black text-base">{gameDetails.game_mode}</span>
+              </div>
+            {/if}
+            {#if gameDetails.opponent_level}
+              <div class="flex flex-col gap-1">
+                <span class="font-bold text-brown text-sm">Difficulty:</span>
+                <span class="text-black text-base">{gameDetails.opponent_level.replace("LEVEL_", "")}</span>
+              </div>
+            {/if}
+          </div>
+
+          <div class="mt-8">
+            <h3 class="text-black font-bold mb-4 mt-8 text-xl">Players</h3>
+            <table class="w-full mt-2">
+              <thead>
+                <tr>
+                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
+                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Nation</th>
+                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Type</th>
+                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Legitimacy</th>
+                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">State Religion</th>
+                </tr>
+              </thead>
+              <tbody>
+                {#each gameDetails.players as player}
+                  <tr class="transition-colors duration-200 hover:bg-tan">
+                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.player_name}</td>
+                    <td class="p-3 text-left border-b-2 border-tan text-black">{formatNation(player.nation)}</td>
+                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.is_human ? "Human" : "AI"}</td>
+                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.legitimacy ?? "—"}</td>
+                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.state_religion ? player.state_religion.replace("RELIGION_", "") : "—"}</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {#each gameDetails.players as player}
-                    <tr class="transition-colors duration-200 hover:bg-tan">
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.player_name}</td>
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{formatNation(player.nation)}</td>
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.is_human ? "Human" : "AI"}</td>
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.legitimacy ?? "—"}</td>
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{player.state_religion ? player.state_religion.replace("RELIGION_", "") : "—"}</td>
-                    </tr>
-                  {/each}
-                </tbody>
-              </table>
-            </div>
+                {/each}
+              </tbody>
+            </table>
           </div>
-        {/if}
-      </div>
+        </Tabs.Content>
+      </Tabs.Root>
     {/if}
 </main>
 

@@ -7,6 +7,7 @@
   let games = $state<GameInfo[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
+  let searchQuery = $state("");
 
   onMount(async () => {
     try {
@@ -66,6 +67,22 @@
   function navigateToGame(matchId: number) {
     goto(`/game/${matchId}`);
   }
+
+  // Filter games based on search query
+  const filteredGames = $derived(
+    games.filter(game => {
+      if (!searchQuery) return true;
+
+      const query = searchQuery.toLowerCase();
+      const title = formatGameTitle(game).toLowerCase();
+      const nation = formatNation(game.human_nation)?.toLowerCase() || "";
+      const date = formatGameSubtitle(game).toLowerCase();
+
+      return title.includes(query) ||
+             nation.includes(query) ||
+             date.includes(query);
+    })
+  );
 </script>
 
 <aside class="w-[250px] h-screen bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
@@ -74,14 +91,26 @@
       <div class="text-2xl font-bold text-gray-200">SUMMARY</div>
     </button>
 
+    <!-- Search Bar -->
+    <div class="mb-4">
+      <input
+        type="text"
+        bind:value={searchQuery}
+        placeholder="Search"
+        class="w-full px-3 py-2 bg-tan border-2 border-black rounded text-black text-sm font-normal placeholder-gray-500 placeholder:font-light focus:outline-none focus:border-orange transition-colors"
+      />
+    </div>
+
     {#if loading}
       <div class="p-4 text-center text-tan">Loading games...</div>
     {:else if error}
       <div class="p-4 text-center text-orange font-bold">Error: {error}</div>
-    {:else if games.length === 0}
-      <div class="p-4 text-center text-tan">No games found</div>
+    {:else if filteredGames.length === 0}
+      <div class="p-4 text-center text-tan">
+        {searchQuery ? "No games match your search" : "No games found"}
+      </div>
     {:else}
-      {#each games as game (game.match_id)}
+      {#each filteredGames as game (game.match_id)}
         <button class="w-full p-3 mb-2 bg-tan border-2 border-black rounded cursor-pointer text-left transition-all duration-200 hover:bg-white hover:border-orange hover:translate-x-0.5 active:bg-white" type="button" onclick={() => navigateToGame(game.match_id)}>
           <div class="text-sm font-semibold mb-1 text-black">{formatGameTitle(game)}</div>
           <div class="text-xs text-brown text-right font-normal">{formatGameSubtitle(game)}</div>
