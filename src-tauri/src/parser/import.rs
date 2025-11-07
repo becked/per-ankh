@@ -63,9 +63,11 @@ fn release_db_lock(conn: &Connection, game_id: &str) -> Result<()> {
 }
 
 /// Import result
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, ts_rs::TS)]
+#[ts(export, export_to = "../src/lib/types/")]
 pub struct ImportResult {
     pub success: bool,
+    #[ts(type = "number")]
     pub match_id: Option<i64>,
     pub game_id: String,
     pub is_new: bool,

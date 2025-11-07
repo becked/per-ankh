@@ -5,7 +5,39 @@
 use crate::parser::{ParseError, Result};
 use duckdb::Connection;
 use std::path::PathBuf;
+use std::sync::Mutex;
 use tauri::Manager;
+
+/// Thread-safe connection pool for DuckDB
+/// DuckDB doesn't have a traditional connection pool, so we use a single
+/// connection wrapped in a Mutex for thread-safe access
+pub struct DbPool {
+    connection: Mutex<Connection>,
+}
+
+impl DbPool {
+    /// Create a new connection pool with a single connection
+    pub fn new(db_path: &PathBuf) -> Result<Self> {
+        let connection = get_connection(db_path)?;
+        Ok(Self {
+            connection: Mutex::new(connection),
+        })
+    }
+
+    /// Execute a function with access to the database connection
+    pub fn with_connection<F, T>(&self, f: F) -> Result<T>
+    where
+        F: FnOnce(&Connection) -> Result<T>,
+    {
+        let conn = self.connection.lock().map_err(|e| {
+            ParseError::IoError(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to acquire connection lock: {}", e),
+            ))
+        })?;
+        f(&conn)
+    }
+}
 
 /// Get the database file path in the user's data directory
 ///
