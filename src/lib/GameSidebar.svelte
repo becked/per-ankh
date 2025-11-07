@@ -3,6 +3,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import type { GameInfo } from "$lib/types";
+  import { formatEnum } from "$lib/utils/formatting";
 
   let games = $state<GameInfo[]>([]);
   let loading = $state(true);
@@ -21,8 +22,7 @@
 
   function formatNation(nation: string | null): string | null {
     if (!nation) return null;
-    // Convert NATION_ASSYRIA to Assyria
-    return nation.replace("NATION_", "").toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+    return formatEnum(nation, "NATION_");
   }
 
   function formatGameTitle(game: GameInfo): string {

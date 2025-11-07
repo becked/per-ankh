@@ -35,6 +35,175 @@ Per-Ankh is a desktop application that ingests completed save files from the Old
 - Follow consistent naming conventions (camelCase for functions/variables, PascalCase for components)
 - Prefer `const` over `let` when variables don't need reassignment
 
+## Code Quality Standards
+
+### Frontend: Null/Undefined Handling
+
+**Policy**: Use different operators based on context to prevent bugs from falsy coercion.
+
+**Domain/Data Layer (strict)**:
+- Use nullish coalescing (`??`) for null/undefined checks
+- Use explicit `!= null` checks for values where `0` or `""` are valid
+- **NEVER** use logical OR (`||`) in data computation or state management
+
+```typescript
+// ✅ CORRECT: Data layer
+const chartData = playerData.map(p => p.points ?? 0);
+const filteredGames = games.filter(g => g.turn_number != null);
+const humanNation = game.nations.find(n => n.is_human) ?? null;
+
+// ❌ WRONG: Data layer
+const chartData = playerData.map(p => p.points || 0);  // 0 is valid!
+```
+
+**UI Rendering Layer (pragmatic)**:
+- Allow `||` only for display fallbacks where falsy values should show the fallback
+
+```typescript
+// ✅ CORRECT: UI rendering
+<h1>{game.name || "Unknown Game"}</h1>
+<span>{player.name || "Anonymous"}</span>
+
+// ✅ CORRECT: UI rendering with zero handling
+<span>{score != null ? score : "N/A"}</span>
+```
+
+### Frontend: Enum Formatting
+
+**Policy**: Use the shared `formatEnum()` utility for consistent formatting of backend enum values.
+
+```typescript
+import { formatEnum } from "$lib/utils/formatting";
+
+// ✅ CORRECT: Use utility
+const nationName = formatEnum(game.nation, "NATION_");
+const religionName = formatEnum(player.religion, "RELIGION_");
+
+// ❌ WRONG: Inline string manipulation
+const nationName = game.nation?.replace("NATION_", "").toLowerCase()...;
+```
+
+The utility handles:
+- Prefix removal (NATION_, RELIGION_, MAPSIZE_, LEVEL_)
+- Title casing
+- Multi-word support (e.g., "OLD_WORLD" → "Old World")
+- Null/undefined safety (returns "Unknown")
+
+### Frontend: Color Usage
+
+**Policy**: Use centralized color configuration with proper hierarchy.
+
+**UI Colors** (CSS variables as single source of truth):
+```typescript
+// ✅ CORRECT: Use Tailwind classes
+<div class="bg-brown text-tan border-black">
+
+// ✅ CORRECT: Custom CSS with variables
+.custom-element {
+  background: var(--color-tan);
+}
+
+// ❌ WRONG: Hardcoded colors
+<div style="background: #D2B48C">
+```
+
+**Chart Colors** (TypeScript constants):
+```typescript
+import { CHART_COLORS, CHART_THEME, getChartColor } from "$lib/config";
+
+// ✅ CORRECT: Use chart theme and helper
+const chartOption: EChartsOption = {
+  ...CHART_THEME,
+  series: data.map((d, i) => ({
+    ...d,
+    itemStyle: { color: getChartColor(i) }
+  }))
+};
+```
+
+**Nation/Tribe Colors** (TypeScript constants with helpers):
+```typescript
+import { getNationColor, getCivilizationColor } from "$lib/config";
+
+// ✅ CORRECT: Use helper functions
+const color = getCivilizationColor(player.nation) ?? getChartColor(i);
+```
+
+**Reference**: See `docs/reference/color-scheme.md` for complete color palette documentation.
+
+### Backend: SQL Query Safety
+
+**Policy**: Always use parameterized queries to prevent SQL injection.
+
+**INSERT/UPDATE/DELETE queries**:
+```rust
+// ✅ CORRECT: Parameterized query
+conn.execute(
+    "INSERT INTO games (name, turn) VALUES (?, ?)",
+    params![game_name, turn_number]
+)?;
+
+// ❌ WRONG: String interpolation
+conn.execute(&format!("INSERT INTO games (name) VALUES ('{}')", name))?;
+```
+
+**SELECT queries (single row)**:
+```rust
+// ✅ CORRECT: query_row with params
+let game = conn.query_row(
+    "SELECT * FROM games WHERE id = ?",
+    [game_id],
+    |row| Ok(Game { id: row.get(0)?, name: row.get(1)? })
+)?;
+```
+
+**SELECT queries (multiple rows)**:
+```rust
+// ✅ CORRECT: prepare + query_map
+let mut stmt = conn.prepare("SELECT * FROM games WHERE turn > ?")?;
+let games = stmt.query_map([min_turn], |row| {
+    Ok(Game { id: row.get(0)?, name: row.get(1)? })
+})?
+.collect::<Result<Vec<_>, _>>()?;
+```
+
+**Table/column names (CANNOT be parameterized)**:
+```rust
+// ✅ CORRECT: Whitelist approach with comment
+let allowed_tables = vec!["games", "players", "nations"];
+if allowed_tables.contains(&table_name) {
+    // Safe: table_name validated against whitelist
+    let query = format!("SELECT COUNT(*) FROM {}", table_name);
+    conn.query_row(&query, [], |row| row.get(0))?
+}
+```
+
+**Reference**: See `src-tauri/src/db/connection.rs` for detailed query pattern documentation.
+
+### Backend: Error Context
+
+**Policy**: Use `anyhow::Context` for cleaner, more ergonomic error handling.
+
+```rust
+use anyhow::Context;
+
+// ✅ CORRECT: Use Context trait
+conn.execute(query, params)
+    .context("Failed to insert game data")?;
+
+let file = File::open(path)
+    .context("Failed to open save file")?;
+
+// ❌ WRONG: Verbose map_err
+conn.execute(query, params)
+    .map_err(|e| format!("Failed to insert game data: {}", e))?;
+```
+
+Benefits:
+- More concise and readable
+- Preserves full error chain for debugging
+- Consistent error formatting
+
 ## Development Commands
 
 ### Initial Setup
