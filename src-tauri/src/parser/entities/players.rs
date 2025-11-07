@@ -30,8 +30,13 @@ pub fn parse_players(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMap
         let legitimacy = player_node.opt_child_text("Legitimacy")
             .and_then(|s| s.parse::<i32>().ok());
 
-        // Determine if player is human (AI players have AIControlledToTurn attribute)
-        let is_human = player_node.opt_attr("AIControlledToTurn").is_none();
+        // Determine if player is human by checking AIControlledToTurn value
+        // Human: AIControlledToTurn="0", AI: AIControlledToTurn="2147483647"
+        let is_human = player_node
+            .opt_attr("AIControlledToTurn")
+            .and_then(|s| s.parse::<i32>().ok())
+            .map(|turn| turn == 0)
+            .unwrap_or(true); // Default to human if attribute missing (backward compatibility)
 
         // External identity
         let online_id = player_node.opt_attr("OnlineID");
