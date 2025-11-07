@@ -7,6 +7,7 @@
 pub mod db;
 pub mod parser;
 
+use anyhow::Context;
 use parser::ImportResult;
 use serde::Serialize;
 use tauri::Manager;
@@ -104,7 +105,8 @@ async fn import_save_file_cmd(
 ) -> Result<ImportResult, String> {
     // Import save file using pooled connection
     pool.with_connection(|conn| parser::import_save_file(&file_path, conn))
-        .map_err(|e| format!("Import failed: {}", e))
+        .context("Import failed")
+        .map_err(|e| e.to_string())
 }
 
 /// Tauri command to get game statistics
@@ -139,7 +141,8 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
             nations,
         })
     })
-    .map_err(|e| format!("Failed to get game statistics: {}", e))
+    .context("Failed to get game statistics")
+    .map_err(|e| e.to_string())
 }
 
 /// Tauri command to get list of all games
@@ -185,7 +188,8 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
 
         Ok(games)
     })
-    .map_err(|e| format!("Failed to get games list: {}", e))
+    .context("Failed to get games list")
+    .map_err(|e| e.to_string())
 }
 
 /// Tauri command to get detailed information about a specific game
@@ -248,7 +252,8 @@ async fn get_game_details(
             ..game_details
         })
     })
-    .map_err(|e| format!("Failed to get game details: {}", e))
+    .context("Failed to get game details")
+    .map_err(|e| e.to_string())
 }
 
 /// Tauri command to get player history data for charts
@@ -317,7 +322,8 @@ async fn get_player_history(
 
         Ok(result)
     })
-    .map_err(|e| format!("Failed to get player history: {}", e))
+    .context("Failed to get player history")
+    .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -338,19 +344,23 @@ pub fn run() {
         .setup(|app| {
             // Initialize database connection pool
             let db_path = db::connection::get_db_path(app.handle())
-                .map_err(|e| format!("Failed to get database path: {}", e))?;
+                .context("Failed to get database path")
+                .map_err(|e| e.to_string())?;
 
             // Ensure schema is ready
             db::ensure_schema_ready(&db_path)
-                .map_err(|e| format!("Failed to initialize schema: {}", e))?;
+                .context("Failed to initialize schema")
+                .map_err(|e| e.to_string())?;
 
             // Create connection pool
             let pool = db::connection::DbPool::new(&db_path)
-                .map_err(|e| format!("Failed to create connection pool: {}", e))?;
+                .context("Failed to create connection pool")
+                .map_err(|e| e.to_string())?;
 
             // Clean up stale locks
             pool.with_connection(|conn| db::connection::cleanup_stale_locks(conn))
-                .map_err(|e| format!("Failed to cleanup stale locks: {}", e))?;
+                .context("Failed to cleanup stale locks")
+                .map_err(|e| e.to_string())?;
 
             // Store pool in Tauri state
             app.handle().manage(pool);
