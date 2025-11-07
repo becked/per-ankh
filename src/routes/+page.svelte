@@ -5,6 +5,7 @@
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { formatEnum } from "$lib/utils/formatting";
+  import { CHART_THEME, getChartColor } from "$lib/config";
 
   let stats = $state<GameStatistics | null>(null);
   let loading = $state(true);
@@ -13,13 +14,13 @@
   let chartOption = $derived<EChartsOption | null>(
     stats
       ? {
+          ...CHART_THEME,
           title: {
+            ...CHART_THEME.title,
             text: "Games by Nation",
-            left: "center",
-            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
           },
           tooltip: {
-            trigger: "axis",
+            ...CHART_THEME.tooltip,
             axisPointer: { type: "shadow" },
           },
           xAxis: {
@@ -40,7 +41,7 @@
               type: "bar",
               data: stats.nations.map((n) => n.games_played),
               itemStyle: {
-                color: "#C87941",
+                color: getChartColor(0),
               },
             },
           ],
