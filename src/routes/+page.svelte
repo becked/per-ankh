@@ -5,7 +5,7 @@
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { formatEnum } from "$lib/utils/formatting";
-  import { CHART_THEME, getChartColor } from "$lib/config";
+  import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
   let stats = $state<GameStatistics | null>(null);
   let loading = $state(true);
@@ -39,10 +39,12 @@
             {
               name: "Games Played",
               type: "bar",
-              data: stats.nations.map((n) => n.games_played),
-              itemStyle: {
-                color: getChartColor(0),
-              },
+              data: stats.nations.map((n, i) => ({
+                value: n.games_played,
+                itemStyle: {
+                  color: getCivilizationColor(n.nation.replace(/^NATION_/, '')) ?? getChartColor(i),
+                },
+              })),
             },
           ],
           grid: {

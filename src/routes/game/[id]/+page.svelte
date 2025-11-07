@@ -6,13 +6,28 @@
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
   import { formatEnum } from "$lib/utils/formatting";
-  import { CHART_THEME, getChartColor } from "$lib/config";
+  import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
+
+  // Helper to get player color based on nation
+  function getPlayerColor(nation: string | null | undefined, fallbackIndex: number): string {
+    console.log(`getPlayerColor called with nation: "${nation}", fallbackIndex: ${fallbackIndex}`);
+    if (nation) {
+      // Strip "NATION_" prefix if present (database stores as "NATION_CARTHAGE" but color map expects "CARTHAGE")
+      const cleanNation = nation.replace(/^NATION_/, '');
+      const nationColor = getCivilizationColor(cleanNation);
+      console.log(`  getCivilizationColor("${cleanNation}") returned: ${nationColor}`);
+      if (nationColor) return nationColor;
+    }
+    const fallback = getChartColor(fallbackIndex);
+    console.log(`  Using fallback color: ${fallback}`);
+    return fallback;
+  }
 
   // Generate chart options for each metric
   const pointsChartOption = $derived<EChartsOption | null>(
@@ -40,7 +55,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.points),
-            itemStyle: { color: getChartColor(i) },
+            itemStyle: { color: getPlayerColor(player.nation, i) },
           })),
         }
       : null
@@ -71,7 +86,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.military_power),
-            itemStyle: { color: getChartColor(i) },
+            itemStyle: { color: getPlayerColor(player.nation, i) },
           })),
         }
       : null
@@ -102,7 +117,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.legitimacy),
-            itemStyle: { color: getChartColor(i) },
+            itemStyle: { color: getPlayerColor(player.nation, i) },
           })),
         }
       : null
