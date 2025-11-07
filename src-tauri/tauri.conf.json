@@ -1,6 +1,6 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "per-ankh",
+  "productName": "☥ Per Ankh",
   "version": "0.1.0",
   "identifier": "com.becked.per-ankh",
   "build": {
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "per-ankh",
+        "title": "",
         "width": 1280,
         "height": 800,
         "minWidth": 1024,
