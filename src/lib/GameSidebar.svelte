@@ -27,25 +27,25 @@
 
   function formatGameTitle(game: GameInfo): string {
     // Check if game_name is a real name (not auto-generated "Game{number}")
-    const isRealName = game.game_name && !game.game_name.match(/^Game\d+$/);
+    const isRealName = game.game_name != null && !game.game_name.match(/^Game\d+$/);
 
-    if (isRealName && game.game_name) {
-      return game.game_name;
+    if (isRealName) {
+      return game.game_name!;
     }
 
     // Format nation by removing NATION_ prefix and capitalizing
     const formattedNation = formatNation(game.human_nation);
 
     // Fallback: use nation and turns if available
-    if (formattedNation && game.total_turns) {
+    if (formattedNation !== null && game.total_turns != null) {
       return `${formattedNation} - ${game.total_turns} turns`;
     }
 
-    if (formattedNation) {
+    if (formattedNation !== null) {
       return formattedNation;
     }
 
-    if (game.total_turns) {
+    if (game.total_turns != null) {
       return `Turn ${game.total_turns}`;
     }
 
@@ -75,7 +75,7 @@
 
       const query = searchQuery.toLowerCase();
       const title = formatGameTitle(game).toLowerCase();
-      const nation = formatNation(game.human_nation)?.toLowerCase() || "";
+      const nation = formatNation(game.human_nation)?.toLowerCase() ?? "";
       const date = formatGameSubtitle(game).toLowerCase();
 
       return title.includes(query) ||
