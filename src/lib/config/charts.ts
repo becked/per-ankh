@@ -43,10 +43,14 @@ export const CHART_THEME = {
     fontFamily: "inherit",
   },
   title: {
+    left: "center",
     textStyle: {
       color: "#1a1a1a",
       fontWeight: "bold",
     },
+  },
+  tooltip: {
+    trigger: "axis",
   },
 } as const;
 
