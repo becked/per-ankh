@@ -62,7 +62,7 @@
 </script>
 
 <main class="flex-1 pt-4 px-8 pb-8 overflow-y-auto bg-blue-gray">
-  <h1 class="mb-8 text-gray-200 text-4xl font-bold border-b-[3px] border-orange pb-2">Per-Ankh - Old World Stats</h1>
+  <h1 class="mb-8 text-gray-200 text-2xl font-bold border-b-[3px] border-orange pb-2">Overview</h1>
 
   {#if loading}
     <p>Loading...</p>
