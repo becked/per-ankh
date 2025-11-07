@@ -27,7 +27,7 @@
 
   function formatGameTitle(game: GameInfo): string {
     // Check if game_name is a real name (not auto-generated "Game{number}")
-    const isRealName = game.game_name != null && !game.game_name.match(/^Game\d+$/);
+    const isRealName = game.game_name != null && game.game_name !== "" && !game.game_name.match(/^Game\d+$/);
 
     if (isRealName) {
       return game.game_name!;
