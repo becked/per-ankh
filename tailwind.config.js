@@ -4,17 +4,17 @@ export default {
   theme: {
     extend: {
       colors: {
-        black: '#000000',
-        brown: '#A52A2A',
-        orange: '#FFA500',
-        tan: '#D2B48C',
-        'tan-hover': '#dfcaae',
-        white: '#FFFFFF',
-        yellow: '#FFFF00',
-        'blue-gray': '#211A12',
-        'border-gray': '#1C160F',
+        black: 'var(--color-black)',
+        brown: 'var(--color-brown)',
+        orange: 'var(--color-orange)',
+        tan: 'var(--color-tan)',
+        'tan-hover': 'var(--color-tan-hover)',
+        white: 'var(--color-white)',
+        yellow: 'var(--color-yellow)',
+        'blue-gray': 'var(--color-blue-gray)',
+        'border-gray': 'var(--color-border-gray)',
         gray: {
-          200: '#eeeeee',
+          200: 'var(--color-gray-200)',
         },
       },
     },
