@@ -13,6 +13,8 @@ export interface GameInfo {
   game_name: string | null;
   save_date: string | null;
   turn_year: number | null;
+  human_nation: string | null;
+  total_turns: number | null;
 }
 
 export interface GameDetails {

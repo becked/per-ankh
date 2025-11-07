@@ -22,6 +22,20 @@
     if (game.game_name) {
       return game.game_name;
     }
+
+    // Fallback: use nation and turns if available
+    if (game.human_nation && game.total_turns) {
+      return `${game.human_nation} - Turn ${game.total_turns}`;
+    }
+
+    if (game.human_nation) {
+      return game.human_nation;
+    }
+
+    if (game.total_turns) {
+      return `Turn ${game.total_turns}`;
+    }
+
     return `Game ${game.match_id}`;
   }
 
