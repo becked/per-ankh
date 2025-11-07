@@ -8,6 +8,7 @@ export default {
         brown: '#A52A2A',
         orange: '#FFA500',
         tan: '#D2B48C',
+        'tan-hover': '#dfcaae',
         white: '#FFFFFF',
         yellow: '#FFFF00',
         'blue-gray': '#211A12',

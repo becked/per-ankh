@@ -111,7 +111,7 @@
       </div>
     {:else}
       {#each filteredGames as game (game.match_id)}
-        <button class="w-full p-2 mb-2 bg-tan border-2 border-black rounded cursor-pointer text-left transition-all duration-200 hover:bg-white hover:border-orange hover:translate-x-0.5 active:bg-white" type="button" onclick={() => navigateToGame(game.match_id)}>
+        <button class="w-full p-2 mb-2 bg-tan border-2 border-black rounded cursor-pointer text-left transition-all duration-200 hover:bg-tan-hover hover:border-orange hover:translate-x-0.5 active:bg-tan-hover" type="button" onclick={() => navigateToGame(game.match_id)}>
           <div class="text-xs font-semibold mb-0.5 text-black">{formatGameTitle(game)}</div>
           <div class="text-[8px] text-brown text-left font-normal">{formatGameSubtitle(game)}</div>
         </button>
