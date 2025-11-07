@@ -154,12 +154,8 @@ impl IdMapper {
         conn: &Connection,
         entity_types: &[&str],
     ) -> Result<()> {
-        let mut stmt = conn.prepare(
-            "INSERT INTO id_mappings (match_id, entity_type, xml_id, db_id)
-             VALUES (?, ?, ?, ?)
-             ON CONFLICT (match_id, entity_type, xml_id)
-             DO UPDATE SET db_id = excluded.db_id",
-        )?;
+        // Use Appender for bulk insert (10-15x faster than individual INSERTs)
+        let mut app = conn.appender("id_mappings")?;
 
         for entity_type in entity_types {
             let mappings = match *entity_type {
@@ -175,9 +171,12 @@ impl IdMapper {
             };
 
             for (&xml_id, &db_id) in mappings {
-                stmt.execute(params![self.match_id, entity_type, xml_id, db_id])?;
+                app.append_row(params![self.match_id, entity_type, xml_id, db_id])?;
             }
         }
+
+        // Flush appender to commit all rows
+        drop(app);
 
         Ok(())
     }

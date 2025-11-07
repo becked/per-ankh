@@ -61,6 +61,9 @@ pub fn parse_character_stats(
 ) -> Result<usize> {
     let mut count = 0;
 
+    // Use Appender for bulk insert (10-15x faster than individual INSERTs)
+    let mut app = conn.appender("character_stats")?;
+
     // Parse Rating elements (RATING_WISDOM, RATING_CHARISMA, etc.)
     if let Some(rating_node) = character_node
         .children()
@@ -78,13 +81,7 @@ pub fn parse_character_stats(
                     ParseError::InvalidFormat(format!("Invalid stat value in {}", stat_name))
                 })?;
 
-            conn.execute(
-                "INSERT INTO character_stats (character_id, match_id, stat_name, stat_value)
-                 VALUES (?, ?, ?, ?)
-                 ON CONFLICT (character_id, match_id, stat_name)
-                 DO UPDATE SET stat_value = excluded.stat_value",
-                params![character_id, match_id, stat_name, stat_value],
-            )?;
+            app.append_row(params![character_id, match_id, stat_name, stat_value])?;
             count += 1;
         }
     }
@@ -101,16 +98,13 @@ pub fn parse_character_stats(
                     ParseError::InvalidFormat(format!("Invalid stat value in {}", stat_name))
                 })?;
 
-            conn.execute(
-                "INSERT INTO character_stats (character_id, match_id, stat_name, stat_value)
-                 VALUES (?, ?, ?, ?)
-                 ON CONFLICT (character_id, match_id, stat_name)
-                 DO UPDATE SET stat_value = excluded.stat_value",
-                params![character_id, match_id, stat_name, stat_value],
-            )?;
+            app.append_row(params![character_id, match_id, stat_name, stat_value])?;
             count += 1;
         }
     }
+
+    // Flush appender to commit all rows
+    drop(app);
 
     Ok(count)
 }
@@ -143,6 +137,9 @@ pub fn parse_character_traits(
         .children()
         .find(|n| n.has_tag_name("TraitTurn"))
     {
+        // Use Appender for bulk insert (10-15x faster than individual INSERTs)
+        let mut app = conn.appender("character_traits")?;
+
         for trait_elem in trait_node.children().filter(|n| n.is_element()) {
             let trait_name = trait_elem.tag_name().name();
             let acquired_turn: i32 = trait_elem
@@ -155,15 +152,13 @@ pub fn parse_character_traits(
                     ParseError::InvalidFormat(format!("Invalid turn in {}", trait_name))
                 })?;
 
-            conn.execute(
-                "INSERT INTO character_traits (character_id, match_id, trait, acquired_turn, removed_turn)
-                 VALUES (?, ?, ?, ?, NULL)
-                 ON CONFLICT (character_id, match_id, trait, acquired_turn)
-                 DO UPDATE SET removed_turn = excluded.removed_turn",
-                params![character_id, match_id, trait_name, acquired_turn],
-            )?;
+            let removed_turn: Option<i32> = None;
+            app.append_row(params![character_id, match_id, trait_name, acquired_turn, removed_turn])?;
             count += 1;
         }
+
+        // Flush appender to commit all rows
+        drop(app);
     }
 
     Ok(count)
@@ -200,6 +195,9 @@ pub fn parse_character_relationships(
         .children()
         .find(|n| n.has_tag_name("RelationshipList"))
     {
+        // Use Appender for bulk insert (10-15x faster than individual INSERTs)
+        let mut app = conn.appender("character_relationships")?;
+
         for rel_data_node in rel_list_node
             .children()
             .filter(|n| n.has_tag_name("RelationshipData"))
@@ -248,27 +246,21 @@ pub fn parse_character_relationships(
                 .and_then(|n| n.text())
                 .and_then(|s| s.parse().ok());
 
-            conn.execute(
-                "INSERT INTO character_relationships
-                 (character_id, match_id, related_character_id, relationship_type,
-                  relationship_value, started_turn, ended_turn)
-                 VALUES (?, ?, ?, ?, ?, ?, NULL)
-                 ON CONFLICT (character_id, match_id, related_character_id, relationship_type)
-                 DO UPDATE SET
-                     relationship_value = excluded.relationship_value,
-                     started_turn = excluded.started_turn,
-                     ended_turn = excluded.ended_turn",
-                params![
-                    character_id,
-                    match_id,
-                    related_character_id,
-                    rel_type,
-                    relationship_value,
-                    started_turn
-                ],
-            )?;
+            let ended_turn: Option<i32> = None;
+            app.append_row(params![
+                character_id,
+                match_id,
+                related_character_id,
+                rel_type,
+                relationship_value,
+                started_turn,
+                ended_turn
+            ])?;
             count += 1;
         }
+
+        // Flush appender to commit all rows
+        drop(app);
     }
 
     Ok(count)
@@ -417,6 +409,9 @@ pub fn parse_character_marriages(
         None => return Ok(0), // No spouses for this character
     };
 
+    // Use Appender for bulk insert (10-15x faster than individual INSERTs)
+    let mut app = conn.appender("character_marriages")?;
+
     // Iterate over ID elements (each is a spouse)
     for id_node in spouses_node.children().filter(|n| n.has_tag_name("ID")) {
         let spouse_xml_id_str = id_node
@@ -435,15 +430,15 @@ pub fn parse_character_marriages(
 
         // Insert marriage record
         // Note: marriage_turn uses -1 as sentinel for unknown, ended_turn is NULL since we don't have that data
-        conn.execute(
-            "INSERT INTO character_marriages (character_id, match_id, spouse_id, marriage_turn, ended_turn)
-             VALUES (?, ?, ?, -1, NULL)
-             ON CONFLICT (character_id, match_id, spouse_id, marriage_turn) DO NOTHING",
-            params![character_id, match_id, spouse_id],
-        )?;
+        let marriage_turn = -1;
+        let ended_turn: Option<i32> = None;
+        app.append_row(params![character_id, match_id, spouse_id, marriage_turn, ended_turn])?;
 
         count += 1;
     }
+
+    // Flush appender to commit all rows
+    drop(app);
 
     Ok(count)
 }
