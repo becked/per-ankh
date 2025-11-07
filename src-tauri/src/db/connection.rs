@@ -1,6 +1,58 @@
 // DuckDB connection management
 //
 // Handles database file location and connection pooling
+//
+// ## Database Query Standards
+//
+// All database queries MUST use parameterized queries to prevent SQL injection.
+// Follow these patterns consistently:
+//
+// ### INSERT/UPDATE/DELETE queries
+// Use `execute()` with parameterized values via `params![]` macro:
+// ```rust
+// conn.execute(
+//     "INSERT INTO table (col1, col2) VALUES (?, ?)",
+//     params![value1, value2]
+// )?;
+// ```
+//
+// ### SELECT queries returning single row
+// Use `query_row()` with parameterized values:
+// ```rust
+// let result = conn.query_row(
+//     "SELECT * FROM table WHERE id = ?",
+//     [id],
+//     |row| Ok((row.get(0)?, row.get(1)?))
+// )?;
+// ```
+//
+// ### SELECT queries returning multiple rows
+// Use `prepare()` followed by `query_map()`:
+// ```rust
+// let mut stmt = conn.prepare("SELECT * FROM table WHERE status = ?")?;
+// let items = stmt.query_map([status], |row| {
+//     Ok(Item {
+//         id: row.get(0)?,
+//         name: row.get(1)?,
+//     })
+// })?
+// .collect::<std::result::Result<Vec<_>, _>>()?;
+// ```
+//
+// ### Table/column names (CANNOT be parameterized)
+// SQL does not allow parameterizing identifiers (table/column names).
+// When necessary, use `format!()` with a hardcoded whitelist:
+// ```rust
+// let allowed_tables = vec!["users", "posts", "comments"];
+// if allowed_tables.contains(&table_name) {
+//     let query = format!("SELECT COUNT(*) FROM {}", table_name);
+//     // Add comment explaining why this is safe
+// }
+// ```
+//
+// ### DO NOT use string interpolation for values
+// ❌ NEVER: `format!("SELECT * FROM users WHERE id = {}", user_id)`
+// ✅ ALWAYS: `conn.query_row("SELECT * FROM users WHERE id = ?", [user_id], ...)`
 
 use crate::parser::{ParseError, Result};
 use duckdb::Connection;
