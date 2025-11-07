@@ -28,6 +28,8 @@ pub struct GameInfo {
     pub game_name: Option<String>,
     pub save_date: Option<String>,
     pub turn_year: Option<i32>,
+    pub human_nation: Option<String>,
+    pub total_turns: Option<i32>,
 }
 
 #[derive(Serialize)]
@@ -174,11 +176,25 @@ async fn get_games_list(app_handle: tauri::AppHandle) -> Result<Vec<GameInfo>, S
         .map_err(|e| format!("Failed to connect to database: {}", e))?;
 
     // Get all games ordered by save_date (newest first)
+    // Join with players to get the first player's nation (usually the human player)
+    // Prioritize players with names, but fall back to any player if none have names
     let mut stmt = conn
         .prepare(
-            "SELECT match_id, game_name, CAST(save_date AS VARCHAR) as save_date
-             FROM matches
-             ORDER BY save_date DESC"
+            "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
+                    m.total_turns, p.nation
+             FROM matches m
+             LEFT JOIN (
+                 SELECT match_id, nation,
+                        ROW_NUMBER() OVER (
+                            PARTITION BY match_id
+                            ORDER BY
+                                CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
+                                     THEN 0 ELSE 1 END,
+                                player_name
+                        ) as rn
+                 FROM players
+             ) p ON m.match_id = p.match_id AND p.rn = 1
+             ORDER BY m.save_date DESC"
         )
         .map_err(|e| format!("Failed to prepare games query: {}", e))?;
 
@@ -189,6 +205,8 @@ async fn get_games_list(app_handle: tauri::AppHandle) -> Result<Vec<GameInfo>, S
                 game_name: row.get(1)?,
                 save_date: row.get(2)?,
                 turn_year: None,
+                total_turns: row.get(3)?,
+                human_nation: row.get(4)?,
             })
         })
         .map_err(|e| format!("Failed to query games: {}", e))?
