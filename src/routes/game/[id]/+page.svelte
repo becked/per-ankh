@@ -6,14 +6,13 @@
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
   import { formatEnum } from "$lib/utils/formatting";
+  import { CHART_COLORS } from "$lib/config/charts";
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
-
-  const colors = ["#C87941", "#8B4513", "#CD853F", "#A0522D", "#D2691E", "#B8860B"];
 
   // Generate chart options for each metric
   const pointsChartOption = $derived<EChartsOption | null>(
@@ -44,7 +43,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.points),
-            itemStyle: { color: colors[i % colors.length] },
+            itemStyle: { color: CHART_COLORS[i % CHART_COLORS.length] },
           })),
         }
       : null
@@ -78,7 +77,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.military_power),
-            itemStyle: { color: colors[i % colors.length] },
+            itemStyle: { color: CHART_COLORS[i % CHART_COLORS.length] },
           })),
         }
       : null
@@ -112,7 +111,7 @@
             name: player.player_name,
             type: "line",
             data: player.history.map((h) => h.legitimacy),
-            itemStyle: { color: colors[i % colors.length] },
+            itemStyle: { color: CHART_COLORS[i % CHART_COLORS.length] },
           })),
         }
       : null
