@@ -1,0 +1,32 @@
+# Cargo configuration for Per-Ankh
+#
+# This file configures development optimizations including faster linkers.
+# Production builds (via `cargo build --release`) will use platform defaults
+# to ensure maximum compatibility across all target platforms.
+
+# Development profile linker optimizations for macOS
+# Using lld (LLVM's linker) which is 30-50% faster than Apple's default ld
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"]
+
+# For Linux development (if contributors use Linux)
+# lld is typically available as 'lld' on Linux systems
+# Uncomment these if developing on Linux:
+# [target.x86_64-unknown-linux-gnu]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+#
+# [target.aarch64-unknown-linux-gnu]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# For Windows development (if contributors use Windows)
+# lld-link is the Windows-compatible lld linker
+# Uncomment these if developing on Windows:
+# [target.x86_64-pc-windows-msvc]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld-link"]
+
+# Note: Production builds via `npm run tauri build` or CI/CD pipelines
+# should NOT use this config, or should override with --config-profile
+# to ensure platform-appropriate defaults are used for distribution.
