@@ -166,7 +166,7 @@
     {:else if error}
       <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
     {:else if gameDetails}
-      <h1 class="mb-8 text-gray-200 text-4xl font-bold border-b-[3px] border-orange pb-2">{gameDetails.game_name || `Game ${gameDetails.match_id}`}</h1>
+      <h1 class="mb-8 text-gray-200 text-2xl font-bold border-b-[3px] border-orange pb-2">{gameDetails.game_name || `Game ${gameDetails.match_id}`}</h1>
 
       <!-- Summary Section -->
       <div class="bg-gray-200 p-6 border-2 border-black rounded-lg mb-6">
