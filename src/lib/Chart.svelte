@@ -10,7 +10,8 @@
 
   onMount(() => {
     chart = echarts.init(chartContainer);
-    chart.setOption(option);
+    // Type assertion needed due to echarts type definition incompatibility
+    chart.setOption(option as any);
 
     const handleResize = () => chart.resize();
     window.addEventListener("resize", handleResize);
@@ -23,7 +24,8 @@
 
   $effect(() => {
     if (chart) {
-      chart.setOption(option, true);
+      // Type assertion needed due to echarts type definition incompatibility
+      chart.setOption(option as any, true);
     }
   });
 </script>
