@@ -38,14 +38,15 @@ export const CHART_COLORS = [
  */
 export const CHART_THEME = {
   colors: CHART_COLORS,
-  backgroundColor: "transparent",
+  backgroundColor: "#211A12", // Blue-gray background matches main UI
   textStyle: {
     fontFamily: "inherit",
+    color: "#FFFFFF", // White text for dark background
   },
   title: {
     left: "center",
     textStyle: {
-      color: "#1a1a1a",
+      color: "#FFFFFF", // White title for dark background
       fontWeight: "bold",
     },
   },
