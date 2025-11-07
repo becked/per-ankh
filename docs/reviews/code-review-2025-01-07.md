@@ -213,12 +213,16 @@ export const CHART_COLORS = [
 ];
 ```
 
-**5. Inconsistent Null Handling**
-- **Examples**:
-  - `formatNation(game.human_nation)?.toLowerCase() || ""`
-  - `player.legitimacy ?? "—"`
-- **Issue**: Mixing `||` and `??` operators inconsistently
-- **Recommendation**: Standardize on nullish coalescing (`??`) for clarity
+**5. Inconsistent Null Handling** ✅ **FIXED**
+- **Status**: Resolved with clear policy
+- **Policy Implemented**:
+  - Domain/data layer: Use `??` exclusively (never `||`)
+  - UI rendering: Allow `||` only for display fallbacks (e.g., `name || "Unknown"`)
+  - Explicit null checks: Use `!= null` for numbers/values where 0/"" are valid
+- **Changes Made**:
+  - Fixed data layer to use `??` in chart computations and state derivations
+  - Fixed truthiness checks in `formatGameTitle` to handle 0 and empty strings correctly
+  - Maintained `||` only in UI rendering contexts (e.g., `game_name || 'Game X'`)
 
 **6. No Error Boundaries**
 - **Issue**: No component-level error handling

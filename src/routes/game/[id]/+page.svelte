@@ -30,7 +30,7 @@
           xAxis: {
             type: "category",
             name: "Turn",
-            data: playerHistory[0]?.history.map((h) => h.turn) || [],
+            data: playerHistory[0]?.history.map((h) => h.turn) ?? [],
           },
           yAxis: {
             type: "value",
@@ -61,7 +61,7 @@
           xAxis: {
             type: "category",
             name: "Turn",
-            data: playerHistory[0]?.history.map((h) => h.turn) || [],
+            data: playerHistory[0]?.history.map((h) => h.turn) ?? [],
           },
           yAxis: {
             type: "value",
@@ -92,7 +92,7 @@
           xAxis: {
             type: "category",
             name: "Turn",
-            data: playerHistory[0]?.history.map((h) => h.turn) || [],
+            data: playerHistory[0]?.history.map((h) => h.turn) ?? [],
           },
           yAxis: {
             type: "value",
@@ -141,7 +141,7 @@
 
   // Get the human player's nation
   const humanNation = $derived(
-    gameDetails?.players.find((p) => p.is_human)?.nation || null
+    gameDetails?.players.find((p) => p.is_human)?.nation ?? null
   );
 </script>
 
