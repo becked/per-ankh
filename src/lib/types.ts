@@ -35,3 +35,16 @@ export interface PlayerInfo {
   legitimacy: number | null;
   state_religion: string | null;
 }
+
+export interface PlayerHistoryPoint {
+  turn: number;
+  points: number | null;
+  military_power: number | null;
+  legitimacy: number | null;
+}
+
+export interface PlayerHistory {
+  player_id: number;
+  player_name: string;
+  history: PlayerHistoryPoint[];
+}

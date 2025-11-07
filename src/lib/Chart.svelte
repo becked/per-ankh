@@ -1,0 +1,44 @@
+<script lang="ts">
+  import { onMount } from "svelte";
+  import * as echarts from "echarts";
+  import type { EChartsOption } from "echarts";
+
+  let { option, height = "400px" }: { option: EChartsOption; height?: string } = $props();
+
+  let chartContainer: HTMLDivElement;
+  let chart: echarts.ECharts;
+
+  onMount(() => {
+    chart = echarts.init(chartContainer);
+    chart.setOption(option);
+
+    const handleResize = () => chart.resize();
+    window.addEventListener("resize", handleResize);
+
+    return () => {
+      window.removeEventListener("resize", handleResize);
+      chart.dispose();
+    };
+  });
+
+  $effect(() => {
+    if (chart) {
+      chart.setOption(option, true);
+    }
+  });
+</script>
+
+<div class="chart-container" style="height: {height}">
+  <div bind:this={chartContainer} class="chart"></div>
+</div>
+
+<style>
+  .chart-container {
+    width: 100%;
+  }
+
+  .chart {
+    width: 100%;
+    height: 100%;
+  }
+</style>

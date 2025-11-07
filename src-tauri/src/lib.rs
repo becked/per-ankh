@@ -53,6 +53,21 @@ pub struct GameDetails {
     pub players: Vec<PlayerInfo>,
 }
 
+#[derive(Serialize)]
+pub struct PlayerHistoryPoint {
+    pub turn: i32,
+    pub points: Option<i32>,
+    pub military_power: Option<i32>,
+    pub legitimacy: Option<i32>,
+}
+
+#[derive(Serialize)]
+pub struct PlayerHistory {
+    pub player_id: i32,
+    pub player_name: String,
+    pub history: Vec<PlayerHistoryPoint>,
+}
+
 // Initialize logging
 fn init_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -256,6 +271,84 @@ async fn get_game_details(
     })
 }
 
+/// Tauri command to get player history data for charts
+///
+/// Returns time-series data for victory points, military power, and legitimacy
+#[tauri::command]
+async fn get_player_history(
+    match_id: i64,
+    app_handle: tauri::AppHandle,
+) -> Result<Vec<PlayerHistory>, String> {
+    let db_path = db::connection::get_db_path(&app_handle)
+        .map_err(|e| format!("Failed to get database path: {}", e))?;
+
+    let conn = db::connection::get_connection(&db_path)
+        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+
+    // Get all players for this match
+    let mut players_stmt = conn
+        .prepare(
+            "SELECT player_id, player_name
+             FROM players
+             WHERE match_id = ?
+             ORDER BY player_name"
+        )
+        .map_err(|e| format!("Failed to prepare players query: {}", e))?;
+
+    let players: Vec<(i32, String)> = players_stmt
+        .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?)))
+        .map_err(|e| format!("Failed to query players: {}", e))?
+        .collect::<std::result::Result<Vec<_>, _>>()
+        .map_err(|e| format!("Failed to collect players: {}", e))?;
+
+    let mut result = Vec::new();
+
+    for (player_id, player_name) in players {
+        // Query combined history data using LEFT JOINs to handle sparse data
+        let mut history_stmt = conn
+            .prepare(
+                "SELECT DISTINCT
+                    COALESCE(ph.turn, mh.turn, lh.turn) as turn,
+                    ph.points,
+                    mh.military_power,
+                    lh.legitimacy
+                 FROM (SELECT DISTINCT turn FROM points_history WHERE match_id = ? AND player_id = ?
+                       UNION SELECT DISTINCT turn FROM military_history WHERE match_id = ? AND player_id = ?
+                       UNION SELECT DISTINCT turn FROM legitimacy_history WHERE match_id = ? AND player_id = ?) turns
+                 LEFT JOIN points_history ph ON ph.match_id = ? AND ph.player_id = ? AND ph.turn = turns.turn
+                 LEFT JOIN military_history mh ON mh.match_id = ? AND mh.player_id = ? AND mh.turn = turns.turn
+                 LEFT JOIN legitimacy_history lh ON lh.match_id = ? AND lh.player_id = ? AND lh.turn = turns.turn
+                 ORDER BY turn"
+            )
+            .map_err(|e| format!("Failed to prepare history query: {}", e))?;
+
+        let history: Vec<PlayerHistoryPoint> = history_stmt
+            .query_map(
+                [match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64,
+                 match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64],
+                |row| {
+                    Ok(PlayerHistoryPoint {
+                        turn: row.get(0)?,
+                        points: row.get(1)?,
+                        military_power: row.get(2)?,
+                        legitimacy: row.get(3)?,
+                    })
+                },
+            )
+            .map_err(|e| format!("Failed to query history: {}", e))?
+            .collect::<std::result::Result<Vec<_>, _>>()
+            .map_err(|e| format!("Failed to collect history: {}", e))?;
+
+        result.push(PlayerHistory {
+            player_id,
+            player_name,
+            history,
+        });
+    }
+
+    Ok(result)
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -267,7 +360,8 @@ pub fn run() {
             import_save_file_cmd,
             get_game_statistics,
             get_games_list,
-            get_game_details
+            get_game_details,
+            get_player_history
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

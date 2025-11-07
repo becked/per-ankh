@@ -2,10 +2,53 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import type { GameStatistics } from "$lib/types";
+  import type { EChartsOption } from "echarts";
+  import Chart from "$lib/Chart.svelte";
 
   let stats = $state<GameStatistics | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
+
+  let chartOption = $derived<EChartsOption | null>(
+    stats
+      ? {
+          title: {
+            text: "Games by Nation",
+            left: "center",
+            textStyle: { color: "#1a1a1a", fontWeight: "bold" },
+          },
+          tooltip: {
+            trigger: "axis",
+            axisPointer: { type: "shadow" },
+          },
+          xAxis: {
+            type: "category",
+            data: stats.nations.map((n) => n.nation.replace("NATION_", "")),
+            axisLabel: {
+              rotate: 45,
+              interval: 0,
+            },
+          },
+          yAxis: {
+            type: "value",
+            name: "Games Played",
+          },
+          series: [
+            {
+              name: "Games Played",
+              type: "bar",
+              data: stats.nations.map((n) => n.games_played),
+              itemStyle: {
+                color: "#C87941",
+              },
+            },
+          ],
+          grid: {
+            bottom: 100,
+          },
+        }
+      : null
+  );
 
   onMount(async () => {
     try {
@@ -29,6 +72,12 @@
     <div class="stats-summary">
       <h2>Games Played: {stats.total_games}</h2>
     </div>
+
+    {#if chartOption}
+      <div class="chart-section">
+        <Chart option={chartOption} height="400px" />
+      </div>
+    {/if}
 
     <div class="nations-section">
       <h2>Nations</h2>
@@ -93,6 +142,14 @@ h2 {
   border: 2px solid var(--color-orange);
   border-radius: 4px;
   font-weight: bold;
+}
+
+.chart-section {
+  background: #eeeeee;
+  padding: 1.5rem;
+  border: 2px solid var(--color-black);
+  border-radius: 8px;
+  margin-bottom: 2rem;
 }
 
 .nations-section {
