@@ -81,6 +81,7 @@ pub struct PlayerHistoryPoint {
 pub struct PlayerHistory {
     pub player_id: i32,
     pub player_name: String,
+    pub nation: Option<String>,
     pub history: Vec<PlayerHistoryPoint>,
 }
 
@@ -268,19 +269,19 @@ async fn get_player_history(
         // Get all players for this match
         let mut players_stmt = conn
             .prepare(
-                "SELECT player_id, player_name
+                "SELECT player_id, player_name, nation
                  FROM players
                  WHERE match_id = ?
                  ORDER BY player_name"
             )?;
 
-        let players: Vec<(i32, String)> = players_stmt
-            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+        let players: Vec<(i32, String, Option<String>)> = players_stmt
+            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
         let mut result = Vec::new();
 
-        for (player_id, player_name) in players {
+        for (player_id, player_name, nation) in players {
             // Query combined history data using LEFT JOINs to handle sparse data
             let mut history_stmt = conn
                 .prepare(
@@ -313,9 +314,11 @@ async fn get_player_history(
                 )?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
 
+            // Include nation for player color lookup
             result.push(PlayerHistory {
                 player_id,
                 player_name,
+                nation,
                 history,
             });
         }
