@@ -9,21 +9,29 @@ pub mod parser;
 
 use parser::ImportResult;
 use serde::Serialize;
+use tauri::Manager;
+use ts_rs::TS;
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
 pub struct NationStats {
     pub nation: String,
+    #[ts(type = "number")]
     pub games_played: i64,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
 pub struct GameStatistics {
+    #[ts(type = "number")]
     pub total_games: i64,
     pub nations: Vec<NationStats>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
 pub struct GameInfo {
+    #[ts(type = "number")]
     pub match_id: i64,
     pub game_name: Option<String>,
     pub save_date: Option<String>,
@@ -32,7 +40,8 @@ pub struct GameInfo {
     pub total_turns: Option<i32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
 pub struct PlayerInfo {
     pub player_name: String,
     pub nation: Option<String>,
@@ -41,8 +50,10 @@ pub struct PlayerInfo {
     pub state_religion: Option<String>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
 pub struct GameDetails {
+    #[ts(type = "number")]
     pub match_id: i64,
     pub game_name: Option<String>,
     pub save_date: Option<String>,
@@ -55,7 +66,8 @@ pub struct GameDetails {
     pub players: Vec<PlayerInfo>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
 pub struct PlayerHistoryPoint {
     pub turn: i32,
     pub points: Option<i32>,
@@ -63,7 +75,8 @@ pub struct PlayerHistoryPoint {
     pub legitimacy: Option<i32>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
 pub struct PlayerHistory {
     pub player_id: i32,
     pub player_name: String,
@@ -76,144 +89,103 @@ fn init_logging() {
         .init();
 }
 
-// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-#[tauri::command]
-fn greet(name: &str) -> String {
-    format!("Hello, {}! You've been greeted from Rust!", name)
-}
-
 /// Tauri command to import a save file
 ///
 /// # Arguments
 /// * `file_path` - Path to the ZIP save file
-/// * `app_handle` - Tauri app handle for accessing app data directory
+/// * `pool` - Database connection pool from Tauri state
 ///
 /// # Returns
 /// ImportResult with success status and match_id
 #[tauri::command]
 async fn import_save_file_cmd(
     file_path: String,
-    app_handle: tauri::AppHandle,
+    pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<ImportResult, String> {
-    // Get database path
-    let db_path = db::connection::get_db_path(&app_handle)
-        .map_err(|e| format!("Failed to get database path: {}", e))?;
-
-    // Ensure schema is ready
-    db::ensure_schema_ready(&db_path)
-        .map_err(|e| format!("Failed to initialize schema: {}", e))?;
-
-    // Open connection
-    let conn = db::connection::get_connection(&db_path)
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
-
-    // Clean up stale locks
-    db::connection::cleanup_stale_locks(&conn)
-        .map_err(|e| format!("Failed to cleanup stale locks: {}", e))?;
-
-    // Import save file
-    let result = parser::import_save_file(&file_path, &conn)
-        .map_err(|e| format!("Import failed: {}", e))?;
-
-    Ok(result)
+    // Import save file using pooled connection
+    pool.with_connection(|conn| parser::import_save_file(&file_path, conn))
+        .map_err(|e| format!("Import failed: {}", e))
 }
 
 /// Tauri command to get game statistics
 ///
 /// Returns total number of games and nation play counts
 #[tauri::command]
-async fn get_game_statistics(app_handle: tauri::AppHandle) -> Result<GameStatistics, String> {
-    // Get database path
-    let db_path = db::connection::get_db_path(&app_handle)
-        .map_err(|e| format!("Failed to get database path: {}", e))?;
+async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> Result<GameStatistics, String> {
+    pool.with_connection(|conn| {
+        // Get total games count
+        let total_games: i64 = conn
+            .query_row(
+                "SELECT COUNT(DISTINCT match_id) FROM players",
+                [],
+                |row| row.get(0),
+            )?;
 
-    // Open connection
-    let conn = db::connection::get_connection(&db_path)
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+        // Get nation statistics
+        let mut stmt = conn
+            .prepare("SELECT nation, COUNT(DISTINCT match_id) as games_played FROM players WHERE nation IS NOT NULL GROUP BY nation ORDER BY games_played DESC")?;
 
-    // Get total games count
-    let total_games: i64 = conn
-        .query_row(
-            "SELECT COUNT(DISTINCT match_id) FROM players",
-            [],
-            |row| row.get(0),
-        )
-        .map_err(|e| format!("Failed to get total games: {}", e))?;
+        let nations = stmt
+            .query_map([], |row| {
+                Ok(NationStats {
+                    nation: row.get(0)?,
+                    games_played: row.get(1)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
-    // Get nation statistics
-    let mut stmt = conn
-        .prepare("SELECT nation, COUNT(DISTINCT match_id) as games_played FROM players WHERE nation IS NOT NULL GROUP BY nation ORDER BY games_played DESC")
-        .map_err(|e| format!("Failed to prepare nation query: {}", e))?;
-
-    let nations = stmt
-        .query_map([], |row| {
-            Ok(NationStats {
-                nation: row.get(0)?,
-                games_played: row.get(1)?,
-            })
+        Ok(GameStatistics {
+            total_games,
+            nations,
         })
-        .map_err(|e| format!("Failed to query nations: {}", e))?
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect nations: {}", e))?;
-
-    Ok(GameStatistics {
-        total_games,
-        nations,
     })
+    .map_err(|e| format!("Failed to get game statistics: {}", e))
 }
 
 /// Tauri command to get list of all games
 ///
 /// Returns list of games with basic info sorted by save date (newest first)
 #[tauri::command]
-async fn get_games_list(app_handle: tauri::AppHandle) -> Result<Vec<GameInfo>, String> {
-    // Get database path
-    let db_path = db::connection::get_db_path(&app_handle)
-        .map_err(|e| format!("Failed to get database path: {}", e))?;
+async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Result<Vec<GameInfo>, String> {
+    pool.with_connection(|conn| {
+        // Get all games ordered by save_date (newest first)
+        // Join with players to get the first player's nation (usually the human player)
+        // Prioritize players with names, but fall back to any player if none have names
+        let mut stmt = conn
+            .prepare(
+                "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
+                        m.total_turns, p.nation
+                 FROM matches m
+                 LEFT JOIN (
+                     SELECT match_id, nation,
+                            ROW_NUMBER() OVER (
+                                PARTITION BY match_id
+                                ORDER BY
+                                    CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
+                                         THEN 0 ELSE 1 END,
+                                    player_name
+                            ) as rn
+                     FROM players
+                 ) p ON m.match_id = p.match_id AND p.rn = 1
+                 ORDER BY m.save_date DESC"
+            )?;
 
-    // Open connection
-    let conn = db::connection::get_connection(&db_path)
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+        let games = stmt
+            .query_map([], |row| {
+                Ok(GameInfo {
+                    match_id: row.get(0)?,
+                    game_name: row.get(1)?,
+                    save_date: row.get(2)?,
+                    turn_year: None,
+                    total_turns: row.get(3)?,
+                    human_nation: row.get(4)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
-    // Get all games ordered by save_date (newest first)
-    // Join with players to get the first player's nation (usually the human player)
-    // Prioritize players with names, but fall back to any player if none have names
-    let mut stmt = conn
-        .prepare(
-            "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
-                    m.total_turns, p.nation
-             FROM matches m
-             LEFT JOIN (
-                 SELECT match_id, nation,
-                        ROW_NUMBER() OVER (
-                            PARTITION BY match_id
-                            ORDER BY
-                                CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
-                                     THEN 0 ELSE 1 END,
-                                player_name
-                        ) as rn
-                 FROM players
-             ) p ON m.match_id = p.match_id AND p.rn = 1
-             ORDER BY m.save_date DESC"
-        )
-        .map_err(|e| format!("Failed to prepare games query: {}", e))?;
-
-    let games = stmt
-        .query_map([], |row| {
-            Ok(GameInfo {
-                match_id: row.get(0)?,
-                game_name: row.get(1)?,
-                save_date: row.get(2)?,
-                turn_year: None,
-                total_turns: row.get(3)?,
-                human_nation: row.get(4)?,
-            })
-        })
-        .map_err(|e| format!("Failed to query games: {}", e))?
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect games: {}", e))?;
-
-    Ok(games)
+        Ok(games)
+    })
+    .map_err(|e| format!("Failed to get games list: {}", e))
 }
 
 /// Tauri command to get detailed information about a specific game
@@ -222,71 +194,61 @@ async fn get_games_list(app_handle: tauri::AppHandle) -> Result<Vec<GameInfo>, S
 #[tauri::command]
 async fn get_game_details(
     match_id: i64,
-    app_handle: tauri::AppHandle,
+    pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<GameDetails, String> {
-    // Get database path
-    let db_path = db::connection::get_db_path(&app_handle)
-        .map_err(|e| format!("Failed to get database path: {}", e))?;
+    pool.with_connection(|conn| {
+        // Get match details
+        let mut stmt = conn
+            .prepare(
+                "SELECT match_id, game_name, CAST(save_date AS VARCHAR) as save_date,
+                        total_turns, map_size, map_width, map_height, game_mode, opponent_level
+                 FROM matches
+                 WHERE match_id = ?"
+            )?;
 
-    // Open connection
-    let conn = db::connection::get_connection(&db_path)
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
+        let game_details = stmt
+            .query_row([match_id], |row| {
+                Ok(GameDetails {
+                    match_id: row.get(0)?,
+                    game_name: row.get(1)?,
+                    save_date: row.get(2)?,
+                    total_turns: row.get(3)?,
+                    map_size: row.get(4)?,
+                    map_width: row.get(5)?,
+                    map_height: row.get(6)?,
+                    game_mode: row.get(7)?,
+                    opponent_level: row.get(8)?,
+                    players: Vec::new(), // Will be filled below
+                })
+            })?;
 
-    // Get match details
-    let mut stmt = conn
-        .prepare(
-            "SELECT match_id, game_name, CAST(save_date AS VARCHAR) as save_date,
-                    total_turns, map_size, map_width, map_height, game_mode, opponent_level
-             FROM matches
-             WHERE match_id = ?"
-        )
-        .map_err(|e| format!("Failed to prepare match query: {}", e))?;
+        // Get players for this match
+        let mut players_stmt = conn
+            .prepare(
+                "SELECT player_name, nation, is_human, legitimacy, state_religion
+                 FROM players
+                 WHERE match_id = ?
+                 ORDER BY player_name"
+            )?;
 
-    let game_details = stmt
-        .query_row([match_id], |row| {
-            Ok(GameDetails {
-                match_id: row.get(0)?,
-                game_name: row.get(1)?,
-                save_date: row.get(2)?,
-                total_turns: row.get(3)?,
-                map_size: row.get(4)?,
-                map_width: row.get(5)?,
-                map_height: row.get(6)?,
-                game_mode: row.get(7)?,
-                opponent_level: row.get(8)?,
-                players: Vec::new(), // Will be filled below
-            })
+        let players = players_stmt
+            .query_map([match_id], |row| {
+                Ok(PlayerInfo {
+                    player_name: row.get(0)?,
+                    nation: row.get(1)?,
+                    is_human: row.get(2)?,
+                    legitimacy: row.get(3)?,
+                    state_religion: row.get(4)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(GameDetails {
+            players,
+            ..game_details
         })
-        .map_err(|e| format!("Failed to query match details: {}", e))?;
-
-    // Get players for this match
-    let mut players_stmt = conn
-        .prepare(
-            "SELECT player_name, nation, is_human, legitimacy, state_religion
-             FROM players
-             WHERE match_id = ?
-             ORDER BY player_name"
-        )
-        .map_err(|e| format!("Failed to prepare players query: {}", e))?;
-
-    let players = players_stmt
-        .query_map([match_id], |row| {
-            Ok(PlayerInfo {
-                player_name: row.get(0)?,
-                nation: row.get(1)?,
-                is_human: row.get(2)?,
-                legitimacy: row.get(3)?,
-                state_religion: row.get(4)?,
-            })
-        })
-        .map_err(|e| format!("Failed to query players: {}", e))?
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect players: {}", e))?;
-
-    Ok(GameDetails {
-        players,
-        ..game_details
     })
+    .map_err(|e| format!("Failed to get game details: {}", e))
 }
 
 /// Tauri command to get player history data for charts
@@ -295,92 +257,106 @@ async fn get_game_details(
 #[tauri::command]
 async fn get_player_history(
     match_id: i64,
-    app_handle: tauri::AppHandle,
+    pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerHistory>, String> {
-    let db_path = db::connection::get_db_path(&app_handle)
-        .map_err(|e| format!("Failed to get database path: {}", e))?;
-
-    let conn = db::connection::get_connection(&db_path)
-        .map_err(|e| format!("Failed to connect to database: {}", e))?;
-
-    // Get all players for this match
-    let mut players_stmt = conn
-        .prepare(
-            "SELECT player_id, player_name
-             FROM players
-             WHERE match_id = ?
-             ORDER BY player_name"
-        )
-        .map_err(|e| format!("Failed to prepare players query: {}", e))?;
-
-    let players: Vec<(i32, String)> = players_stmt
-        .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?)))
-        .map_err(|e| format!("Failed to query players: {}", e))?
-        .collect::<std::result::Result<Vec<_>, _>>()
-        .map_err(|e| format!("Failed to collect players: {}", e))?;
-
-    let mut result = Vec::new();
-
-    for (player_id, player_name) in players {
-        // Query combined history data using LEFT JOINs to handle sparse data
-        let mut history_stmt = conn
+    pool.with_connection(|conn| {
+        // Get all players for this match
+        let mut players_stmt = conn
             .prepare(
-                "SELECT DISTINCT
-                    COALESCE(ph.turn, mh.turn, lh.turn) as turn,
-                    ph.points,
-                    mh.military_power,
-                    lh.legitimacy
-                 FROM (SELECT DISTINCT turn FROM points_history WHERE match_id = ? AND player_id = ?
-                       UNION SELECT DISTINCT turn FROM military_history WHERE match_id = ? AND player_id = ?
-                       UNION SELECT DISTINCT turn FROM legitimacy_history WHERE match_id = ? AND player_id = ?) turns
-                 LEFT JOIN points_history ph ON ph.match_id = ? AND ph.player_id = ? AND ph.turn = turns.turn
-                 LEFT JOIN military_history mh ON mh.match_id = ? AND mh.player_id = ? AND mh.turn = turns.turn
-                 LEFT JOIN legitimacy_history lh ON lh.match_id = ? AND lh.player_id = ? AND lh.turn = turns.turn
-                 ORDER BY turn"
-            )
-            .map_err(|e| format!("Failed to prepare history query: {}", e))?;
+                "SELECT player_id, player_name
+                 FROM players
+                 WHERE match_id = ?
+                 ORDER BY player_name"
+            )?;
 
-        let history: Vec<PlayerHistoryPoint> = history_stmt
-            .query_map(
-                [match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64,
-                 match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64],
-                |row| {
-                    Ok(PlayerHistoryPoint {
-                        turn: row.get(0)?,
-                        points: row.get(1)?,
-                        military_power: row.get(2)?,
-                        legitimacy: row.get(3)?,
-                    })
-                },
-            )
-            .map_err(|e| format!("Failed to query history: {}", e))?
-            .collect::<std::result::Result<Vec<_>, _>>()
-            .map_err(|e| format!("Failed to collect history: {}", e))?;
+        let players: Vec<(i32, String)> = players_stmt
+            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
 
-        result.push(PlayerHistory {
-            player_id,
-            player_name,
-            history,
-        });
-    }
+        let mut result = Vec::new();
 
-    Ok(result)
+        for (player_id, player_name) in players {
+            // Query combined history data using LEFT JOINs to handle sparse data
+            let mut history_stmt = conn
+                .prepare(
+                    "SELECT DISTINCT
+                        COALESCE(ph.turn, mh.turn, lh.turn) as turn,
+                        ph.points,
+                        mh.military_power,
+                        lh.legitimacy
+                     FROM (SELECT DISTINCT turn FROM points_history WHERE match_id = ? AND player_id = ?
+                           UNION SELECT DISTINCT turn FROM military_history WHERE match_id = ? AND player_id = ?
+                           UNION SELECT DISTINCT turn FROM legitimacy_history WHERE match_id = ? AND player_id = ?) turns
+                     LEFT JOIN points_history ph ON ph.match_id = ? AND ph.player_id = ? AND ph.turn = turns.turn
+                     LEFT JOIN military_history mh ON mh.match_id = ? AND mh.player_id = ? AND mh.turn = turns.turn
+                     LEFT JOIN legitimacy_history lh ON lh.match_id = ? AND lh.player_id = ? AND lh.turn = turns.turn
+                     ORDER BY turn"
+                )?;
+
+            let history: Vec<PlayerHistoryPoint> = history_stmt
+                .query_map(
+                    [match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64,
+                     match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64],
+                    |row| {
+                        Ok(PlayerHistoryPoint {
+                            turn: row.get(0)?,
+                            points: row.get(1)?,
+                            military_power: row.get(2)?,
+                            legitimacy: row.get(3)?,
+                        })
+                    },
+                )?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            result.push(PlayerHistory {
+                player_id,
+                player_name,
+                history,
+            });
+        }
+
+        Ok(result)
+    })
+    .map_err(|e| format!("Failed to get player history: {}", e))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
 
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
-            greet,
             import_save_file_cmd,
             get_game_statistics,
             get_games_list,
             get_game_details,
             get_player_history
-        ])
+        ]);
+
+    builder
+        .setup(|app| {
+            // Initialize database connection pool
+            let db_path = db::connection::get_db_path(app.handle())
+                .map_err(|e| format!("Failed to get database path: {}", e))?;
+
+            // Ensure schema is ready
+            db::ensure_schema_ready(&db_path)
+                .map_err(|e| format!("Failed to initialize schema: {}", e))?;
+
+            // Create connection pool
+            let pool = db::connection::DbPool::new(&db_path)
+                .map_err(|e| format!("Failed to create connection pool: {}", e))?;
+
+            // Clean up stale locks
+            pool.with_connection(|conn| db::connection::cleanup_stale_locks(conn))
+                .map_err(|e| format!("Failed to cleanup stale locks: {}", e))?;
+
+            // Store pool in Tauri state
+            app.handle().manage(pool);
+
+            Ok(())
+        })
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }

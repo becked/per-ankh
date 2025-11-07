@@ -98,6 +98,25 @@ npm run lint
 npm run format
 ```
 
+### TypeScript Type Generation
+
+TypeScript types are automatically generated from Rust structs using `ts-rs`:
+
+```bash
+# Manually regenerate types (rarely needed)
+npm run types:generate
+
+# Types are automatically regenerated when:
+# 1. Running npm run tauri:dev or npm run tauri:build
+# 2. Committing Rust files (via git pre-commit hook)
+```
+
+**Important**:
+- Generated types are in `src/lib/types/` directory
+- Never edit these files manually - they're auto-generated
+- To add new types: add `#[derive(TS)]` and `#[ts(export)]` to your Rust struct
+- Run tests to generate: `cargo test --lib export_bindings`
+
 ## Architecture
 
 ### Application Structure
