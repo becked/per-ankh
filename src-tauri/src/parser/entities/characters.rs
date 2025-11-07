@@ -5,6 +5,7 @@
 // - Pass 2 (separate): Parent relationships, marriages, relationships
 
 use crate::parser::id_mapper::IdMapper;
+use crate::parser::utils::deduplicate_rows_last_wins;
 use crate::parser::xml_loader::{sentinels, XmlDocument, XmlNodeExt};
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
@@ -19,10 +20,9 @@ pub fn parse_characters_core(
     id_mapper: &mut IdMapper,
 ) -> Result<usize> {
     let root = doc.root_element();
-    let mut count = 0;
 
-    // Use Appender for bulk insert performance
-    let mut app = conn.appender("characters")?;
+    // Collect all character rows first
+    let mut characters = Vec::new();
 
     // Find all Character elements as direct children of Root
     for char_node in root.children().filter(|n| n.has_tag_name("Character")) {
@@ -30,8 +30,8 @@ pub fn parse_characters_core(
         let db_id = id_mapper.map_character(xml_id);
 
         // Identity - stored as ATTRIBUTES on Character element
-        let first_name = char_node.opt_attr("FirstName");
-        let gender = char_node.opt_attr("Gender");
+        let first_name = char_node.opt_attr("FirstName").map(|s| s.to_string());
+        let gender = char_node.opt_attr("Gender").map(|s| s.to_string());
 
         // Player affiliation (optional - tribal characters have Player="-1")
         let player_xml_id = char_node
@@ -43,7 +43,7 @@ pub fn parse_characters_core(
             None => None,
         };
 
-        let tribe = char_node.opt_child_text("Tribe");
+        let tribe = char_node.opt_child_text("Tribe").map(|s| s.to_string());
 
         // Birth and death - BirthTurn is an attribute, DeathTurn is a child element
         let birth_turn = char_node
@@ -52,20 +52,20 @@ pub fn parse_characters_core(
         let death_turn = char_node
             .opt_child_text("DeathTurn")
             .and_then(|s| s.parse::<i32>().ok());
-        let death_reason = char_node.opt_child_text("DeathReason");
+        let death_reason = char_node.opt_child_text("DeathReason").map(|s| s.to_string());
 
         // NOTE: Parent relationships (birth_father_id, birth_mother_id) are NULL in Pass 1
         // They will be filled in Pass 2 via UPDATE statements
 
         // Affiliations
-        let family = char_node.opt_child_text("Family");
-        let nation = char_node.opt_child_text("Nation");
-        let religion = char_node.opt_child_text("Religion");
+        let family = char_node.opt_child_text("Family").map(|s| s.to_string());
+        let nation = char_node.opt_child_text("Nation").map(|s| s.to_string());
+        let religion = char_node.opt_child_text("Religion").map(|s| s.to_string());
 
         // Titles and roles
-        let cognomen = char_node.opt_child_text("Cognomen");
-        let archetype = char_node.opt_child_text("Archetype");
-        let portrait = char_node.opt_child_text("Portrait");
+        let cognomen = char_node.opt_child_text("Cognomen").map(|s| s.to_string());
+        let archetype = char_node.opt_child_text("Archetype").map(|s| s.to_string());
+        let portrait = char_node.opt_child_text("Portrait").map(|s| s.to_string());
 
         // Progression
         let xp = char_node
@@ -95,9 +95,9 @@ pub fn parse_characters_core(
             .opt_child_text("BecameLeaderTurn")
             .and_then(|s| s.parse::<i32>().ok());
 
-        // Insert character using Appender (Pass 1: NULL for parent relationships)
+        // Collect row data (Pass 1: NULL for parent relationships)
         // Must match schema column order exactly
-        app.append_row(params![
+        characters.push((
             db_id,                  // character_id
             id_mapper.match_id,     // match_id
             xml_id,                 // xml_id
@@ -127,10 +127,37 @@ pub fn parse_characters_core(
             false,                  // was_family_head - default false
             None::<i32>,            // nation_joined_turn - not parsed yet
             None::<i64>             // seed - not parsed yet
-        ])?;
-
-        count += 1;
+        ));
     }
+
+    // Deduplicate (last-wins strategy)
+    // Primary key: (character_id, match_id)
+    let unique_characters = deduplicate_rows_last_wins(
+        characters,
+        |(char_id, match_id, ..)| (*char_id, *match_id)
+    );
+
+    let count = unique_characters.len();
+
+    // Bulk insert deduplicated rows
+    let mut app = conn.appender("characters")?;
+    for (db_id, match_id, xml_id, first_name, gender, player_db_id, tribe, birth_turn,
+         birth_city_id, death_turn, death_reason, birth_father_id, birth_mother_id,
+         family, nation, religion, cognomen, archetype, portrait, xp, level, is_royal,
+         is_infertile, became_leader_turn, abdicated_turn, was_religion_head,
+         was_family_head, nation_joined_turn, seed) in unique_characters
+    {
+        app.append_row(params![
+            db_id, match_id, xml_id, first_name, gender, player_db_id, tribe, birth_turn,
+            birth_city_id, death_turn, death_reason, birth_father_id, birth_mother_id,
+            family, nation, religion, cognomen, archetype, portrait, xp, level, is_royal,
+            is_infertile, became_leader_turn, abdicated_turn, was_religion_head,
+            was_family_head, nation_joined_turn, seed
+        ])?;
+    }
+
+    // Flush appender to commit all rows
+    drop(app);
 
     log::info!("Parsed {} characters (Pass 1: core data)", count);
     Ok(count)

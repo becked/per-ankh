@@ -33,6 +33,7 @@
 // ```
 
 use crate::parser::id_mapper::IdMapper;
+use crate::parser::utils::{deduplicate_rows_first_wins, deduplicate_rows_last_wins};
 use crate::parser::xml_loader::XmlNodeExt;
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
@@ -59,10 +60,8 @@ pub fn parse_character_stats(
     character_id: i64,
     match_id: i64,
 ) -> Result<usize> {
-    let mut count = 0;
-
-    // Use Appender for bulk insert (10-15x faster than individual INSERTs)
-    let mut app = conn.appender("character_stats")?;
+    // Collect all stat rows first
+    let mut stats = Vec::new();
 
     // Parse Rating elements (RATING_WISDOM, RATING_CHARISMA, etc.)
     if let Some(rating_node) = character_node
@@ -81,8 +80,7 @@ pub fn parse_character_stats(
                     ParseError::InvalidFormat(format!("Invalid stat value in {}", stat_name))
                 })?;
 
-            app.append_row(params![character_id, match_id, stat_name, stat_value])?;
-            count += 1;
+            stats.push((character_id, match_id, stat_name.to_string(), stat_value));
         }
     }
 
@@ -98,9 +96,23 @@ pub fn parse_character_stats(
                     ParseError::InvalidFormat(format!("Invalid stat value in {}", stat_name))
                 })?;
 
-            app.append_row(params![character_id, match_id, stat_name, stat_value])?;
-            count += 1;
+            stats.push((character_id, match_id, stat_name.to_string(), stat_value));
         }
+    }
+
+    // Deduplicate (last-wins matches DO UPDATE behavior)
+    // Primary key: (character_id, match_id, stat_name)
+    let unique_stats = deduplicate_rows_last_wins(
+        stats,
+        |(char_id, match_id, stat_name, _)| (*char_id, *match_id, stat_name.clone())
+    );
+
+    let count = unique_stats.len();
+
+    // Bulk insert
+    let mut app = conn.appender("character_stats")?;
+    for (char_id, match_id, stat_name, stat_value) in unique_stats {
+        app.append_row(params![char_id, match_id, stat_name, stat_value])?;
     }
 
     // Flush appender to commit all rows
@@ -131,14 +143,12 @@ pub fn parse_character_traits(
     character_id: i64,
     match_id: i64,
 ) -> Result<usize> {
-    let mut count = 0;
-
     if let Some(trait_node) = character_node
         .children()
         .find(|n| n.has_tag_name("TraitTurn"))
     {
-        // Use Appender for bulk insert (10-15x faster than individual INSERTs)
-        let mut app = conn.appender("character_traits")?;
+        // Collect all trait rows first
+        let mut traits = Vec::new();
 
         for trait_elem in trait_node.children().filter(|n| n.is_element()) {
             let trait_name = trait_elem.tag_name().name();
@@ -153,15 +163,31 @@ pub fn parse_character_traits(
                 })?;
 
             let removed_turn: Option<i32> = None;
-            app.append_row(params![character_id, match_id, trait_name, acquired_turn, removed_turn])?;
-            count += 1;
+            traits.push((character_id, match_id, trait_name.to_string(), acquired_turn, removed_turn));
+        }
+
+        // Deduplicate (last-wins matches DO UPDATE behavior)
+        // Primary key: (character_id, match_id, trait, acquired_turn)
+        let unique_traits = deduplicate_rows_last_wins(
+            traits,
+            |(char_id, match_id, trait_name, acquired, _)| (*char_id, *match_id, trait_name.clone(), *acquired)
+        );
+
+        let count = unique_traits.len();
+
+        // Bulk insert
+        let mut app = conn.appender("character_traits")?;
+        for (char_id, match_id, trait_name, acquired, removed) in unique_traits {
+            app.append_row(params![char_id, match_id, trait_name, acquired, removed])?;
         }
 
         // Flush appender to commit all rows
         drop(app);
-    }
 
-    Ok(count)
+        Ok(count)
+    } else {
+        Ok(0)
+    }
 }
 
 /// Parse character relationships (RelationshipList element)
@@ -189,14 +215,12 @@ pub fn parse_character_relationships(
     character_id: i64,
     match_id: i64,
 ) -> Result<usize> {
-    let mut count = 0;
-
     if let Some(rel_list_node) = character_node
         .children()
         .find(|n| n.has_tag_name("RelationshipList"))
     {
-        // Use Appender for bulk insert (10-15x faster than individual INSERTs)
-        let mut app = conn.appender("character_relationships")?;
+        // Collect all relationship rows first
+        let mut relationships = Vec::new();
 
         for rel_data_node in rel_list_node
             .children()
@@ -247,23 +271,49 @@ pub fn parse_character_relationships(
                 .and_then(|s| s.parse().ok());
 
             let ended_turn: Option<i32> = None;
-            app.append_row(params![
+
+            relationships.push((
                 character_id,
                 match_id,
                 related_character_id,
+                rel_type.to_string(),
+                relationship_value,
+                started_turn,
+                ended_turn
+            ));
+        }
+
+        // Deduplicate (last-wins matches DO UPDATE behavior)
+        // Primary key: (character_id, match_id, related_character_id, relationship_type)
+        let unique_relationships = deduplicate_rows_last_wins(
+            relationships,
+            |(char_id, match_id, related_id, rel_type, _, _, _)|
+                (*char_id, *match_id, *related_id, rel_type.clone())
+        );
+
+        let count = unique_relationships.len();
+
+        // Bulk insert
+        let mut app = conn.appender("character_relationships")?;
+        for (char_id, match_id, related_id, rel_type, relationship_value, started_turn, ended_turn) in unique_relationships {
+            app.append_row(params![
+                char_id,
+                match_id,
+                related_id,
                 rel_type,
                 relationship_value,
                 started_turn,
                 ended_turn
             ])?;
-            count += 1;
         }
 
         // Flush appender to commit all rows
         drop(app);
-    }
 
-    Ok(count)
+        Ok(count)
+    } else {
+        Ok(0)
+    }
 }
 
 /// Parse character parent relationships ONLY (Pass 2a)
@@ -401,16 +451,14 @@ pub fn parse_character_marriages(
     character_id: i64,
     match_id: i64,
 ) -> Result<usize> {
-    let mut count = 0;
-
     // Find Spouses element
     let spouses_node = match character_node.children().find(|n| n.has_tag_name("Spouses")) {
         Some(node) => node,
         None => return Ok(0), // No spouses for this character
     };
 
-    // Use Appender for bulk insert (10-15x faster than individual INSERTs)
-    let mut app = conn.appender("character_marriages")?;
+    // Collect all marriage rows first
+    let mut marriages = Vec::new();
 
     // Iterate over ID elements (each is a spouse)
     for id_node in spouses_node.children().filter(|n| n.has_tag_name("ID")) {
@@ -428,13 +476,26 @@ pub fn parse_character_marriages(
         // Map XML ID to database ID
         let spouse_id = id_mapper.get_character(spouse_xml_id)?;
 
-        // Insert marriage record
         // Note: marriage_turn uses -1 as sentinel for unknown, ended_turn is NULL since we don't have that data
         let marriage_turn = -1;
         let ended_turn: Option<i32> = None;
-        app.append_row(params![character_id, match_id, spouse_id, marriage_turn, ended_turn])?;
 
-        count += 1;
+        marriages.push((character_id, match_id, spouse_id, marriage_turn, ended_turn));
+    }
+
+    // Deduplicate before appending (first-wins matches DO NOTHING behavior)
+    // Primary key: (character_id, match_id, spouse_id)
+    let unique_marriages = deduplicate_rows_first_wins(
+        marriages,
+        |(char_id, match_id, spouse_id, _, _)| (*char_id, *match_id, *spouse_id)
+    );
+
+    let count = unique_marriages.len();
+
+    // Bulk insert deduplicated rows
+    let mut app = conn.appender("character_marriages")?;
+    for (char_id, match_id, spouse_id, marriage_turn, ended_turn) in unique_marriages {
+        app.append_row(params![char_id, match_id, spouse_id, marriage_turn, ended_turn])?;
     }
 
     // Flush appender to commit all rows

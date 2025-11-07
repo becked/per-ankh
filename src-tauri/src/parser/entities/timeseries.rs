@@ -18,6 +18,7 @@
 // is the value for that turn. Only turns with data are stored (sparse format).
 
 use crate::parser::id_mapper::IdMapper;
+use crate::parser::utils::deduplicate_rows_last_wins;
 use crate::parser::xml_loader::XmlNodeExt;
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
@@ -177,13 +178,28 @@ pub fn parse_game_yield_prices(
         return Ok(0);
     }
 
+    // Collect rows with match_id
+    let rows: Vec<_> = data
+        .into_iter()
+        .map(|(yield_type, turn, price)| (match_id, turn, yield_type, price))
+        .collect();
+
+    // Deduplicate by primary key (match_id, turn, yield_type)
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(match_id, turn, yield_type, _)| (*match_id, *turn, yield_type.clone())
+    );
+
+    let count = unique_rows.len();
+
     // Bulk insert using Appender API for better performance
     let mut app = conn.appender("yield_prices")?;
-    for (yield_type, turn, price) in &data {
+    for (match_id, turn, yield_type, price) in unique_rows {
         app.append_row(params![match_id, turn, yield_type, price])?;
     }
+    drop(app);
 
-    Ok(data.len())
+    Ok(count)
 }
 
 /// Parse player military power history
@@ -210,12 +226,27 @@ pub fn parse_military_power_history(
         return Ok(0);
     }
 
+    // Collect rows
+    let rows: Vec<_> = data
+        .into_iter()
+        .map(|(turn, military_power)| (player_id, match_id, turn, military_power))
+        .collect();
+
+    // Deduplicate by primary key (player_id, match_id, turn)
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(player_id, match_id, turn, _)| (*player_id, *match_id, *turn)
+    );
+
+    let count = unique_rows.len();
+
     let mut app = conn.appender("military_history")?;
-    for (turn, military_power) in &data {
+    for (player_id, match_id, turn, military_power) in unique_rows {
         app.append_row(params![player_id, match_id, turn, military_power])?;
     }
+    drop(app);
 
-    Ok(data.len())
+    Ok(count)
 }
 
 /// Parse player points history
@@ -241,12 +272,27 @@ pub fn parse_points_history(
         return Ok(0);
     }
 
+    // Collect rows
+    let rows: Vec<_> = data
+        .into_iter()
+        .map(|(turn, points)| (player_id, match_id, turn, points))
+        .collect();
+
+    // Deduplicate by primary key (player_id, match_id, turn)
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(player_id, match_id, turn, _)| (*player_id, *match_id, *turn)
+    );
+
+    let count = unique_rows.len();
+
     let mut app = conn.appender("points_history")?;
-    for (turn, points) in &data {
+    for (player_id, match_id, turn, points) in unique_rows {
         app.append_row(params![player_id, match_id, turn, points])?;
     }
+    drop(app);
 
-    Ok(data.len())
+    Ok(count)
 }
 
 /// Parse player legitimacy history
@@ -272,12 +318,27 @@ pub fn parse_legitimacy_history(
         return Ok(0);
     }
 
+    // Collect rows
+    let rows: Vec<_> = data
+        .into_iter()
+        .map(|(turn, legitimacy)| (player_id, match_id, turn, legitimacy))
+        .collect();
+
+    // Deduplicate by primary key (player_id, match_id, turn)
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(player_id, match_id, turn, _)| (*player_id, *match_id, *turn)
+    );
+
+    let count = unique_rows.len();
+
     let mut app = conn.appender("legitimacy_history")?;
-    for (turn, legitimacy) in &data {
+    for (player_id, match_id, turn, legitimacy) in unique_rows {
         app.append_row(params![player_id, match_id, turn, legitimacy])?;
     }
+    drop(app);
 
-    Ok(data.len())
+    Ok(count)
 }
 
 /// Parse player yield rate history (per-yield type)
@@ -308,12 +369,27 @@ pub fn parse_yield_rate_history(
         return Ok(0);
     }
 
+    // Collect rows
+    let rows: Vec<_> = data
+        .into_iter()
+        .map(|(yield_type, turn, amount)| (player_id, match_id, turn, yield_type, amount))
+        .collect();
+
+    // Deduplicate by primary key (player_id, match_id, turn, yield_type)
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(player_id, match_id, turn, yield_type, _)| (*player_id, *match_id, *turn, yield_type.clone())
+    );
+
+    let count = unique_rows.len();
+
     let mut app = conn.appender("yield_history")?;
-    for (yield_type, turn, amount) in &data {
+    for (player_id, match_id, turn, yield_type, amount) in unique_rows {
         app.append_row(params![player_id, match_id, turn, yield_type, amount])?;
     }
+    drop(app);
 
-    Ok(data.len())
+    Ok(count)
 }
 
 /// Parse player family opinion history (per-family)
@@ -344,12 +420,27 @@ pub fn parse_family_opinion_history(
         return Ok(0);
     }
 
+    // Collect rows
+    let rows: Vec<_> = data
+        .into_iter()
+        .map(|(family_name, turn, opinion)| (player_id, match_id, family_name, turn, opinion))
+        .collect();
+
+    // Deduplicate by primary key (player_id, match_id, family_name, turn)
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(player_id, match_id, family_name, turn, _)| (*player_id, *match_id, family_name.clone(), *turn)
+    );
+
+    let count = unique_rows.len();
+
     let mut app = conn.appender("family_opinion_history")?;
-    for (family_name, turn, opinion) in &data {
+    for (player_id, match_id, family_name, turn, opinion) in unique_rows {
         app.append_row(params![player_id, match_id, family_name, turn, opinion])?;
     }
+    drop(app);
 
-    Ok(data.len())
+    Ok(count)
 }
 
 /// Parse player religion opinion history (per-religion)
@@ -380,12 +471,27 @@ pub fn parse_religion_opinion_history(
         return Ok(0);
     }
 
+    // Collect rows
+    let rows: Vec<_> = data
+        .into_iter()
+        .map(|(religion_name, turn, opinion)| (player_id, match_id, religion_name, turn, opinion))
+        .collect();
+
+    // Deduplicate by primary key (player_id, match_id, religion_name, turn)
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(player_id, match_id, religion_name, turn, _)| (*player_id, *match_id, religion_name.clone(), *turn)
+    );
+
+    let count = unique_rows.len();
+
     let mut app = conn.appender("religion_opinion_history")?;
-    for (religion_name, turn, opinion) in &data {
+    for (player_id, match_id, religion_name, turn, opinion) in unique_rows {
         app.append_row(params![player_id, match_id, religion_name, turn, opinion])?;
     }
+    drop(app);
 
-    Ok(data.len())
+    Ok(count)
 }
 
 /// Parse all player-level time-series data

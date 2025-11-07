@@ -1,6 +1,7 @@
 // Tribe entity parser
 
 use crate::parser::id_mapper::IdMapper;
+use crate::parser::utils::deduplicate_rows_last_wins;
 use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
@@ -8,10 +9,9 @@ use duckdb::{params, Connection};
 /// Parse all tribes from the XML document
 pub fn parse_tribes(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let root = doc.root_element();
-    let mut count = 0;
 
-    // Create appender ONCE before loop
-    let mut app = conn.appender("tribes")?;
+    // Collect all tribe rows first
+    let mut tribes = Vec::new();
 
     // Find all Tribe elements as direct children of Root
     for tribe_node in root.children().filter(|n| n.has_tag_name("Tribe")) {
@@ -39,20 +39,38 @@ pub fn parse_tribes(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
             None => None,
         };
 
-        let religion = tribe_node.opt_child_text("Religion");
+        let religion = tribe_node.opt_child_text("Religion").map(|s| s.to_string());
 
-        // Bulk append - must match schema column order exactly
-        app.append_row(params![
-            tribe_id,                   // tribe_id
+        // Collect row data - must match schema column order exactly
+        tribes.push((
+            tribe_id.to_string(),       // tribe_id
             id_mapper.match_id,         // match_id
             xml_id,                     // xml_id
             leader_db_id,               // leader_character_id
             allied_player_db_id,        // allied_player_id
             religion,                   // religion
-        ])?;
-
-        count += 1;
+        ));
     }
+
+    // Deduplicate (last-wins strategy)
+    // Primary key: (tribe_id, match_id)
+    let unique_tribes = deduplicate_rows_last_wins(
+        tribes,
+        |(tribe_id, match_id, ..)| (tribe_id.clone(), *match_id)
+    );
+
+    let count = unique_tribes.len();
+
+    // Bulk insert deduplicated rows
+    let mut app = conn.appender("tribes")?;
+    for (tribe_id, match_id, xml_id, leader_db_id, allied_player_db_id, religion) in unique_tribes {
+        app.append_row(params![
+            tribe_id, match_id, xml_id, leader_db_id, allied_player_db_id, religion
+        ])?;
+    }
+
+    // Flush appender to commit all rows
+    drop(app);
 
     log::info!("Parsed {} tribes", count);
     Ok(count)

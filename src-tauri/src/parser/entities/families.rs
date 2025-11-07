@@ -29,6 +29,7 @@
 // ```
 
 use crate::parser::id_mapper::IdMapper;
+use crate::parser::utils::deduplicate_rows_last_wins;
 use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
 use crate::parser::Result;
 use duckdb::{params, Connection};
@@ -41,10 +42,9 @@ pub fn parse_families(
     id_mapper: &mut IdMapper,
 ) -> Result<usize> {
     let root = doc.root_element();
-    let mut count = 0;
 
-    // Create appender ONCE before loop
-    let mut app = conn.appender("families")?;
+    // Collect all family rows first
+    let mut families = Vec::new();
 
     // Step 1: Parse global FamilyClass to get all family names and their classes
     let family_classes = parse_family_classes(&root)?;
@@ -117,22 +117,43 @@ pub fn parse_families(
             // Get turns without leader
             let turns_without_leader = family_turns_no_leader.get(&family_name).copied().unwrap_or(0);
 
-            // Bulk append - must match schema column order exactly
-            app.append_row(params![
+            // Collect row data - must match schema column order exactly
+            families.push((
                 db_id,                      // family_id
                 id_mapper.match_id,         // match_id
                 xml_id,                     // xml_id
                 player_db_id,               // player_id
-                &family_name,               // family_name
-                family_class,               // family_class
+                family_name.clone(),        // family_name
+                family_class.to_string(),   // family_class
                 head_character_db_id,       // head_character_id
                 seat_city_db_id,            // seat_city_id
                 turns_without_leader,       // turns_without_leader
-            ])?;
-
-            count += 1;
+            ));
         }
     }
+
+    // Deduplicate (last-wins strategy)
+    // Primary key: (family_id, match_id)
+    let unique_families = deduplicate_rows_last_wins(
+        families,
+        |(family_id, match_id, ..)| (*family_id, *match_id)
+    );
+
+    let count = unique_families.len();
+
+    // Bulk insert deduplicated rows
+    let mut app = conn.appender("families")?;
+    for (db_id, match_id, xml_id, player_db_id, family_name, family_class,
+         head_character_db_id, seat_city_db_id, turns_without_leader) in unique_families
+    {
+        app.append_row(params![
+            db_id, match_id, xml_id, player_db_id, family_name, family_class,
+            head_character_db_id, seat_city_db_id, turns_without_leader
+        ])?;
+    }
+
+    // Flush appender to commit all rows
+    drop(app);
 
     log::info!("Parsed {} families", count);
     Ok(count)

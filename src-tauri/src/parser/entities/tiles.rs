@@ -1,6 +1,7 @@
 // Tile entity parser
 
 use crate::parser::id_mapper::IdMapper;
+use crate::parser::utils::deduplicate_rows_last_wins;
 use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
@@ -8,10 +9,20 @@ use duckdb::{params, Connection};
 /// Parse all tiles from the XML document (Pass 1: Core data only, no ownership history)
 pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let root = doc.root_element();
-    let mut count = 0;
 
-    // Create appender ONCE before loop
-    let mut app = conn.appender("tiles")?;
+    // DIAGNOSTIC: Check if there's any existing data for this match_id before we start
+    let existing_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tiles WHERE match_id = ?",
+        [id_mapper.match_id],
+        |row| row.get(0),
+    )?;
+    if existing_count > 0 {
+        log::error!("CRITICAL: Found {} existing tiles for match_id {} BEFORE parse_tiles! Transaction rollback may have failed!",
+            existing_count, id_mapper.match_id);
+    }
+
+    // Collect all tile rows first
+    let mut tiles = Vec::new();
 
     // Get map dimensions from root attributes
     let map_width = root.req_attr("MapWidth")?.parse::<i32>()?;
@@ -27,9 +38,9 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
         let y = xml_id / map_width;
 
         // Terrain
-        let terrain = tile_node.opt_child_text("Terrain");
-        let height = tile_node.opt_child_text("Height");
-        let vegetation = tile_node.opt_child_text("Vegetation");
+        let terrain = tile_node.opt_child_text("Terrain").map(|s| s.to_string());
+        let height = tile_node.opt_child_text("Height").map(|s| s.to_string());
+        let vegetation = tile_node.opt_child_text("Vegetation").map(|s| s.to_string());
 
         // Rivers (boolean flags for hex directions)
         let river_w = tile_node
@@ -46,10 +57,10 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             .unwrap_or(false);
 
         // Resources
-        let resource = tile_node.opt_child_text("Resource");
+        let resource = tile_node.opt_child_text("Resource").map(|s| s.to_string());
 
         // Improvements
-        let improvement = tile_node.opt_child_text("Improvement");
+        let improvement = tile_node.opt_child_text("Improvement").map(|s| s.to_string());
         let improvement_pillaged = tile_node
             .opt_child_text("ImprovementPillaged")
             .and_then(|s| s.parse::<bool>().ok())
@@ -67,7 +78,7 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             .unwrap_or(0);
 
         // Specialists
-        let specialist = tile_node.opt_child_text("Specialist");
+        let specialist = tile_node.opt_child_text("Specialist").map(|s| s.to_string());
 
         // Infrastructure
         let has_road = tile_node
@@ -118,10 +129,10 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             .opt_child_text("IsCitySite")
             .and_then(|s| s.parse::<bool>().ok())
             .unwrap_or(false);
-        let tribe_site = tile_node.opt_child_text("TribeSite");
+        let tribe_site = tile_node.opt_child_text("TribeSite").map(|s| s.to_string());
 
         // Religion
-        let religion = tile_node.opt_child_text("Religion");
+        let religion = tile_node.opt_child_text("Religion").map(|s| s.to_string());
 
         // Seeds
         let init_seed = tile_node
@@ -131,8 +142,8 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             .opt_child_text("TurnSeed")
             .and_then(|s| s.parse::<i64>().ok());
 
-        // Bulk append - must match schema column order exactly
-        app.append_row(params![
+        // Collect row data - must match schema column order exactly
+        tiles.push((
             db_id,                      // tile_id
             id_mapper.match_id,         // match_id
             xml_id,                     // xml_id
@@ -159,9 +170,47 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             religion,                   // religion
             init_seed,                  // init_seed
             turn_seed,                  // turn_seed
-        ])?;
+        ));
+    }
 
-        count += 1;
+    // Deduplicate (last-wins strategy)
+    // We need to deduplicate by BOTH constraints:
+    // 1. Primary key: (tile_id, match_id)
+    // 2. Unique index: (match_id, xml_id)
+    let initial_tile_count = tiles.len();
+
+    // First pass: deduplicate by PRIMARY KEY (tile_id, match_id)
+    let after_pk_dedup = deduplicate_rows_last_wins(
+        tiles,
+        |(tile_id, match_id, ..)| (*tile_id, *match_id)
+    );
+
+    // Second pass: deduplicate by UNIQUE INDEX (match_id, xml_id)
+    let unique_tiles = deduplicate_rows_last_wins(
+        after_pk_dedup,
+        |(_, match_id, xml_id, ..)| (*match_id, *xml_id)
+    );
+
+    let count = unique_tiles.len();
+    let tile_duplicates_removed = initial_tile_count - count;
+    if tile_duplicates_removed > 0 {
+        log::warn!("Removed {} duplicate tiles during parse_tiles (had {}, now {})",
+            tile_duplicates_removed, initial_tile_count, count);
+    }
+
+    // Bulk insert deduplicated rows
+    let mut app = conn.appender("tiles")?;
+    for (db_id, match_id, xml_id, x, y, terrain, height, vegetation, river_w, river_sw, river_se,
+         resource, improvement, improvement_pillaged, improvement_disabled, improvement_turns_left,
+         improvement_develop_turns, specialist, has_road, owner_player_db_id, owner_city_db_id,
+         is_city_site, tribe_site, religion, init_seed, turn_seed) in unique_tiles
+    {
+        app.append_row(params![
+            db_id, match_id, xml_id, x, y, terrain, height, vegetation, river_w, river_sw, river_se,
+            resource, improvement, improvement_pillaged, improvement_disabled, improvement_turns_left,
+            improvement_develop_turns, specialist, has_road, owner_player_db_id, owner_city_db_id,
+            is_city_site, tribe_site, religion, init_seed, turn_seed
+        ])?;
     }
 
     // Explicitly drop appender to ensure data is flushed
@@ -183,6 +232,56 @@ pub fn update_tile_city_ownership(
     conn: &Connection,
     id_mapper: &IdMapper,
 ) -> Result<usize> {
+    // Diagnostic: Check for duplicate tiles in database
+    log::info!("Running duplicate check for match_id {}", id_mapper.match_id);
+
+    let total_tiles: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM tiles WHERE match_id = ?",
+        [id_mapper.match_id],
+        |row| row.get(0),
+    )?;
+
+    log::info!("Total tiles in database for this match: {}", total_tiles);
+
+    let duplicate_count: i64 = conn.query_row(
+        "SELECT COUNT(*) FROM (
+            SELECT tile_id, COUNT(*) as cnt
+            FROM tiles
+            WHERE match_id = ?
+            GROUP BY tile_id
+            HAVING COUNT(*) > 1
+        )",
+        [id_mapper.match_id],
+        |row| row.get(0),
+    )?;
+
+    log::info!("Duplicate tile_ids found: {}", duplicate_count);
+
+    if duplicate_count > 0 {
+        log::error!("CRITICAL: Found {} duplicate tile_id values in tiles table before UPDATE!", duplicate_count);
+
+        // Get details of duplicates
+        let mut stmt = conn.prepare(
+            "SELECT tile_id, COUNT(*) as cnt
+             FROM tiles
+             WHERE match_id = ?
+             GROUP BY tile_id
+             HAVING COUNT(*) > 1
+             LIMIT 10"
+        )?;
+        let duplicates: Vec<(i32, i64)> = stmt.query_map([id_mapper.match_id], |row| {
+            Ok((row.get(0)?, row.get(1)?))
+        })?.collect::<std::result::Result<Vec<_>, _>>()?;
+
+        for (tile_id, count) in duplicates {
+            log::error!("  Duplicate tile_id {} appears {} times", tile_id, count);
+        }
+
+        return Err(ParseError::InvalidFormat(
+            format!("Database has {} duplicate tiles for match_id {}", duplicate_count, id_mapper.match_id)
+        ));
+    }
+
     let root = doc.root_element();
 
     // First pass: collect all tile-city ownership mappings
@@ -198,25 +297,43 @@ pub fn update_tile_city_ownership(
         }
     }
 
-    let total_count = updates.len();
+    log::info!("Collected {} tile ownership mappings from XML", updates.len());
 
-    // Second pass: batch UPDATE in chunks of 500 for optimal performance
-    const BATCH_SIZE: usize = 500;
-    for chunk in updates.chunks(BATCH_SIZE) {
-        // Build CASE statement for batch UPDATE
-        let mut sql = String::from("UPDATE tiles SET owner_city_id = CASE tile_id ");
-        let mut tile_ids_for_where = Vec::new();
+    // Deduplicate by tile_id (last-wins strategy)
+    // This handles duplicate Tile elements in XML with the same ID
+    let initial_count = updates.len();
+    let unique_updates = deduplicate_rows_last_wins(
+        updates,
+        |(tile_id, _)| *tile_id
+    );
 
-        for (tile_id, city_id) in chunk {
-            sql.push_str(&format!("WHEN {} THEN {} ", tile_id, city_id));
-            tile_ids_for_where.push(tile_id.to_string());
+    let total_count = unique_updates.len();
+    let duplicates_removed = initial_count - total_count;
+
+    log::info!("After deduplication: {} unique tile ownership mappings ({} duplicates removed)",
+        total_count, duplicates_removed);
+
+    // Verify uniqueness
+    use std::collections::HashSet;
+    let mut seen = HashSet::new();
+    for (tile_id, _) in &unique_updates {
+        if !seen.insert(tile_id) {
+            log::error!("CRITICAL: Deduplication failed! tile_id {} appears multiple times in unique_updates!", tile_id);
+            return Err(ParseError::InvalidFormat(
+                format!("Deduplication failed for tile_id {}", tile_id)
+            ));
         }
+    }
+    log::info!("Uniqueness verified: all tile_ids are unique in update list");
 
-        sql.push_str("END WHERE tile_id IN (");
-        sql.push_str(&tile_ids_for_where.join(", "));
-        sql.push_str(&format!(") AND match_id = {}", id_mapper.match_id));
+    // Second pass: UPDATE tiles with owner_city_id
+    // Use individual parameterized UPDATEs instead of batched CASE to avoid potential DuckDB issues
+    let mut stmt = conn.prepare(
+        "UPDATE tiles SET owner_city_id = ? WHERE tile_id = ? AND match_id = ?"
+    )?;
 
-        conn.execute(&sql, [])?;
+    for (tile_id, city_id) in unique_updates {
+        stmt.execute(params![city_id, tile_id, id_mapper.match_id])?;
     }
 
     log::info!("Updated {} tiles with city ownership", total_count);
@@ -233,10 +350,9 @@ pub fn parse_tile_ownership_history(
     id_mapper: &IdMapper,
 ) -> Result<usize> {
     let root = doc.root_element();
-    let mut count = 0;
 
-    // Create appender for ownership history
-    let mut ownership_app = conn.appender("tile_ownership_history")?;
+    // Collect all ownership history records first
+    let mut history_records = Vec::new();
 
     // Find all Tile elements with OwnerHistory
     for tile_node in root.children().filter(|n| n.has_tag_name("Tile")) {
@@ -257,19 +373,32 @@ pub fn parse_tile_ownership_history(
                                     None
                                 };
 
-                                ownership_app.append_row(params![
+                                history_records.push((
                                     tile_db_id,         // tile_id
                                     id_mapper.match_id, // match_id
                                     turn,               // turn
                                     owner_db_id,        // owner_player_id (NULL if -1)
-                                ])?;
-                                count += 1;
+                                ));
                             }
                         }
                     }
                 }
             }
         }
+    }
+
+    // Deduplicate by primary key (tile_id, match_id, turn)
+    let unique_records = deduplicate_rows_last_wins(
+        history_records,
+        |(tile_id, match_id, turn, _)| (*tile_id, *match_id, *turn)
+    );
+
+    let count = unique_records.len();
+
+    // Bulk insert deduplicated records
+    let mut ownership_app = conn.appender("tile_ownership_history")?;
+    for (tile_db_id, match_id, turn, owner_db_id) in unique_records {
+        ownership_app.append_row(params![tile_db_id, match_id, turn, owner_db_id])?;
     }
 
     // Explicitly drop appender to ensure data is flushed

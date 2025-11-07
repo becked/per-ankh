@@ -5,6 +5,7 @@
 // Re-importing a match loads existing mappings from id_mappings table.
 
 use super::{ParseError, Result};
+use crate::parser::utils::deduplicate_rows_last_wins;
 use duckdb::{params, Connection};
 use std::collections::HashMap;
 
@@ -154,11 +155,11 @@ impl IdMapper {
         conn: &Connection,
         entity_types: &[&str],
     ) -> Result<()> {
-        // Use Appender for bulk insert (10-15x faster than individual INSERTs)
-        let mut app = conn.appender("id_mappings")?;
+        // Collect all mapping rows first
+        let mut mappings = Vec::new();
 
         for entity_type in entity_types {
-            let mappings = match *entity_type {
+            let entity_mappings = match *entity_type {
                 "player" => &self.players,
                 "character" => &self.characters,
                 "city" => &self.cities,
@@ -170,9 +171,22 @@ impl IdMapper {
                 _ => continue,
             };
 
-            for (&xml_id, &db_id) in mappings {
-                app.append_row(params![self.match_id, entity_type, xml_id, db_id])?;
+            for (&xml_id, &db_id) in entity_mappings {
+                mappings.push((self.match_id, entity_type.to_string(), xml_id, db_id));
             }
+        }
+
+        // Deduplicate (last-wins strategy)
+        // Primary key: (match_id, entity_type, xml_id)
+        let unique_mappings = deduplicate_rows_last_wins(
+            mappings,
+            |(match_id, entity_type, xml_id, _)| (*match_id, entity_type.clone(), *xml_id)
+        );
+
+        // Bulk insert deduplicated rows
+        let mut app = conn.appender("id_mappings")?;
+        for (match_id, entity_type, xml_id, db_id) in unique_mappings {
+            app.append_row(params![match_id, entity_type, xml_id, db_id])?;
         }
 
         // Flush appender to commit all rows
