@@ -213,6 +213,20 @@ run_dev() {
     npm run tauri dev
 }
 
+# Rebuild the application from scratch (for icon changes, etc.)
+rebuild_dev() {
+    print_info "Rebuilding application from scratch..."
+    print_warning "This will clean all compiled artifacts and rebuild"
+
+    cd "$RUST_DIR"
+    print_info "Running cargo clean..."
+    cargo clean
+
+    cd "$PROJECT_ROOT"
+    print_info "Starting clean development build..."
+    npm run tauri dev
+}
+
 # Build the application for distribution
 build_app() {
     print_info "Building application for distribution..."
@@ -363,6 +377,10 @@ Commands:
   dev                          Run the application in development mode
                                Example: $0 dev
 
+  rebuild                      Rebuild application from scratch (clean + dev)
+                               Use this after changing app icons or embedded assets
+                               Example: $0 rebuild
+
   build                        Build application for distribution
                                Example: $0 build
 
@@ -442,6 +460,10 @@ main() {
         dev)
             check_requirements
             run_dev
+            ;;
+        rebuild)
+            check_requirements
+            rebuild_dev
             ;;
         build)
             check_requirements
