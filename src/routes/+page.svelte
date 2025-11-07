@@ -2,7 +2,6 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import type { GameStatistics } from "$lib/types";
-  import GameTabs from "$lib/GameTabs.svelte";
 
   let stats = $state<GameStatistics | null>(null);
   let loading = $state(true);
@@ -19,10 +18,7 @@
   });
 </script>
 
-<div class="app-layout">
-  <GameTabs />
-
-  <main class="container">
+<main class="container">
   <h1>Per-Ankh - Old World Stats</h1>
 
   {#if loading}
@@ -54,47 +50,84 @@
       </table>
     </div>
   {/if}
-  </main>
-</div>
+</main>
 
 <style>
-.app-layout {
-  display: flex;
-  height: 100vh;
-  overflow: hidden;
-}
-
 .container {
   flex: 1;
-  padding: 2rem;
+  padding: 1rem 2rem 2rem 2rem;
   overflow-y: auto;
+  background: var(--color-blue-gray);
 }
 
 h1 {
   margin-bottom: 2rem;
+  color: #eeeeee;
+  font-size: 2rem;
+  font-weight: bold;
+  border-bottom: 3px solid var(--color-orange);
+  padding-bottom: 0.5rem;
+}
+
+h2 {
+  color: var(--color-brown);
+  font-weight: bold;
 }
 
 .stats-summary {
   margin-bottom: 2rem;
+  background: #eeeeee;
+  padding: 1.5rem;
+  border: 2px solid var(--color-black);
+  border-radius: 8px;
+}
+
+.stats-summary h2 {
+  color: var(--color-black);
 }
 
 .error {
-  color: red;
+  color: var(--color-white);
+  background: var(--color-brown);
+  padding: 1rem;
+  border: 2px solid var(--color-orange);
+  border-radius: 4px;
+  font-weight: bold;
+}
+
+.nations-section {
+  background: #eeeeee;
+  padding: 1.5rem;
+  border: 2px solid var(--color-black);
+  border-radius: 8px;
 }
 
 table {
   width: 100%;
   border-collapse: collapse;
+  margin-top: 1rem;
 }
 
 th,
 td {
-  padding: 0.5rem;
+  padding: 0.75rem;
   text-align: left;
-  border-bottom: 1px solid #ddd;
+  border-bottom: 2px solid var(--color-tan);
+  color: var(--color-black);
 }
 
 th {
   font-weight: bold;
+  background: transparent;
+  color: var(--color-black);
+  border-bottom: 2px solid var(--color-black);
+}
+
+tbody tr:hover {
+  background: var(--color-tan);
+}
+
+tbody tr {
+  transition: background 0.2s;
 }
 </style>
