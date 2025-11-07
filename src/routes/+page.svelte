@@ -91,7 +91,7 @@
         <tbody>
           {#each stats.nations as nation}
             <tr>
-              <td>{nation.nation}</td>
+              <td>{nation.nation.replace("NATION_", "")}</td>
               <td>{nation.games_played}</td>
             </tr>
           {/each}
