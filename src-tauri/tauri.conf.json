@@ -17,11 +17,25 @@
         "height": 800,
         "minWidth": 1024,
         "minHeight": 600,
-        "titleBarStyle": "Overlay"
+        "titleBarStyle": "Overlay",
+        "backgroundColor": "#211A12"
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "capabilities": [
+        {
+          "identifier": "main-capability",
+          "description": "Main application permissions",
+          "windows": ["main"],
+          "permissions": [
+            "core:default",
+            "dialog:default",
+            "dialog:allow-confirm",
+            "dialog:allow-message"
+          ]
+        }
+      ]
     }
   },
   "bundle": {

@@ -5,6 +5,7 @@
   import { page } from "$app/stores";
   import type { GameInfo } from "$lib/types";
   import { formatEnum, formatDate } from "$lib/utils/formatting";
+  import { refreshData } from "$lib/stores/refresh";
 
   let games = $state<GameInfo[]>([]);
   let loading = $state(true);
@@ -14,7 +15,9 @@
   // Get current game ID from URL
   const currentGameId = $derived($page.params.id ? Number($page.params.id) : null);
 
-  onMount(async () => {
+  async function fetchGames() {
+    loading = true;
+    error = null;
     try {
       games = await invoke<GameInfo[]>("get_games_list");
     } catch (err) {
@@ -22,6 +25,15 @@
     } finally {
       loading = false;
     }
+  }
+
+  onMount(() => {
+    fetchGames();
+  });
+
+  // Subscribe to refresh events
+  refreshData.subscribe(() => {
+    fetchGames();
   });
 
   function formatNation(nation: string | null): string | null {

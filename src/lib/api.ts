@@ -52,4 +52,11 @@ export const api = {
    */
   runEventTest: () =>
     invoke<string>("run_event_test"),
+
+  /**
+   * Reset the database by dropping all tables and recreating the schema.
+   * WARNING: This will delete all imported game data.
+   */
+  resetDatabase: () =>
+    invoke<string>("reset_database_cmd"),
 } as const;
