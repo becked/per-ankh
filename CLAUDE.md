@@ -18,6 +18,57 @@ Per-Ankh is a desktop application that ingests completed save files from the Old
   - Frontend: npm/pnpm - manages JavaScript dependencies
   - Backend: Cargo - manages Rust dependencies
 
+## ⚠️ Tauri Desktop Environment - NOT a Web Browser
+
+**CRITICAL**: This is a native desktop application built with Tauri, NOT a traditional web application.
+
+### Key Differences from Browser Environment
+
+**What DOESN'T Work:**
+- ❌ "Refresh the page" - This is a desktop app with hot-reload during development
+- ❌ Browser DevTools shortcuts (F12) - Use the app's development tools
+- ❌ Assuming synchronous browser APIs - Many are async in Tauri
+
+**What DOES Work:**
+- ✅ Hot reload during `npm run tauri dev` - File changes auto-update
+- ✅ Tauri command invocations via `invoke()` - Frontend ↔ Rust backend communication
+- ✅ Native OS dialogs - `window.confirm()`, `window.alert()`, file pickers
+
+### Tauri-Specific API Behaviors
+
+**Native Dialogs are Async:**
+```typescript
+// ❌ WRONG: Assumes browser behavior (synchronous)
+const confirmed = window.confirm("Are you sure?");
+if (!confirmed) return;
+
+// ✅ CORRECT: Tauri returns Promise
+const confirmed = await window.confirm("Are you sure?");
+if (!confirmed) return;
+```
+
+**File Operations:**
+- Use Tauri's dialog APIs for file/folder selection
+- File paths are OS-native (not URLs)
+- File operations happen in Rust backend, not frontend
+
+**State Management:**
+- Frontend state is ephemeral (resets on app restart)
+- Persistent state must be stored in DuckDB or app data directory
+- No localStorage/sessionStorage - use Tauri's storage plugin if needed
+
+**Development Workflow:**
+- `npm run tauri dev` - Runs app with hot reload
+- Changes to frontend auto-reload
+- Changes to Rust require recompilation (automatic)
+- Console logs appear in terminal, not browser DevTools
+
+**When Troubleshooting:**
+- Check terminal output for Rust panics/errors
+- Check browser console for frontend errors
+- Don't suggest "refresh the page" - suggest restarting dev server if needed
+- Remember: User is running a compiled desktop app, not visiting a URL
+
 ## Coding Standards
 
 ### Rust Standards
