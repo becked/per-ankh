@@ -8,7 +8,7 @@
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
-  import { formatEnum } from "$lib/utils/formatting";
+  import { formatEnum, formatDate } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
   let gameDetails = $state<GameDetails | null>(null);
@@ -223,12 +223,6 @@
         loading = false;
       });
   });
-
-  function formatDate(dateStr: string | null): string {
-    if (!dateStr) return "Unknown";
-    const date = new Date(dateStr);
-    return date.toLocaleDateString();
-  }
 
   // Get the human player's nation
   const humanNation = $derived(
