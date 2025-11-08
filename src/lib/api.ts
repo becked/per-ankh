@@ -1,10 +1,8 @@
 import { invoke } from "@tauri-apps/api/core";
-import type {
-  GameStatistics,
-  GameDetails,
-  PlayerHistory,
-  YieldHistory
-} from "$lib/types";
+import type { GameStatistics } from "$lib/types/GameStatistics";
+import type { GameDetails } from "$lib/types/GameDetails";
+import type { PlayerHistory } from "$lib/types/PlayerHistory";
+import type { YieldHistory } from "$lib/types/YieldHistory";
 
 /**
  * Centralized API layer for all Tauri backend commands.
