@@ -69,6 +69,70 @@ if (!confirmed) return;
 - Don't suggest "refresh the page" - suggest restarting dev server if needed
 - Remember: User is running a compiled desktop app, not visiting a URL
 
+## Tauri Built-ins vs Web APIs
+
+**Principle:** Prefer Tauri built-ins for type safety. We use TypeScript to catch bugs at compile time.
+
+### ALWAYS Use Tauri Built-ins
+
+**1. OS Integration:**
+- File/folder pickers → `@tauri-apps/plugin-dialog`
+- System dialogs → `@tauri-apps/plugin-dialog` (confirm, message)
+- Native menus, system tray, notifications
+- Window management
+
+**Why:** Native OS integration required; web APIs won't work correctly.
+
+**2. Type Safety Issues:**
+- Any browser API that behaves differently in Tauri
+- Example: `window.confirm()` returns `Promise<boolean>` in Tauri but TypeScript types it as `boolean`
+- This creates silent bugs TypeScript cannot catch
+
+**3. Security-Sensitive:**
+- File system access
+- Shell commands
+- Process management
+
+**Why:** Tauri APIs are sandboxed and secured by default.
+
+### Prefer Tauri Built-ins
+
+**4. Desktop Features:**
+- Clipboard, keyboard shortcuts, app updates, persistence
+
+**Why:** Better integration, though alternatives exist.
+
+### Web Libraries Are Fine
+
+**5. Pure UI/Logic:**
+- Charts (ECharts), forms, layouts, data processing
+- Anything with no OS interaction
+
+**Why:** No desktop-specific concerns.
+
+### Decision Framework
+
+Ask yourself:
+1. Does it interact with the OS? → **Use Tauri**
+2. Does the browser API behave differently in Tauri? → **Use Tauri**
+3. Is it security-sensitive? → **Use Tauri**
+4. Is it pure UI/logic with no OS interaction? → **Web libraries OK**
+
+### Example: Dialogs
+
+```typescript
+// ❌ BAD: window.confirm() is Promise<boolean> in Tauri but typed as boolean
+const confirmed = window.confirm("Sure?"); // TypeScript thinks boolean!
+if (!confirmed) return; // Bug: actually checking if Promise is falsy
+
+// ✅ GOOD: Tauri plugin has correct types
+import { confirm } from '@tauri-apps/plugin-dialog';
+const confirmed = await confirm("Sure?", "Title"); // Properly typed as Promise<boolean>
+if (!confirmed) return; // TypeScript enforces await
+```
+
+**Reference:** See `docs/dialog-audit-report.md` for detailed analysis of dialog usage.
+
 ## Coding Standards
 
 ### Rust Standards
