@@ -31,9 +31,11 @@
     }
   });
 
-  const progressPercentage = $derived(
-    progress ? Math.round((progress.current / progress.total) * 100) : 0
-  );
+  const progressPercentage = $derived.by(() => {
+    if (!progress) return 0;
+    const p = progress as ImportProgress;
+    return Math.round((p.current / p.total) * 100);
+  });
 
   const formatTime = (ms: number): string => {
     const seconds = Math.floor(ms / 1000);
