@@ -2,9 +2,129 @@
 //
 // Ensures the database schema is properly initialized before use
 
-use crate::parser::{ParseError, Result};
+use crate::parser::Result;
 use duckdb::Connection;
 use std::path::Path;
+
+/// Create the database schema on an existing connection
+///
+/// This function creates all tables, indexes, and views from the schema.sql file.
+/// It can be used for both initial schema creation and schema reset operations.
+pub fn create_schema(conn: &Connection) -> Result<()> {
+    log::info!("Creating database schema...");
+    let schema_sql = include_str!("../../../docs/schema.sql");
+    log::info!("Schema SQL loaded, length: {} bytes", schema_sql.len());
+
+    // DuckDB doesn't support partial indexes (indexes with WHERE clauses)
+    // Also need to defer VIEW creation until after tables are created
+    let mut filtered_sql = String::new();
+    let mut deferred_views = String::new();
+    let mut skipped_partial_indexes = 0;
+    let mut in_view_statement = false;
+    let mut current_view = String::new();
+
+    for line in schema_sql.lines() {
+        let trimmed = line.trim().to_uppercase();
+
+        // Track if we're inside a CREATE VIEW statement
+        if trimmed.starts_with("CREATE VIEW") || trimmed.starts_with("CREATE OR REPLACE VIEW") {
+            in_view_statement = true;
+            current_view.clear();
+            current_view.push_str(line);
+            current_view.push('\n');
+            log::debug!("Deferring view creation: {}", line.trim());
+            continue;
+        }
+
+        if in_view_statement {
+            current_view.push_str(line);
+            current_view.push('\n');
+            // Views end with a semicolon at the end of a line
+            if line.trim().ends_with(';') {
+                deferred_views.push_str(&current_view);
+                in_view_statement = false;
+            }
+            continue;
+        }
+
+        // Skip partial index statements (CREATE INDEX/CREATE UNIQUE INDEX with WHERE)
+        // Check uppercased version for case-insensitive matching
+        if (trimmed.starts_with("CREATE INDEX") || trimmed.starts_with("CREATE UNIQUE INDEX"))
+            && trimmed.contains(" WHERE ")
+        {
+            skipped_partial_indexes += 1;
+            log::debug!("Skipping partial index: {}", line.trim());
+            // Comment out the line instead of skipping to preserve line numbers
+            filtered_sql.push_str("-- SKIPPED (partial index not supported): ");
+            filtered_sql.push_str(line);
+            filtered_sql.push('\n');
+        } else {
+            filtered_sql.push_str(line);
+            filtered_sql.push('\n');
+        }
+    }
+
+    log::info!("Filtered out {} partial index statements", skipped_partial_indexes);
+    log::info!("Filtered SQL length: {} bytes", filtered_sql.len());
+
+    if skipped_partial_indexes > 0 {
+        log::warn!(
+            "Skipped {} partial indexes (DuckDB doesn't support WHERE clauses in indexes)",
+            skipped_partial_indexes
+        );
+    }
+
+    // Log first 1000 chars of filtered SQL to debug
+    log::debug!("First 1000 chars of filtered SQL: {}", &filtered_sql[..filtered_sql.len().min(1000)]);
+
+    // Execute the filtered schema (tables, indexes, etc.)
+    log::info!("Executing schema SQL (tables and indexes)...");
+    match conn.execute_batch(&filtered_sql) {
+        Ok(_) => {
+            log::info!("Tables and indexes created successfully");
+        }
+        Err(e) => {
+            log::error!("Failed to execute schema: {}", e);
+            log::error!("First 500 chars of filtered SQL: {}", &filtered_sql[..filtered_sql.len().min(500)]);
+            return Err(e.into());
+        }
+    }
+
+    // Create non-partial unique indexes for UPSERT support
+    // (DuckDB doesn't support partial indexes, so we create them without WHERE clauses)
+    log::info!("Creating unique indexes for UPSERT support...");
+    let upsert_indexes = "
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_game_id ON matches(game_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_players_xml_id ON players(match_id, xml_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_xml_id ON characters(match_id, xml_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_cities_xml_id ON cities(match_id, xml_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tiles_xml_id ON tiles(match_id, xml_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_families_xml_id ON families(match_id, xml_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_religions_xml_id ON religions(match_id, xml_id);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tribes_xml_id ON tribes(match_id, xml_id);
+    ";
+    conn.execute_batch(upsert_indexes)?;
+    log::info!("Unique indexes created successfully");
+
+    // Now execute deferred views (after all tables are created)
+    if !deferred_views.is_empty() {
+        log::info!("Executing deferred views...");
+        log::debug!("Deferred views SQL length: {} bytes", deferred_views.len());
+        match conn.execute_batch(&deferred_views) {
+            Ok(_) => {
+                log::info!("Views created successfully");
+            }
+            Err(e) => {
+                log::error!("Failed to create views: {}", e);
+                log::error!("Views SQL: {}", &deferred_views[..deferred_views.len().min(1000)]);
+                return Err(e.into());
+            }
+        }
+    }
+
+    log::info!("Database schema created successfully");
+    Ok(())
+}
 
 /// Initialize and validate schema on first run
 pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
@@ -28,118 +148,7 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
 
     // Initialize schema from schema.sql if not exists
     if !schema_exists {
-        log::info!("Initializing database schema...");
-        let schema_sql = include_str!("../../../docs/schema.sql");
-        log::info!("Schema SQL loaded, length: {} bytes", schema_sql.len());
-
-        // DuckDB doesn't support partial indexes (indexes with WHERE clauses)
-        // Also need to defer VIEW creation until after tables are created
-        let mut filtered_sql = String::new();
-        let mut deferred_views = String::new();
-        let mut skipped_partial_indexes = 0;
-        let mut in_view_statement = false;
-        let mut current_view = String::new();
-
-        for line in schema_sql.lines() {
-            let trimmed = line.trim().to_uppercase();
-
-            // Track if we're inside a CREATE VIEW statement
-            if trimmed.starts_with("CREATE VIEW") || trimmed.starts_with("CREATE OR REPLACE VIEW") {
-                in_view_statement = true;
-                current_view.clear();
-                current_view.push_str(line);
-                current_view.push('\n');
-                log::debug!("Deferring view creation: {}", line.trim());
-                continue;
-            }
-
-            if in_view_statement {
-                current_view.push_str(line);
-                current_view.push('\n');
-                // Views end with a semicolon at the end of a line
-                if line.trim().ends_with(';') {
-                    deferred_views.push_str(&current_view);
-                    in_view_statement = false;
-                }
-                continue;
-            }
-
-            // Skip partial index statements (CREATE INDEX/CREATE UNIQUE INDEX with WHERE)
-            // Check uppercased version for case-insensitive matching
-            if (trimmed.starts_with("CREATE INDEX") || trimmed.starts_with("CREATE UNIQUE INDEX"))
-                && trimmed.contains(" WHERE ")
-            {
-                skipped_partial_indexes += 1;
-                log::debug!("Skipping partial index: {}", line.trim());
-                // Comment out the line instead of skipping to preserve line numbers
-                filtered_sql.push_str("-- SKIPPED (partial index not supported): ");
-                filtered_sql.push_str(line);
-                filtered_sql.push('\n');
-            } else {
-                filtered_sql.push_str(line);
-                filtered_sql.push('\n');
-            }
-        }
-
-        log::info!("Filtered out {} partial index statements", skipped_partial_indexes);
-        log::info!("Filtered SQL length: {} bytes", filtered_sql.len());
-
-        if skipped_partial_indexes > 0 {
-            log::warn!(
-                "Skipped {} partial indexes (DuckDB doesn't support WHERE clauses in indexes)",
-                skipped_partial_indexes
-            );
-        }
-
-        // Log first 1000 chars of filtered SQL to debug
-        log::debug!("First 1000 chars of filtered SQL: {}", &filtered_sql[..filtered_sql.len().min(1000)]);
-
-        // Execute the filtered schema (tables, indexes, etc.)
-        log::info!("Executing schema SQL (tables and indexes)...");
-        match conn.execute_batch(&filtered_sql) {
-            Ok(_) => {
-                log::info!("Tables and indexes created successfully");
-            }
-            Err(e) => {
-                log::error!("Failed to execute schema: {}", e);
-                log::error!("First 500 chars of filtered SQL: {}", &filtered_sql[..filtered_sql.len().min(500)]);
-                return Err(e.into());
-            }
-        }
-
-        // Create non-partial unique indexes for UPSERT support
-        // (DuckDB doesn't support partial indexes, so we create them without WHERE clauses)
-        log::info!("Creating unique indexes for UPSERT support...");
-        let upsert_indexes = "
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_matches_game_id ON matches(game_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_players_xml_id ON players(match_id, xml_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_characters_xml_id ON characters(match_id, xml_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_cities_xml_id ON cities(match_id, xml_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_tiles_xml_id ON tiles(match_id, xml_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_families_xml_id ON families(match_id, xml_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_religions_xml_id ON religions(match_id, xml_id);
-            CREATE UNIQUE INDEX IF NOT EXISTS idx_tribes_xml_id ON tribes(match_id, xml_id);
-        ";
-        conn.execute_batch(upsert_indexes)?;
-        log::info!("Unique indexes created successfully");
-
-        // Now execute deferred views (after all tables are created)
-        if !deferred_views.is_empty() {
-            log::info!("Executing deferred views...");
-            log::debug!("Deferred views SQL length: {} bytes", deferred_views.len());
-            match conn.execute_batch(&deferred_views) {
-                Ok(_) => {
-                    log::info!("Views created successfully");
-                }
-                Err(e) => {
-                    log::error!("Failed to create views: {}", e);
-                    log::error!("Views SQL: {}", &deferred_views[..deferred_views.len().min(1000)]);
-                    return Err(e.into());
-                }
-            }
-        }
-
-        log::info!("Database schema initialized successfully");
+        create_schema(&conn)?;
     } else {
         log::info!("Schema already exists, skipping initialization");
     }

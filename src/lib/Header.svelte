@@ -48,7 +48,7 @@
   async function handleResetDatabase() {
     isSettingsOpen = false;
 
-    const confirmed = window.confirm(
+    const confirmed = await window.confirm(
       "Are you sure you want to reset the database? This will delete all imported game data and cannot be undone."
     );
 
@@ -79,8 +79,14 @@
 
   // Close settings dropdown when clicking outside
   function handleClickOutside(event: MouseEvent) {
+    if (!isSettingsOpen) {
+      return;
+    }
+
     const target = event.target as HTMLElement;
-    if (!target.closest(".settings-container")) {
+    const closestSettings = target.closest(".settings-container");
+
+    if (!closestSettings) {
       isSettingsOpen = false;
     }
   }

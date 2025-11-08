@@ -720,15 +720,14 @@ async fn run_event_test(app: tauri::AppHandle) -> Result<String, String> {
 
 /// Tauri command to reset the database
 ///
-/// Drops all tables and recreates the schema
+/// Drops all tables and recreates the schema using the pooled connection
 #[tauri::command]
 async fn reset_database_cmd(
-    app: tauri::AppHandle,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<String, String> {
     log::info!("Database reset requested");
 
-    // Drop all tables and views
+    // Drop all tables/views and recreate schema using the same pooled connection
     pool.with_connection(|conn| {
         // Drop views first (they depend on tables)
         let views = vec!["match_summary", "player_performance", "character_lineage", "rulers"];
@@ -795,22 +794,15 @@ async fn reset_database_cmd(
             conn.execute(&query, [])?;
         }
 
+        log::info!("All tables dropped, reinitializing schema");
+
+        // Recreate schema using the same connection (avoids connection conflicts)
+        db::create_schema(conn)?;
+
+        log::info!("Database reset completed successfully");
         Ok(())
     })
     .map_err(|e| e.to_string())?;
-
-    log::info!("All tables dropped, reinitializing schema");
-
-    // Reinitialize schema
-    let db_path = db::connection::get_db_path(&app)
-        .context("Failed to get database path")
-        .map_err(|e| e.to_string())?;
-
-    db::ensure_schema_ready(&db_path)
-        .context("Failed to reinitialize schema")
-        .map_err(|e| e.to_string())?;
-
-    log::info!("Database reset completed successfully");
 
     Ok("Database reset successfully".to_string())
 }
