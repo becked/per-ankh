@@ -10,7 +10,9 @@ pub mod parser;
 use anyhow::Context;
 use parser::ImportResult;
 use serde::Serialize;
-use tauri::Manager;
+use std::path::PathBuf;
+use std::time::Instant;
+use tauri::{Emitter, Manager};
 use ts_rs::TS;
 
 #[derive(Serialize, TS)]
@@ -101,6 +103,52 @@ pub struct YieldHistory {
     pub nation: Option<String>,
     pub yield_type: String,
     pub data: Vec<YieldDataPoint>,
+}
+
+#[derive(Clone, Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct ImportProgress {
+    /// Number of files processed so far
+    #[ts(type = "number")]
+    pub current: usize,
+    /// Total number of files to import
+    #[ts(type = "number")]
+    pub total: usize,
+    /// Name of the file currently being processed
+    pub current_file: String,
+    /// Milliseconds elapsed since import started
+    #[ts(type = "number")]
+    pub elapsed_ms: u64,
+    /// Estimated milliseconds remaining
+    #[ts(type = "number")]
+    pub estimated_remaining_ms: u64,
+    /// Import speed in files per second
+    pub speed: f64,
+    /// Result of the current file import (if completed)
+    pub result: Option<ImportResult>,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct FileImportError {
+    pub file_name: String,
+    pub error: String,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct BatchImportResult {
+    #[ts(type = "number")]
+    pub total_files: usize,
+    #[ts(type = "number")]
+    pub successful: usize,
+    #[ts(type = "number")]
+    pub failed: usize,
+    #[ts(type = "number")]
+    pub skipped: usize,
+    pub errors: Vec<FileImportError>,
+    #[ts(type = "number")]
+    pub duration_ms: u64,
 }
 
 // Initialize logging
@@ -411,14 +459,213 @@ async fn get_yield_history(
     .map_err(|e| e.to_string())
 }
 
+/// Tauri command to import multiple save files from a directory
+///
+/// Opens a directory picker, finds all .zip files, and imports them with progress tracking
+#[tauri::command]
+async fn import_directory_cmd(
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<BatchImportResult, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Open directory picker
+    let dir_path = app
+        .dialog()
+        .file()
+        .set_title("Select Directory with Save Files")
+        .blocking_pick_folder();
+
+    let dir_path = match dir_path {
+        Some(path) => path,
+        None => return Err("No directory selected".to_string()),
+    };
+
+    // Convert FilePath to PathBuf
+    let dir_path_buf: PathBuf = dir_path
+        .as_path()
+        .ok_or("Invalid directory path")?
+        .to_path_buf();
+
+    // Find all .zip files in the directory
+    let mut save_files: Vec<PathBuf> = std::fs::read_dir(&dir_path_buf)
+        .map_err(|e| format!("Failed to read directory: {}", e))?
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+        .filter(|path| {
+            path.extension()
+                .and_then(|ext| ext.to_str())
+                .map(|ext| ext.eq_ignore_ascii_case("zip"))
+                .unwrap_or(false)
+        })
+        .collect();
+
+    // Sort files by name for predictable ordering
+    save_files.sort();
+
+    if save_files.is_empty() {
+        return Err("No .zip files found in directory".to_string());
+    }
+
+    import_files_batch(save_files, app, pool).await
+}
+
+/// Tauri command to import selected save files
+///
+/// Opens a file picker (multi-select) and imports selected files with progress tracking
+#[tauri::command]
+async fn import_files_cmd(
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<BatchImportResult, String> {
+    use tauri_plugin_dialog::DialogExt;
+
+    // Open file picker (multi-select)
+    let files = app
+        .dialog()
+        .file()
+        .set_title("Select Save Files to Import")
+        .add_filter("Old World Save Files", &["zip"])
+        .blocking_pick_files();
+
+    let files = match files {
+        Some(files) => files,
+        None => return Err("No files selected".to_string()),
+    };
+
+    if files.is_empty() {
+        return Err("No files selected".to_string());
+    }
+
+    // Convert Vec<FilePath> to Vec<PathBuf>
+    let files_pathbuf: Vec<PathBuf> = files
+        .iter()
+        .filter_map(|f| f.as_path().map(|p| p.to_path_buf()))
+        .collect();
+
+    import_files_batch(files_pathbuf, app, pool).await
+}
+
+/// Helper function to import a batch of files with progress tracking
+async fn import_files_batch(
+    files: Vec<PathBuf>,
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<BatchImportResult, String> {
+    let total = files.len();
+    let start_time = Instant::now();
+
+    let mut successful = 0;
+    let mut failed = 0;
+    let mut skipped = 0;
+    let mut errors: Vec<FileImportError> = Vec::new();
+
+    for (index, file_path) in files.iter().enumerate() {
+        let current = index + 1;
+        let file_name = file_path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .unwrap_or("unknown")
+            .to_string();
+
+        // Calculate progress metrics
+        let elapsed = start_time.elapsed();
+        let elapsed_ms = elapsed.as_millis() as u64;
+        let speed = if elapsed_ms > 0 {
+            (current as f64) / (elapsed_ms as f64 / 1000.0)
+        } else {
+            0.0
+        };
+        let estimated_remaining_ms = if speed > 0.0 {
+            ((total - current) as f64 / speed * 1000.0) as u64
+        } else {
+            0
+        };
+
+        // Import the file
+        let result = pool
+            .with_connection(|conn| {
+                parser::import_save_file(
+                    file_path.to_str().unwrap_or(""),
+                    conn,
+                )
+            })
+            .context("Import failed");
+
+        // Process result
+        let import_result = match result {
+            Ok(res) => {
+                if res.success {
+                    if res.is_new {
+                        successful += 1;
+                    } else {
+                        skipped += 1;
+                    }
+                } else {
+                    failed += 1;
+                    errors.push(FileImportError {
+                        file_name: file_name.clone(),
+                        error: res.error.clone().unwrap_or_else(|| "Unknown error".to_string()),
+                    });
+                }
+                Some(res)
+            }
+            Err(e) => {
+                failed += 1;
+                let error_msg = e.to_string();
+                errors.push(FileImportError {
+                    file_name: file_name.clone(),
+                    error: error_msg,
+                });
+                None
+            }
+        };
+
+        // Emit progress event
+        let progress = ImportProgress {
+            current,
+            total,
+            current_file: file_name,
+            elapsed_ms,
+            estimated_remaining_ms,
+            speed,
+            result: import_result,
+        };
+
+        log::info!("Emitting progress event: {}/{} - {}", current, total, progress.current_file);
+
+        // Emit progress events (currently not working in frontend)
+        // See docs/tauri-progress-events-investigation.md for details
+        // Keeping this code for future attempts to fix event delivery
+        if let Err(e) = app.emit_to(tauri::EventTarget::Any, "import-progress", &progress) {
+            log::error!("Failed to emit progress event: {}", e);
+            return Err(format!("Failed to emit progress event: {}", e));
+        }
+
+        log::info!("Progress event emitted successfully");
+    }
+
+    Ok(BatchImportResult {
+        total_files: total,
+        successful,
+        failed,
+        skipped,
+        errors,
+        duration_ms: start_time.elapsed().as_millis() as u64,
+    })
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
 
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             import_save_file_cmd,
+            import_directory_cmd,
+            import_files_cmd,
             get_game_statistics,
             get_games_list,
             get_game_details,
