@@ -19,7 +19,14 @@
   const progressPercentage = $derived.by(() => {
     if (!progress) return 0;
     const p = progress as ImportProgress;
-    return Math.round((p.current / p.total) * 100);
+
+    // Calculate progress including in-file progress
+    // Matches backend logic: completed files + current file progress
+    const completedFiles = p.current - 1;
+    const currentFileProgress = p.file_progress ?? 0;
+    const totalProgress = (completedFiles + currentFileProgress) / p.total;
+
+    return Math.round(totalProgress * 100);
   });
 
   const formatTime = (ms: number): string => {
