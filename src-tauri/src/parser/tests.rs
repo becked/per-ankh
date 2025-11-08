@@ -61,8 +61,8 @@ mod tests {
         // Open connection
         let conn = db::connection::get_connection(&db_path).unwrap();
 
-        // Import save file
-        let result = parser::import_save_file(test_file, &conn);
+        // Import save file (no progress tracking for tests)
+        let result = parser::import_save_file(test_file, &conn, None, None, None, None, None);
 
         match &result {
             Ok(import_result) => {
@@ -127,15 +127,15 @@ mod tests {
         // Open connection
         let conn = db::connection::get_connection(&db_path).unwrap();
 
-        // First import
-        let result1 = parser::import_save_file(test_file, &conn).unwrap();
+        // First import (no progress tracking for tests)
+        let result1 = parser::import_save_file(test_file, &conn, None, None, None, None, None).unwrap();
         assert!(result1.success);
         assert!(result1.is_new, "First import should be new");
         let match_id1 = result1.match_id.unwrap();
         let game_id = result1.game_id.clone();
 
         // Second import (should update, not create new)
-        let result2 = parser::import_save_file(test_file, &conn).unwrap();
+        let result2 = parser::import_save_file(test_file, &conn, None, None, None, None, None).unwrap();
         if !result2.success {
             eprintln!("Second import failed: {:?}", result2.error);
         }

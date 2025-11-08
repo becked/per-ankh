@@ -29,4 +29,12 @@ speed: number,
 /**
  * Result of the current file import (if completed)
  */
-result: ImportResult | null, };
+result: ImportResult | null, 
+/**
+ * Current parsing phase within the file (e.g., "Parsing characters")
+ */
+current_phase: string | null, 
+/**
+ * Progress within current file (0.0 to 1.0, where 1.0 = file complete)
+ */
+file_progress: number | null, };

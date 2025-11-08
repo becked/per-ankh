@@ -126,6 +126,10 @@ pub struct ImportProgress {
     pub speed: f64,
     /// Result of the current file import (if completed)
     pub result: Option<ImportResult>,
+    /// Current parsing phase within the file (e.g., "Parsing characters")
+    pub current_phase: Option<String>,
+    /// Progress within current file (0.0 to 1.0, where 1.0 = file complete)
+    pub file_progress: Option<f64>,
 }
 
 #[derive(Serialize, TS)]
@@ -170,10 +174,12 @@ async fn import_save_file_cmd(
     file_path: String,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<ImportResult, String> {
-    // Import save file using pooled connection
-    pool.with_connection(|conn| parser::import_save_file(&file_path, conn))
-        .context("Import failed")
-        .map_err(|e| e.to_string())
+    // Import save file using pooled connection (single-file import, no intra-file progress)
+    pool.with_connection(|conn| {
+        parser::import_save_file(&file_path, conn, None, None, None, None, None)
+    })
+    .context("Import failed")
+    .map_err(|e| e.to_string())
 }
 
 /// Tauri command to get game statistics
@@ -599,6 +605,11 @@ fn import_files_batch(
                 parser::import_save_file(
                     file_path.to_str().unwrap_or(""),
                     conn,
+                    Some(&app),
+                    Some(current),
+                    Some(total),
+                    Some(&file_name),
+                    Some(start_time),
                 )
             })
             .context("Import failed");
@@ -641,6 +652,8 @@ fn import_files_batch(
             estimated_remaining_ms,
             speed,
             result: import_result,
+            current_phase: None,
+            file_progress: None,
         };
 
         log::info!("Emitting progress event: {}/{} - {}", current, total, progress.current_file);
