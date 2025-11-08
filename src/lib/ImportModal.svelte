@@ -1,35 +1,20 @@
 <script lang="ts">
+  import { Progress } from "bits-ui";
   import type { ImportProgress } from "$lib/types/ImportProgress";
   import type { BatchImportResult } from "$lib/types/BatchImportResult";
 
   interface Props {
     isOpen: boolean;
-    initialProgress?: ImportProgress | null;
-    initialResult?: BatchImportResult | null;
+    progress: ImportProgress | null;
+    result: BatchImportResult | null;
     onClose: () => void;
     onImportComplete?: () => void;
   }
 
-  let { isOpen = $bindable(), initialProgress, initialResult, onClose, onImportComplete }: Props = $props();
+  let { isOpen = $bindable(), progress, result, onClose, onImportComplete }: Props = $props();
 
-  let progress: ImportProgress | null = $state(null);
-  let result: BatchImportResult | null = $state(null);
-  let isImporting = $state(true); // Assume we're importing when modal opens
+  let isImporting = $derived(result === null);
   let error: string | null = $state(null);
-
-  // Update progress and result from parent
-  $effect(() => {
-    if (initialProgress) {
-      progress = initialProgress;
-    }
-  });
-
-  $effect(() => {
-    if (initialResult) {
-      result = initialResult;
-      isImporting = false;
-    }
-  });
 
   const progressPercentage = $derived.by(() => {
     if (!progress) return 0;
@@ -51,8 +36,6 @@
 
   function handleClose() {
     if (!isImporting) {
-      progress = null;
-      result = null;
       error = null;
       onClose();
     }
@@ -124,13 +107,19 @@
             </div>
 
             <!-- Progress bar -->
-            <div class="w-full bg-gray-700 border border-black rounded-full h-6 mb-4">
-              <div
-                class="bg-orange h-full rounded-full flex items-center justify-center text-sm font-bold text-black transition-all duration-300"
-                style="width: {progressPercentage}%"
+            <div class="w-full mb-4">
+              <Progress.Root
+                value={progressPercentage}
+                max={100}
+                class="relative w-full bg-gray-700 border border-black rounded-full h-6 overflow-hidden"
               >
-                {progressPercentage}%
-              </div>
+                <div
+                  class="absolute inset-0 bg-orange flex items-center justify-center text-sm font-bold text-black transition-all duration-300"
+                  style="width: {progressPercentage}%; max-width: 100%;"
+                >
+                  {progressPercentage}%
+                </div>
+              </Progress.Root>
             </div>
 
             <!-- Current file -->

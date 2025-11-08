@@ -147,8 +147,8 @@
 
 <ImportModal
   bind:isOpen={isImportModalOpen}
-  initialProgress={importProgress}
-  initialResult={importResult}
+  progress={importProgress}
+  result={importResult}
   onClose={closeImportModal}
   onImportComplete={handleImportComplete}
 />
