@@ -33,16 +33,23 @@ export const api = {
   /**
    * Import save files from a directory.
    * Opens a directory picker and imports all .zip files with progress tracking.
-   * Emits 'import-progress' events during import.
+   * Returns immediately and emits 'import-progress' and 'import-complete' events.
    */
   importDirectory: () =>
-    invoke<BatchImportResult>("import_directory_cmd"),
+    invoke<string>("import_directory_cmd"),
 
   /**
    * Import selected save files.
    * Opens a file picker (multi-select) and imports selected .zip files with progress tracking.
-   * Emits 'import-progress' events during import.
+   * Returns immediately and emits 'import-progress' and 'import-complete' events.
    */
   importFiles: () =>
-    invoke<BatchImportResult>("import_files_cmd"),
+    invoke<string>("import_files_cmd"),
+
+  /**
+   * Test event emission from backend to frontend.
+   * Emits 'test-event' every 5 seconds for 60 seconds (12 events total).
+   */
+  runEventTest: () =>
+    invoke<string>("run_event_test"),
 } as const;
