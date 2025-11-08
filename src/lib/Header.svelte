@@ -61,6 +61,7 @@
       await api.resetDatabase();
       await showSuccess("Database reset successfully.");
       refreshData.trigger();
+      goto("/"); // Navigate to summary page after reset
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       await showError(`Failed to reset database: ${errorMsg}`);
