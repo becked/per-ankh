@@ -466,7 +466,7 @@ async fn get_yield_history(
 async fn import_directory_cmd(
     app: tauri::AppHandle,
     pool: tauri::State<'_, db::connection::DbPool>,
-) -> Result<BatchImportResult, String> {
+) -> Result<String, String> {
     use tauri_plugin_dialog::DialogExt;
 
     // Open directory picker
@@ -507,7 +507,12 @@ async fn import_directory_cmd(
         return Err("No .zip files found in directory".to_string());
     }
 
-    import_files_batch(save_files, app, pool).await
+    // Spawn thread for actual work to avoid blocking event loop
+    std::thread::spawn(move || {
+        import_files_batch(save_files, app);
+    });
+
+    Ok("Import started".to_string())
 }
 
 /// Tauri command to import selected save files
@@ -517,7 +522,7 @@ async fn import_directory_cmd(
 async fn import_files_cmd(
     app: tauri::AppHandle,
     pool: tauri::State<'_, db::connection::DbPool>,
-) -> Result<BatchImportResult, String> {
+) -> Result<String, String> {
     use tauri_plugin_dialog::DialogExt;
 
     // Open file picker (multi-select)
@@ -543,15 +548,21 @@ async fn import_files_cmd(
         .filter_map(|f| f.as_path().map(|p| p.to_path_buf()))
         .collect();
 
-    import_files_batch(files_pathbuf, app, pool).await
+    // Spawn thread for actual work to avoid blocking event loop
+    std::thread::spawn(move || {
+        import_files_batch(files_pathbuf, app);
+    });
+
+    Ok("Import started".to_string())
 }
 
 /// Helper function to import a batch of files with progress tracking
-async fn import_files_batch(
+fn import_files_batch(
     files: Vec<PathBuf>,
     app: tauri::AppHandle,
-    pool: tauri::State<'_, db::connection::DbPool>,
-) -> Result<BatchImportResult, String> {
+) {
+    // Get DbPool from app state
+    let pool: tauri::State<db::connection::DbPool> = app.state();
     let total = files.len();
     let start_time = Instant::now();
 
@@ -634,25 +645,64 @@ async fn import_files_batch(
 
         log::info!("Emitting progress event: {}/{} - {}", current, total, progress.current_file);
 
-        // Emit progress events (currently not working in frontend)
-        // See docs/tauri-progress-events-investigation.md for details
-        // Keeping this code for future attempts to fix event delivery
-        if let Err(e) = app.emit_to(tauri::EventTarget::Any, "import-progress", &progress) {
+        // Emit progress event - don't return error, continue importing
+        if let Err(e) = app.emit("import-progress", &progress) {
             log::error!("Failed to emit progress event: {}", e);
-            return Err(format!("Failed to emit progress event: {}", e));
         }
 
         log::info!("Progress event emitted successfully");
     }
 
-    Ok(BatchImportResult {
+    let final_result = BatchImportResult {
         total_files: total,
         successful,
         failed,
         skipped,
         errors,
         duration_ms: start_time.elapsed().as_millis() as u64,
-    })
+    };
+
+    // Emit completion event
+    if let Err(e) = app.emit("import-complete", &final_result) {
+        log::error!("Failed to emit completion event: {}", e);
+    } else {
+        log::info!("Import complete event emitted successfully");
+    }
+}
+
+/// Test command to validate event emission
+///
+/// Emits a test event every 5 seconds for 60 seconds
+#[tauri::command]
+async fn run_event_test(app: tauri::AppHandle) -> Result<String, String> {
+    use std::thread;
+    use std::time::Duration;
+
+    log::info!("Event test started");
+
+    // Spawn a thread to emit events (commands must be async but emit happens in thread)
+    thread::spawn(move || {
+        for i in 1..=12 {
+            thread::sleep(Duration::from_secs(5));
+
+            let payload = serde_json::json!({
+                "iteration": i,
+                "message": format!("Event {} of 12", i)
+            });
+
+            log::info!("Emitting test event {}/12", i);
+
+            if let Err(e) = app.emit("test-event", &payload) {
+                log::error!("Failed to emit event: {}", e);
+            } else {
+                log::info!("Event {}/12 emitted successfully", i);
+            }
+        }
+
+        log::info!("Event test completed");
+    });
+
+    Ok("Event test started - will emit 12 events over 60 seconds".to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -670,7 +720,8 @@ pub fn run() {
             get_games_list,
             get_game_details,
             get_player_history,
-            get_yield_history
+            get_yield_history,
+            run_event_test
         ]);
 
     builder

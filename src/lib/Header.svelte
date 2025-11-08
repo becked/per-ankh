@@ -1,5 +1,7 @@
 <script lang="ts">
   import { goto } from "$app/navigation";
+  import { onMount, onDestroy } from "svelte";
+  import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import ImportModal from "$lib/ImportModal.svelte";
 
   import { api } from "$lib/api";
@@ -30,11 +32,9 @@
     isImportModalOpen = true;
 
     try {
-      // Open file picker and start import
-      // Note: Real-time progress events don't work in Tauri 2.x currently
-      // See docs/tauri-progress-events-investigation.md for details
-      const result = await api.importFiles();
-      importResult = result;
+      // This now returns immediately after spawning the import task
+      await api.importFiles();
+      // Modal stays open, listening for events
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       // If user cancelled, close modal
@@ -62,6 +62,26 @@
       isSettingsOpen = false;
     }
   }
+
+  let progressUnlisten: UnlistenFn | null = null;
+  let completeUnlisten: UnlistenFn | null = null;
+
+  onMount(async () => {
+    // Listen for progress events
+    progressUnlisten = await listen<ImportProgress>("import-progress", (event) => {
+      importProgress = event.payload;
+    });
+
+    // Listen for completion event
+    completeUnlisten = await listen<BatchImportResult>("import-complete", (event) => {
+      importResult = event.payload;
+    });
+  });
+
+  onDestroy(() => {
+    if (progressUnlisten) progressUnlisten();
+    if (completeUnlisten) completeUnlisten();
+  });
 </script>
 
 <svelte:window onclick={handleClickOutside} />
@@ -112,6 +132,13 @@
           onclick={handleImportFiles}
         >
           Import Save Files
+        </button>
+        <button
+          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          type="button"
+          onclick={() => { isSettingsOpen = false; goto("/event-test"); }}
+        >
+          Event Test
         </button>
       </div>
     {/if}
