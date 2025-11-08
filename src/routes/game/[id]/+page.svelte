@@ -1,7 +1,10 @@
 <script lang="ts">
   import { page } from "$app/stores";
   import { api } from "$lib/api";
-  import type { GameDetails, PlayerHistory, YieldHistory } from "$lib/types";
+  import type { GameDetails } from "$lib/types/GameDetails";
+  import type { PlayerHistory } from "$lib/types/PlayerHistory";
+  import type { YieldHistory } from "$lib/types/YieldHistory";
+  import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
@@ -10,10 +13,20 @@
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
-  let yieldHistory = $state<YieldHistory[] | null>(null);
+  let allYields = $state<YieldHistory[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
+
+  // All available yield types in Old World
+  const YIELD_TYPES = [
+    "YIELD_SCIENCE",
+    "YIELD_CIVICS",
+    "YIELD_TRAINING",
+    "YIELD_GROWTH",
+    "YIELD_CULTURE",
+    "YIELD_HAPPINESS"
+  ] as const;
 
   // Helper to get player color based on nation
   function getPlayerColor(nation: string | null | undefined, fallbackIndex: number): string {
@@ -130,46 +143,58 @@
       : null
   );
 
-  const scienceChartOption = $derived<EChartsOption | null>(
-    yieldHistory && yieldHistory.length > 0
-      ? {
-          ...CHART_THEME,
-          title: {
-            ...CHART_THEME.title,
-            text: "Science Production",
-          },
-          legend: {
-            data: yieldHistory.map((y) => y.player_name),
-            top: 30,
-          },
-          grid: {
-            left: 60,
-            right: 40,
-            top: 80,
-            bottom: 60,
-          },
-          xAxis: {
-            type: "category",
-            name: "Turn",
-            nameLocation: "middle",
-            nameGap: 30,
-            data: yieldHistory[0]?.data.map((d) => d.turn) ?? [],
-          },
-          yAxis: {
-            type: "value",
-            name: "Science per Turn",
-            nameLocation: "middle",
-            nameGap: 40,
-          },
-          series: yieldHistory.map((playerYield, i) => ({
-            name: playerYield.player_name,
-            type: "line",
-            data: playerYield.data.map((d) => d.amount),
-            itemStyle: { color: getPlayerColor(playerYield.nation, i) },
-          })),
-        }
-      : null
-  );
+  // Helper function to create yield chart option for a specific yield type
+  function createYieldChartOption(yieldType: string, title: string, yAxisLabel: string): EChartsOption | null {
+    if (!allYields || allYields.length === 0) return null;
+
+    const yieldData = allYields.filter(y => y.yield_type === yieldType);
+    if (yieldData.length === 0) return null;
+
+    return {
+      ...CHART_THEME,
+      title: {
+        ...CHART_THEME.title,
+        text: title,
+      },
+      legend: {
+        data: yieldData.map((y) => y.player_name),
+        top: 30,
+      },
+      grid: {
+        left: 60,
+        right: 40,
+        top: 80,
+        bottom: 60,
+      },
+      xAxis: {
+        type: "category",
+        name: "Turn",
+        nameLocation: "middle",
+        nameGap: 30,
+        data: yieldData[0]?.data.map((d: YieldDataPoint) => d.turn) ?? [],
+      },
+      yAxis: {
+        type: "value",
+        name: yAxisLabel,
+        nameLocation: "middle",
+        nameGap: 40,
+      },
+      series: yieldData.map((playerYield, i) => ({
+        name: playerYield.player_name,
+        type: "line",
+        data: playerYield.data.map((d: YieldDataPoint) => d.amount),
+        itemStyle: { color: getPlayerColor(playerYield.nation, i) },
+      })),
+    };
+  }
+
+  // Create chart options for each yield type
+  const scienceChartOption = $derived(createYieldChartOption("YIELD_SCIENCE", "Science Production", "Science per Turn"));
+  const civicsChartOption = $derived(createYieldChartOption("YIELD_CIVICS", "Civics Production", "Civics per Turn"));
+  const trainingChartOption = $derived(createYieldChartOption("YIELD_TRAINING", "Training Production", "Training per Turn"));
+  const growthChartOption = $derived(createYieldChartOption("YIELD_GROWTH", "Growth Production", "Growth per Turn"));
+  const cultureChartOption = $derived(createYieldChartOption("YIELD_CULTURE", "Culture Production", "Culture per Turn"));
+  const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn"));
 
   // Reactively load game details when the route parameter changes
   $effect(() => {
@@ -179,17 +204,17 @@
     error = null;
     gameDetails = null;
     playerHistory = null;
-    yieldHistory = null;
+    allYields = null;
 
     Promise.all([
       api.getGameDetails(matchId),
       api.getPlayerHistory(matchId),
-      api.getYieldHistory(matchId, ["YIELD_SCIENCE"]),
+      api.getYieldHistory(matchId, Array.from(YIELD_TYPES)),
     ])
       .then(([details, history, yields]) => {
         gameDetails = details;
         playerHistory = history;
-        yieldHistory = yields;
+        allYields = yields;
       })
       .catch((err) => {
         error = String(err);
@@ -314,14 +339,46 @@
           class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
         >
           <h2 class="text-black font-bold mb-4 mt-0">Economics</h2>
-          {#if scienceChartOption}
-            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
-              <Chart option={scienceChartOption} height="400px" />
-            </div>
-          {:else if yieldHistory === null}
+          {#if allYields === null}
             <p class="text-brown italic text-center p-8">Loading yield data...</p>
-          {:else}
+          {:else if allYields.length === 0}
             <p class="text-brown italic text-center p-8">No yield data available</p>
+          {:else}
+            {#if scienceChartOption}
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+                <Chart option={scienceChartOption} height="400px" />
+              </div>
+            {/if}
+
+            {#if civicsChartOption}
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+                <Chart option={civicsChartOption} height="400px" />
+              </div>
+            {/if}
+
+            {#if trainingChartOption}
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+                <Chart option={trainingChartOption} height="400px" />
+              </div>
+            {/if}
+
+            {#if growthChartOption}
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+                <Chart option={growthChartOption} height="400px" />
+              </div>
+            {/if}
+
+            {#if cultureChartOption}
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+                <Chart option={cultureChartOption} height="400px" />
+              </div>
+            {/if}
+
+            {#if happinessChartOption}
+              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+                <Chart option={happinessChartOption} height="400px" />
+              </div>
+            {/if}
           {/if}
         </Tabs.Content>
 
