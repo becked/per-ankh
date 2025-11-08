@@ -16,6 +16,71 @@ use lazy_static::lazy_static;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
 use std::time::Instant;
+use tauri::Emitter;
+
+/// Total number of phases for intra-file progress tracking
+const TOTAL_PHASES: usize = 8;
+
+/// Emit phase progress event
+///
+/// Emits progress events during file import to show which phase is currently executing
+/// and how far through the file we are. Only emits if app handle is provided.
+fn emit_phase_progress(
+    app: Option<&tauri::AppHandle>,
+    file_index: usize,
+    total_files: usize,
+    file_name: &str,
+    phase_name: &str,
+    phase_number: usize,
+    batch_start_time: Instant,
+) {
+    // Only emit if we have an app handle (batch imports only)
+    let app = match app {
+        Some(a) => a,
+        None => return,
+    };
+
+    let file_progress = (phase_number as f64) / (TOTAL_PHASES as f64);
+
+    let elapsed = batch_start_time.elapsed();
+    let elapsed_ms = elapsed.as_millis() as u64;
+
+    // Calculate speed based on files completed + current file progress
+    let files_progress = (file_index - 1) as f64 + file_progress;
+    let speed = if elapsed_ms > 0 {
+        files_progress / (elapsed_ms as f64 / 1000.0)
+    } else {
+        0.0
+    };
+
+    // Estimate remaining time
+    let remaining_files = (total_files - file_index) as f64 + (1.0 - file_progress);
+    let estimated_remaining_ms = if speed > 0.0 {
+        (remaining_files / speed * 1000.0) as u64
+    } else {
+        0
+    };
+
+    let progress = crate::ImportProgress {
+        current: file_index,
+        total: total_files,
+        current_file: file_name.to_string(),
+        elapsed_ms,
+        estimated_remaining_ms,
+        speed,
+        result: None,
+        current_phase: Some(phase_name.to_string()),
+        file_progress: Some(file_progress),
+    };
+
+    // Log but don't fail if emit fails
+    log::info!("📊 Emitting phase {} of {}: {}", phase_number, TOTAL_PHASES, phase_name);
+    if let Err(e) = app.emit("import-progress", &progress) {
+        log::error!("Failed to emit phase progress: {}", e);
+    } else {
+        log::info!("✅ Phase progress emitted successfully");
+    }
+}
 
 /// In-process lock manager for same-process concurrency
 lazy_static! {
@@ -80,10 +145,23 @@ pub struct ImportResult {
 /// # Arguments
 /// * `file_path` - Path to the ZIP save file
 /// * `conn` - Database connection
+/// * `app` - Optional Tauri AppHandle for emitting progress events
+/// * `file_index` - Optional file index (1-based) for batch imports
+/// * `total_files` - Optional total number of files for batch imports
+/// * `file_name` - Optional file name for progress tracking
+/// * `batch_start_time` - Optional batch start time for ETA calculations
 ///
 /// # Returns
 /// ImportResult with success status and match_id
-pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResult> {
+pub fn import_save_file(
+    file_path: &str,
+    conn: &Connection,
+    app: Option<&tauri::AppHandle>,
+    file_index: Option<usize>,
+    total_files: Option<usize>,
+    file_name: Option<&str>,
+    batch_start_time: Option<Instant>,
+) -> Result<ImportResult> {
     // Phase 1: Extract and parse XML
     log::info!("Importing save file: {}", file_path);
 
@@ -122,7 +200,17 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 
     // Now safe to proceed - we have exclusive access for this GameId
     let t_internal = Instant::now();
-    match import_save_file_internal(file_path, &doc, &tx, &game_id) {
+    match import_save_file_internal(
+        file_path,
+        &doc,
+        &tx,
+        &game_id,
+        app,
+        file_index,
+        total_files,
+        file_name,
+        batch_start_time,
+    ) {
         Ok(result) => {
             let internal_time = t_internal.elapsed();
             log::info!("⏱️  Internal import: {:?}", internal_time);
@@ -165,8 +253,22 @@ fn import_save_file_internal(
     doc: &XmlDocument,
     tx: &Connection,
     game_id: &str,
+    app: Option<&tauri::AppHandle>,
+    file_index: Option<usize>,
+    total_files: Option<usize>,
+    file_name: Option<&str>,
+    batch_start_time: Option<Instant>,
 ) -> Result<ImportResult> {
     let t_setup = Instant::now();
+
+    // Unpack progress tracking parameters (all must be Some to emit progress)
+    let progress_params = if let (Some(app_h), Some(idx), Some(total), Some(name), Some(start)) =
+        (app, file_index, total_files, file_name, batch_start_time)
+    {
+        Some((app_h, idx, total, name, start))
+    } else {
+        None
+    };
 
     // Extract turn number from XML (Turn is inside Game element)
     let root = doc.root_element();
@@ -232,6 +334,11 @@ fn import_save_file_internal(
     let setup_time = t_setup.elapsed();
     log::info!("⏱️  Match setup: {:?}", setup_time);
     eprintln!("⏱️  Match setup: {:?}", setup_time);
+
+    // PHASE 1: Extraction & Setup complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Extracting and setting up", 1, start);
+    }
 
     // Parse foundation entities (Pass 1: Core data only)
     log::info!("Parsing foundation entities...");
@@ -329,6 +436,11 @@ fn import_save_file_internal(
     log::info!("⏱️  Foundation entities total: {:?}", foundation_total);
     eprintln!("⏱️  Foundation entities total: {:?}", foundation_total);
 
+    // PHASE 2: Foundation entities complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Parsing foundation entities", 2, start);
+    }
+
     // Parse aggregate unit production data (derived from entities)
     log::info!("Parsing aggregate unit production data...");
     let t_units = Instant::now();
@@ -342,6 +454,11 @@ fn import_save_file_internal(
     log::info!("⏱️  Unit production: {:?}", units_time);
     eprintln!("⏱️  Unit production: {:?}", units_time);
 
+    // PHASE 3: Unit production complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Parsing unit production", 3, start);
+    }
+
     // Parse player-nested gameplay data (Milestone 3)
     log::info!("Parsing player-nested gameplay data...");
     let t_gameplay = Instant::now();
@@ -349,6 +466,11 @@ fn import_save_file_internal(
     let gameplay_time = t_gameplay.elapsed();
     log::info!("⏱️  Player gameplay data: {:?}", gameplay_time);
     eprintln!("⏱️  Player gameplay data: {:?}", gameplay_time);
+
+    // PHASE 4: Gameplay data complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Parsing gameplay data", 4, start);
+    }
 
     // Parse game-level diplomacy
     log::info!("Parsing diplomacy...");
@@ -359,6 +481,11 @@ fn import_save_file_internal(
     log::info!("⏱️  Diplomacy: {:?}", diplomacy_time);
     eprintln!("⏱️  Diplomacy: {:?}", diplomacy_time);
 
+    // PHASE 5: Diplomacy complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Parsing diplomacy", 5, start);
+    }
+
     // Parse time-series data (Milestone 4)
     log::info!("Parsing time-series data...");
     let t_timeseries = Instant::now();
@@ -366,6 +493,11 @@ fn import_save_file_internal(
     let timeseries_time = t_timeseries.elapsed();
     log::info!("⏱️  Time-series data: {:?}", timeseries_time);
     eprintln!("⏱️  Time-series data: {:?}", timeseries_time);
+
+    // PHASE 6: Time-series data complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Parsing time-series data", 6, start);
+    }
 
     // Parse character extended data (Milestone 5)
     log::info!("Parsing character extended data (stats, traits, relationships)...");
@@ -382,6 +514,11 @@ fn import_save_file_internal(
     let city_ext_time = t_city_ext.elapsed();
     log::info!("⏱️  City extended data: {:?}", city_ext_time);
     eprintln!("⏱️  City extended data: {:?}", city_ext_time);
+
+    // PHASE 7: Character & city extended data complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Parsing character and city data", 7, start);
+    }
 
     // Parse tile extended data (Milestone 6)
     log::info!("Parsing tile extended data (visibility, history)...");
@@ -405,6 +542,11 @@ fn import_save_file_internal(
     let id_save_time = t_id_save.elapsed();
     log::info!("⏱️  Save ID mappings: {:?}", id_save_time);
     eprintln!("⏱️  Save ID mappings: {:?}", id_save_time);
+
+    // PHASE 8: Finalization complete
+    if let Some((app_h, idx, total, name, start)) = progress_params {
+        emit_phase_progress(Some(app_h), idx, total, name, "Finalizing", 8, start);
+    }
 
     Ok(ImportResult {
         success: true,

@@ -130,6 +130,15 @@
               </div>
             </div>
 
+            <!-- Current phase -->
+            {#if progress.current_phase}
+              <div class="mb-3">
+                <span class="text-sm text-tan-dark italic">
+                  {progress.current_phase}
+                </span>
+              </div>
+            {/if}
+
             <!-- Stats -->
             <div class="grid grid-cols-2 gap-4 text-sm">
               <div>
