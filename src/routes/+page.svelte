@@ -6,6 +6,7 @@
   import Chart from "$lib/Chart.svelte";
   import { formatEnum } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
+  import { refreshData } from "$lib/stores/refresh";
 
   let stats = $state<GameStatistics | null>(null);
   let loading = $state(true);
@@ -54,7 +55,9 @@
       : null
   );
 
-  onMount(async () => {
+  async function fetchStats() {
+    loading = true;
+    error = null;
     try {
       stats = await api.getGameStatistics();
     } catch (err) {
@@ -62,6 +65,15 @@
     } finally {
       loading = false;
     }
+  }
+
+  onMount(() => {
+    fetchStats();
+  });
+
+  // Subscribe to refresh events
+  refreshData.subscribe(() => {
+    fetchStats();
   });
 </script>
 

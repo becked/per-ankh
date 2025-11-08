@@ -7,6 +7,7 @@
   import { api } from "$lib/api";
   import type { ImportProgress } from "$lib/types/ImportProgress";
   import type { BatchImportResult } from "$lib/types/BatchImportResult";
+  import { refreshData } from "$lib/stores/refresh";
 
   let isSettingsOpen = $state(false);
   let isImportModalOpen = $state(false);
@@ -44,6 +45,27 @@
     }
   }
 
+  async function handleResetDatabase() {
+    isSettingsOpen = false;
+
+    const confirmed = window.confirm(
+      "Are you sure you want to reset the database? This will delete all imported game data and cannot be undone."
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await api.resetDatabase();
+      alert("Database reset successfully.");
+      refreshData.trigger();
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      alert(`Failed to reset database: ${errorMsg}`);
+    }
+  }
+
   function closeImportModal() {
     isImportModalOpen = false;
     importProgress = null;
@@ -51,8 +73,8 @@
   }
 
   function handleImportComplete() {
-    // Reload the page to show newly imported games
-    window.location.reload();
+    // Trigger data refresh to show newly imported games
+    refreshData.trigger();
   }
 
   // Close settings dropdown when clicking outside
@@ -132,6 +154,13 @@
           onclick={handleImportFiles}
         >
           Import Save Files
+        </button>
+        <button
+          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          type="button"
+          onclick={handleResetDatabase}
+        >
+          Reset Database
         </button>
         <button
           class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"

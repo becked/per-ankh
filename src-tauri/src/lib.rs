@@ -8,7 +8,7 @@ pub mod db;
 pub mod parser;
 
 use anyhow::Context;
-use parser::ImportResult;
+use parser::{ImportResult, ParseError};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -718,6 +718,103 @@ async fn run_event_test(app: tauri::AppHandle) -> Result<String, String> {
     Ok("Event test started - will emit 12 events over 60 seconds".to_string())
 }
 
+/// Tauri command to reset the database
+///
+/// Drops all tables and recreates the schema
+#[tauri::command]
+async fn reset_database_cmd(
+    app: tauri::AppHandle,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<String, String> {
+    log::info!("Database reset requested");
+
+    // Drop all tables and views
+    pool.with_connection(|conn| {
+        // Drop views first (they depend on tables)
+        let views = vec!["match_summary", "player_performance", "character_lineage", "rulers"];
+        for view in views {
+            let query = format!("DROP VIEW IF EXISTS {}", view);
+            conn.execute(&query, [])?;
+        }
+
+        // Drop tables in reverse order of dependencies
+        // This list includes all tables from the schema
+        let tables = vec![
+            "memory_data",
+            "event_outcomes",
+            "story_choices",
+            "story_events",
+            "event_logs",
+            "yield_prices",
+            "legitimacy_history",
+            "military_history",
+            "points_history",
+            "yield_history",
+            "player_goals",
+            "diplomacy",
+            "laws",
+            "technology_states",
+            "technology_progress",
+            "technologies_completed",
+            "player_units_produced",
+            "tile_ownership_history",
+            "tile_visibility",
+            "tile_changes",
+            "tiles",
+            "city_projects_completed",
+            "city_units_produced",
+            "city_production_queue",
+            "city_religions",
+            "city_culture",
+            "city_yields",
+            "cities",
+            "tribes",
+            "religion_opinion_history",
+            "religions",
+            "family_law_opinions",
+            "family_opinion_history",
+            "families",
+            "character_missions",
+            "character_stats",
+            "character_marriages",
+            "character_relationships",
+            "character_traits",
+            "characters",
+            "player_council",
+            "player_resources",
+            "players",
+            "match_settings",
+            "schema_migrations",
+            "matches",
+            "match_locks",
+            "id_mappings",
+        ];
+
+        for table in tables {
+            let query = format!("DROP TABLE IF EXISTS {}", table);
+            conn.execute(&query, [])?;
+        }
+
+        Ok(())
+    })
+    .map_err(|e| e.to_string())?;
+
+    log::info!("All tables dropped, reinitializing schema");
+
+    // Reinitialize schema
+    let db_path = db::connection::get_db_path(&app)
+        .context("Failed to get database path")
+        .map_err(|e| e.to_string())?;
+
+    db::ensure_schema_ready(&db_path)
+        .context("Failed to reinitialize schema")
+        .map_err(|e| e.to_string())?;
+
+    log::info!("Database reset completed successfully");
+
+    Ok("Database reset successfully".to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -734,7 +831,8 @@ pub fn run() {
             get_game_details,
             get_player_history,
             get_yield_history,
-            run_event_test
+            run_event_test,
+            reset_database_cmd
         ]);
 
     builder

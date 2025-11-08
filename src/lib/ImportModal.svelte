@@ -37,6 +37,13 @@
   function handleClose() {
     if (!isImporting) {
       error = null;
+
+      // If there were successful imports, reload the page to show them
+      // Do this BEFORE calling onClose() so the page reloads with the modal still visible
+      if (result && result.successful > 0 && onImportComplete) {
+        onImportComplete();
+      }
+
       onClose();
     }
   }

@@ -51,6 +51,7 @@ Cargo.lock
 
 # DuckDB Database Files
 *.db
+*.db.wal
 *.duckdb
 *.duckdb.wal
 

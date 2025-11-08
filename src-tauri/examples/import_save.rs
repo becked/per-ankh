@@ -75,7 +75,7 @@ fn main() {
     println!("This may take a minute for large save files...\n");
 
     let start = std::time::Instant::now();
-    match parser::import_save_file(save_path, &conn) {
+    match parser::import_save_file(save_path, &conn, None, None, None, None, None) {
         Ok(result) => {
             let elapsed = start.elapsed();
 
