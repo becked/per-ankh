@@ -8,6 +8,7 @@
   import type { ImportProgress } from "$lib/types/ImportProgress";
   import type { BatchImportResult } from "$lib/types/BatchImportResult";
   import { refreshData } from "$lib/stores/refresh";
+  import { showConfirm, showSuccess, showError } from "$lib/utils/dialogs";
 
   let isSettingsOpen = $state(false);
   let isImportModalOpen = $state(false);
@@ -48,7 +49,7 @@
   async function handleResetDatabase() {
     isSettingsOpen = false;
 
-    const confirmed = await window.confirm(
+    const confirmed = await showConfirm(
       "Are you sure you want to reset the database? This will delete all imported game data and cannot be undone."
     );
 
@@ -58,11 +59,11 @@
 
     try {
       await api.resetDatabase();
-      alert("Database reset successfully.");
+      await showSuccess("Database reset successfully.");
       refreshData.trigger();
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      alert(`Failed to reset database: ${errorMsg}`);
+      await showError(`Failed to reset database: ${errorMsg}`);
     }
   }
 
