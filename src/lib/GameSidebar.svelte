@@ -3,7 +3,7 @@
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import type { GameInfo } from "$lib/types";
-  import { formatEnum } from "$lib/utils/formatting";
+  import { formatEnum, formatDate } from "$lib/utils/formatting";
 
   let games = $state<GameInfo[]>([]);
   let loading = $state(true);
@@ -53,11 +53,7 @@
   }
 
   function formatGameSubtitle(game: GameInfo): string {
-    if (game.save_date) {
-      const date = new Date(game.save_date);
-      return date.toISOString().split('T')[0];
-    }
-    return "";
+    return formatDate(game.save_date) === "Unknown" ? "" : formatDate(game.save_date);
   }
 
   function navigateToSummary() {

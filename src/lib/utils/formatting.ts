@@ -23,3 +23,19 @@ export function formatEnum(value: string | null | undefined, prefix: string): st
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
 }
+
+/**
+ * Formats a date string to YYYY-MM-DD format for consistent display across the app.
+ *
+ * @param dateStr - The date string to format (ISO 8601 format from backend)
+ * @returns Formatted date string in YYYY-MM-DD format
+ *
+ * @example
+ * formatDate("2025-01-15T12:00:00Z") // returns "2025-01-15"
+ * formatDate(null) // returns "Unknown"
+ */
+export function formatDate(dateStr: string | null | undefined): string {
+  if (!dateStr) return "Unknown";
+  const date = new Date(dateStr);
+  return date.toISOString().split('T')[0];
+}
