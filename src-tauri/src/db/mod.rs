@@ -4,4 +4,4 @@ pub mod connection;
 pub mod schema;
 
 pub use connection::get_connection;
-pub use schema::ensure_schema_ready;
+pub use schema::{create_schema, ensure_schema_ready};
