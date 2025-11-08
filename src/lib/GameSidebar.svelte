@@ -56,10 +56,6 @@
     return formatDate(game.save_date) === "Unknown" ? "" : formatDate(game.save_date);
   }
 
-  function navigateToSummary() {
-    goto("/");
-  }
-
   function navigateToGame(matchId: number) {
     goto(`/game/${matchId}`);
   }
@@ -81,12 +77,8 @@
   );
 </script>
 
-<aside class="w-[175px] h-screen bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
+<aside class="w-[175px] h-full bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
   <div class="sidebar-content overflow-y-auto flex-1 pt-4 px-2 pb-2">
-    <button class="w-full mb-6 cursor-pointer text-left pb-2 pt-4 border-b-[3px] border-orange transition-opacity hover:opacity-80" type="button" onclick={navigateToSummary}>
-      <div class="text-3xl font-bold text-gray-200">☥ Per Ankh</div>
-    </button>
-
     <!-- Search Bar -->
     <div class="mb-4">
       <input
