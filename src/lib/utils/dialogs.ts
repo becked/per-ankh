@@ -2,15 +2,15 @@ import { confirm, message } from "@tauri-apps/plugin-dialog";
 
 /**
  * Show a confirmation dialog with consistent branding.
- * Uses "☥ Per Ankh" as the default title.
+ * Uses "Confirm" as the default title.
  *
  * @param msg - The confirmation message to display
- * @param title - Optional custom title (defaults to "☥ Per Ankh")
+ * @param title - Optional custom title (defaults to "Confirm")
  * @returns Promise<boolean> - true if user confirmed, false if cancelled
  */
 export async function showConfirm(
 	msg: string,
-	title: string = "☥ Per Ankh"
+	title: string = "Confirm"
 ): Promise<boolean> {
 	return await confirm(msg, { title, kind: "warning" });
 }
