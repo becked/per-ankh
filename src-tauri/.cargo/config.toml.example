@@ -1,0 +1,55 @@
+# Cargo configuration for Per-Ankh (Optional Development Optimization)
+#
+# This file demonstrates OPTIONAL linker optimizations for faster development builds.
+# To use these optimizations:
+#   1. Copy this file to `config.toml` in the same directory
+#   2. Install the required linker for your platform (see below)
+#   3. Adjust paths if needed for your system
+#
+# IMPORTANT: This config is for LOCAL DEVELOPMENT ONLY.
+# - CI/CD builds will use platform defaults (no custom linkers)
+# - Production builds (`npm run tauri build`) will use platform defaults
+# - This config is ignored by git (see .gitignore)
+
+# macOS Development
+# ------------------
+# Using lld (LLVM's linker) which is 30-50% faster than Apple's default ld
+#
+# Installation:
+#   brew install llvm
+#
+# Note: Adjust the path below if your Homebrew is installed elsewhere
+# (Intel Macs might use /usr/local/opt/llvm/bin/ld64.lld)
+
+[target.aarch64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"]
+
+[target.x86_64-apple-darwin]
+rustflags = ["-C", "link-arg=-fuse-ld=/opt/homebrew/bin/ld64.lld"]
+
+# Linux Development (Optional)
+# -----------------------------
+# lld is typically available as 'lld' on Linux systems
+#
+# Installation:
+#   Ubuntu/Debian: sudo apt install lld
+#   Fedora/RHEL:   sudo dnf install lld
+#   Arch:          sudo pacman -S lld
+#
+# Uncomment these if developing on Linux:
+# [target.x86_64-unknown-linux-gnu]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+#
+# [target.aarch64-unknown-linux-gnu]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Windows Development (Optional)
+# -------------------------------
+# lld-link is the Windows-compatible lld linker
+#
+# Installation:
+#   lld-link comes with LLVM: https://releases.llvm.org/download.html
+#
+# Uncomment these if developing on Windows:
+# [target.x86_64-pc-windows-msvc]
+# rustflags = ["-C", "link-arg=-fuse-ld=lld-link"]

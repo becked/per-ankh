@@ -37,6 +37,7 @@ vite.config.ts.timestamp-*
 Cargo.lock
 **/*.rs.bk
 *.pdb
+/src-tauri/.cargo/config.toml
 
 # Tauri Build Outputs
 /src-tauri/target/
