@@ -419,23 +419,44 @@ fn import_save_file_internal(
     log::info!("⏱️    Character birth cities: {:?}", birth_cities_time);
     eprintln!("⏱️    Character birth cities: {:?}", birth_cities_time);
 
-    // 5. Tribes (references characters via leader_character_id)
+    // 5. Tribes - HYBRID PARSER (references characters via leader_character_id)
     let t_tribes = Instant::now();
-    let tribes_count = super::entities::parse_tribes(doc, tx, &mut id_mapper)?;
+
+    // Parse to structs (pure, no DB)
+    let tribes_data = super::parsers::parse_tribes_struct(doc)?;
+
+    // Insert to database
+    super::inserters::insert_tribes(tx, &tribes_data, &id_mapper)?;
+    let tribes_count = tribes_data.len();
+
     let tribes_time = t_tribes.elapsed();
     log::info!("⏱️    Tribes: {:?} ({} tribes)", tribes_time, tribes_count);
     eprintln!("⏱️    Tribes: {:?} ({} tribes)", tribes_time, tribes_count);
 
-    // 6. Families (parsed from global FamilyClass and per-player family data)
+    // 6. Families - HYBRID PARSER (parsed from global FamilyClass and per-player family data)
     let t_families = Instant::now();
-    let families_count = super::entities::parse_families(doc, tx, &mut id_mapper)?;
+
+    // Parse to structs (pure, no DB)
+    let families_data = super::parsers::parse_families_struct(doc)?;
+
+    // Insert to database
+    super::inserters::insert_families(tx, &families_data, &mut id_mapper)?;
+    let families_count = families_data.len();
+
     let families_time = t_families.elapsed();
     log::info!("⏱️    Families: {:?} ({} families)", families_time, families_count);
     eprintln!("⏱️    Families: {:?} ({} families)", families_time, families_count);
 
-    // 7. Religions (parsed from aggregate containers: ReligionFounded, ReligionHeadID, etc.)
+    // 7. Religions - HYBRID PARSER (parsed from aggregate containers: ReligionFounded, ReligionHeadID, etc.)
     let t_religions = Instant::now();
-    let religions_count = super::entities::parse_religions(doc, tx, &mut id_mapper)?;
+
+    // Parse to structs (pure, no DB)
+    let religions_data = super::parsers::parse_religions_struct(doc)?;
+
+    // Insert to database
+    super::inserters::insert_religions(tx, &religions_data, &mut id_mapper)?;
+    let religions_count = religions_data.len();
+
     let religions_time = t_religions.elapsed();
     log::info!("⏱️    Religions: {:?} ({} religions)", religions_time, religions_count);
     eprintln!("⏱️    Religions: {:?} ({} religions)", religions_time, religions_count);
@@ -453,11 +474,21 @@ fn import_save_file_internal(
         emit_phase_progress(Some(app_h), idx, total, name, "Parsing foundation entities", 2, start);
     }
 
-    // Parse aggregate unit production data (derived from entities)
+    // Parse aggregate unit production data - HYBRID PARSER (derived from entities)
     log::info!("Parsing aggregate unit production data...");
     let t_units = Instant::now();
-    let player_units_count = super::entities::parse_player_units_produced(doc, tx, &id_mapper)?;
-    let city_units_count = super::entities::parse_city_units_produced(doc, tx, &id_mapper)?;
+
+    // Parse to structs (pure, no DB)
+    let player_units_data = super::parsers::parse_player_units_produced(doc)?;
+    let city_units_data = super::parsers::parse_city_units_produced(doc)?;
+
+    // Insert to database
+    super::inserters::insert_player_units_produced(tx, &player_units_data, &id_mapper)?;
+    super::inserters::insert_city_units_produced(tx, &city_units_data, &id_mapper)?;
+
+    let player_units_count = player_units_data.len();
+    let city_units_count = city_units_data.len();
+
     log::info!(
         "Parsed unit production: {} player records, {} city records",
         player_units_count, city_units_count
