@@ -1,7 +1,7 @@
 # Hybrid Parser Migration - Batch 3 Progress Tracker
 
 **Phase:** Phase 3 - Extended and Nested Data
-**Status:** In Progress (2 of 7 entities complete)
+**Status:** In Progress (3 of 7 entities complete)
 **Started:** 2025-11-09
 
 ---
@@ -11,8 +11,8 @@
 Batch 3 migrates extended and nested data entities to the hybrid parser architecture. These entities contain auxiliary game data that's parsed after the core entities.
 
 **Total Entities:** 7
-**Completed:** 2 ✅
-**Remaining:** 5 ⏳
+**Completed:** 3 ✅
+**Remaining:** 4 ⏳
 
 ---
 
@@ -32,9 +32,16 @@ Batch 3 migrates extended and nested data entities to the hybrid parser architec
    - Tests: 7 unit tests, all passing
    - Implementation: 5 parser functions, 5 inserter functions with deduplication
 
+3. **tile_data** (2025-11-09)
+   - Files: `parsers/tile_data.rs`, `inserters/tile_data.rs`
+   - Types: `TileVisibility`, `TileChange`
+   - Tests: 5 unit tests, all passing
+   - Implementation: Separate parsers for visibility and change history
+   - Commit: `2e30684`
+
 ### ⏳ Remaining Entities
 
-3. **tile_data** (Next)
+4. **player_data** (Next)
    - Source: `entities/tile_data.rs` (~225 lines)
    - Tables: `tile_visibility`, `tile_ownership_history`
    - Complexity: Medium
@@ -112,6 +119,27 @@ Use this checklist for each remaining entity:
 
 ## Common Patterns to Follow
 
+### CRITICAL: Test Setup Pattern
+
+**Always use `parse_xml()` helper in tests:**
+
+```rust
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::parser::xml_loader::parse_xml;  // ✅ Use this
+
+    #[test]
+    fn test_example() {
+        let xml = r#"<Root>...</Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();  // ✅ Correct
+        // NOT: Document::parse(xml).unwrap()  ❌ Wrong - type mismatch
+    }
+}
+```
+
+**Why:** `XmlDocument` is an enum wrapper (not a type alias). Using `roxmltree::Document::parse()` directly causes type mismatch errors because it returns `Document<'_>` but parsers expect `&XmlDocument`.
+
 ### Parser Function Signature
 ```rust
 pub fn parse_{entity}_struct(doc: &XmlDocument) -> Result<Vec<{Entity}Data>> {
@@ -162,12 +190,12 @@ pub fn insert_{entities}(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use roxmltree::Document;
+    use crate::parser::xml_loader::parse_xml;
 
     #[test]
     fn test_parse_{entity}_struct_basic() {
         let xml = r#"<Root><{Tag} ID="1" Field="value"/></Root>"#;
-        let doc = Document::parse(xml).unwrap();
+        let doc = parse_xml(xml.to_string()).unwrap();
 
         let items = parse_{entity}_struct(&doc).unwrap();
 
@@ -179,7 +207,7 @@ mod tests {
     #[test]
     fn test_parse_{entity}_struct_empty() {
         let xml = r#"<Root></Root>"#;
-        let doc = Document::parse(xml).unwrap();
+        let doc = parse_xml(xml.to_string()).unwrap();
 
         let items = parse_{entity}_struct(&doc).unwrap();
         assert_eq!(items.len(), 0);
