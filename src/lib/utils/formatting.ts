@@ -39,3 +39,53 @@ export function formatDate(dateStr: string | null | undefined): string {
   const date = new Date(dateStr);
   return date.toISOString().split('T')[0];
 }
+
+/**
+ * Formats a game title for display, using intelligent fallbacks.
+ *
+ * Rules:
+ * 1. If game has a real name (not "GameN" pattern), use it
+ * 2. Otherwise, show "{Nation} - {Turns} turns"
+ * 3. Fallback to just nation, just turns, or "Game {ID}"
+ *
+ * @param game - Game data containing name, nation, turns, and ID
+ * @returns Formatted game title string
+ *
+ * @example
+ * formatGameTitle({ game_name: "My Epic Campaign", ... }) // returns "My Epic Campaign"
+ * formatGameTitle({ game_name: "Game 5", human_nation: "NATION_ROME", total_turns: 100, ... }) // returns "Rome - 100 turns"
+ * formatGameTitle({ game_name: null, human_nation: "NATION_EGYPT", total_turns: null, match_id: 3 }) // returns "Egypt"
+ */
+export function formatGameTitle(game: {
+  game_name: string | null;
+  human_nation: string | null;
+  total_turns: number | null;
+  match_id: number;
+}): string {
+  // Check if game_name is a real name (not auto-generated "Game{number}")
+  const isRealName = game.game_name != null &&
+                     game.game_name !== "" &&
+                     !game.game_name.match(/^Game\d+$/);
+
+  if (isRealName) {
+    return game.game_name!;
+  }
+
+  // Format nation by removing NATION_ prefix and capitalizing
+  const formattedNation = game.human_nation ? formatEnum(game.human_nation, "NATION_") : null;
+
+  // Fallback: use nation and turns if available
+  if (formattedNation !== null && game.total_turns != null) {
+    return `${formattedNation} - ${game.total_turns} turns`;
+  }
+
+  if (formattedNation !== null) {
+    return formattedNation;
+  }
+
+  if (game.total_turns != null) {
+    return `Turn ${game.total_turns}`;
+  }
+
+  return `Game ${game.match_id}`;
+}
