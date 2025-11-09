@@ -59,12 +59,62 @@ pub struct PlayerData {
     pub tribe_mercenaries_hired: i32,
 }
 
+/// Character entity data parsed from XML
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterData {
+    // Core identity
+    pub xml_id: i32,
+    pub first_name: Option<String>,
+    pub gender: Option<String>,
+
+    // Affiliations
+    pub player_xml_id: Option<i32>,
+    pub tribe: Option<String>,
+    pub family: Option<String>,
+    pub nation: Option<String>,
+    pub religion: Option<String>,
+
+    // Life cycle
+    pub birth_turn: i32,
+    pub death_turn: Option<i32>,
+    pub death_reason: Option<String>,
+
+    // Parent relationships (XML IDs - NOT set here, updated in Pass 2)
+    pub birth_father_xml_id: Option<i32>,
+    pub birth_mother_xml_id: Option<i32>,
+    pub birth_city_xml_id: Option<i32>,
+
+    // Titles and roles
+    pub cognomen: Option<String>,
+    pub archetype: Option<String>,
+    pub portrait: Option<String>,
+
+    // Progression
+    pub xp: i32,
+    pub level: i32,
+
+    // Status flags
+    pub is_royal: bool,
+    pub is_infertile: bool,
+
+    // Leadership
+    pub became_leader_turn: Option<i32>,
+    pub abdicated_turn: Option<i32>,
+    pub was_religion_head: bool,
+    pub was_family_head: bool,
+    pub nation_joined_turn: Option<i32>,
+
+    // Other
+    pub seed: Option<i64>,
+}
+
 /// Complete game save data (for future expansion)
 ///
-/// Currently only contains players for proof-of-concept.
+/// Currently contains players and characters.
 /// Will expand to include all entity types as migration progresses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameData {
     pub players: Vec<PlayerData>,
-    // Future: characters, cities, tiles, families, etc.
+    pub characters: Vec<CharacterData>,
+    // Future: cities, tiles, families, etc.
 }

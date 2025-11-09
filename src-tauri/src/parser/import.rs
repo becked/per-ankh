@@ -358,9 +358,15 @@ fn import_save_file_internal(
     log::info!("⏱️    Players: {:?} ({} players)", players_time, players_count);
     eprintln!("⏱️    Players: {:?} ({} players)", players_time, players_count);
 
-    // 2. Characters - Pass 1: Core data only (no relationships yet)
+    // 2. Characters - HYBRID PARSER
     let t_characters = Instant::now();
-    let characters_count = super::entities::parse_characters_core(doc, tx, &mut id_mapper)?;
+
+    // Parse to structs (pure, no DB)
+    let characters_data = super::parsers::parse_characters_struct(doc)?;
+
+    // Insert to database (Pass 1: Core data only, no relationships yet)
+    let characters_count = super::inserters::insert_characters_core(tx, &characters_data, &mut id_mapper)?;
+
     let characters_time = t_characters.elapsed();
     log::info!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
     eprintln!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
