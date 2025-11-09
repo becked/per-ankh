@@ -34,6 +34,7 @@ lazy_static = "1.4"  # Global state for import locks
 sha256 = "1.5"  # SHA-256 hashing for file integrity
 chrono = "0.4"  # Date and time parsing
 ts-rs = "10.0"  # TypeScript type generation from Rust
+rayon = "1.10"  # Parallel iteration for hybrid parser
 
 [dev-dependencies]
 tempfile = "3.8"  # Temporary directories for tests

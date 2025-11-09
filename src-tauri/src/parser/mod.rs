@@ -12,6 +12,9 @@ pub mod id_mapper;
 pub mod import;
 pub mod entities;
 pub mod utils;
+pub mod game_data;
+pub mod parsers;
+pub mod inserters;
 
 #[cfg(test)]
 mod tests;
