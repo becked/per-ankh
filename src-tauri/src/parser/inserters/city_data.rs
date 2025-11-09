@@ -58,6 +58,7 @@ pub fn insert_city_production_queue(
             item_type,
             progress,
             is_repeat,
+            None::<String>, // yield_costs (JSON, not currently parsed from XML)
         ])?;
     }
 
@@ -157,7 +158,7 @@ pub fn insert_city_religions(
 
     let mut app = conn.appender("city_religions")?;
     for (city_id, match_id, religion) in unique_rows {
-        app.append_row(params![city_id, match_id, religion])?;
+        app.append_row(params![city_id, match_id, religion, None::<i32>])?; // acquired_turn not available in XML
     }
 
     drop(app);
@@ -197,7 +198,7 @@ pub fn insert_city_culture(
             match_id,
             team_id,
             culture_level,
-            0,
+            0, // culture_progress (not available in XML)
             happiness_level
         ])?;
     }

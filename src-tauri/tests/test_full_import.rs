@@ -29,7 +29,7 @@ fn test_import_babylonia_save() {
 
     // Import save file
     let save_path = "test-data/saves/OW-Babylonia-Year123-2024-01-31-22-44-04.zip";
-    let result = parser::import_save_file(save_path, &conn).expect("Failed to import save file");
+    let result = parser::import_save_file(save_path, &conn, None, None, None, None, None).expect("Failed to import save file");
 
     // Verify result
     assert!(result.success, "Import should succeed");
@@ -213,7 +213,7 @@ fn test_import_multiple_saves() {
         }
 
         println!("\n--- Importing {} ---", save_path);
-        let result = parser::import_save_file(save_path, &conn).expect("Failed to import save file");
+        let result = parser::import_save_file(save_path, &conn, None, None, None, None, None).expect("Failed to import save file");
 
         assert!(result.success, "Import should succeed for {}", save_path);
         assert!(result.match_id.is_some(), "Should have match_id for {}", save_path);
@@ -249,7 +249,7 @@ fn test_reimport_same_save() {
 
     // First import
     println!("First import...");
-    let result1 = parser::import_save_file(save_path, &conn).expect("Failed to import save file");
+    let result1 = parser::import_save_file(save_path, &conn, None, None, None, None, None).expect("Failed to import save file");
     assert!(result1.success, "First import should succeed");
     assert!(result1.is_new, "First import should be new");
     let match_id1 = result1.match_id.unwrap();
@@ -262,7 +262,7 @@ fn test_reimport_same_save() {
 
     // Second import (update)
     println!("\nSecond import (should update existing match)...");
-    let result2 = parser::import_save_file(save_path, &conn).expect("Failed to import save file");
+    let result2 = parser::import_save_file(save_path, &conn, None, None, None, None, None).expect("Failed to import save file");
     assert!(result2.success, "Second import should succeed");
     assert!(!result2.is_new, "Second import should not be new");
     assert_eq!(result2.match_id, Some(match_id1), "Should reuse same match_id");

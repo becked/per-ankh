@@ -26,7 +26,7 @@ fn test_unit_production_parsing() {
     let conn = db::connection::get_connection(&db_path).unwrap();
 
     // Import save file
-    let result = parser::import_save_file(test_file, &conn).unwrap();
+    let result = parser::import_save_file(test_file, &conn, None, None, None, None, None).unwrap();
     assert!(result.success, "Import should succeed");
 
     // Verify player_units_produced has data

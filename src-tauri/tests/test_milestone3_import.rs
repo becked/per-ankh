@@ -39,7 +39,7 @@ fn test_milestone3_import() {
         return;
     }
 
-    let result = parser::import_save_file(test_file, &conn).expect("Failed to import save file");
+    let result = parser::import_save_file(test_file, &conn, None, None, None, None, None).expect("Failed to import save file");
 
     if !result.success {
         eprintln!("Import failed with error: {:?}", result.error);
