@@ -407,6 +407,20 @@ pub struct PlayerGoal {
     pub goal_state: Option<String>, // JSON-serialized stats
 }
 
+/// Diplomacy relation between entities (player-player or player-tribe)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DiplomacyRelation {
+    pub entity1_type: String,         // "player" or "tribe"
+    pub entity1_id: String,           // XML ID as string (e.g., "0", "TRIBE_REBELS")
+    pub entity2_type: String,         // "player" or "tribe"
+    pub entity2_id: String,           // XML ID as string
+    pub relation: String,             // e.g., "DIPLOMACY_WAR", "DIPLOMACY_PEACE"
+    pub war_score: Option<i32>,
+    pub last_conflict_turn: Option<i32>,
+    pub last_diplomacy_turn: Option<i32>,
+    pub diplomacy_blocked_until_turn: Option<i32>,
+}
+
 /// Complete game save data (for future expansion)
 ///
 /// Currently contains players, characters, cities, and Batch 2 entities.
@@ -444,6 +458,7 @@ pub struct GameData {
     pub player_council: Vec<PlayerCouncil>,
     pub laws: Vec<Law>,
     pub player_goals: Vec<PlayerGoal>,
+    pub diplomacy_relations: Vec<DiplomacyRelation>,
 
-    // Future: diplomacy, timeseries, events
+    // Future: timeseries, events
 }
