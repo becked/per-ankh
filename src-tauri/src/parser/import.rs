@@ -518,7 +518,14 @@ fn import_save_file_internal(
     // Parse game-level diplomacy
     log::info!("Parsing diplomacy...");
     let t_diplomacy = Instant::now();
-    let diplomacy_count = super::entities::parse_diplomacy(doc, tx, &id_mapper, match_id)?;
+
+    // Parse to structs (pure, no DB)
+    let diplomacy_relations = super::parsers::parse_diplomacy_relations(doc)?;
+
+    // Insert to database
+    super::inserters::insert_diplomacy_relations(tx, &diplomacy_relations, match_id)?;
+
+    let diplomacy_count = diplomacy_relations.len();
     log::info!("Parsed {} diplomacy relations", diplomacy_count);
     let diplomacy_time = t_diplomacy.elapsed();
     log::info!("⏱️  Diplomacy: {:?}", diplomacy_time);
@@ -613,34 +620,34 @@ fn import_save_file_internal(
 /// - PermanentLogList/LogData → event_logs
 /// - MemoryList/MemoryData → memory_data
 fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
-    let root = doc.root_element();
-    let mut totals = (0, 0, 0, 0, 0, 0, 0, 0, 0); // resources, tech_progress, tech_completed, tech_states, council, laws, goals, log_events, memories
-    let mut next_log_id: i64 = 1;
-    let mut next_memory_id: i64 = 1;
+    // Parse to structs (pure, no DB)
+    let player_data = super::parsers::parse_all_player_data(doc)?;
 
-    // Iterate through all Player elements
-    for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
-        let player_xml_id_str: &str = player_node.req_attr("ID")?;
-        let player_xml_id: i32 = player_xml_id_str.parse()
-            .map_err(|_| ParseError::InvalidFormat(format!("Player ID must be an integer: {}", player_xml_id_str)))?;
-        let player_id = id_mapper.get_player(player_xml_id)?;
-        let match_id = id_mapper.match_id;
+    // Parse event logs and memories (these are also player-nested)
+    let (_, event_logs, memory_data) = super::parsers::parse_events_struct(doc)?;
 
-        // Parse each type of player data
-        totals.0 += super::entities::parse_player_resources(&player_node, tx, player_id, match_id)?;
-        totals.1 += super::entities::parse_technology_progress(&player_node, tx, player_id, match_id)?;
-        totals.2 += super::entities::parse_technologies_completed(&player_node, tx, player_id, match_id)?;
-        totals.3 += super::entities::parse_technology_states(&player_node, tx, player_id, match_id)?;
-        totals.4 += super::entities::parse_player_council(&player_node, tx, id_mapper, player_id, match_id)?;
-        totals.5 += super::entities::parse_laws(&player_node, tx, player_id, match_id)?;
-        totals.6 += super::entities::parse_player_goals(&player_node, tx, id_mapper, player_id, match_id)?;
-        totals.7 += super::entities::parse_player_log_events(&player_node, tx, player_id, match_id, &mut next_log_id)?;
-        totals.8 += super::entities::parse_player_memories(&player_node, tx, player_id, match_id, &mut next_memory_id)?;
-    }
+    // Insert to database
+    super::inserters::insert_player_resources(tx, &player_data.resources, id_mapper)?;
+    super::inserters::insert_technology_progress(tx, &player_data.tech_progress, id_mapper)?;
+    super::inserters::insert_technologies_completed(tx, &player_data.tech_completed, id_mapper)?;
+    super::inserters::insert_technology_states(tx, &player_data.tech_states, id_mapper)?;
+    super::inserters::insert_player_council(tx, &player_data.council, id_mapper)?;
+    super::inserters::insert_laws(tx, &player_data.laws, id_mapper)?;
+    super::inserters::insert_player_goals(tx, &player_data.goals, id_mapper)?;
+    super::inserters::insert_event_logs(tx, &event_logs, id_mapper)?;
+    super::inserters::insert_memory_data(tx, &memory_data, id_mapper)?;
 
     log::info!(
         "Parsed player gameplay data: {} resources, {} tech_progress, {} tech_completed, {} tech_states, {} council, {} laws, {} goals, {} log_events, {} memories",
-        totals.0, totals.1, totals.2, totals.3, totals.4, totals.5, totals.6, totals.7, totals.8
+        player_data.resources.len(),
+        player_data.tech_progress.len(),
+        player_data.tech_completed.len(),
+        player_data.tech_states.len(),
+        player_data.council.len(),
+        player_data.laws.len(),
+        player_data.goals.len(),
+        event_logs.len(),
+        memory_data.len()
     );
 
     Ok(())
@@ -653,49 +660,29 @@ fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &Id
 /// - Player-level: MilitaryPowerHistory, PointsHistory, LegitimacyHistory,
 ///                 YieldRateHistory, FamilyOpinionHistory, ReligionOpinionHistory
 fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
-    let root = doc.root_element();
-    let match_id = id_mapper.match_id;
+    // Parse to structs (pure, no DB)
+    let yield_prices = super::parsers::parse_yield_price_history_struct(doc)?;
+    let (military_power, points, legitimacy, yield_rates, family_opinions, religion_opinions) =
+        super::parsers::parse_all_player_timeseries(doc)?;
 
-    // Parse game-level yield prices
-    let yield_prices_count = if let Some(game_node) = root.children().find(|n| n.has_tag_name("Game")) {
-        super::entities::parse_game_yield_prices(&game_node, tx, match_id)?
-    } else {
-        log::warn!("No <Game> element found, skipping yield price history");
-        0
-    };
-
-    // Parse player-level time-series data
-    let mut player_totals = (0, 0, 0, 0, 0, 0); // military, points, legitimacy, yields, family_opinions, religion_opinions
-    let mut player_count = 0;
-
-    for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
-        let player_xml_id_str: &str = player_node.req_attr("ID")?;
-        let player_xml_id: i32 = player_xml_id_str.parse()
-            .map_err(|_| ParseError::InvalidFormat(format!("Player ID must be an integer: {}", player_xml_id_str)))?;
-        let player_id = id_mapper.get_player(player_xml_id)?;
-
-        let (military, points, legitimacy, yields, family_opinions, religion_opinions) =
-            super::entities::parse_player_timeseries(&player_node, tx, player_id, match_id)?;
-
-        player_totals.0 += military;
-        player_totals.1 += points;
-        player_totals.2 += legitimacy;
-        player_totals.3 += yields;
-        player_totals.4 += family_opinions;
-        player_totals.5 += religion_opinions;
-        player_count += 1;
-    }
+    // Insert to database
+    super::inserters::insert_yield_price_history(tx, &yield_prices, id_mapper)?;
+    super::inserters::insert_military_power_history(tx, &military_power, id_mapper)?;
+    super::inserters::insert_points_history(tx, &points, id_mapper)?;
+    super::inserters::insert_legitimacy_history(tx, &legitimacy, id_mapper)?;
+    super::inserters::insert_yield_rate_history(tx, &yield_rates, id_mapper)?;
+    super::inserters::insert_family_opinion_history(tx, &family_opinions, id_mapper)?;
+    super::inserters::insert_religion_opinion_history(tx, &religion_opinions, id_mapper)?;
 
     log::info!(
-        "Parsed time-series data: {} yield prices, {} players with {} military, {} points, {} legitimacy, {} yields, {} family opinions, {} religion opinions",
-        yield_prices_count,
-        player_count,
-        player_totals.0,
-        player_totals.1,
-        player_totals.2,
-        player_totals.3,
-        player_totals.4,
-        player_totals.5
+        "Parsed time-series data: {} yield prices, {} military, {} points, {} legitimacy, {} yields, {} family opinions, {} religion opinions",
+        yield_prices.len(),
+        military_power.len(),
+        points.len(),
+        legitimacy.len(),
+        yield_rates.len(),
+        family_opinions.len(),
+        religion_opinions.len()
     );
 
     Ok(())
@@ -782,40 +769,22 @@ fn parse_character_extended_data_all(
     tx: &Connection,
     id_mapper: &IdMapper,
 ) -> Result<()> {
-    let root = doc.root_element();
-    let match_id = id_mapper.match_id;
+    // Parse to structs (pure, no DB)
+    let (stats, traits, relationships, marriages) =
+        super::parsers::parse_all_character_data_struct(doc.document())?;
 
-    let mut totals = (0, 0, 0, 0); // stats, traits, relationships, marriages
-    let mut character_count = 0;
-
-    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
-        let character_xml_id_str: &str = character_node.req_attr("ID")?;
-        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!(
-                "Character ID must be an integer: {}",
-                character_xml_id_str
-            ))
-        })?;
-        let character_id = id_mapper.get_character(character_xml_id)?;
-
-        // Parse extended data (genealogy was already parsed in Pass 2)
-        let (stats, traits, relationships, marriages) =
-            super::entities::parse_character_extended_data(&character_node, tx, id_mapper, character_id, match_id)?;
-
-        totals.0 += stats;
-        totals.1 += traits;
-        totals.2 += relationships;
-        totals.3 += marriages;
-        character_count += 1;
-    }
+    // Insert to database
+    super::inserters::insert_character_stats(tx, &stats, id_mapper)?;
+    super::inserters::insert_character_traits(tx, &traits, id_mapper)?;
+    super::inserters::insert_character_relationships(tx, &relationships, id_mapper)?;
+    super::inserters::insert_character_marriages(tx, &marriages, id_mapper)?;
 
     log::info!(
-        "Parsed character extended data for {} characters: {} stats, {} traits, {} relationships, {} marriages",
-        character_count,
-        totals.0,
-        totals.1,
-        totals.2,
-        totals.3
+        "Parsed character extended data: {} stats, {} traits, {} relationships, {} marriages",
+        stats.len(),
+        traits.len(),
+        relationships.len(),
+        marriages.len()
     );
 
     Ok(())
@@ -830,38 +799,27 @@ fn parse_character_extended_data_all(
 /// - Yields (YieldProgress) -> city_yields table
 /// - Religions (Religion) -> city_religions table
 fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
-    let root = doc.root_element();
-    let match_id = id_mapper.match_id;
+    // Parse to structs (pure, no DB)
+    let city_production = super::parsers::parse_city_production_queue_struct(doc)?;
+    let city_projects = super::parsers::parse_city_projects_completed_struct(doc)?;
+    let city_yields = super::parsers::parse_city_yields_struct(doc)?;
+    let city_religions = super::parsers::parse_city_religions_struct(doc)?;
+    let city_culture = super::parsers::parse_city_culture_struct(doc)?;
 
-    let mut totals = (0, 0, 0, 0, 0); // queue items, completed builds, culture records, yields, religions
-    let mut city_count = 0;
-
-    for city_node in root.children().filter(|n| n.has_tag_name("City")) {
-        let city_xml_id_str: &str = city_node.req_attr("ID")?;
-        let city_xml_id: i32 = city_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!("City ID must be an integer: {}", city_xml_id_str))
-        })?;
-        let city_id = id_mapper.get_city(city_xml_id)?;
-
-        let (queue, completed, culture, yields, religions) =
-            super::entities::parse_city_extended_data(&city_node, tx, city_id, match_id)?;
-
-        totals.0 += queue;
-        totals.1 += completed;
-        totals.2 += culture;
-        totals.3 += yields;
-        totals.4 += religions;
-        city_count += 1;
-    }
+    // Insert to database
+    super::inserters::insert_city_production_queue(tx, &city_production, id_mapper)?;
+    super::inserters::insert_city_projects_completed(tx, &city_projects, id_mapper)?;
+    super::inserters::insert_city_yields(tx, &city_yields, id_mapper)?;
+    super::inserters::insert_city_religions(tx, &city_religions, id_mapper)?;
+    super::inserters::insert_city_culture(tx, &city_culture, id_mapper)?;
 
     log::info!(
-        "Parsed city extended data for {} cities: {} queue items, {} completed builds, {} culture records, {} yields, {} religions",
-        city_count,
-        totals.0,
-        totals.1,
-        totals.2,
-        totals.3,
-        totals.4
+        "Parsed city extended data: {} production queue, {} projects completed, {} yields, {} religions, {} culture",
+        city_production.len(),
+        city_projects.len(),
+        city_yields.len(),
+        city_religions.len(),
+        city_culture.len()
     );
 
     Ok(())
@@ -873,41 +831,21 @@ fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
 /// - Tile visibility (RevealedTurn, RevealedOwner) -> tile_visibility table
 /// - Tile history (OwnerHistory, TerrainHistory, VegetationHistory) -> tile_changes table
 fn parse_tile_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
-    let root = doc.root_element();
-    let match_id = id_mapper.match_id;
+    // Parse to structs (pure, no DB)
+    let visibility = super::parsers::parse_tile_visibility_struct(doc)?;
+    let changes = super::parsers::parse_tile_changes_struct(doc)?;
 
-    // Track next change_id across all tiles
-    // Start from match_id * 1_000_000 to ensure uniqueness across matches
-    let mut next_change_id = match_id * 1_000_000;
+    // Insert to database
+    super::inserters::insert_tile_visibility(tx, &visibility, id_mapper)?;
+    super::inserters::insert_tile_changes(tx, &changes, id_mapper)?;
 
-    let mut totals = (0, 0); // visibility records, history changes
-    let mut tile_count = 0;
-
-    for tile_node in root.children().filter(|n| n.has_tag_name("Tile")) {
-        let tile_xml_id_str: &str = tile_node.req_attr("ID")?;
-        let tile_xml_id: i32 = tile_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!("Tile ID must be an integer: {}", tile_xml_id_str))
-        })?;
-        let tile_id = id_mapper.get_tile(tile_xml_id)?;
-
-        let (visibility, history) = super::entities::parse_tile_extended_data(
-            &tile_node,
-            tx,
-            tile_id,
-            match_id,
-            &mut next_change_id,
-        )?;
-
-        totals.0 += visibility;
-        totals.1 += history;
-        tile_count += 1;
-    }
+    let visibility_count = visibility.len();
+    let changes_count = changes.len();
 
     log::info!(
-        "Parsed tile extended data for {} tiles: {} visibility records, {} history changes",
-        tile_count,
-        totals.0,
-        totals.1
+        "Parsed tile extended data: {} visibility records, {} history changes",
+        visibility_count,
+        changes_count
     );
 
     Ok(())
@@ -920,88 +858,15 @@ fn parse_tile_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
 /// - Character-level: EventStoryTurn
 /// - City-level: EventStoryTurn
 fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
-    let root = doc.root_element();
-    let match_id = id_mapper.match_id;
+    // Parse to structs (pure, no DB)
+    // Note: We already parsed event_logs and memory_data in parse_player_gameplay_data,
+    // so we only need the event_stories here
+    let (event_stories, _, _) = super::parsers::parse_events_struct(doc)?;
 
-    // Track next event_id across all entity types
-    // Start from match_id * 1_000_000 to ensure uniqueness across matches
-    let mut next_event_id = match_id * 1_000_000;
+    // Insert to database
+    super::inserters::insert_event_stories(tx, &event_stories, id_mapper)?;
 
-    let mut total_events = 0;
-
-    // Parse player-level events
-    for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
-        let player_xml_id_str: &str = player_node.req_attr("ID")?;
-        let player_xml_id: i32 = player_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!("Player ID must be an integer: {}", player_xml_id_str))
-        })?;
-        let player_id = id_mapper.get_player(player_xml_id)?;
-
-        total_events +=
-            super::entities::parse_player_events(&player_node, tx, player_id, match_id, &mut next_event_id)?;
-    }
-
-    // Parse character-level events
-    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
-        let character_xml_id_str: &str = character_node.req_attr("ID")?;
-        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!(
-                "Character ID must be an integer: {}",
-                character_xml_id_str
-            ))
-        })?;
-        let character_id = id_mapper.get_character(character_xml_id)?;
-
-        // Need to find player_id for this character
-        // Characters have a Player attribute
-        // Skip events for tribal characters (Player=-1)
-        let player_xml_id: Option<i32> = character_node
-            .opt_attr("Player")
-            .and_then(|s| s.parse().ok())
-            .filter(|&id| id >= 0); // Filter out -1 and other negative values
-
-        if let Some(player_xml_id) = player_xml_id {
-            let player_id = id_mapper.get_player(player_xml_id)?;
-            total_events += super::entities::parse_character_events(
-                &character_node,
-                tx,
-                character_id,
-                player_id,
-                match_id,
-                &mut next_event_id,
-            )?;
-        }
-    }
-
-    // Parse city-level events
-    for city_node in root.children().filter(|n| n.has_tag_name("City")) {
-        let city_xml_id_str: &str = city_node.req_attr("ID")?;
-        let city_xml_id: i32 = city_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!("City ID must be an integer: {}", city_xml_id_str))
-        })?;
-        let city_id = id_mapper.get_city(city_xml_id)?;
-
-        // Cities have a Player attribute
-        // Skip events for cities in anarchy/being captured (Player=-1)
-        let player_xml_id: Option<i32> = city_node
-            .opt_attr("Player")
-            .and_then(|s| s.parse().ok())
-            .filter(|&id| id >= 0); // Filter out -1 and other negative values
-
-        if let Some(player_xml_id) = player_xml_id {
-            let player_id = id_mapper.get_player(player_xml_id)?;
-            total_events += super::entities::parse_city_events(
-                &city_node,
-                tx,
-                city_id,
-                player_id,
-                match_id,
-                &mut next_event_id,
-            )?;
-        }
-    }
-
-    log::info!("Parsed {} event stories", total_events);
+    log::info!("Parsed {} event stories", event_stories.len());
 
     Ok(())
 }
