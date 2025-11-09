@@ -155,6 +155,15 @@ pub struct BatchImportResult {
     pub duration_ms: u64,
 }
 
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct NationDynastyRow {
+    pub nation: Option<String>,
+    pub dynasty: Option<String>,
+    #[ts(type = "number")]
+    pub count: i64,
+}
+
 // Initialize logging
 fn init_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -719,6 +728,124 @@ async fn run_event_test(app: tauri::AppHandle) -> Result<String, String> {
     Ok("Event test started - will emit 12 events over 60 seconds".to_string())
 }
 
+/// Tauri command to get nation and dynasty data for debugging
+///
+/// Returns all unique combinations of nation and dynasty values from the database
+#[tauri::command]
+async fn get_nation_dynasty_data(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<NationDynastyRow>, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT nation, dynasty, COUNT(*) as count
+                 FROM players
+                 GROUP BY nation, dynasty
+                 ORDER BY nation, dynasty"
+            )?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(NationDynastyRow {
+                    nation: row.get(0)?,
+                    dynasty: row.get(1)?,
+                    count: row.get(2)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(rows)
+    })
+    .context("Failed to get nation/dynasty data")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get detailed player data per match for debugging
+///
+/// Returns match_id, nation, and dynasty for all players
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct PlayerDebugRow {
+    #[ts(type = "number")]
+    pub match_id: i64,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub dynasty: Option<String>,
+    pub is_human: bool,
+}
+
+#[tauri::command]
+async fn get_player_debug_data(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<PlayerDebugRow>, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT match_id, player_name, nation, dynasty, is_human
+                 FROM players
+                 ORDER BY match_id, player_name"
+            )?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(PlayerDebugRow {
+                    match_id: row.get(0)?,
+                    player_name: row.get(1)?,
+                    nation: row.get(2)?,
+                    dynasty: row.get(3)?,
+                    is_human: row.get(4)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(rows)
+    })
+    .context("Failed to get player debug data")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get match data for debugging
+///
+/// Returns basic info about all matches in the database
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct MatchDebugRow {
+    #[ts(type = "number")]
+    pub match_id: i64,
+    pub game_id: String,
+    pub game_name: Option<String>,
+    pub file_name: String,
+}
+
+#[tauri::command]
+async fn get_match_debug_data(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<MatchDebugRow>, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn
+            .prepare(
+                "SELECT match_id, game_id, game_name, file_name
+                 FROM matches
+                 ORDER BY match_id"
+            )?;
+
+        let rows = stmt
+            .query_map([], |row| {
+                Ok(MatchDebugRow {
+                    match_id: row.get(0)?,
+                    game_id: row.get(1)?,
+                    game_name: row.get(2)?,
+                    file_name: row.get(3)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(rows)
+    })
+    .context("Failed to get match debug data")
+    .map_err(|e| e.to_string())
+}
+
 /// Tauri command to reset the database
 ///
 /// Drops all tables and recreates the schema using the pooled connection
@@ -824,6 +951,9 @@ pub fn run() {
             get_game_details,
             get_player_history,
             get_yield_history,
+            get_nation_dynasty_data,
+            get_player_debug_data,
+            get_match_debug_data,
             run_event_test,
             reset_database_cmd
         ]);
