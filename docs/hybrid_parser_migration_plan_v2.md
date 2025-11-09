@@ -1038,6 +1038,24 @@ log::info!("⏱️ Players: {:?}", t_parse.elapsed());
 
 ## Testing Strategy
 
+### Important: Use `parse_xml()` Helper in Tests
+
+**CRITICAL:** Always use `parse_xml()` from `xml_loader.rs` in tests, NOT `roxmltree::Document::parse()` directly.
+
+```rust
+// ❌ WRONG: Type mismatch error
+use roxmltree::Document;
+let doc = Document::parse(xml).unwrap();  // Returns Document<'_>
+parse_players_struct(&doc).unwrap();      // Expects &XmlDocument (enum wrapper)
+
+// ✅ CORRECT: Use parse_xml() helper
+use crate::parser::xml_loader::parse_xml;
+let doc = parse_xml(xml.to_string()).unwrap();  // Returns XmlDocument enum
+parse_players_struct(&doc).unwrap();            // Works correctly
+```
+
+**Why:** `XmlDocument` is an enum wrapper (not a type alias) that holds both the string content and the parsed `Document`. This enables future optimizations like hybrid streaming for large files.
+
 ### Unit Tests (Parser Logic)
 
 **Before (Hard):**
