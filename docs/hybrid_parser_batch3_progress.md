@@ -1,7 +1,7 @@
 # Hybrid Parser Migration - Batch 3 Progress Tracker
 
 **Phase:** Phase 3 - Extended and Nested Data
-**Status:** In Progress (3 of 7 entities complete)
+**Status:** In Progress (4 of 7 entities complete)
 **Started:** 2025-11-09
 
 ---
@@ -11,8 +11,8 @@
 Batch 3 migrates extended and nested data entities to the hybrid parser architecture. These entities contain auxiliary game data that's parsed after the core entities.
 
 **Total Entities:** 7
-**Completed:** 3 ✅
-**Remaining:** 4 ⏳
+**Completed:** 4 ✅
+**Remaining:** 3 ⏳
 
 ---
 
@@ -39,15 +39,16 @@ Batch 3 migrates extended and nested data entities to the hybrid parser architec
    - Implementation: Separate parsers for visibility and change history
    - Commit: `2e30684`
 
+4. **player_data** (2025-11-09)
+   - Files: `parsers/player_data.rs`, `inserters/player_data.rs`
+   - Types: `PlayerResource`, `TechnologyProgress`, `TechnologyCompleted`, `TechnologyState`, `PlayerCouncil`, `Law`, `PlayerGoal`
+   - Tests: 9 unit tests, all passing
+   - Implementation: 7 parser functions, 7 inserter functions with deduplication
+   - Notable: Uses `parse_all_player_data()` orchestrator function to collect all nested data
+
 ### ⏳ Remaining Entities
 
-4. **player_data** (Next)
-   - Source: `entities/player_data.rs` (~454 lines)
-   - Tables: `player_resources`, `player_tech`, `player_laws`, `player_council`, `player_goals`
-   - Complexity: High (many nested types)
-   - Estimated effort: 4-5 hours
-
-5. **diplomacy**
+5. **diplomacy** (Next)
    - Source: `entities/diplomacy.rs` (~171 lines)
    - Tables: `diplomacy_relations`
    - Complexity: Low-Medium
@@ -334,5 +335,5 @@ Once all 7 entities are migrated:
 ---
 
 **Last Updated:** 2025-11-09
-**Status:** 2/7 complete (29%)
-**Next Entity:** tile_data
+**Status:** 4/7 complete (57%)
+**Next Entity:** diplomacy

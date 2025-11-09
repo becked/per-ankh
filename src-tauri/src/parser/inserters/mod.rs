@@ -21,6 +21,7 @@ pub mod unit_production;
 // Batch 3 - Extended and nested data
 pub mod character_data;
 pub mod city_data;
+pub mod player_data;
 pub mod tile_data;
 
 // Batch 1 exports
@@ -43,5 +44,9 @@ pub use character_data::{
 pub use city_data::{
     insert_city_culture, insert_city_production_queue, insert_city_projects_completed,
     insert_city_religions, insert_city_yields,
+};
+pub use player_data::{
+    insert_laws, insert_player_council, insert_player_goals, insert_player_resources,
+    insert_technologies_completed, insert_technology_progress, insert_technology_states,
 };
 pub use tile_data::{insert_tile_changes, insert_tile_visibility};

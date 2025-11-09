@@ -341,6 +341,72 @@ pub struct TileChange {
     pub new_value: String,
 }
 
+/// Player resource stockpile (YieldStockpile element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerResource {
+    pub player_xml_id: i32,
+    pub yield_type: String,
+    pub amount: i32,
+}
+
+/// Technology research progress (TechProgress element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TechnologyProgress {
+    pub player_xml_id: i32,
+    pub tech: String,
+    pub progress: i32,
+}
+
+/// Completed technologies (TechCount element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TechnologyCompleted {
+    pub player_xml_id: i32,
+    pub tech: String,
+    pub completed_turn: Option<i32>,
+}
+
+/// Technology state (TechAvailable, TechPassed, TechTrashed, TechLocked, TechTarget elements)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TechnologyState {
+    pub player_xml_id: i32,
+    pub tech: String,
+    pub state: String, // "available", "passed", "trashed", "locked", "targeted"
+}
+
+/// Player council positions (CouncilCharacter element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerCouncil {
+    pub player_xml_id: i32,
+    pub position: String,
+    pub character_xml_id: i32,
+    pub appointed_turn: Option<i32>,
+}
+
+/// Active laws (ActiveLaw element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Law {
+    pub player_xml_id: i32,
+    pub law_category: String,
+    pub law: String,
+    pub adopted_turn: i32,
+    pub change_count: i32,
+}
+
+/// Player goals (GoalList element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerGoal {
+    pub player_xml_id: i32,
+    pub goal_xml_id: i32,
+    pub goal_type: String,
+    pub leader_character_xml_id: Option<i32>,
+    pub started_turn: i32,
+    pub completed_turn: Option<i32>,
+    pub failed_turn: Option<i32>,
+    pub max_turns: Option<i32>,
+    pub progress: i32,
+    pub goal_state: Option<String>, // JSON-serialized stats
+}
+
 /// Complete game save data (for future expansion)
 ///
 /// Currently contains players, characters, cities, and Batch 2 entities.
@@ -371,6 +437,13 @@ pub struct GameData {
     pub city_culture: Vec<CityCulture>,
     pub tile_visibility: Vec<TileVisibility>,
     pub tile_changes: Vec<TileChange>,
+    pub player_resources: Vec<PlayerResource>,
+    pub technology_progress: Vec<TechnologyProgress>,
+    pub technologies_completed: Vec<TechnologyCompleted>,
+    pub technology_states: Vec<TechnologyState>,
+    pub player_council: Vec<PlayerCouncil>,
+    pub laws: Vec<Law>,
+    pub player_goals: Vec<PlayerGoal>,
 
-    // Future: tiles, player_data, diplomacy, timeseries, events
+    // Future: diplomacy, timeseries, events
 }
