@@ -42,12 +42,6 @@ Batch 3 migrates extended and nested data entities to the hybrid parser architec
 ### ⏳ Remaining Entities
 
 4. **player_data** (Next)
-   - Source: `entities/tile_data.rs` (~225 lines)
-   - Tables: `tile_visibility`, `tile_ownership_history`
-   - Complexity: Medium
-   - Estimated effort: 2-3 hours
-
-4. **player_data**
    - Source: `entities/player_data.rs` (~454 lines)
    - Tables: `player_resources`, `player_tech`, `player_laws`, `player_council`, `player_goals`
    - Complexity: High (many nested types)
