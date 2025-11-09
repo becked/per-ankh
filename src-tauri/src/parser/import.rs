@@ -345,9 +345,15 @@ fn import_save_file_internal(
     let t_foundation = Instant::now();
 
     // Order matters due to foreign keys:
-    // 1. Players (no dependencies)
+    // 1. Players (no dependencies) - HYBRID PARSER
     let t_players = Instant::now();
-    let players_count = super::entities::parse_players(doc, tx, &mut id_mapper)?;
+
+    // Parse to structs (pure, no DB)
+    let players_data = super::parsers::parse_players_struct(doc)?;
+
+    // Insert to database
+    let players_count = super::inserters::insert_players(tx, &players_data, &mut id_mapper)?;
+
     let players_time = t_players.elapsed();
     log::info!("⏱️    Players: {:?} ({} players)", players_time, players_count);
     eprintln!("⏱️    Players: {:?} ({} players)", players_time, players_count);
