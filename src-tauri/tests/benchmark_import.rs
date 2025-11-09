@@ -38,7 +38,7 @@ fn benchmark_real_save_import() {
 
     let import_start = Instant::now();
 
-    let result = import_save_file(save_path, &conn)
+    let result = import_save_file(save_path, &conn, None, None, None, None, None)
         .expect("Import failed");
 
     let import_time = import_start.elapsed();
@@ -143,7 +143,7 @@ fn benchmark_multiple_imports() {
         println!("Import {}/{}...", idx + 1, save_files.len());
 
         let start = Instant::now();
-        let result = import_save_file(save_path, &conn)
+        let result = import_save_file(save_path, &conn, None, None, None, None, None)
             .expect(&format!("Failed to import {}", save_path));
         let elapsed = start.elapsed();
 
