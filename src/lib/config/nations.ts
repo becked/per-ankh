@@ -19,7 +19,7 @@
 export const NATION_COLORS = {
   AKSUM: "#F8A3B4", // Pink/Rose
   ASSYRIA: "#FADC3B", // Yellow
-  BABYLON: "#82C83E", // Green
+  BABYLONIA: "#82C83E", // Green
   CARTHAGE: "#F6EFE1", // Beige/Off-white
   EGYPT: "#BC6304", // Dark Orange/Brown
   GREECE: "#2360BC", // Dark Blue

@@ -116,7 +116,7 @@ The application uses specific colors for each Old World nation and tribe. These 
 |--------|----------|-------------------|--------|
 | **Aksum** | `#F8A3B4` | Pink/Rose | `NATION_COLORS.AKSUM` |
 | **Assyria** | `#FADC3B` | Yellow | `NATION_COLORS.ASSYRIA` |
-| **Babylon** | `#82C83E` | Green | `NATION_COLORS.BABYLON` |
+| **Babylonia** | `#82C83E` | Green | `NATION_COLORS.BABYLONIA` |
 | **Carthage** | `#F6EFE1` | Beige/Off-white | `NATION_COLORS.CARTHAGE` |
 | **Egypt** | `#BC6304` | Dark Orange/Brown | `NATION_COLORS.EGYPT` |
 | **Greece** | `#2360BC` | Dark Blue | `NATION_COLORS.GREECE` |
