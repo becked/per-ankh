@@ -6,6 +6,8 @@
 // - Validation before insertion
 // - Future: multi-pass insertion for FK dependencies
 
+pub mod characters;
 pub mod players;
 
+pub use characters::insert_characters_core;
 pub use players::insert_players;
