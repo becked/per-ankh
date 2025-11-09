@@ -18,6 +18,9 @@ pub mod religions;
 pub mod tribes;
 pub mod unit_production;
 
+// Batch 3 - Extended and nested data
+pub mod character_data;
+
 // Batch 1 exports
 pub use characters::parse_characters_struct;
 pub use cities::parse_cities_struct;
@@ -29,3 +32,6 @@ pub use families::parse_families_struct;
 pub use religions::parse_religions_struct;
 pub use tribes::parse_tribes_struct;
 pub use unit_production::{parse_city_units_produced, parse_player_units_produced};
+
+// Batch 3 exports
+pub use character_data::parse_all_character_data_struct;

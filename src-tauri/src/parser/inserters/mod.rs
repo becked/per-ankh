@@ -18,6 +18,9 @@ pub mod religions;
 pub mod tribes;
 pub mod unit_production;
 
+// Batch 3 - Extended and nested data
+pub mod character_data;
+
 // Batch 1 exports
 pub use characters::insert_characters_core;
 pub use cities::insert_cities;
@@ -29,3 +32,9 @@ pub use families::insert_families;
 pub use religions::insert_religions;
 pub use tribes::insert_tribes;
 pub use unit_production::{insert_city_units_produced, insert_player_units_produced};
+
+// Batch 3 exports
+pub use character_data::{
+    insert_character_marriages, insert_character_relationships, insert_character_stats,
+    insert_character_traits,
+};
