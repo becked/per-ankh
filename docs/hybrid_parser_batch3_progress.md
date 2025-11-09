@@ -1,7 +1,7 @@
 # Hybrid Parser Migration - Batch 3 Progress Tracker
 
 **Phase:** Phase 3 - Extended and Nested Data
-**Status:** In Progress (4 of 7 entities complete)
+**Status:** In Progress (5 of 7 entities complete)
 **Started:** 2025-11-09
 
 ---
@@ -11,8 +11,8 @@
 Batch 3 migrates extended and nested data entities to the hybrid parser architecture. These entities contain auxiliary game data that's parsed after the core entities.
 
 **Total Entities:** 7
-**Completed:** 4 ✅
-**Remaining:** 3 ⏳
+**Completed:** 5 ✅
+**Remaining:** 2 ⏳
 
 ---
 
@@ -46,15 +46,17 @@ Batch 3 migrates extended and nested data entities to the hybrid parser architec
    - Implementation: 7 parser functions, 7 inserter functions with deduplication
    - Notable: Uses `parse_all_player_data()` orchestrator function to collect all nested data
 
+5. **diplomacy** (2025-11-09)
+   - Files: `parsers/diplomacy.rs`, `inserters/diplomacy.rs`
+   - Types: `DiplomacyRelation`
+   - Tests: 6 unit tests, all passing
+   - Implementation: Parses both TribeDiplomacy and TeamDiplomacy
+   - Notable: Stores entity IDs as strings (supports both player IDs and tribe names)
+   - Commit: `32299aa`
+
 ### ⏳ Remaining Entities
 
-5. **diplomacy** (Next)
-   - Source: `entities/diplomacy.rs` (~171 lines)
-   - Tables: `diplomacy_relations`
-   - Complexity: Low-Medium
-   - Estimated effort: 2 hours
-
-6. **timeseries**
+6. **timeseries** (Next)
    - Source: `entities/timeseries.rs` (~450 lines)
    - Tables: `points_history`, `yield_history`
    - Complexity: Medium
@@ -335,5 +337,5 @@ Once all 7 entities are migrated:
 ---
 
 **Last Updated:** 2025-11-09
-**Status:** 4/7 complete (57%)
-**Next Entity:** diplomacy
+**Status:** 5/7 complete (71%)
+**Next Entity:** timeseries
