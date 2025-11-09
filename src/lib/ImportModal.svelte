@@ -37,10 +37,6 @@
     return `${minutes}m ${remainingSeconds}s`;
   };
 
-  const formatSpeed = (speed: number): string => {
-    return speed.toFixed(1);
-  };
-
   function handleClose() {
     if (!isImporting) {
       error = null;
@@ -162,10 +158,6 @@
               <div>
                 <span class="text-gray-400">Remaining:</span>
                 <span class="ml-2 text-tan">{formatTime(progress.estimated_remaining_ms)}</span>
-              </div>
-              <div>
-                <span class="text-gray-400">Speed:</span>
-                <span class="ml-2 text-tan">{formatSpeed(progress.speed)} files/sec</span>
               </div>
             </div>
           </div>
