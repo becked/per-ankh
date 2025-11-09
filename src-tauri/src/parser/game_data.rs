@@ -108,13 +108,158 @@ pub struct CharacterData {
     pub seed: Option<i64>,
 }
 
+/// City entity data parsed from XML
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityData {
+    // Core identity
+    pub xml_id: i32,
+    pub city_name: String,
+    pub founded_turn: i32,
+
+    // Ownership
+    pub player_xml_id: Option<i32>,
+    pub tile_xml_id: i32,
+    pub family: Option<String>,
+    pub first_owner_player_xml_id: Option<i32>,
+
+    // Status
+    pub is_capital: bool,
+
+    // Population
+    pub citizens: i32,
+    pub growth_progress: i32,
+
+    // Leadership (character XML IDs)
+    pub governor_xml_id: Option<i32>,
+    pub general_xml_id: Option<i32>,
+    pub agent_xml_id: Option<i32>,
+
+    // Production
+    pub hurry_civics_count: i32,
+    pub hurry_money_count: i32,
+    pub specialist_count: i32,
+}
+
+/// Tile entity data parsed from XML
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TileData {
+    // Core identity
+    pub xml_id: i32,
+    pub x: i32,
+    pub y: i32,
+
+    // Terrain
+    pub terrain: Option<String>,
+    pub height: Option<String>,
+    pub vegetation: Option<String>,
+
+    // Rivers (hex directions)
+    pub river_w: bool,
+    pub river_sw: bool,
+    pub river_se: bool,
+
+    // Resources and improvements
+    pub resource: Option<String>,
+    pub improvement: Option<String>,
+    pub improvement_pillaged: bool,
+    pub improvement_disabled: bool,
+    pub improvement_turns_left: Option<i32>,
+    pub improvement_develop_turns: i32,
+
+    // Specialists
+    pub specialist: Option<String>,
+
+    // Infrastructure
+    pub has_road: bool,
+
+    // Ownership (XML IDs)
+    pub owner_player_xml_id: Option<i32>,
+    // Note: owner_city_id is NOT set during parsing - it will be populated in Pass 2b
+
+    // Sites
+    pub is_city_site: bool,
+    pub tribe_site: Option<String>,
+
+    // Religion
+    pub religion: Option<String>,
+
+    // Seeds
+    pub init_seed: Option<i64>,
+    pub turn_seed: Option<i64>,
+}
+
+/// Family entity data parsed from XML
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FamilyData {
+    // Families don't have XML IDs - we generate stable IDs from names
+    pub family_name: String,
+    pub family_class: String,
+    pub player_xml_id: i32,
+
+    // Leadership and status (XML IDs)
+    pub head_character_xml_id: Option<i32>,
+    pub seat_city_xml_id: Option<i32>,
+    pub turns_without_leader: i32,
+}
+
+/// Religion entity data parsed from XML
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReligionData {
+    // Religions don't have XML IDs - identified by name
+    pub religion_name: String,
+    pub founded_turn: Option<i32>,
+
+    // Leadership and status (XML IDs)
+    pub founder_player_xml_id: Option<i32>,
+    pub head_character_xml_id: Option<i32>,
+    pub holy_city_xml_id: Option<i32>,
+}
+
+/// Tribe entity data parsed from XML
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TribeData {
+    // Tribes use string IDs like "TRIBE_REBELS"
+    pub tribe_id: String,
+
+    // Leadership and alliances (XML IDs)
+    pub leader_character_xml_id: Option<i32>,
+    pub allied_player_xml_id: Option<i32>,
+    pub religion: Option<String>,
+}
+
+/// Player unit production data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlayerUnitProduction {
+    pub player_xml_id: i32,
+    pub unit_type: String,
+    pub count: i32,
+}
+
+/// City unit production data
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityUnitProduction {
+    pub city_xml_id: i32,
+    pub unit_type: String,
+    pub count: i32,
+}
+
 /// Complete game save data (for future expansion)
 ///
-/// Currently contains players and characters.
+/// Currently contains players, characters, cities, and Batch 2 entities.
 /// Will expand to include all entity types as migration progresses.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct GameData {
+    // Batch 1 - Foundation entities
     pub players: Vec<PlayerData>,
     pub characters: Vec<CharacterData>,
-    // Future: cities, tiles, families, etc.
+    pub cities: Vec<CityData>,
+
+    // Batch 2 - Affiliation and aggregate entities
+    pub families: Vec<FamilyData>,
+    pub religions: Vec<ReligionData>,
+    pub tribes: Vec<TribeData>,
+    pub player_units_produced: Vec<PlayerUnitProduction>,
+    pub city_units_produced: Vec<CityUnitProduction>,
+
+    // Future: tiles, character_data, city_data, etc.
 }
