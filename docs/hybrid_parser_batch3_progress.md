@@ -1,7 +1,7 @@
 # Hybrid Parser Migration - Batch 3 Progress Tracker
 
 **Phase:** Phase 3 - Extended and Nested Data
-**Status:** In Progress (1 of 7 entities complete)
+**Status:** In Progress (2 of 7 entities complete)
 **Started:** 2025-11-09
 
 ---
@@ -11,8 +11,8 @@
 Batch 3 migrates extended and nested data entities to the hybrid parser architecture. These entities contain auxiliary game data that's parsed after the core entities.
 
 **Total Entities:** 7
-**Completed:** 1 ✅
-**Remaining:** 6 ⏳
+**Completed:** 2 ✅
+**Remaining:** 5 ⏳
 
 ---
 
@@ -26,15 +26,15 @@ Batch 3 migrates extended and nested data entities to the hybrid parser architec
    - Tests: 6 unit tests, all passing
    - Commit: `c2eadc6`
 
+2. **city_data** (2025-11-09)
+   - Files: `parsers/city_data.rs`, `inserters/city_data.rs`
+   - Types: `CityProductionItem`, `CityProjectCompleted`, `CityYield`, `CityReligion`, `CityCulture`
+   - Tests: 7 unit tests, all passing
+   - Implementation: 5 parser functions, 5 inserter functions with deduplication
+
 ### ⏳ Remaining Entities
 
-2. **city_data** (Next)
-   - Source: `entities/city_data.rs` (~430 lines)
-   - Tables: `city_production_queue`, `city_culture`, `city_yields`, etc.
-   - Complexity: High (multiple nested data types)
-   - Estimated effort: 3-4 hours
-
-3. **tile_data**
+3. **tile_data** (Next)
    - Source: `entities/tile_data.rs` (~225 lines)
    - Tables: `tile_visibility`, `tile_ownership_history`
    - Complexity: Medium
@@ -312,5 +312,5 @@ Once all 7 entities are migrated:
 ---
 
 **Last Updated:** 2025-11-09
-**Status:** 1/7 complete (14%)
-**Next Entity:** city_data
+**Status:** 2/7 complete (29%)
+**Next Entity:** tile_data
