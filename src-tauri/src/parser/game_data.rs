@@ -243,6 +243,43 @@ pub struct CityUnitProduction {
     pub count: i32,
 }
 
+/// Character stat data (Rating and Stat elements combined)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterStat {
+    pub character_xml_id: i32,
+    pub stat_name: String,
+    pub stat_value: i32,
+}
+
+/// Character trait data (TraitTurn element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterTrait {
+    pub character_xml_id: i32,
+    pub trait_name: String,
+    pub acquired_turn: i32,
+    pub removed_turn: Option<i32>,
+}
+
+/// Character relationship data (RelationshipList element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterRelationship {
+    pub character_xml_id: i32,
+    pub related_character_xml_id: i32,
+    pub relationship_type: String,
+    pub relationship_value: Option<i32>,
+    pub started_turn: Option<i32>,
+    pub ended_turn: Option<i32>,
+}
+
+/// Character marriage data (Spouses element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CharacterMarriage {
+    pub character_xml_id: i32,
+    pub spouse_xml_id: i32,
+    pub married_turn: i32,
+    pub divorced_turn: Option<i32>,
+}
+
 /// Complete game save data (for future expansion)
 ///
 /// Currently contains players, characters, cities, and Batch 2 entities.
@@ -261,5 +298,11 @@ pub struct GameData {
     pub player_units_produced: Vec<PlayerUnitProduction>,
     pub city_units_produced: Vec<CityUnitProduction>,
 
-    // Future: tiles, character_data, city_data, etc.
+    // Batch 3 - Extended and nested data
+    pub character_stats: Vec<CharacterStat>,
+    pub character_traits: Vec<CharacterTrait>,
+    pub character_relationships: Vec<CharacterRelationship>,
+    pub character_marriages: Vec<CharacterMarriage>,
+
+    // Future: tiles, city_data, tile_data, player_data, diplomacy, timeseries, events
 }
