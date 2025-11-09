@@ -24,6 +24,7 @@ pub mod city_data;
 pub mod diplomacy;
 pub mod player_data;
 pub mod tile_data;
+pub mod timeseries;
 
 // Batch 1 exports
 pub use characters::insert_characters_core;
@@ -52,3 +53,8 @@ pub use player_data::{
     insert_technologies_completed, insert_technology_progress, insert_technology_states,
 };
 pub use tile_data::{insert_tile_changes, insert_tile_visibility};
+pub use timeseries::{
+    insert_family_opinion_history, insert_legitimacy_history, insert_military_power_history,
+    insert_points_history, insert_religion_opinion_history, insert_yield_price_history,
+    insert_yield_rate_history,
+};

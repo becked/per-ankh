@@ -421,6 +421,65 @@ pub struct DiplomacyRelation {
     pub diplomacy_blocked_until_turn: Option<i32>,
 }
 
+/// Game-level yield price history (sparse timeseries)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YieldPriceHistory {
+    pub turn: i32,
+    pub yield_type: String,  // e.g., "YIELD_GROWTH", "YIELD_CIVICS"
+    pub price: i32,
+}
+
+/// Player military power history (sparse timeseries)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MilitaryPowerHistory {
+    pub player_xml_id: i32,
+    pub turn: i32,
+    pub military_power: i32,
+}
+
+/// Player points history (sparse timeseries)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PointsHistory {
+    pub player_xml_id: i32,
+    pub turn: i32,
+    pub points: i32,
+}
+
+/// Player legitimacy history (sparse timeseries)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LegitimacyHistory {
+    pub player_xml_id: i32,
+    pub turn: i32,
+    pub legitimacy: i32,
+}
+
+/// Player yield rate history per yield type (sparse timeseries)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YieldRateHistory {
+    pub player_xml_id: i32,
+    pub turn: i32,
+    pub yield_type: String,  // e.g., "YIELD_GROWTH", "YIELD_CIVICS"
+    pub amount: i32,
+}
+
+/// Player family opinion history per family (sparse timeseries)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FamilyOpinionHistory {
+    pub player_xml_id: i32,
+    pub family_name: String,  // e.g., "FAMILY_BARCID"
+    pub turn: i32,
+    pub opinion: i32,
+}
+
+/// Player religion opinion history per religion (sparse timeseries)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ReligionOpinionHistory {
+    pub player_xml_id: i32,
+    pub religion_name: String,  // e.g., "RELIGION_JUDAISM"
+    pub turn: i32,
+    pub opinion: i32,
+}
+
 /// Complete game save data (for future expansion)
 ///
 /// Currently contains players, characters, cities, and Batch 2 entities.
@@ -460,5 +519,14 @@ pub struct GameData {
     pub player_goals: Vec<PlayerGoal>,
     pub diplomacy_relations: Vec<DiplomacyRelation>,
 
-    // Future: timeseries, events
+    // Timeseries data
+    pub yield_price_history: Vec<YieldPriceHistory>,
+    pub military_power_history: Vec<MilitaryPowerHistory>,
+    pub points_history: Vec<PointsHistory>,
+    pub legitimacy_history: Vec<LegitimacyHistory>,
+    pub yield_rate_history: Vec<YieldRateHistory>,
+    pub family_opinion_history: Vec<FamilyOpinionHistory>,
+    pub religion_opinion_history: Vec<ReligionOpinionHistory>,
+
+    // Future: events
 }
