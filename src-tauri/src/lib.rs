@@ -225,8 +225,8 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
 async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Result<Vec<GameInfo>, String> {
     pool.with_connection(|conn| {
         // Get all games ordered by save_date (newest first)
-        // Join with players to get the first player's nation (usually the human player)
-        // Prioritize players with names, but fall back to any player if none have names
+        // Join with players to get the human player's nation
+        // Prioritize human players, then players with names, then fall back to any player
         let mut stmt = conn
             .prepare(
                 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
@@ -237,6 +237,7 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
                             ROW_NUMBER() OVER (
                                 PARTITION BY match_id
                                 ORDER BY
+                                    CASE WHEN is_human = true THEN 0 ELSE 1 END,
                                     CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
                                          THEN 0 ELSE 1 END,
                                     player_name
