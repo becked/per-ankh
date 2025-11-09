@@ -20,6 +20,8 @@ pub mod unit_production;
 
 // Batch 3 - Extended and nested data
 pub mod character_data;
+pub mod city_data;
+pub mod tile_data;
 
 // Batch 1 exports
 pub use characters::insert_characters_core;
@@ -38,3 +40,8 @@ pub use character_data::{
     insert_character_marriages, insert_character_relationships, insert_character_stats,
     insert_character_traits,
 };
+pub use city_data::{
+    insert_city_culture, insert_city_production_queue, insert_city_projects_completed,
+    insert_city_religions, insert_city_yields,
+};
+pub use tile_data::{insert_tile_changes, insert_tile_visibility};

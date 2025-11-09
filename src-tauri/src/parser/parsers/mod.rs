@@ -20,6 +20,8 @@ pub mod unit_production;
 
 // Batch 3 - Extended and nested data
 pub mod character_data;
+pub mod city_data;
+pub mod tile_data;
 
 // Batch 1 exports
 pub use characters::parse_characters_struct;
@@ -35,3 +37,8 @@ pub use unit_production::{parse_city_units_produced, parse_player_units_produced
 
 // Batch 3 exports
 pub use character_data::parse_all_character_data_struct;
+pub use city_data::{
+    parse_city_culture_struct, parse_city_production_queue_struct,
+    parse_city_projects_completed_struct, parse_city_religions_struct, parse_city_yields_struct,
+};
+pub use tile_data::{parse_tile_changes_struct, parse_tile_visibility_struct};

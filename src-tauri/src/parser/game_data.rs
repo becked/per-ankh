@@ -280,6 +280,67 @@ pub struct CharacterMarriage {
     pub divorced_turn: Option<i32>,
 }
 
+/// City production queue item (BuildQueue element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityProductionItem {
+    pub city_xml_id: i32,
+    pub queue_position: i32,
+    pub build_type: String,
+    pub item_type: String,
+    pub progress: i32,
+    pub is_repeat: bool,
+}
+
+/// City completed project (CompletedBuild element, aggregated)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityProjectCompleted {
+    pub city_xml_id: i32,
+    pub project_type: String,
+    pub count: i32,
+}
+
+/// City yield progress (YieldProgress element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityYield {
+    pub city_xml_id: i32,
+    pub yield_type: String,
+    pub progress: i32,
+}
+
+/// City religion (Religion element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityReligion {
+    pub city_xml_id: i32,
+    pub religion: String,
+}
+
+/// City culture and happiness per team (TeamCulture and TeamHappinessLevel elements)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityCulture {
+    pub city_xml_id: i32,
+    pub team_id: i32,
+    pub culture_level: i32,
+    pub happiness_level: i32,
+}
+
+/// Tile visibility data (RevealedTurn and RevealedOwner elements)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TileVisibility {
+    pub tile_xml_id: i32,
+    pub team_id: i32,
+    pub revealed_turn: i32,
+    pub visible_owner_player_xml_id: Option<i32>,
+}
+
+/// Tile change history (TerrainHistory and VegetationHistory elements)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TileChange {
+    pub tile_xml_id: i32,
+    pub turn: i32,
+    pub change_type: String, // "terrain" or "vegetation"
+    pub new_value: String,
+}
+
 /// Complete game save data (for future expansion)
 ///
 /// Currently contains players, characters, cities, and Batch 2 entities.
@@ -303,6 +364,13 @@ pub struct GameData {
     pub character_traits: Vec<CharacterTrait>,
     pub character_relationships: Vec<CharacterRelationship>,
     pub character_marriages: Vec<CharacterMarriage>,
+    pub city_production_queue: Vec<CityProductionItem>,
+    pub city_projects_completed: Vec<CityProjectCompleted>,
+    pub city_yields: Vec<CityYield>,
+    pub city_religions: Vec<CityReligion>,
+    pub city_culture: Vec<CityCulture>,
+    pub tile_visibility: Vec<TileVisibility>,
+    pub tile_changes: Vec<TileChange>,
 
-    // Future: tiles, city_data, tile_data, player_data, diplomacy, timeseries, events
+    // Future: tiles, player_data, diplomacy, timeseries, events
 }
