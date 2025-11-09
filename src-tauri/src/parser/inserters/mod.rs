@@ -22,6 +22,7 @@ pub mod unit_production;
 pub mod character_data;
 pub mod city_data;
 pub mod diplomacy;
+pub mod events;
 pub mod player_data;
 pub mod tile_data;
 pub mod timeseries;
@@ -48,6 +49,7 @@ pub use city_data::{
     insert_city_religions, insert_city_yields,
 };
 pub use diplomacy::insert_diplomacy_relations;
+pub use events::{insert_event_logs, insert_event_stories, insert_memory_data};
 pub use player_data::{
     insert_laws, insert_player_council, insert_player_goals, insert_player_resources,
     insert_technologies_completed, insert_technology_progress, insert_technology_states,
