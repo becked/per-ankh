@@ -480,6 +480,41 @@ pub struct ReligionOpinionHistory {
     pub opinion: i32,
 }
 
+/// Story event data parsed from EventStoryTurn elements
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventStory {
+    pub event_type: String,          // e.g., "EVENTSTORY_CULTURE_PAID_FUNCTION"
+    pub player_xml_id: i32,           // Player who experienced the event
+    pub occurred_turn: i32,           // Turn when event occurred
+    pub primary_character_xml_id: Option<i32>, // Character involved (if any)
+    pub city_xml_id: Option<i32>,     // City involved (if any)
+}
+
+/// Event log entry from PermanentLogList/LogData
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct EventLog {
+    pub player_xml_id: i32,
+    pub log_type: String,             // e.g., "TECH_DISCOVERED"
+    pub turn: i32,
+    pub description: Option<String>,  // Text description with HTML tags
+    pub data1: Option<i32>,
+    pub data2: Option<i32>,
+    pub data3: Option<i32>,
+}
+
+/// Player memory data from MemoryList/MemoryData
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemoryData {
+    pub player_xml_id: i32,
+    pub memory_type: String,          // e.g., "MEMORYPLAYER_ATTACKED_CITY"
+    pub turn: i32,
+    pub target_player_xml_id: Option<i32>,
+    pub target_character_xml_id: Option<i32>,
+    pub target_family: Option<String>,
+    pub target_tribe: Option<String>,
+    pub target_religion: Option<String>,
+}
+
 /// Complete game save data (for future expansion)
 ///
 /// Currently contains players, characters, cities, and Batch 2 entities.
@@ -528,5 +563,8 @@ pub struct GameData {
     pub family_opinion_history: Vec<FamilyOpinionHistory>,
     pub religion_opinion_history: Vec<ReligionOpinionHistory>,
 
-    // Future: events
+    // Events data
+    pub event_stories: Vec<EventStory>,
+    pub event_logs: Vec<EventLog>,
+    pub memory_data: Vec<MemoryData>,
 }
