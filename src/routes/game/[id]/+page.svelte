@@ -8,7 +8,7 @@
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
-  import { formatEnum, formatDate } from "$lib/utils/formatting";
+  import { formatEnum, formatDate, formatGameTitle } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
   let gameDetails = $state<GameDetails | null>(null);
@@ -228,6 +228,16 @@
   const humanNation = $derived(
     gameDetails?.players.find((p) => p.is_human)?.nation ?? null
   );
+
+  // Format the game title using the shared formatter
+  const gameTitle = $derived(
+    gameDetails ? formatGameTitle({
+      game_name: gameDetails.game_name,
+      human_nation: humanNation,
+      total_turns: gameDetails.total_turns,
+      match_id: gameDetails.match_id
+    }) : ""
+  );
 </script>
 
 <main class="flex-1 pt-4 px-8 pb-8 overflow-y-auto bg-blue-gray">
@@ -236,7 +246,7 @@
     {:else if error}
       <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
     {:else if gameDetails}
-      <h1 class="mb-2 text-gray-200 text-3xl font-bold">{gameDetails.game_name || `Game ${gameDetails.match_id}`}</h1>
+      <h1 class="mb-2 text-gray-200 text-3xl font-bold">{gameTitle}</h1>
       <p class="mb-8 text-brown text-sm">{formatDate(gameDetails.save_date)}</p>
 
       <!-- Summary Section -->
