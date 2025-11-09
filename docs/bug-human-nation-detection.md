@@ -1,8 +1,12 @@
 # Bug Report: Human Nation Detection Issue
 
+## Status: FIXED ✓
+
+**Fixed in**: src-tauri/src/lib.rs:240 (updated SQL query to prioritize `is_human = true`)
+
 ## Summary
 
-The parser is incorrectly identifying the human player's nation in some save files. A Babylonian game is being stored with `human_nation = "NATION_CARTHAGE"` instead of `"NATION_BABYLONIA"`.
+The query was incorrectly selecting the human player's nation by prioritizing alphabetical player names instead of using the `is_human` flag. A Babylonian game was being displayed with `human_nation = "NATION_CARTHAGE"` instead of `"NATION_BABYLONIA"` because "Carthage" came first alphabetically.
 
 ## Observed Behavior
 
@@ -61,9 +65,9 @@ function formatGameTitle(game: GameInfo): string {
 
 The frontend is working correctly. The bug is that `human_nation` contains the wrong value.
 
-## Root Cause: Backend Parser
+## Root Cause: SQL Query (NOT Parser)
 
-The issue is in the Rust save file parser that determines which player is human.
+**Investigation Result**: The parser was working correctly. The bug was in the SQL query that retrieves game information.
 
 ### Where to Investigate
 
@@ -185,3 +189,62 @@ The frontend treats "GameN" pattern as placeholder and prefers showing the natio
 - `src-tauri/src/db/queries.rs` - Database queries
 - `src/lib/GameSidebar.svelte:44-69` - Frontend title formatting
 - `src/routes/game/[id]/+page.svelte:239` - Detail page title display
+
+---
+
+## Fix Applied
+
+### What Was Wrong
+
+**File**: `src-tauri/src/lib.rs:228-246` (`get_games_list` command)
+
+The SQL query was selecting the nation from the `players` table using this ordering:
+```sql
+ORDER BY
+    CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
+         THEN 0 ELSE 1 END,
+    player_name
+```
+
+This meant it picked **the first player alphabetically by name**, not the human player. If an AI player's nation name came before your player name alphabetically (e.g., "Carthage" < "Jeff"), it would select the wrong nation.
+
+### The Fix
+
+Updated the SQL query to prioritize the `is_human` flag:
+```sql
+ORDER BY
+    CASE WHEN is_human = true THEN 0 ELSE 1 END,
+    CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
+         THEN 0 ELSE 1 END,
+    player_name
+```
+
+Now the query:
+1. **First** selects human players (`is_human = true`)
+2. Then prioritizes players with names
+3. Finally sorts alphabetically as a fallback
+
+### Testing the Fix
+
+To verify the fix works:
+
+1. Delete the database to force a fresh import:
+   ```bash
+   rm -f ~/Library/Application\ Support/com.becked.per-ankh/per-ankh.db
+   ```
+
+2. Re-import your Babylonian save file
+
+3. Check the database:
+   ```sql
+   SELECT game_name, human_nation FROM matches WHERE match_id = X;
+   ```
+   Should now show: `human_nation = "NATION_BABYLONIA"`
+
+4. Check the UI:
+   - Sidebar should display: "Babylonia - N turns" (or the custom game name if set)
+   - Detail page should show correct nation color and info
+
+### Future Optimization
+
+See `docs/todo-optimize-human-nation-storage.md` for a potential future optimization to store `human_nation` directly in the `matches` table instead of computing it via JOIN.
