@@ -4,7 +4,7 @@
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import type { GameInfo } from "$lib/types";
-  import { formatEnum, formatDate } from "$lib/utils/formatting";
+  import { formatGameTitle, formatDate, formatEnum } from "$lib/utils/formatting";
   import { refreshData } from "$lib/stores/refresh";
 
   let games = $state<GameInfo[]>([]);
@@ -36,38 +36,6 @@
     fetchGames();
   });
 
-  function formatNation(nation: string | null): string | null {
-    if (!nation) return null;
-    return formatEnum(nation, "NATION_");
-  }
-
-  function formatGameTitle(game: GameInfo): string {
-    // Check if game_name is a real name (not auto-generated "Game{number}")
-    const isRealName = game.game_name != null && game.game_name !== "" && !game.game_name.match(/^Game\d+$/);
-
-    if (isRealName) {
-      return game.game_name!;
-    }
-
-    // Format nation by removing NATION_ prefix and capitalizing
-    const formattedNation = formatNation(game.human_nation);
-
-    // Fallback: use nation and turns if available
-    if (formattedNation !== null && game.total_turns != null) {
-      return `${formattedNation} - ${game.total_turns} turns`;
-    }
-
-    if (formattedNation !== null) {
-      return formattedNation;
-    }
-
-    if (game.total_turns != null) {
-      return `Turn ${game.total_turns}`;
-    }
-
-    return `Game ${game.match_id}`;
-  }
-
   function formatGameSubtitle(game: GameInfo): string {
     return formatDate(game.save_date) === "Unknown" ? "" : formatDate(game.save_date);
   }
@@ -83,7 +51,7 @@
 
       const query = searchQuery.toLowerCase();
       const title = formatGameTitle(game).toLowerCase();
-      const nation = formatNation(game.human_nation)?.toLowerCase() ?? "";
+      const nation = game.human_nation ? formatEnum(game.human_nation, "NATION_").toLowerCase() : "";
       const date = formatGameSubtitle(game).toLowerCase();
 
       return title.includes(query) ||
