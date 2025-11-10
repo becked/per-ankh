@@ -75,7 +75,7 @@
       {#each filteredGames as game (game.match_id)}
         {@const isActive = currentGameId === game.match_id}
         <button
-          class="game-list-item {isActive ? 'active' : ''} w-full p-1.5 mb-0.5 border-2 rounded cursor-pointer text-left transition-all duration-200 {isActive ? '' : 'border-black hover:border-orange hover:translate-x-0.5'}"
+          class="game-list-item {isActive ? 'active' : ''} w-full p-1.5 mb-0.5 border-2 rounded-lg cursor-pointer text-left transition-all duration-200 {isActive ? '' : 'border-black hover:border-orange hover:translate-x-0.5'}"
           type="button"
           onclick={() => navigateToGame(game.match_id)}
         >
