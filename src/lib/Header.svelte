@@ -176,7 +176,7 @@
 
   <!-- Title in the center -->
   <button
-    class="cursor-pointer text-left transition-opacity hover:opacity-80"
+    class="absolute left-1/2 -translate-x-1/2 cursor-pointer text-left transition-opacity hover:opacity-80"
     type="button"
     onclick={navigateToSummary}
   >
