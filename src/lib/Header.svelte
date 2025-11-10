@@ -152,6 +152,13 @@
         <button
           class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors"
           type="button"
+          onclick={() => { isSettingsOpen = false; goto("/"); }}
+        >
+          Overview
+        </button>
+        <button
+          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          type="button"
           onclick={handleImportFiles}
         >
           Import Save Files
