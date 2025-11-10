@@ -246,23 +246,25 @@
     {:else if error}
       <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
     {:else if gameDetails}
-      <h1 class="mb-2 text-gray-200 text-3xl font-bold">{gameTitle}</h1>
-      <p class="mb-8 text-brown text-sm">{formatDate(gameDetails.save_date)}</p>
+      <div class="flex justify-between items-baseline mb-8">
+        <h1 class="text-gray-200 text-3xl font-bold">{gameTitle}</h1>
+        <p class="text-brown text-sm">{formatDate(gameDetails.save_date)}</p>
+      </div>
 
       <!-- Summary Section -->
-      <div class="p-6 border-2 border-black rounded-lg mb-6" style="background-color: #36302a;">
+      <div class="p-2 border-2 border-black rounded-lg mb-6" style="background-color: #36302a;">
         <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
-          <div class="flex flex-col gap-2 text-center">
-            <span class="font-bold text-brown text-sm uppercase tracking-wide">Players</span>
-            <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.players.length}</span>
-          </div>
-          <div class="flex flex-col gap-2 text-center">
-            <span class="font-bold text-brown text-sm uppercase tracking-wide">Human Nation</span>
+          <div class="flex items-center justify-center gap-2">
+            <span class="font-bold text-brown text-sm uppercase tracking-wide">Nation:</span>
             <span class="text-2xl font-bold" style="color: #EEEEEE;">{formatEnum(humanNation, "NATION_")}</span>
           </div>
-          <div class="flex flex-col gap-2 text-center">
-            <span class="font-bold text-brown text-sm uppercase tracking-wide">Turns</span>
+          <div class="flex items-center justify-center gap-2">
+            <span class="font-bold text-brown text-sm uppercase tracking-wide">Turns:</span>
             <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.total_turns}</span>
+          </div>
+          <div class="flex items-center justify-center gap-2">
+            <span class="font-bold text-brown text-sm uppercase tracking-wide">Nations:</span>
+            <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.players.length}</span>
           </div>
         </div>
       </div>
