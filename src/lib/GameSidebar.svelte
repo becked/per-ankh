@@ -61,7 +61,7 @@
   );
 </script>
 
-<aside class="w-[175px] h-full bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
+<aside class="w-[175px] h-full bg-blue-gray border-l-2 border-black flex flex-col overflow-hidden">
   <div class="sidebar-content overflow-y-auto flex-1 pt-2 px-2 pb-2">
     {#if loading}
       <div class="p-4 text-center text-tan">Loading games...</div>
@@ -86,23 +86,3 @@
     {/if}
   </div>
 </aside>
-
-<style>
-  /* Custom scrollbar styling - not available in Tailwind */
-  .sidebar-content::-webkit-scrollbar {
-    width: 8px;
-  }
-
-  .sidebar-content::-webkit-scrollbar-track {
-    background: rgba(0, 0, 0, 0.2);
-  }
-
-  .sidebar-content::-webkit-scrollbar-thumb {
-    background: var(--color-tan);
-    border-radius: 4px;
-  }
-
-  .sidebar-content::-webkit-scrollbar-thumb:hover {
-    background: var(--color-orange);
-  }
-</style>

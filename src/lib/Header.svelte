@@ -121,46 +121,10 @@
   data-tauri-drag-region
   class="w-full bg-blue-gray border-b-[3px] border-black px-4 pt-6 pb-2 flex items-center justify-between relative"
 >
-  <!-- Search box on the left -->
-  <div class="flex-shrink-0 w-56 relative">
-    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-4 w-4 text-tan opacity-50"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
-    </div>
-    <input
-      type="text"
-      bind:value={$searchQuery}
-      placeholder="Search"
-      class="w-full pl-9 pr-3 py-1 border-none rounded-full text-tan text-sm font-normal placeholder-tan placeholder:opacity-50 focus:outline-none transition-colors"
-      style="background-color: #403A33;"
-    />
-  </div>
-
-  <!-- Title in the center -->
-  <button
-    class="cursor-pointer text-left transition-opacity hover:opacity-80"
-    type="button"
-    onclick={navigateToSummary}
-  >
-    <div class="text-3xl font-bold text-gray-200 border-b-2 border-orange pb-1">☥ Per Ankh</div>
-  </button>
-
-  <!-- Settings dropdown on the right -->
+  <!-- Settings dropdown on the left -->
   <div class="settings-container flex-shrink-0">
     <button
-      class="text-orange hover:text-tan transition-colors p-2"
+      class="text-orange hover:text-tan transition-colors pr-2 py-2"
       type="button"
       onclick={toggleSettings}
       aria-label="Settings"
@@ -183,7 +147,7 @@
 
     {#if isSettingsOpen}
       <div
-        class="absolute right-0 mt-2 w-48 bg-blue-gray border-2 border-black rounded shadow-lg z-50"
+        class="absolute left-0 mt-2 w-48 bg-blue-gray border-2 border-black rounded shadow-lg z-50"
       >
         <button
           class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors"
@@ -208,6 +172,42 @@
         </button>
       </div>
     {/if}
+  </div>
+
+  <!-- Title in the center -->
+  <button
+    class="cursor-pointer text-left transition-opacity hover:opacity-80"
+    type="button"
+    onclick={navigateToSummary}
+  >
+    <div class="text-3xl font-bold text-gray-200 border-b-2 border-orange pb-1">☥ Per Ankh</div>
+  </button>
+
+  <!-- Search box on the right -->
+  <div class="flex-shrink-0 w-56 relative">
+    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        class="h-4 w-4 text-tan opacity-50"
+        fill="none"
+        viewBox="0 0 24 24"
+        stroke="currentColor"
+      >
+        <path
+          stroke-linecap="round"
+          stroke-linejoin="round"
+          stroke-width="2"
+          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+        />
+      </svg>
+    </div>
+    <input
+      type="text"
+      bind:value={$searchQuery}
+      placeholder="Search"
+      class="w-full pl-9 pr-3 py-1 border-none rounded-full text-tan text-sm font-normal placeholder-tan placeholder:opacity-50 focus:outline-none transition-colors"
+      style="background-color: #403A33;"
+    />
   </div>
 </header>
 
