@@ -184,7 +184,7 @@
   </button>
 
   <!-- Search box on the right -->
-  <div class="flex-shrink-0 w-56 relative">
+  <div class="flex-shrink-0 w-[171px] -mr-4 pr-2 pl-1 relative">
     <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
       <svg
         xmlns="http://www.w3.org/2000/svg"
