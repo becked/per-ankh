@@ -118,7 +118,7 @@
 
 <header
   data-tauri-drag-region
-  class="w-full bg-blue-gray border-b-[3px] border-black px-4 pt-6 pb-2 flex items-center justify-between"
+  class="w-full bg-blue-gray border-b-[3px] border-black px-4 pt-6 pb-2 flex items-center justify-center relative"
 >
   <button
     class="cursor-pointer text-left transition-opacity hover:opacity-80"
@@ -129,7 +129,7 @@
   </button>
 
   <!-- Settings dropdown -->
-  <div class="settings-container relative">
+  <div class="settings-container absolute right-4">
     <button
       class="text-orange hover:text-tan transition-colors p-2"
       type="button"
