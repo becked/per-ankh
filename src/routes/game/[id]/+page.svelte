@@ -250,19 +250,19 @@
       <p class="mb-8 text-brown text-sm">{formatDate(gameDetails.save_date)}</p>
 
       <!-- Summary Section -->
-      <div class="bg-gray-200 p-6 border-2 border-black rounded-lg mb-6">
+      <div class="p-6 border-2 border-black rounded-lg mb-6" style="background-color: #36302a;">
         <div class="grid grid-cols-[repeat(auto-fit,minmax(200px,1fr))] gap-6">
           <div class="flex flex-col gap-2 text-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide">Players</span>
-            <span class="text-black text-2xl font-bold">{gameDetails.players.length}</span>
+            <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.players.length}</span>
           </div>
           <div class="flex flex-col gap-2 text-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide">Human Nation</span>
-            <span class="text-black text-2xl font-bold">{formatEnum(humanNation, "NATION_")}</span>
+            <span class="text-2xl font-bold" style="color: #EEEEEE;">{formatEnum(humanNation, "NATION_")}</span>
           </div>
           <div class="flex flex-col gap-2 text-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide">Turns</span>
-            <span class="text-black text-2xl font-bold">{gameDetails.total_turns}</span>
+            <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.total_turns}</span>
           </div>
         </div>
       </div>
