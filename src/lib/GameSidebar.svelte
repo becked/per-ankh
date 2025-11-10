@@ -62,7 +62,7 @@
 </script>
 
 <aside class="w-[175px] h-full bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
-  <div class="sidebar-content overflow-y-auto flex-1 pt-4 px-2 pb-2">
+  <div class="sidebar-content overflow-y-auto flex-1 pt-2 px-2 pb-2">
     {#if loading}
       <div class="p-4 text-center text-tan">Loading games...</div>
     {:else if error}
@@ -75,7 +75,7 @@
       {#each filteredGames as game (game.match_id)}
         {@const isActive = currentGameId === game.match_id}
         <button
-          class="w-full p-2 mb-2 border-2 rounded cursor-pointer text-left transition-all duration-200 {isActive ? 'bg-tan-hover border-tan-hover hover:border-orange' : 'bg-tan border-black hover:bg-tan-hover hover:border-orange hover:translate-x-0.5'} active:bg-tan-hover"
+          class="w-full p-1.5 mb-0.5 border-2 rounded cursor-pointer text-left transition-all duration-200 {isActive ? 'bg-tan-hover border-tan-hover hover:border-orange' : 'bg-tan border-black hover:bg-tan-hover hover:border-orange hover:translate-x-0.5'} active:bg-tan-hover"
           type="button"
           onclick={() => navigateToGame(game.match_id)}
         >
