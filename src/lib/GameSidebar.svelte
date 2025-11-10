@@ -75,14 +75,29 @@
       {#each filteredGames as game (game.match_id)}
         {@const isActive = currentGameId === game.match_id}
         <button
-          class="w-full p-1.5 mb-0.5 border-2 rounded cursor-pointer text-left transition-all duration-200 {isActive ? 'bg-tan-hover border-tan-hover hover:border-orange' : 'bg-tan border-black hover:bg-tan-hover hover:border-orange hover:translate-x-0.5'} active:bg-tan-hover"
+          class="game-list-item {isActive ? 'active' : ''} w-full p-1.5 mb-0.5 border-2 rounded cursor-pointer text-left transition-all duration-200 {isActive ? '' : 'border-black hover:border-orange hover:translate-x-0.5'}"
           type="button"
           onclick={() => navigateToGame(game.match_id)}
         >
           <div class="text-xs font-semibold mb-0.5 text-black">{formatGameTitle(game)}</div>
-          <div class="text-[8px] text-brown text-left font-normal">{formatGameSubtitle(game)}</div>
+          <div class="text-[8px] text-left font-normal" style="color: #79261d;">{formatGameSubtitle(game)}</div>
         </button>
       {/each}
     {/if}
   </div>
 </aside>
+
+<style>
+  .game-list-item {
+    background-color: #c1872f;
+  }
+
+  .game-list-item:hover,
+  .game-list-item.active {
+    background-color: #f2a93b;
+  }
+
+  .game-list-item.active {
+    border-color: #f2a93b;
+  }
+</style>
