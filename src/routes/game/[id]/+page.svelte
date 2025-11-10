@@ -272,31 +272,31 @@
       <!-- Tabs with Bits UI -->
       <Tabs.Root bind:value={activeTab}>
         <!-- Tab Navigation -->
-        <Tabs.List class="flex gap-2 mb-6 border-b-2 border-black">
+        <Tabs.List class="flex">
           <Tabs.Trigger
             value="events"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 rounded-tl-lg font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
             Events
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="laws"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
             Laws & Technology
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="economics"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
             Economics
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="settings"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-tr-lg font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
             Game Settings
           </Tabs.Trigger>
@@ -305,9 +305,10 @@
         <!-- Tab Content: Events -->
         <Tabs.Content
           value="events"
-          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
         >
-          <h2 class="text-black font-bold mb-4 mt-0">Game History</h2>
+          <h2 class="text-tan font-bold mb-4 mt-0">Game History</h2>
           {#if pointsChartOption}
             <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
               <Chart option={pointsChartOption} height="400px" />
@@ -330,18 +331,20 @@
         <!-- Tab Content: Laws -->
         <Tabs.Content
           value="laws"
-          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
         >
-          <h2 class="text-black font-bold mb-4 mt-0">Laws & Technology</h2>
+          <h2 class="text-tan font-bold mb-4 mt-0">Laws & Technology</h2>
           <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
         </Tabs.Content>
 
         <!-- Tab Content: Economics -->
         <Tabs.Content
           value="economics"
-          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
         >
-          <h2 class="text-black font-bold mb-4 mt-0">Economics</h2>
+          <h2 class="text-tan font-bold mb-4 mt-0">Economics</h2>
           {#if allYields === null}
             <p class="text-brown italic text-center p-8">Loading yield data...</p>
           {:else if allYields.length === 0}
@@ -388,9 +391,10 @@
         <!-- Tab Content: Settings -->
         <Tabs.Content
           value="settings"
-          class="bg-gray-200 p-8 border-2 border-black rounded-b-lg rounded-tr-lg min-h-[400px] tab-pane"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
         >
-          <h2 class="text-black font-bold mb-4 mt-0">Game Settings</h2>
+          <h2 class="text-tan font-bold mb-4 mt-0">Game Settings</h2>
           <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8">
             {#if gameDetails.map_size}
               <div class="flex flex-col gap-1">
