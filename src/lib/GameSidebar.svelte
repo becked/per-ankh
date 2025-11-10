@@ -6,11 +6,11 @@
   import type { GameInfo } from "$lib/types";
   import { formatGameTitle, formatDate, formatEnum } from "$lib/utils/formatting";
   import { refreshData } from "$lib/stores/refresh";
+  import { searchQuery } from "$lib/stores/search";
 
   let games = $state<GameInfo[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
-  let searchQuery = $state("");
 
   // Get current game ID from URL
   const currentGameId = $derived($page.params.id ? Number($page.params.id) : null);
@@ -47,9 +47,9 @@
   // Filter games based on search query
   const filteredGames = $derived(
     games.filter(game => {
-      if (!searchQuery) return true;
+      if (!$searchQuery) return true;
 
-      const query = searchQuery.toLowerCase();
+      const query = $searchQuery.toLowerCase();
       const title = formatGameTitle(game).toLowerCase();
       const nation = game.human_nation ? formatEnum(game.human_nation, "NATION_").toLowerCase() : "";
       const date = formatGameSubtitle(game).toLowerCase();
@@ -63,23 +63,13 @@
 
 <aside class="w-[175px] h-full bg-blue-gray border-r-2 border-black flex flex-col overflow-hidden">
   <div class="sidebar-content overflow-y-auto flex-1 pt-4 px-2 pb-2">
-    <!-- Search Bar -->
-    <div class="mb-4">
-      <input
-        type="text"
-        bind:value={searchQuery}
-        placeholder="Search"
-        class="w-full px-3 py-2 bg-tan border-2 border-black rounded text-black text-sm font-normal placeholder-gray-500 placeholder:font-light focus:outline-none focus:border-orange transition-colors"
-      />
-    </div>
-
     {#if loading}
       <div class="p-4 text-center text-tan">Loading games...</div>
     {:else if error}
       <div class="p-4 text-center text-orange font-bold">Error: {error}</div>
     {:else if filteredGames.length === 0}
       <div class="p-4 text-center text-tan">
-        {searchQuery ? "No games match your search" : "No games found"}
+        {$searchQuery ? "No games match your search" : "No games found"}
       </div>
     {:else}
       {#each filteredGames as game (game.match_id)}
