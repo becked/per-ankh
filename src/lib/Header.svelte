@@ -187,7 +187,7 @@
     type="button"
     onclick={navigateToSummary}
   >
-    <div class="text-3xl font-bold text-gray-200 border-b-2 border-orange pb-1">☥ Per Ankh</div>
+    <div class="text-3xl font-bold text-gray-200 border-b-2 border-orange pb-1">𓉑 Per Ankh</div>
   </button>
 
   <!-- Search box on the right -->

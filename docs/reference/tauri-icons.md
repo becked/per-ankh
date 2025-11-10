@@ -65,19 +65,22 @@ The `src-tauri/icons/` directory also contains Windows Store/UWP icons:
 - Usually displayed without modification
 - Various desktop environments may apply different effects
 
-## Using ☥ (Ankh Symbol) for Per-Ankh Icon
+## Using 𓉑 (Egyptian Hieroglyph) for Per-Ankh Icon
 
 ### Design Approach
 
-The ankh symbol (☥) is ideal for the Per-Ankh application icon due to its:
+The Egyptian hieroglyph 𓉑 (U+13251) is used for the Per-Ankh application icon due to its:
 - Strong symbolic connection to the app name ("Per-Ankh" = "House of Life")
 - Simple, recognizable shape that scales well
 - Historical significance related to Ancient Egypt/Old World theme
+- Authentic hieroglyphic representation
+
+**Note:** The application previously used the ankh symbol (☥ U+2625) but was updated to use the more authentic Egyptian hieroglyph 𓉑 (U+13251) for better visual representation.
 
 ### Recommended Design Process
 
 1. **Create master icon** (1024x1024 PNG):
-   - Center the ankh symbol
+   - Center the Egyptian hieroglyph (𓉑)
    - Use bold, clean lines (minimum 20-30px stroke width at 1024px)
    - Consider adding a subtle background shape or color
    - Test visibility at small sizes (reduce to 32x32 to verify legibility)
@@ -104,7 +107,7 @@ The ankh symbol (☥) is ideal for the Per-Ankh application icon due to its:
 
 **AI Generation:**
 - Claude, ChatGPT with DALL-E, Midjourney, etc. can generate icon designs
-- Prompt example: "Create a minimalist app icon featuring an Egyptian ankh symbol, bold lines, simple geometric design, suitable for 1024x1024 resolution"
+- Prompt example: "Create a minimalist app icon featuring an Egyptian hieroglyph (house/per-ankh symbol 𓉑), bold lines, simple geometric design, suitable for 1024x1024 resolution"
 
 **Icon Conversion:**
 - **Tauri CLI icon generator** (built-in): `npm run tauri icon`
