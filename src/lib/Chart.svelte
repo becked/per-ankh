@@ -11,7 +11,7 @@
   onMount(() => {
     // Wait for container to have dimensions before initializing
     const initChart = () => {
-      if (chartContainer.clientWidth === 0 || chartContainer.clientHeight === 0) {
+      if (!chartContainer || chartContainer.clientWidth === 0 || chartContainer.clientHeight === 0) {
         // Container not ready yet, try again soon
         setTimeout(initChart, 50);
         return;
