@@ -240,7 +240,7 @@
   );
 </script>
 
-<main class="flex-1 pt-4 px-8 pb-8 overflow-y-auto bg-blue-gray">
+<main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
     {#if loading}
       <p>Loading game details...</p>
     {:else if error}
