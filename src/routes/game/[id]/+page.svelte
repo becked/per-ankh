@@ -275,28 +275,28 @@
         <Tabs.List class="flex gap-2 mb-6 border-b-2 border-black">
           <Tabs.Trigger
             value="events"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
           >
             Events
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="laws"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
           >
             Laws & Technology
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="economics"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
           >
             Economics
           </Tabs.Trigger>
 
           <Tabs.Trigger
             value="settings"
-            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-gray-200 data-[state=inactive]:bg-tan"
+            class="px-6 py-3 border-2 border-black border-b-0 rounded-t-lg font-bold text-black cursor-pointer transition-all duration-200 relative -bottom-0.5 hover:bg-tan-hover data-[state=active]:bg-[#9a9a95] data-[state=inactive]:bg-[#71716a]"
           >
             Game Settings
           </Tabs.Trigger>
