@@ -340,33 +340,32 @@ fn import_save_file_internal(
         emit_phase_progress(Some(app_h), idx, total, name, "Extracting and setting up", 1, start);
     }
 
-    // Parse foundation entities (Pass 1: Core data only)
-    log::info!("Parsing foundation entities...");
-    let t_foundation = Instant::now();
+    // PHASE 1: PARALLEL PARSING of foundation entities
+    // Parse all 4 foundation entities concurrently for ~2x speedup
+    log::info!("Parsing foundation entities (PARALLEL)...");
+    let t_parse_foundation = Instant::now();
 
-    // Order matters due to foreign keys:
-    // 1. Players (no dependencies) - HYBRID PARSER
+    let (players_data, characters_data, cities_data, tiles_data) =
+        super::parsers::parse_foundation_entities_parallel(doc)?;
+
+    let parse_foundation_time = t_parse_foundation.elapsed();
+    log::info!("⏱️  Parallel foundation parsing: {:?}", parse_foundation_time);
+    eprintln!("⏱️  Parallel foundation parsing: {:?}", parse_foundation_time);
+
+    // PHASE 2: SEQUENTIAL INSERTION (order matters for foreign keys)
+    log::info!("Inserting foundation entities (sequential)...");
+    let t_insert_foundation = Instant::now();
+
+    // 1. Players (no dependencies)
     let t_players = Instant::now();
-
-    // Parse to structs (pure, no DB)
-    let players_data = super::parsers::parse_players_struct(doc)?;
-
-    // Insert to database
     let players_count = super::inserters::insert_players(tx, &players_data, &mut id_mapper)?;
-
     let players_time = t_players.elapsed();
     log::info!("⏱️    Players: {:?} ({} players)", players_time, players_count);
     eprintln!("⏱️    Players: {:?} ({} players)", players_time, players_count);
 
-    // 2. Characters - HYBRID PARSER
+    // 2. Characters core (no relationships yet)
     let t_characters = Instant::now();
-
-    // Parse to structs (pure, no DB)
-    let characters_data = super::parsers::parse_characters_struct(doc)?;
-
-    // Insert to database (Pass 1: Core data only, no relationships yet)
     let characters_count = super::inserters::insert_characters_core(tx, &characters_data, &mut id_mapper)?;
-
     let characters_time = t_characters.elapsed();
     log::info!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
     eprintln!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
@@ -383,14 +382,16 @@ fn import_save_file_internal(
 
     // 3. Tiles (depends on players for ownership)
     let t_tiles = Instant::now();
-    let tiles_count = super::entities::parse_tiles(doc, tx, &mut id_mapper)?;
+    super::inserters::insert_tiles_core(tx, &tiles_data, &mut id_mapper)?;
+    let tiles_count = tiles_data.len();
     let tiles_time = t_tiles.elapsed();
     log::info!("⏱️    Tiles: {:?} ({} tiles)", tiles_time, tiles_count);
     eprintln!("⏱️    Tiles: {:?} ({} tiles)", tiles_time, tiles_count);
 
     // 4. Cities (depends on players, tiles)
     let t_cities = Instant::now();
-    let cities_count = super::entities::parse_cities(doc, tx, &mut id_mapper)?;
+    super::inserters::insert_cities(tx, &cities_data, &mut id_mapper)?;
+    let cities_count = cities_data.len();
     let cities_time = t_cities.elapsed();
     log::info!("⏱️    Cities: {:?} ({} cities)", cities_time, cities_count);
     eprintln!("⏱️    Cities: {:?} ({} cities)", cities_time, cities_count);
@@ -419,55 +420,57 @@ fn import_save_file_internal(
     log::info!("⏱️    Character birth cities: {:?}", birth_cities_time);
     eprintln!("⏱️    Character birth cities: {:?}", birth_cities_time);
 
-    // 5. Tribes - HYBRID PARSER (references characters via leader_character_id)
+    let insert_foundation_time = t_insert_foundation.elapsed();
+    log::info!("⏱️  Sequential foundation insertion: {:?}", insert_foundation_time);
+    eprintln!("⏱️  Sequential foundation insertion: {:?}", insert_foundation_time);
+
+    // PHASE 3: PARALLEL PARSING of affiliation entities
+    log::info!("Parsing affiliation entities (PARALLEL)...");
+    let t_parse_affiliation = Instant::now();
+
+    let (families_data, religions_data, tribes_data) =
+        super::parsers::parse_affiliation_entities_parallel(doc)?;
+
+    let parse_affiliation_time = t_parse_affiliation.elapsed();
+    log::info!("⏱️  Parallel affiliation parsing: {:?}", parse_affiliation_time);
+    eprintln!("⏱️  Parallel affiliation parsing: {:?}", parse_affiliation_time);
+
+    // PHASE 4: SEQUENTIAL INSERTION of affiliation entities
+    log::info!("Inserting affiliation entities (sequential)...");
+    let t_insert_affiliation = Instant::now();
+
+    // 5. Tribes (references characters via leader_character_id)
     let t_tribes = Instant::now();
-
-    // Parse to structs (pure, no DB)
-    let tribes_data = super::parsers::parse_tribes_struct(doc)?;
-
-    // Insert to database
     super::inserters::insert_tribes(tx, &tribes_data, &id_mapper)?;
     let tribes_count = tribes_data.len();
-
     let tribes_time = t_tribes.elapsed();
     log::info!("⏱️    Tribes: {:?} ({} tribes)", tribes_time, tribes_count);
     eprintln!("⏱️    Tribes: {:?} ({} tribes)", tribes_time, tribes_count);
 
-    // 6. Families - HYBRID PARSER (parsed from global FamilyClass and per-player family data)
+    // 6. Families (parsed from global FamilyClass and per-player family data)
     let t_families = Instant::now();
-
-    // Parse to structs (pure, no DB)
-    let families_data = super::parsers::parse_families_struct(doc)?;
-
-    // Insert to database
     super::inserters::insert_families(tx, &families_data, &mut id_mapper)?;
     let families_count = families_data.len();
-
     let families_time = t_families.elapsed();
     log::info!("⏱️    Families: {:?} ({} families)", families_time, families_count);
     eprintln!("⏱️    Families: {:?} ({} families)", families_time, families_count);
 
-    // 7. Religions - HYBRID PARSER (parsed from aggregate containers: ReligionFounded, ReligionHeadID, etc.)
+    // 7. Religions (parsed from aggregate containers: ReligionFounded, ReligionHeadID, etc.)
     let t_religions = Instant::now();
-
-    // Parse to structs (pure, no DB)
-    let religions_data = super::parsers::parse_religions_struct(doc)?;
-
-    // Insert to database
     super::inserters::insert_religions(tx, &religions_data, &mut id_mapper)?;
     let religions_count = religions_data.len();
-
     let religions_time = t_religions.elapsed();
     log::info!("⏱️    Religions: {:?} ({} religions)", religions_time, religions_count);
     eprintln!("⏱️    Religions: {:?} ({} religions)", religions_time, religions_count);
 
+    let insert_affiliation_time = t_insert_affiliation.elapsed();
+    log::info!("⏱️  Sequential affiliation insertion: {:?}", insert_affiliation_time);
+    eprintln!("⏱️  Sequential affiliation insertion: {:?}", insert_affiliation_time);
+
     log::info!(
-        "Parsed entities: {} players, {} tribes, {} characters, {} tiles, {} cities, {} families, {} religions",
-        players_count, tribes_count, characters_count, tiles_count, cities_count, families_count, religions_count
+        "Parsed entities: {} players, {} characters, {} tiles, {} cities, {} tribes, {} families, {} religions",
+        players_count, characters_count, tiles_count, cities_count, tribes_count, families_count, religions_count
     );
-    let foundation_total = t_foundation.elapsed();
-    log::info!("⏱️  Foundation entities total: {:?}", foundation_total);
-    eprintln!("⏱️  Foundation entities total: {:?}", foundation_total);
 
     // PHASE 2: Foundation entities complete
     if let Some((app_h, idx, total, name, start)) = progress_params {

@@ -50,3 +50,106 @@ pub use events::parse_events_struct;
 pub use player_data::parse_all_player_data;
 pub use tile_data::{parse_tile_changes_struct, parse_tile_visibility_struct};
 pub use timeseries::{parse_all_player_timeseries, parse_yield_price_history_struct};
+
+// Parallel parsing orchestration
+use crate::parser::game_data::{CharacterData, CityData, FamilyData, PlayerData, ReligionData, TileData, TribeData};
+use crate::parser::xml_loader::XmlDocument;
+use crate::parser::Result;
+use std::time::Instant;
+
+/// Parse foundation entities in parallel using rayon
+///
+/// Returns a tuple of (players, characters, cities, tiles) parsed concurrently.
+/// This is the main performance optimization - parsing these 4 large entities
+/// in parallel provides ~2x speedup on the parsing phase.
+pub fn parse_foundation_entities_parallel(
+    doc: &XmlDocument,
+) -> Result<(Vec<PlayerData>, Vec<CharacterData>, Vec<CityData>, Vec<TileData>)> {
+    log::info!("Parsing foundation entities (parallel)...");
+    let t_start = Instant::now();
+
+    // Parse 4 entities in parallel using nested rayon::join (rayon::join only takes 2 closures)
+    let (players_res, (characters_res, (cities_res, tiles_res))) = rayon::join(
+        || {
+            let t = Instant::now();
+            let result = parse_players_struct(doc);
+            log::debug!("  parse_players_struct: {:?}", t.elapsed());
+            result
+        },
+        || rayon::join(
+            || {
+                let t = Instant::now();
+                let result = parse_characters_struct(doc);
+                log::debug!("  parse_characters_struct: {:?}", t.elapsed());
+                result
+            },
+            || rayon::join(
+                || {
+                    let t = Instant::now();
+                    let result = parse_cities_struct(doc);
+                    log::debug!("  parse_cities_struct: {:?}", t.elapsed());
+                    result
+                },
+                || {
+                    let t = Instant::now();
+                    let result = parse_tiles_struct(doc);
+                    log::debug!("  parse_tiles_struct: {:?}", t.elapsed());
+                    result
+                },
+            ),
+        ),
+    );
+
+    let players = players_res?;
+    let characters = characters_res?;
+    let cities = cities_res?;
+    let tiles = tiles_res?;
+
+    let total = t_start.elapsed();
+    log::info!("⏱️  Parallel foundation parsing: {:?}", total);
+
+    Ok((players, characters, cities, tiles))
+}
+
+/// Parse affiliation entities in parallel using rayon
+///
+/// Returns a tuple of (families, religions, tribes) parsed concurrently.
+pub fn parse_affiliation_entities_parallel(
+    doc: &XmlDocument,
+) -> Result<(Vec<FamilyData>, Vec<ReligionData>, Vec<TribeData>)> {
+    log::info!("Parsing affiliation entities (parallel)...");
+    let t_start = Instant::now();
+
+    // Parse 3 entities in parallel using nested rayon::join
+    let (families_res, (religions_res, tribes_res)) = rayon::join(
+        || {
+            let t = Instant::now();
+            let result = parse_families_struct(doc);
+            log::debug!("  parse_families_struct: {:?}", t.elapsed());
+            result
+        },
+        || rayon::join(
+            || {
+                let t = Instant::now();
+                let result = parse_religions_struct(doc);
+                log::debug!("  parse_religions_struct: {:?}", t.elapsed());
+                result
+            },
+            || {
+                let t = Instant::now();
+                let result = parse_tribes_struct(doc);
+                log::debug!("  parse_tribes_struct: {:?}", t.elapsed());
+                result
+            },
+        ),
+    );
+
+    let families = families_res?;
+    let religions = religions_res?;
+    let tribes = tribes_res?;
+
+    let total = t_start.elapsed();
+    log::info!("⏱️  Parallel affiliation parsing: {:?}", total);
+
+    Ok((families, religions, tribes))
+}
