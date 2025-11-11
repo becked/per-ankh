@@ -127,7 +127,13 @@ pub fn get_db_path(app_handle: &tauri::AppHandle) -> Result<PathBuf> {
 pub fn get_connection(db_path: &PathBuf) -> Result<Connection> {
     let conn = Connection::open(db_path)?;
 
-    // DuckDB handles concurrency internally, no need for WAL mode configuration
+    // Delay checkpoints until explicit CHECKPOINT call
+    // Default is 16MB - imports trigger multiple checkpoints
+    // Phase 1 optimization: reduce checkpoint overhead during large imports
+    conn.execute_batch("
+        SET checkpoint_threshold='1GB';
+        SET wal_autocheckpoint='1GB';
+    ")?;
 
     Ok(conn)
 }
