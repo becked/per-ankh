@@ -336,6 +336,8 @@ pub fn update_tile_city_ownership(
     // NOTE: Batched approaches (CASE UPDATE, UPDATE FROM, INSERT ON CONFLICT) all trigger
     // DuckDB MVCC bugs with composite PRIMARY KEYs. The bugs manifest as assertion failures
     // in debug builds and may silently produce incorrect results in release builds.
+    // Additionally, mega-batch CASE UPDATEs create extremely large SQL strings (~100KB+)
+    // which cause severe performance degradation in debug builds and may hit DuckDB limits.
     let mut stmt = conn.prepare(
         "UPDATE tiles SET owner_city_id = ? WHERE tile_id = ? AND match_id = ?"
     )?;
