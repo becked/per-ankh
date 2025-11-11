@@ -424,6 +424,13 @@ fn import_save_file_internal(
     log::info!("⏱️  Sequential foundation insertion: {:?}", insert_foundation_time);
     eprintln!("⏱️  Sequential foundation insertion: {:?}", insert_foundation_time);
 
+    // Free foundation entity data immediately after insertion
+    drop(players_data);
+    drop(characters_data);
+    drop(cities_data);
+    drop(tiles_data);
+    log::debug!("Freed foundation entity data");
+
     // PHASE 3: PARALLEL PARSING of affiliation entities
     log::info!("Parsing affiliation entities (PARALLEL)...");
     let t_parse_affiliation = Instant::now();
@@ -466,6 +473,12 @@ fn import_save_file_internal(
     let insert_affiliation_time = t_insert_affiliation.elapsed();
     log::info!("⏱️  Sequential affiliation insertion: {:?}", insert_affiliation_time);
     eprintln!("⏱️  Sequential affiliation insertion: {:?}", insert_affiliation_time);
+
+    // Free affiliation entity data immediately after insertion
+    drop(families_data);
+    drop(religions_data);
+    drop(tribes_data);
+    log::debug!("Freed affiliation entity data");
 
     log::info!(
         "Parsed entities: {} players, {} characters, {} tiles, {} cities, {} tribes, {} families, {} religions",

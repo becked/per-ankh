@@ -68,22 +68,26 @@ pub fn parse_foundation_entities_parallel(
     log::info!("Parsing foundation entities (parallel)...");
     let t_start = Instant::now();
 
-    // Parse 4 entities in parallel using nested rayon::join (rayon::join only takes 2 closures)
-    let (players_res, (characters_res, (cities_res, tiles_res))) = rayon::join(
+    // Parse 4 entities in parallel using flattened rayon::join (reduces stack depth)
+    let ((players_res, characters_res), (cities_res, tiles_res)) = rayon::join(
         || {
-            let t = Instant::now();
-            let result = parse_players_struct(doc);
-            log::debug!("  parse_players_struct: {:?}", t.elapsed());
-            result
+            rayon::join(
+                || {
+                    let t = Instant::now();
+                    let result = parse_players_struct(doc);
+                    log::debug!("  parse_players_struct: {:?}", t.elapsed());
+                    result
+                },
+                || {
+                    let t = Instant::now();
+                    let result = parse_characters_struct(doc);
+                    log::debug!("  parse_characters_struct: {:?}", t.elapsed());
+                    result
+                },
+            )
         },
-        || rayon::join(
-            || {
-                let t = Instant::now();
-                let result = parse_characters_struct(doc);
-                log::debug!("  parse_characters_struct: {:?}", t.elapsed());
-                result
-            },
-            || rayon::join(
+        || {
+            rayon::join(
                 || {
                     let t = Instant::now();
                     let result = parse_cities_struct(doc);
@@ -96,8 +100,8 @@ pub fn parse_foundation_entities_parallel(
                     log::debug!("  parse_tiles_struct: {:?}", t.elapsed());
                     result
                 },
-            ),
-        ),
+            )
+        },
     );
 
     let players = players_res?;
