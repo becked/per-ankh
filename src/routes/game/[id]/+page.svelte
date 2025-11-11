@@ -310,19 +310,19 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Game History</h2>
           {#if pointsChartOption}
-            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+            <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
               <Chart option={pointsChartOption} height="400px" />
             </div>
           {/if}
 
           {#if militaryChartOption}
-            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+            <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
               <Chart option={militaryChartOption} height="400px" />
             </div>
           {/if}
 
           {#if legitimacyChartOption}
-            <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+            <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
               <Chart option={legitimacyChartOption} height="400px" />
             </div>
           {/if}
@@ -351,37 +351,37 @@
             <p class="text-brown italic text-center p-8">No yield data available</p>
           {:else}
             {#if scienceChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={scienceChartOption} height="400px" />
               </div>
             {/if}
 
             {#if civicsChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={civicsChartOption} height="400px" />
               </div>
             {/if}
 
             {#if trainingChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={trainingChartOption} height="400px" />
               </div>
             {/if}
 
             {#if growthChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={growthChartOption} height="400px" />
               </div>
             {/if}
 
             {#if cultureChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={cultureChartOption} height="400px" />
               </div>
             {/if}
 
             {#if happinessChartOption}
-              <div class="bg-white p-4 border-2 border-tan rounded-lg mb-6">
+              <div class="bg-gray-200 p-4 border-2 border-tan rounded-lg mb-6">
                 <Chart option={happinessChartOption} height="400px" />
               </div>
             {/if}
