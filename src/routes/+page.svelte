@@ -95,8 +95,11 @@
   {:else if error}
     <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
   {:else if stats}
-    <div class="mb-8 bg-gray-200 p-6 border-2 border-black rounded-lg">
-      <h2 class="text-black font-bold">Games Played: {stats.total_games}</h2>
+    <div class="p-2 border-2 border-black rounded-lg mb-8" style="background-color: #36302a;">
+      <div class="flex items-center justify-center gap-2">
+        <span class="font-bold text-brown text-sm uppercase tracking-wide">Games Played:</span>
+        <span class="text-2xl font-bold" style="color: #EEEEEE;">{stats.total_games}</span>
+      </div>
     </div>
 
     {#if chartOption}
