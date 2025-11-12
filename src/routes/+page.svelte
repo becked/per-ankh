@@ -6,7 +6,15 @@
   import Chart from "$lib/Chart.svelte";
   import { formatEnum } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
-  import { refreshData } from "$lib/stores/refresh";
+  import { refreshData as refreshDataStore } from "$lib/stores/refresh";
+
+  let refreshData = $state(0);
+  $effect(() => {
+    const unsubscribe = refreshDataStore.subscribe((value) => {
+      refreshData = value;
+    });
+    return unsubscribe;
+  });
 
   let stats = $state<GameStatistics | null>(null);
   let loading = $state(true);
@@ -71,9 +79,11 @@
     fetchStats();
   });
 
-  // Subscribe to refresh events
-  refreshData.subscribe(() => {
-    fetchStats();
+  // React to refresh events
+  $effect(() => {
+    if (refreshData > 0) {
+      fetchStats();
+    }
   });
 </script>
 
