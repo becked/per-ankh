@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount } from "svelte";
+  import { onMount, tick } from "svelte";
   import * as echarts from "echarts";
   import type { EChartsOption } from "echarts";
 
@@ -8,26 +8,47 @@
   let chartContainer: HTMLDivElement;
   let chart: echarts.ECharts | null = null;
 
-  onMount(() => {
-    // Wait for container to have dimensions before initializing
+  onMount(async () => {
+    // Wait for DOM to be fully rendered
+    await tick();
+
     const initChart = () => {
-      if (!chartContainer || chartContainer.clientWidth === 0 || chartContainer.clientHeight === 0) {
-        // Container not ready yet, try again soon
-        setTimeout(initChart, 50);
+      if (!chartContainer) return;
+
+      // Check if container has dimensions
+      const { clientWidth, clientHeight } = chartContainer;
+      if (clientWidth === 0 || clientHeight === 0) {
         return;
       }
 
-      chart = echarts.init(chartContainer);
-      // Type assertion needed due to echarts type definition incompatibility
-      chart.setOption(option as any);
+      // Initialize chart if not already done
+      if (!chart) {
+        chart = echarts.init(chartContainer);
+        chart.setOption(option as any);
+      }
     };
 
+    // Try initial initialization
     initChart();
 
+    // Use ResizeObserver to detect when container gets dimensions
+    const resizeObserver = new ResizeObserver(() => {
+      if (!chart && chartContainer) {
+        // Container now has dimensions, try to initialize
+        initChart();
+      }
+      // Resize existing chart
+      chart?.resize();
+    });
+
+    resizeObserver.observe(chartContainer);
+
+    // Also listen for window resize
     const handleResize = () => chart?.resize();
     window.addEventListener("resize", handleResize);
 
     return () => {
+      resizeObserver.disconnect();
       window.removeEventListener("resize", handleResize);
       chart?.dispose();
     };
