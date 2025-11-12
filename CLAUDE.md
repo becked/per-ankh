@@ -10,7 +10,7 @@ Per-Ankh is a desktop application that ingests completed save files from the Old
 
 - **Application Framework**: Tauri - native desktop application framework
 - **Backend**: Rust - handles data processing, file parsing, and DuckDB queries
-- **Frontend Framework**: Svelte - reactive UI framework
+- **Frontend Framework**: Svelte 5 - reactive UI framework with runes
 - **Frontend Language**: TypeScript - type-safe JavaScript
 - **Visualization**: Apache ECharts - interactive charting library
 - **Database**: DuckDB (Rust bindings) - handles data storage and analytical queries
@@ -149,6 +149,71 @@ if (!confirmed) return; // TypeScript enforces await
 - Use Prettier for code formatting
 - Follow consistent naming conventions (camelCase for functions/variables, PascalCase for components)
 - Prefer `const` over `let` when variables don't need reassignment
+
+### Svelte 5 Standards
+
+**CRITICAL**: This project uses Svelte 5. Always use Svelte 5 runes and patterns.
+
+**Reactive State:**
+```typescript
+// ✅ CORRECT: Svelte 5 runes
+let count = $state(0);
+let doubled = $derived(count * 2);
+
+// ❌ WRONG: Svelte 4 patterns
+let count = 0; // No reactivity
+$: doubled = count * 2; // Old reactive statement syntax
+```
+
+**Props:**
+```typescript
+// ✅ CORRECT: Svelte 5 props
+let { name, age = 0 }: { name: string; age?: number } = $props();
+
+// ❌ WRONG: Svelte 4 export
+export let name: string;
+export let age: number = 0;
+```
+
+**Effects:**
+```typescript
+// ✅ CORRECT: Svelte 5 effect
+$effect(() => {
+  console.log('count changed:', count);
+});
+
+// ❌ WRONG: Svelte 4 reactive statement
+$: console.log('count changed:', count);
+```
+
+**Store Integration:**
+When using Svelte stores with Svelte 5 runes, properly integrate them:
+```typescript
+// ✅ CORRECT: Convert store to reactive state
+import { myStore } from './stores';
+
+let storeValue = $state(0);
+$effect(() => {
+  const unsubscribe = myStore.subscribe((value) => {
+    storeValue = value;
+  });
+  return unsubscribe;
+});
+
+// Then use storeValue reactively
+$effect(() => {
+  if (storeValue > 0) {
+    // React to changes
+  }
+});
+
+// ❌ WRONG: Top-level subscribe (causes render failures)
+myStore.subscribe(() => {
+  // This will break component initialization
+});
+```
+
+**Why this matters**: Mixing Svelte 4 and Svelte 5 patterns causes silent failures where components fail to render. The code may compile but the app shows a blank screen.
 
 ## Code Quality Standards
 
