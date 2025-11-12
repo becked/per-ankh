@@ -100,7 +100,7 @@
     </div>
 
     {#if chartOption}
-      <div class="bg-gray-200 p-6 border-2 border-black rounded-lg mb-8">
+      <div class="p-4 border-2 border-black rounded-lg mb-8" style="background-color: var(--color-chart-frame)">
         <Chart option={chartOption} height="400px" />
       </div>
     {/if}
