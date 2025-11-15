@@ -25,21 +25,26 @@ export function formatEnum(value: string | null | undefined, prefix: string): st
 }
 
 /**
- * Formats map class values by removing the MAPCLASS_MapScript prefix and splitting PascalCase.
+ * Formats map class values by removing the MAPCLASS prefix and splitting PascalCase.
  *
- * @param value - The map class value (e.g., "MAPCLASS_MapScriptContinent", "MAPCLASS_MapScriptHardwoodForest")
- * @returns Formatted string (e.g., "Continent", "Hardwood Forest")
+ * @param value - The map class value (e.g., "MAPCLASS_MapScriptContinent", "MAPCLASS_AridPlateau")
+ * @returns Formatted string (e.g., "Continent", "Arid Plateau")
  *
  * @example
  * formatMapClass("MAPCLASS_MapScriptContinent") // returns "Continent"
  * formatMapClass("MAPCLASS_MapScriptHardwoodForest") // returns "Hardwood Forest"
+ * formatMapClass("MAPCLASS_AridPlateau") // returns "Arid Plateau"
  * formatMapClass(null) // returns "Unknown"
  */
 export function formatMapClass(value: string | null | undefined): string {
   if (!value) return "Unknown";
 
-  // Remove the MAPCLASS_MapScript prefix
-  const withoutPrefix = value.replace(/^MAPCLASS_MapScript/, "");
+  // Remove the MAPCLASS_MapScript prefix (if present), or just MAPCLASS_ prefix
+  let withoutPrefix = value.replace(/^MAPCLASS_MapScript/, "");
+  if (withoutPrefix === value) {
+    // MapScript wasn't present, try removing just MAPCLASS_
+    withoutPrefix = value.replace(/^MAPCLASS_/, "");
+  }
 
   // Split PascalCase by inserting space before capital letters
   // Then trim and clean up any extra spaces
