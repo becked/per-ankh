@@ -1,4 +1,4 @@
--- Old World Game Data Schema v2.2
+-- Old World Game Data Schema v2.3
 -- DuckDB Schema for Multi-Match Game Save Analysis
 --
 -- Design Principles:
@@ -886,6 +886,8 @@ CREATE UNIQUE INDEX idx_matches_game_id ON matches(game_id) WHERE game_id IS NOT
 CREATE INDEX idx_players_match ON players(match_id);
 CREATE INDEX idx_players_name ON players(player_name_normalized);
 CREATE INDEX idx_players_nation ON players(nation);
+-- Winner lookup optimization: supports efficient JOIN on (match_id, player_id) for get_game_details()
+CREATE INDEX idx_players_match_player ON players(match_id, player_id);
 -- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
 CREATE UNIQUE INDEX idx_players_xml_id ON players(match_id, xml_id) WHERE xml_id IS NOT NULL;
 
