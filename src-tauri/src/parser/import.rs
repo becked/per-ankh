@@ -329,7 +329,8 @@ fn import_save_file_internal(
     let mut id_mapper = IdMapper::new(match_id, tx, true)?;
 
     // Insert match record (no UPSERT - always fresh import)
-    insert_match_metadata(tx, match_id, game_id, file_path, &file_hash, doc)?;
+    // Returns winner info if game has been won
+    let winner_info = insert_match_metadata(tx, match_id, game_id, file_path, &file_hash, doc)?;
 
     let setup_time = t_setup.elapsed();
     log::info!("⏱️  Match setup: {:?}", setup_time);
@@ -362,6 +363,11 @@ fn import_save_file_internal(
     let players_time = t_players.elapsed();
     log::info!("⏱️    Players: {:?} ({} players)", players_time, players_count);
     eprintln!("⏱️    Players: {:?} ({} players)", players_time, players_count);
+
+    // Update winner_player_id if game has been won
+    if let Some(ref winner) = winner_info {
+        update_winner(tx, match_id, winner, &players_data, &id_mapper)?;
+    }
 
     // 2. Characters core (no relationships yet)
     let t_characters = Instant::now();
@@ -927,7 +933,70 @@ fn parse_save_date(date_str: &str) -> Option<String> {
         .map(|d| d.format("%Y-%m-%d").to_string())
 }
 
+/// Winner information extracted from XML
+#[derive(Debug, Clone)]
+enum WinnerInfo {
+    /// Winner identified by team ID (from TeamVictoriesCompleted)
+    TeamId(i32),
+    /// Winner identified by player XML ID (from Victory element)
+    PlayerXmlId(i32),
+}
+
+/// Update match with winner player ID after players are inserted
+fn update_winner(
+    tx: &Connection,
+    match_id: i64,
+    winner_info: &WinnerInfo,
+    players_data: &[super::game_data::PlayerData],
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    // Resolve winner info to player XML ID
+    let winner_player_xml_id = match winner_info {
+        WinnerInfo::TeamId(team_id) => {
+            // For single-player games (team 0), the winner is the human player
+            // For multiplayer, try to match by team_id attribute
+            let team_id_str = team_id.to_string();
+
+            // Try finding by team_id attribute first
+            if let Some(player) = players_data.iter().find(|p| p.team_id.as_ref() == Some(&team_id_str)) {
+                player.xml_id
+            } else {
+                // Fallback: in single-player games, find the human player
+                players_data
+                    .iter()
+                    .find(|p| p.is_human)
+                    .map(|p| p.xml_id)
+                    .ok_or_else(|| {
+                        ParseError::InvalidFormat(format!(
+                            "No human player found for winning team ID: {}",
+                            team_id
+                        ))
+                    })?
+            }
+        }
+        WinnerInfo::PlayerXmlId(xml_id) => *xml_id,
+    };
+
+    // Map player XML ID to DB ID
+    let winner_player_db_id = id_mapper.get_player(winner_player_xml_id)?;
+
+    // Update matches table
+    tx.execute(
+        "UPDATE matches SET winner_player_id = ? WHERE match_id = ?",
+        params![winner_player_db_id, match_id],
+    )?;
+
+    log::info!(
+        "Set winner: player XML ID {} → DB ID {}",
+        winner_player_xml_id,
+        winner_player_db_id
+    );
+
+    Ok(())
+}
+
 /// Insert match metadata (fresh import only - no UPSERT)
+/// Returns winner information if a victory is detected in the save file
 fn insert_match_metadata(
     tx: &Connection,
     match_id: i64,
@@ -935,7 +1004,7 @@ fn insert_match_metadata(
     file_path: &str,
     file_hash: &str,
     doc: &XmlDocument,
-) -> Result<()> {
+) -> Result<Option<WinnerInfo>> {
     let root = doc.root_element();
 
     // Extract file name from path
@@ -1002,6 +1071,31 @@ fn insert_match_metadata(
     let first_seed: Option<i64> = root.opt_attr("FirstSeed").and_then(|s| s.parse().ok());
     let map_seed: Option<i64> = root.opt_attr("MapSeed").and_then(|s| s.parse().ok());
 
+    // Extract winner information (if game has been won)
+    // TeamVictories is inside the Game element
+    let winner_info = game_node
+        .children()
+        .find(|n| n.has_tag_name("TeamVictories"))
+        .and_then(|tv| {
+            tv.children()
+                .find(|n| n.has_tag_name("Team"))
+                .and_then(|team| {
+                    team.text()
+                        .and_then(|t| t.parse::<i32>().ok())
+                        .map(WinnerInfo::TeamId)
+                })
+        })
+        .or_else(|| {
+            // Fallback: Check Victory element with winner attribute (in root)
+            root.children()
+                .find(|n| n.has_tag_name("Victory"))
+                .and_then(|v| {
+                    v.opt_attr("winner")
+                        .and_then(|w| w.parse::<i32>().ok())
+                        .map(WinnerInfo::PlayerXmlId)
+                })
+        });
+
     tx.execute(
         "INSERT INTO matches (
             match_id, file_name, file_hash, game_id, game_name, save_date,
@@ -1040,7 +1134,7 @@ fn insert_match_metadata(
         ],
     )?;
 
-    Ok(())
+    Ok(winner_info)
 }
 
 #[cfg(test)]
