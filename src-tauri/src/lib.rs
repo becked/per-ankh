@@ -66,6 +66,13 @@ pub struct GameDetails {
     pub map_height: Option<i32>,
     pub game_mode: Option<String>,
     pub opponent_level: Option<String>,
+    pub victory_conditions: Option<String>,
+    pub enabled_dlc: Option<String>,
+    #[ts(type = "number | null")]
+    pub winner_player_id: Option<i64>,
+    pub winner_name: Option<String>,
+    pub winner_civilization: Option<String>,
+    pub winner_victory_type: Option<String>,
     pub players: Vec<PlayerInfo>,
 }
 
@@ -284,13 +291,18 @@ async fn get_game_details(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<GameDetails, String> {
     pool.with_connection(|conn| {
-        // Get match details
+        // Get match details with winner information via LEFT JOIN
         let mut stmt = conn
             .prepare(
-                "SELECT match_id, game_name, CAST(save_date AS VARCHAR) as save_date,
-                        total_turns, map_size, map_width, map_height, game_mode, opponent_level
-                 FROM matches
-                 WHERE match_id = ?"
+                "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
+                        m.total_turns, m.map_size, m.map_width, m.map_height,
+                        m.game_mode, m.opponent_level, m.victory_conditions, m.enabled_dlc,
+                        m.winner_player_id,
+                        wp.player_name as winner_name,
+                        wp.nation as winner_civilization
+                 FROM matches m
+                 LEFT JOIN players wp ON m.match_id = wp.match_id AND m.winner_player_id = wp.player_id
+                 WHERE m.match_id = ?"
             )?;
 
         let game_details = stmt
@@ -305,6 +317,12 @@ async fn get_game_details(
                     map_height: row.get(6)?,
                     game_mode: row.get(7)?,
                     opponent_level: row.get(8)?,
+                    victory_conditions: row.get(9)?,
+                    enabled_dlc: row.get(10)?,
+                    winner_player_id: row.get(11)?,
+                    winner_name: row.get(12)?,
+                    winner_civilization: row.get(13)?,
+                    winner_victory_type: None, // Future enhancement
                     players: Vec::new(), // Will be filled below
                 })
             })?;

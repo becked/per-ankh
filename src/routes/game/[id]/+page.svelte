@@ -238,6 +238,40 @@
       match_id: gameDetails.match_id
     }) : ""
   );
+
+  // Format winner display
+  const winnerDisplay = $derived(() => {
+    if (!gameDetails?.winner_player_id) return "Game In Progress";
+
+    const name = gameDetails.winner_name ?? "Unknown";
+    const civ = formatEnum(gameDetails.winner_civilization, 'NATION_');
+    const victory = gameDetails.winner_victory_type
+      ? ` - ${formatEnum(gameDetails.winner_victory_type, 'VICTORY_')}`
+      : '';
+
+    return `Winner: ${name} (${civ})${victory}`;
+  });
+
+  // Get winner civilization color
+  const winnerColor = $derived(() => {
+    if (!gameDetails?.winner_civilization) return undefined;
+    return getCivilizationColor(gameDetails.winner_civilization);
+  });
+
+  // Format victory conditions from DB string
+  const victoryConditions = $derived(
+    gameDetails?.victory_conditions
+      ?.split('+')
+      .map(v => formatEnum(v, 'VICTORY_'))
+      .join(', ') ?? 'Unknown'
+  );
+
+  // Format DLC list from DB string
+  const dlcList = $derived(
+    gameDetails?.enabled_dlc
+      ?.split('+')
+      .join(', ') ?? 'None'
+  );
 </script>
 
 <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
@@ -267,6 +301,16 @@
             <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.players.length}</span>
           </div>
         </div>
+      </div>
+
+      <!-- Winner Display -->
+      <div class="mb-4 p-3 bg-tan/30 border border-brown rounded">
+        <span
+          class="text-lg font-semibold"
+          style:color={winnerColor()}
+        >
+          {winnerDisplay()}
+        </span>
       </div>
 
       <!-- Tabs with Bits UI -->
@@ -418,6 +462,18 @@
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Difficulty:</span>
                 <span class="text-black text-base">{formatEnum(gameDetails.opponent_level, "LEVEL_")}</span>
+              </div>
+            {/if}
+            {#if gameDetails.victory_conditions}
+              <div class="flex flex-col gap-1">
+                <span class="font-bold text-brown text-sm">Victory Conditions:</span>
+                <span class="text-black text-base">{victoryConditions}</span>
+              </div>
+            {/if}
+            {#if gameDetails.enabled_dlc}
+              <div class="flex flex-col gap-1">
+                <span class="font-bold text-brown text-sm">DLC Enabled:</span>
+                <span class="text-black text-base">{dlcList}</span>
               </div>
             {/if}
           </div>
