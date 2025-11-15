@@ -8,7 +8,7 @@
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
-  import { formatEnum, formatDate, formatGameTitle } from "$lib/utils/formatting";
+  import { formatEnum, formatDate, formatGameTitle, formatMapClass } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
   let gameDetails = $state<GameDetails | null>(null);
@@ -306,8 +306,13 @@
             </span>
           </div>
 
-          <!-- Right Column: Turns & Nations -->
+          <!-- Right Column: Map, Turns & Nations -->
           <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-4 items-center">
+            {#if gameDetails.map_class}
+              <span class="font-bold text-brown text-sm uppercase tracking-wide text-right">Map:</span>
+              <span class="text-2xl font-bold" style="color: #EEEEEE;">{formatMapClass(gameDetails.map_class)}</span>
+            {/if}
+
             <span class="font-bold text-brown text-sm uppercase tracking-wide text-right">Turns:</span>
             <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.total_turns}</span>
 

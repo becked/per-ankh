@@ -25,6 +25,31 @@ export function formatEnum(value: string | null | undefined, prefix: string): st
 }
 
 /**
+ * Formats map class values by removing the MAPCLASS_MapScript prefix and splitting PascalCase.
+ *
+ * @param value - The map class value (e.g., "MAPCLASS_MapScriptContinent", "MAPCLASS_MapScriptHardwoodForest")
+ * @returns Formatted string (e.g., "Continent", "Hardwood Forest")
+ *
+ * @example
+ * formatMapClass("MAPCLASS_MapScriptContinent") // returns "Continent"
+ * formatMapClass("MAPCLASS_MapScriptHardwoodForest") // returns "Hardwood Forest"
+ * formatMapClass(null) // returns "Unknown"
+ */
+export function formatMapClass(value: string | null | undefined): string {
+  if (!value) return "Unknown";
+
+  // Remove the MAPCLASS_MapScript prefix
+  const withoutPrefix = value.replace(/^MAPCLASS_MapScript/, "");
+
+  // Split PascalCase by inserting space before capital letters
+  // Then trim and clean up any extra spaces
+  return withoutPrefix
+    .replace(/([A-Z])/g, " $1")
+    .trim()
+    .replace(/\s+/g, " ");
+}
+
+/**
  * Formats a date string to YYYY-MM-DD format for consistent display across the app.
  *
  * @param dateStr - The date string to format (ISO 8601 format from backend)
