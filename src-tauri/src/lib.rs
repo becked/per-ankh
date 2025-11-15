@@ -64,6 +64,7 @@ pub struct GameDetails {
     pub map_size: Option<String>,
     pub map_width: Option<i32>,
     pub map_height: Option<i32>,
+    pub map_class: Option<String>,
     pub game_mode: Option<String>,
     pub opponent_level: Option<String>,
     pub victory_conditions: Option<String>,
@@ -295,7 +296,7 @@ async fn get_game_details(
         let mut stmt = conn
             .prepare(
                 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
-                        m.total_turns, m.map_size, m.map_width, m.map_height,
+                        m.total_turns, m.map_size, m.map_width, m.map_height, m.map_class,
                         m.game_mode, m.opponent_level, m.victory_conditions, m.enabled_dlc,
                         m.winner_player_id,
                         wp.player_name as winner_name,
@@ -316,14 +317,15 @@ async fn get_game_details(
                     map_size: row.get(4)?,
                     map_width: row.get(5)?,
                     map_height: row.get(6)?,
-                    game_mode: row.get(7)?,
-                    opponent_level: row.get(8)?,
-                    victory_conditions: row.get(9)?,
-                    enabled_dlc: row.get(10)?,
-                    winner_player_id: row.get(11)?,
-                    winner_name: row.get(12)?,
-                    winner_civilization: row.get(13)?,
-                    winner_victory_type: row.get(14)?,
+                    map_class: row.get(7)?,
+                    game_mode: row.get(8)?,
+                    opponent_level: row.get(9)?,
+                    victory_conditions: row.get(10)?,
+                    enabled_dlc: row.get(11)?,
+                    winner_player_id: row.get(12)?,
+                    winner_name: row.get(13)?,
+                    winner_civilization: row.get(14)?,
+                    winner_victory_type: row.get(15)?,
                     players: Vec::new(), // Will be filled below
                 })
             })?;
