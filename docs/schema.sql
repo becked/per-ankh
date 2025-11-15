@@ -80,6 +80,7 @@ CREATE TABLE matches (
     victory_conditions VARCHAR, -- Serialized list
     total_turns INTEGER NOT NULL, -- Turn number from save - identifies snapshot
     winner_player_id BIGINT,
+    winner_victory_type VARCHAR, -- Victory type used to win (e.g., VICTORY_CONQUEST)
     -- Seeds for analysis
     first_seed BIGINT,
     map_seed BIGINT,

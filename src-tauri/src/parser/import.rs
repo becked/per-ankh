@@ -937,9 +937,9 @@ fn parse_save_date(date_str: &str) -> Option<String> {
 #[derive(Debug, Clone)]
 enum WinnerInfo {
     /// Winner identified by team ID (from TeamVictoriesCompleted)
-    TeamId(i32),
+    TeamId(i32, Option<String>), // (team_id, victory_type)
     /// Winner identified by player XML ID (from Victory element)
-    PlayerXmlId(i32),
+    PlayerXmlId(i32, Option<String>), // (player_xml_id, victory_type)
 }
 
 /// Update match with winner player ID after players are inserted
@@ -950,15 +950,15 @@ fn update_winner(
     players_data: &[super::game_data::PlayerData],
     id_mapper: &IdMapper,
 ) -> Result<()> {
-    // Resolve winner info to player XML ID
-    let winner_player_xml_id = match winner_info {
-        WinnerInfo::TeamId(team_id) => {
+    // Resolve winner info to player XML ID and extract victory type
+    let (winner_player_xml_id, victory_type) = match winner_info {
+        WinnerInfo::TeamId(team_id, victory_type) => {
             // For single-player games (team 0), the winner is the human player
             // For multiplayer, try to match by team_id attribute
             let team_id_str = team_id.to_string();
 
             // Try finding by team_id attribute first
-            if let Some(player) = players_data.iter().find(|p| p.team_id.as_ref() == Some(&team_id_str)) {
+            let xml_id = if let Some(player) = players_data.iter().find(|p| p.team_id.as_ref() == Some(&team_id_str)) {
                 player.xml_id
             } else {
                 // Fallback: in single-player games, find the human player
@@ -972,24 +972,26 @@ fn update_winner(
                             team_id
                         ))
                     })?
-            }
+            };
+            (xml_id, victory_type.clone())
         }
-        WinnerInfo::PlayerXmlId(xml_id) => *xml_id,
+        WinnerInfo::PlayerXmlId(xml_id, victory_type) => (*xml_id, victory_type.clone()),
     };
 
     // Map player XML ID to DB ID
     let winner_player_db_id = id_mapper.get_player(winner_player_xml_id)?;
 
-    // Update matches table
+    // Update matches table with winner and victory type
     tx.execute(
-        "UPDATE matches SET winner_player_id = ? WHERE match_id = ?",
-        params![winner_player_db_id, match_id],
+        "UPDATE matches SET winner_player_id = ?, winner_victory_type = ? WHERE match_id = ?",
+        params![winner_player_db_id, victory_type, match_id],
     )?;
 
     log::info!(
-        "Set winner: player XML ID {} → DB ID {}",
+        "Set winner: player XML ID {} → DB ID {}, victory type: {:?}",
         winner_player_xml_id,
-        winner_player_db_id
+        winner_player_db_id,
+        victory_type
     );
 
     Ok(())
@@ -1093,9 +1095,9 @@ fn insert_match_metadata(
             tv.children()
                 .find(|n| n.has_tag_name("Team"))
                 .and_then(|team| {
-                    team.text()
-                        .and_then(|t| t.parse::<i32>().ok())
-                        .map(WinnerInfo::TeamId)
+                    let team_id = team.text()?.parse::<i32>().ok()?;
+                    let victory_type = team.opt_attr("Victory").map(|s| s.to_string());
+                    Some(WinnerInfo::TeamId(team_id, victory_type))
                 })
         })
         .or_else(|| {
@@ -1103,9 +1105,9 @@ fn insert_match_metadata(
             root.children()
                 .find(|n| n.has_tag_name("Victory"))
                 .and_then(|v| {
-                    v.opt_attr("winner")
-                        .and_then(|w| w.parse::<i32>().ok())
-                        .map(WinnerInfo::PlayerXmlId)
+                    let winner_id = v.opt_attr("winner")?.parse::<i32>().ok()?;
+                    let victory_type = v.opt_attr("type").map(|s| s.to_string());
+                    Some(WinnerInfo::PlayerXmlId(winner_id, victory_type))
                 })
         });
 
