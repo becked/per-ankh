@@ -1071,6 +1071,19 @@ fn insert_match_metadata(
     let first_seed: Option<i64> = root.opt_attr("FirstSeed").and_then(|s| s.parse().ok());
     let map_seed: Option<i64> = root.opt_attr("MapSeed").and_then(|s| s.parse().ok());
 
+    // Victory conditions - extract from VictoryEnabled element
+    let victory_conditions = root
+        .children()
+        .find(|n| n.has_tag_name("VictoryEnabled"))
+        .map(|ve| {
+            ve.children()
+                .filter(|child| child.is_element())
+                .filter_map(|child| Some(child.tag_name().name().to_string()))
+                .collect::<Vec<String>>()
+                .join("+")
+        })
+        .filter(|s| !s.is_empty()); // Return None if no victory conditions found
+
     // Extract winner information (if game has been won)
     // TeamVictories is inside the Game element
     let winner_info = game_node
@@ -1106,6 +1119,7 @@ fn insert_match_metadata(
             opponent_level, tribe_level, development, advantage,
             succession_gender, succession_order, mortality, event_level,
             victory_point_modifier, force_march, team_nation,
+            victory_conditions,
             first_seed, map_seed,
             game_version, enabled_dlc
         ) VALUES (
@@ -1117,6 +1131,7 @@ fn insert_match_metadata(
             ?, ?, ?, ?,
             ?, ?, ?, ?,
             ?, ?, ?,
+            ?,
             ?, ?,
             ?, ?
         )",
@@ -1129,6 +1144,7 @@ fn insert_match_metadata(
             opponent_level, tribe_level, development, advantage,
             succession_gender, succession_order, mortality, event_level,
             victory_point_modifier, force_march, team_nation,
+            victory_conditions,
             first_seed, map_seed,
             game_version, enabled_dlc
         ],
