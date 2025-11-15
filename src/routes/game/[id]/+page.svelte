@@ -448,7 +448,7 @@
           style="background-color: #35302B;"
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Game Settings</h2>
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8">
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8 p-4 rounded-lg" style="background-color: #c5c3c2;">
             {#if gameDetails.map_size}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Map Size:</span>
@@ -487,8 +487,8 @@
             {/if}
           </div>
 
-          <div class="mt-8">
-            <h3 class="text-black font-bold mb-4 mt-8 text-xl">Players</h3>
+          <div class="mt-8 p-4 rounded-lg" style="background-color: #c5c3c2;">
+            <h3 class="text-black font-bold mb-4 mt-0 text-xl">Players</h3>
             <table class="w-full mt-2">
               <thead>
                 <tr>
