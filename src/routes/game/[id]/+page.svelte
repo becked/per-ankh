@@ -5,6 +5,7 @@
   import type { PlayerHistory } from "$lib/types/PlayerHistory";
   import type { YieldHistory } from "$lib/types/YieldHistory";
   import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
+  import type { EventLog } from "$lib/types/EventLog";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
@@ -14,6 +15,7 @@
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
   let allYields = $state<YieldHistory[] | null>(null);
+  let eventLogs = $state<EventLog[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
@@ -205,16 +207,19 @@
     gameDetails = null;
     playerHistory = null;
     allYields = null;
+    eventLogs = null;
 
     Promise.all([
       api.getGameDetails(matchId),
       api.getPlayerHistory(matchId),
       api.getYieldHistory(matchId, Array.from(YIELD_TYPES)),
+      api.getEventLogs(matchId),
     ])
-      .then(([details, history, yields]) => {
+      .then(([details, history, yields, logs]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
+        eventLogs = logs;
       })
       .catch((err) => {
         error = String(err);
@@ -365,6 +370,39 @@
           {#if pointsChartOption}
             <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
               <Chart option={pointsChartOption} height="400px" />
+            </div>
+          {/if}
+
+          <!-- Event Logs Table -->
+          <h3 class="text-tan font-bold mb-4 mt-8">Event Logs</h3>
+          {#if eventLogs === null}
+            <p class="text-brown italic text-center p-8">Loading event logs...</p>
+          {:else if eventLogs.length === 0}
+            <p class="text-brown italic text-center p-8">No event logs recorded</p>
+          {:else}
+            <div class="overflow-x-auto rounded-lg" style="background-color: #c5c3c2;">
+              <table class="w-full">
+                <thead>
+                  <tr>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Turn</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Log Type</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
+                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Description</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each eventLogs as log}
+                    <tr class="transition-colors duration-200 hover:bg-tan">
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.turn}</td>
+                      <td class="p-3 text-left border-b-2 border-tan text-black">
+                        <code class="text-sm">{formatEnum(log.log_type, "")}</code>
+                      </td>
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.player_name ?? "—"}</td>
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.description ?? "—"}</td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
             </div>
           {/if}
         </Tabs.Content>

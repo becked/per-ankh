@@ -7,6 +7,8 @@ import type { BatchImportResult } from "$lib/types/BatchImportResult";
 import type { NationDynastyRow } from "$lib/types/NationDynastyRow";
 import type { PlayerDebugRow } from "$lib/types/PlayerDebugRow";
 import type { MatchDebugRow } from "$lib/types/MatchDebugRow";
+import type { StoryEvent } from "$lib/types/StoryEvent";
+import type { EventLog } from "$lib/types/EventLog";
 
 /**
  * Centralized API layer for all Tauri backend commands.
@@ -32,6 +34,12 @@ export const api = {
 
   getYieldHistory: (matchId: number, yieldTypes: string[]) =>
     invoke<YieldHistory[]>("get_yield_history", { matchId, yieldTypes }),
+
+  getStoryEvents: (matchId: number) =>
+    invoke<StoryEvent[]>("get_story_events", { matchId }),
+
+  getEventLogs: (matchId: number) =>
+    invoke<EventLog[]>("get_event_logs", { matchId }),
 
   /**
    * Get nation and dynasty data for debugging.

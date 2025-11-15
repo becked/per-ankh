@@ -956,6 +956,107 @@ async fn reset_database_cmd(
     Ok("Database reset successfully".to_string())
 }
 
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct StoryEvent {
+    #[ts(type = "number")]
+    pub event_id: i64,
+    pub event_type: String,
+    pub player_name: String,
+    pub occurred_turn: i32,
+    pub primary_character_name: Option<String>,
+    pub city_name: Option<String>,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct EventLog {
+    #[ts(type = "number")]
+    pub log_id: i64,
+    pub log_type: String,
+    pub turn: i32,
+    pub player_name: Option<String>,
+    pub description: Option<String>,
+}
+
+#[tauri::command]
+async fn get_story_events(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<StoryEvent>, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT
+                se.event_id,
+                se.event_type,
+                p.player_name,
+                se.occurred_turn,
+                c.first_name as character_name,
+                ci.city_name
+             FROM story_events se
+             JOIN players p ON se.player_id = p.player_id AND se.match_id = p.match_id
+             LEFT JOIN characters c ON se.primary_character_id = c.character_id AND se.match_id = c.match_id
+             LEFT JOIN cities ci ON se.city_id = ci.city_id AND se.match_id = ci.match_id
+             WHERE se.match_id = ?
+             ORDER BY se.occurred_turn DESC, se.event_id DESC
+             LIMIT 100"
+        )?;
+
+        let events = stmt
+            .query_map([match_id], |row| {
+                Ok(StoryEvent {
+                    event_id: row.get(0)?,
+                    event_type: row.get(1)?,
+                    player_name: row.get(2)?,
+                    occurred_turn: row.get(3)?,
+                    primary_character_name: row.get(4)?,
+                    city_name: row.get(5)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(events)
+    })
+    .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_event_logs(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<EventLog>, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT
+                el.log_id,
+                el.log_type,
+                el.turn,
+                p.player_name,
+                el.description
+             FROM event_logs el
+             LEFT JOIN players p ON el.player_id = p.player_id AND el.match_id = p.match_id
+             WHERE el.match_id = ?
+             ORDER BY el.turn DESC, el.log_id DESC
+             LIMIT 100"
+        )?;
+
+        let logs = stmt
+            .query_map([match_id], |row| {
+                Ok(EventLog {
+                    log_id: row.get(0)?,
+                    log_type: row.get(1)?,
+                    turn: row.get(2)?,
+                    player_name: row.get(3)?,
+                    description: row.get(4)?,
+                })
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        Ok(logs)
+    })
+    .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -972,6 +1073,8 @@ pub fn run() {
             get_game_details,
             get_player_history,
             get_yield_history,
+            get_story_events,
+            get_event_logs,
             get_nation_dynasty_data,
             get_player_debug_data,
             get_match_debug_data,
