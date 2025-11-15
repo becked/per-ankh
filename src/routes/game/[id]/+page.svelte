@@ -239,19 +239,6 @@
     }) : ""
   );
 
-  // Format winner display
-  const winnerDisplay = $derived(() => {
-    if (!gameDetails?.winner_player_id) return "Game In Progress";
-
-    const name = gameDetails.winner_name ?? "Unknown";
-    const civ = formatEnum(gameDetails.winner_civilization, 'NATION_');
-    const victory = gameDetails.winner_victory_type
-      ? ` - ${formatEnum(gameDetails.winner_victory_type, 'VICTORY_')}`
-      : '';
-
-    return `Winner: ${name} (${civ})${victory}`;
-  });
-
   // Get winner civilization color
   const winnerColor = $derived(() => {
     if (!gameDetails?.winner_civilization) return undefined;
@@ -288,7 +275,7 @@
       <!-- Summary Section -->
       <div class="p-2 border-2 border-black rounded-lg mb-6" style="background-color: #36302a;">
         <div class="flex justify-evenly">
-          <!-- Left Column: Player & Winner -->
+          <!-- Left Column: Player, Winner & Victory Type -->
           <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-4 items-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide text-right">Player:</span>
             <span class="text-2xl font-bold" style="color: #EEEEEE;">{formatEnum(humanNation, "NATION_")}</span>
@@ -306,6 +293,15 @@
                 {/if}
               {:else}
                 In Progress
+              {/if}
+            </span>
+
+            <span class="font-bold text-brown text-sm uppercase tracking-wide text-right">Victory Type:</span>
+            <span class="text-2xl font-bold" style="color: #EEEEEE;">
+              {#if gameDetails.winner_victory_type}
+                {formatEnum(gameDetails.winner_victory_type, 'VICTORY_')}
+              {:else}
+                -
               {/if}
             </span>
           </div>
