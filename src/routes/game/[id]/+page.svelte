@@ -367,18 +367,6 @@
               <Chart option={pointsChartOption} height="400px" />
             </div>
           {/if}
-
-          {#if militaryChartOption}
-            <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-              <Chart option={militaryChartOption} height="400px" />
-            </div>
-          {/if}
-
-          {#if legitimacyChartOption}
-            <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-              <Chart option={legitimacyChartOption} height="400px" />
-            </div>
-          {/if}
         </Tabs.Content>
 
         <!-- Tab Content: Laws -->
@@ -398,6 +386,18 @@
           style="background-color: #35302B;"
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Economics</h2>
+          {#if militaryChartOption}
+            <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
+              <Chart option={militaryChartOption} height="400px" />
+            </div>
+          {/if}
+
+          {#if legitimacyChartOption}
+            <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
+              <Chart option={legitimacyChartOption} height="400px" />
+            </div>
+          {/if}
+
           {#if allYields === null}
             <p class="text-brown italic text-center p-8">Loading yield data...</p>
           {:else if allYields.length === 0}
