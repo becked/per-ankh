@@ -287,8 +287,7 @@
 
       <!-- Summary Section -->
       <div class="p-2 border-2 border-black rounded-lg mb-6" style="background-color: #36302a;">
-        <div class="flex gap-8">
-          <div class="flex-1"></div>
+        <div class="flex justify-evenly">
           <!-- Left Column: Player & Winner -->
           <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-4 items-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide text-right">Player:</span>
@@ -310,7 +309,7 @@
               {/if}
             </span>
           </div>
-          <div class="flex-1"></div>
+
           <!-- Right Column: Turns & Nations -->
           <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-4 items-center">
             <span class="font-bold text-brown text-sm uppercase tracking-wide text-right">Turns:</span>
@@ -319,7 +318,6 @@
             <span class="font-bold text-brown text-sm uppercase tracking-wide text-right">Nations:</span>
             <span class="text-2xl font-bold" style="color: #EEEEEE;">{gameDetails.players.length}</span>
           </div>
-          <div class="flex-1"></div>
         </div>
       </div>
 
