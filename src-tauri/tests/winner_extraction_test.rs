@@ -40,15 +40,16 @@ fn test_winner_extraction_from_completed_game() {
     assert!(result.success, "Import should succeed");
     assert!(result.match_id.is_some(), "Should have match_id");
 
-    // Query winner_player_id
-    let winner: Option<i64> = conn.query_row(
-        "SELECT winner_player_id FROM matches WHERE match_id = ?",
+    // Query winner_player_id and victory type
+    let (winner, victory_type): (Option<i64>, Option<String>) = conn.query_row(
+        "SELECT winner_player_id, winner_victory_type FROM matches WHERE match_id = ?",
         [result.match_id.unwrap()],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
     ).unwrap();
 
     // Verify winner was extracted
     assert!(winner.is_some(), "Winner should be set for completed game");
+    assert!(victory_type.is_some(), "Victory type should be extracted for completed game");
 
     // Verify winner is a valid player
     let player_count: i64 = conn.query_row(
@@ -59,7 +60,8 @@ fn test_winner_extraction_from_completed_game() {
 
     assert_eq!(player_count, 1, "Winner should reference an existing player");
 
-    println!("✓ Winner extracted: player_id = {}", winner.unwrap());
+    println!("✓ Winner extracted: player_id = {}, victory_type = {:?}",
+             winner.unwrap(), victory_type);
 }
 
 #[test]

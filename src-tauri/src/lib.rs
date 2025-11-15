@@ -299,7 +299,8 @@ async fn get_game_details(
                         m.game_mode, m.opponent_level, m.victory_conditions, m.enabled_dlc,
                         m.winner_player_id,
                         wp.player_name as winner_name,
-                        wp.nation as winner_civilization
+                        wp.nation as winner_civilization,
+                        m.winner_victory_type
                  FROM matches m
                  LEFT JOIN players wp ON m.match_id = wp.match_id AND m.winner_player_id = wp.player_id
                  WHERE m.match_id = ?"
@@ -322,7 +323,7 @@ async fn get_game_details(
                     winner_player_id: row.get(11)?,
                     winner_name: row.get(12)?,
                     winner_civilization: row.get(13)?,
-                    winner_victory_type: None, // Future enhancement
+                    winner_victory_type: row.get(14)?,
                     players: Vec::new(), // Will be filled below
                 })
             })?;
