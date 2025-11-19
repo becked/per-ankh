@@ -1028,16 +1028,19 @@ async fn get_event_logs(
     pool.with_connection(|conn| {
         let mut stmt = conn.prepare(
             "SELECT
-                el.log_id,
+                MIN(el.log_id) as log_id,
                 el.log_type,
                 el.turn,
-                p.player_name,
+                CASE
+                    WHEN COUNT(*) > 1 THEN NULL
+                    ELSE COALESCE(MAX(p.player_name), 'Player')
+                END as player_name,
                 el.description
              FROM event_logs el
              LEFT JOIN players p ON el.player_id = p.player_id AND el.match_id = p.match_id
              WHERE el.match_id = ?
-             ORDER BY el.turn DESC, el.log_id DESC
-             LIMIT 100"
+             GROUP BY el.turn, el.log_type, el.description
+             ORDER BY el.turn DESC, MIN(el.log_id) DESC"
         )?;
 
         let logs = stmt
@@ -1053,6 +1056,69 @@ async fn get_event_logs(
             .collect::<Result<Vec<_>, _>>()?;
 
         Ok(logs)
+    })
+    .map_err(|e| e.to_string())
+}
+
+/// Debug command to investigate player_id mismatch in event_logs
+#[tauri::command]
+async fn debug_event_log_player_ids(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<String, String> {
+    pool.with_connection(|conn| {
+        // Get distinct player_ids from event_logs
+        let mut stmt = conn.prepare(
+            "SELECT DISTINCT player_id FROM event_logs WHERE match_id = ? ORDER BY player_id"
+        )?;
+        let event_log_ids: Vec<Option<i64>> = stmt
+            .query_map([match_id], |row| row.get(0))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Get player_ids from players table
+        let mut stmt = conn.prepare(
+            "SELECT player_id, player_name FROM players WHERE match_id = ? ORDER BY player_id"
+        )?;
+        let players: Vec<(i64, String)> = stmt
+            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?)))?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        // Get a sample of event_logs with their player_ids
+        let mut stmt = conn.prepare(
+            "SELECT log_id, turn, log_type, player_id, description
+             FROM event_logs
+             WHERE match_id = ?
+             ORDER BY turn DESC
+             LIMIT 10"
+        )?;
+        let sample_logs: Vec<(i64, i32, String, Option<i64>, Option<String>)> = stmt
+            .query_map([match_id], |row| {
+                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
+            })?
+            .collect::<Result<Vec<_>, _>>()?;
+
+        let mut result = format!("=== Debug for match_id {} ===\n\n", match_id);
+
+        result.push_str("Player IDs in event_logs:\n");
+        for id in &event_log_ids {
+            result.push_str(&format!("  {:?}\n", id));
+        }
+
+        result.push_str("\nPlayers in players table:\n");
+        for (id, name) in &players {
+            result.push_str(&format!("  {} - {}\n", id, name));
+        }
+
+        result.push_str("\nSample event logs (last 10):\n");
+        for (log_id, turn, log_type, player_id, desc) in &sample_logs {
+            result.push_str(&format!(
+                "  log_id={}, turn={}, type={}, player_id={:?}, desc={}\n",
+                log_id, turn, log_type, player_id,
+                desc.as_ref().map(|s| &s[..s.len().min(50)]).unwrap_or("None")
+            ));
+        }
+
+        Ok(result)
     })
     .map_err(|e| e.to_string())
 }
@@ -1079,7 +1145,8 @@ pub fn run() {
             get_player_debug_data,
             get_match_debug_data,
             run_event_test,
-            reset_database_cmd
+            reset_database_cmd,
+            debug_event_log_player_ids
         ]);
 
     builder
