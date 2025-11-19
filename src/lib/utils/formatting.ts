@@ -86,6 +86,24 @@ export function formatDate(dateStr: string | null | undefined): string {
  * formatGameTitle({ game_name: "Game 5", human_nation: "NATION_ROME", total_turns: 100, ... }) // returns "Rome - 100 turns"
  * formatGameTitle({ game_name: null, human_nation: "NATION_EGYPT", total_turns: null, match_id: 3 }) // returns "Egypt"
  */
+/**
+ * Strips Unity TextMeshPro rich text markup from a string.
+ * Removes tags like <color=#e3c08c>, <link="...">, <sprite="..." name="..." tint>, etc.
+ *
+ * @param text - The text containing markup to strip
+ * @returns Plain text with all markup tags removed
+ *
+ * @example
+ * stripMarkup("Discovered <color=#e3c08c><link=\"HELP\">Tech</link></color>") // returns "Discovered Tech"
+ * stripMarkup(null) // returns ""
+ */
+export function stripMarkup(text: string | null | undefined): string {
+  if (!text) return "";
+
+  // Remove all angle-bracket tags (Unity TextMeshPro rich text)
+  return text.replace(/<[^>]*>/g, "").trim();
+}
+
 export function formatGameTitle(game: {
   game_name: string | null;
   human_nation: string | null;

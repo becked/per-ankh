@@ -91,4 +91,10 @@ export const api = {
    */
   resetDatabase: () =>
     invoke<string>("reset_database_cmd"),
+
+  /**
+   * Debug command to investigate player_id mismatch in event_logs.
+   */
+  debugEventLogPlayerIds: (matchId: number) =>
+    invoke<string>("debug_event_log_player_ids", { matchId }),
 } as const;

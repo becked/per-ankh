@@ -9,7 +9,7 @@
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { Tabs } from "bits-ui";
-  import { formatEnum, formatDate, formatGameTitle, formatMapClass } from "$lib/utils/formatting";
+  import { formatEnum, formatDate, formatGameTitle, formatMapClass, stripMarkup } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
   let gameDetails = $state<GameDetails | null>(null);
@@ -264,6 +264,38 @@
       ?.split('+')
       .join(', ') ?? 'None'
   );
+
+  // Process event logs to extract player names from descriptions like "...by Kush (Fluffbunny)"
+  const processedEventLogs = $derived(
+    eventLogs?.map(log => {
+      // Strip markup first
+      const cleanDesc = stripMarkup(log.description);
+
+      // If player_name is already set, just clean the description
+      if (log.player_name) {
+        return { ...log, description: cleanDesc };
+      }
+
+      // Try to extract player name from description ending with "(PlayerName)"
+      const match = cleanDesc?.match(/\s*\(([^)]+)\)\s*$/);
+      if (match) {
+        return {
+          ...log,
+          player_name: match[1],
+          // Store the cleaned description with the parenthetical removed
+          description: cleanDesc?.replace(/\s*\([^)]+\)\s*$/, '') ?? null
+        };
+      }
+
+      return { ...log, description: cleanDesc };
+    }) ?? null
+  );
+
+  // Check if event logs have meaningful player names (for showing/hiding Player column)
+  // If all names are null or "Player", it's a single player game - hide the column
+  const showPlayerColumn = $derived(
+    processedEventLogs && processedEventLogs.some(log => log.player_name && log.player_name !== 'Player')
+  );
 </script>
 
 <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
@@ -375,9 +407,9 @@
 
           <!-- Event Logs Table -->
           <h3 class="text-tan font-bold mb-4 mt-8">Event Logs</h3>
-          {#if eventLogs === null}
+          {#if processedEventLogs === null}
             <p class="text-brown italic text-center p-8">Loading event logs...</p>
-          {:else if eventLogs.length === 0}
+          {:else if processedEventLogs.length === 0}
             <p class="text-brown italic text-center p-8">No event logs recorded</p>
           {:else}
             <div class="overflow-x-auto rounded-lg" style="background-color: #c5c3c2;">
@@ -386,19 +418,23 @@
                   <tr>
                     <th class="p-3 text-left border-b-2 border-black text-black font-bold">Turn</th>
                     <th class="p-3 text-left border-b-2 border-black text-black font-bold">Log Type</th>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
+                    {#if showPlayerColumn}
+                      <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
+                    {/if}
                     <th class="p-3 text-left border-b-2 border-black text-black font-bold">Description</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#each eventLogs as log}
+                  {#each processedEventLogs as log}
                     <tr class="transition-colors duration-200 hover:bg-tan">
                       <td class="p-3 text-left border-b-2 border-tan text-black">{log.turn}</td>
                       <td class="p-3 text-left border-b-2 border-tan text-black">
                         <code class="text-sm">{formatEnum(log.log_type, "")}</code>
                       </td>
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.player_name ?? "—"}</td>
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.description ?? "—"}</td>
+                      {#if showPlayerColumn}
+                        <td class="p-3 text-left border-b-2 border-tan text-black">{log.player_name ?? ""}</td>
+                      {/if}
+                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.description || "—"}</td>
                     </tr>
                   {/each}
                 </tbody>
