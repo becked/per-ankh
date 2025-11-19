@@ -89,19 +89,45 @@ export function formatDate(dateStr: string | null | undefined): string {
 /**
  * Strips Unity TextMeshPro rich text markup from a string.
  * Removes tags like <color=#e3c08c>, <link="...">, <sprite="..." name="..." tint>, etc.
+ * Also handles Old World specific patterns like icon(YIELD_SOMETHING) and link(CONCEPT_SOMETHING).
  *
  * @param text - The text containing markup to strip
  * @returns Plain text with all markup tags removed
  *
  * @example
  * stripMarkup("Discovered <color=#e3c08c><link=\"HELP\">Tech</link></color>") // returns "Discovered Tech"
+ * stripMarkup("link(CONCEPT_AMBITION): icon(YIELD_LEGITIMACY) Send") // returns "Ambition: Send"
  * stripMarkup(null) // returns ""
  */
 export function stripMarkup(text: string | null | undefined): string {
   if (!text) return "";
 
-  // Remove all angle-bracket tags (Unity TextMeshPro rich text)
-  return text.replace(/<[^>]*>/g, "").trim();
+  return text
+    // Remove all angle-bracket tags (Unity TextMeshPro rich text)
+    .replace(/<[^>]*>/g, "")
+    // Remove icon(...) patterns entirely
+    .replace(/icon\([^)]*\)\s*/g, "")
+    // Replace link(CONCEPT_SOMETHING) with formatted "Something"
+    .replace(/link\(CONCEPT_([^)]+)\)/g, (_, concept) => {
+      // Convert SOMETHING_LIKE_THIS to "Something Like This"
+      return concept
+        .toLowerCase()
+        .split("_")
+        .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(" ");
+    })
+    // Replace any remaining link(...) patterns with their content
+    .replace(/link\(([^)]+)\)/g, (_, content) => {
+      // Extract meaningful part after prefix (e.g., "TECH_IRONWORKING" -> "Ironworking")
+      const parts = content.split("_");
+      if (parts.length > 1) {
+        return parts.slice(1)
+          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+          .join(" ");
+      }
+      return content;
+    })
+    .trim();
 }
 
 export function formatGameTitle(game: {

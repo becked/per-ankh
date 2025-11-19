@@ -1026,6 +1026,8 @@ async fn get_event_logs(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<EventLog>, String> {
     pool.with_connection(|conn| {
+        // Strip markup tags from description for grouping to properly deduplicate
+        // events that differ only in player-specific markup (e.g., link IDs)
         let mut stmt = conn.prepare(
             "SELECT
                 MIN(el.log_id) as log_id,
@@ -1035,11 +1037,11 @@ async fn get_event_logs(
                     WHEN COUNT(*) > 1 THEN NULL
                     ELSE COALESCE(MAX(p.player_name), 'Player')
                 END as player_name,
-                el.description
+                MIN(el.description) as description
              FROM event_logs el
              LEFT JOIN players p ON el.player_id = p.player_id AND el.match_id = p.match_id
              WHERE el.match_id = ?
-             GROUP BY el.turn, el.log_type, el.description
+             GROUP BY el.turn, el.log_type, regexp_replace(el.description, '<[^>]*>', '', 'g')
              ORDER BY el.turn DESC, MIN(el.log_id) DESC"
         )?;
 
