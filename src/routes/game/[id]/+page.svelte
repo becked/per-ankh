@@ -8,7 +8,7 @@
   import type { EventLog } from "$lib/types/EventLog";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
-  import { Tabs } from "bits-ui";
+  import { Tabs, Combobox } from "bits-ui";
   import { formatEnum, formatDate, formatGameTitle, formatMapClass, stripMarkup } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
@@ -19,6 +19,15 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
+
+  // Event log filter state
+  let searchTerm = $state("");
+  let selectedLogTypes = $state<string[]>([]);
+  let selectedPlayers = $state<string[]>([]);
+
+  // Combobox search state
+  let logTypeSearch = $state("");
+  let playerSearch = $state("");
 
   // All available yield types in Old World
   const YIELD_TYPES = [
@@ -291,11 +300,92 @@
     }) ?? null
   );
 
-  // Check if event logs have meaningful player names (for showing/hiding Player column)
-  // If all names are null or "Player", it's a single player game - hide the column
-  const showPlayerColumn = $derived(
-    processedEventLogs && processedEventLogs.some(log => log.player_name && log.player_name !== 'Player')
+  // Get unique log types for filter dropdown
+  const uniqueLogTypes = $derived(
+    processedEventLogs
+      ? [...new Set(processedEventLogs.map(log => log.log_type))].sort()
+      : []
   );
+
+  // Filtered log types for combobox search
+  const filteredLogTypes = $derived(
+    logTypeSearch === ""
+      ? uniqueLogTypes
+      : uniqueLogTypes.filter(type =>
+          formatEnum(type, "").toLowerCase().includes(logTypeSearch.toLowerCase())
+        )
+  );
+
+  // Get unique players for filter dropdown
+  const uniquePlayers = $derived(
+    processedEventLogs
+      ? [...new Set(processedEventLogs.map(log => log.player_name).filter((p): p is string => p != null && p !== 'Player'))].sort()
+      : []
+  );
+
+  // Get nation names to distinguish from player usernames
+  const nationNames = $derived(
+    gameDetails
+      ? gameDetails.players.map(p => formatEnum(p.nation, 'NATION_'))
+      : []
+  );
+
+  // Show player column if any event has a player name that's NOT a nation name
+  // and looks like a real username (no spaces - filters out "One Legendary", etc.)
+  // In single player, extracted names are nations (e.g., "Aksum") or game terms
+  // In multiplayer, they're actual usernames (e.g., "Fluffbunny")
+  const showPlayerColumn = $derived(
+    processedEventLogs && processedEventLogs.some(log =>
+      log.player_name &&
+      log.player_name !== 'Player' &&
+      !nationNames.includes(log.player_name) &&
+      !log.player_name.includes(' ')  // Real usernames don't have spaces
+    )
+  );
+
+  // Filtered players for combobox search
+  const filteredPlayers = $derived(
+    playerSearch === ""
+      ? uniquePlayers
+      : uniquePlayers.filter(player =>
+          player.toLowerCase().includes(playerSearch.toLowerCase())
+        )
+  );
+
+  // Apply filters to event logs
+  const filteredEventLogs = $derived(
+    processedEventLogs?.filter(log => {
+      // Search filter (case-insensitive)
+      if (searchTerm && !log.description?.toLowerCase().includes(searchTerm.toLowerCase())) {
+        return false;
+      }
+      // Log type filter
+      if (selectedLogTypes.length > 0 && !selectedLogTypes.includes(log.log_type)) {
+        return false;
+      }
+      // Player filter
+      if (selectedPlayers.length > 0 && (!log.player_name || !selectedPlayers.includes(log.player_name))) {
+        return false;
+      }
+      return true;
+    }) ?? null
+  );
+
+  // Check if any filters are active
+  const hasActiveFilters = $derived(
+    searchTerm !== "" ||
+    selectedLogTypes.length > 0 ||
+    selectedPlayers.length > 0
+  );
+
+  // Clear all filters
+  function clearFilters() {
+    searchTerm = "";
+    selectedLogTypes = [];
+    selectedPlayers = [];
+    logTypeSearch = "";
+    playerSearch = "";
+  }
 </script>
 
 <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
@@ -412,6 +502,112 @@
           {:else if processedEventLogs.length === 0}
             <p class="text-brown italic text-center p-8">No event logs recorded</p>
           {:else}
+            <!-- Filters -->
+            <div class="flex flex-wrap gap-3 mb-4 items-end">
+              <!-- Log Type -->
+              <div class="flex flex-col gap-1">
+                <span class="text-brown text-xs font-bold">Log Type</span>
+                <Combobox.Root type="multiple" bind:value={selectedLogTypes}>
+                  <div class="relative">
+                    <Combobox.Input
+                      oninput={(e) => (logTypeSearch = e.currentTarget.value)}
+                      placeholder={selectedLogTypes.length > 0 ? `${selectedLogTypes.length} selected` : "Select types..."}
+                      class="px-3 py-2 rounded border-2 border-black bg-white text-black text-sm w-40"
+                    />
+                    <Combobox.Trigger class="absolute right-2 top-1/2 -translate-y-1/2 text-black">
+                      ▼
+                    </Combobox.Trigger>
+                  </div>
+                  <Combobox.Portal>
+                    <Combobox.Content class="bg-white border-2 border-black rounded shadow-lg max-h-48 overflow-y-auto z-50">
+                      {#each filteredLogTypes as logType}
+                        <Combobox.Item
+                          value={logType}
+                          label={formatEnum(logType, "")}
+                          class="px-3 py-2 cursor-pointer hover:bg-tan text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan"
+                        >
+                          {#snippet children({ selected })}
+                            {formatEnum(logType, "")}
+                            {#if selected}
+                              <span class="text-brown font-bold">✓</span>
+                            {/if}
+                          {/snippet}
+                        </Combobox.Item>
+                      {:else}
+                        <div class="px-3 py-2 text-brown text-sm italic">No matches</div>
+                      {/each}
+                    </Combobox.Content>
+                  </Combobox.Portal>
+                </Combobox.Root>
+              </div>
+
+              <!-- Player (only show if player column is visible) -->
+              {#if showPlayerColumn && uniquePlayers.length > 0}
+                <div class="flex flex-col gap-1">
+                  <span class="text-brown text-xs font-bold">Player</span>
+                  <Combobox.Root type="multiple" bind:value={selectedPlayers}>
+                    <div class="relative">
+                      <Combobox.Input
+                        oninput={(e) => (playerSearch = e.currentTarget.value)}
+                        placeholder={selectedPlayers.length > 0 ? `${selectedPlayers.length} selected` : "Select players..."}
+                        class="px-3 py-2 rounded border-2 border-black bg-white text-black text-sm w-40"
+                      />
+                      <Combobox.Trigger class="absolute right-2 top-1/2 -translate-y-1/2 text-black">
+                        ▼
+                      </Combobox.Trigger>
+                    </div>
+                    <Combobox.Portal>
+                      <Combobox.Content class="bg-white border-2 border-black rounded shadow-lg max-h-48 overflow-y-auto z-50">
+                        {#each filteredPlayers as player}
+                          <Combobox.Item
+                            value={player}
+                            label={player}
+                            class="px-3 py-2 cursor-pointer hover:bg-tan text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan"
+                          >
+                            {#snippet children({ selected })}
+                              {player}
+                              {#if selected}
+                                <span class="text-brown font-bold">✓</span>
+                              {/if}
+                            {/snippet}
+                          </Combobox.Item>
+                        {:else}
+                          <div class="px-3 py-2 text-brown text-sm italic">No matches</div>
+                        {/each}
+                      </Combobox.Content>
+                    </Combobox.Portal>
+                  </Combobox.Root>
+                </div>
+              {/if}
+
+              <!-- Search (Description) -->
+              <div class="flex flex-col gap-1">
+                <label for="search" class="text-brown text-xs font-bold">Search</label>
+                <input
+                  id="search"
+                  type="text"
+                  bind:value={searchTerm}
+                  placeholder="Filter by description..."
+                  class="px-3 py-2 rounded border-2 border-black bg-white text-black text-sm w-48"
+                />
+              </div>
+
+              <!-- Clear button -->
+              {#if hasActiveFilters}
+                <button
+                  onclick={clearFilters}
+                  class="px-3 py-2 rounded border-2 border-black bg-brown text-white text-sm font-bold hover:bg-tan hover:text-black transition-colors"
+                >
+                  Clear
+                </button>
+              {/if}
+
+              <!-- Results count -->
+              <span class="text-brown text-sm ml-auto">
+                {filteredEventLogs?.length ?? 0} / {processedEventLogs.length} events
+              </span>
+            </div>
+
             <div class="overflow-x-auto rounded-lg" style="background-color: #c5c3c2;">
               <table class="w-full">
                 <thead>
@@ -425,18 +621,26 @@
                   </tr>
                 </thead>
                 <tbody>
-                  {#each processedEventLogs as log}
-                    <tr class="transition-colors duration-200 hover:bg-tan">
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.turn}</td>
-                      <td class="p-3 text-left border-b-2 border-tan text-black">
-                        <code class="text-sm">{formatEnum(log.log_type, "")}</code>
+                  {#if filteredEventLogs && filteredEventLogs.length > 0}
+                    {#each filteredEventLogs as log}
+                      <tr class="transition-colors duration-200 hover:bg-tan">
+                        <td class="p-3 text-left border-b-2 border-tan text-black">{log.turn}</td>
+                        <td class="p-3 text-left border-b-2 border-tan text-black">
+                          <code class="text-sm">{formatEnum(log.log_type, "")}</code>
+                        </td>
+                        {#if showPlayerColumn}
+                          <td class="p-3 text-left border-b-2 border-tan text-black">{log.player_name ?? ""}</td>
+                        {/if}
+                        <td class="p-3 text-left border-b-2 border-tan text-black">{log.description || "—"}</td>
+                      </tr>
+                    {/each}
+                  {:else}
+                    <tr>
+                      <td colspan={showPlayerColumn ? 4 : 3} class="p-8 text-center text-brown italic">
+                        No events match filters
                       </td>
-                      {#if showPlayerColumn}
-                        <td class="p-3 text-left border-b-2 border-tan text-black">{log.player_name ?? ""}</td>
-                      {/if}
-                      <td class="p-3 text-left border-b-2 border-tan text-black">{log.description || "—"}</td>
                     </tr>
-                  {/each}
+                  {/if}
                 </tbody>
               </table>
             </div>
