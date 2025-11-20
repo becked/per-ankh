@@ -7,7 +7,7 @@
   import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
   import type { EventLog } from "$lib/types/EventLog";
   import type { EChartsOption } from "echarts";
-  import Chart from "$lib/Chart.svelte";
+  import ChartContainer from "$lib/ChartContainer.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
   import { Tabs, Select } from "bits-ui";
   import { formatEnum, formatDate, formatGameTitle, formatMapClass, stripMarkup } from "$lib/utils/formatting";
@@ -485,9 +485,7 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Game History</h2>
           {#if pointsChartOption}
-            <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-              <Chart option={pointsChartOption} height="400px" />
-            </div>
+            <ChartContainer option={pointsChartOption} height="400px" title="Victory Points" />
           {/if}
 
           <!-- Event Logs Table -->
@@ -656,15 +654,11 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Economics</h2>
           {#if militaryChartOption}
-            <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-              <Chart option={militaryChartOption} height="400px" />
-            </div>
+            <ChartContainer option={militaryChartOption} height="400px" title="Military Power" />
           {/if}
 
           {#if legitimacyChartOption}
-            <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-              <Chart option={legitimacyChartOption} height="400px" />
-            </div>
+            <ChartContainer option={legitimacyChartOption} height="400px" title="Legitimacy" />
           {/if}
 
           {#if allYields === null}
@@ -673,39 +667,27 @@
             <p class="text-brown italic text-center p-8">No yield data available</p>
           {:else}
             {#if scienceChartOption}
-              <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-                <Chart option={scienceChartOption} height="400px" />
-              </div>
+              <ChartContainer option={scienceChartOption} height="400px" title="Science Production" />
             {/if}
 
             {#if civicsChartOption}
-              <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-                <Chart option={civicsChartOption} height="400px" />
-              </div>
+              <ChartContainer option={civicsChartOption} height="400px" title="Civics Production" />
             {/if}
 
             {#if trainingChartOption}
-              <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-                <Chart option={trainingChartOption} height="400px" />
-              </div>
+              <ChartContainer option={trainingChartOption} height="400px" title="Training Production" />
             {/if}
 
             {#if growthChartOption}
-              <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-                <Chart option={growthChartOption} height="400px" />
-              </div>
+              <ChartContainer option={growthChartOption} height="400px" title="Growth Production" />
             {/if}
 
             {#if cultureChartOption}
-              <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-                <Chart option={cultureChartOption} height="400px" />
-              </div>
+              <ChartContainer option={cultureChartOption} height="400px" title="Culture Production" />
             {/if}
 
             {#if happinessChartOption}
-              <div class="p-1 border-2 border-tan rounded-lg mb-6" style="background-color: var(--color-chart-frame)">
-                <Chart option={happinessChartOption} height="400px" />
-              </div>
+              <ChartContainer option={happinessChartOption} height="400px" title="Happiness Production" />
             {/if}
           {/if}
         </Tabs.Content>
