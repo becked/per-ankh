@@ -69,7 +69,7 @@
             text: "Victory Points",
           },
           legend: {
-            data: playerHistory.map((p) => p.player_name),
+            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
             top: 30,
           },
           grid: {
@@ -92,7 +92,7 @@
             nameGap: 40,
           },
           series: playerHistory.map((player, i) => ({
-            name: player.player_name,
+            name: formatEnum(player.nation, "NATION_"),
             type: "line",
             data: player.history.map((h) => h.points),
             itemStyle: { color: getPlayerColor(player.nation, i) },
@@ -110,7 +110,7 @@
             text: "Military Power",
           },
           legend: {
-            data: playerHistory.map((p) => p.player_name),
+            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
             top: 30,
           },
           xAxis: {
@@ -123,7 +123,7 @@
             name: "Military Power",
           },
           series: playerHistory.map((player, i) => ({
-            name: player.player_name,
+            name: formatEnum(player.nation, "NATION_"),
             type: "line",
             data: player.history.map((h) => h.military_power),
             itemStyle: { color: getPlayerColor(player.nation, i) },
@@ -141,7 +141,7 @@
             text: "Legitimacy",
           },
           legend: {
-            data: playerHistory.map((p) => p.player_name),
+            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
             top: 30,
           },
           xAxis: {
@@ -154,7 +154,7 @@
             name: "Legitimacy",
           },
           series: playerHistory.map((player, i) => ({
-            name: player.player_name,
+            name: formatEnum(player.nation, "NATION_"),
             type: "line",
             data: player.history.map((h) => h.legitimacy),
             itemStyle: { color: getPlayerColor(player.nation, i) },
@@ -177,7 +177,7 @@
         text: title,
       },
       legend: {
-        data: yieldData.map((y) => y.player_name),
+        data: yieldData.map((y) => formatEnum(y.nation, "NATION_")),
         top: 30,
       },
       grid: {
@@ -200,7 +200,7 @@
         nameGap: 40,
       },
       series: yieldData.map((playerYield, i) => ({
-        name: playerYield.player_name,
+        name: formatEnum(playerYield.nation, "NATION_"),
         type: "line",
         data: playerYield.data.map((d: YieldDataPoint) => d.amount),
         itemStyle: { color: getPlayerColor(playerYield.nation, i) },
