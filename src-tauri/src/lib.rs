@@ -979,6 +979,22 @@ pub struct EventLog {
     pub description: Option<String>,
 }
 
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct LawAdoptionDataPoint {
+    pub turn: i32,
+    pub law_count: i32,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct LawAdoptionHistory {
+    pub player_id: i32,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub data: Vec<LawAdoptionDataPoint>,
+}
+
 #[tauri::command]
 async fn get_story_events(
     match_id: i64,
@@ -1125,6 +1141,73 @@ async fn debug_event_log_player_ids(
     .map_err(|e| e.to_string())
 }
 
+/// Tauri command to get law adoption history for human players
+///
+/// Returns cumulative law adoption data over time for each human player in the match
+#[tauri::command]
+async fn get_law_adoption_history(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<LawAdoptionHistory>, String> {
+    pool.with_connection(|conn| {
+        // Get all players for this match
+        let mut players_stmt = conn
+            .prepare(
+                "SELECT player_id, player_name, nation
+                 FROM players
+                 WHERE match_id = ?
+                 ORDER BY player_name"
+            )?;
+
+        let players: Vec<(i32, String, Option<String>)> = players_stmt
+            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut result = Vec::new();
+
+        for (player_id, player_name, nation) in players {
+            // Get law adoption data from event logs (which have turn-by-turn history)
+            // Count cumulative law adoptions over time
+            let mut law_stmt = conn
+                .prepare(
+                    "WITH law_events AS (
+                        SELECT turn, COUNT(*) as laws_adopted
+                        FROM event_logs
+                        WHERE match_id = ?
+                          AND player_id = ?
+                          AND log_type = 'LAW_ADOPTED'
+                        GROUP BY turn
+                     )
+                     SELECT
+                        turn,
+                        SUM(laws_adopted) OVER (ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cumulative_laws
+                     FROM law_events
+                     ORDER BY turn"
+                )?;
+
+            let data: Vec<LawAdoptionDataPoint> = law_stmt
+                .query_map([match_id, player_id as i64], |row| {
+                    Ok(LawAdoptionDataPoint {
+                        turn: row.get(0)?,
+                        law_count: row.get(1)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            result.push(LawAdoptionHistory {
+                player_id,
+                player_name,
+                nation,
+                data,
+            });
+        }
+
+        Ok(result)
+    })
+    .context("Failed to get law adoption history")
+    .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -1143,6 +1226,7 @@ pub fn run() {
             get_yield_history,
             get_story_events,
             get_event_logs,
+            get_law_adoption_history,
             get_nation_dynasty_data,
             get_player_debug_data,
             get_match_debug_data,
