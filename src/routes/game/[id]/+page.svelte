@@ -68,10 +68,6 @@
             ...CHART_THEME.title,
             text: "Victory Points",
           },
-          legend: {
-            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
-            top: 30,
-          },
           grid: {
             left: 60,
             right: 40,
@@ -109,10 +105,6 @@
             ...CHART_THEME.title,
             text: "Military Power",
           },
-          legend: {
-            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
-            top: 30,
-          },
           xAxis: {
             type: "category",
             name: "Turn",
@@ -139,10 +131,6 @@
           title: {
             ...CHART_THEME.title,
             text: "Legitimacy",
-          },
-          legend: {
-            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
-            top: 30,
           },
           xAxis: {
             type: "category",
@@ -175,10 +163,6 @@
       title: {
         ...CHART_THEME.title,
         text: title,
-      },
-      legend: {
-        data: yieldData.map((y) => formatEnum(y.nation, "NATION_")),
-        top: 30,
       },
       grid: {
         left: 60,
