@@ -1150,6 +1150,13 @@ async fn get_law_adoption_history(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<LawAdoptionHistory>, String> {
     pool.with_connection(|conn| {
+        // Get the final turn number for this match
+        let final_turn: i32 = conn.query_row(
+            "SELECT total_turns FROM matches WHERE match_id = ?",
+            [match_id],
+            |row| row.get(0)
+        )?;
+
         // Get all players for this match
         let mut players_stmt = conn
             .prepare(
@@ -1185,7 +1192,7 @@ async fn get_law_adoption_history(
                      ORDER BY turn"
                 )?;
 
-            let data: Vec<LawAdoptionDataPoint> = law_stmt
+            let mut data: Vec<LawAdoptionDataPoint> = law_stmt
                 .query_map([match_id, player_id as i64], |row| {
                     Ok(LawAdoptionDataPoint {
                         turn: row.get(0)?,
@@ -1193,6 +1200,22 @@ async fn get_law_adoption_history(
                     })
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            // Prepend a starting point at turn 0 with 0 laws so the line starts from the origin
+            data.insert(0, LawAdoptionDataPoint {
+                turn: 0,
+                law_count: 0,
+            });
+
+            // Append an ending point at the final turn to extend the line to the end of the chart
+            if let Some(last_point) = data.last() {
+                if last_point.turn < final_turn {
+                    data.push(LawAdoptionDataPoint {
+                        turn: final_turn,
+                        law_count: last_point.law_count,
+                    });
+                }
+            }
 
             result.push(LawAdoptionHistory {
                 player_id,
