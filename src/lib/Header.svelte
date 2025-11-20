@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import ImportModal from "$lib/ImportModal.svelte";
+  import SearchInput from "$lib/SearchInput.svelte";
 
   import { api } from "$lib/api";
   import type { ImportProgress } from "$lib/types/ImportProgress";
@@ -191,31 +192,11 @@
   </button>
 
   <!-- Search box on the right -->
-  <div class="flex-shrink-0 w-[171px] -mr-4 pr-2 pl-1 relative">
-    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-4 w-4 text-tan opacity-50"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-      >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          stroke-width="2"
-          d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-        />
-      </svg>
-    </div>
-    <input
-      type="text"
-      bind:value={$searchQuery}
-      placeholder="Search"
-      class="w-full pl-9 pr-3 py-1 border-none rounded-full text-tan text-sm font-normal placeholder-tan placeholder:opacity-50 focus:outline-none transition-colors"
-      style="background-color: #403A33;"
-    />
-  </div>
+  <SearchInput
+    bind:value={$searchQuery}
+    variant="dark"
+    class="flex-shrink-0 w-[171px] -mr-4 pr-2 pl-1"
+  />
 </header>
 
 <ImportModal
