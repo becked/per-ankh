@@ -8,7 +8,8 @@
   import type { EventLog } from "$lib/types/EventLog";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
-  import { Tabs, Combobox } from "bits-ui";
+  import SearchInput from "$lib/SearchInput.svelte";
+  import { Tabs, Select } from "bits-ui";
   import { formatEnum, formatDate, formatGameTitle, formatMapClass, stripMarkup } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
 
@@ -22,12 +23,20 @@
 
   // Event log filter state
   let searchTerm = $state("");
-  let selectedLogTypes = $state<string[]>([]);
-  let selectedPlayers = $state<string[]>([]);
+  let selectedFilters = $state<string[]>([]);  // Combined log types and players with prefixes
 
-  // Combobox search state
-  let logTypeSearch = $state("");
-  let playerSearch = $state("");
+  // Parse selected filters back into separate arrays
+  const selectedLogTypes = $derived(
+    selectedFilters
+      .filter(f => f.startsWith("logtype:"))
+      .map(f => f.replace("logtype:", ""))
+  );
+
+  const selectedPlayers = $derived(
+    selectedFilters
+      .filter(f => f.startsWith("player:"))
+      .map(f => f.replace("player:", ""))
+  );
 
   // All available yield types in Old World
   const YIELD_TYPES = [
@@ -307,14 +316,6 @@
       : []
   );
 
-  // Filtered log types for combobox search
-  const filteredLogTypes = $derived(
-    logTypeSearch === ""
-      ? uniqueLogTypes
-      : uniqueLogTypes.filter(type =>
-          formatEnum(type, "").toLowerCase().includes(logTypeSearch.toLowerCase())
-        )
-  );
 
   // Get unique players for filter dropdown
   const uniquePlayers = $derived(
@@ -343,21 +344,19 @@
     )
   );
 
-  // Filtered players for combobox search
-  const filteredPlayers = $derived(
-    playerSearch === ""
-      ? uniquePlayers
-      : uniquePlayers.filter(player =>
-          player.toLowerCase().includes(playerSearch.toLowerCase())
-        )
-  );
 
   // Apply filters to event logs
   const filteredEventLogs = $derived(
     processedEventLogs?.filter(log => {
-      // Search filter (case-insensitive)
-      if (searchTerm && !log.description?.toLowerCase().includes(searchTerm.toLowerCase())) {
-        return false;
+      // Search filter (case-insensitive) - searches log type, player, and description
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const matchesLogType = formatEnum(log.log_type, "").toLowerCase().includes(term);
+        const matchesPlayer = log.player_name?.toLowerCase().includes(term) ?? false;
+        const matchesDescription = log.description?.toLowerCase().includes(term) ?? false;
+        if (!matchesLogType && !matchesPlayer && !matchesDescription) {
+          return false;
+        }
       }
       // Log type filter
       if (selectedLogTypes.length > 0 && !selectedLogTypes.includes(log.log_type)) {
@@ -374,17 +373,13 @@
   // Check if any filters are active
   const hasActiveFilters = $derived(
     searchTerm !== "" ||
-    selectedLogTypes.length > 0 ||
-    selectedPlayers.length > 0
+    selectedFilters.length > 0
   );
 
   // Clear all filters
   function clearFilters() {
     searchTerm = "";
-    selectedLogTypes = [];
-    selectedPlayers = [];
-    logTypeSearch = "";
-    playerSearch = "";
+    selectedFilters = [];
   }
 </script>
 
@@ -504,102 +499,98 @@
           {:else}
             <!-- Filters -->
             <div class="flex flex-wrap gap-3 mb-4 items-end">
-              <!-- Log Type -->
-              <div class="flex flex-col gap-1">
-                <span class="text-brown text-xs font-bold">Log Type</span>
-                <Combobox.Root type="multiple" bind:value={selectedLogTypes}>
-                  <div class="relative">
-                    <Combobox.Input
-                      oninput={(e) => (logTypeSearch = e.currentTarget.value)}
-                      placeholder={selectedLogTypes.length > 0 ? `${selectedLogTypes.length} selected` : "Select types..."}
-                      class="px-3 py-2 rounded border-2 border-black bg-white text-black text-sm w-40"
-                    />
-                    <Combobox.Trigger class="absolute right-2 top-1/2 -translate-y-1/2 text-black">
-                      ▼
-                    </Combobox.Trigger>
+              <!-- Combined Log Type and Player Filter -->
+              <Select.Root type="multiple" bind:value={selectedFilters}>
+                <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black bg-white text-black text-sm w-32 flex items-center justify-between relative">
+                  <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                    </svg>
                   </div>
-                  <Combobox.Portal>
-                    <Combobox.Content class="bg-white border-2 border-black rounded shadow-lg max-h-48 overflow-y-auto z-50">
-                      {#each filteredLogTypes as logType}
-                        <Combobox.Item
-                          value={logType}
-                          label={formatEnum(logType, "")}
-                          class="px-3 py-2 cursor-pointer hover:bg-tan text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan"
-                        >
-                          {#snippet children({ selected })}
-                            {formatEnum(logType, "")}
-                            {#if selected}
-                              <span class="text-brown font-bold">✓</span>
-                            {/if}
-                          {/snippet}
-                        </Combobox.Item>
-                      {:else}
-                        <div class="px-3 py-2 text-brown text-sm italic">No matches</div>
-                      {/each}
-                    </Combobox.Content>
-                  </Combobox.Portal>
-                </Combobox.Root>
-              </div>
+                  <span class="truncate">Filter</span>
+                  <span class="ml-2">▼</span>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content class="bg-white border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50">
+                    <Select.Viewport>
+                      <!-- Players Group (only show if player column is visible) -->
+                      {#if showPlayerColumn && uniquePlayers.length > 0}
+                        <Select.Group>
+                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-gray-200">
+                            Players
+                          </Select.GroupHeading>
+                          {#each uniquePlayers as player}
+                            <Select.Item
+                              value={`player:${player}`}
+                              label={player}
+                              class="px-3 py-2 cursor-pointer hover:bg-tan-hover text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan-hover"
+                            >
+                              {#snippet children({ selected })}
+                                {player}
+                                {#if selected}
+                                  <span class="text-brown font-bold">✓</span>
+                                {/if}
+                              {/snippet}
+                            </Select.Item>
+                          {/each}
+                        </Select.Group>
+                      {/if}
 
-              <!-- Player (only show if player column is visible) -->
-              {#if showPlayerColumn && uniquePlayers.length > 0}
-                <div class="flex flex-col gap-1">
-                  <span class="text-brown text-xs font-bold">Player</span>
-                  <Combobox.Root type="multiple" bind:value={selectedPlayers}>
-                    <div class="relative">
-                      <Combobox.Input
-                        oninput={(e) => (playerSearch = e.currentTarget.value)}
-                        placeholder={selectedPlayers.length > 0 ? `${selectedPlayers.length} selected` : "Select players..."}
-                        class="px-3 py-2 rounded border-2 border-black bg-white text-black text-sm w-40"
-                      />
-                      <Combobox.Trigger class="absolute right-2 top-1/2 -translate-y-1/2 text-black">
-                        ▼
-                      </Combobox.Trigger>
-                    </div>
-                    <Combobox.Portal>
-                      <Combobox.Content class="bg-white border-2 border-black rounded shadow-lg max-h-48 overflow-y-auto z-50">
-                        {#each filteredPlayers as player}
-                          <Combobox.Item
-                            value={player}
-                            label={player}
-                            class="px-3 py-2 cursor-pointer hover:bg-tan text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan"
-                          >
-                            {#snippet children({ selected })}
-                              {player}
-                              {#if selected}
-                                <span class="text-brown font-bold">✓</span>
-                              {/if}
-                            {/snippet}
-                          </Combobox.Item>
-                        {:else}
-                          <div class="px-3 py-2 text-brown text-sm italic">No matches</div>
-                        {/each}
-                      </Combobox.Content>
-                    </Combobox.Portal>
-                  </Combobox.Root>
-                </div>
-              {/if}
+                      <!-- Log Types Group -->
+                      {#if uniqueLogTypes.length > 0}
+                        <Select.Group>
+                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-gray-200 {showPlayerColumn && uniquePlayers.length > 0 ? 'border-t' : ''}">
+                            Log Types
+                          </Select.GroupHeading>
+                          {#each uniqueLogTypes as logType}
+                            <Select.Item
+                              value={`logtype:${logType}`}
+                              label={formatEnum(logType, "")}
+                              class="px-3 py-2 cursor-pointer hover:bg-tan-hover text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan-hover"
+                            >
+                              {#snippet children({ selected })}
+                                {formatEnum(logType, "")}
+                                {#if selected}
+                                  <span class="text-brown font-bold">✓</span>
+                                {/if}
+                              {/snippet}
+                            </Select.Item>
+                          {/each}
+                        </Select.Group>
+                      {/if}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
 
-              <!-- Search (Description) -->
-              <div class="flex flex-col gap-1">
-                <label for="search" class="text-brown text-xs font-bold">Search</label>
-                <input
-                  id="search"
-                  type="text"
-                  bind:value={searchTerm}
-                  placeholder="Filter by description..."
-                  class="px-3 py-2 rounded border-2 border-black bg-white text-black text-sm w-48"
-                />
-              </div>
+              <!-- Description search -->
+              <SearchInput
+                bind:value={searchTerm}
+                variant="light"
+                class="w-96"
+              />
 
               <!-- Clear button -->
               {#if hasActiveFilters}
                 <button
                   onclick={clearFilters}
-                  class="px-3 py-2 rounded border-2 border-black bg-brown text-white text-sm font-bold hover:bg-tan hover:text-black transition-colors"
+                  class="px-3 py-2 rounded border-2 border-black bg-orange text-black text-sm font-bold hover:bg-tan transition-colors"
                 >
                   Clear
                 </button>
+              {/if}
+
+              <!-- Selected filter chips -->
+              {#if selectedFilters.length > 0}
+                <div class="flex flex-wrap gap-1">
+                  {#each selectedFilters as filter}
+                    <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                      {filter.startsWith("logtype:")
+                        ? formatEnum(filter.replace("logtype:", ""), "")
+                        : filter.replace("player:", "")}
+                    </span>
+                  {/each}
+                </div>
               {/if}
 
               <!-- Results count -->
@@ -608,7 +599,7 @@
               </span>
             </div>
 
-            <div class="overflow-x-auto rounded-lg" style="background-color: #c5c3c2;">
+            <div class="overflow-x-auto rounded-lg min-h-[36rem]" style="background-color: #c5c3c2;">
               <table class="w-full">
                 <thead>
                   <tr>
