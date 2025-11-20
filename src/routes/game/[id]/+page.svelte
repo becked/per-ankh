@@ -205,37 +205,81 @@
   // Create law adoption chart option
   const lawAdoptionChartOption = $derived<EChartsOption | null>(
     lawAdoptionHistory && lawAdoptionHistory.length > 0
-      ? {
-          ...CHART_THEME,
-          title: {
-            ...CHART_THEME.title,
-            text: "Law Adoption Over Time",
-          },
-          grid: {
-            left: 60,
-            right: 40,
-            top: 80,
-            bottom: 60,
-          },
-          xAxis: {
-            type: "value",
-            name: "Turn",
-            nameLocation: "middle",
-            nameGap: 30,
-          },
-          yAxis: {
-            type: "value",
-            name: "Number of Laws",
-            nameLocation: "middle",
-            nameGap: 40,
-          },
-          series: lawAdoptionHistory.map((player, i) => ({
-            name: formatEnum(player.nation, "NATION_"),
-            type: "line",
-            data: player.data.map((d) => [d.turn, d.law_count]),
-            itemStyle: { color: getPlayerColor(player.nation, i) },
-          })),
-        }
+      ? (() => {
+          // Calculate the maximum law count across all players
+          const maxLawCount = Math.max(
+            ...lawAdoptionHistory.flatMap(player =>
+              player.data.map(d => d.law_count)
+            )
+          );
+
+          // Get the final turn (max turn value in the data)
+          const finalTurn = Math.max(
+            ...lawAdoptionHistory.flatMap(player =>
+              player.data.map(d => d.turn)
+            )
+          );
+
+          return {
+            ...CHART_THEME,
+            title: {
+              ...CHART_THEME.title,
+              text: "Law Adoption Over Time",
+            },
+            grid: {
+              left: 60,
+              right: 40,
+              top: 80,
+              bottom: 60,
+            },
+            xAxis: {
+              type: "value",
+              name: "Turn",
+              nameLocation: "middle",
+              nameGap: 30,
+              splitLine: { show: false }, // Remove vertical grid lines
+              max: finalTurn, // End at the actual final turn
+            },
+            yAxis: {
+              type: "value",
+              name: "Number of Laws",
+              nameLocation: "middle",
+              nameGap: 40,
+              max: maxLawCount + 2, // Add 2 units of padding above the max
+              splitLine: { show: false }, // Hide default grid lines
+            },
+            series: [
+              ...lawAdoptionHistory.map((player, i) => ({
+                name: formatEnum(player.nation, "NATION_"),
+                type: "line",
+                data: player.data.map((d) => [d.turn, d.law_count]),
+                itemStyle: { color: getPlayerColor(player.nation, i) },
+                symbol: 'none', // Hide symbols/dots on the line
+                emphasis: {
+                  symbol: 'circle', // Show circle on hover
+                  symbolSize: 8,
+                },
+                // Add custom horizontal lines to the first series only
+                ...(i === 0 ? {
+                  markLine: {
+                    silent: true, // Don't trigger hover/click events
+                    symbol: 'none', // No symbols at line endpoints
+                    label: { show: false }, // Hide labels
+                    lineStyle: {
+                      type: 'dashed',
+                      color: '#666666',
+                      width: 1,
+                    },
+                    data: [
+                      { yAxis: 4 },
+                      { yAxis: 7 },
+                    ],
+                  },
+                } : {}),
+              })),
+            ],
+          };
+        })()
       : null
   );
 
