@@ -6,6 +6,7 @@
   import type { YieldHistory } from "$lib/types/YieldHistory";
   import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
   import type { EventLog } from "$lib/types/EventLog";
+  import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
   import type { EChartsOption } from "echarts";
   import ChartContainer from "$lib/ChartContainer.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
@@ -17,6 +18,7 @@
   let playerHistory = $state<PlayerHistory[] | null>(null);
   let allYields = $state<YieldHistory[] | null>(null);
   let eventLogs = $state<EventLog[] | null>(null);
+  let lawAdoptionHistory = $state<LawAdoptionHistory[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
@@ -200,6 +202,43 @@
   const cultureChartOption = $derived(createYieldChartOption("YIELD_CULTURE", "Culture Production", "Culture per Turn"));
   const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn"));
 
+  // Create law adoption chart option
+  const lawAdoptionChartOption = $derived<EChartsOption | null>(
+    lawAdoptionHistory && lawAdoptionHistory.length > 0
+      ? {
+          ...CHART_THEME,
+          title: {
+            ...CHART_THEME.title,
+            text: "Law Adoption Over Time",
+          },
+          grid: {
+            left: 60,
+            right: 40,
+            top: 80,
+            bottom: 60,
+          },
+          xAxis: {
+            type: "value",
+            name: "Turn",
+            nameLocation: "middle",
+            nameGap: 30,
+          },
+          yAxis: {
+            type: "value",
+            name: "Number of Laws",
+            nameLocation: "middle",
+            nameGap: 40,
+          },
+          series: lawAdoptionHistory.map((player, i) => ({
+            name: formatEnum(player.nation, "NATION_"),
+            type: "line",
+            data: player.data.map((d) => [d.turn, d.law_count]),
+            itemStyle: { color: getPlayerColor(player.nation, i) },
+          })),
+        }
+      : null
+  );
+
   // Reactively load game details when the route parameter changes
   $effect(() => {
     const matchId = Number($page.params.id);
@@ -210,18 +249,21 @@
     playerHistory = null;
     allYields = null;
     eventLogs = null;
+    lawAdoptionHistory = null;
 
     Promise.all([
       api.getGameDetails(matchId),
       api.getPlayerHistory(matchId),
       api.getYieldHistory(matchId, Array.from(YIELD_TYPES)),
       api.getEventLogs(matchId),
+      api.getLawAdoptionHistory(matchId),
     ])
-      .then(([details, history, yields, logs]) => {
+      .then(([details, history, yields, logs, lawHistory]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
         eventLogs = logs;
+        lawAdoptionHistory = lawHistory;
       })
       .catch((err) => {
         error = String(err);
@@ -627,7 +669,13 @@
           style="background-color: #35302B;"
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Laws & Technology</h2>
-          <p class="text-brown italic text-center p-8 text-lg">Coming soon...</p>
+          {#if lawAdoptionChartOption}
+            <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" />
+          {:else if lawAdoptionHistory !== null && lawAdoptionHistory.length === 0}
+            <p class="text-brown italic text-center p-8">No law adoption data available</p>
+          {:else}
+            <p class="text-brown italic text-center p-8">Loading law adoption data...</p>
+          {/if}
         </Tabs.Content>
 
         <!-- Tab Content: Economics -->

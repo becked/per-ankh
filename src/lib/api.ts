@@ -9,6 +9,7 @@ import type { PlayerDebugRow } from "$lib/types/PlayerDebugRow";
 import type { MatchDebugRow } from "$lib/types/MatchDebugRow";
 import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
+import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 
 /**
  * Centralized API layer for all Tauri backend commands.
@@ -40,6 +41,9 @@ export const api = {
 
   getEventLogs: (matchId: number) =>
     invoke<EventLog[]>("get_event_logs", { matchId }),
+
+  getLawAdoptionHistory: (matchId: number) =>
+    invoke<LawAdoptionHistory[]>("get_law_adoption_history", { matchId }),
 
   /**
    * Get nation and dynasty data for debugging.
