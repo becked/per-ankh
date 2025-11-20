@@ -40,15 +40,18 @@ export const CHART_THEME = {
   colors: CHART_COLORS,
   backgroundColor: "#211A12", // Blue-gray background matches main UI
   textStyle: {
-    fontFamily: "inherit",
+    fontFamily: "Arial, sans-serif",
     color: "#FFFFFF", // White text for dark background
   },
   title: {
     left: "center",
     textStyle: {
-      color: "#FFFFFF", // White title for dark background
-      fontWeight: "bold",
+      color: "#FFFFFF",
+      fontSize: 20,
     },
+  },
+  legend: {
+    show: false, // Hide legend - colors consistently represent nations, info available in tooltips
   },
   tooltip: {
     trigger: "axis",
