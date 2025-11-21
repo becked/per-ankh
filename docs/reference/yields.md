@@ -248,20 +248,33 @@ The ÷10 rule exists at the **boundary between game logic and display** - the ga
 
 ## Our Implementation
 
-We should mirror this architecture:
+We mirror the game's architecture:
 
-```python
-# Parser: Extract integers from XML (game logic format)
-amount = int(xml_value)  # 215
-
-# Database: Store display values (presentation format)
-display_value = amount / 10.0  # 21.5
-
-# Charts: Use values directly (already in display format)
-hover_text = f"{value:.1f}"  # "21.5"
+```
+XML (raw)  →  Parser  →  Database (raw)  →  View (display)  →  Frontend
+   215          ↓           215              ÷10 → 21.5          charts
+             no-op
 ```
 
-This matches the game's design: keep logic layer in integers, convert once for presentation.
+```rust
+// Parser: Store raw integers from XML (no conversion)
+let amount: i32 = xml_value.parse()?;  // 215
+
+// Database: Store raw integers in base tables
+INSERT INTO yield_history (amount) VALUES (?);  // 215
+
+// View: Convert to display values (single source of truth)
+CREATE VIEW yield_history_display AS
+SELECT amount / 10.0 AS amount FROM yield_history;  // 21.5
+
+// Queries: Use the view for display
+SELECT amount FROM yield_history_display;  // 21.5
+```
+
+**Benefits:**
+- Raw integers preserved for potential future calculations
+- Conversion happens in exactly one place (the view)
+- Queries don't repeat `/10.0` everywhere (DRY)
 
 ---
 
