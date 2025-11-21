@@ -186,6 +186,27 @@ $effect(() => {
 $: console.log('count changed:', count);
 ```
 
+**Effect Dependency Tracking:**
+
+Svelte 5 `$effect` only tracks dependencies **at the point they're accessed**. If a reactive value is only accessed inside a conditional block, it may not be tracked when the condition is initially false.
+
+```typescript
+// ✅ CORRECT: Access reactive values unconditionally to ensure tracking
+$effect(() => {
+  const currentOption = option;  // Always accessed → always tracked
+  if (chart && currentOption) {
+    chart.setOption(currentOption);
+  }
+});
+
+// ❌ WRONG: Reactive value only accessed conditionally
+$effect(() => {
+  if (chart) {
+    chart.setOption(option);  // NOT tracked if chart is initially null
+  }
+});
+```
+
 **Store Integration:**
 When using Svelte stores with Svelte 5 runes, properly integrate them:
 ```typescript
