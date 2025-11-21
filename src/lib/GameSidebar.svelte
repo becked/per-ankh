@@ -59,6 +59,40 @@
              date.includes(query);
     })
   );
+
+  // Get month key for grouping (e.g., "2024-11")
+  function getMonthKey(game: GameInfo): string {
+    if (!game.save_date) return "unknown";
+    const date = new Date(game.save_date);
+    if (isNaN(date.getTime())) return "unknown";
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  // Format month key for display (e.g., "Nov 2024")
+  function formatMonthLabel(monthKey: string): string {
+    if (monthKey === "unknown") return "Unknown Date";
+    const [year, month] = monthKey.split("-");
+    const date = new Date(Number(year), Number(month) - 1);
+    return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+  }
+
+  // Group games by month, preserving order
+  type GameGroup = { monthKey: string; label: string; games: GameInfo[] };
+  const groupedGames = $derived.by(() => {
+    const groups: GameGroup[] = [];
+    let currentKey = "";
+
+    for (const game of filteredGames) {
+      const key = getMonthKey(game);
+      if (key !== currentKey) {
+        groups.push({ monthKey: key, label: formatMonthLabel(key), games: [] });
+        currentKey = key;
+      }
+      groups[groups.length - 1].games.push(game);
+    }
+
+    return groups;
+  });
 </script>
 
 <aside class="w-[175px] h-full bg-blue-gray border-l-2 border-black flex flex-col overflow-hidden">
@@ -72,16 +106,25 @@
         {$searchQuery ? "No games match your search" : "No games found"}
       </div>
     {:else}
-      {#each filteredGames as game (game.match_id)}
-        {@const isActive = currentGameId === game.match_id}
-        <button
-          class="game-list-item {isActive ? 'active' : ''} w-full p-1.5 mb-0.5 border-2 rounded-lg cursor-pointer text-left transition-all duration-200 {isActive ? '' : 'border-black hover:border-orange hover:translate-x-0.5'}"
-          type="button"
-          onclick={() => navigateToGame(game.match_id)}
-        >
-          <div class="text-xs font-semibold mb-0.5 text-black">{formatGameTitle(game)}</div>
-          <div class="text-[8px] text-left font-normal" style="color: #79261d;">{formatGameSubtitle(game)}</div>
-        </button>
+      {#each groupedGames as group (group.monthKey)}
+        <!-- Month separator -->
+        <div class="month-separator flex items-center gap-1.5 my-2 px-1">
+          <div class="separator-line flex-1 h-px bg-tan opacity-50"></div>
+          <span class="text-tan text-[9px] whitespace-nowrap">{group.label}</span>
+          <div class="separator-line flex-1 h-px bg-tan opacity-50"></div>
+        </div>
+
+        {#each group.games as game (game.match_id)}
+          {@const isActive = currentGameId === game.match_id}
+          <button
+            class="game-list-item {isActive ? 'active' : ''} w-full p-1.5 mb-0.5 border-2 rounded-lg cursor-pointer text-left transition-all duration-200 {isActive ? '' : 'border-black hover:border-orange hover:translate-x-0.5'}"
+            type="button"
+            onclick={() => navigateToGame(game.match_id)}
+          >
+            <div class="text-xs font-semibold mb-0.5 text-black">{formatGameTitle(game)}</div>
+            <div class="text-[8px] text-left font-normal" style="color: #79261d;">{formatGameSubtitle(game)}</div>
+          </button>
+        {/each}
       {/each}
     {/if}
   </div>
