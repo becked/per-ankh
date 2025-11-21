@@ -226,6 +226,20 @@
               ...CHART_THEME.title,
               text: "Law Adoption Over Time",
             },
+            tooltip: {
+              trigger: 'item',
+              formatter: (params: { data?: [number, number, string | null] }) => {
+                const data = params.data;
+                if (!data) return '';
+                const [turn, count, lawName] = data;
+                if (lawName) {
+                  // Format law name: LAW_SLAVERY -> Slavery
+                  const formattedLaw = formatEnum(lawName, "LAW_");
+                  return `Turn ${turn}: Adopted ${formattedLaw}`;
+                }
+                return `Turn ${turn}: ${count} law classes`;
+              },
+            },
             grid: {
               left: 60,
               right: 40,
@@ -252,12 +266,14 @@
               ...lawAdoptionHistory.map((player, i) => ({
                 name: formatEnum(player.nation, "NATION_"),
                 type: "line",
-                data: player.data.map((d) => [d.turn, d.law_count]),
+                // Data includes law_name as third element for tooltip
+                data: player.data.map((d) => [d.turn, d.law_count, d.law_name]),
                 itemStyle: { color: getPlayerColor(player.nation, i) },
-                symbol: 'none', // Hide symbols/dots on the line
+                // Show dots only at points with law adoptions
+                symbol: (value: [number, number, string | null]) => value[2] ? 'circle' : 'none',
+                symbolSize: 8,
                 emphasis: {
-                  symbol: 'circle', // Show circle on hover
-                  symbolSize: 8,
+                  symbolSize: 12,
                 },
                 // Add custom horizontal lines to the first series only
                 ...(i === 0 ? {
