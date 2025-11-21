@@ -984,6 +984,8 @@ pub struct EventLog {
 pub struct LawAdoptionDataPoint {
     pub turn: i32,
     pub law_count: i32,
+    /// The name of the law adopted at this point (None for synthetic start/end points)
+    pub law_name: Option<String>,
 }
 
 #[derive(Serialize, TS)]
@@ -1173,9 +1175,8 @@ async fn get_law_adoption_history(
         let mut result = Vec::new();
 
         for (player_id, player_name, nation) in players {
-            // Get law adoption data from event logs, counting distinct LAW CLASSES over time.
-            // This correctly handles law switches within the same class (e.g., Freedom → Slavery)
-            // by only counting new law classes, not every law adoption event.
+            // Get ALL law adoption events with their names and running cumulative law class count.
+            // This includes switches within the same class (which don't change the count).
             //
             // Note: data1 is NULL because law names (strings) can't be parsed as integers.
             // Instead, we extract the law name from the description field using regex.
@@ -1186,43 +1187,47 @@ async fn get_law_adoption_history(
                         -- Build a mapping of law -> law_category from all imported games
                         SELECT DISTINCT law, law_category FROM laws
                      ),
-                     extracted_laws AS (
-                        -- Extract law name from description using regex
-                        -- Description format: Adopted <...link=HELP_LINK,HELP_LAW,LAW_XXX...>
+                     all_law_events AS (
+                        -- Extract all law adoption events with law names
                         SELECT
                             e.turn,
-                            regexp_extract(e.description, 'HELP_LAW,([A-Z_]+)', 1) as extracted_law
+                            regexp_extract(e.description, 'HELP_LAW,([A-Z_]+)', 1) as law_name,
+                            e.log_id
                         FROM event_logs e
                         WHERE e.match_id = ?
                           AND e.player_id = ?
                           AND e.log_type = 'LAW_ADOPTED'
                           AND e.description IS NOT NULL
                      ),
-                     law_class_events AS (
-                        -- Join extracted laws with law mapping to get law classes
-                        SELECT el.turn, m.law_category
-                        FROM extracted_laws el
-                        JOIN law_mapping m ON el.extracted_law = m.law
-                        WHERE el.extracted_law IS NOT NULL
+                     events_with_class AS (
+                        -- Join with law mapping to get law classes
+                        SELECT
+                            ale.turn,
+                            ale.law_name,
+                            m.law_category,
+                            ale.log_id
+                        FROM all_law_events ale
+                        JOIN law_mapping m ON ale.law_name = m.law
+                        WHERE ale.law_name IS NOT NULL
                      ),
-                     first_adoption AS (
+                     first_class_adoption AS (
                         -- For each law class, find the first turn it was adopted
-                        -- (ignoring subsequent switches within the same class)
                         SELECT law_category, MIN(turn) as first_turn
-                        FROM law_class_events
+                        FROM events_with_class
                         GROUP BY law_category
                      ),
-                     new_classes_per_turn AS (
-                        -- Count how many NEW law classes were adopted each turn
-                        SELECT first_turn as turn, COUNT(*) as new_classes
-                        FROM first_adoption
-                        GROUP BY first_turn
+                     events_with_cumulative AS (
+                        -- For each event, calculate cumulative law classes up to and including that turn
+                        SELECT
+                            e.turn,
+                            e.law_name,
+                            e.log_id,
+                            (SELECT COUNT(*) FROM first_class_adoption f WHERE f.first_turn <= e.turn) as cumulative_law_classes
+                        FROM events_with_class e
                      )
-                     SELECT
-                        turn,
-                        SUM(new_classes) OVER (ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) as cumulative_law_classes
-                     FROM new_classes_per_turn
-                     ORDER BY turn"
+                     SELECT turn, cumulative_law_classes, law_name
+                     FROM events_with_cumulative
+                     ORDER BY turn, log_id"
                 )?;
 
             let mut data: Vec<LawAdoptionDataPoint> = law_stmt
@@ -1230,6 +1235,7 @@ async fn get_law_adoption_history(
                     Ok(LawAdoptionDataPoint {
                         turn: row.get(0)?,
                         law_count: row.get(1)?,
+                        law_name: row.get(2)?,
                     })
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -1238,6 +1244,7 @@ async fn get_law_adoption_history(
             data.insert(0, LawAdoptionDataPoint {
                 turn: 0,
                 law_count: 0,
+                law_name: None,
             });
 
             // Append an ending point at the final turn to extend the line to the end of the chart
@@ -1246,6 +1253,7 @@ async fn get_law_adoption_history(
                     data.push(LawAdoptionDataPoint {
                         turn: final_turn,
                         law_count: last_point.law_count,
+                        law_name: None,
                     });
                 }
             }
