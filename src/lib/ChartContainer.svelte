@@ -8,7 +8,9 @@
     height = "400px",
     title = "Chart",
   }: {
-    option: EChartsOption;
+    // Using a broader type because ECharts types are overly strict
+    // and don't play well with TypeScript's inference
+    option: EChartsOption | Record<string, unknown>;
     height?: string;
     title?: string;
   } = $props();

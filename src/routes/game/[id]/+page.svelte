@@ -9,6 +9,7 @@
   import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
   import type { EChartsOption } from "echarts";
   import ChartContainer from "$lib/ChartContainer.svelte";
+  import ChartSeriesFilter, { type SeriesInfo } from "$lib/ChartSeriesFilter.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
   import { Tabs, Select } from "bits-ui";
   import { formatEnum, formatDate, formatGameTitle, formatMapClass, stripMarkup } from "$lib/utils/formatting";
@@ -26,6 +27,29 @@
   // Event log filter state
   let searchTerm = $state("");
   let selectedFilters = $state<string[]>([]);  // Combined log types and players with prefixes
+
+  // Chart series filter state (shared across all nation-based charts)
+  let selectedNations = $state<Record<string, boolean>>({});
+
+  // Derive series info from law adoption history for the filter component
+  const nationSeriesInfo = $derived<SeriesInfo[]>(
+    lawAdoptionHistory?.map((player, i) => ({
+      name: formatEnum(player.nation, "NATION_"),
+      color: getPlayerColor(player.nation, i),
+    })) ?? []
+  );
+
+  // Initialize filter state when data loads - select all nations by default
+  $effect(() => {
+    if (lawAdoptionHistory && Object.keys(selectedNations).length === 0) {
+      selectedNations = Object.fromEntries(
+        lawAdoptionHistory.map((player) => [
+          formatEnum(player.nation, "NATION_"),
+          true,
+        ])
+      );
+    }
+  });
 
   // Parse selected filters back into separate arrays
   const selectedLogTypes = $derived(
@@ -203,22 +227,25 @@
   const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn"));
 
   // Create law adoption chart option
-  const lawAdoptionChartOption = $derived<EChartsOption | null>(
-    lawAdoptionHistory && lawAdoptionHistory.length > 0
+  // Uses ECharts legend.selected for filtering instead of filtering data directly
+  // Note: Not using explicit EChartsOption type because ECharts types are overly strict
+  const lawAdoptionChartOption = $derived(
+    (lawAdoptionHistory?.length ?? 0) > 0
       ? (() => {
+          const players = lawAdoptionHistory ?? [];
+
           // Calculate the maximum law count across all players
           const maxLawCount = Math.max(
-            ...lawAdoptionHistory.flatMap(player =>
-              player.data.map(d => d.law_count)
-            )
+            ...players.flatMap(player => player.data.map(d => d.law_count))
           );
 
-          // Get the final turn (max turn value in the data)
+          // Get the final turn for consistent x-axis
           const finalTurn = Math.max(
-            ...lawAdoptionHistory.flatMap(player =>
-              player.data.map(d => d.turn)
-            )
+            ...players.flatMap(player => player.data.map(d => d.turn))
           );
+
+          // Get nation names for legend
+          const nationNames = players.map(p => formatEnum(p.nation, "NATION_"));
 
           return {
             ...CHART_THEME,
@@ -226,10 +253,17 @@
               ...CHART_THEME.title,
               text: "Law Adoption Over Time",
             },
+            // Hidden legend controls series visibility via legend.selected
+            legend: {
+              show: false,
+              data: nationNames,
+              selected: selectedNations,
+            },
             tooltip: {
               trigger: 'item',
-              formatter: (params: { data?: [number, number, string | null] }) => {
-                const data = params.data;
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formatter: (params: any) => {
+                const data = params.data as [number, number, string | null] | undefined;
                 if (!data) return '';
                 const [turn, count, lawName] = data;
                 if (lawName) {
@@ -251,49 +285,45 @@
               name: "Turn",
               nameLocation: "middle",
               nameGap: 30,
-              splitLine: { show: false }, // Remove vertical grid lines
-              max: finalTurn, // End at the actual final turn
+              splitLine: { show: false },
+              max: finalTurn,
             },
             yAxis: {
               type: "value",
               name: "Number of Laws",
               nameLocation: "middle",
               nameGap: 40,
-              max: maxLawCount + 2, // Add 2 units of padding above the max
-              splitLine: { show: false }, // Hide default grid lines
+              max: maxLawCount + 2,
+              splitLine: { show: false },
             },
-            series: [
-              ...lawAdoptionHistory.map((player, i) => ({
-                name: formatEnum(player.nation, "NATION_"),
-                type: "line",
-                // Data includes law_name as third element for tooltip
-                data: player.data.map((d) => [d.turn, d.law_count, d.law_name]),
-                itemStyle: { color: getPlayerColor(player.nation, i) },
-                // Show dots only at points with law adoptions
-                symbol: (value: [number, number, string | null]) => value[2] ? 'circle' : 'none',
-                symbolSize: 8,
-                emphasis: {
-                  symbolSize: 12,
-                },
-                // Add custom horizontal lines to the first series only
-                ...(i === 0 ? {
-                  markLine: {
-                    silent: true, // Don't trigger hover/click events
-                    symbol: 'none', // No symbols at line endpoints
-                    label: { show: false }, // Hide labels
-                    lineStyle: {
-                      type: 'dashed',
-                      color: '#666666',
-                      width: 1,
-                    },
-                    data: [
-                      { yAxis: 4 },
-                      { yAxis: 7 },
-                    ],
+            series: players.map((player, i) => ({
+              name: formatEnum(player.nation, "NATION_"),
+              type: "line" as const,
+              data: player.data.map((d) => [d.turn, d.law_count, d.law_name]),
+              itemStyle: { color: getPlayerColor(player.nation, i) },
+              symbol: (value: [number, number, string | null]) => value[2] ? 'circle' : 'none',
+              symbolSize: 8,
+              emphasis: {
+                symbolSize: 12,
+              },
+              // Add custom horizontal lines to the first series only
+              ...(i === 0 ? {
+                markLine: {
+                  silent: true,
+                  symbol: 'none',
+                  label: { show: false },
+                  lineStyle: {
+                    type: 'dashed' as const,
+                    color: '#666666',
+                    width: 1,
                   },
-                } : {}),
-              })),
-            ],
+                  data: [
+                    { yAxis: 4 },
+                    { yAxis: 7 },
+                  ],
+                },
+              } : {}),
+            })),
           };
         })()
       : null
@@ -730,6 +760,12 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Laws & Technology</h2>
           {#if lawAdoptionChartOption}
+            <!-- Nation filter for chart series -->
+            {#if nationSeriesInfo.length > 0}
+              <div class="mb-4">
+                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedNations} />
+              </div>
+            {/if}
             <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" />
           {:else if lawAdoptionHistory !== null && lawAdoptionHistory.length === 0}
             <p class="text-brown italic text-center p-8">No law adoption data available</p>

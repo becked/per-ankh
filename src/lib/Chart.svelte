@@ -3,7 +3,8 @@
   import * as echarts from "echarts";
   import type { EChartsOption } from "echarts";
 
-  let { option, height = "400px" }: { option: EChartsOption; height?: string } = $props();
+  // Using a broader type because ECharts types are overly strict
+  let { option, height = "400px" }: { option: EChartsOption | Record<string, unknown>; height?: string } = $props();
 
   let chartContainer: HTMLDivElement;
   let chart: echarts.ECharts | null = null;
@@ -57,9 +58,14 @@
   });
 
   $effect(() => {
-    if (chart) {
+    // Access option unconditionally to ensure it's always tracked as a dependency.
+    // Svelte 5 $effect only tracks dependencies at the point they're accessed,
+    // so accessing option inside a conditional (if chart) would fail to track it
+    // when chart is initially null. See CLAUDE.md "Effect Dependency Tracking".
+    const currentOption = option;
+    if (chart && currentOption) {
       // Type assertion needed due to echarts type definition incompatibility
-      chart.setOption(option as any, true);
+      chart.setOption(currentOption as any, true);
       // Force resize to handle tab visibility changes
       chart.resize();
     }
