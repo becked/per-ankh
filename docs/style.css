@@ -179,6 +179,76 @@ h2 {
   color: var(--color-tan);
 }
 
+.tech .source-link {
+  margin-top: 1rem;
+}
+
+.tech .source-link a {
+  color: var(--color-orange);
+  text-decoration: none;
+}
+
+.tech .source-link a:hover {
+  text-decoration: underline;
+}
+
+/* Installation Section */
+.install-platform {
+  background-color: var(--color-border-gray);
+  padding: 1.5rem;
+  border-radius: 8px;
+  border: 1px solid var(--color-brown);
+  margin-bottom: 1.5rem;
+}
+
+.install-platform:last-child {
+  margin-bottom: 0;
+}
+
+.install-platform h3 {
+  color: var(--color-orange);
+  margin-bottom: 1rem;
+  font-size: 1.25rem;
+}
+
+.install-platform ol {
+  padding-left: 1.5rem;
+  color: var(--color-tan);
+}
+
+.install-platform li {
+  margin-bottom: 0.75rem;
+}
+
+.install-platform ul {
+  margin-top: 0.5rem;
+  padding-left: 1.5rem;
+}
+
+.install-platform a {
+  color: var(--color-orange);
+  text-decoration: none;
+}
+
+.install-platform a:hover {
+  text-decoration: underline;
+}
+
+.install-platform code {
+  background-color: var(--color-blue-gray);
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.9em;
+}
+
+.install-platform .note {
+  font-size: 0.875rem;
+  color: var(--color-tan);
+  opacity: 0.85;
+  margin-top: 0.5rem;
+  font-style: italic;
+}
+
 /* Footer */
 footer {
   text-align: center;
