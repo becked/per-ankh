@@ -140,14 +140,12 @@
               </div>
             </div>
 
-            <!-- Current phase -->
-            {#if progress.current_phase}
-              <div class="mb-3">
-                <span class="text-sm text-tan-dark italic">
-                  {progress.current_phase}
-                </span>
-              </div>
-            {/if}
+            <!-- Current phase - always reserve space to prevent layout shift -->
+            <div class="mb-3 h-5">
+              <span class="text-sm text-tan-dark italic">
+                {progress.current_phase ?? "\u00A0"}
+              </span>
+            </div>
 
             <!-- Stats -->
             <div class="grid grid-cols-2 gap-4 text-sm">
