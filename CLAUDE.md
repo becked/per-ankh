@@ -518,9 +518,18 @@ per-ankh/
 │   │   └── parser.rs     # Save file parsing
 │   ├── Cargo.toml        # Rust dependencies
 │   └── tauri.conf.json   # Tauri configuration
+├── test-data/             # Test fixtures
+│   └── saves/            # Sample Old World save files for development/testing
 ├── package.json           # Frontend dependencies
 └── tsconfig.json         # TypeScript configuration
 ```
+
+### Test Data
+
+The `test-data/saves/` directory contains sample Old World game save files that can be used for:
+- Development and manual testing without needing your own save files
+- Troubleshooting parsing or data issues
+- Reproducing bugs with known test data
 
 ### Data Flow
 1. **Ingestion**: Rust backend reads and parses Old World save files (XML/JSON format)
