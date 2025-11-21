@@ -684,7 +684,7 @@ fn import_files_batch(
             speed,
             result: import_result,
             current_phase: None,
-            file_progress: None,
+            file_progress: Some(1.0), // File is 100% complete
         };
 
         log::info!("Emitting progress event: {}/{} - {}", current, total, progress.current_file);
