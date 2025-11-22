@@ -759,13 +759,12 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Laws & Technology</h2>
           {#if lawAdoptionChartOption}
-            <!-- Nation filter for chart series -->
-            {#if nationSeriesInfo.length > 0}
-              <div class="mb-4">
+            {#snippet nationFilter()}
+              {#if nationSeriesInfo.length > 0}
                 <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedNations} />
-              </div>
-            {/if}
-            <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" />
+              {/if}
+            {/snippet}
+            <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" controls={nationFilter} />
           {:else if lawAdoptionHistory !== null && lawAdoptionHistory.length === 0}
             <p class="text-brown italic text-center p-8">No law adoption data available</p>
           {:else}
