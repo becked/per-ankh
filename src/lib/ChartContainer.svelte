@@ -27,6 +27,15 @@
     dialogRef?.close();
   }
 
+  function handleDialogClose() {
+    // Remove focus from the button that triggered the dialog
+    // to prevent the blue focus outline on the chart container
+    // This handles all close methods: button click, Escape key, backdrop click
+    if (document.activeElement instanceof HTMLElement) {
+      document.activeElement.blur();
+    }
+  }
+
   function handleBackdropClick(event: MouseEvent) {
     // Close if clicking the dialog backdrop (not the content)
     if (event.target === dialogRef) {
@@ -46,7 +55,7 @@
     <!-- Expand button -->
     <button
       onclick={openFullscreen}
-      class="absolute top-3 right-3 z-10 p-1.5 rounded bg-black/20 hover:bg-black/40 transition-colors cursor-pointer"
+      class="absolute top-3 right-3 z-10 p-1.5 rounded bg-black/20 hover:bg-black/40 transition-colors cursor-pointer focus:outline-none"
       aria-label="Expand {title} to fullscreen"
       title="Expand to fullscreen"
     >
@@ -75,13 +84,14 @@
 <dialog
   bind:this={dialogRef}
   onclick={handleBackdropClick}
+  onclose={handleDialogClose}
   class="fullscreen-dialog"
 >
   <div class="dialog-content">
     <!-- Close button -->
     <button
       onclick={closeFullscreen}
-      class="absolute top-0 right-0 z-10 p-2 rounded bg-black/30 hover:bg-black/50 transition-colors cursor-pointer"
+      class="absolute top-0 right-0 z-10 p-2 rounded bg-black/30 hover:bg-black/50 transition-colors cursor-pointer focus:outline-none"
       aria-label="Close fullscreen"
       title="Close fullscreen (Esc)"
     >
@@ -122,6 +132,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
+    /* Remove focus outline - dialog doesn't need visual focus indication */
+    outline: none;
   }
 
   .fullscreen-dialog::backdrop {
