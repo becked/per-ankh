@@ -2,6 +2,7 @@
   import { Progress } from "bits-ui";
   import type { ImportProgress } from "$lib/types/ImportProgress";
   import type { BatchImportResult } from "$lib/types/BatchImportResult";
+  import HieroglyphParade from "./HieroglyphParade.svelte";
 
   interface Props {
     isOpen: boolean;
@@ -54,7 +55,10 @@
 
 {#if isOpen}
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-blue-gray border-2 border-black p-6 rounded-lg shadow-lg max-w-2xl w-full mx-4">
+    <div class="bg-blue-gray border-2 border-black p-6 pt-12 rounded-lg shadow-lg max-w-2xl w-full mx-4 relative overflow-hidden">
+      <!-- Hieroglyph parade runs across top of modal until closed -->
+      <HieroglyphParade active={isOpen} />
+
       <h2 class="text-2xl font-bold text-tan mb-4 border-b-2 border-orange pb-2">
         Import Save Files
       </h2>
