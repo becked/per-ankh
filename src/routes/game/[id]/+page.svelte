@@ -29,26 +29,61 @@
   let searchTerm = $state("");
   let selectedFilters = $state<string[]>([]);  // Combined log types and players with prefixes
 
-  // Chart series filter state (shared across all nation-based charts)
-  let selectedNations = $state<Record<string, boolean>>({});
+  // Chart series filter state - each chart has its own independent state
+  let selectedPointsNations = $state<Record<string, boolean>>({});
+  let selectedLawsNations = $state<Record<string, boolean>>({});
+  let selectedMilitaryNations = $state<Record<string, boolean>>({});
+  let selectedLegitimacyNations = $state<Record<string, boolean>>({});
+  let selectedScienceNations = $state<Record<string, boolean>>({});
+  let selectedCivicsNations = $state<Record<string, boolean>>({});
+  let selectedTrainingNations = $state<Record<string, boolean>>({});
+  let selectedGrowthNations = $state<Record<string, boolean>>({});
+  let selectedCultureNations = $state<Record<string, boolean>>({});
+  let selectedHappinessNations = $state<Record<string, boolean>>({});
 
-  // Derive series info from law adoption history for the filter component
+  // Derive series info from player history for the filter component
   const nationSeriesInfo = $derived<SeriesInfo[]>(
+    playerHistory?.map((player, i) => ({
+      name: formatEnum(player.nation, "NATION_"),
+      color: getPlayerColor(player.nation, i),
+    })) ?? []
+  );
+
+  // Derive series info from law adoption history (may have different players than playerHistory)
+  const lawsSeriesInfo = $derived<SeriesInfo[]>(
     lawAdoptionHistory?.map((player, i) => ({
       name: formatEnum(player.nation, "NATION_"),
       color: getPlayerColor(player.nation, i),
     })) ?? []
   );
 
-  // Initialize filter state when data loads - select all nations by default
+  // Helper to create default selection (all nations selected)
+  function createDefaultSelection(players: { nation: string | null }[]): Record<string, boolean> {
+    return Object.fromEntries(
+      players.map((player) => [formatEnum(player.nation, "NATION_"), true])
+    );
+  }
+
+  // Initialize filter state when data loads - select all nations by default for each chart
+  $effect(() => {
+    if (playerHistory) {
+      const defaultSelection = createDefaultSelection(playerHistory);
+      selectedPointsNations = { ...defaultSelection };
+      selectedMilitaryNations = { ...defaultSelection };
+      selectedLegitimacyNations = { ...defaultSelection };
+      selectedScienceNations = { ...defaultSelection };
+      selectedCivicsNations = { ...defaultSelection };
+      selectedTrainingNations = { ...defaultSelection };
+      selectedGrowthNations = { ...defaultSelection };
+      selectedCultureNations = { ...defaultSelection };
+      selectedHappinessNations = { ...defaultSelection };
+    }
+  });
+
+  // Initialize law adoption filter separately (uses lawAdoptionHistory data)
   $effect(() => {
     if (lawAdoptionHistory) {
-      selectedNations = Object.fromEntries(
-        lawAdoptionHistory.map((player) => [
-          formatEnum(player.nation, "NATION_"),
-          true,
-        ])
-      );
+      selectedLawsNations = createDefaultSelection(lawAdoptionHistory);
     }
   });
 
@@ -95,6 +130,11 @@
             ...CHART_THEME.title,
             text: "Victory Points",
           },
+          legend: {
+            show: false,
+            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
+            selected: selectedPointsNations,
+          },
           grid: {
             left: 60,
             right: 40,
@@ -132,6 +172,11 @@
             ...CHART_THEME.title,
             text: "Military Power",
           },
+          legend: {
+            show: false,
+            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
+            selected: selectedMilitaryNations,
+          },
           xAxis: {
             type: "category",
             name: "Turn",
@@ -159,6 +204,11 @@
             ...CHART_THEME.title,
             text: "Legitimacy",
           },
+          legend: {
+            show: false,
+            data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
+            selected: selectedLegitimacyNations,
+          },
           xAxis: {
             type: "category",
             name: "Turn",
@@ -179,7 +229,12 @@
   );
 
   // Helper function to create yield chart option for a specific yield type
-  function createYieldChartOption(yieldType: string, title: string, yAxisLabel: string): EChartsOption | null {
+  function createYieldChartOption(
+    yieldType: string,
+    title: string,
+    yAxisLabel: string,
+    selectedNationsState: Record<string, boolean>
+  ): EChartsOption | null {
     if (!allYields || allYields.length === 0) return null;
 
     const yieldData = allYields.filter(y => y.yield_type === yieldType);
@@ -190,6 +245,11 @@
       title: {
         ...CHART_THEME.title,
         text: title,
+      },
+      legend: {
+        show: false,
+        data: yieldData.map((y) => formatEnum(y.nation, "NATION_")),
+        selected: selectedNationsState,
       },
       grid: {
         left: 60,
@@ -219,13 +279,13 @@
     };
   }
 
-  // Create chart options for each yield type
-  const scienceChartOption = $derived(createYieldChartOption("YIELD_SCIENCE", "Science Production", "Science per Turn"));
-  const civicsChartOption = $derived(createYieldChartOption("YIELD_CIVICS", "Civics Production", "Civics per Turn"));
-  const trainingChartOption = $derived(createYieldChartOption("YIELD_TRAINING", "Training Production", "Training per Turn"));
-  const growthChartOption = $derived(createYieldChartOption("YIELD_GROWTH", "Growth Production", "Growth per Turn"));
-  const cultureChartOption = $derived(createYieldChartOption("YIELD_CULTURE", "Culture Production", "Culture per Turn"));
-  const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn"));
+  // Create chart options for each yield type - each with its own independent state
+  const scienceChartOption = $derived(createYieldChartOption("YIELD_SCIENCE", "Science Production", "Science per Turn", selectedScienceNations));
+  const civicsChartOption = $derived(createYieldChartOption("YIELD_CIVICS", "Civics Production", "Civics per Turn", selectedCivicsNations));
+  const trainingChartOption = $derived(createYieldChartOption("YIELD_TRAINING", "Training Production", "Training per Turn", selectedTrainingNations));
+  const growthChartOption = $derived(createYieldChartOption("YIELD_GROWTH", "Growth Production", "Growth per Turn", selectedGrowthNations));
+  const cultureChartOption = $derived(createYieldChartOption("YIELD_CULTURE", "Culture Production", "Culture per Turn", selectedCultureNations));
+  const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn", selectedHappinessNations));
 
   // Create law adoption chart option
   // Uses ECharts legend.selected for filtering instead of filtering data directly
@@ -258,7 +318,7 @@
             legend: {
               show: false,
               data: nationNames,
-              selected: selectedNations,
+              selected: selectedLawsNations,
             },
             tooltip: {
               trigger: 'item',
@@ -600,7 +660,12 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Game History</h2>
           {#if pointsChartOption}
-            <ChartContainer option={pointsChartOption} height="400px" title="Victory Points" />
+            {#snippet pointsFilter()}
+              {#if nationSeriesInfo.length > 0}
+                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedPointsNations} />
+              {/if}
+            {/snippet}
+            <ChartContainer option={pointsChartOption} height="400px" title="Victory Points" controls={pointsFilter} />
           {/if}
 
           <!-- Event Logs Table -->
@@ -759,12 +824,12 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Laws & Technology</h2>
           {#if lawAdoptionChartOption}
-            {#snippet nationFilter()}
-              {#if nationSeriesInfo.length > 0}
-                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedNations} />
+            {#snippet lawsFilter()}
+              {#if lawsSeriesInfo.length > 0}
+                <ChartSeriesFilter series={lawsSeriesInfo} bind:selected={selectedLawsNations} />
               {/if}
             {/snippet}
-            <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" controls={nationFilter} />
+            <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" controls={lawsFilter} />
           {:else if lawAdoptionHistory !== null && lawAdoptionHistory.length === 0}
             <p class="text-brown italic text-center p-8">No law adoption data available</p>
           {:else}
@@ -780,11 +845,21 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Economics</h2>
           {#if militaryChartOption}
-            <ChartContainer option={militaryChartOption} height="400px" title="Military Power" />
+            {#snippet militaryFilter()}
+              {#if nationSeriesInfo.length > 0}
+                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedMilitaryNations} />
+              {/if}
+            {/snippet}
+            <ChartContainer option={militaryChartOption} height="400px" title="Military Power" controls={militaryFilter} />
           {/if}
 
           {#if legitimacyChartOption}
-            <ChartContainer option={legitimacyChartOption} height="400px" title="Legitimacy" />
+            {#snippet legitimacyFilter()}
+              {#if nationSeriesInfo.length > 0}
+                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedLegitimacyNations} />
+              {/if}
+            {/snippet}
+            <ChartContainer option={legitimacyChartOption} height="400px" title="Legitimacy" controls={legitimacyFilter} />
           {/if}
 
           {#if allYields === null}
@@ -793,27 +868,57 @@
             <p class="text-brown italic text-center p-8">No yield data available</p>
           {:else}
             {#if scienceChartOption}
-              <ChartContainer option={scienceChartOption} height="400px" title="Science Production" />
+              {#snippet scienceFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedScienceNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={scienceChartOption} height="400px" title="Science Production" controls={scienceFilter} />
             {/if}
 
             {#if civicsChartOption}
-              <ChartContainer option={civicsChartOption} height="400px" title="Civics Production" />
+              {#snippet civicsFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedCivicsNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={civicsChartOption} height="400px" title="Civics Production" controls={civicsFilter} />
             {/if}
 
             {#if trainingChartOption}
-              <ChartContainer option={trainingChartOption} height="400px" title="Training Production" />
+              {#snippet trainingFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedTrainingNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={trainingChartOption} height="400px" title="Training Production" controls={trainingFilter} />
             {/if}
 
             {#if growthChartOption}
-              <ChartContainer option={growthChartOption} height="400px" title="Growth Production" />
+              {#snippet growthFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedGrowthNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={growthChartOption} height="400px" title="Growth Production" controls={growthFilter} />
             {/if}
 
             {#if cultureChartOption}
-              <ChartContainer option={cultureChartOption} height="400px" title="Culture Production" />
+              {#snippet cultureFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedCultureNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={cultureChartOption} height="400px" title="Culture Production" controls={cultureFilter} />
             {/if}
 
             {#if happinessChartOption}
-              <ChartContainer option={happinessChartOption} height="400px" title="Happiness Production" />
+              {#snippet happinessFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedHappinessNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={happinessChartOption} height="400px" title="Happiness Production" controls={happinessFilter} />
             {/if}
           {/if}
         </Tabs.Content>
