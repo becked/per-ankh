@@ -14,6 +14,7 @@
   import { Tabs, Select } from "bits-ui";
   import { formatEnum, formatDate, formatGameTitle, formatMapClass, stripMarkup } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
+  import GamePageSkeleton from "$lib/GamePageSkeleton.svelte";
 
   let gameDetails = $state<GameDetails | null>(null);
   let playerHistory = $state<PlayerHistory[] | null>(null);
@@ -329,17 +330,13 @@
       : null
   );
 
-  // Reactively load game details when the route parameter changes
+  // Fetch game data on component mount
+  // The {#key} block in +layout.svelte destroys/recreates this component on URL change
   $effect(() => {
     const matchId = Number($page.params.id);
 
     loading = true;
     error = null;
-    gameDetails = null;
-    playerHistory = null;
-    allYields = null;
-    eventLogs = null;
-    lawAdoptionHistory = null;
 
     Promise.all([
       api.getGameDetails(matchId),
@@ -499,13 +496,15 @@
   }
 </script>
 
-<main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
-    {#if loading}
-      <p>Loading game details...</p>
-    {:else if error}
-      <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
-    {:else if gameDetails}
-      <div class="flex justify-between items-baseline mb-8">
+{#if loading}
+  <GamePageSkeleton />
+{:else if error}
+  <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
+    <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
+  </main>
+{:else if gameDetails}
+  <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
+    <div class="flex justify-between items-baseline mb-8">
         <h1 class="text-gray-200 text-3xl font-bold">{gameTitle}</h1>
         <p class="text-brown text-sm">{formatDate(gameDetails.save_date)}</p>
       </div>
@@ -514,7 +513,7 @@
       <div class="p-2 border-2 border-black rounded-lg mb-6" style="background-color: #36302a;">
         <div class="flex justify-evenly">
           <!-- Left Column: Player, Winner & Victory Type -->
-          <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2 items-center">
+          <div class="grid grid-cols-[auto_minmax(180px,1fr)] gap-x-2 gap-y-2 items-center">
             <span class="font-bold text-brown text-xs uppercase tracking-wide text-right">Player:</span>
             <span class="text-xl font-bold" style="color: #EEEEEE;">{formatEnum(humanNation, "NATION_")}</span>
 
@@ -545,7 +544,7 @@
           </div>
 
           <!-- Right Column: Map, Turns & Nations -->
-          <div class="grid grid-cols-[auto_1fr] gap-x-2 gap-y-2 items-center">
+          <div class="grid grid-cols-[auto_minmax(100px,1fr)] gap-x-2 gap-y-2 items-center">
             {#if gameDetails.map_class}
               <span class="font-bold text-brown text-xs uppercase tracking-wide text-right">Map:</span>
               <span class="text-xl font-bold" style="color: #EEEEEE;">{formatMapClass(gameDetails.map_class)}</span>
@@ -893,8 +892,8 @@
           </div>
         </Tabs.Content>
       </Tabs.Root>
-    {/if}
-</main>
+  </main>
+{/if}
 
 <style>
   /* Custom fade-in animation for tab switching */

@@ -39,6 +39,7 @@ export const CHART_COLORS = [
 export const CHART_THEME = {
   colors: CHART_COLORS,
   backgroundColor: "#211A12", // Blue-gray background matches main UI
+  animation: false, // Disable initial animation for smoother page transitions
   textStyle: {
     fontFamily: "Arial, sans-serif",
     color: "#FFFFFF", // White text for dark background
