@@ -42,7 +42,7 @@
 
   // Initialize filter state when data loads - select all nations by default
   $effect(() => {
-    if (lawAdoptionHistory && Object.keys(selectedNations).length === 0) {
+    if (lawAdoptionHistory) {
       selectedNations = Object.fromEntries(
         lawAdoptionHistory.map((player) => [
           formatEnum(player.nation, "NATION_"),

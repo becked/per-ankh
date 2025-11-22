@@ -1,9 +1,10 @@
 <script lang="ts">
   /**
    * A reusable filter component for ECharts series.
-   * Displays clickable buttons for each series that toggle visibility.
+   * Displays toggle buttons for each series that control visibility.
    * Works with ECharts' legend.selected option for filtering.
    */
+  import { ToggleGroup } from "bits-ui";
 
   export type SeriesInfo = {
     name: string;
@@ -18,64 +19,38 @@
     selected?: Record<string, boolean>;
   } = $props();
 
-  function toggleSeries(name: string) {
-    selected = {
-      ...selected,
-      [name]: !selected[name],
-    };
-  }
-
-  function selectAll() {
-    selected = Object.fromEntries(series.map((s) => [s.name, true]));
-  }
-
-  function selectNone() {
-    selected = Object.fromEntries(series.map((s) => [s.name, false]));
-  }
-
-  // Count how many are selected
-  const selectedCount = $derived(
-    Object.values(selected).filter(Boolean).length
+  // Convert Record<string, boolean> to string[] for bits-ui
+  const selectedNames = $derived(
+    Object.entries(selected)
+      .filter(([_, isSelected]) => isSelected)
+      .map(([name]) => name)
   );
-  const allSelected = $derived(selectedCount === series.length);
-  const noneSelected = $derived(selectedCount === 0);
+
+  // Convert string[] back to Record<string, boolean> when toggle changes
+  function handleValueChange(newValue: string[]) {
+    selected = Object.fromEntries(
+      series.map((s) => [s.name, newValue.includes(s.name)])
+    );
+  }
 </script>
 
-<div class="flex flex-wrap items-center gap-2">
-  <!-- Select All / None buttons -->
-  <div class="flex gap-1 mr-2">
-    <button
-      onclick={selectAll}
-      disabled={allSelected}
-      class="px-2 py-1 text-xs rounded border border-black transition-colors
-             {allSelected ? 'bg-gray-400 text-gray-600 cursor-not-allowed' : 'bg-tan text-black hover:bg-tan-hover'}"
-    >
-      All
-    </button>
-    <button
-      onclick={selectNone}
-      disabled={noneSelected}
-      class="px-2 py-1 text-xs rounded border border-black transition-colors
-             {noneSelected ? 'bg-gray-400 text-gray-600 cursor-not-allowed' : 'bg-tan text-black hover:bg-tan-hover'}"
-    >
-      None
-    </button>
-  </div>
-
-  <!-- Series toggle buttons -->
+<ToggleGroup.Root
+  type="multiple"
+  value={selectedNames}
+  onValueChange={handleValueChange}
+  class="flex flex-wrap items-center gap-2"
+>
   {#each series as s}
-    <button
-      onclick={() => toggleSeries(s.name)}
-      class="px-3 py-1 text-sm rounded border-2 transition-all duration-200"
-      style:background-color={selected[s.name] ? s.color : 'transparent'}
-      style:border-color={s.color}
-      style:color={selected[s.name] ? getContrastColor(s.color) : s.color}
-      style:opacity={selected[s.name] ? 1 : 0.5}
+    {@const isSelected = selected[s.name]}
+    <ToggleGroup.Item
+      value={s.name}
+      class="px-3 py-1 text-xs rounded border-2 transition-all duration-200 cursor-pointer"
+      style="background-color: {isSelected ? s.color : 'transparent'}; border-color: {s.color}; color: {isSelected ? getContrastColor(s.color) : s.color}; opacity: {isSelected ? 1 : 0.5};"
     >
       {s.name}
-    </button>
+    </ToggleGroup.Item>
   {/each}
-</div>
+</ToggleGroup.Root>
 
 <script lang="ts" module>
   /**
