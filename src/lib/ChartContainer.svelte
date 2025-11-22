@@ -18,13 +18,25 @@
   } = $props();
 
   let dialogRef: HTMLDialogElement | null = $state(null);
+  let isClosing = $state(false);
+
+  const ANIMATION_DURATION = 200; // ms - keep in sync with CSS
 
   function openFullscreen() {
     dialogRef?.showModal();
   }
 
   function closeFullscreen() {
-    dialogRef?.close();
+    if (!dialogRef || isClosing) return;
+
+    // Add closing class to trigger exit animation
+    isClosing = true;
+
+    // Wait for animation to complete before actually closing
+    setTimeout(() => {
+      dialogRef?.close();
+      isClosing = false;
+    }, ANIMATION_DURATION);
   }
 
   function handleDialogClose() {
@@ -85,7 +97,7 @@
   bind:this={dialogRef}
   onclick={handleBackdropClick}
   onclose={handleDialogClose}
-  class="fullscreen-dialog"
+  class="fullscreen-dialog {isClosing ? 'closing' : ''}"
 >
   <div class="dialog-content">
     <!-- Close button -->
@@ -134,6 +146,74 @@
     justify-content: center;
     /* Remove focus outline - dialog doesn't need visual focus indication */
     outline: none;
+  }
+
+  /* Opening animation */
+  .fullscreen-dialog[open] {
+    animation: dialogFadeIn 0.2s ease-out;
+  }
+
+  .fullscreen-dialog[open] .dialog-content {
+    animation: dialogZoomIn 0.2s ease-out;
+  }
+
+  .fullscreen-dialog[open]::backdrop {
+    animation: backdropFadeIn 0.2s ease-out;
+  }
+
+  /* Closing animation */
+  .fullscreen-dialog.closing {
+    animation: dialogFadeOut 0.2s ease-in forwards;
+  }
+
+  .fullscreen-dialog.closing .dialog-content {
+    animation: dialogZoomOut 0.2s ease-in forwards;
+  }
+
+  .fullscreen-dialog.closing::backdrop {
+    animation: backdropFadeOut 0.2s ease-in forwards;
+  }
+
+  @keyframes dialogFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes dialogFadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
+  }
+
+  @keyframes dialogZoomIn {
+    from {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+    to {
+      opacity: 1;
+      transform: scale(1);
+    }
+  }
+
+  @keyframes dialogZoomOut {
+    from {
+      opacity: 1;
+      transform: scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: scale(0.95);
+    }
+  }
+
+  @keyframes backdropFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+
+  @keyframes backdropFadeOut {
+    from { opacity: 1; }
+    to { opacity: 0; }
   }
 
   .fullscreen-dialog::backdrop {
