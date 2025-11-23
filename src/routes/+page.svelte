@@ -64,7 +64,7 @@
       : null
   );
 
-  // Calendar chart: heatmap showing save activity by nation color
+  // Calendar chart: custom series with split cells for multi-nation days
   function buildCalendarChartOption(dates: SaveDateEntry[]): EChartsOption | null {
     if (dates.length === 0) return null;
 
@@ -91,22 +91,17 @@
       dateToNations.set(entry.date, existing);
     }
 
-    // Create heatmap data - use first nation's color, but store all nations for tooltip
-    const heatmapData: Array<{
-      value: [string, number];
-      nations: string[];
-      itemStyle: { color: string };
-    }> = [];
+    // Create custom series data as plain arrays: [date, nationsJSON, colorsJSON]
+    // ECharts custom series works best with array data format
+    const customData: Array<[string, string, string]> = [];
 
     for (const [date, nations] of dateToNations) {
-      const firstNation = nations[0];
-      const nationKey = firstNation.replace(/^NATION_/, "");
-      const color = getNationColor(nationKey) ?? getChartColor(0);
-      heatmapData.push({
-        value: [date, 1],
-        nations,
-        itemStyle: { color },
+      const colors = nations.map((nation) => {
+        const nationKey = nation.replace(/^NATION_/, "");
+        return getNationColor(nationKey) ?? getChartColor(0);
       });
+      // Store nations and colors as JSON strings in the data array
+      customData.push([date, JSON.stringify(nations), JSON.stringify(colors)]);
     }
 
     return {
@@ -118,11 +113,12 @@
       tooltip: {
         trigger: "item",
         formatter: (params: unknown) => {
-          const p = params as { data: { value: [string, number]; nations: string[] } };
-          const nationsFormatted = p.data.nations
+          const p = params as { value: [string, string, string] };
+          const nations = JSON.parse(p.value[1]) as string[];
+          const nationsFormatted = nations
             .map((n) => formatEnum(n, "NATION_"))
             .join("<br/>");
-          return `${p.data.value[0]}<br/>${nationsFormatted}`;
+          return `${p.value[0]}<br/>${nationsFormatted}`;
         },
       },
       calendar: {
@@ -152,15 +148,62 @@
           },
         },
       },
-      visualMap: {
-        show: false,
-        max: 1,
-      },
       series: [
         {
-          type: "heatmap",
+          type: "custom",
           coordinateSystem: "calendar",
-          data: heatmapData,
+          data: customData,
+          renderItem: (
+            params: { coordSys: { cellWidth: number; cellHeight: number } },
+            api: {
+              value: (idx: number) => string;
+              coord: (date: string) => [number, number];
+            }
+          ) => {
+            const date = api.value(0);
+            const cellPoint = api.coord(date);
+            const cellWidth = params.coordSys.cellWidth;
+            const cellHeight = params.coordSys.cellHeight;
+
+            // Parse colors from JSON string stored in data
+            const colorsJson = api.value(2);
+            const colors = JSON.parse(colorsJson) as string[];
+            const numColors = colors.length;
+
+            if (numColors === 1) {
+              // Single nation: fill entire cell
+              return {
+                type: "rect",
+                shape: {
+                  x: cellPoint[0] - cellWidth / 2,
+                  y: cellPoint[1] - cellHeight / 2,
+                  width: cellWidth,
+                  height: cellHeight,
+                },
+                style: {
+                  fill: colors[0],
+                },
+              };
+            } else {
+              // Multiple nations: split cell vertically
+              const sliceWidth = cellWidth / numColors;
+              return {
+                type: "group",
+                children: colors.map((color, i) => ({
+                  type: "rect",
+                  shape: {
+                    x: cellPoint[0] - cellWidth / 2 + i * sliceWidth,
+                    y: cellPoint[1] - cellHeight / 2,
+                    width: sliceWidth,
+                    height: cellHeight,
+                  },
+                  style: {
+                    fill: color,
+                  },
+                })),
+              };
+            }
+          },
         },
       ],
     } as EChartsOption;
