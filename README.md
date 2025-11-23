@@ -6,6 +6,19 @@ Old World save game analyzer and visualizer built with Tauri, Rust, SvelteKit, a
 
 Per-Ankh imports Old World game save files and provides data visualizations and analytics. The application parses save files (ZIP archives containing XML), extracts game state into a DuckDB database, and presents interactive visualizations through a desktop UI.
 
+## Legal Notice
+
+Per-Ankh is an independent, unofficial fan project. It is not affiliated with, endorsed by, sponsored by, or connected to Mohawk Games, Hooded Horse, or any of their affiliates.
+
+"Old World" is a trademark of Mohawk Games. All game content, including save file formats and game data, remains the intellectual property of Mohawk Games.
+
+This application:
+- Analyzes save files from games you legally own
+- Does not distribute, modify, or circumvent any game content or copy protection
+- Is provided free and open-source for the benefit of the Old World community
+
+This software is provided "as is" without warranty of any kind.
+
 ## Development
 
 ### Recommended IDE Setup
