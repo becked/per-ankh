@@ -10,3 +10,4 @@ export { type GameDetails } from "./types/GameDetails";
 export { type PlayerHistoryPoint } from "./types/PlayerHistoryPoint";
 export { type PlayerHistory } from "./types/PlayerHistory";
 export { type ImportResult } from "./types/ImportResult";
+export { type SaveDateEntry } from "./types/SaveDateEntry";
