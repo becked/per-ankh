@@ -4,7 +4,7 @@
 
 use crate::parser::Result;
 use duckdb::Connection;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Extract table and view names from schema.sql
 ///
@@ -210,8 +210,18 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
 /// Initialize and validate schema on first run
 pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
     log::info!("ensure_schema_ready called for path: {:?}", db_path);
-    let conn = Connection::open(db_path)?;
-    log::info!("Database connection opened successfully");
+
+    let conn = match Connection::open(db_path) {
+        Ok(c) => {
+            log::info!("Database connection opened successfully");
+            c
+        }
+        Err(e) => {
+            log::error!("Failed to open database at {:?}: {}", db_path, e);
+            log::error!("This may indicate database corruption. Consider deleting the database file to recover.");
+            return Err(e.into());
+        }
+    };
 
     // Create app data dir if needed (race-safe)
     if let Some(parent) = db_path.parent() {
@@ -317,6 +327,29 @@ fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
     Ok(warnings)
 }
 
+/// Delete database files for recovery from corruption
+///
+/// Removes the main database file and any associated WAL/journal files.
+/// Returns the paths that were deleted for logging.
+pub fn delete_database_files(db_path: &Path) -> std::io::Result<Vec<PathBuf>> {
+    let mut deleted = Vec::new();
+
+    // Main database file
+    if db_path.exists() {
+        std::fs::remove_file(db_path)?;
+        deleted.push(db_path.to_path_buf());
+    }
+
+    // WAL file (DuckDB uses .wal extension)
+    let wal_path = db_path.with_extension("db.wal");
+    if wal_path.exists() {
+        std::fs::remove_file(&wal_path)?;
+        deleted.push(wal_path);
+    }
+
+    Ok(deleted)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -367,5 +400,35 @@ mod tests {
 
         // Just verify the database file was created
         assert!(db_path.exists(), "Database file should exist");
+    }
+
+    #[test]
+    fn test_delete_database_files() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let wal_path = dir.path().join("test.db.wal");
+
+        // Create fake files
+        std::fs::write(&db_path, b"db").unwrap();
+        std::fs::write(&wal_path, b"wal").unwrap();
+
+        let deleted = delete_database_files(&db_path).unwrap();
+
+        assert_eq!(deleted.len(), 2);
+        assert!(!db_path.exists());
+        assert!(!wal_path.exists());
+    }
+
+    #[test]
+    fn test_delete_database_files_missing_wal() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+
+        std::fs::write(&db_path, b"db").unwrap();
+
+        let deleted = delete_database_files(&db_path).unwrap();
+
+        assert_eq!(deleted.len(), 1);
+        assert!(!db_path.exists());
     }
 }
