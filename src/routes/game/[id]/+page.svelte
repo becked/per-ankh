@@ -957,10 +957,10 @@
                 <span class="text-tan text-base">{gameDetails.game_mode}</span>
               </div>
             {/if}
-            {#if gameDetails.opponent_level}
+            {#if gameDetails.difficulty}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Difficulty:</span>
-                <span class="text-tan text-base">{formatEnum(gameDetails.opponent_level, "LEVEL_")}</span>
+                <span class="text-tan text-base">{formatEnum(gameDetails.difficulty, "DIFFICULTY_")}</span>
               </div>
             {/if}
             {#if gameDetails.victory_conditions}
