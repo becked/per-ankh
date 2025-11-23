@@ -453,6 +453,14 @@
   const dlcList = $derived(
     gameDetails?.enabled_dlc
       ?.split('+')
+      .map(dlc => formatEnum(dlc, 'DLC_'))
+      .join(', ') ?? 'None'
+  );
+
+  // Format mods list from DB string
+  const modsList = $derived(
+    gameDetails?.enabled_mods
+      ?.split('+')
       .join(', ') ?? 'None'
   );
 
@@ -965,6 +973,12 @@
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">DLC Enabled:</span>
                 <span class="text-tan text-base">{dlcList}</span>
+              </div>
+            {/if}
+            {#if gameDetails.enabled_mods}
+              <div class="flex flex-col gap-1">
+                <span class="font-bold text-brown text-sm">Mods Enabled:</span>
+                <span class="text-tan text-base">{modsList}</span>
               </div>
             {/if}
           </div>

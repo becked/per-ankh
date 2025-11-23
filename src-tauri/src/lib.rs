@@ -69,6 +69,7 @@ pub struct GameDetails {
     pub game_mode: Option<String>,
     pub opponent_level: Option<String>,
     pub victory_conditions: Option<String>,
+    pub enabled_mods: Option<String>,
     pub enabled_dlc: Option<String>,
     #[ts(type = "number | null")]
     pub winner_player_id: Option<i64>,
@@ -346,7 +347,7 @@ async fn get_game_details(
             .prepare(
                 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
                         m.total_turns, m.map_size, m.map_width, m.map_height, m.map_class,
-                        m.game_mode, m.opponent_level, m.victory_conditions, m.enabled_dlc,
+                        m.game_mode, m.opponent_level, m.victory_conditions, m.enabled_mods, m.enabled_dlc,
                         m.winner_player_id,
                         wp.player_name as winner_name,
                         wp.nation as winner_civilization,
@@ -370,11 +371,12 @@ async fn get_game_details(
                     game_mode: row.get(8)?,
                     opponent_level: row.get(9)?,
                     victory_conditions: row.get(10)?,
-                    enabled_dlc: row.get(11)?,
-                    winner_player_id: row.get(12)?,
-                    winner_name: row.get(13)?,
-                    winner_civilization: row.get(14)?,
-                    winner_victory_type: row.get(15)?,
+                    enabled_mods: row.get(11)?,
+                    enabled_dlc: row.get(12)?,
+                    winner_player_id: row.get(13)?,
+                    winner_name: row.get(14)?,
+                    winner_civilization: row.get(15)?,
+                    winner_victory_type: row.get(16)?,
                     players: Vec::new(), // Will be filled below
                 })
             })?;

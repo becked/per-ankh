@@ -1,4 +1,4 @@
--- Old World Game Data Schema v2.3
+-- Old World Game Data Schema v2.4
 -- DuckDB Schema for Multi-Match Game Save Analysis
 --
 -- Design Principles:
@@ -86,7 +86,8 @@ CREATE TABLE matches (
     map_seed BIGINT,
     -- Version information
     game_version VARCHAR, -- Game version number (e.g., "1.0.70671")
-    enabled_dlc TEXT, -- DLC list (e.g., "New Portraits+Nobles of the Settled Lands 1+...")
+    enabled_mods TEXT, -- Mod list from Version string (e.g., "name-every-child1+different-leaders1")
+    enabled_dlc TEXT, -- DLC list from GameContent (e.g., "DLC_HEROES_OF_AEGEAN+DLC_THE_SACRED_AND_THE_PROFANE")
     -- Uniqueness: Each (game_id, turn) pair is a unique snapshot
     UNIQUE (game_id, total_turns)
 );
@@ -969,7 +970,8 @@ CREATE TABLE schema_migrations (
 INSERT INTO schema_migrations (version, description) VALUES
 ('2.0.0', 'Clean greenfield schema for multi-match Old World game analysis - 85% XML coverage'),
 ('2.2.0', 'Added match_locks table for multi-process concurrency control'),
-('2.3.0', 'Added is_save_owner column to players table and user_settings table for save owner tracking');
+('2.3.0', 'Added is_save_owner column to players table and user_settings table for save owner tracking'),
+('2.4.0', 'Separated mods and DLC: renamed enabled_dlc to enabled_mods, added new enabled_dlc from GameContent');
 
 
 -- ============================================================================
