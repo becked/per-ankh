@@ -68,6 +68,7 @@ pub struct GameDetails {
     pub map_class: Option<String>,
     pub game_mode: Option<String>,
     pub opponent_level: Option<String>,
+    pub difficulty: Option<String>,
     pub victory_conditions: Option<String>,
     pub enabled_mods: Option<String>,
     pub enabled_dlc: Option<String>,
@@ -342,7 +343,7 @@ async fn get_game_details(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<GameDetails, String> {
     pool.with_connection(|conn| {
-        // Get match details with winner information via LEFT JOIN
+        // Get match details with winner and save owner information via LEFT JOINs
         let mut stmt = conn
             .prepare(
                 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
@@ -351,9 +352,11 @@ async fn get_game_details(
                         m.winner_player_id,
                         wp.player_name as winner_name,
                         wp.nation as winner_civilization,
-                        m.winner_victory_type
+                        m.winner_victory_type,
+                        so.difficulty as save_owner_difficulty
                  FROM matches m
                  LEFT JOIN players wp ON m.match_id = wp.match_id AND m.winner_player_id = wp.player_id
+                 LEFT JOIN players so ON m.match_id = so.match_id AND so.is_save_owner = TRUE
                  WHERE m.match_id = ?"
             )?;
 
@@ -370,6 +373,7 @@ async fn get_game_details(
                     map_class: row.get(7)?,
                     game_mode: row.get(8)?,
                     opponent_level: row.get(9)?,
+                    difficulty: row.get(17)?,
                     victory_conditions: row.get(10)?,
                     enabled_mods: row.get(11)?,
                     enabled_dlc: row.get(12)?,

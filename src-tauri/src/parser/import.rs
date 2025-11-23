@@ -410,6 +410,9 @@ fn import_save_file_internal(
     // Determine save owner (the person whose machine created this save)
     determine_save_owner(tx, match_id, &players_data, &id_mapper)?;
 
+    // Update player difficulties from root-level <Difficulty> element
+    update_player_difficulties(doc, tx, match_id, &id_mapper)?;
+
     // 2. Characters core (no relationships yet)
     let t_characters = Instant::now();
     let characters_count = super::inserters::insert_characters_core(tx, &characters_data, &mut id_mapper)?;
@@ -1099,6 +1102,56 @@ fn determine_save_owner(
             params![db_id, match_id],
         )?;
         log::debug!("Set save owner: player XML ID {} → DB ID {}", xml_id, db_id);
+    }
+
+    Ok(())
+}
+
+/// Update player difficulties from the root-level <Difficulty> element
+///
+/// The XML stores difficulties in a separate indexed array at the root level:
+/// <Difficulty>
+///   <PlayerDifficulty>DIFFICULTY_MAGNIFICENT</PlayerDifficulty>
+///   <PlayerDifficulty>DIFFICULTY_GLORIOUS</PlayerDifficulty>
+/// </Difficulty>
+///
+/// Each index corresponds to a player's XML ID (0, 1, 2, etc.)
+fn update_player_difficulties(
+    doc: &XmlDocument,
+    tx: &Connection,
+    match_id: i64,
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let root = doc.root_element();
+
+    // Parse the <Difficulty> element
+    let difficulty_element = match root.children().find(|n| n.has_tag_name("Difficulty")) {
+        Some(elem) => elem,
+        None => return Ok(()), // No difficulty element, nothing to update
+    };
+
+    // Collect all PlayerDifficulty values indexed by position
+    let difficulties: Vec<String> = difficulty_element
+        .children()
+        .filter(|n| n.has_tag_name("PlayerDifficulty"))
+        .filter_map(|n| n.text().map(|s| s.to_string()))
+        .collect();
+
+    // Update each player's difficulty based on their XML ID
+    for (xml_id, difficulty) in difficulties.iter().enumerate() {
+        let xml_id = xml_id as i32;
+        if let Ok(db_id) = id_mapper.get_player(xml_id) {
+            tx.execute(
+                "UPDATE players SET difficulty = ? WHERE player_id = ? AND match_id = ?",
+                params![difficulty, db_id, match_id],
+            )?;
+            log::debug!(
+                "Set difficulty for player XML ID {} → DB ID {}: {}",
+                xml_id,
+                db_id,
+                difficulty
+            );
+        }
     }
 
     Ok(())
