@@ -151,7 +151,7 @@
     position: absolute;
     top: 2px;
     right: 4px;
-    font-size: 9px;
+    font-size: 7px;
     line-height: 1;
     background-color: rgba(0, 0, 0, 0.6);
     border-radius: 50%;
