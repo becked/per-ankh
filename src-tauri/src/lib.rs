@@ -950,6 +950,30 @@ async fn reset_database_cmd(
     Ok("Database reset successfully".to_string())
 }
 
+/// Tauri command to recover from database corruption
+///
+/// Deletes all database files and reinitializes a fresh database.
+/// This is more aggressive than reset - it removes all files rather than just
+/// dropping tables, which can help recover from corruption.
+#[tauri::command]
+async fn recover_database(app_handle: tauri::AppHandle) -> Result<String, String> {
+    let db_path = db::connection::get_db_path(&app_handle)
+        .map_err(|e| e.to_string())?;
+
+    log::warn!("Database recovery requested, deleting: {:?}", db_path);
+
+    let deleted = db::delete_database_files(&db_path)
+        .map_err(|e| format!("Failed to delete database files: {}", e))?;
+
+    log::info!("Deleted {} files: {:?}", deleted.len(), deleted);
+
+    // Reinitialize schema on fresh database
+    db::ensure_schema_ready(&db_path)
+        .map_err(|e| format!("Failed to reinitialize database: {}", e))?;
+
+    Ok(format!("Database recovered. Deleted {} files.", deleted.len()))
+}
+
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
 pub struct StoryEvent {
@@ -1357,20 +1381,61 @@ pub fn run() {
             get_known_online_ids,
             run_event_test,
             reset_database_cmd,
+            recover_database,
             debug_event_log_player_ids
         ]);
 
     builder
         .setup(|app| {
+            use tauri_plugin_dialog::{DialogExt, MessageDialogButtons, MessageDialogKind};
+
             // Initialize database connection pool
             let db_path = db::connection::get_db_path(app.handle())
                 .context("Failed to get database path")
                 .map_err(|e| e.to_string())?;
 
-            // Ensure schema is ready
-            db::ensure_schema_ready(&db_path)
-                .context("Failed to initialize schema")
-                .map_err(|e| e.to_string())?;
+            // Try to initialize schema, offer recovery on failure
+            if let Err(e) = db::ensure_schema_ready(&db_path) {
+                log::error!("Database initialization failed: {}", e);
+
+                // Truncate error message for dialog - full error is in logs
+                // DuckDB errors can include huge stack traces that overflow the dialog
+                let error_str = e.to_string();
+                let truncated_error: String = error_str
+                    .lines()
+                    .take(3) // First 3 lines contain the useful info
+                    .collect::<Vec<_>>()
+                    .join("\n");
+                let display_error = if truncated_error.len() > 300 {
+                    format!("{}...", &truncated_error[..300])
+                } else if error_str.lines().count() > 3 {
+                    format!("{}...", truncated_error)
+                } else {
+                    truncated_error
+                };
+
+                let confirmed = app.dialog()
+                    .message(format!(
+                        "Database initialization failed:\n{}\n\nWould you like to reset the database? All existing data will be lost.\n\nClick OK to reset, or Cancel to quit.",
+                        display_error
+                    ))
+                    .kind(MessageDialogKind::Error)
+                    .title("Database Error")
+                    .buttons(MessageDialogButtons::OkCancel)
+                    .blocking_show();
+
+                if confirmed {
+                    log::warn!("User requested database recovery");
+                    db::delete_database_files(&db_path)
+                        .map_err(|e| format!("Failed to delete database: {}", e))?;
+                    db::ensure_schema_ready(&db_path)
+                        .map_err(|e| format!("Failed to reinitialize database: {}", e))?;
+                    log::info!("Database recovered successfully");
+                } else {
+                    log::info!("User declined recovery, exiting");
+                    return Err("Database initialization failed".into());
+                }
+            }
 
             // Create connection pool
             let pool = db::connection::DbPool::new(&db_path)

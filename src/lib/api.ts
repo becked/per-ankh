@@ -102,6 +102,14 @@ export const api = {
     invoke<string>("reset_database_cmd"),
 
   /**
+   * Recover from database corruption by deleting all database files and reinitializing.
+   * More aggressive than resetDatabase - removes files rather than just dropping tables.
+   * Use when database is corrupted and cannot be opened.
+   */
+  recoverDatabase: () =>
+    invoke<string>("recover_database"),
+
+  /**
    * Debug command to investigate player_id mismatch in event_logs.
    */
   debugEventLogPlayerIds: (matchId: number) =>
