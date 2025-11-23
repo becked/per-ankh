@@ -59,7 +59,7 @@
       <!-- Hieroglyph parade runs across top of modal until closed -->
       <HieroglyphParade active={isOpen} />
 
-      <h2 class="text-2xl font-bold text-tan mb-4 border-b-2 border-orange pb-2">
+      <h2 class="text-2xl font-bold text-tan mb-4 border-b-2 border-orange pb-2 mt-8">
         Import Save Files
       </h2>
 
