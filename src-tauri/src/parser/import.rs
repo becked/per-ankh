@@ -935,10 +935,10 @@ fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper)
 }
 
 /// Parse version string from Root element
-/// Format: "Version: 1.0.70671+DLC1+DLC2+...=-123456"
-/// Returns (version_number, dlc_list_string)
+/// Format: "Version: 1.0.70671+mod1+mod2+...=-123456"
+/// Returns (version_number, mods_list_string)
 fn parse_version_string(version: &str) -> (Option<String>, Option<String>) {
-    // Split by '+' to separate version and DLCs
+    // Split by '+' to separate version and mods
     let parts: Vec<&str> = version.split('+').collect();
     if parts.is_empty() {
         return (None, None);
@@ -949,18 +949,38 @@ fn parse_version_string(version: &str) -> (Option<String>, Option<String>) {
         .strip_prefix("Version: ")
         .map(|v| v.to_string());
 
-    // Remaining parts are DLCs (join back, exclude checksum at end)
-    let dlcs = if parts.len() > 1 {
-        let dlc_parts: Vec<&str> = parts[1..]
+    // Remaining parts are mods (join back, exclude checksum at end)
+    let mods = if parts.len() > 1 {
+        let mod_parts: Vec<&str> = parts[1..]
             .iter()
             .map(|s| s.split('=').next().unwrap_or(s))
             .collect();
-        Some(dlc_parts.join("+"))
+        Some(mod_parts.join("+"))
     } else {
         None
     };
 
-    (version_num, dlcs)
+    (version_num, mods)
+}
+
+/// Parse GameContent element to extract enabled DLCs
+/// Format: <GameContent><DLC_HEROES_OF_AEGEAN /><DLC_THE_SACRED_AND_THE_PROFANE />...</GameContent>
+/// Returns DLC names joined with "+" (e.g., "DLC_HEROES_OF_AEGEAN+DLC_THE_SACRED_AND_THE_PROFANE")
+fn parse_game_content(root: &roxmltree::Node) -> Option<String> {
+    let game_content = root.children().find(|n| n.has_tag_name("GameContent"))?;
+
+    let dlcs: Vec<&str> = game_content
+        .children()
+        .filter(|child| child.is_element())
+        .map(|el| el.tag_name().name())
+        .filter(|name| name.starts_with("DLC_"))
+        .collect();
+
+    if dlcs.is_empty() {
+        None
+    } else {
+        Some(dlcs.join("+"))
+    }
 }
 
 /// Parse SaveDate string to timestamp
@@ -1113,11 +1133,14 @@ fn insert_match_metadata(
         .ok_or_else(|| ParseError::MissingElement("Game.Turn".to_string()))?;
 
     // Extract all Root attributes
-    // Version and DLC information
-    let (game_version, enabled_dlc) = root
+    // Version and mods information
+    let (game_version, enabled_mods) = root
         .opt_attr("Version")
         .map(parse_version_string)
         .unwrap_or((None, None));
+
+    // DLC information from GameContent element
+    let enabled_dlc = parse_game_content(&root);
 
     // Save date
     let save_date = root
@@ -1210,7 +1233,7 @@ fn insert_match_metadata(
             victory_point_modifier, force_march, team_nation,
             victory_conditions,
             first_seed, map_seed,
-            game_version, enabled_dlc
+            game_version, enabled_mods, enabled_dlc
         ) VALUES (
             ?, ?, ?, ?, ?, ?,
             ?,
@@ -1222,7 +1245,7 @@ fn insert_match_metadata(
             ?, ?, ?,
             ?,
             ?, ?,
-            ?, ?
+            ?, ?, ?
         )",
         params![
             match_id, file_name, file_hash, game_id, game_name, save_date,
@@ -1235,7 +1258,7 @@ fn insert_match_metadata(
             victory_point_modifier, force_march, team_nation,
             victory_conditions,
             first_seed, map_seed,
-            game_version, enabled_dlc
+            game_version, enabled_mods, enabled_dlc
         ],
     )?;
 
@@ -1575,5 +1598,36 @@ mod tests {
             |row| row.get(0),
         ).unwrap();
         assert!(!player_b_owner, "PlayerB should NOT be save owner (no primary user set)");
+    }
+
+    #[test]
+    fn test_parse_game_content() {
+        // Test with DLCs present
+        let xml = r#"<Root><GameContent><DLC_HEROES_OF_AEGEAN /><DLC_THE_SACRED_AND_THE_PROFANE /></GameContent></Root>"#;
+        let doc = roxmltree::Document::parse(xml).unwrap();
+        let root = doc.root_element();
+        let result = parse_game_content(&root);
+        assert_eq!(result, Some("DLC_HEROES_OF_AEGEAN+DLC_THE_SACRED_AND_THE_PROFANE".to_string()));
+
+        // Test with no DLCs (empty GameContent)
+        let xml_empty = r#"<Root><GameContent></GameContent></Root>"#;
+        let doc_empty = roxmltree::Document::parse(xml_empty).unwrap();
+        let root_empty = doc_empty.root_element();
+        let result_empty = parse_game_content(&root_empty);
+        assert_eq!(result_empty, None);
+
+        // Test with no GameContent element
+        let xml_missing = r#"<Root></Root>"#;
+        let doc_missing = roxmltree::Document::parse(xml_missing).unwrap();
+        let root_missing = doc_missing.root_element();
+        let result_missing = parse_game_content(&root_missing);
+        assert_eq!(result_missing, None);
+
+        // Test filtering non-DLC children
+        let xml_mixed = r#"<Root><GameContent><DLC_CALAMITIES /><SOME_OTHER_THING /></GameContent></Root>"#;
+        let doc_mixed = roxmltree::Document::parse(xml_mixed).unwrap();
+        let root_mixed = doc_mixed.root_element();
+        let result_mixed = parse_game_content(&root_mixed);
+        assert_eq!(result_mixed, Some("DLC_CALAMITIES".to_string()));
     }
 }
