@@ -107,10 +107,15 @@
   function animate(currentTime: number) {
     if (!isRunning) return;
 
-    // Spawn new items when it's time
-    if (currentTime >= nextSpawnTime) {
-      untrack(() => spawnHieroglyph());
-      nextSpawnTime = currentTime + SPAWN_INTERVAL_MS;
+    // Catch up on any missed spawns (e.g., if window was off-screen and RAF paused)
+    // Using while loop to spawn multiple items if needed, each with correct animation-delay
+    while (currentTime >= nextSpawnTime) {
+      // Calculate how "late" this spawn is - CSS will position it correctly
+      const delayMs = currentTime - nextSpawnTime;
+      const animationDelay = -delayMs / 1000; // Negative seconds to start animation partway through
+
+      untrack(() => spawnHieroglyph(animationDelay));
+      nextSpawnTime += SPAWN_INTERVAL_MS;
     }
 
     animationFrameId = requestAnimationFrame(animate);
