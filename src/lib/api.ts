@@ -11,6 +11,7 @@ import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
+import type { SaveDateEntry } from "$lib/types/SaveDateEntry";
 
 /**
  * Centralized API layer for all Tauri backend commands.
@@ -27,6 +28,9 @@ import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 export const api = {
   getGameStatistics: () =>
     invoke<GameStatistics>("get_game_statistics"),
+
+  getSaveDates: () =>
+    invoke<SaveDateEntry[]>("get_save_dates"),
 
   getGameDetails: (matchId: number) =>
     invoke<GameDetails>("get_game_details", { matchId }),

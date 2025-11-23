@@ -114,6 +114,16 @@ pub struct YieldHistory {
     pub data: Vec<YieldDataPoint>,
 }
 
+/// A single save date entry for the calendar chart
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct SaveDateEntry {
+    /// Date in YYYY-MM-DD format
+    pub date: String,
+    /// Nation the save owner played as (e.g., "NATION_ROME")
+    pub nation: Option<String>,
+}
+
 #[derive(Clone, Serialize, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
 pub struct ImportProgress {
@@ -242,6 +252,37 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
         })
     })
     .context("Failed to get game statistics")
+    .map_err(|e| e.to_string())
+}
+
+/// Get save dates with nation info for calendar chart
+///
+/// Returns one entry per save file with date and the save owner's nation
+#[tauri::command]
+async fn get_save_dates(pool: tauri::State<'_, db::connection::DbPool>) -> Result<Vec<SaveDateEntry>, String> {
+    pool.with_connection(|conn| {
+        // Get save dates with nation from save owner
+        // Use DATE_TRUNC to normalize to YYYY-MM-DD format
+        let mut stmt = conn.prepare(
+            "SELECT STRFTIME(m.save_date, '%Y-%m-%d') as date, p.nation
+             FROM matches m
+             LEFT JOIN players p ON m.match_id = p.match_id AND p.is_save_owner = TRUE
+             WHERE m.save_date IS NOT NULL
+             ORDER BY m.save_date"
+        )?;
+
+        let entries = stmt
+            .query_map([], |row| {
+                Ok(SaveDateEntry {
+                    date: row.get(0)?,
+                    nation: row.get(1)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(entries)
+    })
+    .context("Failed to get save dates")
     .map_err(|e| e.to_string())
 }
 
@@ -1355,6 +1396,7 @@ pub fn run() {
             import_directory_cmd,
             import_files_cmd,
             get_game_statistics,
+            get_save_dates,
             get_games_list,
             get_game_details,
             get_player_history,
