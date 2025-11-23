@@ -35,7 +35,7 @@ main {
 /* Hero Section */
 .hero {
   text-align: center;
-  padding: 3rem 0 4rem;
+  padding: 3rem 0 0;
 }
 
 .logo-lockup {
@@ -45,14 +45,6 @@ main {
   padding-bottom: 0.75rem;
   border-bottom: 4px solid var(--color-orange);
   margin-bottom: 2rem;
-}
-
-.logo-box {
-  font-size: 2.5rem;
-  line-height: 1;
-  color: var(--color-white);
-  border: 3px solid var(--color-white);
-  padding: 0.25rem 0.5rem;
 }
 
 .logo-text {
@@ -72,7 +64,7 @@ h1 {
 .tagline {
   font-size: 1.5rem;
   color: var(--color-orange);
-  margin-bottom: 0.25rem;
+  margin-bottom: 1.5rem;
 }
 
 .subtitle {
@@ -134,6 +126,39 @@ h2 {
 .feature p {
   color: var(--color-tan);
   font-size: 0.95rem;
+}
+
+/* Screenshots Gallery */
+.screenshot-gallery {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.screenshot-gallery img {
+  border-radius: 8px;
+  border: 1px solid var(--color-brown);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.screenshot-gallery > img {
+  width: 100%;
+}
+
+.screenshot-row {
+  display: flex;
+  gap: 1.5rem;
+  align-items: flex-start;
+}
+
+.screenshot-large {
+  flex: 2;
+  width: 0;
+}
+
+.screenshot-small {
+  flex: 1;
+  width: 0;
 }
 
 /* How It Works */
