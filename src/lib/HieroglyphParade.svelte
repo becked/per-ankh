@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onDestroy } from "svelte";
+  import { onDestroy, untrack } from "svelte";
 
   interface Props {
     active: boolean;
@@ -64,59 +64,104 @@
   ];
 
   // Fixed parade timing - all characters move together at same speed
-  const PARADE_DURATION = 20; // seconds to cross the screen
-  const SPAWN_INTERVAL = 1000; // spawn a new character every 1 second
+  const PARADE_DURATION_MS = 20000; // milliseconds to cross the screen
+  const SPAWN_INTERVAL_MS = 1000; // spawn a new character every 1 second
 
   interface ParadeItem {
     id: number;
     char: string;
+    spawnTime: number; // when this item was spawned (for removal timing)
+    animationDelay: number; // CSS animation-delay in seconds (negative = start partway through)
   }
 
   let items = $state<ParadeItem[]>([]);
   let nextId = 0;
-  let spawnInterval: ReturnType<typeof setInterval> | null = null;
+  let animationFrameId: number | null = null;
+  let nextSpawnTime = 0;
+  let isRunning = false; // Non-reactive flag for RAF loop
 
-  // Spawn a new hieroglyph
-  function spawnHieroglyph() {
+  // Schedule removal for an item
+  function scheduleRemoval(id: number, animationDelay: number) {
+    const remainingDuration = PARADE_DURATION_MS + animationDelay * 1000 + 1000;
+    setTimeout(() => {
+      items = items.filter((i) => i.id !== id);
+    }, Math.max(remainingDuration, 100));
+  }
+
+  // Spawn a new hieroglyph and schedule its removal
+  function spawnHieroglyph(animationDelay: number = 0) {
     const char = HIEROGLYPHS[Math.floor(Math.random() * HIEROGLYPHS.length)];
+    const id = nextId++;
     const item: ParadeItem = {
-      id: nextId++,
+      id,
       char,
+      spawnTime: performance.now(),
+      animationDelay,
     };
     items = [...items, item];
+    scheduleRemoval(id, animationDelay);
+  }
 
-    // Remove item after animation completes
-    setTimeout(
-      () => {
-        items = items.filter((i) => i.id !== item.id);
-      },
-      PARADE_DURATION * 1000 + 1000
-    );
+  // Main animation loop - only handles spawn timing
+  // Uses non-reactive isRunning flag to avoid effect loops
+  function animate(currentTime: number) {
+    if (!isRunning) return;
+
+    // Spawn new items when it's time
+    if (currentTime >= nextSpawnTime) {
+      untrack(() => spawnHieroglyph());
+      nextSpawnTime = currentTime + SPAWN_INTERVAL_MS;
+    }
+
+    animationFrameId = requestAnimationFrame(animate);
   }
 
   function startParade() {
-    // Spawn initial batch with staggered delays to fill the screen
-    for (let i = 0; i < 12; i++) {
-      setTimeout(
-        () => {
-          if (active) spawnHieroglyph();
-        },
-        i * SPAWN_INTERVAL
-      );
+    // Reset state
+    nextId = 0;
+    isRunning = true;
+
+    const now = performance.now();
+
+    // Pre-spawn items to fill the screen immediately
+    // Build array first, then assign once to avoid multiple reactive updates
+    const itemsToPreSpawn = Math.ceil(PARADE_DURATION_MS / SPAWN_INTERVAL_MS);
+    const initialItems: ParadeItem[] = [];
+
+    for (let i = 0; i < itemsToPreSpawn; i++) {
+      // Calculate how "old" this item should appear
+      // First item (i=0) is oldest, last item (i=itemsToPreSpawn-1) is newest
+      const ageMs = (itemsToPreSpawn - 1 - i) * SPAWN_INTERVAL_MS;
+      const animationDelay = -ageMs / 1000; // Convert to negative seconds
+      const char = HIEROGLYPHS[Math.floor(Math.random() * HIEROGLYPHS.length)];
+      const id = nextId++;
+
+      initialItems.push({
+        id,
+        char,
+        spawnTime: now,
+        animationDelay,
+      });
+
+      // Schedule removal for each pre-spawned item
+      scheduleRemoval(id, animationDelay);
     }
 
-    // Continue spawning to maintain the parade
-    spawnInterval = setInterval(() => {
-      if (active) {
-        spawnHieroglyph();
-      }
-    }, SPAWN_INTERVAL);
+    // Single state update with all initial items
+    items = initialItems;
+
+    // Set next spawn time for future items
+    nextSpawnTime = now + SPAWN_INTERVAL_MS;
+
+    // Start animation loop
+    animationFrameId = requestAnimationFrame(animate);
   }
 
   function stopParade() {
-    if (spawnInterval) {
-      clearInterval(spawnInterval);
-      spawnInterval = null;
+    isRunning = false;
+    if (animationFrameId !== null) {
+      cancelAnimationFrame(animationFrameId);
+      animationFrameId = null;
     }
   }
 
@@ -139,7 +184,7 @@
 
 <div class="parade-container">
   {#each items as item (item.id)}
-    <span class="parade-item">
+    <span class="parade-item" style="animation-delay: {item.animationDelay}s">
       {item.char}
     </span>
   {/each}
@@ -151,7 +196,7 @@
 <style>
   .parade-container {
     position: absolute;
-    top: 0.6rem;
+    top: 2.1rem;
     left: 0;
     right: 0;
     height: 2.4rem;
@@ -187,7 +232,7 @@
 
   .hieroglyph-border {
     position: absolute;
-    top: 3rem;
+    top: 4.5rem;
     left: 1rem;
     right: 1rem;
     font-size: 0.5rem;
@@ -202,6 +247,6 @@
   }
 
   .hieroglyph-border-top {
-    top: 0.15rem;
+    top: 1.65rem;
   }
 </style>

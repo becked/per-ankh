@@ -55,7 +55,7 @@
 
 {#if isOpen}
   <div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-    <div class="bg-blue-gray border-2 border-black p-6 pt-12 rounded-lg shadow-lg max-w-2xl w-full mx-4 relative overflow-hidden">
+    <div class="bg-blue-gray border-2 border-black p-6 pt-[4.5rem] rounded-lg shadow-lg max-w-2xl w-full mx-4 relative overflow-hidden">
       <!-- Hieroglyph parade runs across top of modal until closed -->
       <HieroglyphParade active={isOpen} />
 
