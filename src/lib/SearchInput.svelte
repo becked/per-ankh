@@ -33,6 +33,10 @@
     type="text"
     bind:value
     {placeholder}
+    autocomplete="off"
+    autocorrect="off"
+    autocapitalize="off"
+    spellcheck="false"
     class="w-full pl-9 pr-3 {variant === 'dark'
       ? 'py-1 border-none rounded-full text-tan text-sm font-normal placeholder-tan placeholder:opacity-50'
       : 'py-2 border-2 border-black rounded bg-white text-black text-sm'} focus:outline-none transition-colors"

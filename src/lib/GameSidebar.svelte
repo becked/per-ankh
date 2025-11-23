@@ -7,14 +7,16 @@
   import { formatGameTitle, formatDate, formatEnum } from "$lib/utils/formatting";
   import { refreshData } from "$lib/stores/refresh";
   import { searchQuery } from "$lib/stores/search";
+  import { get } from "svelte/store";
 
   let games = $state<GameInfo[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
   // Convert store to reactive state for proper Svelte 5 integration
-  let currentSearchQuery = $state("");
-  $effect(() => {
+  // Use $effect.pre to run before DOM updates for better sync with rapid typing
+  let currentSearchQuery = $state(get(searchQuery));
+  $effect.pre(() => {
     const unsubscribe = searchQuery.subscribe((value) => {
       currentSearchQuery = value;
     });
@@ -115,15 +117,17 @@
         {currentSearchQuery ? "No games match your search" : "No games found"}
       </div>
     {:else}
-      {#each groupedGames as group (group.monthKey)}
-        <!-- Month separator -->
-        <div class="month-separator flex items-center gap-1.5 my-2 px-1">
-          <div class="separator-line flex-1 h-px bg-tan opacity-50"></div>
-          <span class="text-tan text-[9px] whitespace-nowrap">{group.label}</span>
-          <div class="separator-line flex-1 h-px bg-tan opacity-50"></div>
-        </div>
+      <!-- Key block forces complete re-render when search changes to avoid stale DOM -->
+      {#key currentSearchQuery}
+        {#each groupedGames as group (group.monthKey)}
+          <!-- Month separator -->
+          <div class="month-separator flex items-center gap-1.5 my-2 px-1">
+            <div class="separator-line flex-1 h-px bg-tan opacity-50"></div>
+            <span class="text-tan text-[9px] whitespace-nowrap">{group.label}</span>
+            <div class="separator-line flex-1 h-px bg-tan opacity-50"></div>
+          </div>
 
-        {#each group.games as game (game.match_id)}
+          {#each group.games as game (game.match_id)}
           {@const isActive = currentGameId === game.match_id}
           <button
             class="game-list-item {isActive ? 'active' : ''} w-full p-1.5 mb-0.5 border-2 rounded-lg cursor-pointer text-left transition-all duration-200 {isActive ? '' : 'border-black hover:border-orange hover:translate-x-0.5'} relative"
@@ -139,8 +143,9 @@
               <span class="nation-badge">{formatEnum(game.save_owner_nation, "NATION_")}</span>
             {/if}
           </button>
+          {/each}
         {/each}
-      {/each}
+      {/key}
     {/if}
   </div>
 </aside>
