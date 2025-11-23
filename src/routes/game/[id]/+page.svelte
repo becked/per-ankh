@@ -930,65 +930,65 @@
           style="background-color: #35302B;"
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Game Settings</h2>
-          <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8 p-4 rounded-lg" style="background-color: #c5c3c2;">
+          <div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-4 mb-8 p-4 rounded-lg border-2 border-black" style="background-color: #201a13;">
             {#if gameDetails.map_size}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Map Size:</span>
-                <span class="text-black text-base">{formatEnum(gameDetails.map_size, "MAPSIZE_")}</span>
+                <span class="text-tan text-base">{formatEnum(gameDetails.map_size, "MAPSIZE_")}</span>
               </div>
             {/if}
             {#if gameDetails.map_width && gameDetails.map_height}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Map Dimensions:</span>
-                <span class="text-black text-base">{gameDetails.map_width} × {gameDetails.map_height}</span>
+                <span class="text-tan text-base">{gameDetails.map_width} × {gameDetails.map_height}</span>
               </div>
             {/if}
             {#if gameDetails.game_mode}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Game Mode:</span>
-                <span class="text-black text-base">{gameDetails.game_mode}</span>
+                <span class="text-tan text-base">{gameDetails.game_mode}</span>
               </div>
             {/if}
             {#if gameDetails.opponent_level}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Difficulty:</span>
-                <span class="text-black text-base">{formatEnum(gameDetails.opponent_level, "LEVEL_")}</span>
+                <span class="text-tan text-base">{formatEnum(gameDetails.opponent_level, "LEVEL_")}</span>
               </div>
             {/if}
             {#if gameDetails.victory_conditions}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">Victory Conditions:</span>
-                <span class="text-black text-base">{victoryConditions}</span>
+                <span class="text-tan text-base">{victoryConditions}</span>
               </div>
             {/if}
             {#if gameDetails.enabled_dlc}
               <div class="flex flex-col gap-1">
                 <span class="font-bold text-brown text-sm">DLC Enabled:</span>
-                <span class="text-black text-base">{dlcList}</span>
+                <span class="text-tan text-base">{dlcList}</span>
               </div>
             {/if}
           </div>
 
-          <div class="mt-8 p-4 rounded-lg" style="background-color: #c5c3c2;">
-            <h3 class="text-black font-bold mb-4 mt-0 text-xl">Players</h3>
+          <div class="mt-8 p-4 rounded-lg border-2 border-black" style="background-color: #201a13;">
+            <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Players</h3>
             <table class="w-full mt-2">
               <thead>
                 <tr>
-                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
-                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Nation</th>
-                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Type</th>
-                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">Legitimacy</th>
-                  <th class="p-3 text-left border-b-2 border-black text-black font-bold">State Religion</th>
+                  <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Player</th>
+                  <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Nation</th>
+                  <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Type</th>
+                  <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Legitimacy</th>
+                  <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">State Religion</th>
                 </tr>
               </thead>
               <tbody>
                 {#each gameDetails.players as player}
-                  <tr class="transition-colors duration-200 hover:bg-tan">
-                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.player_name}</td>
-                    <td class="p-3 text-left border-b-2 border-tan text-black">{formatEnum(player.nation, "NATION_")}</td>
-                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.is_human ? "Human" : "AI"}</td>
-                    <td class="p-3 text-left border-b-2 border-tan text-black">{player.legitimacy ?? "—"}</td>
-                    <td class="p-3 text-left border-b-2 border-tan text-black">{formatEnum(player.state_religion, "RELIGION_")}</td>
+                  <tr class="transition-colors duration-200 hover:bg-brown/20">
+                    <td class="p-3 text-left border-b border-brown/50 text-tan">{player.player_name}</td>
+                    <td class="p-3 text-left border-b border-brown/50 text-tan">{formatEnum(player.nation, "NATION_")}</td>
+                    <td class="p-3 text-left border-b border-brown/50 text-tan">{player.is_human ? "Human" : "AI"}</td>
+                    <td class="p-3 text-left border-b border-brown/50 text-tan">{player.legitimacy ?? "—"}</td>
+                    <td class="p-3 text-left border-b border-brown/50 text-tan">{formatEnum(player.state_religion, "RELIGION_")}</td>
                   </tr>
                 {/each}
               </tbody>
