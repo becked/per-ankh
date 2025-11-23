@@ -210,6 +210,21 @@
     z-index: 10;
     display: flex;
     align-items: center;
+    /* Fade glyphs within border padding zone (1rem each side) */
+    -webkit-mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black 1rem,
+      black calc(100% - 1rem),
+      transparent 100%
+    );
+    mask-image: linear-gradient(
+      to right,
+      transparent 0,
+      black 1rem,
+      black calc(100% - 1rem),
+      transparent 100%
+    );
   }
 
   .parade-item {
