@@ -65,7 +65,7 @@
 
   // Fixed parade timing - all characters move together at same speed
   const PARADE_DURATION_MS = 20000; // milliseconds to cross the screen
-  const SPAWN_INTERVAL_MS = 1000; // spawn a new character every 1 second
+  const SPAWN_INTERVAL_MS = 600; // spawn a new character every 600ms
 
   interface ParadeItem {
     id: number;
