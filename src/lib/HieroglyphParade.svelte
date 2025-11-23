@@ -66,7 +66,6 @@
   // Fixed parade timing - all characters move together at same speed
   const PARADE_DURATION = 20; // seconds to cross the screen
   const SPAWN_INTERVAL = 1000; // spawn a new character every 1 second
-  const MARCH_STEPS = 60; // number of discrete steps for marching effect
 
   interface ParadeItem {
     id: number;
@@ -162,8 +161,8 @@
     font-size: 1.25rem;
     color: var(--color-tan);
     opacity: 0.9;
-    /* Stepped animation for marching effect */
-    animation: parade-march 20s steps(60, end) forwards;
+    /* Smooth linear animation */
+    animation: parade-march 20s linear forwards;
     /* Start from right edge, off-screen */
     right: -2.5rem;
     white-space: nowrap;
