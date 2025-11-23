@@ -12,6 +12,15 @@
   let loading = $state(true);
   let error = $state<string | null>(null);
 
+  // Convert store to reactive state for proper Svelte 5 integration
+  let currentSearchQuery = $state("");
+  $effect(() => {
+    const unsubscribe = searchQuery.subscribe((value) => {
+      currentSearchQuery = value;
+    });
+    return unsubscribe;
+  });
+
   // Get current game ID from URL
   const currentGameId = $derived($page.params.id ? Number($page.params.id) : null);
 
@@ -47,9 +56,9 @@
   // Filter games based on search query
   const filteredGames = $derived(
     games.filter(game => {
-      if (!$searchQuery) return true;
+      if (!currentSearchQuery) return true;
 
-      const query = $searchQuery.toLowerCase();
+      const query = currentSearchQuery.toLowerCase();
       const title = formatGameTitle(game).toLowerCase();
       const nation = game.save_owner_nation ? formatEnum(game.save_owner_nation, "NATION_").toLowerCase() : "";
       const date = formatGameSubtitle(game).toLowerCase();
@@ -103,7 +112,7 @@
       <div class="p-4 text-center text-orange font-bold">Error: {error}</div>
     {:else if filteredGames.length === 0}
       <div class="p-4 text-center text-tan">
-        {$searchQuery ? "No games match your search" : "No games found"}
+        {currentSearchQuery ? "No games match your search" : "No games found"}
       </div>
     {:else}
       {#each groupedGames as group (group.monthKey)}
