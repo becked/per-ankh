@@ -1,11 +1,11 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { api } from "$lib/api";
-  import type { GameStatistics } from "$lib/types";
+  import type { GameStatistics, SaveDateEntry } from "$lib/types";
   import type { EChartsOption } from "echarts";
   import Chart from "$lib/Chart.svelte";
   import { formatEnum } from "$lib/utils/formatting";
-  import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
+  import { CHART_THEME, getChartColor, getCivilizationColor, getNationColor } from "$lib/config";
   import { refreshData as refreshDataStore } from "$lib/stores/refresh";
 
   let refreshData = $state(0);
@@ -17,6 +17,7 @@
   });
 
   let stats = $state<GameStatistics | null>(null);
+  let saveDates = $state<SaveDateEntry[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
@@ -63,11 +64,120 @@
       : null
   );
 
+  // Calendar chart: heatmap showing save activity by nation color
+  function buildCalendarChartOption(dates: SaveDateEntry[]): EChartsOption | null {
+    if (dates.length === 0) return null;
+
+    // Determine date range: last 6 months from today
+    const today = new Date();
+    const sixMonthsAgo = new Date(today);
+    sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
+
+    const maxDate = today.toISOString().split("T")[0];
+    const minDate = sixMonthsAgo.toISOString().split("T")[0];
+
+    // Group all nations by date (preserve all nations, deduplicated)
+    // Only include dates within the visible range
+    const dateToNations = new Map<string, string[]>();
+    for (const entry of dates) {
+      // Filter to only dates within the 6-month range
+      if (entry.date < minDate || entry.date > maxDate) continue;
+
+      const nation = entry.nation ?? "Unknown";
+      const existing = dateToNations.get(entry.date) ?? [];
+      if (!existing.includes(nation)) {
+        existing.push(nation);
+      }
+      dateToNations.set(entry.date, existing);
+    }
+
+    // Create heatmap data - use first nation's color, but store all nations for tooltip
+    const heatmapData: Array<{
+      value: [string, number];
+      nations: string[];
+      itemStyle: { color: string };
+    }> = [];
+
+    for (const [date, nations] of dateToNations) {
+      const firstNation = nations[0];
+      const nationKey = firstNation.replace(/^NATION_/, "");
+      const color = getNationColor(nationKey) ?? getChartColor(0);
+      heatmapData.push({
+        value: [date, 1],
+        nations,
+        itemStyle: { color },
+      });
+    }
+
+    return {
+      ...CHART_THEME,
+      title: {
+        ...CHART_THEME.title,
+        text: "Calendar",
+      },
+      tooltip: {
+        trigger: "item",
+        formatter: (params: unknown) => {
+          const p = params as { data: { value: [string, number]; nations: string[] } };
+          const nationsFormatted = p.data.nations
+            .map((n) => formatEnum(n, "NATION_"))
+            .join("<br/>");
+          return `${p.data.value[0]}<br/>${nationsFormatted}`;
+        },
+      },
+      calendar: {
+        range: [minDate, maxDate],
+        cellSize: ["auto", 20],
+        left: 60,
+        right: 30,
+        top: 80,
+        bottom: 20,
+        itemStyle: {
+          color: CHART_THEME.backgroundColor, // Empty cells match chart background
+          borderWidth: 1,
+          borderColor: "#c5c3c2",
+        },
+        dayLabel: {
+          color: CHART_THEME.title?.textStyle?.color ?? "#D2B48C",
+        },
+        monthLabel: {
+          color: CHART_THEME.title?.textStyle?.color ?? "#D2B48C",
+        },
+        yearLabel: {
+          color: CHART_THEME.title?.textStyle?.color ?? "#D2B48C",
+        },
+        splitLine: {
+          lineStyle: {
+            color: "#c5c3c2",
+          },
+        },
+      },
+      visualMap: {
+        show: false,
+        max: 1,
+      },
+      series: [
+        {
+          type: "heatmap",
+          coordinateSystem: "calendar",
+          data: heatmapData,
+        },
+      ],
+    } as EChartsOption;
+  }
+
+  let calendarChartOption = $derived(buildCalendarChartOption(saveDates));
+
   async function fetchStats() {
     loading = true;
     error = null;
     try {
-      stats = await api.getGameStatistics();
+      const [statsResult, datesResult] = await Promise.all([
+        api.getGameStatistics(),
+        api.getSaveDates(),
+      ]);
+      stats = statsResult;
+      saveDates = datesResult;
     } catch (err) {
       error = String(err);
     } finally {
@@ -108,24 +218,10 @@
       </div>
     {/if}
 
-    <div class="bg-gray-200 p-6 border-2 border-black rounded-lg">
-      <h2 class="text-brown font-bold">Nations</h2>
-      <table class="w-full mt-4">
-        <thead>
-          <tr>
-            <th class="p-3 text-left border-b-2 border-black text-black font-bold">Nation</th>
-            <th class="p-3 text-left border-b-2 border-black text-black font-bold">Games Played</th>
-          </tr>
-        </thead>
-        <tbody>
-          {#each stats.nations as nation}
-            <tr class="transition-colors duration-200 hover:bg-tan">
-              <td class="p-3 text-left border-b-2 border-tan text-black">{formatEnum(nation.nation, "NATION_")}</td>
-              <td class="p-3 text-left border-b-2 border-tan text-black">{nation.games_played}</td>
-            </tr>
-          {/each}
-        </tbody>
-      </table>
-    </div>
+    {#if calendarChartOption}
+      <div class="p-1 border-2 border-black rounded-lg mb-8" style="background-color: var(--color-chart-frame)">
+        <Chart option={calendarChartOption} height="250px" />
+      </div>
+    {/if}
   {/if}
 </main>

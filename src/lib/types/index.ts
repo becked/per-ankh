@@ -10,4 +10,5 @@ export type { PlayerInfo } from "./PlayerInfo";
 export type { YieldHistory } from "./YieldHistory";
 export type { YieldDataPoint } from "./YieldDataPoint";
 export type { NationStats } from "./NationStats";
+export type { SaveDateEntry } from "./SaveDateEntry";
 export type { ImportResult } from "./ImportResult";
