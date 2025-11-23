@@ -6,6 +6,87 @@ use crate::parser::Result;
 use duckdb::Connection;
 use std::path::Path;
 
+/// Extract table and view names from schema.sql
+///
+/// Parses the schema SQL to find all CREATE TABLE and CREATE VIEW statements.
+/// Returns (tables, views) as vectors of names in the order they appear.
+fn extract_schema_objects() -> (Vec<String>, Vec<String>) {
+    let schema_sql = include_str!("../../../docs/schema.sql");
+    let mut tables = Vec::new();
+    let mut views = Vec::new();
+
+    for line in schema_sql.lines() {
+        let trimmed = line.trim();
+        let upper = trimmed.to_uppercase();
+
+        // Match CREATE TABLE name (
+        if upper.starts_with("CREATE TABLE ") {
+            if let Some(name) = trimmed
+                .strip_prefix("CREATE TABLE ")
+                .or_else(|| trimmed.strip_prefix("create table "))
+            {
+                // Name ends at space or (
+                let name = name
+                    .split(|c: char| c.is_whitespace() || c == '(')
+                    .next()
+                    .unwrap_or("");
+                if !name.is_empty() {
+                    tables.push(name.to_string());
+                }
+            }
+        }
+        // Match CREATE VIEW name AS
+        else if upper.starts_with("CREATE VIEW ") {
+            if let Some(name) = trimmed
+                .strip_prefix("CREATE VIEW ")
+                .or_else(|| trimmed.strip_prefix("create view "))
+            {
+                let name = name
+                    .split(|c: char| c.is_whitespace())
+                    .next()
+                    .unwrap_or("");
+                if !name.is_empty() {
+                    views.push(name.to_string());
+                }
+            }
+        }
+    }
+
+    (tables, views)
+}
+
+/// Drop all schema objects (views first, then tables)
+///
+/// Dynamically extracts table/view names from schema.sql to ensure
+/// all objects are dropped even when schema.sql is updated.
+pub fn drop_all_schema_objects(conn: &Connection) -> Result<()> {
+    let (tables, views) = extract_schema_objects();
+
+    log::info!(
+        "Dropping {} views and {} tables from schema",
+        views.len(),
+        tables.len()
+    );
+
+    // Drop views first (they depend on tables)
+    for view in &views {
+        // NOTE: View names come from schema.sql parsing, not user input
+        let query = format!("DROP VIEW IF EXISTS {}", view);
+        conn.execute(&query, [])?;
+    }
+    log::debug!("Dropped {} views", views.len());
+
+    // Drop tables in reverse order (later tables may depend on earlier ones)
+    for table in tables.iter().rev() {
+        // NOTE: Table names come from schema.sql parsing, not user input
+        let query = format!("DROP TABLE IF EXISTS {}", table);
+        conn.execute(&query, [])?;
+    }
+    log::debug!("Dropped {} tables", tables.len());
+
+    Ok(())
+}
+
 /// Create the database schema on an existing connection
 ///
 /// This function creates all tables, indexes, and views from the schema.sql file.
@@ -240,6 +321,32 @@ fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
 mod tests {
     use super::*;
     use tempfile::tempdir;
+
+    #[test]
+    fn test_extract_schema_objects() {
+        let (tables, views) = extract_schema_objects();
+
+        // Verify we extracted a reasonable number of tables and views
+        assert!(tables.len() >= 30, "Expected at least 30 tables, got {}", tables.len());
+        assert!(views.len() >= 4, "Expected at least 4 views, got {}", views.len());
+
+        // Verify specific known tables exist
+        assert!(tables.contains(&"matches".to_string()), "Should contain 'matches' table");
+        assert!(tables.contains(&"players".to_string()), "Should contain 'players' table");
+        assert!(tables.contains(&"characters".to_string()), "Should contain 'characters' table");
+        assert!(tables.contains(&"user_settings".to_string()), "Should contain 'user_settings' table");
+
+        // Verify specific known views exist
+        assert!(views.contains(&"match_summary".to_string()), "Should contain 'match_summary' view");
+        assert!(views.contains(&"rulers".to_string()), "Should contain 'rulers' view");
+
+        // Verify order: id_mappings should come first (it's the first CREATE TABLE in schema.sql)
+        assert_eq!(tables[0], "id_mappings", "First table should be 'id_mappings'");
+
+        println!("Extracted {} tables and {} views", tables.len(), views.len());
+        println!("Tables: {:?}", tables);
+        println!("Views: {:?}", views);
+    }
 
     #[test]
     #[ignore] // TODO: Fix information_schema query issues in DuckDB
