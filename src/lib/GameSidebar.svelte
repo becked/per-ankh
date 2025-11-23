@@ -125,7 +125,10 @@
               <span class="trophy-badge" title="Victory">🏆</span>
             {/if}
             <div class="text-xs font-semibold mb-0.5 text-black">{formatGameTitle(game)}</div>
-            <div class="text-[8px] text-left font-normal" style="color: #79261d;">{formatGameSubtitle(game)}</div>
+            <div class="date-badge">{formatGameSubtitle(game)}</div>
+            {#if game.save_owner_nation}
+              <span class="nation-badge">{formatEnum(game.save_owner_nation, "NATION_")}</span>
+            {/if}
           </button>
         {/each}
       {/each}
@@ -136,6 +139,7 @@
 <style>
   .game-list-item {
     background-color: #c1872f;
+    padding-bottom: 18px;
   }
 
   .game-list-item:hover,
@@ -160,5 +164,25 @@
     display: flex;
     align-items: center;
     justify-content: center;
+  }
+
+  .date-badge {
+    position: absolute;
+    bottom: 2px;
+    left: 6px;
+    font-size: 8px;
+    font-weight: 600;
+    color: #79261d;
+    line-height: 1;
+  }
+
+  .nation-badge {
+    position: absolute;
+    bottom: 2px;
+    right: 4px;
+    font-size: 8px;
+    font-weight: 600;
+    color: #79261d;
+    line-height: 1;
   }
 </style>
