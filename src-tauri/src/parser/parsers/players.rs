@@ -34,16 +34,25 @@ pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
             .opt_child_text("Legitimacy")
             .and_then(|s| s.parse::<i32>().ok());
 
-        // Determine if player is human by checking AIControlledToTurn value
-        // Human: AIControlledToTurn="0", AI: AIControlledToTurn="2147483647"
-        let is_human = player_node
+        // External identity - parse first since it affects is_human detection
+        let online_id = player_node.opt_attr("OnlineID").map(|s| s.to_string());
+
+        // Determine if player is human:
+        // 1. Has an OnlineID (Steam/GOG/Epic account) = definitely human
+        // 2. AIControlledToTurn="0" = actively taking turn (human in single-player,
+        //    or the current player in multiplayer)
+        // In multiplayer saves, only the active player has AIControlledToTurn=0,
+        // but ALL human players have OnlineIDs. So OnlineID is the reliable indicator.
+        let has_online_id = online_id
+            .as_ref()
+            .map(|s| !s.is_empty())
+            .unwrap_or(false);
+        let ai_controlled_to_turn_zero = player_node
             .opt_attr("AIControlledToTurn")
             .and_then(|s| s.parse::<i32>().ok())
             .map(|turn| turn == 0)
-            .unwrap_or(true); // Default to human if attribute missing (backward compatibility)
-
-        // External identity
-        let online_id = player_node.opt_attr("OnlineID").map(|s| s.to_string());
+            .unwrap_or(false);
+        let is_human = has_online_id || ai_controlled_to_turn_zero;
         let email = player_node.opt_attr("Email").map(|s| s.to_string());
 
         // Game state
@@ -104,6 +113,7 @@ pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
             dynasty,
             team_id,
             is_human,
+            is_save_owner: false, // Determined later by save owner detection logic
             online_id,
             email,
             difficulty,
@@ -136,7 +146,7 @@ mod tests {
     #[test]
     fn test_parse_players_struct_basic() {
         let xml = r#"<Root GameId="test-123">
-            <Player ID="0" Name="Test Player" Nation="NATION_ROME"/>
+            <Player ID="0" Name="Test Player" Nation="NATION_ROME" AIControlledToTurn="0"/>
         </Root>"#;
 
         let doc = parse_xml(xml.to_string()).unwrap();
@@ -147,7 +157,21 @@ mod tests {
         assert_eq!(players[0].xml_id, 0);
         assert_eq!(players[0].player_name, "Test Player");
         assert_eq!(players[0].nation, Some("NATION_ROME".to_string()));
-        assert!(players[0].is_human); // Default when AIControlledToTurn missing
+        assert!(players[0].is_human); // Human because AIControlledToTurn=0
+    }
+
+    #[test]
+    fn test_parse_players_struct_no_attributes_is_ai() {
+        // A player with no AIControlledToTurn and no OnlineID is considered AI
+        let xml = r#"<Root GameId="test-123">
+            <Player ID="0" Name="AI Player" Nation="NATION_ROME"/>
+        </Root>"#;
+
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let players = parse_players_struct(&doc).unwrap();
+
+        assert_eq!(players.len(), 1);
+        assert!(!players[0].is_human); // AI because no OnlineID and no AIControlledToTurn=0
     }
 
     #[test]
@@ -185,5 +209,48 @@ mod tests {
             players[0].tech_researching,
             Some("TECH_MINING".to_string())
         );
+    }
+
+    #[test]
+    fn test_parse_players_struct_multiplayer_online_id() {
+        // In multiplayer, both players have OnlineID but only active player has AIControlledToTurn=0
+        // Both should be detected as human because OnlineID indicates human player
+        let xml = r#"<Root GameId="test-123">
+            <Player ID="0" Name="ninja" Nation="NATION_CARTHAGE" AIControlledToTurn="0" OnlineID="76561198115360497"/>
+            <Player ID="1" Name="becked" Nation="NATION_ROME" AIControlledToTurn="100" OnlineID="76561199101298499"/>
+        </Root>"#;
+
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let players = parse_players_struct(&doc).unwrap();
+
+        assert_eq!(players.len(), 2);
+        // ninja is human (has OnlineID AND AIControlledToTurn=0)
+        assert_eq!(players[0].player_name, "ninja");
+        assert!(players[0].is_human);
+        assert_eq!(
+            players[0].online_id,
+            Some("76561198115360497".to_string())
+        );
+        // becked is ALSO human because they have an OnlineID (even though AIControlledToTurn != 0)
+        assert_eq!(players[1].player_name, "becked");
+        assert!(players[1].is_human); // This was the bug: previously false!
+        assert_eq!(
+            players[1].online_id,
+            Some("76561199101298499".to_string())
+        );
+    }
+
+    #[test]
+    fn test_parse_players_struct_human_with_online_id_only() {
+        // A player with OnlineID but no AIControlledToTurn is still human
+        let xml = r#"<Root GameId="test-123">
+            <Player ID="0" Name="Steam User" Nation="NATION_GREECE" OnlineID="12345678901234567"/>
+        </Root>"#;
+
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let players = parse_players_struct(&doc).unwrap();
+
+        assert_eq!(players.len(), 1);
+        assert!(players[0].is_human); // Human because has OnlineID
     }
 }

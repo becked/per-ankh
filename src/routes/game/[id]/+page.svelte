@@ -429,7 +429,7 @@
   const gameTitle = $derived(
     gameDetails ? formatGameTitle({
       game_name: gameDetails.game_name,
-      human_nation: humanNation,
+      save_owner_nation: humanNation,
       total_turns: gameDetails.total_turns,
       match_id: gameDetails.match_id
     }) : ""

@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from "svelte";
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import ImportModal from "$lib/ImportModal.svelte";
+  import SettingsModal from "$lib/SettingsModal.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
 
   import { api } from "$lib/api";
@@ -12,8 +13,9 @@
   import { searchQuery } from "$lib/stores/search";
   import { showConfirm, showSuccess, showError } from "$lib/utils/dialogs";
 
-  let isSettingsOpen = $state(false);
+  let isMenuOpen = $state(false);
   let isImportModalOpen = $state(false);
+  let isSettingsModalOpen = $state(false);
   let importProgress: ImportProgress | null = $state(null);
   let importResult: BatchImportResult | null = $state(null);
 
@@ -21,12 +23,17 @@
     goto("/");
   }
 
-  function toggleSettings() {
-    isSettingsOpen = !isSettingsOpen;
+  function toggleMenu() {
+    isMenuOpen = !isMenuOpen;
+  }
+
+  function openSettingsModal() {
+    isMenuOpen = false;
+    isSettingsModalOpen = true;
   }
 
   async function handleImportFiles() {
-    isSettingsOpen = false;
+    isMenuOpen = false;
 
     // Reset state from previous import
     importProgress = null;
@@ -49,7 +56,7 @@
   }
 
   async function handleResetDatabase() {
-    isSettingsOpen = false;
+    isMenuOpen = false;
 
     const confirmed = await showConfirm(
       "Are you sure you want to reset the database? This will delete all imported game data and cannot be undone."
@@ -81,17 +88,17 @@
     refreshData.trigger();
   }
 
-  // Close settings dropdown when clicking outside
+  // Close menu dropdown when clicking outside
   function handleClickOutside(event: MouseEvent) {
-    if (!isSettingsOpen) {
+    if (!isMenuOpen) {
       return;
     }
 
     const target = event.target as HTMLElement;
-    const closestSettings = target.closest(".settings-container");
+    const closestMenu = target.closest(".menu-container");
 
-    if (!closestSettings) {
-      isSettingsOpen = false;
+    if (!closestMenu) {
+      isMenuOpen = false;
     }
   }
 
@@ -122,13 +129,13 @@
   data-tauri-drag-region
   class="w-full bg-blue-gray border-b-[3px] border-black px-4 pt-6 pb-2 flex items-center justify-between relative"
 >
-  <!-- Settings dropdown on the left -->
-  <div class="settings-container flex-shrink-0">
+  <!-- Menu dropdown on the left -->
+  <div class="menu-container flex-shrink-0">
     <button
       class="text-orange hover:text-tan transition-colors pr-2 py-2"
       type="button"
-      onclick={toggleSettings}
-      aria-label="Settings"
+      onclick={toggleMenu}
+      aria-label="Menu"
     >
       <svg
         xmlns="http://www.w3.org/2000/svg"
@@ -146,14 +153,14 @@
       </svg>
     </button>
 
-    {#if isSettingsOpen}
+    {#if isMenuOpen}
       <div
         class="absolute left-0 mt-2 w-48 bg-blue-gray border-2 border-black rounded shadow-lg z-50"
       >
         <button
           class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors"
           type="button"
-          onclick={() => { isSettingsOpen = false; goto("/"); }}
+          onclick={() => { isMenuOpen = false; goto("/"); }}
         >
           Overview
         </button>
@@ -167,16 +174,16 @@
         <button
           class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
           type="button"
-          onclick={handleResetDatabase}
+          onclick={openSettingsModal}
         >
-          Reset Database
+          Set Primary User
         </button>
         <button
           class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
           type="button"
-          onclick={() => { isSettingsOpen = false; goto("/event-test"); }}
+          onclick={handleResetDatabase}
         >
-          Event Test
+          Reset Database
         </button>
       </div>
     {/if}
@@ -205,4 +212,9 @@
   result={importResult}
   onClose={closeImportModal}
   onImportComplete={handleImportComplete}
+/>
+
+<SettingsModal
+  bind:isOpen={isSettingsModalOpen}
+  onClose={() => { isSettingsModalOpen = false; }}
 />

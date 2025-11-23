@@ -24,6 +24,7 @@ pub struct PlayerData {
     pub dynasty: Option<String>,
     pub team_id: Option<String>,
     pub is_human: bool,
+    pub is_save_owner: bool,
 
     // External identity
     pub online_id: Option<String>,

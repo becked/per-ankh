@@ -83,8 +83,8 @@ export function formatDate(dateStr: string | null | undefined): string {
  *
  * @example
  * formatGameTitle({ game_name: "My Epic Campaign", ... }) // returns "My Epic Campaign"
- * formatGameTitle({ game_name: "Game 5", human_nation: "NATION_ROME", total_turns: 100, ... }) // returns "Rome - 100 turns"
- * formatGameTitle({ game_name: null, human_nation: "NATION_EGYPT", total_turns: null, match_id: 3 }) // returns "Egypt"
+ * formatGameTitle({ game_name: "Game 5", save_owner_nation: "NATION_ROME", total_turns: 100, ... }) // returns "Rome - 100 turns"
+ * formatGameTitle({ game_name: null, save_owner_nation: "NATION_EGYPT", total_turns: null, match_id: 3 }) // returns "Egypt"
  */
 /**
  * Strips Unity TextMeshPro rich text markup from a string.
@@ -132,7 +132,7 @@ export function stripMarkup(text: string | null | undefined): string {
 
 export function formatGameTitle(game: {
   game_name: string | null;
-  human_nation: string | null;
+  save_owner_nation: string | null;
   total_turns: number | null;
   match_id: number;
 }): string {
@@ -146,7 +146,7 @@ export function formatGameTitle(game: {
   }
 
   // Format nation by removing NATION_ prefix and capitalizing
-  const formattedNation = game.human_nation ? formatEnum(game.human_nation, "NATION_") : null;
+  const formattedNation = game.save_owner_nation ? formatEnum(game.save_owner_nation, "NATION_") : null;
 
   // Fallback: use nation and turns if available
   if (formattedNation !== null && game.total_turns != null) {

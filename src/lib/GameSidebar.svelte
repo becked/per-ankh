@@ -51,7 +51,7 @@
 
       const query = $searchQuery.toLowerCase();
       const title = formatGameTitle(game).toLowerCase();
-      const nation = game.human_nation ? formatEnum(game.human_nation, "NATION_").toLowerCase() : "";
+      const nation = game.save_owner_nation ? formatEnum(game.save_owner_nation, "NATION_").toLowerCase() : "";
       const date = formatGameSubtitle(game).toLowerCase();
 
       return title.includes(query) ||
@@ -121,7 +121,7 @@
             type="button"
             onclick={() => navigateToGame(game.match_id)}
           >
-            {#if game.human_won === true}
+            {#if game.save_owner_won === true}
               <span class="trophy-badge" title="Victory">🏆</span>
             {/if}
             <div class="text-xs font-semibold mb-0.5 text-black">{formatGameTitle(game)}</div>

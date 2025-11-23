@@ -49,6 +49,7 @@ pub fn insert_players(
             player.dynasty.clone(),                         // dynasty
             player.team_id.clone(),                         // team_id
             player.is_human,                                // is_human
+            player.is_save_owner,                           // is_save_owner
             player.online_id.clone(),                       // online_id
             player.email.clone(),                           // email
             player.difficulty.clone(),                      // difficulty
@@ -89,6 +90,7 @@ pub fn insert_players(
         dynasty,
         team_id,
         is_human,
+        is_save_owner,
         online_id,
         email,
         difficulty,
@@ -118,6 +120,7 @@ pub fn insert_players(
             dynasty,
             team_id,
             is_human,
+            is_save_owner,
             online_id,
             email,
             difficulty,
