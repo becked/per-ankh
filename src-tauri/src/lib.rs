@@ -41,6 +41,7 @@ pub struct GameInfo {
     pub turn_year: Option<i32>,
     pub human_nation: Option<String>,
     pub total_turns: Option<i32>,
+    pub human_won: Option<bool>,
 }
 
 #[derive(Serialize, TS)]
@@ -242,15 +243,21 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
 async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Result<Vec<GameInfo>, String> {
     pool.with_connection(|conn| {
         // Get all games ordered by save_date (newest first)
-        // Join with players to get the human player's nation
+        // Join with players to get the human player's nation and player_id
         // Prioritize human players, then players with names, then fall back to any player
+        // Compare winner_player_id with human player_id to determine if human won
         let mut stmt = conn
             .prepare(
                 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
-                        m.total_turns, p.nation
+                        m.total_turns, p.nation,
+                        CASE
+                            WHEN m.winner_player_id IS NULL THEN NULL
+                            WHEN m.winner_player_id = p.player_id THEN TRUE
+                            ELSE FALSE
+                        END as human_won
                  FROM matches m
                  LEFT JOIN (
-                     SELECT match_id, nation,
+                     SELECT match_id, nation, player_id,
                             ROW_NUMBER() OVER (
                                 PARTITION BY match_id
                                 ORDER BY
@@ -273,6 +280,7 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
                     turn_year: None,
                     total_turns: row.get(3)?,
                     human_nation: row.get(4)?,
+                    human_won: row.get(5)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
