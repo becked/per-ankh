@@ -91,6 +91,12 @@ CREATE TABLE matches (
     UNIQUE (game_id, total_turns)
 );
 
+-- User settings for save owner identification
+CREATE TABLE user_settings (
+    key VARCHAR NOT NULL PRIMARY KEY,
+    value VARCHAR
+);
+
 CREATE TABLE match_settings (
     setting_id BIGINT NOT NULL PRIMARY KEY,
     match_id BIGINT NOT NULL,
@@ -134,6 +140,7 @@ CREATE TABLE players (
     dynasty VARCHAR,
     team_id INTEGER,
     is_human BOOLEAN DEFAULT true,
+    is_save_owner BOOLEAN DEFAULT false,  -- TRUE if this player is the save file owner
     -- External identity
     online_id VARCHAR,
     email VARCHAR,
@@ -961,7 +968,8 @@ CREATE TABLE schema_migrations (
 
 INSERT INTO schema_migrations (version, description) VALUES
 ('2.0.0', 'Clean greenfield schema for multi-match Old World game analysis - 85% XML coverage'),
-('2.2.0', 'Added match_locks table for multi-process concurrency control');
+('2.2.0', 'Added match_locks table for multi-process concurrency control'),
+('2.3.0', 'Added is_save_owner column to players table and user_settings table for save owner tracking');
 
 
 -- ============================================================================
@@ -969,7 +977,7 @@ INSERT INTO schema_migrations (version, description) VALUES
 -- ============================================================================
 --
 -- Schema Statistics:
--- - 54 tables (entities + time-series + aggregates + reference + views + locks)
+-- - 55 tables (entities + time-series + aggregates + reference + views + locks + settings)
 -- - ~85% coverage of XML data structures
 -- - Optimized for multi-match analytical queries
 -- - Full character/family/religion system for political analysis

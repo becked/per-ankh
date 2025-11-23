@@ -128,6 +128,41 @@ fn release_db_lock(conn: &Connection, game_id: &str) -> Result<()> {
     Ok(())
 }
 
+/// Auto-detect and set primary user OnlineID on first import
+///
+/// Finds the most frequently occurring OnlineID across all players and sets it
+/// as the primary user. Only runs if primary_user_online_id is not already set.
+fn auto_detect_primary_user(conn: &Connection) -> Result<()> {
+    // Skip if already configured
+    if crate::db::settings::get_primary_user_online_id(conn)
+        .map_err(|e| ParseError::InvalidFormat(e.to_string()))?
+        .is_some()
+    {
+        return Ok(());
+    }
+
+    // Find most common OnlineID (excluding empty strings)
+    let result: Option<String> = conn
+        .query_row(
+            "SELECT online_id FROM players
+             WHERE online_id IS NOT NULL AND online_id != ''
+             GROUP BY online_id
+             ORDER BY COUNT(*) DESC
+             LIMIT 1",
+            [],
+            |row| row.get(0),
+        )
+        .ok();
+
+    if let Some(online_id) = result {
+        crate::db::settings::set_primary_user_online_id(conn, &online_id)
+            .map_err(|e| ParseError::InvalidFormat(e.to_string()))?;
+        log::info!("Auto-detected primary user OnlineID: {}", online_id);
+    }
+
+    Ok(())
+}
+
 /// Import result
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
@@ -199,6 +234,9 @@ pub fn import_save_file(
     eprintln!("⏱️  Lock acquisition: {:?}", lock_time);
 
     // Now safe to proceed - we have exclusive access for this GameId
+    // Auto-detect primary user from existing data (only runs once, on first import with data)
+    auto_detect_primary_user(&tx)?;
+
     let t_internal = Instant::now();
     match import_save_file_internal(
         file_path,
@@ -368,6 +406,9 @@ fn import_save_file_internal(
     if let Some(ref winner) = winner_info {
         update_winner(tx, match_id, winner, &players_data, &id_mapper)?;
     }
+
+    // Determine save owner (the person whose machine created this save)
+    determine_save_owner(tx, match_id, &players_data, &id_mapper)?;
 
     // 2. Characters core (no relationships yet)
     let t_characters = Instant::now();
@@ -997,6 +1038,52 @@ fn update_winner(
     Ok(())
 }
 
+/// Determine which player is the save owner (the person whose machine created this save)
+///
+/// Detection priority:
+/// 1. If only one human player exists → they are the save owner
+/// 2. If primary_user_online_id is set → match player by OnlineID
+/// 3. Otherwise → leave is_save_owner = false for all players (unknown)
+fn determine_save_owner(
+    tx: &Connection,
+    match_id: i64,
+    players_data: &[super::game_data::PlayerData],
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let human_players: Vec<_> = players_data.iter().filter(|p| p.is_human).collect();
+
+    let save_owner_xml_id: Option<i32> = if human_players.len() == 1 {
+        // Single human = save owner (covers all single-player games)
+        Some(human_players[0].xml_id)
+    } else if human_players.len() > 1 {
+        // Multiple humans: try to match by primary user OnlineID
+        let primary_online_id = crate::db::settings::get_primary_user_online_id(tx)
+            .map_err(|e| ParseError::InvalidFormat(e.to_string()))?;
+
+        if let Some(ref online_id) = primary_online_id {
+            players_data
+                .iter()
+                .find(|p| p.online_id.as_ref() == Some(online_id))
+                .map(|p| p.xml_id)
+        } else {
+            None // No primary user configured, can't determine save owner
+        }
+    } else {
+        None // No human players
+    };
+
+    if let Some(xml_id) = save_owner_xml_id {
+        let db_id = id_mapper.get_player(xml_id)?;
+        tx.execute(
+            "UPDATE players SET is_save_owner = TRUE WHERE player_id = ? AND match_id = ?",
+            params![db_id, match_id],
+        )?;
+        log::debug!("Set save owner: player XML ID {} → DB ID {}", xml_id, db_id);
+    }
+
+    Ok(())
+}
+
 /// Insert match metadata (fresh import only - no UPSERT)
 /// Returns winner information if a victory is detected in the save file
 fn insert_match_metadata(
@@ -1158,7 +1245,18 @@ fn insert_match_metadata(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::db::schema::create_schema;
     use tempfile::tempdir;
+
+    fn setup_test_db() -> Connection {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+        create_schema(&conn).unwrap();
+        // Leak the tempdir so it doesn't get cleaned up while conn is in use
+        std::mem::forget(dir);
+        conn
+    }
 
     #[test]
     fn test_acquire_process_lock() {
@@ -1176,5 +1274,306 @@ mod tests {
 
         // Different game_ids should return different locks
         assert!(!Arc::ptr_eq(&lock1, &lock2));
+    }
+
+    #[test]
+    fn test_auto_detect_primary_user_selects_most_common() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Insert players: OnlineID "A" appears twice, "B" appears once
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (1, 1, 'Player1', 'player1', 'NATION_ROME', 'A', TRUE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (2, 1, 'Player2', 'player2', 'NATION_GREECE', 'A', TRUE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (3, 1, 'Player3', 'player3', 'NATION_PERSIA', 'B', TRUE)",
+            [],
+        ).unwrap();
+
+        // Run auto-detect
+        auto_detect_primary_user(&conn).unwrap();
+
+        // Should select "A" as it appears most frequently
+        let result = crate::db::settings::get_primary_user_online_id(&conn).unwrap();
+        assert_eq!(result, Some("A".to_string()));
+    }
+
+    #[test]
+    fn test_auto_detect_primary_user_skips_if_already_set() {
+        let conn = setup_test_db();
+
+        // Pre-set the primary user
+        crate::db::settings::set_primary_user_online_id(&conn, "X").unwrap();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Insert players where "A" appears most
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (1, 1, 'Player1', 'player1', 'NATION_ROME', 'A', TRUE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (2, 1, 'Player2', 'player2', 'NATION_GREECE', 'A', TRUE)",
+            [],
+        ).unwrap();
+
+        // Run auto-detect
+        auto_detect_primary_user(&conn).unwrap();
+
+        // Should still be "X" since it was already set
+        let result = crate::db::settings::get_primary_user_online_id(&conn).unwrap();
+        assert_eq!(result, Some("X".to_string()));
+    }
+
+    #[test]
+    fn test_auto_detect_primary_user_ignores_empty_online_ids() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Insert players: empty OnlineID appears most, but valid "A" appears once
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (1, 1, 'Player1', 'player1', 'NATION_ROME', '', FALSE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (2, 1, 'Player2', 'player2', 'NATION_GREECE', '', FALSE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (3, 1, 'Player3', 'player3', 'NATION_PERSIA', 'A', TRUE)",
+            [],
+        ).unwrap();
+
+        // Run auto-detect
+        auto_detect_primary_user(&conn).unwrap();
+
+        // Should select "A", ignoring empty strings
+        let result = crate::db::settings::get_primary_user_online_id(&conn).unwrap();
+        assert_eq!(result, Some("A".to_string()));
+    }
+
+    #[test]
+    fn test_auto_detect_primary_user_no_players() {
+        let conn = setup_test_db();
+
+        // No players in database
+
+        // Run auto-detect
+        auto_detect_primary_user(&conn).unwrap();
+
+        // Should remain None since no players exist
+        let result = crate::db::settings::get_primary_user_online_id(&conn).unwrap();
+        assert_eq!(result, None);
+    }
+
+    /// Helper to create a minimal PlayerData for testing
+    fn make_test_player(xml_id: i32, is_human: bool, online_id: Option<&str>) -> super::super::game_data::PlayerData {
+        super::super::game_data::PlayerData {
+            xml_id,
+            player_name: format!("Player{}", xml_id),
+            nation: Some("NATION_ROME".to_string()),
+            dynasty: None,
+            team_id: None,
+            is_human,
+            is_save_owner: false,
+            online_id: online_id.map(|s| s.to_string()),
+            email: None,
+            difficulty: None,
+            last_turn_completed: None,
+            turn_ended: false,
+            legitimacy: None,
+            succession_gender: None,
+            state_religion: None,
+            founder_character_xml_id: None,
+            chosen_heir_xml_id: None,
+            original_capital_city_xml_id: None,
+            time_stockpile: None,
+            tech_researching: None,
+            ambition_delay: 0,
+            tiles_purchased: 0,
+            state_religion_changes: 0,
+            tribe_mercenaries_hired: 0,
+        }
+    }
+
+    #[test]
+    fn test_determine_save_owner_single_human() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Insert players: one human, two AI
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human) VALUES (1, 1, 'Human', 'human', 'NATION_ROME', TRUE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human) VALUES (2, 1, 'AI1', 'ai1', 'NATION_GREECE', FALSE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human) VALUES (3, 1, 'AI2', 'ai2', 'NATION_PERSIA', FALSE)",
+            [],
+        ).unwrap();
+
+        // Create IdMapper with proper mappings (xml_id 0 -> db_id 1, etc.)
+        let mut id_mapper = IdMapper::new(1, &conn, true).unwrap();
+        id_mapper.map_player(0); // xml_id 0 -> db_id 1
+        id_mapper.map_player(1); // xml_id 1 -> db_id 2
+        id_mapper.map_player(2); // xml_id 2 -> db_id 3
+
+        // Create PlayerData structs matching the inserted players
+        let players_data = vec![
+            make_test_player(0, true, None),  // Human player, xml_id 0 -> db_id 1
+            make_test_player(1, false, None), // AI player
+            make_test_player(2, false, None), // AI player
+        ];
+
+        // Run determine_save_owner
+        determine_save_owner(&conn, 1, &players_data, &id_mapper).unwrap();
+
+        // Verify human player has is_save_owner = true
+        let is_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(is_owner, "Single human player should be marked as save owner");
+
+        // Verify AI players have is_save_owner = false
+        let ai1_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!ai1_owner, "AI player should not be save owner");
+    }
+
+    #[test]
+    fn test_determine_save_owner_multiple_humans_with_primary_user() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Pre-set the primary user OnlineID
+        crate::db::settings::set_primary_user_online_id(&conn, "PLAYER_B_ID").unwrap();
+
+        // Insert two human players with different OnlineIDs
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (1, 1, 'PlayerA', 'playera', 'NATION_ROME', 'PLAYER_A_ID', TRUE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (2, 1, 'PlayerB', 'playerb', 'NATION_GREECE', 'PLAYER_B_ID', TRUE)",
+            [],
+        ).unwrap();
+
+        // Create IdMapper
+        let mut id_mapper = IdMapper::new(1, &conn, true).unwrap();
+        id_mapper.map_player(0); // xml_id 0 -> db_id 1
+        id_mapper.map_player(1); // xml_id 1 -> db_id 2
+
+        // Create PlayerData structs
+        let players_data = vec![
+            make_test_player(0, true, Some("PLAYER_A_ID")),
+            make_test_player(1, true, Some("PLAYER_B_ID")), // This one matches primary user
+        ];
+
+        // Run determine_save_owner
+        determine_save_owner(&conn, 1, &players_data, &id_mapper).unwrap();
+
+        // Verify PlayerB (matching primary user) is save owner
+        let player_a_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!player_a_owner, "PlayerA should NOT be save owner (wrong OnlineID)");
+
+        let player_b_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(player_b_owner, "PlayerB should be save owner (matches primary user OnlineID)");
+    }
+
+    #[test]
+    fn test_determine_save_owner_multiple_humans_no_primary_user() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // DO NOT set primary user - leave it as None
+
+        // Insert two human players
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (1, 1, 'PlayerA', 'playera', 'NATION_ROME', 'PLAYER_A_ID', TRUE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (2, 1, 'PlayerB', 'playerb', 'NATION_GREECE', 'PLAYER_B_ID', TRUE)",
+            [],
+        ).unwrap();
+
+        // Create IdMapper
+        let mut id_mapper = IdMapper::new(1, &conn, true).unwrap();
+        id_mapper.map_player(0);
+        id_mapper.map_player(1);
+
+        // Create PlayerData structs
+        let players_data = vec![
+            make_test_player(0, true, Some("PLAYER_A_ID")),
+            make_test_player(1, true, Some("PLAYER_B_ID")),
+        ];
+
+        // Run determine_save_owner
+        determine_save_owner(&conn, 1, &players_data, &id_mapper).unwrap();
+
+        // Verify neither player is marked as save owner
+        let player_a_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!player_a_owner, "PlayerA should NOT be save owner (no primary user set)");
+
+        let player_b_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!player_b_owner, "PlayerB should NOT be save owner (no primary user set)");
     }
 }

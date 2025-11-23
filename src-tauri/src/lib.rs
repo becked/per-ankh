@@ -39,9 +39,9 @@ pub struct GameInfo {
     pub game_name: Option<String>,
     pub save_date: Option<String>,
     pub turn_year: Option<i32>,
-    pub human_nation: Option<String>,
+    pub save_owner_nation: Option<String>,
     pub total_turns: Option<i32>,
-    pub human_won: Option<bool>,
+    pub save_owner_won: Option<bool>,
 }
 
 #[derive(Serialize, TS)]
@@ -173,6 +173,15 @@ pub struct NationDynastyRow {
     pub count: i64,
 }
 
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct KnownOnlineId {
+    pub online_id: String,
+    pub player_names: Vec<String>,
+    #[ts(type = "number")]
+    pub save_count: i64,
+}
+
 // Initialize logging
 fn init_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -243,9 +252,8 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
 async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Result<Vec<GameInfo>, String> {
     pool.with_connection(|conn| {
         // Get all games ordered by save_date (newest first)
-        // Join with players to get the human player's nation and player_id
-        // Prioritize human players, then players with names, then fall back to any player
-        // Compare winner_player_id with human player_id to determine if human won
+        // Join with save owner player (is_save_owner = TRUE) to get their nation and player_id
+        // Compare winner_player_id with save owner player_id to determine if save owner won
         let mut stmt = conn
             .prepare(
                 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
@@ -254,20 +262,12 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
                             WHEN m.winner_player_id IS NULL THEN NULL
                             WHEN m.winner_player_id = p.player_id THEN TRUE
                             ELSE FALSE
-                        END as human_won
+                        END as save_owner_won
                  FROM matches m
                  LEFT JOIN (
-                     SELECT match_id, nation, player_id,
-                            ROW_NUMBER() OVER (
-                                PARTITION BY match_id
-                                ORDER BY
-                                    CASE WHEN is_human = true THEN 0 ELSE 1 END,
-                                    CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
-                                         THEN 0 ELSE 1 END,
-                                    player_name
-                            ) as rn
-                     FROM players
-                 ) p ON m.match_id = p.match_id AND p.rn = 1
+                     SELECT match_id, nation, player_id
+                     FROM players WHERE is_save_owner = TRUE
+                 ) p ON m.match_id = p.match_id
                  ORDER BY m.save_date DESC"
             )?;
 
@@ -279,8 +279,8 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
                     save_date: row.get(2)?,
                     turn_year: None,
                     total_turns: row.get(3)?,
-                    human_nation: row.get(4)?,
-                    human_won: row.get(5)?,
+                    save_owner_nation: row.get(4)?,
+                    save_owner_won: row.get(5)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -1280,6 +1280,69 @@ async fn get_law_adoption_history(
     .map_err(|e| e.to_string())
 }
 
+/// Tauri command to get the primary user OnlineID
+#[tauri::command]
+async fn get_primary_user_online_id(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Option<String>, String> {
+    pool.with_connection(|conn| Ok(db::settings::get_primary_user_online_id(conn)?))
+        .context("Failed to get primary user OnlineID")
+        .map_err(|e| e.to_string())
+}
+
+/// Tauri command to set the primary user OnlineID
+#[tauri::command]
+async fn set_primary_user_online_id(
+    online_id: String,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<(), String> {
+    pool.with_connection(|conn| Ok(db::settings::set_primary_user_online_id(conn, &online_id)?))
+        .context("Failed to set primary user OnlineID")
+        .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get all known OnlineIDs with player names and save counts
+///
+/// Returns list of distinct OnlineIDs with aggregated player names, sorted by save count
+#[tauri::command]
+async fn get_known_online_ids(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<KnownOnlineId>, String> {
+    pool.with_connection(|conn| {
+        // Use string_agg to get comma-separated player names, then split in Rust
+        // DuckDB's list() returns a native list type that's harder to deserialize
+        let mut stmt = conn.prepare(
+            "SELECT online_id,
+                    string_agg(DISTINCT player_name, '|||' ORDER BY player_name) as player_names,
+                    COUNT(*) as save_count
+             FROM players
+             WHERE online_id IS NOT NULL AND online_id != ''
+             GROUP BY online_id
+             ORDER BY save_count DESC"
+        )?;
+
+        let results = stmt
+            .query_map([], |row| {
+                let names_str: String = row.get(1)?;
+                let player_names: Vec<String> = names_str
+                    .split("|||")
+                    .filter(|s| !s.is_empty())
+                    .map(|s| s.to_string())
+                    .collect();
+                Ok(KnownOnlineId {
+                    online_id: row.get(0)?,
+                    player_names,
+                    save_count: row.get(2)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(results)
+    })
+    .context("Failed to get known OnlineIDs")
+    .map_err(|e| e.to_string())
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     init_logging();
@@ -1302,6 +1365,9 @@ pub fn run() {
             get_nation_dynasty_data,
             get_player_debug_data,
             get_match_debug_data,
+            get_primary_user_online_id,
+            set_primary_user_online_id,
+            get_known_online_ids,
             run_event_test,
             reset_database_cmd,
             debug_event_log_player_ids

@@ -10,6 +10,7 @@ import type { MatchDebugRow } from "$lib/types/MatchDebugRow";
 import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
+import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 
 /**
  * Centralized API layer for all Tauri backend commands.
@@ -101,4 +102,27 @@ export const api = {
    */
   debugEventLogPlayerIds: (matchId: number) =>
     invoke<string>("debug_event_log_player_ids", { matchId }),
+
+  // ===== User Settings =====
+
+  /**
+   * Get the primary user's OnlineID for save owner identification.
+   * Returns null if not yet configured.
+   */
+  getPrimaryUserOnlineId: () =>
+    invoke<string | null>("get_primary_user_online_id"),
+
+  /**
+   * Set the primary user's OnlineID for save owner identification.
+   */
+  setPrimaryUserOnlineId: (onlineId: string) =>
+    invoke<void>("set_primary_user_online_id", { onlineId }),
+
+  /**
+   * Get all known OnlineIDs from imported saves.
+   * Returns distinct OnlineID/player_name combinations with save counts.
+   * Used for primary user selection UI.
+   */
+  getKnownOnlineIds: () =>
+    invoke<KnownOnlineId[]>("get_known_online_ids"),
 } as const;
