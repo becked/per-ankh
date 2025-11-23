@@ -6,10 +6,10 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 
 **Database Coverage**: ~85% of XML data structures (54 tables, 16 time-series tracked metrics)
 
-**Current Implementation Status**: ~10% of planned features
+**Current Implementation Status**: ~15% of planned features
 - **Overview Page**: Games by nation chart, total games count
-- **Game Detail Page**: 9 time-series charts across Events and Economics tabs, basic game settings display
-- **Foundation**: Solid architecture with centralized API, type safety, color theming, reusable Chart component
+- **Game Detail Page**: 10 time-series charts across Events, Economics, and Laws & Technology tabs; complete game settings with winner display
+- **Foundation**: Solid architecture with centralized API, type safety, color theming, reusable Chart component with series filters and fullscreen support
 
 **Analysis Categories**:
 1. Match Overview & Victory Analysis
@@ -43,32 +43,24 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 ## 1. Match Overview & Victory Analysis
 
 ### 1.1 Match Summary Card
-**Status**: 🔨 PARTIAL (Backend complete, frontend display pending)
+**Status**: ✅ IMPLEMENTED
 **Priority**: 🟢 Easy
 **Type**: Info Card
 **Data Sources**: `matches`, `players`, `match_summary` view
 
-**Currently Implemented**:
+**Current Implementation**:
 - ✅ Game name, total turns
 - ✅ Map size, width, height
 - ✅ Game mode, difficulty
 - ✅ Players table with: name, nation, type (Human/AI), legitimacy, state religion
 - ✅ Player count (calculated from players array)
-
-**Backend Complete (needs frontend display)**:
-- ✅ Winner extraction from XML (`matches.winner_player_id`)
-- ✅ Winner name and civilization (via LEFT JOIN in query)
-- ✅ Victory conditions data (`matches.victory_conditions`)
-- ✅ DLC enabled data (`matches.enabled_dlc`)
-
-**Remaining Work (Frontend)**:
-- 📋 Display winner in summary bar (name, civilization, victory type)
-- 📋 Display victory conditions in Settings tab
-- 📋 Display DLC list in Settings tab
+- ✅ Winner display in summary bar (name, civilization, victory type)
+- ✅ Victory conditions displayed in Settings tab
+- ✅ DLC list displayed in Settings tab
 
 **Value**: Essential context for every analysis
 
-**Implementation Plan**: See `docs/feature-1.1-match-summary-implementation-plan.md`
+**File**: `/src/routes/game/[id]/+page.svelte` (Summary bar and Settings tab)
 
 ---
 
@@ -678,11 +670,34 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 
 **Value**: Quick research progress indicator
 
-**Location**: Could populate empty "Laws & Technology" tab on Game Detail page
+**Location**: Laws & Technology tab on Game Detail page (currently shows Law Adoption chart)
 
 ---
 
-### 7.2 Technology Timeline
+### 7.2 Law Adoption History
+**Status**: ✅ IMPLEMENTED (Game Detail page, Laws & Technology tab)
+**Priority**: 🟢 Easy
+**Type**: Line chart with markers
+**Data Sources**: `player_laws`, `laws`
+
+**Current Implementation**:
+- ✅ X-axis: Turn number
+- ✅ Y-axis: Cumulative law count by class
+- ✅ Series: One line per player (color-coded by nation)
+- ✅ Law name markers with tooltips on adoption events
+- ✅ Series filter for player selection
+- ✅ Fullscreen support
+
+**Insights**:
+- Law adoption pace comparison
+- Law class preferences (Champions, Traders, etc.)
+- Government stability through law accumulation
+
+**File**: `/src/routes/game/[id]/+page.svelte` (Laws & Technology tab)
+
+---
+
+### 7.3 Technology Timeline (PLANNED)
 **Priority**: 🟡 Medium
 **Type**: Gantt chart / timeline
 **Data Sources**: `technologies_completed`, `technology_progress`
@@ -699,7 +714,7 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 
 ---
 
-### 7.3 Tech Tree Path Visualization
+### 7.4 Tech Tree Path Visualization
 **Priority**: 🔴 Complex
 **Type**: Tree/graph diagram
 **Data Sources**: `technologies_completed`, tech tree prerequisites
@@ -718,7 +733,7 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 
 ---
 
-### 7.4 Science Output Analysis
+### 7.5 Science Output Analysis
 **Status**: ✅ IMPLEMENTED (Game Detail page, Economics tab)
 **Priority**: 🟢 Easy
 **Type**: Line chart
@@ -742,7 +757,7 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 
 ---
 
-### 7.5 Cross-Player Tech Race
+### 7.6 Cross-Player Tech Race
 **Priority**: 🟡 Medium
 **Type**: Multi-line chart
 **Data Sources**: `technologies_completed` (cross-player)
@@ -1261,39 +1276,28 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 ### Phase 1: Core Analytics (MVP)
 **Goal**: Essential insights for every match
 
-**Status**: 45% Complete (4.5/10 features - winner backend done, frontend pending)
+**Status**: 50% Complete (5/10 features)
 
 **Completed**:
 1. ✅ Victory Points Timeline (1.2)
 2. ✅ Yield Production Timeline (2.1)
 3. ✅ Military Power Timeline (3.1)
-4. 🔨 Match Summary Card (1.1) - Backend complete (winner extraction), frontend pending
-
-**Backend Complete (Frontend Pending)**:
-- ✅ Winner extraction from XML
-- ✅ Winner data in database (`matches.winner_player_id`)
-- ✅ Victory conditions and DLC data available
-- 📋 Frontend display implementation (in progress)
+4. ✅ Match Summary Card (1.1) - Winner display, victory conditions, DLC list
+5. ✅ Law Adoption History (7.2) - Laws & Technology tab
 
 **Remaining**:
-5. 📋 Family Opinion Tracker (4.3)
-6. 📋 Religion Opinion Tracker (4.4)
-7. 📋 Tech Tree Completion (7.1) - Can populate empty "Laws & Technology" tab
-8. 📋 Territorial Expansion Timeline (8.2)
-9. 📋 City Count Timeline (9.1)
-10. 📋 Event Choice Distribution (10.1)
+6. 📋 Family Opinion Tracker (4.3)
+7. 📋 Religion Opinion Tracker (4.4)
+8. 📋 Tech Tree Completion (7.1)
+9. 📋 Territorial Expansion Timeline (8.2)
+10. 📋 City Count Timeline (9.1)
 
 **Rationale**: Covers all major game systems with simple visualizations
 
 **Recommended Next Steps**:
-1. **CURRENT TASK**: Complete Match Summary Card frontend (winner display, victory conditions, DLC list)
-   - Implementation plan: `docs/feature-1.1-match-summary-implementation-plan.md`
-   - Estimated effort: ~65 minutes
-   - Backend: ✅ Complete
-   - Frontend: 📋 In progress
-2. Add Family Opinion Tracker (similar to existing charts)
-3. Add Religion Opinion Tracker (similar to existing charts)
-4. Populate "Laws & Technology" tab with Tech Tree Completion metrics
+1. Add Family Opinion Tracker (similar to existing charts, data already parsed)
+2. Add Religion Opinion Tracker (similar to existing charts, data already parsed)
+3. Add Tech Tree Completion metrics to Laws & Technology tab
 
 ---
 
@@ -1442,41 +1446,37 @@ This report catalogs potential statistics and visualizations for the Per-Ankh Ol
 The Per-Ankh database provides a rich foundation for comprehensive Old World analytics. This report identifies **70+ potential statistics and visualizations** across 11 analytical categories.
 
 **Current Status**:
-- **Implementation Progress**: ~12% of total features (4.5 of 40 core features)
-- **Phase 1 (MVP)**: 45% complete (4.5/10 features)
-- **Strong Foundation**: Centralized API, type-safe data layer, reusable Chart component, nation color theming
+- **Implementation Progress**: ~15% of total features (5 of 40 core features)
+- **Phase 1 (MVP)**: 50% complete (5/10 features)
+- **Strong Foundation**: Centralized API, type-safe data layer, reusable Chart component with series filters and fullscreen support, nation color theming
 
 **Implemented Features**:
 - ✅ Victory Points Timeline (Events)
 - ✅ Military Power Timeline (Events)
+- ✅ Legitimacy Timeline (Economics)
 - ✅ 6 Yield Production Charts (Economics: Science, Civics, Training, Growth, Culture, Happiness)
 - ✅ Games by Nation Chart (Overview)
-- 🔨 Match Summary (Settings) - Backend complete (winner extraction), frontend display pending
+- ✅ Match Summary Card (Settings) - Winner display, victory conditions, DLC list
+- ✅ Law Adoption History (Laws & Technology) - Cumulative law adoption with markers
 
-**Backend Complete (Frontend Pending)**:
-- ✅ Winner extraction from XML saves
-- ✅ Winner data persisted in database (`matches.winner_player_id`)
-- ✅ Victory conditions and DLC data available in database
-- 📋 Frontend display implementation (current task)
+**Recent Enhancements**:
+- ✅ Series filters on all game detail charts (toggle player visibility)
+- ✅ Fullscreen chart support with open/close animations
+- ✅ Event log filtering and deduplication
+- ✅ Egyptian hieroglyph animation in import modal
 
 **Immediate Next Steps** (Complete Phase 1 MVP):
-1. **IN PROGRESS**: Complete Match Summary Card frontend (winner display, victory conditions, DLC list)
-   - See `docs/feature-1.1-match-summary-implementation-plan.md`
-   - Backend: ✅ Complete
-   - Frontend: 📋 Estimated ~65 minutes
-2. Family Opinion Tracker - data ready, similar pattern to existing charts
-3. Religion Opinion Tracker - data ready, similar pattern to existing charts
-4. Tech Tree Completion - populate empty "Laws & Technology" tab
-5. Territorial Expansion Timeline
-6. City Count Timeline
-7. Event Choice Distribution
+1. Family Opinion Tracker - data ready, similar pattern to existing charts
+2. Religion Opinion Tracker - data ready, similar pattern to existing charts
+3. Tech Tree Completion metrics - add to Laws & Technology tab
+4. Territorial Expansion Timeline
+5. City Count Timeline
 
 **Recommended Implementation Approach**:
-1. ✅ ~~Start with Phase 1 (10 core visualizations)~~ **In Progress: 4.5/10 done**
-2. **CURRENT**: Complete Match Summary Card (1.1) - winner display, victory conditions, DLC
-3. Complete remaining Phase 1 features (5.5 features, all "Easy" priority)
-4. Gather user feedback on most valuable insights
-5. Iteratively add Phase 2-4 features based on demand
+1. ✅ ~~Start with Phase 1 (10 core visualizations)~~ **In Progress: 5/10 done**
+2. Complete remaining Phase 1 features (5 features, all "Easy" priority)
+3. Gather user feedback on most valuable insights
+4. Iteratively add Phase 2-4 features based on demand
 5. Maintain focus on performance and usability as dataset grows
 
 **Key Success Factors**:
@@ -1487,10 +1487,11 @@ The Per-Ankh database provides a rich foundation for comprehensive Old World ana
 
 **Data Advantage**: With 54 tables and comprehensive time-series tracking already in place, the hard work (data collection) is done. Most remaining features are simple backend queries + chart configurations following existing patterns.
 
-**Recent Progress** (2025-11-15):
-- ✅ Winner extraction from XML implemented and tested
-- ✅ Winner data pipeline complete (XML → Database → Query ready)
-- 📋 Frontend display layer in progress (Feature 1.1)
+**Recent Progress** (2025-11-22):
+- ✅ Match Summary Card complete (winner display, victory type, victory conditions, DLC list)
+- ✅ Law Adoption History chart added to Laws & Technology tab
+- ✅ Series filters added to all game detail charts
+- ✅ Fullscreen chart support with animations
 
 ---
 
@@ -1538,19 +1539,19 @@ The Per-Ankh database provides a rich foundation for comprehensive Old World ana
 
 | Category | Total Features | Implemented | Partial | Planned |
 |----------|---------------|-------------|---------|---------|
-| Match Overview & Victory | 4 | 1 | 1 | 2 |
+| Match Overview & Victory | 4 | 2 | 0 | 2 |
 | Economic Performance | 6 | 1 | 0 | 5 |
 | Military & Warfare | 5 | 1 | 0 | 4 |
 | Diplomatic Relations | 5 | 0 | 0 | 5 |
 | Character & Dynasty | 8 | 0 | 0 | 8 |
 | Family & Religion | 5 | 0 | 0 | 5 |
-| Technology & Research | 5 | 0 | 0 | 5 |
+| Technology & Research | 6 | 2 | 0 | 4 |
 | Map Control & Expansion | 5 | 0 | 0 | 5 |
 | City Management | 7 | 0 | 0 | 7 |
 | Event Narrative | 4 | 0 | 0 | 4 |
 | Cross-Match Analysis | 7 | 0 | 1 | 6 |
 | Advanced & Experimental | 6 | 0 | 0 | 6 |
-| **TOTAL** | **67** | **3** | **2** | **62** |
+| **TOTAL** | **68** | **6** | **1** | **61** |
 
 ### Quick Wins (Easy features with data ready)
 
@@ -1568,12 +1569,13 @@ All use existing Chart component, similar query patterns, and ECharts configurat
 
 ---
 
-**Document Version**: 2.1 (Updated with winner extraction backend completion)
-**Last Updated**: 2025-11-15
+**Document Version**: 2.2 (Validation and status update)
+**Last Updated**: 2025-11-22
 **Author**: Claude Code Analysis
 **Database Schema Version**: 2.2
 
 **Changelog**:
+- 2025-11-22 v2.2: Validated report against codebase; updated Match Summary Card to IMPLEMENTED; added Law Adoption History (7.2); updated Phase 1 progress to 50%; added series filter and fullscreen enhancements
 - 2025-11-15 v2.1: Updated Feature 1.1 to reflect winner backend completion, frontend pending
 - 2025-11-15 v2.0: Initial status tracking across all features
 - 2025-11-14 v1.0: Original feature catalog
