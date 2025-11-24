@@ -240,7 +240,7 @@
   });
 </script>
 
-<main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
+<main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray isolate">
   <h1 class="mb-8 text-gray-200 text-3xl font-bold">Overview</h1>
 
   {#if loading}

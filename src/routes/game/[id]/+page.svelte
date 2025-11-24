@@ -567,11 +567,11 @@
 {#if loading}
   <GamePageSkeleton />
 {:else if error}
-  <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
+  <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray isolate">
     <p class="text-white bg-brown p-4 border-2 border-orange rounded font-bold">Error: {error}</p>
   </main>
 {:else if gameDetails}
-  <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
+  <main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray isolate">
     <div class="flex justify-between items-baseline mb-8">
         <h1 class="text-gray-200 text-3xl font-bold">{gameTitle}</h1>
         <p class="text-brown text-sm">{formatDate(gameDetails.save_date)}</p>
