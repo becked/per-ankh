@@ -230,14 +230,29 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
         // Get total games count
         let total_games: i64 = conn
             .query_row(
-                "SELECT COUNT(DISTINCT match_id) FROM players",
+                "SELECT COUNT(*) FROM matches",
                 [],
                 |row| row.get(0),
             )?;
 
-        // Get nation statistics
+        // Get nation statistics - count games per save owner's nation
+        // Uses same logic as get_games_list: prefer is_save_owner, fall back to first human player
         let mut stmt = conn
-            .prepare("SELECT nation, COUNT(DISTINCT match_id) as games_played FROM players WHERE nation IS NOT NULL GROUP BY nation ORDER BY games_played DESC")?;
+            .prepare(
+                "SELECT COALESCE(so.nation, fh.nation) as nation, COUNT(*) as games_played
+                 FROM matches m
+                 LEFT JOIN (
+                     SELECT match_id, nation FROM players WHERE is_save_owner = TRUE
+                 ) so ON m.match_id = so.match_id
+                 LEFT JOIN (
+                     SELECT match_id, nation,
+                            ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY player_id) as rn
+                     FROM players WHERE is_human = TRUE
+                 ) fh ON m.match_id = fh.match_id AND fh.rn = 1
+                 WHERE COALESCE(so.nation, fh.nation) IS NOT NULL
+                 GROUP BY COALESCE(so.nation, fh.nation)
+                 ORDER BY games_played DESC"
+            )?;
 
         let nations = stmt
             .query_map([], |row| {
