@@ -36,6 +36,59 @@ pub fn set_primary_user_online_id(conn: &Connection, online_id: &str) -> duckdb:
     Ok(())
 }
 
+/// Reprocess save owners for all existing matches based on current primary user OnlineID
+///
+/// This should be called after changing the primary user OnlineID to fix
+/// save owner assignments for previously imported multiplayer games.
+///
+/// Logic:
+/// - Single-player matches (1 human): human is always save owner
+/// - Multiplayer matches (2+ humans): match by primary user OnlineID
+pub fn reprocess_save_owners(conn: &Connection) -> duckdb::Result<usize> {
+    let primary_online_id = get_primary_user_online_id(conn)?;
+
+    // Step 1: Clear all save owner flags
+    conn.execute("UPDATE players SET is_save_owner = FALSE", [])?;
+
+    // Step 2: For single-player matches (exactly 1 human), set that human as save owner
+    conn.execute(
+        "UPDATE players SET is_save_owner = TRUE
+         WHERE (match_id, player_id) IN (
+             SELECT match_id, player_id FROM (
+                 SELECT match_id, player_id,
+                        COUNT(*) OVER (PARTITION BY match_id) as human_count
+                 FROM players WHERE is_human = TRUE
+             ) WHERE human_count = 1
+         )",
+        [],
+    )?;
+
+    // Step 3: For multiplayer matches, set save owner by matching OnlineID
+    let multiplayer_updated = if let Some(ref online_id) = primary_online_id {
+        conn.execute(
+            "UPDATE players SET is_save_owner = TRUE
+             WHERE online_id = ?
+             AND match_id IN (
+                 SELECT match_id FROM players
+                 WHERE is_human = TRUE
+                 GROUP BY match_id
+                 HAVING COUNT(*) > 1
+             )",
+            [online_id],
+        )?
+    } else {
+        0
+    };
+
+    log::info!(
+        "Reprocessed save owners (primary_online_id={:?}, multiplayer_updated={})",
+        primary_online_id,
+        multiplayer_updated
+    );
+
+    Ok(multiplayer_updated)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -88,5 +141,138 @@ mod tests {
             get_primary_user_online_id(&conn).unwrap(),
             Some("67890".to_string())
         );
+    }
+
+    #[test]
+    fn test_reprocess_save_owners_single_player() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Insert single human player (single-player game)
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner) VALUES (1, 1, 'Human', 'human', 'NATION_ROME', TRUE, FALSE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner) VALUES (2, 1, 'AI', 'ai', 'NATION_EGYPT', FALSE, FALSE)",
+            [],
+        ).unwrap();
+
+        // Run reprocess
+        reprocess_save_owners(&conn).unwrap();
+
+        // Human should now be save owner
+        let is_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(is_owner, "Single human player should be marked as save owner");
+
+        // AI should not be save owner
+        let ai_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!ai_owner, "AI player should not be save owner");
+    }
+
+    #[test]
+    fn test_reprocess_save_owners_multiplayer() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Insert two human players (multiplayer game)
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner, online_id) VALUES (1, 1, 'PlayerA', 'playera', 'NATION_ROME', TRUE, FALSE, 'AAA')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner, online_id) VALUES (2, 1, 'PlayerB', 'playerb', 'NATION_EGYPT', TRUE, FALSE, 'BBB')",
+            [],
+        ).unwrap();
+
+        // Set primary user to PlayerB's OnlineID
+        set_primary_user_online_id(&conn, "BBB").unwrap();
+
+        // Run reprocess
+        reprocess_save_owners(&conn).unwrap();
+
+        // PlayerA should NOT be save owner
+        let a_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!a_owner, "PlayerA should NOT be save owner");
+
+        // PlayerB SHOULD be save owner (matches primary OnlineID)
+        let b_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(b_owner, "PlayerB should be save owner (matches primary OnlineID)");
+    }
+
+    #[test]
+    fn test_reprocess_save_owners_changes_with_new_online_id() {
+        let conn = setup_test_db();
+
+        // Insert test match
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Insert two human players
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner, online_id) VALUES (1, 1, 'PlayerA', 'playera', 'NATION_ROME', TRUE, FALSE, 'AAA')",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner, online_id) VALUES (2, 1, 'PlayerB', 'playerb', 'NATION_EGYPT', TRUE, FALSE, 'BBB')",
+            [],
+        ).unwrap();
+
+        // Initially set to PlayerA
+        set_primary_user_online_id(&conn, "AAA").unwrap();
+        reprocess_save_owners(&conn).unwrap();
+
+        let a_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(a_owner, "PlayerA should be save owner initially");
+
+        // Now change to PlayerB
+        set_primary_user_online_id(&conn, "BBB").unwrap();
+        reprocess_save_owners(&conn).unwrap();
+
+        let a_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!a_owner, "PlayerA should NO LONGER be save owner");
+
+        let b_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(b_owner, "PlayerB should NOW be save owner");
     }
 }

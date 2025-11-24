@@ -6,4 +6,4 @@ pub mod settings;
 
 pub use connection::get_connection;
 pub use schema::{create_schema, delete_database_files, drop_all_schema_objects, ensure_schema_ready};
-pub use settings::{get_primary_user_online_id, set_primary_user_online_id};
+pub use settings::{get_primary_user_online_id, reprocess_save_owners, set_primary_user_online_id};
