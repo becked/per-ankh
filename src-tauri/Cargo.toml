@@ -5,11 +5,14 @@ description = "A Tauri App"
 authors = ["you"]
 edition = "2021"
 default-run = "per-ankh"
-autobins = false  # Disable auto-discovery to prevent dev tools from being bundled
-
 [[bin]]
 name = "per-ankh"
 path = "src/main.rs"
+
+# Dev tools moved to examples/ to avoid Tauri bundling them
+[[example]]
+name = "benchmark_parsing"
+path = "examples/benchmark_parsing.rs"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
