@@ -1,7 +1,7 @@
 <!-- Skeleton loading state for the game page -->
 <!-- Matches the layout of +page.svelte exactly to prevent layout shift -->
 
-<main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray">
+<main class="flex-1 pt-4 px-4 pb-8 overflow-y-auto bg-blue-gray isolate">
   <!-- Header with title and date - exact same classes as real page -->
   <div class="flex justify-between items-baseline mb-8">
     <h1 class="text-gray-200 text-3xl font-bold invisible">Game Title Here</h1>
