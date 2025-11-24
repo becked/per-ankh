@@ -63,8 +63,27 @@ use tauri::Manager;
 /// Thread-safe connection pool for DuckDB
 /// DuckDB doesn't have a traditional connection pool, so we use a single
 /// connection wrapped in a Mutex for thread-safe access
+///
+/// Implements Drop to ensure WAL is checkpointed before connection closes.
+/// This prevents WAL corruption that can occur when the app closes without
+/// flushing pending writes (especially on Windows).
 pub struct DbPool {
     connection: Mutex<Connection>,
+}
+
+impl Drop for DbPool {
+    fn drop(&mut self) {
+        // Checkpoint WAL before closing to prevent corruption on restart
+        // Without this, an abrupt app close can leave the WAL in an inconsistent
+        // state, causing "Failure while replaying WAL file" errors on Windows
+        if let Ok(conn) = self.connection.lock() {
+            if let Err(e) = conn.execute_batch("CHECKPOINT") {
+                log::error!("Failed to checkpoint on close: {}", e);
+            } else {
+                log::info!("Database checkpointed on close");
+            }
+        }
+    }
 }
 
 impl DbPool {

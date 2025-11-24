@@ -296,21 +296,30 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
     pool.with_connection(|conn| {
         // Get all games ordered by save_date (newest first)
         // Join with save owner player (is_save_owner = TRUE) to get their nation and player_id
+        // Falls back to first human player's nation when save owner is unknown (e.g., multiplayer
+        // saves from opponent's machine where our OnlineID isn't present)
         // Compare winner_player_id with save owner player_id to determine if save owner won
         let mut stmt = conn
             .prepare(
                 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
-                        m.total_turns, p.nation,
+                        m.total_turns,
+                        COALESCE(so.nation, fh.nation) as nation,
                         CASE
                             WHEN m.winner_player_id IS NULL THEN NULL
-                            WHEN m.winner_player_id = p.player_id THEN TRUE
-                            ELSE FALSE
+                            WHEN so.player_id IS NOT NULL AND m.winner_player_id = so.player_id THEN TRUE
+                            WHEN so.player_id IS NOT NULL THEN FALSE
+                            ELSE NULL
                         END as save_owner_won
                  FROM matches m
                  LEFT JOIN (
                      SELECT match_id, nation, player_id
                      FROM players WHERE is_save_owner = TRUE
-                 ) p ON m.match_id = p.match_id
+                 ) so ON m.match_id = so.match_id
+                 LEFT JOIN (
+                     SELECT match_id, nation, player_id,
+                            ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY player_id) as rn
+                     FROM players WHERE is_human = TRUE
+                 ) fh ON m.match_id = fh.match_id AND fh.rn = 1
                  ORDER BY m.save_date DESC"
             )?;
 
@@ -1301,14 +1310,21 @@ async fn get_primary_user_online_id(
 }
 
 /// Tauri command to set the primary user OnlineID
+///
+/// Also reprocesses save owners for all existing matches to fix
+/// any multiplayer games that were imported before this was set correctly.
 #[tauri::command]
 async fn set_primary_user_online_id(
     online_id: String,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<(), String> {
-    pool.with_connection(|conn| Ok(db::settings::set_primary_user_online_id(conn, &online_id)?))
-        .context("Failed to set primary user OnlineID")
-        .map_err(|e| e.to_string())
+    pool.with_connection(|conn| {
+        db::settings::set_primary_user_online_id(conn, &online_id)?;
+        db::reprocess_save_owners(conn)?;
+        Ok(())
+    })
+    .context("Failed to set primary user OnlineID")
+    .map_err(|e| e.to_string())
 }
 
 /// Tauri command to get all known OnlineIDs with player names and save counts
@@ -1394,6 +1410,42 @@ pub fn run() {
                 .context("Failed to get database path")
                 .map_err(|e| e.to_string())?;
 
+            // Recovery marker file - signals that user requested recovery on previous run
+            // We use this to delete database files BEFORE DuckDB opens them, avoiding
+            // Windows file locking issues where DuckDB holds locks even after errors
+            let recovery_marker = db_path.with_extension("db.recovery");
+
+            // Check for recovery marker BEFORE opening database
+            if recovery_marker.exists() {
+                log::warn!("Recovery marker found, deleting database files");
+                // Remove marker first so we don't loop if deletion fails
+                let _ = std::fs::remove_file(&recovery_marker);
+
+                match db::delete_database_files(&db_path) {
+                    Ok(deleted) => {
+                        log::info!("Deleted {} database files for recovery", deleted.len());
+                        app.dialog()
+                            .message("Database has been reset. Your data has been cleared.")
+                            .kind(MessageDialogKind::Info)
+                            .title("Database Reset Complete")
+                            .blocking_show();
+                    }
+                    Err(e) => {
+                        log::error!("Failed to delete database files: {}", e);
+                        app.dialog()
+                            .message(format!(
+                                "Failed to reset database: {}\n\nPlease manually delete the database files at:\n{}",
+                                e,
+                                db_path.display()
+                            ))
+                            .kind(MessageDialogKind::Error)
+                            .title("Recovery Failed")
+                            .blocking_show();
+                        return Err("Database recovery failed".into());
+                    }
+                }
+            }
+
             // Try to initialize schema, offer recovery on failure
             if let Err(e) = db::ensure_schema_ready(&db_path) {
                 log::error!("Database initialization failed: {}", e);
@@ -1425,12 +1477,21 @@ pub fn run() {
                     .blocking_show();
 
                 if confirmed {
-                    log::warn!("User requested database recovery");
-                    db::delete_database_files(&db_path)
-                        .map_err(|e| format!("Failed to delete database: {}", e))?;
-                    db::ensure_schema_ready(&db_path)
-                        .map_err(|e| format!("Failed to reinitialize database: {}", e))?;
-                    log::info!("Database recovered successfully");
+                    log::warn!("User requested database recovery, writing marker for next restart");
+                    // Write recovery marker - actual deletion happens on next app start
+                    // This avoids Windows file locking issues where DuckDB holds locks
+                    // even after Connection::open() fails during WAL replay
+                    if let Err(e) = std::fs::write(&recovery_marker, "recovery requested") {
+                        log::error!("Failed to write recovery marker: {}", e);
+                    }
+
+                    app.dialog()
+                        .message("Please restart the application to complete the database reset.")
+                        .kind(MessageDialogKind::Info)
+                        .title("Restart Required")
+                        .blocking_show();
+
+                    return Err("Database recovery pending - please restart".into());
                 } else {
                     log::info!("User declined recovery, exiting");
                     return Err("Database initialization failed".into());
