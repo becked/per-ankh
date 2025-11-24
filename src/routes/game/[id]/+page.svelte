@@ -687,9 +687,9 @@
             <div class="flex flex-wrap gap-3 mb-4 items-end">
               <!-- Combined Log Type and Player Filter -->
               <Select.Root type="multiple" bind:value={selectedFilters}>
-                <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black bg-white text-black text-sm w-32 flex items-center justify-between relative">
+                <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
                   <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
                     </svg>
                   </div>
@@ -697,24 +697,24 @@
                   <span class="ml-2">▼</span>
                 </Select.Trigger>
                 <Select.Portal>
-                  <Select.Content class="bg-white border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50">
+                  <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
                     <Select.Viewport>
                       <!-- Players Group (only show if player column is visible) -->
                       {#if showPlayerColumn && uniquePlayers.length > 0}
                         <Select.Group>
-                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-gray-200">
+                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50">
                             Players
                           </Select.GroupHeading>
                           {#each uniquePlayers as player}
                             <Select.Item
                               value={`player:${player}`}
                               label={player}
-                              class="px-3 py-2 cursor-pointer hover:bg-tan-hover text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan-hover"
+                              class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
                             >
                               {#snippet children({ selected })}
                                 {player}
                                 {#if selected}
-                                  <span class="text-brown font-bold">✓</span>
+                                  <span class="text-orange font-bold">✓</span>
                                 {/if}
                               {/snippet}
                             </Select.Item>
@@ -725,19 +725,19 @@
                       <!-- Log Types Group -->
                       {#if uniqueLogTypes.length > 0}
                         <Select.Group>
-                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-gray-200 {showPlayerColumn && uniquePlayers.length > 0 ? 'border-t' : ''}">
+                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50 {showPlayerColumn && uniquePlayers.length > 0 ? 'border-t border-t-brown/50' : ''}">
                             Log Types
                           </Select.GroupHeading>
                           {#each uniqueLogTypes as logType}
                             <Select.Item
                               value={`logtype:${logType}`}
                               label={formatEnum(logType, "")}
-                              class="px-3 py-2 cursor-pointer hover:bg-tan-hover text-black text-sm flex justify-between items-center data-[highlighted]:bg-tan-hover"
+                              class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
                             >
                               {#snippet children({ selected })}
                                 {formatEnum(logType, "")}
                                 {#if selected}
-                                  <span class="text-brown font-bold">✓</span>
+                                  <span class="text-orange font-bold">✓</span>
                                 {/if}
                               {/snippet}
                             </Select.Item>
@@ -752,7 +752,7 @@
               <!-- Description search -->
               <SearchInput
                 bind:value={searchTerm}
-                variant="light"
+                variant="field"
                 class="w-96"
               />
 
@@ -785,30 +785,30 @@
               </span>
             </div>
 
-            <div class="overflow-x-auto rounded-lg min-h-[36rem]" style="background-color: #c5c3c2;">
+            <div class="overflow-x-auto rounded-lg min-h-[36rem]" style="background-color: #201a13;">
               <table class="w-full">
                 <thead>
                   <tr>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Turn</th>
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Log Type</th>
+                    <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Turn</th>
+                    <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Log Type</th>
                     {#if showPlayerColumn}
-                      <th class="p-3 text-left border-b-2 border-black text-black font-bold">Player</th>
+                      <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Player</th>
                     {/if}
-                    <th class="p-3 text-left border-b-2 border-black text-black font-bold">Description</th>
+                    <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Description</th>
                   </tr>
                 </thead>
                 <tbody>
                   {#if filteredEventLogs && filteredEventLogs.length > 0}
                     {#each filteredEventLogs as log}
-                      <tr class="transition-colors duration-200 hover:bg-tan">
-                        <td class="p-3 text-left border-b-2 border-tan text-black">{log.turn}</td>
-                        <td class="p-3 text-left border-b-2 border-tan text-black">
+                      <tr class="transition-colors duration-200 hover:bg-brown/20">
+                        <td class="p-3 text-left border-b border-brown/50 text-tan">{log.turn}</td>
+                        <td class="p-3 text-left border-b border-brown/50 text-tan">
                           <code class="text-sm">{formatEnum(log.log_type, "")}</code>
                         </td>
                         {#if showPlayerColumn}
-                          <td class="p-3 text-left border-b-2 border-tan text-black">{log.player_name ?? ""}</td>
+                          <td class="p-3 text-left border-b border-brown/50 text-tan">{log.player_name ?? ""}</td>
                         {/if}
-                        <td class="p-3 text-left border-b-2 border-tan text-black">{log.description || "—"}</td>
+                        <td class="p-3 text-left border-b border-brown/50 text-tan">{log.description || "—"}</td>
                       </tr>
                     {/each}
                   {:else}

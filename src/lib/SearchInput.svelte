@@ -7,16 +7,36 @@
   }: {
     value?: string;
     placeholder?: string;
-    variant?: "light" | "dark";
+    variant?: "light" | "dark" | "field";
     class?: string;
   } = $props();
+
+  const variantStyles = {
+    light: {
+      icon: 'text-gray-400',
+      input: 'py-2 border-2 border-black rounded bg-white text-black text-sm',
+      bg: ''
+    },
+    dark: {
+      icon: 'text-tan opacity-50',
+      input: 'py-1 border-none rounded-full text-tan text-sm font-normal placeholder-tan placeholder:opacity-50',
+      bg: 'background-color: #403A33;'
+    },
+    field: {
+      icon: 'text-brown',
+      input: 'py-2 border-2 border-black rounded text-tan text-sm placeholder-brown placeholder:opacity-70',
+      bg: 'background-color: #201a13;'
+    }
+  };
+
+  const styles = $derived(variantStyles[variant]);
 </script>
 
 <div class="relative {className}">
   <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
     <svg
       xmlns="http://www.w3.org/2000/svg"
-      class="h-4 w-4 {variant === 'dark' ? 'text-tan opacity-50' : 'text-gray-400'}"
+      class="h-4 w-4 {styles.icon}"
       fill="none"
       viewBox="0 0 24 24"
       stroke="currentColor"
@@ -37,9 +57,7 @@
     autocorrect="off"
     autocapitalize="off"
     spellcheck="false"
-    class="w-full pl-9 pr-3 {variant === 'dark'
-      ? 'py-1 border-none rounded-full text-tan text-sm font-normal placeholder-tan placeholder:opacity-50'
-      : 'py-2 border-2 border-black rounded bg-white text-black text-sm'} focus:outline-none transition-colors"
-    style={variant === 'dark' ? 'background-color: #403A33;' : ''}
+    class="w-full pl-9 pr-3 {styles.input} focus:outline-none transition-colors"
+    style={styles.bg}
   />
 </div>
