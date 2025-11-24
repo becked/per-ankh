@@ -75,6 +75,19 @@ jobs:
           security set-key-partition-list -S apple-tool:,apple: -k "$KEYCHAIN_PASSWORD" $KEYCHAIN_PATH
           security list-keychain -d user -s $KEYCHAIN_PATH
 
+      - name: Prepare release notes
+        id: release_notes
+        shell: bash
+        run: |
+          # Extract version without 'v' prefix (e.g., v0.1.5 -> 0.1.5)
+          VERSION="${GITHUB_REF_NAME#v}"
+          # Read template and replace VERSION placeholder
+          BODY=$(sed "s/VERSION/${VERSION}/g" .github/RELEASE_TEMPLATE.md)
+          # Set multi-line output using delimiter
+          echo "body<<EOF" >> $GITHUB_OUTPUT
+          echo "$BODY" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
       - name: Build the app
         uses: tauri-apps/tauri-action@v0
         env:
@@ -86,7 +99,7 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: 'Per Ankh ${{ github.ref_name }}'
-          releaseBody: 'See the assets below to download this version and install.'
+          releaseBody: ${{ steps.release_notes.outputs.body }}
           releaseDraft: true
           prerelease: false
           args: ${{ matrix.args }}
