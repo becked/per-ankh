@@ -2,7 +2,7 @@
 
 ## Overview
 
-Per Ankh uses GitHub Actions to automatically build and release the application for macOS and Windows platforms.
+Per Ankh uses GitHub Actions to automatically build and release the application for macOS, Windows, and Linux platforms.
 
 ## Release Process
 
@@ -43,10 +43,14 @@ Once the tag is pushed, GitHub Actions will:
    - `Per-Ankh_x.x.x_aarch64.dmg` (Apple Silicon Macs)
 
 2. **Build for Windows**:
-   - `Per-Ankh_x.x.x_x64-setup.exe` (installer)
+   - `Per-Ankh_x.x.x_x64-setup.exe` (NSIS installer)
    - `Per-Ankh_x.x.x_x64_en-US.msi` (MSI installer)
 
-3. **Create GitHub Release**:
+3. **Build for Linux**:
+   - `per-ankh_x.x.x_amd64.deb` (Debian/Ubuntu)
+   - `per-ankh-x.x.x-1.x86_64.rpm` (Fedora/RHEL)
+
+4. **Create GitHub Release**:
    - Creates a draft release with the tag name
    - Uploads all build artifacts as release assets
    - Includes checksums for verification
@@ -71,6 +75,10 @@ Each release includes the following files:
 - `Per-Ankh_x.x.x_x64-setup.exe` - NSIS installer (recommended)
 - `Per-Ankh_x.x.x_x64_en-US.msi` - MSI installer
 
+### Linux
+- `per-ankh_x.x.x_amd64.deb` - Debian/Ubuntu package
+- `per-ankh-x.x.x-1.x86_64.rpm` - Fedora/RHEL package
+
 ## Manual Build (Local Development)
 
 If you need to build locally for testing:
@@ -81,7 +89,8 @@ npm run tauri:build
 
 # Output location:
 # macOS: src-tauri/target/release/bundle/dmg/
-# Windows: src-tauri/target/release/bundle/nsis/ or bundle/msi/
+# Windows: src-tauri/target/release/bundle/nsis/
+# Linux: src-tauri/target/release/bundle/deb/ and bundle/rpm/
 ```
 
 ## GitHub Actions Costs
@@ -91,7 +100,8 @@ npm run tauri:build
   - 2,000 free minutes/month
   - macOS builds count as 10x (expensive)
   - Windows builds count as 2x
-  - Typical release: ~110-230 charged minutes
+  - Linux builds count as 1x (standard)
+  - Typical release: ~120-250 charged minutes
 
 ## Troubleshooting
 
@@ -128,7 +138,7 @@ Follow [Semantic Versioning](https://semver.org/):
 The release workflow is defined in `.github/workflows/release.yml` and:
 
 - Triggers on tags matching `v*`
-- Builds for macOS (Intel + Apple Silicon) and Windows
+- Builds for macOS (Intel + Apple Silicon), Windows, and Linux
 - Uses Rust and Node.js caching for faster builds
 - Creates draft releases (requires manual publishing)
 - Automatically generates checksums for all artifacts
@@ -138,7 +148,6 @@ The release workflow is defined in `.github/workflows/release.yml` and:
 Potential improvements to the release process:
 
 1. **Auto-updater**: Integrate Tauri's built-in updater with GitHub Releases
-2. **Linux builds**: Add Ubuntu builds to the workflow
-3. **Changelog automation**: Generate release notes from commit messages
-4. **Beta releases**: Create pre-release builds from `beta` branch
-5. **Signed builds**: Add code signing for macOS and Windows (requires certificates)
+2. **Changelog automation**: Generate release notes from commit messages
+3. **Beta releases**: Create pre-release builds from `beta` branch
+4. **Signed builds**: Add code signing for macOS and Windows (requires certificates)
