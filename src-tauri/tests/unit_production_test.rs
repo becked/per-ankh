@@ -19,11 +19,9 @@ fn test_unit_production_parsing() {
     let dir = tempdir().unwrap();
     let db_path = dir.path().join("test.db");
 
-    // Initialize schema
-    db::ensure_schema_ready(&db_path).unwrap();
-
-    // Open connection
+    // Open connection and initialize schema (unified connection management)
     let conn = db::connection::get_connection(&db_path).unwrap();
+    db::ensure_schema_ready(&conn).unwrap();
 
     // Import save file
     let result = parser::import_save_file(test_file, &conn, None, None, None, None, None).unwrap();

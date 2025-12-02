@@ -1003,26 +1003,26 @@ async fn reset_database_cmd(
 
 /// Tauri command to recover from database corruption
 ///
-/// Deletes all database files and reinitializes a fresh database.
-/// This is more aggressive than reset - it removes all files rather than just
-/// dropping tables, which can help recover from corruption.
+/// Writes a recovery marker and instructs user to restart the app.
+/// Actual file deletion happens on next startup to avoid Windows file locking
+/// issues where the existing DbPool holds locks on database files.
 #[tauri::command]
 async fn recover_database(app_handle: tauri::AppHandle) -> Result<String, String> {
     let db_path = db::connection::get_db_path(&app_handle)
         .map_err(|e| e.to_string())?;
 
-    log::warn!("Database recovery requested, deleting: {:?}", db_path);
+    log::warn!("Database recovery requested, writing marker for: {:?}", db_path);
 
-    let deleted = db::delete_database_files(&db_path)
-        .map_err(|e| format!("Failed to delete database files: {}", e))?;
+    // Write recovery marker - actual deletion happens on next app start
+    // This avoids Windows file locking issues where the existing DbPool
+    // holds locks on the database files even during recovery
+    let recovery_marker = db_path.with_extension("db.recovery");
+    std::fs::write(&recovery_marker, "recovery requested")
+        .map_err(|e| format!("Failed to write recovery marker: {}", e))?;
 
-    log::info!("Deleted {} files: {:?}", deleted.len(), deleted);
+    log::info!("Recovery marker written, restart required");
 
-    // Reinitialize schema on fresh database
-    db::ensure_schema_ready(&db_path)
-        .map_err(|e| format!("Failed to reinitialize database: {}", e))?;
-
-    Ok(format!("Database recovered. Deleted {} files.", deleted.len()))
+    Ok("Recovery marker written. Please restart the application to complete the database reset.".to_string())
 }
 
 #[derive(Serialize, TS)]
@@ -1682,8 +1682,16 @@ pub fn run() {
                 // Continue anyway - crash guard is just a safety net
             }
 
-            // Try to initialize schema, offer recovery on failure
-            let schema_result = db::ensure_schema_ready(&db_path);
+            // Create connection pool FIRST - ensures all DB operations use consistent
+            // checkpoint settings (1GB threshold). This prevents index corruption that
+            // occurred when schema init used default settings and imports used high threshold.
+            let pool = db::connection::DbPool::new(&db_path)
+                .context("Failed to create connection pool")
+                .map_err(|e| e.to_string())?;
+
+            // Initialize schema using the pool's connection (unified connection management)
+            // This ensures schema creation and imports use the same checkpoint settings
+            let schema_result = pool.with_connection(|conn| db::ensure_schema_ready(conn));
 
             // Remove crash guard - we didn't crash, so remove the marker
             // Do this whether we succeeded or got a Rust error (only crashes leave it)
@@ -1746,11 +1754,6 @@ pub fn run() {
                 log::warn!("Failed to write schema version file: {}", e);
                 // Non-fatal - database still works, just won't have version tracking
             }
-
-            // Create connection pool
-            let pool = db::connection::DbPool::new(&db_path)
-                .context("Failed to create connection pool")
-                .map_err(|e| e.to_string())?;
 
             // Clean up stale locks
             pool.with_connection(|conn| db::connection::cleanup_stale_locks(conn))

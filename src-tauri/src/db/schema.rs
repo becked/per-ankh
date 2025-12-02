@@ -386,26 +386,11 @@ fn migrate_add_collections(conn: &Connection) -> Result<()> {
 }
 
 /// Initialize and validate schema on first run
-pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
-    log::info!("ensure_schema_ready called for path: {:?}", db_path);
-
-    let conn = match Connection::open(db_path) {
-        Ok(c) => {
-            log::info!("Database connection opened successfully");
-            c
-        }
-        Err(e) => {
-            log::error!("Failed to open database at {:?}: {}", db_path, e);
-            log::error!("This may indicate database corruption. Consider deleting the database file to recover.");
-            return Err(e.into());
-        }
-    };
-
-    // Create app data dir if needed (race-safe)
-    if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent)?;
-        log::info!("Created parent directory: {:?}", parent);
-    }
+///
+/// Takes an existing connection to ensure consistent checkpoint settings.
+/// The connection should be created via DbPool to have proper WAL settings.
+pub fn ensure_schema_ready(conn: &Connection) -> Result<()> {
+    log::info!("ensure_schema_ready called");
 
     // Check if schema is already initialized by trying to query the matches table directly
     // This is more reliable than using information_schema which has compatibility issues
@@ -417,7 +402,7 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
 
     // Initialize schema from schema.sql if not exists
     if !schema_exists {
-        create_schema(&conn)?;
+        create_schema(conn)?;
     } else {
         log::info!("Schema already exists, checking version...");
 
@@ -440,12 +425,12 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
         }
 
         // Run migrations for existing databases
-        migrate_schema(&conn)?;
+        migrate_schema(conn)?;
     }
 
     // Validate schema integrity (lenient - just check critical tables)
     log::info!("Validating schema...");
-    match validate_schema(&conn) {
+    match validate_schema(conn) {
         Ok(warnings) => {
             log::info!("Schema validation completed with {} warnings", warnings.len());
             for warning in warnings {
@@ -458,6 +443,13 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
             log::warn!("Schema validation had warnings: {}", e);
         }
     }
+
+    // Explicit CHECKPOINT to flush WAL after schema operations
+    // This ensures schema/index data is persisted before any data imports,
+    // preventing index corruption from WAL inconsistencies across connections
+    log::info!("Checkpointing after schema operations...");
+    conn.execute_batch("CHECKPOINT")?;
+    log::info!("Schema checkpoint completed");
 
     log::info!("ensure_schema_ready completed successfully");
     Ok(())
@@ -593,16 +585,17 @@ mod tests {
     fn test_ensure_schema_ready() {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
 
         // First call should initialize schema (may have warnings due to partial indexes)
-        let result1 = ensure_schema_ready(&db_path);
+        let result1 = ensure_schema_ready(&conn);
         if let Err(ref e) = result1 {
             eprintln!("Schema initialization error: {:?}", e);
         }
         assert!(result1.is_ok(), "First schema init should succeed: {:?}", result1);
 
         // Second call should not error (idempotent)
-        let result2 = ensure_schema_ready(&db_path);
+        let result2 = ensure_schema_ready(&conn);
         assert!(result2.is_ok(), "Second schema init should succeed");
 
         // Just verify the database file was created
@@ -776,7 +769,8 @@ mod tests {
         drop(conn);
 
         // ensure_schema_ready should return error for old schema
-        let result = ensure_schema_ready(&db_path);
+        let conn = Connection::open(&db_path).unwrap();
+        let result = ensure_schema_ready(&conn);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
         assert!(err_msg.contains("v2.6.0") || err_msg.contains("reset"),

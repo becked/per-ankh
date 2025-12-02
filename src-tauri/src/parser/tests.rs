@@ -15,11 +15,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
 
-        // Initialize schema
-        db::ensure_schema_ready(&db_path).unwrap();
-
-        // Open connection and check tables exist
+        // Open connection and initialize schema
         let conn = Connection::open(&db_path).unwrap();
+        db::ensure_schema_ready(&conn).unwrap();
 
         // Try to query the players table directly
         let result = conn.query_row(
@@ -55,11 +53,9 @@ mod tests {
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
 
-        // Initialize schema
-        db::ensure_schema_ready(&db_path).unwrap();
-
-        // Open connection
+        // Open connection and initialize schema (unified connection management)
         let conn = db::connection::get_connection(&db_path).unwrap();
+        db::ensure_schema_ready(&conn).unwrap();
 
         // Import save file (no progress tracking for tests)
         let result = parser::import_save_file(test_file, &conn, None, None, None, None, None);

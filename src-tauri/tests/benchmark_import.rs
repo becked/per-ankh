@@ -5,7 +5,7 @@ use per_ankh_lib::db::schema::ensure_schema_ready;
 use per_ankh_lib::db::connection::get_connection;
 use per_ankh_lib::parser::import::import_save_file;
 use std::time::Instant;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[test]
 fn benchmark_real_save_import() {
@@ -17,14 +17,13 @@ fn benchmark_real_save_import() {
 
     println!("\n=== Per-Ankh Save File Import Benchmark ===\n");
 
-    // Setup: Create temporary database
+    // Setup: Create temporary database (unified connection management)
     let setup_start = Instant::now();
-    let tmp_db_path_obj = Path::new(tmp_db_path);
-    ensure_schema_ready(tmp_db_path_obj)
-        .expect("Failed to initialize schema");
     let tmp_db_pathbuf = PathBuf::from(tmp_db_path);
     let conn = get_connection(&tmp_db_pathbuf)
         .expect("Failed to open database connection");
+    ensure_schema_ready(&conn)
+        .expect("Failed to initialize schema");
     let setup_time = setup_start.elapsed();
 
     println!("Database setup: {:?}", setup_time);
@@ -121,12 +120,11 @@ fn benchmark_multiple_imports() {
 
     println!("\n=== Multiple Import Benchmark ===\n");
 
-    let tmp_db_path_obj = Path::new(tmp_db_path);
-    ensure_schema_ready(tmp_db_path_obj)
-        .expect("Failed to initialize schema");
     let tmp_db_pathbuf = PathBuf::from(tmp_db_path);
     let conn = get_connection(&tmp_db_pathbuf)
         .expect("Failed to open database connection");
+    ensure_schema_ready(&conn)
+        .expect("Failed to initialize schema");
 
     // Pick several different save files from 2025
     let save_files = vec![

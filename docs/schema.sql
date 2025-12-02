@@ -27,8 +27,9 @@ CREATE TABLE id_mappings (
     PRIMARY KEY (match_id, entity_type, xml_id)
 );
 
-CREATE INDEX idx_id_mappings_match ON id_mappings(match_id);
-CREATE INDEX idx_id_mappings_lookup ON id_mappings(match_id, entity_type, xml_id);
+-- INDEXES DISABLED: Testing if index corruption is the issue (GitHub #13)
+-- CREATE INDEX idx_id_mappings_match ON id_mappings(match_id);
+-- CREATE INDEX idx_id_mappings_lookup ON id_mappings(match_id, entity_type, xml_id);
 
 -- Lock table for cross-process synchronization during imports
 -- Prevents multiple app instances from corrupting data when importing same GameId
@@ -39,7 +40,7 @@ CREATE TABLE match_locks (
     CONSTRAINT unique_game_lock UNIQUE (game_id)
 );
 
-CREATE INDEX idx_match_locks_stale ON match_locks(locked_at);
+-- CREATE INDEX idx_match_locks_stale ON match_locks(locked_at);
 
 -- Collections for organizing matches (e.g., "Personal", "Challenge Games")
 -- Allows filtering stats and preventing player name pollution in Primary User detection
@@ -108,7 +109,7 @@ CREATE TABLE matches (
     UNIQUE (game_id, total_turns)
 );
 
-CREATE INDEX idx_matches_collection ON matches(collection_id);
+-- CREATE INDEX idx_matches_collection ON matches(collection_id);
 
 -- User settings for save owner identification
 CREATE TABLE user_settings (
@@ -828,7 +829,14 @@ LEFT JOIN characters m ON c.birth_mother_id = m.character_id AND c.match_id = m.
 -- ============================================================================
 -- SECTION 18: INDEXES FOR PERFORMANCE
 -- ============================================================================
+-- ALL INDEXES TEMPORARILY DISABLED: Testing if index corruption is the issue (GitHub #13)
+-- The Appender API may have a bug causing index corruption during bulk inserts.
+-- If disabling indexes fixes the crash, we'll need to either:
+-- 1. Create indexes AFTER imports complete
+-- 2. Upgrade DuckDB to a version with a fix
+-- 3. Use INSERT statements instead of Appender
 
+/*
 -- Match lookups
 CREATE INDEX idx_matches_hash ON matches(file_hash);
 CREATE INDEX idx_matches_game_name ON matches(game_name);
@@ -899,6 +907,7 @@ CREATE UNIQUE INDEX idx_religions_xml_id ON religions(match_id, xml_id) WHERE xm
 -- Tribe lookups
 -- UPSERT support: unique constraint on (match_id, xml_id) for idempotent updates
 CREATE UNIQUE INDEX idx_tribes_xml_id ON tribes(match_id, xml_id) WHERE xml_id IS NOT NULL;
+*/
 
 
 -- ============================================================================
