@@ -21,11 +21,9 @@ fn test_import_babylonia_save() {
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
 
-    // Initialize schema
-    db::ensure_schema_ready(&db_path).expect("Failed to initialize schema");
-
-    // Get connection
+    // Get connection and initialize schema (unified connection management)
     let conn = db::connection::get_connection(&db_path).expect("Failed to connect to database");
+    db::ensure_schema_ready(&conn).expect("Failed to initialize schema");
 
     // Import save file
     let save_path = "test-data/saves/OW-Babylonia-Year123-2024-01-31-22-44-04.zip";
@@ -193,11 +191,9 @@ fn test_import_multiple_saves() {
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
 
-    // Initialize schema
-    db::ensure_schema_ready(&db_path).expect("Failed to initialize schema");
-
-    // Get connection
+    // Get connection and initialize schema (unified connection management)
     let conn = db::connection::get_connection(&db_path).expect("Failed to connect to database");
+    db::ensure_schema_ready(&conn).expect("Failed to initialize schema");
 
     // Import multiple save files
     let save_files = vec![
@@ -239,11 +235,9 @@ fn test_reimport_same_save() {
     let temp_dir = tempdir().expect("Failed to create temp dir");
     let db_path = temp_dir.path().join("test.db");
 
-    // Initialize schema
-    db::ensure_schema_ready(&db_path).expect("Failed to initialize schema");
-
-    // Get connection
+    // Get connection and initialize schema (unified connection management)
     let conn = db::connection::get_connection(&db_path).expect("Failed to connect to database");
+    db::ensure_schema_ready(&conn).expect("Failed to initialize schema");
 
     let save_path = "test-data/saves/OW-Babylonia-Year123-2024-01-31-22-44-04.zip";
 

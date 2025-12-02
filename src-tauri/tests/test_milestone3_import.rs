@@ -9,7 +9,6 @@
 // - Player goals
 // - Diplomacy
 
-use duckdb::Connection;
 use per_ankh_lib::db;
 use per_ankh_lib::parser;
 use std::path::PathBuf;
@@ -24,11 +23,9 @@ fn test_milestone3_import() {
         std::fs::remove_file(&db_path).ok();
     }
 
-    // Initialize schema
-    db::ensure_schema_ready(&db_path).expect("Failed to initialize schema");
-
-    // Open connection
-    let conn = Connection::open(&db_path).expect("Failed to open connection");
+    // Open connection and initialize schema (unified connection management)
+    let conn = db::connection::get_connection(&db_path).expect("Failed to open connection");
+    db::ensure_schema_ready(&conn).expect("Failed to initialize schema");
 
     // Import test save file (path relative to project root)
     let test_file = "../test-data/saves/OW-Carthage-Year39-2025-11-04-21-38-46.zip";
