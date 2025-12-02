@@ -226,22 +226,30 @@ async fn import_save_file_cmd(
 /// Tauri command to get game statistics
 ///
 /// Returns total number of games and nation play counts
+/// Optionally filters by collection_id (None = all games)
 #[tauri::command]
-async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> Result<GameStatistics, String> {
+async fn get_game_statistics(
+    collection_id: Option<i32>,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<GameStatistics, String> {
     pool.with_connection(|conn| {
         // Get total games count
-        let total_games: i64 = conn
-            .query_row(
+        let total_games: i64 = match collection_id {
+            Some(cid) => conn.query_row(
+                "SELECT COUNT(*) FROM matches WHERE collection_id = ?",
+                [cid],
+                |row| row.get(0),
+            )?,
+            None => conn.query_row(
                 "SELECT COUNT(*) FROM matches",
                 [],
                 |row| row.get(0),
-            )?;
+            )?,
+        };
 
         // Get nation statistics - count games per save owner's nation
         // Uses same logic as get_games_list: prefer is_save_owner, fall back to first human player
-        let mut stmt = conn
-            .prepare(
-                "SELECT COALESCE(so.nation, fh.nation) as nation, COUNT(*) as games_played
+        let base_query = "SELECT COALESCE(so.nation, fh.nation) as nation, COUNT(*) as games_played
                  FROM matches m
                  LEFT JOIN (
                      SELECT match_id, nation FROM players WHERE is_save_owner = TRUE
@@ -251,19 +259,33 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
                             ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY player_id) as rn
                      FROM players WHERE is_human = TRUE
                  ) fh ON m.match_id = fh.match_id AND fh.rn = 1
-                 WHERE COALESCE(so.nation, fh.nation) IS NOT NULL
-                 GROUP BY COALESCE(so.nation, fh.nation)
-                 ORDER BY games_played DESC"
-            )?;
+                 WHERE COALESCE(so.nation, fh.nation) IS NOT NULL";
 
-        let nations = stmt
-            .query_map([], |row| {
-                Ok(NationStats {
-                    nation: row.get(0)?,
-                    games_played: row.get(1)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let query = match collection_id {
+            Some(_) => format!("{} AND m.collection_id = ? GROUP BY COALESCE(so.nation, fh.nation) ORDER BY games_played DESC", base_query),
+            None => format!("{} GROUP BY COALESCE(so.nation, fh.nation) ORDER BY games_played DESC", base_query),
+        };
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let nations = match collection_id {
+            Some(cid) => stmt
+                .query_map([cid], |row| {
+                    Ok(NationStats {
+                        nation: row.get(0)?,
+                        games_played: row.get(1)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?,
+            None => stmt
+                .query_map([], |row| {
+                    Ok(NationStats {
+                        nation: row.get(0)?,
+                        games_played: row.get(1)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?,
+        };
 
         Ok(GameStatistics {
             total_games,
@@ -277,27 +299,45 @@ async fn get_game_statistics(pool: tauri::State<'_, db::connection::DbPool>) -> 
 /// Get save dates with nation info for calendar chart
 ///
 /// Returns one entry per save file with date and the save owner's nation
+/// Optionally filters by collection_id (None = all games)
 #[tauri::command]
-async fn get_save_dates(pool: tauri::State<'_, db::connection::DbPool>) -> Result<Vec<SaveDateEntry>, String> {
+async fn get_save_dates(
+    collection_id: Option<i32>,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<SaveDateEntry>, String> {
     pool.with_connection(|conn| {
         // Get save dates with nation from save owner
-        // Use DATE_TRUNC to normalize to YYYY-MM-DD format
-        let mut stmt = conn.prepare(
-            "SELECT STRFTIME(m.save_date, '%Y-%m-%d') as date, p.nation
+        // Use STRFTIME to normalize to YYYY-MM-DD format
+        let base_query = "SELECT STRFTIME(m.save_date, '%Y-%m-%d') as date, p.nation
              FROM matches m
              LEFT JOIN players p ON m.match_id = p.match_id AND p.is_save_owner = TRUE
-             WHERE m.save_date IS NOT NULL
-             ORDER BY m.save_date"
-        )?;
+             WHERE m.save_date IS NOT NULL";
 
-        let entries = stmt
-            .query_map([], |row| {
-                Ok(SaveDateEntry {
-                    date: row.get(0)?,
-                    nation: row.get(1)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let query = match collection_id {
+            Some(_) => format!("{} AND m.collection_id = ? ORDER BY m.save_date", base_query),
+            None => format!("{} ORDER BY m.save_date", base_query),
+        };
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let entries = match collection_id {
+            Some(cid) => stmt
+                .query_map([cid], |row| {
+                    Ok(SaveDateEntry {
+                        date: row.get(0)?,
+                        nation: row.get(1)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?,
+            None => stmt
+                .query_map([], |row| {
+                    Ok(SaveDateEntry {
+                        date: row.get(0)?,
+                        nation: row.get(1)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?,
+        };
 
         Ok(entries)
     })
