@@ -60,6 +60,9 @@ pub enum ParseError {
     #[error("Concurrency lock error: {0}")]
     ConcurrencyLock(String),
 
+    #[error("Schema upgrade required: {0}")]
+    SchemaUpgrade(String),
+
     #[error("Database error: {0}")]
     DatabaseError(#[from] duckdb::Error),
 

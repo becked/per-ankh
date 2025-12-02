@@ -337,7 +337,26 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
     if !schema_exists {
         create_schema(&conn)?;
     } else {
-        log::info!("Schema already exists, skipping initialization");
+        log::info!("Schema already exists, checking version...");
+
+        // Check if schema requires breaking upgrade (v2.6.0 removes FK constraints)
+        // This cannot be migrated incrementally - requires full reset
+        let has_v260 = conn
+            .query_row(
+                "SELECT 1 FROM schema_migrations WHERE version = '2.6.0'",
+                [],
+                |_| Ok(()),
+            )
+            .is_ok();
+
+        if !has_v260 {
+            log::warn!("Schema version < 2.6.0 detected, database reset required for FK removal");
+            return Err(crate::parser::ParseError::SchemaUpgrade(
+                "Database schema has been updated (v2.6.0) and requires a reset. \
+                 Your imported games will need to be re-imported after the reset.".to_string()
+            ).into());
+        }
+
         // Run migrations for existing databases
         migrate_schema(&conn)?;
     }
@@ -638,5 +657,40 @@ mod tests {
 
         // Leak tempdir to prevent cleanup while conn is in use
         std::mem::forget(dir);
+    }
+
+    #[test]
+    fn test_schema_has_no_foreign_keys() {
+        let schema_sql = include_str!("../../../docs/schema.sql");
+        let fk_count = schema_sql
+            .lines()
+            .filter(|line| {
+                let trimmed = line.trim().to_uppercase();
+                trimmed.starts_with("FOREIGN KEY")
+            })
+            .count();
+        assert_eq!(fk_count, 0, "Schema should have no FOREIGN KEY constraints");
+    }
+
+    #[test]
+    fn test_old_schema_triggers_upgrade_error() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Create old schema (pre-2.6.0) with just enough to pass schema_exists check
+        conn.execute_batch(
+            "CREATE TABLE matches (match_id BIGINT PRIMARY KEY);
+             CREATE TABLE schema_migrations (version VARCHAR PRIMARY KEY);
+             INSERT INTO schema_migrations (version) VALUES ('2.5.0');"
+        ).unwrap();
+        drop(conn);
+
+        // ensure_schema_ready should return error for old schema
+        let result = ensure_schema_ready(&db_path);
+        assert!(result.is_err());
+        let err_msg = result.unwrap_err().to_string();
+        assert!(err_msg.contains("v2.6.0") || err_msg.contains("reset"),
+                "Error should mention v2.6.0 or reset: {}", err_msg);
     }
 }
