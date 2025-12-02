@@ -223,7 +223,7 @@
   <!-- Collection filter dropdown -->
   <div class="px-2 pt-2 pb-1 border-b border-black">
     <select
-      class="w-full bg-brown text-tan text-xs p-1.5 rounded border border-black cursor-pointer"
+      class="w-full bg-[#35302b] text-tan text-xs p-1.5 rounded border border-black cursor-pointer"
       value={currentCollectionId ?? "all"}
       onchange={handleCollectionChange}
     >
