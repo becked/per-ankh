@@ -1560,6 +1560,50 @@ pub fn run() {
             // Windows file locking issues where DuckDB holds locks even after errors
             let recovery_marker = db_path.with_extension("db.recovery");
 
+            // Crash guard marker - written BEFORE opening database, deleted AFTER success
+            // If this exists on startup, we crashed during database init (e.g., DuckDB
+            // assertion failure from corruption), so we auto-reset the database
+            let crash_guard = db_path.with_extension("db.opening");
+
+            // Check for crash guard FIRST - indicates we crashed during last DB open
+            if crash_guard.exists() {
+                log::warn!("Crash guard found - database likely corrupted, auto-resetting");
+                // Remove guard first so we don't loop if deletion fails
+                let _ = std::fs::remove_file(&crash_guard);
+
+                match db::delete_database_files(&db_path) {
+                    Ok(deleted) => {
+                        log::info!(
+                            "Auto-recovered from database corruption, deleted {} files",
+                            deleted.len()
+                        );
+                        app.dialog()
+                            .message(
+                                "Per-Ankh detected database corruption and has automatically reset.\n\n\
+                                Your imported games have been cleared.\n\
+                                Please re-import your save files to continue.",
+                            )
+                            .kind(MessageDialogKind::Info)
+                            .title("Database Auto-Recovery")
+                            .blocking_show();
+                    }
+                    Err(e) => {
+                        log::error!("Failed to auto-recover corrupted database: {}", e);
+                        app.dialog()
+                            .message(format!(
+                                "Database corruption detected but auto-recovery failed: {}\n\n\
+                                Please manually delete the database files at:\n{}",
+                                e,
+                                db_path.display()
+                            ))
+                            .kind(MessageDialogKind::Error)
+                            .title("Auto-Recovery Failed")
+                            .blocking_show();
+                        return Err("Database auto-recovery failed".into());
+                    }
+                }
+            }
+
             // Check for recovery marker BEFORE opening database
             if recovery_marker.exists() {
                 log::warn!("Recovery marker found, deleting database files");
@@ -1630,8 +1674,22 @@ pub fn run() {
                 }
             }
 
+            // Write crash guard BEFORE opening database
+            // If we crash during DuckDB init (assertion failure from corruption),
+            // this marker will trigger auto-recovery on next startup
+            if let Err(e) = std::fs::write(&crash_guard, "opening database") {
+                log::warn!("Failed to write crash guard: {}", e);
+                // Continue anyway - crash guard is just a safety net
+            }
+
             // Try to initialize schema, offer recovery on failure
-            if let Err(e) = db::ensure_schema_ready(&db_path) {
+            let schema_result = db::ensure_schema_ready(&db_path);
+
+            // Remove crash guard - we didn't crash, so remove the marker
+            // Do this whether we succeeded or got a Rust error (only crashes leave it)
+            let _ = std::fs::remove_file(&crash_guard);
+
+            if let Err(e) = schema_result {
                 log::error!("Database initialization failed: {}", e);
 
                 // Truncate error message for dialog - full error is in logs
