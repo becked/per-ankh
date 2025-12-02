@@ -8,6 +8,7 @@ pub mod db;
 pub mod parser;
 
 use anyhow::Context;
+use db::collections::Collection;
 use parser::{ImportResult, ParseError};
 use serde::Serialize;
 use std::path::PathBuf;
@@ -42,6 +43,7 @@ pub struct GameInfo {
     pub save_owner_nation: Option<String>,
     pub total_turns: Option<i32>,
     pub save_owner_won: Option<bool>,
+    pub collection_id: i32,
 }
 
 #[derive(Serialize, TS)]
@@ -306,17 +308,19 @@ async fn get_save_dates(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
 /// Tauri command to get list of all games
 ///
 /// Returns list of games with basic info sorted by save date (newest first)
+/// Optionally filters by collection_id (None = all games)
 #[tauri::command]
-async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Result<Vec<GameInfo>, String> {
+async fn get_games_list(
+    collection_id: Option<i32>,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<GameInfo>, String> {
     pool.with_connection(|conn| {
         // Get all games ordered by save_date (newest first)
         // Join with save owner player (is_save_owner = TRUE) to get their nation and player_id
         // Falls back to first human player's nation when save owner is unknown (e.g., multiplayer
         // saves from opponent's machine where our OnlineID isn't present)
         // Compare winner_player_id with save owner player_id to determine if save owner won
-        let mut stmt = conn
-            .prepare(
-                "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
+        let base_query = "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
                         m.total_turns,
                         COALESCE(so.nation, fh.nation) as nation,
                         CASE
@@ -324,7 +328,8 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
                             WHEN so.player_id IS NOT NULL AND m.winner_player_id = so.player_id THEN TRUE
                             WHEN so.player_id IS NOT NULL THEN FALSE
                             ELSE NULL
-                        END as save_owner_won
+                        END as save_owner_won,
+                        m.collection_id
                  FROM matches m
                  LEFT JOIN (
                      SELECT match_id, nation, player_id
@@ -334,23 +339,45 @@ async fn get_games_list(pool: tauri::State<'_, db::connection::DbPool>) -> Resul
                      SELECT match_id, nation, player_id,
                             ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY player_id) as rn
                      FROM players WHERE is_human = TRUE
-                 ) fh ON m.match_id = fh.match_id AND fh.rn = 1
-                 ORDER BY m.save_date DESC"
-            )?;
+                 ) fh ON m.match_id = fh.match_id AND fh.rn = 1";
 
-        let games = stmt
-            .query_map([], |row| {
-                Ok(GameInfo {
-                    match_id: row.get(0)?,
-                    game_name: row.get(1)?,
-                    save_date: row.get(2)?,
-                    turn_year: None,
-                    total_turns: row.get(3)?,
-                    save_owner_nation: row.get(4)?,
-                    save_owner_won: row.get(5)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let query = match collection_id {
+            Some(_) => format!("{} WHERE m.collection_id = ? ORDER BY m.save_date DESC", base_query),
+            None => format!("{} ORDER BY m.save_date DESC", base_query),
+        };
+
+        let mut stmt = conn.prepare(&query)?;
+
+        let games = match collection_id {
+            Some(cid) => stmt
+                .query_map([cid], |row| {
+                    Ok(GameInfo {
+                        match_id: row.get(0)?,
+                        game_name: row.get(1)?,
+                        save_date: row.get(2)?,
+                        turn_year: None,
+                        total_turns: row.get(3)?,
+                        save_owner_nation: row.get(4)?,
+                        save_owner_won: row.get(5)?,
+                        collection_id: row.get(6)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?,
+            None => stmt
+                .query_map([], |row| {
+                    Ok(GameInfo {
+                        match_id: row.get(0)?,
+                        game_name: row.get(1)?,
+                        save_date: row.get(2)?,
+                        turn_year: None,
+                        total_turns: row.get(3)?,
+                        save_owner_nation: row.get(4)?,
+                        save_owner_won: row.get(5)?,
+                        collection_id: row.get(6)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?,
+        };
 
         Ok(games)
     })
@@ -1342,9 +1369,100 @@ async fn set_primary_user_online_id(
     .map_err(|e| e.to_string())
 }
 
+// ============================================================================
+// COLLECTION COMMANDS
+// ============================================================================
+
+/// Tauri command to get all collections
+#[tauri::command]
+async fn get_collections(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<Collection>, String> {
+    pool.with_connection(|conn| Ok(db::collections::get_collections(conn)?))
+        .context("Failed to get collections")
+        .map_err(|e| e.to_string())
+}
+
+/// Tauri command to create a new collection
+#[tauri::command]
+async fn create_collection(
+    pool: tauri::State<'_, db::connection::DbPool>,
+    name: String,
+) -> Result<Collection, String> {
+    pool.with_connection(|conn| Ok(db::collections::create_collection(conn, &name)?))
+        .context("Failed to create collection")
+        .map_err(|e| e.to_string())
+}
+
+/// Tauri command to rename a collection
+#[tauri::command]
+async fn rename_collection(
+    pool: tauri::State<'_, db::connection::DbPool>,
+    collection_id: i32,
+    name: String,
+) -> Result<(), String> {
+    pool.with_connection(|conn| Ok(db::collections::rename_collection(conn, collection_id, &name)?))
+        .context("Failed to rename collection")
+        .map_err(|e| e.to_string())
+}
+
+/// Tauri command to delete a collection
+///
+/// Moves all matches in the deleted collection to the default collection.
+#[tauri::command]
+async fn delete_collection(
+    pool: tauri::State<'_, db::connection::DbPool>,
+    collection_id: i32,
+) -> Result<(), String> {
+    pool.with_connection(|conn| Ok(db::collections::delete_collection(conn, collection_id)?))
+        .context("Failed to delete collection")
+        .map_err(|e| e.to_string())
+}
+
+/// Tauri command to set the default collection
+#[tauri::command]
+async fn set_default_collection(
+    pool: tauri::State<'_, db::connection::DbPool>,
+    collection_id: i32,
+) -> Result<(), String> {
+    pool.with_connection(|conn| Ok(db::collections::set_default_collection(conn, collection_id)?))
+        .context("Failed to set default collection")
+        .map_err(|e| e.to_string())
+}
+
+/// Tauri command to move specific matches to a collection
+#[tauri::command]
+async fn move_matches_to_collection(
+    pool: tauri::State<'_, db::connection::DbPool>,
+    match_ids: Vec<i64>,
+    collection_id: i32,
+) -> Result<usize, String> {
+    pool.with_connection(|conn| {
+        Ok(db::collections::move_matches_to_collection(conn, &match_ids, collection_id)?)
+    })
+    .context("Failed to move matches")
+    .map_err(|e| format!("{:#}", e))
+}
+
+/// Tauri command to move matches by game name pattern to a collection
+///
+/// Uses SQL LIKE pattern matching (% for wildcard).
+#[tauri::command]
+async fn move_matches_by_game_name(
+    pool: tauri::State<'_, db::connection::DbPool>,
+    pattern: String,
+    collection_id: i32,
+) -> Result<usize, String> {
+    pool.with_connection(|conn| Ok(db::collections::move_matches_by_game_name(conn, &pattern, collection_id)?))
+        .context("Failed to move matches by name")
+        .map_err(|e| e.to_string())
+}
+
 /// Tauri command to get all known OnlineIDs with player names and save counts
 ///
-/// Returns list of distinct OnlineIDs with aggregated player names, sorted by save count
+/// Returns list of distinct OnlineIDs with aggregated player names, sorted by save count.
+/// Only counts saves in the default collection to prevent challenge games from polluting
+/// Primary User detection.
 #[tauri::command]
 async fn get_known_online_ids(
     pool: tauri::State<'_, db::connection::DbPool>,
@@ -1352,13 +1470,18 @@ async fn get_known_online_ids(
     pool.with_connection(|conn| {
         // Use string_agg to get comma-separated player names, then split in Rust
         // DuckDB's list() returns a native list type that's harder to deserialize
+        // Only count saves in the default collection for Primary User detection
         let mut stmt = conn.prepare(
-            "SELECT online_id,
-                    string_agg(DISTINCT player_name, '|||' ORDER BY player_name) as player_names,
+            "SELECT p.online_id,
+                    string_agg(DISTINCT p.player_name, '|||' ORDER BY p.player_name) as player_names,
                     COUNT(*) as save_count
-             FROM players
-             WHERE online_id IS NOT NULL AND online_id != ''
-             GROUP BY online_id
+             FROM players p
+             JOIN matches m ON p.match_id = m.match_id
+             JOIN collections c ON m.collection_id = c.collection_id
+             WHERE p.online_id IS NOT NULL
+               AND p.online_id != ''
+               AND c.is_default = TRUE
+             GROUP BY p.online_id
              ORDER BY save_count DESC"
         )?;
 
@@ -1409,6 +1532,13 @@ pub fn run() {
             get_match_debug_data,
             get_primary_user_online_id,
             set_primary_user_online_id,
+            get_collections,
+            create_collection,
+            rename_collection,
+            delete_collection,
+            set_default_collection,
+            move_matches_to_collection,
+            move_matches_by_game_name,
             get_known_online_ids,
             run_event_test,
             reset_database_cmd,

@@ -1,4 +1,4 @@
--- Old World Game Data Schema v2.4
+-- Old World Game Data Schema v2.5
 -- DuckDB Schema for Multi-Match Game Save Analysis
 --
 -- Design Principles:
@@ -40,6 +40,20 @@ CREATE TABLE match_locks (
 );
 
 CREATE INDEX idx_match_locks_stale ON match_locks(locked_at);
+
+-- Collections for organizing matches (e.g., "Personal", "Challenge Games")
+-- Allows filtering stats and preventing player name pollution in Primary User detection
+-- Sequence starts at 2 because ID 1 is reserved for the default collection
+CREATE SEQUENCE collections_id_seq START 2;
+
+CREATE TABLE collections (
+    collection_id INTEGER PRIMARY KEY DEFAULT nextval('collections_id_seq'),
+    name VARCHAR NOT NULL UNIQUE,
+    is_default BOOLEAN NOT NULL DEFAULT FALSE
+);
+
+-- Seed default collection with explicit ID 1
+INSERT INTO collections (collection_id, name, is_default) VALUES (1, 'Personal', TRUE);
 
 CREATE TABLE matches (
     match_id BIGINT NOT NULL PRIMARY KEY,
@@ -88,9 +102,13 @@ CREATE TABLE matches (
     game_version VARCHAR, -- Game version number (e.g., "1.0.70671")
     enabled_mods TEXT, -- Mod list from Version string (e.g., "name-every-child1+different-leaders1")
     enabled_dlc TEXT, -- DLC list from GameContent (e.g., "DLC_HEROES_OF_AEGEAN+DLC_THE_SACRED_AND_THE_PROFANE")
+    -- Collection for organizing matches
+    collection_id INTEGER NOT NULL DEFAULT 1 REFERENCES collections(collection_id),
     -- Uniqueness: Each (game_id, turn) pair is a unique snapshot
     UNIQUE (game_id, total_turns)
 );
+
+CREATE INDEX idx_matches_collection ON matches(collection_id);
 
 -- User settings for save owner identification
 CREATE TABLE user_settings (
@@ -971,7 +989,8 @@ INSERT INTO schema_migrations (version, description) VALUES
 ('2.0.0', 'Clean greenfield schema for multi-match Old World game analysis - 85% XML coverage'),
 ('2.2.0', 'Added match_locks table for multi-process concurrency control'),
 ('2.3.0', 'Added is_save_owner column to players table and user_settings table for save owner tracking'),
-('2.4.0', 'Separated mods and DLC: renamed enabled_dlc to enabled_mods, added new enabled_dlc from GameContent');
+('2.4.0', 'Separated mods and DLC: renamed enabled_dlc to enabled_mods, added new enabled_dlc from GameContent'),
+('2.5.0', 'Added collections table for organizing matches and filtering stats');
 
 
 -- ============================================================================

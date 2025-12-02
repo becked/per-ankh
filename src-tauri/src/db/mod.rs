@@ -1,5 +1,6 @@
 // Database module for DuckDB operations
 
+pub mod collections;
 pub mod connection;
 pub mod schema;
 pub mod settings;
