@@ -41,11 +41,25 @@ pub fn parse_characters_struct(doc: &XmlDocument) -> Result<Vec<CharacterData>> 
             .and_then(|s| s.parse::<i32>().ok());
         let death_reason = char_node.opt_child_text("DeathReason").map(|s| s.to_string());
 
-        // Parent relationships - these will be set to None here and populated in Pass 2
-        // This matches the existing two-pass strategy
-        let birth_father_xml_id = None;
-        let birth_mother_xml_id = None;
-        let birth_city_xml_id = None;
+        // Parent relationships - parsed inline, used during insertion
+        let birth_father_xml_id: Option<i32> = char_node
+            .children()
+            .find(|n| n.has_tag_name("BirthFatherID"))
+            .and_then(|n| n.text())
+            .and_then(|s| s.parse().ok());
+
+        let birth_mother_xml_id: Option<i32> = char_node
+            .children()
+            .find(|n| n.has_tag_name("BirthMotherID"))
+            .and_then(|n| n.text())
+            .and_then(|s| s.parse().ok());
+
+        // Birth city - parsed inline, updated after cities are inserted
+        let birth_city_xml_id: Option<i32> = char_node
+            .children()
+            .find(|n| n.has_tag_name("BirthCityID"))
+            .and_then(|n| n.text())
+            .and_then(|s| s.parse().ok());
 
         // Affiliations
         let family = char_node.opt_child_text("Family").map(|s| s.to_string());

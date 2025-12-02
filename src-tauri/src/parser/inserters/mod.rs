@@ -28,7 +28,7 @@ pub mod tile_data;
 pub mod timeseries;
 
 // Batch 1 exports
-pub use characters::insert_characters_core;
+pub use characters::{insert_characters, update_character_birth_cities};
 pub use cities::insert_cities;
 pub use players::insert_players;
 pub use tiles::insert_tiles_core;

@@ -1,4 +1,4 @@
--- Old World Game Data Schema v2.5
+-- Old World Game Data Schema v2.6
 -- DuckDB Schema for Multi-Match Game Save Analysis
 --
 -- Design Principles:
@@ -6,7 +6,7 @@
 -- - Stores data from multiple XML save files
 -- - ~85% coverage of XML data structures
 -- - XML-first terminology (Tile not Territory, Character not Ruler)
--- - Proper normalization and foreign key constraints
+-- - Relationships documented in comments (FK constraints removed for ETL performance)
 -- - Optimized for analytical queries across matches
 --
 -- Coverage: Characters, Units, Families, Religions, Laws, Diplomacy,
@@ -103,7 +103,7 @@ CREATE TABLE matches (
     enabled_mods TEXT, -- Mod list from Version string (e.g., "name-every-child1+different-leaders1")
     enabled_dlc TEXT, -- DLC list from GameContent (e.g., "DLC_HEROES_OF_AEGEAN+DLC_THE_SACRED_AND_THE_PROFANE")
     -- Collection for organizing matches
-    collection_id INTEGER NOT NULL DEFAULT 1 REFERENCES collections(collection_id),
+    collection_id INTEGER NOT NULL DEFAULT 1,  -- References: collections(collection_id)
     -- Uniqueness: Each (game_id, turn) pair is a unique snapshot
     UNIQUE (game_id, total_turns)
 );
@@ -118,11 +118,10 @@ CREATE TABLE user_settings (
 
 CREATE TABLE match_settings (
     setting_id BIGINT NOT NULL PRIMARY KEY,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     setting_type VARCHAR NOT NULL, -- 'game_option', 'dlc_content', 'map_option', 'occurrence_level'
     setting_key VARCHAR NOT NULL,
-    setting_value VARCHAR,
-    FOREIGN KEY (match_id) REFERENCES matches(match_id)
+    setting_value VARCHAR
 );
 
 -- Useful view for match overview
@@ -150,7 +149,7 @@ GROUP BY m.match_id, m.game_name, m.save_date, m.total_turns,
 
 CREATE TABLE players (
     player_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     xml_id INTEGER,  -- Original XML Player ID for debugging and reference
     player_name VARCHAR NOT NULL,
     player_name_normalized VARCHAR NOT NULL,
@@ -183,27 +182,24 @@ CREATE TABLE players (
     tiles_purchased INTEGER DEFAULT 0,
     state_religion_changes INTEGER DEFAULT 0,
     tribe_mercenaries_hired INTEGER DEFAULT 0,
-    PRIMARY KEY (player_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id)
+    PRIMARY KEY (player_id, match_id)
 );
 
 CREATE TABLE player_resources (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     yield_type VARCHAR NOT NULL, -- YIELD_CIVICS, YIELD_TRAINING, YIELD_SCIENCE, etc.
     amount INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, yield_type),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, yield_type)
 );
 
 CREATE TABLE player_council (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     position VARCHAR NOT NULL, -- COUNCIL_AMBASSADOR, COUNCIL_CHANCELLOR, etc.
     character_id INTEGER NOT NULL,
     appointed_turn INTEGER,
-    PRIMARY KEY (player_id, match_id, position),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, position)
 );
 
 
@@ -214,21 +210,21 @@ CREATE TABLE player_council (
 
 CREATE TABLE characters (
     character_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     xml_id INTEGER,  -- Original XML Character ID for debugging and reference
     -- Identity
     first_name VARCHAR,
     gender VARCHAR, -- GENDER_MALE, GENDER_FEMALE
-    player_id INTEGER, -- NULL for tribal/neutral characters
+    player_id INTEGER,  -- References: players(player_id, match_id); NULL for tribal/neutral characters
     tribe VARCHAR, -- Non-null for tribal characters
     -- Birth and death
     birth_turn INTEGER NOT NULL,
-    birth_city_id INTEGER,
+    birth_city_id INTEGER,  -- References: cities(city_id, match_id)
     death_turn INTEGER,
     death_reason VARCHAR, -- DEATH_OLD_AGE, DEATH_BATTLE, DEATH_ILLNESS, etc.
     -- Parentage and lineage
-    birth_father_id INTEGER,
-    birth_mother_id INTEGER,
+    birth_father_id INTEGER,  -- References: characters(character_id, match_id)
+    birth_mother_id INTEGER,  -- References: characters(character_id, match_id)
     -- Affiliations
     family VARCHAR, -- FAMILY_SARGONID, etc.
     nation VARCHAR,
@@ -254,63 +250,49 @@ CREATE TABLE characters (
     -- Other
     nation_joined_turn INTEGER,
     seed BIGINT, -- Random seed for character generation
-    PRIMARY KEY (character_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
-    -- TODO: Self-referential foreign keys disabled due to DuckDB limitation
-    -- DuckDB blocks UPDATE statements on rows referenced by other rows, even with DEFERRABLE
-    -- This prevents updating parent relationships when a character is also a parent
-    -- We validate parent relationships at application level instead
-    -- FOREIGN KEY (birth_father_id, match_id) REFERENCES characters(character_id, match_id),
-    -- FOREIGN KEY (birth_mother_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (character_id, match_id)
 );
 
 CREATE TABLE character_traits (
-    character_id INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,  -- References: characters(character_id, match_id)
     match_id BIGINT NOT NULL,
     trait VARCHAR NOT NULL, -- TRAIT_WISE, TRAIT_AMBITIOUS, TRAIT_ILL, etc.
     acquired_turn INTEGER NOT NULL,
     removed_turn INTEGER, -- NULL if still active
-    PRIMARY KEY (character_id, match_id, trait, acquired_turn),
-    FOREIGN KEY (character_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (character_id, match_id, trait, acquired_turn)
 );
 
 CREATE TABLE character_relationships (
-    character_id INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,  -- References: characters(character_id, match_id)
     match_id BIGINT NOT NULL,
-    related_character_id INTEGER NOT NULL,
+    related_character_id INTEGER NOT NULL,  -- References: characters(character_id, match_id)
     relationship_type VARCHAR NOT NULL, -- RELATIONSHIP_LOVES, RELATIONSHIP_PLOTTING_AGAINST, etc.
     relationship_value INTEGER, -- Strength/intensity where applicable
     started_turn INTEGER,
     ended_turn INTEGER,
-    PRIMARY KEY (character_id, match_id, related_character_id, relationship_type),
-    FOREIGN KEY (character_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (related_character_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (character_id, match_id, related_character_id, relationship_type)
 );
 
 CREATE TABLE character_marriages (
-    character_id INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,  -- References: characters(character_id, match_id)
     match_id BIGINT NOT NULL,
-    spouse_id INTEGER NOT NULL,
+    spouse_id INTEGER NOT NULL,  -- References: characters(character_id, match_id)
     marriage_turn INTEGER NOT NULL,
     ended_turn INTEGER, -- Death or divorce
-    PRIMARY KEY (character_id, match_id, spouse_id, marriage_turn),
-    FOREIGN KEY (character_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (spouse_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (character_id, match_id, spouse_id, marriage_turn)
 );
 
 CREATE TABLE character_stats (
-    character_id INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,  -- References: characters(character_id, match_id)
     match_id BIGINT NOT NULL,
     stat_name VARCHAR NOT NULL, -- STAT_CITY_FOUNDED, STAT_TECH_DISCOVERED, etc.
     stat_value INTEGER NOT NULL,
-    PRIMARY KEY (character_id, match_id, stat_name),
-    FOREIGN KEY (character_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (character_id, match_id, stat_name)
 );
 
 CREATE TABLE character_missions (
     mission_id INTEGER NOT NULL,
-    character_id INTEGER NOT NULL,
+    character_id INTEGER NOT NULL,  -- References: characters(character_id, match_id)
     match_id BIGINT NOT NULL,
     mission_type VARCHAR NOT NULL, -- MISSION_AMBASSADOR, MISSION_HOLD_COURT, etc.
     started_turn INTEGER NOT NULL,
@@ -318,8 +300,7 @@ CREATE TABLE character_missions (
     target_type VARCHAR, -- 'player', 'family', 'city', 'character', etc.
     target_id INTEGER,
     mission_state VARCHAR, -- JSON for complex state
-    PRIMARY KEY (mission_id, match_id),
-    FOREIGN KEY (character_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (mission_id, match_id)
 );
 
 -- View: Living rulers (replaces old "rulers" table)
@@ -343,37 +324,32 @@ ORDER BY c.match_id, c.player_id, c.became_leader_turn;
 
 CREATE TABLE families (
     family_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     xml_id INTEGER,  -- Original XML Family ID for debugging and reference
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     family_name VARCHAR NOT NULL, -- FAMILY_SARGONID, FAMILY_HANNONID, etc.
     family_class VARCHAR NOT NULL, -- FAMILYCLASS_CHAMPIONS, FAMILYCLASS_TRADERS, etc.
-    head_character_id INTEGER,
+    head_character_id INTEGER,  -- References: characters(character_id, match_id)
     seat_city_id INTEGER,
     turns_without_leader INTEGER DEFAULT 0,
-    PRIMARY KEY (family_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (head_character_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (family_id, match_id)
 );
 
 CREATE TABLE family_opinion_history (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     family_name VARCHAR NOT NULL,
     turn INTEGER NOT NULL,
     opinion INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, family_name, turn),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, family_name, turn)
 );
 
 CREATE TABLE family_law_opinions (
-    family_id INTEGER NOT NULL,
+    family_id INTEGER NOT NULL,  -- References: families(family_id, match_id)
     match_id BIGINT NOT NULL,
     law_category VARCHAR NOT NULL, -- LAWCLASS_SLAVERY_FREEDOM, etc.
     opinion_value INTEGER NOT NULL,
-    PRIMARY KEY (family_id, match_id, law_category),
-    FOREIGN KEY (family_id, match_id) REFERENCES families(family_id, match_id)
+    PRIMARY KEY (family_id, match_id, law_category)
 );
 
 
@@ -383,27 +359,23 @@ CREATE TABLE family_law_opinions (
 
 CREATE TABLE religions (
     religion_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     xml_id INTEGER,  -- Original XML Religion ID for debugging and reference
     religion_name VARCHAR NOT NULL, -- RELIGION_ZOROASTRIANISM, RELIGION_JUDAISM, etc.
     founded_turn INTEGER,
-    founder_player_id INTEGER,
-    head_character_id INTEGER,
+    founder_player_id INTEGER,  -- References: players(player_id, match_id)
+    head_character_id INTEGER,  -- References: characters(character_id, match_id)
     holy_city_id INTEGER,
-    PRIMARY KEY (religion_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (founder_player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (head_character_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (religion_id, match_id)
 );
 
 CREATE TABLE religion_opinion_history (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     religion_name VARCHAR NOT NULL,
     turn INTEGER NOT NULL,
     opinion INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, religion_name, turn),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, religion_name, turn)
 );
 
 
@@ -413,15 +385,12 @@ CREATE TABLE religion_opinion_history (
 
 CREATE TABLE tribes (
     tribe_id VARCHAR NOT NULL, -- TRIBE_SCYTHIANS, TRIBE_DANES, etc.
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     xml_id INTEGER,  -- Original XML Tribe ID for debugging and reference
-    leader_character_id INTEGER,
-    allied_player_id INTEGER,
+    leader_character_id INTEGER,  -- References: characters(character_id, match_id)
+    allied_player_id INTEGER,  -- References: players(player_id, match_id)
     religion VARCHAR,
-    PRIMARY KEY (tribe_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (leader_character_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (allied_player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (tribe_id, match_id)
 );
 
 
@@ -431,9 +400,9 @@ CREATE TABLE tribes (
 
 CREATE TABLE cities (
     city_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     xml_id INTEGER,  -- Original XML City ID for debugging and reference
-    player_id INTEGER,  -- NULL for cities in anarchy/being captured (Player="-1" in XML)
+    player_id INTEGER,  -- References: players(player_id, match_id); NULL for cities in anarchy/being captured
     tile_id INTEGER NOT NULL,
     -- Identity
     city_name VARCHAR NOT NULL,
@@ -446,57 +415,49 @@ CREATE TABLE cities (
     citizens INTEGER DEFAULT 1,
     growth_progress INTEGER DEFAULT 0,
     -- Leadership
-    governor_id INTEGER,
-    general_id INTEGER,
-    agent_id INTEGER, -- Spy/agent assigned
+    governor_id INTEGER,  -- References: characters(character_id, match_id)
+    general_id INTEGER,  -- References: characters(character_id, match_id)
+    agent_id INTEGER,  -- References: characters(character_id, match_id)
     -- Production
     hurry_civics_count INTEGER DEFAULT 0,
     hurry_money_count INTEGER DEFAULT 0,
     specialist_count INTEGER DEFAULT 0,
     -- Ownership tracking
     first_owner_player_id INTEGER,
-    PRIMARY KEY (city_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (governor_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (general_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (agent_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (city_id, match_id)
 );
 
 CREATE TABLE city_yields (
-    city_id INTEGER NOT NULL,
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
     match_id BIGINT NOT NULL,
     yield_type VARCHAR NOT NULL, -- YIELD_GROWTH, YIELD_CULTURE, YIELD_HAPPINESS
     progress INTEGER DEFAULT 0,
     overflow INTEGER DEFAULT 0,
     level INTEGER DEFAULT 0,
-    PRIMARY KEY (city_id, match_id, yield_type),
-    FOREIGN KEY (city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (city_id, match_id, yield_type)
 );
 
 CREATE TABLE city_culture (
-    city_id INTEGER NOT NULL,
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
     match_id BIGINT NOT NULL,
     team_id INTEGER NOT NULL,
     culture_level INTEGER DEFAULT 0,
     culture_progress INTEGER DEFAULT 0,
     happiness_level INTEGER DEFAULT 0,
-    PRIMARY KEY (city_id, match_id, team_id),
-    FOREIGN KEY (city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (city_id, match_id, team_id)
 );
 
 CREATE TABLE city_religions (
-    city_id INTEGER NOT NULL,
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
     match_id BIGINT NOT NULL,
     religion VARCHAR NOT NULL,
     acquired_turn INTEGER,
-    PRIMARY KEY (city_id, match_id, religion),
-    FOREIGN KEY (city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (city_id, match_id, religion)
 );
 
 CREATE TABLE city_production_queue (
     queue_id INTEGER NOT NULL,
-    city_id INTEGER NOT NULL,
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
     match_id BIGINT NOT NULL,
     queue_position INTEGER NOT NULL,
     build_type VARCHAR NOT NULL, -- BUILD_UNIT, BUILD_IMPROVEMENT, BUILD_PROJECT
@@ -504,27 +465,24 @@ CREATE TABLE city_production_queue (
     progress INTEGER DEFAULT 0,
     is_repeat BOOLEAN DEFAULT false,
     yield_costs VARCHAR, -- JSON: {"YIELD_TRAINING": 100, "YIELD_IRON": 20}
-    PRIMARY KEY (queue_id, match_id),
-    FOREIGN KEY (city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (queue_id, match_id)
 );
 
 -- Aggregate tables for statistics
 CREATE TABLE city_units_produced (
-    city_id INTEGER NOT NULL,
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
     match_id BIGINT NOT NULL,
     unit_type VARCHAR NOT NULL,
     count INTEGER NOT NULL,
-    PRIMARY KEY (city_id, match_id, unit_type),
-    FOREIGN KEY (city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (city_id, match_id, unit_type)
 );
 
 CREATE TABLE city_projects_completed (
-    city_id INTEGER NOT NULL,
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
     match_id BIGINT NOT NULL,
     project_type VARCHAR NOT NULL,
     count INTEGER NOT NULL,
-    PRIMARY KEY (city_id, match_id, project_type),
-    FOREIGN KEY (city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (city_id, match_id, project_type)
 );
 
 
@@ -534,7 +492,7 @@ CREATE TABLE city_projects_completed (
 
 CREATE TABLE tiles (
     tile_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     xml_id INTEGER,  -- Original XML Tile ID for debugging and reference
     x INTEGER NOT NULL,
     y INTEGER NOT NULL,
@@ -559,8 +517,8 @@ CREATE TABLE tiles (
     -- Infrastructure
     has_road BOOLEAN DEFAULT false,
     -- Ownership
-    owner_player_id INTEGER,
-    owner_city_id INTEGER, -- Which city's territory
+    owner_player_id INTEGER,  -- References: players(player_id, match_id)
+    owner_city_id INTEGER,  -- References: cities(city_id, match_id)
     -- Sites
     is_city_site BOOLEAN DEFAULT false,
     tribe_site VARCHAR, -- Tribal site marker
@@ -569,28 +527,24 @@ CREATE TABLE tiles (
     -- Seeds
     init_seed BIGINT,
     turn_seed BIGINT,
-    PRIMARY KEY (tile_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (owner_player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (owner_city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (tile_id, match_id)
 );
 
 -- Historical tile changes (sparse - only record changes)
 CREATE TABLE tile_changes (
     change_id INTEGER NOT NULL,
-    tile_id INTEGER NOT NULL,
+    tile_id INTEGER NOT NULL,  -- References: tiles(tile_id, match_id)
     match_id BIGINT NOT NULL,
     turn INTEGER NOT NULL,
     change_type VARCHAR NOT NULL, -- 'owner', 'terrain', 'vegetation', 'improvement'
     old_value VARCHAR,
     new_value VARCHAR,
-    PRIMARY KEY (change_id, match_id),
-    FOREIGN KEY (tile_id, match_id) REFERENCES tiles(tile_id, match_id)
+    PRIMARY KEY (change_id, match_id)
 );
 
 -- Fog of war visibility (optional - for competitive analysis)
 CREATE TABLE tile_visibility (
-    tile_id INTEGER NOT NULL,
+    tile_id INTEGER NOT NULL,  -- References: tiles(tile_id, match_id)
     match_id BIGINT NOT NULL,
     team_id INTEGER NOT NULL,
     revealed_turn INTEGER,
@@ -600,19 +554,16 @@ CREATE TABLE tile_visibility (
     visible_vegetation VARCHAR,
     visible_improvement VARCHAR,
     visible_owner_player_id INTEGER,
-    PRIMARY KEY (tile_id, match_id, team_id),
-    FOREIGN KEY (tile_id, match_id) REFERENCES tiles(tile_id, match_id)
+    PRIMARY KEY (tile_id, match_id, team_id)
 );
 
 -- Tile ownership history (for territorial expansion and conquest analysis)
 CREATE TABLE tile_ownership_history (
-    tile_id INTEGER NOT NULL,
+    tile_id INTEGER NOT NULL,  -- References: tiles(tile_id, match_id)
     match_id BIGINT NOT NULL,
     turn INTEGER NOT NULL,
-    owner_player_id INTEGER,  -- NULL if unowned (-1 in XML OwnerHistory)
-    PRIMARY KEY (tile_id, match_id, turn),
-    FOREIGN KEY (tile_id, match_id) REFERENCES tiles(tile_id, match_id),
-    FOREIGN KEY (owner_player_id, match_id) REFERENCES players(player_id, match_id)
+    owner_player_id INTEGER,  -- References: players(player_id, match_id); NULL if unowned
+    PRIMARY KEY (tile_id, match_id, turn)
 );
 
 
@@ -625,12 +576,11 @@ CREATE TABLE tile_ownership_history (
 
 -- Aggregate production statistics
 CREATE TABLE player_units_produced (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     unit_type VARCHAR NOT NULL,
     count INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, unit_type),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, unit_type)
 );
 
 
@@ -639,30 +589,27 @@ CREATE TABLE player_units_produced (
 -- ============================================================================
 
 CREATE TABLE technologies_completed (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     tech VARCHAR NOT NULL, -- TECH_IRONWORKING, TECH_ASTRONOMY, etc.
     completed_turn INTEGER,
-    PRIMARY KEY (player_id, match_id, tech),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, tech)
 );
 
 CREATE TABLE technology_progress (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     tech VARCHAR NOT NULL,
     progress INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, tech),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, tech)
 );
 
 CREATE TABLE technology_states (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     tech VARCHAR NOT NULL,
     state VARCHAR NOT NULL, -- 'available', 'passed', 'trashed', 'locked', 'targeted'
-    PRIMARY KEY (player_id, match_id, tech, state),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, tech, state)
 );
 
 
@@ -671,14 +618,13 @@ CREATE TABLE technology_states (
 -- ============================================================================
 
 CREATE TABLE laws (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     law_category VARCHAR NOT NULL, -- LAWCLASS_SLAVERY_FREEDOM, etc.
     law VARCHAR NOT NULL, -- Specific law within category
     adopted_turn INTEGER NOT NULL,
     change_count INTEGER DEFAULT 1, -- Times this category changed
-    PRIMARY KEY (player_id, match_id, law_category),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, law_category)
 );
 
 
@@ -687,7 +633,7 @@ CREATE TABLE laws (
 -- ============================================================================
 
 CREATE TABLE diplomacy (
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     entity1_type VARCHAR NOT NULL, -- 'player' or 'tribe'
     entity1_id VARCHAR NOT NULL,
     entity2_type VARCHAR NOT NULL, -- 'player' or 'tribe'
@@ -697,8 +643,7 @@ CREATE TABLE diplomacy (
     last_conflict_turn INTEGER,
     last_diplomacy_turn INTEGER,
     diplomacy_blocked_until_turn INTEGER,
-    PRIMARY KEY (match_id, entity1_type, entity1_id, entity2_type, entity2_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id)
+    PRIMARY KEY (match_id, entity1_type, entity1_id, entity2_type, entity2_id)
 );
 
 
@@ -708,19 +653,17 @@ CREATE TABLE diplomacy (
 
 CREATE TABLE player_goals (
     goal_id INTEGER NOT NULL,
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     goal_type VARCHAR NOT NULL, -- GOAL_SIX_CONNECTED_CITIES, GOAL_MUSAEUM, etc.
-    leader_character_id INTEGER, -- Character pursuing this
+    leader_character_id INTEGER,  -- References: characters(character_id, match_id)
     started_turn INTEGER NOT NULL,
     completed_turn INTEGER,
     failed_turn INTEGER,
     max_turns INTEGER,
     progress INTEGER DEFAULT 0,
     goal_state VARCHAR, -- JSON for complex tracking
-    PRIMARY KEY (goal_id, match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (leader_character_id, match_id) REFERENCES characters(character_id, match_id)
+    PRIMARY KEY (goal_id, match_id)
 );
 
 
@@ -730,64 +673,53 @@ CREATE TABLE player_goals (
 
 CREATE TABLE event_logs (
     log_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     turn INTEGER NOT NULL,
     log_type VARCHAR NOT NULL, -- LOG_TECH_DISCOVERED, LOG_CITY_FOUNDED, etc.
-    player_id INTEGER,
+    player_id INTEGER,  -- References: players(player_id, match_id)
     description VARCHAR,
     data1 INTEGER,
     data2 INTEGER,
     data3 INTEGER,
     is_permanent BOOLEAN DEFAULT false,
-    PRIMARY KEY (log_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (log_id, match_id)
 );
 
 CREATE TABLE story_events (
     event_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     event_type VARCHAR NOT NULL, -- EVENTSTORY_MARRIAGE_OFFER, etc.
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     occurred_turn INTEGER NOT NULL,
-    primary_character_id INTEGER,
-    secondary_character_id INTEGER,
-    city_id INTEGER,
+    primary_character_id INTEGER,  -- References: characters(character_id, match_id)
+    secondary_character_id INTEGER,  -- References: characters(character_id, match_id)
+    city_id INTEGER,  -- References: cities(city_id, match_id)
     event_text VARCHAR,
-    PRIMARY KEY (event_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id),
-    FOREIGN KEY (primary_character_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (secondary_character_id, match_id) REFERENCES characters(character_id, match_id),
-    FOREIGN KEY (city_id, match_id) REFERENCES cities(city_id, match_id)
+    PRIMARY KEY (event_id, match_id)
 );
 
 CREATE TABLE story_choices (
-    event_id INTEGER NOT NULL,
+    event_id INTEGER NOT NULL,  -- References: story_events(event_id, match_id)
     match_id BIGINT NOT NULL,
     option_selected VARCHAR NOT NULL,
     choice_turn INTEGER NOT NULL,
-    PRIMARY KEY (event_id, match_id),
-    FOREIGN KEY (event_id, match_id) REFERENCES story_events(event_id, match_id)
+    PRIMARY KEY (event_id, match_id)
 );
 
 CREATE TABLE event_outcomes (
     outcome_id INTEGER NOT NULL,
-    match_id BIGINT NOT NULL,
-    event_id INTEGER, -- NULL for non-story outcomes
-    player_id INTEGER NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
+    event_id INTEGER,  -- References: story_events(event_id, match_id); NULL for non-story outcomes
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     outcome_type VARCHAR NOT NULL, -- BONUS_XP_CHARACTER_SMALL, etc.
     count INTEGER DEFAULT 1,
     applied_turn INTEGER NOT NULL,
-    PRIMARY KEY (outcome_id, match_id),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id),
-    FOREIGN KEY (event_id, match_id) REFERENCES story_events(event_id, match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (outcome_id, match_id)
 );
 
 CREATE TABLE memory_data (
     memory_id INTEGER NOT NULL,
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     memory_type VARCHAR NOT NULL, -- MEMORYPLAYER_ATTACKED_CITY, MEMORYFAMILY_FOUNDED_CITY, etc.
     turn INTEGER NOT NULL,
@@ -796,8 +728,7 @@ CREATE TABLE memory_data (
     target_family VARCHAR,
     target_tribe VARCHAR,
     target_religion VARCHAR,
-    PRIMARY KEY (memory_id, match_id),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (memory_id, match_id)
 );
 
 
@@ -807,40 +738,36 @@ CREATE TABLE memory_data (
 -- These tables capture turn-by-turn progression of key metrics
 
 CREATE TABLE yield_history (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     turn INTEGER NOT NULL,
     yield_type VARCHAR NOT NULL, -- YIELD_GROWTH, YIELD_CIVICS, YIELD_TRAINING, etc.
     amount INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, turn, yield_type),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, turn, yield_type)
 );
 
 CREATE TABLE points_history (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     turn INTEGER NOT NULL,
     points INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, turn),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, turn)
 );
 
 CREATE TABLE military_history (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     turn INTEGER NOT NULL,
     military_power INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, turn),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, turn)
 );
 
 CREATE TABLE legitimacy_history (
-    player_id INTEGER NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,
     turn INTEGER NOT NULL,
     legitimacy INTEGER NOT NULL,
-    PRIMARY KEY (player_id, match_id, turn),
-    FOREIGN KEY (player_id, match_id) REFERENCES players(player_id, match_id)
+    PRIMARY KEY (player_id, match_id, turn)
 );
 
 
@@ -849,12 +776,11 @@ CREATE TABLE legitimacy_history (
 -- ============================================================================
 
 CREATE TABLE yield_prices (
-    match_id BIGINT NOT NULL,
+    match_id BIGINT NOT NULL,  -- References: matches(match_id)
     turn INTEGER NOT NULL,
     yield_type VARCHAR NOT NULL,
     price INTEGER NOT NULL,
-    PRIMARY KEY (match_id, turn, yield_type),
-    FOREIGN KEY (match_id) REFERENCES matches(match_id)
+    PRIMARY KEY (match_id, turn, yield_type)
 );
 
 
@@ -990,7 +916,8 @@ INSERT INTO schema_migrations (version, description) VALUES
 ('2.2.0', 'Added match_locks table for multi-process concurrency control'),
 ('2.3.0', 'Added is_save_owner column to players table and user_settings table for save owner tracking'),
 ('2.4.0', 'Separated mods and DLC: renamed enabled_dlc to enabled_mods, added new enabled_dlc from GameContent'),
-('2.5.0', 'Added collections table for organizing matches and filtering stats');
+('2.5.0', 'Added collections table for organizing matches and filtering stats'),
+('2.6.0', 'Removed FK constraints for ETL performance - relationships documented in comments');
 
 
 -- ============================================================================
@@ -1002,11 +929,11 @@ INSERT INTO schema_migrations (version, description) VALUES
 -- - ~85% coverage of XML data structures
 -- - Optimized for multi-match analytical queries
 -- - Full character/family/religion system for political analysis
--- - Individual unit tracking for tactical analysis
+-- - Aggregate unit production tracking (individual units not persisted in saves)
 -- - Production queues and city mechanics
 -- - Story event system with choices and outcomes
 -- - Comprehensive time-series metrics
--- - Clean normalization with proper foreign keys
+-- - Relationships documented in comments (FK constraints removed for ETL performance)
 --
 -- Key Query Patterns Supported:
 -- - Cross-match player performance analysis

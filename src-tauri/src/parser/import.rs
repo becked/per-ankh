@@ -19,7 +19,7 @@ use std::time::Instant;
 use tauri::Emitter;
 
 /// Total number of phases for intra-file progress tracking
-const TOTAL_PHASES: usize = 8;
+const TOTAL_PHASES: usize = 6;
 
 /// Emit phase progress event
 ///
@@ -413,22 +413,12 @@ fn import_save_file_internal(
     // Update player difficulties from root-level <Difficulty> element
     update_player_difficulties(doc, tx, match_id, &id_mapper)?;
 
-    // 2. Characters core (no relationships yet)
+    // 2. Characters (with parent relationships set via two-phase ID mapping)
     let t_characters = Instant::now();
-    let characters_count = super::inserters::insert_characters_core(tx, &characters_data, &mut id_mapper)?;
+    let characters_count = super::inserters::insert_characters(tx, &characters_data, &mut id_mapper)?;
     let characters_time = t_characters.elapsed();
-    log::info!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
-    eprintln!("⏱️    Characters core: {:?} ({} characters)", characters_time, characters_count);
-
-    // CRITICAL FIX: Pass 2a - Parse parent relationships immediately after characters
-    // This MUST happen BEFORE any tables reference characters via FK (tribes, cities, etc.)
-    // DuckDB prevents updating a row that's already referenced by another table's FK.
-    log::info!("Parsing character parent relationships (Pass 2a)...");
-    let t_parents = Instant::now();
-    parse_character_parent_relationships_pass2a(doc, tx, &id_mapper)?;
-    let parents_time = t_parents.elapsed();
-    log::info!("⏱️    Character parents: {:?}", parents_time);
-    eprintln!("⏱️    Character parents: {:?}", parents_time);
+    log::info!("⏱️    Characters: {:?} ({} characters)", characters_time, characters_count);
+    eprintln!("⏱️    Characters: {:?} ({} characters)", characters_time, characters_count);
 
     // 3. Tiles (depends on players for ownership)
     let t_tiles = Instant::now();
@@ -462,10 +452,10 @@ fn import_save_file_internal(
     log::info!("⏱️    Tile ownership history: {:?}", tile_history_time);
     eprintln!("⏱️    Tile ownership history: {:?}", tile_history_time);
 
-    // Pass 2d - Parse birth cities after cities are created
-    log::info!("Parsing character birth cities (Pass 2d)...");
+    // Update character birth cities after cities are created
+    log::info!("Updating character birth cities...");
     let t_birth_cities = Instant::now();
-    parse_character_birth_cities_pass2b(doc, tx, &id_mapper)?;
+    super::inserters::update_character_birth_cities(tx, &characters_data, &id_mapper)?;
     let birth_cities_time = t_birth_cities.elapsed();
     log::info!("⏱️    Character birth cities: {:?}", birth_cities_time);
     eprintln!("⏱️    Character birth cities: {:?}", birth_cities_time);
@@ -475,6 +465,7 @@ fn import_save_file_internal(
     eprintln!("⏱️  Sequential foundation insertion: {:?}", insert_foundation_time);
 
     // Free foundation entity data immediately after insertion
+    // Note: characters_data was used for birth city update above
     drop(players_data);
     drop(characters_data);
     drop(cities_data);
@@ -537,7 +528,7 @@ fn import_save_file_internal(
 
     // PHASE 2: Foundation entities complete
     if let Some((app_h, idx, total, name, start)) = progress_params {
-        emit_phase_progress(Some(app_h), idx, total, name, "Parsing foundation entities", 2, start);
+        emit_phase_progress(Some(app_h), idx, total, name, "Processing foundation entities", 2, start);
     }
 
     // Parse aggregate unit production data - HYBRID PARSER (derived from entities)
@@ -563,9 +554,9 @@ fn import_save_file_internal(
     log::info!("⏱️  Unit production: {:?}", units_time);
     eprintln!("⏱️  Unit production: {:?}", units_time);
 
-    // PHASE 3: Unit production complete
+    // PHASE 3: Affiliations and unit production complete
     if let Some((app_h, idx, total, name, start)) = progress_params {
-        emit_phase_progress(Some(app_h), idx, total, name, "Parsing unit production", 3, start);
+        emit_phase_progress(Some(app_h), idx, total, name, "Processing affiliations", 3, start);
     }
 
     // Parse player-nested gameplay data (Milestone 3)
@@ -575,11 +566,6 @@ fn import_save_file_internal(
     let gameplay_time = t_gameplay.elapsed();
     log::info!("⏱️  Player gameplay data: {:?}", gameplay_time);
     eprintln!("⏱️  Player gameplay data: {:?}", gameplay_time);
-
-    // PHASE 4: Gameplay data complete
-    if let Some((app_h, idx, total, name, start)) = progress_params {
-        emit_phase_progress(Some(app_h), idx, total, name, "Parsing gameplay data", 4, start);
-    }
 
     // Parse game-level diplomacy
     log::info!("Parsing diplomacy...");
@@ -597,11 +583,6 @@ fn import_save_file_internal(
     log::info!("⏱️  Diplomacy: {:?}", diplomacy_time);
     eprintln!("⏱️  Diplomacy: {:?}", diplomacy_time);
 
-    // PHASE 5: Diplomacy complete
-    if let Some((app_h, idx, total, name, start)) = progress_params {
-        emit_phase_progress(Some(app_h), idx, total, name, "Parsing diplomacy", 5, start);
-    }
-
     // Parse time-series data (Milestone 4)
     log::info!("Parsing time-series data...");
     let t_timeseries = Instant::now();
@@ -610,9 +591,9 @@ fn import_save_file_internal(
     log::info!("⏱️  Time-series data: {:?}", timeseries_time);
     eprintln!("⏱️  Time-series data: {:?}", timeseries_time);
 
-    // PHASE 6: Time-series data complete
+    // PHASE 4: Gameplay, diplomacy, and time-series data complete
     if let Some((app_h, idx, total, name, start)) = progress_params {
-        emit_phase_progress(Some(app_h), idx, total, name, "Parsing time-series data", 6, start);
+        emit_phase_progress(Some(app_h), idx, total, name, "Processing gameplay data", 4, start);
     }
 
     // Parse character extended data (Milestone 5)
@@ -631,9 +612,9 @@ fn import_save_file_internal(
     log::info!("⏱️  City extended data: {:?}", city_ext_time);
     eprintln!("⏱️  City extended data: {:?}", city_ext_time);
 
-    // PHASE 7: Character & city extended data complete
+    // PHASE 5: Extended data complete (characters, cities, tiles, events)
     if let Some((app_h, idx, total, name, start)) = progress_params {
-        emit_phase_progress(Some(app_h), idx, total, name, "Parsing character and city data", 7, start);
+        emit_phase_progress(Some(app_h), idx, total, name, "Processing extended data", 5, start);
     }
 
     // Parse tile extended data (Milestone 6)
@@ -659,9 +640,9 @@ fn import_save_file_internal(
     log::info!("⏱️  Save ID mappings: {:?}", id_save_time);
     eprintln!("⏱️  Save ID mappings: {:?}", id_save_time);
 
-    // PHASE 8: Finalization complete
+    // PHASE 6: Finalization complete
     if let Some((app_h, idx, total, name, start)) = progress_params {
-        emit_phase_progress(Some(app_h), idx, total, name, "Finalizing", 8, start);
+        emit_phase_progress(Some(app_h), idx, total, name, "Finalizing", 6, start);
     }
 
     Ok(ImportResult {
@@ -754,73 +735,6 @@ fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMappe
     Ok(())
 }
 
-/// Parse character parent relationships (Pass 2a)
-///
-/// This function updates the characters table with parent relationships ONLY.
-/// CRITICAL: This must be called BEFORE any tables reference characters via FK
-/// (tribes, cities, player_goals, etc.) to avoid DuckDB FK constraint violations.
-fn parse_character_parent_relationships_pass2a(
-    doc: &XmlDocument,
-    tx: &Connection,
-    id_mapper: &IdMapper,
-) -> Result<()> {
-    let root = doc.root_element();
-    let mut parent_count = 0;
-
-    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
-        let character_xml_id_str: &str = character_node.req_attr("ID")?;
-        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!(
-                "Character ID must be an integer: {}",
-                character_xml_id_str
-            ))
-        })?;
-        let character_id = id_mapper.get_character(character_xml_id)?;
-
-        // Parse parent relationships (now that all characters exist)
-        let has_parents = super::entities::parse_character_parent_relationships(&character_node, tx, id_mapper, character_id)?;
-        if has_parents {
-            parent_count += 1;
-        }
-    }
-
-    log::info!("Updated {} characters with parent relationships", parent_count);
-    Ok(())
-}
-
-/// Parse character birth cities (Pass 2b)
-///
-/// This function updates the characters table with birth city references.
-/// This must be called AFTER cities have been inserted.
-fn parse_character_birth_cities_pass2b(
-    doc: &XmlDocument,
-    tx: &Connection,
-    id_mapper: &IdMapper,
-) -> Result<()> {
-    let root = doc.root_element();
-    let mut city_count = 0;
-
-    for character_node in root.children().filter(|n| n.has_tag_name("Character")) {
-        let character_xml_id_str: &str = character_node.req_attr("ID")?;
-        let character_xml_id: i32 = character_xml_id_str.parse().map_err(|_| {
-            ParseError::InvalidFormat(format!(
-                "Character ID must be an integer: {}",
-                character_xml_id_str
-            ))
-        })?;
-        let character_id = id_mapper.get_character(character_xml_id)?;
-
-        // Parse birth city (now that all cities exist)
-        let has_birth_city = super::entities::parse_character_birth_city(&character_node, tx, id_mapper, character_id)?;
-        if has_birth_city {
-            city_count += 1;
-        }
-    }
-
-    log::info!("Updated {} characters with birth city", city_count);
-    Ok(())
-}
-
 /// Parse character extended data (Milestone 5)
 ///
 /// This function parses character-specific nested data:
@@ -829,7 +743,7 @@ fn parse_character_birth_cities_pass2b(
 /// - Relationships (RelationshipList) -> character_relationships table
 /// - Marriages (Spouses) -> character_marriages table
 ///
-/// Note: Genealogy (parent relationships) is now parsed earlier in Pass 2
+/// Note: Parent relationships are parsed inline and set during initial character insertion
 fn parse_character_extended_data_all(
     doc: &XmlDocument,
     tx: &Connection,

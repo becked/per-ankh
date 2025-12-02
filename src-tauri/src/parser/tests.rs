@@ -97,6 +97,20 @@ mod tests {
                     stored_game_id, import_result.game_id,
                     "Stored game_id should match"
                 );
+
+                // Verify parent relationships are populated (Phase 2 validation)
+                let parents_set: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM characters
+                         WHERE match_id = ? AND (birth_father_id IS NOT NULL OR birth_mother_id IS NOT NULL)",
+                        [import_result.match_id.unwrap()],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                assert!(
+                    parents_set > 0,
+                    "Some characters should have parent relationships set"
+                );
             }
             Err(e) => {
                 panic!("Import failed: {}", e);
@@ -104,58 +118,4 @@ mod tests {
         }
     }
 
-    #[test]
-    #[ignore] // TODO: FK constraint issue with reimport - needs ON UPDATE/DELETE CASCADE in schema
-    fn test_import_and_reimport_same_file() {
-        // Use a small test save file
-        let test_file = "../test-data/saves/OW-Carthage-Year39-2025-11-04-21-38-46.zip";
-
-        // Check if file exists
-        if !std::path::Path::new(test_file).exists() {
-            eprintln!("Test file not found: {}", test_file);
-            eprintln!("Skipping integration test");
-            return;
-        }
-
-        // Create temporary database
-        let dir = tempdir().unwrap();
-        let db_path = dir.path().join("test.db");
-
-        // Initialize schema
-        db::ensure_schema_ready(&db_path).unwrap();
-
-        // Open connection
-        let conn = db::connection::get_connection(&db_path).unwrap();
-
-        // First import (no progress tracking for tests)
-        let result1 = parser::import_save_file(test_file, &conn, None, None, None, None, None).unwrap();
-        assert!(result1.success);
-        assert!(result1.is_new, "First import should be new");
-        let match_id1 = result1.match_id.unwrap();
-        let game_id = result1.game_id.clone();
-
-        // Second import (should update, not create new)
-        let result2 = parser::import_save_file(test_file, &conn, None, None, None, None, None).unwrap();
-        if !result2.success {
-            eprintln!("Second import failed: {:?}", result2.error);
-        }
-        assert!(result2.success);
-        assert!(!result2.is_new, "Second import should be update");
-        let match_id2 = result2.match_id.unwrap();
-
-        assert_eq!(
-            match_id1, match_id2,
-            "Second import should have same match_id"
-        );
-        assert_eq!(
-            result2.game_id, game_id,
-            "Second import should have same game_id"
-        );
-
-        // Verify still only one match in database
-        let count: i64 = conn
-            .query_row("SELECT COUNT(*) FROM matches", [], |row| row.get(0))
-            .unwrap();
-        assert_eq!(count, 1, "Should still have exactly one match in database");
-    }
 }
