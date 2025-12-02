@@ -4,7 +4,89 @@
 
 use crate::parser::Result;
 use duckdb::Connection;
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+
+/// Current schema version - increment when breaking changes require database reset
+pub const CURRENT_SCHEMA_VERSION: &str = "2.6.0";
+
+/// Schema version file metadata
+///
+/// Stored as JSON in a separate file (e.g., `per-ankh.db.version`) that we can
+/// read BEFORE opening DuckDB. This avoids crashes when DuckDB tries to open
+/// an incompatible database file.
+#[derive(Debug, Serialize, Deserialize)]
+pub struct SchemaVersionInfo {
+    pub version: String,
+    pub created_at: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub upgraded_from: Option<String>,
+}
+
+/// Check if database needs reset based on version file
+///
+/// Returns Ok(true) if database should be reset (version missing or incompatible),
+/// Ok(false) if database is compatible and can be opened safely.
+pub fn needs_schema_reset(db_path: &Path) -> bool {
+    let version_path = db_path.with_extension("db.version");
+
+    // No version file = needs reset (legacy database or first run)
+    if !version_path.exists() {
+        // But only if the database file itself exists
+        // (first run with no db = no reset needed, just create fresh)
+        return db_path.exists();
+    }
+
+    // Try to read and parse version file
+    match std::fs::read_to_string(&version_path) {
+        Ok(contents) => {
+            match serde_json::from_str::<SchemaVersionInfo>(&contents) {
+                Ok(info) => {
+                    // Check if version is compatible
+                    // For now, exact match required. Could add semver logic later.
+                    info.version != CURRENT_SCHEMA_VERSION
+                }
+                Err(e) => {
+                    log::warn!("Failed to parse version file: {}", e);
+                    true // Corrupted version file = reset
+                }
+            }
+        }
+        Err(e) => {
+            log::warn!("Failed to read version file: {}", e);
+            true // Can't read = reset
+        }
+    }
+}
+
+/// Write schema version file after successful initialization
+pub fn write_schema_version(db_path: &Path, upgraded_from: Option<&str>) -> std::io::Result<()> {
+    let version_path = db_path.with_extension("db.version");
+
+    let info = SchemaVersionInfo {
+        version: CURRENT_SCHEMA_VERSION.to_string(),
+        created_at: chrono::Utc::now().to_rfc3339(),
+        upgraded_from: upgraded_from.map(|s| s.to_string()),
+    };
+
+    let json = serde_json::to_string_pretty(&info)
+        .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, e))?;
+
+    std::fs::write(&version_path, json)?;
+    log::info!("Wrote schema version file: {:?}", version_path);
+
+    Ok(())
+}
+
+/// Delete schema version file (called when deleting database)
+pub fn delete_schema_version(db_path: &Path) -> std::io::Result<()> {
+    let version_path = db_path.with_extension("db.version");
+    if version_path.exists() {
+        std::fs::remove_file(&version_path)?;
+        log::info!("Deleted schema version file: {:?}", version_path);
+    }
+    Ok(())
+}
 
 /// Extract table and view names from schema.sql
 ///
@@ -463,6 +545,13 @@ pub fn delete_database_files(db_path: &Path) -> std::io::Result<Vec<PathBuf>> {
     if wal_path.exists() {
         std::fs::remove_file(&wal_path)?;
         deleted.push(wal_path);
+    }
+
+    // Version file
+    let version_path = db_path.with_extension("db.version");
+    if version_path.exists() {
+        std::fs::remove_file(&version_path)?;
+        deleted.push(version_path);
     }
 
     Ok(deleted)

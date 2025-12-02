@@ -1591,6 +1591,45 @@ pub fn run() {
                 }
             }
 
+            // Check schema version BEFORE opening DuckDB
+            // This prevents crashes from incompatible database files
+            if db::needs_schema_reset(&db_path) {
+                log::warn!(
+                    "Schema version incompatible or missing, resetting database (current: {})",
+                    db::CURRENT_SCHEMA_VERSION
+                );
+
+                match db::delete_database_files(&db_path) {
+                    Ok(deleted) => {
+                        log::info!("Deleted {} database files for schema upgrade", deleted.len());
+                        app.dialog()
+                            .message(format!(
+                                "Per-Ankh has been updated with performance improvements that require a fresh database.\n\n\
+                                Your previously imported games have been cleared.\n\
+                                Please re-import your save files to continue.\n\n\
+                                (Schema version: {})",
+                                db::CURRENT_SCHEMA_VERSION
+                            ))
+                            .kind(MessageDialogKind::Info)
+                            .title("Database Upgrade")
+                            .blocking_show();
+                    }
+                    Err(e) => {
+                        log::error!("Failed to delete database files for upgrade: {}", e);
+                        app.dialog()
+                            .message(format!(
+                                "Failed to upgrade database: {}\n\nPlease manually delete:\n{}",
+                                e,
+                                db_path.display()
+                            ))
+                            .kind(MessageDialogKind::Error)
+                            .title("Upgrade Failed")
+                            .blocking_show();
+                        return Err("Database upgrade failed".into());
+                    }
+                }
+            }
+
             // Try to initialize schema, offer recovery on failure
             if let Err(e) = db::ensure_schema_ready(&db_path) {
                 log::error!("Database initialization failed: {}", e);
@@ -1641,6 +1680,13 @@ pub fn run() {
                     log::info!("User declined recovery, exiting");
                     return Err("Database initialization failed".into());
                 }
+            }
+
+            // Write version file after successful schema initialization
+            // This ensures future startups know the database is compatible
+            if let Err(e) = db::write_schema_version(&db_path, None) {
+                log::warn!("Failed to write schema version file: {}", e);
+                // Non-fatal - database still works, just won't have version tracking
             }
 
             // Create connection pool
