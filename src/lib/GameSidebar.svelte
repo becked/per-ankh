@@ -329,17 +329,17 @@
             <button
               type="button"
               class="flex-1 text-xs bg-[#35302b] hover:bg-[#453e37] text-tan px-2 py-1 rounded transition-colors"
-              onclick={createAndMoveToCollection}
-              disabled={!newCollectionName.trim()}
+              onclick={() => { showNewCollectionInput = false; newCollectionName = ""; }}
             >
-              Create
+              Cancel
             </button>
             <button
               type="button"
               class="flex-1 text-xs bg-[#ab9978] hover:bg-[#9a8a6c] text-black px-2 py-1 rounded transition-colors"
-              onclick={() => { showNewCollectionInput = false; newCollectionName = ""; }}
+              onclick={createAndMoveToCollection}
+              disabled={!newCollectionName.trim()}
             >
-              Cancel
+              Create
             </button>
           </div>
         </div>
