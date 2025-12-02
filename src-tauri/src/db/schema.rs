@@ -207,6 +207,102 @@ pub fn create_schema(conn: &Connection) -> Result<()> {
     Ok(())
 }
 
+/// Run schema migrations for existing databases
+///
+/// This function checks for missing schema elements and adds them without
+/// requiring a full database reset. Each migration is idempotent.
+fn migrate_schema(conn: &Connection) -> Result<()> {
+    log::info!("Running schema migrations...");
+
+    // Migration: Add collections table (v2.5.0)
+    migrate_add_collections(conn)?;
+
+    log::info!("Schema migrations completed");
+    Ok(())
+}
+
+/// Migration: Add collections table and matches.collection_id column
+///
+/// Introduced in schema v2.5.0 for organizing matches into collections.
+fn migrate_add_collections(conn: &Connection) -> Result<()> {
+    // Check if collections table exists
+    let collections_exists = conn
+        .query_row("SELECT 1 FROM collections LIMIT 1", [], |_| Ok(()))
+        .is_ok();
+
+    if !collections_exists {
+        log::info!("Migrating: Adding collections table...");
+
+        // Create sequence (ignore error if already exists)
+        let _ = conn.execute("CREATE SEQUENCE IF NOT EXISTS collections_id_seq START 2", []);
+
+        // Create collections table
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS collections (
+                collection_id INTEGER PRIMARY KEY DEFAULT nextval('collections_id_seq'),
+                name VARCHAR NOT NULL UNIQUE,
+                is_default BOOLEAN NOT NULL DEFAULT FALSE
+            )",
+            [],
+        )?;
+
+        // Seed default collection
+        conn.execute(
+            "INSERT INTO collections (collection_id, name, is_default) VALUES (1, 'Personal', TRUE)",
+            [],
+        )?;
+
+        log::info!("Created collections table with default 'Personal' collection");
+    }
+
+    // Check if matches.collection_id column exists using DuckDB's pragma
+    let column_exists: bool = conn
+        .query_row(
+            "SELECT COUNT(*) > 0 FROM pragma_table_info('matches') WHERE name = 'collection_id'",
+            [],
+            |row| row.get(0),
+        )
+        .unwrap_or(false);
+
+    if !column_exists {
+        log::info!("Migrating: Adding collection_id column to matches...");
+
+        // DuckDB doesn't support ADD COLUMN with constraints, so we:
+        // 1. Add column without constraints
+        // 2. Set default value for all existing rows
+        conn.execute("ALTER TABLE matches ADD COLUMN collection_id INTEGER", [])?;
+        conn.execute("UPDATE matches SET collection_id = 1 WHERE collection_id IS NULL", [])?;
+
+        // Create index
+        conn.execute(
+            "CREATE INDEX IF NOT EXISTS idx_matches_collection ON matches(collection_id)",
+            [],
+        )?;
+
+        log::info!("Added collection_id column to matches table (all existing matches assigned to 'Personal' collection)");
+    }
+
+    // Update schema_migrations if this migration was applied
+    // Check if v2.5.0 is already recorded
+    let v250_exists = conn
+        .query_row(
+            "SELECT 1 FROM schema_migrations WHERE version = '2.5.0'",
+            [],
+            |_| Ok(()),
+        )
+        .is_ok();
+
+    if !v250_exists {
+        conn.execute(
+            "INSERT INTO schema_migrations (version, description) VALUES ('2.5.0', 'Added collections table for organizing matches and filtering stats')",
+            [],
+        )?;
+        log::info!("Recorded migration v2.5.0 in schema_migrations");
+    }
+
+    Ok(())
+}
+
 /// Initialize and validate schema on first run
 pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
     log::info!("ensure_schema_ready called for path: {:?}", db_path);
@@ -242,6 +338,8 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
         create_schema(&conn)?;
     } else {
         log::info!("Schema already exists, skipping initialization");
+        // Run migrations for existing databases
+        migrate_schema(&conn)?;
     }
 
     // Validate schema integrity (lenient - just check critical tables)
@@ -272,6 +370,7 @@ fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
     // Check critical tables exist by trying to query them directly
     // (information_schema has compatibility issues in DuckDB)
     let required_tables = vec![
+        "collections",
         "matches",
         "match_locks",
         "id_mappings",
@@ -430,5 +529,114 @@ mod tests {
 
         assert_eq!(deleted.len(), 1);
         assert!(!db_path.exists());
+    }
+
+    #[test]
+    fn test_migrate_adds_collections_to_old_schema() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Create a minimal old schema without collections
+        conn.execute_batch(
+            "CREATE TABLE matches (
+                match_id BIGINT PRIMARY KEY,
+                game_id VARCHAR NOT NULL,
+                file_name VARCHAR NOT NULL,
+                file_hash VARCHAR NOT NULL,
+                total_turns INTEGER NOT NULL
+            );
+            CREATE TABLE schema_migrations (
+                version VARCHAR PRIMARY KEY,
+                applied_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                description VARCHAR
+            );
+            INSERT INTO schema_migrations (version, description) VALUES ('2.4.0', 'Old schema');
+            INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns)
+                VALUES (1, 'game1', 'file1.zip', 'hash1', 100);
+            INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns)
+                VALUES (2, 'game2', 'file2.zip', 'hash2', 200);"
+        ).unwrap();
+
+        // Verify collections doesn't exist yet
+        let collections_exists = conn
+            .query_row("SELECT 1 FROM collections LIMIT 1", [], |_| Ok(()))
+            .is_ok();
+        assert!(!collections_exists, "collections table should not exist before migration");
+
+        // Run migration
+        migrate_schema(&conn).unwrap();
+
+        // Verify collections table was created
+        let collections_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM collections", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(collections_count, 1, "Should have 1 default collection");
+
+        // Verify default collection exists
+        let default_name: String = conn
+            .query_row(
+                "SELECT name FROM collections WHERE is_default = TRUE",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(default_name, "Personal");
+
+        // Verify collection_id column was added to matches
+        let match_collection: i32 = conn
+            .query_row(
+                "SELECT collection_id FROM matches WHERE match_id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(match_collection, 1, "Existing matches should be in collection 1");
+
+        // Verify all matches got collection_id = 1
+        let all_in_default: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM matches WHERE collection_id = 1",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(all_in_default, 2, "All existing matches should be in default collection");
+
+        // Verify schema_migrations was updated
+        let v250_exists: bool = conn
+            .query_row(
+                "SELECT 1 FROM schema_migrations WHERE version = '2.5.0'",
+                [],
+                |_| Ok(true),
+            )
+            .unwrap_or(false);
+        assert!(v250_exists, "Migration v2.5.0 should be recorded");
+
+        // Leak tempdir to prevent cleanup while conn is in use
+        std::mem::forget(dir);
+    }
+
+    #[test]
+    fn test_migrate_is_idempotent() {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+
+        // Create full schema (which includes collections)
+        create_schema(&conn).unwrap();
+
+        // Run migration multiple times - should not error
+        migrate_schema(&conn).unwrap();
+        migrate_schema(&conn).unwrap();
+
+        // Verify still just one default collection
+        let collections_count: i64 = conn
+            .query_row("SELECT COUNT(*) FROM collections", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(collections_count, 1, "Should still have only 1 collection");
+
+        // Leak tempdir to prevent cleanup while conn is in use
+        std::mem::forget(dir);
     }
 }

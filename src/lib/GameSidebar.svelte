@@ -1,20 +1,27 @@
 <script lang="ts">
-  import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import { goto } from "$app/navigation";
   import { page } from "$app/stores";
   import type { GameInfo } from "$lib/types";
+  import type { Collection } from "$lib/types/Collection";
   import { formatGameTitle, formatDate, formatEnum } from "$lib/utils/formatting";
   import { refreshData } from "$lib/stores/refresh";
   import { searchQuery } from "$lib/stores/search";
+  import { activeCollectionId } from "$lib/stores/collection";
+  import { api } from "$lib/api";
   import { get } from "svelte/store";
 
   let games = $state<GameInfo[]>([]);
+  let collections = $state<Collection[]>([]);
   let loading = $state(true);
   let error = $state<string | null>(null);
 
-  // Convert store to reactive state for proper Svelte 5 integration
-  // Use $effect.pre to run before DOM updates for better sync with rapid typing
+  // Context menu state
+  let contextMenu = $state<{ x: number; y: number; game: GameInfo } | null>(null);
+  let showNewCollectionInput = $state(false);
+  let newCollectionName = $state("");
+
+  // Convert stores to reactive state for proper Svelte 5 integration
   let currentSearchQuery = $state(get(searchQuery));
   $effect.pre(() => {
     const unsubscribe = searchQuery.subscribe((value) => {
@@ -23,14 +30,30 @@
     return unsubscribe;
   });
 
+  let currentCollectionId = $state<number | null>(get(activeCollectionId));
+  $effect.pre(() => {
+    const unsubscribe = activeCollectionId.subscribe((value) => {
+      currentCollectionId = value;
+    });
+    return unsubscribe;
+  });
+
   // Get current game ID from URL
   const currentGameId = $derived($page.params.id ? Number($page.params.id) : null);
+
+  async function fetchCollections() {
+    try {
+      collections = await api.getCollections();
+    } catch (err) {
+      console.error("Failed to load collections:", err);
+    }
+  }
 
   async function fetchGames() {
     loading = true;
     error = null;
     try {
-      games = await invoke<GameInfo[]>("get_games_list");
+      games = await api.getGamesList(currentCollectionId);
     } catch (err) {
       error = String(err);
     } finally {
@@ -38,14 +61,84 @@
     }
   }
 
-  onMount(() => {
+  // Re-fetch games when collection filter changes
+  $effect(() => {
+    const _ = currentCollectionId;
     fetchGames();
+  });
+
+  onMount(() => {
+    fetchCollections();
   });
 
   // Subscribe to refresh events
   refreshData.subscribe(() => {
+    fetchCollections();
     fetchGames();
   });
+
+  function handleCollectionChange(e: Event) {
+    const value = (e.target as HTMLSelectElement).value;
+    const id = value === "all" ? null : Number(value);
+    activeCollectionId.set(id);
+  }
+
+  function handleContextMenu(e: MouseEvent, game: GameInfo) {
+    e.preventDefault();
+    e.stopPropagation();
+    contextMenu = { x: e.clientX, y: e.clientY, game };
+    showNewCollectionInput = false;
+    newCollectionName = "";
+  }
+
+  function closeContextMenu() {
+    contextMenu = null;
+    showNewCollectionInput = false;
+    newCollectionName = "";
+  }
+
+  async function moveToCollection(collectionId: number) {
+    if (!contextMenu) return;
+
+    try {
+      await api.moveMatchesToCollection([contextMenu.game.match_id], collectionId);
+      refreshData.trigger();
+    } catch (err) {
+      console.error("Failed to move game:", err);
+    }
+
+    closeContextMenu();
+  }
+
+  async function createAndMoveToCollection() {
+    if (!contextMenu || !newCollectionName.trim()) return;
+
+    try {
+      const newCollection = await api.createCollection(newCollectionName.trim());
+      await api.moveMatchesToCollection([contextMenu.game.match_id], newCollection.collection_id);
+      refreshData.trigger();
+    } catch (err) {
+      console.error("Failed to create collection:", err);
+    }
+
+    closeContextMenu();
+  }
+
+  function handleClickOutside(e: MouseEvent) {
+    // Only handle left clicks (button 0)
+    if (e.button !== 0) return;
+    if (!contextMenu) return;
+    const target = e.target as HTMLElement;
+    if (!target.closest(".context-menu")) {
+      closeContextMenu();
+    }
+  }
+
+  function handleKeydown(e: KeyboardEvent) {
+    if (e.key === "Escape" && contextMenu) {
+      closeContextMenu();
+    }
+  }
 
   function formatGameSubtitle(game: GameInfo): string {
     return formatDate(game.save_date) === "Unknown" ? "" : formatDate(game.save_date);
@@ -107,6 +200,22 @@
 </script>
 
 <aside class="w-[175px] h-full bg-blue-gray border-l-2 border-black flex flex-col overflow-hidden">
+  <!-- Collection filter dropdown -->
+  <div class="px-2 pt-2 pb-1 border-b border-black">
+    <select
+      class="w-full bg-brown text-tan text-xs p-1.5 rounded border border-black cursor-pointer"
+      value={currentCollectionId ?? "all"}
+      onchange={handleCollectionChange}
+    >
+      <option value="all">All Collections</option>
+      {#each collections as c (c.collection_id)}
+        <option value={c.collection_id}>
+          {c.name} ({c.match_count})
+        </option>
+      {/each}
+    </select>
+  </div>
+
   <div class="sidebar-content overflow-y-auto flex-1 pt-2 px-2 pb-2">
     {#if loading}
       <div class="p-4 text-center text-tan">Loading games...</div>
@@ -133,6 +242,7 @@
             class="game-list-item {isActive ? 'active' : ''} w-full p-1.5 mb-0.5 border-2 rounded-lg cursor-pointer text-left transition-all duration-200 {isActive ? '' : 'border-black hover:border-orange hover:translate-x-0.5'} relative"
             type="button"
             onclick={() => navigateToGame(game.match_id)}
+            oncontextmenu={(e) => handleContextMenu(e, game)}
           >
             {#if game.save_owner_won === true}
               <span class="trophy-badge" title="Victory">🏆</span>
@@ -149,6 +259,78 @@
     {/if}
   </div>
 </aside>
+
+<!-- Context menu for moving games to collections -->
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+
+{#if contextMenu}
+  <div
+    class="context-menu fixed bg-blue-gray border-2 border-black rounded shadow-lg z-50 min-w-[160px]"
+    style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+  >
+    <div class="px-3 py-2 text-xs text-gray-400 border-b border-gray-700">
+      Move to Collection
+    </div>
+
+    {#each collections as collection (collection.collection_id)}
+      <button
+        type="button"
+        class="w-full text-left px-3 py-2 text-sm text-tan hover:bg-brown transition-colors flex items-center justify-between
+          {collection.collection_id === contextMenu.game.collection_id ? 'bg-brown bg-opacity-50' : ''}"
+        onclick={() => moveToCollection(collection.collection_id)}
+      >
+        <span>{collection.name}</span>
+        {#if collection.collection_id === contextMenu.game.collection_id}
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-orange" viewBox="0 0 20 20" fill="currentColor">
+            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd" />
+          </svg>
+        {/if}
+      </button>
+    {/each}
+
+    <div class="border-t border-gray-700">
+      {#if showNewCollectionInput}
+        <div class="p-2">
+          <input
+            type="text"
+            bind:value={newCollectionName}
+            placeholder="Collection name"
+            class="w-full bg-gray-700 text-tan text-sm px-2 py-1 rounded border border-black focus:outline-none focus:border-orange"
+            onkeydown={(e) => {
+              if (e.key === "Enter") createAndMoveToCollection();
+              if (e.key === "Escape") { showNewCollectionInput = false; newCollectionName = ""; }
+            }}
+          />
+          <div class="flex gap-1 mt-1">
+            <button
+              type="button"
+              class="flex-1 text-xs bg-brown hover:bg-brown-dark text-tan px-2 py-1 rounded transition-colors"
+              onclick={createAndMoveToCollection}
+              disabled={!newCollectionName.trim()}
+            >
+              Create
+            </button>
+            <button
+              type="button"
+              class="flex-1 text-xs bg-gray-600 hover:bg-gray-500 text-tan px-2 py-1 rounded transition-colors"
+              onclick={() => { showNewCollectionInput = false; newCollectionName = ""; }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      {:else}
+        <button
+          type="button"
+          class="w-full text-left px-3 py-2 text-sm text-tan hover:bg-brown transition-colors"
+          onclick={() => { showNewCollectionInput = true; }}
+        >
+          + New Collection...
+        </button>
+      {/if}
+    </div>
+  </div>
+{/if}
 
 <style>
   .game-list-item {

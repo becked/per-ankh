@@ -1,6 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { GameStatistics } from "$lib/types/GameStatistics";
 import type { GameDetails } from "$lib/types/GameDetails";
+import type { GameInfo } from "$lib/types/GameInfo";
 import type { PlayerHistory } from "$lib/types/PlayerHistory";
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { BatchImportResult } from "$lib/types/BatchImportResult";
@@ -12,6 +13,7 @@ import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 import type { SaveDateEntry } from "$lib/types/SaveDateEntry";
+import type { Collection } from "$lib/types/Collection";
 
 /**
  * Centralized API layer for all Tauri backend commands.
@@ -31,6 +33,13 @@ export const api = {
 
   getSaveDates: () =>
     invoke<SaveDateEntry[]>("get_save_dates"),
+
+  /**
+   * Get list of all games, optionally filtered by collection.
+   * Returns games sorted by save date (newest first).
+   */
+  getGamesList: (collectionId?: number | null) =>
+    invoke<GameInfo[]>("get_games_list", { collectionId: collectionId ?? null }),
 
   getGameDetails: (matchId: number) =>
     invoke<GameDetails>("get_game_details", { matchId }),
@@ -137,4 +146,51 @@ export const api = {
    */
   getKnownOnlineIds: () =>
     invoke<KnownOnlineId[]>("get_known_online_ids"),
+
+  // ===== Collections =====
+
+  /**
+   * Get all collections with match counts.
+   */
+  getCollections: () =>
+    invoke<Collection[]>("get_collections"),
+
+  /**
+   * Create a new collection.
+   */
+  createCollection: (name: string) =>
+    invoke<Collection>("create_collection", { name }),
+
+  /**
+   * Rename an existing collection.
+   */
+  renameCollection: (collectionId: number, name: string) =>
+    invoke<void>("rename_collection", { collectionId, name }),
+
+  /**
+   * Delete a collection. Matches are moved to the default collection.
+   */
+  deleteCollection: (collectionId: number) =>
+    invoke<void>("delete_collection", { collectionId }),
+
+  /**
+   * Set a collection as the default (used for Primary User detection).
+   */
+  setDefaultCollection: (collectionId: number) =>
+    invoke<void>("set_default_collection", { collectionId }),
+
+  /**
+   * Move specific matches to a collection.
+   * Returns the number of matches moved.
+   */
+  moveMatchesToCollection: (matchIds: number[], collectionId: number) =>
+    invoke<number>("move_matches_to_collection", { matchIds, collectionId }),
+
+  /**
+   * Move matches by game name pattern (SQL LIKE syntax).
+   * Example: "Challenge Map%" moves all games starting with "Challenge Map".
+   * Returns the number of matches moved.
+   */
+  moveMatchesByGameName: (pattern: string, collectionId: number) =>
+    invoke<number>("move_matches_by_game_name", { pattern, collectionId }),
 } as const;

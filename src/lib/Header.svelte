@@ -4,6 +4,7 @@
   import { listen, type UnlistenFn } from "@tauri-apps/api/event";
   import ImportModal from "$lib/ImportModal.svelte";
   import SettingsModal from "$lib/SettingsModal.svelte";
+  import CollectionsModal from "$lib/CollectionsModal.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
 
   import { api } from "$lib/api";
@@ -16,6 +17,7 @@
   let isMenuOpen = $state(false);
   let isImportModalOpen = $state(false);
   let isSettingsModalOpen = $state(false);
+  let isCollectionsModalOpen = $state(false);
   let importProgress: ImportProgress | null = $state(null);
   let importResult: BatchImportResult | null = $state(null);
 
@@ -30,6 +32,11 @@
   function openSettingsModal() {
     isMenuOpen = false;
     isSettingsModalOpen = true;
+  }
+
+  function openCollectionsModal() {
+    isMenuOpen = false;
+    isCollectionsModalOpen = true;
   }
 
   async function handleImportFiles() {
@@ -181,6 +188,13 @@
         <button
           class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
           type="button"
+          onclick={openCollectionsModal}
+        >
+          Manage Collections
+        </button>
+        <button
+          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          type="button"
           onclick={handleResetDatabase}
         >
           Reset Database
@@ -217,4 +231,9 @@
 <SettingsModal
   bind:isOpen={isSettingsModalOpen}
   onClose={() => { isSettingsModalOpen = false; }}
+/>
+
+<CollectionsModal
+  bind:isOpen={isCollectionsModalOpen}
+  onClose={() => { isCollectionsModalOpen = false; }}
 />
