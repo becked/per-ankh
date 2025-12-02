@@ -28,11 +28,19 @@ import type { Collection } from "$lib/types/Collection";
  * When this file grows to 30-40+ functions, consider splitting into domain modules.
  */
 export const api = {
-  getGameStatistics: () =>
-    invoke<GameStatistics>("get_game_statistics"),
+  /**
+   * Get game statistics (total games, games by nation).
+   * Optionally filters by collection_id (null = all games).
+   */
+  getGameStatistics: (collectionId?: number | null) =>
+    invoke<GameStatistics>("get_game_statistics", { collectionId: collectionId ?? null }),
 
-  getSaveDates: () =>
-    invoke<SaveDateEntry[]>("get_save_dates"),
+  /**
+   * Get save dates with nation info for calendar chart.
+   * Optionally filters by collection_id (null = all games).
+   */
+  getSaveDates: (collectionId?: number | null) =>
+    invoke<SaveDateEntry[]>("get_save_dates", { collectionId: collectionId ?? null }),
 
   /**
    * Get list of all games, optionally filtered by collection.

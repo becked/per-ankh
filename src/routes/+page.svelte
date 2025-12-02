@@ -1,5 +1,4 @@
 <script lang="ts">
-  import { onMount } from "svelte";
   import { api } from "$lib/api";
   import type { GameStatistics, SaveDateEntry } from "$lib/types";
   import type { EChartsOption } from "echarts";
@@ -7,11 +6,22 @@
   import { formatEnum } from "$lib/utils/formatting";
   import { CHART_THEME, getChartColor, getCivilizationColor, getNationColor } from "$lib/config";
   import { refreshData as refreshDataStore } from "$lib/stores/refresh";
+  import { activeCollectionId } from "$lib/stores/collection";
+  import { get } from "svelte/store";
 
   let refreshData = $state(0);
   $effect(() => {
     const unsubscribe = refreshDataStore.subscribe((value) => {
       refreshData = value;
+    });
+    return unsubscribe;
+  });
+
+  // Subscribe to collection filter
+  let currentCollectionId = $state<number | null>(get(activeCollectionId));
+  $effect.pre(() => {
+    const unsubscribe = activeCollectionId.subscribe((value) => {
+      currentCollectionId = value;
     });
     return unsubscribe;
   });
@@ -216,8 +226,8 @@
     error = null;
     try {
       const [statsResult, datesResult] = await Promise.all([
-        api.getGameStatistics(),
-        api.getSaveDates(),
+        api.getGameStatistics(currentCollectionId),
+        api.getSaveDates(currentCollectionId),
       ]);
       stats = statsResult;
       saveDates = datesResult;
@@ -228,15 +238,17 @@
     }
   }
 
-  onMount(() => {
-    fetchStats();
-  });
-
   // React to refresh events
   $effect(() => {
     if (refreshData > 0) {
       fetchStats();
     }
+  });
+
+  // React to collection filter changes (also handles initial fetch)
+  $effect(() => {
+    const _ = currentCollectionId; // Track dependency
+    fetchStats();
   });
 </script>
 
