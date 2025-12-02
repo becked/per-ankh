@@ -165,35 +165,36 @@
         class="absolute left-0 mt-2 w-48 bg-blue-gray border-2 border-black rounded shadow-lg z-50"
       >
         <button
-          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors"
+          class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors"
           type="button"
           onclick={() => { isMenuOpen = false; goto("/"); }}
         >
           Overview
         </button>
+        <div class="border-t border-black"></div>
         <button
-          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors"
           type="button"
           onclick={handleImportFiles}
         >
           Import Save Files
         </button>
         <button
-          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors"
           type="button"
           onclick={openSettingsModal}
         >
           Set Primary User
         </button>
         <button
-          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors"
           type="button"
           onclick={openCollectionsModal}
         >
           Manage Collections
         </button>
         <button
-          class="w-full text-left px-4 py-2 text-tan hover:bg-brown transition-colors border-t border-gray-600"
+          class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors"
           type="button"
           onclick={handleResetDatabase}
         >
