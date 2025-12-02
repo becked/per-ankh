@@ -86,7 +86,27 @@
   function handleContextMenu(e: MouseEvent, game: GameInfo) {
     e.preventDefault();
     e.stopPropagation();
-    contextMenu = { x: e.clientX, y: e.clientY, game };
+
+    // Menu dimensions (approximate - matches min-w-[160px] and typical height)
+    const menuWidth = 180;
+    const menuHeight = 250;
+    const sidebarWidth = 175;
+
+    // Position menu to the left of the sidebar
+    let x = window.innerWidth - sidebarWidth - menuWidth - 8;
+    let y = e.clientY;
+
+    // If menu would overflow bottom edge, shift up
+    if (y + menuHeight > window.innerHeight) {
+      y = window.innerHeight - menuHeight - 8;
+    }
+
+    // Ensure y doesn't go negative
+    if (y < 8) {
+      y = 8;
+    }
+
+    contextMenu = { x, y, game };
     showNewCollectionInput = false;
     newCollectionName = "";
   }
@@ -264,19 +284,21 @@
 <svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
 {#if contextMenu}
+  <!-- onclick stopPropagation prevents handleClickOutside from firing on internal clicks -->
   <div
     class="context-menu fixed bg-blue-gray border-2 border-black rounded shadow-lg z-50 min-w-[160px]"
     style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
+    onclick={(e) => e.stopPropagation()}
   >
-    <div class="px-3 py-2 text-xs text-gray-400 border-b border-gray-700">
+    <div class="px-3 py-2 text-sm text-white border-b border-black">
       Move to Collection
     </div>
 
     {#each collections as collection (collection.collection_id)}
       <button
         type="button"
-        class="w-full text-left px-3 py-2 text-sm text-tan hover:bg-brown transition-colors flex items-center justify-between
-          {collection.collection_id === contextMenu.game.collection_id ? 'bg-brown bg-opacity-50' : ''}"
+        class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors flex items-center justify-between
+          {collection.collection_id === contextMenu.game.collection_id ? 'bg-[#35302b]' : ''}"
         onclick={() => moveToCollection(collection.collection_id)}
       >
         <span>{collection.name}</span>
@@ -288,14 +310,16 @@
       </button>
     {/each}
 
-    <div class="border-t border-gray-700">
+    <div class="border-t border-black">
       {#if showNewCollectionInput}
         <div class="p-2">
+          <!-- svelte-ignore a11y_autofocus -->
           <input
             type="text"
             bind:value={newCollectionName}
             placeholder="Collection name"
-            class="w-full bg-gray-700 text-tan text-sm px-2 py-1 rounded border border-black focus:outline-none focus:border-orange"
+            autofocus
+            class="w-full bg-[#35302b] text-tan text-sm px-2 py-1 rounded border border-[#4a433b] focus:outline-none focus:border-[#5a524a] placeholder:text-[#c5c3c2]"
             onkeydown={(e) => {
               if (e.key === "Enter") createAndMoveToCollection();
               if (e.key === "Escape") { showNewCollectionInput = false; newCollectionName = ""; }
@@ -304,7 +328,7 @@
           <div class="flex gap-1 mt-1">
             <button
               type="button"
-              class="flex-1 text-xs bg-brown hover:bg-brown-dark text-tan px-2 py-1 rounded transition-colors"
+              class="flex-1 text-xs bg-[#35302b] hover:bg-[#453e37] text-tan px-2 py-1 rounded transition-colors"
               onclick={createAndMoveToCollection}
               disabled={!newCollectionName.trim()}
             >
@@ -312,7 +336,7 @@
             </button>
             <button
               type="button"
-              class="flex-1 text-xs bg-gray-600 hover:bg-gray-500 text-tan px-2 py-1 rounded transition-colors"
+              class="flex-1 text-xs bg-[#ab9978] hover:bg-[#9a8a6c] text-black px-2 py-1 rounded transition-colors"
               onclick={() => { showNewCollectionInput = false; newCollectionName = ""; }}
             >
               Cancel
@@ -322,7 +346,7 @@
       {:else}
         <button
           type="button"
-          class="w-full text-left px-3 py-2 text-sm text-tan hover:bg-brown transition-colors"
+          class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors"
           onclick={() => { showNewCollectionInput = true; }}
         >
           + New Collection...
