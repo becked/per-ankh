@@ -440,6 +440,49 @@ Benefits:
 - Preserves full error chain for debugging
 - Consistent error formatting
 
+### Backend: DuckDB (Not SQLite!)
+
+**Policy**: DuckDB has different syntax and capabilities from SQLite. Don't assume SQLite patterns work.
+
+**ALTER TABLE Limitations**:
+DuckDB has very limited schema modification support compared to SQLite:
+- ❌ `ALTER TABLE ... DROP COLUMN` - Not supported
+- ❌ `ALTER TABLE ... RENAME COLUMN` - Not supported
+- ❌ `ALTER TABLE ... ALTER COLUMN TYPE` - Not supported
+- ✅ `ALTER TABLE ... ADD COLUMN` - Supported
+- ✅ `ALTER TABLE ... RENAME TO` - Supported
+
+**Schema Migration Pattern**:
+```sql
+-- ❌ WRONG: Trying to modify columns (will fail)
+ALTER TABLE games DROP COLUMN old_field;
+ALTER TABLE games RENAME COLUMN foo TO bar;
+
+-- ✅ CORRECT: Create new table, migrate data, swap
+CREATE TABLE games_new AS SELECT id, name, turn FROM games;
+DROP TABLE games;
+ALTER TABLE games_new RENAME TO games;
+```
+
+**Other Syntax Differences**:
+
+| Feature | SQLite | DuckDB |
+|---------|--------|--------|
+| UPSERT | `INSERT OR REPLACE` | `INSERT ... ON CONFLICT` |
+| Type casting | `CAST(x AS type)` | `CAST()` or `x::type` |
+| RETURNING | Limited | Full support |
+
+```sql
+-- ❌ WRONG: SQLite upsert
+INSERT OR REPLACE INTO games (id, name) VALUES (1, 'Test');
+
+-- ✅ CORRECT: DuckDB upsert
+INSERT INTO games (id, name) VALUES (1, 'Test')
+ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
+```
+
+**When in doubt**: Check https://duckdb.org/docs/sql/introduction before assuming SQLite syntax works.
+
 ## Development Commands
 
 ### Initial Setup
