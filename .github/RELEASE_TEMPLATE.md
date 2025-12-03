@@ -1,4 +1,8 @@
-### Windows
+### Release Notes
+
+### Installation
+
+**Windows**
 
 1. Download `Per.Ankh_VERSION_x64_en-US.msi` (in the Assets section)
 2. Run the installer
@@ -6,18 +10,13 @@
 
 _This warning appears because the app isn't code-signed. We are actively working on [this issue](https://github.com/becked/per-ankh/issues/1)._
 
-### Mac
+**Mac**
 
 1. Download `Per.Ankh_VERSION_aarch64.dmg` for Apple Silicon or `Per.Ankh_VERSION_x64.dmg` for Intel (in the Assets section)
 2. Open the .dmg and drag Per-Ankh to your Applications folder
 3. Launch from Applications
 
-### Debian/Ubuntu
+**Linux**
 
 1. Download `Per.Ankh_VERSION_amd64.deb` (in the Assets section)
 2. Install with: `sudo apt install ./Per.Ankh_VERSION_amd64.deb`
-
-### Fedora/RedHat
-
-1. Download `Per.Ankh-VERSION-1.x86_64.rpm` (in the Assets section)
-2. Install with: `sudo dnf install ./Per.Ankh-VERSION-1.x86_64.rpm`
