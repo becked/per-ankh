@@ -158,10 +158,11 @@ do_release() {
     echo "  package.json:     $current_npm -> $version"
     echo ""
     echo "Actions:"
-    echo "  1. Update version in all 3 files"
-    echo "  2. Commit: 'chore: bump version to $version'"
-    echo "  3. Create and push tag: $tag"
-    echo "  4. Push to origin (triggers GitHub release workflow)"
+    echo "  1. Update version in config files (3 files)"
+    echo "  2. Update CHANGELOG.md release links"
+    echo "  3. Commit: 'chore: bump version to $version'"
+    echo "  4. Create and push tag: $tag"
+    echo "  5. Push to origin (triggers GitHub release workflow)"
     if [ "$force" = "--force" ] && ([ -n "$tag_exists_local" ] || [ -n "$tag_exists_remote" ]); then
         echo "  [--force] Delete existing tag $tag first"
     fi
@@ -201,9 +202,25 @@ do_release() {
     echo "Updating package.json..."
     sed -i '' "s/\"version\": \"$current_npm\"/\"version\": \"$version\"/" "$SCRIPT_DIR/package.json"
 
+    # Update CHANGELOG.md links
+    echo "Updating CHANGELOG.md links..."
+    local changelog="$SCRIPT_DIR/CHANGELOG.md"
+    # Extract previous version from [Unreleased] link
+    local prev_version=$(grep '^\[Unreleased\]:' "$changelog" | sed 's/.*compare\/v\([0-9.]*\)\.\.\.HEAD/\1/')
+    if [ -n "$prev_version" ]; then
+        # Update [Unreleased] to compare from new version
+        sed -i '' "s|\[Unreleased\]: \(.*\)/compare/v${prev_version}\.\.\.HEAD|[Unreleased]: \1/compare/v${version}...HEAD|" "$changelog"
+        # Insert new version link after [Unreleased]
+        sed -i '' "/^\[Unreleased\]:/a\\
+[${version}]: https://github.com/becked/per-ankh/compare/v${prev_version}...v${version}
+" "$changelog"
+    else
+        echo "Warning: Could not parse previous version from CHANGELOG.md"
+    fi
+
     # Commit changes
     echo "Committing version bump..."
-    git add "$SCRIPT_DIR/src-tauri/tauri.conf.json" "$SCRIPT_DIR/src-tauri/Cargo.toml" "$SCRIPT_DIR/package.json"
+    git add "$SCRIPT_DIR/src-tauri/tauri.conf.json" "$SCRIPT_DIR/src-tauri/Cargo.toml" "$SCRIPT_DIR/package.json" "$SCRIPT_DIR/CHANGELOG.md"
     git commit -m "chore: bump version to $version"
 
     # Create tag
