@@ -4,11 +4,12 @@
 // from XML to intermediate structs (no database dependency).
 
 use crate::parser::game_data::{
-    CityCulture, CityProductionItem, CityProjectCompleted, CityReligion, CityYield,
+    CityCulture, CityEnemyAgent, CityLuxury, CityProductionItem, CityProjectCompleted,
+    CityProjectCount, CityReligion, CityYield,
 };
 use crate::parser::xml_loader::XmlDocument;
 use crate::parser::{ParseError, Result};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 /// Parse city production queue for all cities
 pub fn parse_city_production_queue_struct(doc: &XmlDocument) -> Result<Vec<CityProductionItem>> {
@@ -208,23 +209,24 @@ pub fn parse_city_culture_struct(doc: &XmlDocument) -> Result<Vec<CityCulture>> 
             HashMap::new()
         };
 
-        let team_happiness = if let Some(happiness_node) = city_node
+        // Check for TeamHappinessLevel first (newer format, 2023+),
+        // fall back to TeamDiscontentLevel (older format, 2022)
+        let team_happiness = city_node
             .children()
             .find(|n| n.has_tag_name("TeamHappinessLevel"))
-        {
-            happiness_node
-                .children()
-                .filter(|n| n.is_element())
-                .filter_map(|team_node| {
-                    let team_tag = team_node.tag_name().name();
-                    let team_id: i32 = team_tag.strip_prefix("T.")?.parse().ok()?;
-                    let happiness: i32 = team_node.text()?.parse().ok()?;
-                    Some((team_id, happiness))
-                })
-                .collect::<HashMap<i32, i32>>()
-        } else {
-            HashMap::new()
-        };
+            .or_else(|| city_node.children().find(|n| n.has_tag_name("TeamDiscontentLevel")))
+            .map(|node| {
+                node.children()
+                    .filter(|n| n.is_element())
+                    .filter_map(|team_node| {
+                        let team_tag = team_node.tag_name().name();
+                        let team_id: i32 = team_tag.strip_prefix("T.")?.parse().ok()?;
+                        let happiness: i32 = team_node.text()?.parse().ok()?;
+                        Some((team_id, happiness))
+                    })
+                    .collect::<HashMap<i32, i32>>()
+            })
+            .unwrap_or_default();
 
         let mut all_teams = std::collections::HashSet::new();
         all_teams.extend(team_culture.keys());
@@ -240,6 +242,120 @@ pub fn parse_city_culture_struct(doc: &XmlDocument) -> Result<Vec<CityCulture>> 
                 culture_level,
                 happiness_level,
             });
+        }
+    }
+
+    Ok(results)
+}
+
+/// Parse ProjectCount for all cities
+/// Note: Distinct from parse_city_projects_completed_struct which parses <CompletedBuild>
+pub fn parse_city_project_counts_struct(doc: &XmlDocument) -> Result<Vec<CityProjectCount>> {
+    let root = doc.root_element();
+    let mut results = Vec::new();
+
+    for city_node in root.children().filter(|n| n.has_tag_name("City")) {
+        let city_xml_id: i32 = city_node
+            .attribute("ID")
+            .ok_or_else(|| ParseError::MissingAttribute("City.ID".to_string()))?
+            .parse()?;
+
+        if let Some(project_count_node) = city_node.children().find(|n| n.has_tag_name("ProjectCount")) {
+            for project_elem in project_count_node.children().filter(|n| n.is_element()) {
+                let project_type = project_elem.tag_name().name().to_string();
+                let count: i32 = project_elem.text().and_then(|s| s.parse().ok()).unwrap_or(0);
+
+                if count > 0 {
+                    results.push(CityProjectCount {
+                        city_xml_id,
+                        project_type,
+                        count,
+                    });
+                }
+            }
+        }
+    }
+
+    Ok(results)
+}
+
+/// Helper to parse <P.X>value</P.X> elements into HashMap<player_id, value>
+fn parse_player_keyed_element(city_node: &roxmltree::Node, element_name: &str) -> HashMap<i32, i32> {
+    city_node
+        .children()
+        .find(|n| n.has_tag_name(element_name))
+        .map(|node| {
+            node.children()
+                .filter(|n| n.is_element())
+                .filter_map(|elem| {
+                    let tag = elem.tag_name().name();
+                    let player_id: i32 = tag.strip_prefix("P.")?.parse().ok()?;
+                    let value: i32 = elem.text()?.parse().ok()?;
+                    Some((player_id, value))
+                })
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+/// Parse enemy agent data for all cities
+pub fn parse_city_enemy_agents_struct(doc: &XmlDocument) -> Result<Vec<CityEnemyAgent>> {
+    let root = doc.root_element();
+    let mut results = Vec::new();
+
+    for city_node in root.children().filter(|n| n.has_tag_name("City")) {
+        let city_xml_id: i32 = city_node
+            .attribute("ID")
+            .ok_or_else(|| ParseError::MissingAttribute("City.ID".to_string()))?
+            .parse()?;
+
+        // Parse AgentTurn, AgentCharacterID, AgentTileID - each has <P.X> children
+        let agent_turns = parse_player_keyed_element(&city_node, "AgentTurn");
+        let agent_chars = parse_player_keyed_element(&city_node, "AgentCharacterID");
+        let agent_tiles = parse_player_keyed_element(&city_node, "AgentTileID");
+
+        // Collect all enemy player IDs
+        let mut enemy_players: HashSet<i32> = HashSet::new();
+        enemy_players.extend(agent_turns.keys());
+        enemy_players.extend(agent_chars.keys());
+        enemy_players.extend(agent_tiles.keys());
+
+        for enemy_player_id in enemy_players {
+            results.push(CityEnemyAgent {
+                city_xml_id,
+                enemy_player_xml_id: enemy_player_id,
+                placed_turn: agent_turns.get(&enemy_player_id).copied(),
+                agent_character_xml_id: agent_chars.get(&enemy_player_id).copied(),
+                agent_tile_xml_id: agent_tiles.get(&enemy_player_id).copied(),
+            });
+        }
+    }
+
+    Ok(results)
+}
+
+/// Parse luxury import history for all cities
+pub fn parse_city_luxuries_struct(doc: &XmlDocument) -> Result<Vec<CityLuxury>> {
+    let root = doc.root_element();
+    let mut results = Vec::new();
+
+    for city_node in root.children().filter(|n| n.has_tag_name("City")) {
+        let city_xml_id: i32 = city_node
+            .attribute("ID")
+            .ok_or_else(|| ParseError::MissingAttribute("City.ID".to_string()))?
+            .parse()?;
+
+        if let Some(luxury_node) = city_node.children().find(|n| n.has_tag_name("LuxuryTurn")) {
+            for luxury_elem in luxury_node.children().filter(|n| n.is_element()) {
+                let resource = luxury_elem.tag_name().name().to_string();
+                let imported_turn: i32 = luxury_elem.text().and_then(|s| s.parse().ok()).unwrap_or(0);
+
+                results.push(CityLuxury {
+                    city_xml_id,
+                    resource,
+                    imported_turn,
+                });
+            }
         }
     }
 
@@ -391,5 +507,156 @@ mod tests {
         let doc = parse_xml(xml.to_string()).unwrap();
         let culture = parse_city_culture_struct(&doc).unwrap();
         assert_eq!(culture.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_city_culture_with_happiness_level() {
+        let xml = r#"<Root>
+            <City ID="0">
+                <TeamCulture>
+                    <T.0>5</T.0>
+                </TeamCulture>
+                <TeamHappinessLevel>
+                    <T.0>3</T.0>
+                </TeamHappinessLevel>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let culture = parse_city_culture_struct(&doc).unwrap();
+        assert_eq!(culture.len(), 1);
+        assert_eq!(culture[0].happiness_level, 3);
+    }
+
+    #[test]
+    fn test_parse_city_culture_with_discontent_level_legacy() {
+        // Older saves (2022) use TeamDiscontentLevel instead of TeamHappinessLevel
+        let xml = r#"<Root>
+            <City ID="0">
+                <TeamCulture>
+                    <T.1>4</T.1>
+                </TeamCulture>
+                <TeamDiscontentLevel>
+                    <T.1>6</T.1>
+                </TeamDiscontentLevel>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let culture = parse_city_culture_struct(&doc).unwrap();
+        assert_eq!(culture.len(), 1);
+        assert_eq!(culture[0].happiness_level, 6);
+    }
+
+    #[test]
+    fn test_parse_city_project_counts() {
+        let xml = r#"<Root>
+            <City ID="0">
+                <ProjectCount>
+                    <PROJECT_WALLS>1</PROJECT_WALLS>
+                    <PROJECT_FORUM_4>2</PROJECT_FORUM_4>
+                </ProjectCount>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let projects = parse_city_project_counts_struct(&doc).unwrap();
+        assert_eq!(projects.len(), 2);
+        assert!(projects
+            .iter()
+            .any(|p| p.project_type == "PROJECT_WALLS" && p.count == 1));
+        assert!(projects
+            .iter()
+            .any(|p| p.project_type == "PROJECT_FORUM_4" && p.count == 2));
+    }
+
+    #[test]
+    fn test_parse_city_project_counts_empty() {
+        let xml = r#"<Root><City ID="0"><ProjectCount /></City></Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let projects = parse_city_project_counts_struct(&doc).unwrap();
+        assert_eq!(projects.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_city_enemy_agents() {
+        let xml = r#"<Root>
+            <City ID="0">
+                <AgentTurn>
+                    <P.2>10</P.2>
+                    <P.4>15</P.4>
+                </AgentTurn>
+                <AgentCharacterID>
+                    <P.2>595</P.2>
+                    <P.4>530</P.4>
+                </AgentCharacterID>
+                <AgentTileID>
+                    <P.2>2070</P.2>
+                </AgentTileID>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let agents = parse_city_enemy_agents_struct(&doc).unwrap();
+        assert_eq!(agents.len(), 2);
+
+        let p2_agent = agents
+            .iter()
+            .find(|a| a.enemy_player_xml_id == 2)
+            .unwrap();
+        assert_eq!(p2_agent.placed_turn, Some(10));
+        assert_eq!(p2_agent.agent_character_xml_id, Some(595));
+        assert_eq!(p2_agent.agent_tile_xml_id, Some(2070));
+
+        let p4_agent = agents
+            .iter()
+            .find(|a| a.enemy_player_xml_id == 4)
+            .unwrap();
+        assert_eq!(p4_agent.placed_turn, Some(15));
+        assert_eq!(p4_agent.agent_character_xml_id, Some(530));
+        assert_eq!(p4_agent.agent_tile_xml_id, None); // P.4 not in AgentTileID
+    }
+
+    #[test]
+    fn test_parse_city_enemy_agents_empty() {
+        let xml = r#"<Root>
+            <City ID="0">
+                <AgentTurn />
+                <AgentCharacterID />
+                <AgentTileID />
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let agents = parse_city_enemy_agents_struct(&doc).unwrap();
+        assert_eq!(agents.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_city_luxuries() {
+        let xml = r#"<Root>
+            <City ID="0">
+                <LuxuryTurn>
+                    <RESOURCE_FUR>154</RESOURCE_FUR>
+                    <RESOURCE_SILK>120</RESOURCE_SILK>
+                </LuxuryTurn>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let luxuries = parse_city_luxuries_struct(&doc).unwrap();
+        assert_eq!(luxuries.len(), 2);
+        assert!(luxuries
+            .iter()
+            .any(|l| l.resource == "RESOURCE_FUR" && l.imported_turn == 154));
+        assert!(luxuries
+            .iter()
+            .any(|l| l.resource == "RESOURCE_SILK" && l.imported_turn == 120));
+    }
+
+    #[test]
+    fn test_parse_city_luxuries_empty() {
+        let xml = r#"<Root>
+            <City ID="0">
+                <LuxuryTurn />
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let luxuries = parse_city_luxuries_struct(&doc).unwrap();
+        assert_eq!(luxuries.len(), 0);
     }
 }

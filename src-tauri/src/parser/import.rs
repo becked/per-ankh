@@ -775,13 +775,19 @@ fn parse_character_extended_data_all(
 /// This function parses city-specific nested data:
 /// - Production queue (BuildQueue) -> city_production_queue table
 /// - Completed builds (CompletedBuild) -> city_projects_completed table
-/// - Culture and happiness (TeamCulture, TeamHappinessLevel) -> city_culture table
+/// - Project counts (ProjectCount) -> city_project_counts table
+/// - Enemy agents (AgentTurn, AgentCharacterID, AgentTileID) -> city_enemy_agents table
+/// - Luxuries (LuxuryTurn) -> city_luxuries table
+/// - Culture and happiness (TeamCulture, TeamHappinessLevel/TeamDiscontentLevel) -> city_culture table
 /// - Yields (YieldProgress) -> city_yields table
 /// - Religions (Religion) -> city_religions table
 fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
     let city_production = super::parsers::parse_city_production_queue_struct(doc)?;
     let city_projects = super::parsers::parse_city_projects_completed_struct(doc)?;
+    let city_project_counts = super::parsers::parse_city_project_counts_struct(doc)?;
+    let city_enemy_agents = super::parsers::parse_city_enemy_agents_struct(doc)?;
+    let city_luxuries = super::parsers::parse_city_luxuries_struct(doc)?;
     let city_yields = super::parsers::parse_city_yields_struct(doc)?;
     let city_religions = super::parsers::parse_city_religions_struct(doc)?;
     let city_culture = super::parsers::parse_city_culture_struct(doc)?;
@@ -789,14 +795,20 @@ fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
     // Insert to database
     super::inserters::insert_city_production_queue(tx, &city_production, id_mapper)?;
     super::inserters::insert_city_projects_completed(tx, &city_projects, id_mapper)?;
+    super::inserters::insert_city_project_counts(tx, &city_project_counts, id_mapper)?;
+    super::inserters::insert_city_enemy_agents(tx, &city_enemy_agents, id_mapper)?;
+    super::inserters::insert_city_luxuries(tx, &city_luxuries, id_mapper)?;
     super::inserters::insert_city_yields(tx, &city_yields, id_mapper)?;
     super::inserters::insert_city_religions(tx, &city_religions, id_mapper)?;
     super::inserters::insert_city_culture(tx, &city_culture, id_mapper)?;
 
     log::info!(
-        "Parsed city extended data: {} production queue, {} projects completed, {} yields, {} religions, {} culture",
+        "Parsed city extended data: {} production queue, {} projects completed, {} project counts, {} enemy agents, {} luxuries, {} yields, {} religions, {} culture",
         city_production.len(),
         city_projects.len(),
+        city_project_counts.len(),
+        city_enemy_agents.len(),
+        city_luxuries.len(),
         city_yields.len(),
         city_religions.len(),
         city_culture.len()

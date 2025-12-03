@@ -45,7 +45,8 @@ pub use character_data::{
     insert_character_traits,
 };
 pub use city_data::{
-    insert_city_culture, insert_city_production_queue, insert_city_projects_completed,
+    insert_city_culture, insert_city_enemy_agents, insert_city_luxuries,
+    insert_city_production_queue, insert_city_project_counts, insert_city_projects_completed,
     insert_city_religions, insert_city_yields,
 };
 pub use diplomacy::insert_diplomacy_relations;

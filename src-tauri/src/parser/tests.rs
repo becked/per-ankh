@@ -107,6 +107,80 @@ mod tests {
                     parents_set > 0,
                     "Some characters should have parent relationships set"
                 );
+
+                // Validate new city columns from city-data-coverage plan
+                let match_id = import_result.match_id.unwrap();
+
+                // Check cities table has the new columns populated
+                let city_count: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM cities WHERE match_id = ?",
+                        [match_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                println!("  Cities: {}", city_count);
+                assert!(city_count > 0, "Should have cities");
+
+                // Verify new Phase 2 city columns exist and can be queried
+                let city_with_hurry: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM cities
+                         WHERE match_id = ? AND (
+                             hurry_training_count > 0 OR
+                             hurry_population_count > 0 OR
+                             growth_count > 0 OR
+                             unit_production_count > 0 OR
+                             buy_tile_count > 0
+                         )",
+                        [match_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                println!("  Cities with hurry/growth metrics: {}", city_with_hurry);
+
+                // Validate Phase 3 tables exist and can be queried
+                let project_counts: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM city_project_counts WHERE match_id = ?",
+                        [match_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                println!("  City project counts: {}", project_counts);
+
+                let enemy_agents: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM city_enemy_agents WHERE match_id = ?",
+                        [match_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                println!("  City enemy agents: {}", enemy_agents);
+
+                let luxuries: i64 = conn
+                    .query_row(
+                        "SELECT COUNT(*) FROM city_luxuries WHERE match_id = ?",
+                        [match_id],
+                        |row| row.get(0),
+                    )
+                    .unwrap();
+                println!("  City luxuries: {}", luxuries);
+
+                // Sample query to verify data integrity
+                let sample_city: (String, i32, i32, i32, i32) = conn
+                    .query_row(
+                        "SELECT city_name, hurry_civics_count, hurry_money_count,
+                                hurry_training_count, hurry_population_count
+                         FROM cities WHERE match_id = ? LIMIT 1",
+                        [match_id],
+                        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?)),
+                    )
+                    .unwrap();
+                println!(
+                    "  Sample city '{}': civics={}, money={}, training={}, pop={}",
+                    sample_city.0, sample_city.1, sample_city.2, sample_city.3, sample_city.4
+                );
             }
             Err(e) => {
                 panic!("Import failed: {}", e);
@@ -114,4 +188,130 @@ mod tests {
         }
     }
 
+    #[test]
+    fn test_city_data_coverage_late_game() {
+        // Use a late-game save with more city data
+        let test_file = "../test-data/saves/OW-Carthage-Year158-2025-07-28-16-15-39.zip";
+
+        if !std::path::Path::new(test_file).exists() {
+            eprintln!("Late-game test file not found, skipping");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = db::connection::get_connection(&db_path).unwrap();
+        db::ensure_schema_ready(&conn).unwrap();
+
+        let result = parser::import_save_file(test_file, &conn, None, None, None, None, None);
+        let import_result = result.unwrap();
+        assert!(import_result.success);
+
+        let match_id = import_result.match_id.unwrap();
+
+        // Query all new city columns
+        println!("\n=== City Data Coverage Validation (Late Game) ===");
+
+        // Show cities with production metrics
+        let mut stmt = conn.prepare(
+            "SELECT city_name, growth_count, unit_production_count, buy_tile_count,
+                    hurry_civics_count, hurry_money_count, hurry_training_count, hurry_population_count
+             FROM cities
+             WHERE match_id = ? AND (growth_count > 0 OR unit_production_count > 0)
+             ORDER BY growth_count DESC
+             LIMIT 5"
+        ).unwrap();
+
+        println!("\nTop 5 cities by growth_count:");
+        let rows = stmt.query_map([match_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, i32>(1)?,
+                row.get::<_, i32>(2)?,
+                row.get::<_, i32>(3)?,
+                row.get::<_, i32>(4)?,
+                row.get::<_, i32>(5)?,
+                row.get::<_, i32>(6)?,
+                row.get::<_, i32>(7)?,
+            ))
+        }).unwrap();
+
+        for row in rows {
+            let (name, growth, units, tiles, civics, money, training, pop) = row.unwrap();
+            println!("  {} - growth:{}, units:{}, tiles:{}, hurry(c:{},m:{},t:{},p:{})",
+                     name, growth, units, tiles, civics, money, training, pop);
+        }
+
+        // Show project counts
+        let mut stmt = conn.prepare(
+            "SELECT project_type, SUM(count) as total
+             FROM city_project_counts
+             WHERE match_id = ?
+             GROUP BY project_type
+             ORDER BY total DESC
+             LIMIT 10"
+        ).unwrap();
+
+        println!("\nProject counts (top 10):");
+        let rows = stmt.query_map([match_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        }).unwrap();
+
+        for row in rows {
+            let (project, count) = row.unwrap();
+            println!("  {}: {}", project, count);
+        }
+
+        // Show luxuries
+        let mut stmt = conn.prepare(
+            "SELECT c.city_name, l.resource, l.imported_turn
+             FROM city_luxuries l
+             JOIN cities c ON l.city_id = c.city_id AND l.match_id = c.match_id
+             WHERE l.match_id = ?
+             ORDER BY l.imported_turn
+             LIMIT 10"
+        ).unwrap();
+
+        println!("\nCity luxuries (first 10):");
+        let rows = stmt.query_map([match_id], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, i32>(2)?,
+            ))
+        }).unwrap();
+
+        for row in rows {
+            let (city, resource, turn) = row.unwrap();
+            println!("  {} imported {} on turn {}", city, resource, turn);
+        }
+
+        // Summary stats
+        let total_cities: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM cities WHERE match_id = ?",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        let cities_with_growth: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM cities WHERE match_id = ? AND growth_count > 0",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        let project_count_records: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM city_project_counts WHERE match_id = ?",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        let luxury_records: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM city_luxuries WHERE match_id = ?",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        println!("\nSummary:");
+        println!("  Total cities: {}", total_cities);
+        println!("  Cities with growth: {} ({:.0}%)", cities_with_growth,
+                 (cities_with_growth as f64 / total_cities as f64) * 100.0);
+        println!("  Project count records: {}", project_count_records);
+        println!("  Luxury records: {}", luxury_records);
+    }
 }

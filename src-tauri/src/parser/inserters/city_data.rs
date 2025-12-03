@@ -3,12 +3,16 @@
 // Inserts city-specific nested data into DB tables:
 // - CityProductionItem -> city_production_queue table
 // - CityProjectCompleted -> city_projects_completed table
+// - CityProjectCount -> city_project_counts table
+// - CityEnemyAgent -> city_enemy_agents table
+// - CityLuxury -> city_luxuries table
 // - CityYield -> city_yields table
 // - CityReligion -> city_religions table
 // - CityCulture -> city_culture table
 
 use crate::parser::game_data::{
-    CityCulture, CityProductionItem, CityProjectCompleted, CityReligion, CityYield,
+    CityCulture, CityEnemyAgent, CityLuxury, CityProductionItem, CityProjectCompleted,
+    CityProjectCount, CityReligion, CityYield,
 };
 use crate::parser::id_mapper::IdMapper;
 use crate::parser::utils::deduplicate_rows_last_wins;
@@ -201,6 +205,126 @@ pub fn insert_city_culture(
             0, // culture_progress (not available in XML)
             happiness_level
         ])?;
+    }
+
+    drop(app);
+    Ok(())
+}
+
+/// Insert city project counts using Appender
+pub fn insert_city_project_counts(
+    conn: &Connection,
+    records: &[CityProjectCount],
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let mut rows = Vec::new();
+
+    for record in records {
+        let city_id = id_mapper.get_city(record.city_xml_id)?;
+
+        rows.push((
+            city_id,
+            id_mapper.match_id,
+            record.project_type.clone(),
+            record.count,
+        ));
+    }
+
+    // Deduplicate by (city_id, match_id, project_type) - last-wins
+    let unique_rows =
+        deduplicate_rows_last_wins(rows, |(city_id, match_id, project_type, _)| {
+            (*city_id, *match_id, project_type.clone())
+        });
+
+    let mut app = conn.appender("city_project_counts")?;
+    for (city_id, match_id, project_type, count) in unique_rows {
+        app.append_row(params![city_id, match_id, project_type, count])?;
+    }
+
+    drop(app);
+    Ok(())
+}
+
+/// Insert city enemy agents using Appender
+pub fn insert_city_enemy_agents(
+    conn: &Connection,
+    records: &[CityEnemyAgent],
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let mut rows = Vec::new();
+
+    for record in records {
+        let city_id = id_mapper.get_city(record.city_xml_id)?;
+        let enemy_player_id = id_mapper.get_player(record.enemy_player_xml_id)?;
+        let agent_character_id = record
+            .agent_character_xml_id
+            .and_then(|xml_id| id_mapper.get_character(xml_id).ok());
+        let agent_tile_id = record
+            .agent_tile_xml_id
+            .and_then(|xml_id| id_mapper.get_tile(xml_id).ok());
+
+        rows.push((
+            city_id,
+            id_mapper.match_id,
+            enemy_player_id,
+            agent_character_id,
+            record.placed_turn,
+            agent_tile_id,
+        ));
+    }
+
+    // Deduplicate by (city_id, match_id, enemy_player_id) - last-wins
+    let unique_rows =
+        deduplicate_rows_last_wins(rows, |(city_id, match_id, enemy_player_id, ..)| {
+            (*city_id, *match_id, *enemy_player_id)
+        });
+
+    let mut app = conn.appender("city_enemy_agents")?;
+    for (city_id, match_id, enemy_player_id, agent_character_id, placed_turn, agent_tile_id) in
+        unique_rows
+    {
+        app.append_row(params![
+            city_id,
+            match_id,
+            enemy_player_id,
+            agent_character_id,
+            placed_turn,
+            agent_tile_id
+        ])?;
+    }
+
+    drop(app);
+    Ok(())
+}
+
+/// Insert city luxuries using Appender
+pub fn insert_city_luxuries(
+    conn: &Connection,
+    records: &[CityLuxury],
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    let mut rows = Vec::new();
+
+    for record in records {
+        let city_id = id_mapper.get_city(record.city_xml_id)?;
+
+        rows.push((
+            city_id,
+            id_mapper.match_id,
+            record.resource.clone(),
+            record.imported_turn,
+        ));
+    }
+
+    // Deduplicate by (city_id, match_id, resource) - last-wins
+    let unique_rows =
+        deduplicate_rows_last_wins(rows, |(city_id, match_id, resource, _)| {
+            (*city_id, *match_id, resource.clone())
+        });
+
+    let mut app = conn.appender("city_luxuries")?;
+    for (city_id, match_id, resource, imported_turn) in unique_rows {
+        app.append_row(params![city_id, match_id, resource, imported_turn])?;
     }
 
     drop(app);
