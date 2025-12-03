@@ -14,8 +14,12 @@ City ──┬── tile_id → Tile (city center location)
        │   └── specialist (e.g., SPECIALIST_POET_1)
        │
        ├── governor_id → Character
-       ├── general_id → Character
-       └── agent_id → Character
+       │
+       ├── city_enemy_agents → Enemy spies in the city
+       │
+       ├── city_project_counts → Completed project counts
+       │
+       └── city_luxuries → Imported luxury history
 ```
 
 ## Key Relationships
@@ -89,26 +93,30 @@ ORDER BY t.x, t.y
 
 ### Core Fields (CityData struct)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `xml_id` | i32 | Original XML City ID |
-| `city_name` | String | City name (from NameType or Name element) |
-| `founded_turn` | i32 | Turn when city was founded |
-| `player_xml_id` | Option<i32> | Owner player (None if in anarchy) |
-| `tile_xml_id` | i32 | Tile where city center sits |
-| `family` | Option<String> | Controlling family (e.g., FAMILY_SAITE) |
-| `first_owner_player_xml_id` | Option<i32> | Original founder player |
-| `is_capital` | bool | Whether this is a capital city |
-| `citizens` | i32 | Current population |
-| `growth_progress` | i32 | Progress toward next citizen |
-| `governor_xml_id` | Option<i32> | Character ID of governor |
-| `general_xml_id` | Option<i32> | Character ID of general |
-| `agent_xml_id` | Option<i32> | Character ID of agent/spy |
-| `hurry_civics_count` | i32 | Times production was hurried with civics |
-| `hurry_money_count` | i32 | Times production was hurried with money |
-| `specialist_count` | i32 | Count of specialists (aggregate) |
+| Field | Type | XML Element | Description |
+|-------|------|-------------|-------------|
+| `xml_id` | i32 | `ID` attr | Original XML City ID |
+| `city_name` | String | `NameType` or `Name` | City name |
+| `founded_turn` | i32 | `Founded` attr | Turn when city was founded |
+| `player_xml_id` | Option<i32> | `Player` attr | Owner player (None if in anarchy) |
+| `tile_xml_id` | i32 | `TileID` attr | Tile where city center sits |
+| `family` | Option<String> | `Family` attr | Controlling family (e.g., FAMILY_SAITE) |
+| `first_owner_player_xml_id` | Option<i32> | `FirstPlayer` | Original founder player |
+| `last_owner_player_xml_id` | Option<i32> | `LastPlayer` | Most recent owner |
+| `is_capital` | bool | `Capital` | Whether this is a capital city |
+| `citizens` | i32 | `Citizens` | Current population |
+| `governor_xml_id` | Option<i32> | `GovernorID` | Character ID of governor |
+| `governor_turn` | Option<i32> | `GovernorTurn` | Turn when governor was assigned |
+| `hurry_civics_count` | i32 | `HurryCivicsCount` | Times production was hurried with civics |
+| `hurry_money_count` | i32 | `HurryMoneyCount` | Times production was hurried with money |
+| `hurry_training_count` | i32 | `HurryTrainingCount` | Times production was hurried with training |
+| `hurry_population_count` | i32 | `HurryPopulationCount` | Times production was hurried with population |
+| `specialist_count` | i32 | `SpecialistProducedCount` | Lifetime specialists produced |
+| `growth_count` | i32 | `GrowthCount` | Total historical citizen growth |
+| `unit_production_count` | i32 | `UnitProductionCount` | Total units produced (aggregate) |
+| `buy_tile_count` | i32 | `BuyTileCount` | Tiles purchased |
 
-**Source:** `src-tauri/src/parser/game_data.rs` (lines 112-142)
+**Source:** `src-tauri/src/parser/game_data.rs`
 **Parser:** `src-tauri/src/parser/parsers/cities.rs`
 
 ### Extended City Data (Separate Tables)
@@ -149,47 +157,57 @@ ORDER BY t.x, t.y
 
 #### CityCulture
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `city_xml_id` | i32 | City this culture data belongs to |
-| `team_id` | i32 | Team/player this culture level is for |
-| `culture_level` | i32 | Culture level (0-5 for normal to legendary) |
-| `happiness_level` | i32 | Happiness modifier for this team |
+| Field | Type | XML Element | Description |
+|-------|------|-------------|-------------|
+| `city_xml_id` | i32 | `ID` attr | City this culture data belongs to |
+| `team_id` | i32 | `T.X` tag | Team/player this culture level is for |
+| `culture_level` | i32 | `TeamCulture.T.X` | Culture level (0-5 for normal to legendary) |
+| `happiness_level` | i32 | `TeamHappinessLevel.T.X` or `TeamDiscontentLevel.T.X` | Happiness modifier for this team |
 
-**Source:** `src-tauri/src/parser/game_data.rs` (lines 284-325)
+**Note:** Older saves (2022) use `TeamDiscontentLevel` instead of `TeamHappinessLevel`. The parser automatically handles both formats.
+
+#### CityProjectCount
+
+| Field | Type | XML Element | Description |
+|-------|------|-------------|-------------|
+| `city_xml_id` | i32 | `ID` attr | City that completed the projects |
+| `project_type` | String | tag name | Project type (e.g., PROJECT_WALLS) |
+| `count` | i32 | text | Number of times completed |
+
+**Note:** This is distinct from `CityProjectCompleted` which parses `<CompletedBuild>` (a log). This table parses `<ProjectCount>` (aggregated counts per project type).
+
+#### CityEnemyAgent
+
+| Field | Type | XML Element | Description |
+|-------|------|-------------|-------------|
+| `city_xml_id` | i32 | `ID` attr | City with enemy spy |
+| `enemy_player_xml_id` | i32 | `P.X` tag | Enemy player ID |
+| `agent_character_xml_id` | Option<i32> | `AgentCharacterID.P.X` | Character ID of enemy agent |
+| `placed_turn` | Option<i32> | `AgentTurn.P.X` | Turn when agent was placed |
+| `agent_tile_xml_id` | Option<i32> | `AgentTileID.P.X` | Tile where agent is located |
+
+**Note:** This tracks **enemy spies** in the city, keyed by player ID.
+
+#### CityLuxury
+
+| Field | Type | XML Element | Description |
+|-------|------|-------------|-------------|
+| `city_xml_id` | i32 | `ID` attr | City with luxury import |
+| `resource` | String | `LuxuryTurn.RESOURCE_X` tag | Resource type (e.g., RESOURCE_FUR) |
+| `imported_turn` | i32 | text | Turn when luxury was imported |
+
+**Source:** `src-tauri/src/parser/game_data.rs`
 **Parser:** `src-tauri/src/parser/parsers/city_data.rs`
 
 ## Unparsed City Data (Future Work)
 
 The following data exists in save file XML but is not yet parsed:
 
-### High Priority
-
-| Field | XML Element | Description |
-|-------|-------------|-------------|
-| `UnitProductionCounts` | `<UnitProductionCounts>` | **Breakdown of units produced by type** (e.g., 5 settlers, 1 worker) |
-| `SpecialistProducedCount` | `<SpecialistProducedCount>` | Lifetime total specialists produced |
-| `ProjectCount` | `<ProjectCount>` | Count of each project type completed (more detailed than CompletedBuild) |
-
 ### Medium Priority
 
 | Field | XML Element | Description |
 |-------|-------------|-------------|
-| `GovernorTurn` | `<GovernorTurn>` | Turn when current governor was appointed |
-| `GrowthCount` | `<GrowthCount>` | Total historical citizen growth |
 | `YieldOverflow` | `<YieldOverflow>` | Overflow production per yield type |
-| `FirstPlayer` | `<FirstPlayer>` | First owner (for conquest tracking) |
-| `LastPlayer` | `<LastPlayer>` | Most recent owner |
-
-### Espionage Data
-
-| Field | XML Element | Description |
-|-------|-------------|-------------|
-| `AgentTurn` | `<AgentTurn><P.X>` | Turn when enemy player X placed agent |
-| `AgentCharacterID` | `<AgentCharacterID><P.X>` | Character ID of enemy agent from player X |
-| `AgentTileID` | `<AgentTileID><P.X>` | Tile where enemy agent is located |
-
-This data tracks **enemy spies** in the city, keyed by player ID.
 
 ### Event History
 
@@ -202,7 +220,6 @@ This data tracks **enemy spies** in the city, keyed by player ID.
 
 | Field | XML Element | Description |
 |-------|-------------|-------------|
-| `LuxuryTurn` | `<LuxuryTurn>` | When luxuries were imported |
 | `TeamCultureStep` | `<TeamCultureStep>` | Culture level progression |
 | `PlayerFamily` | `<PlayerFamily>` | Historical family ownership by player |
 
@@ -274,15 +291,61 @@ CREATE TABLE cities (
     founded_turn INTEGER NOT NULL,
     is_capital BOOLEAN DEFAULT false,
     citizens INTEGER DEFAULT 1,
-    growth_progress INTEGER DEFAULT 0,
     governor_id INTEGER,
-    general_id INTEGER,
-    agent_id INTEGER,
+    governor_turn INTEGER,
     hurry_civics_count INTEGER DEFAULT 0,
     hurry_money_count INTEGER DEFAULT 0,
+    hurry_training_count INTEGER DEFAULT 0,
+    hurry_population_count INTEGER DEFAULT 0,
     specialist_count INTEGER DEFAULT 0,
+    growth_count INTEGER DEFAULT 0,
+    unit_production_count INTEGER DEFAULT 0,
+    buy_tile_count INTEGER DEFAULT 0,
     first_owner_player_id INTEGER,
+    last_owner_player_id INTEGER,
     PRIMARY KEY (city_id, match_id)
+);
+```
+
+### city_project_counts table
+
+```sql
+-- City project counts from <ProjectCount> element
+-- Note: Distinct from city_projects_completed which logs <CompletedBuild>
+CREATE TABLE city_project_counts (
+    city_id INTEGER NOT NULL,
+    match_id BIGINT NOT NULL,
+    project_type VARCHAR NOT NULL,  -- PROJECT_WALLS, PROJECT_FORUM_4, etc.
+    count INTEGER NOT NULL,
+    PRIMARY KEY (city_id, match_id, project_type)
+);
+```
+
+### city_enemy_agents table
+
+```sql
+-- Enemy spies operating in cities
+CREATE TABLE city_enemy_agents (
+    city_id INTEGER NOT NULL,
+    match_id BIGINT NOT NULL,
+    enemy_player_id INTEGER NOT NULL,
+    agent_character_id INTEGER,
+    placed_turn INTEGER,
+    agent_tile_id INTEGER,
+    PRIMARY KEY (city_id, match_id, enemy_player_id)
+);
+```
+
+### city_luxuries table
+
+```sql
+-- Luxury resource import history per city
+CREATE TABLE city_luxuries (
+    city_id INTEGER NOT NULL,
+    match_id BIGINT NOT NULL,
+    resource VARCHAR NOT NULL,  -- RESOURCE_FUR, RESOURCE_SILK, etc.
+    imported_turn INTEGER NOT NULL,
+    PRIMARY KEY (city_id, match_id, resource)
 );
 ```
 
@@ -300,11 +363,12 @@ CREATE TABLE tiles (
     improvement_turns_left INTEGER,
     improvement_develop_turns INTEGER DEFAULT 0,
     specialist VARCHAR,
-    owner_city_id INTEGER,  -- Links tile to controlling city
-    PRIMARY KEY (tile_id, match_id),
-    FOREIGN KEY (owner_city_id, match_id) REFERENCES cities(city_id, match_id)
+    owner_city_id INTEGER,  -- References: cities(city_id, match_id)
+    PRIMARY KEY (tile_id, match_id)
 );
 ```
+
+**Note:** Foreign key constraints were removed for ETL performance. Relationships are documented in comments.
 
 ## Multi-Pass Parsing
 
@@ -317,6 +381,20 @@ Cities and tiles have a circular dependency that requires multi-pass parsing:
 
 This is handled in `src-tauri/src/parser/import.rs` and `src-tauri/src/parser/entities/tiles.rs`.
 
-## Note on specialist_count
+## Notes on Aggregate Fields
 
-The `cities.specialist_count` field is a **denormalized aggregate** - it matches the count of tiles with specialists in that city's territory. For detailed specialist information, always query through tiles.
+### specialist_count
+
+The `cities.specialist_count` field stores the **lifetime total specialists produced** (from `<SpecialistProducedCount>`), not the current count. For the current count of specialists in a city's territory, query through tiles.
+
+### unit_production_count vs city_units_produced
+
+Two separate data sources track unit production:
+- `cities.unit_production_count` - Parses `<UnitProductionCount>`, the aggregate total units produced
+- `city_units_produced` table - Parses `<UnitProductionCounts>`, the per-unit-type breakdown (e.g., 5 settlers, 1 worker)
+
+### city_projects_completed vs city_project_counts
+
+These tables serve different purposes:
+- `city_projects_completed` - Parses `<CompletedBuild>`, a log of all completed build queue items
+- `city_project_counts` - Parses `<ProjectCount>`, aggregated counts per project type (more efficient for statistics)
