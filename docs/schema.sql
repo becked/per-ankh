@@ -1,4 +1,4 @@
--- Old World Game Data Schema v2.6
+-- Old World Game Data Schema v2.9
 -- DuckDB Schema for Multi-Match Game Save Analysis
 --
 -- Design Principles:
@@ -414,17 +414,21 @@ CREATE TABLE cities (
     is_capital BOOLEAN DEFAULT false,
     -- Population
     citizens INTEGER DEFAULT 1,
-    growth_progress INTEGER DEFAULT 0,
     -- Leadership
     governor_id INTEGER,  -- References: characters(character_id, match_id)
-    general_id INTEGER,  -- References: characters(character_id, match_id)
-    agent_id INTEGER,  -- References: characters(character_id, match_id)
-    -- Production
+    governor_turn INTEGER,  -- Turn when governor was assigned
+    -- Production and economy
     hurry_civics_count INTEGER DEFAULT 0,
     hurry_money_count INTEGER DEFAULT 0,
+    hurry_training_count INTEGER DEFAULT 0,
+    hurry_population_count INTEGER DEFAULT 0,
     specialist_count INTEGER DEFAULT 0,
+    growth_count INTEGER DEFAULT 0,
+    unit_production_count INTEGER DEFAULT 0,
+    buy_tile_count INTEGER DEFAULT 0,
     -- Ownership tracking
     first_owner_player_id INTEGER,
+    last_owner_player_id INTEGER,
     PRIMARY KEY (city_id, match_id)
 );
 
@@ -484,6 +488,36 @@ CREATE TABLE city_projects_completed (
     project_type VARCHAR NOT NULL,
     count INTEGER NOT NULL,
     PRIMARY KEY (city_id, match_id, project_type)
+);
+
+-- City project counts from <ProjectCount> element
+-- Note: Distinct from city_projects_completed which logs <CompletedBuild>
+CREATE TABLE city_project_counts (
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
+    match_id BIGINT NOT NULL,
+    project_type VARCHAR NOT NULL,  -- PROJECT_WALLS, PROJECT_FORUM_4, etc.
+    count INTEGER NOT NULL,
+    PRIMARY KEY (city_id, match_id, project_type)
+);
+
+-- Enemy spies operating in cities
+CREATE TABLE city_enemy_agents (
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
+    match_id BIGINT NOT NULL,
+    enemy_player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
+    agent_character_id INTEGER,  -- References: characters(character_id, match_id)
+    placed_turn INTEGER,
+    agent_tile_id INTEGER,  -- References: tiles(tile_id, match_id)
+    PRIMARY KEY (city_id, match_id, enemy_player_id)
+);
+
+-- Luxury resource import history per city
+CREATE TABLE city_luxuries (
+    city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
+    match_id BIGINT NOT NULL,
+    resource VARCHAR NOT NULL,  -- RESOURCE_FUR, RESOURCE_SILK, etc.
+    imported_turn INTEGER NOT NULL,
+    PRIMARY KEY (city_id, match_id, resource)
 );
 
 
@@ -926,7 +960,10 @@ INSERT INTO schema_migrations (version, description) VALUES
 ('2.3.0', 'Added is_save_owner column to players table and user_settings table for save owner tracking'),
 ('2.4.0', 'Separated mods and DLC: renamed enabled_dlc to enabled_mods, added new enabled_dlc from GameContent'),
 ('2.5.0', 'Added collections table for organizing matches and filtering stats'),
-('2.6.0', 'Removed FK constraints for ETL performance - relationships documented in comments');
+('2.6.0', 'Removed FK constraints for ETL performance - relationships documented in comments'),
+('2.7.0', 'Removed invalid city columns (growth_progress, general_id, agent_id) that do not exist in XML'),
+('2.8.0', 'Added new city columns: governor_turn, hurry_training/population_count, growth/unit_production/buy_tile_count, last_owner_player_id'),
+('2.9.0', 'Added city_project_counts, city_enemy_agents, city_luxuries tables; fixed TeamDiscontentLevel fallback for legacy saves');
 
 
 -- ============================================================================
@@ -934,7 +971,7 @@ INSERT INTO schema_migrations (version, description) VALUES
 -- ============================================================================
 --
 -- Schema Statistics:
--- - 55 tables (entities + time-series + aggregates + reference + views + locks + settings)
+-- - 58 tables (entities + time-series + aggregates + reference + views + locks + settings)
 -- - ~85% coverage of XML data structures
 -- - Optimized for multi-match analytical queries
 -- - Full character/family/religion system for political analysis

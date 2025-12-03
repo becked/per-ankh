@@ -56,32 +56,11 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
             .opt_child_text("Citizens")
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(1);
-        let growth_progress = city_node
-            .opt_child_text("GrowthProgress")
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
-
         // Leadership
         let governor_xml_id = city_node
             .opt_child_text("GovernorID")
             .and_then(|s| s.parse::<i32>().ok());
         let governor_db_id = match governor_xml_id {
-            Some(id) => Some(id_mapper.get_character(id)?),
-            None => None,
-        };
-
-        let general_xml_id = city_node
-            .opt_child_text("GeneralID")
-            .and_then(|s| s.parse::<i32>().ok());
-        let general_db_id = match general_xml_id {
-            Some(id) => Some(id_mapper.get_character(id)?),
-            None => None,
-        };
-
-        let agent_xml_id = city_node
-            .opt_child_text("Agent")
-            .and_then(|s| s.parse::<i32>().ok());
-        let agent_db_id = match agent_xml_id {
             Some(id) => Some(id_mapper.get_character(id)?),
             None => None,
         };
@@ -96,18 +75,59 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(0);
         let specialist_count = city_node
-            .opt_child_text("SpecialistCount")
+            .opt_child_text("SpecialistProducedCount")
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(0);
 
         // First owner tracking
         let first_owner_player_xml_id = city_node
-            .opt_child_text("FirstOwnerPlayerID")
+            .opt_child_text("FirstPlayer")
             .and_then(|s| s.parse::<i32>().ok());
         let first_owner_player_db_id = match first_owner_player_xml_id {
             Some(id) => Some(id_mapper.get_player(id)?),
             None => None,
         };
+
+        // Last owner tracking
+        let last_owner_player_xml_id = city_node
+            .opt_child_text("LastPlayer")
+            .and_then(|s| s.parse::<i32>().ok());
+        let last_owner_player_db_id = match last_owner_player_xml_id {
+            Some(id) => Some(id_mapper.get_player(id)?),
+            None => None,
+        };
+
+        // Governor turn
+        let governor_turn = city_node
+            .opt_child_text("GovernorTurn")
+            .and_then(|s| s.parse::<i32>().ok());
+
+        // Additional hurry metrics
+        let hurry_training_count = city_node
+            .opt_child_text("HurryTrainingCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        let hurry_population_count = city_node
+            .opt_child_text("HurryPopulationCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        // Growth and production counts
+        let growth_count = city_node
+            .opt_child_text("GrowthCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        let unit_production_count = city_node
+            .opt_child_text("UnitProductionCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        let buy_tile_count = city_node
+            .opt_child_text("BuyTileCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
 
         // Collect row data - must match schema column order exactly
         cities.push((
@@ -121,14 +141,18 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
             founded_turn,                   // founded_turn
             is_capital,                     // is_capital
             citizens,                       // citizens
-            growth_progress,                // growth_progress
             governor_db_id,                 // governor_id
-            general_db_id,                  // general_id
-            agent_db_id,                    // agent_id
+            governor_turn,                  // governor_turn
             hurry_civics_count,             // hurry_civics_count
             hurry_money_count,              // hurry_money_count
+            hurry_training_count,           // hurry_training_count
+            hurry_population_count,         // hurry_population_count
             specialist_count,               // specialist_count
+            growth_count,                   // growth_count
+            unit_production_count,          // unit_production_count
+            buy_tile_count,                 // buy_tile_count
             first_owner_player_db_id,       // first_owner_player_id
+            last_owner_player_db_id,        // last_owner_player_id
         ));
     }
 
@@ -144,13 +168,17 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
     // Bulk insert deduplicated rows
     let mut app = conn.appender("cities")?;
     for (db_id, match_id, xml_id, player_db_id, tile_db_id, city_name, family, founded_turn,
-         is_capital, citizens, growth_progress, governor_db_id, general_db_id, agent_db_id,
-         hurry_civics_count, hurry_money_count, specialist_count, first_owner_player_db_id) in unique_cities
+         is_capital, citizens, governor_db_id, governor_turn,
+         hurry_civics_count, hurry_money_count, hurry_training_count, hurry_population_count,
+         specialist_count, growth_count, unit_production_count, buy_tile_count,
+         first_owner_player_db_id, last_owner_player_db_id) in unique_cities
     {
         app.append_row(params![
             db_id, match_id, xml_id, player_db_id, tile_db_id, city_name, family, founded_turn,
-            is_capital, citizens, growth_progress, governor_db_id, general_db_id, agent_db_id,
-            hurry_civics_count, hurry_money_count, specialist_count, first_owner_player_db_id
+            is_capital, citizens, governor_db_id, governor_turn,
+            hurry_civics_count, hurry_money_count, hurry_training_count, hurry_population_count,
+            specialist_count, growth_count, unit_production_count, buy_tile_count,
+            first_owner_player_db_id, last_owner_player_db_id
         ])?;
     }
 

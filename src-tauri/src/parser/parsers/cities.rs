@@ -44,22 +44,9 @@ pub fn parse_cities_struct(doc: &XmlDocument) -> Result<Vec<CityData>> {
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(1);
 
-        let growth_progress = city_node
-            .opt_child_text("GrowthProgress")
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
-
         // Leadership
         let governor_xml_id = city_node
             .opt_child_text("GovernorID")
-            .and_then(|s| s.parse::<i32>().ok());
-
-        let general_xml_id = city_node
-            .opt_child_text("GeneralID")
-            .and_then(|s| s.parse::<i32>().ok());
-
-        let agent_xml_id = city_node
-            .opt_child_text("Agent")
             .and_then(|s| s.parse::<i32>().ok());
 
         // Production
@@ -74,14 +61,51 @@ pub fn parse_cities_struct(doc: &XmlDocument) -> Result<Vec<CityData>> {
             .unwrap_or(0);
 
         let specialist_count = city_node
-            .opt_child_text("SpecialistCount")
+            .opt_child_text("SpecialistProducedCount")
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(0);
 
         // First owner tracking
         let first_owner_player_xml_id = city_node
-            .opt_child_text("FirstOwnerPlayerID")
+            .opt_child_text("FirstPlayer")
             .and_then(|s| s.parse::<i32>().ok());
+
+        // Last owner tracking
+        let last_owner_player_xml_id = city_node
+            .opt_child_text("LastPlayer")
+            .and_then(|s| s.parse::<i32>().ok());
+
+        // Governor turn
+        let governor_turn = city_node
+            .opt_child_text("GovernorTurn")
+            .and_then(|s| s.parse::<i32>().ok());
+
+        // Additional hurry metrics
+        let hurry_training_count = city_node
+            .opt_child_text("HurryTrainingCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        let hurry_population_count = city_node
+            .opt_child_text("HurryPopulationCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        // Growth and production counts
+        let growth_count = city_node
+            .opt_child_text("GrowthCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        let unit_production_count = city_node
+            .opt_child_text("UnitProductionCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
+
+        let buy_tile_count = city_node
+            .opt_child_text("BuyTileCount")
+            .and_then(|s| s.parse::<i32>().ok())
+            .unwrap_or(0);
 
         cities.push(CityData {
             xml_id,
@@ -91,15 +115,19 @@ pub fn parse_cities_struct(doc: &XmlDocument) -> Result<Vec<CityData>> {
             tile_xml_id,
             family,
             first_owner_player_xml_id,
+            last_owner_player_xml_id,
             is_capital,
             citizens,
-            growth_progress,
             governor_xml_id,
-            general_xml_id,
-            agent_xml_id,
+            governor_turn,
             hurry_civics_count,
             hurry_money_count,
+            hurry_training_count,
+            hurry_population_count,
             specialist_count,
+            growth_count,
+            unit_production_count,
+            buy_tile_count,
         });
     }
 
@@ -168,5 +196,71 @@ mod tests {
         assert_eq!(cities[0].city_name, "City One");
         assert_eq!(cities[1].city_name, "City Two");
         assert_eq!(cities[1].citizens, 5);
+    }
+
+    #[test]
+    fn test_parse_cities_first_player() {
+        let xml = r#"<Root GameId="test">
+            <City ID="0" Player="0" TileID="100" Founded="1">
+                <Name>Test</Name>
+                <FirstPlayer>2</FirstPlayer>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let cities = parse_cities_struct(&doc).unwrap();
+        assert_eq!(cities[0].first_owner_player_xml_id, Some(2));
+    }
+
+    #[test]
+    fn test_parse_cities_specialist_produced_count() {
+        let xml = r#"<Root GameId="test">
+            <City ID="0" Player="0" TileID="100" Founded="1">
+                <Name>Test</Name>
+                <SpecialistProducedCount>24</SpecialistProducedCount>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let cities = parse_cities_struct(&doc).unwrap();
+        assert_eq!(cities[0].specialist_count, 24);
+    }
+
+    #[test]
+    fn test_parse_cities_all_hurry_metrics() {
+        let xml = r#"<Root GameId="test">
+            <City ID="0" Player="0" TileID="100" Founded="1">
+                <Name>Test</Name>
+                <HurryCivicsCount>3</HurryCivicsCount>
+                <HurryTrainingCount>2</HurryTrainingCount>
+                <HurryMoneyCount>5</HurryMoneyCount>
+                <HurryPopulationCount>4</HurryPopulationCount>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let cities = parse_cities_struct(&doc).unwrap();
+        assert_eq!(cities[0].hurry_civics_count, 3);
+        assert_eq!(cities[0].hurry_training_count, 2);
+        assert_eq!(cities[0].hurry_money_count, 5);
+        assert_eq!(cities[0].hurry_population_count, 4);
+    }
+
+    #[test]
+    fn test_parse_cities_new_fields() {
+        let xml = r#"<Root GameId="test">
+            <City ID="0" Player="0" TileID="100" Founded="1">
+                <Name>Test</Name>
+                <GovernorTurn>45</GovernorTurn>
+                <GrowthCount>12</GrowthCount>
+                <UnitProductionCount>8</UnitProductionCount>
+                <LastPlayer>0</LastPlayer>
+                <BuyTileCount>3</BuyTileCount>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let cities = parse_cities_struct(&doc).unwrap();
+        assert_eq!(cities[0].governor_turn, Some(45));
+        assert_eq!(cities[0].growth_count, 12);
+        assert_eq!(cities[0].unit_production_count, 8);
+        assert_eq!(cities[0].last_owner_player_xml_id, Some(0));
+        assert_eq!(cities[0].buy_tile_count, 3);
     }
 }

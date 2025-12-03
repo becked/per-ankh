@@ -32,18 +32,14 @@ pub fn insert_cities(
             None => None,
         };
 
-        let general_db_id = match city.general_xml_id {
-            Some(id) => Some(id_mapper.get_character(id)?),
-            None => None,
-        };
-
-        let agent_db_id = match city.agent_xml_id {
-            Some(id) => Some(id_mapper.get_character(id)?),
-            None => None,
-        };
-
         // Map first owner player XML ID to DB ID
         let first_owner_player_db_id = match city.first_owner_player_xml_id {
+            Some(id) => Some(id_mapper.get_player(id)?),
+            None => None,
+        };
+
+        // Map last owner player XML ID to DB ID
+        let last_owner_player_db_id = match city.last_owner_player_xml_id {
             Some(id) => Some(id_mapper.get_player(id)?),
             None => None,
         };
@@ -60,14 +56,18 @@ pub fn insert_cities(
             city.founded_turn,              // founded_turn
             city.is_capital,                // is_capital
             city.citizens,                  // citizens
-            city.growth_progress,           // growth_progress
             governor_db_id,                 // governor_id
-            general_db_id,                  // general_id
-            agent_db_id,                    // agent_id
+            city.governor_turn,             // governor_turn
             city.hurry_civics_count,        // hurry_civics_count
             city.hurry_money_count,         // hurry_money_count
+            city.hurry_training_count,      // hurry_training_count
+            city.hurry_population_count,    // hurry_population_count
             city.specialist_count,          // specialist_count
+            city.growth_count,              // growth_count
+            city.unit_production_count,     // unit_production_count
+            city.buy_tile_count,            // buy_tile_count
             first_owner_player_db_id,       // first_owner_player_id
+            last_owner_player_db_id,        // last_owner_player_id
         ));
     }
 
@@ -81,13 +81,17 @@ pub fn insert_cities(
     // Bulk insert deduplicated rows
     let mut app = conn.appender("cities")?;
     for (db_id, match_id, xml_id, player_db_id, tile_db_id, city_name, family, founded_turn,
-         is_capital, citizens, growth_progress, governor_db_id, general_db_id, agent_db_id,
-         hurry_civics_count, hurry_money_count, specialist_count, first_owner_player_db_id) in unique_cities
+         is_capital, citizens, governor_db_id, governor_turn,
+         hurry_civics_count, hurry_money_count, hurry_training_count, hurry_population_count,
+         specialist_count, growth_count, unit_production_count, buy_tile_count,
+         first_owner_player_db_id, last_owner_player_db_id) in unique_cities
     {
         app.append_row(params![
             db_id, match_id, xml_id, player_db_id, tile_db_id, city_name, family, founded_turn,
-            is_capital, citizens, growth_progress, governor_db_id, general_db_id, agent_db_id,
-            hurry_civics_count, hurry_money_count, specialist_count, first_owner_player_db_id
+            is_capital, citizens, governor_db_id, governor_turn,
+            hurry_civics_count, hurry_money_count, hurry_training_count, hurry_population_count,
+            specialist_count, growth_count, unit_production_count, buy_tile_count,
+            first_owner_player_db_id, last_owner_player_db_id
         ])?;
     }
 

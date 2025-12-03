@@ -42,7 +42,8 @@ pub use unit_production::{parse_city_units_produced, parse_player_units_produced
 // Batch 3 exports
 pub use character_data::parse_all_character_data_struct;
 pub use city_data::{
-    parse_city_culture_struct, parse_city_production_queue_struct,
+    parse_city_culture_struct, parse_city_enemy_agents_struct, parse_city_luxuries_struct,
+    parse_city_production_queue_struct, parse_city_project_counts_struct,
     parse_city_projects_completed_struct, parse_city_religions_struct, parse_city_yields_struct,
 };
 pub use diplomacy::parse_diplomacy_relations;

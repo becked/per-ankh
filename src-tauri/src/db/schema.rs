@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Current schema version - increment when breaking changes require database reset
-pub const CURRENT_SCHEMA_VERSION: &str = "2.6.0";
+pub const CURRENT_SCHEMA_VERSION: &str = "2.9.0";
 
 /// Schema version file metadata
 ///
@@ -406,20 +406,20 @@ pub fn ensure_schema_ready(conn: &Connection) -> Result<()> {
     } else {
         log::info!("Schema already exists, checking version...");
 
-        // Check if schema requires breaking upgrade (v2.6.0 removes FK constraints)
+        // Check if schema requires breaking upgrade (v2.8.0 adds new city columns)
         // This cannot be migrated incrementally - requires full reset
-        let has_v260 = conn
+        let has_v280 = conn
             .query_row(
-                "SELECT 1 FROM schema_migrations WHERE version = '2.6.0'",
+                "SELECT 1 FROM schema_migrations WHERE version = '2.8.0'",
                 [],
                 |_| Ok(()),
             )
             .is_ok();
 
-        if !has_v260 {
-            log::warn!("Schema version < 2.6.0 detected, database reset required for FK removal");
+        if !has_v280 {
+            log::warn!("Schema version < 2.8.0 detected, database reset required for city schema changes");
             return Err(crate::parser::ParseError::SchemaUpgrade(
-                "Database schema has been updated (v2.6.0) and requires a reset. \
+                "Database schema has been updated (v2.8.0) and requires a reset. \
                  Your imported games will need to be re-imported after the reset.".to_string()
             ).into());
         }
@@ -760,11 +760,11 @@ mod tests {
         let db_path = dir.path().join("test.db");
         let conn = Connection::open(&db_path).unwrap();
 
-        // Create old schema (pre-2.6.0) with just enough to pass schema_exists check
+        // Create old schema (pre-2.8.0) with just enough to pass schema_exists check
         conn.execute_batch(
             "CREATE TABLE matches (match_id BIGINT PRIMARY KEY);
              CREATE TABLE schema_migrations (version VARCHAR PRIMARY KEY);
-             INSERT INTO schema_migrations (version) VALUES ('2.5.0');"
+             INSERT INTO schema_migrations (version) VALUES ('2.7.0');"
         ).unwrap();
         drop(conn);
 
@@ -773,7 +773,7 @@ mod tests {
         let result = ensure_schema_ready(&conn);
         assert!(result.is_err());
         let err_msg = result.unwrap_err().to_string();
-        assert!(err_msg.contains("v2.6.0") || err_msg.contains("reset"),
-                "Error should mention v2.6.0 or reset: {}", err_msg);
+        assert!(err_msg.contains("v2.8.0") || err_msg.contains("reset"),
+                "Error should mention v2.8.0 or reset: {}", err_msg);
     }
 }

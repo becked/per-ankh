@@ -122,23 +122,27 @@ pub struct CityData {
     pub tile_xml_id: i32,
     pub family: Option<String>,
     pub first_owner_player_xml_id: Option<i32>,
+    pub last_owner_player_xml_id: Option<i32>,
 
     // Status
     pub is_capital: bool,
 
     // Population
     pub citizens: i32,
-    pub growth_progress: i32,
 
     // Leadership (character XML IDs)
     pub governor_xml_id: Option<i32>,
-    pub general_xml_id: Option<i32>,
-    pub agent_xml_id: Option<i32>,
+    pub governor_turn: Option<i32>,
 
-    // Production
+    // Production and economy
     pub hurry_civics_count: i32,
     pub hurry_money_count: i32,
+    pub hurry_training_count: i32,
+    pub hurry_population_count: i32,
     pub specialist_count: i32,
+    pub growth_count: i32,
+    pub unit_production_count: i32,
+    pub buy_tile_count: i32,
 }
 
 /// Tile entity data parsed from XML
@@ -298,6 +302,33 @@ pub struct CityProjectCompleted {
     pub city_xml_id: i32,
     pub project_type: String,
     pub count: i32,
+}
+
+/// City project completion counts from <ProjectCount> element
+/// Note: Distinct from CityProjectCompleted which parses <CompletedBuild>
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityProjectCount {
+    pub city_xml_id: i32,
+    pub project_type: String, // e.g., "PROJECT_WALLS"
+    pub count: i32,
+}
+
+/// Enemy agent/spy in a city (AgentTurn/AgentCharacterID/AgentTileID elements)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityEnemyAgent {
+    pub city_xml_id: i32,
+    pub enemy_player_xml_id: i32,
+    pub agent_character_xml_id: Option<i32>,
+    pub placed_turn: Option<i32>,
+    pub agent_tile_xml_id: Option<i32>,
+}
+
+/// City luxury import history (LuxuryTurn element)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CityLuxury {
+    pub city_xml_id: i32,
+    pub resource: String, // e.g., "RESOURCE_FUR"
+    pub imported_turn: i32,
 }
 
 /// City yield progress (YieldProgress element)
@@ -541,6 +572,9 @@ pub struct GameData {
     pub character_marriages: Vec<CharacterMarriage>,
     pub city_production_queue: Vec<CityProductionItem>,
     pub city_projects_completed: Vec<CityProjectCompleted>,
+    pub city_project_counts: Vec<CityProjectCount>,
+    pub city_enemy_agents: Vec<CityEnemyAgent>,
+    pub city_luxuries: Vec<CityLuxury>,
     pub city_yields: Vec<CityYield>,
     pub city_religions: Vec<CityReligion>,
     pub city_culture: Vec<CityCulture>,
