@@ -7,6 +7,8 @@
   import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
   import type { EventLog } from "$lib/types/EventLog";
   import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
+  import type { CityStatistics } from "$lib/types/CityStatistics";
+  import type { CityInfo } from "$lib/types/CityInfo";
   import type { EChartsOption } from "echarts";
   import ChartContainer from "$lib/ChartContainer.svelte";
   import ChartSeriesFilter, { type SeriesInfo } from "$lib/ChartSeriesFilter.svelte";
@@ -21,6 +23,7 @@
   let allYields = $state<YieldHistory[] | null>(null);
   let eventLogs = $state<EventLog[] | null>(null);
   let lawAdoptionHistory = $state<LawAdoptionHistory[] | null>(null);
+  let cityStatistics = $state<CityStatistics | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
@@ -28,6 +31,10 @@
   // Event log filter state
   let searchTerm = $state("");
   let selectedFilters = $state<string[]>([]);  // Combined log types and players with prefixes
+
+  // Event log sort state
+  let eventLogSortColumn = $state<string>("turn");
+  let eventLogSortDirection = $state<"asc" | "desc">("asc");
 
   // Chart series filter state - each chart has its own independent state
   let selectedPointsNations = $state<Record<string, boolean>>({});
@@ -40,6 +47,214 @@
   let selectedGrowthNations = $state<Record<string, boolean>>({});
   let selectedCultureNations = $state<Record<string, boolean>>({});
   let selectedHappinessNations = $state<Record<string, boolean>>({});
+
+  // City table state
+  let citySearchTerm = $state("");
+  let citySortColumn = $state<string>("city_name");
+  let citySortDirection = $state<"asc" | "desc">("asc");
+
+  // City column definitions
+  // format function receives the value AND the city object for context (e.g., capital star)
+  type CityColumn = {
+    key: string;
+    label: string;
+    defaultVisible: boolean;
+    getValue: (city: CityInfo) => string | number | boolean | null;
+    format?: (value: string | number | boolean | null, city: CityInfo) => string;
+    sortValue?: (city: CityInfo) => string | number;
+  };
+
+  // Column order: Nation, Name, Family, Founded, Culture, Specialists, Growth, Population, Tiles Bought
+  // Default visible: Nation, Name, Family, Founded, Culture
+  const CITY_COLUMNS: CityColumn[] = [
+    {
+      key: "owner_nation",
+      label: "Nation",
+      defaultVisible: true,
+      getValue: (c) => c.owner_nation,
+      format: (v) => formatEnum(v as string | null, "NATION_"),
+    },
+    {
+      key: "city_name",
+      label: "Name",
+      defaultVisible: true,
+      getValue: (c) => c.city_name,
+      format: (v, city) => {
+        const name = formatEnum(v as string, "CITYNAME_");
+        return city.is_capital ? `★ ${name}` : name;
+      },
+    },
+    {
+      key: "family",
+      label: "Family",
+      defaultVisible: true,
+      getValue: (c) => c.family,
+      format: (v) => formatEnum(v as string | null, "FAMILY_"),
+    },
+    {
+      key: "founded_turn",
+      label: "Founded",
+      defaultVisible: true,
+      getValue: (c) => c.founded_turn,
+    },
+    {
+      key: "culture_level",
+      label: "Culture",
+      defaultVisible: true,
+      getValue: (c) => c.culture_level,
+      format: (v) => (v as number | null)?.toString() ?? "—",
+      sortValue: (c) => c.culture_level ?? -1,
+    },
+    {
+      key: "specialist_count",
+      label: "Specialists",
+      defaultVisible: false,
+      getValue: (c) => c.specialist_count,
+    },
+    {
+      key: "growth_count",
+      label: "Growth",
+      defaultVisible: false,
+      getValue: (c) => c.growth_count,
+    },
+    {
+      key: "citizens",
+      label: "Population",
+      defaultVisible: false,
+      getValue: (c) => c.citizens,
+    },
+    {
+      key: "buy_tile_count",
+      label: "Tiles Bought",
+      defaultVisible: false,
+      getValue: (c) => c.buy_tile_count,
+    },
+    {
+      key: "governor_name",
+      label: "Governor",
+      defaultVisible: false,
+      getValue: (c) => c.governor_name,
+      format: (v) => v ? formatEnum(v as string, "NAME_") : "—",
+    },
+    {
+      key: "unit_production_count",
+      label: "Units Produced",
+      defaultVisible: false,
+      getValue: (c) => c.unit_production_count,
+    },
+    {
+      key: "hurry_civics_count",
+      label: "Hurry (Civics)",
+      defaultVisible: false,
+      getValue: (c) => c.hurry_civics_count,
+    },
+    {
+      key: "hurry_money_count",
+      label: "Hurry (Money)",
+      defaultVisible: false,
+      getValue: (c) => c.hurry_money_count,
+    },
+    {
+      key: "hurry_training_count",
+      label: "Hurry (Training)",
+      defaultVisible: false,
+      getValue: (c) => c.hurry_training_count,
+    },
+    {
+      key: "hurry_population_count",
+      label: "Hurry (Pop)",
+      defaultVisible: false,
+      getValue: (c) => c.hurry_population_count,
+    },
+  ];
+
+  // Initialize visible columns from defaults
+  let cityVisibleColumns = $state<Record<string, boolean>>(
+    Object.fromEntries(CITY_COLUMNS.map((col) => [col.key, col.defaultVisible]))
+  );
+
+  // Get visible columns in order
+  const visibleCityColumns = $derived(
+    CITY_COLUMNS.filter((col) => cityVisibleColumns[col.key])
+  );
+
+  // Convert visibility Record to array of selected keys for Select component
+  const selectedColumnKeys = $derived(
+    Object.entries(cityVisibleColumns)
+      .filter(([, visible]) => visible)
+      .map(([key]) => key)
+  );
+
+  // Handle column visibility change from Select
+  function handleColumnVisibilityChange(keys: string[]) {
+    for (const col of CITY_COLUMNS) {
+      cityVisibleColumns[col.key] = keys.includes(col.key);
+    }
+  }
+
+  // Filtered and sorted cities
+  const filteredSortedCities = $derived(() => {
+    if (!cityStatistics) return [];
+
+    // Filter by search term
+    let cities = cityStatistics.cities;
+    if (citySearchTerm) {
+      const term = citySearchTerm.toLowerCase();
+      cities = cities.filter((city) =>
+        city.city_name.toLowerCase().includes(term) ||
+        (city.owner_nation?.toLowerCase().includes(term) ?? false) ||
+        (city.family?.toLowerCase().includes(term) ?? false) ||
+        (city.governor_name?.toLowerCase().includes(term) ?? false)
+      );
+    }
+
+    // Sort
+    const column = CITY_COLUMNS.find((col) => col.key === citySortColumn);
+    if (column) {
+      cities = [...cities].sort((a, b) => {
+        const aVal = column.sortValue ? column.sortValue(a) : column.getValue(a);
+        const bVal = column.sortValue ? column.sortValue(b) : column.getValue(b);
+
+        // Handle nulls - sort them to the end
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+
+        // Compare values
+        let cmp: number;
+        if (typeof aVal === "string" && typeof bVal === "string") {
+          cmp = aVal.localeCompare(bVal);
+        } else {
+          cmp = (aVal as number) - (bVal as number);
+        }
+
+        return citySortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return cities;
+  });
+
+  // Toggle sort column/direction
+  function toggleCitySort(columnKey: string) {
+    if (citySortColumn === columnKey) {
+      // Toggle direction if same column
+      citySortDirection = citySortDirection === "asc" ? "desc" : "asc";
+    } else {
+      // New column, default to ascending
+      citySortColumn = columnKey;
+      citySortDirection = "asc";
+    }
+  }
+
+  // Format cell value using column's format function or default
+  function formatCityCell(column: CityColumn, city: CityInfo): string {
+    const value = column.getValue(city);
+    if (column.format) {
+      return column.format(value, city);
+    }
+    return value?.toString() ?? "—";
+  }
 
   // Derive series info from player history for the filter component
   const nationSeriesInfo = $derived<SeriesInfo[]>(
@@ -404,13 +619,15 @@
       api.getYieldHistory(matchId, Array.from(YIELD_TYPES)),
       api.getEventLogs(matchId),
       api.getLawAdoptionHistory(matchId),
+      api.getCityStatistics(matchId),
     ])
-      .then(([details, history, yields, logs, lawHistory]) => {
+      .then(([details, history, yields, logs, lawHistory, cityStats]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
         eventLogs = logs;
         lawAdoptionHistory = lawHistory;
+        cityStatistics = cityStats;
       })
       .catch((err) => {
         error = String(err);
@@ -526,9 +743,12 @@
   );
 
 
-  // Apply filters to event logs
-  const filteredEventLogs = $derived(
-    processedEventLogs?.filter(log => {
+  // Apply filters and sorting to event logs
+  const filteredEventLogs = $derived(() => {
+    if (!processedEventLogs) return null;
+
+    // Filter
+    let logs = processedEventLogs.filter(log => {
       // Search filter (case-insensitive) - searches log type, player, and description
       if (searchTerm) {
         const term = searchTerm.toLowerCase();
@@ -548,8 +768,53 @@
         return false;
       }
       return true;
-    }) ?? null
-  );
+    });
+
+    // Sort
+    logs = [...logs].sort((a, b) => {
+      let aVal: string | number | null;
+      let bVal: string | number | null;
+
+      switch (eventLogSortColumn) {
+        case "turn":
+          aVal = a.turn;
+          bVal = b.turn;
+          break;
+        case "log_type":
+          aVal = a.log_type;
+          bVal = b.log_type;
+          break;
+        case "player_name":
+          aVal = a.player_name ?? "";
+          bVal = b.player_name ?? "";
+          break;
+        case "description":
+          aVal = a.description ?? "";
+          bVal = b.description ?? "";
+          break;
+        default:
+          aVal = a.turn;
+          bVal = b.turn;
+      }
+
+      // Handle nulls - sort them to the end
+      if (aVal == null && bVal == null) return 0;
+      if (aVal == null) return 1;
+      if (bVal == null) return -1;
+
+      // Compare values
+      let cmp: number;
+      if (typeof aVal === "string" && typeof bVal === "string") {
+        cmp = aVal.localeCompare(bVal);
+      } else {
+        cmp = (aVal as number) - (bVal as number);
+      }
+
+      return eventLogSortDirection === "asc" ? cmp : -cmp;
+    });
+
+    return logs;
+  });
 
   // Check if any filters are active
   const hasActiveFilters = $derived(
@@ -561,6 +826,18 @@
   function clearFilters() {
     searchTerm = "";
     selectedFilters = [];
+  }
+
+  // Toggle event log sort column/direction
+  function toggleEventLogSort(columnKey: string) {
+    if (eventLogSortColumn === columnKey) {
+      // Toggle direction if same column
+      eventLogSortDirection = eventLogSortDirection === "asc" ? "desc" : "asc";
+    } else {
+      // New column, default to ascending
+      eventLogSortColumn = columnKey;
+      eventLogSortDirection = "asc";
+    }
   }
 </script>
 
@@ -650,6 +927,13 @@
             class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
             Economics
+          </Tabs.Trigger>
+
+          <Tabs.Trigger
+            value="cities"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
+          >
+            Cities
           </Tabs.Trigger>
 
           <Tabs.Trigger
@@ -756,16 +1040,6 @@
                 class="w-96"
               />
 
-              <!-- Clear button -->
-              {#if hasActiveFilters}
-                <button
-                  onclick={clearFilters}
-                  class="px-3 py-2 rounded border-2 border-black bg-orange text-black text-sm font-bold hover:bg-tan transition-colors"
-                >
-                  Clear
-                </button>
-              {/if}
-
               <!-- Selected filter chips -->
               {#if selectedFilters.length > 0}
                 <div class="flex flex-wrap gap-1">
@@ -781,7 +1055,7 @@
 
               <!-- Results count -->
               <span class="text-brown text-sm ml-auto">
-                {filteredEventLogs?.length ?? 0} / {processedEventLogs.length} events
+                {filteredEventLogs()?.length ?? 0} / {processedEventLogs.length} events
               </span>
             </div>
 
@@ -789,17 +1063,56 @@
               <table class="w-full">
                 <thead>
                   <tr>
-                    <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Turn</th>
-                    <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Log Type</th>
+                    <th
+                      class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                      onclick={() => toggleEventLogSort("turn")}
+                    >
+                      <span class="inline-flex items-center gap-1">
+                        Turn
+                        {#if eventLogSortColumn === "turn"}
+                          <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                        {/if}
+                      </span>
+                    </th>
+                    <th
+                      class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                      onclick={() => toggleEventLogSort("log_type")}
+                    >
+                      <span class="inline-flex items-center gap-1">
+                        Log Type
+                        {#if eventLogSortColumn === "log_type"}
+                          <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                        {/if}
+                      </span>
+                    </th>
                     {#if showPlayerColumn}
-                      <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Player</th>
+                      <th
+                        class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleEventLogSort("player_name")}
+                      >
+                        <span class="inline-flex items-center gap-1">
+                          Player
+                          {#if eventLogSortColumn === "player_name"}
+                            <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                          {/if}
+                        </span>
+                      </th>
                     {/if}
-                    <th class="p-3 text-left border-b-2 border-brown text-brown font-bold">Description</th>
+                    <th
+                      class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                      onclick={() => toggleEventLogSort("description")}
+                    >
+                      <span class="inline-flex items-center gap-1">
+                        Description
+                        {#if eventLogSortColumn === "description"}
+                          <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                        {/if}
+                      </span>
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
-                  {#if filteredEventLogs && filteredEventLogs.length > 0}
-                    {#each filteredEventLogs as log}
+                  {#each filteredEventLogs() ?? [] as log}
                       <tr class="transition-colors duration-200 hover:bg-brown/20">
                         <td class="p-3 text-left border-b border-brown/50 text-tan">{log.turn}</td>
                         <td class="p-3 text-left border-b border-brown/50 text-tan">
@@ -810,14 +1123,13 @@
                         {/if}
                         <td class="p-3 text-left border-b border-brown/50 text-tan">{log.description || "—"}</td>
                       </tr>
-                    {/each}
                   {:else}
                     <tr>
                       <td colspan={showPlayerColumn ? 4 : 3} class="p-8 text-center text-brown italic">
                         No events match filters
                       </td>
                     </tr>
-                  {/if}
+                  {/each}
                 </tbody>
               </table>
             </div>
@@ -928,6 +1240,107 @@
               {/snippet}
               <ChartContainer option={happinessChartOption} height="400px" title="Happiness Production" controls={happinessFilter} />
             {/if}
+          {/if}
+        </Tabs.Content>
+
+        <!-- Tab Content: Cities -->
+        <Tabs.Content
+          value="cities"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
+        >
+          <h2 class="text-tan font-bold mb-4 mt-0">Cities</h2>
+
+          {#if cityStatistics === null}
+            <p class="text-brown italic text-center p-8">Loading city data...</p>
+          {:else if cityStatistics.cities.length === 0}
+            <p class="text-brown italic text-center p-8">No cities found</p>
+          {:else}
+            <!-- Table Controls -->
+            <div class="flex flex-wrap gap-3 mb-4 items-end">
+              <!-- Search -->
+              <SearchInput
+                bind:value={citySearchTerm}
+                placeholder="Search"
+                variant="field"
+                class="w-64"
+              />
+
+              <!-- Column Visibility Dropdown -->
+              <Select.Root type="multiple" value={selectedColumnKeys} onValueChange={handleColumnVisibilityChange}>
+                <Select.Trigger class="px-4 py-2 rounded border-2 border-black text-tan text-sm flex items-center gap-2" style="background-color: #201a13;">
+                  <span>Columns</span>
+                  <span class="text-brown">▼</span>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content class="border-2 border-black rounded shadow-lg max-h-80 overflow-y-auto z-50 bg-[#201a13]">
+                    <Select.Viewport>
+                      {#each CITY_COLUMNS as column}
+                        <Select.Item
+                          value={column.key}
+                          label={column.label}
+                          class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                        >
+                          {#snippet children({ selected })}
+                            <span>{column.label}</span>
+                            {#if selected}
+                              <span class="text-orange font-bold">✓</span>
+                            {/if}
+                          {/snippet}
+                        </Select.Item>
+                      {/each}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+
+              <!-- Results count -->
+              <span class="text-brown text-sm ml-auto">
+                {filteredSortedCities().length} / {cityStatistics.cities.length} cities
+              </span>
+            </div>
+
+            <!-- City Details Table -->
+            <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
+              <table class="w-full">
+                <thead>
+                  <tr>
+                    {#each visibleCityColumns as column}
+                      <th
+                        class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleCitySort(column.key)}
+                      >
+                        <span class="inline-flex items-center gap-1">
+                          {column.label}
+                          {#if citySortColumn === column.key}
+                            <span class="text-orange">
+                              {citySortDirection === "asc" ? "↑" : "↓"}
+                            </span>
+                          {/if}
+                        </span>
+                      </th>
+                    {/each}
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each filteredSortedCities() as city}
+                    <tr class="transition-colors duration-200 hover:bg-brown/20">
+                      {#each visibleCityColumns as column}
+                        <td class="p-3 text-left border-b border-brown/50 text-tan {column.key === 'city_name' ? 'font-bold' : ''} whitespace-nowrap">
+                          {formatCityCell(column, city)}
+                        </td>
+                      {/each}
+                    </tr>
+                  {:else}
+                    <tr>
+                      <td colspan={visibleCityColumns.length} class="p-8 text-center text-brown italic">
+                        No cities match search
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
           {/if}
         </Tabs.Content>
 
