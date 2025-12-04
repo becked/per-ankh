@@ -460,6 +460,25 @@ fn import_save_file_internal(
     log::info!("⏱️    Character birth cities: {:?}", birth_cities_time);
     eprintln!("⏱️    Character birth cities: {:?}", birth_cities_time);
 
+    // 5. Units (depends on players, tiles)
+    log::info!("Parsing and inserting units...");
+    let t_units_entities = Instant::now();
+    let parsed_units = super::parsers::parse_units_struct(doc)?;
+    log::info!(
+        "Parsed {} units, {} promotions, {} effects, {} family associations",
+        parsed_units.units.len(),
+        parsed_units.promotions.len(),
+        parsed_units.effects.len(),
+        parsed_units.families.len()
+    );
+    super::inserters::insert_units(tx, &parsed_units.units, &mut id_mapper)?;
+    super::inserters::insert_unit_promotions(tx, &parsed_units.promotions, &id_mapper)?;
+    super::inserters::insert_unit_effects(tx, &parsed_units.effects, &id_mapper)?;
+    super::inserters::insert_unit_families(tx, &parsed_units.families, &id_mapper)?;
+    let units_entities_time = t_units_entities.elapsed();
+    log::info!("⏱️    Units: {:?} ({} units)", units_entities_time, parsed_units.units.len());
+    eprintln!("⏱️    Units: {:?} ({} units)", units_entities_time, parsed_units.units.len());
+
     let insert_foundation_time = t_insert_foundation.elapsed();
     log::info!("⏱️  Sequential foundation insertion: {:?}", insert_foundation_time);
     eprintln!("⏱️  Sequential foundation insertion: {:?}", insert_foundation_time);

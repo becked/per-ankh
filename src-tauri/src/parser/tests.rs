@@ -314,4 +314,145 @@ mod tests {
         println!("  Project count records: {}", project_count_records);
         println!("  Luxury records: {}", luxury_records);
     }
+
+    #[test]
+    fn test_unit_data_verification() {
+        // Use a late-game save with more unit data
+        let test_file = "../test-data/saves/OW-Carthage-Year158-2025-07-28-16-15-39.zip";
+
+        if !std::path::Path::new(test_file).exists() {
+            eprintln!("Test file not found, skipping");
+            return;
+        }
+
+        let dir = tempfile::tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = db::connection::get_connection(&db_path).unwrap();
+        db::ensure_schema_ready(&conn).unwrap();
+
+        let result = parser::import_save_file(test_file, &conn, None, None, None, None, None);
+        let import_result = result.unwrap();
+        assert!(import_result.success);
+
+        let match_id = import_result.match_id.unwrap();
+
+        println!("\n=== UNIT DATA VERIFICATION ===");
+
+        // Count units and related data
+        let unit_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM units WHERE match_id = ?",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        let promo_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM unit_promotions WHERE match_id = ?",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        let effect_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM unit_effects WHERE match_id = ?",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        let family_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM unit_families WHERE match_id = ?",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+
+        println!("Total units: {}", unit_count);
+        println!("Unit promotions: {}", promo_count);
+        println!("Unit effects: {}", effect_count);
+        println!("Unit family associations: {}", family_count);
+
+        assert!(unit_count > 0, "Should have units");
+
+        // Unit type breakdown
+        println!("\n--- Unit Types ---");
+        let mut stmt = conn.prepare(
+            "SELECT unit_type, COUNT(*) as cnt FROM units WHERE match_id = ? GROUP BY unit_type ORDER BY cnt DESC LIMIT 10"
+        ).unwrap();
+        let rows = stmt.query_map([match_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?))
+        }).unwrap();
+
+        for row in rows {
+            let (unit_type, count) = row.unwrap();
+            println!("  {}: {}", unit_type, count);
+        }
+
+        // Sample military units with XP
+        println!("\n--- Sample Military Units (with XP) ---");
+        let mut stmt = conn.prepare(
+            "SELECT u.unit_id, u.unit_type, u.xp, u.level, p.player_name
+             FROM units u
+             LEFT JOIN players p ON u.player_id = p.player_id AND u.match_id = p.match_id
+             WHERE u.match_id = ? AND u.xp IS NOT NULL
+             ORDER BY u.xp DESC LIMIT 5"
+        ).unwrap();
+        let rows = stmt.query_map([match_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<i32>>(2)?,
+                row.get::<_, Option<i32>>(3)?,
+                row.get::<_, Option<String>>(4)?,
+            ))
+        }).unwrap();
+
+        for row in rows {
+            let (id, unit_type, xp, level, player) = row.unwrap();
+            println!("  Unit {}: {} (XP: {:?}, Level: {:?}, Owner: {:?})", id, unit_type, xp, level, player);
+        }
+
+        // Sample promotions
+        println!("\n--- Sample Promotions ---");
+        let mut stmt = conn.prepare(
+            "SELECT up.promotion, up.is_acquired, COUNT(*) as cnt
+             FROM unit_promotions up
+             WHERE up.match_id = ?
+             GROUP BY up.promotion, up.is_acquired
+             ORDER BY cnt DESC LIMIT 10"
+        ).unwrap();
+        let rows = stmt.query_map([match_id], |row| {
+            Ok((row.get::<_, String>(0)?, row.get::<_, bool>(1)?, row.get::<_, i64>(2)?))
+        }).unwrap();
+
+        for row in rows {
+            let (promo, acquired, count) = row.unwrap();
+            let status = if acquired { "acquired" } else { "available" };
+            println!("  {} ({}): {}", promo, status, count);
+        }
+
+        // Sample effects
+        if effect_count > 0 {
+            println!("\n--- Sample Effects ---");
+            let mut stmt = conn.prepare(
+                "SELECT effect, SUM(stacks) as total_stacks, COUNT(*) as unit_count
+                 FROM unit_effects WHERE match_id = ?
+                 GROUP BY effect ORDER BY unit_count DESC LIMIT 5"
+            ).unwrap();
+            let rows = stmt.query_map([match_id], |row| {
+                Ok((row.get::<_, String>(0)?, row.get::<_, i64>(1)?, row.get::<_, i64>(2)?))
+            }).unwrap();
+
+            for row in rows {
+                let (effect, stacks, count) = row.unwrap();
+                println!("  {} - {} units, {} total stacks", effect, count, stacks);
+            }
+        }
+
+        // Barbarian units
+        let barbarian_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM units WHERE match_id = ? AND player_id IS NULL",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+        println!("\nBarbarian/tribal units (no player): {}", barbarian_count);
+
+        // Sleeping units
+        let sleeping_count: i64 = conn.query_row(
+            "SELECT COUNT(*) FROM units WHERE match_id = ? AND is_sleeping = true",
+            [match_id], |row| row.get(0)
+        ).unwrap();
+        println!("Sleeping units: {}", sleeping_count);
+    }
 }
