@@ -57,19 +57,12 @@ pub fn parse_tiles_struct(doc: &XmlDocument) -> Result<Vec<TileData>> {
         let improvement_turns_left = tile_node
             .opt_child_text("ImprovementTurnsLeft")
             .and_then(|s| s.parse::<i32>().ok());
-        let improvement_develop_turns = tile_node
-            .opt_child_text("ImprovementDevelopTurns")
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
 
         // Specialists
         let specialist = tile_node.opt_child_text("Specialist").map(|s| s.to_string());
 
-        // Infrastructure
-        let has_road = tile_node
-            .opt_child_text("HasRoad")
-            .and_then(|s| s.parse::<bool>().ok())
-            .unwrap_or(false);
+        // Infrastructure - Road element presence indicates a road exists
+        let has_road = tile_node.children().any(|n| n.has_tag_name("Road"));
 
         // Parse ownership history to derive current owner
         // Note: Ownership history itself is NOT inserted here - it will be inserted in Pass 2c
@@ -104,10 +97,6 @@ pub fn parse_tiles_struct(doc: &XmlDocument) -> Result<Vec<TileData>> {
         }
 
         // Sites
-        let is_city_site = tile_node
-            .opt_child_text("IsCitySite")
-            .and_then(|s| s.parse::<bool>().ok())
-            .unwrap_or(false);
         let tribe_site = tile_node.opt_child_text("TribeSite").map(|s| s.to_string());
 
         // Religion
@@ -136,11 +125,9 @@ pub fn parse_tiles_struct(doc: &XmlDocument) -> Result<Vec<TileData>> {
             improvement_pillaged,
             improvement_disabled,
             improvement_turns_left,
-            improvement_develop_turns,
             specialist,
             has_road,
             owner_player_xml_id,
-            is_city_site,
             tribe_site,
             religion,
             init_seed,
@@ -203,7 +190,7 @@ mod tests {
                 <RiverSE>true</RiverSE>
                 <Improvement>IMPROVEMENT_FARM</Improvement>
                 <ImprovementPillaged>false</ImprovementPillaged>
-                <HasRoad>true</HasRoad>
+                <Road />
             </Tile>
         </Root>"#;
 
@@ -217,5 +204,20 @@ mod tests {
         assert_eq!(tiles[0].improvement, Some("IMPROVEMENT_FARM".to_string()));
         assert_eq!(tiles[0].improvement_pillaged, false);
         assert_eq!(tiles[0].has_road, true);
+    }
+
+    #[test]
+    fn test_parse_tiles_struct_no_road() {
+        let xml = r#"<Root GameId="test-123" MapWidth="10">
+            <Tile ID="0">
+                <Terrain>TERRAIN_PLAINS</Terrain>
+            </Tile>
+        </Root>"#;
+
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let tiles = parse_tiles_struct(&doc).unwrap();
+
+        assert_eq!(tiles.len(), 1);
+        assert_eq!(tiles[0].has_road, false);
     }
 }
