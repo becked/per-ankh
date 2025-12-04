@@ -192,7 +192,8 @@ pub fn parse_city_culture_struct(doc: &XmlDocument) -> Result<Vec<CityCulture>> 
             .ok_or_else(|| ParseError::MissingAttribute("City.ID".to_string()))?
             .parse()?;
 
-        let team_culture = if let Some(culture_node) =
+        // Parse TeamCulture - values are string enums like "CULTURE_LEGENDARY"
+        let team_culture: HashMap<i32, String> = if let Some(culture_node) =
             city_node.children().find(|n| n.has_tag_name("TeamCulture"))
         {
             culture_node
@@ -201,17 +202,17 @@ pub fn parse_city_culture_struct(doc: &XmlDocument) -> Result<Vec<CityCulture>> 
                 .filter_map(|team_node| {
                     let team_tag = team_node.tag_name().name();
                     let team_id: i32 = team_tag.strip_prefix("T.")?.parse().ok()?;
-                    let culture: i32 = team_node.text()?.parse().ok()?;
+                    let culture = team_node.text()?.to_string();
                     Some((team_id, culture))
                 })
-                .collect::<HashMap<i32, i32>>()
+                .collect()
         } else {
             HashMap::new()
         };
 
         // Check for TeamHappinessLevel first (newer format, 2023+),
         // fall back to TeamDiscontentLevel (older format, 2022)
-        let team_happiness = city_node
+        let team_happiness: HashMap<i32, i32> = city_node
             .children()
             .find(|n| n.has_tag_name("TeamHappinessLevel"))
             .or_else(|| city_node.children().find(|n| n.has_tag_name("TeamDiscontentLevel")))
@@ -224,7 +225,7 @@ pub fn parse_city_culture_struct(doc: &XmlDocument) -> Result<Vec<CityCulture>> 
                         let happiness: i32 = team_node.text()?.parse().ok()?;
                         Some((team_id, happiness))
                     })
-                    .collect::<HashMap<i32, i32>>()
+                    .collect()
             })
             .unwrap_or_default();
 
@@ -233,7 +234,7 @@ pub fn parse_city_culture_struct(doc: &XmlDocument) -> Result<Vec<CityCulture>> 
         all_teams.extend(team_happiness.keys());
 
         for &team_id in &all_teams {
-            let culture_level = team_culture.get(&team_id).copied().unwrap_or(0);
+            let culture_level = team_culture.get(&team_id).cloned();
             let happiness_level = team_happiness.get(&team_id).copied().unwrap_or(0);
 
             results.push(CityCulture {
@@ -477,11 +478,12 @@ mod tests {
 
     #[test]
     fn test_parse_city_culture_basic() {
+        // Use realistic string enum values from actual save files
         let xml = r#"<Root>
             <City ID="0">
                 <TeamCulture>
-                    <T.0>5</T.0>
-                    <T.1>2</T.1>
+                    <T.0>CULTURE_LEGENDARY</T.0>
+                    <T.1>CULTURE_STRONG</T.1>
                 </TeamCulture>
                 <TeamHappinessLevel>
                     <T.0>3</T.0>
@@ -494,10 +496,10 @@ mod tests {
 
         assert_eq!(culture.len(), 2);
         assert!(culture.iter().any(|c| c.team_id == 0
-            && c.culture_level == 5
+            && c.culture_level == Some("CULTURE_LEGENDARY".to_string())
             && c.happiness_level == 3));
         assert!(culture.iter().any(|c| c.team_id == 1
-            && c.culture_level == 2
+            && c.culture_level == Some("CULTURE_STRONG".to_string())
             && c.happiness_level == 0));
     }
 
@@ -514,7 +516,7 @@ mod tests {
         let xml = r#"<Root>
             <City ID="0">
                 <TeamCulture>
-                    <T.0>5</T.0>
+                    <T.0>CULTURE_ESTABLISHED</T.0>
                 </TeamCulture>
                 <TeamHappinessLevel>
                     <T.0>3</T.0>
@@ -524,16 +526,18 @@ mod tests {
         let doc = parse_xml(xml.to_string()).unwrap();
         let culture = parse_city_culture_struct(&doc).unwrap();
         assert_eq!(culture.len(), 1);
+        assert_eq!(culture[0].culture_level, Some("CULTURE_ESTABLISHED".to_string()));
         assert_eq!(culture[0].happiness_level, 3);
     }
 
     #[test]
     fn test_parse_city_culture_with_discontent_level_legacy() {
         // Older saves (2022) use TeamDiscontentLevel instead of TeamHappinessLevel
+        // but culture level is still a string enum
         let xml = r#"<Root>
             <City ID="0">
                 <TeamCulture>
-                    <T.1>4</T.1>
+                    <T.1>CULTURE_DEVELOPING</T.1>
                 </TeamCulture>
                 <TeamDiscontentLevel>
                     <T.1>6</T.1>
@@ -543,6 +547,7 @@ mod tests {
         let doc = parse_xml(xml.to_string()).unwrap();
         let culture = parse_city_culture_struct(&doc).unwrap();
         assert_eq!(culture.len(), 1);
+        assert_eq!(culture[0].culture_level, Some("CULTURE_DEVELOPING".to_string()));
         assert_eq!(culture[0].happiness_level, 6);
     }
 

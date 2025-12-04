@@ -314,11 +314,11 @@ pub fn parse_city_religions(
 /// ```xml
 /// <City ID="0">
 ///   <TeamCulture>
-///     <TEAM_0>5</TEAM_0>
-///     <TEAM_1>2</TEAM_1>
+///     <T.0>CULTURE_LEGENDARY</T.0>
+///     <T.1>CULTURE_STRONG</T.1>
 ///   </TeamCulture>
 ///   <TeamHappinessLevel>
-///     <TEAM_0>3</TEAM_0>
+///     <T.0>3</T.0>
 ///   </TeamHappinessLevel>
 /// </City>
 /// ```
@@ -329,7 +329,7 @@ pub fn parse_city_religions(
 ///     city_id INTEGER NOT NULL,
 ///     match_id BIGINT NOT NULL,
 ///     team_id INTEGER NOT NULL,
-///     culture_level INTEGER DEFAULT 0,
+///     culture_level VARCHAR,  -- String enum: CULTURE_WEAK, CULTURE_DEVELOPING, etc.
 ///     happiness_level INTEGER DEFAULT 0,
 ///     PRIMARY KEY (city_id, match_id, team_id)
 /// );
@@ -342,8 +342,8 @@ pub fn parse_city_culture_happiness(
 ) -> Result<usize> {
     let mut count = 0;
 
-    // Parse TeamCulture (note: culture values may be strings like "CULTURE_DEVELOPING" - skip those for now)
-    let team_culture = if let Some(culture_node) = city_node
+    // Parse TeamCulture - values are string enums like "CULTURE_LEGENDARY"
+    let team_culture: std::collections::HashMap<i32, String> = if let Some(culture_node) = city_node
         .children()
         .find(|n| n.has_tag_name("TeamCulture"))
     {
@@ -353,18 +353,16 @@ pub fn parse_city_culture_happiness(
             .filter_map(|team_node| {
                 let team_tag = team_node.tag_name().name(); // "T.0" format
                 let team_id: i32 = team_tag.strip_prefix("T.")?.parse().ok()?;
-                // Try to parse as integer (some versions may have integer culture levels)
-                // If it's a string like "CULTURE_DEVELOPING", skip it for now
-                let culture: i32 = team_node.text()?.parse().ok()?;
+                let culture = team_node.text()?.to_string();
                 Some((team_id, culture))
             })
-            .collect::<std::collections::HashMap<i32, i32>>()
+            .collect()
     } else {
         std::collections::HashMap::new()
     };
 
     // Parse TeamHappinessLevel
-    let team_happiness = if let Some(happiness_node) = city_node
+    let team_happiness: std::collections::HashMap<i32, i32> = if let Some(happiness_node) = city_node
         .children()
         .find(|n| n.has_tag_name("TeamHappinessLevel"))
     {
@@ -377,7 +375,7 @@ pub fn parse_city_culture_happiness(
                 let happiness: i32 = team_node.text()?.parse().ok()?;
                 Some((team_id, happiness))
             })
-            .collect::<std::collections::HashMap<i32, i32>>()
+            .collect()
     } else {
         std::collections::HashMap::new()
     };
@@ -388,7 +386,7 @@ pub fn parse_city_culture_happiness(
     all_teams.extend(team_happiness.keys());
 
     for &team_id in &all_teams {
-        let culture_level = team_culture.get(&team_id).copied().unwrap_or(0);
+        let culture_level: Option<&String> = team_culture.get(&team_id);
         let happiness_level = team_happiness.get(&team_id).copied().unwrap_or(0);
 
         conn.execute(

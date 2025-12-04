@@ -102,8 +102,8 @@
       label: "Culture",
       defaultVisible: true,
       getValue: (c) => c.culture_level,
-      format: (v) => (v as number | null)?.toString() ?? "—",
-      sortValue: (c) => c.culture_level ?? -1,
+      format: (v) => formatEnum(v as string | null, "CULTURE_"),
+      sortValue: (c) => c.culture_level ?? "",
     },
     {
       key: "specialist_count",

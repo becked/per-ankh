@@ -97,10 +97,24 @@ pub fn parse_cities_struct(doc: &XmlDocument) -> Result<Vec<CityData>> {
             .and_then(|s| s.parse::<i32>().ok())
             .unwrap_or(0);
 
+        // Try UnitProductionCount (older saves), fall back to summing UnitProductionCounts (newer saves)
         let unit_production_count = city_node
             .opt_child_text("UnitProductionCount")
             .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
+            .unwrap_or_else(|| {
+                // Fall back: sum from UnitProductionCounts breakdown (e.g., <UNIT_SETTLER>5</UNIT_SETTLER>)
+                city_node
+                    .children()
+                    .find(|n| n.has_tag_name("UnitProductionCounts"))
+                    .map(|counts_node| {
+                        counts_node
+                            .children()
+                            .filter(|n| n.is_element())
+                            .filter_map(|n| n.text().and_then(|s| s.parse::<i32>().ok()))
+                            .sum()
+                    })
+                    .unwrap_or(0)
+            });
 
         let buy_tile_count = city_node
             .opt_child_text("BuyTileCount")
@@ -262,5 +276,58 @@ mod tests {
         assert_eq!(cities[0].unit_production_count, 8);
         assert_eq!(cities[0].last_owner_player_xml_id, Some(0));
         assert_eq!(cities[0].buy_tile_count, 3);
+    }
+
+    #[test]
+    fn test_parse_cities_unit_production_counts_fallback() {
+        // Newer saves (2025+) don't have aggregate <UnitProductionCount>,
+        // only the breakdown <UnitProductionCounts>
+        let xml = r#"<Root GameId="test">
+            <City ID="0" Player="0" TileID="100" Founded="1">
+                <Name>Test</Name>
+                <UnitProductionCounts>
+                    <UNIT_SETTLER>5</UNIT_SETTLER>
+                    <UNIT_WORKER>3</UNIT_WORKER>
+                    <UNIT_CHRISTIANITY_DISCIPLE>2</UNIT_CHRISTIANITY_DISCIPLE>
+                </UnitProductionCounts>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let cities = parse_cities_struct(&doc).unwrap();
+        // Should sum 5 + 3 + 2 = 10
+        assert_eq!(cities[0].unit_production_count, 10);
+    }
+
+    #[test]
+    fn test_parse_cities_unit_production_count_preferred_over_fallback() {
+        // If both exist, prefer the aggregate <UnitProductionCount> (older saves)
+        let xml = r#"<Root GameId="test">
+            <City ID="0" Player="0" TileID="100" Founded="1">
+                <Name>Test</Name>
+                <UnitProductionCount>15</UnitProductionCount>
+                <UnitProductionCounts>
+                    <UNIT_SETTLER>5</UNIT_SETTLER>
+                    <UNIT_WORKER>3</UNIT_WORKER>
+                </UnitProductionCounts>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let cities = parse_cities_struct(&doc).unwrap();
+        // Should use aggregate value 15, not sum (8)
+        assert_eq!(cities[0].unit_production_count, 15);
+    }
+
+    #[test]
+    fn test_parse_cities_unit_production_empty_fallback() {
+        // Empty UnitProductionCounts should return 0
+        let xml = r#"<Root GameId="test">
+            <City ID="0" Player="0" TileID="100" Founded="1">
+                <Name>Test</Name>
+                <UnitProductionCounts></UnitProductionCounts>
+            </City>
+        </Root>"#;
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let cities = parse_cities_struct(&doc).unwrap();
+        assert_eq!(cities[0].unit_production_count, 0);
     }
 }

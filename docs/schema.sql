@@ -446,7 +446,7 @@ CREATE TABLE city_culture (
     city_id INTEGER NOT NULL,  -- References: cities(city_id, match_id)
     match_id BIGINT NOT NULL,
     team_id INTEGER NOT NULL,
-    culture_level INTEGER DEFAULT 0,
+    culture_level VARCHAR,  -- String enum: CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY
     culture_progress INTEGER DEFAULT 0,
     happiness_level INTEGER DEFAULT 0,
     PRIMARY KEY (city_id, match_id, team_id)

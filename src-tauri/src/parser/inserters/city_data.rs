@@ -184,7 +184,7 @@ pub fn insert_city_culture(
             city_id,
             id_mapper.match_id,
             culture.team_id,
-            culture.culture_level,
+            culture.culture_level.clone(),
             culture.happiness_level,
         ));
     }
