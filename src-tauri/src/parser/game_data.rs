@@ -351,7 +351,8 @@ pub struct CityReligion {
 pub struct CityCulture {
     pub city_xml_id: i32,
     pub team_id: i32,
-    pub culture_level: i32,
+    /// Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
+    pub culture_level: Option<String>,
     pub happiness_level: i32,
 }
 

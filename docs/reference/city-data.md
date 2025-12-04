@@ -161,8 +161,15 @@ ORDER BY t.x, t.y
 |-------|------|-------------|-------------|
 | `city_xml_id` | i32 | `ID` attr | City this culture data belongs to |
 | `team_id` | i32 | `T.X` tag | Team/player this culture level is for |
-| `culture_level` | i32 | `TeamCulture.T.X` | Culture level (0-5 for normal to legendary) |
+| `culture_level` | String | `TeamCulture.T.X` | Culture level as string enum |
 | `happiness_level` | i32 | `TeamHappinessLevel.T.X` or `TeamDiscontentLevel.T.X` | Happiness modifier for this team |
+
+**Culture Level Values:**
+- `CULTURE_WEAK` (level 0)
+- `CULTURE_DEVELOPING` (level 1)
+- `CULTURE_STRONG` (level 2)
+- `CULTURE_ESTABLISHED` (level 3)
+- `CULTURE_LEGENDARY` (level 4)
 
 **Note:** Older saves (2022) use `TeamDiscontentLevel` instead of `TeamHappinessLevel`. The parser automatically handles both formats.
 
@@ -390,8 +397,10 @@ The `cities.specialist_count` field stores the **lifetime total specialists prod
 ### unit_production_count vs city_units_produced
 
 Two separate data sources track unit production:
-- `cities.unit_production_count` - Parses `<UnitProductionCount>`, the aggregate total units produced
+- `cities.unit_production_count` - The aggregate total units produced. Parser first checks for `<UnitProductionCount>` (older saves, 2022), then falls back to summing `<UnitProductionCounts>` children (newer saves, 2025+)
 - `city_units_produced` table - Parses `<UnitProductionCounts>`, the per-unit-type breakdown (e.g., 5 settlers, 1 worker)
+
+**Note:** Newer saves (2025+) don't include the aggregate `<UnitProductionCount>` element, only the breakdown. The parser automatically computes the sum.
 
 ### city_projects_completed vs city_project_counts
 

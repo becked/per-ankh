@@ -1106,6 +1106,37 @@ pub struct LawAdoptionHistory {
     pub data: Vec<LawAdoptionDataPoint>,
 }
 
+/// City information for the Cities tab
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct CityInfo {
+    #[ts(type = "number")]
+    pub city_id: i64,
+    pub city_name: String,
+    pub owner_nation: Option<String>,
+    pub family: Option<String>,
+    pub founded_turn: i32,
+    pub is_capital: bool,
+    pub citizens: i32,
+    pub governor_name: Option<String>,
+    /// Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
+    pub culture_level: Option<String>,
+    pub growth_count: i32,
+    pub unit_production_count: i32,
+    pub specialist_count: i32,
+    pub buy_tile_count: i32,
+    pub hurry_civics_count: i32,
+    pub hurry_money_count: i32,
+    pub hurry_training_count: i32,
+    pub hurry_population_count: i32,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct CityStatistics {
+    pub cities: Vec<CityInfo>,
+}
+
 #[tauri::command]
 async fn get_story_events(
     match_id: i64,
@@ -1381,6 +1412,73 @@ async fn get_law_adoption_history(
     .map_err(|e| e.to_string())
 }
 
+/// Tauri command to get city statistics for a match
+///
+/// Returns all cities with their metrics for comparison charts
+#[tauri::command]
+async fn get_city_statistics(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<CityStatistics, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT
+                c.city_id,
+                c.city_name,
+                p.nation as owner_nation,
+                c.family,
+                c.founded_turn,
+                c.is_capital,
+                c.citizens,
+                gov.first_name as governor_name,
+                cc.culture_level,
+                c.growth_count,
+                c.unit_production_count,
+                c.specialist_count,
+                c.buy_tile_count,
+                c.hurry_civics_count,
+                c.hurry_money_count,
+                c.hurry_training_count,
+                c.hurry_population_count
+             FROM cities c
+             LEFT JOIN players p ON c.player_id = p.player_id AND c.match_id = p.match_id
+             LEFT JOIN characters gov ON c.governor_id = gov.character_id AND c.match_id = gov.match_id
+             LEFT JOIN city_culture cc ON c.city_id = cc.city_id AND c.match_id = cc.match_id
+                 AND cc.team_id = COALESCE(p.team_id, p.xml_id)
+             WHERE c.match_id = ?
+             ORDER BY c.city_name"
+        )?;
+
+        let cities = stmt
+            .query_map([match_id], |row| {
+                Ok(CityInfo {
+                    city_id: row.get(0)?,
+                    city_name: row.get(1)?,
+                    owner_nation: row.get(2)?,
+                    family: row.get(3)?,
+                    founded_turn: row.get(4)?,
+                    is_capital: row.get(5)?,
+                    citizens: row.get(6)?,
+                    governor_name: row.get(7)?,
+                    culture_level: row.get(8)?,
+                    growth_count: row.get(9)?,
+                    unit_production_count: row.get(10)?,
+                    specialist_count: row.get(11)?,
+                    buy_tile_count: row.get(12)?,
+                    hurry_civics_count: row.get(13)?,
+                    hurry_money_count: row.get(14)?,
+                    hurry_training_count: row.get(15)?,
+                    hurry_population_count: row.get(16)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(CityStatistics { cities })
+    })
+    .context("Failed to get city statistics")
+    .map_err(|e| e.to_string())
+}
+
 /// Tauri command to get the primary user OnlineID
 #[tauri::command]
 async fn get_primary_user_online_id(
@@ -1567,6 +1665,7 @@ pub fn run() {
             get_story_events,
             get_event_logs,
             get_law_adoption_history,
+            get_city_statistics,
             get_nation_dynasty_data,
             get_player_debug_data,
             get_match_debug_data,
