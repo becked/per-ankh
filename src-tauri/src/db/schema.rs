@@ -88,14 +88,15 @@ pub fn delete_schema_version(db_path: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// Extract table and view names from schema.sql
+/// Extract table, view, and sequence names from schema.sql
 ///
-/// Parses the schema SQL to find all CREATE TABLE and CREATE VIEW statements.
-/// Returns (tables, views) as vectors of names in the order they appear.
-fn extract_schema_objects() -> (Vec<String>, Vec<String>) {
+/// Parses the schema SQL to find all CREATE TABLE, CREATE VIEW, and CREATE SEQUENCE statements.
+/// Returns (tables, views, sequences) as vectors of names in the order they appear.
+fn extract_schema_objects() -> (Vec<String>, Vec<String>, Vec<String>) {
     let schema_sql = include_str!("../../../docs/schema.sql");
     let mut tables = Vec::new();
     let mut views = Vec::new();
+    let mut sequences = Vec::new();
 
     for line in schema_sql.lines() {
         let trimmed = line.trim();
@@ -132,22 +133,39 @@ fn extract_schema_objects() -> (Vec<String>, Vec<String>) {
                 }
             }
         }
+        // Match CREATE SEQUENCE name
+        else if upper.starts_with("CREATE SEQUENCE ") {
+            if let Some(name) = trimmed
+                .strip_prefix("CREATE SEQUENCE ")
+                .or_else(|| trimmed.strip_prefix("create sequence "))
+            {
+                // Name ends at space or semicolon
+                let name = name
+                    .split(|c: char| c.is_whitespace() || c == ';')
+                    .next()
+                    .unwrap_or("");
+                if !name.is_empty() {
+                    sequences.push(name.to_string());
+                }
+            }
+        }
     }
 
-    (tables, views)
+    (tables, views, sequences)
 }
 
-/// Drop all schema objects (views first, then tables)
+/// Drop all schema objects (views first, then tables, then sequences)
 ///
-/// Dynamically extracts table/view names from schema.sql to ensure
+/// Dynamically extracts table/view/sequence names from schema.sql to ensure
 /// all objects are dropped even when schema.sql is updated.
 pub fn drop_all_schema_objects(conn: &Connection) -> Result<()> {
-    let (tables, views) = extract_schema_objects();
+    let (tables, views, sequences) = extract_schema_objects();
 
     log::info!(
-        "Dropping {} views and {} tables from schema",
+        "Dropping {} views, {} tables, and {} sequences from schema",
         views.len(),
-        tables.len()
+        tables.len(),
+        sequences.len()
     );
 
     // Drop views first (they depend on tables)
@@ -165,6 +183,14 @@ pub fn drop_all_schema_objects(conn: &Connection) -> Result<()> {
         conn.execute(&query, [])?;
     }
     log::debug!("Dropped {} tables", tables.len());
+
+    // Drop sequences last (tables may reference them via DEFAULT nextval())
+    for sequence in &sequences {
+        // NOTE: Sequence names come from schema.sql parsing, not user input
+        let query = format!("DROP SEQUENCE IF EXISTS {}", sequence);
+        conn.execute(&query, [])?;
+    }
+    log::debug!("Dropped {} sequences", sequences.len());
 
     Ok(())
 }
@@ -556,11 +582,12 @@ mod tests {
 
     #[test]
     fn test_extract_schema_objects() {
-        let (tables, views) = extract_schema_objects();
+        let (tables, views, sequences) = extract_schema_objects();
 
         // Verify we extracted a reasonable number of tables and views
         assert!(tables.len() >= 30, "Expected at least 30 tables, got {}", tables.len());
         assert!(views.len() >= 4, "Expected at least 4 views, got {}", views.len());
+        assert!(sequences.len() >= 1, "Expected at least 1 sequence, got {}", sequences.len());
 
         // Verify specific known tables exist
         assert!(tables.contains(&"matches".to_string()), "Should contain 'matches' table");
@@ -572,12 +599,16 @@ mod tests {
         assert!(views.contains(&"match_summary".to_string()), "Should contain 'match_summary' view");
         assert!(views.contains(&"rulers".to_string()), "Should contain 'rulers' view");
 
+        // Verify specific known sequences exist
+        assert!(sequences.contains(&"collections_id_seq".to_string()), "Should contain 'collections_id_seq' sequence");
+
         // Verify order: id_mappings should come first (it's the first CREATE TABLE in schema.sql)
         assert_eq!(tables[0], "id_mappings", "First table should be 'id_mappings'");
 
-        println!("Extracted {} tables and {} views", tables.len(), views.len());
+        println!("Extracted {} tables, {} views, and {} sequences", tables.len(), views.len(), sequences.len());
         println!("Tables: {:?}", tables);
         println!("Views: {:?}", views);
+        println!("Sequences: {:?}", sequences);
     }
 
     #[test]
