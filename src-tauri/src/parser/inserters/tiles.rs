@@ -44,12 +44,10 @@ pub fn insert_tiles_core(
             tile.improvement_pillaged,      // improvement_pillaged
             tile.improvement_disabled,      // improvement_disabled
             tile.improvement_turns_left,    // improvement_turns_left
-            tile.improvement_develop_turns, // improvement_develop_turns
             tile.specialist.clone(),        // specialist
             tile.has_road,                  // has_road
             owner_player_db_id,             // owner_player_id
             owner_city_db_id,               // owner_city_id (NULL for now, set in Pass 2b)
-            tile.is_city_site,              // is_city_site
             tile.tribe_site.clone(),        // tribe_site
             tile.religion.clone(),          // religion
             tile.init_seed,                 // init_seed
@@ -86,14 +84,14 @@ pub fn insert_tiles_core(
     let mut app = conn.appender("tiles")?;
     for (db_id, match_id, xml_id, x, y, terrain, height, vegetation, river_w, river_sw, river_se,
          resource, improvement, improvement_pillaged, improvement_disabled, improvement_turns_left,
-         improvement_develop_turns, specialist, has_road, owner_player_db_id, owner_city_db_id,
-         is_city_site, tribe_site, religion, init_seed, turn_seed) in unique_tiles
+         specialist, has_road, owner_player_db_id, owner_city_db_id,
+         tribe_site, religion, init_seed, turn_seed) in unique_tiles
     {
         app.append_row(params![
             db_id, match_id, xml_id, x, y, terrain, height, vegetation, river_w, river_sw, river_se,
             resource, improvement, improvement_pillaged, improvement_disabled, improvement_turns_left,
-            improvement_develop_turns, specialist, has_road, owner_player_db_id, owner_city_db_id,
-            is_city_site, tribe_site, religion, init_seed, turn_seed
+            specialist, has_road, owner_player_db_id, owner_city_db_id,
+            tribe_site, religion, init_seed, turn_seed
         ])?;
     }
 

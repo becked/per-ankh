@@ -72,19 +72,12 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
         let improvement_turns_left = tile_node
             .opt_child_text("ImprovementTurnsLeft")
             .and_then(|s| s.parse::<i32>().ok());
-        let improvement_develop_turns = tile_node
-            .opt_child_text("ImprovementDevelopTurns")
-            .and_then(|s| s.parse::<i32>().ok())
-            .unwrap_or(0);
 
         // Specialists
         let specialist = tile_node.opt_child_text("Specialist").map(|s| s.to_string());
 
-        // Infrastructure
-        let has_road = tile_node
-            .opt_child_text("HasRoad")
-            .and_then(|s| s.parse::<bool>().ok())
-            .unwrap_or(false);
+        // Infrastructure - Road element presence indicates a road exists
+        let has_road = tile_node.children().any(|n| n.has_tag_name("Road"));
 
         // City ownership (which city's territory this tile belongs to)
         // NOTE: owner_city_id is NOT set here because cities haven't been parsed yet.
@@ -125,10 +118,6 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
         }
 
         // Sites
-        let is_city_site = tile_node
-            .opt_child_text("IsCitySite")
-            .and_then(|s| s.parse::<bool>().ok())
-            .unwrap_or(false);
         let tribe_site = tile_node.opt_child_text("TribeSite").map(|s| s.to_string());
 
         // Religion
@@ -160,12 +149,10 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
             improvement_pillaged,       // improvement_pillaged
             improvement_disabled,       // improvement_disabled
             improvement_turns_left,     // improvement_turns_left
-            improvement_develop_turns,  // improvement_develop_turns
             specialist,                 // specialist
             has_road,                   // has_road
             owner_player_db_id,         // owner_player_id
             owner_city_db_id,           // owner_city_id
-            is_city_site,               // is_city_site
             tribe_site,                 // tribe_site
             religion,                   // religion
             init_seed,                  // init_seed
@@ -202,14 +189,14 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
     let mut app = conn.appender("tiles")?;
     for (db_id, match_id, xml_id, x, y, terrain, height, vegetation, river_w, river_sw, river_se,
          resource, improvement, improvement_pillaged, improvement_disabled, improvement_turns_left,
-         improvement_develop_turns, specialist, has_road, owner_player_db_id, owner_city_db_id,
-         is_city_site, tribe_site, religion, init_seed, turn_seed) in unique_tiles
+         specialist, has_road, owner_player_db_id, owner_city_db_id,
+         tribe_site, religion, init_seed, turn_seed) in unique_tiles
     {
         app.append_row(params![
             db_id, match_id, xml_id, x, y, terrain, height, vegetation, river_w, river_sw, river_se,
             resource, improvement, improvement_pillaged, improvement_disabled, improvement_turns_left,
-            improvement_develop_turns, specialist, has_road, owner_player_db_id, owner_city_db_id,
-            is_city_site, tribe_site, religion, init_seed, turn_seed
+            specialist, has_road, owner_player_db_id, owner_city_db_id,
+            tribe_site, religion, init_seed, turn_seed
         ])?;
     }
 
