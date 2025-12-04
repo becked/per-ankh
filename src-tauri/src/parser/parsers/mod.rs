@@ -26,6 +26,7 @@ pub mod events;
 pub mod player_data;
 pub mod tile_data;
 pub mod timeseries;
+pub mod units;
 
 // Batch 1 exports
 pub use characters::parse_characters_struct;
@@ -51,6 +52,7 @@ pub use events::parse_events_struct;
 pub use player_data::parse_all_player_data;
 pub use tile_data::{parse_tile_changes_struct, parse_tile_visibility_struct};
 pub use timeseries::{parse_all_player_timeseries, parse_yield_price_history_struct};
+pub use units::parse_units_struct;
 
 // Parallel parsing orchestration
 use crate::parser::game_data::{CharacterData, CityData, FamilyData, PlayerData, ReligionData, TileData, TribeData};

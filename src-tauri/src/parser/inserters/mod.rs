@@ -26,6 +26,7 @@ pub mod events;
 pub mod player_data;
 pub mod tile_data;
 pub mod timeseries;
+pub mod units;
 
 // Batch 1 exports
 pub use characters::{insert_characters, update_character_birth_cities};
@@ -61,3 +62,4 @@ pub use timeseries::{
     insert_points_history, insert_religion_opinion_history, insert_yield_price_history,
     insert_yield_rate_history,
 };
+pub use units::{insert_unit_effects, insert_unit_families, insert_unit_promotions, insert_units};

@@ -426,4 +426,40 @@ mod tests {
 
         assert!(mapper.get_player(999).is_err());
     }
+
+    #[test]
+    fn test_unit_id_mapping() {
+        let mut mapper = IdMapper {
+            match_id: 1,
+            players: HashMap::new(),
+            characters: HashMap::new(),
+            cities: HashMap::new(),
+            units: HashMap::new(),
+            tiles: HashMap::new(),
+            families: HashMap::new(),
+            religions: HashMap::new(),
+            religion_names: HashMap::new(),
+            tribes: HashMap::new(),
+            next_player_id: 1,
+            next_character_id: 1,
+            next_city_id: 1,
+            next_unit_id: 1,
+            next_tile_id: 1,
+            next_family_id: 1,
+            next_religion_id: 1,
+            next_tribe_id: 1,
+        };
+
+        let id1 = mapper.map_unit(100);
+        let id2 = mapper.map_unit(200);
+        let id1_again = mapper.map_unit(100);
+
+        assert_eq!(id1, 1);
+        assert_eq!(id2, 2);
+        assert_eq!(id1_again, 1);
+
+        assert_eq!(mapper.get_unit(100).unwrap(), 1);
+        assert_eq!(mapper.get_unit(200).unwrap(), 2);
+        assert!(mapper.get_unit(999).is_err());
+    }
 }

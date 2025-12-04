@@ -169,7 +169,6 @@ pub struct TileData {
     pub improvement_pillaged: bool,
     pub improvement_disabled: bool,
     pub improvement_turns_left: Option<i32>,
-    pub improvement_develop_turns: i32,
 
     // Specialists
     pub specialist: Option<String>,
@@ -182,7 +181,6 @@ pub struct TileData {
     // Note: owner_city_id is NOT set during parsing - it will be populated in Pass 2b
 
     // Sites
-    pub is_city_site: bool,
     pub tribe_site: Option<String>,
 
     // Religion
@@ -372,6 +370,50 @@ pub struct TileChange {
     pub turn: i32,
     pub change_type: String, // "terrain" or "vegetation"
     pub new_value: String,
+}
+
+/// Unit entity data parsed from XML (nested within Tile elements)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnitData {
+    pub xml_id: i32,
+    pub tile_xml_id: i32,
+    pub unit_type: String,
+    pub player_xml_id: Option<i32>,
+    pub tribe: Option<String>,
+    pub xp: Option<i32>,
+    pub level: Option<i32>,
+    pub create_turn: Option<i32>,
+    pub facing: Option<String>,
+    pub original_player_xml_id: Option<i32>,
+    pub turns_since_last_move: Option<i32>,
+    pub gender: Option<String>,
+    pub is_sleeping: bool,
+    pub current_formation: Option<String>,
+    pub seed: Option<i64>,
+}
+
+/// Unit promotion (acquired or available)
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnitPromotion {
+    pub unit_xml_id: i32,
+    pub promotion: String,
+    pub is_acquired: bool,
+}
+
+/// Unit effect bonus
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnitEffect {
+    pub unit_xml_id: i32,
+    pub effect: String,
+    pub stacks: i32,
+}
+
+/// Unit family association
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UnitFamily {
+    pub unit_xml_id: i32,
+    pub player_xml_id: i32,
+    pub family_name: String,
 }
 
 /// Player resource stockpile (YieldStockpile element)
@@ -581,6 +623,10 @@ pub struct GameData {
     pub city_culture: Vec<CityCulture>,
     pub tile_visibility: Vec<TileVisibility>,
     pub tile_changes: Vec<TileChange>,
+    pub units: Vec<UnitData>,
+    pub unit_promotions: Vec<UnitPromotion>,
+    pub unit_effects: Vec<UnitEffect>,
+    pub unit_families: Vec<UnitFamily>,
     pub player_resources: Vec<PlayerResource>,
     pub technology_progress: Vec<TechnologyProgress>,
     pub technologies_completed: Vec<TechnologyCompleted>,

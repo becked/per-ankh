@@ -1,4 +1,4 @@
--- Old World Game Data Schema v2.9
+-- Old World Game Data Schema v2.11
 -- DuckDB Schema for Multi-Match Game Save Analysis
 --
 -- Design Principles:
@@ -546,7 +546,6 @@ CREATE TABLE tiles (
     improvement_pillaged BOOLEAN DEFAULT false,
     improvement_disabled BOOLEAN DEFAULT false,
     improvement_turns_left INTEGER, -- Construction remaining
-    improvement_develop_turns INTEGER DEFAULT 0,
     -- Specialists
     specialist VARCHAR, -- SPECIALIST_POET_1, SPECIALIST_OFFICER_1, etc.
     -- Infrastructure
@@ -555,7 +554,6 @@ CREATE TABLE tiles (
     owner_player_id INTEGER,  -- References: players(player_id, match_id)
     owner_city_id INTEGER,  -- References: cities(city_id, match_id)
     -- Sites
-    is_city_site BOOLEAN DEFAULT false,
     tribe_site VARCHAR, -- Tribal site marker
     -- Religion
     religion VARCHAR,
@@ -603,11 +601,68 @@ CREATE TABLE tile_ownership_history (
 
 
 -- ============================================================================
--- SECTION 9: UNITS (Military)
+-- SECTION 9: UNITS (Military and Civilian)
 -- ============================================================================
--- NOTE: Individual unit tracking (units, unit_promotions, unit_types tables) has been removed.
--- Analysis of save file XML structure shows individual unit state is NOT persisted in save files.
--- Only aggregate unit production statistics are available (see tables below).
+
+CREATE TABLE units (
+    unit_id INTEGER NOT NULL,
+    match_id BIGINT NOT NULL,
+    xml_id INTEGER,
+    tile_id INTEGER,  -- References: tiles(tile_id, match_id)
+    unit_type VARCHAR NOT NULL,  -- UNIT_HASTATUS, UNIT_WORKER, etc.
+    player_id INTEGER,  -- References: players(player_id, match_id); NULL for barbarians
+    tribe VARCHAR,  -- NONE or TRIBE_ANARCHY, etc.
+    xp INTEGER,  -- NULL for civilian units
+    level INTEGER,  -- NULL for civilian units
+    create_turn INTEGER,
+    facing VARCHAR,  -- NW, NE, E, SE, SW, W
+    original_player_id INTEGER,  -- For captured/gifted units
+    turns_since_last_move INTEGER,
+    gender VARCHAR,  -- GENDER_MALE, GENDER_FEMALE (workers only)
+    is_sleeping BOOLEAN DEFAULT false,
+    current_formation VARCHAR,  -- EFFECTUNIT_SHIP_FORMATION, etc.
+    seed BIGINT,
+    PRIMARY KEY (unit_id, match_id)
+);
+
+CREATE INDEX idx_units_match ON units(match_id);
+CREATE INDEX idx_units_tile ON units(tile_id, match_id);
+CREATE INDEX idx_units_player ON units(player_id, match_id);
+CREATE INDEX idx_units_type ON units(unit_type, match_id);
+
+-- Unit promotions (acquired and available)
+CREATE TABLE unit_promotions (
+    unit_id INTEGER NOT NULL,  -- References: units(unit_id, match_id)
+    match_id BIGINT NOT NULL,
+    promotion VARCHAR NOT NULL,  -- PROMOTION_STRIKE1, PROMOTION_GUARD1, etc.
+    is_acquired BOOLEAN NOT NULL,  -- true = has promotion, false = available to choose
+    PRIMARY KEY (unit_id, match_id, promotion)
+);
+
+CREATE INDEX idx_unit_promotions_match ON unit_promotions(match_id);
+
+-- Unit effects (bonuses like EFFECTUNIT_STEADFAST)
+CREATE TABLE unit_effects (
+    unit_id INTEGER NOT NULL,  -- References: units(unit_id, match_id)
+    match_id BIGINT NOT NULL,
+    effect VARCHAR NOT NULL,  -- EFFECTUNIT_STEADFAST, etc.
+    stacks INTEGER DEFAULT 1,  -- Number of stacks of this effect
+    PRIMARY KEY (unit_id, match_id, effect)
+);
+
+CREATE INDEX idx_unit_effects_match ON unit_effects(match_id);
+
+-- Unit family associations (which family recruited/owns unit)
+CREATE TABLE unit_families (
+    unit_id INTEGER NOT NULL,  -- References: units(unit_id, match_id)
+    match_id BIGINT NOT NULL,
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
+    family_name VARCHAR NOT NULL,  -- FAMILY_FABIUS, FAMILY_VALERIUS, etc.
+    PRIMARY KEY (unit_id, match_id, player_id)
+);
+
+CREATE INDEX idx_unit_families_match ON unit_families(match_id);
+CREATE INDEX idx_unit_families_family ON unit_families(family_name, match_id);
 
 -- Aggregate production statistics
 CREATE TABLE player_units_produced (
@@ -963,7 +1018,9 @@ INSERT INTO schema_migrations (version, description) VALUES
 ('2.6.0', 'Removed FK constraints for ETL performance - relationships documented in comments'),
 ('2.7.0', 'Removed invalid city columns (growth_progress, general_id, agent_id) that do not exist in XML'),
 ('2.8.0', 'Added new city columns: governor_turn, hurry_training/population_count, growth/unit_production/buy_tile_count, last_owner_player_id'),
-('2.9.0', 'Added city_project_counts, city_enemy_agents, city_luxuries tables; fixed TeamDiscontentLevel fallback for legacy saves');
+('2.9.0', 'Added city_project_counts, city_enemy_agents, city_luxuries tables; fixed TeamDiscontentLevel fallback for legacy saves'),
+('2.10.0', 'Added units, unit_promotions, unit_effects, unit_families tables for individual unit tracking'),
+('2.11.0', 'Schema version bump to trigger database reset for units tables');
 
 
 -- ============================================================================
@@ -971,11 +1028,11 @@ INSERT INTO schema_migrations (version, description) VALUES
 -- ============================================================================
 --
 -- Schema Statistics:
--- - 58 tables (entities + time-series + aggregates + reference + views + locks + settings)
--- - ~85% coverage of XML data structures
+-- - 62 tables (entities + time-series + aggregates + reference + views + locks + settings)
+-- - ~90% coverage of XML data structures
 -- - Optimized for multi-match analytical queries
 -- - Full character/family/religion system for political analysis
--- - Aggregate unit production tracking (individual units not persisted in saves)
+-- - Individual unit tracking with promotions, effects, and family associations
 -- - Production queues and city mechanics
 -- - Story event system with choices and outcomes
 -- - Comprehensive time-series metrics
