@@ -11,6 +11,7 @@ import type { MatchDebugRow } from "$lib/types/MatchDebugRow";
 import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
+import type { CityStatistics } from "$lib/types/CityStatistics";
 import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 import type { SaveDateEntry } from "$lib/types/SaveDateEntry";
 import type { Collection } from "$lib/types/Collection";
@@ -66,6 +67,13 @@ export const api = {
 
   getLawAdoptionHistory: (matchId: number) =>
     invoke<LawAdoptionHistory[]>("get_law_adoption_history", { matchId }),
+
+  /**
+   * Get city statistics for a match.
+   * Returns all cities with their metrics for comparison charts.
+   */
+  getCityStatistics: (matchId: number) =>
+    invoke<CityStatistics>("get_city_statistics", { matchId }),
 
   /**
    * Get nation and dynasty data for debugging.

@@ -48,6 +48,9 @@
     <div class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold text-tan" style="background-color: #2a2622;">
       Economics
     </div>
+    <div class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold text-tan" style="background-color: #2a2622;">
+      Cities
+    </div>
     <div class="px-6 py-3 border-2 border-black border-b-0 rounded-tr-lg font-bold text-tan" style="background-color: #2a2622;">
       Game Settings
     </div>

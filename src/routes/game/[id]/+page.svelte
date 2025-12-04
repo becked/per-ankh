@@ -34,7 +34,7 @@
 
   // Event log sort state
   let eventLogSortColumn = $state<string>("turn");
-  let eventLogSortDirection = $state<"asc" | "desc">("asc");
+  let eventLogSortDirection = $state<"asc" | "desc">("desc");
 
   // Chart series filter state - each chart has its own independent state
   let selectedPointsNations = $state<Record<string, boolean>>({});
@@ -50,7 +50,7 @@
 
   // City table state
   let citySearchTerm = $state("");
-  let citySortColumn = $state<string>("city_name");
+  let citySortColumn = $state<string>("owner_nation");
   let citySortDirection = $state<"asc" | "desc">("asc");
 
   // City column definitions
@@ -81,7 +81,7 @@
       getValue: (c) => c.city_name,
       format: (v, city) => {
         const name = formatEnum(v as string, "CITYNAME_");
-        return city.is_capital ? `★ ${name}` : name;
+        return city.is_capital ? `${name} ★` : name;
       },
     },
     {
@@ -605,13 +605,21 @@
       : null
   );
 
-  // Fetch game data on component mount
-  // The {#key} block in +layout.svelte destroys/recreates this component on URL change
+  // Fetch game data when route changes
   $effect(() => {
     const matchId = Number($page.params.id);
 
+    // Reset state for new game
     loading = true;
     error = null;
+    activeTab = "events";
+    eventLogSortColumn = "turn";
+    eventLogSortDirection = "desc";
+    citySortColumn = "owner_nation";
+    citySortDirection = "asc";
+    cityVisibleColumns = Object.fromEntries(
+      CITY_COLUMNS.map((col) => [col.key, col.defaultVisible])
+    );
 
     Promise.all([
       api.getGameDetails(matchId),
