@@ -4,7 +4,7 @@
 // from TribeDiplomacy and TeamDiplomacy elements
 
 use crate::parser::id_mapper::IdMapper;
-use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
+use crate::parser::xml_loader::XmlDocument;
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
 
@@ -168,7 +168,6 @@ fn parse_team_diplomacy(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::parser::xml_loader::parse_xml;
 
     #[test]

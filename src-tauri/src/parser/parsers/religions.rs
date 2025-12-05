@@ -1,7 +1,7 @@
 // Religion entity parser - pure parsing (no DB dependency)
 
 use crate::parser::game_data::ReligionData;
-use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
+use crate::parser::xml_loader::XmlDocument;
 use crate::parser::Result;
 use std::collections::HashMap;
 

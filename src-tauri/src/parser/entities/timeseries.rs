@@ -17,9 +17,7 @@
 // Each element is named <TX> where X is the turn number, and the text content
 // is the value for that turn. Only turns with data are stored (sparse format).
 
-use crate::parser::id_mapper::IdMapper;
 use crate::parser::utils::deduplicate_rows_last_wins;
-use crate::parser::xml_loader::XmlNodeExt;
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
 use roxmltree::Node;

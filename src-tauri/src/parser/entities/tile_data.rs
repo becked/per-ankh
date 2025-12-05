@@ -222,7 +222,6 @@ pub fn parse_tile_extended_data(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use roxmltree::Document;
 
     #[test]

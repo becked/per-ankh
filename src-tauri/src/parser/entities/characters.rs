@@ -6,8 +6,8 @@
 
 use crate::parser::id_mapper::IdMapper;
 use crate::parser::utils::deduplicate_rows_last_wins;
-use crate::parser::xml_loader::{sentinels, XmlDocument, XmlNodeExt};
-use crate::parser::{ParseError, Result};
+use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
+use crate::parser::Result;
 use duckdb::{params, Connection};
 
 /// Parse all characters from the XML document (Pass 1: Core data only)

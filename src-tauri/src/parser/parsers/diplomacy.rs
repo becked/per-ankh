@@ -1,7 +1,7 @@
 // Diplomacy parser - converts TribeDiplomacy and TeamDiplomacy to DiplomacyRelation structs
 
 use crate::parser::game_data::DiplomacyRelation;
-use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
+use crate::parser::xml_loader::XmlDocument;
 use crate::parser::{ParseError, Result};
 
 /// Parse all diplomacy relations from TribeDiplomacy and TeamDiplomacy elements

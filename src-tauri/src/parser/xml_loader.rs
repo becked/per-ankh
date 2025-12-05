@@ -20,14 +20,14 @@ pub enum XmlDocument {
 
 impl XmlDocument {
     /// Get the root element
-    pub fn root_element(&self) -> roxmltree::Node {
+    pub fn root_element(&self) -> roxmltree::Node<'_, '_> {
         match self {
             XmlDocument::FullDom(_, doc) => doc.root_element(),
         }
     }
 
     /// Get the underlying document (for full DOM strategy)
-    pub fn document(&self) -> &Document {
+    pub fn document(&self) -> &Document<'_> {
         match self {
             XmlDocument::FullDom(_, doc) => doc,
         }

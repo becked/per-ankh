@@ -111,7 +111,6 @@ pub fn parse_city_units_produced(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::parser::xml_loader::parse_xml;
 
     #[test]
