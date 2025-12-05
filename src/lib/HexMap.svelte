@@ -1,6 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
-  import * as echarts from "echarts";
+  import { Deck, OrthographicView } from "@deck.gl/core";
+  import { PolygonLayer } from "@deck.gl/layers";
   import type { MapTile } from "$lib/types/MapTile";
   import {
     getCivilizationColor,
@@ -10,41 +11,479 @@
     getResourceColor,
     getMutedTerrainColor,
   } from "$lib/config";
+  import { formatEnum } from "$lib/utils/formatting";
 
-  export type ColorMode = "political" | "terrain" | "height" | "vegetation" | "resource";
+  export type ColorMode = "political" | "religion" | "terrain" | "height" | "vegetation" | "resource";
 
   let {
     tiles,
     height = "600px",
+    totalTurns = null,
+    selectedTurn = null,
+    onTurnChange = null,
   }: {
     tiles: MapTile[];
     height?: string;
+    totalTurns?: number | null;
+    selectedTurn?: number | null;
+    onTurnChange?: ((turn: number) => void) | null;
   } = $props();
 
   let colorMode = $state<ColorMode>("political");
-  let chartContainer: HTMLDivElement;
-  let chart: echarts.ECharts | null = null;
+  let deckCanvas: HTMLCanvasElement;
+  let deck: Deck | null = null;
+  let tooltipContent = $state<string | null>(null);
+  let tooltipX = $state(0);
+  let tooltipY = $state(0);
 
-  // Fullscreen dialog state
+  // Fullscreen state
   let dialogRef: HTMLDialogElement | null = $state(null);
-  let fullscreenChartContainer: HTMLDivElement;
-  let fullscreenChart: echarts.ECharts | null = null;
+  let fullscreenCanvas: HTMLCanvasElement;
+  let fullscreenDeck: Deck | null = null;
   let isClosing = $state(false);
+  let fullscreenTooltipContent = $state<string | null>(null);
+  let fullscreenTooltipX = $state(0);
+  let fullscreenTooltipY = $state(0);
 
-  const ANIMATION_DURATION = 200; // ms - keep in sync with CSS
+  const ANIMATION_DURATION = 200;
+
+  const COLOR_MODES: { value: ColorMode; label: string }[] = [
+    { value: "political", label: "Political" },
+    { value: "religion", label: "Religion" },
+  ];
+
+  // Hex geometry constants (flat-top orientation)
+  // Use equal spacing so square tile grids appear square
+  const HEX_SIZE = 10;
+  const HEX_SPACING = HEX_SIZE * 1.5; // Equal horizontal and vertical spacing
+
+  /**
+   * Convert axial hex coordinates to pixel position
+   * Flat-top hex: odd columns offset down by half spacing
+   * Y is negated because deck.gl Y increases upward, but game coordinates Y increases downward
+   */
+  function hexToPixel(x: number, y: number): [number, number] {
+    const px = x * HEX_SPACING;
+    const py = -(y * HEX_SPACING + (x % 2 === 1 ? HEX_SPACING / 2 : 0));
+    return [px, py];
+  }
+
+  /**
+   * Generate vertices for a flat-top hexagon centered at given position
+   * Slightly adjusted aspect ratio to fill grid cells nicely
+   */
+  function hexVertices(cx: number, cy: number, size: number): [number, number][] {
+    const vertices: [number, number][] = [];
+    // Hex radius for x and y to make hexes fill the equal-spaced grid
+    const rx = size;
+    const ry = size * 0.9; // Slightly shorter to account for equal spacing
+    for (let i = 0; i < 6; i++) {
+      const angle = (Math.PI / 3) * i;
+      vertices.push([
+        cx + rx * Math.cos(angle),
+        cy + ry * Math.sin(angle),
+      ]);
+    }
+    return vertices;
+  }
+
+  /**
+   * Blend two hex colors together with a given alpha (0-1).
+   */
+  function blendColors(foreground: string, background: string, alpha: number): string {
+    const fg = parseInt(foreground.slice(1), 16);
+    const bg = parseInt(background.slice(1), 16);
+
+    const fgR = (fg >> 16) & 255;
+    const fgG = (fg >> 8) & 255;
+    const fgB = fg & 255;
+
+    const bgR = (bg >> 16) & 255;
+    const bgG = (bg >> 8) & 255;
+    const bgB = bg & 255;
+
+    const r = Math.round(fgR * alpha + bgR * (1 - alpha));
+    const g = Math.round(fgG * alpha + bgG * (1 - alpha));
+    const b = Math.round(fgB * alpha + bgB * (1 - alpha));
+
+    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
+  }
+
+  /**
+   * Convert hex color string to RGB array for deck.gl
+   */
+  function hexToRgb(hex: string): [number, number, number] {
+    const val = parseInt(hex.slice(1), 16);
+    return [(val >> 16) & 255, (val >> 8) & 255, val & 255];
+  }
+
+  /**
+   * Get tile color based on current color mode.
+   */
+  function getTileColor(tile: MapTile, mode: ColorMode): string {
+    switch (mode) {
+      case "political":
+        if (tile.owner_nation) {
+          const nationColor = getCivilizationColor(tile.owner_nation.replace("NATION_", ""));
+          if (nationColor) {
+            const terrainColor = getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
+            return blendColors(nationColor, terrainColor, 0.65);
+          }
+          return getTerrainColor(tile.terrain);
+        }
+        return getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
+      case "religion":
+        if (tile.religion && tile.religion_founder_nation) {
+          const nationColor = getCivilizationColor(tile.religion_founder_nation.replace("NATION_", ""));
+          if (nationColor) {
+            const terrainColor = getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
+            return blendColors(nationColor, terrainColor, 0.65);
+          }
+        }
+        return getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
+      case "terrain":
+        return getTerrainColor(tile.terrain);
+      case "height":
+        return getHeightColor(tile.height);
+      case "vegetation":
+        return getVegetationColor(tile.vegetation);
+      case "resource":
+        return tile.resource ? getResourceColor(tile.resource) : getTerrainColor(tile.terrain);
+      default:
+        return getTerrainColor(tile.terrain);
+    }
+  }
+
+  /**
+   * Build tooltip HTML content for a tile
+   */
+  function buildTooltipContent(tile: MapTile, mode: ColorMode): string {
+    const lines = [`<b>(${tile.x}, ${tile.y})</b>`];
+
+    if (mode === "political" || mode === "religion") {
+      // Religion mode shows religion info prominently at top
+      if (mode === "religion") {
+        if (tile.religion) {
+          lines.push(`Religion: ${formatEnum(tile.religion, "RELIGION_")}`);
+          if (tile.religion_founder_nation) {
+            lines.push(`Founded by: ${formatEnum(tile.religion_founder_nation, "NATION_")}`);
+          }
+        } else {
+          lines.push(`Religion: None`);
+        }
+      }
+      if (tile.owner_nation) {
+        lines.push(`Owner: ${formatEnum(tile.owner_nation, "NATION_")}`);
+      }
+      if (tile.owner_city) {
+        lines.push(`City: ${formatEnum(tile.owner_city, "CITYNAME_")}`);
+      }
+      if (tile.terrain && tile.terrain !== "TERRAIN_URBAN") {
+        lines.push(`Terrain: ${formatEnum(tile.terrain, "TERRAIN_")}`);
+      }
+      if (tile.height && tile.height !== "HEIGHT_FLAT") {
+        lines.push(`Elevation: ${formatEnum(tile.height, "HEIGHT_")}`);
+      }
+      if (tile.vegetation && tile.vegetation !== "VEGETATION_NONE") {
+        lines.push(`Vegetation: ${formatEnum(tile.vegetation, "VEGETATION_")}`);
+      }
+      if (tile.resource) {
+        lines.push(`Resource: ${formatEnum(tile.resource, "RESOURCE_")}`);
+      }
+      if (tile.improvement) {
+        let imp = formatEnum(tile.improvement, "IMPROVEMENT_");
+        if (imp.startsWith("Shrine ")) {
+          imp = imp.replace("Shrine ", "") + " Shrine";
+        } else if (imp.startsWith("Monastery ")) {
+          imp = imp.replace("Monastery ", "") + " Monastery";
+        }
+        if (tile.improvement_pillaged) imp += " (Pillaged)";
+        lines.push(`Improvement: ${imp}`);
+      }
+      if (tile.specialist) {
+        lines.push(`Specialist: ${formatEnum(tile.specialist, "SPECIALIST_")}`);
+      }
+      if (tile.tribe_site) {
+        lines.push(`Tribe Site: ${formatEnum(tile.tribe_site, "TRIBE_")}`);
+      }
+      // Only show religion in political mode (religion mode shows it at the top)
+      if (mode === "political" && tile.religion) {
+        lines.push(`Religion: ${formatEnum(tile.religion, "RELIGION_")}`);
+      }
+      if (tile.has_road) {
+        lines.push(`Road: Yes`);
+      }
+      const rivers: string[] = [];
+      if (tile.river_w) rivers.push("W");
+      if (tile.river_sw) rivers.push("SW");
+      if (tile.river_se) rivers.push("SE");
+      if (rivers.length > 0) {
+        lines.push(`Rivers: ${rivers.join(", ")}`);
+      }
+    } else {
+      if (mode === "terrain" && tile.terrain) {
+        lines.push(`Terrain: ${formatEnum(tile.terrain, "TERRAIN_")}`);
+      }
+      if (mode === "height" && tile.height) {
+        lines.push(`Elevation: ${formatEnum(tile.height, "HEIGHT_")}`);
+      }
+      if (mode === "vegetation" && tile.vegetation) {
+        lines.push(`Vegetation: ${formatEnum(tile.vegetation, "VEGETATION_")}`);
+      }
+      if (mode === "resource" && tile.resource) {
+        lines.push(`Resource: ${formatEnum(tile.resource, "RESOURCE_")}`);
+      }
+    }
+    return lines.join("<br/>");
+  }
+
+  // Turn slider handling with debounce
+  let sliderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+  function handleSliderChange(event: Event) {
+    const target = event.target as HTMLInputElement;
+    const turn = parseInt(target.value, 10);
+
+    if (sliderDebounceTimer) {
+      clearTimeout(sliderDebounceTimer);
+    }
+
+    sliderDebounceTimer = setTimeout(() => {
+      onTurnChange?.(turn);
+    }, 100);
+  }
+
+  const showTurnSlider = $derived(
+    (colorMode === "political" || colorMode === "religion") && totalTurns != null && selectedTurn != null && onTurnChange != null
+  );
+
+  // Playback state
+  let isPlaying = $state(false);
+  let playbackInterval: ReturnType<typeof setInterval> | null = null;
+  const PLAYBACK_SPEED_MS = 300; // Time between turns in milliseconds
+
+  function startPlayback() {
+    if (isPlaying || !totalTurns || selectedTurn == null) return;
+
+    // If at the end, start from beginning
+    if (selectedTurn >= totalTurns) {
+      onTurnChange?.(1);
+    }
+
+    isPlaying = true;
+    playbackInterval = setInterval(() => {
+      if (selectedTurn != null && totalTurns != null) {
+        if (selectedTurn >= totalTurns) {
+          // Reached the end, stop playing
+          stopPlayback();
+        } else {
+          onTurnChange?.(selectedTurn + 1);
+        }
+      }
+    }, PLAYBACK_SPEED_MS);
+  }
+
+  function stopPlayback() {
+    isPlaying = false;
+    if (playbackInterval) {
+      clearInterval(playbackInterval);
+      playbackInterval = null;
+    }
+  }
+
+  function togglePlayback() {
+    if (isPlaying) {
+      stopPlayback();
+    } else {
+      startPlayback();
+    }
+  }
+
+  // Clean up playback on unmount
+  $effect(() => {
+    return () => {
+      if (playbackInterval) {
+        clearInterval(playbackInterval);
+      }
+    };
+  });
+
+  // Prepare tile data with polygon vertices
+  interface TileData {
+    tile: MapTile;
+    polygon: [number, number][];
+    color: [number, number, number];
+  }
+
+  function prepareTileData(mode: ColorMode): TileData[] {
+    return tiles.map((tile) => {
+      const [px, py] = hexToPixel(tile.x, tile.y);
+      return {
+        tile,
+        polygon: hexVertices(px, py, HEX_SIZE),
+        color: hexToRgb(getTileColor(tile, mode)),
+      };
+    });
+  }
+
+  // Calculate initial view bounds
+  function calculateViewState(canvas?: HTMLCanvasElement) {
+    if (tiles.length === 0) {
+      return { target: [0, 0, 0], zoom: 0 };
+    }
+
+    let minX = Infinity, maxX = -Infinity;
+    let minY = Infinity, maxY = -Infinity;
+
+    for (const tile of tiles) {
+      const [px, py] = hexToPixel(tile.x, tile.y);
+      minX = Math.min(minX, px);
+      maxX = Math.max(maxX, px);
+      minY = Math.min(minY, py);
+      maxY = Math.max(maxY, py);
+    }
+
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const mapWidth = maxX - minX + HEX_SPACING * 2;
+    const mapHeight = maxY - minY + HEX_SPACING * 2;
+
+    const containerWidth = canvas?.clientWidth || deckCanvas?.clientWidth || 800;
+    const containerHeight = canvas?.clientHeight || deckCanvas?.clientHeight || 600;
+
+    // Calculate zoom to fit both dimensions in container
+    const scaleX = containerWidth / mapWidth;
+    const scaleY = containerHeight / mapHeight;
+    const scale = Math.min(scaleX, scaleY) * 0.95;
+    const zoom = Math.log2(scale);
+
+    return { target: [centerX, centerY, 0], zoom };
+  }
+
+  function createLayer(mode: ColorMode) {
+    const data = prepareTileData(mode);
+
+    return new PolygonLayer<TileData>({
+      id: "hex-layer",
+      data,
+      getPolygon: (d) => d.polygon,
+      getFillColor: (d) => d.color,
+      getLineColor: [40, 40, 40],
+      getLineWidth: 1,
+      lineWidthMinPixels: 0.5,
+      pickable: true,
+      stroked: true,
+      filled: true,
+      extruded: false,
+      transitions: {
+        getFillColor: 200,
+      },
+    });
+  }
+
+  function initDeck() {
+    if (!deckCanvas) return;
+
+    const width = deckCanvas.clientWidth;
+    const height = deckCanvas.clientHeight;
+    if (width === 0 || height === 0) return;
+
+    // Clean up existing deck to prevent WebGL context accumulation
+    if (deck) {
+      deck.finalize();
+      deck = null;
+    }
+
+    // Set canvas pixel dimensions to match CSS dimensions (prevents stretching)
+    deckCanvas.width = width * window.devicePixelRatio;
+    deckCanvas.height = height * window.devicePixelRatio;
+
+    const viewState = calculateViewState();
+
+    deck = new Deck({
+      canvas: deckCanvas,
+      width,
+      height,
+      useDevicePixels: true,
+      views: new OrthographicView({ id: "ortho", controller: false }),
+      initialViewState: {
+        ...viewState,
+        minZoom: -2,
+        maxZoom: 6,
+      },
+      controller: false,
+      getCursor: () => "default",
+      layers: [createLayer(colorMode)],
+      onHover: ({ object, x, y }: { object?: TileData; x: number; y: number }) => {
+        if (object) {
+          tooltipContent = buildTooltipContent(object.tile, colorMode);
+          tooltipX = x;
+          tooltipY = y;
+        } else {
+          tooltipContent = null;
+        }
+      },
+    });
+  }
+
+  function initFullscreenDeck() {
+    if (!fullscreenCanvas) return;
+
+    const width = fullscreenCanvas.clientWidth;
+    const height = fullscreenCanvas.clientHeight;
+    if (width === 0 || height === 0) return;
+
+    // Clean up existing fullscreen deck to prevent WebGL context accumulation
+    if (fullscreenDeck) {
+      fullscreenDeck.finalize();
+      fullscreenDeck = null;
+    }
+
+    // Set canvas pixel dimensions to match CSS dimensions (prevents stretching)
+    fullscreenCanvas.width = width * window.devicePixelRatio;
+    fullscreenCanvas.height = height * window.devicePixelRatio;
+
+    const viewState = calculateViewState(fullscreenCanvas);
+
+    fullscreenDeck = new Deck({
+      canvas: fullscreenCanvas,
+      width,
+      height,
+      useDevicePixels: true,
+      views: new OrthographicView({ id: "ortho", controller: false }),
+      initialViewState: {
+        ...viewState,
+        minZoom: -2,
+        maxZoom: 6,
+      },
+      controller: false,
+      getCursor: () => "default",
+      layers: [createLayer(colorMode)],
+      onHover: ({ object, x, y }: { object?: TileData; x: number; y: number }) => {
+        if (object) {
+          fullscreenTooltipContent = buildTooltipContent(object.tile, colorMode);
+          fullscreenTooltipX = x;
+          fullscreenTooltipY = y;
+        } else {
+          fullscreenTooltipContent = null;
+        }
+      },
+    });
+  }
 
   function openFullscreen() {
     dialogRef?.showModal();
-    // Initialize fullscreen chart after dialog opens
     tick().then(() => {
-      if (fullscreenChartContainer && !fullscreenChart) {
-        fullscreenChart = echarts.init(fullscreenChartContainer);
-        if (chartOption) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          fullscreenChart.setOption(chartOption as any);
-        }
+      if (fullscreenCanvas && !fullscreenDeck) {
+        initFullscreenDeck();
       }
-      fullscreenChart?.resize();
+      if (fullscreenDeck && fullscreenCanvas) {
+        fullscreenDeck.setProps({
+          width: fullscreenCanvas.clientWidth,
+          height: fullscreenCanvas.clientHeight,
+          layers: [createLayer(colorMode)],
+        });
+      }
     });
   }
 
@@ -69,294 +508,151 @@
     }
   }
 
-  const COLOR_MODES: { value: ColorMode; label: string }[] = [
-    { value: "political", label: "Political" },
-    { value: "terrain", label: "Terrain" },
-    { value: "height", label: "Elevation" },
-    { value: "vegetation", label: "Vegetation" },
-    { value: "resource", label: "Resources" },
-  ];
-
-  // Hex geometry constants (flat-top orientation)
-  const HEX_SIZE = 10;
-  const HEX_WIDTH = HEX_SIZE * 2;
-  const HEX_HEIGHT = Math.sqrt(3) * HEX_SIZE;
-
-  /**
-   * Convert axial hex coordinates to pixel position
-   * Flat-top hex: odd rows offset right by half width
-   */
-  function hexToPixel(x: number, y: number): [number, number] {
-    const px = x * HEX_WIDTH * 0.75;
-    const py = y * HEX_HEIGHT + (x % 2 === 1 ? HEX_HEIGHT / 2 : 0);
-    return [px, py];
-  }
-
-  /**
-   * Generate vertices for a flat-top hexagon with separate x/y scaling
-   * to handle non-uniform aspect ratios
-   */
-  function hexVertices(cx: number, cy: number, sizeX: number, sizeY: number): number[][] {
-    const vertices: number[][] = [];
-    for (let i = 0; i < 6; i++) {
-      const angle = (Math.PI / 3) * i;
-      vertices.push([
-        cx + sizeX * Math.cos(angle),
-        cy + sizeY * Math.sin(angle),
-      ]);
-    }
-    return vertices;
-  }
-
-  /**
-   * Blend two hex colors together with a given alpha (0-1).
-   * Result = foreground * alpha + background * (1 - alpha)
-   */
-  function blendColors(foreground: string, background: string, alpha: number): string {
-    const fg = parseInt(foreground.slice(1), 16);
-    const bg = parseInt(background.slice(1), 16);
-
-    const fgR = (fg >> 16) & 255;
-    const fgG = (fg >> 8) & 255;
-    const fgB = fg & 255;
-
-    const bgR = (bg >> 16) & 255;
-    const bgG = (bg >> 8) & 255;
-    const bgB = bg & 255;
-
-    const r = Math.round(fgR * alpha + bgR * (1 - alpha));
-    const g = Math.round(fgG * alpha + bgG * (1 - alpha));
-    const b = Math.round(fgB * alpha + bgB * (1 - alpha));
-
-    return `#${((r << 16) | (g << 8) | b).toString(16).padStart(6, "0")}`;
-  }
-
-  /**
-   * Get tile color based on current color mode.
-   * In political mode, unowned tiles show terrain color.
-   */
-  function getTileColor(tile: MapTile, mode: ColorMode): string {
-    switch (mode) {
-      case "political":
-        if (tile.owner_nation) {
-          const nationColor = getCivilizationColor(tile.owner_nation.replace("NATION_", ""));
-          if (nationColor) {
-            // Blend nation color over terrain so features show through
-            const terrainColor = getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
-            return blendColors(nationColor, terrainColor, 0.65);
-          }
-          return getTerrainColor(tile.terrain);
-        }
-        // Unclaimed tiles show muted terrain features
-        return getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
-      case "terrain":
-        return getTerrainColor(tile.terrain);
-      case "height":
-        return getHeightColor(tile.height);
-      case "vegetation":
-        return getVegetationColor(tile.vegetation);
-      case "resource":
-        return tile.resource ? getResourceColor(tile.resource) : getTerrainColor(tile.terrain);
-      default:
-        return getTerrainColor(tile.terrain);
-    }
-  }
-
-  function buildChartOption(mode: ColorMode) {
-    if (!tiles.length) return null;
-
-    return {
-      backgroundColor: "#1a1a1a",
-      animation: false,
-      grid: {
-        left: 20,
-        right: 20,
-        top: 20,
-        bottom: 20,
-        containLabel: false,
-      },
-      tooltip: {
-        trigger: "item",
-        formatter: (params: { data: { tile: MapTile } }) => {
-          const t = params.data.tile;
-          const lines = [`<b>(${t.x}, ${t.y})</b>`];
-
-          if (mode === "political") {
-            // Show all tile info in political mode
-            if (t.owner_nation) {
-              lines.push(`Owner: ${t.owner_nation.replace("NATION_", "")}`);
-            }
-            if (t.owner_city) {
-              lines.push(`City: ${t.owner_city.replace("CITYNAME_", "")}`);
-            }
-            if (t.terrain) {
-              lines.push(`Terrain: ${t.terrain.replace("TERRAIN_", "")}`);
-            }
-            if (t.height && t.height !== "HEIGHT_FLAT") {
-              lines.push(`Elevation: ${t.height.replace("HEIGHT_", "")}`);
-            }
-            if (t.vegetation && t.vegetation !== "VEGETATION_NONE") {
-              lines.push(`Vegetation: ${t.vegetation.replace("VEGETATION_", "")}`);
-            }
-            if (t.resource) {
-              lines.push(`Resource: ${t.resource.replace("RESOURCE_", "")}`);
-            }
-            if (t.improvement) {
-              let imp = t.improvement.replace("IMPROVEMENT_", "");
-              if (t.improvement_pillaged) imp += " (Pillaged)";
-              lines.push(`Improvement: ${imp}`);
-            }
-            if (t.specialist) {
-              lines.push(`Specialist: ${t.specialist.replace("SPECIALIST_", "")}`);
-            }
-            if (t.tribe_site) {
-              lines.push(`Tribe Site: ${t.tribe_site.replace("TRIBE_", "")}`);
-            }
-            if (t.religion) {
-              lines.push(`Religion: ${t.religion.replace("RELIGION_", "")}`);
-            }
-            if (t.has_road) {
-              lines.push(`Road: Yes`);
-            }
-            // Rivers
-            const rivers: string[] = [];
-            if (t.river_w) rivers.push("W");
-            if (t.river_sw) rivers.push("SW");
-            if (t.river_se) rivers.push("SE");
-            if (rivers.length > 0) {
-              lines.push(`Rivers: ${rivers.join(", ")}`);
-            }
-          } else {
-            // Other modes show mode-specific info
-            if (mode === "terrain" && t.terrain) {
-              lines.push(`Terrain: ${t.terrain.replace("TERRAIN_", "")}`);
-            }
-            if (mode === "height" && t.height) {
-              lines.push(`Elevation: ${t.height.replace("HEIGHT_", "")}`);
-            }
-            if (mode === "vegetation" && t.vegetation) {
-              lines.push(`Vegetation: ${t.vegetation.replace("VEGETATION_", "")}`);
-            }
-            if (mode === "resource" && t.resource) {
-              lines.push(`Resource: ${t.resource.replace("RESOURCE_", "")}`);
-            }
-          }
-          return lines.join("<br/>");
-        },
-      },
-      xAxis: { show: false, min: "dataMin", max: "dataMax" },
-      yAxis: { show: false, min: "dataMin", max: "dataMax", inverse: true },
-      series: [{
-        type: "custom",
-        coordinateSystem: "cartesian2d",
-        renderItem: (params: unknown, api: {
-          value: (idx: number) => number;
-          coord: (val: [number, number]) => [number, number];
-          style: (opts: { fill: string }) => Record<string, unknown>;
-        }) => {
-          const px = api.value(0) as number;
-          const py = api.value(1) as number;
-          const color = api.value(2) as unknown as string;
-          const [cx, cy] = api.coord([px, py]);
-
-          // Calculate screen scale for both axes independently
-          const [x0, y0] = api.coord([0, 0]);
-          const [x1] = api.coord([HEX_WIDTH * 0.75, 0]); // One horizontal step
-          const [, y1] = api.coord([0, HEX_HEIGHT]); // One vertical step
-
-          const screenHSpacing = x1 - x0;
-          const screenVSpacing = Math.abs(y1 - y0);
-
-          // For flat-top hexes: h_spacing = 1.5 * rX, v_spacing = sqrt(3) * rY
-          // Calculate independent X and Y radii to handle aspect ratio distortion
-          const screenHexSizeX = screenHSpacing / 1.5;
-          const screenHexSizeY = screenVSpacing / Math.sqrt(3);
-
-          return {
-            type: "polygon",
-            shape: { points: hexVertices(cx, cy, screenHexSizeX, screenHexSizeY) },
-            style: api.style({ fill: color }),
-          };
-        },
-        data: tiles.map((tile) => {
-          const [px, py] = hexToPixel(tile.x, tile.y);
-          return {
-            value: [px, py, getTileColor(tile, mode)],
-            tile,
-          };
-        }),
-      }],
-    };
-  }
-
-  const chartOption = $derived(buildChartOption(colorMode));
-
   onMount(() => {
-    let resizeObserver: ResizeObserver;
+    let lastWidth = 0;
+    let lastHeight = 0;
+    let checkIntervalId: ReturnType<typeof setInterval> | null = null;
 
-    const initChart = () => {
-      if (!chartContainer || chartContainer.clientWidth === 0) return;
-      if (!chart) {
-        chart = echarts.init(chartContainer);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        if (chartOption) chart.setOption(chartOption as any);
+    // Check for visibility changes periodically (less aggressive than RAF)
+    function checkVisibility() {
+      if (!deckCanvas) return;
+
+      const width = deckCanvas.clientWidth;
+      const height = deckCanvas.clientHeight;
+
+      // Only act if dimensions actually changed
+      if (width === lastWidth && height === lastHeight) return;
+
+      // Detect when canvas becomes visible (dimensions change from 0 to non-zero)
+      if (width > 0 && height > 0 && (lastWidth === 0 || lastHeight === 0) && !deck) {
+        initDeck();
       }
-    };
 
+      lastWidth = width;
+      lastHeight = height;
+    }
+
+    // Check visibility every 100ms (much less aggressive than RAF)
+    checkIntervalId = setInterval(checkVisibility, 100);
+
+    // Also try to init after a tick
     tick().then(() => {
-      initChart();
-      resizeObserver = new ResizeObserver(() => {
-        if (!chart && chartContainer) initChart();
-        chart?.resize();
-      });
-      resizeObserver.observe(chartContainer);
+      if (!deck && deckCanvas && deckCanvas.clientWidth > 0) {
+        initDeck();
+        lastWidth = deckCanvas.clientWidth;
+        lastHeight = deckCanvas.clientHeight;
+      }
     });
 
-    window.addEventListener("resize", () => chart?.resize());
-
     return () => {
-      resizeObserver?.disconnect();
-      chart?.dispose();
+      if (checkIntervalId !== null) {
+        clearInterval(checkIntervalId);
+      }
+      // Clean up WebGL contexts to prevent "too many contexts" error
+      if (deck) {
+        deck.finalize();
+        deck = null;
+      }
+      if (fullscreenDeck) {
+        fullscreenDeck.finalize();
+        fullscreenDeck = null;
+      }
     };
   });
 
-  $effect(() => {
-    // Access chartOption unconditionally to ensure it's tracked
-    const opt = chartOption;
-    if (chart && opt) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      chart.setOption(opt as any, true);
-    }
-    // Keep fullscreen chart in sync
-    if (fullscreenChart && opt) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      fullscreenChart.setOption(opt as any, true);
-    }
-  });
+  // Track previous tile count to detect game changes
+  let prevTileCount = $state(0);
 
-  // Cleanup fullscreen chart on unmount
+  // Update layers when tiles or color mode changes
   $effect(() => {
-    return () => {
-      fullscreenChart?.dispose();
-    };
+    const mode = colorMode;
+    const currentTiles = tiles;
+    const tileCount = currentTiles.length;
+
+    // If tile count changed significantly, reinitialize deck with new view bounds
+    if (tileCount > 0 && Math.abs(tileCount - prevTileCount) > 100) {
+      prevTileCount = tileCount;
+      // Reinitialize to get correct view bounds for new map
+      if (deckCanvas) {
+        initDeck();
+      }
+      return;
+    }
+    prevTileCount = tileCount;
+
+    // If deck doesn't exist but we have tiles and a valid canvas, initialize it
+    // This handles the case when switching back to the Map tab
+    if (!deck && currentTiles.length > 0 && deckCanvas && deckCanvas.clientWidth > 0) {
+      initDeck();
+    }
+
+    if (deck && currentTiles.length > 0) {
+      deck.setProps({
+        layers: [createLayer(mode)],
+      });
+    }
+    if (fullscreenDeck && currentTiles.length > 0) {
+      fullscreenDeck.setProps({
+        layers: [createLayer(mode)],
+      });
+    }
   });
 </script>
 
 <div class="flex flex-col gap-4">
-  <!-- Color mode selector -->
-  <div class="flex gap-2">
-    {#each COLOR_MODES as mode}
-      <button
-        class="px-4 py-2 rounded border-2 border-black font-bold text-sm transition-colors {colorMode === mode.value ? 'bg-brown text-tan' : 'bg-transparent text-brown hover:bg-brown/30'}"
-        onclick={() => colorMode = mode.value}
-      >
-        {mode.label}
-      </button>
-    {/each}
+  <!-- Controls row: Color mode selector + Turn slider -->
+  <div class="flex flex-wrap items-center gap-4">
+    <!-- Color mode buttons -->
+    <div class="flex gap-2">
+      {#each COLOR_MODES as mode}
+        <button
+          class="px-4 py-2 rounded border-2 border-black font-bold text-sm transition-colors {colorMode === mode.value ? 'bg-brown text-tan' : 'bg-transparent text-brown hover:bg-brown/30'}"
+          onclick={() => colorMode = mode.value}
+        >
+          {mode.label}
+        </button>
+      {/each}
+    </div>
+
+    <!-- Turn slider (only in political mode) -->
+    {#if showTurnSlider}
+      <div class="flex items-center gap-3 ml-auto">
+        <span class="text-brown text-sm font-bold">Turn:</span>
+        <!-- Play/Pause button -->
+        <button
+          onclick={togglePlayback}
+          class="p-1.5 rounded bg-brown/30 hover:bg-brown/50 transition-colors"
+          aria-label={isPlaying ? "Pause" : "Play"}
+          title={isPlaying ? "Pause" : "Play"}
+        >
+          {#if isPlaying}
+            <!-- Pause icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+              <rect x="6" y="4" width="4" height="16" />
+              <rect x="14" y="4" width="4" height="16" />
+            </svg>
+          {:else}
+            <!-- Play icon -->
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M8 5v14l11-7z" />
+            </svg>
+          {/if}
+        </button>
+        <input
+          type="range"
+          min="1"
+          max={totalTurns}
+          value={selectedTurn}
+          oninput={handleSliderChange}
+          class="turn-slider w-48"
+        />
+        <span class="text-tan text-sm font-bold w-8 text-right">{selectedTurn}</span>
+      </div>
+    {/if}
   </div>
 
   <!-- Map container -->
-  <div class="relative border-2 border-tan rounded-lg overflow-hidden" style="background-color: var(--color-chart-frame)">
+  <div class="relative border-2 border-tan rounded-lg overflow-hidden" style="background-color: #1a1a1a">
     <!-- Expand button -->
     <button
       onclick={openFullscreen}
@@ -381,8 +677,18 @@
     </button>
 
     <div class="w-full" style="height: {height}">
-      <div bind:this={chartContainer} class="w-full h-full"></div>
+      <canvas bind:this={deckCanvas} class="w-full h-full"></canvas>
     </div>
+
+    <!-- Custom tooltip -->
+    {#if tooltipContent}
+      <div
+        class="tooltip"
+        style="left: {tooltipX + 10}px; top: {tooltipY + 10}px;"
+      >
+        {@html tooltipContent}
+      </div>
+    {/if}
   </div>
 </div>
 
@@ -414,28 +720,132 @@
       </svg>
     </button>
 
-    <!-- Color mode selector in fullscreen -->
+    <!-- Controls in fullscreen -->
     <div class="mb-4 flex-shrink-0 bg-black/90 rounded-lg px-4 py-3">
-      <div class="flex gap-2">
-        {#each COLOR_MODES as mode}
-          <button
-            class="px-4 py-2 rounded border-2 border-black font-bold text-sm transition-colors {colorMode === mode.value ? 'bg-brown text-tan' : 'bg-transparent text-brown hover:bg-brown/30'}"
-            onclick={() => colorMode = mode.value}
-          >
-            {mode.label}
-          </button>
-        {/each}
+      <div class="flex flex-wrap items-center gap-4">
+        <!-- Color mode buttons -->
+        <div class="flex gap-2">
+          {#each COLOR_MODES as mode}
+            <button
+              class="px-4 py-2 rounded border-2 border-black font-bold text-sm transition-colors {colorMode === mode.value ? 'bg-brown text-tan' : 'bg-transparent text-brown hover:bg-brown/30'}"
+              onclick={() => colorMode = mode.value}
+            >
+              {mode.label}
+            </button>
+          {/each}
+        </div>
+
+        <!-- Turn slider (only in political mode) -->
+        {#if showTurnSlider}
+          <div class="flex items-center gap-3 ml-auto">
+            <span class="text-brown text-sm font-bold">Turn:</span>
+            <!-- Play/Pause button -->
+            <button
+              onclick={togglePlayback}
+              class="p-1.5 rounded bg-brown/30 hover:bg-brown/50 transition-colors"
+              aria-label={isPlaying ? "Pause" : "Play"}
+              title={isPlaying ? "Pause" : "Play"}
+            >
+              {#if isPlaying}
+                <!-- Pause icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                  <rect x="6" y="4" width="4" height="16" />
+                  <rect x="14" y="4" width="4" height="16" />
+                </svg>
+              {:else}
+                <!-- Play icon -->
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                  <path d="M8 5v14l11-7z" />
+                </svg>
+              {/if}
+            </button>
+            <input
+              type="range"
+              min="1"
+              max={totalTurns}
+              value={selectedTurn}
+              oninput={handleSliderChange}
+              class="turn-slider w-64"
+            />
+            <span class="text-tan text-sm font-bold w-8 text-right">{selectedTurn}</span>
+          </div>
+        {/if}
       </div>
     </div>
 
     <!-- Fullscreen map -->
-    <div class="flex-1 min-h-0 rounded-lg overflow-hidden" style="background-color: var(--color-chart-frame)">
-      <div bind:this={fullscreenChartContainer} class="w-full h-full"></div>
+    <div class="flex-1 min-h-0 rounded-lg overflow-hidden relative" style="background-color: #1a1a1a">
+      <canvas bind:this={fullscreenCanvas} class="w-full h-full"></canvas>
+
+      <!-- Fullscreen tooltip -->
+      {#if fullscreenTooltipContent}
+        <div
+          class="tooltip"
+          style="left: {fullscreenTooltipX + 10}px; top: {fullscreenTooltipY + 10}px;"
+        >
+          {@html fullscreenTooltipContent}
+        </div>
+      {/if}
     </div>
   </div>
 </dialog>
 
 <style>
+  .tooltip {
+    position: absolute;
+    background: rgba(50, 50, 50, 0.95);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 12px;
+    line-height: 1.4;
+    pointer-events: none;
+    z-index: 100;
+    max-width: 250px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Turn slider styling */
+  .turn-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    background: #4a4540;
+    border-radius: 3px;
+    outline: none;
+    cursor: pointer;
+  }
+
+  .turn-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    background: var(--color-brown);
+    border-radius: 50%;
+    cursor: pointer;
+    transition: background 0.15s ease;
+  }
+
+  .turn-slider::-webkit-slider-thumb:hover {
+    background: var(--color-tan);
+  }
+
+  .turn-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    background: var(--color-brown);
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s ease;
+  }
+
+  .turn-slider::-moz-range-thumb:hover {
+    background: var(--color-tan);
+  }
+
+  /* Fullscreen dialog styles */
   .fullscreen-dialog {
     border: none;
     padding: 0;

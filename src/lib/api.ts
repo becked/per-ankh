@@ -84,6 +84,14 @@ export const api = {
     invoke<MapTile[]>("get_map_tiles", { matchId }),
 
   /**
+   * Get map tiles at a specific turn for historical visualization.
+   * Reconstructs ownership from tile_ownership_history.
+   * Improvements/roads only shown if tile was owned at that turn.
+   */
+  getMapTilesAtTurn: (matchId: number, turn: number) =>
+    invoke<MapTile[]>("get_map_tiles_at_turn", { matchId, turn }),
+
+  /**
    * Get nation and dynasty data for debugging.
    * Returns all unique combinations of nation/dynasty values from the database.
    */

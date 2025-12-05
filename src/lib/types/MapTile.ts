@@ -3,7 +3,11 @@
 /**
  * Tile data for map visualization
  */
-export type MapTile = { x: number, y: number, terrain: string | null, height: string | null, vegetation: string | null, resource: string | null, improvement: string | null, improvement_pillaged: boolean, has_road: boolean, specialist: string | null, tribe_site: string | null, religion: string | null, river_w: boolean, river_sw: boolean, river_se: boolean, 
+export type MapTile = { x: number, y: number, terrain: string | null, height: string | null, vegetation: string | null, resource: string | null, improvement: string | null, improvement_pillaged: boolean, has_road: boolean, specialist: string | null, tribe_site: string | null, religion: string | null, 
+/**
+ * Resolved from religion -> religions.founder_player_id -> players.nation
+ */
+religion_founder_nation: string | null, river_w: boolean, river_sw: boolean, river_se: boolean, 
 /**
  * Resolved from owner_player_id -> players.nation
  */

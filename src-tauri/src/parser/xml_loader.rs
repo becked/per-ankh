@@ -128,6 +128,8 @@ impl<'a, 'input: 'a> XmlNodeExt for roxmltree::Node<'a, 'input> {
         self.children()
             .find(|n| n.has_tag_name(name))
             .and_then(|n| n.text())
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty())
     }
 
     fn element_path(&self) -> String {
