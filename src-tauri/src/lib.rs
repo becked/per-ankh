@@ -196,6 +196,31 @@ pub struct KnownOnlineId {
     pub save_count: i64,
 }
 
+/// Tile data for map visualization
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct MapTile {
+    pub x: i32,
+    pub y: i32,
+    pub terrain: Option<String>,
+    pub height: Option<String>,
+    pub vegetation: Option<String>,
+    pub resource: Option<String>,
+    pub improvement: Option<String>,
+    pub improvement_pillaged: bool,
+    pub has_road: bool,
+    pub specialist: Option<String>,
+    pub tribe_site: Option<String>,
+    pub religion: Option<String>,
+    pub river_w: bool,
+    pub river_sw: bool,
+    pub river_se: bool,
+    /// Resolved from owner_player_id -> players.nation
+    pub owner_nation: Option<String>,
+    /// Resolved from owner_city_id -> cities.city_name
+    pub owner_city: Option<String>,
+}
+
 // Initialize logging
 fn init_logging() {
     env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
@@ -1479,6 +1504,58 @@ async fn get_city_statistics(
     .map_err(|e| e.to_string())
 }
 
+/// Tauri command to get all map tiles for visualization
+///
+/// Returns tile data with terrain, resources, improvements, and ownership
+#[tauri::command]
+async fn get_map_tiles(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<MapTile>, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
+                    t.resource, t.improvement, t.improvement_pillaged, t.has_road,
+                    t.specialist, t.tribe_site, t.religion,
+                    t.river_w, t.river_sw, t.river_se,
+                    p.nation, c.city_name
+             FROM tiles t
+             LEFT JOIN players p ON t.owner_player_id = p.player_id AND t.match_id = p.match_id
+             LEFT JOIN cities c ON t.owner_city_id = c.city_id AND t.match_id = c.match_id
+             WHERE t.match_id = ?
+             ORDER BY t.y, t.x"
+        )?;
+
+        let tiles = stmt
+            .query_map([match_id], |row| {
+                Ok(MapTile {
+                    x: row.get(0)?,
+                    y: row.get(1)?,
+                    terrain: row.get(2)?,
+                    height: row.get(3)?,
+                    vegetation: row.get(4)?,
+                    resource: row.get(5)?,
+                    improvement: row.get(6)?,
+                    improvement_pillaged: row.get::<_, Option<bool>>(7)?.unwrap_or(false),
+                    has_road: row.get::<_, Option<bool>>(8)?.unwrap_or(false),
+                    specialist: row.get(9)?,
+                    tribe_site: row.get(10)?,
+                    religion: row.get(11)?,
+                    river_w: row.get::<_, Option<bool>>(12)?.unwrap_or(false),
+                    river_sw: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
+                    river_se: row.get::<_, Option<bool>>(14)?.unwrap_or(false),
+                    owner_nation: row.get(15)?,
+                    owner_city: row.get(16)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(tiles)
+    })
+    .context("Failed to get map tiles")
+    .map_err(|e| e.to_string())
+}
+
 /// Tauri command to get the primary user OnlineID
 #[tauri::command]
 async fn get_primary_user_online_id(
@@ -1666,6 +1743,7 @@ pub fn run() {
             get_event_logs,
             get_law_adoption_history,
             get_city_statistics,
+            get_map_tiles,
             get_nation_dynasty_data,
             get_player_debug_data,
             get_match_debug_data,

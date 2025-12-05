@@ -24,3 +24,18 @@ export {
   type NationKey,
   type TribeKey,
 } from "./nations";
+
+// Re-export terrain colors
+export {
+  TERRAIN_COLORS,
+  HEIGHT_COLORS,
+  VEGETATION_COLORS,
+  RESOURCE_COLORS,
+  UNOWNED_TILE_COLOR,
+  RESOURCE_DEFAULT_COLOR,
+  getTerrainColor,
+  getHeightColor,
+  getVegetationColor,
+  getResourceColor,
+  getMutedTerrainColor,
+} from "./terrain";
