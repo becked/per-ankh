@@ -27,6 +27,8 @@
   let lawAdoptionHistory = $state<LawAdoptionHistory[] | null>(null);
   let cityStatistics = $state<CityStatistics | null>(null);
   let mapTiles = $state<MapTile[] | null>(null);
+  let selectedMapTurn = $state<number | null>(null);
+  let mapTilesLoading = $state(false);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
@@ -641,6 +643,8 @@
         lawAdoptionHistory = lawHistory;
         cityStatistics = cityStats;
         mapTiles = tiles;
+        // Initialize map turn to final turn
+        selectedMapTurn = details.total_turns;
       })
       .catch((err) => {
         error = String(err);
@@ -839,6 +843,36 @@
   function clearFilters() {
     searchTerm = "";
     selectedFilters = [];
+  }
+
+  // Handle map turn slider change
+  async function handleMapTurnChange(turn: number) {
+    if (!gameDetails || mapTilesLoading) return;
+
+    selectedMapTurn = turn;
+
+    // Fetch tiles at the specified turn
+    if (turn === gameDetails.total_turns) {
+      // For final turn, use the regular endpoint (current state)
+      mapTilesLoading = true;
+      try {
+        mapTiles = await api.getMapTiles(gameDetails.match_id);
+      } catch (err) {
+        console.error("Failed to fetch map tiles:", err);
+      } finally {
+        mapTilesLoading = false;
+      }
+    } else {
+      // For historical turns, use the historical endpoint
+      mapTilesLoading = true;
+      try {
+        mapTiles = await api.getMapTilesAtTurn(gameDetails.match_id, turn);
+      } catch (err) {
+        console.error("Failed to fetch map tiles at turn:", err);
+      } finally {
+        mapTilesLoading = false;
+      }
+    }
   }
 
   // Toggle event log sort column/direction
@@ -1372,7 +1406,13 @@
         >
           <h2 class="text-tan font-bold mb-4 mt-0">World Map</h2>
           {#if mapTiles}
-            <HexMap tiles={mapTiles} height="600px" />
+            <HexMap
+              tiles={mapTiles}
+              height="600px"
+              totalTurns={gameDetails?.total_turns ?? null}
+              selectedTurn={selectedMapTurn}
+              onTurnChange={handleMapTurnChange}
+            />
           {:else}
             <p class="text-brown italic">Loading map data...</p>
           {/if}

@@ -212,6 +212,8 @@ pub struct MapTile {
     pub specialist: Option<String>,
     pub tribe_site: Option<String>,
     pub religion: Option<String>,
+    /// Resolved from religion -> religions.founder_player_id -> players.nation
+    pub religion_founder_nation: Option<String>,
     pub river_w: bool,
     pub river_sw: bool,
     pub river_se: bool,
@@ -1513,15 +1515,25 @@ async fn get_map_tiles(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<MapTile>, String> {
     pool.with_connection(|conn| {
+        // Get religion from city_religions table (religion is per-city, not per-tile)
+        // If a city has multiple religions, pick the first alphabetically for consistency
         let mut stmt = conn.prepare(
             "SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
                     t.resource, t.improvement, t.improvement_pillaged, t.has_road,
-                    t.specialist, t.tribe_site, t.religion,
+                    t.specialist, t.tribe_site, cr.religion,
+                    rp.nation as religion_founder_nation,
                     t.river_w, t.river_sw, t.river_se,
                     p.nation, c.city_name
              FROM tiles t
              LEFT JOIN players p ON t.owner_player_id = p.player_id AND t.match_id = p.match_id
              LEFT JOIN cities c ON t.owner_city_id = c.city_id AND t.match_id = c.match_id
+             LEFT JOIN (
+                 SELECT city_id, match_id, MIN(religion) as religion
+                 FROM city_religions
+                 GROUP BY city_id, match_id
+             ) cr ON t.owner_city_id = cr.city_id AND t.match_id = cr.match_id
+             LEFT JOIN religions r ON cr.religion = r.religion_name AND cr.match_id = r.match_id
+             LEFT JOIN players rp ON r.founder_player_id = rp.player_id AND r.match_id = rp.match_id
              WHERE t.match_id = ?
              ORDER BY t.y, t.x"
         )?;
@@ -1541,11 +1553,12 @@ async fn get_map_tiles(
                     specialist: row.get(9)?,
                     tribe_site: row.get(10)?,
                     religion: row.get(11)?,
-                    river_w: row.get::<_, Option<bool>>(12)?.unwrap_or(false),
-                    river_sw: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
-                    river_se: row.get::<_, Option<bool>>(14)?.unwrap_or(false),
-                    owner_nation: row.get(15)?,
-                    owner_city: row.get(16)?,
+                    religion_founder_nation: row.get(12)?,
+                    river_w: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
+                    river_sw: row.get::<_, Option<bool>>(14)?.unwrap_or(false),
+                    river_se: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
+                    owner_nation: row.get(16)?,
+                    owner_city: row.get(17)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -1553,6 +1566,94 @@ async fn get_map_tiles(
         Ok(tiles)
     })
     .context("Failed to get map tiles")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get map tiles at a specific turn for historical visualization
+///
+/// Returns tile data with ownership state reconstructed from tile_ownership_history.
+/// Improvements and roads are only shown if the tile was owned at the specified turn.
+#[tauri::command]
+async fn get_map_tiles_at_turn(
+    match_id: i64,
+    turn: i32,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<MapTile>, String> {
+    pool.with_connection(|conn| {
+        // Query that reconstructs tile state at a specific turn:
+        // - Ownership comes from tile_ownership_history (latest record at or before turn)
+        // - Improvements/roads only shown if tile was owned at that turn
+        // - Resources, terrain, rivers are always shown (exist from game start)
+        // Get religion from city_religions table (religion is per-city, not per-tile)
+        // If a city has multiple religions, pick the first alphabetically for consistency
+        let mut stmt = conn.prepare(
+            "WITH ownership_at_turn AS (
+                SELECT tile_id, owner_player_id
+                FROM (
+                    SELECT tile_id, owner_player_id,
+                           ROW_NUMBER() OVER (PARTITION BY tile_id ORDER BY turn DESC) as rn
+                    FROM tile_ownership_history
+                    WHERE match_id = ? AND turn <= ?
+                )
+                WHERE rn = 1
+            ),
+            city_religion AS (
+                SELECT city_id, match_id, MIN(religion) as religion
+                FROM city_religions
+                GROUP BY city_id, match_id
+            )
+            SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
+                   t.resource,
+                   -- Only show improvement if tile was owned at this turn
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.improvement ELSE NULL END,
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.improvement_pillaged ELSE false END,
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.has_road ELSE false END,
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.specialist ELSE NULL END,
+                   t.tribe_site,
+                   -- Only show religion if tile was owned at this turn
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN cr.religion ELSE NULL END,
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN rp.nation ELSE NULL END as religion_founder_nation,
+                   t.river_w, t.river_sw, t.river_se,
+                   p.nation, c.city_name
+            FROM tiles t
+            LEFT JOIN ownership_at_turn oh ON t.tile_id = oh.tile_id
+            LEFT JOIN players p ON oh.owner_player_id = p.player_id AND p.match_id = ?
+            LEFT JOIN cities c ON t.owner_city_id = c.city_id AND c.match_id = ? AND c.founded_turn <= ?
+            LEFT JOIN city_religion cr ON t.owner_city_id = cr.city_id AND cr.match_id = ?
+            LEFT JOIN religions r ON cr.religion = r.religion_name AND r.match_id = ?
+            LEFT JOIN players rp ON r.founder_player_id = rp.player_id AND rp.match_id = ?
+            WHERE t.match_id = ?
+            ORDER BY t.y, t.x"
+        )?;
+
+        let tiles = stmt
+            .query_map([match_id, turn as i64, match_id, match_id, turn as i64, match_id, match_id, match_id, match_id], |row| {
+                Ok(MapTile {
+                    x: row.get(0)?,
+                    y: row.get(1)?,
+                    terrain: row.get(2)?,
+                    height: row.get(3)?,
+                    vegetation: row.get(4)?,
+                    resource: row.get(5)?,
+                    improvement: row.get(6)?,
+                    improvement_pillaged: row.get::<_, Option<bool>>(7)?.unwrap_or(false),
+                    has_road: row.get::<_, Option<bool>>(8)?.unwrap_or(false),
+                    specialist: row.get(9)?,
+                    tribe_site: row.get(10)?,
+                    religion: row.get(11)?,
+                    religion_founder_nation: row.get(12)?,
+                    river_w: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
+                    river_sw: row.get::<_, Option<bool>>(14)?.unwrap_or(false),
+                    river_se: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
+                    owner_nation: row.get(16)?,
+                    owner_city: row.get(17)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(tiles)
+    })
+    .context("Failed to get map tiles at turn")
     .map_err(|e| e.to_string())
 }
 
@@ -1744,6 +1845,7 @@ pub fn run() {
             get_law_adoption_history,
             get_city_statistics,
             get_map_tiles,
+            get_map_tiles_at_turn,
             get_nation_dynasty_data,
             get_player_debug_data,
             get_match_debug_data,
