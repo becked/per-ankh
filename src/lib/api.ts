@@ -12,6 +12,7 @@ import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 import type { CityStatistics } from "$lib/types/CityStatistics";
+import type { MapTile } from "$lib/types/MapTile";
 import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 import type { SaveDateEntry } from "$lib/types/SaveDateEntry";
 import type { Collection } from "$lib/types/Collection";
@@ -74,6 +75,13 @@ export const api = {
    */
   getCityStatistics: (matchId: number) =>
     invoke<CityStatistics>("get_city_statistics", { matchId }),
+
+  /**
+   * Get all map tiles for a match.
+   * Returns tile data with terrain, resources, improvements, and ownership.
+   */
+  getMapTiles: (matchId: number) =>
+    invoke<MapTile[]>("get_map_tiles", { matchId }),
 
   /**
    * Get nation and dynasty data for debugging.

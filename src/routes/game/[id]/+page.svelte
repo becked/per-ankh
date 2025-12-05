@@ -9,7 +9,9 @@
   import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
   import type { CityStatistics } from "$lib/types/CityStatistics";
   import type { CityInfo } from "$lib/types/CityInfo";
+  import type { MapTile } from "$lib/types/MapTile";
   import type { EChartsOption } from "echarts";
+  import HexMap from "$lib/HexMap.svelte";
   import ChartContainer from "$lib/ChartContainer.svelte";
   import ChartSeriesFilter, { type SeriesInfo } from "$lib/ChartSeriesFilter.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
@@ -24,6 +26,7 @@
   let eventLogs = $state<EventLog[] | null>(null);
   let lawAdoptionHistory = $state<LawAdoptionHistory[] | null>(null);
   let cityStatistics = $state<CityStatistics | null>(null);
+  let mapTiles = $state<MapTile[] | null>(null);
   let loading = $state(true);
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
@@ -628,14 +631,16 @@
       api.getEventLogs(matchId),
       api.getLawAdoptionHistory(matchId),
       api.getCityStatistics(matchId),
+      api.getMapTiles(matchId),
     ])
-      .then(([details, history, yields, logs, lawHistory, cityStats]) => {
+      .then(([details, history, yields, logs, lawHistory, cityStats, tiles]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
         eventLogs = logs;
         lawAdoptionHistory = lawHistory;
         cityStatistics = cityStats;
+        mapTiles = tiles;
       })
       .catch((err) => {
         error = String(err);
@@ -942,6 +947,13 @@
             class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
             Cities
+          </Tabs.Trigger>
+
+          <Tabs.Trigger
+            value="map"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
+          >
+            Map
           </Tabs.Trigger>
 
           <Tabs.Trigger
@@ -1349,6 +1361,20 @@
                 </tbody>
               </table>
             </div>
+          {/if}
+        </Tabs.Content>
+
+        <!-- Tab Content: Map -->
+        <Tabs.Content
+          value="map"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
+        >
+          <h2 class="text-tan font-bold mb-4 mt-0">World Map</h2>
+          {#if mapTiles}
+            <HexMap tiles={mapTiles} height="600px" />
+          {:else}
+            <p class="text-brown italic">Loading map data...</p>
           {/if}
         </Tabs.Content>
 

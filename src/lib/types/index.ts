@@ -12,3 +12,4 @@ export type { YieldDataPoint } from "./YieldDataPoint";
 export type { NationStats } from "./NationStats";
 export type { SaveDateEntry } from "./SaveDateEntry";
 export type { ImportResult } from "./ImportResult";
+export type { MapTile } from "./MapTile";
