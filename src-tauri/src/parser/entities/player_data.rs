@@ -10,7 +10,6 @@
 // - GoalList → player_goals
 
 use crate::parser::id_mapper::IdMapper;
-use crate::parser::xml_loader::XmlNodeExt;
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
 use roxmltree::Node;
@@ -451,7 +450,6 @@ pub fn parse_player_goals(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use crate::parser::xml_loader::parse_xml;
 
     #[test]

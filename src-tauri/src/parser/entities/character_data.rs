@@ -34,7 +34,6 @@
 
 use crate::parser::id_mapper::IdMapper;
 use crate::parser::utils::{deduplicate_rows_first_wins, deduplicate_rows_last_wins};
-use crate::parser::xml_loader::XmlNodeExt;
 use crate::parser::{ParseError, Result};
 use duckdb::{params, Connection};
 use roxmltree::Node;
@@ -424,7 +423,6 @@ pub fn parse_character_extended_data(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use roxmltree::Document;
 
     #[test]

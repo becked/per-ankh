@@ -425,7 +425,6 @@ pub fn parse_city_extended_data(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use roxmltree::Document;
 
     #[test]

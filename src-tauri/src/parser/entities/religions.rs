@@ -1,8 +1,8 @@
 // Religion entity parser
 
 use crate::parser::id_mapper::IdMapper;
-use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
-use crate::parser::{ParseError, Result};
+use crate::parser::xml_loader::XmlDocument;
+use crate::parser::Result;
 use duckdb::{params, Connection};
 use std::collections::HashMap;
 

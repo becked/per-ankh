@@ -11,7 +11,6 @@
 use super::{ParseError, Result};
 use std::fs::File;
 use std::io::Read;
-use std::path::Path;
 use zip::ZipArchive;
 
 const MAX_COMPRESSED_SIZE: u64 = 50 * 1024 * 1024; // 50 MB

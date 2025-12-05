@@ -9,7 +9,7 @@ pub mod parser;
 
 use anyhow::Context;
 use db::collections::Collection;
-use parser::{ImportResult, ParseError};
+use parser::ImportResult;
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Instant;
@@ -673,7 +673,7 @@ async fn get_yield_history(
 #[tauri::command]
 async fn import_directory_cmd(
     app: tauri::AppHandle,
-    pool: tauri::State<'_, db::connection::DbPool>,
+    _pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<String, String> {
     use tauri_plugin_dialog::DialogExt;
 
@@ -729,7 +729,7 @@ async fn import_directory_cmd(
 #[tauri::command]
 async fn import_files_cmd(
     app: tauri::AppHandle,
-    pool: tauri::State<'_, db::connection::DbPool>,
+    _pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<String, String> {
     use tauri_plugin_dialog::DialogExt;
 

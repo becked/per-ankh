@@ -82,7 +82,7 @@ fn emit_phase_progress(
     }
 }
 
-/// In-process lock manager for same-process concurrency
+// In-process lock manager for same-process concurrency
 lazy_static! {
     static ref IMPORT_LOCKS: Arc<Mutex<HashMap<String, Arc<Mutex<()>>>>> =
         Arc::new(Mutex::new(HashMap::new()));

@@ -632,7 +632,6 @@ fn parse_legacy_memory_data(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use roxmltree::Document;
 
     #[test]
