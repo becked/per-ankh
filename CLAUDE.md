@@ -149,6 +149,7 @@ if (!confirmed) return; // TypeScript enforces await
 - Use Prettier for code formatting
 - Follow consistent naming conventions (camelCase for functions/variables, PascalCase for components)
 - Prefer `const` over `let` when variables don't need reassignment
+- **When displaying XML/backend enum values in UI**: Always use `formatEnum()` from `$lib/utils/formatting` (see "Frontend: Enum Formatting" section below)
 
 ### Svelte 5 Standards
 
