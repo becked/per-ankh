@@ -1,5 +1,31 @@
 # Changelog
 
+## [0.1.8] - 2025-12-05
+
+### Added
+- Map tab with interactive hex visualization
+  - Five color modes: Political, Terrain, Elevation, Vegetation, Resources
+  - Historical playback with turn-by-turn replay and fast-forward controls
+  - Religion map mode showing religious spread over time
+  - Map markers for cities and improvements
+  - Pan and zoom controls
+  - Fullscreen mode with animated dialog
+  - Rich tooltips showing tile details
+- Improvements tab showing all tile improvements with sortable columns
+- Unit data ingestion (units, promotions, effects, family associations)
+- Expanded city data coverage with additional fields and tables
+- Sortable columns in Cities and Event Logs tables
+- Overview statistics now filter by selected collection
+
+### Changed
+- Enum display formatting now strips trailing numbers for cleaner output
+
+### Fixed
+- Page state now resets properly when navigating between games
+- Cities tab culture level and units produced display correctly
+- Database reset no longer fails with "sequence already exists" error
+- Road data parsing corrected
+
 ## [0.1.7] - 2025-12-01
 
 ### Added
@@ -123,7 +149,8 @@
 - Real-time import progress events
 - GitHub Actions release workflow
 
-[Unreleased]: https://github.com/becked/per-ankh/compare/v0.1.7...HEAD
+[Unreleased]: https://github.com/becked/per-ankh/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/becked/per-ankh/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/becked/per-ankh/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/becked/per-ankh/compare/v0.1.5...v0.1.6
 [0.1.5]: https://github.com/becked/per-ankh/compare/v0.1.4...v0.1.5
