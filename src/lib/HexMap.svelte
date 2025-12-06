@@ -33,9 +33,10 @@
   let deckCanvas: HTMLCanvasElement;
 
   // Marker visibility toggles
+  let showCityTints = $state(true);
   let showCities = $state(true);
-  let showUrbanImprovements = $state(true);
-  let showRuralImprovements = $state(true);
+  let showUrbanImprovements = $state(false);
+  let showRuralImprovements = $state(false);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let deck: Deck<any> | null = null;
   let tooltipContent = $state<string | null>(null);
@@ -125,15 +126,95 @@
   }
 
   /**
+   * Generate a consistent hash value (0-1) from a string.
+   * Used to assign consistent tints to cities.
+   */
+  function hashString(str: string): number {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const char = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash; // Convert to 32bit integer
+    }
+    // Normalize to 0-1 range
+    return Math.abs(hash % 1000) / 1000;
+  }
+
+  /**
+   * Vary a hex color's lightness and saturation based on a value (0-1).
+   * Creates distinct tints/shades for different cities within a nation.
+   */
+  function varyCityColor(hexColor: string, cityHash: number): string {
+    const val = parseInt(hexColor.slice(1), 16);
+    let r = (val >> 16) & 255;
+    let g = (val >> 8) & 255;
+    let b = val & 255;
+
+    // Convert to HSL
+    r /= 255; g /= 255; b /= 255;
+    const max = Math.max(r, g, b);
+    const min = Math.min(r, g, b);
+    let h = 0, s = 0;
+    const l = (max + min) / 2;
+
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+        case g: h = ((b - r) / d + 2) / 6; break;
+        case b: h = ((r - g) / d + 4) / 6; break;
+      }
+    }
+
+    // Vary lightness: range from -0.15 to +0.15 based on city hash
+    const lightnessShift = (cityHash - 0.5) * 0.3;
+    const newL = Math.max(0.2, Math.min(0.8, l + lightnessShift));
+
+    // Vary saturation slightly: range from -0.1 to +0.1
+    const saturationShift = ((cityHash * 7) % 1 - 0.5) * 0.2;
+    const newS = Math.max(0.2, Math.min(1, s + saturationShift));
+
+    // Convert back to RGB
+    const hue2rgb = (p: number, q: number, t: number) => {
+      if (t < 0) t += 1;
+      if (t > 1) t -= 1;
+      if (t < 1/6) return p + (q - p) * 6 * t;
+      if (t < 1/2) return q;
+      if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+      return p;
+    };
+
+    let r2, g2, b2;
+    if (newS === 0) {
+      r2 = g2 = b2 = newL;
+    } else {
+      const q = newL < 0.5 ? newL * (1 + newS) : newL + newS - newL * newS;
+      const p = 2 * newL - q;
+      r2 = hue2rgb(p, q, h + 1/3);
+      g2 = hue2rgb(p, q, h);
+      b2 = hue2rgb(p, q, h - 1/3);
+    }
+
+    const toHex = (c: number) => Math.round(c * 255).toString(16).padStart(2, "0");
+    return `#${toHex(r2)}${toHex(g2)}${toHex(b2)}`;
+  }
+
+  /**
    * Get tile color based on current color mode.
    * For religion mode, returns the first religion's color (stripes handled separately).
    */
-  function getTileColor(tile: MapTile, mode: ColorMode): string {
+  function getTileColor(tile: MapTile, mode: ColorMode, applyCityTints: boolean = false): string {
     switch (mode) {
       case "political":
         if (tile.owner_nation) {
-          const nationColor = getCivilizationColor(tile.owner_nation.replace("NATION_", ""));
+          let nationColor = getCivilizationColor(tile.owner_nation.replace("NATION_", ""));
           if (nationColor) {
+            // Apply city tints if enabled and tile belongs to a city
+            if (applyCityTints && tile.owner_city) {
+              const cityHash = hashString(tile.owner_city);
+              nationColor = varyCityColor(nationColor, cityHash);
+            }
             const terrainColor = getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
             return blendColors(nationColor, terrainColor, 0.65);
           }
@@ -145,8 +226,13 @@
         if (tile.religions && tile.religions.length > 0) {
           const firstReligion = tile.religions[0];
           if (firstReligion.founder_nation) {
-            const nationColor = getCivilizationColor(firstReligion.founder_nation.replace("NATION_", ""));
+            let nationColor = getCivilizationColor(firstReligion.founder_nation.replace("NATION_", ""));
             if (nationColor) {
+              // Apply city tints if enabled and tile belongs to a city
+              if (applyCityTints && tile.owner_city) {
+                const cityHash = hashString(tile.owner_city);
+                nationColor = varyCityColor(nationColor, cityHash);
+              }
               const terrainColor = getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
               return blendColors(nationColor, terrainColor, 0.65);
             }
@@ -366,14 +452,14 @@
     tile: MapTile;
   }
 
-  function prepareTileData(mode: ColorMode): TileData[] {
+  function prepareTileData(mode: ColorMode, applyCityTints: boolean = false): TileData[] {
     return tiles.map((tile) => {
       const [px, py] = hexToPixel(tile.x, tile.y);
 
       return {
         tile,
         polygon: hexVertices(px, py, HEX_SIZE),
-        color: hexToRgb(getTileColor(tile, mode)),
+        color: hexToRgb(getTileColor(tile, mode, applyCityTints)),
       };
     });
   }
@@ -452,8 +538,8 @@
     return { target: [centerX, centerY, 0] as [number, number, number], zoom };
   }
 
-  function createLayers(mode: ColorMode) {
-    const tileData = prepareTileData(mode);
+  function createLayers(mode: ColorMode, applyCityTints: boolean = false) {
+    const tileData = prepareTileData(mode, applyCityTints);
 
     // Marker sizes (in pixels, will scale with zoom)
     const IMPROVEMENT_DOT_RADIUS = 2;
@@ -582,7 +668,7 @@
       },
       controller: false,
       getCursor: () => panMode ? (isDragging ? "grabbing" : "grab") : "default",
-      layers: createLayers(colorMode),
+      layers: createLayers(colorMode, showCityTints),
       onHover: ({ object, x, y }: { object?: TileData; x: number; y: number }) => {
         if (object) {
           tooltipContent = buildTooltipContent(object.tile, colorMode);
@@ -628,7 +714,7 @@
       },
       controller: false,
       getCursor: () => fullscreenPanMode ? (isDragging ? "grabbing" : "grab") : "default",
-      layers: createLayers(colorMode),
+      layers: createLayers(colorMode, showCityTints),
       onHover: ({ object, x, y }: { object?: TileData; x: number; y: number }) => {
         if (object) {
           fullscreenTooltipContent = buildTooltipContent(object.tile, colorMode);
@@ -651,7 +737,7 @@
         fullscreenDeck.setProps({
           width: fullscreenCanvas.clientWidth,
           height: fullscreenCanvas.clientHeight,
-          layers: createLayers(colorMode),
+          layers: createLayers(colorMode, showCityTints),
         });
       }
     });
@@ -921,6 +1007,7 @@
     const _cities = showCities;
     const _urbanImprovements = showUrbanImprovements;
     const _ruralImprovements = showRuralImprovements;
+    const _cityTints = showCityTints;
 
     // If tile count changed significantly, reinitialize deck with new view bounds
     if (tileCount > 0 && Math.abs(tileCount - prevTileCount) > 100) {
@@ -941,12 +1028,12 @@
 
     if (deck && currentTiles.length > 0) {
       deck.setProps({
-        layers: createLayers(mode),
+        layers: createLayers(mode, _cityTints),
       });
     }
     if (fullscreenDeck && currentTiles.length > 0) {
       fullscreenDeck.setProps({
-        layers: createLayers(mode),
+        layers: createLayers(mode, _cityTints),
       });
     }
   });
@@ -970,8 +1057,12 @@
     <!-- Marker toggles -->
     <div class="flex items-center gap-3 text-sm">
       <label class="marker-toggle">
+        <input type="checkbox" bind:checked={showCityTints} />
+        <span class="marker-label">City Territory</span>
+      </label>
+      <label class="marker-toggle">
         <input type="checkbox" bind:checked={showCities} />
-        <span class="marker-label">Cities</span>
+        <span class="marker-label">City Sites</span>
       </label>
       <label class="marker-toggle">
         <input type="checkbox" bind:checked={showUrbanImprovements} />
@@ -1046,8 +1137,20 @@
 
   <!-- Map container -->
   <div class="relative border-2 border-tan rounded-lg overflow-hidden" style="background-color: #1a1a1a">
-    <!-- Map controls (top right) -->
-    <div class="absolute top-3 right-3 z-10 flex items-start gap-2">
+    <!-- Map controls (top right, vertical stack) -->
+    <div class="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">
+      <!-- Expand button -->
+      <button
+        onclick={openFullscreen}
+        class="control-btn"
+        aria-label="Expand map to fullscreen"
+        title="Expand to fullscreen"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+      </button>
+
       <!-- Pan mode toggle (hand icon) -->
       <button
         onclick={() => togglePanMode(false)}
@@ -1090,18 +1193,6 @@
           </svg>
         </button>
       </div>
-
-      <!-- Expand button -->
-      <button
-        onclick={openFullscreen}
-        class="control-btn"
-        aria-label="Expand map to fullscreen"
-        title="Expand to fullscreen"
-      >
-        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
-          <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
-        </svg>
-      </button>
     </div>
 
     <div
@@ -1138,25 +1229,6 @@
   class="fullscreen-dialog {isClosing ? 'closing' : ''}"
 >
   <div class="dialog-content">
-    <!-- Close button -->
-    <button
-      onclick={closeFullscreen}
-      class="absolute top-0 right-0 z-10 p-2 rounded bg-black/30 hover:bg-black/50 transition-colors cursor-pointer focus:outline-none"
-      aria-label="Close fullscreen"
-      title="Close fullscreen (Esc)"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-5 w-5 text-white"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        stroke-width="2"
-      >
-        <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
-      </svg>
-    </button>
-
     <!-- Controls in fullscreen -->
     <div class="mb-4 flex-shrink-0 bg-black/90 rounded-lg px-4 py-3">
       <div class="flex flex-wrap items-center gap-4">
@@ -1175,8 +1247,12 @@
         <!-- Marker toggles -->
         <div class="flex items-center gap-3 text-sm">
           <label class="marker-toggle">
+            <input type="checkbox" bind:checked={showCityTints} />
+            <span class="marker-label">City Territory</span>
+          </label>
+          <label class="marker-toggle">
             <input type="checkbox" bind:checked={showCities} />
-            <span class="marker-label">Cities</span>
+            <span class="marker-label">City Sites</span>
           </label>
           <label class="marker-toggle">
             <input type="checkbox" bind:checked={showUrbanImprovements} />
@@ -1252,8 +1328,20 @@
 
     <!-- Fullscreen map -->
     <div class="flex-1 min-h-0 rounded-lg overflow-hidden relative" style="background-color: #1a1a1a">
-      <!-- Map controls -->
-      <div class="absolute top-3 right-3 z-10 flex items-start gap-2">
+      <!-- Map controls (vertical stack) -->
+      <div class="absolute top-3 right-3 z-10 flex flex-col items-center gap-2">
+        <!-- Collapse button -->
+        <button
+          onclick={closeFullscreen}
+          class="control-btn"
+          aria-label="Exit fullscreen"
+          title="Exit fullscreen"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 9V4.5M9 9H4.5M9 9L3.75 3.75M9 15v4.5M9 15H4.5M9 15l-5.25 5.25M15 9h4.5M15 9V4.5M15 9l5.25-5.25M15 15h4.5M15 15v4.5m0-4.5l5.25 5.25" />
+          </svg>
+        </button>
+
         <!-- Pan mode toggle (hand icon) -->
         <button
           onclick={() => togglePanMode(true)}
