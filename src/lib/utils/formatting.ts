@@ -8,6 +8,7 @@
  * @example
  * formatEnum("NATION_ASSYRIA", "NATION_") // returns "Assyria"
  * formatEnum("NATION_OLD_WORLD", "NATION_") // returns "Old World"
+ * formatEnum("IMPROVEMENT_GARRISON_1", "IMPROVEMENT_") // returns "Garrison"
  * formatEnum(null, "NATION_") // returns "Unknown"
  */
 export function formatEnum(value: string | null | undefined, prefix: string): string {
@@ -17,11 +18,14 @@ export function formatEnum(value: string | null | undefined, prefix: string): st
   const withoutPrefix = value.replace(prefix, "");
 
   // Convert to lowercase, replace underscores with spaces, and title-case each word
-  return withoutPrefix
+  const formatted = withoutPrefix
     .toLowerCase()
     .split("_")
     .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
     .join(" ");
+
+  // Remove trailing numbers (e.g., "Garrison 1" -> "Garrison", "Poet 2" -> "Poet")
+  return formatted.replace(/\s+\d+$/, "");
 }
 
 /**
