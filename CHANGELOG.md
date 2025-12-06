@@ -150,6 +150,7 @@
 - GitHub Actions release workflow
 
 [Unreleased]: https://github.com/becked/per-ankh/compare/v0.1.8...HEAD
+[0.1.8]: https://github.com/becked/per-ankh/compare/v0.1.8...v0.1.8
 [0.1.8]: https://github.com/becked/per-ankh/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/becked/per-ankh/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/becked/per-ankh/compare/v0.1.5...v0.1.6
