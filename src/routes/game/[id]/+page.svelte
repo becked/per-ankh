@@ -9,6 +9,8 @@
   import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
   import type { CityStatistics } from "$lib/types/CityStatistics";
   import type { CityInfo } from "$lib/types/CityInfo";
+  import type { ImprovementData } from "$lib/types/ImprovementData";
+  import type { ImprovementInfo } from "$lib/types/ImprovementInfo";
   import type { MapTile } from "$lib/types/MapTile";
   import type { EChartsOption } from "echarts";
   import HexMap from "$lib/HexMap.svelte";
@@ -26,6 +28,7 @@
   let eventLogs = $state<EventLog[] | null>(null);
   let lawAdoptionHistory = $state<LawAdoptionHistory[] | null>(null);
   let cityStatistics = $state<CityStatistics | null>(null);
+  let improvementData = $state<ImprovementData | null>(null);
   let mapTiles = $state<MapTile[] | null>(null);
   let selectedMapTurn = $state<number | null>(null);
   let mapTilesLoading = $state(false);
@@ -57,6 +60,11 @@
   let citySearchTerm = $state("");
   let citySortColumn = $state<string>("owner_nation");
   let citySortDirection = $state<"asc" | "desc">("asc");
+
+  // Improvements table state
+  let improvementSearchTerm = $state("");
+  let improvementSortColumn = $state<string>("nation");
+  let improvementSortDirection = $state<"asc" | "desc">("asc");
 
   // City column definitions
   // format function receives the value AND the city object for context (e.g., capital star)
@@ -259,6 +267,98 @@
       return column.format(value, city);
     }
     return value?.toString() ?? "—";
+  }
+
+  // Improvements column definitions
+  type ImprovementColumn = {
+    key: keyof ImprovementInfo;
+    label: string;
+    format?: (value: string | null) => string;
+  };
+
+  const IMPROVEMENT_COLUMNS: ImprovementColumn[] = [
+    {
+      key: "nation",
+      label: "Nation",
+      format: (v) => formatEnum(v, "NATION_"),
+    },
+    {
+      key: "city_name",
+      label: "City",
+      format: (v) => formatEnum(v, "CITYNAME_"),
+    },
+    {
+      key: "improvement",
+      label: "Improvement",
+      format: (v) => formatEnum(v, "IMPROVEMENT_"),
+    },
+    {
+      key: "specialist",
+      label: "Specialist",
+      format: (v) => v ? formatEnum(v, "SPECIALIST_") : "—",
+    },
+    {
+      key: "resource",
+      label: "Resource",
+      format: (v) => v ? formatEnum(v, "RESOURCE_") : "—",
+    },
+  ];
+
+  // Filtered and sorted improvements
+  const filteredSortedImprovements = $derived(() => {
+    if (!improvementData) return [];
+
+    // Filter by search term
+    let improvements = improvementData.improvements;
+    if (improvementSearchTerm) {
+      const term = improvementSearchTerm.toLowerCase();
+      improvements = improvements.filter((imp) =>
+        imp.nation?.toLowerCase().includes(term) ||
+        imp.city_name?.toLowerCase().includes(term) ||
+        imp.improvement.toLowerCase().includes(term) ||
+        imp.specialist?.toLowerCase().includes(term) ||
+        imp.resource?.toLowerCase().includes(term)
+      );
+    }
+
+    // Sort
+    const column = IMPROVEMENT_COLUMNS.find((col) => col.key === improvementSortColumn);
+    if (column) {
+      improvements = [...improvements].sort((a, b) => {
+        const aVal = a[column.key];
+        const bVal = b[column.key];
+
+        // Handle nulls - sort them to the end
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+
+        // Compare values
+        const cmp = aVal.localeCompare(bVal);
+        return improvementSortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return improvements;
+  });
+
+  // Toggle improvement sort column/direction
+  function toggleImprovementSort(columnKey: string) {
+    if (improvementSortColumn === columnKey) {
+      improvementSortDirection = improvementSortDirection === "asc" ? "desc" : "asc";
+    } else {
+      improvementSortColumn = columnKey;
+      improvementSortDirection = "asc";
+    }
+  }
+
+  // Format improvement cell value
+  function formatImprovementCell(column: ImprovementColumn, imp: ImprovementInfo): string {
+    const value = imp[column.key];
+    if (column.format) {
+      return column.format(value);
+    }
+    return value ?? "—";
   }
 
   // Derive series info from player history for the filter component
@@ -622,6 +722,8 @@
     eventLogSortDirection = "desc";
     citySortColumn = "owner_nation";
     citySortDirection = "asc";
+    improvementSortColumn = "nation";
+    improvementSortDirection = "asc";
     cityVisibleColumns = Object.fromEntries(
       CITY_COLUMNS.map((col) => [col.key, col.defaultVisible])
     );
@@ -633,15 +735,17 @@
       api.getEventLogs(matchId),
       api.getLawAdoptionHistory(matchId),
       api.getCityStatistics(matchId),
+      api.getImprovementData(matchId),
       api.getMapTiles(matchId),
     ])
-      .then(([details, history, yields, logs, lawHistory, cityStats, tiles]) => {
+      .then(([details, history, yields, logs, lawHistory, cityStats, impData, tiles]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
         eventLogs = logs;
         lawAdoptionHistory = lawHistory;
         cityStatistics = cityStats;
+        improvementData = impData;
         mapTiles = tiles;
         // Initialize map turn to final turn
         selectedMapTurn = details.total_turns;
@@ -981,6 +1085,13 @@
             class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
             Cities
+          </Tabs.Trigger>
+
+          <Tabs.Trigger
+            value="improvements"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
+          >
+            Improvements
           </Tabs.Trigger>
 
           <Tabs.Trigger
@@ -1389,6 +1500,79 @@
                     <tr>
                       <td colspan={visibleCityColumns.length} class="p-8 text-center text-brown italic">
                         No cities match search
+                      </td>
+                    </tr>
+                  {/each}
+                </tbody>
+              </table>
+            </div>
+          {/if}
+        </Tabs.Content>
+
+        <!-- Tab Content: Improvements -->
+        <Tabs.Content
+          value="improvements"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
+        >
+          <h2 class="text-tan font-bold mb-4 mt-0">Improvements</h2>
+
+          {#if improvementData === null}
+            <p class="text-brown italic text-center p-8">Loading improvement data...</p>
+          {:else if improvementData.improvements.length === 0}
+            <p class="text-brown italic text-center p-8">No improvements found</p>
+          {:else}
+            <!-- Controls row -->
+            <div class="flex flex-wrap gap-3 mb-4 items-end">
+              <!-- Search -->
+              <SearchInput
+                bind:value={improvementSearchTerm}
+                placeholder="Search"
+                variant="field"
+                class="w-64"
+              />
+
+              <!-- Results count -->
+              <span class="text-brown text-sm ml-auto">
+                {filteredSortedImprovements().length} / {improvementData.improvements.length} improvements
+              </span>
+            </div>
+
+            <!-- Improvements data table -->
+            <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
+              <table class="w-full">
+                <thead>
+                  <tr>
+                    {#each IMPROVEMENT_COLUMNS as column}
+                      <th
+                        class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleImprovementSort(column.key)}
+                      >
+                        <span class="inline-flex items-center gap-1">
+                          {column.label}
+                          {#if improvementSortColumn === column.key}
+                            <span class="text-orange">
+                              {improvementSortDirection === "asc" ? "↑" : "↓"}
+                            </span>
+                          {/if}
+                        </span>
+                      </th>
+                    {/each}
+                  </tr>
+                </thead>
+                <tbody>
+                  {#each filteredSortedImprovements() as imp}
+                    <tr class="transition-colors duration-200 hover:bg-brown/20">
+                      {#each IMPROVEMENT_COLUMNS as column}
+                        <td class="p-3 text-left border-b border-brown/50 text-tan {column.key === 'improvement' ? 'font-bold' : ''} whitespace-nowrap">
+                          {formatImprovementCell(column, imp)}
+                        </td>
+                      {/each}
+                    </tr>
+                  {:else}
+                    <tr>
+                      <td colspan={IMPROVEMENT_COLUMNS.length} class="p-8 text-center text-brown italic">
+                        No improvements match search
                       </td>
                     </tr>
                   {/each}
