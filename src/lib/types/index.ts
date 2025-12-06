@@ -13,3 +13,4 @@ export type { NationStats } from "./NationStats";
 export type { SaveDateEntry } from "./SaveDateEntry";
 export type { ImportResult } from "./ImportResult";
 export type { MapTile } from "./MapTile";
+export type { ReligionInfo } from "./ReligionInfo";
