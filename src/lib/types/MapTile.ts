@@ -16,4 +16,12 @@ owner_nation: string | null,
 /**
  * Resolved from owner_city_id -> cities.city_name
  */
-owner_city: string | null, };
+owner_city: string | null, 
+/**
+ * True if this tile is a city center
+ */
+is_city_center: boolean, 
+/**
+ * True if this tile is a capital city center
+ */
+is_capital: boolean, };

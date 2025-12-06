@@ -228,6 +228,10 @@ pub struct MapTile {
     pub owner_nation: Option<String>,
     /// Resolved from owner_city_id -> cities.city_name
     pub owner_city: Option<String>,
+    /// True if this tile is a city center
+    pub is_city_center: bool,
+    /// True if this tile is a capital city center
+    pub is_capital: bool,
     /// City ID for religion lookup (internal use)
     #[serde(skip)]
     #[ts(skip)]
@@ -1635,15 +1639,19 @@ async fn get_map_tiles(
         }
 
         // Step 2: Query base tile data (without religion, but with owner_city_id)
+        // Also join with cities on tile_id to detect city center tiles
         let mut stmt = conn.prepare(
             "SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
                     t.resource, t.improvement, t.improvement_pillaged, t.has_road,
                     t.specialist, t.tribe_site,
                     t.river_w, t.river_sw, t.river_se,
-                    p.nation, c.city_name, t.owner_city_id
+                    p.nation, c.city_name, t.owner_city_id,
+                    city_center.city_id IS NOT NULL as is_city_center,
+                    COALESCE(city_center.is_capital, false) as is_capital
              FROM tiles t
              LEFT JOIN players p ON t.owner_player_id = p.player_id AND t.match_id = p.match_id
              LEFT JOIN cities c ON t.owner_city_id = c.city_id AND t.match_id = c.match_id
+             LEFT JOIN cities city_center ON t.tile_id = city_center.tile_id AND t.match_id = city_center.match_id
              WHERE t.match_id = ?
              ORDER BY t.y, t.x"
         )?;
@@ -1669,6 +1677,8 @@ async fn get_map_tiles(
                     river_se: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
                     owner_nation: row.get(14)?,
                     owner_city: row.get(15)?,
+                    is_city_center: row.get::<_, Option<bool>>(17)?.unwrap_or(false),
+                    is_capital: row.get::<_, Option<bool>>(18)?.unwrap_or(false),
                     owner_city_id,
                 })
             })?
@@ -1760,6 +1770,7 @@ async fn get_map_tiles_at_turn(
         // - Ownership comes from tile_ownership_history (latest record at or before turn)
         // - Improvements/roads only shown if tile was owned at that turn
         // - Resources, terrain, rivers are always shown (exist from game start)
+        // - City center/capital status only shown if city existed at this turn
         let mut stmt = conn.prepare(
             "WITH ownership_at_turn AS (
                 SELECT tile_id, owner_player_id
@@ -1782,17 +1793,20 @@ async fn get_map_tiles_at_turn(
                    t.river_w, t.river_sw, t.river_se,
                    p.nation, c.city_name,
                    -- Return city_id only if tile was owned at this turn (for religion lookup)
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.owner_city_id ELSE NULL END as owner_city_id
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.owner_city_id ELSE NULL END as owner_city_id,
+                   city_center.city_id IS NOT NULL as is_city_center,
+                   COALESCE(city_center.is_capital, false) as is_capital
             FROM tiles t
             LEFT JOIN ownership_at_turn oh ON t.tile_id = oh.tile_id
             LEFT JOIN players p ON oh.owner_player_id = p.player_id AND p.match_id = ?
             LEFT JOIN cities c ON t.owner_city_id = c.city_id AND c.match_id = ? AND c.founded_turn <= ?
+            LEFT JOIN cities city_center ON t.tile_id = city_center.tile_id AND city_center.match_id = ? AND city_center.founded_turn <= ?
             WHERE t.match_id = ?
             ORDER BY t.y, t.x"
         )?;
 
         let tiles = stmt
-            .query_map([match_id, turn as i64, match_id, match_id, turn as i64, match_id], |row| {
+            .query_map([match_id, turn as i64, match_id, match_id, turn as i64, match_id, turn as i64, match_id], |row| {
                 let owner_city_id: Option<i64> = row.get(16)?;
                 Ok(MapTile {
                     x: row.get(0)?,
@@ -1812,6 +1826,8 @@ async fn get_map_tiles_at_turn(
                     river_se: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
                     owner_nation: row.get(14)?,
                     owner_city: row.get(15)?,
+                    is_city_center: row.get::<_, Option<bool>>(17)?.unwrap_or(false),
+                    is_capital: row.get::<_, Option<bool>>(18)?.unwrap_or(false),
                     owner_city_id,
                 })
             })?
