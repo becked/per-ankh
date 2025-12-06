@@ -12,6 +12,7 @@ import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 import type { CityStatistics } from "$lib/types/CityStatistics";
+import type { ImprovementData } from "$lib/types/ImprovementData";
 import type { MapTile } from "$lib/types/MapTile";
 import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 import type { SaveDateEntry } from "$lib/types/SaveDateEntry";
@@ -75,6 +76,13 @@ export const api = {
    */
   getCityStatistics: (matchId: number) =>
     invoke<CityStatistics>("get_city_statistics", { matchId }),
+
+  /**
+   * Get improvement data for a match.
+   * Returns all improvements with nation, city, specialist, and resource info.
+   */
+  getImprovementData: (matchId: number) =>
+    invoke<ImprovementData>("get_improvement_data", { matchId }),
 
   /**
    * Get all map tiles for a match.

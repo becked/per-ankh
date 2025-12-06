@@ -1175,6 +1175,24 @@ pub struct CityStatistics {
     pub cities: Vec<CityInfo>,
 }
 
+/// Single improvement with its city and owner information
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct ImprovementInfo {
+    pub nation: Option<String>,
+    pub city_name: Option<String>,
+    pub improvement: String,
+    pub specialist: Option<String>,
+    pub resource: Option<String>,
+}
+
+/// Response for get_improvement_data command
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct ImprovementData {
+    pub improvements: Vec<ImprovementInfo>,
+}
+
 #[tauri::command]
 async fn get_story_events(
     match_id: i64,
@@ -1514,6 +1532,48 @@ async fn get_city_statistics(
         Ok(CityStatistics { cities })
     })
     .context("Failed to get city statistics")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get all improvements for a match
+///
+/// Returns improvement data with nation, city, specialist, and resource info
+#[tauri::command]
+async fn get_improvement_data(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<ImprovementData, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT
+                p.nation,
+                c.city_name,
+                t.improvement,
+                t.specialist,
+                t.resource
+             FROM tiles t
+             LEFT JOIN cities c ON t.owner_city_id = c.city_id AND t.match_id = c.match_id
+             LEFT JOIN players p ON c.player_id = p.player_id AND c.match_id = p.match_id
+             WHERE t.match_id = ?
+               AND t.improvement IS NOT NULL
+             ORDER BY p.nation, c.city_name, t.improvement"
+        )?;
+
+        let improvements = stmt
+            .query_map([match_id], |row| {
+                Ok(ImprovementInfo {
+                    nation: row.get(0)?,
+                    city_name: row.get(1)?,
+                    improvement: row.get(2)?,
+                    specialist: row.get(3)?,
+                    resource: row.get(4)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(ImprovementData { improvements })
+    })
+    .context("Failed to get improvement data")
     .map_err(|e| e.to_string())
 }
 
@@ -1963,6 +2023,7 @@ pub fn run() {
             get_event_logs,
             get_law_adoption_history,
             get_city_statistics,
+            get_improvement_data,
             get_map_tiles,
             get_map_tiles_at_turn,
             get_nation_dynasty_data,
