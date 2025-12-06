@@ -1,7 +1,7 @@
 <script lang="ts">
   import { onMount, tick } from "svelte";
   import { Deck, OrthographicView } from "@deck.gl/core";
-  import { PolygonLayer } from "@deck.gl/layers";
+  import { PolygonLayer, ScatterplotLayer, TextLayer } from "@deck.gl/layers";
   import type { MapTile } from "$lib/types/MapTile";
   import {
     getCivilizationColor,
@@ -31,6 +31,11 @@
 
   let colorMode = $state<ColorMode>("political");
   let deckCanvas: HTMLCanvasElement;
+
+  // Marker visibility toggles
+  let showCities = $state(true);
+  let showUrbanImprovements = $state(true);
+  let showRuralImprovements = $state(true);
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let deck: Deck<any> | null = null;
   let tooltipContent = $state<string | null>(null);
@@ -197,6 +202,9 @@
       if (tile.owner_city) {
         lines.push(`City: ${formatEnum(tile.owner_city, "CITYNAME_")}`);
       }
+      if (tile.is_city_center) {
+        lines.push(tile.is_capital ? `City Site (Capital)` : `City Site`);
+      }
       if (tile.terrain && tile.terrain !== "TERRAIN_URBAN") {
         lines.push(`Terrain: ${formatEnum(tile.terrain, "TERRAIN_")}`);
       }
@@ -352,6 +360,12 @@
     color: [number, number, number];
   }
 
+  // Marker data for improvements, cities, capitals
+  interface MarkerData {
+    position: [number, number];
+    tile: MapTile;
+  }
+
   function prepareTileData(mode: ColorMode): TileData[] {
     return tiles.map((tile) => {
       const [px, py] = hexToPixel(tile.x, tile.y);
@@ -362,6 +376,46 @@
         color: hexToRgb(getTileColor(tile, mode)),
       };
     });
+  }
+
+  // Prepare marker data for urban improvements (on TERRAIN_URBAN, but not city centers)
+  function prepareUrbanImprovementMarkers(): MarkerData[] {
+    return tiles
+      .filter((tile) => tile.improvement && !tile.is_city_center && tile.terrain === "TERRAIN_URBAN")
+      .map((tile) => ({
+        position: hexToPixel(tile.x, tile.y),
+        tile,
+      }));
+  }
+
+  // Prepare marker data for rural improvements (not on TERRAIN_URBAN, not city centers)
+  function prepareRuralImprovementMarkers(): MarkerData[] {
+    return tiles
+      .filter((tile) => tile.improvement && !tile.is_city_center && tile.terrain !== "TERRAIN_URBAN")
+      .map((tile) => ({
+        position: hexToPixel(tile.x, tile.y),
+        tile,
+      }));
+  }
+
+  // Prepare marker data for non-capital city centers (circles)
+  function prepareCityMarkers(): MarkerData[] {
+    return tiles
+      .filter((tile) => tile.is_city_center && !tile.is_capital)
+      .map((tile) => ({
+        position: hexToPixel(tile.x, tile.y),
+        tile,
+      }));
+  }
+
+  // Prepare marker data for capital cities (stars)
+  function prepareCapitalMarkers(): MarkerData[] {
+    return tiles
+      .filter((tile) => tile.is_capital)
+      .map((tile) => ({
+        position: hexToPixel(tile.x, tile.y),
+        tile,
+      }));
   }
 
   // Calculate initial view bounds
@@ -398,27 +452,101 @@
     return { target: [centerX, centerY, 0] as [number, number, number], zoom };
   }
 
-  function createLayer(mode: ColorMode) {
-    const data = prepareTileData(mode);
+  function createLayers(mode: ColorMode) {
+    const tileData = prepareTileData(mode);
 
-    // Use standard PolygonLayer for all modes
-    // For religion mode, tooltip shows all religions even though map shows primary
-    return new PolygonLayer<TileData>({
-      id: "hex-layer",
-      data,
-      getPolygon: (d) => d.polygon,
-      getFillColor: (d) => d.color,
-      getLineColor: [40, 40, 40],
-      getLineWidth: 1,
-      lineWidthMinPixels: 0.5,
-      pickable: true,
-      stroked: true,
-      filled: true,
-      extruded: false,
-      transitions: {
-        getFillColor: 200,
-      },
-    });
+    // Marker sizes (in pixels, will scale with zoom)
+    const IMPROVEMENT_DOT_RADIUS = 2;
+    const CITY_CIRCLE_RADIUS = 2.5;
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const layers: any[] = [
+      // Base hex layer
+      new PolygonLayer<TileData>({
+        id: "hex-layer",
+        data: tileData,
+        getPolygon: (d) => d.polygon,
+        getFillColor: (d) => d.color,
+        getLineColor: [40, 40, 40],
+        getLineWidth: 1,
+        lineWidthMinPixels: 0.5,
+        pickable: true,
+        stroked: true,
+        filled: true,
+        extruded: false,
+        transitions: {
+          getFillColor: 200,
+        },
+      }),
+    ];
+
+    // Conditionally add marker layers based on toggles
+    if (showUrbanImprovements) {
+      layers.push(
+        new ScatterplotLayer<MarkerData>({
+          id: "urban-improvement-markers",
+          data: prepareUrbanImprovementMarkers(),
+          getPosition: (d) => d.position,
+          getRadius: IMPROVEMENT_DOT_RADIUS,
+          getFillColor: [26, 26, 26],
+          radiusUnits: "pixels",
+          pickable: false,
+        })
+      );
+    }
+
+    if (showRuralImprovements) {
+      layers.push(
+        new ScatterplotLayer<MarkerData>({
+          id: "rural-improvement-markers",
+          data: prepareRuralImprovementMarkers(),
+          getPosition: (d) => d.position,
+          getRadius: IMPROVEMENT_DOT_RADIUS,
+          getFillColor: [26, 26, 26],
+          radiusUnits: "pixels",
+          pickable: false,
+        })
+      );
+    }
+
+    if (showCities) {
+      // Non-capital city centers (circles)
+      layers.push(
+        new ScatterplotLayer<MarkerData>({
+          id: "city-markers",
+          data: prepareCityMarkers(),
+          getPosition: (d) => d.position,
+          getRadius: CITY_CIRCLE_RADIUS,
+          getFillColor: [0, 0, 0, 0], // Transparent fill
+          getLineColor: [26, 26, 26],
+          getLineWidth: 1.5,
+          lineWidthUnits: "pixels",
+          stroked: true,
+          filled: false,
+          radiusUnits: "pixels",
+          pickable: false,
+        })
+      );
+
+      // Capital cities (stars)
+      layers.push(
+        new TextLayer<MarkerData>({
+          id: "capital-markers",
+          data: prepareCapitalMarkers(),
+          getPosition: (d) => d.position,
+          getText: () => "★",
+          getSize: 16,
+          getColor: [26, 26, 26],
+          getTextAnchor: "middle",
+          getAlignmentBaseline: "center",
+          characterSet: ["★"],
+          sizeUnits: "pixels",
+          pickable: false,
+        })
+      );
+    }
+
+    return layers;
   }
 
   function initDeck() {
@@ -439,6 +567,7 @@
     deckCanvas.height = height * window.devicePixelRatio;
 
     const viewState = calculateViewState();
+    currentViewState = viewState;
 
     deck = new Deck({
       canvas: deckCanvas,
@@ -452,8 +581,8 @@
         maxZoom: 6,
       },
       controller: false,
-      getCursor: () => "default",
-      layers: [createLayer(colorMode)],
+      getCursor: () => panMode ? (isDragging ? "grabbing" : "grab") : "default",
+      layers: createLayers(colorMode),
       onHover: ({ object, x, y }: { object?: TileData; x: number; y: number }) => {
         if (object) {
           tooltipContent = buildTooltipContent(object.tile, colorMode);
@@ -484,6 +613,7 @@
     fullscreenCanvas.height = height * window.devicePixelRatio;
 
     const viewState = calculateViewState(fullscreenCanvas);
+    fullscreenViewState = viewState;
 
     fullscreenDeck = new Deck({
       canvas: fullscreenCanvas,
@@ -497,8 +627,8 @@
         maxZoom: 6,
       },
       controller: false,
-      getCursor: () => "default",
-      layers: [createLayer(colorMode)],
+      getCursor: () => fullscreenPanMode ? (isDragging ? "grabbing" : "grab") : "default",
+      layers: createLayers(colorMode),
       onHover: ({ object, x, y }: { object?: TileData; x: number; y: number }) => {
         if (object) {
           fullscreenTooltipContent = buildTooltipContent(object.tile, colorMode);
@@ -521,7 +651,7 @@
         fullscreenDeck.setProps({
           width: fullscreenCanvas.clientWidth,
           height: fullscreenCanvas.clientHeight,
-          layers: [createLayer(colorMode)],
+          layers: createLayers(colorMode),
         });
       }
     });
@@ -546,6 +676,185 @@
     if (event.target === dialogRef) {
       closeFullscreen();
     }
+  }
+
+  // Track current view state for zoom controls
+  let currentViewState = $state<{ target: [number, number, number]; zoom: number } | null>(null);
+  let fullscreenViewState = $state<{ target: [number, number, number]; zoom: number } | null>(null);
+
+  // Pan mode state
+  let panMode = $state(false);
+  let fullscreenPanMode = $state(false);
+  let isDragging = $state(false);
+  let lastDragPosition = $state<{ x: number; y: number } | null>(null);
+
+  // Zoom controls
+  function zoomIn(isFullscreen = false) {
+    const targetDeck = isFullscreen ? fullscreenDeck : deck;
+    const viewState = isFullscreen ? fullscreenViewState : currentViewState;
+    if (!targetDeck || !viewState) return;
+
+    const newZoom = Math.min(viewState.zoom + 0.5, 6);
+    const newViewState = { ...viewState, zoom: newZoom };
+
+    if (isFullscreen) {
+      fullscreenViewState = newViewState;
+    } else {
+      currentViewState = newViewState;
+    }
+
+    targetDeck.setProps({
+      initialViewState: {
+        ...newViewState,
+        minZoom: -2,
+        maxZoom: 6,
+        transitionDuration: 200,
+      },
+    });
+  }
+
+  function zoomOut(isFullscreen = false) {
+    const targetDeck = isFullscreen ? fullscreenDeck : deck;
+    const viewState = isFullscreen ? fullscreenViewState : currentViewState;
+    if (!targetDeck || !viewState) return;
+
+    const newZoom = Math.max(viewState.zoom - 0.5, -2);
+    const newViewState = { ...viewState, zoom: newZoom };
+
+    if (isFullscreen) {
+      fullscreenViewState = newViewState;
+    } else {
+      currentViewState = newViewState;
+    }
+
+    targetDeck.setProps({
+      initialViewState: {
+        ...newViewState,
+        minZoom: -2,
+        maxZoom: 6,
+        transitionDuration: 200,
+      },
+    });
+  }
+
+  function resetView(isFullscreen = false) {
+    const targetDeck = isFullscreen ? fullscreenDeck : deck;
+    const targetCanvas = isFullscreen ? fullscreenCanvas : deckCanvas;
+    if (!targetDeck) return;
+
+    const viewState = calculateViewState(targetCanvas);
+
+    if (isFullscreen) {
+      fullscreenViewState = viewState;
+    } else {
+      currentViewState = viewState;
+    }
+
+    targetDeck.setProps({
+      initialViewState: {
+        ...viewState,
+        minZoom: -2,
+        maxZoom: 6,
+        transitionDuration: 300,
+      },
+    });
+  }
+
+  function pan(dx: number, dy: number, isFullscreen = false) {
+    const targetDeck = isFullscreen ? fullscreenDeck : deck;
+    const viewState = isFullscreen ? fullscreenViewState : currentViewState;
+    if (!targetDeck || !viewState) return;
+
+    // Pan amount scales with zoom level (pan more when zoomed out)
+    const panAmount = 50 / Math.pow(2, viewState.zoom);
+    const newTarget: [number, number, number] = [
+      viewState.target[0] + dx * panAmount,
+      viewState.target[1] + dy * panAmount,
+      viewState.target[2],
+    ];
+    const newViewState = { ...viewState, target: newTarget };
+
+    if (isFullscreen) {
+      fullscreenViewState = newViewState;
+    } else {
+      currentViewState = newViewState;
+    }
+
+    targetDeck.setProps({
+      initialViewState: {
+        ...newViewState,
+        minZoom: -2,
+        maxZoom: 6,
+        transitionDuration: 100,
+      },
+    });
+  }
+
+  function togglePanMode(isFullscreen = false) {
+    if (isFullscreen) {
+      fullscreenPanMode = !fullscreenPanMode;
+    } else {
+      panMode = !panMode;
+    }
+    // Reset drag state when toggling off
+    isDragging = false;
+    lastDragPosition = null;
+  }
+
+  function handleDragStart(e: MouseEvent, isFullscreen = false) {
+    const isPanModeActive = isFullscreen ? fullscreenPanMode : panMode;
+    if (!isPanModeActive) return;
+
+    isDragging = true;
+    lastDragPosition = { x: e.clientX, y: e.clientY };
+  }
+
+  function handleDragMove(e: MouseEvent, isFullscreen = false) {
+    const isPanModeActive = isFullscreen ? fullscreenPanMode : panMode;
+    if (!isPanModeActive || !isDragging || !lastDragPosition) return;
+
+    const targetDeck = isFullscreen ? fullscreenDeck : deck;
+    const viewState = isFullscreen ? fullscreenViewState : currentViewState;
+    if (!targetDeck || !viewState) return;
+
+    // Calculate delta in screen pixels
+    const dx = e.clientX - lastDragPosition.x;
+    const dy = e.clientY - lastDragPosition.y;
+
+    // Convert screen pixels to world units based on zoom level
+    // Negate both to make map follow cursor (drag right = map moves right)
+    const scale = Math.pow(2, viewState.zoom);
+    const worldDx = -dx / scale;
+    const worldDy = -dy / scale;
+
+    const newTarget: [number, number, number] = [
+      viewState.target[0] + worldDx,
+      viewState.target[1] + worldDy,
+      viewState.target[2],
+    ];
+    const newViewState = { ...viewState, target: newTarget };
+
+    if (isFullscreen) {
+      fullscreenViewState = newViewState;
+    } else {
+      currentViewState = newViewState;
+    }
+
+    targetDeck.setProps({
+      initialViewState: {
+        ...newViewState,
+        minZoom: -2,
+        maxZoom: 6,
+        transitionDuration: 0,
+      },
+    });
+
+    lastDragPosition = { x: e.clientX, y: e.clientY };
+  }
+
+  function handleDragEnd() {
+    isDragging = false;
+    lastDragPosition = null;
   }
 
   onMount(() => {
@@ -603,11 +912,15 @@
   // Track previous tile count to detect game changes
   let prevTileCount = $state(0);
 
-  // Update layers when tiles or color mode changes
+  // Update layers when tiles, color mode, or marker toggles change
   $effect(() => {
     const mode = colorMode;
     const currentTiles = tiles;
     const tileCount = currentTiles.length;
+    // Track marker toggles for reactivity
+    const _cities = showCities;
+    const _urbanImprovements = showUrbanImprovements;
+    const _ruralImprovements = showRuralImprovements;
 
     // If tile count changed significantly, reinitialize deck with new view bounds
     if (tileCount > 0 && Math.abs(tileCount - prevTileCount) > 100) {
@@ -628,12 +941,12 @@
 
     if (deck && currentTiles.length > 0) {
       deck.setProps({
-        layers: [createLayer(mode)],
+        layers: createLayers(mode),
       });
     }
     if (fullscreenDeck && currentTiles.length > 0) {
       fullscreenDeck.setProps({
-        layers: [createLayer(mode)],
+        layers: createLayers(mode),
       });
     }
   });
@@ -652,6 +965,22 @@
           {mode.label}
         </button>
       {/each}
+    </div>
+
+    <!-- Marker toggles -->
+    <div class="flex items-center gap-3 text-sm">
+      <label class="marker-toggle">
+        <input type="checkbox" bind:checked={showCities} />
+        <span class="marker-label">Cities</span>
+      </label>
+      <label class="marker-toggle">
+        <input type="checkbox" bind:checked={showUrbanImprovements} />
+        <span class="marker-label">Urban</span>
+      </label>
+      <label class="marker-toggle">
+        <input type="checkbox" bind:checked={showRuralImprovements} />
+        <span class="marker-label">Rural</span>
+      </label>
     </div>
 
     <!-- Turn slider (only in political mode) -->
@@ -717,30 +1046,74 @@
 
   <!-- Map container -->
   <div class="relative border-2 border-tan rounded-lg overflow-hidden" style="background-color: #1a1a1a">
-    <!-- Expand button -->
-    <button
-      onclick={openFullscreen}
-      class="absolute top-3 right-3 z-10 p-1.5 rounded bg-black/20 hover:bg-black/40 transition-colors cursor-pointer focus:outline-none"
-      aria-label="Expand map to fullscreen"
-      title="Expand to fullscreen"
-    >
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        class="h-4 w-4 text-white"
-        fill="none"
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        stroke-width="2"
+    <!-- Map controls (top right) -->
+    <div class="absolute top-3 right-3 z-10 flex items-start gap-2">
+      <!-- Pan mode toggle (hand icon) -->
+      <button
+        onclick={() => togglePanMode(false)}
+        class="control-btn {panMode ? 'active' : ''}"
+        aria-label={panMode ? "Disable pan mode" : "Enable pan mode"}
+        title={panMode ? "Disable pan mode" : "Enable pan mode (drag to pan)"}
       >
-        <path
-          stroke-linecap="round"
-          stroke-linejoin="round"
-          d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
-        />
-      </svg>
-    </button>
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+        </svg>
+      </button>
 
-    <div class="w-full" style="height: {height}">
+      <!-- Zoom slider -->
+      <div class="zoom-container">
+        <!-- Zoom in button -->
+        <button
+          onclick={() => zoomIn(false)}
+          class="zoom-btn"
+          aria-label="Zoom in"
+          title="Zoom in"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+          </svg>
+        </button>
+        <!-- Slider track -->
+        <div class="zoom-track">
+          <div class="zoom-track-line"></div>
+          <div class="zoom-thumb"></div>
+        </div>
+        <!-- Zoom out button -->
+        <button
+          onclick={() => zoomOut(false)}
+          class="zoom-btn"
+          aria-label="Zoom out"
+          title="Zoom out"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M18 12H6" />
+          </svg>
+        </button>
+      </div>
+
+      <!-- Expand button -->
+      <button
+        onclick={openFullscreen}
+        class="control-btn"
+        aria-label="Expand map to fullscreen"
+        title="Expand to fullscreen"
+      >
+        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4" />
+        </svg>
+      </button>
+    </div>
+
+    <div
+      class="w-full"
+      style="height: {height}"
+      onmousedown={(e) => handleDragStart(e, false)}
+      onmousemove={(e) => handleDragMove(e, false)}
+      onmouseup={handleDragEnd}
+      onmouseleave={handleDragEnd}
+      role="application"
+      aria-label="Map view"
+    >
       <canvas bind:this={deckCanvas} class="w-full h-full"></canvas>
     </div>
 
@@ -797,6 +1170,22 @@
               {mode.label}
             </button>
           {/each}
+        </div>
+
+        <!-- Marker toggles -->
+        <div class="flex items-center gap-3 text-sm">
+          <label class="marker-toggle">
+            <input type="checkbox" bind:checked={showCities} />
+            <span class="marker-label">Cities</span>
+          </label>
+          <label class="marker-toggle">
+            <input type="checkbox" bind:checked={showUrbanImprovements} />
+            <span class="marker-label">Urban</span>
+          </label>
+          <label class="marker-toggle">
+            <input type="checkbox" bind:checked={showRuralImprovements} />
+            <span class="marker-label">Rural</span>
+          </label>
         </div>
 
         <!-- Turn slider (only in political mode) -->
@@ -863,7 +1252,63 @@
 
     <!-- Fullscreen map -->
     <div class="flex-1 min-h-0 rounded-lg overflow-hidden relative" style="background-color: #1a1a1a">
-      <canvas bind:this={fullscreenCanvas} class="w-full h-full"></canvas>
+      <!-- Map controls -->
+      <div class="absolute top-3 right-3 z-10 flex items-start gap-2">
+        <!-- Pan mode toggle (hand icon) -->
+        <button
+          onclick={() => togglePanMode(true)}
+          class="control-btn {fullscreenPanMode ? 'active' : ''}"
+          aria-label={fullscreenPanMode ? "Disable pan mode" : "Enable pan mode"}
+          title={fullscreenPanMode ? "Disable pan mode" : "Enable pan mode (drag to pan)"}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M7 11.5V14m0-2.5v-6a1.5 1.5 0 113 0m-3 6a1.5 1.5 0 00-3 0v2a7.5 7.5 0 0015 0v-5a1.5 1.5 0 00-3 0m-6-3V11m0-5.5v-1a1.5 1.5 0 013 0v1m0 0V11m0-5.5a1.5 1.5 0 013 0v3m0 0V11" />
+          </svg>
+        </button>
+
+        <!-- Zoom slider -->
+        <div class="zoom-container">
+          <!-- Zoom in button -->
+          <button
+            onclick={() => zoomIn(true)}
+            class="zoom-btn"
+            aria-label="Zoom in"
+            title="Zoom in"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 6v12m6-6H6" />
+            </svg>
+          </button>
+          <!-- Slider track -->
+          <div class="zoom-track">
+            <div class="zoom-track-line"></div>
+            <div class="zoom-thumb"></div>
+          </div>
+          <!-- Zoom out button -->
+          <button
+            onclick={() => zoomOut(true)}
+            class="zoom-btn"
+            aria-label="Zoom out"
+            title="Zoom out"
+          >
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-3 w-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M18 12H6" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      <div
+        class="w-full h-full"
+        onmousedown={(e) => handleDragStart(e, true)}
+        onmousemove={(e) => handleDragMove(e, true)}
+        onmouseup={handleDragEnd}
+        onmouseleave={handleDragEnd}
+        role="application"
+        aria-label="Fullscreen map view"
+      >
+        <canvas bind:this={fullscreenCanvas} class="w-full h-full"></canvas>
+      </div>
 
       <!-- Fullscreen tooltip -->
       {#if fullscreenTooltipContent}
@@ -1030,5 +1475,142 @@
     border-radius: 0.5rem;
     padding: 1rem;
     background-color: #35302B;
+  }
+
+  /* Control button styles */
+  .control-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    background: #35302B;
+    border: 2px solid var(--color-tan);
+    border-radius: 8px;
+    color: var(--color-tan);
+    cursor: pointer;
+    transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease;
+  }
+
+  .control-btn:hover {
+    color: white;
+    border-color: white;
+  }
+
+  .control-btn.active {
+    background: var(--color-brown);
+    color: var(--color-tan);
+    border-color: var(--color-tan);
+  }
+
+  .control-btn.active:hover {
+    background: var(--color-brown);
+    color: white;
+    border-color: white;
+  }
+
+  /* Zoom slider styles */
+  .zoom-container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    background: #35302B;
+    border: 2px solid var(--color-tan);
+    border-radius: 8px;
+    padding: 6px;
+    gap: 4px;
+  }
+
+  .zoom-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    background: transparent;
+    border: none;
+    color: var(--color-tan);
+    cursor: pointer;
+    transition: color 0.15s ease;
+  }
+
+  .zoom-btn:hover {
+    color: white;
+  }
+
+  .zoom-track {
+    position: relative;
+    width: 20px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .zoom-track-line {
+    width: 3px;
+    height: 100%;
+    background: var(--color-tan);
+    border-radius: 2px;
+    opacity: 0.5;
+  }
+
+  .zoom-thumb {
+    position: absolute;
+    width: 12px;
+    height: 12px;
+    background: var(--color-tan);
+    border-radius: 50%;
+    top: 50%;
+    transform: translateY(-50%);
+  }
+
+  /* Marker toggle styles */
+  .marker-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    cursor: pointer;
+  }
+
+  .marker-toggle input[type="checkbox"] {
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border: 2px solid var(--color-tan);
+    border-radius: 3px;
+    background: transparent;
+    cursor: pointer;
+    position: relative;
+    transition: background 0.15s ease, border-color 0.15s ease;
+  }
+
+  .marker-toggle input[type="checkbox"]:checked {
+    background: var(--color-tan);
+  }
+
+  .marker-toggle input[type="checkbox"]:checked::after {
+    content: "";
+    position: absolute;
+    left: 3px;
+    top: 0px;
+    width: 4px;
+    height: 8px;
+    border: solid #1a1a1a;
+    border-width: 0 2px 2px 0;
+    transform: rotate(45deg);
+  }
+
+  .marker-toggle:hover input[type="checkbox"] {
+    border-color: white;
+  }
+
+  .marker-label {
+    color: var(--color-tan);
+    user-select: none;
+  }
+
+  .marker-toggle:hover .marker-label {
+    color: white;
   }
 </style>
