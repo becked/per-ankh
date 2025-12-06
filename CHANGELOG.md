@@ -4,9 +4,8 @@
 
 ### Added
 - Map tab with interactive hex visualization
-  - Five color modes: Political, Terrain, Elevation, Vegetation, Resources
+  - Two modes: Political, Religion
   - Historical playback with turn-by-turn replay and fast-forward controls
-  - Religion map mode showing religious spread over time
   - Map markers for cities and improvements
   - Pan and zoom controls
   - Fullscreen mode with animated dialog
