@@ -196,6 +196,14 @@ pub struct KnownOnlineId {
     pub save_count: i64,
 }
 
+/// Religion info with founder nation for map visualization
+#[derive(Serialize, Clone, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct ReligionInfo {
+    pub religion_name: String,
+    pub founder_nation: Option<String>,
+}
+
 /// Tile data for map visualization
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
@@ -211,9 +219,8 @@ pub struct MapTile {
     pub has_road: bool,
     pub specialist: Option<String>,
     pub tribe_site: Option<String>,
-    pub religion: Option<String>,
-    /// Resolved from religion -> religions.founder_player_id -> players.nation
-    pub religion_founder_nation: Option<String>,
+    /// All religions present in this tile's city (up to 5)
+    pub religions: Vec<ReligionInfo>,
     pub river_w: bool,
     pub river_sw: bool,
     pub river_se: bool,
@@ -221,6 +228,10 @@ pub struct MapTile {
     pub owner_nation: Option<String>,
     /// Resolved from owner_city_id -> cities.city_name
     pub owner_city: Option<String>,
+    /// City ID for religion lookup (internal use)
+    #[serde(skip)]
+    #[ts(skip)]
+    pub owner_city_id: Option<i64>,
 }
 
 // Initialize logging
@@ -1508,38 +1519,78 @@ async fn get_city_statistics(
 
 /// Tauri command to get all map tiles for visualization
 ///
-/// Returns tile data with terrain, resources, improvements, and ownership
+/// Returns tile data with terrain, resources, improvements, ownership, and ALL religions
 #[tauri::command]
 async fn get_map_tiles(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<MapTile>, String> {
     pool.with_connection(|conn| {
-        // Get religion from city_religions table (religion is per-city, not per-tile)
-        // If a city has multiple religions, pick the first alphabetically for consistency
+        // Step 1: Query all religions by city with founder nations
+        // Primary religion is determined by:
+        // 1. Owner nation's current state religion comes first
+        // 2. Then by when the owner nation adopted each religion (from story_events)
+        // 3. Then by when the city acquired the religion
+        // 4. Finally alphabetically by religion name
+        let mut religion_stmt = conn.prepare(
+            "SELECT cr.city_id, cr.religion, founder.nation as founder_nation
+             FROM city_religions cr
+             JOIN religions r ON cr.religion = r.religion_name AND cr.match_id = r.match_id
+             LEFT JOIN players founder ON r.founder_player_id = founder.player_id AND r.match_id = founder.match_id
+             JOIN cities c ON cr.city_id = c.city_id AND cr.match_id = c.match_id
+             LEFT JOIN players owner ON c.player_id = owner.player_id AND c.match_id = owner.match_id
+             LEFT JOIN story_events se
+                 ON se.player_id = owner.player_id
+                 AND se.match_id = cr.match_id
+                 AND se.event_type = cr.religion || '.EVENTSTORY_ADOPT_RELIGION'
+             WHERE cr.match_id = ?
+             ORDER BY
+                 cr.city_id,
+                 CASE WHEN cr.religion = owner.state_religion THEN 0 ELSE 1 END,
+                 se.occurred_turn NULLS LAST,
+                 cr.acquired_turn NULLS FIRST,
+                 cr.religion"
+        )?;
+
+        let mut city_religions: std::collections::HashMap<i64, Vec<ReligionInfo>> =
+            std::collections::HashMap::new();
+
+        let religion_rows = religion_stmt.query_map([match_id], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        })?;
+
+        for row in religion_rows {
+            let (city_id, religion_name, founder_nation) = row?;
+            city_religions
+                .entry(city_id)
+                .or_insert_with(Vec::new)
+                .push(ReligionInfo {
+                    religion_name,
+                    founder_nation,
+                });
+        }
+
+        // Step 2: Query base tile data (without religion, but with owner_city_id)
         let mut stmt = conn.prepare(
             "SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
                     t.resource, t.improvement, t.improvement_pillaged, t.has_road,
-                    t.specialist, t.tribe_site, cr.religion,
-                    rp.nation as religion_founder_nation,
+                    t.specialist, t.tribe_site,
                     t.river_w, t.river_sw, t.river_se,
-                    p.nation, c.city_name
+                    p.nation, c.city_name, t.owner_city_id
              FROM tiles t
              LEFT JOIN players p ON t.owner_player_id = p.player_id AND t.match_id = p.match_id
              LEFT JOIN cities c ON t.owner_city_id = c.city_id AND t.match_id = c.match_id
-             LEFT JOIN (
-                 SELECT city_id, match_id, MIN(religion) as religion
-                 FROM city_religions
-                 GROUP BY city_id, match_id
-             ) cr ON t.owner_city_id = cr.city_id AND t.match_id = cr.match_id
-             LEFT JOIN religions r ON cr.religion = r.religion_name AND cr.match_id = r.match_id
-             LEFT JOIN players rp ON r.founder_player_id = rp.player_id AND r.match_id = rp.match_id
              WHERE t.match_id = ?
              ORDER BY t.y, t.x"
         )?;
 
         let tiles = stmt
             .query_map([match_id], |row| {
+                let owner_city_id: Option<i64> = row.get(16)?;
                 Ok(MapTile {
                     x: row.get(0)?,
                     y: row.get(1)?,
@@ -1552,18 +1603,31 @@ async fn get_map_tiles(
                     has_road: row.get::<_, Option<bool>>(8)?.unwrap_or(false),
                     specialist: row.get(9)?,
                     tribe_site: row.get(10)?,
-                    religion: row.get(11)?,
-                    religion_founder_nation: row.get(12)?,
-                    river_w: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
-                    river_sw: row.get::<_, Option<bool>>(14)?.unwrap_or(false),
-                    river_se: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
-                    owner_nation: row.get(16)?,
-                    owner_city: row.get(17)?,
+                    religions: Vec::new(), // Populated below
+                    river_w: row.get::<_, Option<bool>>(11)?.unwrap_or(false),
+                    river_sw: row.get::<_, Option<bool>>(12)?.unwrap_or(false),
+                    river_se: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
+                    owner_nation: row.get(14)?,
+                    owner_city: row.get(15)?,
+                    owner_city_id,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
-        Ok(tiles)
+        // Step 3: Populate religions from HashMap
+        let tiles_with_religions: Vec<MapTile> = tiles
+            .into_iter()
+            .map(|mut tile| {
+                if let Some(city_id) = tile.owner_city_id {
+                    if let Some(religions) = city_religions.get(&city_id) {
+                        tile.religions = religions.clone();
+                    }
+                }
+                tile
+            })
+            .collect();
+
+        Ok(tiles_with_religions)
     })
     .context("Failed to get map tiles")
     .map_err(|e| e.to_string())
@@ -1572,7 +1636,7 @@ async fn get_map_tiles(
 /// Tauri command to get map tiles at a specific turn for historical visualization
 ///
 /// Returns tile data with ownership state reconstructed from tile_ownership_history.
-/// Improvements and roads are only shown if the tile was owned at the specified turn.
+/// Improvements, roads, and religions are only shown if the tile was owned at the specified turn.
 #[tauri::command]
 async fn get_map_tiles_at_turn(
     match_id: i64,
@@ -1580,12 +1644,62 @@ async fn get_map_tiles_at_turn(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<MapTile>, String> {
     pool.with_connection(|conn| {
-        // Query that reconstructs tile state at a specific turn:
+        // Step 1: Query all religions by city with founder nations
+        // Filter by: religion must be founded by this turn AND city acquired it by this turn
+        // Primary religion is determined by:
+        // 1. Owner nation's state religion at this turn (adoption must have happened by this turn)
+        // 2. Then by when the owner nation adopted each religion (if by this turn)
+        // 3. Then by when the city acquired the religion
+        // 4. Finally alphabetically by religion name
+        let mut religion_stmt = conn.prepare(
+            "SELECT cr.city_id, cr.religion, founder.nation as founder_nation
+             FROM city_religions cr
+             JOIN religions r ON cr.religion = r.religion_name AND cr.match_id = r.match_id
+             LEFT JOIN players founder ON r.founder_player_id = founder.player_id AND r.match_id = founder.match_id
+             JOIN cities c ON cr.city_id = c.city_id AND cr.match_id = c.match_id
+             LEFT JOIN players owner ON c.player_id = owner.player_id AND c.match_id = owner.match_id
+             LEFT JOIN story_events se
+                 ON se.player_id = owner.player_id
+                 AND se.match_id = cr.match_id
+                 AND se.event_type = cr.religion || '.EVENTSTORY_ADOPT_RELIGION'
+                 AND se.occurred_turn <= ?
+             WHERE cr.match_id = ?
+               AND (r.founded_turn IS NULL OR r.founded_turn <= ?)
+               AND (cr.acquired_turn IS NULL OR cr.acquired_turn <= ?)
+             ORDER BY
+                 cr.city_id,
+                 CASE WHEN cr.religion = owner.state_religion AND se.occurred_turn IS NOT NULL THEN 0 ELSE 1 END,
+                 se.occurred_turn NULLS LAST,
+                 cr.acquired_turn NULLS FIRST,
+                 cr.religion"
+        )?;
+
+        let mut city_religions: std::collections::HashMap<i64, Vec<ReligionInfo>> =
+            std::collections::HashMap::new();
+
+        let religion_rows = religion_stmt.query_map([turn as i64, match_id, turn as i64, turn as i64], |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<String>>(2)?,
+            ))
+        })?;
+
+        for row in religion_rows {
+            let (city_id, religion_name, founder_nation) = row?;
+            city_religions
+                .entry(city_id)
+                .or_insert_with(Vec::new)
+                .push(ReligionInfo {
+                    religion_name,
+                    founder_nation,
+                });
+        }
+
+        // Step 2: Query tile data with ownership at specific turn
         // - Ownership comes from tile_ownership_history (latest record at or before turn)
         // - Improvements/roads only shown if tile was owned at that turn
         // - Resources, terrain, rivers are always shown (exist from game start)
-        // Get religion from city_religions table (religion is per-city, not per-tile)
-        // If a city has multiple religions, pick the first alphabetically for consistency
         let mut stmt = conn.prepare(
             "WITH ownership_at_turn AS (
                 SELECT tile_id, owner_player_id
@@ -1596,11 +1710,6 @@ async fn get_map_tiles_at_turn(
                     WHERE match_id = ? AND turn <= ?
                 )
                 WHERE rn = 1
-            ),
-            city_religion AS (
-                SELECT city_id, match_id, MIN(religion) as religion
-                FROM city_religions
-                GROUP BY city_id, match_id
             )
             SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
                    t.resource,
@@ -1610,24 +1719,21 @@ async fn get_map_tiles_at_turn(
                    CASE WHEN oh.owner_player_id IS NOT NULL THEN t.has_road ELSE false END,
                    CASE WHEN oh.owner_player_id IS NOT NULL THEN t.specialist ELSE NULL END,
                    t.tribe_site,
-                   -- Only show religion if tile was owned at this turn
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN cr.religion ELSE NULL END,
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN rp.nation ELSE NULL END as religion_founder_nation,
                    t.river_w, t.river_sw, t.river_se,
-                   p.nation, c.city_name
+                   p.nation, c.city_name,
+                   -- Return city_id only if tile was owned at this turn (for religion lookup)
+                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.owner_city_id ELSE NULL END as owner_city_id
             FROM tiles t
             LEFT JOIN ownership_at_turn oh ON t.tile_id = oh.tile_id
             LEFT JOIN players p ON oh.owner_player_id = p.player_id AND p.match_id = ?
             LEFT JOIN cities c ON t.owner_city_id = c.city_id AND c.match_id = ? AND c.founded_turn <= ?
-            LEFT JOIN city_religion cr ON t.owner_city_id = cr.city_id AND cr.match_id = ?
-            LEFT JOIN religions r ON cr.religion = r.religion_name AND r.match_id = ?
-            LEFT JOIN players rp ON r.founder_player_id = rp.player_id AND rp.match_id = ?
             WHERE t.match_id = ?
             ORDER BY t.y, t.x"
         )?;
 
         let tiles = stmt
-            .query_map([match_id, turn as i64, match_id, match_id, turn as i64, match_id, match_id, match_id, match_id], |row| {
+            .query_map([match_id, turn as i64, match_id, match_id, turn as i64, match_id], |row| {
+                let owner_city_id: Option<i64> = row.get(16)?;
                 Ok(MapTile {
                     x: row.get(0)?,
                     y: row.get(1)?,
@@ -1640,18 +1746,31 @@ async fn get_map_tiles_at_turn(
                     has_road: row.get::<_, Option<bool>>(8)?.unwrap_or(false),
                     specialist: row.get(9)?,
                     tribe_site: row.get(10)?,
-                    religion: row.get(11)?,
-                    religion_founder_nation: row.get(12)?,
-                    river_w: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
-                    river_sw: row.get::<_, Option<bool>>(14)?.unwrap_or(false),
-                    river_se: row.get::<_, Option<bool>>(15)?.unwrap_or(false),
-                    owner_nation: row.get(16)?,
-                    owner_city: row.get(17)?,
+                    religions: Vec::new(), // Populated below
+                    river_w: row.get::<_, Option<bool>>(11)?.unwrap_or(false),
+                    river_sw: row.get::<_, Option<bool>>(12)?.unwrap_or(false),
+                    river_se: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
+                    owner_nation: row.get(14)?,
+                    owner_city: row.get(15)?,
+                    owner_city_id,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
 
-        Ok(tiles)
+        // Step 3: Populate religions from HashMap (only if tile was owned at this turn)
+        let tiles_with_religions: Vec<MapTile> = tiles
+            .into_iter()
+            .map(|mut tile| {
+                if let Some(city_id) = tile.owner_city_id {
+                    if let Some(religions) = city_religions.get(&city_id) {
+                        tile.religions = religions.clone();
+                    }
+                }
+                tile
+            })
+            .collect();
+
+        Ok(tiles_with_religions)
     })
     .context("Failed to get map tiles at turn")
     .map_err(|e| e.to_string())

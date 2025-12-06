@@ -31,7 +31,8 @@
 
   let colorMode = $state<ColorMode>("political");
   let deckCanvas: HTMLCanvasElement;
-  let deck: Deck | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let deck: Deck<any> | null = null;
   let tooltipContent = $state<string | null>(null);
   let tooltipX = $state(0);
   let tooltipY = $state(0);
@@ -39,7 +40,8 @@
   // Fullscreen state
   let dialogRef: HTMLDialogElement | null = $state(null);
   let fullscreenCanvas: HTMLCanvasElement;
-  let fullscreenDeck: Deck | null = null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let fullscreenDeck: Deck<any> | null = null;
   let isClosing = $state(false);
   let fullscreenTooltipContent = $state<string | null>(null);
   let fullscreenTooltipX = $state(0);
@@ -119,6 +121,7 @@
 
   /**
    * Get tile color based on current color mode.
+   * For religion mode, returns the first religion's color (stripes handled separately).
    */
   function getTileColor(tile: MapTile, mode: ColorMode): string {
     switch (mode) {
@@ -133,11 +136,15 @@
         }
         return getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
       case "religion":
-        if (tile.religion && tile.religion_founder_nation) {
-          const nationColor = getCivilizationColor(tile.religion_founder_nation.replace("NATION_", ""));
-          if (nationColor) {
-            const terrainColor = getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
-            return blendColors(nationColor, terrainColor, 0.65);
+        // For single-color fallback, use first religion's founder nation
+        if (tile.religions && tile.religions.length > 0) {
+          const firstReligion = tile.religions[0];
+          if (firstReligion.founder_nation) {
+            const nationColor = getCivilizationColor(firstReligion.founder_nation.replace("NATION_", ""));
+            if (nationColor) {
+              const terrainColor = getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
+              return blendColors(nationColor, terrainColor, 0.65);
+            }
           }
         }
         return getMutedTerrainColor(tile.terrain, tile.height, tile.vegetation);
@@ -163,10 +170,22 @@
     if (mode === "political" || mode === "religion") {
       // Religion mode shows religion info prominently at top
       if (mode === "religion") {
-        if (tile.religion) {
-          lines.push(`Religion: ${formatEnum(tile.religion, "RELIGION_")}`);
-          if (tile.religion_founder_nation) {
-            lines.push(`Founded by: ${formatEnum(tile.religion_founder_nation, "NATION_")}`);
+        if (tile.religions && tile.religions.length > 0) {
+          if (tile.religions.length === 1) {
+            const rel = tile.religions[0];
+            lines.push(`Religion: ${formatEnum(rel.religion_name, "RELIGION_")}`);
+            if (rel.founder_nation) {
+              lines.push(`Founded by: ${formatEnum(rel.founder_nation, "NATION_")}`);
+            }
+          } else {
+            lines.push(`<b>Religions:</b>`);
+            for (const rel of tile.religions) {
+              const name = formatEnum(rel.religion_name, "RELIGION_");
+              const founder = rel.founder_nation
+                ? ` (${formatEnum(rel.founder_nation, "NATION_")})`
+                : "";
+              lines.push(`&nbsp;&nbsp;• ${name}${founder}`);
+            }
           }
         } else {
           lines.push(`Religion: None`);
@@ -207,8 +226,9 @@
         lines.push(`Tribe Site: ${formatEnum(tile.tribe_site, "TRIBE_")}`);
       }
       // Only show religion in political mode (religion mode shows it at the top)
-      if (mode === "political" && tile.religion) {
-        lines.push(`Religion: ${formatEnum(tile.religion, "RELIGION_")}`);
+      if (mode === "political" && tile.religions && tile.religions.length > 0) {
+        const religionNames = tile.religions.map(r => formatEnum(r.religion_name, "RELIGION_")).join(", ");
+        lines.push(`Religion: ${religionNames}`);
       }
       if (tile.has_road) {
         lines.push(`Road: Yes`);
@@ -259,18 +279,26 @@
 
   // Playback state
   let isPlaying = $state(false);
+  let isFastPlaying = $state(false);
   let playbackInterval: ReturnType<typeof setInterval> | null = null;
-  const PLAYBACK_SPEED_MS = 300; // Time between turns in milliseconds
+  const PLAYBACK_SPEED_MS = 300; // Time between turns in milliseconds (normal speed)
+  const FAST_PLAYBACK_SPEED_MS = 150; // Time between turns at 2x speed
 
-  function startPlayback() {
-    if (isPlaying || !totalTurns || selectedTurn == null) return;
+  function startPlayback(fast: boolean = false) {
+    if (!totalTurns || selectedTurn == null) return;
+
+    // Stop any existing playback first
+    stopPlayback();
 
     // If at the end, start from beginning
     if (selectedTurn >= totalTurns) {
       onTurnChange?.(1);
     }
 
-    isPlaying = true;
+    isPlaying = !fast;
+    isFastPlaying = fast;
+    const speed = fast ? FAST_PLAYBACK_SPEED_MS : PLAYBACK_SPEED_MS;
+
     playbackInterval = setInterval(() => {
       if (selectedTurn != null && totalTurns != null) {
         if (selectedTurn >= totalTurns) {
@@ -280,11 +308,12 @@
           onTurnChange?.(selectedTurn + 1);
         }
       }
-    }, PLAYBACK_SPEED_MS);
+    }, speed);
   }
 
   function stopPlayback() {
     isPlaying = false;
+    isFastPlaying = false;
     if (playbackInterval) {
       clearInterval(playbackInterval);
       playbackInterval = null;
@@ -295,7 +324,15 @@
     if (isPlaying) {
       stopPlayback();
     } else {
-      startPlayback();
+      startPlayback(false);
+    }
+  }
+
+  function toggleFastPlayback() {
+    if (isFastPlaying) {
+      stopPlayback();
+    } else {
+      startPlayback(true);
     }
   }
 
@@ -318,6 +355,7 @@
   function prepareTileData(mode: ColorMode): TileData[] {
     return tiles.map((tile) => {
       const [px, py] = hexToPixel(tile.x, tile.y);
+
       return {
         tile,
         polygon: hexVertices(px, py, HEX_SIZE),
@@ -327,9 +365,9 @@
   }
 
   // Calculate initial view bounds
-  function calculateViewState(canvas?: HTMLCanvasElement) {
+  function calculateViewState(canvas?: HTMLCanvasElement): { target: [number, number, number]; zoom: number } {
     if (tiles.length === 0) {
-      return { target: [0, 0, 0], zoom: 0 };
+      return { target: [0, 0, 0] as [number, number, number], zoom: 0 };
     }
 
     let minX = Infinity, maxX = -Infinity;
@@ -357,12 +395,14 @@
     const scale = Math.min(scaleX, scaleY) * 0.95;
     const zoom = Math.log2(scale);
 
-    return { target: [centerX, centerY, 0], zoom };
+    return { target: [centerX, centerY, 0] as [number, number, number], zoom };
   }
 
   function createLayer(mode: ColorMode) {
     const data = prepareTileData(mode);
 
+    // Use standard PolygonLayer for all modes
+    // For religion mode, tooltip shows all religions even though map shows primary
     return new PolygonLayer<TileData>({
       id: "hex-layer",
       data,
@@ -618,26 +658,50 @@
     {#if showTurnSlider}
       <div class="flex items-center gap-3 ml-auto">
         <span class="text-brown text-sm font-bold">Turn:</span>
-        <!-- Play/Pause button -->
-        <button
-          onclick={togglePlayback}
-          class="p-1.5 rounded bg-brown/30 hover:bg-brown/50 transition-colors"
-          aria-label={isPlaying ? "Pause" : "Play"}
-          title={isPlaying ? "Pause" : "Play"}
-        >
-          {#if isPlaying}
-            <!-- Pause icon -->
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
-              <rect x="6" y="4" width="4" height="16" />
-              <rect x="14" y="4" width="4" height="16" />
-            </svg>
-          {:else}
-            <!-- Play icon -->
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
-              <path d="M8 5v14l11-7z" />
-            </svg>
-          {/if}
-        </button>
+        <!-- Playback buttons grouped together -->
+        <div class="flex items-center">
+          <!-- Play/Pause button -->
+          <button
+            onclick={togglePlayback}
+            class="p-1.5 rounded transition-colors {isPlaying ? 'bg-brown text-tan' : 'bg-brown/30 hover:bg-brown/50'}"
+            aria-label={isPlaying ? "Pause" : "Play"}
+            title={isPlaying ? "Pause" : "Play (1x)"}
+          >
+            {#if isPlaying}
+              <!-- Pause icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="4" width="4" height="16" />
+                <rect x="14" y="4" width="4" height="16" />
+              </svg>
+            {:else}
+              <!-- Play icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M8 5v14l11-7z" />
+              </svg>
+            {/if}
+          </button>
+          <!-- Fast Forward button (2x speed) -->
+          <button
+            onclick={toggleFastPlayback}
+            class="p-1.5 rounded transition-colors {isFastPlaying ? 'bg-brown text-tan' : 'bg-brown/30 hover:bg-brown/50'}"
+            aria-label={isFastPlaying ? "Pause" : "Fast Forward"}
+            title={isFastPlaying ? "Pause" : "Fast Forward (2x)"}
+          >
+            {#if isFastPlaying}
+              <!-- Pause icon -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                <rect x="6" y="4" width="4" height="16" />
+                <rect x="14" y="4" width="4" height="16" />
+              </svg>
+            {:else}
+              <!-- Fast Forward icon (double play arrows) -->
+              <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                <path d="M4 5v14l8-7z" />
+                <path d="M12 5v14l8-7z" />
+              </svg>
+            {/if}
+          </button>
+        </div>
         <input
           type="range"
           min="1"
@@ -739,26 +803,50 @@
         {#if showTurnSlider}
           <div class="flex items-center gap-3 ml-auto">
             <span class="text-brown text-sm font-bold">Turn:</span>
-            <!-- Play/Pause button -->
-            <button
-              onclick={togglePlayback}
-              class="p-1.5 rounded bg-brown/30 hover:bg-brown/50 transition-colors"
-              aria-label={isPlaying ? "Pause" : "Play"}
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {#if isPlaying}
-                <!-- Pause icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
-                  <rect x="6" y="4" width="4" height="16" />
-                  <rect x="14" y="4" width="4" height="16" />
-                </svg>
-              {:else}
-                <!-- Play icon -->
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M8 5v14l11-7z" />
-                </svg>
-              {/if}
-            </button>
+            <!-- Playback buttons grouped together -->
+            <div class="flex items-center">
+              <!-- Play/Pause button -->
+              <button
+                onclick={togglePlayback}
+                class="p-1.5 rounded transition-colors {isPlaying ? 'bg-brown text-tan' : 'bg-brown/30 hover:bg-brown/50'}"
+                aria-label={isPlaying ? "Pause" : "Play"}
+                title={isPlaying ? "Pause" : "Play (1x)"}
+              >
+                {#if isPlaying}
+                  <!-- Pause icon -->
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                {:else}
+                  <!-- Play icon -->
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M8 5v14l11-7z" />
+                  </svg>
+                {/if}
+              </button>
+              <!-- Fast Forward button (2x speed) -->
+              <button
+                onclick={toggleFastPlayback}
+                class="p-1.5 rounded transition-colors {isFastPlaying ? 'bg-brown text-tan' : 'bg-brown/30 hover:bg-brown/50'}"
+                aria-label={isFastPlaying ? "Pause" : "Fast Forward"}
+                title={isFastPlaying ? "Pause" : "Fast Forward (2x)"}
+              >
+                {#if isFastPlaying}
+                  <!-- Pause icon -->
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                    <rect x="6" y="4" width="4" height="16" />
+                    <rect x="14" y="4" width="4" height="16" />
+                  </svg>
+                {:else}
+                  <!-- Fast Forward icon (double play arrows) -->
+                  <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-tan" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M4 5v14l8-7z" />
+                    <path d="M12 5v14l8-7z" />
+                  </svg>
+                {/if}
+              </button>
+            </div>
             <input
               type="range"
               min="1"
