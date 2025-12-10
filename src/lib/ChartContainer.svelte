@@ -140,16 +140,23 @@
     max-height: none;
     width: 100vw;
     height: 100vh;
-    /* Center the content */
-    display: flex;
-    align-items: center;
-    justify-content: center;
     /* Remove focus outline - dialog doesn't need visual focus indication */
     outline: none;
   }
 
-  /* Opening animation */
+  /* Explicitly set display based on open state to fix WebKitGTK compositor issue.
+     Without this, the unconditional display:flex overrides the browser's default
+     display:none for closed dialogs, causing compositor layer leakage on Linux.
+     See: https://github.com/anthropics/per-ankh/issues/8 */
+  .fullscreen-dialog:not([open]) {
+    display: none;
+  }
+
   .fullscreen-dialog[open] {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    /* Opening animation */
     animation: dialogFadeIn 0.2s ease-out;
   }
 
