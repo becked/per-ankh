@@ -101,8 +101,9 @@ OldWorld/
   <Player>...</Player>           <!-- Multiple: one per player -->
   <City>...</City>               <!-- Multiple: all cities in game -->
   <Character>...</Character>     <!-- Multiple: all characters -->
+  <Tribe>...</Tribe>             <!-- Multiple: barbarian tribes -->
   <Tile>...</Tile>               <!-- Multiple: MapWidth × MapHeight tiles -->
-  <Unit>...</Unit>               <!-- Multiple: all units -->
+    <!-- Units are CHILDREN of Tile elements, not top-level -->
 </Root>
 ```
 
@@ -435,10 +436,9 @@ Characters represent rulers, heirs, courtiers, and other notable people.
     <TRAIT_BRAVE>45</TRAIT_BRAVE>
   </TraitTurn>
 
-  <!-- Role assignments -->
-  <UnitCharacterID>-1</UnitCharacterID>    <!-- Unit if general -->
-  <CityGovernorID>5</CityGovernorID>        <!-- City if governor -->
-  <CityAgentID>-1</CityAgentID>             <!-- City if agent -->
+  <!-- Note: Role assignments are tracked on the other entity:
+       - Units have GeneralID pointing to the commanding character
+       - Cities have GovernorID and AgentID pointing to characters -->
 
   <!-- Relationships -->
   <RelationshipList>
@@ -510,8 +510,6 @@ Cities represent urban centers controlled by players.
 
   <!-- Leadership -->
   <GovernorID>125</GovernorID>
-  <GovernorTurn>45</GovernorTurn>
-  <AgentID>-1</AgentID>
 
   <!-- Population -->
   <GrowthCount>15</GrowthCount>
@@ -596,34 +594,45 @@ Y = TileID / MapWidth  (integer division)
 
 ```xml
 <Tile ID="155">
-  <!-- Position -->
-  <Latitude>40</Latitude>
-  <Longitude>25</Longitude>
-
   <!-- Terrain -->
   <Terrain>TERRAIN_TEMPERATE</Terrain>
   <Height>HEIGHT_HILL</Height>
   <Vegetation>VEGETATION_FOREST</Vegetation>
-  <Elevation>2</Elevation>
 
   <!-- Resources -->
   <Resource>RESOURCE_IRON</Resource>
 
   <!-- Improvements -->
   <Improvement>IMPROVEMENT_MINE_2</Improvement>
-  <ImprovementPlayer>0</ImprovementPlayer>
-  <ImprovementBuildTurns>0</ImprovementBuildTurns>
+  <ImprovementBuildTurnsOriginal>5</ImprovementBuildTurnsOriginal>
+  <ImprovementBuildTurnsLeft>0</ImprovementBuildTurnsLeft>
+  <ImprovementCost>
+    <YIELD_STONE>36</YIELD_STONE>
+  </ImprovementCost>
 
-  <!-- Ownership -->
-  <Owner>0</Owner>
-  <CityID>5</CityID>
-  <Boundary />
+  <!-- Specialist working this tile -->
+  <Specialist>SPECIALIST_FARMER</Specialist>
 
-  <!-- Visibility -->
-  <RevealedTurn>
-    <0>1</0>
-    <1>25</1>
-  </RevealedTurn>
+  <!-- Territory -->
+  <CityTerritory>5</CityTerritory>
+
+  <!-- Road (empty element = road present) -->
+  <Road />
+
+  <!-- Rivers (boolean: 0 or 1 for each hex edge) -->
+  <RiverW>1</RiverW>
+  <RiverSW>0</RiverSW>
+  <RiverSE>1</RiverSE>
+
+  <!-- Seeds -->
+  <InitSeed>5456059863076450570</InitSeed>
+  <TurnSeed>11997237878226446141</TurnSeed>
+
+  <!-- Tribal/barbarian site -->
+  <TribeSite>TRIBE_VANDALS</TribeSite>
+
+  <!-- Religion presence -->
+  <Religion />
 
   <!-- Ownership history (see History section) -->
   <OwnerHistory>
@@ -632,29 +641,26 @@ Y = TileID / MapWidth  (integer division)
     <T82>0</T82>
   </OwnerHistory>
 
-  <!-- Religion presence -->
-  <Religion>
-    <RELIGION_ZOROASTRIANISM />
-  </Religion>
+  <!-- Visibility per team -->
+  <RevealedTurn>
+    <T0>1</T0>
+    <T1>25</T1>
+  </RevealedTurn>
 
-  <!-- Road connections -->
-  <Road>
-    <NW />
-    <E />
-  </Road>
-
-  <!-- River edges -->
-  <River>
-    <NE>RIVERPIECE_MAIN</NE>
-  </River>
+  <!-- Units on this tile (see Unit Elements section) -->
+  <Unit ID="91" Type="UNIT_LEGIONARY" Player="0">
+    ...
+  </Unit>
 </Tile>
 ```
+
+**Note:** In older save files (2022), tiles may have `<Latitude>` and `<Elevation>` (integer) instead of `<Height>` (enum). These fields were removed/replaced in later versions.
 
 ---
 
 ## 9. Unit Elements
 
-Units represent military forces, workers, and settlers.
+Units represent military forces, workers, and settlers. **Units are children of Tile elements**, not top-level elements.
 
 ### Unit Attributes
 
@@ -669,57 +675,62 @@ Units represent military forces, workers, and settlers.
 ### Unit Structure
 
 ```xml
-<Unit
-  ID="91"
-  Type="UNIT_LEGIONARY"
-  Player="0"
-  Family="FAMILY_JULII"
-  Seed="2395150775299824834">
+<Tile ID="1255">
+  <!-- ... tile data ... -->
+  <Unit
+    ID="91"
+    Type="UNIT_LEGIONARY"
+    Player="0"
+    Seed="2395150775299824834">
 
-  <!-- Position -->
-  <TileID>1255</TileID>
-  <Facing>E</Facing>
+    <!-- Direction unit is facing -->
+    <Facing>E</Facing>
 
-  <!-- State -->
-  <HP>100</HP>
-  <Fatigue>0</Fatigue>
-  <XP>150</XP>
-  <Level>2</Level>
+    <!-- Experience and level -->
+    <XP>150</XP>
+    <Level>2</Level>
 
-  <!-- Timeline -->
-  <CreateTurn>45</CreateTurn>
-  <TurnsSinceLastMove>0</TurnsSinceLastMove>
+    <!-- Timeline -->
+    <CreateTurn>45</CreateTurn>
+    <TurnsSinceLastMove>0</TurnsSinceLastMove>
 
-  <!-- Promotions -->
-  <Promotion>
-    <PROMOTION_FIERCE />
-    <PROMOTION_DISCIPLINED />
-  </Promotion>
+    <!-- Acquired promotions -->
+    <Promotions>
+      <PROMOTION_FIERCE />
+      <PROMOTION_DISCIPLINED />
+    </Promotions>
 
-  <!-- Character attachment (general) -->
-  <CharacterID>125</CharacterID>
+    <!-- Available promotions to choose -->
+    <PromotionsAvailable>
+      <PROMOTION_HARDY />
+    </PromotionsAvailable>
 
-  <!-- Movement queue -->
-  <QueueList>
-    <TileID>1256</TileID>
-    <TileID>1257</TileID>
-  </QueueList>
+    <!-- General commanding this unit -->
+    <GeneralID>125</GeneralID>
 
-  <!-- Unit state -->
-  <Fortified />
-  <Sleeping />
-  <Locked />
+    <!-- Unit state flags -->
+    <Sleep />
 
-  <!-- Origin -->
-  <OriginalTribe>TRIBE_NONE</OriginalTribe>
-  <OriginalPlayer>0</OriginalPlayer>
+    <!-- Formation -->
+    <CurrentFormation>UNITFORMATION_BLOCK</CurrentFormation>
 
-  <!-- AI data -->
-  <AI>
-    <Role>ROLE_ATTACK</Role>
-    <TargetTileID>1300</TargetTileID>
-  </AI>
-</Unit>
+    <!-- Origin -->
+    <OriginalPlayer>0</OriginalPlayer>
+
+    <!-- Gender (for units that have it) -->
+    <Gender>GENDER_MALE</Gender>
+
+    <!-- Family associations per player -->
+    <PlayerFamily>
+      <Player Family="FAMILY_JULII">0</Player>
+    </PlayerFamily>
+
+    <!-- Bonus effects with stack counts -->
+    <BonusEffectUnits>
+      <EFFECTUNIT_HEAL>2</EFFECTUNIT_HEAL>
+    </BonusEffectUnits>
+  </Unit>
+</Tile>
 ```
 
 ### Barbarian Units
@@ -727,7 +738,7 @@ Units represent military forces, workers, and settlers.
 Barbarian units have:
 - `Player="-1"`
 - `Tribe` attribute set (e.g., `TRIBE_SCYTHIANS`)
-- `OriginalTribe` matching `Tribe`
+- No `OriginalPlayer` (or negative value)
 
 ---
 
