@@ -113,59 +113,68 @@ OldWorld/
 
 The `<Root>` element contains all global game configuration as XML attributes.
 
-### Version Information
+### Version and Identity
 
 | Attribute | Type | Description |
 |-----------|------|-------------|
-| `Version` | string | Game version (e.g., `Version: 1.0.80522`) |
+| `Version` | string | Game version (e.g., `Version: 1.0.78921`) |
 | `GameId` | GUID | Unique game identifier |
+| `GameName` | string | Custom game name (often empty) |
+| `SaveDate` | string | Save timestamp (e.g., `30 July 2025`) - 2025+ only |
 | `FirstSeed` | long | Initial random seed for game generation |
+| `MapSeed` | long | Map generation seed - 2025+ only |
 
 ### Map Configuration
 
-| Attribute | Type | Values |
-|-----------|------|--------|
-| `MapWidth` | int | Map width in tiles (e.g., `76`) |
-| `MapClass` | enum | See Map Classes below |
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `MapWidth` | int | Map width in tiles (e.g., `82`) |
+| `MapClass` | enum | Map type (see below) |
 | `MapSize` | enum | See Map Sizes section |
-| `MapAspectRatio` | enum | `MAPASPECTRATIO_STANDARD`, `MAPASPECTRATIO_WIDE`, etc. |
-| `MapPath` | string | Path to custom map file (empty for generated maps) |
+| `MapPath` | string | Path to custom map file (empty for generated) |
+| `MinLatitude` | int | Map latitude bounds - 2025+ only |
+| `MaxLatitude` | int | Map latitude bounds - 2025+ only |
+| `MapEdgesSafe` | bool | Whether map edges are safe - 2025+ only |
+| `MinCitySiteDistance` | int | Minimum tiles between city sites - 2025+ only |
 
-**Map Classes (from `MapClassType` enum):**
-- `MAPCLASS_InlandSea`
-- `MAPCLASS_Seaside`
-- `MAPCLASS_Continents`
-- `MAPCLASS_Mediterranean`
-- `MAPCLASS_Archipelago`
-- `MAPCLASS_Bay`
-- `MAPCLASS_Highlands`
-- `MAPCLASS_Desert`
-- `MAPCLASS_Donut`
-- `MAPCLASS_PlayerIslands`
+**Map Classes:**
+- `MAPCLASS_MapScriptContinent`
+- `MAPCLASS_MapScriptSeaside`
+- `MAPCLASS_MapScriptInlandSea`
+- `MAPCLASS_MapScriptMediterranean`
+- `MAPCLASS_MapScriptArchipelago`
+- `MAPCLASS_MapScriptHighlands`
 
 ### Game Mode Settings
 
-| Attribute | Type | Values |
-|-----------|------|--------|
-| `GameMode` | enum | `SINGLE_PLAYER`, `NETWORK`, `LAN`, `PLAY_BY_CLOUD`, `HOTSEAT`, `SERVER` |
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `GameMode` | enum | `SINGLE_PLAYER`, `NETWORK`, `PLAY_BY_CLOUD`, `HOTSEAT` |
 | `TurnStyle` | enum | `TURNSTYLE_STRICT`, `TURNSTYLE_TIGHT`, `TURNSTYLE_LOOSE` |
 | `TurnTimer` | enum | `TURNTIMER_NONE`, `TURNTIMER_SLOW`, `TURNTIMER_MEDIUM`, `TURNTIMER_FAST` |
+| `TurnScale` | enum | `TURNSCALE_YEAR` |
+| `TeamNation` | enum | `TEAMNATION_GAME_UNIQUE` |
 
-### Difficulty and AI Settings
+### AI and Difficulty Settings
 
-| Attribute | Type | Values |
-|-----------|------|--------|
-| `Difficulty` | enum | See Difficulty section |
-| `OpponentLevel` | enum | `OPPONENTLEVEL_PEACEFUL` through `OPPONENTLEVEL_RUTHLESS` |
-| `TribeLevel` | enum | `TRIBELEVEL_WEAK` through `TRIBELEVEL_FIERCE` |
-| `EventLevel` | enum | `EVENTLEVEL_NONE`, `EVENTLEVEL_LOW`, `EVENTLEVEL_MODERATE`, `EVENTLEVEL_HIGH` |
-| `Mortality` | enum | `MORTALITY_NONE`, `MORTALITY_LOW`, `MORTALITY_STANDARD`, `MORTALITY_HIGH` |
-| `Development` | enum | `DEVELOPMENT_FLEDGLING`, `DEVELOPMENT_DEVELOPING`, `DEVELOPMENT_ADVANCED`, `DEVELOPMENT_ESTABLISHED` |
+| Attribute | Type | Description |
+|-----------|------|-------------|
+| `OpponentLevel` | enum | AI aggressiveness (`OPPONENTLEVEL_PEACEFUL` to `OPPONENTLEVEL_RUTHLESS`) |
+| `TribeLevel` | enum | Barbarian strength (`TRIBELEVEL_WEAK` to `TRIBELEVEL_RAGING`) |
+| `EventLevel` | enum | Event frequency (`EVENTLEVEL_NONE` to `EVENTLEVEL_HIGH`) |
+| `Mortality` | enum | Character death rate (`MORTALITY_NONE` to `MORTALITY_HIGH`) |
+| `Development` | enum | Starting development (`DEVELOPMENT_FLEDGLING` to `DEVELOPMENT_ESTABLISHED`) |
+| `HumanDevelopment` | enum | Human player development - 2025+ only |
+| `Advantage` | enum | AI advantage level (`ADVANTAGE_NONE`, `ADVANTAGE_MODERATE`, etc.) |
+| `ForceMarch` | enum | Force march setting - 2025+ only |
+| `VictoryPointModifier` | enum | VP modifier - 2025+ only |
+
+**Note:** Per-player difficulty is set in the `<Difficulty>` child element, not as a root attribute.
 
 ### Succession Settings
 
-| Attribute | Type | Values |
-|-----------|------|--------|
+| Attribute | Type | Description |
+|-----------|------|-------------|
 | `SuccessionGender` | enum | See below |
 | `SuccessionOrder` | enum | See below |
 
@@ -189,51 +198,86 @@ The `<Game>` element contains the current game state:
 
 ```xml
 <Game>
-  <Seed>948676584249414482</Seed>
-  <Turn>166</Turn>
+  <Seed>18046197664196916347</Seed>
+  <Turn>120</Turn>
   <TurnTime>0</TurnTime>
   <GameOver />
   <TeamTurn>0</TeamTurn>
   <PlayerTurn>0</PlayerTurn>
-  <WinnerTeam>0</WinnerTeam>
-  <WinnerVictory>2</WinnerVictory>
 
   <!-- ID Counters -->
-  <NextUnitID>1101</NextUnitID>
-  <NextCityID>50</NextCityID>
-  <NextCharacterID>625</NextCharacterID>
+  <NextUnitID>1156</NextUnitID>
+  <NextCityID>51</NextCityID>
+  <NextCharacterID>585</NextCharacterID>
+  <NextOccurrenceID>25</NextOccurrenceID>
 
-  <!-- Global settings -->
-  <MinCitySiteDistance>8</MinCitySiteDistance>
+  <!-- Map info (duplicated from Root for convenience) -->
+  <MapClass>MAPCLASS_MapScriptContinent</MapClass>
+  <MapSize>MAPSIZE_LARGE</MapSize>
+
+  <!-- Victory tracking -->
+  <TeamVictories>
+    <Team Victory="VICTORY_POINTS">0</Team>
+  </TeamVictories>
+  <TeamVictoriesCompleted>
+    <Team Victory="VICTORY_POINTS">0</Team>
+  </TeamVictoriesCompleted>
 
   <!-- Market prices -->
   <YieldPrice>
-    <YIELD_ORDERS>250</YIELD_ORDERS>
-    <YIELD_FOOD>80</YIELD_FOOD>
-    <YIELD_IRON>120</YIELD_IRON>
-    <YIELD_STONE>90</YIELD_STONE>
-    <YIELD_WOOD>70</YIELD_WOOD>
+    <YIELD_ORDERS>1415630</YIELD_ORDERS>
+    <YIELD_FOOD>114231</YIELD_FOOD>
+    <YIELD_IRON>170784</YIELD_IRON>
+    <YIELD_STONE>136950</YIELD_STONE>
+    <YIELD_WOOD>180950</YIELD_WOOD>
   </YieldPrice>
+  <YieldPriceTurn>...</YieldPriceTurn>
+  <YieldPriceHistory>...</YieldPriceHistory>
 
   <!-- Religion state -->
   <ReligionFounded>
     <RELIGION_ZOROASTRIANISM>25</RELIGION_ZOROASTRIANISM>
     <RELIGION_JUDAISM>42</RELIGION_JUDAISM>
   </ReligionFounded>
+  <ReligionFounder>
+    <RELIGION_ZOROASTRIANISM>0</RELIGION_ZOROASTRIANISM>
+  </ReligionFounder>
   <ReligionHeadID>
     <RELIGION_ZOROASTRIANISM>125</RELIGION_ZOROASTRIANISM>
   </ReligionHeadID>
   <ReligionHolyCity>
     <RELIGION_ZOROASTRIANISM>5</RELIGION_ZOROASTRIANISM>
   </ReligionHolyCity>
+  <ReligionTheology>...</ReligionTheology>
 
-  <!-- Family assignments -->
+  <!-- Family assignments per nation -->
   <FamilyClass>
     <FAMILY_JULII>FAMILYCLASS_STATESMEN</FAMILY_JULII>
     <FAMILY_CLAUDII>FAMILYCLASS_CHAMPIONS</FAMILY_CLAUDII>
-    <FAMILY_CORNELII>FAMILYCLASS_LANDOWNERS</FAMILY_CORNELII>
-    <FAMILY_AEMILII>FAMILYCLASS_TRADERS</FAMILY_AEMILII>
   </FamilyClass>
+
+  <!-- Built wonders (disabled for other players) -->
+  <ImprovementDisabled>
+    <IMPROVEMENT_COLOSSEUM />
+  </ImprovementDisabled>
+
+  <!-- Team diplomacy -->
+  <TeamAlliance>...</TeamAlliance>
+  <TeamContact>...</TeamContact>
+  <TeamDiplomacy>...</TeamDiplomacy>
+  <TeamConflictTurn>...</TeamConflictTurn>
+  <TeamDiplomacyTurn>...</TeamDiplomacyTurn>
+  <TeamWarScore>...</TeamWarScore>
+
+  <!-- Tribe diplomacy -->
+  <TribeContact>...</TribeContact>
+  <TribeDiplomacy>...</TribeDiplomacy>
+  <TribeConflictTurn>...</TribeConflictTurn>
+  <TribeDiplomacyTurn>...</TribeDiplomacyTurn>
+  <TribeWarScore>...</TribeWarScore>
+
+  <!-- Active calamities/events -->
+  <Occurrences>...</Occurrences>
 </Game>
 ```
 
@@ -244,12 +288,15 @@ The `<Game>` element contains the current game state:
 | `Seed` | ulong | Current RNG seed |
 | `Turn` | int | Current game turn (1 turn = 1 year in-game) |
 | `GameOver` | empty | Present if game has ended |
-| `WinnerTeam` | int | Team ID of winner (-1 if none) |
-| `WinnerVictory` | int | Victory type index achieved |
+| `TeamTurn` | int | Current team's turn |
+| `PlayerTurn` | int | Current player's turn |
 | `NextUnitID` | int | Next available unit ID |
 | `NextCityID` | int | Next available city ID |
 | `NextCharacterID` | int | Next available character ID |
+| `NextOccurrenceID` | int | Next available occurrence ID |
+| `TeamVictories` | complex | Victory progress per team |
 | `YieldPrice` | dict | Current market prices for goods |
+| `ImprovementDisabled` | list | Wonders that have been built (unavailable) |
 
 ---
 
@@ -264,9 +311,11 @@ Each player (human or AI) has a `<Player>` element.
 | `ID` | int | Player index (0-based) |
 | `Name` | string | Player display name |
 | `Email` | string | Player email (multiplayer) |
-| `OnlineID` | GUID | Steam/platform ID (human players only) |
-| `Nation` | enum | Civilization (e.g., `NATION_ROME`) |
-| `AIControlledToTurn` | int | Turn until AI takes control |
+| `OnlineID` | string | Steam/platform ID (human players only) |
+| `Language` | enum | Player language setting |
+| `Nation` | enum | Civilization (e.g., `NATION_AKSUM`) |
+| `Dynasty` | enum | Starting dynasty (e.g., `DYNASTY_KALEB`) |
+| `AIControlledToTurn` | int | Turn until AI takes control (0 = human) |
 
 ### Identifying Human Players
 
@@ -277,51 +326,90 @@ Each player (human or AI) has a `<Player>` element.
 ### Player Child Elements
 
 ```xml
-<Player ID="0" Nation="NATION_ROME" OnlineID="abc123...">
-  <!-- Leadership -->
-  <FounderID>25</FounderID>
+<Player
+    ID="0"
+    Name=""
+    Email=""
+    OnlineID="76561199101298499"
+    Language="LANGUAGE_ENGLISH"
+    Nation="NATION_AKSUM"
+    Dynasty="DYNASTY_KALEB"
+    AIControlledToTurn="0">
+
+  <!-- Capital and leadership -->
+  <OriginalCapitalCityID>0</OriginalCapitalCityID>
+  <FounderID>4</FounderID>
   <ChosenHeirID>-1</ChosenHeirID>
   <Leaders>
     <ID>4</ID>
-    <ID>20</ID>
-    <ID>45</ID>
+    <ID>85</ID>
+    <ID>203</ID>
   </Leaders>
 
-  <!-- Turn tracking -->
-  <LastDoTurn>166</LastDoTurn>
-  <StartTurnCities>11</StartTurnCities>
+  <!-- Turn and game state -->
+  <LastDoTurn>120</LastDoTurn>
+  <StartTurnCities>14</StartTurnCities>
+  <Legitimacy>281</Legitimacy>
+  <Founded />
+  <CompletedGameSaved />
 
-  <!-- Succession rules -->
+  <!-- Current research and religion -->
+  <TechResearching>TECH_COHORTS</TechResearching>
+  <StateReligion>RELIGION_ZOROASTRIANISM</StateReligion>
   <SuccessionGender>SUCCESSIONGENDER_ABSOLUTE_COGNATIC</SuccessionGender>
-  <SuccessionOrder>SUCCESSIONORDER_PRIMOGENITURE</SuccessionOrder>
+
+  <!-- Starting locations -->
+  <StartingTileIDs>
+    <Tile>3402</Tile>
+    <Tile>4059</Tile>
+  </StartingTileIDs>
 
   <!-- Resource stockpiles -->
   <YieldStockpile>
-    <YIELD_CIVICS>5000</YIELD_CIVICS>
-    <YIELD_TRAINING>3200</YIELD_TRAINING>
-    <YIELD_MONEY>15000</YIELD_MONEY>
-    <YIELD_FOOD>800</YIELD_FOOD>
-    <YIELD_IRON>450</YIELD_IRON>
-    <YIELD_STONE>320</YIELD_STONE>
-    <YIELD_WOOD>280</YIELD_WOOD>
-    <YIELD_ORDERS>12</YIELD_ORDERS>
+    <YIELD_CIVICS>16909</YIELD_CIVICS>
+    <YIELD_TRAINING>20000</YIELD_TRAINING>
+    <YIELD_MONEY>29708</YIELD_MONEY>
+    <YIELD_ORDERS>316</YIELD_ORDERS>
+    <YIELD_FOOD>15103</YIELD_FOOD>
+    <YIELD_IRON>3557</YIELD_IRON>
+    <YIELD_STONE>6765</YIELD_STONE>
+    <YIELD_WOOD>4091</YIELD_WOOD>
   </YieldStockpile>
 
-  <!-- Technology progress -->
+  <!-- Technology progress (research points) -->
   <TechProgress>
-    <TECH_METAPHYSICS>250</TECH_METAPHYSICS>
+    <TECH_COHORTS>5611</TECH_COHORTS>
+    <TECH_INFANTRY_SQUARE>16116</TECH_INFANTRY_SQUARE>
   </TechProgress>
+
+  <!-- Technologies researched -->
   <TechCount>
-    <TECH_TRAPPING>2</TECH_TRAPPING>
-    <TECH_STONECUTTING>1</TECH_STONECUTTING>
     <TECH_IRONWORKING>1</TECH_IRONWORKING>
+    <TECH_STONECUTTING>1</TECH_STONECUTTING>
+    <TECH_TRAPPING>1</TECH_TRAPPING>
   </TechCount>
 
-  <!-- Laws -->
+  <!-- Law change counts -->
   <LawClassChangeCount>
-    <LAWCLASS_ECONOMY>2</LAWCLASS_ECONOMY>
-    <LAWCLASS_MILITARY>1</LAWCLASS_MILITARY>
+    <LAWCLASS_EPICS_EXPLORATION>1</LAWCLASS_EPICS_EXPLORATION>
+    <LAWCLASS_SLAVERY_FREEDOM>1</LAWCLASS_SLAVERY_FREEDOM>
   </LawClassChangeCount>
+
+  <!-- Resources player has discovered -->
+  <ResourceRevealed>
+    <RESOURCE_IRON>5</RESOURCE_IRON>
+    <RESOURCE_HORSE>13</RESOURCE_HORSE>
+  </ResourceRevealed>
+
+  <!-- Ambitions started -->
+  <GoalStartedCount>
+    <GOAL_10_KILLS>1</GOAL_10_KILLS>
+    <GOAL_30_POPULATION>1</GOAL_30_POPULATION>
+  </GoalStartedCount>
+
+  <!-- Missions and bonuses received -->
+  <MissionStartedTurn>...</MissionStartedTurn>
+  <BonusCount>...</BonusCount>
 
   <!-- History data (see History section) -->
   <PointsHistory>...</PointsHistory>
@@ -329,11 +417,6 @@ Each player (human or AI) has a `<Player>` element.
   <MilitaryPowerHistory>...</MilitaryPowerHistory>
   <LegitimacyHistory>...</LegitimacyHistory>
   <FamilyOpinionHistory>...</FamilyOpinionHistory>
-  <ReligionOpinionHistory>...</ReligionOpinionHistory>
-
-  <!-- Event logs -->
-  <PermanentLogList>...</PermanentLogList>
-  <MemoryList>...</MemoryList>
 </Player>
 ```
 
@@ -342,10 +425,14 @@ Each player (human or AI) has a `<Player>` element.
 | Element | Description |
 |---------|-------------|
 | `FounderID` | Character ID of dynasty founder |
-| `Leaders` | List of character IDs who have been rulers (succession history) |
+| `Leaders` | List of character IDs who have ruled (succession history) |
+| `Legitimacy` | Current legitimacy score |
+| `StateReligion` | Player's state religion |
+| `TechResearching` | Current technology being researched |
 | `YieldStockpile` | Current resource amounts |
 | `TechProgress` | Research points toward technologies |
-| `TechCount` | Number of times each tech was researched |
+| `TechCount` | Technologies researched (1 = completed) |
+| `GoalStartedCount` | Ambitions that have been started |
 
 ---
 
@@ -359,42 +446,46 @@ Characters represent rulers, heirs, courtiers, and other notable people.
 |-----------|------|-------------|
 | `ID` | int | Unique character ID |
 | `BirthTurn` | int | Turn of birth (negative = before game start) |
-| `Player` | int | Owner player ID |
+| `Player` | int | Owner player ID (-1 for tribal characters) |
 | `Gender` | enum | `GENDER_MALE` or `GENDER_FEMALE` |
-| `FirstName` | enum | Name type (e.g., `NAME_JULIUS`) |
+| `FirstName` | enum | Name type (e.g., `NAME_SOFYA`) |
 | `Seed` | ulong | Character's random seed |
 
-### Character Structure (from `Source/Base/Game/GameCore/Character.cs`)
+### Character Structure
 
 ```xml
 <Character
-  ID="25"
-  BirthTurn="-26"
-  Player="0"
-  Gender="GENDER_MALE"
-  FirstName="NAME_MARCUS"
-  Seed="32379498">
+    ID="4"
+    BirthTurn="-17"
+    Player="0"
+    Gender="GENDER_FEMALE"
+    FirstName="NAME_SOFYA"
+    Seed="18046197664149768981">
 
   <!-- Identity -->
-  <Nickname>the Elder</Nickname>
-  <Portrait>CHARACTER_PORTRAIT_ROME_LEADER_MALE_15</Portrait>
-  <Title>TITLE_AUGUSTUS</Title>
+  <NicknameType>GENDERED_TEXT_NICKNAME_THE_YOUNGER</NicknameType>
+  <Portrait>CHARACTER_PORTRAIT_AKSUM_LEADER_FEMALE_14</Portrait>
+  <NameType>NAME_SOFYA</NameType>
+  <Cognomen>COGNOMEN_SETTLER</Cognomen>
 
   <!-- Experience -->
-  <XP>70</XP>
-  <Level>3</Level>
+  <XP>102</XP>
+  <Level>2</Level>
 
   <!-- Life events -->
-  <DeathTurn>125</DeathTurn>
-  <LeaderTurn>45</LeaderTurn>
-  <AbdicateTurn>-2147483648</AbdicateTurn>
+  <DeathTurn>23</DeathTurn>
+  <DeathReason>TEXT_TRAIT_ILL_F</DeathReason>
+  <LeaderTurn>1</LeaderTurn>
+  <NationTurn>1</NationTurn>
+
+  <!-- Status flags -->
+  <Royal />
+  <Infertile />
 
   <!-- Affiliations -->
-  <Nation>NATION_ROME</Nation>
-  <Family>FAMILY_JULII</Family>
-  <WasFamilyHead>FAMILY_JULII</WasFamilyHead>
-  <Religion>RELIGION_ZOROASTRIANISM</Religion>
-  <WasReligionHead>RELIGION_NONE</WasReligionHead>
+  <Nation>NATION_AKSUM</Nation>
+  <Family>FAMILY_AKSUM_BARYA</Family>
+  <Tribe>TRIBE_GAULS</Tribe>
 
   <!-- Family connections -->
   <FatherID>12</FatherID>
@@ -402,43 +493,38 @@ Characters represent rulers, heirs, courtiers, and other notable people.
   <BirthFatherID>12</BirthFatherID>
   <BirthMotherID>15</BirthMotherID>
   <BirthCityID>0</BirthCityID>
-  <Spouses>
-    <ID>28</ID>
-    <ID>42</ID>
-  </Spouses>
-  <Children>
-    <ID>35</ID>
-    <ID>38</ID>
-  </Children>
 
-  <!-- Ratings (0-10 scale) -->
+  <!-- Ratings (can be negative) -->
   <Rating>
-    <RATING_WISDOM>4</RATING_WISDOM>
-    <RATING_CHARISMA>6</RATING_CHARISMA>
-    <RATING_COURAGE>8</RATING_COURAGE>
-    <RATING_DISCIPLINE>5</RATING_DISCIPLINE>
+    <RATING_WISDOM>5</RATING_WISDOM>
+    <RATING_CHARISMA>0</RATING_CHARISMA>
+    <RATING_COURAGE>-1</RATING_COURAGE>
+    <RATING_DISCIPLINE>0</RATING_DISCIPLINE>
   </Rating>
 
-  <!-- Stats (varies by stat type) -->
+  <!-- Statistics -->
   <Stat>
-    <STAT_LEGITIMACY>125</STAT_LEGITIMACY>
+    <STAT_CITY_FOUNDED>3</STAT_CITY_FOUNDED>
+    <STAT_TECH_DISCOVERED>7</STAT_TECH_DISCOVERED>
+    <STAT_YEARS_REIGNED>22</STAT_YEARS_REIGNED>
+    <STAT_UNIT_MILITARY_KILLED>9</STAT_UNIT_MILITARY_KILLED>
   </Stat>
 
   <!-- Traits with acquisition turn -->
-  <Trait>
-    <TRAIT_EDUCATED />
-    <TRAIT_COMMANDER_ARCHETYPE />
-    <TRAIT_BRAVE />
-  </Trait>
   <TraitTurn>
-    <TRAIT_EDUCATED>1</TRAIT_EDUCATED>
-    <TRAIT_COMMANDER_ARCHETYPE>1</TRAIT_COMMANDER_ARCHETYPE>
-    <TRAIT_BRAVE>45</TRAIT_BRAVE>
+    <TRAIT_SCHEMER_ARCHETYPE>1</TRAIT_SCHEMER_ARCHETYPE>
+    <TRAIT_INSPIRING>10</TRAIT_INSPIRING>
+    <TRAIT_INTELLIGENT>1</TRAIT_INTELLIGENT>
   </TraitTurn>
+
+  <!-- Event stories experienced -->
+  <EventStoryTurn>
+    <EVENTSTORY_SACRED_TOMB>4</EVENTSTORY_SACRED_TOMB>
+  </EventStoryTurn>
 
   <!-- Note: Role assignments are tracked on the other entity:
        - Units have GeneralID pointing to the commanding character
-       - Cities have GovernorID and AgentID pointing to characters -->
+       - Cities have GovernorID pointing to characters -->
 
   <!-- Relationships -->
   <RelationshipList>
@@ -499,64 +585,104 @@ Cities represent urban centers controlled by players.
 
 ```xml
 <City
-  ID="0"
-  TileID="3442"
-  Player="0"
-  Family="FAMILY_JULII"
-  Founded="1">
+    ID="0"
+    TileID="3484"
+    Player="0"
+    Family="FAMILY_AKSUM_BARYA"
+    Founded="1">
 
-  <Name>CITYNAME_ROME</Name>
+  <NameType>CITYNAME_ADULIS</NameType>
   <Capital />
 
   <!-- Leadership -->
-  <GovernorID>125</GovernorID>
+  <GovernorID>350</GovernorID>
 
   <!-- Population -->
-  <GrowthCount>15</GrowthCount>
+  <GrowthCount>11</GrowthCount>
   <Citizens>8</Citizens>
-  <SpecialistProducedCount>24</SpecialistProducedCount>
+  <SpecialistProducedCount>12</SpecialistProducedCount>
 
   <!-- Ownership history -->
   <FirstPlayer>0</FirstPlayer>
   <LastPlayer>0</LastPlayer>
 
-  <!-- Production -->
+  <!-- Production progress and overflow -->
   <YieldProgress>
-    <YIELD_GROWTH>450</YIELD_GROWTH>
-    <YIELD_CULTURE>200</YIELD_CULTURE>
+    <YIELD_GROWTH>1301</YIELD_GROWTH>
+    <YIELD_CULTURE>8884</YIELD_CULTURE>
+    <YIELD_HAPPINESS>1170</YIELD_HAPPINESS>
   </YieldProgress>
   <YieldOverflow>
-    <YIELD_TRAINING>50</YIELD_TRAINING>
+    <YIELD_GROWTH>243</YIELD_GROWTH>
+    <YIELD_CIVICS>588</YIELD_CIVICS>
   </YieldOverflow>
 
   <!-- Completed projects -->
   <ProjectCount>
-    <PROJECT_INQUIRY>3</PROJECT_INQUIRY>
-    <PROJECT_FESTIVAL>2</PROJECT_FESTIVAL>
-    <PROJECT_OFFER>1</PROJECT_OFFER>
+    <PROJECT_TREASURY_1>1</PROJECT_TREASURY_1>
+    <PROJECT_FORUM_4>1</PROJECT_FORUM_4>
+    <PROJECT_ARCHIVE_1>1</PROJECT_ARCHIVE_1>
   </ProjectCount>
 
   <!-- Produced units -->
   <UnitProductionCounts>
-    <UNIT_SLINGER>2</UNIT_SLINGER>
-    <UNIT_WARRIOR>3</UNIT_WARRIOR>
+    <UNIT_SETTLER>7</UNIT_SETTLER>
     <UNIT_WORKER>4</UNIT_WORKER>
   </UnitProductionCounts>
 
-  <!-- Culture and religion -->
-  <TeamCultureStep>
-    <0>3</0>
-    <1>1</1>
-  </TeamCultureStep>
-  <ReligionTurn>
-    <RELIGION_ZOROASTRIANISM>45</RELIGION_ZOROASTRIANISM>
-  </ReligionTurn>
+  <!-- Luxury resources providing happiness -->
+  <LuxuryTurn />
 
-  <!-- Happiness modifiers -->
-  <LuxuryTurn>
-    <RESOURCE_WINE>25</RESOURCE_WINE>
-    <RESOURCE_INCENSE>32</RESOURCE_INCENSE>
-  </LuxuryTurn>
+  <!-- Agent/spy tracking (P.{player_id}) -->
+  <AgentTurn>
+    <P.3>0</P.3>
+  </AgentTurn>
+  <AgentCharacterID />
+  <AgentTileID />
+
+  <!-- Culture per team (T.{team_id}) -->
+  <TeamCultureStep>
+    <T.0>1</T.0>
+  </TeamCultureStep>
+  <TeamCulture>
+    <T.0>CULTURE_LEGENDARY</T.0>
+  </TeamCulture>
+
+  <!-- Happiness level per team -->
+  <TeamHappinessLevel>
+    <T.0>10</T.0>
+    <T.1>-1</T.1>
+  </TeamHappinessLevel>
+
+  <!-- Religion presence -->
+  <Religion>
+    <RELIGION_ZOROASTRIANISM />
+    <RELIGION_PAGAN_AKSUM />
+  </Religion>
+
+  <!-- Family per player (P.{player_id}) -->
+  <PlayerFamily>
+    <P.0>FAMILY_AKSUM_BARYA</P.0>
+  </PlayerFamily>
+
+  <!-- Event stories that have occurred in this city -->
+  <EventStoryTurn>
+    <EVENTSTORY_TRADE_SILK>119</EVENTSTORY_TRADE_SILK>
+    <EVENTSTORY_WONDER_HAGIA_SOPHIA>99</EVENTSTORY_WONDER_HAGIA_SOPHIA>
+  </EventStoryTurn>
+
+  <!-- Current build queue -->
+  <BuildQueue>
+    <QueueInfo>
+      <Build>BUILD_UNIT</Build>
+      <Type>UNIT_SHOTELAI</Type>
+      <Data>-1</Data>
+      <Progress>814</Progress>
+      <YieldCost>
+        <YIELD_IRON>200</YIELD_IRON>
+      </YieldCost>
+    </QueueInfo>
+  </BuildQueue>
 </City>
 ```
 
