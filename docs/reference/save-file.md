@@ -593,28 +593,34 @@ Y = TileID / MapWidth  (integer division)
 ### Tile Structure
 
 ```xml
-<Tile ID="155">
+<Tile ID="1026">
+  <!-- Border marker -->
+  <Boundary />
+
   <!-- Terrain -->
-  <Terrain>TERRAIN_TEMPERATE</Terrain>
-  <Height>HEIGHT_HILL</Height>
-  <Vegetation>VEGETATION_FOREST</Vegetation>
+  <Terrain>TERRAIN_LUSH</Terrain>
+  <Height>HEIGHT_FLAT</Height>
+  <Vegetation>VEGETATION_TREES</Vegetation>
 
   <!-- Resources -->
   <Resource>RESOURCE_IRON</Resource>
 
   <!-- Improvements -->
-  <Improvement>IMPROVEMENT_MINE_2</Improvement>
-  <ImprovementBuildTurnsOriginal>5</ImprovementBuildTurnsOriginal>
+  <Improvement>IMPROVEMENT_FARM</Improvement>
+  <ImprovementBuildTurnsOriginal>3</ImprovementBuildTurnsOriginal>
   <ImprovementBuildTurnsLeft>0</ImprovementBuildTurnsLeft>
   <ImprovementCost>
-    <YIELD_STONE>36</YIELD_STONE>
+    <YIELD_WOOD>18</YIELD_WOOD>
   </ImprovementCost>
 
   <!-- Specialist working this tile -->
   <Specialist>SPECIALIST_FARMER</Specialist>
 
   <!-- Territory -->
-  <CityTerritory>5</CityTerritory>
+  <CityTerritory>36</CityTerritory>
+
+  <!-- Tribal/barbarian site -->
+  <TribeSite>TRIBE_BARBARIANS</TribeSite>
 
   <!-- Road (empty element = road present) -->
   <Road />
@@ -625,30 +631,47 @@ Y = TileID / MapWidth  (integer division)
   <RiverSE>1</RiverSE>
 
   <!-- Seeds -->
-  <InitSeed>5456059863076450570</InitSeed>
-  <TurnSeed>11997237878226446141</TurnSeed>
+  <InitSeed>3268377015542681982</InitSeed>
+  <TurnSeed>221329921854821505</TurnSeed>
 
-  <!-- Tribal/barbarian site -->
-  <TribeSite>TRIBE_VANDALS</TribeSite>
+  <!-- Religion presence (empty or with religion children) -->
+  <Religion>
+    <RELIGION_ZOROASTRIANISM />
+    <RELIGION_PAGAN_AKSUM />
+  </Religion>
 
-  <!-- Religion presence -->
-  <Religion />
+  <!-- Family associations per player -->
+  <PlayerFamily>
+    <P.0>FAMILY_AKSUM_BARYA</P.0>
+  </PlayerFamily>
 
   <!-- Ownership history (see History section) -->
   <OwnerHistory>
-    <T1>0</T1>
-    <T45>1</T45>
-    <T82>0</T82>
+    <T27>1</T27>
   </OwnerHistory>
 
-  <!-- Visibility per team -->
+  <!-- Terrain/vegetation change history -->
+  <TerrainHistory>
+    <T0>TERRAIN_LUSH</T0>
+    <T62>TERRAIN_URBAN</T62>
+  </TerrainHistory>
+  <VegetationHistory>
+    <T0>VEGETATION_TREES</T0>
+    <T58>NONE</T58>
+  </VegetationHistory>
+
+  <!-- Visibility per team (T = team ID) -->
   <RevealedTurn>
-    <T0>1</T0>
-    <T1>25</T1>
+    <T0>100</T0>
+    <T1>94</T1>
   </RevealedTurn>
+  <Revealed>
+    <Team>0</Team>
+    <Team>1</Team>
+  </Revealed>
 
   <!-- Units on this tile (see Unit Elements section) -->
-  <Unit ID="91" Type="UNIT_LEGIONARY" Player="0">
+  <Unit ID="1099" Type="UNIT_SWORDSMAN" Player="1" ...>
     ...
   </Unit>
 </Tile>
@@ -675,60 +698,71 @@ Units represent military forces, workers, and settlers. **Units are children of 
 ### Unit Structure
 
 ```xml
-<Tile ID="1255">
+<Tile ID="1026">
   <!-- ... tile data ... -->
   <Unit
-    ID="91"
-    Type="UNIT_LEGIONARY"
-    Player="0"
-    Seed="2395150775299824834">
+    ID="1099"
+    Type="UNIT_SWORDSMAN"
+    Player="1"
+    Tribe="NONE"
+    Seed="18046197663297639751">
+
+    <!-- General commanding this unit -->
+    <GeneralID>576</GeneralID>
+
+    <!-- Experience and level -->
+    <XP>50</XP>
+    <Level>2</Level>
+
+    <!-- Timeline -->
+    <CreateTurn>114</CreateTurn>
+    <TurnsSinceLastMove>11</TurnsSinceLastMove>
 
     <!-- Direction unit is facing -->
     <Facing>E</Facing>
 
-    <!-- Experience and level -->
-    <XP>150</XP>
-    <Level>2</Level>
+    <!-- Origin -->
+    <OriginalPlayer>1</OriginalPlayer>
 
-    <!-- Timeline -->
-    <CreateTurn>45</CreateTurn>
-    <TurnsSinceLastMove>0</TurnsSinceLastMove>
+    <!-- Gender (for units that have it, e.g., workers) -->
+    <Gender>GENDER_FEMALE</Gender>
+
+    <!-- Cooldown state -->
+    <Cooldown>COOLDOWN_GENERAL</Cooldown>
+    <CooldownTurns>1</CooldownTurns>
+
+    <!-- Raid participation -->
+    <RaidTurn />
+
+    <!-- Family associations per player (P.{player_id}) -->
+    <PlayerFamily>
+      <P.1>FAMILY_CYPSELID</P.1>
+    </PlayerFamily>
+
+    <!-- Movement queue -->
+    <QueueList />
 
     <!-- Acquired promotions -->
     <Promotions>
-      <PROMOTION_FIERCE />
-      <PROMOTION_DISCIPLINED />
+      <PROMOTION_COMBAT1 />
     </Promotions>
 
     <!-- Available promotions to choose -->
     <PromotionsAvailable>
-      <PROMOTION_HARDY />
+      <PROMOTION_COMBAT2 />
+      <PROMOTION_TOUGH />
+      <PROMOTION_HECKLER />
     </PromotionsAvailable>
 
-    <!-- General commanding this unit -->
-    <GeneralID>125</GeneralID>
-
-    <!-- Unit state flags -->
-    <Sleep />
-
-    <!-- Formation -->
-    <CurrentFormation>UNITFORMATION_BLOCK</CurrentFormation>
-
-    <!-- Origin -->
-    <OriginalPlayer>0</OriginalPlayer>
-
-    <!-- Gender (for units that have it) -->
-    <Gender>GENDER_MALE</Gender>
-
-    <!-- Family associations per player -->
-    <PlayerFamily>
-      <Player Family="FAMILY_JULII">0</Player>
-    </PlayerFamily>
-
     <!-- Bonus effects with stack counts -->
-    <BonusEffectUnits>
-      <EFFECTUNIT_HEAL>2</EFFECTUNIT_HEAL>
-    </BonusEffectUnits>
+    <BonusEffectUnits />
+
+    <!-- AI state (for AI-controlled units) -->
+    <AI>
+      <Target>1001</Target>
+      <TargetData>38</TargetData>
+      <Role>IMPROVE</Role>
+    </AI>
   </Unit>
 </Tile>
 ```
