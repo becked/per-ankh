@@ -1194,6 +1194,21 @@ fn insert_match_metadata(
         })
         .filter(|s| !s.is_empty()); // Return None if no victory conditions found
 
+    // Parse Team/PlayerTeam elements to build player→team mapping
+    // Structure: <Team><PlayerTeam>0</PlayerTeam><PlayerTeam>1</PlayerTeam>...</Team>
+    // The index of PlayerTeam corresponds to the player XML ID
+    let team_assignments: Vec<i32> = root
+        .children()
+        .find(|n| n.has_tag_name("Team"))
+        .map(|team_elem| {
+            team_elem
+                .children()
+                .filter(|n| n.has_tag_name("PlayerTeam"))
+                .filter_map(|n| n.text().and_then(|t| t.parse::<i32>().ok()))
+                .collect()
+        })
+        .unwrap_or_default();
+
     // Extract winner information (if game has been won)
     // TeamVictories is inside the Game element
     let winner_info = game_node
@@ -1203,9 +1218,28 @@ fn insert_match_metadata(
             tv.children()
                 .find(|n| n.has_tag_name("Team"))
                 .and_then(|team| {
-                    let team_id = team.text()?.parse::<i32>().ok()?;
+                    let winning_team_id = team.text()?.parse::<i32>().ok()?;
                     let victory_type = team.opt_attr("Victory").map(|s| s.to_string());
-                    Some(WinnerInfo::TeamId(team_id, victory_type))
+
+                    // Find which player is on the winning team using Team/PlayerTeam mapping
+                    // PlayerTeam elements are indexed by player XML ID
+                    let winner_player_xml_id = team_assignments
+                        .iter()
+                        .enumerate()
+                        .find(|(_, &team_id)| team_id == winning_team_id)
+                        .map(|(player_idx, _)| player_idx as i32);
+
+                    match winner_player_xml_id {
+                        Some(xml_id) => Some(WinnerInfo::PlayerXmlId(xml_id, victory_type)),
+                        None => {
+                            // Fallback: return TeamId and let update_winner handle it
+                            log::warn!(
+                                "Could not find player on winning team {} via Team/PlayerTeam mapping",
+                                winning_team_id
+                            );
+                            Some(WinnerInfo::TeamId(winning_team_id, victory_type))
+                        }
+                    }
                 })
         })
         .or_else(|| {
