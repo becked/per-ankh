@@ -787,6 +787,11 @@
       .join(', ') ?? 'Unknown'
   );
 
+  // Check if Victory Points victory condition is enabled
+  const victoryPointsEnabled = $derived(
+    gameDetails?.victory_conditions?.includes('VICTORY_POINTS') ?? false
+  );
+
   // Format DLC list from DB string
   const dlcList = $derived(
     gameDetails?.enabled_dlc
@@ -1116,7 +1121,12 @@
           style="background-color: #35302B;"
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Game History</h2>
-          {#if pointsChartOption}
+          {#if !victoryPointsEnabled}
+            <div class="p-6 rounded-lg border-2 border-black mb-6" style="background-color: #201a13;">
+              <h3 class="text-tan font-bold mb-2">Victory Points</h3>
+              <p class="text-brown italic">Victory Points not enabled for this game (enabled: {victoryConditions}).</p>
+            </div>
+          {:else if pointsChartOption}
             {#snippet pointsFilter()}
               {#if nationSeriesInfo.length > 0}
                 <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedPointsNations} />

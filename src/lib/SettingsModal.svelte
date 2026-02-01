@@ -1,5 +1,6 @@
 <script lang="ts">
   import { api } from "$lib/api";
+  import { refreshData } from "$lib/stores/refresh";
   import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 
   interface Props {
@@ -40,6 +41,8 @@
     try {
       await api.setPrimaryUserOnlineId(onlineId);
       currentOnlineId = onlineId;
+      // Refresh sidebar to update trophy icons with new save owner calculation
+      refreshData.trigger();
     } catch (err) {
       error = String(err);
     } finally {

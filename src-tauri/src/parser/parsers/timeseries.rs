@@ -5,7 +5,7 @@
 
 use crate::parser::game_data::{
     FamilyOpinionHistory, LegitimacyHistory, MilitaryPowerHistory, PointsHistory,
-    ReligionOpinionHistory, YieldPriceHistory, YieldRateHistory,
+    ReligionOpinionHistory, YieldPriceHistory, YieldRateHistory, YieldTotalHistory,
 };
 use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
 use crate::parser::{ParseError, Result};
@@ -120,6 +120,7 @@ pub fn parse_all_player_timeseries(
     Vec<PointsHistory>,
     Vec<LegitimacyHistory>,
     Vec<YieldRateHistory>,
+    Vec<YieldTotalHistory>,
     Vec<FamilyOpinionHistory>,
     Vec<ReligionOpinionHistory>,
 )> {
@@ -129,6 +130,7 @@ pub fn parse_all_player_timeseries(
     let mut points = Vec::new();
     let mut legitimacy = Vec::new();
     let mut yield_rates = Vec::new();
+    let mut yield_totals = Vec::new();
     let mut family_opinions = Vec::new();
     let mut religion_opinions = Vec::new();
 
@@ -174,6 +176,19 @@ pub fn parse_all_player_timeseries(
             });
         }
 
+        // Parse yield total history (per-yield type) - more accurate cumulative totals
+        // Available in game version 1.0.81366+ (January 2026)
+        for (yield_type, turn, amount) in
+            parse_sparse_history_by_type(&player_node, "YieldTotalHistory")?
+        {
+            yield_totals.push(YieldTotalHistory {
+                player_xml_id,
+                turn,
+                yield_type,
+                amount,
+            });
+        }
+
         // Parse family opinion history (per-family)
         for (family_name, turn, opinion) in
             parse_sparse_history_by_type(&player_node, "FamilyOpinionHistory")?
@@ -204,6 +219,7 @@ pub fn parse_all_player_timeseries(
         points,
         legitimacy,
         yield_rates,
+        yield_totals,
         family_opinions,
         religion_opinions,
     ))
@@ -329,7 +345,7 @@ mod tests {
         </Root>"#;
 
         let doc = parse_xml(xml.to_string()).unwrap();
-        let (military, points, legitimacy, _, _, _) = parse_all_player_timeseries(&doc).unwrap();
+        let (military, points, legitimacy, _, _, _, _) = parse_all_player_timeseries(&doc).unwrap();
 
         assert_eq!(military.len(), 1);
         assert_eq!(military[0].player_xml_id, 0);
@@ -353,14 +369,69 @@ mod tests {
         </Root>"#;
 
         let doc = parse_xml(xml.to_string()).unwrap();
-        let (military, points, legitimacy, yields, families, religions) =
+        let (military, points, legitimacy, yields, yield_totals, families, religions) =
             parse_all_player_timeseries(&doc).unwrap();
 
         assert_eq!(military.len(), 0);
         assert_eq!(points.len(), 0);
         assert_eq!(legitimacy.len(), 0);
         assert_eq!(yields.len(), 0);
+        assert_eq!(yield_totals.len(), 0);
         assert_eq!(families.len(), 0);
         assert_eq!(religions.len(), 0);
+    }
+
+    #[test]
+    fn test_parse_yield_total_history() {
+        let xml = r#"<Root>
+            <Player ID="0">
+                <YieldTotalHistory>
+                    <YIELD_GROWTH>
+                        <T2>144</T2>
+                        <T5>432</T5>
+                    </YIELD_GROWTH>
+                    <YIELD_SCIENCE>
+                        <T2>50</T2>
+                    </YIELD_SCIENCE>
+                </YieldTotalHistory>
+            </Player>
+        </Root>"#;
+
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let (_, _, _, _, yield_totals, _, _) = parse_all_player_timeseries(&doc).unwrap();
+
+        assert_eq!(yield_totals.len(), 3);
+        assert_eq!(yield_totals[0].player_xml_id, 0);
+        assert_eq!(yield_totals[0].yield_type, "YIELD_GROWTH");
+        assert_eq!(yield_totals[0].turn, 2);
+        assert_eq!(yield_totals[0].amount, 144);
+        assert_eq!(yield_totals[1].yield_type, "YIELD_GROWTH");
+        assert_eq!(yield_totals[1].turn, 5);
+        assert_eq!(yield_totals[1].amount, 432);
+        assert_eq!(yield_totals[2].yield_type, "YIELD_SCIENCE");
+        assert_eq!(yield_totals[2].turn, 2);
+        assert_eq!(yield_totals[2].amount, 50);
+    }
+
+    #[test]
+    fn test_parse_yield_total_history_missing() {
+        // Old save files won't have YieldTotalHistory
+        let xml = r#"<Root>
+            <Player ID="0">
+                <YieldRateHistory>
+                    <YIELD_GROWTH>
+                        <T2>10</T2>
+                    </YIELD_GROWTH>
+                </YieldRateHistory>
+            </Player>
+        </Root>"#;
+
+        let doc = parse_xml(xml.to_string()).unwrap();
+        let (_, _, _, yield_rates, yield_totals, _, _) = parse_all_player_timeseries(&doc).unwrap();
+
+        // yield_totals should be empty for old saves
+        assert_eq!(yield_totals.len(), 0);
+        // yield_rates should still work
+        assert_eq!(yield_rates.len(), 1);
     }
 }
