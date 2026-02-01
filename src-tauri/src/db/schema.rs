@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Current schema version - increment when breaking changes require database reset
-pub const CURRENT_SCHEMA_VERSION: &str = "2.11.0";
+pub const CURRENT_SCHEMA_VERSION: &str = "2.12.0";
 
 /// Schema version file metadata
 ///

@@ -238,10 +238,40 @@ pub struct MapTile {
     pub owner_city_id: Option<i64>,
 }
 
-// Initialize logging
+// Initialize logging to both console and file (dev builds only)
+#[cfg(debug_assertions)]
 fn init_logging() {
-    env_logger::Builder::from_env(env_logger::Env::default().default_filter_or("info"))
-        .init();
+    // Create logs directory if it doesn't exist
+    let logs_dir = std::path::Path::new("logs");
+    if !logs_dir.exists() {
+        let _ = std::fs::create_dir_all(logs_dir);
+    }
+
+    // Open log file (append mode)
+    let log_file = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open("logs/dev.log")
+        .expect("Failed to open log file");
+
+    // Configure fern for dual output (console + file)
+    fern::Dispatch::new()
+        .format(|out, message, record| {
+            out.finish(format_args!(
+                "[{} {} {}] {}",
+                chrono::Utc::now().format("%Y-%m-%dT%H:%M:%SZ"),
+                record.level(),
+                record.target(),
+                message
+            ))
+        })
+        .level(log::LevelFilter::Info)
+        // Output to stderr (console)
+        .chain(std::io::stderr())
+        // Output to file
+        .chain(log_file)
+        .apply()
+        .expect("Failed to initialize logging");
 }
 
 /// Tauri command to import a save file
@@ -550,13 +580,22 @@ async fn get_game_details(
 
 /// Tauri command to get player history data for charts
 ///
-/// Returns time-series data for victory points, military power, and legitimacy
+/// Returns time-series data for victory points, military power, and legitimacy.
+/// Uses forward-fill to handle sparse data from game v1.0.81366+ (January 2026)
+/// where history elements only record values when they change.
 #[tauri::command]
 async fn get_player_history(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerHistory>, String> {
     pool.with_connection(|conn| {
+        // Get total turns for this match to generate complete turn sequence
+        let total_turns: i32 = conn.query_row(
+            "SELECT total_turns FROM matches WHERE match_id = ?",
+            [match_id],
+            |row| row.get(0),
+        )?;
+
         // Get all players for this match
         let mut players_stmt = conn
             .prepare(
@@ -573,27 +612,45 @@ async fn get_player_history(
         let mut result = Vec::new();
 
         for (player_id, player_name, nation) in players {
-            // Query combined history data using LEFT JOINs to handle sparse data
+            // Query with forward-fill using DuckDB window functions.
+            // Generates complete turn sequence and fills gaps with LAST_VALUE.
             let mut history_stmt = conn
                 .prepare(
-                    "SELECT DISTINCT
-                        COALESCE(ph.turn, mh.turn, lh.turn) as turn,
-                        ph.points,
-                        mh.military_power,
-                        lh.legitimacy
-                     FROM (SELECT DISTINCT turn FROM points_history WHERE match_id = ? AND player_id = ?
-                           UNION SELECT DISTINCT turn FROM military_history WHERE match_id = ? AND player_id = ?
-                           UNION SELECT DISTINCT turn FROM legitimacy_history WHERE match_id = ? AND player_id = ?) turns
-                     LEFT JOIN points_history ph ON ph.match_id = ? AND ph.player_id = ? AND ph.turn = turns.turn
-                     LEFT JOIN military_history mh ON mh.match_id = ? AND mh.player_id = ? AND mh.turn = turns.turn
-                     LEFT JOIN legitimacy_history lh ON lh.match_id = ? AND lh.player_id = ? AND lh.turn = turns.turn
-                     ORDER BY turn"
+                    "WITH turns AS (
+                        SELECT UNNEST(RANGE(1, ? + 1)) AS turn
+                    ),
+                    sparse_data AS (
+                        SELECT
+                            t.turn,
+                            ph.points,
+                            mh.military_power,
+                            lh.legitimacy
+                        FROM turns t
+                        LEFT JOIN points_history ph
+                            ON ph.match_id = ? AND ph.player_id = ? AND ph.turn = t.turn
+                        LEFT JOIN military_history mh
+                            ON mh.match_id = ? AND mh.player_id = ? AND mh.turn = t.turn
+                        LEFT JOIN legitimacy_history lh
+                            ON lh.match_id = ? AND lh.player_id = ? AND lh.turn = t.turn
+                    )
+                    SELECT
+                        turn,
+                        LAST_VALUE(points IGNORE NULLS) OVER (
+                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS points,
+                        LAST_VALUE(military_power IGNORE NULLS) OVER (
+                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS military_power,
+                        LAST_VALUE(legitimacy IGNORE NULLS) OVER (
+                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS legitimacy
+                    FROM sparse_data
+                    ORDER BY turn"
                 )?;
 
             let history: Vec<PlayerHistoryPoint> = history_stmt
                 .query_map(
-                    [match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64,
-                     match_id, player_id as i64, match_id, player_id as i64, match_id, player_id as i64],
+                    [total_turns, match_id as i32, player_id, match_id as i32, player_id, match_id as i32, player_id],
                     |row| {
                         Ok(PlayerHistoryPoint {
                             turn: row.get(0)?,
@@ -622,7 +679,10 @@ async fn get_player_history(
 
 /// Tauri command to get yield history data for specific yield types
 ///
-/// Returns time-series data for requested yield types (e.g., YIELD_SCIENCE, YIELD_CIVICS)
+/// Returns time-series data for requested yield types (e.g., YIELD_SCIENCE, YIELD_CIVICS).
+/// Uses forward-fill to handle sparse data from game v1.0.81366+ (January 2026).
+/// Prefers yield_total_history (accurate cumulative totals) when available,
+/// falls back to yield_history (rate-based) for older saves.
 #[tauri::command]
 async fn get_yield_history(
     match_id: i64,
@@ -630,6 +690,13 @@ async fn get_yield_history(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<YieldHistory>, String> {
     pool.with_connection(|conn| {
+        // Get total turns for this match to generate complete turn sequence
+        let total_turns: i32 = conn.query_row(
+            "SELECT total_turns FROM matches WHERE match_id = ?",
+            [match_id],
+            |row| row.get(0),
+        )?;
+
         // Get all players for this match
         let mut players_stmt = conn
             .prepare(
@@ -645,20 +712,41 @@ async fn get_yield_history(
 
         let mut result = Vec::new();
 
-        // For each player and each yield type, get the history
+        // For each player and each yield type, get the history with forward-fill
         for (player_id, player_name, nation) in players {
             for yield_type in &yield_types {
-                // Query yield history for this player and yield type
-                // Convert from fixed-point (divide by 10) to display values
+                // Query with forward-fill using DuckDB window functions.
+                // Prefers yield_total_history (accurate totals) when available,
+                // falls back to yield_history (rate-based) for older saves.
                 let mut yield_stmt = conn
                     .prepare(
-                        "SELECT turn, amount / 10.0 AS display_amount
-                         FROM yield_history
-                         WHERE match_id = ? AND player_id = ? AND yield_type = ?
-                         ORDER BY turn"
+                        "WITH turns AS (
+                            SELECT UNNEST(RANGE(1, ? + 1)) AS turn
+                        ),
+                        source_data AS (
+                            SELECT
+                                t.turn,
+                                COALESCE(tot.amount, rate.amount) AS amount
+                            FROM turns t
+                            LEFT JOIN yield_total_history tot
+                                ON tot.match_id = ? AND tot.player_id = ? AND tot.yield_type = ? AND tot.turn = t.turn
+                            LEFT JOIN yield_history rate
+                                ON rate.match_id = ? AND rate.player_id = ? AND rate.yield_type = ? AND rate.turn = t.turn
+                        )
+                        SELECT
+                            turn,
+                            LAST_VALUE(amount / 10.0 IGNORE NULLS) OVER (
+                                ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                            ) AS display_amount
+                        FROM source_data
+                        ORDER BY turn"
                     )?;
 
-                let params: [&dyn duckdb::ToSql; 3] = [&match_id, &(player_id as i64), &yield_type.as_str()];
+                let params: [&dyn duckdb::ToSql; 7] = [
+                    &total_turns,
+                    &match_id, &(player_id as i64), &yield_type.as_str(),
+                    &match_id, &(player_id as i64), &yield_type.as_str()
+                ];
                 let data: Vec<YieldDataPoint> = yield_stmt
                     .query_map(&params[..], |row| {
                         Ok(YieldDataPoint {
@@ -2020,6 +2108,7 @@ async fn get_known_online_ids(
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(debug_assertions)]
     init_logging();
 
     let builder = tauri::Builder::default()

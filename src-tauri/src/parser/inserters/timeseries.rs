@@ -4,7 +4,7 @@
 
 use crate::parser::game_data::{
     FamilyOpinionHistory, LegitimacyHistory, MilitaryPowerHistory, PointsHistory,
-    ReligionOpinionHistory, YieldPriceHistory, YieldRateHistory,
+    ReligionOpinionHistory, YieldPriceHistory, YieldRateHistory, YieldTotalHistory,
 };
 use crate::parser::id_mapper::IdMapper;
 use crate::parser::utils::deduplicate_rows_last_wins;
@@ -159,6 +159,45 @@ pub fn insert_yield_rate_history(
     );
 
     let mut app = conn.appender("yield_history")?;
+    for (player_id, match_id, turn, yield_type, amount) in unique_rows {
+        app.append_row(params![player_id, match_id, turn, yield_type, amount])?;
+    }
+    drop(app);
+
+    Ok(())
+}
+
+/// Insert player yield total history (per-yield type)
+/// More accurate cumulative totals available in game v1.0.81366+ (January 2026)
+pub fn insert_yield_total_history(
+    conn: &Connection,
+    items: &[YieldTotalHistory],
+    id_mapper: &IdMapper,
+) -> Result<()> {
+    if items.is_empty() {
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for item in items {
+        let player_id = id_mapper.get_player(item.player_xml_id)?;
+        rows.push((
+            player_id,
+            id_mapper.match_id,
+            item.turn,
+            item.yield_type.clone(),
+            item.amount,
+        ));
+    }
+
+    let unique_rows = deduplicate_rows_last_wins(
+        rows,
+        |(player_id, match_id, turn, yield_type, _)| {
+            (*player_id, *match_id, *turn, yield_type.clone())
+        },
+    );
+
+    let mut app = conn.appender("yield_total_history")?;
     for (player_id, match_id, turn, yield_type, amount) in unique_rows {
         app.append_row(params![player_id, match_id, turn, yield_type, amount])?;
     }

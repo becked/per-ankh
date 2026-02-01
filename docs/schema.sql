@@ -836,6 +836,18 @@ CREATE TABLE yield_history (
     PRIMARY KEY (player_id, match_id, turn, yield_type)
 );
 
+-- Cumulative yield totals (more accurate than yield_history)
+-- Available in game version 1.0.81366+ (January 2026)
+-- Includes ALL yield sources: base production, events, bonuses, specialists, trade
+CREATE TABLE yield_total_history (
+    player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
+    match_id BIGINT NOT NULL,
+    turn INTEGER NOT NULL,
+    yield_type VARCHAR NOT NULL, -- YIELD_GROWTH, YIELD_CIVICS, YIELD_TRAINING, etc.
+    amount INTEGER NOT NULL,     -- Cumulative total up to this turn
+    PRIMARY KEY (player_id, match_id, turn, yield_type)
+);
+
 CREATE TABLE points_history (
     player_id INTEGER NOT NULL,  -- References: players(player_id, match_id)
     match_id BIGINT NOT NULL,

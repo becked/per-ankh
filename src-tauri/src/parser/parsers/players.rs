@@ -47,11 +47,10 @@ pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
             .as_ref()
             .map(|s| !s.is_empty())
             .unwrap_or(false);
-        let ai_controlled_to_turn_zero = player_node
+        let ai_controlled_to_turn = player_node
             .opt_attr("AIControlledToTurn")
-            .and_then(|s| s.parse::<i32>().ok())
-            .map(|turn| turn == 0)
-            .unwrap_or(false);
+            .and_then(|s| s.parse::<i32>().ok());
+        let ai_controlled_to_turn_zero = ai_controlled_to_turn == Some(0);
         let is_human = has_online_id || ai_controlled_to_turn_zero;
         let email = player_node.opt_attr("Email").map(|s| s.to_string());
 
@@ -116,6 +115,7 @@ pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
             is_save_owner: false, // Determined later by save owner detection logic
             online_id,
             email,
+            ai_controlled_to_turn,
             difficulty,
             last_turn_completed,
             turn_ended,

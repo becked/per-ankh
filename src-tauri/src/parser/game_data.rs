@@ -30,6 +30,10 @@ pub struct PlayerData {
     pub online_id: Option<String>,
     pub email: Option<String>,
 
+    // Turn state (used to detect save owner in multiplayer)
+    // AIControlledToTurn=0 means this player is actively taking their turn (created the save)
+    pub ai_controlled_to_turn: Option<i32>,
+
     // Game settings
     pub difficulty: Option<String>,
 
@@ -535,6 +539,17 @@ pub struct YieldRateHistory {
     pub turn: i32,
     pub yield_type: String,  // e.g., "YIELD_GROWTH", "YIELD_CIVICS"
     pub amount: i32,
+}
+
+/// Player cumulative yield totals (more accurate than YieldRateHistory)
+/// Available in game version 1.0.81366+ (January 2026)
+/// Includes ALL yield sources: base production, events, bonuses, specialists, trade
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct YieldTotalHistory {
+    pub player_xml_id: i32,
+    pub turn: i32,
+    pub yield_type: String,  // e.g., "YIELD_GROWTH", "YIELD_CIVICS"
+    pub amount: i32,         // Cumulative total up to this turn
 }
 
 /// Player family opinion history per family (sparse timeseries)

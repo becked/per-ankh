@@ -724,11 +724,11 @@ fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &Id
 /// This function parses both game-level and player-level time-series data:
 /// - Game-level: YieldPriceHistory
 /// - Player-level: MilitaryPowerHistory, PointsHistory, LegitimacyHistory,
-///                 YieldRateHistory, FamilyOpinionHistory, ReligionOpinionHistory
+///   YieldRateHistory, YieldTotalHistory, FamilyOpinionHistory, ReligionOpinionHistory
 fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
     let yield_prices = super::parsers::parse_yield_price_history_struct(doc)?;
-    let (military_power, points, legitimacy, yield_rates, family_opinions, religion_opinions) =
+    let (military_power, points, legitimacy, yield_rates, yield_totals, family_opinions, religion_opinions) =
         super::parsers::parse_all_player_timeseries(doc)?;
 
     // Insert to database
@@ -737,16 +737,18 @@ fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMappe
     super::inserters::insert_points_history(tx, &points, id_mapper)?;
     super::inserters::insert_legitimacy_history(tx, &legitimacy, id_mapper)?;
     super::inserters::insert_yield_rate_history(tx, &yield_rates, id_mapper)?;
+    super::inserters::insert_yield_total_history(tx, &yield_totals, id_mapper)?;
     super::inserters::insert_family_opinion_history(tx, &family_opinions, id_mapper)?;
     super::inserters::insert_religion_opinion_history(tx, &religion_opinions, id_mapper)?;
 
     log::info!(
-        "Parsed time-series data: {} yield prices, {} military, {} points, {} legitimacy, {} yields, {} family opinions, {} religion opinions",
+        "Parsed time-series data: {} yield prices, {} military, {} points, {} legitimacy, {} yield_rates, {} yield_totals, {} family opinions, {} religion opinions",
         yield_prices.len(),
         military_power.len(),
         points.len(),
         legitimacy.len(),
         yield_rates.len(),
+        yield_totals.len(),
         family_opinions.len(),
         religion_opinions.len()
     );
@@ -1010,8 +1012,10 @@ fn update_winner(
 ///
 /// Detection priority:
 /// 1. If only one human player exists → they are the save owner
-/// 2. If primary_user_online_id is set → match player by OnlineID
-/// 3. Otherwise → leave is_save_owner = false for all players (unknown)
+/// 2. If multiple humans and one has AIControlledToTurn=0 → they are the save owner
+///    (in multiplayer, only the active player can save the game)
+/// 3. If primary_user_online_id is set → match player by OnlineID
+/// 4. Otherwise → leave is_save_owner = false for all players (unknown)
 fn determine_save_owner(
     tx: &Connection,
     match_id: i64,
@@ -1024,17 +1028,32 @@ fn determine_save_owner(
         // Single human = save owner (covers all single-player games)
         Some(human_players[0].xml_id)
     } else if human_players.len() > 1 {
-        // Multiple humans: try to match by primary user OnlineID
-        let primary_online_id = crate::db::settings::get_primary_user_online_id(tx)
-            .map_err(|e| ParseError::InvalidFormat(e.to_string()))?;
+        // Multiple humans (multiplayer): first try AIControlledToTurn=0 detection
+        // The player with AIControlledToTurn=0 is the active player who created the save
+        let active_player = human_players
+            .iter()
+            .find(|p| p.ai_controlled_to_turn == Some(0));
 
-        if let Some(ref online_id) = primary_online_id {
-            players_data
-                .iter()
-                .find(|p| p.online_id.as_ref() == Some(online_id))
-                .map(|p| p.xml_id)
+        if let Some(player) = active_player {
+            log::debug!(
+                "Detected save owner via AIControlledToTurn=0: {} (xml_id={})",
+                player.player_name,
+                player.xml_id
+            );
+            Some(player.xml_id)
         } else {
-            None // No primary user configured, can't determine save owner
+            // Fallback: try to match by primary user OnlineID
+            let primary_online_id = crate::db::settings::get_primary_user_online_id(tx)
+                .map_err(|e| ParseError::InvalidFormat(e.to_string()))?;
+
+            if let Some(ref online_id) = primary_online_id {
+                players_data
+                    .iter()
+                    .find(|p| p.online_id.as_ref() == Some(online_id))
+                    .map(|p| p.xml_id)
+            } else {
+                None // No primary user configured and no active player, can't determine save owner
+            }
         }
     } else {
         None // No human players
@@ -1442,6 +1461,16 @@ mod tests {
 
     /// Helper to create a minimal PlayerData for testing
     fn make_test_player(xml_id: i32, is_human: bool, online_id: Option<&str>) -> super::super::game_data::PlayerData {
+        make_test_player_with_turn(xml_id, is_human, online_id, None)
+    }
+
+    /// Helper to create a PlayerData with ai_controlled_to_turn for multiplayer testing
+    fn make_test_player_with_turn(
+        xml_id: i32,
+        is_human: bool,
+        online_id: Option<&str>,
+        ai_controlled_to_turn: Option<i32>,
+    ) -> super::super::game_data::PlayerData {
         super::super::game_data::PlayerData {
             xml_id,
             player_name: format!("Player{}", xml_id),
@@ -1452,6 +1481,7 @@ mod tests {
             is_save_owner: false,
             online_id: online_id.map(|s| s.to_string()),
             email: None,
+            ai_controlled_to_turn,
             difficulty: None,
             last_turn_completed: None,
             turn_ended: false,

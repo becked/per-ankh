@@ -60,6 +60,6 @@ pub use tile_data::{insert_tile_changes, insert_tile_visibility};
 pub use timeseries::{
     insert_family_opinion_history, insert_legitimacy_history, insert_military_power_history,
     insert_points_history, insert_religion_opinion_history, insert_yield_price_history,
-    insert_yield_rate_history,
+    insert_yield_rate_history, insert_yield_total_history,
 };
 pub use units::{insert_unit_effects, insert_unit_families, insert_unit_promotions, insert_units};

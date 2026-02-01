@@ -9,9 +9,6 @@ mod tests {
 
     #[test]
     fn test_schema_tables_exist() {
-        // Initialize logger for test
-        let _ = env_logger::builder().is_test(true).try_init();
-
         let dir = tempdir().unwrap();
         let db_path = dir.path().join("test.db");
 
