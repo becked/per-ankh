@@ -1,5 +1,16 @@
 # Changelog
 
+## [0.1.9] - 2026-01-31
+
+### Added
+- Support for new Old World save file format (game version 1.0.77+)
+- Auto-detection of save owner in multiplayer games
+- YieldTotalHistory data extraction for comprehensive yield tracking
+
+### Fixed
+- Winner determination in multiplayer games now correctly identifies the victor
+- Comprehensive validation of save file references against actual data
+
 ## [0.1.8] - 2025-12-05
 
 ### Added
@@ -148,8 +159,8 @@
 - Real-time import progress events
 - GitHub Actions release workflow
 
-[Unreleased]: https://github.com/becked/per-ankh/compare/v0.1.8...HEAD
-[0.1.8]: https://github.com/becked/per-ankh/compare/v0.1.8...v0.1.8
+[Unreleased]: https://github.com/becked/per-ankh/compare/v0.1.9...HEAD
+[0.1.9]: https://github.com/becked/per-ankh/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/becked/per-ankh/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/becked/per-ankh/compare/v0.1.6...v0.1.7
 [0.1.6]: https://github.com/becked/per-ankh/compare/v0.1.5...v0.1.6
