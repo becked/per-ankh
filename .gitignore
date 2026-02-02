@@ -44,6 +44,10 @@ Cargo.lock
 /src-tauri/WixTools/
 /src-tauri/gen/
 
+# Tauri Signing Keys
+.tauri-signing-key
+.tauri-signing-key.pub
+
 # Environment Variables
 .env
 .env.*
