@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.1.10] - 2026-02-02
+
+### Added
+- Military tab with Military Power chart and Units Produced pivot table
+- Techs tab with tech discovery chart and completed techs pivot table
+- Separate Laws tab with law adoption chart and current laws pivot table
+- 8 additional yield charts: Orders, Food, Money, Discontent, Iron, Stone, Wood, Maintenance
+- Automatic update functionality with Tauri updater plugin
+- Incremental schema migration system for non-breaking database updates
+- Nation filter dropdown for Cities table
+- Nation filter dropdown for Improvements table
+
+### Changed
+- Renamed "Economics" tab to "Yields" (now displays 16 charts total)
+- Split "Laws & Technology" tab into separate Laws and Techs tabs
+- Converted Laws, Techs, Units, and Improvements tables to pivot format (rows=items, columns=nations)
+- Removed chart series filter buttons (nation colors are self-explanatory)
+- Removed duplicate section headers in Laws and Techs tabs
+
+### Fixed
+- EventLog data1/data2/data3 fields now parsed as strings instead of integers
+- Missing migration entries added to schema.sql
+
 ## [0.1.9] - 2026-01-31
 
 ### Added
@@ -159,7 +182,8 @@
 - Real-time import progress events
 - GitHub Actions release workflow
 
-[Unreleased]: https://github.com/becked/per-ankh/compare/v0.1.9...HEAD
+[Unreleased]: https://github.com/becked/per-ankh/compare/v0.1.10...HEAD
+[0.1.10]: https://github.com/becked/per-ankh/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/becked/per-ankh/compare/v0.1.8...v0.1.9
 [0.1.8]: https://github.com/becked/per-ankh/compare/v0.1.7...v0.1.8
 [0.1.7]: https://github.com/becked/per-ankh/compare/v0.1.6...v0.1.7
