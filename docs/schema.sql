@@ -1032,7 +1032,9 @@ INSERT INTO schema_migrations (version, description) VALUES
 ('2.8.0', 'Added new city columns: governor_turn, hurry_training/population_count, growth/unit_production/buy_tile_count, last_owner_player_id'),
 ('2.9.0', 'Added city_project_counts, city_enemy_agents, city_luxuries tables; fixed TeamDiscontentLevel fallback for legacy saves'),
 ('2.10.0', 'Added units, unit_promotions, unit_effects, unit_families tables for individual unit tracking'),
-('2.11.0', 'Schema version bump to trigger database reset for units tables');
+('2.11.0', 'Schema version bump to trigger database reset for units tables'),
+('2.12.0', 'Migration system refactor (no schema changes)'),
+('2.13.0', 'Change event_logs data1/data2/data3 from INTEGER to VARCHAR');
 
 
 -- ============================================================================
