@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Current schema version - increment when schema changes
-pub const CURRENT_SCHEMA_VERSION: &str = "2.12.0";
+pub const CURRENT_SCHEMA_VERSION: &str = "2.13.0";
 
 // ============================================================================
 // MIGRATION REGISTRY
@@ -78,6 +78,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: "2.12.0",
         description: "Migration system refactor (no schema changes)",
         is_breaking: false,
+    },
+    Migration {
+        version: "2.13.0",
+        description: "Change event_logs data1/data2/data3 from INTEGER to VARCHAR",
+        is_breaking: true,
     },
 ];
 
@@ -1048,8 +1053,8 @@ mod tests {
         assert!(!pending.is_empty(), "Should have pending migrations from 2.4.0");
         assert_eq!(pending[0].version, "2.5.0", "First pending should be 2.5.0");
 
-        // From 2.12.0, no migrations should be pending
-        let pending = get_pending_migrations("2.12.0");
+        // From 2.13.0 (current), no migrations should be pending
+        let pending = get_pending_migrations("2.13.0");
         assert!(pending.is_empty(), "Should have no pending migrations from current version");
 
         // From 2.7.0, should have 2.8.0+ pending
@@ -1060,11 +1065,11 @@ mod tests {
 
     #[test]
     fn test_has_breaking_migration() {
-        // 2.4.0 -> 2.12.0 has breaking migrations (2.6.0+)
+        // 2.4.0 -> 2.13.0 has breaking migrations (2.6.0+)
         assert!(has_breaking_migration("2.4.0"));
 
-        // 2.12.0 -> 2.12.0 has no pending migrations
-        assert!(!has_breaking_migration("2.12.0"));
+        // 2.13.0 -> 2.13.0 has no pending migrations
+        assert!(!has_breaking_migration("2.13.0"));
     }
 
     #[test]

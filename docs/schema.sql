@@ -768,9 +768,9 @@ CREATE TABLE event_logs (
     log_type VARCHAR NOT NULL, -- LOG_TECH_DISCOVERED, LOG_CITY_FOUNDED, etc.
     player_id INTEGER,  -- References: players(player_id, match_id)
     description VARCHAR,
-    data1 INTEGER,
-    data2 INTEGER,
-    data3 INTEGER,
+    data1 VARCHAR,  -- e.g., "TECH_TRAPPING", "LAW_SLAVERY" (string, not integer)
+    data2 VARCHAR,
+    data3 VARCHAR,
     is_permanent BOOLEAN DEFAULT false,
     PRIMARY KEY (log_id, match_id)
 );
