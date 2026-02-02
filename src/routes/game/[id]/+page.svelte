@@ -10,15 +10,14 @@
   import type { PlayerLaw } from "$lib/types/PlayerLaw";
   import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
   import type { PlayerTech } from "$lib/types/PlayerTech";
+  import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
   import type { CityStatistics } from "$lib/types/CityStatistics";
   import type { CityInfo } from "$lib/types/CityInfo";
   import type { ImprovementData } from "$lib/types/ImprovementData";
-  import type { ImprovementInfo } from "$lib/types/ImprovementInfo";
   import type { MapTile } from "$lib/types/MapTile";
   import type { EChartsOption } from "echarts";
   import HexMap from "$lib/HexMap.svelte";
   import ChartContainer from "$lib/ChartContainer.svelte";
-  import ChartSeriesFilter, { type SeriesInfo } from "$lib/ChartSeriesFilter.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
   import { Tabs, Select } from "bits-ui";
   import { formatEnum, formatDate, formatGameTitle, formatMapClass, stripMarkup } from "$lib/utils/formatting";
@@ -33,6 +32,7 @@
   let currentLaws = $state<PlayerLaw[] | null>(null);
   let techDiscoveryHistory = $state<TechDiscoveryHistory[] | null>(null);
   let completedTechs = $state<PlayerTech[] | null>(null);
+  let unitsProduced = $state<PlayerUnitProduced[] | null>(null);
   let cityStatistics = $state<CityStatistics | null>(null);
   let improvementData = $state<ImprovementData | null>(null);
   let mapTiles = $state<MapTile[] | null>(null);
@@ -74,20 +74,19 @@
   let citySearchTerm = $state("");
   let citySortColumn = $state<string>("owner_nation");
   let citySortDirection = $state<"asc" | "desc">("asc");
+  let selectedCityFilters = $state<string[]>([]);
 
   // Improvements table state
   let improvementSearchTerm = $state("");
-  let improvementSortColumn = $state<string>("nation");
+  let improvementSortColumn = $state<string>("improvement");
   let improvementSortDirection = $state<"asc" | "desc">("asc");
+  let selectedImprovementFilters = $state<string[]>([]);
 
   // Laws table state
   let lawSearchTerm = $state("");
   let lawSortColumn = $state<string>("nation");
   let lawSortDirection = $state<"asc" | "desc">("asc");
   let selectedLawFilters = $state<string[]>([]);  // Combined nations and laws with prefixes
-
-  // Law adoption timeline filter state
-  let selectedTimelineNations = $state<string[]>([]);
 
   // Tech chart filter state
   let selectedTechsNations = $state<Record<string, boolean>>({});
@@ -98,8 +97,11 @@
   let techSortDirection = $state<"asc" | "desc">("asc");
   let selectedTechFilters = $state<string[]>([]);  // Combined nations and techs with prefixes
 
-  // Tech discovery timeline filter state
-  let selectedTechTimelineNations = $state<string[]>([]);
+  // Units table state
+  let unitSearchTerm = $state("");
+  let unitSortColumn = $state<string>("nation");
+  let unitSortDirection = $state<"asc" | "desc">("asc");
+  let selectedUnitFilters = $state<string[]>([]);  // Combined nations and unit types with prefixes
 
   // City column definitions
   // format function receives the value AND the city object for context (e.g., capital star)
@@ -240,12 +242,32 @@
     }
   }
 
+  // Get unique nations for city filter dropdown
+  const uniqueCityNations = $derived(
+    cityStatistics
+      ? [...new Set(cityStatistics.cities.map(city => city.owner_nation).filter((n): n is string => n != null))].sort()
+      : []
+  );
+
+  // Parse selected city filters (nation only)
+  const selectedCityNations = $derived(
+    selectedCityFilters
+      .filter(f => f.startsWith("nation:"))
+      .map(f => f.replace("nation:", ""))
+  );
+
   // Filtered and sorted cities
   const filteredSortedCities = $derived(() => {
     if (!cityStatistics) return [];
 
-    // Filter by search term
     let cities = cityStatistics.cities;
+
+    // Filter by selected nations
+    if (selectedCityNations.length > 0) {
+      cities = cities.filter((city) => city.owner_nation && selectedCityNations.includes(city.owner_nation));
+    }
+
+    // Filter by search term
     if (citySearchTerm) {
       const term = citySearchTerm.toLowerCase();
       cities = cities.filter((city) =>
@@ -304,77 +326,83 @@
     return value?.toString() ?? "—";
   }
 
-  // Improvements column definitions
-  type ImprovementColumn = {
-    key: keyof ImprovementInfo;
-    label: string;
-    format?: (value: string | null) => string;
+  // Get unique nations for improvement filter dropdown
+  const uniqueImprovementNations = $derived(
+    improvementData
+      ? [...new Set(improvementData.improvements.map(imp => imp.nation).filter((n): n is string => n != null))].sort()
+      : []
+  );
+
+  // Parse selected improvement filters (nation only)
+  const selectedImprovementNations = $derived(
+    selectedImprovementFilters
+      .filter(f => f.startsWith("nation:"))
+      .map(f => f.replace("nation:", ""))
+  );
+
+  // Nations to display as columns (filtered or all)
+  const displayedImprovementNations = $derived(
+    selectedImprovementNations.length > 0 ? selectedImprovementNations : uniqueImprovementNations
+  );
+
+  // Pivot table data: rows are improvement names, columns are nations
+  type ImprovementPivotRow = {
+    improvement: string;
+    counts: Record<string, number>;  // nation -> count
+    total: number;
   };
 
-  const IMPROVEMENT_COLUMNS: ImprovementColumn[] = [
-    {
-      key: "nation",
-      label: "Nation",
-      format: (v) => formatEnum(v, "NATION_"),
-    },
-    {
-      key: "city_name",
-      label: "City",
-      format: (v) => formatEnum(v, "CITYNAME_"),
-    },
-    {
-      key: "improvement",
-      label: "Improvement",
-      format: (v) => formatEnum(v, "IMPROVEMENT_"),
-    },
-    {
-      key: "specialist",
-      label: "Specialist",
-      format: (v) => v ? formatEnum(v, "SPECIALIST_") : "—",
-    },
-    {
-      key: "resource",
-      label: "Resource",
-      format: (v) => v ? formatEnum(v, "RESOURCE_") : "—",
-    },
-  ];
+  const improvementPivotData = $derived(() => {
+    if (!improvementData || improvementData.improvements.length === 0) return [];
 
-  // Filtered and sorted improvements
-  const filteredSortedImprovements = $derived(() => {
-    if (!improvementData) return [];
+    // Build a map of improvement -> nation -> count
+    const pivotMap = new Map<string, Record<string, number>>();
 
-    // Filter by search term
-    let improvements = improvementData.improvements;
-    if (improvementSearchTerm) {
-      const term = improvementSearchTerm.toLowerCase();
-      improvements = improvements.filter((imp) =>
-        imp.nation?.toLowerCase().includes(term) ||
-        imp.city_name?.toLowerCase().includes(term) ||
-        imp.improvement.toLowerCase().includes(term) ||
-        imp.specialist?.toLowerCase().includes(term) ||
-        imp.resource?.toLowerCase().includes(term)
-      );
+    for (const imp of improvementData.improvements) {
+      if (!imp.nation) continue;
+
+      if (!pivotMap.has(imp.improvement)) {
+        pivotMap.set(imp.improvement, {});
+      }
+      const counts = pivotMap.get(imp.improvement)!;
+      counts[imp.nation] = (counts[imp.nation] ?? 0) + 1;
+    }
+
+    // Convert to array of rows
+    const rows: ImprovementPivotRow[] = [];
+    for (const [improvement, counts] of pivotMap) {
+      // Filter by search term
+      if (improvementSearchTerm) {
+        const term = improvementSearchTerm.toLowerCase();
+        if (!improvement.toLowerCase().includes(term)) {
+          continue;
+        }
+      }
+
+      // Calculate total across all nations
+      const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
+      rows.push({ improvement, counts, total });
     }
 
     // Sort
-    const column = IMPROVEMENT_COLUMNS.find((col) => col.key === improvementSortColumn);
-    if (column) {
-      improvements = [...improvements].sort((a, b) => {
-        const aVal = a[column.key];
-        const bVal = b[column.key];
-
-        // Handle nulls - sort them to the end
-        if (aVal == null && bVal == null) return 0;
-        if (aVal == null) return 1;
-        if (bVal == null) return -1;
-
-        // Compare values
-        const cmp = aVal.localeCompare(bVal);
+    rows.sort((a, b) => {
+      if (improvementSortColumn === "improvement") {
+        const cmp = a.improvement.localeCompare(b.improvement);
         return improvementSortDirection === "asc" ? cmp : -cmp;
-      });
-    }
+      } else if (improvementSortColumn === "total") {
+        const cmp = a.total - b.total;
+        return improvementSortDirection === "asc" ? cmp : -cmp;
+      } else if (improvementSortColumn.startsWith("nation:")) {
+        const nation = improvementSortColumn.replace("nation:", "");
+        const aVal = a.counts[nation] ?? 0;
+        const bVal = b.counts[nation] ?? 0;
+        const cmp = aVal - bVal;
+        return improvementSortDirection === "asc" ? cmp : -cmp;
+      }
+      return a.improvement.localeCompare(b.improvement);
+    });
 
-    return improvements;
+    return rows;
   });
 
   // Toggle improvement sort column/direction
@@ -387,107 +415,84 @@
     }
   }
 
-  // Laws table column definitions
-  type LawColumn = {
-    key: keyof PlayerLaw;
-    label: string;
-    format?: (value: string | number | null) => string;
-  };
-
-  const LAW_COLUMNS: LawColumn[] = [
-    {
-      key: "nation",
-      label: "Nation",
-      format: (v) => formatEnum(v as string | null, "NATION_"),
-    },
-    {
-      key: "law",
-      label: "Active Law",
-      format: (v) => formatEnum(v as string | null, "LAW_"),
-    },
-    {
-      key: "adopted_turn",
-      label: "Turn",
-      format: (v) => v ? String(v) : "—",
-    },
-  ];
-
-  // Parse selected law filters into separate arrays
-  const selectedLawNations = $derived(
-    selectedLawFilters
-      .filter(f => f.startsWith("nation:"))
-      .map(f => f.replace("nation:", ""))
-  );
-
-  const selectedLawNames = $derived(
-    selectedLawFilters
-      .filter(f => f.startsWith("law:"))
-      .map(f => f.replace("law:", ""))
-  );
-
-  // Get unique nations and laws for filter dropdown
+  // Get unique nations for law filter dropdown
   const uniqueLawNations = $derived(
     currentLaws
       ? [...new Set(currentLaws.map(law => law.nation).filter((n): n is string => n != null))].sort()
       : []
   );
 
+  // Get unique law names (for rows)
   const uniqueLawNames = $derived(
     currentLaws
       ? [...new Set(currentLaws.map(law => law.law))].sort()
       : []
   );
 
-  // Filtered and sorted laws
-  const filteredSortedLaws = $derived(() => {
-    if (!currentLaws) return [];
+  // Parse selected law filters (nation only now)
+  const selectedLawNations = $derived(
+    selectedLawFilters
+      .filter(f => f.startsWith("nation:"))
+      .map(f => f.replace("nation:", ""))
+  );
 
-    // Filter by selected nations
-    let laws = currentLaws;
-    if (selectedLawNations.length > 0) {
-      laws = laws.filter((law) => law.nation && selectedLawNations.includes(law.nation));
+  // Nations to display as columns (filtered or all)
+  const displayedLawNations = $derived(
+    selectedLawNations.length > 0 ? selectedLawNations : uniqueLawNations
+  );
+
+  // Pivot table data: rows are law names, columns are nations
+  type LawPivotRow = {
+    law: string;
+    turns: Record<string, number | null>;  // nation -> adopted_turn
+  };
+
+  const lawPivotData = $derived(() => {
+    if (!currentLaws || currentLaws.length === 0) return [];
+
+    // Build a map of law -> nation -> adopted_turn
+    const pivotMap = new Map<string, Record<string, number | null>>();
+
+    for (const l of currentLaws) {
+      if (!l.nation) continue;
+
+      if (!pivotMap.has(l.law)) {
+        pivotMap.set(l.law, {});
+      }
+      const turns = pivotMap.get(l.law)!;
+      turns[l.nation] = l.adopted_turn;
     }
 
-    // Filter by selected laws
-    if (selectedLawNames.length > 0) {
-      laws = laws.filter((law) => selectedLawNames.includes(law.law));
-    }
-
-    // Filter by search term
-    if (lawSearchTerm) {
-      const term = lawSearchTerm.toLowerCase();
-      laws = laws.filter((law) =>
-        law.nation?.toLowerCase().includes(term) ||
-        law.player_name.toLowerCase().includes(term) ||
-        law.law_category.toLowerCase().includes(term) ||
-        law.law.toLowerCase().includes(term)
-      );
-    }
-
-    // Sort
-    const column = LAW_COLUMNS.find((col) => col.key === lawSortColumn);
-    if (column) {
-      laws = [...laws].sort((a, b) => {
-        const aVal = a[column.key];
-        const bVal = b[column.key];
-
-        // Handle nulls - sort them to the end
-        if (aVal == null && bVal == null) return 0;
-        if (aVal == null) return 1;
-        if (bVal == null) return -1;
-
-        // Compare values (handle both string and number)
-        let cmp: number;
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          cmp = aVal - bVal;
-        } else {
-          cmp = String(aVal).localeCompare(String(bVal));
+    // Convert to array of rows
+    const rows: LawPivotRow[] = [];
+    for (const [law, turns] of pivotMap) {
+      // Filter by search term
+      if (lawSearchTerm) {
+        const term = lawSearchTerm.toLowerCase();
+        if (!law.toLowerCase().includes(term)) {
+          continue;
         }
-        return lawSortDirection === "asc" ? cmp : -cmp;
-      });
+      }
+
+      rows.push({ law, turns });
     }
 
-    return laws;
+    // Sort by law name or by sort column
+    rows.sort((a, b) => {
+      if (lawSortColumn === "law") {
+        const cmp = a.law.localeCompare(b.law);
+        return lawSortDirection === "asc" ? cmp : -cmp;
+      } else if (lawSortColumn.startsWith("nation:")) {
+        const nation = lawSortColumn.replace("nation:", "");
+        const aVal = a.turns[nation] ?? Infinity;
+        const bVal = b.turns[nation] ?? Infinity;
+        const cmp = aVal - bVal;
+        return lawSortDirection === "asc" ? cmp : -cmp;
+      }
+      return a.law.localeCompare(b.law);
+    });
+
+    return rows;
   });
 
   // Toggle law sort column/direction
@@ -500,115 +505,84 @@
     }
   }
 
-  // Format law cell value
-  function formatLawCell(column: LawColumn, law: PlayerLaw): string {
-    const value = law[column.key];
-    if (column.format) {
-      return column.format(value as string | number | null);
-    }
-    return value != null ? String(value) : "—";
-  }
-
-  // Tech column definitions
-  type TechColumn = {
-    key: keyof PlayerTech;
-    label: string;
-    format?: (value: string | number | null) => string;
-  };
-
-  const TECH_COLUMNS: TechColumn[] = [
-    {
-      key: "nation",
-      label: "Nation",
-      format: (v) => formatEnum(v as string | null, "NATION_"),
-    },
-    {
-      key: "tech",
-      label: "Technology",
-      format: (v) => formatEnum(v as string | null, "TECH_"),
-    },
-    {
-      key: "completed_turn",
-      label: "Turn",
-      format: (v) => v ? String(v) : "—",
-    },
-  ];
-
-  // Parse selected tech filters into separate arrays
-  const selectedTechNations = $derived(
-    selectedTechFilters
-      .filter(f => f.startsWith("nation:"))
-      .map(f => f.replace("nation:", ""))
-  );
-
-  const selectedTechNames = $derived(
-    selectedTechFilters
-      .filter(f => f.startsWith("tech:"))
-      .map(f => f.replace("tech:", ""))
-  );
-
-  // Get unique nations and techs for filter dropdown
+  // Get unique nations for tech filter dropdown
   const uniqueTechNations = $derived(
     completedTechs
       ? [...new Set(completedTechs.map(tech => tech.nation).filter((n): n is string => n != null))].sort()
       : []
   );
 
+  // Get unique tech names (for rows)
   const uniqueTechNames = $derived(
     completedTechs
       ? [...new Set(completedTechs.map(tech => tech.tech))].sort()
       : []
   );
 
-  // Filtered and sorted techs
-  const filteredSortedTechs = $derived(() => {
-    if (!completedTechs) return [];
+  // Parse selected tech filters (nation only now)
+  const selectedTechNations = $derived(
+    selectedTechFilters
+      .filter(f => f.startsWith("nation:"))
+      .map(f => f.replace("nation:", ""))
+  );
 
-    // Filter by selected nations
-    let techs = completedTechs;
-    if (selectedTechNations.length > 0) {
-      techs = techs.filter((tech) => tech.nation && selectedTechNations.includes(tech.nation));
+  // Nations to display as columns (filtered or all)
+  const displayedTechNations = $derived(
+    selectedTechNations.length > 0 ? selectedTechNations : uniqueTechNations
+  );
+
+  // Pivot table data: rows are tech names, columns are nations
+  type TechPivotRow = {
+    tech: string;
+    turns: Record<string, number | null>;  // nation -> completed_turn
+  };
+
+  const techPivotData = $derived(() => {
+    if (!completedTechs || completedTechs.length === 0) return [];
+
+    // Build a map of tech -> nation -> completed_turn
+    const pivotMap = new Map<string, Record<string, number | null>>();
+
+    for (const t of completedTechs) {
+      if (!t.nation) continue;
+
+      if (!pivotMap.has(t.tech)) {
+        pivotMap.set(t.tech, {});
+      }
+      const turns = pivotMap.get(t.tech)!;
+      turns[t.nation] = t.completed_turn;
     }
 
-    // Filter by selected techs
-    if (selectedTechNames.length > 0) {
-      techs = techs.filter((tech) => selectedTechNames.includes(tech.tech));
-    }
-
-    // Filter by search term
-    if (techSearchTerm) {
-      const term = techSearchTerm.toLowerCase();
-      techs = techs.filter((tech) =>
-        tech.nation?.toLowerCase().includes(term) ||
-        tech.player_name.toLowerCase().includes(term) ||
-        tech.tech.toLowerCase().includes(term)
-      );
-    }
-
-    // Sort
-    const column = TECH_COLUMNS.find((col) => col.key === techSortColumn);
-    if (column) {
-      techs = [...techs].sort((a, b) => {
-        const aVal = a[column.key];
-        const bVal = b[column.key];
-
-        // Handle nulls - sort them to the end
-        if (aVal == null && bVal == null) return 0;
-        if (aVal == null) return 1;
-        if (bVal == null) return -1;
-
-        // Compare values (handle both string and number)
-        let cmp: number;
-        if (typeof aVal === "number" && typeof bVal === "number") {
-          cmp = aVal - bVal;
-        } else {
-          cmp = String(aVal).localeCompare(String(bVal));
+    // Convert to array of rows
+    const rows: TechPivotRow[] = [];
+    for (const [tech, turns] of pivotMap) {
+      // Filter by search term
+      if (techSearchTerm) {
+        const term = techSearchTerm.toLowerCase();
+        if (!tech.toLowerCase().includes(term)) {
+          continue;
         }
-        return techSortDirection === "asc" ? cmp : -cmp;
-      });
+      }
+
+      rows.push({ tech, turns });
     }
 
-    return techs;
+    // Sort by tech name or by sort column
+    rows.sort((a, b) => {
+      if (techSortColumn === "tech") {
+        const cmp = a.tech.localeCompare(b.tech);
+        return techSortDirection === "asc" ? cmp : -cmp;
+      } else if (techSortColumn.startsWith("nation:")) {
+        const nation = techSortColumn.replace("nation:", "");
+        const aVal = a.turns[nation] ?? Infinity;
+        const bVal = b.turns[nation] ?? Infinity;
+        const cmp = aVal - bVal;
+        return techSortDirection === "asc" ? cmp : -cmp;
+      }
+      return a.tech.localeCompare(b.tech);
+    });
+
+    return rows;
   });
 
   // Toggle tech sort column/direction
@@ -621,189 +595,102 @@
     }
   }
 
-  // Format tech cell value
-  function formatTechCell(column: TechColumn, tech: PlayerTech): string {
-    const value = tech[column.key];
-    if (column.format) {
-      return column.format(value as string | number | null);
-    }
-    return value != null ? String(value) : "—";
-  }
+  // Get unique nations for unit filter dropdown
+  const uniqueUnitNations = $derived(
+    unitsProduced
+      ? [...new Set(unitsProduced.map(u => u.nation).filter((n): n is string => n != null))].sort()
+      : []
+  );
 
-  // Tech discovery timeline data structure
-  type TechTimelineRow = {
-    turn: number;
-    discoveries: Record<number, string[]>;  // player_id -> array of tech names
+  // Get unique unit types (for rows)
+  const uniqueUnitTypes = $derived(
+    unitsProduced
+      ? [...new Set(unitsProduced.map(u => u.unit_type))].sort()
+      : []
+  );
+
+  // Parse selected unit filters (nation only now)
+  const selectedUnitNations = $derived(
+    selectedUnitFilters
+      .filter(f => f.startsWith("nation:"))
+      .map(f => f.replace("nation:", ""))
+  );
+
+  // Nations to display as columns (filtered or all)
+  const displayedUnitNations = $derived(
+    selectedUnitNations.length > 0 ? selectedUnitNations : uniqueUnitNations
+  );
+
+  // Pivot table data: rows are unit types, columns are nations
+  type UnitPivotRow = {
+    unit_type: string;
+    counts: Record<string, number>;  // nation -> count
+    total: number;
   };
 
-  // Transform techDiscoveryHistory into timeline rows
-  const techDiscoveryTimeline = $derived(() => {
-    if (!techDiscoveryHistory || techDiscoveryHistory.length === 0) return [];
+  const unitPivotData = $derived(() => {
+    if (!unitsProduced || unitsProduced.length === 0) return [];
 
-    // Collect all discovery events by turn
-    const turnMap = new Map<number, Record<number, string[]>>();
+    // Build a map of unit_type -> nation -> count
+    const pivotMap = new Map<string, Record<string, number>>();
 
-    for (const player of techDiscoveryHistory) {
-      for (const point of player.data) {
-        // Only include points where a tech was actually discovered (has tech_name)
-        if (point.tech_name) {
-          if (!turnMap.has(point.turn)) {
-            turnMap.set(point.turn, {});
-          }
-          const turnData = turnMap.get(point.turn)!;
-          if (!turnData[player.player_id]) {
-            turnData[player.player_id] = [];
-          }
-          turnData[player.player_id].push(point.tech_name);
-        }
+    for (const u of unitsProduced) {
+      if (!u.nation) continue;
+
+      if (!pivotMap.has(u.unit_type)) {
+        pivotMap.set(u.unit_type, {});
       }
+      const counts = pivotMap.get(u.unit_type)!;
+      counts[u.nation] = (counts[u.nation] ?? 0) + u.count;
     }
 
-    // Convert to array and sort by turn
-    const rows: TechTimelineRow[] = Array.from(turnMap.entries())
-      .map(([turn, discoveries]) => ({ turn, discoveries }))
-      .sort((a, b) => a.turn - b.turn);
+    // Convert to array of rows
+    const rows: UnitPivotRow[] = [];
+    for (const [unit_type, counts] of pivotMap) {
+      // Filter by search term
+      if (unitSearchTerm) {
+        const term = unitSearchTerm.toLowerCase();
+        if (!unit_type.toLowerCase().includes(term)) {
+          continue;
+        }
+      }
+
+      // Calculate total across displayed nations
+      const total = displayedUnitNations.reduce((sum, nation) => sum + (counts[nation] ?? 0), 0);
+
+      rows.push({ unit_type, counts, total });
+    }
+
+    // Sort by unit type name or by sort column
+    rows.sort((a, b) => {
+      if (unitSortColumn === "unit_type") {
+        const cmp = a.unit_type.localeCompare(b.unit_type);
+        return unitSortDirection === "asc" ? cmp : -cmp;
+      } else if (unitSortColumn === "total") {
+        const cmp = a.total - b.total;
+        return unitSortDirection === "asc" ? cmp : -cmp;
+      } else if (unitSortColumn.startsWith("nation:")) {
+        const nation = unitSortColumn.replace("nation:", "");
+        const aVal = a.counts[nation] ?? 0;
+        const bVal = b.counts[nation] ?? 0;
+        const cmp = aVal - bVal;
+        return unitSortDirection === "asc" ? cmp : -cmp;
+      }
+      return a.unit_type.localeCompare(b.unit_type);
+    });
 
     return rows;
   });
 
-  // Get players for tech timeline columns (from techDiscoveryHistory)
-  const techTimelinePlayers = $derived(
-    techDiscoveryHistory?.map(p => ({
-      player_id: p.player_id,
-      player_name: p.player_name,
-      nation: p.nation,
-    })) ?? []
-  );
-
-  // Get unique nations for tech timeline filter
-  const techTimelineNationOptions = $derived(
-    techTimelinePlayers
-      .filter((p): p is typeof p & { nation: string } => p.nation != null)
-      .map(p => p.nation)
-  );
-
-  // Filtered tech timeline players based on selection
-  const filteredTechTimelinePlayers = $derived(
-    selectedTechTimelineNations.length === 0
-      ? techTimelinePlayers
-      : techTimelinePlayers.filter(p => p.nation && selectedTechTimelineNations.includes(p.nation))
-  );
-
-  // Filtered tech timeline rows (only show rows where at least one filtered player has a discovery)
-  const filteredTechTimelineRows = $derived(() => {
-    const rows = techDiscoveryTimeline();
-    if (selectedTechTimelineNations.length === 0) return rows;
-
-    const filteredPlayerIds = new Set(filteredTechTimelinePlayers.map(p => p.player_id));
-    return rows.filter(row =>
-      Object.keys(row.discoveries).some(playerId => filteredPlayerIds.has(Number(playerId)))
-    );
-  });
-
-  // Law adoption timeline data structure
-  type TimelineRow = {
-    turn: number;
-    adoptions: Record<number, string[]>;  // player_id -> array of law names
-  };
-
-  // Transform lawAdoptionHistory into timeline rows
-  const lawAdoptionTimeline = $derived(() => {
-    if (!lawAdoptionHistory || lawAdoptionHistory.length === 0) return [];
-
-    // Collect all adoption events by turn
-    const turnMap = new Map<number, Record<number, string[]>>();
-
-    for (const player of lawAdoptionHistory) {
-      for (const point of player.data) {
-        // Only include points where a law was actually adopted (has law_name)
-        if (point.law_name) {
-          if (!turnMap.has(point.turn)) {
-            turnMap.set(point.turn, {});
-          }
-          const turnData = turnMap.get(point.turn)!;
-          if (!turnData[player.player_id]) {
-            turnData[player.player_id] = [];
-          }
-          turnData[player.player_id].push(point.law_name);
-        }
-      }
+  // Toggle unit sort column/direction
+  function toggleUnitSort(columnKey: string) {
+    if (unitSortColumn === columnKey) {
+      unitSortDirection = unitSortDirection === "asc" ? "desc" : "asc";
+    } else {
+      unitSortColumn = columnKey;
+      unitSortDirection = "asc";
     }
-
-    // Convert to array and sort by turn
-    const rows: TimelineRow[] = Array.from(turnMap.entries())
-      .map(([turn, adoptions]) => ({ turn, adoptions }))
-      .sort((a, b) => a.turn - b.turn);
-
-    return rows;
-  });
-
-  // Get players for timeline columns (from lawAdoptionHistory)
-  const timelinePlayers = $derived(
-    lawAdoptionHistory?.map(p => ({
-      player_id: p.player_id,
-      player_name: p.player_name,
-      nation: p.nation,
-    })) ?? []
-  );
-
-  // Get unique nations for timeline filter
-  const timelineNationOptions = $derived(
-    timelinePlayers
-      .filter((p): p is typeof p & { nation: string } => p.nation != null)
-      .map(p => p.nation)
-  );
-
-  // Filtered timeline players based on selection
-  const filteredTimelinePlayers = $derived(
-    selectedTimelineNations.length === 0
-      ? timelinePlayers
-      : timelinePlayers.filter(p => p.nation && selectedTimelineNations.includes(p.nation))
-  );
-
-  // Filtered timeline rows (only show rows where at least one filtered player has an adoption)
-  const filteredTimelineRows = $derived(() => {
-    const rows = lawAdoptionTimeline();
-    if (selectedTimelineNations.length === 0) return rows;
-
-    const filteredPlayerIds = new Set(filteredTimelinePlayers.map(p => p.player_id));
-    return rows.filter(row =>
-      Object.keys(row.adoptions).some(playerId => filteredPlayerIds.has(Number(playerId)))
-    );
-  });
-
-  // Format improvement cell value
-  function formatImprovementCell(column: ImprovementColumn, imp: ImprovementInfo): string {
-    const value = imp[column.key];
-    if (column.format) {
-      return column.format(value);
-    }
-    return value ?? "—";
   }
-
-  // Derive series info from player history for the filter component
-  const nationSeriesInfo = $derived<SeriesInfo[]>(
-    playerHistory?.map((player, i) => ({
-      name: formatEnum(player.nation, "NATION_"),
-      color: getPlayerColor(player.nation, i),
-    })) ?? []
-  );
-
-  // Derive series info from law adoption history (may have different players than playerHistory)
-  const lawsSeriesInfo = $derived<SeriesInfo[]>(
-    lawAdoptionHistory?.map((player, i) => ({
-      name: formatEnum(player.nation, "NATION_"),
-      color: getPlayerColor(player.nation, i),
-    })) ?? []
-  );
-
-  // Derive series info from tech discovery history (may have different players than playerHistory)
-  const techsSeriesInfo = $derived<SeriesInfo[]>(
-    techDiscoveryHistory?.map((player, i) => ({
-      name: formatEnum(player.nation, "NATION_"),
-      color: getPlayerColor(player.nation, i),
-    })) ?? []
-  );
 
   // Helper to create default selection (all nations selected)
   function createDefaultSelection(players: { nation: string | null }[]): Record<string, boolean> {
@@ -1279,11 +1166,12 @@
       api.getCurrentLaws(matchId),
       api.getTechDiscoveryHistory(matchId),
       api.getCompletedTechs(matchId),
+      api.getUnitsProduced(matchId),
       api.getCityStatistics(matchId),
       api.getImprovementData(matchId),
       api.getMapTiles(matchId),
     ])
-      .then(([details, history, yields, logs, lawHistory, laws, techHistory, techs, cityStats, impData, tiles]) => {
+      .then(([details, history, yields, logs, lawHistory, laws, techHistory, techs, units, cityStats, impData, tiles]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
@@ -1292,6 +1180,7 @@
         currentLaws = laws;
         techDiscoveryHistory = techHistory;
         completedTechs = techs;
+        unitsProduced = units;
         cityStatistics = cityStats;
         improvementData = impData;
         mapTiles = tiles;
@@ -1641,6 +1530,13 @@
           </Tabs.Trigger>
 
           <Tabs.Trigger
+            value="military"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
+          >
+            Military
+          </Tabs.Trigger>
+
+          <Tabs.Trigger
             value="cities"
             class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
@@ -1682,12 +1578,7 @@
               <p class="text-brown italic">Victory Points not enabled for this game (enabled: {victoryConditions}).</p>
             </div>
           {:else if pointsChartOption}
-            {#snippet pointsFilter()}
-              {#if nationSeriesInfo.length > 0}
-                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedPointsNations} />
-              {/if}
-            {/snippet}
-            <ChartContainer option={pointsChartOption} height="400px" title="Victory Points" controls={pointsFilter} />
+            <ChartContainer option={pointsChartOption} height="400px" title="Victory Points" />
           {/if}
 
           <!-- Event Logs Table -->
@@ -1872,112 +1763,12 @@
           class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
           style="background-color: #35302B;"
         >
-          <h2 class="text-tan font-bold mb-4 mt-0">Laws</h2>
           {#if lawAdoptionChartOption}
-            {#snippet lawsFilter()}
-              {#if lawsSeriesInfo.length > 0}
-                <ChartSeriesFilter series={lawsSeriesInfo} bind:selected={selectedLawsNations} />
-              {/if}
-            {/snippet}
-            <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" controls={lawsFilter} />
+            <ChartContainer option={lawAdoptionChartOption} height="400px" title="Law Adoption Over Time" />
           {:else if lawAdoptionHistory !== null && lawAdoptionHistory.length === 0}
             <p class="text-brown italic text-center p-8">No law adoption data available</p>
           {:else}
             <p class="text-brown italic text-center p-8">Loading law adoption data...</p>
-          {/if}
-
-          <!-- Law Adoption Timeline -->
-          {#if lawAdoptionTimeline().length > 0}
-            <div class="mt-8">
-              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Law Adoption Timeline</h3>
-
-              <!-- Filter controls -->
-              <div class="flex flex-wrap gap-3 mb-4 items-center">
-                <Select.Root type="multiple" bind:value={selectedTimelineNations}>
-                  <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
-                    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
-                      </svg>
-                    </div>
-                    <span class="truncate">Filter</span>
-                    <span class="ml-2">▼</span>
-                  </Select.Trigger>
-                  <Select.Portal>
-                    <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
-                      <Select.Viewport>
-                        {#each timelineNationOptions as nation}
-                          <Select.Item
-                            value={nation}
-                            label={formatEnum(nation, "NATION_")}
-                            class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
-                          >
-                            {#snippet children({ selected })}
-                              {formatEnum(nation, "NATION_")}
-                              {#if selected}
-                                <span class="text-orange font-bold">✓</span>
-                              {/if}
-                            {/snippet}
-                          </Select.Item>
-                        {/each}
-                      </Select.Viewport>
-                    </Select.Content>
-                  </Select.Portal>
-                </Select.Root>
-
-                <!-- Selected nation chips -->
-                {#if selectedTimelineNations.length > 0}
-                  <div class="flex flex-wrap gap-1">
-                    {#each selectedTimelineNations as nation}
-                      <span class="px-2 py-1 rounded bg-brown text-white text-xs">
-                        {formatEnum(nation, "NATION_")}
-                      </span>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
-                <table class="w-full">
-                  <thead>
-                    <tr>
-                      <th class="p-3 text-left border-b-2 border-brown text-brown font-bold whitespace-nowrap w-20">
-                        Turn
-                      </th>
-                      {#each filteredTimelinePlayers as player}
-                        {@const playerColor = player.nation ? getCivilizationColor(player.nation) : null}
-                        <th
-                          class="p-3 text-center border-b-2 border-brown font-bold whitespace-nowrap"
-                          style="background-color: {playerColor ?? '#4a4a4a'}40; color: {playerColor ?? '#D2B48C'};"
-                        >
-                          {formatEnum(player.nation, "NATION_")}
-                        </th>
-                      {/each}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each filteredTimelineRows() as row}
-                      <tr class="transition-colors duration-200 hover:bg-brown/20">
-                        <td class="p-3 text-left border-b border-brown/50 text-tan font-bold whitespace-nowrap">
-                          {row.turn}
-                        </td>
-                        {#each filteredTimelinePlayers as player}
-                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
-                            {#if row.adoptions[player.player_id]?.length > 0}
-                              {#each row.adoptions[player.player_id] as lawName, i}
-                                <span>{formatEnum(lawName, "LAW_")}</span>
-                              {/each}
-                            {:else}
-                              <span class="text-brown/50">—</span>
-                            {/if}
-                          </td>
-                        {/each}
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           {/if}
 
           <!-- Current Laws Table -->
@@ -1991,8 +1782,6 @@
             </div>
           {:else}
             <div class="mt-8">
-              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Current Laws</h3>
-
               <!-- Controls row -->
               <div class="flex flex-wrap gap-3 mb-4 items-end">
                 <!-- Filter dropdown -->
@@ -2031,29 +1820,6 @@
                             {/each}
                           </Select.Group>
                         {/if}
-
-                        <!-- Laws Group -->
-                        {#if uniqueLawNames.length > 0}
-                          <Select.Group>
-                            <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50 {uniqueLawNations.length > 0 ? 'border-t border-t-brown/50' : ''}">
-                              Laws
-                            </Select.GroupHeading>
-                            {#each uniqueLawNames as law}
-                              <Select.Item
-                                value={`law:${law}`}
-                                label={formatEnum(law, "LAW_")}
-                                class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
-                              >
-                                {#snippet children({ selected })}
-                                  {formatEnum(law, "LAW_")}
-                                  {#if selected}
-                                    <span class="text-orange font-bold">✓</span>
-                                  {/if}
-                                {/snippet}
-                              </Select.Item>
-                            {/each}
-                          </Select.Group>
-                        {/if}
                       </Select.Viewport>
                     </Select.Content>
                   </Select.Portal>
@@ -2062,7 +1828,7 @@
                 <!-- Search -->
                 <SearchInput
                   bind:value={lawSearchTerm}
-                  placeholder="Search"
+                  placeholder="Search laws"
                   variant="field"
                   class="w-64"
                 />
@@ -2072,9 +1838,7 @@
                   <div class="flex flex-wrap gap-1">
                     {#each selectedLawFilters as filter}
                       <span class="px-2 py-1 rounded bg-brown text-white text-xs">
-                        {filter.startsWith("nation:")
-                          ? formatEnum(filter.replace("nation:", ""), "NATION_")
-                          : formatEnum(filter.replace("law:", ""), "LAW_")}
+                        {formatEnum(filter.replace("nation:", ""), "NATION_")}
                       </span>
                     {/each}
                   </div>
@@ -2082,23 +1846,38 @@
 
                 <!-- Results count -->
                 <span class="text-brown text-sm ml-auto">
-                  {filteredSortedLaws().length} / {currentLaws.length} laws
+                  {lawPivotData().length} laws
                 </span>
               </div>
 
-              <!-- Laws data table -->
+              <!-- Laws pivot table -->
               <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
                 <table class="w-full">
                   <thead>
                     <tr>
-                      {#each LAW_COLUMNS as column}
+                      <!-- Law column header -->
+                      <th
+                        class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleLawSort("law")}
+                      >
+                        <span class="inline-flex items-center gap-1">
+                          Law
+                          {#if lawSortColumn === "law"}
+                            <span class="text-orange">
+                              {lawSortDirection === "asc" ? "↑" : "↓"}
+                            </span>
+                          {/if}
+                        </span>
+                      </th>
+                      <!-- Nation column headers -->
+                      {#each displayedLawNations as nation}
                         <th
-                          class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                          onclick={() => toggleLawSort(column.key)}
+                          class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                          onclick={() => toggleLawSort(`nation:${nation}`)}
                         >
-                          <span class="inline-flex items-center gap-1">
-                            {column.label}
-                            {#if lawSortColumn === column.key}
+                          <span class="inline-flex items-center gap-1 justify-center">
+                            {formatEnum(nation, "NATION_")}
+                            {#if lawSortColumn === `nation:${nation}`}
                               <span class="text-orange">
                                 {lawSortDirection === "asc" ? "↑" : "↓"}
                               </span>
@@ -2109,17 +1888,20 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {#each filteredSortedLaws() as law}
-                      <tr class="transition-colors duration-200 hover:bg-brown/20">
-                        {#each LAW_COLUMNS as column}
-                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
-                            {formatLawCell(column, law)}
+                    {#each lawPivotData() as row}
+                      <tr class="hover:bg-brown/10">
+                        <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                          {formatEnum(row.law, "LAW_")}
+                        </td>
+                        {#each displayedLawNations as nation}
+                          <td class="p-3 text-center border-b border-brown/50 text-tan whitespace-nowrap">
+                            {row.turns[nation] != null ? row.turns[nation] : "—"}
                           </td>
                         {/each}
                       </tr>
                     {:else}
                       <tr>
-                        <td colspan={LAW_COLUMNS.length} class="p-8 text-center text-brown italic">
+                        <td colspan={displayedLawNations.length + 1} class="p-8 text-center text-brown italic">
                           No laws match search
                         </td>
                       </tr>
@@ -2137,112 +1919,12 @@
           class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
           style="background-color: #35302B;"
         >
-          <h2 class="text-tan font-bold mb-4 mt-0">Technologies</h2>
           {#if techDiscoveryChartOption}
-            {#snippet techsFilter()}
-              {#if techsSeriesInfo.length > 0}
-                <ChartSeriesFilter series={techsSeriesInfo} bind:selected={selectedTechsNations} />
-              {/if}
-            {/snippet}
-            <ChartContainer option={techDiscoveryChartOption} height="400px" title="Tech Discovery Over Time" controls={techsFilter} />
+            <ChartContainer option={techDiscoveryChartOption} height="400px" title="Tech Discovery Over Time" />
           {:else if techDiscoveryHistory !== null && techDiscoveryHistory.length === 0}
             <p class="text-brown italic text-center p-8">No tech discovery data available</p>
           {:else}
             <p class="text-brown italic text-center p-8">Loading tech discovery data...</p>
-          {/if}
-
-          <!-- Tech Discovery Timeline -->
-          {#if techDiscoveryTimeline().length > 0}
-            <div class="mt-8">
-              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Tech Discovery Timeline</h3>
-
-              <!-- Filter controls -->
-              <div class="flex flex-wrap gap-3 mb-4 items-center">
-                <Select.Root type="multiple" bind:value={selectedTechTimelineNations}>
-                  <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
-                    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
-                      </svg>
-                    </div>
-                    <span class="truncate">Filter</span>
-                    <span class="ml-2">▼</span>
-                  </Select.Trigger>
-                  <Select.Portal>
-                    <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
-                      <Select.Viewport>
-                        {#each techTimelineNationOptions as nation}
-                          <Select.Item
-                            value={nation}
-                            label={formatEnum(nation, "NATION_")}
-                            class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
-                          >
-                            {#snippet children({ selected })}
-                              {formatEnum(nation, "NATION_")}
-                              {#if selected}
-                                <span class="text-orange font-bold">✓</span>
-                              {/if}
-                            {/snippet}
-                          </Select.Item>
-                        {/each}
-                      </Select.Viewport>
-                    </Select.Content>
-                  </Select.Portal>
-                </Select.Root>
-
-                <!-- Selected nation chips -->
-                {#if selectedTechTimelineNations.length > 0}
-                  <div class="flex flex-wrap gap-1">
-                    {#each selectedTechTimelineNations as nation}
-                      <span class="px-2 py-1 rounded bg-brown text-white text-xs">
-                        {formatEnum(nation, "NATION_")}
-                      </span>
-                    {/each}
-                  </div>
-                {/if}
-              </div>
-
-              <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
-                <table class="w-full">
-                  <thead>
-                    <tr>
-                      <th class="p-3 text-left border-b-2 border-brown text-brown font-bold whitespace-nowrap w-20">
-                        Turn
-                      </th>
-                      {#each filteredTechTimelinePlayers as player}
-                        {@const playerColor = player.nation ? getCivilizationColor(player.nation) : null}
-                        <th
-                          class="p-3 text-center border-b-2 border-brown font-bold whitespace-nowrap"
-                          style="background-color: {playerColor ?? '#4a4a4a'}40; color: {playerColor ?? '#D2B48C'};"
-                        >
-                          {formatEnum(player.nation, "NATION_")}
-                        </th>
-                      {/each}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {#each filteredTechTimelineRows() as row}
-                      <tr class="transition-colors duration-200 hover:bg-brown/20">
-                        <td class="p-3 text-left border-b border-brown/50 text-tan font-bold whitespace-nowrap">
-                          {row.turn}
-                        </td>
-                        {#each filteredTechTimelinePlayers as player}
-                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
-                            {#if row.discoveries[player.player_id]?.length > 0}
-                              {#each row.discoveries[player.player_id] as techName}
-                                <span>{formatEnum(techName, "TECH_")}</span>
-                              {/each}
-                            {:else}
-                              <span class="text-brown/50">—</span>
-                            {/if}
-                          </td>
-                        {/each}
-                      </tr>
-                    {/each}
-                  </tbody>
-                </table>
-              </div>
-            </div>
           {/if}
 
           <!-- Completed Technologies Table -->
@@ -2256,8 +1938,6 @@
             </div>
           {:else}
             <div class="mt-8">
-              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Completed Technologies</h3>
-
               <!-- Controls row -->
               <div class="flex flex-wrap gap-3 mb-4 items-end">
                 <!-- Filter dropdown -->
@@ -2296,29 +1976,6 @@
                             {/each}
                           </Select.Group>
                         {/if}
-
-                        <!-- Techs Group -->
-                        {#if uniqueTechNames.length > 0}
-                          <Select.Group>
-                            <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50 {uniqueTechNations.length > 0 ? 'border-t border-t-brown/50' : ''}">
-                              Technologies
-                            </Select.GroupHeading>
-                            {#each uniqueTechNames as tech}
-                              <Select.Item
-                                value={`tech:${tech}`}
-                                label={formatEnum(tech, "TECH_")}
-                                class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
-                              >
-                                {#snippet children({ selected })}
-                                  {formatEnum(tech, "TECH_")}
-                                  {#if selected}
-                                    <span class="text-orange font-bold">✓</span>
-                                  {/if}
-                                {/snippet}
-                              </Select.Item>
-                            {/each}
-                          </Select.Group>
-                        {/if}
                       </Select.Viewport>
                     </Select.Content>
                   </Select.Portal>
@@ -2327,7 +1984,7 @@
                 <!-- Search -->
                 <SearchInput
                   bind:value={techSearchTerm}
-                  placeholder="Search"
+                  placeholder="Search technologies"
                   variant="field"
                   class="w-64"
                 />
@@ -2337,9 +1994,7 @@
                   <div class="flex flex-wrap gap-1">
                     {#each selectedTechFilters as filter}
                       <span class="px-2 py-1 rounded bg-brown text-white text-xs">
-                        {filter.startsWith("nation:")
-                          ? formatEnum(filter.replace("nation:", ""), "NATION_")
-                          : formatEnum(filter.replace("tech:", ""), "TECH_")}
+                        {formatEnum(filter.replace("nation:", ""), "NATION_")}
                       </span>
                     {/each}
                   </div>
@@ -2347,23 +2002,38 @@
 
                 <!-- Results count -->
                 <span class="text-brown text-sm ml-auto">
-                  {filteredSortedTechs().length} / {completedTechs.length} technologies
+                  {techPivotData().length} technologies
                 </span>
               </div>
 
-              <!-- Technologies data table -->
+              <!-- Technologies pivot table -->
               <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
                 <table class="w-full">
                   <thead>
                     <tr>
-                      {#each TECH_COLUMNS as column}
+                      <!-- Technology column header -->
+                      <th
+                        class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleTechSort("tech")}
+                      >
+                        <span class="inline-flex items-center gap-1">
+                          Technology
+                          {#if techSortColumn === "tech"}
+                            <span class="text-orange">
+                              {techSortDirection === "asc" ? "↑" : "↓"}
+                            </span>
+                          {/if}
+                        </span>
+                      </th>
+                      <!-- Nation column headers -->
+                      {#each displayedTechNations as nation}
                         <th
-                          class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                          onclick={() => toggleTechSort(column.key)}
+                          class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                          onclick={() => toggleTechSort(`nation:${nation}`)}
                         >
-                          <span class="inline-flex items-center gap-1">
-                            {column.label}
-                            {#if techSortColumn === column.key}
+                          <span class="inline-flex items-center gap-1 justify-center">
+                            {formatEnum(nation, "NATION_")}
+                            {#if techSortColumn === `nation:${nation}`}
                               <span class="text-orange">
                                 {techSortDirection === "asc" ? "↑" : "↓"}
                               </span>
@@ -2374,17 +2044,20 @@
                     </tr>
                   </thead>
                   <tbody>
-                    {#each filteredSortedTechs() as tech}
-                      <tr class="transition-colors duration-200 hover:bg-brown/20">
-                        {#each TECH_COLUMNS as column}
-                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
-                            {formatTechCell(column, tech)}
+                    {#each techPivotData() as row}
+                      <tr class="hover:bg-brown/10">
+                        <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                          {formatEnum(row.tech, "TECH_")}
+                        </td>
+                        {#each displayedTechNations as nation}
+                          <td class="p-3 text-center border-b border-brown/50 text-tan whitespace-nowrap">
+                            {row.turns[nation] != null ? row.turns[nation] : "—"}
                           </td>
                         {/each}
                       </tr>
                     {:else}
                       <tr>
-                        <td colspan={TECH_COLUMNS.length} class="p-8 text-center text-brown italic">
+                        <td colspan={displayedTechNations.length + 1} class="p-8 text-center text-brown italic">
                           No technologies match search
                         </td>
                       </tr>
@@ -2403,22 +2076,8 @@
           style="background-color: #35302B;"
         >
           <h2 class="text-tan font-bold mb-4 mt-0">Yields</h2>
-          {#if militaryChartOption}
-            {#snippet militaryFilter()}
-              {#if nationSeriesInfo.length > 0}
-                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedMilitaryNations} />
-              {/if}
-            {/snippet}
-            <ChartContainer option={militaryChartOption} height="400px" title="Military Power" controls={militaryFilter} />
-          {/if}
-
           {#if legitimacyChartOption}
-            {#snippet legitimacyFilter()}
-              {#if nationSeriesInfo.length > 0}
-                <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedLegitimacyNations} />
-              {/if}
-            {/snippet}
-            <ChartContainer option={legitimacyChartOption} height="400px" title="Legitimacy" controls={legitimacyFilter} />
+            <ChartContainer option={legitimacyChartOption} height="400px" title="Legitimacy" />
           {/if}
 
           {#if allYields === null}
@@ -2427,130 +2086,234 @@
             <p class="text-brown italic text-center p-8">No yield data available</p>
           {:else}
             {#if scienceChartOption}
-              {#snippet scienceFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedScienceNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={scienceChartOption} height="400px" title="Science Production" controls={scienceFilter} />
+              <ChartContainer option={scienceChartOption} height="400px" title="Science Production" />
             {/if}
 
             {#if civicsChartOption}
-              {#snippet civicsFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedCivicsNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={civicsChartOption} height="400px" title="Civics Production" controls={civicsFilter} />
+              <ChartContainer option={civicsChartOption} height="400px" title="Civics Production" />
             {/if}
 
             {#if trainingChartOption}
-              {#snippet trainingFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedTrainingNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={trainingChartOption} height="400px" title="Training Production" controls={trainingFilter} />
+              <ChartContainer option={trainingChartOption} height="400px" title="Training Production" />
             {/if}
 
             {#if growthChartOption}
-              {#snippet growthFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedGrowthNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={growthChartOption} height="400px" title="Growth Production" controls={growthFilter} />
+              <ChartContainer option={growthChartOption} height="400px" title="Growth Production" />
             {/if}
 
             {#if cultureChartOption}
-              {#snippet cultureFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedCultureNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={cultureChartOption} height="400px" title="Culture Production" controls={cultureFilter} />
+              <ChartContainer option={cultureChartOption} height="400px" title="Culture Production" />
             {/if}
 
             {#if happinessChartOption}
-              {#snippet happinessFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedHappinessNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={happinessChartOption} height="400px" title="Happiness Production" controls={happinessFilter} />
+              <ChartContainer option={happinessChartOption} height="400px" title="Happiness Production" />
             {/if}
 
             {#if ordersChartOption}
-              {#snippet ordersFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedOrdersNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={ordersChartOption} height="400px" title="Orders" controls={ordersFilter} />
+              <ChartContainer option={ordersChartOption} height="400px" title="Orders" />
             {/if}
 
             {#if foodChartOption}
-              {#snippet foodFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedFoodNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={foodChartOption} height="400px" title="Food Production" controls={foodFilter} />
+              <ChartContainer option={foodChartOption} height="400px" title="Food Production" />
             {/if}
 
             {#if moneyChartOption}
-              {#snippet moneyFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedMoneyNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={moneyChartOption} height="400px" title="Money Income" controls={moneyFilter} />
+              <ChartContainer option={moneyChartOption} height="400px" title="Money Income" />
             {/if}
 
             {#if discontentChartOption}
-              {#snippet discontentFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedDiscontentNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={discontentChartOption} height="400px" title="Discontent" controls={discontentFilter} />
+              <ChartContainer option={discontentChartOption} height="400px" title="Discontent" />
             {/if}
 
             {#if ironChartOption}
-              {#snippet ironFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedIronNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={ironChartOption} height="400px" title="Iron Production" controls={ironFilter} />
+              <ChartContainer option={ironChartOption} height="400px" title="Iron Production" />
             {/if}
 
             {#if stoneChartOption}
-              {#snippet stoneFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedStoneNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={stoneChartOption} height="400px" title="Stone Production" controls={stoneFilter} />
+              <ChartContainer option={stoneChartOption} height="400px" title="Stone Production" />
             {/if}
 
             {#if woodChartOption}
-              {#snippet woodFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedWoodNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={woodChartOption} height="400px" title="Wood Production" controls={woodFilter} />
+              <ChartContainer option={woodChartOption} height="400px" title="Wood Production" />
             {/if}
 
             {#if maintenanceChartOption}
-              {#snippet maintenanceFilter()}
-                {#if nationSeriesInfo.length > 0}
-                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedMaintenanceNations} />
-                {/if}
-              {/snippet}
-              <ChartContainer option={maintenanceChartOption} height="400px" title="Maintenance Costs" controls={maintenanceFilter} />
+              <ChartContainer option={maintenanceChartOption} height="400px" title="Maintenance Costs" />
             {/if}
+          {/if}
+        </Tabs.Content>
+
+        <!-- Tab Content: Military -->
+        <Tabs.Content
+          value="military"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
+        >
+          <h2 class="text-tan font-bold mb-4 mt-0">Military</h2>
+
+          <!-- Military Power Chart -->
+          {#if militaryChartOption}
+            <ChartContainer option={militaryChartOption} height="400px" title="Military Power" />
+          {/if}
+
+          <!-- Units Produced Table -->
+          {#if unitsProduced && unitsProduced.length > 0}
+            <div class="p-6 rounded-lg border-2 border-black mt-6" style="background-color: #201a13;">
+              <h3 class="text-tan font-bold mb-4">Units Produced</h3>
+
+              <!-- Controls row -->
+              <div class="flex flex-wrap gap-3 mb-4 items-end">
+                <!-- Filter dropdown -->
+                <Select.Root type="multiple" bind:value={selectedUnitFilters}>
+                  <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
+                    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                      </svg>
+                    </div>
+                    <span class="truncate">Filter</span>
+                    <span class="ml-2">▼</span>
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
+                      <Select.Viewport>
+                        <!-- Nations Group -->
+                        {#if uniqueUnitNations.length > 0}
+                          <Select.Group>
+                            <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50">
+                              Nations
+                            </Select.GroupHeading>
+                            {#each uniqueUnitNations as nation}
+                              <Select.Item
+                                value={`nation:${nation}`}
+                                label={formatEnum(nation, "NATION_")}
+                                class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                              >
+                                {#snippet children({ selected })}
+                                  {formatEnum(nation, "NATION_")}
+                                  {#if selected}
+                                    <span class="text-orange font-bold">✓</span>
+                                  {/if}
+                                {/snippet}
+                              </Select.Item>
+                            {/each}
+                          </Select.Group>
+                        {/if}
+                      </Select.Viewport>
+                    </Select.Content>
+                  </Select.Portal>
+                </Select.Root>
+
+                <!-- Search -->
+                <SearchInput
+                  bind:value={unitSearchTerm}
+                  placeholder="Search units"
+                  variant="field"
+                  class="w-64"
+                />
+
+                <!-- Selected filter chips -->
+                {#if selectedUnitFilters.length > 0}
+                  <div class="flex flex-wrap gap-1">
+                    {#each selectedUnitFilters as filter}
+                      <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                        {formatEnum(filter.replace("nation:", ""), "NATION_")}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
+
+                <!-- Results count -->
+                <span class="text-brown text-sm ml-auto">
+                  {unitPivotData().length} unit types
+                </span>
+              </div>
+
+              <!-- Units Pivot Table -->
+              <div class="overflow-x-auto">
+                <table class="w-full">
+                  <thead>
+                    <tr>
+                      <!-- Unit column header -->
+                      <th
+                        class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleUnitSort("unit_type")}
+                      >
+                        <span class="inline-flex items-center gap-1">
+                          Unit
+                          {#if unitSortColumn === "unit_type"}
+                            <span class="text-orange">
+                              {unitSortDirection === "asc" ? "↑" : "↓"}
+                            </span>
+                          {/if}
+                        </span>
+                      </th>
+                      <!-- Nation column headers -->
+                      {#each displayedUnitNations as nation}
+                        <th
+                          class="p-3 text-right border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                          onclick={() => toggleUnitSort(`nation:${nation}`)}
+                        >
+                          <span class="inline-flex items-center gap-1 justify-end">
+                            {formatEnum(nation, "NATION_")}
+                            {#if unitSortColumn === `nation:${nation}`}
+                              <span class="text-orange">
+                                {unitSortDirection === "asc" ? "↑" : "↓"}
+                              </span>
+                            {/if}
+                          </span>
+                        </th>
+                      {/each}
+                      <!-- Total column if multiple nations -->
+                      {#if displayedUnitNations.length > 1}
+                        <th
+                          class="p-3 text-right border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                          onclick={() => toggleUnitSort("total")}
+                        >
+                          <span class="inline-flex items-center gap-1 justify-end">
+                            Total
+                            {#if unitSortColumn === "total"}
+                              <span class="text-orange">
+                                {unitSortDirection === "asc" ? "↑" : "↓"}
+                              </span>
+                            {/if}
+                          </span>
+                        </th>
+                      {/if}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each unitPivotData() as row}
+                      <tr class="hover:bg-brown/10">
+                        <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                          {formatEnum(row.unit_type, "UNIT_")}
+                        </td>
+                        {#each displayedUnitNations as nation}
+                          <td class="p-3 text-right border-b border-brown/50 text-tan whitespace-nowrap">
+                            {row.counts[nation] ?? 0}
+                          </td>
+                        {/each}
+                        {#if displayedUnitNations.length > 1}
+                          <td class="p-3 text-right border-b border-brown/50 text-tan font-bold whitespace-nowrap">
+                            {row.total}
+                          </td>
+                        {/if}
+                      </tr>
+                    {:else}
+                      <tr>
+                        <td colspan={displayedUnitNations.length + 2} class="p-8 text-center text-brown italic">
+                          No units match search
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {:else if unitsProduced === null}
+            <p class="text-brown italic text-center p-8">Loading unit data...</p>
+          {:else}
+            <p class="text-brown italic text-center p-8">No unit production data available</p>
           {/if}
         </Tabs.Content>
 
@@ -2569,6 +2332,47 @@
           {:else}
             <!-- Table Controls -->
             <div class="flex flex-wrap gap-3 mb-4 items-end">
+              <!-- Filter dropdown -->
+              <Select.Root type="multiple" bind:value={selectedCityFilters}>
+                <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
+                  <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                    </svg>
+                  </div>
+                  <span class="truncate">Filter</span>
+                  <span class="ml-2">▼</span>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
+                    <Select.Viewport>
+                      <!-- Nations Group -->
+                      {#if uniqueCityNations.length > 0}
+                        <Select.Group>
+                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50">
+                            Nations
+                          </Select.GroupHeading>
+                          {#each uniqueCityNations as nation}
+                            <Select.Item
+                              value={`nation:${nation}`}
+                              label={formatEnum(nation, "NATION_")}
+                              class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                            >
+                              {#snippet children({ selected })}
+                                {formatEnum(nation, "NATION_")}
+                                {#if selected}
+                                  <span class="text-orange font-bold">✓</span>
+                                {/if}
+                              {/snippet}
+                            </Select.Item>
+                          {/each}
+                        </Select.Group>
+                      {/if}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+
               <!-- Search -->
               <SearchInput
                 bind:value={citySearchTerm}
@@ -2576,6 +2380,17 @@
                 variant="field"
                 class="w-64"
               />
+
+              <!-- Selected filter chips -->
+              {#if selectedCityFilters.length > 0}
+                <div class="flex flex-wrap gap-1">
+                  {#each selectedCityFilters as filter}
+                    <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                      {formatEnum(filter.replace("nation:", ""), "NATION_")}
+                    </span>
+                  {/each}
+                </div>
+              {/if}
 
               <!-- Column Visibility Dropdown -->
               <Select.Root type="multiple" value={selectedColumnKeys} onValueChange={handleColumnVisibilityChange}>
@@ -2661,8 +2476,6 @@
           class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
           style="background-color: #35302B;"
         >
-          <h2 class="text-tan font-bold mb-4 mt-0">Improvements</h2>
-
           {#if improvementData === null}
             <p class="text-brown italic text-center p-8">Loading improvement data...</p>
           {:else if improvementData.improvements.length === 0}
@@ -2670,6 +2483,47 @@
           {:else}
             <!-- Controls row -->
             <div class="flex flex-wrap gap-3 mb-4 items-end">
+              <!-- Filter dropdown -->
+              <Select.Root type="multiple" bind:value={selectedImprovementFilters}>
+                <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
+                  <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                    </svg>
+                  </div>
+                  <span class="truncate">Filter</span>
+                  <span class="ml-2">▼</span>
+                </Select.Trigger>
+                <Select.Portal>
+                  <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
+                    <Select.Viewport>
+                      <!-- Nations Group -->
+                      {#if uniqueImprovementNations.length > 0}
+                        <Select.Group>
+                          <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50">
+                            Nations
+                          </Select.GroupHeading>
+                          {#each uniqueImprovementNations as nation}
+                            <Select.Item
+                              value={`nation:${nation}`}
+                              label={formatEnum(nation, "NATION_")}
+                              class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                            >
+                              {#snippet children({ selected })}
+                                {formatEnum(nation, "NATION_")}
+                                {#if selected}
+                                  <span class="text-orange font-bold">✓</span>
+                                {/if}
+                              {/snippet}
+                            </Select.Item>
+                          {/each}
+                        </Select.Group>
+                      {/if}
+                    </Select.Viewport>
+                  </Select.Content>
+                </Select.Portal>
+              </Select.Root>
+
               <!-- Search -->
               <SearchInput
                 bind:value={improvementSearchTerm}
@@ -2678,25 +2532,51 @@
                 class="w-64"
               />
 
+              <!-- Selected filter chips -->
+              {#if selectedImprovementFilters.length > 0}
+                <div class="flex flex-wrap gap-1">
+                  {#each selectedImprovementFilters as filter}
+                    <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                      {formatEnum(filter.replace("nation:", ""), "NATION_")}
+                    </span>
+                  {/each}
+                </div>
+              {/if}
+
               <!-- Results count -->
               <span class="text-brown text-sm ml-auto">
-                {filteredSortedImprovements().length} / {improvementData.improvements.length} improvements
+                {improvementPivotData().length} improvements
               </span>
             </div>
 
-            <!-- Improvements data table -->
+            <!-- Improvements pivot table -->
             <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
               <table class="w-full">
                 <thead>
                   <tr>
-                    {#each IMPROVEMENT_COLUMNS as column}
+                    <!-- Improvement column header -->
+                    <th
+                      class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                      onclick={() => toggleImprovementSort("improvement")}
+                    >
+                      <span class="inline-flex items-center gap-1">
+                        Improvement
+                        {#if improvementSortColumn === "improvement"}
+                          <span class="text-orange">
+                            {improvementSortDirection === "asc" ? "↑" : "↓"}
+                          </span>
+                        {/if}
+                      </span>
+                    </th>
+                    <!-- Nation column headers -->
+                    {#each displayedImprovementNations as nation}
                       <th
-                        class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleImprovementSort(column.key)}
+                        class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleImprovementSort(`nation:${nation}`)}
                       >
-                        <span class="inline-flex items-center gap-1">
-                          {column.label}
-                          {#if improvementSortColumn === column.key}
+                        <span class="inline-flex items-center gap-1 justify-center">
+                          {formatEnum(nation, "NATION_")}
+                          {#if improvementSortColumn === `nation:${nation}`}
                             <span class="text-orange">
                               {improvementSortDirection === "asc" ? "↑" : "↓"}
                             </span>
@@ -2704,20 +2584,44 @@
                         </span>
                       </th>
                     {/each}
+                    <!-- Total column header (only if multiple nations) -->
+                    {#if displayedImprovementNations.length > 1}
+                      <th
+                        class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                        onclick={() => toggleImprovementSort("total")}
+                      >
+                        <span class="inline-flex items-center gap-1 justify-center">
+                          Total
+                          {#if improvementSortColumn === "total"}
+                            <span class="text-orange">
+                              {improvementSortDirection === "asc" ? "↑" : "↓"}
+                            </span>
+                          {/if}
+                        </span>
+                      </th>
+                    {/if}
                   </tr>
                 </thead>
                 <tbody>
-                  {#each filteredSortedImprovements() as imp}
-                    <tr class="transition-colors duration-200 hover:bg-brown/20">
-                      {#each IMPROVEMENT_COLUMNS as column}
-                        <td class="p-3 text-left border-b border-brown/50 text-tan {column.key === 'improvement' ? 'font-bold' : ''} whitespace-nowrap">
-                          {formatImprovementCell(column, imp)}
+                  {#each improvementPivotData() as row}
+                    <tr class="hover:bg-brown/10">
+                      <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                        {formatEnum(row.improvement, "IMPROVEMENT_")}
+                      </td>
+                      {#each displayedImprovementNations as nation}
+                        <td class="p-3 text-center border-b border-brown/50 text-tan whitespace-nowrap">
+                          {row.counts[nation] ?? 0}
                         </td>
                       {/each}
+                      {#if displayedImprovementNations.length > 1}
+                        <td class="p-3 text-center border-b border-brown/50 text-tan font-bold whitespace-nowrap">
+                          {row.total}
+                        </td>
+                      {/if}
                     </tr>
                   {:else}
                     <tr>
-                      <td colspan={IMPROVEMENT_COLUMNS.length} class="p-8 text-center text-brown italic">
+                      <td colspan={displayedImprovementNations.length + (displayedImprovementNations.length > 1 ? 2 : 1)} class="p-8 text-center text-brown italic">
                         No improvements match search
                       </td>
                     </tr>
