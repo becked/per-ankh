@@ -11,6 +11,7 @@ import type { MatchDebugRow } from "$lib/types/MatchDebugRow";
 import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
+import type { PlayerLaw } from "$lib/types/PlayerLaw";
 import type { CityStatistics } from "$lib/types/CityStatistics";
 import type { ImprovementData } from "$lib/types/ImprovementData";
 import type { MapTile } from "$lib/types/MapTile";
@@ -69,6 +70,13 @@ export const api = {
 
   getLawAdoptionHistory: (matchId: number) =>
     invoke<LawAdoptionHistory[]>("get_law_adoption_history", { matchId }),
+
+  /**
+   * Get current laws for all players in a match.
+   * Returns each player's active laws from the laws table.
+   */
+  getCurrentLaws: (matchId: number) =>
+    invoke<PlayerLaw[]>("get_current_laws", { matchId }),
 
   /**
    * Get city statistics for a match.
