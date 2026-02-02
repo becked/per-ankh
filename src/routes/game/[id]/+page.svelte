@@ -401,11 +401,6 @@
       format: (v) => formatEnum(v as string | null, "NATION_"),
     },
     {
-      key: "law_category",
-      label: "Category",
-      format: (v) => formatEnum(v as string | null, "LAWCLASS_"),
-    },
-    {
       key: "law",
       label: "Active Law",
       format: (v) => formatEnum(v as string | null, "LAW_"),
@@ -1970,7 +1965,7 @@
                           <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
                             {#if row.adoptions[player.player_id]?.length > 0}
                               {#each row.adoptions[player.player_id] as lawName, i}
-                                <span>Adopted {formatEnum(lawName, "LAW_")}</span>
+                                <span>{formatEnum(lawName, "LAW_")}</span>
                               {/each}
                             {:else}
                               <span class="text-brown/50">—</span>
