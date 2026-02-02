@@ -1249,6 +1249,37 @@ pub struct PlayerLaw {
     pub change_count: i32,
 }
 
+/// A single data point in a tech discovery timeline
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct TechDiscoveryDataPoint {
+    pub turn: i32,
+    pub tech_count: i32,
+    /// The name of the tech discovered at this point (None for synthetic start/end points)
+    pub tech_name: Option<String>,
+}
+
+/// Tech discovery history for a player
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct TechDiscoveryHistory {
+    pub player_id: i32,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub data: Vec<TechDiscoveryDataPoint>,
+}
+
+/// A single completed tech entry for a player
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct PlayerTech {
+    pub player_id: i32,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub tech: String,
+    pub completed_turn: i32,
+}
+
 /// City information for the Cities tab
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
@@ -1637,6 +1668,144 @@ async fn get_current_laws(
         Ok(laws)
     })
     .context("Failed to get current laws")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get tech discovery history for all players in a match
+///
+/// Returns cumulative tech discovery data over time for each player
+#[tauri::command]
+async fn get_tech_discovery_history(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<TechDiscoveryHistory>, String> {
+    pool.with_connection(|conn| {
+        // Get the final turn number for this match
+        let final_turn: i32 = conn.query_row(
+            "SELECT total_turns FROM matches WHERE match_id = ?",
+            [match_id],
+            |row| row.get(0)
+        )?;
+
+        // Get all players for this match
+        let mut players_stmt = conn
+            .prepare(
+                "SELECT player_id, player_name, nation
+                 FROM players
+                 WHERE match_id = ?
+                 ORDER BY player_name"
+            )?;
+
+        let players: Vec<(i32, String, Option<String>)> = players_stmt
+            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        let mut result = Vec::new();
+
+        for (player_id, player_name, nation) in players {
+            // Get tech discoveries from event_logs (TECH_DISCOVERED events)
+            // data1 contains the tech name for these events
+            let mut tech_stmt = conn
+                .prepare(
+                    "WITH tech_discoveries AS (
+                        SELECT
+                            turn,
+                            data1 as tech_name,
+                            ROW_NUMBER() OVER (ORDER BY turn, log_id) as cumulative_count
+                        FROM event_logs
+                        WHERE match_id = ?
+                          AND player_id = ?
+                          AND log_type = 'TECH_DISCOVERED'
+                          AND data1 IS NOT NULL
+                     )
+                     SELECT turn, cumulative_count, tech_name
+                     FROM tech_discoveries
+                     ORDER BY turn, cumulative_count"
+                )?;
+
+            let mut data: Vec<TechDiscoveryDataPoint> = tech_stmt
+                .query_map([match_id, player_id as i64], |row| {
+                    Ok(TechDiscoveryDataPoint {
+                        turn: row.get(0)?,
+                        tech_count: row.get(1)?,
+                        tech_name: row.get(2)?,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+
+            // Prepend a starting point at turn 0 with 0 techs
+            data.insert(0, TechDiscoveryDataPoint {
+                turn: 0,
+                tech_count: 0,
+                tech_name: None,
+            });
+
+            // Append an ending point at the final turn to extend the line
+            if let Some(last_point) = data.last() {
+                if last_point.turn < final_turn {
+                    data.push(TechDiscoveryDataPoint {
+                        turn: final_turn,
+                        tech_count: last_point.tech_count,
+                        tech_name: None,
+                    });
+                }
+            }
+
+            result.push(TechDiscoveryHistory {
+                player_id,
+                player_name,
+                nation,
+                data,
+            });
+        }
+
+        Ok(result)
+    })
+    .context("Failed to get tech discovery history")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get completed techs for all players in a match
+///
+/// Returns each player's completed technologies with discovery turn from event_logs
+#[tauri::command]
+async fn get_completed_techs(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<PlayerTech>, String> {
+    pool.with_connection(|conn| {
+        // Get completed techs from event_logs (TECH_DISCOVERED events)
+        // This gives us accurate turn numbers unlike the technologies_completed table
+        let mut stmt = conn.prepare(
+            "SELECT
+                e.player_id,
+                p.player_name,
+                p.nation,
+                e.data1 as tech,
+                e.turn as completed_turn
+             FROM event_logs e
+             JOIN players p ON e.player_id = p.player_id AND e.match_id = p.match_id
+             WHERE e.match_id = ?
+               AND e.log_type = 'TECH_DISCOVERED'
+               AND e.data1 IS NOT NULL
+             ORDER BY p.nation, e.turn, e.data1"
+        )?;
+
+        let techs = stmt
+            .query_map([match_id], |row| {
+                Ok(PlayerTech {
+                    player_id: row.get(0)?,
+                    player_name: row.get(1)?,
+                    nation: row.get(2)?,
+                    tech: row.get(3)?,
+                    completed_turn: row.get(4)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(techs)
+    })
+    .context("Failed to get completed techs")
     .map_err(|e| e.to_string())
 }
 
@@ -2210,6 +2379,8 @@ pub fn run() {
             get_event_logs,
             get_law_adoption_history,
             get_current_laws,
+            get_tech_discovery_history,
+            get_completed_techs,
             get_city_statistics,
             get_improvement_data,
             get_map_tiles,
