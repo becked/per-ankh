@@ -14,6 +14,7 @@ import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 import type { PlayerLaw } from "$lib/types/PlayerLaw";
 import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
 import type { PlayerTech } from "$lib/types/PlayerTech";
+import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 import type { CityStatistics } from "$lib/types/CityStatistics";
 import type { ImprovementData } from "$lib/types/ImprovementData";
 import type { MapTile } from "$lib/types/MapTile";
@@ -93,6 +94,13 @@ export const api = {
    */
   getCompletedTechs: (matchId: number) =>
     invoke<PlayerTech[]>("get_completed_techs", { matchId }),
+
+  /**
+   * Get units produced for all players in a match.
+   * Returns each player's unit production counts.
+   */
+  getUnitsProduced: (matchId: number) =>
+    invoke<PlayerUnitProduced[]>("get_units_produced", { matchId }),
 
   /**
    * Get city statistics for a match.

@@ -1280,6 +1280,17 @@ pub struct PlayerTech {
     pub completed_turn: i32,
 }
 
+/// Unit production data for the Military tab
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct PlayerUnitProduced {
+    pub player_id: i32,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub unit_type: String,
+    pub count: i32,
+}
+
 /// City information for the Cities tab
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
@@ -1806,6 +1817,46 @@ async fn get_completed_techs(
         Ok(techs)
     })
     .context("Failed to get completed techs")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get units produced for all players in a match
+///
+/// Returns each player's unit production counts from player_units_produced table
+#[tauri::command]
+async fn get_units_produced(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<PlayerUnitProduced>, String> {
+    pool.with_connection(|conn| {
+        let mut stmt = conn.prepare(
+            "SELECT
+                u.player_id,
+                p.player_name,
+                p.nation,
+                u.unit_type,
+                u.count
+             FROM player_units_produced u
+             JOIN players p ON u.player_id = p.player_id AND u.match_id = p.match_id
+             WHERE u.match_id = ?
+             ORDER BY p.nation, u.count DESC, u.unit_type"
+        )?;
+
+        let units = stmt
+            .query_map([match_id], |row| {
+                Ok(PlayerUnitProduced {
+                    player_id: row.get(0)?,
+                    player_name: row.get(1)?,
+                    nation: row.get(2)?,
+                    unit_type: row.get(3)?,
+                    count: row.get(4)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(units)
+    })
+    .context("Failed to get units produced")
     .map_err(|e| e.to_string())
 }
 
@@ -2381,6 +2432,7 @@ pub fn run() {
             get_current_laws,
             get_tech_discovery_history,
             get_completed_techs,
+            get_units_produced,
             get_city_statistics,
             get_improvement_data,
             get_map_tiles,
