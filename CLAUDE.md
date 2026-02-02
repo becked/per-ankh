@@ -484,6 +484,52 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 
 **When in doubt**: Check https://duckdb.org/docs/sql/introduction before assuming SQLite syntax works.
 
+### Backend: Schema Migrations
+
+**Location**: `src-tauri/src/db/schema.rs`
+
+The app uses a migration registry system to handle schema updates without requiring users to re-import their save files (when possible).
+
+**Key concepts**:
+- `CURRENT_SCHEMA_VERSION`: The target schema version (e.g., "2.12.0")
+- `MIGRATIONS`: Array of all migrations with version, description, and `is_breaking` flag
+- **Breaking migration**: Requires database reset (new XML data needed)
+- **Non-breaking migration**: Can update schema incrementally (add columns, tables, indexes)
+
+**Adding a new migration**:
+
+```rust
+// 1. Add to MIGRATIONS array in schema.rs:
+Migration {
+    version: "2.13.0",
+    description: "Add player statistics columns",
+    is_breaking: false,  // true if needs re-parsing
+},
+
+// 2. Add migration logic in run_migration():
+"2.13.0" => {
+    conn.execute("ALTER TABLE players ADD COLUMN total_cities INTEGER", [])?;
+    conn.execute("UPDATE players SET total_cities = ...", [])?;
+    Ok(())
+}
+
+// 3. Update CURRENT_SCHEMA_VERSION:
+pub const CURRENT_SCHEMA_VERSION: &str = "2.13.0";
+```
+
+**When to mark as breaking (`is_breaking: true`)**:
+- New data from XML that wasn't previously extracted
+- Changed parsing logic that produces different values
+- Structural changes that can't be computed from existing data
+
+**When to mark as non-breaking (`is_breaking: false`)**:
+- Adding columns with computable defaults or NULL
+- Adding new tables (empty until new saves are parsed)
+- Adding indexes or views
+- Removing unused columns (just stop using them in code)
+
+**Structural check**: The system checks if the database structure matches the current schema before requiring a reset. If structure is current but migration records are outdated, it updates records without resetting.
+
 ## Development Commands
 
 ### Initial Setup
