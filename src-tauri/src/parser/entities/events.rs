@@ -277,9 +277,9 @@ pub fn parse_city_events(
 ///     log_type VARCHAR NOT NULL,
 ///     player_id INTEGER,
 ///     description VARCHAR,
-///     data1 INTEGER,
-///     data2 INTEGER,
-///     data3 INTEGER,
+///     data1 VARCHAR,  -- e.g., "TECH_TRAPPING", "LAW_SLAVERY"
+///     data2 VARCHAR,
+///     data3 VARCHAR,
 ///     is_permanent BOOLEAN DEFAULT false
 /// );
 /// ```
@@ -323,27 +323,24 @@ pub fn parse_player_log_events(
             .find(|n| n.has_tag_name("Text"))
             .and_then(|n| n.text());
 
-        // Parse data fields as integers, treating "None" as NULL
+        // Parse data fields as strings, treating "None" as NULL
         let data1 = log_node
             .children()
             .find(|n| n.has_tag_name("Data1"))
             .and_then(|n| n.text())
-            .filter(|t| *t != "None")
-            .and_then(|t| t.parse::<i32>().ok());
+            .filter(|t| *t != "None" && !t.is_empty());
 
         let data2 = log_node
             .children()
             .find(|n| n.has_tag_name("Data2"))
             .and_then(|n| n.text())
-            .filter(|t| *t != "None")
-            .and_then(|t| t.parse::<i32>().ok());
+            .filter(|t| *t != "None" && !t.is_empty());
 
         let data3 = log_node
             .children()
             .find(|n| n.has_tag_name("Data3"))
             .and_then(|n| n.text())
-            .filter(|t| *t != "None")
-            .and_then(|t| t.parse::<i32>().ok());
+            .filter(|t| *t != "None" && !t.is_empty());
 
         let log_id = *next_log_id;
         *next_log_id += 1;

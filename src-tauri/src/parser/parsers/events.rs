@@ -188,22 +188,22 @@ fn parse_player_event_logs(player_node: &roxmltree::Node, player_id: i32) -> Res
                 .children()
                 .find(|n| n.has_tag_name("Data1"))
                 .and_then(|n| n.text())
-                .filter(|t| *t != "None")
-                .and_then(|t| t.parse().ok());
+                .filter(|t| *t != "None" && !t.is_empty())
+                .map(String::from);
 
             let data2 = log_node
                 .children()
                 .find(|n| n.has_tag_name("Data2"))
                 .and_then(|n| n.text())
-                .filter(|t| *t != "None")
-                .and_then(|t| t.parse().ok());
+                .filter(|t| *t != "None" && !t.is_empty())
+                .map(String::from);
 
             let data3 = log_node
                 .children()
                 .find(|n| n.has_tag_name("Data3"))
                 .and_then(|n| n.text())
-                .filter(|t| *t != "None")
-                .and_then(|t| t.parse().ok());
+                .filter(|t| *t != "None" && !t.is_empty())
+                .map(String::from);
 
             logs.push(EventLog {
                 player_xml_id: player_id,

@@ -587,9 +587,9 @@ pub struct EventLog {
     pub log_type: String,             // e.g., "TECH_DISCOVERED"
     pub turn: i32,
     pub description: Option<String>,  // Text description with HTML tags
-    pub data1: Option<i32>,
-    pub data2: Option<i32>,
-    pub data3: Option<i32>,
+    pub data1: Option<String>,        // e.g., "TECH_TRAPPING", "LAW_SLAVERY"
+    pub data2: Option<String>,
+    pub data3: Option<String>,
 }
 
 /// Player memory data from MemoryList/MemoryData
