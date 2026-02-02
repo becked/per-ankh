@@ -8,6 +8,8 @@
   import type { EventLog } from "$lib/types/EventLog";
   import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
   import type { PlayerLaw } from "$lib/types/PlayerLaw";
+  import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
+  import type { PlayerTech } from "$lib/types/PlayerTech";
   import type { CityStatistics } from "$lib/types/CityStatistics";
   import type { CityInfo } from "$lib/types/CityInfo";
   import type { ImprovementData } from "$lib/types/ImprovementData";
@@ -29,6 +31,8 @@
   let eventLogs = $state<EventLog[] | null>(null);
   let lawAdoptionHistory = $state<LawAdoptionHistory[] | null>(null);
   let currentLaws = $state<PlayerLaw[] | null>(null);
+  let techDiscoveryHistory = $state<TechDiscoveryHistory[] | null>(null);
+  let completedTechs = $state<PlayerTech[] | null>(null);
   let cityStatistics = $state<CityStatistics | null>(null);
   let improvementData = $state<ImprovementData | null>(null);
   let mapTiles = $state<MapTile[] | null>(null);
@@ -84,6 +88,18 @@
 
   // Law adoption timeline filter state
   let selectedTimelineNations = $state<string[]>([]);
+
+  // Tech chart filter state
+  let selectedTechsNations = $state<Record<string, boolean>>({});
+
+  // Tech table state
+  let techSearchTerm = $state("");
+  let techSortColumn = $state<string>("nation");
+  let techSortDirection = $state<"asc" | "desc">("asc");
+  let selectedTechFilters = $state<string[]>([]);  // Combined nations and techs with prefixes
+
+  // Tech discovery timeline filter state
+  let selectedTechTimelineNations = $state<string[]>([]);
 
   // City column definitions
   // format function receives the value AND the city object for context (e.g., capital star)
@@ -498,6 +514,198 @@
     return value != null ? String(value) : "—";
   }
 
+  // Tech column definitions
+  type TechColumn = {
+    key: keyof PlayerTech;
+    label: string;
+    format?: (value: string | number | null) => string;
+  };
+
+  const TECH_COLUMNS: TechColumn[] = [
+    {
+      key: "nation",
+      label: "Nation",
+      format: (v) => formatEnum(v as string | null, "NATION_"),
+    },
+    {
+      key: "tech",
+      label: "Technology",
+      format: (v) => formatEnum(v as string | null, "TECH_"),
+    },
+    {
+      key: "completed_turn",
+      label: "Turn",
+      format: (v) => v ? String(v) : "—",
+    },
+  ];
+
+  // Parse selected tech filters into separate arrays
+  const selectedTechNations = $derived(
+    selectedTechFilters
+      .filter(f => f.startsWith("nation:"))
+      .map(f => f.replace("nation:", ""))
+  );
+
+  const selectedTechNames = $derived(
+    selectedTechFilters
+      .filter(f => f.startsWith("tech:"))
+      .map(f => f.replace("tech:", ""))
+  );
+
+  // Get unique nations and techs for filter dropdown
+  const uniqueTechNations = $derived(
+    completedTechs
+      ? [...new Set(completedTechs.map(tech => tech.nation).filter((n): n is string => n != null))].sort()
+      : []
+  );
+
+  const uniqueTechNames = $derived(
+    completedTechs
+      ? [...new Set(completedTechs.map(tech => tech.tech))].sort()
+      : []
+  );
+
+  // Filtered and sorted techs
+  const filteredSortedTechs = $derived(() => {
+    if (!completedTechs) return [];
+
+    // Filter by selected nations
+    let techs = completedTechs;
+    if (selectedTechNations.length > 0) {
+      techs = techs.filter((tech) => tech.nation && selectedTechNations.includes(tech.nation));
+    }
+
+    // Filter by selected techs
+    if (selectedTechNames.length > 0) {
+      techs = techs.filter((tech) => selectedTechNames.includes(tech.tech));
+    }
+
+    // Filter by search term
+    if (techSearchTerm) {
+      const term = techSearchTerm.toLowerCase();
+      techs = techs.filter((tech) =>
+        tech.nation?.toLowerCase().includes(term) ||
+        tech.player_name.toLowerCase().includes(term) ||
+        tech.tech.toLowerCase().includes(term)
+      );
+    }
+
+    // Sort
+    const column = TECH_COLUMNS.find((col) => col.key === techSortColumn);
+    if (column) {
+      techs = [...techs].sort((a, b) => {
+        const aVal = a[column.key];
+        const bVal = b[column.key];
+
+        // Handle nulls - sort them to the end
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+
+        // Compare values (handle both string and number)
+        let cmp: number;
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          cmp = aVal - bVal;
+        } else {
+          cmp = String(aVal).localeCompare(String(bVal));
+        }
+        return techSortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return techs;
+  });
+
+  // Toggle tech sort column/direction
+  function toggleTechSort(columnKey: string) {
+    if (techSortColumn === columnKey) {
+      techSortDirection = techSortDirection === "asc" ? "desc" : "asc";
+    } else {
+      techSortColumn = columnKey;
+      techSortDirection = "asc";
+    }
+  }
+
+  // Format tech cell value
+  function formatTechCell(column: TechColumn, tech: PlayerTech): string {
+    const value = tech[column.key];
+    if (column.format) {
+      return column.format(value as string | number | null);
+    }
+    return value != null ? String(value) : "—";
+  }
+
+  // Tech discovery timeline data structure
+  type TechTimelineRow = {
+    turn: number;
+    discoveries: Record<number, string[]>;  // player_id -> array of tech names
+  };
+
+  // Transform techDiscoveryHistory into timeline rows
+  const techDiscoveryTimeline = $derived(() => {
+    if (!techDiscoveryHistory || techDiscoveryHistory.length === 0) return [];
+
+    // Collect all discovery events by turn
+    const turnMap = new Map<number, Record<number, string[]>>();
+
+    for (const player of techDiscoveryHistory) {
+      for (const point of player.data) {
+        // Only include points where a tech was actually discovered (has tech_name)
+        if (point.tech_name) {
+          if (!turnMap.has(point.turn)) {
+            turnMap.set(point.turn, {});
+          }
+          const turnData = turnMap.get(point.turn)!;
+          if (!turnData[player.player_id]) {
+            turnData[player.player_id] = [];
+          }
+          turnData[player.player_id].push(point.tech_name);
+        }
+      }
+    }
+
+    // Convert to array and sort by turn
+    const rows: TechTimelineRow[] = Array.from(turnMap.entries())
+      .map(([turn, discoveries]) => ({ turn, discoveries }))
+      .sort((a, b) => a.turn - b.turn);
+
+    return rows;
+  });
+
+  // Get players for tech timeline columns (from techDiscoveryHistory)
+  const techTimelinePlayers = $derived(
+    techDiscoveryHistory?.map(p => ({
+      player_id: p.player_id,
+      player_name: p.player_name,
+      nation: p.nation,
+    })) ?? []
+  );
+
+  // Get unique nations for tech timeline filter
+  const techTimelineNationOptions = $derived(
+    techTimelinePlayers
+      .filter((p): p is typeof p & { nation: string } => p.nation != null)
+      .map(p => p.nation)
+  );
+
+  // Filtered tech timeline players based on selection
+  const filteredTechTimelinePlayers = $derived(
+    selectedTechTimelineNations.length === 0
+      ? techTimelinePlayers
+      : techTimelinePlayers.filter(p => p.nation && selectedTechTimelineNations.includes(p.nation))
+  );
+
+  // Filtered tech timeline rows (only show rows where at least one filtered player has a discovery)
+  const filteredTechTimelineRows = $derived(() => {
+    const rows = techDiscoveryTimeline();
+    if (selectedTechTimelineNations.length === 0) return rows;
+
+    const filteredPlayerIds = new Set(filteredTechTimelinePlayers.map(p => p.player_id));
+    return rows.filter(row =>
+      Object.keys(row.discoveries).some(playerId => filteredPlayerIds.has(Number(playerId)))
+    );
+  });
+
   // Law adoption timeline data structure
   type TimelineRow = {
     turn: number;
@@ -594,6 +802,14 @@
     })) ?? []
   );
 
+  // Derive series info from tech discovery history (may have different players than playerHistory)
+  const techsSeriesInfo = $derived<SeriesInfo[]>(
+    techDiscoveryHistory?.map((player, i) => ({
+      name: formatEnum(player.nation, "NATION_"),
+      color: getPlayerColor(player.nation, i),
+    })) ?? []
+  );
+
   // Helper to create default selection (all nations selected)
   function createDefaultSelection(players: { nation: string | null }[]): Record<string, boolean> {
     return Object.fromEntries(
@@ -629,6 +845,13 @@
   $effect(() => {
     if (lawAdoptionHistory) {
       selectedLawsNations = createDefaultSelection(lawAdoptionHistory);
+    }
+  });
+
+  // Initialize tech discovery filter separately (uses techDiscoveryHistory data)
+  $effect(() => {
+    if (techDiscoveryHistory) {
+      selectedTechsNations = createDefaultSelection(techDiscoveryHistory);
     }
   });
 
@@ -951,6 +1174,89 @@
       : null
   );
 
+  const techDiscoveryChartOption = $derived(
+    (techDiscoveryHistory?.length ?? 0) > 0
+      ? (() => {
+          const players = techDiscoveryHistory ?? [];
+
+          // Calculate the maximum tech count across all players
+          const maxTechCount = Math.max(
+            ...players.flatMap(player => player.data.map(d => d.tech_count))
+          );
+
+          // Get the final turn for consistent x-axis
+          const finalTurn = Math.max(
+            ...players.flatMap(player => player.data.map(d => d.turn))
+          );
+
+          // Get nation names for legend
+          const nationNames = players.map(p => formatEnum(p.nation, "NATION_"));
+
+          return {
+            ...CHART_THEME,
+            title: {
+              ...CHART_THEME.title,
+              text: "Tech Discovery Over Time",
+            },
+            // Hidden legend controls series visibility via legend.selected
+            legend: {
+              show: false,
+              data: nationNames,
+              selected: selectedTechsNations,
+            },
+            tooltip: {
+              trigger: 'item',
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              formatter: (params: any) => {
+                const data = params.data as [number, number, string | null] | undefined;
+                if (!data) return '';
+                const [turn, count, techName] = data;
+                if (techName) {
+                  // Format tech name: TECH_IRONWORKING -> Ironworking
+                  const formattedTech = formatEnum(techName, "TECH_");
+                  return `Turn ${turn}: Discovered ${formattedTech}`;
+                }
+                return `Turn ${turn}: ${count} technologies`;
+              },
+            },
+            grid: {
+              left: 60,
+              right: 40,
+              top: 80,
+              bottom: 60,
+            },
+            xAxis: {
+              type: "value",
+              name: "Turn",
+              nameLocation: "middle",
+              nameGap: 30,
+              splitLine: { show: false },
+              max: finalTurn,
+            },
+            yAxis: {
+              type: "value",
+              name: "Number of Technologies",
+              nameLocation: "middle",
+              nameGap: 40,
+              max: maxTechCount + 2,
+              splitLine: { show: false },
+            },
+            series: players.map((player, i) => ({
+              name: formatEnum(player.nation, "NATION_"),
+              type: "line" as const,
+              data: player.data.map((d) => [d.turn, d.tech_count, d.tech_name]),
+              itemStyle: { color: getPlayerColor(player.nation, i) },
+              symbol: (value: [number, number, string | null]) => value[2] ? 'circle' : 'none',
+              symbolSize: 8,
+              emphasis: {
+                symbolSize: 12,
+              },
+            })),
+          };
+        })()
+      : null
+  );
+
   // Fetch game data when route changes
   $effect(() => {
     const matchId = Number($page.params.id);
@@ -976,17 +1282,21 @@
       api.getEventLogs(matchId),
       api.getLawAdoptionHistory(matchId),
       api.getCurrentLaws(matchId),
+      api.getTechDiscoveryHistory(matchId),
+      api.getCompletedTechs(matchId),
       api.getCityStatistics(matchId),
       api.getImprovementData(matchId),
       api.getMapTiles(matchId),
     ])
-      .then(([details, history, yields, logs, lawHistory, laws, cityStats, impData, tiles]) => {
+      .then(([details, history, yields, logs, lawHistory, laws, techHistory, techs, cityStats, impData, tiles]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
         eventLogs = logs;
         lawAdoptionHistory = lawHistory;
         currentLaws = laws;
+        techDiscoveryHistory = techHistory;
+        completedTechs = techs;
         cityStatistics = cityStats;
         improvementData = impData;
         mapTiles = tiles;
@@ -1322,6 +1632,13 @@
           </Tabs.Trigger>
 
           <Tabs.Trigger
+            value="techs"
+            class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
+          >
+            Techs
+          </Tabs.Trigger>
+
+          <Tabs.Trigger
             value="economics"
             class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
@@ -1653,10 +1970,7 @@
                           <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
                             {#if row.adoptions[player.player_id]?.length > 0}
                               {#each row.adoptions[player.player_id] as lawName, i}
-                                <div class="flex items-center gap-1">
-                                  <span class="text-brown">⚖</span>
-                                  <span>Adopted {formatEnum(lawName, "LAW_")}</span>
-                                </div>
+                                <span>Adopted {formatEnum(lawName, "LAW_")}</span>
                               {/each}
                             {:else}
                               <span class="text-brown/50">—</span>
@@ -1812,6 +2126,271 @@
                       <tr>
                         <td colspan={LAW_COLUMNS.length} class="p-8 text-center text-brown italic">
                           No laws match search
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {/if}
+        </Tabs.Content>
+
+        <!-- Tab Content: Techs -->
+        <Tabs.Content
+          value="techs"
+          class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
+          style="background-color: #35302B;"
+        >
+          <h2 class="text-tan font-bold mb-4 mt-0">Technologies</h2>
+          {#if techDiscoveryChartOption}
+            {#snippet techsFilter()}
+              {#if techsSeriesInfo.length > 0}
+                <ChartSeriesFilter series={techsSeriesInfo} bind:selected={selectedTechsNations} />
+              {/if}
+            {/snippet}
+            <ChartContainer option={techDiscoveryChartOption} height="400px" title="Tech Discovery Over Time" controls={techsFilter} />
+          {:else if techDiscoveryHistory !== null && techDiscoveryHistory.length === 0}
+            <p class="text-brown italic text-center p-8">No tech discovery data available</p>
+          {:else}
+            <p class="text-brown italic text-center p-8">Loading tech discovery data...</p>
+          {/if}
+
+          <!-- Tech Discovery Timeline -->
+          {#if techDiscoveryTimeline().length > 0}
+            <div class="mt-8">
+              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Tech Discovery Timeline</h3>
+
+              <!-- Filter controls -->
+              <div class="flex flex-wrap gap-3 mb-4 items-center">
+                <Select.Root type="multiple" bind:value={selectedTechTimelineNations}>
+                  <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
+                    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                      </svg>
+                    </div>
+                    <span class="truncate">Filter</span>
+                    <span class="ml-2">▼</span>
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
+                      <Select.Viewport>
+                        {#each techTimelineNationOptions as nation}
+                          <Select.Item
+                            value={nation}
+                            label={formatEnum(nation, "NATION_")}
+                            class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                          >
+                            {#snippet children({ selected })}
+                              {formatEnum(nation, "NATION_")}
+                              {#if selected}
+                                <span class="text-orange font-bold">✓</span>
+                              {/if}
+                            {/snippet}
+                          </Select.Item>
+                        {/each}
+                      </Select.Viewport>
+                    </Select.Content>
+                  </Select.Portal>
+                </Select.Root>
+
+                <!-- Selected nation chips -->
+                {#if selectedTechTimelineNations.length > 0}
+                  <div class="flex flex-wrap gap-1">
+                    {#each selectedTechTimelineNations as nation}
+                      <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                        {formatEnum(nation, "NATION_")}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+
+              <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
+                <table class="w-full">
+                  <thead>
+                    <tr>
+                      <th class="p-3 text-left border-b-2 border-brown text-brown font-bold whitespace-nowrap w-20">
+                        Turn
+                      </th>
+                      {#each filteredTechTimelinePlayers as player}
+                        {@const playerColor = player.nation ? getCivilizationColor(player.nation) : null}
+                        <th
+                          class="p-3 text-center border-b-2 border-brown font-bold whitespace-nowrap"
+                          style="background-color: {playerColor ?? '#4a4a4a'}40; color: {playerColor ?? '#D2B48C'};"
+                        >
+                          {formatEnum(player.nation, "NATION_")}
+                        </th>
+                      {/each}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each filteredTechTimelineRows() as row}
+                      <tr class="transition-colors duration-200 hover:bg-brown/20">
+                        <td class="p-3 text-left border-b border-brown/50 text-tan font-bold whitespace-nowrap">
+                          {row.turn}
+                        </td>
+                        {#each filteredTechTimelinePlayers as player}
+                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                            {#if row.discoveries[player.player_id]?.length > 0}
+                              {#each row.discoveries[player.player_id] as techName}
+                                <span>{formatEnum(techName, "TECH_")}</span>
+                              {/each}
+                            {:else}
+                              <span class="text-brown/50">—</span>
+                            {/if}
+                          </td>
+                        {/each}
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Completed Technologies Table -->
+          {#if completedTechs === null}
+            <div class="mt-8">
+              <p class="text-brown italic text-center p-8">Loading technologies data...</p>
+            </div>
+          {:else if completedTechs.length === 0}
+            <div class="mt-8">
+              <p class="text-brown italic text-center p-8">No technologies data available</p>
+            </div>
+          {:else}
+            <div class="mt-8">
+              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Completed Technologies</h3>
+
+              <!-- Controls row -->
+              <div class="flex flex-wrap gap-3 mb-4 items-end">
+                <!-- Filter dropdown -->
+                <Select.Root type="multiple" bind:value={selectedTechFilters}>
+                  <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
+                    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                      </svg>
+                    </div>
+                    <span class="truncate">Filter</span>
+                    <span class="ml-2">▼</span>
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
+                      <Select.Viewport>
+                        <!-- Nations Group -->
+                        {#if uniqueTechNations.length > 0}
+                          <Select.Group>
+                            <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50">
+                              Nations
+                            </Select.GroupHeading>
+                            {#each uniqueTechNations as nation}
+                              <Select.Item
+                                value={`nation:${nation}`}
+                                label={formatEnum(nation, "NATION_")}
+                                class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                              >
+                                {#snippet children({ selected })}
+                                  {formatEnum(nation, "NATION_")}
+                                  {#if selected}
+                                    <span class="text-orange font-bold">✓</span>
+                                  {/if}
+                                {/snippet}
+                              </Select.Item>
+                            {/each}
+                          </Select.Group>
+                        {/if}
+
+                        <!-- Techs Group -->
+                        {#if uniqueTechNames.length > 0}
+                          <Select.Group>
+                            <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50 {uniqueTechNations.length > 0 ? 'border-t border-t-brown/50' : ''}">
+                              Technologies
+                            </Select.GroupHeading>
+                            {#each uniqueTechNames as tech}
+                              <Select.Item
+                                value={`tech:${tech}`}
+                                label={formatEnum(tech, "TECH_")}
+                                class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                              >
+                                {#snippet children({ selected })}
+                                  {formatEnum(tech, "TECH_")}
+                                  {#if selected}
+                                    <span class="text-orange font-bold">✓</span>
+                                  {/if}
+                                {/snippet}
+                              </Select.Item>
+                            {/each}
+                          </Select.Group>
+                        {/if}
+                      </Select.Viewport>
+                    </Select.Content>
+                  </Select.Portal>
+                </Select.Root>
+
+                <!-- Search -->
+                <SearchInput
+                  bind:value={techSearchTerm}
+                  placeholder="Search"
+                  variant="field"
+                  class="w-64"
+                />
+
+                <!-- Selected filter chips -->
+                {#if selectedTechFilters.length > 0}
+                  <div class="flex flex-wrap gap-1">
+                    {#each selectedTechFilters as filter}
+                      <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                        {filter.startsWith("nation:")
+                          ? formatEnum(filter.replace("nation:", ""), "NATION_")
+                          : formatEnum(filter.replace("tech:", ""), "TECH_")}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
+
+                <!-- Results count -->
+                <span class="text-brown text-sm ml-auto">
+                  {filteredSortedTechs().length} / {completedTechs.length} technologies
+                </span>
+              </div>
+
+              <!-- Technologies data table -->
+              <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
+                <table class="w-full">
+                  <thead>
+                    <tr>
+                      {#each TECH_COLUMNS as column}
+                        <th
+                          class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                          onclick={() => toggleTechSort(column.key)}
+                        >
+                          <span class="inline-flex items-center gap-1">
+                            {column.label}
+                            {#if techSortColumn === column.key}
+                              <span class="text-orange">
+                                {techSortDirection === "asc" ? "↑" : "↓"}
+                              </span>
+                            {/if}
+                          </span>
+                        </th>
+                      {/each}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each filteredSortedTechs() as tech}
+                      <tr class="transition-colors duration-200 hover:bg-brown/20">
+                        {#each TECH_COLUMNS as column}
+                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                            {formatTechCell(column, tech)}
+                          </td>
+                        {/each}
+                      </tr>
+                    {:else}
+                      <tr>
+                        <td colspan={TECH_COLUMNS.length} class="p-8 text-center text-brown italic">
+                          No technologies match search
                         </td>
                       </tr>
                     {/each}

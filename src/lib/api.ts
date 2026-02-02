@@ -12,6 +12,8 @@ import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { EventLog } from "$lib/types/EventLog";
 import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 import type { PlayerLaw } from "$lib/types/PlayerLaw";
+import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
+import type { PlayerTech } from "$lib/types/PlayerTech";
 import type { CityStatistics } from "$lib/types/CityStatistics";
 import type { ImprovementData } from "$lib/types/ImprovementData";
 import type { MapTile } from "$lib/types/MapTile";
@@ -77,6 +79,20 @@ export const api = {
    */
   getCurrentLaws: (matchId: number) =>
     invoke<PlayerLaw[]>("get_current_laws", { matchId }),
+
+  /**
+   * Get tech discovery history for all players in a match.
+   * Returns cumulative tech count over time for each player.
+   */
+  getTechDiscoveryHistory: (matchId: number) =>
+    invoke<TechDiscoveryHistory[]>("get_tech_discovery_history", { matchId }),
+
+  /**
+   * Get completed techs for all players in a match.
+   * Returns each player's completed technologies with discovery turn.
+   */
+  getCompletedTechs: (matchId: number) =>
+    invoke<PlayerTech[]>("get_completed_techs", { matchId }),
 
   /**
    * Get city statistics for a match.
