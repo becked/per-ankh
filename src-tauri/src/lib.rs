@@ -1236,6 +1236,19 @@ pub struct LawAdoptionHistory {
     pub data: Vec<LawAdoptionDataPoint>,
 }
 
+/// A single law entry for a player
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct PlayerLaw {
+    pub player_id: i32,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub law_category: String,
+    pub law: String,
+    pub adopted_turn: i32,
+    pub change_count: i32,
+}
+
 /// City information for the Cities tab
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
@@ -1557,6 +1570,73 @@ async fn get_law_adoption_history(
         Ok(result)
     })
     .context("Failed to get law adoption history")
+    .map_err(|e| e.to_string())
+}
+
+/// Tauri command to get current laws for all players in a match
+///
+/// Returns each player's active laws from the laws table
+#[tauri::command]
+async fn get_current_laws(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<PlayerLaw>, String> {
+    pool.with_connection(|conn| {
+        // Get the actual adoption turn from event_logs (LAW_ADOPTED events)
+        // The laws table only stores placeholder values for adopted_turn
+        let mut stmt = conn.prepare(
+            "WITH law_adoptions AS (
+                -- Extract law adoption events with the law name from description
+                SELECT
+                    e.player_id,
+                    e.turn,
+                    regexp_extract(e.description, 'LAW_[A-Z_]+', 0) as law_name
+                FROM event_logs e
+                WHERE e.match_id = ?
+                AND e.log_type = 'LAW_ADOPTED'
+                AND e.description IS NOT NULL
+             ),
+             latest_adoptions AS (
+                -- Get the most recent adoption turn for each player+law combination
+                SELECT
+                    player_id,
+                    law_name,
+                    MAX(turn) as adopted_turn
+                FROM law_adoptions
+                GROUP BY player_id, law_name
+             )
+             SELECT
+                l.player_id,
+                p.player_name,
+                p.nation,
+                l.law_category,
+                l.law,
+                COALESCE(la.adopted_turn, 0) as adopted_turn,
+                l.change_count
+             FROM laws l
+             JOIN players p ON l.player_id = p.player_id AND l.match_id = p.match_id
+             LEFT JOIN latest_adoptions la ON l.player_id = la.player_id AND l.law = la.law_name
+             WHERE l.match_id = ?
+             ORDER BY p.nation, l.law_category"
+        )?;
+
+        let laws = stmt
+            .query_map([match_id, match_id], |row| {
+                Ok(PlayerLaw {
+                    player_id: row.get(0)?,
+                    player_name: row.get(1)?,
+                    nation: row.get(2)?,
+                    law_category: row.get(3)?,
+                    law: row.get(4)?,
+                    adopted_turn: row.get(5)?,
+                    change_count: row.get(6)?,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+
+        Ok(laws)
+    })
+    .context("Failed to get current laws")
     .map_err(|e| e.to_string())
 }
 
@@ -2129,6 +2209,7 @@ pub fn run() {
             get_story_events,
             get_event_logs,
             get_law_adoption_history,
+            get_current_laws,
             get_city_statistics,
             get_improvement_data,
             get_map_tiles,

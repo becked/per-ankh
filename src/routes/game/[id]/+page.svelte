@@ -7,6 +7,7 @@
   import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
   import type { EventLog } from "$lib/types/EventLog";
   import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
+  import type { PlayerLaw } from "$lib/types/PlayerLaw";
   import type { CityStatistics } from "$lib/types/CityStatistics";
   import type { CityInfo } from "$lib/types/CityInfo";
   import type { ImprovementData } from "$lib/types/ImprovementData";
@@ -27,6 +28,7 @@
   let allYields = $state<YieldHistory[] | null>(null);
   let eventLogs = $state<EventLog[] | null>(null);
   let lawAdoptionHistory = $state<LawAdoptionHistory[] | null>(null);
+  let currentLaws = $state<PlayerLaw[] | null>(null);
   let cityStatistics = $state<CityStatistics | null>(null);
   let improvementData = $state<ImprovementData | null>(null);
   let mapTiles = $state<MapTile[] | null>(null);
@@ -73,6 +75,15 @@
   let improvementSearchTerm = $state("");
   let improvementSortColumn = $state<string>("nation");
   let improvementSortDirection = $state<"asc" | "desc">("asc");
+
+  // Laws table state
+  let lawSearchTerm = $state("");
+  let lawSortColumn = $state<string>("nation");
+  let lawSortDirection = $state<"asc" | "desc">("asc");
+  let selectedLawFilters = $state<string[]>([]);  // Combined nations and laws with prefixes
+
+  // Law adoption timeline filter state
+  let selectedTimelineNations = $state<string[]>([]);
 
   // City column definitions
   // format function receives the value AND the city object for context (e.g., capital star)
@@ -359,6 +370,204 @@
       improvementSortDirection = "asc";
     }
   }
+
+  // Laws table column definitions
+  type LawColumn = {
+    key: keyof PlayerLaw;
+    label: string;
+    format?: (value: string | number | null) => string;
+  };
+
+  const LAW_COLUMNS: LawColumn[] = [
+    {
+      key: "nation",
+      label: "Nation",
+      format: (v) => formatEnum(v as string | null, "NATION_"),
+    },
+    {
+      key: "law_category",
+      label: "Category",
+      format: (v) => formatEnum(v as string | null, "LAWCLASS_"),
+    },
+    {
+      key: "law",
+      label: "Active Law",
+      format: (v) => formatEnum(v as string | null, "LAW_"),
+    },
+    {
+      key: "adopted_turn",
+      label: "Turn",
+      format: (v) => v ? String(v) : "—",
+    },
+  ];
+
+  // Parse selected law filters into separate arrays
+  const selectedLawNations = $derived(
+    selectedLawFilters
+      .filter(f => f.startsWith("nation:"))
+      .map(f => f.replace("nation:", ""))
+  );
+
+  const selectedLawNames = $derived(
+    selectedLawFilters
+      .filter(f => f.startsWith("law:"))
+      .map(f => f.replace("law:", ""))
+  );
+
+  // Get unique nations and laws for filter dropdown
+  const uniqueLawNations = $derived(
+    currentLaws
+      ? [...new Set(currentLaws.map(law => law.nation).filter((n): n is string => n != null))].sort()
+      : []
+  );
+
+  const uniqueLawNames = $derived(
+    currentLaws
+      ? [...new Set(currentLaws.map(law => law.law))].sort()
+      : []
+  );
+
+  // Filtered and sorted laws
+  const filteredSortedLaws = $derived(() => {
+    if (!currentLaws) return [];
+
+    // Filter by selected nations
+    let laws = currentLaws;
+    if (selectedLawNations.length > 0) {
+      laws = laws.filter((law) => law.nation && selectedLawNations.includes(law.nation));
+    }
+
+    // Filter by selected laws
+    if (selectedLawNames.length > 0) {
+      laws = laws.filter((law) => selectedLawNames.includes(law.law));
+    }
+
+    // Filter by search term
+    if (lawSearchTerm) {
+      const term = lawSearchTerm.toLowerCase();
+      laws = laws.filter((law) =>
+        law.nation?.toLowerCase().includes(term) ||
+        law.player_name.toLowerCase().includes(term) ||
+        law.law_category.toLowerCase().includes(term) ||
+        law.law.toLowerCase().includes(term)
+      );
+    }
+
+    // Sort
+    const column = LAW_COLUMNS.find((col) => col.key === lawSortColumn);
+    if (column) {
+      laws = [...laws].sort((a, b) => {
+        const aVal = a[column.key];
+        const bVal = b[column.key];
+
+        // Handle nulls - sort them to the end
+        if (aVal == null && bVal == null) return 0;
+        if (aVal == null) return 1;
+        if (bVal == null) return -1;
+
+        // Compare values (handle both string and number)
+        let cmp: number;
+        if (typeof aVal === "number" && typeof bVal === "number") {
+          cmp = aVal - bVal;
+        } else {
+          cmp = String(aVal).localeCompare(String(bVal));
+        }
+        return lawSortDirection === "asc" ? cmp : -cmp;
+      });
+    }
+
+    return laws;
+  });
+
+  // Toggle law sort column/direction
+  function toggleLawSort(columnKey: string) {
+    if (lawSortColumn === columnKey) {
+      lawSortDirection = lawSortDirection === "asc" ? "desc" : "asc";
+    } else {
+      lawSortColumn = columnKey;
+      lawSortDirection = "asc";
+    }
+  }
+
+  // Format law cell value
+  function formatLawCell(column: LawColumn, law: PlayerLaw): string {
+    const value = law[column.key];
+    if (column.format) {
+      return column.format(value as string | number | null);
+    }
+    return value != null ? String(value) : "—";
+  }
+
+  // Law adoption timeline data structure
+  type TimelineRow = {
+    turn: number;
+    adoptions: Record<number, string[]>;  // player_id -> array of law names
+  };
+
+  // Transform lawAdoptionHistory into timeline rows
+  const lawAdoptionTimeline = $derived(() => {
+    if (!lawAdoptionHistory || lawAdoptionHistory.length === 0) return [];
+
+    // Collect all adoption events by turn
+    const turnMap = new Map<number, Record<number, string[]>>();
+
+    for (const player of lawAdoptionHistory) {
+      for (const point of player.data) {
+        // Only include points where a law was actually adopted (has law_name)
+        if (point.law_name) {
+          if (!turnMap.has(point.turn)) {
+            turnMap.set(point.turn, {});
+          }
+          const turnData = turnMap.get(point.turn)!;
+          if (!turnData[player.player_id]) {
+            turnData[player.player_id] = [];
+          }
+          turnData[player.player_id].push(point.law_name);
+        }
+      }
+    }
+
+    // Convert to array and sort by turn
+    const rows: TimelineRow[] = Array.from(turnMap.entries())
+      .map(([turn, adoptions]) => ({ turn, adoptions }))
+      .sort((a, b) => a.turn - b.turn);
+
+    return rows;
+  });
+
+  // Get players for timeline columns (from lawAdoptionHistory)
+  const timelinePlayers = $derived(
+    lawAdoptionHistory?.map(p => ({
+      player_id: p.player_id,
+      player_name: p.player_name,
+      nation: p.nation,
+    })) ?? []
+  );
+
+  // Get unique nations for timeline filter
+  const timelineNationOptions = $derived(
+    timelinePlayers
+      .filter((p): p is typeof p & { nation: string } => p.nation != null)
+      .map(p => p.nation)
+  );
+
+  // Filtered timeline players based on selection
+  const filteredTimelinePlayers = $derived(
+    selectedTimelineNations.length === 0
+      ? timelinePlayers
+      : timelinePlayers.filter(p => p.nation && selectedTimelineNations.includes(p.nation))
+  );
+
+  // Filtered timeline rows (only show rows where at least one filtered player has an adoption)
+  const filteredTimelineRows = $derived(() => {
+    const rows = lawAdoptionTimeline();
+    if (selectedTimelineNations.length === 0) return rows;
+
+    const filteredPlayerIds = new Set(filteredTimelinePlayers.map(p => p.player_id));
+    return rows.filter(row =>
+      Object.keys(row.adoptions).some(playerId => filteredPlayerIds.has(Number(playerId)))
+    );
+  });
 
   // Format improvement cell value
   function formatImprovementCell(column: ImprovementColumn, imp: ImprovementInfo): string {
@@ -766,16 +975,18 @@
       api.getYieldHistory(matchId, Array.from(YIELD_TYPES)),
       api.getEventLogs(matchId),
       api.getLawAdoptionHistory(matchId),
+      api.getCurrentLaws(matchId),
       api.getCityStatistics(matchId),
       api.getImprovementData(matchId),
       api.getMapTiles(matchId),
     ])
-      .then(([details, history, yields, logs, lawHistory, cityStats, impData, tiles]) => {
+      .then(([details, history, yields, logs, lawHistory, laws, cityStats, impData, tiles]) => {
         gameDetails = details;
         playerHistory = history;
         allYields = yields;
         eventLogs = logs;
         lawAdoptionHistory = lawHistory;
+        currentLaws = laws;
         cityStatistics = cityStats;
         improvementData = impData;
         mapTiles = tiles;
@@ -1107,7 +1318,7 @@
             value="laws"
             class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
-            Laws & Technology
+            Laws
           </Tabs.Trigger>
 
           <Tabs.Trigger
@@ -1349,7 +1560,7 @@
           class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
           style="background-color: #35302B;"
         >
-          <h2 class="text-tan font-bold mb-4 mt-0">Laws & Technology</h2>
+          <h2 class="text-tan font-bold mb-4 mt-0">Laws</h2>
           {#if lawAdoptionChartOption}
             {#snippet lawsFilter()}
               {#if lawsSeriesInfo.length > 0}
@@ -1361,6 +1572,253 @@
             <p class="text-brown italic text-center p-8">No law adoption data available</p>
           {:else}
             <p class="text-brown italic text-center p-8">Loading law adoption data...</p>
+          {/if}
+
+          <!-- Law Adoption Timeline -->
+          {#if lawAdoptionTimeline().length > 0}
+            <div class="mt-8">
+              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Law Adoption Timeline</h3>
+
+              <!-- Filter controls -->
+              <div class="flex flex-wrap gap-3 mb-4 items-center">
+                <Select.Root type="multiple" bind:value={selectedTimelineNations}>
+                  <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
+                    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                      </svg>
+                    </div>
+                    <span class="truncate">Filter</span>
+                    <span class="ml-2">▼</span>
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
+                      <Select.Viewport>
+                        {#each timelineNationOptions as nation}
+                          <Select.Item
+                            value={nation}
+                            label={formatEnum(nation, "NATION_")}
+                            class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                          >
+                            {#snippet children({ selected })}
+                              {formatEnum(nation, "NATION_")}
+                              {#if selected}
+                                <span class="text-orange font-bold">✓</span>
+                              {/if}
+                            {/snippet}
+                          </Select.Item>
+                        {/each}
+                      </Select.Viewport>
+                    </Select.Content>
+                  </Select.Portal>
+                </Select.Root>
+
+                <!-- Selected nation chips -->
+                {#if selectedTimelineNations.length > 0}
+                  <div class="flex flex-wrap gap-1">
+                    {#each selectedTimelineNations as nation}
+                      <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                        {formatEnum(nation, "NATION_")}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
+              </div>
+
+              <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
+                <table class="w-full">
+                  <thead>
+                    <tr>
+                      <th class="p-3 text-left border-b-2 border-brown text-brown font-bold whitespace-nowrap w-20">
+                        Turn
+                      </th>
+                      {#each filteredTimelinePlayers as player}
+                        {@const playerColor = player.nation ? getCivilizationColor(player.nation) : null}
+                        <th
+                          class="p-3 text-center border-b-2 border-brown font-bold whitespace-nowrap"
+                          style="background-color: {playerColor ?? '#4a4a4a'}40; color: {playerColor ?? '#D2B48C'};"
+                        >
+                          {formatEnum(player.nation, "NATION_")}
+                        </th>
+                      {/each}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each filteredTimelineRows() as row}
+                      <tr class="transition-colors duration-200 hover:bg-brown/20">
+                        <td class="p-3 text-left border-b border-brown/50 text-tan font-bold whitespace-nowrap">
+                          {row.turn}
+                        </td>
+                        {#each filteredTimelinePlayers as player}
+                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                            {#if row.adoptions[player.player_id]?.length > 0}
+                              {#each row.adoptions[player.player_id] as lawName, i}
+                                <div class="flex items-center gap-1">
+                                  <span class="text-brown">⚖</span>
+                                  <span>Adopted {formatEnum(lawName, "LAW_")}</span>
+                                </div>
+                              {/each}
+                            {:else}
+                              <span class="text-brown/50">—</span>
+                            {/if}
+                          </td>
+                        {/each}
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          {/if}
+
+          <!-- Current Laws Table -->
+          {#if currentLaws === null}
+            <div class="mt-8">
+              <p class="text-brown italic text-center p-8">Loading laws data...</p>
+            </div>
+          {:else if currentLaws.length === 0}
+            <div class="mt-8">
+              <p class="text-brown italic text-center p-8">No laws data available</p>
+            </div>
+          {:else}
+            <div class="mt-8">
+              <h3 class="text-tan font-bold mb-4 mt-0 text-xl">Current Laws</h3>
+
+              <!-- Controls row -->
+              <div class="flex flex-wrap gap-3 mb-4 items-end">
+                <!-- Filter dropdown -->
+                <Select.Root type="multiple" bind:value={selectedLawFilters}>
+                  <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
+                    <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
+                      <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4h18M5 8h14M7 12h10M9 16h6" />
+                      </svg>
+                    </div>
+                    <span class="truncate">Filter</span>
+                    <span class="ml-2">▼</span>
+                  </Select.Trigger>
+                  <Select.Portal>
+                    <Select.Content class="border-2 border-black rounded shadow-lg max-h-64 overflow-y-auto z-50 bg-[#201a13]">
+                      <Select.Viewport>
+                        <!-- Nations Group -->
+                        {#if uniqueLawNations.length > 0}
+                          <Select.Group>
+                            <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50">
+                              Nations
+                            </Select.GroupHeading>
+                            {#each uniqueLawNations as nation}
+                              <Select.Item
+                                value={`nation:${nation}`}
+                                label={formatEnum(nation, "NATION_")}
+                                class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                              >
+                                {#snippet children({ selected })}
+                                  {formatEnum(nation, "NATION_")}
+                                  {#if selected}
+                                    <span class="text-orange font-bold">✓</span>
+                                  {/if}
+                                {/snippet}
+                              </Select.Item>
+                            {/each}
+                          </Select.Group>
+                        {/if}
+
+                        <!-- Laws Group -->
+                        {#if uniqueLawNames.length > 0}
+                          <Select.Group>
+                            <Select.GroupHeading class="px-3 py-2 text-brown text-xs font-bold uppercase tracking-wide border-b border-brown/50 {uniqueLawNations.length > 0 ? 'border-t border-t-brown/50' : ''}">
+                              Laws
+                            </Select.GroupHeading>
+                            {#each uniqueLawNames as law}
+                              <Select.Item
+                                value={`law:${law}`}
+                                label={formatEnum(law, "LAW_")}
+                                class="px-3 py-2 cursor-pointer hover:bg-brown/30 text-tan text-sm flex justify-between items-center data-[highlighted]:bg-brown/30"
+                              >
+                                {#snippet children({ selected })}
+                                  {formatEnum(law, "LAW_")}
+                                  {#if selected}
+                                    <span class="text-orange font-bold">✓</span>
+                                  {/if}
+                                {/snippet}
+                              </Select.Item>
+                            {/each}
+                          </Select.Group>
+                        {/if}
+                      </Select.Viewport>
+                    </Select.Content>
+                  </Select.Portal>
+                </Select.Root>
+
+                <!-- Search -->
+                <SearchInput
+                  bind:value={lawSearchTerm}
+                  placeholder="Search"
+                  variant="field"
+                  class="w-64"
+                />
+
+                <!-- Selected filter chips -->
+                {#if selectedLawFilters.length > 0}
+                  <div class="flex flex-wrap gap-1">
+                    {#each selectedLawFilters as filter}
+                      <span class="px-2 py-1 rounded bg-brown text-white text-xs">
+                        {filter.startsWith("nation:")
+                          ? formatEnum(filter.replace("nation:", ""), "NATION_")
+                          : formatEnum(filter.replace("law:", ""), "LAW_")}
+                      </span>
+                    {/each}
+                  </div>
+                {/if}
+
+                <!-- Results count -->
+                <span class="text-brown text-sm ml-auto">
+                  {filteredSortedLaws().length} / {currentLaws.length} laws
+                </span>
+              </div>
+
+              <!-- Laws data table -->
+              <div class="overflow-x-auto rounded-lg" style="background-color: #201a13;">
+                <table class="w-full">
+                  <thead>
+                    <tr>
+                      {#each LAW_COLUMNS as column}
+                        <th
+                          class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
+                          onclick={() => toggleLawSort(column.key)}
+                        >
+                          <span class="inline-flex items-center gap-1">
+                            {column.label}
+                            {#if lawSortColumn === column.key}
+                              <span class="text-orange">
+                                {lawSortDirection === "asc" ? "↑" : "↓"}
+                              </span>
+                            {/if}
+                          </span>
+                        </th>
+                      {/each}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {#each filteredSortedLaws() as law}
+                      <tr class="transition-colors duration-200 hover:bg-brown/20">
+                        {#each LAW_COLUMNS as column}
+                          <td class="p-3 text-left border-b border-brown/50 text-tan whitespace-nowrap">
+                            {formatLawCell(column, law)}
+                          </td>
+                        {/each}
+                      </tr>
+                    {:else}
+                      <tr>
+                        <td colspan={LAW_COLUMNS.length} class="p-8 text-center text-brown italic">
+                          No laws match search
+                        </td>
+                      </tr>
+                    {/each}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           {/if}
         </Tabs.Content>
 
