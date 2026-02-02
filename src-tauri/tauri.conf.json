@@ -33,7 +33,9 @@
             "dialog:default",
             "dialog:allow-confirm",
             "dialog:allow-message",
-            "core:window:allow-start-dragging"
+            "core:window:allow-start-dragging",
+            "updater:default",
+            "process:allow-restart"
           ]
         }
       ]
@@ -41,6 +43,7 @@
   },
   "bundle": {
     "active": true,
+    "createUpdaterArtifacts": true,
     "targets": ["app", "dmg", "nsis", "msi", "deb", "rpm"],
     "icon": [
       "icons/32x32.png",
@@ -52,6 +55,17 @@
     "macOS": {
       "signingIdentity": null,
       "entitlements": null
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERFODlGRjRENEJBMTcyMDUKUldRRmNxRkxUZitKM3RQSE1hRzlDeHlPcDhKM3ZGRmdaZGFRMFduMitTNy9kRUVlenVnRTJ3NXcK",
+      "endpoints": [
+        "https://github.com/becked/per-ankh/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
     }
   }
 }

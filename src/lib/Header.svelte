@@ -5,6 +5,7 @@
   import ImportModal from "$lib/ImportModal.svelte";
   import SettingsModal from "$lib/SettingsModal.svelte";
   import CollectionsModal from "$lib/CollectionsModal.svelte";
+  import UpdateModal from "$lib/UpdateModal.svelte";
   import SearchInput from "$lib/SearchInput.svelte";
 
   import { api } from "$lib/api";
@@ -18,6 +19,7 @@
   let isImportModalOpen = $state(false);
   let isSettingsModalOpen = $state(false);
   let isCollectionsModalOpen = $state(false);
+  let isUpdateModalOpen = $state(false);
   let importProgress: ImportProgress | null = $state(null);
   let importResult: BatchImportResult | null = $state(null);
 
@@ -37,6 +39,11 @@
   function openCollectionsModal() {
     isMenuOpen = false;
     isCollectionsModalOpen = true;
+  }
+
+  function openUpdateModal() {
+    isMenuOpen = false;
+    isUpdateModalOpen = true;
   }
 
   async function handleImportFiles() {
@@ -200,6 +207,14 @@
         >
           Reset Database
         </button>
+        <div class="border-t border-black"></div>
+        <button
+          class="w-full text-left px-3 py-1.5 text-xs text-tan hover:bg-[#35302b] transition-colors"
+          type="button"
+          onclick={openUpdateModal}
+        >
+          Check for Updates...
+        </button>
       </div>
     {/if}
   </div>
@@ -237,4 +252,9 @@
 <CollectionsModal
   bind:isOpen={isCollectionsModalOpen}
   onClose={() => { isCollectionsModalOpen = false; }}
+/>
+
+<UpdateModal
+  bind:isOpen={isUpdateModalOpen}
+  onClose={() => { isUpdateModalOpen = false; }}
 />
