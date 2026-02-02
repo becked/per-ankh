@@ -55,6 +55,14 @@
   let selectedGrowthNations = $state<Record<string, boolean>>({});
   let selectedCultureNations = $state<Record<string, boolean>>({});
   let selectedHappinessNations = $state<Record<string, boolean>>({});
+  let selectedOrdersNations = $state<Record<string, boolean>>({});
+  let selectedFoodNations = $state<Record<string, boolean>>({});
+  let selectedMoneyNations = $state<Record<string, boolean>>({});
+  let selectedDiscontentNations = $state<Record<string, boolean>>({});
+  let selectedIronNations = $state<Record<string, boolean>>({});
+  let selectedStoneNations = $state<Record<string, boolean>>({});
+  let selectedWoodNations = $state<Record<string, boolean>>({});
+  let selectedMaintenanceNations = $state<Record<string, boolean>>({});
 
   // City table state
   let citySearchTerm = $state("");
@@ -397,6 +405,14 @@
       selectedGrowthNations = { ...defaultSelection };
       selectedCultureNations = { ...defaultSelection };
       selectedHappinessNations = { ...defaultSelection };
+      selectedOrdersNations = { ...defaultSelection };
+      selectedFoodNations = { ...defaultSelection };
+      selectedMoneyNations = { ...defaultSelection };
+      selectedDiscontentNations = { ...defaultSelection };
+      selectedIronNations = { ...defaultSelection };
+      selectedStoneNations = { ...defaultSelection };
+      selectedWoodNations = { ...defaultSelection };
+      selectedMaintenanceNations = { ...defaultSelection };
     }
   });
 
@@ -427,7 +443,15 @@
     "YIELD_TRAINING",
     "YIELD_GROWTH",
     "YIELD_CULTURE",
-    "YIELD_HAPPINESS"
+    "YIELD_HAPPINESS",
+    "YIELD_ORDERS",
+    "YIELD_FOOD",
+    "YIELD_MONEY",
+    "YIELD_DISCONTENT",
+    "YIELD_IRON",
+    "YIELD_STONE",
+    "YIELD_WOOD",
+    "YIELD_MAINTENANCE"
   ] as const;
 
   // Helper to get player color based on nation
@@ -606,6 +630,14 @@
   const growthChartOption = $derived(createYieldChartOption("YIELD_GROWTH", "Growth Production", "Growth per Turn", selectedGrowthNations));
   const cultureChartOption = $derived(createYieldChartOption("YIELD_CULTURE", "Culture Production", "Culture per Turn", selectedCultureNations));
   const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn", selectedHappinessNations));
+  const ordersChartOption = $derived(createYieldChartOption("YIELD_ORDERS", "Orders", "Orders per Turn", selectedOrdersNations));
+  const foodChartOption = $derived(createYieldChartOption("YIELD_FOOD", "Food Production", "Food per Turn", selectedFoodNations));
+  const moneyChartOption = $derived(createYieldChartOption("YIELD_MONEY", "Money Income", "Gold per Turn", selectedMoneyNations));
+  const discontentChartOption = $derived(createYieldChartOption("YIELD_DISCONTENT", "Discontent", "Discontent per Turn", selectedDiscontentNations));
+  const ironChartOption = $derived(createYieldChartOption("YIELD_IRON", "Iron Production", "Iron per Turn", selectedIronNations));
+  const stoneChartOption = $derived(createYieldChartOption("YIELD_STONE", "Stone Production", "Stone per Turn", selectedStoneNations));
+  const woodChartOption = $derived(createYieldChartOption("YIELD_WOOD", "Wood Production", "Wood per Turn", selectedWoodNations));
+  const maintenanceChartOption = $derived(createYieldChartOption("YIELD_MAINTENANCE", "Maintenance Costs", "Maintenance per Turn", selectedMaintenanceNations));
 
   // Create law adoption chart option
   // Uses ECharts legend.selected for filtering instead of filtering data directly
@@ -1082,7 +1114,7 @@
             value="economics"
             class="px-6 py-3 border-2 border-black border-b-0 border-r-0 font-bold cursor-pointer transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=active]:text-tan data-[state=inactive]:bg-[#2a2622] data-[state=inactive]:text-tan"
           >
-            Economics
+            Yields
           </Tabs.Trigger>
 
           <Tabs.Trigger
@@ -1332,13 +1364,13 @@
           {/if}
         </Tabs.Content>
 
-        <!-- Tab Content: Economics -->
+        <!-- Tab Content: Yields -->
         <Tabs.Content
           value="economics"
           class="p-8 border-2 border-black border-t-0 rounded-b-lg min-h-[400px] tab-pane"
           style="background-color: #35302B;"
         >
-          <h2 class="text-tan font-bold mb-4 mt-0">Economics</h2>
+          <h2 class="text-tan font-bold mb-4 mt-0">Yields</h2>
           {#if militaryChartOption}
             {#snippet militaryFilter()}
               {#if nationSeriesInfo.length > 0}
@@ -1414,6 +1446,78 @@
                 {/if}
               {/snippet}
               <ChartContainer option={happinessChartOption} height="400px" title="Happiness Production" controls={happinessFilter} />
+            {/if}
+
+            {#if ordersChartOption}
+              {#snippet ordersFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedOrdersNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={ordersChartOption} height="400px" title="Orders" controls={ordersFilter} />
+            {/if}
+
+            {#if foodChartOption}
+              {#snippet foodFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedFoodNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={foodChartOption} height="400px" title="Food Production" controls={foodFilter} />
+            {/if}
+
+            {#if moneyChartOption}
+              {#snippet moneyFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedMoneyNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={moneyChartOption} height="400px" title="Money Income" controls={moneyFilter} />
+            {/if}
+
+            {#if discontentChartOption}
+              {#snippet discontentFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedDiscontentNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={discontentChartOption} height="400px" title="Discontent" controls={discontentFilter} />
+            {/if}
+
+            {#if ironChartOption}
+              {#snippet ironFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedIronNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={ironChartOption} height="400px" title="Iron Production" controls={ironFilter} />
+            {/if}
+
+            {#if stoneChartOption}
+              {#snippet stoneFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedStoneNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={stoneChartOption} height="400px" title="Stone Production" controls={stoneFilter} />
+            {/if}
+
+            {#if woodChartOption}
+              {#snippet woodFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedWoodNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={woodChartOption} height="400px" title="Wood Production" controls={woodFilter} />
+            {/if}
+
+            {#if maintenanceChartOption}
+              {#snippet maintenanceFilter()}
+                {#if nationSeriesInfo.length > 0}
+                  <ChartSeriesFilter series={nationSeriesInfo} bind:selected={selectedMaintenanceNations} />
+                {/if}
+              {/snippet}
+              <ChartContainer option={maintenanceChartOption} height="400px" title="Maintenance Costs" controls={maintenanceFilter} />
             {/if}
           {/if}
         </Tabs.Content>
