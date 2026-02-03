@@ -3,10 +3,12 @@
 **Analysis Date:** November 6, 2025
 **Analyst:** Claude
 **Save Files Examined:**
+
 - OW-Carthage-Year39-2025-11-04-21-38-46.xml (v1.0.80522, November 2025)
 - OW-Babylonia-Year123-2024-01-31-22-44-04.zip (v1.0.70671, January 2024)
 
 **Documents Reviewed:**
+
 - docs/save-file-format.md (from external project)
 - docs/schema.sql (current database schema)
 - docs/database-analysis-2025-11-06.md (current parser coverage)
@@ -32,6 +34,7 @@ This analysis reveals **significant misalignments** between the save file format
 ### 1. Root-Level Elements in Actual Save Files
 
 **2024 Save (v1.0.70671):**
+
 ```
 5476 <Tile>
  297 <Character>
@@ -43,6 +46,7 @@ This analysis reveals **significant misalignments** between the save file format
 ```
 
 **2025 Save (v1.0.80522):**
+
 ```
 1972 <Tile>
   69 <Character>
@@ -57,15 +61,15 @@ This analysis reveals **significant misalignments** between the save file format
 
 ### 2. Save File Format Documentation Accuracy
 
-| Element Type | Documentation Claims | Actual Reality | Impact |
-|--------------|---------------------|----------------|--------|
-| **Units** | "Variable (example: 221 units)" at `/Root/Unit[@ID]` | **Does not exist** | CRITICAL - schema has 3 empty unit tables |
-| **Characters** | Correct location and structure | ✅ Verified | Good |
-| **Cities** | Correct location and structure | ✅ Verified | Good |
-| **Tiles** | Correct location and structure | ✅ Verified | Good |
-| **Players** | Correct location and structure | ✅ Verified | Good |
-| **MemoryData** | Correct location in Player/MemoryList | ✅ Verified | Good |
-| **LogData** | Correct location in Player/PermanentLogList | ✅ Verified | Good |
+| Element Type   | Documentation Claims                                 | Actual Reality     | Impact                                    |
+| -------------- | ---------------------------------------------------- | ------------------ | ----------------------------------------- |
+| **Units**      | "Variable (example: 221 units)" at `/Root/Unit[@ID]` | **Does not exist** | CRITICAL - schema has 3 empty unit tables |
+| **Characters** | Correct location and structure                       | ✅ Verified        | Good                                      |
+| **Cities**     | Correct location and structure                       | ✅ Verified        | Good                                      |
+| **Tiles**      | Correct location and structure                       | ✅ Verified        | Good                                      |
+| **Players**    | Correct location and structure                       | ✅ Verified        | Good                                      |
+| **MemoryData** | Correct location in Player/MemoryList                | ✅ Verified        | Good                                      |
+| **LogData**    | Correct location in Player/PermanentLogList          | ✅ Verified        | Good                                      |
 
 **Assessment**: The documentation is approximately **85% accurate** but contains at least one **critical error** regarding unit storage.
 
@@ -73,38 +77,38 @@ This analysis reveals **significant misalignments** between the save file format
 
 #### ✅ Tables with Verifiable XML Sources
 
-| Schema Table | XML Source | Status |
-|--------------|------------|--------|
-| `matches` | `/Root[@attributes]` | ✅ Fully mappable |
-| `players` | `/Root/Player[@ID]` | ✅ Fully mappable |
-| `characters` | `/Root/Character[@ID]` | ✅ Fully mappable |
-| `character_traits` | `/Root/Character/TraitTurn/*` | ✅ Fully mappable |
-| `character_relationships` | `/Root/Character/Relationships/*` | ⚠️ Partially available |
-| `character_marriages` | Unknown location | ❓ Not found yet |
-| `cities` | `/Root/City[@ID]` | ✅ Fully mappable |
-| `city_yields` | `/Root/City/YieldProgress/*` | ✅ Available in XML |
-| `city_religions` | `/Root/City/Religion/*` | ✅ Available in XML |
-| `city_culture` | `/Root/City/TeamCulture/*` | ✅ Available in XML |
-| `tiles` | `/Root/Tile` | ✅ Fully mappable |
-| `families` | `/Root/Player/Families/*` | ✅ Fully mappable |
-| `religions` | `/Root/Game/Religion*` elements | ✅ Fully mappable |
-| `tribes` | `/Root/Tribe` | ✅ Fully mappable |
-| `technologies_completed` | `/Root/Player/TechCount/*` | ✅ Fully mappable |
-| `laws` | `/Root/Player/ActiveLaw/*` | ✅ Fully mappable |
-| `diplomacy` | `/Root/Game/TeamDiplomacy/*` | ✅ Available |
-| `yield_history` | `/Root/Player/YieldRateHistory/*` | ✅ Fully mappable |
-| `points_history` | `/Root/Player/PointsHistory/*` | ✅ Fully mappable |
-| `military_history` | `/Root/Player/MilitaryPowerHistory/*` | ✅ Fully mappable |
-| `legitimacy_history` | `/Root/Player/LegitimacyHistory/*` | ✅ Available but not parsed |
-| `story_events` | `/Root/Player/EventStoryTurn/*` | ✅ Partially mappable |
+| Schema Table              | XML Source                            | Status                      |
+| ------------------------- | ------------------------------------- | --------------------------- |
+| `matches`                 | `/Root[@attributes]`                  | ✅ Fully mappable           |
+| `players`                 | `/Root/Player[@ID]`                   | ✅ Fully mappable           |
+| `characters`              | `/Root/Character[@ID]`                | ✅ Fully mappable           |
+| `character_traits`        | `/Root/Character/TraitTurn/*`         | ✅ Fully mappable           |
+| `character_relationships` | `/Root/Character/Relationships/*`     | ⚠️ Partially available      |
+| `character_marriages`     | Unknown location                      | ❓ Not found yet            |
+| `cities`                  | `/Root/City[@ID]`                     | ✅ Fully mappable           |
+| `city_yields`             | `/Root/City/YieldProgress/*`          | ✅ Available in XML         |
+| `city_religions`          | `/Root/City/Religion/*`               | ✅ Available in XML         |
+| `city_culture`            | `/Root/City/TeamCulture/*`            | ✅ Available in XML         |
+| `tiles`                   | `/Root/Tile`                          | ✅ Fully mappable           |
+| `families`                | `/Root/Player/Families/*`             | ✅ Fully mappable           |
+| `religions`               | `/Root/Game/Religion*` elements       | ✅ Fully mappable           |
+| `tribes`                  | `/Root/Tribe`                         | ✅ Fully mappable           |
+| `technologies_completed`  | `/Root/Player/TechCount/*`            | ✅ Fully mappable           |
+| `laws`                    | `/Root/Player/ActiveLaw/*`            | ✅ Fully mappable           |
+| `diplomacy`               | `/Root/Game/TeamDiplomacy/*`          | ✅ Available                |
+| `yield_history`           | `/Root/Player/YieldRateHistory/*`     | ✅ Fully mappable           |
+| `points_history`          | `/Root/Player/PointsHistory/*`        | ✅ Fully mappable           |
+| `military_history`        | `/Root/Player/MilitaryPowerHistory/*` | ✅ Fully mappable           |
+| `legitimacy_history`      | `/Root/Player/LegitimacyHistory/*`    | ✅ Available but not parsed |
+| `story_events`            | `/Root/Player/EventStoryTurn/*`       | ✅ Partially mappable       |
 
 #### ❌ Tables with NO XML Source (Per Current Evidence)
 
-| Schema Table | Expected XML Source | Reality | Recommendation |
-|--------------|---------------------|---------|----------------|
-| `units` | `/Root/Unit[@ID]` | **Does not exist** | ⚠️ Consider removal or mark as "future/optional" |
-| `unit_promotions` | `/Root/Unit/Promotions/*` | **Parent element missing** | ⚠️ Consider removal |
-| `unit_types` | Reference data | Could be static data | ✅ Populate from game definitions |
+| Schema Table      | Expected XML Source       | Reality                    | Recommendation                                   |
+| ----------------- | ------------------------- | -------------------------- | ------------------------------------------------ |
+| `units`           | `/Root/Unit[@ID]`         | **Does not exist**         | ⚠️ Consider removal or mark as "future/optional" |
+| `unit_promotions` | `/Root/Unit/Promotions/*` | **Parent element missing** | ⚠️ Consider removal                              |
+| `unit_types`      | Reference data            | Could be static data       | ✅ Populate from game definitions                |
 
 #### ⚠️ Aggregate Data Alternative for Units
 
@@ -131,6 +135,7 @@ While individual units are not stored, **aggregate production statistics ARE ava
 ```
 
 These are correctly mapped to:
+
 - `player_units_produced` (84 rows) ✅
 - `city_units_produced` (62 rows) ✅
 
@@ -139,6 +144,7 @@ These are correctly mapped to:
 #### Issue 1: Character Genealogy (HIGH PRIORITY)
 
 **Schema Expectation:**
+
 ```sql
 characters (
     birth_father_id INTEGER,
@@ -148,6 +154,7 @@ characters (
 ```
 
 **XML Reality:**
+
 ```xml
 <Character ID="8" ...>
     <FirstName>NAME_DIDO</FirstName>
@@ -157,6 +164,7 @@ characters (
 
 **Status:** Fields exist in schema but are empty (per database analysis).
 **Root Cause:** Unknown - either:
+
 1. XML doesn't contain parent references (needs verification)
 2. Parent references are in a different format/location
 3. Parser hasn't implemented this yet
@@ -166,6 +174,7 @@ characters (
 #### Issue 2: Unit Tracking (CRITICAL)
 
 **Schema Design:**
+
 ```sql
 units (
     unit_id INTEGER NOT NULL,
@@ -177,15 +186,18 @@ units (
 ```
 
 **XML Reality:**
+
 - ❌ No `/Root/Unit` elements at all
 - ✅ Aggregate statistics only in `Player/UnitsProduced` and `City/UnitProductionCounts`
 
 **Impact:**
+
 - 0 rows in `units`, `unit_promotions`, `unit_types` tables
 - Military analysis limited to aggregate production counts only
 - **Schema is over-engineered for data that doesn't exist**
 
 **Recommendation:** Either:
+
 1. Accept that individual unit tracking is impossible from save files
 2. Remove/deprecate unit detail tables
 3. Mark as "future enhancement pending game format changes"
@@ -198,6 +210,7 @@ units (
 **Root Cause:** Parser not implemented for these nested structures
 
 **Example XML (verified present):**
+
 ```xml
 <City ID="0" ...>
     <YieldProgress>
@@ -219,17 +232,20 @@ units (
 #### Issue 4: Event System (LOW-MEDIUM PRIORITY)
 
 **Schema Tables:**
+
 - `event_logs` (0 rows)
 - `event_outcomes` (0 rows)
 - `story_choices` (0 rows)
 
 **XML Reality:**
+
 - ✅ `LogData` events exist and are well-documented
 - ✅ Story events tracked in `EventStoryTurn` elements
 - ❓ Event outcomes may be implicit in LogData text
 - ❓ Story choices may not be stored after resolution
 
 **Current Implementation:**
+
 - `story_events` table: 764 rows ✅ (working)
 - But missing: comprehensive logging, outcome tracking, choice recording
 
@@ -256,6 +272,7 @@ units (
 **HIGH PRIORITY:**
 
 1. **Add schema metadata table:**
+
 ```sql
 CREATE TABLE schema_coverage_notes (
     table_name VARCHAR PRIMARY KEY,
@@ -267,6 +284,7 @@ CREATE TABLE schema_coverage_notes (
 ```
 
 2. **Mark unit tables as optional/future:**
+
 ```sql
 -- Add comments to unit tables
 COMMENT ON TABLE units IS 'AVAILABILITY: NO SOURCE DATA IN SAVE FILES (as of v1.0.80522). Individual unit state is not persisted. Only aggregate production counts available.';
@@ -289,51 +307,52 @@ COMMENT ON TABLE unit_types IS 'AVAILABILITY: STATIC - could be populated from g
 
 ### 6. Comparison: Documentation vs Reality vs Schema
 
-| Aspect | save-file-format.md | Actual XML (2024-2025) | schema.sql | Alignment |
-|--------|---------------------|------------------------|------------|-----------|
-| **Root Structure** | Root with 31 attributes | ✅ Confirmed | ✅ Captured in `matches` | Good |
-| **Player Elements** | `/Root/Player[@ID]` | ✅ Confirmed | ✅ `players` table | Good |
-| **Character Elements** | `/Root/Character[@ID]` | ✅ Confirmed | ✅ `characters` table | Good |
-| **City Elements** | `/Root/City[@ID]` | ✅ Confirmed | ✅ `cities` table | Good |
-| **Tile Elements** | `/Root/Tile` | ✅ Confirmed | ✅ `tiles` table | Good |
-| **Unit Elements** | ❌ `/Root/Unit[@ID]` described | ❌ **NOT FOUND** | ❌ 3 empty tables | **CRITICAL MISMATCH** |
-| **MemoryData** | `/Root/Player/MemoryList/MemoryData` | ✅ Confirmed | ❓ Not mapped | Documentation correct, schema incomplete |
-| **LogData** | `/Root/Player/PermanentLogList/LogData` | ✅ Confirmed | ⚠️ `event_logs` table exists but empty | Documentation correct, parser missing |
-| **Character Parents** | Implied by fields | ❓ Not found in samples | ❌ Empty columns | Unknown if available |
-| **City Subsystems** | Not documented | ✅ Exists in XML | ✅ Tables exist but empty | Schema better than docs! |
+| Aspect                 | save-file-format.md                     | Actual XML (2024-2025)  | schema.sql                             | Alignment                                |
+| ---------------------- | --------------------------------------- | ----------------------- | -------------------------------------- | ---------------------------------------- |
+| **Root Structure**     | Root with 31 attributes                 | ✅ Confirmed            | ✅ Captured in `matches`               | Good                                     |
+| **Player Elements**    | `/Root/Player[@ID]`                     | ✅ Confirmed            | ✅ `players` table                     | Good                                     |
+| **Character Elements** | `/Root/Character[@ID]`                  | ✅ Confirmed            | ✅ `characters` table                  | Good                                     |
+| **City Elements**      | `/Root/City[@ID]`                       | ✅ Confirmed            | ✅ `cities` table                      | Good                                     |
+| **Tile Elements**      | `/Root/Tile`                            | ✅ Confirmed            | ✅ `tiles` table                       | Good                                     |
+| **Unit Elements**      | ❌ `/Root/Unit[@ID]` described          | ❌ **NOT FOUND**        | ❌ 3 empty tables                      | **CRITICAL MISMATCH**                    |
+| **MemoryData**         | `/Root/Player/MemoryList/MemoryData`    | ✅ Confirmed            | ❓ Not mapped                          | Documentation correct, schema incomplete |
+| **LogData**            | `/Root/Player/PermanentLogList/LogData` | ✅ Confirmed            | ⚠️ `event_logs` table exists but empty | Documentation correct, parser missing    |
+| **Character Parents**  | Implied by fields                       | ❓ Not found in samples | ❌ Empty columns                       | Unknown if available                     |
+| **City Subsystems**    | Not documented                          | ✅ Exists in XML        | ✅ Tables exist but empty              | Schema better than docs!                 |
 
 ### 7. Data Availability Matrix
 
-| Data Category | XML Availability | Schema Coverage | Parser Implementation | Gap Analysis |
-|---------------|------------------|-----------------|----------------------|--------------|
-| **Match Metadata** | ✅ Full | ✅ Full | ✅ Implemented | None |
-| **Players** | ✅ Full | ✅ Full | ✅ Mostly done | Minor gaps in difficulty, founder IDs |
-| **Characters (Core)** | ✅ Full | ✅ Full | ✅ Implemented | Works well |
-| **Characters (Genealogy)** | ❓ Unknown | ✅ Schema ready | ❌ Not working | **Need XML investigation** |
-| **Characters (Relationships)** | ✅ Partial | ✅ Schema ready | ⚠️ Partial | Missing strength/timing data |
-| **Characters (Marriages)** | ❓ Unknown | ✅ Schema ready | ❌ Not found | **Need XML investigation** |
-| **Cities (Core)** | ✅ Full | ✅ Full | ✅ Implemented | Works well |
-| **Cities (Yields)** | ✅ Full | ✅ Schema ready | ❌ Not implemented | **High-value parser target** |
-| **Cities (Culture)** | ✅ Full | ✅ Schema ready | ❌ Not implemented | **High-value parser target** |
-| **Cities (Religions)** | ✅ Full | ✅ Schema ready | ❌ Not implemented | **High-value parser target** |
-| **Tiles** | ✅ Full | ✅ Full | ⚠️ Mostly done | Ownership fields empty |
-| **Units (Individual)** | ❌ **Does not exist** | ❌ Over-specified | ❌ Impossible | **Schema should mark as unavailable** |
-| **Units (Aggregate)** | ✅ Full | ✅ Implemented | ✅ Working | Good alternative |
-| **Technologies** | ✅ Full | ✅ Full | ✅ Implemented | Works well |
-| **Laws** | ✅ Full | ✅ Full | ✅ Implemented | Works well |
-| **Families** | ✅ Full | ✅ Full | ✅ Implemented | Works well |
-| **Religions** | ✅ Full | ✅ Full | ✅ Implemented | Works well |
-| **Tribes** | ✅ Full | ⚠️ Partial schema | ⚠️ Partial | Leadership/alliance data empty |
-| **Diplomacy** | ✅ Partial | ✅ Full | ⚠️ Basic only | State details missing |
-| **Time Series** | ✅ Full | ✅ Full | ⚠️ Mostly done | Legitimacy missing |
-| **Events (LogData)** | ✅ Full | ✅ Schema ready | ❌ Not implemented | **Medium-value target** |
-| **Events (Story)** | ✅ Full | ✅ Schema ready | ✅ Implemented | Works well |
-| **Events (Outcomes)** | ❓ Unknown | ✅ Schema ready | ❌ Not implemented | May not exist in XML |
-| **MemoryData** | ✅ Full | ❌ Not in schema | ❌ Not implemented | **Schema gap** |
+| Data Category                  | XML Availability      | Schema Coverage   | Parser Implementation | Gap Analysis                          |
+| ------------------------------ | --------------------- | ----------------- | --------------------- | ------------------------------------- |
+| **Match Metadata**             | ✅ Full               | ✅ Full           | ✅ Implemented        | None                                  |
+| **Players**                    | ✅ Full               | ✅ Full           | ✅ Mostly done        | Minor gaps in difficulty, founder IDs |
+| **Characters (Core)**          | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
+| **Characters (Genealogy)**     | ❓ Unknown            | ✅ Schema ready   | ❌ Not working        | **Need XML investigation**            |
+| **Characters (Relationships)** | ✅ Partial            | ✅ Schema ready   | ⚠️ Partial            | Missing strength/timing data          |
+| **Characters (Marriages)**     | ❓ Unknown            | ✅ Schema ready   | ❌ Not found          | **Need XML investigation**            |
+| **Cities (Core)**              | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
+| **Cities (Yields)**            | ✅ Full               | ✅ Schema ready   | ❌ Not implemented    | **High-value parser target**          |
+| **Cities (Culture)**           | ✅ Full               | ✅ Schema ready   | ❌ Not implemented    | **High-value parser target**          |
+| **Cities (Religions)**         | ✅ Full               | ✅ Schema ready   | ❌ Not implemented    | **High-value parser target**          |
+| **Tiles**                      | ✅ Full               | ✅ Full           | ⚠️ Mostly done        | Ownership fields empty                |
+| **Units (Individual)**         | ❌ **Does not exist** | ❌ Over-specified | ❌ Impossible         | **Schema should mark as unavailable** |
+| **Units (Aggregate)**          | ✅ Full               | ✅ Implemented    | ✅ Working            | Good alternative                      |
+| **Technologies**               | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
+| **Laws**                       | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
+| **Families**                   | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
+| **Religions**                  | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
+| **Tribes**                     | ✅ Full               | ⚠️ Partial schema | ⚠️ Partial            | Leadership/alliance data empty        |
+| **Diplomacy**                  | ✅ Partial            | ✅ Full           | ⚠️ Basic only         | State details missing                 |
+| **Time Series**                | ✅ Full               | ✅ Full           | ⚠️ Mostly done        | Legitimacy missing                    |
+| **Events (LogData)**           | ✅ Full               | ✅ Schema ready   | ❌ Not implemented    | **Medium-value target**               |
+| **Events (Story)**             | ✅ Full               | ✅ Schema ready   | ✅ Implemented        | Works well                            |
+| **Events (Outcomes)**          | ❓ Unknown            | ✅ Schema ready   | ❌ Not implemented    | May not exist in XML                  |
+| **MemoryData**                 | ✅ Full               | ❌ Not in schema  | ❌ Not implemented    | **Schema gap**                        |
 
 ### 8. Save File Format Version Differences
 
 **2024 (v1.0.70671):**
+
 - 5,476 tiles (larger map)
 - 297 characters
 - 28 cities
@@ -341,6 +360,7 @@ COMMENT ON TABLE unit_types IS 'AVAILABILITY: STATIC - could be populated from g
 - TurnScale: SEMESTER
 
 **2025 (v1.0.80522):**
+
 - 1,972 tiles (smaller map)
 - 69 characters
 - 14 cities
@@ -437,6 +457,7 @@ The **save-file-format.md documentation is approximately 85% accurate** but cont
 The **parser implementation has made good progress** (65.3% table population) but is correctly blocked on elements that don't exist in save files and incorrectly unimplemented on elements that do exist (city subsystems, legitimacy history).
 
 **Priority actions:**
+
 1. ✅ Accept that individual unit tracking is impossible
 2. 🔍 Investigate character genealogy thoroughly
 3. 🎯 Implement city subsystem parsers (high-value, data available)

@@ -37,6 +37,7 @@ where
 ```
 
 **Rationale**:
+
 - Generic over row type `T` and key type `K`
 - Uses HashMap (last-wins) instead of HashSet to match old `DO UPDATE` behavior
 - Simple closure `key_fn` extracts composite key from each row
@@ -251,18 +252,22 @@ impl IdMapper {
 ## Implementation Strategy
 
 ### Phase 1: Core Helper (Required)
+
 1. Add `deduplicate_rows` function to `src-tauri/src/parser/utils.rs` or create new `src-tauri/src/parser/dedup.rs`
 2. Add unit tests for the helper function
 
 ### Phase 2: Fix Blocking Issue (High Priority)
+
 1. **character_marriages** - fixes immediate import failure
 
 ### Phase 3: Fix Remaining Tables (Medium Priority)
+
 2. **character_stats** - likely to have duplicates
 3. **character_traits** - likely to have duplicates
 4. **character_relationships** - possible duplicates
 
 ### Phase 4: Refactor id_mappings (Optional)
+
 5. **id_mappings** - requires larger refactoring, lower priority
 
 ---
@@ -334,6 +339,7 @@ where
 ```
 
 **When to use**:
+
 - Last-wins (HashMap): Matches `DO UPDATE` behavior - use for stats, traits, relationships
 - First-wins (HashSet): Matches `DO NOTHING` behavior - use for marriages
 
@@ -352,6 +358,7 @@ where
 ## Rollback Plan
 
 If issues arise:
+
 1. Revert to commit `a1d2caf^` (before Appender changes)
 2. Or selectively revert individual tables to INSERT with ON CONFLICT
 3. Performance will regress but imports will work

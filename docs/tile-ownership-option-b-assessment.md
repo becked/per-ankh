@@ -27,6 +27,7 @@ CREATE TABLE tile_changes (
 ```
 
 **Issues:**
+
 - All values stored as VARCHAR (type unsafe)
 - Must filter by `change_type` for queries
 - No foreign key validation on ownership
@@ -90,6 +91,7 @@ CREATE INDEX idx_tile_vegetation_history_lookup
 #### Ownership Query Example
 
 **Current (tile_changes):**
+
 ```sql
 -- Must filter by change_type, scan all records
 SELECT tile_id, turn, new_value as owner_id
@@ -103,6 +105,7 @@ ORDER BY turn;
 ```
 
 **Option B (tile_ownership_history):**
+
 ```sql
 -- Direct query with optimized index
 SELECT tile_id, turn, owner_player_id
@@ -119,6 +122,7 @@ ORDER BY turn;
 #### Terrain Query Example
 
 **Current (tile_changes):**
+
 ```sql
 -- Filter by change_type
 SELECT tile_id, turn, new_value as terrain
@@ -128,6 +132,7 @@ ORDER BY turn;
 ```
 
 **Option B (tile_terrain_history):**
+
 ```sql
 -- Direct query
 SELECT tile_id, turn, terrain
@@ -140,17 +145,18 @@ ORDER BY turn;
 
 ### Type Safety Comparison
 
-| Aspect | tile_changes | Option B |
-|--------|-------------|----------|
-| Owner ID Type | VARCHAR ("-1", "0", "1") | INTEGER (NULL, 0, 1) |
-| Type Validation | None | Foreign key to players |
-| Unowned Representation | String "-1" | NULL (semantic) |
-| Query Type Casting | Required | Not needed |
-| Index Efficiency | Poor (VARCHAR) | Excellent (INTEGER) |
+| Aspect                 | tile_changes             | Option B               |
+| ---------------------- | ------------------------ | ---------------------- |
+| Owner ID Type          | VARCHAR ("-1", "0", "1") | INTEGER (NULL, 0, 1)   |
+| Type Validation        | None                     | Foreign key to players |
+| Unowned Representation | String "-1"              | NULL (semantic)        |
+| Query Type Casting     | Required                 | Not needed             |
+| Index Efficiency       | Poor (VARCHAR)           | Excellent (INTEGER)    |
 
 ### Data Integrity
 
 **Current Approach:**
+
 ```sql
 -- No validation - can insert invalid data
 INSERT INTO tile_changes VALUES
@@ -158,6 +164,7 @@ INSERT INTO tile_changes VALUES
 ```
 
 **Option B:**
+
 ```sql
 -- Foreign key prevents invalid data
 INSERT INTO tile_ownership_history VALUES
@@ -285,6 +292,7 @@ DROP TABLE tile_changes;
 ### 1. Query Performance
 
 **Ownership Expansion Analysis:**
+
 ```sql
 -- 10-50x faster than tile_changes approach
 SELECT
@@ -299,6 +307,7 @@ ORDER BY toh.turn;
 ```
 
 **Terrain Transformation Analysis:**
+
 ```sql
 -- Fast direct query, no filtering needed
 SELECT terrain, COUNT(*) as change_count
@@ -310,6 +319,7 @@ GROUP BY terrain;
 ### 2. Schema Clarity
 
 Each table is self-documenting:
+
 - `tile_ownership_history` - obviously stores ownership
 - `tile_terrain_history` - obviously stores terrain
 - `tile_vegetation_history` - obviously stores vegetation
@@ -330,6 +340,7 @@ ALTER TABLE tile_ownership_history
 ### 4. Optimized Indexes
 
 Each table gets indexes tailored to its access patterns:
+
 - Ownership: Index on `(owner_player_id, match_id)` for player territory queries
 - Terrain: Index on `(match_id, turn)` for temporal analysis
 - Vegetation: Index on `(match_id, turn)` for deforestation tracking
@@ -356,6 +367,7 @@ WHERE new_value = '-1'  -- What does this mean? Unowned? Missing? Error?
 ### 2. Unified Timeline Queries
 
 **Current (Easy):**
+
 ```sql
 -- All changes for a tile in chronological order
 SELECT turn, change_type, new_value
@@ -365,6 +377,7 @@ ORDER BY turn;
 ```
 
 **Option B (Complex):**
+
 ```sql
 -- Need UNION of multiple tables
 SELECT turn, 'ownership' as type,
@@ -414,6 +427,7 @@ FROM tile_vegetation_history;
 ### 4. Can't Easily Add New Change Types
 
 If new change types emerge (e.g., `ImprovementHistory`):
+
 - Current: Just add to tile_changes (easy)
 - Option B: Create new table, new parser, new indexes (effort)
 
@@ -422,6 +436,7 @@ If new change types emerge (e.g., `ImprovementHistory`):
 From test save (123 turns, 5476 tiles):
 
 ### Current State (tile_changes)
+
 ```
 Total records: ~2,201 (all types combined)
 - Ownership: ~2,201 records (100%)
@@ -443,18 +458,19 @@ tile_vegetation_history: ~100 records (100KB)
 
 ## Decision Matrix
 
-| Factor | Weight | tile_changes | Option B | Winner |
-|--------|--------|-------------|----------|--------|
-| Ownership Query Performance | High | 3/10 | 10/10 | **Option B** |
-| Terrain/Veg Query Performance | Low | 6/10 | 10/10 | Option B |
-| Type Safety | Medium | 2/10 | 10/10 | **Option B** |
-| Schema Simplicity | Medium | 9/10 | 4/10 | **tile_changes** |
-| Code Complexity | Medium | 8/10 | 5/10 | **tile_changes** |
-| Unified Timeline Queries | Low | 10/10 | 6/10 | **tile_changes** |
-| Foreign Key Validation | High | 0/10 | 10/10 | **Option B** |
-| Extensibility | Low | 8/10 | 5/10 | **tile_changes** |
+| Factor                        | Weight | tile_changes | Option B | Winner           |
+| ----------------------------- | ------ | ------------ | -------- | ---------------- |
+| Ownership Query Performance   | High   | 3/10         | 10/10    | **Option B**     |
+| Terrain/Veg Query Performance | Low    | 6/10         | 10/10    | Option B         |
+| Type Safety                   | Medium | 2/10         | 10/10    | **Option B**     |
+| Schema Simplicity             | Medium | 9/10         | 4/10     | **tile_changes** |
+| Code Complexity               | Medium | 8/10         | 5/10     | **tile_changes** |
+| Unified Timeline Queries      | Low    | 10/10        | 6/10     | **tile_changes** |
+| Foreign Key Validation        | High   | 0/10         | 10/10    | **Option B**     |
+| Extensibility                 | Low    | 8/10         | 5/10     | **tile_changes** |
 
 **Weighted Score:**
+
 - tile_changes: 5.2/10
 - Option B: 8.1/10
 
@@ -463,6 +479,7 @@ tile_vegetation_history: ~100 records (100KB)
 ### When to Use Option B (Full Normalization)
 
 ✅ **Recommended if:**
+
 - Territorial expansion analysis is a core feature
 - Query performance is critical
 - You need strong data integrity (foreign keys)
@@ -472,6 +489,7 @@ tile_vegetation_history: ~100 records (100KB)
 ### When to Use Hybrid Approach
 
 ✅ **Recommended if:**
+
 - You want quick wins (ownership only)
 - Terrain/vegetation tracking is secondary
 - You want minimal disruption to existing code
@@ -480,6 +498,7 @@ tile_vegetation_history: ~100 records (100KB)
 ### When to Keep tile_changes Only
 
 ✅ **Recommended if:**
+
 - You rarely query history data
 - Unified timeline view is important
 - You expect to add many new change types
@@ -488,6 +507,7 @@ tile_vegetation_history: ~100 records (100KB)
 ## Implementation Estimate
 
 **Option B Full Implementation:**
+
 - Schema changes: 2 hours
 - Parser updates: 4-6 hours
 - Testing (3 tables, 2 formats): 4 hours
@@ -496,12 +516,14 @@ tile_vegetation_history: ~100 records (100KB)
 - **Total: 14-16 hours**
 
 **Hybrid Approach:**
+
 - Schema changes: 1 hour
 - Parser updates: 2 hours (ownership only, remove duplicate)
 - Testing: 2 hours
 - **Total: 5 hours**
 
 **Benefit/Effort Ratio:**
+
 - Option B: High benefit, high effort
 - Hybrid: Good benefit, low effort ✅
 
@@ -510,6 +532,7 @@ tile_vegetation_history: ~100 records (100KB)
 Option B provides the best long-term solution for data integrity, query performance, and schema clarity. However, it requires significant implementation effort.
 
 The **hybrid approach is recommended** as a pragmatic middle ground:
+
 1. Implement specialized `tile_ownership_history` (high-value optimization)
 2. Keep `tile_changes` for terrain/vegetation (low-value, works fine)
 3. Migrate to full Option B later if terrain/vegetation queries become bottlenecks

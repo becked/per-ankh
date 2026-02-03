@@ -13,6 +13,7 @@ Per-Ankh currently uses Tauri's default window decorations with a standard title
 ### macOS Design (Primary Target)
 
 Adopt the Messages.app aesthetic:
+
 - Sidebar extends to the top of the window
 - macOS traffic lights (red/yellow/green) positioned in the sidebar area
 - Translucent sidebar background with blur effect
@@ -24,6 +25,7 @@ Adopt the Messages.app aesthetic:
 ### Windows Design (Secondary)
 
 Adapted design for Windows platform:
+
 - Sidebar extends to top with custom title bar
 - Custom window control buttons (minimize/maximize/close) positioned top-right
 - Support for Windows 11 snap layouts (hover-over-maximize)
@@ -42,13 +44,15 @@ Linux support would require additional research due to varying desktop environme
 
 ```json
 {
-  "tauri": {
-    "windows": [{
-      "decorations": false,
-      "transparent": true,
-      "titleBarStyle": "Overlay"
-    }]
-  }
+	"tauri": {
+		"windows": [
+			{
+				"decorations": false,
+				"transparent": true,
+				"titleBarStyle": "Overlay"
+			}
+		]
+	}
 }
 ```
 
@@ -73,6 +77,7 @@ Linux support would require additional research due to varying desktop environme
 ### Technical Considerations
 
 **Challenges:**
+
 - Accurate traffic light positioning on macOS (Apple's exact spacing)
 - Implementing translucent blur effects (CSS `backdrop-filter` or native APIs)
 - Ensuring drag regions don't interfere with sidebar interactions
@@ -80,6 +85,7 @@ Linux support would require additional research due to varying desktop environme
 - Windows snap layouts integration (requires specific window message handling)
 
 **Risks:**
+
 - Increased complexity in window management code
 - Platform-specific bugs harder to test without all OS environments
 - Potential accessibility issues with custom window controls
@@ -123,24 +129,28 @@ Linux support would require additional research due to varying desktop environme
 ## Implementation Strategy
 
 ### Phase 1: macOS Prototype
+
 - Implement macOS-style window chrome
 - Test on macOS 12, 13, and 14
 - Validate translucent effects and traffic light positioning
 - Gather internal feedback
 
 ### Phase 2: Windows Adaptation
+
 - Design Windows-specific layout (right-side controls)
 - Implement custom window control buttons
 - Test snap layouts and window management
 - Test on Windows 10 and 11
 
 ### Phase 3: Refinement
+
 - Dark mode support and testing
 - Accessibility audit and improvements
 - Performance optimization (blur effects can be expensive)
 - User testing with target audience
 
 ### Phase 4: Linux (Optional)
+
 - Research desktop environment requirements
 - Implement fallback to standard decorations
 - Test on Ubuntu/Fedora with GNOME and KDE
@@ -148,16 +158,19 @@ Linux support would require additional research due to varying desktop environme
 ## Alternative Approaches
 
 ### Option 1: Platform-Specific Builds
+
 - macOS gets native chrome
 - Windows/Linux keep standard decorations
 - Reduces complexity, focuses effort where most impactful
 
 ### Option 2: User Preference Toggle
+
 - Let users choose between native chrome and standard title bar
 - Adds complexity but gives users control
 - Could be feature flag initially for beta testing
 
 ### Option 3: Defer Until Post-MVP
+
 - Ship with standard decorations initially
 - Add native chrome in v2.0 after core features stable
 - Reduces risk during initial development
@@ -165,12 +178,14 @@ Linux support would require additional research due to varying desktop environme
 ## Recommendation
 
 **Proposed Approach:**
+
 1. Start with **macOS-only** implementation (Phase 1)
 2. Use feature flag to toggle between native and standard chrome
 3. Gather user feedback before committing to full cross-platform implementation
 4. Evaluate Windows adaptation (Phase 2) based on macOS feedback
 
 **Rationale:**
+
 - macOS implementation is more straightforward (traffic lights are native)
 - Feature flag allows safe rollout and A/B testing
 - Can validate user interest before investing in Windows/Linux
@@ -179,15 +194,18 @@ Linux support would require additional research due to varying desktop environme
 ## Resources
 
 ### Tauri Documentation
+
 - [Custom Title Bar](https://tauri.app/v1/guides/features/window-customization)
 - [Window Configuration](https://tauri.app/v1/api/config/#windowconfig)
 
 ### Design References
+
 - Apple Messages app (macOS)
 - Apple Music app (similar sidebar design)
 - Microsoft Teams (Windows custom chrome example)
 
 ### Technical Examples
+
 - [tauri-plugin-vibrancy](https://github.com/tauri-apps/tauri-plugin-vibrancy) - Translucent window effects
 - Community examples in Tauri showcase
 

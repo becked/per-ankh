@@ -68,6 +68,7 @@ The current parser follows a **direct-write** pattern:
 ### Key Characteristics
 
 **Data Flow:**
+
 ```rust
 XML → Parse node → Extract data → Appender → DB
      ↑                                        ↑
@@ -120,6 +121,7 @@ pub fn parse_players(
 ### 1. Testing Complexity
 
 **Current:**
+
 ```rust
 #[test]
 fn test_parse_players() {
@@ -140,6 +142,7 @@ fn test_parse_players() {
 ```
 
 **Problems:**
+
 - Can't test parser logic without database
 - Slow tests (DB setup overhead)
 - Hard to verify exact parsed values (need SQL queries)
@@ -148,6 +151,7 @@ fn test_parse_players() {
 ### 2. Lack of Parallelism
 
 **Current execution:**
+
 ```
 Time →
 ├─ parse_players()         [████████] 15ms
@@ -173,6 +177,7 @@ rayon::scope(|s| {
 ```
 
 Additionally:
+
 - Single `&Connection` can't be safely shared across threads for writes
 - `Appender` is not `Sync` (can't be used from multiple threads)
 - IdMapper has mutable state that would require locking
@@ -186,6 +191,7 @@ ParseError::DatabaseError(Foreign key constraint violation in cities table)
 ```
 
 But we can't see:
+
 - What data was successfully parsed before the error?
 - What was the problematic city record that caused the violation?
 - Can we inspect the parsed data structure?
@@ -342,6 +348,7 @@ pub struct CharacterData {
 ```
 
 **Serde support enables:**
+
 - Serialization to disk for caching
 - JSON export for debugging
 - Comparison between saves
@@ -463,6 +470,7 @@ fn insert_players(
 ### Why Parallel Parsing is Possible
 
 **Current (Can't Parallelize):**
+
 ```rust
 // Shared mutable state prevents parallelization
 fn parse_players(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper)
@@ -471,6 +479,7 @@ fn parse_players(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper)
 ```
 
 **Hybrid (Can Parallelize):**
+
 ```rust
 // No shared state - pure function
 fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>>
@@ -551,18 +560,18 @@ Automatic load balancing - no manual tuning needed!
 **Current sequential timing (estimated):**
 
 | Entity Type | Time (ms) | % of Total |
-|-------------|-----------|------------|
-| Players | 5 | 5% |
-| Characters | 25 | 24% |
-| Cities | 12 | 11% |
-| Tiles | 30 | 28% |
-| Families | 4 | 4% |
-| Religions | 4 | 4% |
-| Tribes | 3 | 3% |
-| Player data | 8 | 8% |
-| Timeseries | 10 | 9% |
-| Events | 5 | 5% |
-| **Total** | **106** | **100%** |
+| ----------- | --------- | ---------- |
+| Players     | 5         | 5%         |
+| Characters  | 25        | 24%        |
+| Cities      | 12        | 11%        |
+| Tiles       | 30        | 28%        |
+| Families    | 4         | 4%         |
+| Religions   | 4         | 4%         |
+| Tribes      | 3         | 3%         |
+| Player data | 8         | 8%         |
+| Timeseries  | 10        | 9%         |
+| Events      | 5         | 5%         |
+| **Total**   | **106**   | **100%**   |
 
 **Parallel timing (4 cores, ideal):**
 
@@ -600,6 +609,7 @@ Speedup: 2.65x
 ### Memory Usage
 
 **Current approach:**
+
 ```
 Peak memory during import:
 - XML DOM:           60-70 MB
@@ -609,6 +619,7 @@ Total:              ~85-110 MB
 ```
 
 **Hybrid approach:**
+
 ```
 Peak memory during import:
 - XML DOM:           60-70 MB
@@ -651,15 +662,15 @@ Estimated:           ~157 ms
 
 ### Trade-offs Summary
 
-| Aspect | Current | Hybrid | Change |
-|--------|---------|--------|--------|
-| **Import speed** | 213ms | ~157ms | 26% faster ✅ |
-| **Memory usage** | ~110MB | ~160MB | +45% ❌ |
-| **Code complexity** | Medium | Higher | More types/files ❌ |
-| **Testability** | Hard | Easy | Much better ✅ |
-| **Debuggability** | Hard | Easy | Can inspect structs ✅ |
-| **Flexibility** | Low | High | Can cache/serialize ✅ |
-| **DB coupling** | Tight | Loose | Better architecture ✅ |
+| Aspect              | Current | Hybrid | Change                 |
+| ------------------- | ------- | ------ | ---------------------- |
+| **Import speed**    | 213ms   | ~157ms | 26% faster ✅          |
+| **Memory usage**    | ~110MB  | ~160MB | +45% ❌                |
+| **Code complexity** | Medium  | Higher | More types/files ❌    |
+| **Testability**     | Hard    | Easy   | Much better ✅         |
+| **Debuggability**   | Hard    | Easy   | Can inspect structs ✅ |
+| **Flexibility**     | Low     | High   | Can cache/serialize ✅ |
+| **DB coupling**     | Tight   | Loose  | Better architecture ✅ |
 
 ---
 
@@ -690,6 +701,7 @@ Estimated:           ~157 ms
 **Goal:** Prove the pattern works
 
 1. **Migrate players as proof-of-concept**
+
    ```rust
    // Old: entities/players.rs
    pub fn parse_players(doc, conn, id_mapper) -> Result<usize>
@@ -702,6 +714,7 @@ Estimated:           ~157 ms
    ```
 
 2. **Update `import.rs` to use new pattern**
+
    ```rust
    // Parse
    let players = parse_players_struct(&doc)?;
@@ -711,6 +724,7 @@ Estimated:           ~157 ms
    ```
 
 3. **Add tests**
+
    ```rust
    #[test]
    fn test_parse_players_struct() {
@@ -749,6 +763,7 @@ Estimated:           ~157 ms
 **Goal:** Enable parallel parsing
 
 1. **Add rayon dependency**
+
    ```toml
    # Cargo.toml
    [dependencies]
@@ -756,6 +771,7 @@ Estimated:           ~157 ms
    ```
 
 2. **Refactor `parse_save_to_structs()`**
+
    ```rust
    pub fn parse_save_to_structs(doc: &XmlDocument) -> Result<GameData> {
        // Parallel foundation entities
@@ -848,6 +864,7 @@ pub struct CharacterData {
 ```
 
 **Rationale:**
+
 - IdMapper converts XML → DB IDs during insertion
 - Keeps parsing pure (no ID mapping concerns)
 - Easier to debug (XML IDs match save file)
@@ -862,6 +879,7 @@ pub struct GameData {
 ```
 
 **Rationale:**
+
 - Simpler
 - Better for serialization
 - Order preserved
@@ -877,6 +895,7 @@ pub struct PlayerData {
 ```
 
 **Rationale:**
+
 - Enables caching to disk
 - JSON export for debugging
 - Comparison tools
@@ -911,6 +930,7 @@ pub fn insert_game_data(conn: &Connection, game_data: &GameData, match_id: i64) 
 ### Unit Tests (Parser Logic)
 
 **Before (Hard):**
+
 ```rust
 #[test]
 fn test_parse_players() {
@@ -934,6 +954,7 @@ fn test_parse_players() {
 ```
 
 **After (Easy):**
+
 ```rust
 #[test]
 fn test_parse_players_struct() {
@@ -1102,6 +1123,7 @@ pub fn parse_players(
 #### After (Hybrid)
 
 **Parsing:**
+
 ```rust
 // src-tauri/src/parser/parsers/players.rs
 use crate::parser::game_data::PlayerData;
@@ -1156,6 +1178,7 @@ pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
 ```
 
 **Insertion:**
+
 ```rust
 // src-tauri/src/parser/inserters/players.rs
 use crate::parser::game_data::PlayerData;
@@ -1196,6 +1219,7 @@ pub fn insert_players(
 ```
 
 **Orchestration:**
+
 ```rust
 // src-tauri/src/parser/import.rs
 fn import_save_file_internal(
@@ -1428,6 +1452,7 @@ criterion_main!(benches);
 ```
 
 Run with:
+
 ```bash
 cargo bench --bench import_benchmarks
 ```
@@ -1444,6 +1469,7 @@ This document provides complete context for migrating Per-Ankh to a hybrid parse
 ✅ **Add flexibility** - Caching, serialization, comparison tools
 
 **Trade-offs:**
+
 - ⚠️ +45% memory usage (acceptable for desktop app)
 - ⚠️ More code complexity (more types, files)
 - ⚠️ 6-week migration effort
@@ -1453,6 +1479,7 @@ This document provides complete context for migrating Per-Ankh to a hybrid parse
 ---
 
 **Next Steps:**
+
 1. Review and approve this plan
 2. Create feature branch: `feature/hybrid-parser-architecture`
 3. Begin Phase 1: Foundation (game_data.rs module)

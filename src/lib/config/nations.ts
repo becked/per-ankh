@@ -17,16 +17,16 @@
  * - Sufficient contrast for readability
  */
 export const NATION_COLORS = {
-  AKSUM: "#F8A3B4", // Pink/Rose
-  ASSYRIA: "#FADC3B", // Yellow
-  BABYLONIA: "#82C83E", // Green
-  CARTHAGE: "#F6EFE1", // Beige/Off-white
-  EGYPT: "#BC6304", // Dark Orange/Brown
-  GREECE: "#2360BC", // Dark Blue
-  HITTITE: "#80E3E8", // Cyan
-  KUSH: "#FFFFB6", // Light Yellow
-  PERSIA: "#C04E4A", // Red
-  ROME: "#880D56", // Purple/Burgundy
+	AKSUM: "#F8A3B4", // Pink/Rose
+	ASSYRIA: "#FADC3B", // Yellow
+	BABYLONIA: "#82C83E", // Green
+	CARTHAGE: "#F6EFE1", // Beige/Off-white
+	EGYPT: "#BC6304", // Dark Orange/Brown
+	GREECE: "#2360BC", // Dark Blue
+	HITTITE: "#80E3E8", // Cyan
+	KUSH: "#FFFFB6", // Light Yellow
+	PERSIA: "#C04E4A", // Red
+	ROME: "#880D56", // Purple/Burgundy
 } as const;
 
 /**
@@ -35,12 +35,12 @@ export const NATION_COLORS = {
  * Tribes are minor factions with distinct colors separate from major nations.
  */
 export const TRIBE_COLORS = {
-  GAULS: "#C84732", // Red-Orange
-  VANDALS: "#87DB40", // Lime Green
-  DANES: "#9C5DFF", // Purple
-  THRACIANS: "#3CCDC2", // Teal
-  SCYTHIANS: "#D89A18", // Orange/Gold
-  NUMIDIANS: "#E6E1CA", // Beige/Light Tan
+	GAULS: "#C84732", // Red-Orange
+	VANDALS: "#87DB40", // Lime Green
+	DANES: "#9C5DFF", // Purple
+	THRACIANS: "#3CCDC2", // Teal
+	SCYTHIANS: "#D89A18", // Orange/Gold
+	NUMIDIANS: "#E6E1CA", // Beige/Light Tan
 } as const;
 
 /**
@@ -60,8 +60,8 @@ export type TribeKey = keyof typeof TRIBE_COLORS;
  * @returns Hex color code, or undefined if nation not found
  */
 export function getNationColor(nation: string): string | undefined {
-  const key = nation.toUpperCase() as NationKey;
-  return NATION_COLORS[key];
+	const key = nation.toUpperCase() as NationKey;
+	return NATION_COLORS[key];
 }
 
 /**
@@ -71,8 +71,8 @@ export function getNationColor(nation: string): string | undefined {
  * @returns Hex color code, or undefined if tribe not found
  */
 export function getTribeColor(tribe: string): string | undefined {
-  const key = tribe.toUpperCase() as TribeKey;
-  return TRIBE_COLORS[key];
+	const key = tribe.toUpperCase() as TribeKey;
+	return TRIBE_COLORS[key];
 }
 
 /**
@@ -85,13 +85,13 @@ export function getTribeColor(tribe: string): string | undefined {
  * @returns Hex color code, or undefined if not found
  */
 export function getCivilizationColor(civilization: string): string | undefined {
-  return getNationColor(civilization) ?? getTribeColor(civilization);
+	return getNationColor(civilization) ?? getTribeColor(civilization);
 }
 
 /**
  * Combined mapping of all nations and tribes for convenience
  */
 export const ALL_CIVILIZATION_COLORS = {
-  ...NATION_COLORS,
-  ...TRIBE_COLORS,
+	...NATION_COLORS,
+	...TRIBE_COLORS,
 } as const;

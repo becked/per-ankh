@@ -4,11 +4,11 @@
 
 ### Files Changed
 
-| File | Changes |
-|------|---------|
-| `docs/schema.sql` | Add `units`, `unit_promotions`, `unit_effects`, `unit_families` tables |
-| `src-tauri/src/parser/game_data.rs` | Add `UnitData`, `UnitPromotion`, `UnitEffect`, `UnitFamily` structs |
-| `src-tauri/src/parser/id_mapper.rs` | Add unit ID mapping methods |
+| File                                | Changes                                                                |
+| ----------------------------------- | ---------------------------------------------------------------------- |
+| `docs/schema.sql`                   | Add `units`, `unit_promotions`, `unit_effects`, `unit_families` tables |
+| `src-tauri/src/parser/game_data.rs` | Add `UnitData`, `UnitPromotion`, `UnitEffect`, `UnitFamily` structs    |
+| `src-tauri/src/parser/id_mapper.rs` | Add unit ID mapping methods                                            |
 
 ### Schema (`docs/schema.sql`)
 
@@ -166,6 +166,7 @@ pub fn get_unit(&self, xml_id: i32) -> Result<i64> {
 ```
 
 Initialize in `new()`:
+
 ```rust
 unit_map: HashMap::new(),
 next_unit_id: 1,
@@ -200,13 +201,13 @@ fn test_unit_id_mapping() {
 
 ### Files Changed
 
-| File | Changes |
-|------|---------|
-| `src-tauri/src/parser/parsers/units.rs` | New file: parse units, promotions, effects, families from Tile elements |
-| `src-tauri/src/parser/parsers/mod.rs` | Export units module |
-| `src-tauri/src/parser/inserters/units.rs` | New file: insert units, promotions, effects, families |
-| `src-tauri/src/parser/inserters/mod.rs` | Export units module |
-| `src-tauri/src/parser/import.rs` | Wire up unit parsing after tiles |
+| File                                      | Changes                                                                 |
+| ----------------------------------------- | ----------------------------------------------------------------------- |
+| `src-tauri/src/parser/parsers/units.rs`   | New file: parse units, promotions, effects, families from Tile elements |
+| `src-tauri/src/parser/parsers/mod.rs`     | Export units module                                                     |
+| `src-tauri/src/parser/inserters/units.rs` | New file: insert units, promotions, effects, families                   |
+| `src-tauri/src/parser/inserters/mod.rs`   | Export units module                                                     |
+| `src-tauri/src/parser/import.rs`          | Wire up unit parsing after tiles                                        |
 
 ### Parser (`src-tauri/src/parser/parsers/units.rs`)
 
@@ -596,11 +597,13 @@ inserters::units::insert_unit_families(&conn, &parsed_units.families, &id_mapper
 ### Module Exports
 
 **`src-tauri/src/parser/parsers/mod.rs`**:
+
 ```rust
 pub mod units;
 ```
 
 **`src-tauri/src/parser/inserters/mod.rs`**:
+
 ```rust
 pub mod units;
 ```

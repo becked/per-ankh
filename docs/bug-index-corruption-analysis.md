@@ -17,18 +17,19 @@
 
 Database queries show inconsistent results:
 
-| Query Method | Result |
-|--------------|--------|
-| `SELECT * FROM players WHERE match_id = 20` | 0 rows |
-| `PRAGMA disable_optimizer; SELECT * FROM players WHERE match_id = 20` | 4 rows ✓ |
-| `SELECT COUNT(*) FROM players` | 62 (correct) |
-| `ORDER BY rowid` scan | Full data ✓ |
+| Query Method                                                          | Result       |
+| --------------------------------------------------------------------- | ------------ |
+| `SELECT * FROM players WHERE match_id = 20`                           | 0 rows       |
+| `PRAGMA disable_optimizer; SELECT * FROM players WHERE match_id = 20` | 4 rows ✓     |
+| `SELECT COUNT(*) FROM players`                                        | 62 (correct) |
+| `ORDER BY rowid` scan                                                 | Full data ✓  |
 
 This proves the **`idx_players_match` index is corrupted** - filtered queries use the corrupt index and return wrong results, while full table scans return correct data.
 
 ### DuckDB Assertion Failure
 
 Terminal output shows:
+
 ```
 Assertion failed: (index.IsBound()), function operator(), file row_group_collection.cpp, line 671.
 ```
@@ -51,6 +52,7 @@ The app has a problematic connection flow:
 ### Why This Manifests Now
 
 The FK removal commit (`b4c927d`) made imports ~25% faster by:
+
 - Removing FK constraint validation overhead
 - Using two-phase ID mapping for single-pass character insertion
 
@@ -83,6 +85,7 @@ pub fn ensure_schema_ready(conn: &Connection) -> Result<()> {
 ```
 
 Then in lib.rs:
+
 ```rust
 let pool = db::connection::DbPool::new(&db_path)?;
 pool.with_connection(|conn| db::ensure_schema_ready(conn))?;
@@ -103,6 +106,7 @@ conn.execute_batch("
 ## Verification Steps
 
 After fix:
+
 1. Reset database (delete files)
 2. Start app, import saves
 3. Verify charts show data
@@ -111,6 +115,7 @@ After fix:
 6. Verify charts still show data
 
 Run this query to verify index integrity:
+
 ```sql
 -- Should return same results
 SELECT COUNT(*) FROM players WHERE match_id = 1;

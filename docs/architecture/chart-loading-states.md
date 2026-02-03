@@ -9,6 +9,7 @@
 ## Problem Statement
 
 The Chart component (src/lib/Chart.svelte) currently has no loading state, which can cause:
+
 - Flash of unstyled content (FOUC) during chart initialization
 - Poor user experience when data loads slowly
 - No feedback during async data fetching from Tauri commands
@@ -17,16 +18,18 @@ The Chart component (src/lib/Chart.svelte) currently has no loading state, which
 
 ```typescript
 // src/lib/Chart.svelte
-let { option, height = "400px" }: { option: EChartsOption; height?: string } = $props();
+let { option, height = "400px" }: { option: EChartsOption; height?: string } =
+	$props();
 
 onMount(() => {
-  chart = echarts.init(chartContainer);
-  chart.setOption(option as any);
-  // ...
+	chart = echarts.init(chartContainer);
+	chart.setOption(option as any);
+	// ...
 });
 ```
 
 **Issues**:
+
 - No visual feedback during ECharts initialization (~10-50ms)
 - No loading state for data fetching (variable duration)
 - Direct render can cause visual flash
@@ -40,6 +43,7 @@ onMount(() => {
 Add a local loading state that tracks chart initialization within the Chart component.
 
 **Implementation Sketch**:
+
 ```typescript
 let isLoading = $state(true);
 
@@ -59,12 +63,14 @@ onMount(() => {
 ```
 
 **Pros**:
+
 - Simple to implement - self-contained within Chart component
 - No API changes - parent components don't need updates
 - Automatic - loading state managed internally
 - Minimal code changes
 
 **Cons**:
+
 - Loading state only covers ECharts init, not data fetching
 - Parent has no control over loading appearance
 - Flash may still occur if data arrives after mount
@@ -79,6 +85,7 @@ onMount(() => {
 Add an `isLoading` prop that parent components control.
 
 **Implementation Sketch**:
+
 ```typescript
 // Chart.svelte
 let {
@@ -106,12 +113,14 @@ onMount(async () => {
 ```
 
 **Pros**:
+
 - Parent controls when loading appears (before data fetch)
 - More accurate loading state (covers full data lifecycle)
 - Flexible - different parents can use different timing
 - Simple Chart component - just shows/hides based on prop
 
 **Cons**:
+
 - Requires updating all parent components
 - More boilerplate in parent components
 - Parent must manually manage loading state
@@ -126,6 +135,7 @@ onMount(async () => {
 Automatically detect loading state by checking if option has data.
 
 **Implementation Sketch**:
+
 ```typescript
 // Chart.svelte
 let isReady = $derived(
@@ -141,12 +151,14 @@ let isReady = $derived(
 ```
 
 **Pros**:
+
 - No manual state management needed
 - Works automatically with any data source
 - No prop changes needed
 - Clean abstraction - loading tied to data presence
 
 **Cons**:
+
 - Assumes empty series = loading (may not always be true)
 - Can't distinguish between "loading" and "no data"
 - Less control over when loading appears
@@ -162,6 +174,7 @@ let isReady = $derived(
 Create a reusable skeleton component that mimics chart appearance.
 
 **Implementation Sketch**:
+
 ```typescript
 // ChartSkeleton.svelte
 <div class="w-full h-full bg-tan/10 rounded animate-pulse">
@@ -182,6 +195,7 @@ Create a reusable skeleton component that mimics chart appearance.
 ```
 
 **Pros**:
+
 - Separation of concerns - skeleton is separate component
 - Reusable skeleton can be used elsewhere
 - More sophisticated loading animation possible
@@ -189,6 +203,7 @@ Create a reusable skeleton component that mimics chart appearance.
 - Modern UX pattern (used by Facebook, LinkedIn, etc.)
 
 **Cons**:
+
 - More files/complexity
 - Skeleton needs to stay in sync with chart appearance
 - Parent still needs to manage loading state
@@ -203,25 +218,27 @@ Create a reusable skeleton component that mimics chart appearance.
 Internal state with guaranteed minimum loading time to prevent flashing.
 
 **Implementation Sketch**:
+
 ```typescript
 let isLoading = $state(true);
 const MIN_LOADING_MS = 300;
 
 onMount(async () => {
-  const start = Date.now();
-  chart = echarts.init(chartContainer);
-  chart.setOption(option as any);
+	const start = Date.now();
+	chart = echarts.init(chartContainer);
+	chart.setOption(option as any);
 
-  const elapsed = Date.now() - start;
-  if (elapsed < MIN_LOADING_MS) {
-    await new Promise(r => setTimeout(r, MIN_LOADING_MS - elapsed));
-  }
+	const elapsed = Date.now() - start;
+	if (elapsed < MIN_LOADING_MS) {
+		await new Promise((r) => setTimeout(r, MIN_LOADING_MS - elapsed));
+	}
 
-  isLoading = false;
+	isLoading = false;
 });
 ```
 
 **Pros**:
+
 - Prevents jarring flash for quick loads
 - Self-contained within Chart component
 - No API changes needed
@@ -229,6 +246,7 @@ onMount(async () => {
 - Handles both fast and slow loads gracefully
 
 **Cons**:
+
 - Artificially delays chart appearance
 - Adds complexity for edge case
 - May feel slower than necessary
@@ -243,6 +261,7 @@ onMount(async () => {
 ### 1. Loading Duration Analysis
 
 Measure typical loading times:
+
 - **ECharts initialization**: ~10-50ms (fast)
 - **Tauri command (local DuckDB)**: ~50-200ms (fast to medium)
 - **Tauri command (complex query)**: ~200-1000ms (medium to slow)
@@ -252,6 +271,7 @@ Measure typical loading times:
 ### 2. Loading Coverage Requirements
 
 What should the loading state cover?
+
 - [ ] Just ECharts initialization (10-50ms)
 - [ ] Data fetching from Tauri commands (variable)
 - [ ] Both initialization and data fetching
@@ -261,6 +281,7 @@ What should the loading state cover?
 ### 3. Visual Design Preferences
 
 What should users see while loading?
+
 - **Spinner**: Simple, clear, works everywhere
 - **Skeleton**: Modern, mimics final layout, smoother transition
 - **Empty state message**: Clear but less polished
@@ -283,6 +304,7 @@ What should users see while loading?
 **Recommended Approach**: Option 2 (Parent-Controlled Loading State)
 
 **Rationale**:
+
 1. Data comes from async Tauri commands, so parents already know when data is loading
 2. Gives full control over the loading lifecycle
 3. Can be enhanced later with a skeleton component (Option 4) if needed
@@ -292,6 +314,7 @@ What should users see while loading?
 **Implementation Priority**: Medium (not critical, enhances UX)
 
 **Enhancement Path**:
+
 1. Start with Option 2 (parent-controlled prop)
 2. Add simple spinner/loading message
 3. If loading times are longer or UX needs improvement, add Option 4 (skeleton)

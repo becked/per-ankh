@@ -10,11 +10,11 @@ Yield values are stored as raw integers from the game (fixed-point × 10), but t
 
 **Good news**: We already store raw integers. No schema or parser changes needed.
 
-| Component | Current Behavior |
-|-----------|------------------|
-| Parser | Stores raw XML integers (correct) |
-| Schema | INTEGER columns (correct) |
-| Queries | One query does `/10.0` inline (`lib.rs:467`) |
+| Component | Current Behavior                             |
+| --------- | -------------------------------------------- |
+| Parser    | Stores raw XML integers (correct)            |
+| Schema    | INTEGER columns (correct)                    |
+| Queries   | One query does `/10.0` inline (`lib.rs:467`) |
 
 ## Solution
 
@@ -82,6 +82,7 @@ Since we're in development, delete the DuckDB file and reimport a save to create
 ## Future
 
 When we add queries for other yield tables, follow the same pattern:
+
 1. Base table stores raw integers
 2. Create `*_display` view with `/10.0`
 3. Queries use the view
@@ -89,6 +90,7 @@ When we add queries for other yield tables, follow the same pattern:
 ## Verification
 
 After implementation:
+
 1. Run `cargo test`
 2. Import a save file
 3. Open yield chart - values should display correctly (e.g., 21.5, not 215)

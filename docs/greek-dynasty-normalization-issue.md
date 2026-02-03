@@ -28,17 +28,20 @@ There is strong reason to suspect that Old World changed how they encode dynasti
 - **Later Update (~2021+)**: Dynasty system expanded to other nations. Save format may have changed to properly encode these as `NATION_GREECE` + `DYNASTY_SELEUCID`, etc.
 
 **This would explain the parse-time normalization failure**: If we applied normalization to ALL saves, we would have been "double-normalizing" newer saves that were already in the correct format. This could cause:
+
 - Data collisions (multiple "NATION_GREECE" entries where the game expected distinct values)
 - Query mismatches (statistics counting wrong)
 - Missing games in the UI
 
 **Critical Investigation Step**: Before implementing any fix, examine save files from different time periods to determine:
+
 1. Do older saves (2020-2021) encode Greek dynasties as separate nations?
 2. Do newer saves (2022+) properly encode them as NATION_GREECE + dynasty?
 3. Is there a specific game version where the format changed?
 4. Are there any save file version indicators we can use to detect which format is in use?
 
 This investigation will determine whether we need:
+
 - **Conditional normalization** (only for old saves) based on save file version/date
 - **Uniform normalization** (if all saves use the old format)
 - **No normalization** (if all saves already use the correct format)
@@ -88,6 +91,7 @@ let (nation, dynasty) = normalize_nation_dynasty(raw_nation, raw_dynasty);
 ### Results
 
 **Data Corruption Observed:**
+
 - Logs showed 2 saves imported successfully
 - UI displayed only 1 game in the games list
 - Statistics showed "Games Played: 1" while chart displayed 3 nations
@@ -96,6 +100,7 @@ let (nation, dynasty) = normalize_nation_dynasty(raw_nation, raw_dynasty);
 ### Why It Failed (Theories)
 
 #### Theory 1: Deduplication Key Collision
+
 The parser uses `deduplicate_rows_last_wins` with `(player_id, match_id)` as the primary key:
 
 ```rust
@@ -110,11 +115,13 @@ let unique_players = deduplicate_rows_last_wins(
 **Counter-evidence**: Player IDs come from XML ID mapping (`id_mapper.map_player(xml_id)`), which should be independent of nation values.
 
 #### Theory 2: Database Constraint Violation
+
 **Hypothesis**: There might be a unique constraint or foreign key relationship that was violated by the normalized values.
 
 **Counter-evidence**: No database errors were logged during import.
 
 #### Theory 3: Query-Level Issues
+
 The statistics query groups by nation:
 
 ```rust
@@ -130,6 +137,7 @@ ORDER BY games_played DESC
 **Counter-evidence**: This query should work fine with normalized values - grouping SELEUCUS and ANTIGONUS under GREECE should just combine their counts.
 
 #### Theory 4: Match-Level Data Corruption
+
 **Hypothesis**: The normalization affected match-level records in unexpected ways, perhaps through foreign key relationships or cascading effects.
 
 **Investigation needed**: Check if other entities (cities, units, etc.) reference player data in ways that could be affected by nation normalization.
@@ -137,20 +145,24 @@ ORDER BY games_played DESC
 ## Relevant Code Locations
 
 ### Parser
+
 - **File**: `src-tauri/src/parser/entities/players.rs`
 - **Lines**: 22-24 (nation/dynasty reading)
 - **Lines**: 95-122 (player row assembly)
 - **Lines**: 127-130 (deduplication)
 
 ### Statistics Query
+
 - **File**: `src-tauri/src/lib.rs`
 - **Lines**: 200-210 (get_game_statistics command)
 
 ### Database Schema
+
 - **File**: `docs/schema.sql`
 - **Lines**: 132-133 (nation/dynasty columns)
 
 ### Frontend Chart
+
 - **File**: `src/routes/+page.svelte`
 - **Lines**: 15-56 (chart configuration)
 
@@ -176,12 +188,14 @@ ORDER BY games_played DESC
 ```
 
 **Pros:**
+
 - Preserves original data in database
 - No risk of data corruption during import
 - Easy to modify/extend mapping rules
 - Can be applied to existing data without migration
 
 **Cons:**
+
 - Normalization logic duplicated across queries
 - Slight performance overhead (minimal for small datasets)
 - Dynasty information lost in aggregation (though we could track it separately)
@@ -212,11 +226,13 @@ FROM players;
 ```
 
 **Pros:**
+
 - Centralized normalization logic
 - Preserves original data
 - Clean separation of concerns
 
 **Cons:**
+
 - Adds complexity to schema management
 - Need to update schema migrations
 
@@ -231,11 +247,13 @@ Systematically debug the original approach:
 5. **Add unit tests** for the normalization function with realistic data
 
 **Pros:**
+
 - Most "correct" solution (clean data at source)
 - No query overhead
 - Dynasty values properly stored
 
 **Cons:**
+
 - Requires investigation time
 - Risk of similar issues if not fully understood
 
@@ -245,36 +263,38 @@ Normalize display values in the frontend without touching data:
 
 ```typescript
 function normalizeNation(nation: string): string {
-    switch (nation) {
-        case 'NATION_ANTIGONUS':
-        case 'NATION_SELEUCUS':
-            return 'NATION_GREECE';
-        case 'NATION_PTOLEMY':
-            return 'NATION_EGYPT';
-        default:
-            return nation;
-    }
+	switch (nation) {
+		case "NATION_ANTIGONUS":
+		case "NATION_SELEUCUS":
+			return "NATION_GREECE";
+		case "NATION_PTOLEMY":
+			return "NATION_EGYPT";
+		default:
+			return nation;
+	}
 }
 
 // In chart data preparation
 const normalizedData = stats.nations.reduce((acc, n) => {
-    const normalized = normalizeNation(n.nation);
-    const existing = acc.find(item => item.nation === normalized);
-    if (existing) {
-        existing.games_played += n.games_played;
-    } else {
-        acc.push({ nation: normalized, games_played: n.games_played });
-    }
-    return acc;
+	const normalized = normalizeNation(n.nation);
+	const existing = acc.find((item) => item.nation === normalized);
+	if (existing) {
+		existing.games_played += n.games_played;
+	} else {
+		acc.push({ nation: normalized, games_played: n.games_played });
+	}
+	return acc;
 }, []);
 ```
 
 **Pros:**
+
 - No backend changes required
 - No risk to data integrity
 - Easy to implement and test
 
 **Cons:**
+
 - Doesn't solve the problem for backend queries/reports
 - Logic must be duplicated across frontend components
 - Dynasty information tracking becomes complex
@@ -308,6 +328,7 @@ Any solution should be tested with:
 4. Check Old World patch notes/changelogs for any mentions of dynasty system changes
 
 **Suggested approach:**
+
 ```bash
 # Extract Player nodes from various saves
 unzip -p save_2020.zip game.xml | grep -A 5 '<Player.*Nation="NATION_'

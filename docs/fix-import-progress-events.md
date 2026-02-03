@@ -23,6 +23,7 @@ Return the command immediately and spawn a thread to do the work + emit events.
 **File**: `src-tauri/src/lib.rs`
 
 **Current** (lines 516-547):
+
 ```rust
 #[tauri::command]
 async fn import_files_cmd(
@@ -35,6 +36,7 @@ async fn import_files_cmd(
 ```
 
 **New**:
+
 ```rust
 #[tauri::command]
 async fn import_files_cmd(
@@ -74,6 +76,7 @@ async fn import_files_cmd(
 Apply same pattern to `import_directory_cmd` (lines 465-511).
 
 **Change `import_files_batch` signature** (line 550):
+
 ```rust
 // Remove async, change return type
 fn import_files_batch(
@@ -87,6 +90,7 @@ fn import_files_batch(
 ```
 
 **At end of `import_files_batch`** (replace return statement at line 648):
+
 ```rust
 let final_result = BatchImportResult {
     total_files: total,
@@ -104,6 +108,7 @@ if let Err(e) = app.emit("import-complete", &final_result) {
 ```
 
 **Simplify event emission** (line 640):
+
 ```rust
 // Change from:
 app.emit_to(tauri::EventTarget::Any, "import-progress", &progress)
@@ -120,27 +125,32 @@ if let Err(e) = app.emit("import-progress", &progress) {
 **File**: `src/lib/Header.svelte`
 
 **Replace `handleImportFiles()`** (lines 22-45):
+
 ```typescript
 async function handleImportFiles() {
-  isSettingsOpen = false;
-  importProgress = null;
-  importResult = null;
-  isImportModalOpen = true;
+	isSettingsOpen = false;
+	importProgress = null;
+	importResult = null;
+	isImportModalOpen = true;
 
-  try {
-    // This now returns immediately
-    await api.importFiles();
-    // Modal stays open, listening for events
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    if (errorMsg.includes("No files selected") || errorMsg.includes("cancelled")) {
-      isImportModalOpen = false;
-    }
-  }
+	try {
+		// This now returns immediately
+		await api.importFiles();
+		// Modal stays open, listening for events
+	} catch (err) {
+		const errorMsg = err instanceof Error ? err.message : String(err);
+		if (
+			errorMsg.includes("No files selected") ||
+			errorMsg.includes("cancelled")
+		) {
+			isImportModalOpen = false;
+		}
+	}
 }
 ```
 
 **Add event listeners in onMount** (after existing code around line 64):
+
 ```typescript
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 
@@ -148,24 +158,31 @@ let progressUnlisten: UnlistenFn | null = null;
 let completeUnlisten: UnlistenFn | null = null;
 
 onMount(async () => {
-  // Listen for progress events
-  progressUnlisten = await listen<ImportProgress>("import-progress", (event) => {
-    importProgress = event.payload;
-  });
+	// Listen for progress events
+	progressUnlisten = await listen<ImportProgress>(
+		"import-progress",
+		(event) => {
+			importProgress = event.payload;
+		},
+	);
 
-  // Listen for completion event
-  completeUnlisten = await listen<BatchImportResult>("import-complete", (event) => {
-    importResult = event.payload;
-  });
+	// Listen for completion event
+	completeUnlisten = await listen<BatchImportResult>(
+		"import-complete",
+		(event) => {
+			importResult = event.payload;
+		},
+	);
 });
 
 onDestroy(() => {
-  if (progressUnlisten) progressUnlisten();
-  if (completeUnlisten) completeUnlisten();
+	if (progressUnlisten) progressUnlisten();
+	if (completeUnlisten) completeUnlisten();
 });
 ```
 
 **Add import statements** (top of file):
+
 ```typescript
 import { onMount, onDestroy } from "svelte";
 ```
@@ -175,6 +192,7 @@ import { onMount, onDestroy } from "svelte";
 **File**: `src/lib/ImportModal.svelte`
 
 The modal already handles `initialProgress` prop correctly. Just verify it displays:
+
 - `progress.current` / `progress.total`
 - `progress.current_file`
 - `progress.elapsed_ms` and `progress.estimated_remaining_ms`
@@ -212,6 +230,7 @@ importDirectory: () =>
 ## Rollback Plan
 
 If this doesn't work:
+
 1. Revert changes
 2. Keep current workaround (modal shows after completion)
 3. Document in `tauri-progress-events-investigation.md`

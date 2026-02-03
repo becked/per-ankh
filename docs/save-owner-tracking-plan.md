@@ -3,18 +3,21 @@
 ## Phase 1: Schema Changes
 
 ### Affected Files
-| File | Changes |
-|------|---------|
+
+| File              | Changes                                                                  |
+| ----------------- | ------------------------------------------------------------------------ |
 | `docs/schema.sql` | Add `is_save_owner` column to `players` table; add `user_settings` table |
 
 ### Changes
 
 Add to `players` table after `is_human`:
+
 ```sql
 is_save_owner BOOLEAN DEFAULT false,  -- TRUE if this player is the save file owner
 ```
 
 Add new table in Section 1 (after `matches` table):
+
 ```sql
 -- User settings for save owner identification
 CREATE TABLE user_settings (
@@ -28,17 +31,19 @@ CREATE TABLE user_settings (
 ## Phase 2: Rust Data Structures
 
 ### Affected Files
-| File | Changes |
-|------|---------|
+
+| File                                | Changes                                          |
+| ----------------------------------- | ------------------------------------------------ |
 | `src-tauri/src/parser/game_data.rs` | Add `is_save_owner` field to `PlayerData` struct |
-| `src-tauri/src/db/settings.rs` | New file: functions to get/set user settings |
-| `src-tauri/src/db/mod.rs` | Export `settings` module |
+| `src-tauri/src/db/settings.rs`      | New file: functions to get/set user settings     |
+| `src-tauri/src/db/mod.rs`           | Export `settings` module                         |
 
 ### Changes
 
 **`src-tauri/src/parser/game_data.rs`**
 
 Add field to `PlayerData` struct:
+
 ```rust
 pub is_save_owner: bool,
 ```
@@ -77,6 +82,7 @@ pub fn set_primary_user_online_id(conn: &Connection, online_id: &str) -> Result<
 ```
 
 Unit test:
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -106,8 +112,9 @@ mod tests {
 ## Phase 3: Auto-Detection of Primary User at First Import
 
 ### Affected Files
-| File | Changes |
-|------|---------|
+
+| File                             | Changes                                                                  |
+| -------------------------------- | ------------------------------------------------------------------------ |
 | `src-tauri/src/parser/import.rs` | Add `auto_detect_primary_user()` function; call at start of first import |
 
 ### Changes
@@ -148,6 +155,7 @@ fn auto_detect_primary_user(conn: &Connection) -> Result<()> {
 Call `auto_detect_primary_user(conn)` at the start of `import_save_file()`, before processing the new save.
 
 Unit test:
+
 ```rust
 #[test]
 fn test_auto_detect_primary_user() {
@@ -167,8 +175,9 @@ fn test_auto_detect_skips_if_already_set() {
 ## Phase 4: Save Owner Detection Logic
 
 ### Affected Files
-| File | Changes |
-|------|---------|
+
+| File                             | Changes                                                               |
+| -------------------------------- | --------------------------------------------------------------------- |
 | `src-tauri/src/parser/import.rs` | Add `determine_save_owner()` function; call it after player insertion |
 
 ### Changes
@@ -225,6 +234,7 @@ fn determine_save_owner(
 Call this function in `import_save_file()` after player insertion, before returning success.
 
 Unit tests:
+
 ```rust
 #[test]
 fn test_determine_save_owner_single_human() {
@@ -250,16 +260,18 @@ fn test_determine_save_owner_multiple_humans_no_primary_user() {
 ## Phase 5: Update human_won Query
 
 ### Affected Files
-| File | Changes |
-|------|---------|
+
+| File                   | Changes                                                                           |
+| ---------------------- | --------------------------------------------------------------------------------- |
 | `src-tauri/src/lib.rs` | Update `get_game_statistics()` query to use `is_save_owner`; rename struct fields |
-| `src/lib/types/` | Regenerate TypeScript types (automatic) |
+| `src/lib/types/`       | Regenerate TypeScript types (automatic)                                           |
 
 ### Changes
 
 In `get_game_statistics()`, change the subquery that finds the human player:
 
 **Before:**
+
 ```sql
 LEFT JOIN (
     SELECT match_id, nation, player_id,
@@ -269,6 +281,7 @@ LEFT JOIN (
 ```
 
 **After:**
+
 ```sql
 LEFT JOIN (
     SELECT match_id, nation, player_id
@@ -277,6 +290,7 @@ LEFT JOIN (
 ```
 
 In `GameStatistics` struct, rename fields:
+
 - `human_nation` → `save_owner_nation`
 - `human_won` → `save_owner_won`
 
@@ -287,10 +301,11 @@ Update frontend code that references these fields accordingly.
 ## Phase 6: Tauri Commands for Settings
 
 ### Affected Files
-| File | Changes |
-|------|---------|
+
+| File                   | Changes                                                                                             |
+| ---------------------- | --------------------------------------------------------------------------------------------------- |
 | `src-tauri/src/lib.rs` | Add `get_primary_user_online_id`, `set_primary_user_online_id`, and `get_known_online_ids` commands |
-| `src/lib/api.ts` | Add API functions for settings |
+| `src/lib/api.ts`       | Add API functions for settings                                                                      |
 
 ### Changes
 
@@ -367,14 +382,16 @@ getKnownOnlineIds: () =>
 ## Phase 7: Frontend Settings UI
 
 ### Affected Files
-| File | Changes |
-|------|---------|
-| `src/lib/components/Settings.svelte` | Add primary user configuration section (create file if doesn't exist) |
-| `src/routes/+page.svelte` or equivalent | Add settings access point (gear icon, menu item, etc.) |
+
+| File                                    | Changes                                                               |
+| --------------------------------------- | --------------------------------------------------------------------- |
+| `src/lib/components/Settings.svelte`    | Add primary user configuration section (create file if doesn't exist) |
+| `src/routes/+page.svelte` or equivalent | Add settings access point (gear icon, menu item, etc.)                |
 
 ### Changes
 
 Create settings UI that:
+
 1. Displays current primary user (if set) with player name from `get_known_online_ids()`
 2. Shows dropdown/list of known OnlineIDs with player names and save counts
 3. Allows selecting one as the primary user

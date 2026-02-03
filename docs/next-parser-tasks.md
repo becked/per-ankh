@@ -12,6 +12,7 @@ This document outlines remaining parser implementation work, prioritized by valu
 **All entity tables now use composite PRIMARY KEYs `(id, match_id)`** to support importing multiple game saves into the same database without conflicts.
 
 **Design Principles:**
+
 - Entity IDs are `INTEGER` (not `BIGINT`) and scoped per match
 - Each match maintains independent ID sequences (1, 2, 3, ...)
 - All UPDATE/DELETE queries must include `match_id` in WHERE clauses
@@ -24,16 +25,19 @@ If you create new tables, follow this pattern. See `docs/schema-fix-composite-pr
 ## 🎯 Quick Wins (High Value, Low Effort)
 
 ### 1. LogData Events Parser
+
 **Priority:** High
 **Effort:** Low
 **Impact:** Adds rich event narrative data
 
 **Status:**
+
 - ✅ XML data exists and verified: `/Root/Player/PermanentLogList/LogData`
 - ✅ Schema table exists: `event_logs` with composite PK `(log_id, match_id)` (currently empty)
 - ❌ Parser not implemented
 
 **XML Structure:**
+
 ```xml
 <Player ID="0">
   <PermanentLogList>
@@ -51,12 +55,14 @@ If you create new tables, follow this pattern. See `docs/schema-fix-composite-pr
 ```
 
 **Implementation:**
+
 - Location: `src-tauri/src/parser/entities/events.rs` (or new file)
 - Function: `parse_player_log_events()`
 - Pattern: Similar to `parse_player_events()` which already exists
 - Call from: `parse_player_gameplay_data()` in `import.rs`
 
 **Schema:**
+
 ```sql
 CREATE TABLE event_logs (
     log_id INTEGER NOT NULL,
@@ -75,16 +81,19 @@ CREATE TABLE event_logs (
 ---
 
 ### 2. Legitimacy History Parser
+
 **Priority:** Medium
 **Effort:** Low
 **Impact:** Completes time-series suite
 
 **Status:**
+
 - ✅ XML data exists: `/Root/Player/LegitimacyHistory/*`
 - ✅ Schema table exists: `legitimacy_history` (currently empty)
 - ❌ Parser not implemented
 
 **XML Structure:**
+
 ```xml
 <Player ID="0">
   <LegitimacyHistory>
@@ -96,6 +105,7 @@ CREATE TABLE event_logs (
 ```
 
 **Implementation:**
+
 - Location: `src-tauri/src/parser/entities/timeseries.rs`
 - Function: `parse_legitimacy_history()`
 - Pattern: Identical to `parse_military_power_history()`, `parse_points_history()`
@@ -107,16 +117,19 @@ CREATE TABLE event_logs (
 ---
 
 ### 3. Character Marriages Parser
+
 **Priority:** Medium
 **Effort:** Low
 **Impact:** Enables marriage tracking and dynastic analysis
 
 **Status:**
+
 - ✅ XML data exists: `/Root/Character/Spouses/ID`
 - ✅ Schema table exists: `character_marriages` (currently empty)
 - ❌ Parser not implemented
 
 **XML Structure:**
+
 ```xml
 <Character ID="4">
   <Spouses>
@@ -126,12 +139,14 @@ CREATE TABLE event_logs (
 ```
 
 **Implementation:**
+
 - Location: `src-tauri/src/parser/entities/character_data.rs`
 - Function: `parse_character_marriages()`
 - Call from: `parse_character_extended_data_all()` in `import.rs`
 - Note: Extract spouse ID and infer marriage (married_turn = min(character.birth_turn, spouse.birth_turn) or leave NULL)
 
 **Schema:**
+
 ```sql
 CREATE TABLE character_marriages (
     character_id INTEGER NOT NULL,
@@ -150,16 +165,19 @@ CREATE TABLE character_marriages (
 ## 🔍 Needs Investigation
 
 ### 4. MemoryData System
+
 **Priority:** High (if data is valuable)
 **Effort:** Low-Medium
 **Impact:** AI diplomatic memory tracking
 
 **Status:**
+
 - ✅ XML data exists: `/Root/Player/MemoryList/MemoryData`
 - ✅ Schema table exists: `memory_data` with composite PK `(memory_id, match_id)`
 - ❌ Parser not implemented
 
 **XML Structure:**
+
 ```xml
 <Player ID="0">
   <MemoryList>
@@ -178,6 +196,7 @@ CREATE TABLE character_marriages (
 ```
 
 **Action Required:**
+
 1. Investigate several save files to understand data structure variations
 2. Implement parser following composite key pattern
 3. Ensure IdMapper generates memory_id per match
@@ -188,21 +207,25 @@ See `memory_data` table in `docs/schema.sql` - already includes composite PK and
 ---
 
 ### 5. Tile Ownership
+
 **Priority:** Medium
 **Effort:** Low-Medium
 **Impact:** Track territory control
 
 **Status:**
+
 - ✅ Schema has `owner_player_id`, `owner_tribe` columns in `tiles` table
 - ❌ Columns are always empty (NULL)
 - ❓ Unclear if XML contains ownership data or only tracks unowned tiles
 
 **Action Required:**
+
 1. **Investigate:** Check if Tile elements have `Owner`, `Player`, or similar attributes
 2. **If exists:** Update `parse_tiles()` in `src-tauri/src/parser/entities/tiles.rs`
 3. **If not exists:** Remove ownership columns from schema (YAGNI)
 
 **Check these files:**
+
 ```bash
 xmllint --xpath "//Tile[1]" save-file.xml
 ```
@@ -212,30 +235,36 @@ xmllint --xpath "//Tile[1]" save-file.xml
 ## 📋 Lower Priority
 
 ### 6. Event Outcomes
+
 **Priority:** Low
 **Effort:** Unknown
 **Impact:** May not be available in XML
 
 **Status:**
+
 - ❓ May not exist in XML (outcomes might be implicit in LogData text)
 - ✅ Schema table exists: `event_outcomes` with composite PK `(outcome_id, match_id)` (empty)
 
 **Action Required:**
+
 1. Search multiple save files for outcome-related elements
 2. If not found, remove `event_outcomes` table from schema (YAGNI)
 
 ---
 
 ### 7. Diplomacy State Details
+
 **Priority:** Low
 **Effort:** Medium
 **Impact:** Enhanced diplomatic analysis
 
 **Status:**
+
 - ✅ Basic diplomacy relations work (`parse_diplomacy()`)
 - ⚠️ Missing detailed state info (treaty terms, modifiers, etc.)
 
 **Action Required:**
+
 1. Review `TeamDiplomacy` XML structure more deeply
 2. Identify what additional data is available
 3. Enhance `parse_diplomacy()` if valuable data exists
@@ -245,15 +274,18 @@ xmllint --xpath "//Tile[1]" save-file.xml
 ## 📖 Documentation Tasks
 
 ### 8. XML-to-Schema Mapping Document
+
 **Priority:** Medium (developer experience)
 **Effort:** Medium
 
 Create `docs/xml-schema-mapping.md` with:
+
 - Definitive XPath for each schema table
 - Field-by-field mappings
 - Status indicators (confirmed/partial/missing/static)
 
 ### 9. Corrected Save File Format Documentation
+
 **Priority:** Low
 **Effort:** Medium
 

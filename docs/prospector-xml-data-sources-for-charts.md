@@ -41,21 +41,26 @@ This document catalogs all charts in the tournament visualizer, organized by pag
 Before implementing any data extraction, understand these critical rules:
 
 ### Player ID Conversion
+
 ```
 XML Format:     0-based (ID="0", ID="1", ID="2")
 Display Format: 1-based (Player 1, Player 2, Player 3)
 Conversion:     display_player_id = xml_id + 1
 ```
+
 **Important:** Player ID="0" is valid and represents the first player.
 
 ### Yield Value Scale
+
 ```
 XML Storage:    Raw integer values (e.g., 215)
 Display Value:  Divide by 10 (e.g., 21.5)
 ```
+
 Old World stores all yield values in units of 0.1 internally. Always divide by 10 for display.
 
 ### Coordinate Calculation (for Map)
+
 ```
 Layout:  Row-major (odd-r pointy-top hex grid)
 Formula: x = tile_id % map_width
@@ -71,14 +76,17 @@ The Overview page shows tournament-wide statistics aggregated across multiple ma
 ### Summary Tab
 
 #### 1. Event Category Timeline
+
 **Description:** Stacked area chart showing event frequency by category over normalized game time.
 
 **XML Source:** Events from three sources per match:
 
 1. **MemoryData Events**
+
    ```
    XPath: //Player[@ID]/MemoryList/MemoryData
    ```
+
    ```xml
    <Player ID="0">
      <MemoryList>
@@ -92,9 +100,11 @@ The Overview page shows tournament-wide statistics aggregated across multiple ma
    ```
 
 2. **LogData Events**
+
    ```
    XPath: //Player[@OnlineID]/PermanentLogList/LogData
    ```
+
    ```xml
    <LogData>
      <Type>LAW_ADOPTED</Type>
@@ -119,12 +129,15 @@ The Overview page shows tournament-wide statistics aggregated across multiple ma
 ---
 
 #### 2. Military Unit Breakdown
+
 **Description:** Sunburst chart showing unit production by role (Cavalry, Ranged, Melee) and unit type.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/UnitsProduced
 ```
+
 ```xml
 <UnitsProduced>
   <UNIT_SETTLER>3</UNIT_SETTLER>
@@ -140,12 +153,15 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ---
 
 #### 3. Map Breakdown
+
 **Description:** Sunburst chart showing map distribution by Size → Class → Aspect Ratio.
 
 **XML Source:**
+
 ```
 XPath: Root element attributes
 ```
+
 ```xml
 <Root
   MapSize="MAPSIZE_LARGE"
@@ -155,6 +171,7 @@ XPath: Root element attributes
 ```
 
 **Derivation:**
+
 - `MAPSIZE_LARGE` → "Large" (remove prefix, title case)
 - `MAPCLASS_CoastalRainBasin` → "Coastal Rain Basin" (remove prefix, split camel case)
 - `MAPASPECTRATIO_WIDE` → "Wide"
@@ -162,12 +179,15 @@ XPath: Root element attributes
 ---
 
 #### 4. Average Science Per Turn vs Win Rate
+
 **Description:** Line chart comparing science progression between winners and losers.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/YieldRateHistory/YIELD_SCIENCE
 ```
+
 ```xml
 <YieldRateHistory>
   <YIELD_SCIENCE>
@@ -179,6 +199,7 @@ XPath: //Player[@OnlineID]/YieldRateHistory/YIELD_SCIENCE
 ```
 
 **Derivation:**
+
 1. Extract science rate per turn (divide values by 10)
 2. Determine winner from victory conditions or final score
 3. Average science rates across all winners vs all losers
@@ -189,12 +210,15 @@ XPath: //Player[@OnlineID]/YieldRateHistory/YIELD_SCIENCE
 ### Nations Tab
 
 #### 1. Nation Win Percentage
+
 **Description:** Horizontal bar chart showing win rate per civilization.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/@Nation
 ```
+
 ```xml
 <Player ID="0" OnlineID="123" Nation="NATION_PERSIA">
 ```
@@ -206,6 +230,7 @@ XPath: //Player[@OnlineID]/@Nation
 ---
 
 #### 2. Nation Loss Percentage
+
 **Description:** Horizontal bar chart showing loss rate per civilization.
 
 **Derivation:** `loss_rate = losses / total_games` per nation (inverse of win percentage).
@@ -213,6 +238,7 @@ XPath: //Player[@OnlineID]/@Nation
 ---
 
 #### 3. Nation Popularity
+
 **Description:** Horizontal bar chart showing how often each nation is played.
 
 **Derivation:** Count of matches per nation.
@@ -220,6 +246,7 @@ XPath: //Player[@OnlineID]/@Nation
 ---
 
 #### 4. Nation Counter-Pick Effectiveness
+
 **Description:** Heatmap showing win rates for each nation matchup.
 
 **XML Source:** Same as Nation Win Percentage, but requires tracking both players per match.
@@ -229,6 +256,7 @@ XPath: //Player[@OnlineID]/@Nation
 ---
 
 #### 5. Pick Order Win Rate
+
 **Description:** Bar chart showing win rates for first pick vs second pick.
 
 **XML Source:** Pick order is stored externally (Challonge API) and linked via match metadata.
@@ -240,17 +268,21 @@ XPath: //Player[@OnlineID]/@Nation
 ### Families Tab
 
 #### 1. Family Class Win Rate
+
 **Description:** Horizontal bar chart showing win rate per family class (Clerics, Hunters, Landowners, etc.).
 
 **XML Source:**
+
 ```
 XPath: //City/@Family
 ```
+
 ```xml
 <City ID="5" TileID="245" Player="0" Family="FAMILY_JULII">
 ```
 
 **Family Class Mapping:** Each family constant maps to a class:
+
 - `FAMILY_JULII`, `FAMILY_SCIPIO`, `FAMILY_FLAVII` → Statesmen
 - `FAMILY_CLAUDII` → Landowners
 - etc. (This mapping is game data, not in save file)
@@ -260,6 +292,7 @@ XPath: //City/@Family
 ---
 
 #### 2. Family Class Popularity
+
 **Description:** Horizontal bar chart showing pick frequency per family class.
 
 **Derivation:** Count occurrences of each family class across all matches.
@@ -267,6 +300,7 @@ XPath: //City/@Family
 ---
 
 #### 3. The Omitted Class
+
 **Description:** Chart showing which family classes players choose NOT to pick.
 
 **Derivation:** Each nation has 4 available family classes but players only start with 3. Track which class is omitted per match.
@@ -274,6 +308,7 @@ XPath: //City/@Family
 ---
 
 #### 4. Top Class Combinations
+
 **Description:** Horizontal bar chart showing most popular 3-family-class combinations.
 
 **Derivation:** Group by the set of 3 family classes each player uses, count occurrences.
@@ -281,6 +316,7 @@ XPath: //City/@Family
 ---
 
 #### 5. Class Counter-Pick Effectiveness
+
 **Description:** Heatmap showing win rates for family class matchups.
 
 **Derivation:** Similar to nation counter-pick, but using primary family class.
@@ -288,6 +324,7 @@ XPath: //City/@Family
 ---
 
 #### 6. Nation × Family Class Affinity
+
 **Description:** Heatmap showing how often each nation picks each family class.
 
 **Derivation:** Cross-tabulate nation selections with family class selections.
@@ -295,23 +332,29 @@ XPath: //City/@Family
 ---
 
 #### 7. City Distribution by Class
+
 **Description:** Grouped bar comparing city counts for winners vs losers by family class.
 
 **XML Source:**
+
 ```
 XPath: //City
 ```
+
 Count cities, group by owner's family class.
 
 ---
 
 #### 8-10. Family Opinion Charts
+
 **Description:** Various charts showing family opinion trends over time.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/FamilyOpinionHistory
 ```
+
 ```xml
 <FamilyOpinionHistory>
   <FAMILY_JULII>
@@ -333,13 +376,16 @@ XPath: //Player[@OnlineID]/FamilyOpinionHistory
 ### Rulers Tab
 
 #### 1. Archetype Performance
+
 **Description:** Bar/line chart showing win rates and play counts per ruler archetype.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/Leaders (list of character IDs)
 XPath: //Character[@ID]/TraitTurn (traits with acquisition turn)
 ```
+
 ```xml
 <Player ID="0" OnlineID="123">
   <Leaders>
@@ -357,6 +403,7 @@ XPath: //Character[@ID]/TraitTurn (traits with acquisition turn)
 ```
 
 **Derivation:**
+
 1. Get first character ID from `Leaders` list (starting ruler)
 2. Find archetype from traits ending in `_ARCHETYPE`
 3. Aggregate win rates by archetype
@@ -364,17 +411,20 @@ XPath: //Character[@ID]/TraitTurn (traits with acquisition turn)
 ---
 
 #### 2. Trait Performance
+
 **Description:** Bar/line chart showing win rates per starting ruler trait.
 
 **XML Source:** Same as Archetype Performance.
 
 **Derivation:**
+
 - Starting trait = first non-archetype trait acquired on turn 1
 - Only applies to starting ruler (first in Leaders list)
 
 ---
 
 #### 3. Archetype Matchup Matrix
+
 **Description:** Heatmap showing win rates for archetype vs archetype matchups.
 
 **Derivation:** Cross-tabulate starting ruler archetypes with match outcomes.
@@ -382,6 +432,7 @@ XPath: //Character[@ID]/TraitTurn (traits with acquisition turn)
 ---
 
 #### 4. Popular Combinations
+
 **Description:** Bar chart showing most common archetype + starting trait combinations.
 
 **Derivation:** Count occurrences of each (archetype, trait) pair.
@@ -389,12 +440,15 @@ XPath: //Character[@ID]/TraitTurn (traits with acquisition turn)
 ---
 
 #### 5. Win Rate by Starting Ruler Reign Duration
+
 **Description:** Bar chart showing win rate by how long the starting ruler survived.
 
 **XML Source:**
+
 ```
 XPath: //Character[@ID]/DeathTurn
 ```
+
 ```xml
 <Character ID="5">
   <DeathTurn>42</DeathTurn>
@@ -402,6 +456,7 @@ XPath: //Character[@ID]/DeathTurn
 ```
 
 **Derivation:**
+
 1. Calculate reign duration = `DeathTurn - 1` (or total turns if still alive)
 2. Bucket into quartiles
 3. Calculate win rate per bucket
@@ -409,15 +464,18 @@ XPath: //Character[@ID]/DeathTurn
 ---
 
 #### 6. Win Rate by Succession Rate
+
 **Description:** Bar chart showing win rate by how frequently rulers changed.
 
 **Derivation:**
+
 - Succession rate = `(number_of_rulers - 1) / total_turns * 100`
 - Bucket and calculate win rates
 
 ---
 
 #### 7. Starting Ruler Survival
+
 **Description:** Survival curve showing % of starting rulers still alive over time.
 
 **Derivation:** For each turn, calculate % of starting rulers without a `DeathTurn` <= that turn.
@@ -427,12 +485,15 @@ XPath: //Character[@ID]/DeathTurn
 ### Yields Tab
 
 #### 1-14. Yield Production Charts (Science, Orders, Food, Growth, Culture, Civics, Training, Money, Happiness, Discontent, Iron, Stone, Wood, Maintenance)
+
 **Description:** Stacked subplots showing rate per turn (top) and cumulative total (bottom).
 
 **XML Source (Rate):**
+
 ```
 XPath: //Player[@OnlineID]/YieldRateHistory/YIELD_{TYPE}
 ```
+
 ```xml
 <YieldRateHistory>
   <YIELD_SCIENCE>
@@ -444,11 +505,13 @@ XPath: //Player[@OnlineID]/YieldRateHistory/YIELD_{TYPE}
 ```
 
 **XML Source (Cumulative Total):** Available in game version 1.0.81366+:
+
 ```
 XPath: //Player[@OnlineID]/YieldTotalHistory/YIELD_{TYPE}
 ```
 
 **All 14 Yield Types:**
+
 - `YIELD_SCIENCE` - Research points
 - `YIELD_ORDERS` - Action points
 - `YIELD_FOOD` - Population food
@@ -465,6 +528,7 @@ XPath: //Player[@OnlineID]/YieldTotalHistory/YIELD_{TYPE}
 - `YIELD_MAINTENANCE` - Upkeep costs
 
 **Derivation:**
+
 - **CRITICAL: Divide all raw values by 10 for display**
 - Rate chart: Plot per-turn values
 - Cumulative: Sum rates from turn 1 to current turn (or use YieldTotalHistory if available)
@@ -472,12 +536,15 @@ XPath: //Player[@OnlineID]/YieldTotalHistory/YIELD_{TYPE}
 ---
 
 #### 15. Average Military Score Per Turn
+
 **Description:** Line chart with median and percentile bands.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/MilitaryPowerHistory
 ```
+
 ```xml
 <MilitaryPowerHistory>
   <T1>50</T1>
@@ -491,12 +558,15 @@ XPath: //Player[@OnlineID]/MilitaryPowerHistory
 ---
 
 #### 16. Average Legitimacy Per Turn
+
 **Description:** Line chart with median and percentile bands.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/LegitimacyHistory
 ```
+
 ```xml
 <LegitimacyHistory>
   <T1>75</T1>
@@ -512,12 +582,15 @@ XPath: //Player[@OnlineID]/LegitimacyHistory
 ### Laws Tab
 
 #### 1. Law Timing Distribution
+
 **Description:** Box plot showing distribution of turns to reach law milestones.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ```
+
 ```xml
 <LogData>
   <Type>LAW_ADOPTED</Type>
@@ -527,6 +600,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ```
 
 **Derivation:**
+
 1. Count law adoptions per player per turn
 2. Find turn when player reached 4 laws, 7 laws
 3. Plot distribution across all matches
@@ -534,6 +608,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ---
 
 #### 2. Law Progression Efficiency
+
 **Description:** Scatter plot with turn to 4 laws vs turn to 7 laws.
 
 **Derivation:** Same data as above, plot as (x=turn_to_4, y=turn_to_7).
@@ -543,12 +618,15 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ### Cities Tab
 
 #### 1. City Expansion Timeline
+
 **Description:** Line chart showing cumulative city count over time per player.
 
 **XML Source:**
+
 ```
 XPath: //City/@Founded
 ```
+
 ```xml
 <City ID="5" Founded="3" Player="0">
 ```
@@ -558,12 +636,15 @@ XPath: //City/@Founded
 ---
 
 #### 2. Production Strategies
+
 **Description:** Stacked bar showing unit production breakdown per player.
 
 **XML Source:**
+
 ```
 XPath: //City/UnitProductionCounts
 ```
+
 ```xml
 <UnitProductionCounts>
   <UNIT_SETTLER>2</UNIT_SETTLER>
@@ -585,9 +666,11 @@ The Matches page shows detailed analysis of a single match.
 **Description:** Summary card with match metadata and player information.
 
 **XML Source:**
+
 ```
 XPath: Root element attributes + //Player[@OnlineID]
 ```
+
 ```xml
 <Root
   GameName="Tournament Match"
@@ -605,6 +688,7 @@ XPath: Root element attributes + //Player[@OnlineID]
 ### Timeline Tab
 
 #### 1. Events Timeline by Category
+
 **Description:** Stacked bar chart showing events over time grouped by category.
 
 **XML Source:** Same as Overview page Event Category Timeline, but for single match.
@@ -612,6 +696,7 @@ XPath: Root element attributes + //Player[@OnlineID]
 ---
 
 #### 2. Events Data Table
+
 **Description:** Table listing individual events with turn, category, player, description.
 
 **XML Source:** Combined from MemoryData, LogData, and Religion Adoption events.
@@ -627,9 +712,11 @@ Same content as Timeline tab (alternative view).
 ### Matches Laws Tab
 
 #### 1. Law Tempo (Cumulative)
+
 **Description:** Line chart showing cumulative law count per player over time.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ```
@@ -637,6 +724,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ---
 
 #### 2. Law Adoption Timeline
+
 **Description:** Timeline showing when each specific law was adopted by each player.
 
 **Derivation:** Extract law name from `Data1` field, plot adoption turn.
@@ -644,6 +732,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ---
 
 #### 3. Final Laws by Player
+
 **Description:** Cards showing which laws each player adopted.
 
 **Derivation:** List all `LAW_ADOPTED` events per player.
@@ -653,12 +742,15 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='LAW_ADOPTED']
 ### Technology Tab
 
 #### 1. Tech Tree Visualization
+
 **Description:** Interactive directed graph showing tech dependencies and research status.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='TECH_DISCOVERED']
 ```
+
 ```xml
 <LogData>
   <Type>TECH_DISCOVERED</Type>
@@ -672,6 +764,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='TECH_DISCOVERED']
 ---
 
 #### 2. Technology Cumulative Count
+
 **Description:** Line chart showing cumulative tech count per player.
 
 **Derivation:** Count `TECH_DISCOVERED` events per player up to each turn.
@@ -679,6 +772,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='TECH_DISCOVERED']
 ---
 
 #### 3. Tech Completion Timeline
+
 **Description:** Timeline showing when each tech was completed.
 
 **Derivation:** Plot tech names vs completion turn.
@@ -688,6 +782,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='TECH_DISCOVERED']
 ### Matches Yields Tab
 
 #### 1-14. Per-Match Yield Charts
+
 **Description:** Stacked chart showing rate and cumulative for each yield type.
 
 **XML Source:** Same as Overview Yields Tab, filtered to single match.
@@ -697,9 +792,11 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type='TECH_DISCOVERED']
 ### Science Tab (Beta)
 
 #### 1. Science from Infrastructure
+
 **Description:** Stacked bar showing science contribution by infrastructure type.
 
 **XML Source:**
+
 ```
 XPath: //Tile/Improvement, //Tile/Specialist
 ```
@@ -709,14 +806,17 @@ XPath: //Tile/Improvement, //Tile/Specialist
 ---
 
 #### 2. Direct Science Sources
+
 **Description:** Grouped bar comparing science sources between players.
 
 ---
 
 #### 3. Science Infrastructure Timeline
+
 **Description:** Line chart showing science infrastructure count over time.
 
 **XML Source:**
+
 ```
 XPath: //Tile/OwnerHistory (for tile ownership changes)
 ```
@@ -726,9 +826,11 @@ XPath: //Tile/OwnerHistory (for tile ownership changes)
 ### Ambitions Tab
 
 #### 1. Legitimacy Progression
+
 **Description:** Line chart showing legitimacy over time.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/LegitimacyHistory
 ```
@@ -736,12 +838,15 @@ XPath: //Player[@OnlineID]/LegitimacyHistory
 ---
 
 #### 2. Ambition Summary
+
 **Description:** Table showing completed ambitions.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type starts with 'GOAL_']
 ```
+
 ```xml
 <LogData>
   <Type>GOAL_BUILD_WONDER</Type>
@@ -753,6 +858,7 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type starts with 'GOAL_']
 ---
 
 #### 3. Ambition Timelines
+
 **Description:** Per-player timeline of ambition completions.
 
 ---
@@ -760,12 +866,15 @@ XPath: //Player[@OnlineID]/PermanentLogList/LogData[Type starts with 'GOAL_']
 ### Matches Cities Tab
 
 #### 1. Territory Control Over Time
+
 **Description:** Line chart showing territory tile count per player over time.
 
 **XML Source:**
+
 ```
 XPath: //Tile/OwnerHistory
 ```
+
 ```xml
 <Tile ID="245">
   <OwnerHistory>
@@ -777,6 +886,7 @@ XPath: //Tile/OwnerHistory
 ```
 
 **Derivation:**
+
 - Player ID: 0-based in XML, -1 = unowned
 - Count tiles owned by each player at each turn
 - Ownership persists until next change entry
@@ -784,6 +894,7 @@ XPath: //Tile/OwnerHistory
 ---
 
 #### 2. Final Territory Distribution
+
 **Description:** Pie chart showing final territory split.
 
 **Derivation:** Territory count at final turn.
@@ -791,9 +902,11 @@ XPath: //Tile/OwnerHistory
 ---
 
 #### 3. Cumulative City Count
+
 **Description:** Line chart showing city count over time.
 
 **XML Source:**
+
 ```
 XPath: //City/@Founded
 ```
@@ -801,6 +914,7 @@ XPath: //City/@Founded
 ---
 
 #### 4. City Founding Timeline
+
 **Description:** Scatter plot showing when cities were founded.
 
 ---
@@ -808,12 +922,15 @@ XPath: //City/@Founded
 ### Map Tab
 
 #### 1. Interactive Map Viewer
+
 **Description:** Pixi.js rendered hex map showing terrain, improvements, specialists, resources, and ownership over time.
 
 **XML Source:**
+
 ```
 XPath: //Tile[@ID]
 ```
+
 ```xml
 <Tile ID="245">
   <Terrain>TERRAIN_GRASSLAND</Terrain>
@@ -830,6 +947,7 @@ XPath: //Tile[@ID]
 ```
 
 **Coordinate Calculation:**
+
 ```
 map_width = Root/@MapWidth
 x = tile_id % map_width
@@ -837,6 +955,7 @@ y = tile_id // map_width
 ```
 
 **Tile Data Fields:**
+
 - `Terrain`: Base terrain type (`TERRAIN_GRASSLAND`, `TERRAIN_DESERT`, `TERRAIN_WATER`, etc.)
 - `Improvement`: Building on tile (`IMPROVEMENT_FARM`, `IMPROVEMENT_MINE`, `IMPROVEMENT_QUARRY`, etc.)
 - `Specialist`: Worker assignment (`SPECIALIST_FARMER`, `SPECIALIST_MINER`, `SPECIALIST_PRIEST`, etc.)
@@ -850,9 +969,11 @@ y = tile_id // map_width
 ### Improvements Tab
 
 #### 1. Improvements Butterfly Chart
+
 **Description:** Diverging bar chart comparing improvement counts between players.
 
 **XML Source:**
+
 ```
 XPath: //Tile/Improvement
 ```
@@ -862,9 +983,11 @@ XPath: //Tile/Improvement
 ---
 
 #### 2. Specialists Butterfly Chart
+
 **Description:** Diverging bar chart comparing specialist counts between players.
 
 **XML Source:**
+
 ```
 XPath: //Tile/Specialist
 ```
@@ -874,9 +997,11 @@ XPath: //Tile/Specialist
 ### Military Tab
 
 #### 1. Military Power
+
 **Description:** Line chart showing military strength over time.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/MilitaryPowerHistory
 ```
@@ -884,9 +1009,11 @@ XPath: //Player[@OnlineID]/MilitaryPowerHistory
 ---
 
 #### 2. Unit Listing by Player
+
 **Description:** Cards showing military and non-military unit counts.
 
 **XML Source:**
+
 ```
 XPath: //Player[@OnlineID]/UnitsProduced
 ```
@@ -894,6 +1021,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ---
 
 #### 3-9. Army Composition Charts (Stacked, Grouped, Waffle, Treemap, Icon Grid, Portrait, Marimekko)
+
 **Description:** Various visualizations of unit composition.
 
 **XML Source:** Same as Unit Listing - `UnitsProduced` data rendered in different formats.
@@ -903,6 +1031,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ## XML Structure Reference
 
 ### Root Element
+
 ```xml
 <Root
   GameName="string"
@@ -938,6 +1067,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ```
 
 ### Player Element
+
 ```xml
 <Player
   ID="0"
@@ -994,6 +1124,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ```
 
 ### Character Element
+
 ```xml
 <Character
   ID="5"
@@ -1013,6 +1144,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ```
 
 ### City Element
+
 ```xml
 <City
   ID="5"
@@ -1041,6 +1173,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ```
 
 ### Tile Element
+
 ```xml
 <Tile ID="245">
   <Terrain>TERRAIN_GRASSLAND</Terrain>
@@ -1059,6 +1192,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ```
 
 ### LogData Element
+
 ```xml
 <LogData>
   <Type>LAW_ADOPTED</Type>
@@ -1071,6 +1205,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ```
 
 **Common LogData Types:**
+
 - `LAW_ADOPTED` - Law passed (law name in Data1)
 - `TECH_DISCOVERED` - Technology researched (tech name in Data1)
 - `CITY_FOUNDED` - City founded (family archetype in Text via regex)
@@ -1078,6 +1213,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 - `GOAL_*` - Ambition completed
 
 ### MemoryData Element
+
 ```xml
 <MemoryData>
   <Type>MEMORYPLAYER_ATTACKED_CITY</Type>
@@ -1093,6 +1229,7 @@ XPath: //Player[@OnlineID]/UnitsProduced
 ```
 
 **Player ID Assignment:**
+
 - `MEMORYPLAYER_*` events: Use `<Player>` child element
 - `MEMORYTRIBE_*`, `MEMORYFAMILY_*`, `MEMORYRELIGION_*` events: Use parent `Player[@ID]`
 
@@ -1108,22 +1245,22 @@ XPath: //Player[@OnlineID]/UnitsProduced
 
 ## Quick Reference: XPath to Chart Type
 
-| Chart Category | XPath |
-|----------------|-------|
-| Player metadata | `//Player[@OnlineID]` attributes |
-| Yields | `//Player/YieldRateHistory/*`, `//Player/YieldTotalHistory/*` |
-| Military power | `//Player/MilitaryPowerHistory` |
-| Legitimacy | `//Player/LegitimacyHistory` |
-| Victory points | `//Player/PointsHistory` |
-| Family opinion | `//Player/FamilyOpinionHistory` |
-| Units produced | `//Player/UnitsProduced` |
-| Rulers | `//Player/Leaders` + `//Character` |
-| Laws | `//Player/PermanentLogList/LogData[Type='LAW_ADOPTED']` |
-| Technologies | `//Player/PermanentLogList/LogData[Type='TECH_DISCOVERED']` |
-| Events (log) | `//Player/PermanentLogList/LogData` |
-| Events (memory) | `//Player/MemoryList/MemoryData` |
-| Cities | `//City` |
-| City production | `//City/UnitProductionCounts`, `//City/ProjectCount` |
-| Map/Territory | `//Tile` |
-| Territory ownership | `//Tile/OwnerHistory` |
-| Match metadata | Root element attributes |
+| Chart Category      | XPath                                                         |
+| ------------------- | ------------------------------------------------------------- |
+| Player metadata     | `//Player[@OnlineID]` attributes                              |
+| Yields              | `//Player/YieldRateHistory/*`, `//Player/YieldTotalHistory/*` |
+| Military power      | `//Player/MilitaryPowerHistory`                               |
+| Legitimacy          | `//Player/LegitimacyHistory`                                  |
+| Victory points      | `//Player/PointsHistory`                                      |
+| Family opinion      | `//Player/FamilyOpinionHistory`                               |
+| Units produced      | `//Player/UnitsProduced`                                      |
+| Rulers              | `//Player/Leaders` + `//Character`                            |
+| Laws                | `//Player/PermanentLogList/LogData[Type='LAW_ADOPTED']`       |
+| Technologies        | `//Player/PermanentLogList/LogData[Type='TECH_DISCOVERED']`   |
+| Events (log)        | `//Player/PermanentLogList/LogData`                           |
+| Events (memory)     | `//Player/MemoryList/MemoryData`                              |
+| Cities              | `//City`                                                      |
+| City production     | `//City/UnitProductionCounts`, `//City/ProjectCount`          |
+| Map/Territory       | `//Tile`                                                      |
+| Territory ownership | `//Tile/OwnerHistory`                                         |
+| Match metadata      | Root element attributes                                       |

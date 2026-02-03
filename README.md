@@ -17,6 +17,7 @@ Per-Ankh is an independent, unofficial fan project. It is not affiliated with, e
 "Old World" is a trademark of Mohawk Games. All game content, including save file formats and game data, remains the intellectual property of Mohawk Games.
 
 This application:
+
 - Analyzes save files from games you legally own
 - Does not distribute, modify, or circumvent any game content or copy protection
 - Is provided free and open-source for the benefit of the Old World community
@@ -95,6 +96,7 @@ Run the full integration test suite using the helper script:
 ### Database Schema
 
 The database schema is defined in `docs/schema.sql`. The parser implements Milestones 1-6 as documented in:
+
 - `docs/plans/xml-parser-implementation.md`
 - `docs/plans/xml-parser-milestone-4-6-updates.md`
 
@@ -107,6 +109,7 @@ Analyze the database to check table population and identify empty tables or colu
 ```
 
 This command:
+
 - Shows row counts for all tables
 - Identifies completely empty tables
 - Identifies columns that are empty (all NULL) in populated tables

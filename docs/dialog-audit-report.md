@@ -24,9 +24,10 @@ All dialog usage is currently using global `window.confirm()` and `alert()` func
 **Lines:** 51, 61, 65
 
 #### Instance 1: Confirmation Dialog (Line 51)
+
 ```typescript
 const confirmed = await window.confirm(
-  "Are you sure you want to reset the database? This will delete all imported game data and cannot be undone."
+	"Are you sure you want to reset the database? This will delete all imported game data and cannot be undone.",
 );
 ```
 
@@ -38,6 +39,7 @@ const confirmed = await window.confirm(
 ---
 
 #### Instance 2: Success Alert (Line 61)
+
 ```typescript
 alert("Database reset successfully.");
 ```
@@ -50,6 +52,7 @@ alert("Database reset successfully.");
 ---
 
 #### Instance 3: Error Alert (Line 65)
+
 ```typescript
 alert(`Failed to reset database: ${errorMsg}`);
 ```
@@ -66,6 +69,7 @@ alert(`Failed to reset database: ${errorMsg}`);
 ### What We're Using
 
 **File Dialogs (Backend - Rust):** ✅ Correctly using `tauri-plugin-dialog`
+
 ```rust
 use tauri_plugin_dialog::DialogExt;
 
@@ -77,6 +81,7 @@ let dir_path = app
 ```
 
 **Simple Dialogs (Frontend - TypeScript):** ❌ Using `window.confirm()` and `alert()`
+
 - No imports from `@tauri-apps/plugin-dialog` in frontend
 - Relying on Tauri's runtime polyfill of global window functions
 
@@ -100,15 +105,16 @@ let dir_path = app
 
 ## Risk Assessment
 
-| Instance | Type | Risk Level | Reason |
-|----------|------|-----------|---------|
-| Line 51 (confirm) | Confirmation | 🟡 Medium | Fixed with `await`, but TypeScript won't catch if removed |
-| Line 61 (alert) | Information | 🟡 Medium | Should be awaited; execution continues without blocking |
-| Line 65 (alert) | Error | 🟡 Medium | Same as line 61 |
+| Instance          | Type         | Risk Level | Reason                                                    |
+| ----------------- | ------------ | ---------- | --------------------------------------------------------- |
+| Line 51 (confirm) | Confirmation | 🟡 Medium  | Fixed with `await`, but TypeScript won't catch if removed |
+| Line 61 (alert)   | Information  | 🟡 Medium  | Should be awaited; execution continues without blocking   |
+| Line 65 (alert)   | Error        | 🟡 Medium  | Same as line 61                                           |
 
 **Overall Risk:** 🟡 Medium
 
 While the current code works with `await` on `window.confirm()`, there's no type enforcement. Future developers might:
+
 - Forget `await` on new dialog calls
 - Remove `await` during refactoring
 - Not realize `alert()` should also be awaited
@@ -120,6 +126,7 @@ While the current code works with `await` on `window.confirm()`, there's no type
 ### Option 1: Migrate to Tauri Dialog Plugin (Recommended)
 
 **Pros:**
+
 - ✅ Full type safety
 - ✅ Proper async/await enforcement by TypeScript
 - ✅ More customization options (icons, titles, button labels)
@@ -127,43 +134,44 @@ While the current code works with `await` on `window.confirm()`, there's no type
 - ✅ Better error messages if used incorrectly
 
 **Cons:**
+
 - Requires imports and slightly more code
 - Need to update existing code
 
 **Implementation:**
 
 ```typescript
-import { confirm, message } from '@tauri-apps/plugin-dialog';
+import { confirm, message } from "@tauri-apps/plugin-dialog";
 
 async function handleResetDatabase() {
-  isSettingsOpen = false;
+	isSettingsOpen = false;
 
-  // Confirmation dialog with proper types
-  const confirmed = await confirm(
-    "Are you sure you want to reset the database? This will delete all imported game data and cannot be undone.",
-    { title: "Per Ankh", kind: "warning" }
-  );
+	// Confirmation dialog with proper types
+	const confirmed = await confirm(
+		"Are you sure you want to reset the database? This will delete all imported game data and cannot be undone.",
+		{ title: "Per Ankh", kind: "warning" },
+	);
 
-  if (!confirmed) {
-    return;
-  }
+	if (!confirmed) {
+		return;
+	}
 
-  try {
-    await api.resetDatabase();
-    // Success message
-    await message("Database reset successfully.", {
-      title: "Success",
-      kind: "info"
-    });
-    refreshData.trigger();
-  } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    // Error message
-    await message(`Failed to reset database: ${errorMsg}`, {
-      title: "Error",
-      kind: "error"
-    });
-  }
+	try {
+		await api.resetDatabase();
+		// Success message
+		await message("Database reset successfully.", {
+			title: "Success",
+			kind: "info",
+		});
+		refreshData.trigger();
+	} catch (err) {
+		const errorMsg = err instanceof Error ? err.message : String(err);
+		// Error message
+		await message(`Failed to reset database: ${errorMsg}`, {
+			title: "Error",
+			kind: "error",
+		});
+	}
 }
 ```
 
@@ -176,17 +184,19 @@ Create `src/ambient.d.ts`:
 ```typescript
 // Override browser types for Tauri environment
 interface Window {
-  confirm(message?: string): Promise<boolean>;
-  alert(message?: string): Promise<void>;
-  prompt(message?: string, defaultValue?: string): Promise<string | null>;
+	confirm(message?: string): Promise<boolean>;
+	alert(message?: string): Promise<void>;
+	prompt(message?: string, defaultValue?: string): Promise<string | null>;
 }
 ```
 
 **Pros:**
+
 - ✅ Makes existing code type-safe
 - ✅ Minimal code changes
 
 **Cons:**
+
 - ❌ Maintenance burden
 - ❌ May confuse developers familiar with browser APIs
 - ❌ Doesn't prevent using wrong API in browser context
@@ -199,10 +209,12 @@ interface Window {
 Continue using `window.confirm()` and `alert()` with `await`.
 
 **Pros:**
+
 - ✅ No code changes needed
 - ✅ Simple and familiar
 
 **Cons:**
+
 - ❌ No TypeScript enforcement
 - ❌ Easy to forget `await`
 - ❌ Inconsistent with backend
@@ -237,13 +249,13 @@ The plugin provides proper TypeScript definitions:
 ```typescript
 // From @tauri-apps/plugin-dialog
 declare function confirm(
-  message: string,
-  options?: string | ConfirmDialogOptions
+	message: string,
+	options?: string | ConfirmDialogOptions,
 ): Promise<boolean>;
 
 declare function message(
-  message: string,
-  options?: string | MessageDialogOptions
+	message: string,
+	options?: string | MessageDialogOptions,
 ): Promise<void>;
 ```
 
@@ -252,6 +264,7 @@ declare function message(
 ## Conclusion
 
 While the current implementation works (with `await` added after the recent bug), it's recommended to migrate to the Tauri dialog plugin for:
+
 1. Type safety
 2. Consistency with backend
 3. Better developer experience

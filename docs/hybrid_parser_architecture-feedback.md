@@ -18,29 +18,29 @@ Key risks and how to mitigate
 
 - Memory growth (40–60 MB GameData): Avoid gratuitous string allocation. Prefer borrowing when possible.
 
- ▫ Use ‎⁠Cow<'a, str>⁠ in data structs where values come directly from the DOM, and only allocate when transforms (lowercasing) or lifetimes require ownership.
+▫ Use ‎⁠Cow<'a, str>⁠ in data structs where values come directly from the DOM, and only allocate when transforms (lowercasing) or lifetimes require ownership.
 
- ▫ Consider a string interner (e.g., lasso) for repeated tags like nations, religions, dynasties to cut duplication.
+▫ Consider a string interner (e.g., lasso) for repeated tags like nations, religions, dynasties to cut duplication.
 
 - Serializer format durability: ‎⁠bincode⁠ is compact but not self-describing and fragile across schema changes.
 
- ▫ Add a cache header with magic bytes, version, and a schema hash. Consider compression (zstd) and a checksum.
+▫ Add a cache header with magic bytes, version, and a schema hash. Consider compression (zstd) and a checksum.
 
- ▫ If you expect schema evolution, prefer a versioned format (e.g., MessagePack/CBOR) or keep bincode but gate read by version with explicit migrations.
+▫ If you expect schema evolution, prefer a versioned format (e.g., MessagePack/CBOR) or keep bincode but gate read by version with explicit migrations.
 
 - Foreign key correctness and failure visibility: DuckDB Appender errors inside a big transaction can be opaque.
 
- ▫ Use savepoints per entity to isolate failures and surface counts of successfully inserted rows.
+▫ Use savepoints per entity to isolate failures and surface counts of successfully inserted rows.
 
- ▫ Precompute FK presence maps (XML ID sets) to validate before insertion; emit precise diagnostics for missing parents/cities.
+▫ Precompute FK presence maps (XML ID sets) to validate before insertion; emit precise diagnostics for missing parents/cities.
 
 - Parallel orchestration granularity: ‎⁠join4⁠ is fine for a few heavy tasks, but as entities grow, static joins get unwieldy.
 
- ▫ For many independent entity parsers, a ‎⁠par_iter()⁠ over a task list with fallible results scales better than nesting ‎⁠joinX⁠. Aggregate with a custom error type that collects multiple parse errors.
+▫ For many independent entity parsers, a ‎⁠par_iter()⁠ over a task list with fallible results scales better than nesting ‎⁠joinX⁠. Aggregate with a custom error type that collects multiple parse errors.
 
 - DOM vs streaming: You’re building on roxmltree DOM, which simplifies traversal but costs memory and forces full-parse upfront.
 
- ▫ Keep DOM for now, but consider streaming (‎⁠quick-xml⁠) for very large saves later. You could implement streaming for the worst offenders (tiles/timeseries) behind a feature gate, still feeding into the same GameData.
+▫ Keep DOM for now, but consider streaming (‎⁠quick-xml⁠) for very large saves later. You could implement streaming for the worst offenders (tiles/timeseries) behind a feature gate, still feeding into the same GameData.
 
 - ID mapping strategy: Currently map during insertion; this is fine. If you ever need FK resolution in-memory (for diffs/exports), add a lightweight preassigned ID plan (e.g., compute DB IDs deterministically from insertion order) to enable in-memory joins without DB.
 

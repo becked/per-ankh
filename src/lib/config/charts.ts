@@ -23,12 +23,12 @@
  * - Dark Goldenrod (#B8860B)
  */
 export const CHART_COLORS = [
-  "#C87941", // Copper
-  "#8B4513", // Saddle Brown
-  "#CD853F", // Peru
-  "#A0522D", // Sienna
-  "#D2691E", // Chocolate
-  "#B8860B", // Dark Goldenrod
+	"#C87941", // Copper
+	"#8B4513", // Saddle Brown
+	"#CD853F", // Peru
+	"#A0522D", // Sienna
+	"#D2691E", // Chocolate
+	"#B8860B", // Dark Goldenrod
 ] as const;
 
 /**
@@ -37,26 +37,26 @@ export const CHART_COLORS = [
  * Provides consistent styling across all charts in the application.
  */
 export const CHART_THEME = {
-  colors: CHART_COLORS,
-  backgroundColor: "#211A12", // Blue-gray background matches main UI
-  animation: false, // Disable initial animation for smoother page transitions
-  textStyle: {
-    fontFamily: "Arial, sans-serif",
-    color: "#FFFFFF", // White text for dark background
-  },
-  title: {
-    left: "center",
-    textStyle: {
-      color: "#FFFFFF",
-      fontSize: 20,
-    },
-  },
-  legend: {
-    show: false, // Hide legend - colors consistently represent nations, info available in tooltips
-  },
-  tooltip: {
-    trigger: "axis",
-  },
+	colors: CHART_COLORS,
+	backgroundColor: "#211A12", // Blue-gray background matches main UI
+	animation: false, // Disable initial animation for smoother page transitions
+	textStyle: {
+		fontFamily: "Arial, sans-serif",
+		color: "#FFFFFF", // White text for dark background
+	},
+	title: {
+		left: "center",
+		textStyle: {
+			color: "#FFFFFF",
+			fontSize: 20,
+		},
+	},
+	legend: {
+		show: false, // Hide legend - colors consistently represent nations, info available in tooltips
+	},
+	tooltip: {
+		trigger: "axis",
+	},
 } as const;
 
 /**
@@ -67,5 +67,5 @@ export const CHART_THEME = {
  * @returns Hex color code
  */
 export function getChartColor(index: number): string {
-  return CHART_COLORS[index % CHART_COLORS.length];
+	return CHART_COLORS[index % CHART_COLORS.length];
 }

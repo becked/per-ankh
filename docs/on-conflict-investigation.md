@@ -16,6 +16,7 @@ All `INSERT...ON CONFLICT` clauses in the performance-critical import paths are 
 ### 1. Import Flow is Always Fresh
 
 From `src-tauri/src/parser/import.rs:226-227`:
+
 ```rust
 // Create IdMapper for fresh import (is_new = true)
 let mut id_mapper = IdMapper::new(match_id, tx, true)?;
@@ -26,6 +27,7 @@ Every import creates a **new** match_id and starts with empty tables for that ma
 ### 2. Duplicate Detection Happens Before Import
 
 From `src-tauri/src/parser/import.rs:186-206`:
+
 ```rust
 // Check if this exact save (game_id, turn) already exists
 let existing_match: Option<(i64, String)> = tx
@@ -99,6 +101,7 @@ These may have ON CONFLICT for legitimate reasons (e.g., aggregating duplicate d
 ### Phase 1: Remove ON CONFLICT in Performance-Critical Paths
 
 **Target files:**
+
 - `id_mapper.rs`: Remove from `save_mappings_partial` (Bottleneck #2, 32.9% of import time)
 - `character_data.rs`: Remove from stats, traits, relationships, marriages (Bottleneck #1, 35.4% of import time)
 
@@ -108,6 +111,7 @@ Use DuckDB **Appender API** which doesn't support ON CONFLICT clauses but is 10-
 ### Phase 2: Monitor for Issues
 
 After deploying the optimizations:
+
 - Monitor logs for any constraint violation errors
 - If duplicates appear (unexpected), investigate XML structure
 - Can add explicit de-duplication in code if needed (cheaper than ON CONFLICT on every insert)

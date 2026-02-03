@@ -10,7 +10,7 @@ import { confirm, message } from "@tauri-apps/plugin-dialog";
  */
 export async function showConfirm(
 	msg: string,
-	title: string = "Confirm"
+	title: string = "Confirm",
 ): Promise<boolean> {
 	return await confirm(msg, { title, kind: "warning" });
 }
@@ -23,7 +23,7 @@ export async function showConfirm(
  */
 export async function showSuccess(
 	msg: string,
-	title: string = "Success"
+	title: string = "Success",
 ): Promise<void> {
 	await message(msg, { title, kind: "info" });
 }
@@ -36,7 +36,7 @@ export async function showSuccess(
  */
 export async function showError(
 	msg: string,
-	title: string = "Error"
+	title: string = "Error",
 ): Promise<void> {
 	await message(msg, { title, kind: "error" });
 }

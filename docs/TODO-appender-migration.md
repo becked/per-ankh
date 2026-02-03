@@ -3,6 +3,7 @@
 ## Status: ✅ COMPLETED
 
 ### Completed ✅
+
 - **Time-series parsers** (src-tauri/src/parser/entities/timeseries.rs)
   - 6 functions converted: yield_prices, military_history, points_history, etc.
   - ~31,000 rows using bulk inserts
@@ -49,6 +50,7 @@ All entity parsers have been successfully migrated to the Appender API!
 ## Migration Pattern
 
 ### Before (UPSERT - Slow)
+
 ```rust
 pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let root = doc.root_element();
@@ -77,6 +79,7 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
 ```
 
 ### After (Appender - Fast)
+
 ```rust
 pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let root = doc.root_element();
@@ -116,6 +119,7 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
 For each parser:
 
 1. **Check schema column order**
+
    ```bash
    grep -A 30 "CREATE TABLE <table_name>" docs/schema.sql
    ```
@@ -131,9 +135,11 @@ For each parser:
    - Use `None::<Type>` for NULL columns
 
 4. **Test compilation**
+
    ```bash
    cargo check
    ```
+
    Error `"Call to EndRow before all columns have been appended"` means column count mismatch!
 
 5. **Test import**
@@ -147,16 +153,20 @@ For each parser:
 ## Important Notes
 
 ### Why Appender is Faster
+
 - **UPSERT**: Each row = parse SQL + check conflict + maybe update = 3 operations
 - **Appender**: Batches all rows into single bulk insert = 1 operation
 
 ### Why We Can Remove UPSERT
+
 - Import logic now checks `(game_id, turn)` upfront (import.rs:149-171)
 - Duplicates are skipped in 0.07s - never reach entity parsers
 - Every import is fresh → no conflicts possible
 
 ### Column Order Debugging
+
 If you get `EndRow` error:
+
 ```rust
 // Count schema columns
 grep -A 50 "CREATE TABLE tiles" docs/schema.sql | grep -E "^\s+\w+ " | wc -l

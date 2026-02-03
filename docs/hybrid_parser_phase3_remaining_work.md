@@ -11,12 +11,14 @@
 Phase 3 has successfully created **parsers and inserters** for all 16 entities (~6,400 lines of code). However, many are **not yet wired up** in `import.rs` - they still call the old `entities::` code instead of the new hybrid parsers.
 
 **What's Done:**
+
 - ✅ All 16 entities have `parsers/*.rs` and `inserters/*.rs` files
 - ✅ Module exports configured correctly
 - ✅ All tests passing (120 passed, 0 failed)
 - ✅ Batch 2 entities fully wired (families, religions, tribes, unit_production)
 
 **What's Missing:**
+
 - ⚠️ Batch 1: Cities and tiles need parser/inserter implementation
 - ⚠️ Batch 3: 7 entities have parsers/inserters but aren't wired in import.rs
 
@@ -37,26 +39,26 @@ Phase 3 has successfully created **parsers and inserters** for all 16 entities (
 
 ### Entities Status Table
 
-| Entity | Parser | Inserter | Wired | Notes |
-|--------|--------|----------|-------|-------|
-| **Batch 1** |
-| players | ✅ | ✅ | ✅ | Done in Phase 2 |
-| characters | ✅ | ✅ | ✅ | Done in Batch 1 |
-| cities | ❌ | ❌ | ❌ | **Need to create** |
-| tiles | ❌ | ❌ | ❌ | **Need to create** |
-| **Batch 2** |
-| families | ✅ | ✅ | ✅ | Fully complete |
-| religions | ✅ | ✅ | ✅ | Fully complete |
-| tribes | ✅ | ✅ | ✅ | Fully complete |
-| unit_production | ✅ | ✅ | ✅ | Fully complete |
-| **Batch 3** |
-| character_data | ✅ | ✅ | ❌ | **Need to wire** |
-| city_data | ✅ | ✅ | ❌ | **Need to wire** |
-| tile_data | ✅ | ✅ | ❌ | **Need to wire** |
-| player_data | ✅ | ✅ | ❌ | **Need to wire** |
-| diplomacy | ✅ | ✅ | ❌ | **Need to wire** |
-| timeseries | ✅ | ✅ | ❌ | **Need to wire** |
-| events | ✅ | ✅ | ❌ | **Need to wire** |
+| Entity          | Parser | Inserter | Wired | Notes              |
+| --------------- | ------ | -------- | ----- | ------------------ |
+| **Batch 1**     |
+| players         | ✅     | ✅       | ✅    | Done in Phase 2    |
+| characters      | ✅     | ✅       | ✅    | Done in Batch 1    |
+| cities          | ❌     | ❌       | ❌    | **Need to create** |
+| tiles           | ❌     | ❌       | ❌    | **Need to create** |
+| **Batch 2**     |
+| families        | ✅     | ✅       | ✅    | Fully complete     |
+| religions       | ✅     | ✅       | ✅    | Fully complete     |
+| tribes          | ✅     | ✅       | ✅    | Fully complete     |
+| unit_production | ✅     | ✅       | ✅    | Fully complete     |
+| **Batch 3**     |
+| character_data  | ✅     | ✅       | ❌    | **Need to wire**   |
+| city_data       | ✅     | ✅       | ❌    | **Need to wire**   |
+| tile_data       | ✅     | ✅       | ❌    | **Need to wire**   |
+| player_data     | ✅     | ✅       | ❌    | **Need to wire**   |
+| diplomacy       | ✅     | ✅       | ❌    | **Need to wire**   |
+| timeseries      | ✅     | ✅       | ❌    | **Need to wire**   |
+| events          | ✅     | ✅       | ❌    | **Need to wire**   |
 
 ---
 
@@ -69,6 +71,7 @@ Phase 3 has successfully created **parsers and inserters** for all 16 entities (
 **Location:** `src-tauri/src/parser/import.rs:803`
 
 **Current Code:**
+
 ```rust
 fn parse_character_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
@@ -103,6 +106,7 @@ fn parse_character_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapp
 ```
 
 **New Code (Hybrid Pattern):**
+
 ```rust
 fn parse_character_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
@@ -124,6 +128,7 @@ fn parse_character_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapp
 ```
 
 **What Changed:**
+
 1. Single parse call at the top: `parse_all_character_data_struct(doc)`
 2. Replace node-by-node iteration with bulk insert calls
 3. Parse returns struct, not row counts
@@ -136,6 +141,7 @@ fn parse_character_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapp
 **Location:** `src-tauri/src/parser/import.rs:847`
 
 **Current Code:**
+
 ```rust
 fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
@@ -172,6 +178,7 @@ fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
 ```
 
 **New Code (Hybrid Pattern):**
+
 ```rust
 fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
@@ -204,6 +211,7 @@ fn parse_city_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
 **Location:** `src-tauri/src/parser/import.rs:893`
 
 **Current Code:**
+
 ```rust
 fn parse_tile_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
@@ -235,6 +243,7 @@ fn parse_tile_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
 ```
 
 **New Code (Hybrid Pattern):**
+
 ```rust
 fn parse_tile_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
@@ -261,6 +270,7 @@ fn parse_tile_extended_data_all(doc: &XmlDocument, tx: &Connection, id_mapper: &
 **Location:** `src-tauri/src/parser/import.rs:615-647`
 
 **Current Code:**
+
 ```rust
 fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
@@ -296,6 +306,7 @@ fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &Id
 ```
 
 **New Code (Hybrid Pattern):**
+
 ```rust
 fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
@@ -328,6 +339,7 @@ fn parse_player_gameplay_data(doc: &XmlDocument, tx: &Connection, id_mapper: &Id
 **Location:** `src-tauri/src/parser/import.rs:518-530`
 
 **Current Code:**
+
 ```rust
 // Parse game-level diplomacy
 log::info!("Parsing diplomacy...");
@@ -345,6 +357,7 @@ if let Some((app_h, idx, total, name, start)) = progress_params {
 ```
 
 **New Code (Hybrid Pattern):**
+
 ```rust
 // Parse game-level diplomacy - HYBRID PARSER
 log::info!("Parsing diplomacy...");
@@ -374,6 +387,7 @@ if let Some((app_h, idx, total, name, start)) = progress_params {
 **Location:** `src-tauri/src/parser/import.rs:649-697`
 
 **Current Code:**
+
 ```rust
 fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
@@ -420,6 +434,7 @@ fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMappe
 ```
 
 **New Code (Hybrid Pattern):**
+
 ```rust
 fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
@@ -451,6 +466,7 @@ fn parse_timeseries_data(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMappe
 **Location:** `src-tauri/src/parser/import.rs:924-1006`
 
 **Current Code:**
+
 ```rust
 fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     let root = doc.root_element();
@@ -505,6 +521,7 @@ fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper)
 ```
 
 **New Code (Hybrid Pattern):**
+
 ```rust
 fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper) -> Result<()> {
     // Parse to structs (pure, no DB)
@@ -535,6 +552,7 @@ fn parse_event_stories(doc: &XmlDocument, tx: &Connection, id_mapper: &IdMapper)
 **Reference:** Look at `src-tauri/src/parser/entities/cities.rs` for the current implementation.
 
 **Pattern to follow:**
+
 ```rust
 // src-tauri/src/parser/parsers/cities.rs
 
@@ -589,6 +607,7 @@ mod tests {
 ### 2.2 Create `inserters/cities.rs`
 
 **Pattern to follow:**
+
 ```rust
 // src-tauri/src/parser/inserters/cities.rs
 
@@ -667,6 +686,7 @@ pub fn insert_cities(
 **Location:** `src-tauri/src/parser/import.rs:391-396`
 
 **Change from:**
+
 ```rust
 // 4. Cities (depends on players, tiles)
 let t_cities = Instant::now();
@@ -677,6 +697,7 @@ eprintln!("⏱️    Cities: {:?} ({} cities)", cities_time, cities_count);
 ```
 
 **Change to:**
+
 ```rust
 // 4. Cities - HYBRID PARSER (depends on players, tiles)
 let t_cities = Instant::now();
@@ -703,6 +724,7 @@ eprintln!("⏱️    Cities: {:?} ({} cities)", cities_time, cities_count);
 Follow the same pattern as cities. Reference `src-tauri/src/parser/entities/tiles.rs`.
 
 **Key considerations:**
+
 - Tiles have a complex `TileData` struct with ownership history vectors
 - The parser should extract ALL tile data in one pass
 - Ownership history is nested: `<Tile><OwnerHistory><Player ID="..."/></OwnerHistory></Tile>`
@@ -716,6 +738,7 @@ Follow the same pattern as cities. Reference `src-tauri/src/parser/entities/tile
 3. **Pass 2c:** Insert ownership history after Pass 2b
 
 **Example structure:**
+
 ```rust
 /// Insert core tile data (Pass 1)
 pub fn insert_tiles_core(
@@ -751,6 +774,7 @@ pub fn insert_tile_ownership_history(
 **Change multiple locations:**
 
 **Location 1:** `src-tauri/src/parser/import.rs:384-389` (Tiles core)
+
 ```rust
 // 3. Tiles - HYBRID PARSER (depends on players for ownership)
 let t_tiles = Instant::now();
@@ -767,6 +791,7 @@ eprintln!("⏱️    Tiles: {:?} ({} tiles)", tiles_time, tiles_count);
 ```
 
 **Location 2:** `src-tauri/src/parser/import.rs:398-412` (Pass 2b and 2c)
+
 ```rust
 // Pass 2b - Update tile city ownership after cities are created
 log::info!("Updating tile city ownership (Pass 2b)...");
@@ -794,12 +819,14 @@ eprintln!("⏱️    Tile ownership history: {:?}", tile_history_time);
 ### After Each Entity Migration
 
 1. **Compile check:**
+
    ```bash
    cd src-tauri
    cargo check
    ```
 
 2. **Run tests:**
+
    ```bash
    cargo test --lib
    ```
@@ -807,6 +834,7 @@ eprintln!("⏱️    Tile ownership history: {:?}", tile_history_time);
    All 120+ tests should still pass.
 
 3. **Test import with real save file:**
+
    ```bash
    cargo test test_import_real_save_file -- --nocapture
    ```
@@ -814,6 +842,7 @@ eprintln!("⏱️    Tile ownership history: {:?}", tile_history_time);
    Check logs for timing and counts. Verify no errors.
 
 4. **Manual smoke test:**
+
    ```bash
    cd ..
    npm run tauri dev
@@ -850,6 +879,7 @@ After all entities wired up:
 ### Issue: Type Mismatch Errors
 
 **Problem:**
+
 ```
 error[E0308]: mismatched types
   expected `Option<i64>`, found `Option<i32>`
@@ -857,18 +887,21 @@ error[E0308]: mismatched types
 
 **Solution:**
 Check that XML IDs vs DB IDs are being used correctly:
+
 - Parsers use `i32` (XML IDs)
 - Inserters convert to `i64` (DB IDs) via `id_mapper`
 
 ### Issue: Missing Foreign Key
 
 **Problem:**
+
 ```
 ParseError: Failed to find character mapping for XML ID 42
 ```
 
 **Solution:**
 Check insertion order. The entity being referenced must be inserted first:
+
 - Players before characters
 - Characters before families/religions/tribes
 - Cities before city_data
@@ -876,6 +909,7 @@ Check insertion order. The entity being referenced must be inserted first:
 ### Issue: Duplicate Key Violation
 
 **Problem:**
+
 ```
 Constraint Error: Duplicate key "PRIMARY" in table "cities"
 ```
@@ -886,11 +920,13 @@ Ensure `deduplicate_rows_last_wins()` is being called before insertion.
 ### Issue: Tests Failing
 
 **Problem:**
+
 ```
 test parser::tests::tests::test_import_real_save_file ... FAILED
 ```
 
 **Solution:**
+
 1. Run with `--nocapture` to see logs:
    ```bash
    cargo test test_import_real_save_file -- --nocapture
@@ -953,6 +989,7 @@ See `docs/hybrid_parser_migration_plan_v2.md` Phase 4 for details.
 ## Questions?
 
 If you encounter issues:
+
 1. Check the migration plan: `docs/hybrid_parser_migration_plan_v2.md`
 2. Review existing hybrid parsers: `parsers/players.rs`, `parsers/characters.rs`, etc.
 3. Review existing hybrid inserters: `inserters/players.rs`, `inserters/characters.rs`, etc.

@@ -13,12 +13,14 @@ Two data parsing issues affected the Cities tab display. Both have been fixed.
 **Root Cause:** Parser tried to parse culture level as integer, but XML stores it as a string enum.
 
 **Solution Implemented:** Changed `culture_level` from `INTEGER` to `VARCHAR` throughout the stack:
+
 - Schema: `culture_level VARCHAR` in `city_culture` table
 - Rust structs: `culture_level: Option<String>`
 - Parser: Stores string directly without conversion
 - TypeScript: `culture_level: string | null`
 
 **Files Modified:**
+
 - `docs/schema.sql` - Schema type change
 - `src-tauri/src/db/schema.rs` - Bumped schema version to 2.10.0
 - `src-tauri/src/lib.rs` - CityInfo struct
@@ -68,6 +70,7 @@ let unit_production_count = city_node
 ```
 
 **Files Modified:**
+
 - `src-tauri/src/parser/parsers/cities.rs` - Added fallback logic and tests
 - `docs/reference/city-data.md` - Updated documentation
 

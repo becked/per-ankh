@@ -11,6 +11,7 @@
 ### User Pain Point
 
 Users need to import large numbers of save files:
+
 - **Initial onboarding**: 76-266 completed saves to import
 - **Ongoing usage**: 1-3 new saves per week
 - **Current performance**: ~213ms per save = 56 seconds for 266 saves (unacceptable UX)
@@ -18,11 +19,13 @@ Users need to import large numbers of save files:
 ### Root Cause
 
 Current sequential import architecture:
+
 1. Parse save file (CPU-bound) → 106ms
 2. Insert to database (IO-bound) → 50ms
 3. **Repeat for each file sequentially**
 
 This is inefficient because:
+
 - Parsing is CPU-bound and embarrassingly parallel
 - We have 4-8 CPU cores sitting idle
 - Database insertion time could be overlapped with parsing
@@ -262,22 +265,22 @@ pub fn insert_save_to_db(
 // src/lib/api.ts
 
 export interface BatchImportProgress {
-  totalFiles: number;
-  completed: number;
-  currentFile: string;
-  failedFiles: Array<[string, string]>;
+	totalFiles: number;
+	completed: number;
+	currentFile: string;
+	failedFiles: Array<[string, string]>;
 }
 
 export interface BatchImportResult {
-  successful: Array<{ matchId: number; filePath: string }>;
-  failed: Array<[string, string]>;
+	successful: Array<{ matchId: number; filePath: string }>;
+	failed: Array<[string, string]>;
 }
 
 export const api = {
-  // ... existing commands ...
+	// ... existing commands ...
 
-  importSavesBatch: (filePaths: string[]) =>
-    invoke<BatchImportResult>("import_saves_batch", { filePaths }),
+	importSavesBatch: (filePaths: string[]) =>
+		invoke<BatchImportResult>("import_saves_batch", { filePaths }),
 } as const;
 ```
 
@@ -286,131 +289,137 @@ export const api = {
 ```svelte
 <!-- src/lib/components/BatchImportProgress.svelte -->
 <script lang="ts">
-  import { listen } from "@tauri-apps/api/event";
-  import { onMount, onDestroy } from "svelte";
-  import type { BatchImportProgress } from "$lib/api";
+	import { listen } from "@tauri-apps/api/event";
+	import { onMount, onDestroy } from "svelte";
+	import type { BatchImportProgress } from "$lib/api";
 
-  let progress = $state<BatchImportProgress>({
-    totalFiles: 0,
-    completed: 0,
-    currentFile: "",
-    failedFiles: [],
-  });
+	let progress = $state<BatchImportProgress>({
+		totalFiles: 0,
+		completed: 0,
+		currentFile: "",
+		failedFiles: [],
+	});
 
-  let unlisten: (() => void) | null = null;
+	let unlisten: (() => void) | null = null;
 
-  onMount(async () => {
-    unlisten = await listen<BatchImportProgress>("import-progress", (event) => {
-      progress = event.payload;
-    });
-  });
+	onMount(async () => {
+		unlisten = await listen<BatchImportProgress>("import-progress", (event) => {
+			progress = event.payload;
+		});
+	});
 
-  onDestroy(() => {
-    if (unlisten) unlisten();
-  });
+	onDestroy(() => {
+		if (unlisten) unlisten();
+	});
 
-  $derived percentage = progress.totalFiles > 0
-    ? (progress.completed / progress.totalFiles) * 100
-    : 0;
+	let percentage = $derived(
+		progress.totalFiles > 0
+			? (progress.completed / progress.totalFiles) * 100
+			: 0,
+	);
 </script>
 
 <div class="import-progress">
-  <div class="progress-header">
-    <h3>Importing Save Files</h3>
-    <span class="progress-count">
-      {progress.completed} / {progress.totalFiles}
-    </span>
-  </div>
+	<div class="progress-header">
+		<h3>Importing Save Files</h3>
+		<span class="progress-count">
+			{progress.completed} / {progress.totalFiles}
+		</span>
+	</div>
 
-  <div class="progress-bar-container">
-    <div class="progress-bar" style="width: {percentage}%"></div>
-  </div>
+	<div class="progress-bar-container">
+		<div class="progress-bar" style="width: {percentage}%"></div>
+	</div>
 
-  {#if progress.currentFile}
-    <p class="current-file">
-      Importing: <span class="filename">{progress.currentFile}</span>
-    </p>
-  {/if}
+	{#if progress.currentFile}
+		<p class="current-file">
+			Importing: <span class="filename">{progress.currentFile}</span>
+		</p>
+	{/if}
 
-  {#if progress.failedFiles.length > 0}
-    <details class="failed-imports">
-      <summary>
-        {progress.failedFiles.length} failed import{progress.failedFiles.length !== 1 ? 's' : ''}
-      </summary>
-      <ul>
-        {#each progress.failedFiles as [file, error]}
-          <li>
-            <strong>{file}:</strong> {error}
-          </li>
-        {/each}
-      </ul>
-    </details>
-  {/if}
+	{#if progress.failedFiles.length > 0}
+		<details class="failed-imports">
+			<summary>
+				{progress.failedFiles.length} failed import{progress.failedFiles
+					.length !== 1
+					? "s"
+					: ""}
+			</summary>
+			<ul>
+				{#each progress.failedFiles as [file, error]}
+					<li>
+						<strong>{file}:</strong>
+						{error}
+					</li>
+				{/each}
+			</ul>
+		</details>
+	{/if}
 </div>
 
 <style>
-  .import-progress {
-    padding: 1rem;
-    background: var(--color-tan);
-    border: 2px solid var(--color-brown);
-    border-radius: 4px;
-  }
+	.import-progress {
+		padding: 1rem;
+		background: var(--color-tan);
+		border: 2px solid var(--color-brown);
+		border-radius: 4px;
+	}
 
-  .progress-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 1rem;
-  }
+	.progress-header {
+		display: flex;
+		justify-content: space-between;
+		align-items: center;
+		margin-bottom: 1rem;
+	}
 
-  .progress-bar-container {
-    width: 100%;
-    height: 24px;
-    background: var(--color-sand);
-    border: 1px solid var(--color-brown);
-    border-radius: 4px;
-    overflow: hidden;
-  }
+	.progress-bar-container {
+		width: 100%;
+		height: 24px;
+		background: var(--color-sand);
+		border: 1px solid var(--color-brown);
+		border-radius: 4px;
+		overflow: hidden;
+	}
 
-  .progress-bar {
-    height: 100%;
-    background: var(--color-brown);
-    transition: width 0.3s ease;
-  }
+	.progress-bar {
+		height: 100%;
+		background: var(--color-brown);
+		transition: width 0.3s ease;
+	}
 
-  .current-file {
-    margin-top: 0.5rem;
-    font-size: 0.875rem;
-    color: var(--color-brown);
-  }
+	.current-file {
+		margin-top: 0.5rem;
+		font-size: 0.875rem;
+		color: var(--color-brown);
+	}
 
-  .filename {
-    font-family: monospace;
-    font-weight: bold;
-  }
+	.filename {
+		font-family: monospace;
+		font-weight: bold;
+	}
 
-  .failed-imports {
-    margin-top: 1rem;
-    padding: 0.5rem;
-    background: rgba(255, 0, 0, 0.1);
-    border-radius: 4px;
-  }
+	.failed-imports {
+		margin-top: 1rem;
+		padding: 0.5rem;
+		background: rgba(255, 0, 0, 0.1);
+		border-radius: 4px;
+	}
 
-  .failed-imports summary {
-    cursor: pointer;
-    font-weight: bold;
-    color: #d32f2f;
-  }
+	.failed-imports summary {
+		cursor: pointer;
+		font-weight: bold;
+		color: #d32f2f;
+	}
 
-  .failed-imports ul {
-    margin-top: 0.5rem;
-    padding-left: 1.5rem;
-  }
+	.failed-imports ul {
+		margin-top: 0.5rem;
+		padding-left: 1.5rem;
+	}
 
-  .failed-imports li {
-    margin-bottom: 0.25rem;
-    font-size: 0.875rem;
-  }
+	.failed-imports li {
+		margin-bottom: 0.25rem;
+		font-size: 0.875rem;
+	}
 </style>
 ```
 
@@ -419,66 +428,66 @@ export const api = {
 ```svelte
 <!-- src/routes/import/+page.svelte -->
 <script lang="ts">
-  import { api } from "$lib/api";
-  import { open } from "@tauri-apps/plugin-dialog";
-  import BatchImportProgress from "$lib/components/BatchImportProgress.svelte";
+	import { api } from "$lib/api";
+	import { open } from "@tauri-apps/plugin-dialog";
+	import BatchImportProgress from "$lib/components/BatchImportProgress.svelte";
 
-  let isImporting = $state(false);
-  let importResult = $state<BatchImportResult | null>(null);
+	let isImporting = $state(false);
+	let importResult = $state<BatchImportResult | null>(null);
 
-  async function selectAndImportSaves() {
-    const files = await open({
-      multiple: true,
-      filters: [{
-        name: "Old World Saves",
-        extensions: ["zip"]
-      }]
-    });
+	async function selectAndImportSaves() {
+		const files = await open({
+			multiple: true,
+			filters: [
+				{
+					name: "Old World Saves",
+					extensions: ["zip"],
+				},
+			],
+		});
 
-    if (!files || files.length === 0) return;
+		if (!files || files.length === 0) return;
 
-    isImporting = true;
+		isImporting = true;
 
-    try {
-      importResult = await api.importSavesBatch(files);
-    } catch (error) {
-      console.error("Batch import failed:", error);
-      alert(`Import failed: ${error}`);
-    } finally {
-      isImporting = false;
-    }
-  }
+		try {
+			importResult = await api.importSavesBatch(files);
+		} catch (error) {
+			console.error("Batch import failed:", error);
+			alert(`Import failed: ${error}`);
+		} finally {
+			isImporting = false;
+		}
+	}
 </script>
 
 <div class="import-page">
-  <h1>Import Save Files</h1>
+	<h1>Import Save Files</h1>
 
-  {#if !isImporting && !importResult}
-    <button onclick={selectAndImportSaves}>
-      Select Save Files to Import
-    </button>
-  {/if}
+	{#if !isImporting && !importResult}
+		<button onclick={selectAndImportSaves}>
+			Select Save Files to Import
+		</button>
+	{/if}
 
-  {#if isImporting}
-    <BatchImportProgress />
-  {/if}
+	{#if isImporting}
+		<BatchImportProgress />
+	{/if}
 
-  {#if importResult}
-    <div class="import-results">
-      <h2>Import Complete</h2>
-      <p>Successfully imported {importResult.successful.length} save(s)</p>
+	{#if importResult}
+		<div class="import-results">
+			<h2>Import Complete</h2>
+			<p>Successfully imported {importResult.successful.length} save(s)</p>
 
-      {#if importResult.failed.length > 0}
-        <p class="error">
-          Failed to import {importResult.failed.length} save(s)
-        </p>
-      {/if}
+			{#if importResult.failed.length > 0}
+				<p class="error">
+					Failed to import {importResult.failed.length} save(s)
+				</p>
+			{/if}
 
-      <button onclick={() => importResult = null}>
-        Import More Saves
-      </button>
-    </div>
-  {/if}
+			<button onclick={() => (importResult = null)}> Import More Saves </button>
+		</div>
+	{/if}
 </div>
 ```
 
@@ -489,6 +498,7 @@ export const api = {
 ### Memory Usage Per Save
 
 From hybrid parser architecture doc:
+
 ```
 GameData struct: ~60MB per save (compressed in memory)
 ```
@@ -717,6 +727,7 @@ fn bench_batch_import(c: &mut Criterion) {
 ### Phase 1: Implement Hybrid Parser (Week 1-5)
 
 From `hybrid_parser_architecture.md`:
+
 1. Create GameData structs
 2. Create pure parser functions
 3. Create inserter functions
@@ -751,12 +762,12 @@ From `hybrid_parser_architecture.md`:
 
 ### Success Criteria
 
-| Scenario | Current | Target | Improvement |
-|----------|---------|--------|-------------|
-| 1 save | 213ms | 157ms | 1.4x faster |
-| 10 saves | 2.1s | 0.8s | 2.6x faster |
-| 76 saves | 16.2s | 3.8s | 4.3x faster |
-| 266 saves | 56.6s | 13.3s | 4.3x faster |
+| Scenario  | Current | Target | Improvement |
+| --------- | ------- | ------ | ----------- |
+| 1 save    | 213ms   | 157ms  | 1.4x faster |
+| 10 saves  | 2.1s    | 0.8s   | 2.6x faster |
+| 76 saves  | 16.2s   | 3.8s   | 4.3x faster |
+| 266 saves | 56.6s   | 13.3s  | 4.3x faster |
 
 **Primary goal**: Import 266 saves in under 15 seconds ✅
 
@@ -801,6 +812,7 @@ rayon::scope(|s| {
 ```
 
 **Rejected because**:
+
 - DuckDB connection pool complexity
 - Lock contention on single DB file
 - No atomicity guarantee
@@ -817,6 +829,7 @@ for path in file_paths {
 ```
 
 **Rejected because**:
+
 - No parallelism benefit
 - Simpler but much slower
 - Doesn't address user pain point
@@ -833,6 +846,7 @@ for path in file_paths {
 ```
 
 **Rejected because**:
+
 - Progress tracking complexity
 - Error handling complexity
 - No clear advantage over two-stage pipeline
@@ -850,6 +864,7 @@ The parallel batch import architecture leverages the hybrid parser to achieve:
 ✅ **Robust error handling** (one bad save doesn't block batch)
 
 **Next Steps**:
+
 1. Complete hybrid parser migration (Weeks 1-5)
 2. Implement batch import backend (Week 6)
 3. Build batch import UI (Week 7)

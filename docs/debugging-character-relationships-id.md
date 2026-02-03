@@ -25,6 +25,7 @@ Missing required element: RelationshipData.ID
 ## Reproduction Steps
 
 1. Run the import tool on the Babylonia save file:
+
    ```bash
    cd src-tauri
    cargo run --example import_save -- ../test-data/saves/OW-Babylonia-Year123-2024-01-31-22-44-04.zip
@@ -51,6 +52,7 @@ let target_character_xml_id: i32 = rel_node.req_child_text("ID")?;
 However, the actual XML structure in Old World save files shows that `RelationshipData` can have different structures:
 
 **Case 1: Standard relationship (has ID)**
+
 ```xml
 <RelationshipData>
     <Type>RELATIONSHIP_PLOTTING_AGAINST</Type>
@@ -60,6 +62,7 @@ However, the actual XML structure in Old World save files shows that `Relationsh
 ```
 
 **Case 2: Self-relationship or special case (no ID)**
+
 ```xml
 <RelationshipData>
     <Type>RELATIONSHIP_SOME_TYPE</Type>
@@ -132,6 +135,7 @@ CREATE TABLE character_relationships (
 ```
 
 **Options:**
+
 1. Keep `target_character_id NOT NULL` and skip relationships without IDs
 2. Change to `target_character_id BIGINT` (nullable) to preserve all relationships
 
@@ -142,12 +146,15 @@ CREATE TABLE character_relationships (
 After fixing, verify:
 
 1. **Import completes successfully:**
+
    ```bash
    cargo run --example import_save -- ../test-data/saves/OW-Babylonia-Year123-2024-01-31-22-44-04.zip
    ```
+
    Should complete without errors.
 
 2. **Check imported relationships:**
+
    ```sql
    -- Verify relationships were imported
    SELECT COUNT(*) FROM character_relationships WHERE match_id = 1;
@@ -161,6 +168,7 @@ After fixing, verify:
    ```
 
 3. **Run full test suite:**
+
    ```bash
    cargo test test_import_babylonia_save --release -- --nocapture
    ```
@@ -175,6 +183,7 @@ After fixing, verify:
 ## Expected Results After Fix
 
 With the fix in place, the import should:
+
 - ✅ Complete successfully without errors
 - ✅ Import all character relationships that have target IDs
 - ✅ Skip relationships without target IDs (log count at debug level)
@@ -186,6 +195,7 @@ With the fix in place, the import should:
 ### Import Performance (Before Failure)
 
 The import successfully processed:
+
 - **Core entities:** ~5,800 records (players, characters, cities, tiles, tribes)
 - **Derived data:** ~500 records (unit production, resources, tech, laws, council, goals)
 - **Time-series:** ~30,500 records (yield prices, military history, family opinions)

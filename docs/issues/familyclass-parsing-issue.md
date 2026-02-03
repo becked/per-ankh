@@ -13,6 +13,7 @@ The `FamilyClass` element exists in the raw XML save files but is not appearing 
 ## Current Behavior
 
 When importing save files:
+
 - Families are successfully parsed with name, head, seat, and turns_without_leader
 - The `family_class` column remains empty for all families
 - Logs show: `FamilyClass found in children: false`
@@ -91,25 +92,30 @@ fn parse_family_classes(root: &roxmltree::Node) -> Result<HashMap<String, String
 ## Possible Causes
 
 ### 1. XML Parsing Truncation
+
 - **Hypothesis:** `roxmltree::Document::parse()` might be truncating the document
 - **Evidence:** FamilyClass is at line 1562, relatively deep in the file
 - **Counter:** Root reports 2197 children, suggesting full parse
 
 ### 2. Character Encoding Issue
+
 - **Hypothesis:** FamilyClass element name contains invisible/special characters
 - **Evidence:** XML declares `encoding="utf-8"` but has BOM (`﻿<?xml`)
 - **Note:** We already handle UTF-8 BOM warnings in save_file.rs
 
 ### 3. Case Sensitivity
+
 - **Hypothesis:** Tag name case doesn't match
 - **Counter:** `grep -c "FamilyClass"` confirms exact case in XML
 - **Counter:** Other elements with same casing work fine
 
 ### 4. Namespace or Attribute Filtering
+
 - **Hypothesis:** roxmltree might filter elements based on attributes/namespaces
 - **Evidence:** None - need to check roxmltree documentation
 
 ### 5. XML Document Limit
+
 - **Hypothesis:** roxmltree has a node limit that's being hit
 - **Evidence:** Root has 2197 children but file has many more total nodes
 - **Action:** Check roxmltree docs for limits
@@ -127,6 +133,7 @@ This is acceptable for initial data import but loses information about family ar
    - Test with a minimal XML file containing only FamilyClass
 
 2. **Debug roxmltree parsing:**
+
    ```rust
    // Add after Document::parse()
    let all_elements: Vec<_> = doc.descendants().filter(|n| n.is_element()).collect();
@@ -143,6 +150,7 @@ This is acceptable for initial data import but loses information about family ar
    - But XML structure shows it should be a direct child
 
 4. **Create minimal test case:**
+
    ```xml
    <?xml version="1.0" encoding="utf-8"?>
    <Root>
@@ -152,6 +160,7 @@ This is acceptable for initial data import but loses information about family ar
      </FamilyClass>
    </Root>
    ```
+
    Test if this minimal file parses correctly.
 
 5. **Check XML well-formedness:**
@@ -165,6 +174,7 @@ This is acceptable for initial data import but loses information about family ar
 ## Alternative Solutions
 
 ### Option A: Parse from Raw String
+
 Instead of using the DOM, search the raw XML string:
 
 ```rust
@@ -178,7 +188,9 @@ fn parse_family_classes_from_string(xml_content: &str) -> Result<HashMap<String,
 **Cons:** Fragile, loses XML structure benefits
 
 ### Option B: Use Different XML Parser
+
 Try a different Rust XML library:
+
 - `quick-xml` (already a dependency)
 - `xml-rs`
 - `serde-xml-rs`
@@ -187,6 +199,7 @@ Try a different Rust XML library:
 **Cons:** Requires refactoring all parsing code
 
 ### Option C: Extract During Per-Player Parsing
+
 FamilyClass could be lazily extracted when first needed:
 
 ```rust
@@ -231,11 +244,13 @@ lazy_static! {
 2. **Strategy 2:** Fall back to `root.descendants()` which searches the entire document tree
 
 **Code Changes:**
+
 - Updated `parse_family_classes()` to try both `children()` and `descendants()`
 - Added debug logging to identify which strategy succeeds
 - Added diagnostic logging of first 50 root children if element not found
 
 **Test Results:**
+
 ```
 [INFO] Found FamilyClass in descendants (not direct child)
 [INFO] Parsed 36 family classes from FamilyClass element
@@ -244,6 +259,7 @@ lazy_static! {
 The fix successfully parses all family classes. The descendant search found the element where the direct child search failed.
 
 **Impact:**
+
 - Family classes (FAMILYCLASS_CHAMPIONS, FAMILYCLASS_HUNTERS, etc.) are now correctly populated
 - No data loss for family archetypes
 - Minimal performance impact (descendants search only runs if children search fails)

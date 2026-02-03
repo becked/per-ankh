@@ -5,6 +5,7 @@
 Currently, the `human_nation` field is derived at query time by joining the `matches` table with the `players` table and selecting the player where `is_human = true`. This works but has some inefficiencies.
 
 **Current approach** (as of fix for bug-human-nation-detection.md):
+
 ```sql
 SELECT m.match_id, m.game_name, m.save_date, m.total_turns, p.nation
 FROM matches m
@@ -33,6 +34,7 @@ LEFT JOIN (
 #### 1. Schema Migration
 
 Add column to `matches` table:
+
 ```sql
 ALTER TABLE matches ADD COLUMN human_nation VARCHAR;
 ```
@@ -46,6 +48,7 @@ Populate `human_nation` during save file import.
 **File to modify**: `src-tauri/src/parser/import.rs` (or wherever matches are inserted)
 
 **Logic**:
+
 ```rust
 // After parsing players, find human player's nation
 let human_nation = players.iter()
@@ -66,6 +69,7 @@ Simplify all queries that need human_nation:
 **File to modify**: `src-tauri/src/lib.rs`
 
 **Before**:
+
 ```sql
 SELECT m.match_id, m.game_name, m.save_date, m.total_turns, p.nation
 FROM matches m
@@ -73,6 +77,7 @@ LEFT JOIN (...) p ON ...
 ```
 
 **After**:
+
 ```sql
 SELECT match_id, game_name, save_date, total_turns, human_nation
 FROM matches
@@ -128,6 +133,7 @@ WHERE human_nation IS NULL;
 ## Priority
 
 **Low-Medium** - Current fix (using JOIN with `is_human`) solves the correctness issue. This optimization can wait until:
+
 - We notice performance issues with game list queries
 - We're doing other schema changes and can bundle this
 - We have time for nice-to-have improvements

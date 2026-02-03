@@ -58,6 +58,7 @@ The XML uses a **mixed nesting strategy**:
 Time-series data appears in **two locations**:
 
 1. **Game-level** (inside `<Game>` element):
+
    ```xml
    <Game>
      <YieldPriceHistory>
@@ -110,9 +111,11 @@ Time-series data appears in **two locations**:
 ### Updated Deliverables
 
 **Game-level parsers** (parse from `<Game>` element):
+
 - [ ] Yield price history parser (`YieldPriceHistory` → `yield_prices` table)
 
 **Player-level parsers** (parse from each `<Player>` element):
+
 - [ ] Military power history parser (`MilitaryPowerHistory` → `military_history` table)
 - [ ] Points history parser (`PointsHistory` → `points_history` table)
 - [ ] Legitimacy history parser (`LegitimacyHistory` → `legitimacy_history` table)
@@ -121,6 +124,7 @@ Time-series data appears in **two locations**:
 - [ ] Religion opinion history parser (`ReligionOpinionHistory` → `religion_opinion_history` table)
 
 **Performance optimization**:
+
 - [ ] Batch insert optimization for sparse time-series data
 - [ ] Prepared statement caching
 - [ ] Consider column-store format for very large histories
@@ -207,6 +211,7 @@ fn parse_sparse_history(
 Events and narrative data are **distributed across multiple entity types**:
 
 1. **Game-level** (inside `<Game>`):
+
    ```xml
    <Game>
      <EventStoryMaxPriority />
@@ -214,6 +219,7 @@ Events and narrative data are **distributed across multiple entity types**:
    ```
 
 2. **Player-level** (inside `<Player>`):
+
    ```xml
    <Player ID="0">
      <MissionStartedTurn>
@@ -238,6 +244,7 @@ Events and narrative data are **distributed across multiple entity types**:
    ```
 
 3. **Character-level** (inside `<Character>`):
+
    ```xml
    <Character ID="5">
      <Rating>
@@ -267,6 +274,7 @@ Events and narrative data are **distributed across multiple entity types**:
    ```
 
 4. **Goal-level** (inside `<GoalData>` within `<Player>`):
+
    ```xml
    <GoalData>
      <MissionsCompleted>
@@ -300,21 +308,25 @@ Events and narrative data are **distributed across multiple entity types**:
 ### Updated Deliverables
 
 **Character parsers** (extend existing character parser):
+
 - [ ] Character stats parser (`Rating`, `Stat` → `character_stats` table)
 - [ ] Character traits parser (`TraitTurn` → `character_traits` table)
 - [ ] Character relationships parser (`RelationshipList` → `character_relationships` table)
 - [ ] Character event story parser (`EventStoryTurn` → `story_events` table)
 
 **Player parsers** (extend player gameplay data parser):
+
 - [ ] Player mission tracking (`MissionStartedTurn` → track mission starts)
 - [ ] Player event stories (`AllEventStoryTurn`, `FamilyEventStoryTurn`, etc. → `story_events` table)
 
 **City parsers** (new module `city_data.rs`):
+
 - [ ] City production queue parser (`BuildQueue` → `city_production_queue` table)
 - [ ] City completed builds parser (`CompletedBuild` → `city_projects_completed` table)
 - [ ] City event stories (`EventStoryTurn` → `story_events` table)
 
 **NOTE**: There may not be a separate "event log" or "event outcomes" table in the XML. Events appear to be tracked as:
+
 - Turn when event occurred (stored in various `*EventStoryTurn` elements)
 - Event choices may not be stored in saves (only the outcome)
 
@@ -384,35 +396,42 @@ pub fn parse_city_extended_data(
 ### Additional Deliverables (Based on XML Discoveries)
 
 **Tile-level data**:
+
 - [ ] Tile visibility parser (`RevealedTurn`, `RevealedOwner` → `tile_visibility` table)
 - [ ] Tile history parser (`OwnerHistory`, `TerrainHistory` → `tile_changes` table)
 - [ ] Unit parser refinement (units are nested in tiles, not at root level)
 
 **City-level data** (additional):
+
 - [ ] City yield progress (`YieldProgress` → store in cities table or separate tracking)
 - [ ] City culture per team (`TeamCulture` → `city_culture` table)
 - [ ] City happiness per team (`TeamHappinessLevel` → track in cities or separate table)
 - [ ] City family influence (`PlayerFamily` → track dominant family)
 
 **Character-level data** (additional):
+
 - [ ] Character cognomen history (`CognomenHistory` → track nickname changes over time)
 
 **Player-level data** (additional):
+
 - [ ] Law change counts (`LawClassChangeCount` → update `laws.change_count`)
 - [ ] Mission counts (`MissionStartedTurn` → count missions by type)
 
 **Schema refinements**:
+
 - [ ] Review all `adopted_turn`, `completed_turn` fields - many don't have explicit turn data in XML
 - [ ] Consider adding `turn_last_seen` to entities for tracking state snapshots
 - [ ] Add `xml_path` debugging field to track where data came from
 
 **Performance optimizations**:
+
 - [ ] Profile import on large save files (100+ turns)
 - [ ] Identify bottlenecks (likely time-series bulk inserts)
 - [ ] Implement prepared statement pooling
 - [ ] Consider batched inserts for time-series (1000 rows at a time)
 
 **Testing coverage**:
+
 - [ ] Test with saves from different game versions
 - [ ] Test with saves from different nations
 - [ ] Test with saves at different turn counts (early game vs late game)
@@ -420,6 +439,7 @@ pub fn parse_city_extended_data(
 - [ ] Test concurrent imports of different saves
 
 **Documentation**:
+
 - [ ] Document XML structure patterns (root/game/player/character/city/tile nested)
 - [ ] Document sparse time-series format (`<TX>` elements)
 - [ ] Document entity ID mapping strategy
@@ -442,6 +462,7 @@ pub fn parse_city_extended_data(
 Based on the nested structure, the recommended parsing order is:
 
 ### Phase 1: Core Entities (Milestone 1-2) ✅
+
 1. Match metadata
 2. Players (core fields only)
 3. Characters (core fields only)
@@ -453,6 +474,7 @@ Based on the nested structure, the recommended parsing order is:
 9. Religions (if present as entities)
 
 ### Phase 2: Player Gameplay Data (Milestone 3) ✅
+
 1. Player resources (`YieldStockpile`)
 2. Technology progress/completion/states
 3. Council positions
@@ -460,31 +482,37 @@ Based on the nested structure, the recommended parsing order is:
 5. Player goals
 
 ### Phase 3: Diplomacy (Milestone 3) ✅
+
 1. Tribe diplomacy
 2. Team/player diplomacy
 
 ### Phase 4: Time-Series Data (Milestone 4)
+
 1. Game-level yield prices
 2. Player-level histories (military, points, legitimacy, yields, opinions)
 
 ### Phase 5: Character Extended Data (Milestone 5)
+
 1. Character stats (Rating, Stat)
 2. Character traits (TraitTurn)
 3. Character relationships (RelationshipList)
 4. Character events (EventStoryTurn)
 
 ### Phase 6: City Extended Data (Milestone 5)
+
 1. City build queues
 2. City completed builds
 3. City events
 4. City culture/happiness
 
 ### Phase 7: Tile Extended Data (Milestone 6)
+
 1. Tile visibility
 2. Tile history
 3. Tile-specific improvements/features
 
 ### Phase 8: Polish & Edge Cases (Milestone 6)
+
 1. Additional nested data fields
 2. Performance optimizations
 3. Comprehensive testing
@@ -523,6 +551,7 @@ for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
 ### Testing Strategy
 
 For each milestone, create an integration test that:
+
 1. Imports a test save file
 2. Queries the database to verify record counts
 3. Spot-checks specific data values against known XML content
@@ -531,6 +560,7 @@ For each milestone, create an integration test that:
 ### Documentation Strategy
 
 Each parser module should have:
+
 - Module-level comment with XML structure example
 - Function-level comments explaining non-obvious parsing logic
 - Examples of the actual XML being parsed

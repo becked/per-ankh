@@ -89,18 +89,21 @@ conn.execute("DROP TABLE tile_ownership_updates", [])?;
 ## Testing
 
 ### 1. Run Benchmark
+
 ```bash
 cd src-tauri
 cargo test --release --test benchmark_import -- --nocapture
 ```
 
 **Expected output**:
+
 ```
 ⏱️  Tile city ownership: 50-80ms  # Was 614ms
 ⏱️  TOTAL IMPORT TIME: 1.9-2.0s   # Was 2.5s
 ```
 
 ### 2. Verify Correctness
+
 ```bash
 # After import, check tile ownership is set
 sqlite3 per-ankh.db "SELECT COUNT(*) FROM tiles WHERE owner_city_id IS NOT NULL"
@@ -108,11 +111,13 @@ sqlite3 per-ankh.db "SELECT COUNT(*) FROM tiles WHERE owner_city_id IS NOT NULL"
 ```
 
 ### 3. Test Multiple Saves
+
 ```bash
 cargo test --release --test benchmark_import benchmark_multiple_imports -- --nocapture
 ```
 
 **Expected**:
+
 - Average time: ~1.9s per save (was ~3.0s)
 - No errors or FK violations
 

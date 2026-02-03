@@ -3,6 +3,7 @@
 **Issue**: When importing 10+ files in a batch, the app crashes silently on approximately file #10 with no error message.
 
 **Root Cause**:
+
 1. Triple-nested `rayon::join` creates excessive stack depth
 2. Memory pressure from holding multiple large objects (XML document + parsed structs) across sequential file imports
 
@@ -105,6 +106,7 @@ let tiles = tiles_res?;
 ```
 
 **What Changed**:
+
 - Stack depth reduced from 3 levels to 2
 - Players/Characters parse in parallel (left branch)
 - Cities/Tiles parse in parallel (right branch)
@@ -155,6 +157,7 @@ log::debug!("Freed parsed game data");
 ```
 
 **What Changed**:
+
 - XML document freed right after parsing (saves ~10-20 MB per file)
 - Parsed structs freed right after insertion (saves ~30-50 MB per file)
 - Debug logs help verify cleanup is happening
@@ -180,6 +183,7 @@ cargo run --release --example import_all_saves
 ### Before/After Comparison
 
 **Before**:
+
 ```
 Importing file 1-9... ✓
 Importing file 10... [CRASH - no error message]
@@ -187,6 +191,7 @@ Result: 9 succeeded, 1 failed
 ```
 
 **After**:
+
 ```
 Importing file 1-10... ✓
 Result: 10 succeeded, 0 failed
@@ -232,11 +237,13 @@ This reduces parallelism (slower) but eliminates resource exhaustion.
 ## Why This Works
 
 **Flattening**:
+
 - Triple nesting = stack frames: `join → join → join → parse`
 - Flat structure = stack frames: `join → parse`
 - 2x fewer stack frames = 2x less stack pressure
 
 **Explicit Drops**:
+
 - Without drops: File 10 might still have references to files 1-9 in memory
 - With drops: Each file is fully cleaned up before the next starts
 - Prevents memory accumulation over batch processing
@@ -246,6 +253,7 @@ This reduces parallelism (slower) but eliminates resource exhaustion.
 ## Future Improvements (YAGNI - Don't implement now)
 
 If you later need more control:
+
 - Use `rayon::scope` for even flatter structure
 - Add memory profiling instrumentation
 - Implement streaming XML parsing for very large files (>100 MB)

@@ -12,6 +12,7 @@
 This plan outlines the implementation of a Rust-based parser that extracts data from Old World game save files (ZIP archives containing XML) and loads it into a DuckDB database following the schema defined in `docs/schema.sql`.
 
 **Key Decisions:**
+
 - Full data parsing (all schema sections)
 - Store complete turn-by-turn history
 - Use GameId UUID for match identification
@@ -85,6 +86,7 @@ src-tauri/src/
 **Output:** In-memory XML document
 
 **Steps:**
+
 1. Validate file exists and is readable
 2. Open ZIP archive using `zip` crate
 3. Validate ZIP security (size limits, single XML file, no path traversal)
@@ -96,6 +98,7 @@ src-tauri/src/
 7. Validate root element is `<Root>`
 
 **Hybrid Streaming Strategy (for large files):**
+
 ```rust
 pub enum XmlParseStrategy {
     FullDom(roxmltree::Document),
@@ -130,12 +133,14 @@ pub fn parse_entity_subtree(xml_content: &str, range: (usize, usize))
 ```
 
 **Why Hybrid Approach:**
+
 - Saves can grow > 20 MB with long games
 - Full DOM wasteful for sequential entity parsing
 - Stream at root level, DOM for targeted subtrees
 - Time-series data can be streamed directly to column buffers
 
 **Security Constraints:**
+
 - Maximum compressed size: 50 MB
 - Maximum uncompressed size: 100 MB
 - Maximum entries: 10
@@ -143,6 +148,7 @@ pub fn parse_entity_subtree(xml_content: &str, range: (usize, usize))
 - Only accept files with `.xml` extension
 
 **Error Handling:**
+
 - Invalid ZIP → `ParseError::InvalidZipFile`
 - Multiple/no XML files → `ParseError::InvalidArchiveStructure`
 - File too large → `ParseError::FileTooLarge(size)`
@@ -150,6 +156,7 @@ pub fn parse_entity_subtree(xml_content: &str, range: (usize, usize))
 - XML parse failure → `ParseError::MalformedXML { location, message, context }`
 
 **ZIP Security Validation Implementation:**
+
 ```rust
 const MAX_COMPRESSED_SIZE: u64 = 50 * 1024 * 1024;   // 50 MB
 const MAX_UNCOMPRESSED_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
@@ -319,6 +326,7 @@ fn validate_and_extract_xml(file_path: &str) -> Result<String> {
 **Output:** `match_id` (new or existing)
 
 **Steps:**
+
 1. Extract `GameId` attribute from `<Root>`
 2. Compute `file_hash` (SHA-256 of file contents)
 3. Query database: `SELECT match_id FROM matches WHERE game_id = ?`
@@ -333,6 +341,7 @@ fn validate_and_extract_xml(file_path: &str) -> Result<String> {
 **Update Strategy: UPSERT for Core Entities, DELETE for Derived Data**
 
 For match updates, use **UPSERT** on core entities (stable IDs) and **DELETE-then-INSERT** for derived/aggregate tables. This approach:
+
 - Reduces churn and temporary FK holes
 - Maintains referential integrity during import
 - More resilient if concurrent read occurs mid-update
@@ -340,6 +349,7 @@ For match updates, use **UPSERT** on core entities (stable IDs) and **DELETE-the
 
 **Schema Requirements:**
 The schema already includes unique constraints on `(match_id, xml_id)` for all core entity tables:
+
 - `idx_players_xml_id` on players(match_id, xml_id)
 - `idx_characters_xml_id` on characters(match_id, xml_id)
 - `idx_cities_xml_id` on cities(match_id, xml_id)
@@ -467,6 +477,7 @@ fn upsert_character(tx: &Transaction, character: &Character) -> Result<()> {
 ```
 
 **Important Notes:**
+
 - Core entities: **UPSERT** via `ON CONFLICT (match_id, xml_id)` preserves stable database IDs
 - The `player_id` field is **updated** during UPSERT to match the IdMapper's stable ID
 - Derived tables: **DELETE-then-INSERT** for simplicity
@@ -557,6 +568,7 @@ pub fn import_save_file<P: ProgressCallback>(
 ```
 
 **Required Schema Addition:**
+
 ```sql
 -- Lock table for cross-process synchronization
 CREATE TABLE IF NOT EXISTS match_locks (
@@ -570,6 +582,7 @@ CREATE INDEX idx_match_locks_stale ON match_locks(locked_at);
 ```
 
 **Lock Cleanup (Stale Lock Detection):**
+
 ```rust
 /// Clean up stale locks (locks held > 10 minutes, likely from crashed process)
 pub fn cleanup_stale_locks(conn: &Connection) -> Result<usize> {
@@ -587,6 +600,7 @@ pub fn cleanup_stale_locks(conn: &Connection) -> Result<usize> {
 ```
 
 **Alternative: Unique Constraint Only (Simpler)**
+
 ```rust
 /// Simpler approach: rely on unique game_id constraint
 /// Two concurrent imports will race; first succeeds, second gets constraint violation
@@ -619,11 +633,13 @@ pub fn import_save_file_simple(file_path: &str, db_path: &str) -> Result<ImportR
 
 **Recommendation:**
 Use the **database-level lock table** approach for maximum safety across:
+
 - Multiple app instances
 - Concurrent imports
 - Crash resilience (stale lock cleanup)
 
 **Why This Matters:**
+
 - In-process locks only protect same-app concurrency
 - Database locks protect across multiple app instances
 - Without DB locks, two processes could corrupt same match data
@@ -638,6 +654,7 @@ Use the **database-level lock table** approach for maximum safety across:
 **Solution:** Maintain in-memory mapping during parse
 
 **IdMapper Struct:**
+
 ```rust
 pub struct IdMapper {
     match_id: i64,
@@ -926,6 +943,7 @@ impl IdMapper {
 ```
 
 **ID Stability Strategy:**
+
 - For **new matches**: Start all IDs at 1, create fresh mappings
 - For **match updates**: Load existing XML→DB mappings from `id_mappings` table
 - Database IDs remain **stable** across re-imports of same GameId
@@ -933,6 +951,7 @@ impl IdMapper {
 - IdMapper saves all mappings after successful import
 
 **Required Database Table:**
+
 ```sql
 CREATE TABLE IF NOT EXISTS id_mappings (
     match_id BIGINT NOT NULL,
@@ -947,6 +966,7 @@ CREATE INDEX idx_id_mappings_match ON id_mappings(match_id);
 ```
 
 **Why this works:**
+
 - Each new match gets fresh ID mappings
 - Same XML ID in different matches → different database IDs
 - Re-importing same match preserves database IDs via id_mappings table
@@ -1091,6 +1111,7 @@ pub fn parse_timeseries(xml: &XmlDocument, db: &Connection,
 ### Pattern 1: Top-Level Siblings (Cities, Tiles)
 
 **XML Structure:**
+
 ```xml
 <Root>
   <City ID="15" Player="0">
@@ -1106,6 +1127,7 @@ pub fn parse_timeseries(xml: &XmlDocument, db: &Connection,
 ```
 
 **Parsing Code (using roxmltree):**
+
 ```rust
 pub fn parse_cities(doc: &roxmltree::Document, tx: &Transaction,
                     id_mapper: &mut IdMapper) -> Result<()> {
@@ -1148,6 +1170,7 @@ pub fn parse_cities(doc: &roxmltree::Document, tx: &Transaction,
 ### Pattern 2: Nested Within Player (UnitsProduced, YieldStockpile)
 
 **XML Structure:**
+
 ```xml
 <Player ID="0">
   <YieldStockpile>
@@ -1162,6 +1185,7 @@ pub fn parse_cities(doc: &roxmltree::Document, tx: &Transaction,
 ```
 
 **Parsing Code (using roxmltree):**
+
 ```rust
 pub fn parse_player_resources(player_node: &roxmltree::Node, tx: &Transaction,
                                player_id: i64, match_id: i64) -> Result<()> {
@@ -1191,6 +1215,7 @@ pub fn parse_player_resources(player_node: &roxmltree::Node, tx: &Transaction,
 ### Pattern 3: Sparse Time-Series Data
 
 **XML Structure:**
+
 ```xml
 <YieldPriceHistory>
   <YIELD_GROWTH>
@@ -1203,6 +1228,7 @@ pub fn parse_player_resources(player_node: &roxmltree::Node, tx: &Transaction,
 ```
 
 **Parsing Code (using roxmltree):**
+
 ```rust
 pub fn parse_yield_price_history(doc: &roxmltree::Document, tx: &Transaction,
                                   match_id: i64) -> Result<()> {
@@ -1246,6 +1272,7 @@ pub fn parse_yield_price_history(doc: &roxmltree::Document, tx: &Transaction,
 ### Pattern 4: Self-Referential Entities (Characters)
 
 **XML Structure:**
+
 ```xml
 <Character ID="10" Father="5" Mother="8">
   <FirstName>Hantili</FirstName>
@@ -1259,6 +1286,7 @@ pub fn parse_yield_price_history(doc: &roxmltree::Document, tx: &Transaction,
 **Two-Pass Solution:**
 
 **Pass 1 - Core Data (using roxmltree):**
+
 ```rust
 pub fn parse_characters_core(doc: &roxmltree::Document, tx: &Transaction,
                              id_mapper: &mut IdMapper) -> Result<()> {
@@ -1297,6 +1325,7 @@ pub fn parse_characters_core(doc: &roxmltree::Document, tx: &Transaction,
 ```
 
 **Pass 2 - Relationships (using roxmltree):**
+
 ```rust
 pub fn update_character_parents(doc: &roxmltree::Document, tx: &Transaction,
                                 id_mapper: &IdMapper) -> Result<()> {
@@ -1512,6 +1541,7 @@ pub fn parse_save_file_internal(file_path: &str, tx: &Transaction,
 ```
 
 **Why This Matters:**
+
 - ID mappings saved in Phase 1 transaction, not deferred to end
 - Crash after entity INSERT but before mapping save → no desync
 - Mappings roll back with entities on error
@@ -1705,6 +1735,7 @@ pub fn ensure_schema_ready(db_path: &Path) -> Result<()> {
 ```
 
 **Benefits:**
+
 - Catches missing tables before import starts
 - Validates DELETE_ORDER against actual schema
 - Detects missing UPSERT indexes
@@ -1741,6 +1772,7 @@ pub fn insert_yield_history_batch(data: &[YieldHistoryRow],
 ```
 
 **Advanced Optimization (for > 10k rows):**
+
 ```rust
 // Option A: Build column vectors and use DuckDB appender
 pub fn insert_yield_history_columnar(data: &[YieldHistoryRow],
@@ -1770,6 +1802,7 @@ pub fn insert_yield_history_parquet(data: &[YieldHistoryRow],
 ```
 
 **Benchmark Targets:**
+
 - < 1,000 rows: Prepared statements (~100ms)
 - 1,000-10,000 rows: Batched prepared statements (~500ms)
 - > 10,000 rows: Consider Parquet COPY (~1-2 seconds)
@@ -1940,6 +1973,7 @@ pub fn parse_character_with_helpers(node: &Node, tx: &Transaction,
 ```
 
 **Benefits:**
+
 - **Consistent**: All parsers use same patterns
 - **Error Context**: Automatic element paths in errors
 - **Sentinel Handling**: Centralized `-1` → `None` conversion
@@ -2084,17 +2118,20 @@ mod proptests {
 ## Implementation Milestones
 
 ### Milestone 1: Foundation (Week 1)
+
 **Goal:** Basic parsing infrastructure and schema initialization with production-grade robustness
 
 **Deliverables:**
 
 **Schema & Database:**
+
 - [ ] Database module with schema initialization from `schema.sql`
 - [ ] Add `match_locks` table to schema for multi-process concurrency control
 - [ ] Schema validation on startup (check tables, unique constraints, DELETE_ORDER integrity)
 - [ ] Verify all UPSERT-ready unique constraints exist on core entity tables
 
 **File Ingestion & Security:**
+
 - [ ] ZIP extraction with comprehensive security validation:
   - [ ] Size limits (compressed & uncompressed)
   - [ ] Path traversal checks with path normalization
@@ -2105,23 +2142,27 @@ mod proptests {
 - [ ] XML loading using `roxmltree` with proper error context
 
 **ID Mapping & Stability:**
+
 - [ ] Complete `IdMapper` implementation with all entity types
 - [ ] ID stability mechanism (load/save mappings within same transaction)
 - [ ] UPSERT support for core entities using `ON CONFLICT (match_id, xml_id)`
 - [ ] Atomic ID mapping persistence (saved in Phase 1 transaction)
 
 **Concurrency Control:**
+
 - [ ] In-process locking (Mutex-based for same-app concurrency)
 - [ ] Database-level locking (lock table for cross-process safety)
 - [ ] Stale lock cleanup mechanism
 - [ ] GameId-based serialization
 
 **Parsing:**
+
 - [ ] Match metadata parser with UPSERT support
 - [ ] Player parser with UPSERT (basic fields only)
 - [ ] Transaction coordinator with DELETE-only for derived tables
 
 **Progress & Error Handling:**
+
 - [ ] Enhanced progress reporting with entity counts
 - [ ] `ProgressCallback` trait with `ProgressInfo` struct
 - [ ] Streaming progress updates during entity parsing
@@ -2130,12 +2171,14 @@ mod proptests {
 - [ ] Centralized sentinel value normalization
 
 **Infrastructure:**
+
 - [ ] Tauri command with `spawn_blocking` for async handling
 - [ ] Logging with appropriate levels (debug/info/warn/error)
 - [ ] XML parsing helpers (`XmlNodeExt` trait) with better error messages
 - [ ] Unit tests for core infrastructure
 
 **Dependencies to Add:**
+
 - `roxmltree = "0.19"`
 - `thiserror = "1.0"`
 - `log = "0.4"`
@@ -2143,6 +2186,7 @@ mod proptests {
 - `lazy_static = "1.4"` (for lock manager)
 
 **Success Criteria:**
+
 - ✅ Can import a save file and create match + players records
 - ✅ Transactions roll back properly on error
 - ✅ ZIP security validation rejects malicious files (traversal, zip bombs, control chars)
@@ -2159,9 +2203,11 @@ mod proptests {
 ---
 
 ### Milestone 2: Core Entities (Week 2)
+
 **Goal:** Parse main game entities
 
 **Deliverables:**
+
 - [ ] Character parser (two-pass implementation)
 - [ ] City parser
 - [ ] Tile parser
@@ -2172,6 +2218,7 @@ mod proptests {
 - [ ] Integration tests for entity parsing
 
 **Success Criteria:**
+
 - Can import full save file with all core entities
 - Foreign keys validate correctly
 - Character parent relationships work
@@ -2179,9 +2226,11 @@ mod proptests {
 ---
 
 ### Milestone 3: Gameplay Data (Week 3)
+
 **Goal:** Parse technology, laws, diplomacy, goals
 
 **Deliverables:**
+
 - [ ] Technology parser (completed + progress)
 - [ ] Law parser
 - [ ] Diplomacy parser
@@ -2190,6 +2239,7 @@ mod proptests {
 - [ ] Council positions parser
 
 **Success Criteria:**
+
 - All gameplay systems represented in database
 - Can query "what techs did player complete?"
 - Can query diplomatic relations
@@ -2197,9 +2247,11 @@ mod proptests {
 ---
 
 ### Milestone 4: Time-Series Data (Week 4)
+
 **Goal:** Parse historical turn-by-turn data
 
 **Deliverables:**
+
 - [ ] Yield history parser (sparse format handling)
 - [ ] Points history parser
 - [ ] Military history parser
@@ -2210,6 +2262,7 @@ mod proptests {
 - [ ] Performance optimization for bulk inserts
 
 **Success Criteria:**
+
 - Can reconstruct game progression from turn 1 to current
 - Sparse data handled correctly (missing turns)
 - Performance acceptable (<10 seconds for full import)
@@ -2217,9 +2270,11 @@ mod proptests {
 ---
 
 ### Milestone 5: Events & Narrative (Week 5)
+
 **Goal:** Parse story events, choices, outcomes
 
 **Deliverables:**
+
 - [ ] Event log parser
 - [ ] Story event parser
 - [ ] Event choices parser
@@ -2228,6 +2283,7 @@ mod proptests {
 - [ ] Character stats parser
 
 **Success Criteria:**
+
 - Can reconstruct narrative timeline
 - Event choices linked to outcomes
 - Mission tracking complete
@@ -2235,9 +2291,11 @@ mod proptests {
 ---
 
 ### Milestone 6: Edge Cases & Polish (Week 6)
+
 **Goal:** Handle all edge cases, optimize, document
 
 **Deliverables:**
+
 - [ ] Comprehensive error messages
 - [ ] Logging system (debug/info/warn/error levels)
 - [ ] Performance profiling and optimization
@@ -2246,6 +2304,7 @@ mod proptests {
 - [ ] Example queries demonstrating data usage
 
 **Success Criteria:**
+
 - All test save files import successfully
 - Parse failures produce actionable error messages
 - Import performance: <15 seconds per save file
@@ -2258,6 +2317,7 @@ mod proptests {
 ### Expected Performance Targets
 
 **File Processing:**
+
 - ZIP extraction: <1 second
 - XML parsing to DOM: 2-3 seconds (11 MB file)
 - Database inserts: 5-10 seconds
@@ -2266,6 +2326,7 @@ mod proptests {
 ### Optimization Strategies
 
 1. **Batch Inserts:**
+
    ```rust
    // Instead of individual inserts in loop
    for row in rows {
@@ -2390,24 +2451,24 @@ pub struct ImportStats {
 
 ```typescript
 // src/lib/api/saveImporter.ts
-import { invoke } from '@tauri-apps/api/tauri';
+import { invoke } from "@tauri-apps/api/tauri";
 
 export interface ImportResult {
-  success: boolean;
-  match_id?: number;
-  stats: {
-    players_imported: number;
-    characters_imported: number;
-    cities_imported: number;
-    units_imported: number;
-    tiles_imported: number;
-    timeseries_rows: number;
-  };
-  error?: string;
+	success: boolean;
+	match_id?: number;
+	stats: {
+		players_imported: number;
+		characters_imported: number;
+		cities_imported: number;
+		units_imported: number;
+		tiles_imported: number;
+		timeseries_rows: number;
+	};
+	error?: string;
 }
 
 export async function importSaveFile(filePath: string): Promise<ImportResult> {
-  return await invoke<ImportResult>('import_save_file', { filePath });
+	return await invoke<ImportResult>("import_save_file", { filePath });
 }
 ```
 
@@ -2574,6 +2635,7 @@ impl ProgressCallback for NoOpProgress {
 ```
 
 **Progress Milestones with Counts:**
+
 - 5% - ZIP extracted
 - 10% - XML parsed (11.2 MB)
 - 15% - Match identified (new/updating)
@@ -2597,6 +2659,7 @@ impl ProgressCallback for NoOpProgress {
 - 100% - Complete (12,600 entities imported)
 
 **Frontend Display Example:**
+
 ```
 [████████░░] 75% - Parsing time-series data (50,000 rows)
 [█████████░] 85% - Parsing events and goals
@@ -2604,6 +2667,7 @@ impl ProgressCallback for NoOpProgress {
 ```
 
 **Enhanced Progress Callback with Streaming Updates:**
+
 ```rust
 /// Enhanced progress callback for individual entity updates
 impl ProgressCallback for TauriProgressCallback {
@@ -2685,6 +2749,7 @@ pub fn parse_cities_with_progress<P: ProgressCallback>(
 This implementation plan provides a comprehensive roadmap for building a robust, maintainable parser that transforms Old World save files into structured database records. The modular design, clear error handling, and phased milestones ensure steady progress toward a fully functional data ingestion pipeline.
 
 **Next Steps:**
+
 1. Review and approve this plan
 2. Set up basic Rust project structure
 3. Begin Milestone 1 implementation
@@ -2699,6 +2764,7 @@ This implementation plan provides a comprehensive roadmap for building a robust,
 **Revision Summary (v2.2 - Reviewer Feedback Integration):**
 
 **Tier 1 Changes (Critical for Correctness):**
+
 - **UPSERT Strategy**: Core entities now use `INSERT ... ON CONFLICT (match_id, xml_id) DO UPDATE` instead of DELETE-then-INSERT
   - Eliminates churn and temporary FK constraint violations
   - Only derived/child tables use DELETE-then-INSERT
@@ -2729,12 +2795,13 @@ This implementation plan provides a comprehensive roadmap for building a robust,
   - Returns detailed error messages for missing schema elements
 
 **Tier 2 Changes (Important for Robustness):**
+
 - **Centralized Sentinel Handling**: New `sentinels` module
   - `normalize_id()`, `normalize_turn()`, `normalize_string()` helpers
   - Strict mode validators for range checking
   - Consistent -1 → None conversion
 - **Enhanced Error Context**: Better debugging information
-  - Element paths in all Unknown*Id errors
+  - Element paths in all Unknown\*Id errors
   - XML context excerpts capped at 300 chars
   - `create_xml_context()` helper function
   - Concurrency lock error type
@@ -2744,12 +2811,14 @@ This implementation plan provides a comprehensive roadmap for building a robust,
   - Debug logs for high compression (>10x)
 
 **Updated Milestone 1:**
+
 - Expanded from 12 to 30+ deliverables
 - Organized into 6 categories (Schema, Security, ID Mapping, Concurrency, Parsing, Progress)
 - Added 17 success criteria (vs 6 previously)
 - All Tier 1 and Tier 2 changes incorporated
 
 **Revision Summary (v2.1 - Production Hardening):**
+
 - **Atomicity**: ID mappings saved within same transaction as entities
 - **UPSERT Strategy** (initial): Core entities use INSERT...ON CONFLICT for stability
 - **Unique Constraints**: Added (match_id, xml_id) indexes for idempotent updates
@@ -2760,6 +2829,7 @@ This implementation plan provides a comprehensive roadmap for building a robust,
 - **Schema Validation**: Startup checks for tables, indexes, and DELETE_ORDER
 
 **Revision Summary (v2.0):**
+
 - Switched from `quick-xml` to `roxmltree` for DOM-based parsing
 - Added complete `IdMapper` API with all entity types
 - Implemented ID stability strategy with `id_mappings` table

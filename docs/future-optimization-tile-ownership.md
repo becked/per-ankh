@@ -9,6 +9,7 @@
 ## Current Approach (Two-Pass)
 
 ### Pass 1: Insert Tiles (without city ownership)
+
 ```rust
 // src-tauri/src/parser/entities/tiles.rs:9-172
 pub fn parse_tiles(...) {
@@ -26,6 +27,7 @@ pub fn parse_tiles(...) {
 ```
 
 ### Pass 2: Update Tiles (with city ownership)
+
 ```rust
 // src-tauri/src/parser/entities/tiles.rs:179-207
 pub fn update_tile_city_ownership(...) {
@@ -48,6 +50,7 @@ pub fn update_tile_city_ownership(...) {
 ## Proposed Approach (Single-Pass with Pre-Parse)
 
 ### Step 1: Pre-Parse City Ownership Data
+
 ```rust
 pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let root = doc.root_element();
@@ -127,11 +130,13 @@ The entire second pass becomes unnecessary.
 **Current Priority**: LOW (implement after critical bottlenecks fixed)
 
 **Sequence**:
+
 1. ✅ Fix ID mapper (2.6s → 0.2s savings)
 2. ✅ Fix character extended data (2.8s → 0.25s savings)
 3. ⏸️ Fix tile city ownership (743ms → 40ms savings) ← **Deferred**
 
 **Reason for Deferral**:
+
 - Smaller impact (9.4% of total time vs 33-35%)
 - Higher implementation risk (architectural change)
 - Current batch UPDATE approach provides good-enough speedup (~10x)
@@ -185,11 +190,13 @@ pub fn update_tile_city_ownership(...) -> Result<usize> {
 ## Recommendation
 
 **Phase 1 (Current)**: Implement batch UPDATEs
+
 - Lower risk
 - Good speedup (5-10x)
 - Minimal code changes
 
 **Phase 2 (Future)**: Migrate to pre-parse approach
+
 - After P1 and P2 optimizations are validated
 - When confidence in architecture is high
 - When additional 10x speedup becomes important

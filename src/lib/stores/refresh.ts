@@ -6,12 +6,12 @@ import { writable } from "svelte/store";
  * all subscribers to re-fetch their data.
  */
 function createRefreshStore() {
-  const { subscribe, set } = writable(0);
+	const { subscribe, set } = writable(0);
 
-  return {
-    subscribe,
-    trigger: () => set(Date.now()),
-  };
+	return {
+		subscribe,
+		trigger: () => set(Date.now()),
+	};
 }
 
 export const refreshData = createRefreshStore();

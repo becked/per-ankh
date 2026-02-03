@@ -13,22 +13,24 @@ Per-Ankh currently provides data visualizations and analytics for Old World save
 ## Asset Categories
 
 ### 2D Assets (Essential)
-| Asset Type | Usage |
-|------------|-------|
-| Nation emblems | Headers, legends, player identification |
-| Family crests | Family displays, tooltips, genealogy views |
-| Religion symbols | Religion-related displays and filters |
-| Unit portraits | Unit info panels, lists |
-| Resource/improvement icons | Various info displays |
+
+| Asset Type                 | Usage                                      |
+| -------------------------- | ------------------------------------------ |
+| Nation emblems             | Headers, legends, player identification    |
+| Family crests              | Family displays, tooltips, genealogy views |
+| Religion symbols           | Religion-related displays and filters      |
+| Unit portraits             | Unit info panels, lists                    |
+| Resource/improvement icons | Various info displays                      |
 
 Estimated size: 10-30MB
 
 ### 3D Assets (Enhanced Features)
-| Asset Type | Usage |
-|------------|-------|
-| Unit models (animated) | Unit info viewer, map overlay |
-| Building models (animated) | Building info, city views |
-| Terrain meshes | 3D map reconstruction |
+
+| Asset Type                 | Usage                         |
+| -------------------------- | ----------------------------- |
+| Unit models (animated)     | Unit info viewer, map overlay |
+| Building models (animated) | Building info, city views     |
+| Terrain meshes             | 3D map reconstruction         |
 
 Estimated size: 400MB+ (full extraction is ~462MB)
 
@@ -50,14 +52,17 @@ To avoid distributing copyrighted game assets, **Per-Ankh will extract assets fr
 **Tool**: Python with [unitypy](https://github.com/K0lb3/UnityPy) library (most mature option for Unity asset extraction)
 
 **Output formats**:
+
 - 2D assets → PNG
 - 3D models → GLTF/GLB (with animations, textures embedded)
 
 **Rust alternatives explored** (for native integration):
+
 - [unity-asset](https://crates.io/crates/unity-asset) - Exists but explicitly "not production-ready", labeled as learning exercise
 - [io_unity](https://lib.rs/crates/io_unity) - Less documented
 
 **Node.js alternatives explored**:
+
 - [unity-parser](https://www.npmjs.com/package/unity-parser) - 9 years old, Unity 5.1.2 only
 - [unitiyfs-asset-parser](https://developer.aliyun.com/mirror/npm/package/unitiyfs-asset-parser) - Pure JS, potentially viable but unproven
 
@@ -65,12 +70,12 @@ To avoid distributing copyrighted game assets, **Per-Ankh will extract assets fr
 
 ### Extraction Distribution Options
 
-| Option | Pros | Cons |
-|--------|------|------|
-| **Separate PyInstaller tool** | Main app stays lean (~5MB vs ~55MB), clear separation | Extra download step, two artifacts to maintain |
-| **Bundled PyInstaller** | Seamless UX, single download | Adds ~50-80MB to app size |
-| **User runs Python script** | Simplest for us | Requires Python installed, technical users only |
-| **Invest in Rust crate** | Native integration, long-term ideal | Significant development effort |
+| Option                        | Pros                                                  | Cons                                            |
+| ----------------------------- | ----------------------------------------------------- | ----------------------------------------------- |
+| **Separate PyInstaller tool** | Main app stays lean (~5MB vs ~55MB), clear separation | Extra download step, two artifacts to maintain  |
+| **Bundled PyInstaller**       | Seamless UX, single download                          | Adds ~50-80MB to app size                       |
+| **User runs Python script**   | Simplest for us                                       | Requires Python installed, technical users only |
+| **Invest in Rust crate**      | Native integration, long-term ideal                   | Significant development effort                  |
 
 **Recommended**: Start with separate PyInstaller tool. Revisit bundling or Rust native once the feature proves valuable.
 
@@ -79,11 +84,13 @@ To avoid distributing copyrighted game assets, **Per-Ankh will extract assets fr
 To manage the ~462MB total extraction size:
 
 **Tier 1: 2D Assets Only** (default)
+
 - Logos, icons, portraits
 - Fast extraction, small footprint
 - Enables UI enhancements without heavy storage
 
 **Tier 2: 3D Assets** (opt-in)
+
 - Unit and building models with animations
 - Required for 3D viewer and enhanced map
 - User explicitly enables in settings
@@ -93,12 +100,14 @@ To manage the ~462MB total extraction size:
 **Recommended stack**: [Three.js](https://threejs.org/) via [threlte](https://threlte.xyz/) (Svelte integration)
 
 **Why Three.js over Babylon.js**:
+
 - Smaller bundle (~150KB vs ~500KB+)
 - Better fit for "3D embedded in 2D app" use case
 - threlte provides idiomatic Svelte 5 components
 - Larger community, more examples
 
 **3D format**: GLTF/GLB
+
 - Modern standard with excellent Three.js support
 - Supports animations and PBR materials
 - Single-file option (GLB) simplifies asset management
@@ -110,12 +119,14 @@ To manage the ~462MB total extraction size:
 **Scope**: Display nation, family, and religion logos throughout the app
 
 **Implementation**:
+
 - Extract PNGs during setup
 - Store in app data directory
 - Load via standard `<img>` tags or CSS backgrounds
 - Graceful fallback to text/colored squares if assets unavailable
 
 **User flow**:
+
 1. Settings → Game Installation → Browse to Old World folder
 2. App validates path (checks for expected files)
 3. "Extract Assets" button triggers Tier 1 extraction
@@ -127,12 +138,14 @@ To manage the ~462MB total extraction size:
 **Scope**: Dedicated view where users can inspect 3D models
 
 **Features**:
+
 - Orbit camera controls (rotate, zoom, pan)
 - Animation playback (idle, attack cycles if available)
 - Info panel with unit/building stats from XML data
 - Search/filter to find specific assets
 
 **Implementation**:
+
 - threlte scene with OrbitControls
 - GLTFLoader for model loading
 - AnimationMixer for playback
@@ -143,6 +156,7 @@ To manage the ~462MB total extraction size:
 **Scope**: Render the game map with terrain, cities, units, and borders - with unlimited zoom
 
 **Reference**: The game's 3D map view (see screenshots) showing:
+
 - Hex-based terrain with elevation (hills, mountains)
 - Biomes (grassland, forest, desert, water)
 - Cities with visible buildings
@@ -153,6 +167,7 @@ To manage the ~462MB total extraction size:
 **Complexity assessment**: HIGH
 
 This essentially requires building a game renderer. Components needed:
+
 - Terrain mesh generation from heightmap data
 - Biome texturing
 - Hex grid positioning system
@@ -161,6 +176,7 @@ This essentially requires building a game renderer. Components needed:
 - Camera controls with zoom limits removed
 
 **Data sources**:
+
 - Save file: tile data, unit positions, city locations, borders
 - Game assets: terrain textures, building models, unit models
 - XML: terrain type definitions, asset mappings
@@ -168,16 +184,19 @@ This essentially requires building a game renderer. Components needed:
 
 **Phased approach**:
 
-*Phase 1*: Enhanced 2D map with zoom
+_Phase 1_: Enhanced 2D map with zoom
+
 - Keep current abstract hex map
 - Add smooth zoom (canvas/SVG scaling)
 - Show more detail at higher zoom levels
 
-*Phase 2*: Hybrid 2D/3D
+_Phase 2_: Hybrid 2D/3D
+
 - 2D base with 3D unit/building sprites overlaid
 - Terrain remains stylized/abstract
 
-*Phase 3*: Full 3D terrain
+_Phase 3_: Full 3D terrain
+
 - Actual terrain meshes with elevation
 - Full building and unit models
 - Game-accurate rendering
@@ -215,6 +234,7 @@ This essentially requires building a game renderer. Components needed:
 ## Implementation Roadmap
 
 ### Phase 1: Foundation
+
 - [ ] Create asset extraction tool (Python/unitypy)
 - [ ] Define output format and directory structure
 - [ ] Extract 2D assets (logos, icons)
@@ -222,12 +242,14 @@ This essentially requires building a game renderer. Components needed:
 - [ ] Integrate 2D assets into existing UI
 
 ### Phase 2: 3D Viewer
+
 - [ ] Add threlte dependency
 - [ ] Extract 3D models to GLTF (with animations)
 - [ ] Build unit/building viewer component
 - [ ] Add info panel with game data
 
 ### Phase 3: Enhanced Map
+
 - [ ] Implement 2D map zoom (Phase 1 of map)
 - [ ] Evaluate feasibility of 3D terrain
 - [ ] Reference C# source for rendering logic

@@ -16,6 +16,7 @@ Successfully implemented all three critical performance optimizations identified
 ## Performance Comparison
 
 ### Before Optimization (Baseline)
+
 ```
 ⏱️  Character extended data: 2,800ms (35.4%)
 ⏱️  Save ID mappings:        2,600ms (32.9%)
@@ -27,6 +28,7 @@ Successfully implemented all three critical performance optimizations identified
 ```
 
 ### After Optimization (Achieved)
+
 ```
 ⏱️  Character extended data:   155ms  (8.1%)  ⚡ 18x faster
 ⏱️  Save ID mappings:            2ms  (0.1%)  ⚡ 1,370x faster
@@ -50,6 +52,7 @@ Successfully implemented all three critical performance optimizations identified
 **Speedup**: 1,370x faster ⚡
 
 **Code change**: `src-tauri/src/parser/id_mapper.rs:151-182`
+
 - Removed prepared statement loop
 - Added Appender API for bulk insert
 - Removed ON CONFLICT clause (not needed for fresh imports)
@@ -67,6 +70,7 @@ Successfully implemented all three critical performance optimizations identified
 **Speedup**: 18x faster ⚡
 
 **Code changes**: `src-tauri/src/parser/entities/character_data.rs`
+
 1. `parse_character_stats` (lines 56-110): Added Appender for stats
 2. `parse_character_traits` (lines 128-165): Added Appender for traits
 3. `parse_character_relationships` (lines 185-267): Added Appender for relationships
@@ -85,6 +89,7 @@ Successfully implemented all three critical performance optimizations identified
 **Speedup**: 15x faster ⚡
 
 **Code change**: `src-tauri/src/parser/entities/tiles.rs:174-224`
+
 - Collect all updates into Vec
 - Build batched CASE UPDATE statements
 - Process in chunks of 500 for optimal performance
@@ -96,21 +101,25 @@ Successfully implemented all three critical performance optimizations identified
 ## Overall Impact Analysis
 
 ### Single Save Import
-| Metric | Before | After | Improvement |
-|--------|--------|-------|-------------|
-| Import time | 7.9s | 1.9s | 4.2x faster |
-| User experience | Acceptable | Excellent | ✅ |
+
+| Metric          | Before     | After     | Improvement |
+| --------------- | ---------- | --------- | ----------- |
+| Import time     | 7.9s       | 1.9s      | 4.2x faster |
+| User experience | Acceptable | Excellent | ✅          |
 
 ### Batch Import Scenarios
-| Batch Size | Before | After | Time Saved | Improvement |
-|------------|--------|-------|------------|-------------|
-| 1 save | 7.9s | 1.9s | 6.0s | 4.2x faster |
-| 10 saves | 79s | 19s | 60s | 4.2x faster |
-| 76 saves | 600s (~10m) | 144s (~2.4m) | 456s (~7.6m) | 4.2x faster |
-| 266 saves | 2,101s (~35m) | 505s (~8.4m) | 1,596s (~26.6m) | 4.2x faster |
+
+| Batch Size | Before        | After        | Time Saved      | Improvement |
+| ---------- | ------------- | ------------ | --------------- | ----------- |
+| 1 save     | 7.9s          | 1.9s         | 6.0s            | 4.2x faster |
+| 10 saves   | 79s           | 19s          | 60s             | 4.2x faster |
+| 76 saves   | 600s (~10m)   | 144s (~2.4m) | 456s (~7.6m)    | 4.2x faster |
+| 266 saves  | 2,101s (~35m) | 505s (~8.4m) | 1,596s (~26.6m) | 4.2x faster |
 
 ### Real-World User Impact
+
 **Onboarding scenario (importing full game history):**
+
 - Before: 35 minutes
 - After: 8.4 minutes
 - **Improvement: User saves 26.6 minutes** ⚡
@@ -162,11 +171,13 @@ These were not bottlenecks before, but are now the slowest operations. However, 
 ## Validation
 
 ### Test Results
+
 ```bash
 cargo test --release --test benchmark_import benchmark_real_save_import
 ```
 
 **Output:**
+
 ```
 === Per-Ankh Save File Import Benchmark ===
 Total import time: 1.90841075s
@@ -180,6 +191,7 @@ Throughput: 3129 entities/second
 ```
 
 ### Correctness Verification
+
 - All entities imported successfully ✅
 - Entity counts match expected values ✅
 - No database constraint violations ✅
@@ -191,19 +203,21 @@ Throughput: 3129 entities/second
 
 The performance diagnosis document predicted:
 
-| Optimization | Predicted Speedup | Actual Speedup | Status |
-|--------------|-------------------|----------------|--------|
-| ID Mapper | 13x (2.6s → 0.2s) | **1,370x (2.6s → 0.002s)** | ✅ Exceeded! |
-| Character Data | 11x (2.8s → 0.25s) | **18x (2.8s → 0.155s)** | ✅ Exceeded! |
-| Tile Ownership | 18x (743ms → 40ms) | **15x (743ms → 49ms)** | ✅ Met! |
-| **Overall** | **6x (7.9s → 1.3s)** | **4.2x (7.9s → 1.9s)** | ✅ Within range! |
+| Optimization   | Predicted Speedup    | Actual Speedup             | Status           |
+| -------------- | -------------------- | -------------------------- | ---------------- |
+| ID Mapper      | 13x (2.6s → 0.2s)    | **1,370x (2.6s → 0.002s)** | ✅ Exceeded!     |
+| Character Data | 11x (2.8s → 0.25s)   | **18x (2.8s → 0.155s)**    | ✅ Exceeded!     |
+| Tile Ownership | 18x (743ms → 40ms)   | **15x (743ms → 49ms)**     | ✅ Met!          |
+| **Overall**    | **6x (7.9s → 1.3s)** | **4.2x (7.9s → 1.9s)**     | ✅ Within range! |
 
 **Why is overall slightly lower than predicted?**
+
 - Other operations (Foundation, Player gameplay, City data, etc.) now dominate the time
 - These were not bottlenecks before, so they were not optimized
 - The bottlenecks we fixed are now so fast that other operations became the new bottlenecks
 
 **Why is ID Mapper so much faster than predicted?**
+
 - The original diagnosis measured 433μs per INSERT
 - Appender API is even faster than predicted, likely due to:
   - Zero transaction overhead (single flush at end)
@@ -215,16 +229,19 @@ The performance diagnosis document predicted:
 ## Lessons Learned
 
 ### What Worked Well
+
 1. **Profiling first**: The performance diagnosis correctly identified bottlenecks
 2. **Appender API**: DuckDB's Appender is incredibly fast for bulk operations
 3. **Incremental approach**: Fixing Priority 1 first gave immediate wins
 4. **Test-driven validation**: Benchmark test provided objective measurement
 
 ### What Could Be Improved
+
 1. **Documentation**: Should document Appender usage patterns earlier
 2. **Consistency**: Some parsers use Appender (tiles, ownership history), others don't - now all critical paths are consistent
 
 ### Future Work
+
 - Consider parallelizing batch imports across CPU cores (4-8x additional speedup)
 - Profile remaining bottlenecks if user demand warrants it
 - Implement pre-parse approach for tile city ownership (deferred - see `docs/future-optimization-tile-ownership.md`)

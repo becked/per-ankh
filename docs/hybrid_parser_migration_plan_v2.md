@@ -12,6 +12,7 @@
 This document provides a complete migration plan to refactor Per-Ankh's parser from **direct-write** to **hybrid architecture** with parallel parsing support.
 
 **Key Benefits:**
+
 - ~2x parsing speedup via parallelization (conservative estimate)
 - Vastly improved testability (parse without database)
 - Enables caching, comparison, and export features
@@ -42,6 +43,7 @@ This document provides a complete migration plan to refactor Per-Ankh's parser f
 ### Architecture: Direct-Write Pattern
 
 **Data flow:**
+
 ```
 XML → Parse node → Extract data → Appender → DB
      ↑                                        ↑
@@ -49,6 +51,7 @@ XML → Parse node → Extract data → Appender → DB
 ```
 
 **Example from `entities/players.rs:10`:**
+
 ```rust
 pub fn parse_players(
     doc: &XmlDocument,
@@ -68,11 +71,13 @@ pub fn parse_players(
    - **Critical:** This complexity must be preserved in hybrid approach
 
 2. **Comprehensive Timing Instrumentation**
+
    ```rust
    let t_players = Instant::now();
    let players_count = super::entities::parse_players(...)?;
    log::info!("⏱️ Players: {:?} ({} players)", t_players.elapsed(), players_count);
    ```
+
    - Per-entity timing already exists
    - Must be maintained in hybrid approach
 
@@ -93,6 +98,7 @@ pub fn parse_players(
    - Can't cache or serialize intermediate results
 
 2. **No Parallelization**
+
    ```rust
    // Can't do this - mutable borrow conflicts:
    rayon::scope(|s| {
@@ -109,6 +115,7 @@ pub fn parse_players(
 ### Entity Inventory
 
 **Current parser files:** 16 entities
+
 - `players.rs`, `characters.rs`, `cities.rs`, `tiles.rs`
 - `families.rs`, `religions.rs`, `tribes.rs`
 - `character_data.rs`, `city_data.rs`, `tile_data.rs`
@@ -370,6 +377,7 @@ pub fn insert_game_data(
 **Tasks:**
 
 1. **Add dependencies** (Cargo.toml)
+
    ```toml
    [dependencies]
    rayon = "1.10"           # Parallel iteration
@@ -383,6 +391,7 @@ pub fn insert_game_data(
    - Use `String` initially (optimize to `Cow<'a, str>` in Phase 5)
 
 3. **Create `parsers/` module structure**
+
    ```
    parsers/
    ├── mod.rs          # Re-exports all parse_*_struct functions
@@ -392,6 +401,7 @@ pub fn insert_game_data(
    ```
 
 4. **Create `inserters/` module structure**
+
    ```
    inserters/
    ├── mod.rs          # Re-exports all insert_* functions
@@ -401,6 +411,7 @@ pub fn insert_game_data(
    ```
 
 5. **Create `validation.rs`**
+
    ```rust
    // src-tauri/src/parser/validation.rs
 
@@ -447,6 +458,7 @@ pub fn insert_game_data(
    ```
 
 6. **Add memory profiling utilities**
+
    ```rust
    // src-tauri/src/parser/utils.rs
 
@@ -483,6 +495,7 @@ pub fn insert_game_data(
 **Tasks:**
 
 1. **Implement `parsers/players.rs`**
+
    ```rust
    use crate::parser::game_data::PlayerData;
    use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
@@ -512,6 +525,7 @@ pub fn insert_game_data(
    ```
 
 2. **Implement `inserters/players.rs`**
+
    ```rust
    use crate::parser::game_data::PlayerData;
    use crate::parser::id_mapper::IdMapper;
@@ -558,6 +572,7 @@ pub fn insert_game_data(
    ```
 
 3. **Add unit tests**
+
    ```rust
    // src-tauri/src/parser/parsers/players.rs
 
@@ -599,6 +614,7 @@ pub fn insert_game_data(
    ```
 
 4. **Add comparison integration test**
+
    ```rust
    // src-tauri/src/parser/tests.rs
 
@@ -644,6 +660,7 @@ pub fn insert_game_data(
    ```
 
 5. **Memory profiling**
+
    ```rust
    #[test]
    fn test_memory_profile_players() {
@@ -670,15 +687,18 @@ pub fn insert_game_data(
 **Goal:** Migrate all 16 entities to hybrid pattern
 
 **Batch 1 (Week 4): Foundation entities**
+
 - Characters (complex due to Pass 2a parent relationships)
 - Cities (references players, tiles)
 - Tiles (references players)
 
 **Batch 2 (Week 5): Affiliation and aggregate entities**
+
 - Families, Religions, Tribes
 - Unit production (player, city)
 
 **Batch 3 (Week 6): Extended and nested data**
+
 - Character data (stats, traits, relationships)
 - City data (production, culture, yields)
 - Tile data (visibility, history)
@@ -686,6 +706,7 @@ pub fn insert_game_data(
 - Diplomacy, Timeseries, Events
 
 **For each entity:**
+
 1. Implement `parsers/{entity}.rs`
 2. Implement `inserters/{entity}.rs`
 3. Add unit tests (parse without DB)
@@ -693,6 +714,7 @@ pub fn insert_game_data(
 5. Profile memory usage
 
 **Maintain backwards compatibility:**
+
 - Keep old `entities/` parsers until all tests pass
 - Run both in parallel during validation phase
 - Use feature flag if needed
@@ -706,6 +728,7 @@ pub fn insert_game_data(
 **Tasks:**
 
 1. **Implement `parsers/mod.rs` with parallel orchestration**
+
    ```rust
    use rayon::prelude::*;
    use crate::parser::game_data::GameData;
@@ -779,6 +802,7 @@ pub fn insert_game_data(
    ```
 
 2. **Update `import.rs` to use hybrid approach**
+
    ```rust
    // src-tauri/src/parser/import.rs
 
@@ -822,6 +846,7 @@ pub fn insert_game_data(
    ```
 
 3. **Benchmark comparison**
+
    ```bash
    # Establish baseline with current parser
    cargo bench --bench import_benchmarks > baseline.txt
@@ -834,6 +859,7 @@ pub fn insert_game_data(
    ```
 
 4. **Add benchmark suite**
+
    ```rust
    // benches/import_benchmarks.rs
 
@@ -881,6 +907,7 @@ pub fn insert_game_data(
 2. **Memory optimization** (if profiling shows issues)
    - Replace `String` with `Cow<'a, str>` in hot paths
    - Add string interning for repeated values (nations, tribes)
+
    ```rust
    use std::borrow::Cow;
 
@@ -893,6 +920,7 @@ pub fn insert_game_data(
    ```
 
 3. **Add caching support** (optional feature)
+
    ```rust
    // src-tauri/src/parser/cache.rs
 
@@ -972,6 +1000,7 @@ pub struct CharacterData {
 ```
 
 **Rationale:**
+
 - IdMapper converts XML → DB IDs during insertion
 - Keeps parsing pure (no ID mapping concerns)
 - Easier to debug (XML IDs match save file)
@@ -986,6 +1015,7 @@ pub struct GameData {
 ```
 
 **Rationale:**
+
 - Simpler, more efficient for iteration
 - Better for serialization
 - Order preserved (useful for debugging)
@@ -1001,6 +1031,7 @@ pub struct PlayerData {
 ```
 
 **Rationale:**
+
 - Enables caching to disk
 - JSON export for debugging
 - Minimal overhead
@@ -1016,6 +1047,7 @@ let unique_rows = deduplicate_rows_last_wins(
 ```
 
 **Rationale:**
+
 - Current approach works well
 - Last-wins strategy is correct for updates
 - Don't fix what isn't broken
@@ -1030,6 +1062,7 @@ log::info!("⏱️ Players: {:?}", t_parse.elapsed());
 ```
 
 **Rationale:**
+
 - Already comprehensive
 - Critical for performance monitoring
 - Users rely on this output
@@ -1059,6 +1092,7 @@ parse_players_struct(&doc).unwrap();            // Works correctly
 ### Unit Tests (Parser Logic)
 
 **Before (Hard):**
+
 ```rust
 #[test]
 fn test_parse_players() {
@@ -1069,6 +1103,7 @@ fn test_parse_players() {
 ```
 
 **After (Easy):**
+
 ```rust
 #[test]
 fn test_parse_players_struct() {
@@ -1148,6 +1183,7 @@ cargo bench --bench import_benchmarks -- --baseline before
 **Risk:** GameData structs consume too much RAM
 
 **Mitigations:**
+
 - ✅ Memory profiling in Phase 2 (before full migration)
 - ✅ Use `Cow<'a, str>` for strings borrowed from XML DOM
 - ✅ String interning for repeated values (nations, religions)
@@ -1155,6 +1191,7 @@ cargo bench --bench import_benchmarks -- --baseline before
 - ✅ Accept trade-off (desktop apps have plenty of RAM)
 
 **Go/No-Go Decision Point:** Phase 2 memory profiling
+
 - If <100 MB increase: Proceed
 - If 100-150 MB: Proceed with optimization plan
 - If >150 MB: Reassess or optimize before Phase 3
@@ -1164,6 +1201,7 @@ cargo bench --bench import_benchmarks -- --baseline before
 **Risk:** Invalid FKs pass parsing but fail at insertion
 
 **Mitigations:**
+
 - ✅ Validation layer catches issues before DB writes
 - ✅ Rich error messages with context (entity type, XML ID, field)
 - ✅ Preserve existing multi-pass insertion order
@@ -1174,6 +1212,7 @@ cargo bench --bench import_benchmarks -- --baseline before
 **Risk:** Parallel parsing overhead negates benefits
 
 **Mitigations:**
+
 - ✅ Benchmark before/after in Phase 4
 - ✅ Profile with large saves (400+ turns)
 - ✅ Measure not just parsing but total import time
@@ -1186,11 +1225,13 @@ cargo bench --bench import_benchmarks -- --baseline before
 **Risk:** One parse failure doesn't stop other threads
 
 **Reality:** This is acceptable
+
 - rayon::join4 runs all 4 tasks even if one fails
 - Error is returned after all complete
 - Minimal waste (parsing is cheap compared to I/O)
 
 **Alternative (if needed):**
+
 ```rust
 // Use shared flag for early termination
 let error_flag = AtomicBool::new(false);
@@ -1207,6 +1248,7 @@ rayon::scope(|s| {
 **Risk:** Cached data is stale or corrupt
 
 **Mitigations:**
+
 - ✅ Version header with magic bytes
 - ✅ Schema hash validation
 - ✅ Checksum verification (optional)
@@ -1220,6 +1262,7 @@ rayon::scope(|s| {
 ### Expected Performance Profile
 
 **Current sequential (from plan):**
+
 ```
 ZIP extraction:       50-200 ms
 XML parsing:          30-80 ms
@@ -1231,6 +1274,7 @@ Measured average:     ~213 ms
 ```
 
 **Hybrid with parallel:**
+
 ```
 ZIP extraction:       50-200 ms   (unchanged)
 XML parsing:          30-80 ms    (unchanged)
@@ -1247,12 +1291,14 @@ Expected average:     ~160 ms
 ### Profiling Plan
 
 1. **Baseline measurement** (before migration)
+
    ```bash
    cargo build --release
    # Import 10 representative saves, measure times
    ```
 
 2. **Per-phase measurement** (after each migration batch)
+
    ```bash
    # After Phase 2 (players only)
    # After Phase 3 Batch 1 (foundation entities)
@@ -1262,6 +1308,7 @@ Expected average:     ~160 ms
    ```
 
 3. **Memory profiling**
+
    ```bash
    valgrind --tool=massif target/release/per-ankh
    # Or use instrument sampling on macOS
@@ -1275,16 +1322,19 @@ Expected average:     ~160 ms
 ### Success Criteria
 
 **Must achieve:**
+
 - ✅ No regression in total import time (must be ≤ current)
 - ✅ Memory increase < 150 MB
 - ✅ All integration tests pass (old vs new identical)
 
 **Should achieve:**
+
 - ✅ 15-25% improvement in total import time
 - ✅ 2x speedup on parsing phase
 - ✅ Memory increase < 100 MB
 
 **Stretch goals:**
+
 - ⭐ 30%+ improvement in total import time
 - ⭐ 3x speedup on parsing phase (with optimizations)
 - ⭐ Caching reduces re-import to <50ms
@@ -1296,6 +1346,7 @@ Expected average:     ~160 ms
 ### Example 1: Complete Entity Migration (Players)
 
 **Before: entities/players.rs**
+
 ```rust
 pub fn parse_players(
     doc: &XmlDocument,
@@ -1308,6 +1359,7 @@ pub fn parse_players(
 ```
 
 **After: parsers/players.rs**
+
 ```rust
 pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
     let root = doc.root_element();
@@ -1324,6 +1376,7 @@ pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
 ```
 
 **After: inserters/players.rs**
+
 ```rust
 pub fn insert_players(
     conn: &Connection,
@@ -1555,6 +1608,7 @@ fn import_save_file_internal(...) -> Result<ImportResult> {
 ```
 
 **Usage:**
+
 ```bash
 # Build with hybrid parser (default)
 cargo build --release
@@ -1577,12 +1631,14 @@ This migration plan provides:
 ✅ **Clear success criteria** (performance, memory, correctness)
 
 **Expected Outcomes:**
+
 - ~25% faster imports (conservative)
 - Much easier testing and debugging
 - Enables future features (caching, comparison, export)
 - Cleaner architecture for long-term maintenance
 
 **Risks:**
+
 - +60-100 MB memory (acceptable for desktop)
 - 7-8 weeks engineering time (well-scoped)
 - Complexity in preserving multi-pass logic (manageable)
@@ -1592,6 +1648,7 @@ This migration plan provides:
 ---
 
 **Next Steps:**
+
 1. Review and approve this plan
 2. Create feature branch: `feature/hybrid-parser-migration`
 3. Begin Phase 1: Foundation (game_data.rs, module structure)
