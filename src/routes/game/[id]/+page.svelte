@@ -164,6 +164,7 @@
 
 	// City column definitions
 	// format function receives the value AND the city object for context (e.g., capital star)
+	/* eslint-disable no-unused-vars -- Parameters in type signatures */
 	type CityColumn = {
 		key: string;
 		label: string;
@@ -175,6 +176,7 @@
 		) => string;
 		sortValue?: (city: CityInfo) => string | number;
 	};
+	/* eslint-enable no-unused-vars */
 
 	// Column order: Nation, Name, Family, Founded, Culture, Specialists, Growth, Population, Tiles Bought
 	// Default visible: Nation, Name, Family, Founded, Culture
@@ -433,6 +435,7 @@
 			return [];
 
 		// Build a map of improvement -> nation -> count
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const pivotMap = new Map<string, Record<string, number>>();
 
 		for (const imp of improvementData.improvements) {
@@ -495,11 +498,6 @@
 			: [],
 	);
 
-	// Get unique law names (for rows)
-	const uniqueLawNames = $derived(
-		currentLaws ? [...new Set(currentLaws.map((law) => law.law))].sort() : [],
-	);
-
 	// Parse selected law filters (nation only now)
 	const selectedLawNations = $derived(
 		tables.laws.filters
@@ -522,6 +520,7 @@
 		if (!currentLaws || currentLaws.length === 0) return [];
 
 		// Build a map of law -> nation -> adopted_turn
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const pivotMap = new Map<string, Record<string, number | null>>();
 
 		for (const l of currentLaws) {
@@ -579,13 +578,6 @@
 			: [],
 	);
 
-	// Get unique tech names (for rows)
-	const uniqueTechNames = $derived(
-		completedTechs
-			? [...new Set(completedTechs.map((tech) => tech.tech))].sort()
-			: [],
-	);
-
 	// Parse selected tech filters (nation only now)
 	const selectedTechNations = $derived(
 		tables.techs.filters
@@ -608,6 +600,7 @@
 		if (!completedTechs || completedTechs.length === 0) return [];
 
 		// Build a map of tech -> nation -> completed_turn
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const pivotMap = new Map<string, Record<string, number | null>>();
 
 		for (const t of completedTechs) {
@@ -665,13 +658,6 @@
 			: [],
 	);
 
-	// Get unique unit types (for rows)
-	const uniqueUnitTypes = $derived(
-		unitsProduced
-			? [...new Set(unitsProduced.map((u) => u.unit_type))].sort()
-			: [],
-	);
-
 	// Parse selected unit filters (nation only now)
 	const selectedUnitNations = $derived(
 		tables.units.filters
@@ -695,6 +681,7 @@
 		if (!unitsProduced || unitsProduced.length === 0) return [];
 
 		// Build a map of unit_type -> nation -> count
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const pivotMap = new Map<string, Record<string, number>>();
 
 		for (const u of unitsProduced) {
@@ -1155,8 +1142,7 @@
 						},
 						tooltip: {
 							trigger: "item",
-							// eslint-disable-next-line @typescript-eslint/no-explicit-any
-							formatter: (params: any) => {
+							formatter: (params: { data: unknown }) => {
 								const data = params.data as
 									| [number, number, string | null]
 									| undefined;
@@ -1261,8 +1247,7 @@
 						},
 						tooltip: {
 							trigger: "item",
-							// eslint-disable-next-line @typescript-eslint/no-explicit-any
-							formatter: (params: any) => {
+							formatter: (params: { data: unknown }) => {
 								const data = params.data as
 									| [number, number, string | null]
 									| undefined;
@@ -1617,17 +1602,6 @@
 		return logs;
 	});
 
-	// Check if any filters are active
-	const hasActiveFilters = $derived(
-		tables.events.search !== "" || tables.events.filters.length > 0,
-	);
-
-	// Clear all filters
-	function clearFilters() {
-		tables.events.search = "";
-		tables.events.filters = [];
-	}
-
 	// Handle map turn slider change
 	async function handleMapTurnChange(turn: number) {
 		if (!gameDetails || mapTilesLoading) return;
@@ -1904,7 +1878,7 @@
 												>
 													Players
 												</Select.GroupHeading>
-												{#each uniquePlayers as player}
+												{#each uniquePlayers as player (player)}
 													<Select.Item
 														value={`player:${player}`}
 														label={player}
@@ -1932,7 +1906,7 @@
 												>
 													Log Types
 												</Select.GroupHeading>
-												{#each uniqueLogTypes as logType}
+												{#each uniqueLogTypes as logType (logType)}
 													<Select.Item
 														value={`logtype:${logType}`}
 														label={formatEnum(logType, "")}
@@ -1963,7 +1937,7 @@
 						<!-- Selected filter chips -->
 						{#if tables.events.filters.length > 0}
 							<div class="flex flex-wrap gap-1">
-								{#each tables.events.filters as filter}
+								{#each tables.events.filters as filter (filter)}
 									<span class="rounded bg-brown px-2 py-1 text-xs text-white">
 										{filter.startsWith("logtype:")
 											? formatEnum(filter.replace("logtype:", ""), "")
@@ -2051,7 +2025,7 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each filteredEventLogs() ?? [] as log}
+								{#each filteredEventLogs() ?? [] as log, i (i)}
 									<tr class="hover:bg-brown/20 transition-colors duration-200">
 										<td class="border-brown/50 border-b p-3 text-left text-tan"
 											>{log.turn}</td
@@ -2165,7 +2139,7 @@
 													>
 														Nations
 													</Select.GroupHeading>
-													{#each uniqueLawNations as nation}
+													{#each uniqueLawNations as nation (nation)}
 														<Select.Item
 															value={`nation:${nation}`}
 															label={formatEnum(nation, "NATION_")}
@@ -2197,7 +2171,7 @@
 							<!-- Selected filter chips -->
 							{#if tables.laws.filters.length > 0}
 								<div class="flex flex-wrap gap-1">
-									{#each tables.laws.filters as filter}
+									{#each tables.laws.filters as filter (filter)}
 										<span class="rounded bg-brown px-2 py-1 text-xs text-white">
 											{formatEnum(filter.replace("nation:", ""), "NATION_")}
 										</span>
@@ -2234,7 +2208,7 @@
 											</span>
 										</th>
 										<!-- Nation column headers -->
-										{#each displayedLawNations as nation}
+										{#each displayedLawNations as nation (nation)}
 											<th
 												class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
 												onclick={() => toggleSort("laws", `nation:${nation}`)}
@@ -2254,14 +2228,14 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each lawPivotData() as row}
+									{#each lawPivotData() as row (row.law)}
 										<tr class="hover:bg-brown/10">
 											<td
 												class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"
 											>
 												{formatEnum(row.law, "LAW_")}
 											</td>
-											{#each displayedLawNations as nation}
+											{#each displayedLawNations as nation (nation)}
 												<td
 													class="border-brown/50 whitespace-nowrap border-b p-3 text-center text-tan"
 												>
@@ -2365,7 +2339,7 @@
 													>
 														Nations
 													</Select.GroupHeading>
-													{#each uniqueTechNations as nation}
+													{#each uniqueTechNations as nation (nation)}
 														<Select.Item
 															value={`nation:${nation}`}
 															label={formatEnum(nation, "NATION_")}
@@ -2397,7 +2371,7 @@
 							<!-- Selected filter chips -->
 							{#if tables.techs.filters.length > 0}
 								<div class="flex flex-wrap gap-1">
-									{#each tables.techs.filters as filter}
+									{#each tables.techs.filters as filter (filter)}
 										<span class="rounded bg-brown px-2 py-1 text-xs text-white">
 											{formatEnum(filter.replace("nation:", ""), "NATION_")}
 										</span>
@@ -2434,7 +2408,7 @@
 											</span>
 										</th>
 										<!-- Nation column headers -->
-										{#each displayedTechNations as nation}
+										{#each displayedTechNations as nation (nation)}
 											<th
 												class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
 												onclick={() => toggleSort("techs", `nation:${nation}`)}
@@ -2454,14 +2428,14 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each techPivotData() as row}
+									{#each techPivotData() as row (row.tech)}
 										<tr class="hover:bg-brown/10">
 											<td
 												class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"
 											>
 												{formatEnum(row.tech, "TECH_")}
 											</td>
-											{#each displayedTechNations as nation}
+											{#each displayedTechNations as nation (nation)}
 												<td
 													class="border-brown/50 whitespace-nowrap border-b p-3 text-center text-tan"
 												>
@@ -2689,7 +2663,7 @@
 													>
 														Nations
 													</Select.GroupHeading>
-													{#each uniqueUnitNations as nation}
+													{#each uniqueUnitNations as nation (nation)}
 														<Select.Item
 															value={`nation:${nation}`}
 															label={formatEnum(nation, "NATION_")}
@@ -2721,7 +2695,7 @@
 							<!-- Selected filter chips -->
 							{#if tables.units.filters.length > 0}
 								<div class="flex flex-wrap gap-1">
-									{#each tables.units.filters as filter}
+									{#each tables.units.filters as filter (filter)}
 										<span class="rounded bg-brown px-2 py-1 text-xs text-white">
 											{formatEnum(filter.replace("nation:", ""), "NATION_")}
 										</span>
@@ -2755,7 +2729,7 @@
 											</span>
 										</th>
 										<!-- Nation column headers -->
-										{#each displayedUnitNations as nation}
+										{#each displayedUnitNations as nation (nation)}
 											<th
 												class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-right font-bold text-brown"
 												onclick={() => toggleSort("units", `nation:${nation}`)}
@@ -2793,14 +2767,14 @@
 									</tr>
 								</thead>
 								<tbody>
-									{#each unitPivotData() as row}
+									{#each unitPivotData() as row (row.unit_type)}
 										<tr class="hover:bg-brown/10">
 											<td
 												class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"
 											>
 												{formatEnum(row.unit_type, "UNIT_")}
 											</td>
-											{#each displayedUnitNations as nation}
+											{#each displayedUnitNations as nation (nation)}
 												<td
 													class="border-brown/50 whitespace-nowrap border-b p-3 text-right text-tan"
 												>
@@ -2893,7 +2867,7 @@
 												>
 													Nations
 												</Select.GroupHeading>
-												{#each uniqueCityNations as nation}
+												{#each uniqueCityNations as nation (nation)}
 													<Select.Item
 														value={`nation:${nation}`}
 														label={formatEnum(nation, "NATION_")}
@@ -2925,7 +2899,7 @@
 						<!-- Selected filter chips -->
 						{#if tables.cities.filters.length > 0}
 							<div class="flex flex-wrap gap-1">
-								{#each tables.cities.filters as filter}
+								{#each tables.cities.filters as filter (filter)}
 									<span class="rounded bg-brown px-2 py-1 text-xs text-white">
 										{formatEnum(filter.replace("nation:", ""), "NATION_")}
 									</span>
@@ -2951,7 +2925,7 @@
 									class="z-50 max-h-80 overflow-y-auto rounded border-2 border-black bg-[#201a13] shadow-lg"
 								>
 									<Select.Viewport>
-										{#each CITY_COLUMNS as column}
+										{#each CITY_COLUMNS as column (column.key)}
 											<Select.Item
 												value={column.key}
 												label={column.label}
@@ -2984,7 +2958,7 @@
 						<table class="w-full">
 							<thead>
 								<tr>
-									{#each visibleCityColumns as column}
+									{#each visibleCityColumns as column (column.key)}
 										<th
 											class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
 											onclick={() => toggleSort("cities", column.key)}
@@ -3002,9 +2976,9 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each filteredSortedCities() as city}
+								{#each filteredSortedCities() as city (city.city_name)}
 									<tr class="hover:bg-brown/20 transition-colors duration-200">
-										{#each visibleCityColumns as column}
+										{#each visibleCityColumns as column (column.key)}
 											<td
 												class="border-brown/50 border-b p-3 text-left text-tan {column.key ===
 												'city_name'
@@ -3089,7 +3063,7 @@
 												>
 													Nations
 												</Select.GroupHeading>
-												{#each uniqueImprovementNations as nation}
+												{#each uniqueImprovementNations as nation (nation)}
 													<Select.Item
 														value={`nation:${nation}`}
 														label={formatEnum(nation, "NATION_")}
@@ -3121,7 +3095,7 @@
 						<!-- Selected filter chips -->
 						{#if tables.improvements.filters.length > 0}
 							<div class="flex flex-wrap gap-1">
-								{#each tables.improvements.filters as filter}
+								{#each tables.improvements.filters as filter (filter)}
 									<span class="rounded bg-brown px-2 py-1 text-xs text-white">
 										{formatEnum(filter.replace("nation:", ""), "NATION_")}
 									</span>
@@ -3160,7 +3134,7 @@
 										</span>
 									</th>
 									<!-- Nation column headers -->
-									{#each displayedImprovementNations as nation}
+									{#each displayedImprovementNations as nation (nation)}
 										<th
 											class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
 											onclick={() =>
@@ -3203,14 +3177,14 @@
 								</tr>
 							</thead>
 							<tbody>
-								{#each improvementPivotData() as row}
+								{#each improvementPivotData() as row (row.improvement)}
 									<tr class="hover:bg-brown/10">
 										<td
 											class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"
 										>
 											{formatEnum(row.improvement, "IMPROVEMENT_")}
 										</td>
-										{#each displayedImprovementNations as nation}
+										{#each displayedImprovementNations as nation (nation)}
 											<td
 												class="border-brown/50 whitespace-nowrap border-b p-3 text-center text-tan"
 											>
@@ -3356,7 +3330,7 @@
 							</tr>
 						</thead>
 						<tbody>
-							{#each gameDetails.players as player}
+							{#each gameDetails.players as player (player.nation)}
 								<tr class="hover:bg-brown/20 transition-colors duration-200">
 									<td class="border-brown/50 border-b p-3 text-left text-tan"
 										>{player.player_name}</td

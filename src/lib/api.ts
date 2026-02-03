@@ -4,7 +4,6 @@ import type { GameDetails } from "$lib/types/GameDetails";
 import type { GameInfo } from "$lib/types/GameInfo";
 import type { PlayerHistory } from "$lib/types/PlayerHistory";
 import type { YieldHistory } from "$lib/types/YieldHistory";
-import type { BatchImportResult } from "$lib/types/BatchImportResult";
 import type { NationDynastyRow } from "$lib/types/NationDynastyRow";
 import type { PlayerDebugRow } from "$lib/types/PlayerDebugRow";
 import type { MatchDebugRow } from "$lib/types/MatchDebugRow";

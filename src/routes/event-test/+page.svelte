@@ -63,7 +63,7 @@
 	<div
 		class="flex-1 overflow-y-auto rounded border-2 border-gray-400 bg-black p-4 font-mono text-sm"
 	>
-		{#each logs as log}
+		{#each logs as log, i (i)}
 			<div class="text-green-400">{log}</div>
 		{/each}
 	</div>

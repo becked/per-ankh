@@ -50,7 +50,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each matchData as row}
+					{#each matchData as row (row.match_id)}
 						<tr class="hover:bg-gray-50">
 							<td class="border border-gray-300 px-4 py-2">{row.match_id}</td>
 							<td class="border border-gray-300 px-4 py-2">{row.game_id}</td>
@@ -79,7 +79,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each nationData as row}
+					{#each nationData as row (`${row.nation}-${row.dynasty}`)}
 						<tr class="hover:bg-gray-50">
 							<td class="border border-gray-300 px-4 py-2"
 								>{row.nation ?? "(null)"}</td
@@ -113,7 +113,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each playerData as row}
+					{#each playerData as row (`${row.match_id}-${row.player_name}`)}
 						<tr class="hover:bg-gray-50">
 							<td class="border border-gray-300 px-4 py-2">{row.match_id}</td>
 							<td class="border border-gray-300 px-4 py-2">{row.player_name}</td

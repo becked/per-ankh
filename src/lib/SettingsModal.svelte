@@ -91,7 +91,7 @@
 					</div>
 				{:else}
 					<div class="max-h-64 overflow-y-auto rounded border border-black">
-						{#each knownIds as id}
+						{#each knownIds as id (id.online_id)}
 							<button
 								type="button"
 								class="w-full border-b border-gray-700 px-4 py-3 text-left transition-colors last:border-b-0

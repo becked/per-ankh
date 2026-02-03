@@ -95,7 +95,6 @@
 </div>
 
 <!-- Fullscreen dialog (renders in browser's top layer) -->
-<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 <dialog
 	bind:this={dialogRef}
 	onclick={handleBackdropClick}

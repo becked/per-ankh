@@ -42,7 +42,7 @@
 	// Convert Record<string, boolean> to string[] for bits-ui
 	const selectedNames = $derived(
 		Object.entries(selected)
-			.filter(([_, isSelected]) => isSelected)
+			.filter(([, isSelected]) => isSelected)
 			.map(([name]) => name),
 	);
 
@@ -60,7 +60,7 @@
 	onValueChange={handleValueChange}
 	class="flex flex-wrap items-center gap-2"
 >
-	{#each series as s}
+	{#each series as s (s.name)}
 		{@const isSelected = selected[s.name]}
 		<ToggleGroup.Item
 			value={s.name}

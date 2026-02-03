@@ -71,7 +71,8 @@
 
 	// Re-fetch games when collection filter changes
 	$effect(() => {
-		const _ = currentCollectionId;
+		// Track dependency for reactivity - accessing value registers it as a dependency
+		void currentCollectionId;
 		fetchGames();
 	});
 
@@ -182,8 +183,9 @@
 			: formatDate(game.save_date);
 	}
 
-	function navigateToGame(matchId: number) {
-		goto(`/game/${matchId}`);
+	async function navigateToGame(matchId: number) {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- Navigation is awaited
+		await goto(`/game/${matchId}`);
 	}
 
 	// Filter games based on search query
