@@ -32,6 +32,7 @@
 		height?: string;
 		totalTurns?: number | null;
 		selectedTurn?: number | null;
+		// eslint-disable-next-line no-unused-vars -- Turn is used in callback signature
 		onTurnChange?: ((turn: number) => void) | null;
 	} = $props();
 
@@ -43,7 +44,6 @@
 	let showCities = $state(true);
 	let showUrbanImprovements = $state(false);
 	let showRuralImprovements = $state(false);
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let deck: Deck<any> | null = null;
 	let tooltipContent = $state<string | null>(null);
 	let tooltipX = $state(0);
@@ -52,7 +52,6 @@
 	// Fullscreen state
 	let dialogRef: HTMLDialogElement | null = $state(null);
 	let fullscreenCanvas: HTMLCanvasElement;
-	// eslint-disable-next-line @typescript-eslint/no-explicit-any
 	let fullscreenDeck: Deck<any> | null = null;
 	let isClosing = $state(false);
 	let fullscreenTooltipContent = $state<string | null>(null);
@@ -615,7 +614,6 @@
 		const IMPROVEMENT_DOT_RADIUS = 2;
 		const CITY_CIRCLE_RADIUS = 2.5;
 
-		// eslint-disable-next-line @typescript-eslint/no-explicit-any
 		const layers: any[] = [
 			// Base hex layer
 			new PolygonLayer<TileData>({
@@ -920,6 +918,7 @@
 		});
 	}
 
+	// eslint-disable-next-line no-unused-vars -- Reserved for future map controls
 	function resetView(isFullscreen = false) {
 		const targetDeck = isFullscreen ? fullscreenDeck : deck;
 		const targetCanvas = isFullscreen ? fullscreenCanvas : deckCanvas;
@@ -943,6 +942,7 @@
 		});
 	}
 
+	// eslint-disable-next-line no-unused-vars -- Reserved for future map controls
 	function pan(dx: number, dy: number, isFullscreen = false) {
 		const targetDeck = isFullscreen ? fullscreenDeck : deck;
 		const viewState = isFullscreen ? fullscreenViewState : currentViewState;
@@ -1105,11 +1105,11 @@
 		const mode = colorMode;
 		const currentTiles = tiles;
 		const tileCount = currentTiles.length;
-		// Track marker toggles for reactivity
-		const _cities = showCities;
-		const _urbanImprovements = showUrbanImprovements;
-		const _ruralImprovements = showRuralImprovements;
-		const _cityTints = showCityTints;
+		// Track marker toggles for reactivity - accessing values registers them as dependencies
+		void showCities;
+		void showUrbanImprovements;
+		void showRuralImprovements;
+		const applyCityTints = showCityTints;
 
 		// If tile count changed significantly, reinitialize deck with new view bounds
 		if (tileCount > 0 && Math.abs(tileCount - prevTileCount) > 100) {
@@ -1135,12 +1135,12 @@
 
 		if (deck && currentTiles.length > 0) {
 			deck.setProps({
-				layers: createLayers(mode, _cityTints),
+				layers: createLayers(mode, applyCityTints),
 			});
 		}
 		if (fullscreenDeck && currentTiles.length > 0) {
 			fullscreenDeck.setProps({
-				layers: createLayers(mode, _cityTints),
+				layers: createLayers(mode, applyCityTints),
 			});
 		}
 	});
@@ -1151,7 +1151,7 @@
 	<div class="flex flex-wrap items-center gap-4">
 		<!-- Color mode buttons -->
 		<div class="flex gap-2">
-			{#each COLOR_MODES as mode}
+			{#each COLOR_MODES as mode (mode.value)}
 				<button
 					class="rounded border-2 border-black px-4 py-2 text-sm font-bold transition-colors {colorMode ===
 					mode.value
@@ -1393,6 +1393,7 @@
 				class="tooltip"
 				style="left: {tooltipX + 10}px; top: {tooltipY + 10}px;"
 			>
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -- Trusted: generated internally by buildTooltipContent() -->
 				{@html tooltipContent}
 			</div>
 		{/if}
@@ -1413,7 +1414,7 @@
 			<div class="flex flex-wrap items-center gap-4">
 				<!-- Color mode buttons -->
 				<div class="flex gap-2">
-					{#each COLOR_MODES as mode}
+					{#each COLOR_MODES as mode (mode.value)}
 						<button
 							class="rounded border-2 border-black px-4 py-2 text-sm font-bold transition-colors {colorMode ===
 							mode.value
@@ -1664,6 +1665,7 @@
 					style="left: {fullscreenTooltipX + 10}px; top: {fullscreenTooltipY +
 						10}px;"
 				>
+					<!-- eslint-disable-next-line svelte/no-at-html-tags -- Trusted: generated internally by buildTooltipContent() -->
 					{@html fullscreenTooltipContent}
 				</div>
 			{/if}

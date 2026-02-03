@@ -23,8 +23,9 @@
 	let importProgress: ImportProgress | null = $state(null);
 	let importResult: BatchImportResult | null = $state(null);
 
-	function navigateToSummary() {
-		goto("/");
+	async function navigateToSummary() {
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- Navigation is awaited
+		await goto("/");
 	}
 
 	function toggleMenu() {
@@ -87,7 +88,8 @@
 			await api.resetDatabase();
 			await showSuccess("Database reset successfully.");
 			refreshData.trigger();
-			goto("/"); // Navigate to summary page after reset
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- Navigation is awaited
+			await goto("/"); // Navigate to summary page after reset
 		} catch (err) {
 			const errorMsg = err instanceof Error ? err.message : String(err);
 			await showError(`Failed to reset database: ${errorMsg}`);
@@ -183,9 +185,10 @@
 				<button
 					class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
 					type="button"
-					onclick={() => {
+					onclick={async () => {
 						isMenuOpen = false;
-						goto("/");
+						// eslint-disable-next-line svelte/no-navigation-without-resolve -- Navigation is awaited
+						await goto("/");
 					}}
 				>
 					Overview

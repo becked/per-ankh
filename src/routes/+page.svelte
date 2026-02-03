@@ -89,6 +89,7 @@
 
 		// Determine date range: last 6 months from today
 		const today = new Date();
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Date used in regular function, not reactive state
 		const sixMonthsAgo = new Date(today);
 		sixMonthsAgo.setMonth(sixMonthsAgo.getMonth() - 6);
 
@@ -97,6 +98,7 @@
 
 		// Group all nations by date (preserve all nations, deduplicated)
 		// Only include dates within the visible range
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used in regular function, not reactive state
 		const dateToNations = new Map<string, string[]>();
 		for (const entry of dates) {
 			// Filter to only dates within the 6-month range
@@ -172,12 +174,14 @@
 					type: "custom",
 					coordinateSystem: "calendar",
 					data: customData,
+					/* eslint-disable no-unused-vars -- Parameters in type signature */
 					renderItem: (
 						params: { coordSys: { cellWidth: number; cellHeight: number } },
 						api: {
 							value: (idx: number) => string;
 							coord: (date: string) => [number, number];
 						},
+					/* eslint-enable no-unused-vars */
 					) => {
 						const date = api.value(0);
 						const cellPoint = api.coord(date);
@@ -256,7 +260,8 @@
 
 	// React to collection filter changes (also handles initial fetch)
 	$effect(() => {
-		const _ = currentCollectionId; // Track dependency
+		// Track dependency for reactivity - accessing value registers it as a dependency
+		void currentCollectionId;
 		fetchStats();
 	});
 </script>

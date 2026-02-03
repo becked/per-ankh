@@ -112,7 +112,7 @@
 								<div
 									class="max-h-40 overflow-y-auto rounded border border-red-700 bg-gray-800 p-3"
 								>
-									{#each result.errors as error}
+									{#each result.errors as error (error.file_name)}
 										<div class="mb-2 text-sm">
 											<div class="font-semibold text-red-400">
 												{error.file_name}
