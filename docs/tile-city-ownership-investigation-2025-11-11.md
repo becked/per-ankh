@@ -21,13 +21,16 @@ The tile city ownership operation takes **622ms** (57% of total import time), bu
 ## Timeline of Optimization Attempts
 
 ### 1. Initial Implementation: Individual UPDATEs (Pre-Nov 7)
+
 **Performance**: ~740ms
 **Method**: Loop with individual UPDATE statements
 **Status**: Baseline (slow but working)
 
 ### 2. Batched CASE UPDATE Optimization (Nov 7 - commit 75a2f65)
+
 **Performance**: **49ms** (15x faster!)
 **Method**: Batched CASE UPDATE statements
+
 ```sql
 UPDATE tiles SET owner_city_id = CASE tile_id
   WHEN 1 THEN 100
@@ -35,12 +38,15 @@ UPDATE tiles SET owner_city_id = CASE tile_id
   ...
 END WHERE tile_id IN (1, 2, ...) AND match_id = 123
 ```
+
 **Status**: ✅ Fast but ❌ Buggy
 
 ### 3. Reversion to Individual UPDATEs (Nov 7 - commit ad75e3b)
+
 **Performance**: ~770ms (slower than batched, similar to baseline)
 **Reason**: DuckDB threw spurious PRIMARY KEY violations
 **Commit message excerpt**:
+
 > "DuckDB was throwing spurious PRIMARY KEY constraint violations during batched
 > CASE UPDATE statements, even when all diagnostic checks showed no actual
 > duplicates existed. After extensive debugging..."
@@ -51,14 +57,17 @@ END WHERE tile_id IN (1, 2, ...) AND match_id = 123
 **Status**: ❌ Slow but ✅ Reliable
 
 ### 4. INSERT ON CONFLICT Optimization (Post-Nov 7 - commit cbfadd2)
+
 **Performance**: Unknown (not measured in current benchmarks)
 **Method**: Tried using INSERT ON CONFLICT instead
 **Status**: Also reverted (commit b6c1f74)
 
 ### 5. Current State (Nov 11)
+
 **Performance**: 622ms
 **Method**: Individual parameterized UPDATEs
 **Comment in code (lines 336-338)**:
+
 > "Use individual parameterized UPDATEs - slower but stable
 > NOTE: Batched approaches (CASE UPDATE, UPDATE FROM, INSERT ON CONFLICT) all trigger
 > DuckDB MVCC bugs with composite PRIMARY KEYs."
@@ -70,11 +79,13 @@ END WHERE tile_id IN (1, 2, ...) AND match_id = 123
 ## Why Nov 7 Performance Report Showed 49ms
 
 The Nov 7 performance results document states:
+
 - "Tile city ownership: 49ms (2.6%) ⚡ 15x faster"
 
 This measurement was taken **during testing of the batched CASE UPDATE optimization** (commit 75a2f65), but **before it was reverted** due to the DuckDB bug (commit ad75e3b).
 
 **Both commits happened on Nov 7, 2025:**
+
 1. Morning: Implemented batched CASE UPDATE (49ms) ✅
 2. Afternoon: Discovered DuckDB bug, reverted to individual UPDATEs (770ms) ❌
 
@@ -100,6 +111,7 @@ for (tile_id, city_id) in unique_updates {
 ```
 
 **Performance characteristics:**
+
 - **Time**: 622ms for ~5,476 tiles
 - **Per-tile**: ~114μs per tile
 - **Method**: Prepared statement executed in a loop
@@ -116,12 +128,14 @@ for (tile_id, city_id) in unique_updates {
 **Bug description**: DuckDB throws PRIMARY KEY constraint violations when using batched UPDATE operations (CASE UPDATE, UPDATE FROM, INSERT ON CONFLICT) on tables with composite PRIMARY KEYs.
 
 **Symptoms**:
+
 - Error: "PRIMARY KEY or UNIQUE constraint violated"
 - Diagnostic checks show NO actual duplicates in database
 - Diagnostic checks show NO duplicates in update list
 - Error occurs randomly/inconsistently (MVCC race condition)
 
 **Tables affected**: Any table with composite PRIMARY KEY, specifically:
+
 - `tiles` (PRIMARY KEY: `tile_id, match_id`)
 - `characters` (PRIMARY KEY: `character_id, match_id`)
 - Others with similar schema
@@ -137,6 +151,7 @@ for (tile_id, city_id) in unique_updates {
 **Document**: `docs/implementation/tile-ownership-update-optimization.md`
 
 **Approach**:
+
 1. Create temp table
 2. Bulk insert updates using Appender API (fast)
 3. Single `UPDATE FROM` query
@@ -157,21 +172,23 @@ for (tile_id, city_id) in unique_updates {
 ### Impact on Total Import Time
 
 **Current breakdown** (1,099ms total):
+
 - Tile city ownership: 622ms (57%)
 - All other operations: 477ms (43%)
 
 **If optimized to 50ms**:
+
 - Tile city ownership: 50ms (10%)
 - All other operations: 477ms (90%)
 - **Total**: ~527ms (52% faster overall!)
 
 ### User Experience Impact
 
-| Scenario | Current | If Optimized | Difference |
-|----------|---------|--------------|------------|
-| Single save | 1.1s | ~0.5s | 0.6s saved |
-| 10 saves | 11s | ~5s | 6s saved |
-| 266 saves | 5 min | ~2.3 min | 2.7 min saved |
+| Scenario    | Current | If Optimized | Difference    |
+| ----------- | ------- | ------------ | ------------- |
+| Single save | 1.1s    | ~0.5s        | 0.6s saved    |
+| 10 saves    | 11s     | ~5s          | 6s saved      |
+| 266 saves   | 5 min   | ~2.3 min     | 2.7 min saved |
 
 **Significant improvement**: Would make imports feel nearly instant.
 
@@ -184,6 +201,7 @@ for (tile_id, city_id) in unique_updates {
 **Why**: The optimization doc suggests UPDATE FROM might avoid the bug
 
 **How**:
+
 1. Implement temp table + Appender + UPDATE FROM (see `tile-ownership-update-optimization.md`)
 2. Test with multiple saves
 3. Monitor for PRIMARY KEY violations
@@ -198,6 +216,7 @@ for (tile_id, city_id) in unique_updates {
 
 **Current DuckDB version**: Unknown (check `Cargo.toml`)
 **Action**:
+
 1. Check DuckDB release notes for MVCC or PRIMARY KEY bug fixes
 2. Test with latest DuckDB version
 3. If bug is fixed upstream, batched approaches should work
@@ -209,6 +228,7 @@ for (tile_id, city_id) in unique_updates {
 ### Priority 3: Accept Current Performance (No Risk)
 
 **Rationale**:
+
 - Current performance (1.1s per save) is already **excellent**
 - User experience is good even with 266 saves (5 min)
 - System is **stable and correct**
@@ -225,6 +245,7 @@ for (tile_id, city_id) in unique_updates {
 **Can it be optimized?** ⚠️ Maybe - UPDATE FROM approach is documented but untested
 
 **Should it be optimized?** 🤔 Depends on risk tolerance:
+
 - **Low risk tolerance**: Keep current implementation (stable, correct, acceptable performance)
 - **High risk tolerance**: Try UPDATE FROM optimization (might gain 50% speedup, might fail)
 

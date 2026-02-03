@@ -13,6 +13,7 @@ Import failed: Some("Unknown player ID: -1 at lookup")
 ```
 
 This error occurs during parsing of a real Old World save file (`OW-Carthage-Year39-2025-11-04-21-38-46.zip`) after successfully parsing:
+
 - 2 Players
 - Multiple Tribes
 - 74 Characters
@@ -52,6 +53,7 @@ In Old World XML files, `-1` is used as a sentinel value to indicate "no player"
 We've already added filtering for several entity types to handle `-1` properly:
 
 #### 1. Characters Parser (src/parser/entities/characters.rs:33-41)
+
 ```rust
 let player_xml_id = char_node
     .opt_attr("Player")
@@ -64,6 +66,7 @@ let player_db_id = match player_xml_id {
 ```
 
 #### 2. Tiles Parser (src/parser/entities/tiles.rs:64-72)
+
 ```rust
 let owner_player_xml_id = tile_node
     .opt_child_text("OwnerPlayer")
@@ -76,6 +79,7 @@ let owner_player_db_id = match owner_player_xml_id {
 ```
 
 #### 3. Tribes Parser (src/parser/entities/tribes.rs:30-37)
+
 ```rust
 let allied_player_xml_id = tribe_node
     .opt_child_text("AlliedPlayer")
@@ -115,6 +119,7 @@ When running the test with `RUST_LOG=debug`, the debug log statement inside `get
 ### 2. The Error Is ParseError::UnknownPlayerId
 
 The error message matches the format from `id_mapper.rs:263`:
+
 ```rust
 .ok_or_else(|| ParseError::UnknownPlayerId(xml_id, "lookup".to_string()))
 ```
@@ -124,6 +129,7 @@ The second parameter is hardcoded to `"lookup"`, which appears in the error mess
 ### 3. Families and Religions Parsers Are Disabled
 
 These parsers are currently commented out in `src/parser/import.rs:196-200` because:
+
 - Families and Religions don't exist as separate top-level XML elements
 - They are referenced by name (e.g., `FAMILY_BARCID`, `RELIGION_JUDAISM`) but not defined separately
 - However, the parser files still exist and contain `get_player()` calls
@@ -144,6 +150,7 @@ let player_db_id = id_mapper.get_player(player_xml_id)?;
 ### 5. Test File Context
 
 The test save file `OW-Carthage-Year39-2025-11-04-21-38-46.zip` contains:
+
 - 2 players (IDs 0 and 1)
 - Player 0: "ninja" (human, Carthage)
 - Player 1: "becked" (AI-controlled, Rome)
@@ -155,6 +162,7 @@ The test save file `OW-Carthage-Year39-2025-11-04-21-38-46.zip` contains:
 ## Attempted Debugging Steps
 
 ### 1. Added Debug Logging ❌
+
 ```rust
 pub fn get_player(&self, xml_id: i32) -> Result<i64> {
     log::debug!("get_player called with xml_id={}, mapped players: {:?}",
@@ -162,19 +170,25 @@ pub fn get_player(&self, xml_id: i32) -> Result<i64> {
     // ...
 }
 ```
+
 **Result**: No debug output appeared before the error, suggesting error occurs before any get_player calls or logging isn't captured.
 
 ### 2. Searched for -1 References ✓
+
 Confirmed that `-1` appears in multiple contexts:
+
 - Character `Player="-1"` attributes
 - Tile `OwnerPlayer` elements
 - Tribe `AlliedPlayer` elements
 
 ### 3. Added .filter(|&id| id >= 0) to Parsers ✓
+
 Successfully prevented `-1` from reaching `get_player()` in Characters, Tiles, and Tribes parsers.
 
 ### 4. Checked XML Structure 🔍
+
 Examined actual XML and found:
+
 - Cities always have valid Player IDs (0 or 1 in test file)
 - Families/Religions don't exist as elements (commented out parsers)
 - No obvious source of `-1` in required fields
@@ -186,6 +200,7 @@ Examined actual XML and found:
 Add better error context to pinpoint exactly where the error occurs:
 
 #### Option 1: Add Stack Trace to Error
+
 Modify `ParseError::UnknownPlayerId` to capture stack trace or caller location:
 
 ```rust
@@ -194,6 +209,7 @@ UnknownPlayerId(i32, String, std::backtrace::Backtrace),
 ```
 
 #### Option 2: Add Entity Context to get_player Calls
+
 Pass additional context about which entity is being parsed:
 
 ```rust
@@ -206,6 +222,7 @@ pub fn get_player(&self, xml_id: i32, context: &str) -> Result<i64> {
 ```
 
 Then update all call sites:
+
 ```rust
 // In cities.rs
 let player_db_id = id_mapper.get_player(player_xml_id, "city owner")?;
@@ -223,6 +240,7 @@ $ grep '<City' test-data/saves/*.xml | grep 'Player="-1"'
 ```
 
 If cities CAN have `-1`, add filtering:
+
 ```rust
 let player_xml_id = city_node
     .req_attr("Player")?
@@ -241,6 +259,7 @@ let player_db_id = id_mapper.get_player(player_xml_id)?;
 ### MEDIUM PRIORITY: Check Import Orchestration
 
 Review `src/parser/import.rs:133-217` for any player lookups during:
+
 - Match metadata extraction (line 236-238)
 - ID mapper initialization (line 167)
 - Delete derived data phase (line 173-175)
@@ -248,6 +267,7 @@ Review `src/parser/import.rs:133-217` for any player lookups during:
 ### LOW PRIORITY: Check for Attribute vs Element Confusion
 
 Verify no parsers are reading `-1` as a string from the wrong location:
+
 - Attributes vs child elements confusion
 - Typos in element/attribute names
 - Case sensitivity issues
@@ -285,12 +305,14 @@ grep -n '<City' OW-Carthage-Year39-2025-11-04-21-38-46.xml | head -20
 ## Hypothesis to Test
 
 **Primary Hypothesis**: The error occurs in the Cities parser because:
+
 1. Test passes through Players (2), Tribes (~20), Characters (74), Tiles (3000+)
 2. Cities are parsed next in sequence (line 194 of import.rs)
 3. Cities parser doesn't filter `-1` values
 4. One city in the XML might have `Player="-1"` (captured/neutral city?)
 
 **Alternative Hypothesis**: The error occurs during a second pass or relationship update:
+
 1. Some entity parsers update relationships after initial parsing
 2. A foreign key lookup might be trying to resolve a `-1` player reference
 3. Check for UPDATE statements that modify player_id columns
@@ -298,6 +320,7 @@ grep -n '<City' OW-Carthage-Year39-2025-11-04-21-38-46.xml | head -20
 ## Success Criteria
 
 Investigation is complete when we can:
+
 1. Identify the exact line of code calling `get_player(-1)`
 2. Understand why that code path exists
 3. Either filter the `-1` or fix the data model to handle it appropriately
@@ -335,6 +358,7 @@ The **Primary Hypothesis was correct**. The error occurred in the Cities parser 
 **Two-part fix implemented:**
 
 #### 1. Schema Change (docs/schema.sql:400)
+
 Changed cities.player_id to allow NULL for cities in transitional states:
 
 ```sql
@@ -346,6 +370,7 @@ player_id INTEGER,  -- NULL for cities in anarchy/being captured (Player="-1" in
 ```
 
 #### 2. Parser Change (src-tauri/src/parser/entities/cities.rs:18-30)
+
 Added filtering to handle `Player="-1"` similar to other entity parsers:
 
 ```rust
@@ -367,6 +392,7 @@ let player_db_id = match player_xml_id {
 ### Test Results
 
 After implementing the fix:
+
 ```
 running 1 test
 Successfully imported match:
@@ -383,17 +409,20 @@ test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 21 filtered out; fin
 **What we learned about cities in transitional states:**
 
 In Old World, cities can be temporarily "unowned" during:
+
 - **Anarchy**: City has revolted or lost control (`Player="-1"`, `<Tribe>TRIBE_ANARCHY</Tribe>`)
 - **Capture**: City is being captured by another player (`<CaptureTurns>N</CaptureTurns>`)
 - **Damage**: City may have damage from sieges (`<Damage>20</Damage>`)
 
 These cities maintain tracking data:
+
 - `<FirstPlayer>`: Original owner
 - `<LastPlayer>`: Previous owner before anarchy
 - `<CapturePlayer>`: Player attempting to capture
 - `Family`: Set to "NONE" when in anarchy
 
 **Database representation:**
+
 - `player_id` is NULL during transitional states
 - Foreign key constraint allows NULL (standard SQL behavior)
 - Indexes on player_id handle NULL values correctly

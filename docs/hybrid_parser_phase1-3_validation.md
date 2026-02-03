@@ -13,12 +13,14 @@ The developer has completed **substantial work** on the hybrid parser migration,
 ### Key Findings
 
 ✅ **What's Working:**
+
 - 13/16 entities migrated to hybrid pattern (81% structural completion)
 - Excellent code quality with comprehensive tests
 - Proper separation of parsing from DB insertion
 - Multi-pass insertion logic preserved correctly
 
 ❌ **Critical Gaps:**
+
 - **NO parallelization implemented** (main goal not achieved)
 - Tiles and Cities still using old direct-write pattern
 - No validation layer (`validation.rs` doesn't exist)
@@ -34,6 +36,7 @@ The developer has completed **substantial work** on the hybrid parser migration,
 **Status:** Fully implemented
 
 **Deliverables:**
+
 - ✅ `rayon = "1.10"` added to Cargo.toml (line 37)
 - ✅ `game_data.rs` created with all 16+ data structs
 - ✅ `parsers/` module structure created (16 files)
@@ -42,11 +45,13 @@ The developer has completed **substantial work** on the hybrid parser migration,
 - ❌ **Memory profiling utilities NOT added**
 
 **Code Quality:** Excellent
+
 - All structs use `#[derive(Debug, Clone, Serialize, Deserialize)]`
 - XML IDs stored (not DB IDs) as per plan
 - Comprehensive documentation in game_data.rs:1-571
 
 **Files Created:**
+
 ```
 src-tauri/src/parser/
 ├── game_data.rs              ✅ Complete (571 lines)
@@ -93,6 +98,7 @@ src-tauri/src/parser/
 **Status:** Parsers implemented, but testing incomplete
 
 **Deliverables:**
+
 - ✅ `parsers/players.rs` implemented (pure, no DB)
 - ✅ `inserters/players.rs` implemented (preserves deduplication)
 - ⚠️ **Unit tests exist BUT NOT comparison tests**
@@ -100,6 +106,7 @@ src-tauri/src/parser/
 - ❌ **NO memory profiling for players**
 
 **Evidence from Code:**
+
 ```rust
 // src-tauri/src/parser/parsers/players.rs:14
 pub fn parse_players_struct(doc: &XmlDocument) -> Result<Vec<PlayerData>> {
@@ -148,6 +155,7 @@ pub fn insert_players(
 **Missing:** Comparison test to prove hybrid matches old parser exactly
 
 **Plan Required (Phase 2, lines 605-643):**
+
 ```rust
 #[test]
 fn test_hybrid_matches_direct_players() {
@@ -177,12 +185,12 @@ fn test_hybrid_matches_direct_players() {
 
 #### Batch 1 - Foundation Entities
 
-| Entity | Parser | Inserter | Wired? | Status |
-|--------|--------|----------|---------|--------|
-| **Players** | ✅ | ✅ | ✅ | Complete |
-| **Characters** | ✅ | ✅ | ✅ | Complete |
-| **Cities** | ✅ | ✅ | ❌ | **NOT WIRED** |
-| **Tiles** | ✅ | ✅ | ❌ | **NOT WIRED** |
+| Entity         | Parser | Inserter | Wired? | Status        |
+| -------------- | ------ | -------- | ------ | ------------- |
+| **Players**    | ✅     | ✅       | ✅     | Complete      |
+| **Characters** | ✅     | ✅       | ✅     | Complete      |
+| **Cities**     | ✅     | ✅       | ❌     | **NOT WIRED** |
+| **Tiles**      | ✅     | ✅       | ❌     | **NOT WIRED** |
 
 **Critical Issue:** Tiles and Cities still use old direct-write pattern in import.rs:
 
@@ -201,6 +209,7 @@ let cities_time = t_cities.elapsed();
 ```
 
 **Expected (per plan lines 709-780):**
+
 ```rust
 // Should be using HYBRID pattern ✅
 let tiles_data = super::parsers::parse_tiles_struct(doc)?;
@@ -214,16 +223,17 @@ let cities_count = super::inserters::insert_cities(tx, &cities_data, &mut id_map
 
 #### Batch 2 - Affiliation Entities
 
-| Entity | Parser | Inserter | Wired? | Status |
-|--------|--------|----------|---------|--------|
-| **Families** | ✅ | ✅ | ✅ | Complete |
-| **Religions** | ✅ | ✅ | ✅ | Complete |
-| **Tribes** | ✅ | ✅ | ✅ | Complete |
-| **Unit Production** | ✅ | ✅ | ✅ | Complete |
+| Entity              | Parser | Inserter | Wired? | Status   |
+| ------------------- | ------ | -------- | ------ | -------- |
+| **Families**        | ✅     | ✅       | ✅     | Complete |
+| **Religions**       | ✅     | ✅       | ✅     | Complete |
+| **Tribes**          | ✅     | ✅       | ✅     | Complete |
+| **Unit Production** | ✅     | ✅       | ✅     | Complete |
 
 **Status:** Batch 2 is **fully migrated and wired**
 
 **Evidence from import.rs:422-462:**
+
 ```rust
 // 5. Tribes - HYBRID PARSER ✅
 let tribes_data = super::parsers::parse_tribes_struct(doc)?;
@@ -246,15 +256,15 @@ super::inserters::insert_city_units_produced(tx, &city_units_data, &id_mapper)?;
 
 #### Batch 3 - Extended Data (7/7 Complete)
 
-| Entity | Parser | Inserter | Wired? | Status |
-|--------|--------|----------|---------|--------|
-| **character_data** | ✅ | ✅ | ✅ | Complete |
-| **city_data** | ✅ | ✅ | ✅ | Complete |
-| **tile_data** | ✅ | ✅ | ✅ | Complete |
-| **player_data** | ✅ | ✅ | ✅ | Complete |
-| **diplomacy** | ✅ | ✅ | ✅ | Complete |
-| **timeseries** | ✅ | ✅ | ✅ | Complete |
-| **events** | ✅ | ✅ | ✅ | Complete |
+| Entity             | Parser | Inserter | Wired? | Status   |
+| ------------------ | ------ | -------- | ------ | -------- |
+| **character_data** | ✅     | ✅       | ✅     | Complete |
+| **city_data**      | ✅     | ✅       | ✅     | Complete |
+| **tile_data**      | ✅     | ✅       | ✅     | Complete |
+| **player_data**    | ✅     | ✅       | ✅     | Complete |
+| **diplomacy**      | ✅     | ✅       | ✅     | Complete |
+| **timeseries**     | ✅     | ✅       | ✅     | Complete |
+| **events**         | ✅     | ✅       | ✅     | Complete |
 
 **Status:** All Batch 3 entities **migrated and wired**
 
@@ -267,17 +277,20 @@ super::inserters::insert_city_units_produced(tx, &city_units_data, &id_mapper)?;
 **Status:** NOT implemented - **Critical for achieving faster parsing**
 
 **Critical Findings:**
+
 - ❌ No `rayon::join4()` or `rayon::join3()` calls found in codebase
 - ❌ No parallel orchestration in `parsers/mod.rs`
 - ❌ All parsing still sequential in import.rs:349-462
 
 **Evidence:**
+
 ```bash
 $ grep -r "rayon::" src-tauri/src/parser
 # NO RESULTS - rayon not used anywhere despite being in Cargo.toml!
 ```
 
 **Expected (per plan lines 709-780):**
+
 ```rust
 // parsers/mod.rs - SHOULD EXIST but DOESN'T ❌
 use rayon::prelude::*;
@@ -321,6 +334,7 @@ pub fn parse_save_to_structs(doc: &XmlDocument) -> Result<GameData> {
 ```
 
 **Actual (current import.rs:349-393):**
+
 ```rust
 // Sequential parsing - NO SPEEDUP ❌
 let t_players = Instant::now();
@@ -350,11 +364,13 @@ let cities_count = super::entities::parse_cities(doc, tx, &mut id_mapper)?;
 ✅ **Present:** Many parser unit tests exist (using correct `parse_xml()` helper)
 
 **Evidence:**
+
 - Tests follow correct pattern with `parse_xml()` helper
 - No type mismatches
 - Cargo test shows tests compiling successfully
 
 **Example Pattern (verified in code):**
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -379,6 +395,7 @@ mod tests {
 ❌ **Missing:** No comparison tests (old vs new parser)
 
 **Plan Required (Phase 2, lines 605-643):**
+
 ```rust
 #[test]
 fn test_hybrid_matches_direct_full_import() {
@@ -414,6 +431,7 @@ fn test_hybrid_matches_direct_full_import() {
 ❌ **Missing:** No evidence of memory profiling
 
 **Plan Required (Phase 2, lines 449-473):**
+
 ```rust
 // src-tauri/src/parser/utils.rs
 
@@ -458,9 +476,10 @@ fn test_memory_profile_players() {
 **Consequence:** Unknown if memory usage is within acceptable 100-150 MB budget
 
 **Go/No-Go Decision Point (per plan):**
+
 - <100 MB: Proceed ✅
 - 100-150 MB: Optimize then proceed ⚠️
-- >150 MB: Reassess ❌
+- > 150 MB: Reassess ❌
 
 **Current Status:** Decision point not reached (no profiling)
 
@@ -471,7 +490,9 @@ fn test_memory_profile_players() {
 ### ✅ DRY (Don't Repeat Yourself) - **EXCELLENT**
 
 **Evidence:**
+
 1. **Reuses `deduplicate_rows_last_wins()` utility** across all inserters
+
    ```rust
    // inserters/players.rs:44
    let unique_rows = deduplicate_rows_last_wins(
@@ -482,6 +503,7 @@ fn test_memory_profile_players() {
    ```
 
 2. **Common parser pattern** across all entities
+
    ```rust
    pub fn parse_{entity}_struct(doc: &XmlDocument) -> Result<Vec<{Entity}Data>> {
        let root = doc.root_element();
@@ -505,12 +527,14 @@ fn test_memory_profile_players() {
 ### ⚠️ YAGNI (You Ain't Gonna Need It) - **MIXED**
 
 **Good:**
+
 - ✅ No premature abstractions
 - ✅ No over-engineering of data structures
 - ✅ Uses `String` instead of `Cow<'a, str>` (optimize later if needed per plan)
 - ✅ Simple Vec instead of HashMap (as per plan lines 979-992)
 
 **Questionable:**
+
 - ⚠️ Created parsers/inserters for ALL 16 entities before wiring them up
   - Could have validated with just players/characters first (YAGNI)
   - Should have proven speedup with Phase 2 POC before proceeding
@@ -530,6 +554,7 @@ fn test_memory_profile_players() {
 ### ✅ Multi-Pass Insertion Logic - **PERFECTLY PRESERVED**
 
 **Evidence from import.rs:374-420:**
+
 ```rust
 // CRITICAL FIX: Pass 2a - Parse parent relationships immediately after characters
 // This MUST happen BEFORE any tables reference characters via FK (tribes, cities, etc.)
@@ -552,6 +577,7 @@ parse_character_birth_cities_pass2b(doc, tx, &id_mapper)?;
 ```
 
 ✅ **Critical FK ordering preserved correctly**
+
 - Pass 2a happens BEFORE tribes (which reference characters)
 - Pass 2b happens AFTER cities are created
 - Pass 2c happens AFTER Pass 2b
@@ -562,6 +588,7 @@ parse_character_birth_cities_pass2b(doc, tx, &id_mapper)?;
 ### ✅ Timing Instrumentation - **PRESERVED**
 
 **Evidence from import.rs:358-372:**
+
 ```rust
 let players_time = t_players.elapsed();
 log::info!("⏱️    Players: {:?} ({} players)", players_time, players_count);
@@ -579,6 +606,7 @@ eprintln!("⏱️    Characters core: {:?} ({} characters)", characters_time, ch
 All inserters use `deduplicate_rows_last_wins()` or `deduplicate_rows_first_wins()` appropriately
 
 **Example from inserters/players.rs:**
+
 ```rust
 let unique_rows = deduplicate_rows_last_wins(
     rows,
@@ -595,10 +623,12 @@ let unique_rows = deduplicate_rows_last_wins(
 ### 🔴 HIGH PRIORITY (Blocking speedup goal)
 
 #### Issue 1: NO PARALLELIZATION
+
 **Severity:** CRITICAL
 **Impact:** Main goal not achieved - parser is NOT faster
 
 **Details:**
+
 - `rayon` dependency added but never used
 - No `rayon::join4()` or `rayon::join3()` calls in codebase
 - All parsing still sequential
@@ -606,6 +636,7 @@ let unique_rows = deduplicate_rows_last_wins(
 **Location:** Should be in `parsers/mod.rs` (doesn't exist)
 
 **Expected Code (per plan lines 709-780):**
+
 ```rust
 // NEW FILE: src-tauri/src/parser/parsers/mod.rs
 use rayon::prelude::*;
@@ -643,10 +674,12 @@ pub fn parse_all_entities_parallel(doc: &XmlDocument) -> Result<PartialGameData>
 ---
 
 #### Issue 2: Tiles and Cities NOT WIRED
+
 **Severity:** HIGH
 **Impact:** Inconsistent architecture, not fully hybrid
 
 **Details:**
+
 - Parsers exist: `parsers/tiles.rs`, `parsers/cities.rs` ✅
 - Inserters exist: `inserters/tiles.rs`, `inserters/cities.rs` ✅
 - BUT still using old direct-write in import.rs ❌
@@ -654,6 +687,7 @@ pub fn parse_all_entities_parallel(doc: &XmlDocument) -> Result<PartialGameData>
 **Location:** `import.rs:384-395`
 
 **Current Code (WRONG):**
+
 ```rust
 // 3. Tiles (depends on players for ownership)
 let t_tiles = Instant::now();
@@ -667,6 +701,7 @@ let cities_time = t_cities.elapsed();
 ```
 
 **Expected Code (CORRECT):**
+
 ```rust
 // 3. Tiles - HYBRID PARSER
 let t_tiles = Instant::now();
@@ -686,10 +721,12 @@ let cities_time = t_cities.elapsed();
 ---
 
 #### Issue 3: NO COMPARISON TESTS
+
 **Severity:** HIGH
 **Impact:** No validation that hybrid matches old behavior
 
 **Details:**
+
 - Unit tests exist for parsers ✅
 - BUT no comparison tests between old and new ❌
 - Cannot prove correctness of migration
@@ -697,6 +734,7 @@ let cities_time = t_cities.elapsed();
 **Location:** Should be in `src-tauri/src/parser/tests.rs`
 
 **Required Test (per plan lines 605-643):**
+
 ```rust
 #[test]
 fn test_hybrid_matches_direct_full_import() {
@@ -728,10 +766,12 @@ fn test_hybrid_matches_direct_full_import() {
 ### 🟡 MEDIUM PRIORITY (Validation gaps)
 
 #### Issue 4: NO VALIDATION LAYER
+
 **Severity:** MEDIUM
 **Impact:** No pre-insertion FK validation
 
 **Details:**
+
 - Plan calls for `validation.rs` (lines 407-519)
 - File does not exist ❌
 - No `validate_game_data()` function
@@ -739,6 +779,7 @@ fn test_hybrid_matches_direct_full_import() {
 **Location:** Should be `src-tauri/src/parser/validation.rs`
 
 **Required Code (per plan):**
+
 ```rust
 // src-tauri/src/parser/validation.rs
 
@@ -775,10 +816,12 @@ fn validate_foreign_keys(game_data: &GameData) -> Result<()> {
 ---
 
 #### Issue 5: NO MEMORY PROFILING
+
 **Severity:** MEDIUM
 **Impact:** Unknown if memory acceptable
 
 **Details:**
+
 - Plan requires memory profiling (Phase 2)
 - Go/No-Go decision point not reached
 - Unknown if within 100-150 MB budget
@@ -786,6 +829,7 @@ fn validate_foreign_keys(game_data: &GameData) -> Result<()> {
 **Location:** Should be utilities in `utils.rs` + tests
 
 **Required Code (per plan lines 449-473):**
+
 ```rust
 // src-tauri/src/parser/utils.rs
 
@@ -814,10 +858,12 @@ pub fn estimate_memory_usage(game_data: &GameData) -> usize {
 ### 🟢 LOW PRIORITY (Nice to have)
 
 #### Issue 6: Old entities/ code still exists
+
 **Severity:** LOW
 **Impact:** Code bloat, confusion
 
 **Details:**
+
 - `src-tauri/src/parser/entities/` still exists
 - Contains old direct-write parsers
 - Some still in use (tiles.rs, cities.rs)
@@ -836,6 +882,7 @@ pub fn estimate_memory_usage(game_data: &GameData) -> usize {
 ### Expected vs Actual
 
 **Plan Expected (with parallelization, lines 1221-1244):**
+
 ```
 ZIP extraction:       50-200 ms  (unchanged)
 XML parsing:          30-80 ms   (unchanged)
@@ -848,6 +895,7 @@ Expected average:     ~160 ms
 ```
 
 **Actual Current (no parallelization):**
+
 ```
 ZIP extraction:       50-200 ms  (unchanged)
 XML parsing:          30-80 ms   (unchanged)
@@ -862,6 +910,7 @@ Current average:      ~213 ms
 **Speedup Achieved:** **0%** (goal was 25% improvement)
 
 **Performance Gap:**
+
 - Current: 213 ms average
 - Target: 160 ms average
 - Deficit: 53 ms (25% slower than target)
@@ -869,12 +918,14 @@ Current average:      ~213 ms
 ### Bottleneck Analysis
 
 **Current Time Breakdown (estimated):**
+
 - ZIP extraction: 23% (50ms / 213ms)
 - XML parsing: 19% (40ms / 213ms)
 - Entity parsing: 50% (106ms / 213ms) ← **Parallelization target**
 - DB insertion: 33% (70ms / 213ms)
 
 **If parallelization implemented:**
+
 - Entity parsing: 50ms (2.1x faster)
 - Total: 160ms
 - Improvement: 25%
@@ -888,10 +939,12 @@ Current average:      ~213 ms
 ### Immediate Actions (To achieve faster parsing)
 
 #### 1. Wire Tiles and Cities to hybrid pattern
+
 **Priority:** HIGH
 **Effort:** 1-2 hours
 
 **Changes Required:**
+
 ```rust
 // File: src-tauri/src/parser/import.rs
 // Lines: 384-395
@@ -913,10 +966,12 @@ let cities_count = super::inserters::insert_cities(tx, &cities_data, &mut id_map
 ---
 
 #### 2. Implement parallel parsing orchestration
+
 **Priority:** CRITICAL
 **Effort:** 3-4 hours
 
 **Step 1: Create parallel parser function**
+
 ```rust
 // NEW FILE: src-tauri/src/parser/parsers/mod.rs
 // Add at the top:
@@ -987,6 +1042,7 @@ pub fn parse_affiliation_entities_parallel(
 ```
 
 **Step 2: Update import.rs to use parallel parsing**
+
 ```rust
 // File: src-tauri/src/parser/import.rs
 // Lines: 343-467
@@ -1034,10 +1090,12 @@ log::info!("⏱️  Foundation insertion: {:?}", insertion_time);
 ---
 
 #### 3. Add comparison tests
+
 **Priority:** HIGH
 **Effort:** 2-3 hours
 
 **Test Implementation:**
+
 ```rust
 // File: src-tauri/src/parser/tests.rs
 // Add at the end:
@@ -1095,10 +1153,12 @@ fn test_hybrid_matches_direct_for_players() {
 ---
 
 #### 4. Benchmark before/after parallelization
+
 **Priority:** HIGH
 **Effort:** 1 hour
 
 **Process:**
+
 ```bash
 # 1. Baseline measurement (current sequential)
 cargo build --release
@@ -1118,6 +1178,7 @@ cargo build --release
 ```
 
 **Success Criteria:**
+
 - Parsing phase: 2x+ speedup
 - Overall import: 15-25% improvement
 - No regression in correctness (comparison tests pass)
@@ -1127,6 +1188,7 @@ cargo build --release
 ### Nice-to-Have (Can defer)
 
 #### 5. Add validation layer (validation.rs)
+
 **Priority:** MEDIUM
 **Effort:** 3-4 hours
 **Defer to:** After parallelization working
@@ -1136,6 +1198,7 @@ cargo build --release
 ---
 
 #### 6. Memory profiling
+
 **Priority:** MEDIUM
 **Effort:** 2-3 hours
 **Defer to:** After parallelization working
@@ -1145,6 +1208,7 @@ cargo build --release
 ---
 
 #### 7. Delete old entities/ code
+
 **Priority:** LOW
 **Effort:** 1 hour
 **Defer to:** After all validation complete (Phase 5)
@@ -1158,6 +1222,7 @@ cargo build --release
 ### Overall Assessment
 
 **Implementation Quality:** HIGH
+
 - Code follows DRY principles excellently
 - Proper separation of concerns (parsing vs insertion)
 - Multi-pass insertion logic preserved correctly
@@ -1165,12 +1230,14 @@ cargo build --release
 - 81% of entities structurally migrated
 
 **Implementation Completeness:** MEDIUM
+
 - Phase 1: ✅ Complete (with minor gaps)
 - Phase 2: ⚠️ Partial (missing validation)
 - Phase 3: ⚠️ Incomplete (tiles/cities not wired)
 - Phase 4: ❌ Not started (critical gap)
 
 **Goal Achievement:** **0%**
+
 - **Main goal: Faster parser** - NOT achieved
 - No parallelization implemented
 - No performance improvement over baseline
@@ -1185,6 +1252,7 @@ cargo build --release
 4. ✅ Benchmark and verify speedup: 1 hr
 
 **Expected Outcome:**
+
 - 2x speedup on parsing phase (106ms → 50ms)
 - 25% overall improvement (213ms → 160ms)
 - Full validation via comparison tests
@@ -1192,12 +1260,14 @@ cargo build --release
 ### Key Takeaways
 
 **Strengths:**
+
 - ✅ Excellent code quality and DRY compliance
 - ✅ Proper architectural separation
 - ✅ Multi-pass logic preserved
 - ✅ Good test patterns established
 
 **Lessons Learned:**
+
 - ⚠️ Should have validated Phase 2 POC before migrating all entities
 - ⚠️ Diverged from phased approach (built everything before proving speedup)
 - ⚠️ Missed critical Phase 4 (parallelization) which is the core goal

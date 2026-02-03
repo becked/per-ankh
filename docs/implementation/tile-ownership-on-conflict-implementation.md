@@ -41,6 +41,7 @@ for (tile_id, city_id) in unique_updates {
 ```
 
 **Bottlenecks**:
+
 - 2,700 separate query executions
 - 2,700 foreign key validations
 - No opportunity for query optimizer to batch operations
@@ -51,9 +52,11 @@ for (tile_id, city_id) in unique_updates {
 ## Current Implementation
 
 ### Location
+
 `src-tauri/src/parser/entities/tiles.rs:329-340`
 
 ### Code
+
 ```rust
 // Second pass: UPDATE tiles with owner_city_id
 // Use individual parameterized UPDATEs - slower but stable
@@ -70,6 +73,7 @@ for (tile_id, city_id) in unique_updates {
 ```
 
 ### Performance Characteristics
+
 - **Debug mode**: ~614ms (assumed, not measured)
 - **Release mode**: Unknown (never benchmarked)
 - **Stability**: 100% stable, no crashes
@@ -82,6 +86,7 @@ for (tile_id, city_id) in unique_updates {
 ### Approach
 
 Use DuckDB's `INSERT ... ON CONFLICT DO UPDATE` (UPSERT) to leverage:
+
 1. **Bulk insert** via Appender (10-20x faster than individual INSERTs)
 2. **Single SQL execution** instead of 2,700
 3. **Different DuckDB code path** that doesn't trigger MVCC bugs
@@ -119,11 +124,13 @@ conn.execute("DROP TABLE tile_ownership_updates", [])?;
 ### Why This Works
 
 **Avoids MVCC Bug**:
+
 - Uses INSERT code path instead of UPDATE code path
 - DuckDB's conflict detection is more robust than UPDATE's MVCC version tracking
 - Doesn't trigger the composite PRIMARY KEY bug that affects UPDATE FROM and CASE UPDATE
 
 **Performance Benefits**:
+
 - Appender is 10-20x faster than individual INSERTs
 - Single query execution instead of 2,700
 - DuckDB can optimize the bulk operation
@@ -135,6 +142,7 @@ conn.execute("DROP TABLE tile_ownership_updates", [])?;
 ### DuckDB ON CONFLICT Documentation
 
 **Syntax**:
+
 ```sql
 INSERT INTO table (columns...)
 VALUES (...)
@@ -143,6 +151,7 @@ DO UPDATE SET column = value
 ```
 
 **Key Points**:
+
 1. **Conflict target**: Defaults to PRIMARY KEY if omitted
 2. **EXCLUDED qualifier**: References the would-be-inserted row values
 3. **Composite keys**: Fully supported for `PRIMARY KEY (col1, col2)`
@@ -151,6 +160,7 @@ DO UPDATE SET column = value
 ### Schema Details
 
 **Tiles Table**:
+
 ```sql
 CREATE TABLE tiles (
     tile_id INTEGER NOT NULL,
@@ -163,10 +173,12 @@ CREATE TABLE tiles (
 ```
 
 **Key Constraints**:
+
 - Composite PRIMARY KEY: `(tile_id, match_id)`
 - Composite FOREIGN KEY: `(owner_city_id, match_id) → cities(city_id, match_id)`
 
 **Why Composite Keys Matter**:
+
 - DuckDB's MVCC implementation has bugs with batched UPDATEs on composite PRIMARY KEYs
 - INSERT ON CONFLICT uses different code path that doesn't trigger the bug
 - All `owner_city_id` values exist in `cities` table (validated by FK constraint)
@@ -178,6 +190,7 @@ CREATE TABLE tiles (
 **Performance**: 10-20x faster than individual INSERTs (proven in this codebase).
 
 **Usage Pattern**:
+
 ```rust
 let mut app = conn.appender("table_name")?;
 for row in rows {
@@ -199,6 +212,7 @@ drop(app); // IMPORTANT: Must drop to flush data
 ### Step 2: Replace Individual UPDATEs
 
 Replace this code:
+
 ```rust
 // Second pass: UPDATE tiles with owner_city_id
 // Use individual parameterized UPDATEs - slower but stable
@@ -215,6 +229,7 @@ for (tile_id, city_id) in unique_updates {
 ```
 
 With this code:
+
 ```rust
 // Second pass: UPDATE tiles with owner_city_id using INSERT ON CONFLICT (UPSERT)
 // This approach uses INSERT code path instead of UPDATE path, avoiding DuckDB MVCC bugs
@@ -255,6 +270,7 @@ conn.execute("DROP TABLE tile_ownership_updates", [])?;
 ### Step 3: Add Debug Timing (Optional but Recommended)
 
 The implementation above includes debug timing logs to measure:
+
 1. **Appender bulk insert time**: How long it takes to insert ~2,700 rows into temp table
 2. **UPSERT execution time**: How long the ON CONFLICT query takes
 
@@ -268,27 +284,30 @@ These logs help diagnose where time is spent and compare debug vs release perfor
 
 **We need to measure BOTH approaches in BOTH modes** to understand the true performance difference:
 
-| Approach | Debug Mode | Release Mode |
-|----------|------------|--------------|
+| Approach           | Debug Mode                   | Release Mode                 |
+| ------------------ | ---------------------------- | ---------------------------- |
 | Individual UPDATEs | **Unknown** (assumed ~614ms) | **Unknown** (never measured) |
-| INSERT ON CONFLICT | 1,255ms (measured once) | 7-20ms (measured, proven) |
+| INSERT ON CONFLICT | 1,255ms (measured once)      | 7-20ms (measured, proven)    |
 
 ### Test 1: Release Mode Benchmark
 
 **Purpose**: Measure both approaches in optimized builds.
 
 **Command**:
+
 ```bash
 cd src-tauri
 cargo test --release --test benchmark_import -- --nocapture
 ```
 
 **What to Look For**:
+
 - Total import time
 - Tile ownership update time (if instrumented)
 - Any crashes or errors
 
 **Expected Results**:
+
 - INSERT ON CONFLICT: 7-20ms (proven)
 - Individual UPDATEs: Unknown (need to measure baseline)
 
@@ -297,18 +316,21 @@ cargo test --release --test benchmark_import -- --nocapture
 **Purpose**: Measure performance in development builds.
 
 **Setup**:
+
 1. Implement the ON CONFLICT approach
 2. Add debug timing logs (see Step 3)
 3. Run app in dev mode: `npm run tauri dev`
 4. Import multiple save files
 
 **What to Look For**:
+
 - Total import time
 - Appender insert time (from debug log)
 - UPSERT execution time (from debug log)
 - App responsiveness during import
 
 **Expected Results** (need to verify):
+
 - INSERT ON CONFLICT: ~1,255ms (previously measured)
 - Individual UPDATEs: Unknown (need to measure baseline in debug)
 
@@ -317,6 +339,7 @@ cargo test --release --test benchmark_import -- --nocapture
 **Purpose**: Ensure ON CONFLICT produces identical results to individual UPDATEs.
 
 **Procedure**:
+
 ```bash
 # Run release mode test
 cargo test --release --test benchmark_import -- --nocapture
@@ -326,6 +349,7 @@ cargo test --release --test benchmark_import -- --nocapture
 ```
 
 **SQL Verification**:
+
 ```sql
 -- Count tiles with city ownership
 SELECT COUNT(*) FROM tiles WHERE owner_city_id IS NOT NULL;
@@ -346,11 +370,13 @@ AND NOT EXISTS (
 **Purpose**: Ensure stability across multiple imports.
 
 **Command**:
+
 ```bash
 cargo test --release --test benchmark_import benchmark_multiple_imports -- --nocapture
 ```
 
 **What to Look For**:
+
 - No crashes
 - Consistent performance across imports
 - No PRIMARY KEY violations
@@ -363,6 +389,7 @@ cargo test --release --test benchmark_import benchmark_multiple_imports -- --noc
 ### When to Use This
 
 If measurements show that:
+
 - INSERT ON CONFLICT is significantly slower in debug mode (>2x slower than individual UPDATEs)
 - INSERT ON CONFLICT is significantly faster in release mode (>5x faster than individual UPDATEs)
 
@@ -429,12 +456,14 @@ Then we can use conditional compilation to get the best of both worlds.
 ### Pros & Cons
 
 **Pros**:
+
 - Fast development experience (no multi-second hangs)
 - Fast production builds (8-12x speedup for end users)
 - No crashes (ON CONFLICT doesn't trigger MVCC bug)
 - Clear documentation of why different approaches are needed
 
 **Cons**:
+
 - Code duplication (~30 lines duplicated)
 - Different code paths could hide bugs (low risk - both approaches tested)
 - Adds complexity to codebase
@@ -450,6 +479,7 @@ If measurements show that debug mode performance difference is acceptable (e.g.,
 ### Attempt 1: UPDATE FROM (FAILED - Crashes)
 
 **Code**:
+
 ```sql
 UPDATE tiles
 SET owner_city_id = u.owner_city_id
@@ -460,6 +490,7 @@ WHERE tiles.tile_id = u.tile_id AND tiles.match_id = ?
 **Result**: DuckDB assertion failure on composite PRIMARY KEY.
 
 **Error**:
+
 ```
 Assertion failed: (!FlatVector::IsNull(result_vector, result_idx)),
 function FetchRow, file row_group.cpp, line 788
@@ -472,6 +503,7 @@ function FetchRow, file row_group.cpp, line 788
 ### Attempt 2: Batched CASE UPDATE (FAILED - Crashes)
 
 **Code** (from commit 75a2f65):
+
 ```sql
 UPDATE tiles SET owner_city_id = CASE tile_id
   WHEN 1 THEN 100
@@ -498,21 +530,25 @@ END WHERE tile_id IN (1, 2, ...) AND match_id = 123
 ## References
 
 ### Documentation
+
 - DuckDB ON CONFLICT: https://duckdb.org/docs/stable/sql/statements/insert#on-conflict-clause
 - Schema: `docs/schema.sql` (tiles table, line ~150)
 - Performance regression analysis: `docs/reports/performance-regression-analysis-2025-11-08.md`
 
 ### Code Locations
+
 - Current implementation: `src-tauri/src/parser/entities/tiles.rs:329-340`
 - Benchmark test: `src-tauri/tests/benchmark_import.rs`
 - Import orchestration: `src-tauri/src/parser/import.rs`
 
 ### Git History
+
 - Batched CASE attempt: commit `75a2f65` (Nov 7, 2025)
 - Reversion due to MVCC bug: commit `ad75e3b` (Nov 7, 2025)
 - Current stable implementation: Current HEAD
 
 ### Related Issues
+
 - DuckDB MVCC bug with composite PRIMARY KEYs (not filed - internal DuckDB issue)
 - Composite FK validation overhead (minor, not the bottleneck)
 

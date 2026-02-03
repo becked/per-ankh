@@ -79,6 +79,7 @@ fn import_files_batch(
 #### Update the call to pass file context:
 
 Replace line 597-604:
+
 ```rust
 // OLD:
 let result = pool
@@ -92,6 +93,7 @@ let result = pool
 ```
 
 With:
+
 ```rust
 // NEW:
 let result = pool
@@ -353,6 +355,7 @@ This command is for single-file imports. Since it doesn't use the batch system, 
 #### Update TypeScript types (auto-generated):
 
 After making Rust changes, run:
+
 ```bash
 cargo test --lib export_bindings
 ```
@@ -411,21 +414,25 @@ If you want to show "File 2 of 10 (45%)" separately from the overall progress:
 ## Key Design Decisions
 
 **Why 8 phases?**
+
 - Natural groupings in the existing code structure
 - Enough granularity for meaningful feedback
 - Low enough overhead to be negligible
 
 **Why not time-based?**
+
 - More complex to implement
 - Less accurate (progress could move unevenly)
 - Harder to test and debug
 
 **Why optional fields instead of separate event types?**
+
 - DRY: Reuse existing `ImportProgress` struct and event handling
 - Simpler frontend: One event listener handles all progress updates
 - Type safety: Frontend gets all fields in one interface
 
 **Why calculate speed/ETA in the helper?**
+
 - DRY: Single source of truth for progress calculations
 - Consistency: Same formula used for all phase emissions
 - Accuracy: Includes fractional file progress in calculations

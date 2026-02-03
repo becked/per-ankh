@@ -7,6 +7,7 @@ Old World's decision to store yields in units of 0.1 (requiring ÷10 for display
 ## The Problem with Floating Point
 
 ### 1. **Precision Errors**
+
 ```csharp
 // C# floating point example
 float science = 0.1f;
@@ -18,6 +19,7 @@ for (int i = 0; i < 10; i++) {
 ```
 
 **Why this matters for Old World:**
+
 - 100+ turns of calculations
 - Thousands of tiles, units, buildings generating yields
 - Compounding rounding errors could cause:
@@ -40,6 +42,7 @@ float yield = CalculateYield(); // 21.499999
 ```
 
 **Fixed-point solution:**
+
 ```csharp
 // Both platforms, guaranteed identical
 int yield = 215; // Stored as integer
@@ -51,11 +54,13 @@ int yield = 215; // Stored as integer
 Strategy games run many calculations per turn:
 
 **Per-turn yield calculation:**
+
 - ~50-100 tiles per player
 - Each tile: base yield + improvements + bonuses + adjacency
 - 2 players × 100 turns × 100 tiles × 5 yields = **100,000 calculations**
 
 **Integer vs Float performance:**
+
 ```csharp
 // Integer arithmetic (what Old World uses)
 int result = (base * modifier) / 100;  // Fast, exact
@@ -72,13 +77,14 @@ Modern CPUs are faster at integer operations, especially for exact division by p
 
 Games typically choose scale factors based on precision needs:
 
-| Game Type | Scale Factor | Precision | Example |
-|-----------|-------------|-----------|---------|
-| Old World yields | 10 | 0.1 | 21.5 science/turn |
-| Economic sims | 100 | 0.01 | $99.99 |
-| Physics engines | 1000+ | 0.001+ | Position coordinates |
+| Game Type        | Scale Factor | Precision | Example              |
+| ---------------- | ------------ | --------- | -------------------- |
+| Old World yields | 10           | 0.1       | 21.5 science/turn    |
+| Economic sims    | 100          | 0.01      | $99.99               |
+| Physics engines  | 1000+        | 0.001+    | Position coordinates |
 
 **Old World's choice of 10:**
+
 - ✅ Allows decimal precision (21.5, not just 21 or 22)
 - ✅ Simple mental math for developers (215 → 21.5)
 - ✅ Small storage size (no need for 1000x or higher)
@@ -128,6 +134,7 @@ public float Display => _scienceTenths / 10f;  // Only for UI
 ### .NET Serialization Benefits
 
 **XML Serialization (what Old World uses):**
+
 ```xml
 <!-- Integer: Simple, exact -->
 <YIELD_SCIENCE>215</YIELD_SCIENCE>
@@ -144,16 +151,19 @@ public float Display => _scienceTenths / 10f;  // Only for UI
 ### Cross-Platform Consistency
 
 Old World runs on:
+
 - Windows (x64, x86)
 - macOS (Intel, Apple Silicon)
 - Linux (various architectures)
 
 **Float representation varies:**
+
 - IEEE 754 standard has implementation differences
 - JIT compilation affects precision
 - CPU FPU units differ (x86 vs ARM)
 
 **Integer representation is identical:**
+
 ```csharp
 int yield = 215;  // Exactly 215 on ALL platforms
 ```
@@ -163,14 +173,17 @@ int yield = 215;  // Exactly 215 on ALL platforms
 ### Similar Games Using Fixed-Point
 
 **Civilization series:**
+
 - Uses integer percentages for many values
 - Food, production often scaled by 100
 
 **Crusader Kings / Europa Universalis (Paradox):**
+
 - Fixed-point for monthly income/expenses
 - Integer math for deterministic multiplayer
 
 **StarCraft II:**
+
 - All unit stats are integers
 - Damage, health, shields use fixed-point
 - Attack speed stored as "cooldown frames"
@@ -178,6 +191,7 @@ int yield = 215;  // Exactly 215 on ALL platforms
 ### Industry Standard Pattern
 
 This pattern appears in:
+
 - Financial software (cents, not dollars)
 - Physics engines (units of 0.001m)
 - Network games (tick-based state sync)
@@ -190,6 +204,7 @@ public decimal Science { get; set; }
 ```
 
 **Drawbacks:**
+
 1. **Size:** 16 bytes vs 4 bytes for int
    - 4x memory per value
    - Slower cache performance
@@ -228,6 +243,7 @@ class PlayerStatsUI {
 ```
 
 **Benefits:**
+
 - Game logic never touches floats
 - Display code handles conversion
 - Clean separation of concerns
@@ -272,6 +288,7 @@ SELECT amount FROM yield_history_display;  // 21.5
 ```
 
 **Benefits:**
+
 - Raw integers preserved for potential future calculations
 - Conversion happens in exactly one place (the view)
 - Queries don't repeat `/10.0` everywhere (DRY)
@@ -279,6 +296,7 @@ SELECT amount FROM yield_history_display;  // 21.5
 ---
 
 **References:**
+
 - Fixed-Point Arithmetic: https://en.wikipedia.org/wiki/Fixed-point_arithmetic
 - IEEE 754 Floating Point: https://en.wikipedia.org/wiki/IEEE_754
 - Game Programming Patterns: https://gameprogrammingpatterns.com/

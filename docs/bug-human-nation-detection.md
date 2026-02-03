@@ -11,11 +11,13 @@ The query was incorrectly selecting the human player's nation by prioritizing al
 ## Observed Behavior
 
 **Database State:**
+
 - `game_name`: "Game 5"
 - `human_nation`: "NATION_CARTHAGE" ❌ (incorrect)
 - Expected: "NATION_BABYLONIA" ✓
 
 **User Impact:**
+
 - Sidebar displays: "Carthage - 113 turns" (shows wrong nation)
 - Detail page displays: "Game 5" (shows placeholder name)
 - Charts/stats show wrong nation color for human player
@@ -29,22 +31,23 @@ The frontend has two different approaches to displaying game titles:
 
 ```typescript
 function formatGameTitle(game: GameInfo): string {
-  // Check if game_name is real or auto-generated "GameN" pattern
-  const isRealName = game.game_name != null &&
-                     game.game_name !== "" &&
-                     !game.game_name.match(/^Game\d+$/);
+	// Check if game_name is real or auto-generated "GameN" pattern
+	const isRealName =
+		game.game_name != null &&
+		game.game_name !== "" &&
+		!game.game_name.match(/^Game\d+$/);
 
-  if (isRealName) {
-    return game.game_name!;
-  }
+	if (isRealName) {
+		return game.game_name!;
+	}
 
-  // Fallback: show nation + turns
-  const formattedNation = formatNation(game.human_nation);
-  if (formattedNation !== null && game.total_turns != null) {
-    return `${formattedNation} - ${game.total_turns} turns`;
-  }
+	// Fallback: show nation + turns
+	const formattedNation = formatNation(game.human_nation);
+	if (formattedNation !== null && game.total_turns != null) {
+		return `${formattedNation} - ${game.total_turns} turns`;
+	}
 
-  // Additional fallbacks...
+	// Additional fallbacks...
 }
 ```
 
@@ -74,6 +77,7 @@ The frontend is working correctly. The bug is that `human_nation` contains the w
 **File:** `src-tauri/src/parser.rs` (or wherever save file parsing happens)
 
 **Look for:**
+
 1. Code that identifies the human player
 2. Logic that extracts/assigns the nation for the human player
 3. How `human_nation` field gets populated in the database
@@ -81,6 +85,7 @@ The frontend is working correctly. The bug is that `human_nation` contains the w
 ### Likely Scenarios
 
 **Scenario 1: Player Index Mismatch**
+
 ```rust
 // Wrong: assumes human is always player 0
 let human_nation = players[0].nation;
@@ -93,12 +98,14 @@ let human_nation = players.iter()
 ```
 
 **Scenario 2: Nation Assignment Order**
+
 ```rust
 // If nation assignment happens before is_human detection,
 // the nation might be assigned to wrong player
 ```
 
 **Scenario 3: Multi-Player Game Logic**
+
 ```rust
 // In multiplayer, might be picking wrong human
 // (if there are multiple human players in hotseat mode)
@@ -113,6 +120,7 @@ let human_nation = players.iter()
 ## Expected Fix
 
 After fix:
+
 - Parse save file to correctly identify human player
 - Store correct nation in `human_nation` field
 - Sidebar will then display correct nation name
@@ -122,11 +130,13 @@ After fix:
 
 **Table:** `games`
 **Relevant Fields:**
+
 - `game_name` (TEXT): User-provided name or auto-generated "Game{N}"
-- `human_nation` (TEXT): Should be the NATION_* enum of the human player
+- `human_nation` (TEXT): Should be the NATION\_\* enum of the human player
 - `match_id` (INTEGER): Primary key
 
 **Related Table:** `players`
+
 - Stores all players in the game
 - Has `is_human` (BOOLEAN) flag
 - Has `nation` (TEXT) field
@@ -146,6 +156,7 @@ The `games.human_nation` field is likely derived from `players` table where `is_
 ### Old World Save File Format
 
 Old World uses XML save files with structure like:
+
 ```xml
 <game>
   <players>
@@ -162,6 +173,7 @@ Old World uses XML save files with structure like:
 ```
 
 The parser needs to:
+
 1. Find the player with `<isHuman>true</isHuman>`
 2. Extract that player's `<nation>` value
 3. Store it as `games.human_nation`
@@ -169,6 +181,7 @@ The parser needs to:
 ### Game Name Context
 
 Old World save files have a `<gameName>` field:
+
 - If user named the game: contains actual name (e.g., "My Epic Campaign")
 - If not named: often empty or contains placeholder like "Game 5"
 
@@ -199,6 +212,7 @@ The frontend treats "GameN" pattern as placeholder and prefers showing the natio
 **File**: `src-tauri/src/lib.rs:228-246` (`get_games_list` command)
 
 The SQL query was selecting the nation from the `players` table using this ordering:
+
 ```sql
 ORDER BY
     CASE WHEN player_name IS NOT NULL AND LENGTH(player_name) > 0
@@ -211,6 +225,7 @@ This meant it picked **the first player alphabetically by name**, not the human 
 ### The Fix
 
 Updated the SQL query to prioritize the `is_human` flag:
+
 ```sql
 ORDER BY
     CASE WHEN is_human = true THEN 0 ELSE 1 END,
@@ -220,6 +235,7 @@ ORDER BY
 ```
 
 Now the query:
+
 1. **First** selects human players (`is_human = true`)
 2. Then prioritizes players with names
 3. Finally sorts alphabetically as a fallback
@@ -229,6 +245,7 @@ Now the query:
 To verify the fix works:
 
 1. Delete the database to force a fresh import:
+
    ```bash
    rm -f ~/Library/Application\ Support/com.becked.per-ankh/per-ankh.db
    ```
@@ -236,9 +253,11 @@ To verify the fix works:
 2. Re-import your Babylonian save file
 
 3. Check the database:
+
    ```sql
    SELECT game_name, human_nation FROM matches WHERE match_id = X;
    ```
+
    Should now show: `human_nation = "NATION_BABYLONIA"`
 
 4. Check the UI:

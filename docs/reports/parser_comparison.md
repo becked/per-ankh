@@ -22,18 +22,21 @@ Both parsers handle the same XML-based game save format, but employ fundamentall
 ### Python Parser: Monolithic ETL Pattern
 
 **Structure:**
+
 - Single file: `docs/parser.py` (~2,100 lines)
 - Single class: `OldWorldSaveParser`
 - Helper function: `parse_tournament_file()` orchestrates extraction
 - Data extracted and returned as dictionaries for downstream processing
 
 **Philosophy:**
+
 - **Extract, Transform, Load (ETL)**: Parse XML → Transform to dictionaries → Return for database insertion elsewhere
 - **Separation of concerns**: Parser doesn't touch the database directly
 - **Simple and linear**: One file, one class, straightforward method calls
 - **Python-idiomatic**: Uses standard library extensively (xml.etree.ElementTree, zipfile, pathlib)
 
 **Example:**
+
 ```python
 class OldWorldSaveParser:
     def extract_players(self) -> List[Dict[str, Any]]:
@@ -50,6 +53,7 @@ data = parser.extract_players()
 ### Rust Parser: Modular Direct-Write Pattern
 
 **Structure:**
+
 - Multiple modules across 20+ files:
   - `mod.rs`: Error types and module organization
   - `save_file.rs`: ZIP validation and extraction (~230 lines)
@@ -61,6 +65,7 @@ data = parser.extract_players()
 - Two-pass parsing strategy for handling foreign key relationships
 
 **Philosophy:**
+
 - **Parse and persist**: XML → Transform → Insert directly to database in one pass
 - **Security-first**: Extensive validation at every layer (ZIP bombs, path traversal, file size limits)
 - **Performance-critical**: Bulk insertion with DuckDB Appenders, minimal allocations
@@ -69,6 +74,7 @@ data = parser.extract_players()
 - **Rust-idiomatic**: Leverages strong typing, Result monad, lifetime management
 
 **Example:**
+
 ```rust
 // Direct database insertion during parsing
 pub fn parse_players(
@@ -88,13 +94,13 @@ pub fn parse_players(
 
 **Key Architectural Difference:**
 
-| Aspect | Python (ETL) | Rust (Direct-Write) |
-|--------|--------------|---------------------|
-| Coupling | Parser ↔ Database: Loose | Parser ↔ Database: Tight |
-| Data flow | Parse → Dict → Return → DB | Parse → DB (immediate) |
-| Memory | All data in-memory dicts | Streaming to DB |
-| Error recovery | Continue parsing, handle errors later | Transactional rollback |
-| Testing | Easy to test parser without DB | Requires DB connection |
+| Aspect         | Python (ETL)                          | Rust (Direct-Write)      |
+| -------------- | ------------------------------------- | ------------------------ |
+| Coupling       | Parser ↔ Database: Loose              | Parser ↔ Database: Tight |
+| Data flow      | Parse → Dict → Return → DB            | Parse → DB (immediate)   |
+| Memory         | All data in-memory dicts              | Streaming to DB          |
+| Error recovery | Continue parsing, handle errors later | Transactional rollback   |
+| Testing        | Easy to test parser without DB        | Requires DB connection   |
 
 ---
 
@@ -103,6 +109,7 @@ pub fn parse_players(
 ### Python: Single Monolithic File
 
 **Organization:**
+
 ```
 docs/parser.py (2,191 lines)
 ├── class TerrainType (constants)
@@ -134,12 +141,14 @@ docs/parser.py (2,191 lines)
 ```
 
 **Pros:**
+
 - **Easy navigation**: Everything in one place
 - **Quick prototyping**: Add a new extraction method without creating files
 - **No module complexity**: No import management
 - **Clear context**: All related code visible at once
 
 **Cons:**
+
 - **2,100+ line file**: Difficult to navigate, slow editor performance
 - **No logical boundaries**: All extraction logic mixed together
 - **Merge conflicts**: Multiple developers editing same file
@@ -149,6 +158,7 @@ docs/parser.py (2,191 lines)
 ### Rust: Hierarchical Module System
 
 **Organization:**
+
 ```
 src-tauri/src/parser/
 ├── mod.rs                      (119 lines - error types, module exports)
@@ -177,6 +187,7 @@ src-tauri/src/parser/
 ```
 
 **Pros:**
+
 - **Clear separation**: Each module has single responsibility
 - **Parallel development**: Multiple developers can work on different entities
 - **Focused testing**: Test individual entity parsers in isolation
@@ -185,6 +196,7 @@ src-tauri/src/parser/
 - **Maintainable**: Easy to locate and modify specific functionality
 
 **Cons:**
+
 - **More files**: Need to navigate across multiple files
 - **Import management**: Must explicitly import/export modules
 - **Indirection**: May need to trace through multiple files
@@ -201,6 +213,7 @@ src-tauri/src/parser/
 **Library:** `xml.etree.ElementTree` (stdlib)
 
 **Approach:**
+
 ```python
 # Load entire XML into memory
 self.root = ET.fromstring(self.xml_content)
@@ -215,6 +228,7 @@ score = self._safe_int(player_elem.get("score"), 0)
 ```
 
 **Characteristics:**
+
 - **Full DOM**: Entire document loaded into memory
 - **Flexible navigation**: Can traverse document multiple times
 - **Simple API**: Pythonic, easy to learn
@@ -222,6 +236,7 @@ score = self._safe_int(player_elem.get("score"), 0)
 - **Memory overhead**: Entire XML tree stays in memory
 
 **Memory profile for 50MB save file:**
+
 - Compressed ZIP: ~5-10MB
 - Uncompressed XML: ~50MB
 - ElementTree DOM: ~100-150MB (2-3x raw XML size)
@@ -233,6 +248,7 @@ score = self._safe_int(player_elem.get("score"), 0)
 **Library:** `roxmltree` (DOM parser with arena allocation)
 
 **Approach:**
+
 ```rust
 // Parse with lifetime-bound Document (efficient arena allocation)
 let doc = Document::parse(xml_content)?;
@@ -246,6 +262,7 @@ app.append_row(params![player_xml_id, nation, ...])?;
 ```
 
 **Characteristics:**
+
 - **Efficient DOM**: Arena-allocated nodes, minimal overhead
 - **Planned hybrid**: Full DOM for <20MB, streaming for larger files (future)
 - **Type-safe extraction**: Custom `XmlNodeExt` trait for required vs optional
@@ -253,6 +270,7 @@ app.append_row(params![player_xml_id, nation, ...])?;
 - **Zero-copy where possible**: String slices reference original buffer
 
 **Current strategy (all files):**
+
 ```rust
 pub enum XmlDocument {
     FullDom(String, Document<'static>), // Current: all files
@@ -261,6 +279,7 @@ pub enum XmlDocument {
 ```
 
 **Memory profile for 50MB save file:**
+
 - Compressed ZIP: ~5-10MB
 - Uncompressed XML: ~50MB
 - roxmltree DOM: ~60-70MB (1.2-1.4x raw XML)
@@ -270,6 +289,7 @@ pub enum XmlDocument {
 **Security & Validation:**
 
 Python has **minimal validation**:
+
 ```python
 try:
     self.root = ET.fromstring(self.xml_content)
@@ -280,6 +300,7 @@ except ET.ParseError as e:
 Rust has **comprehensive validation** at ZIP and XML layers:
 
 ZIP validation (`save_file.rs`):
+
 ```rust
 const MAX_COMPRESSED_SIZE: u64 = 50 * 1024 * 1024;   // 50 MB
 const MAX_UNCOMPRESSED_SIZE: u64 = 100 * 1024 * 1024; // 100 MB
@@ -299,6 +320,7 @@ fn validate_zip_path(path: &str) -> Result<()> {
 ```
 
 XML validation (`xml_loader.rs`):
+
 ```rust
 // Validate root element
 if !root.has_tag_name("Root") {
@@ -344,6 +366,7 @@ def extract_players(self) -> List[Dict[str, Any]]:
 ```
 
 **ID conversion scattered throughout:**
+
 ```python
 # In extract_logdata_events():
 player_id = int(player_xml_id) + 1  # 0-based → 1-based
@@ -356,6 +379,7 @@ player_id = int(player_xml_id) + 1
 ```
 
 **Characteristics:**
+
 - **Stateless**: No tracking of ID mappings
 - **Convention-based**: Assumes sequential player IDs (0, 1, 2, ...)
 - **No re-import support**: Every import creates new IDs
@@ -363,6 +387,7 @@ player_id = int(player_xml_id) + 1
 - **Data loss on re-import**: Historical data can't be linked to updated saves
 
 **Problem scenario:**
+
 ```python
 # First import: Game at turn 50
 #   Player 0 → player_id 1
@@ -381,6 +406,7 @@ player_id = int(player_xml_id) + 1
 **Approach:** Dedicated mapping layer with database persistence
 
 **Architecture:**
+
 ```rust
 pub struct IdMapper {
     pub match_id: i64,
@@ -399,6 +425,7 @@ pub struct IdMapper {
 ```
 
 **Database persistence:**
+
 ```sql
 CREATE TABLE id_mappings (
     match_id BIGINT,
@@ -410,6 +437,7 @@ CREATE TABLE id_mappings (
 ```
 
 **Usage pattern:**
+
 ```rust
 // First pass: Create mappings
 let db_id = id_mapper.map_player(xml_id);  // Creates if doesn't exist
@@ -422,6 +450,7 @@ id_mapper.save_mappings(conn)?;
 ```
 
 **Re-import scenario:**
+
 ```rust
 // First import: Game at turn 50
 let mut id_mapper = IdMapper::new(match_id, conn, is_new: true);
@@ -437,6 +466,7 @@ let mut id_mapper = IdMapper::new(match_id, conn, is_new: false);
 ```
 
 **Benefits:**
+
 1. **Stable IDs across imports**: Can track player progression over time
 2. **Referential integrity**: Validates IDs before creating foreign keys
 3. **Error detection**: Fails fast if referencing non-existent entity
@@ -445,6 +475,7 @@ let mut id_mapper = IdMapper::new(match_id, conn, is_new: false);
 6. **Auditable**: id_mappings table shows complete mapping history
 
 **Example error handling:**
+
 ```rust
 // Python: Silent failure or null reference
 birth_father_id = father_elem.text if father_elem else None
@@ -484,6 +515,7 @@ turn = self._safe_int(turn_elem.text)                # Defaults to None
 ```
 
 **Error categories:**
+
 ```python
 # File-level errors
 except FileNotFoundError:
@@ -497,12 +529,14 @@ except ET.ParseError as e:
 ```
 
 **Philosophy:**
+
 - **Lenient**: Missing data → use defaults (0, None, empty string)
 - **Keep going**: Parse as much as possible, skip invalid data
 - **Simple errors**: Generic ValueError with string message
 - **No context**: Hard to know where in XML error occurred
 
 **Example:**
+
 ```python
 # If player score is missing or invalid, defaults to 0
 # User never knows data was malformed
@@ -535,6 +569,7 @@ pub type Result<T> = std::result::Result<T, ParseError>;
 ```
 
 **Custom extraction helpers:**
+
 ```rust
 trait XmlNodeExt {
     // Required attribute - error if missing
@@ -549,6 +584,7 @@ trait XmlNodeExt {
 ```
 
 **Usage:**
+
 ```rust
 // Required field - error with full context if missing
 let player_xml_id: i32 = player_node.req_attr("ID")?.parse()
@@ -561,6 +597,7 @@ let online_id: Option<&str> = player_node.opt_attr("OnlineID");
 ```
 
 **Error context example:**
+
 ```rust
 // Python error:
 //   ValueError: Error parsing XML: no element found
@@ -573,6 +610,7 @@ let online_id: Option<&str> = player_node.opt_attr("OnlineID");
 ```
 
 **Transactional safety:**
+
 ```rust
 // All imports wrapped in transaction
 let tx = conn.unchecked_transaction()?;
@@ -589,6 +627,7 @@ match import_save_file_internal(file_path, &doc, &tx, game_id) {
 ```
 
 **Philosophy:**
+
 - **Strict**: Required data MUST exist or import fails
 - **Atomic**: All-or-nothing imports (no partial data)
 - **Informative**: Errors show exact location and context
@@ -603,6 +642,7 @@ match import_save_file_internal(file_path, &doc, &tx, game_id) {
 ### Python: Dictionary Accumulation
 
 **Pattern:**
+
 ```python
 def extract_players(self) -> List[Dict[str, Any]]:
     players = []
@@ -622,23 +662,27 @@ for player in players:
 ```
 
 **Characteristics:**
+
 - **Memory-bound**: All data in dicts before database insert
 - **Row-by-row inserts**: Individual INSERT statements (slow)
 - **No batching**: Database commits after every row
 - **Simple**: Easy to understand and debug
 
 **Performance profile** (for save with 2 players, 50 characters, 30 cities):
+
 - XML parsing: ~100ms
 - Dict creation: ~50ms
 - Database inserts: ~500ms (row-by-row)
 - **Total: ~650ms**
 
 **Scalability:** Linear growth. For 10x data (20 players, 500 characters, 300 cities):
+
 - **Estimated time: ~6.5 seconds**
 
 ### Rust: Streaming Bulk Insertion
 
 **Pattern:**
+
 ```rust
 pub fn parse_players(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapper) -> Result<usize> {
     let mut app = conn.appender("players")?;  // Create appender ONCE
@@ -658,12 +702,14 @@ pub fn parse_players(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMap
 ```
 
 **Characteristics:**
+
 - **Streaming**: Parse → transform → insert in one pass
 - **Bulk insertion**: DuckDB Appender batches rows internally
 - **Minimal allocations**: No intermediate dictionaries
 - **Type-safe**: Compile-time verification of column order/types
 
 **Performance profile** (same save: 2 players, 50 characters, 30 cities):
+
 - ZIP validation: ~5ms
 - XML parsing: ~30ms
 - Database inserts: ~50ms (bulk appender)
@@ -671,18 +717,19 @@ pub fn parse_players(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMap
 - **Total: ~95ms**
 
 **Scalability:** Sub-linear growth due to batching. For 10x data:
+
 - **Estimated time: ~450ms** (not 10x, only ~5x due to batching)
 
 **Memory comparison:**
 
-| Operation | Python Memory | Rust Memory |
-|-----------|---------------|-------------|
-| XML DOM | 100-150MB | 60-70MB |
-| Data structures | 50-100MB (dicts) | ~5MB (streaming) |
-| Peak usage | 250-300MB | 120-150MB |
-| **Total reduction** | **Baseline** | **~50% less** |
+| Operation           | Python Memory    | Rust Memory      |
+| ------------------- | ---------------- | ---------------- |
+| XML DOM             | 100-150MB        | 60-70MB          |
+| Data structures     | 50-100MB (dicts) | ~5MB (streaming) |
+| Peak usage          | 250-300MB        | 120-150MB        |
+| **Total reduction** | **Baseline**     | **~50% less**    |
 
-**Benchmark** (importing OW*2025_P8_T55.zip):
+**Benchmark** (importing OW\*2025_P8_T55.zip):
 
 ```
 Python parser:
@@ -731,12 +778,14 @@ def import_game_save(zip_path: str):
 ```
 
 **Pros:**
+
 - **Testable**: Can test parser without database
 - **Flexible**: Can use different databases (PostgreSQL, SQLite, etc.)
 - **Reusable**: Parser output can feed multiple consumers
 - **Clear boundaries**: Parser doesn't need DB knowledge
 
 **Cons:**
+
 - **Memory overhead**: Must hold all data in memory
 - **Two-step process**: Parse, then load (can't stream)
 - **Error handling split**: Parser errors vs. DB errors in different places
@@ -772,12 +821,14 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 ```
 
 **Pros:**
+
 - **Atomic**: All-or-nothing import (no partial data)
 - **Memory efficient**: Stream to DB, don't accumulate
 - **Type-safe schema**: Rust types match DB schema
 - **Single error boundary**: All errors caught in transaction
 
 **Cons:**
+
 - **Tightly coupled**: Parser requires DuckDB connection
 - **Less flexible**: Hard to swap databases
 - **Testing complexity**: Need DB for unit tests
@@ -785,14 +836,15 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 
 **Transaction guarantees:**
 
-| Scenario | Python | Rust |
-|----------|--------|------|
-| Parse error mid-import | Partial data in DB | Rollback (no data) |
-| DB constraint violation | Some data inserted | Rollback (no data) |
-| Application crash | Partial data in DB | Rollback (no data) |
-| Concurrent imports | Possible data corruption | Prevented by locks |
+| Scenario                | Python                   | Rust               |
+| ----------------------- | ------------------------ | ------------------ |
+| Parse error mid-import  | Partial data in DB       | Rollback (no data) |
+| DB constraint violation | Some data inserted       | Rollback (no data) |
+| Application crash       | Partial data in DB       | Rollback (no data) |
+| Concurrent imports      | Possible data corruption | Prevented by locks |
 
 **Verdict:**
+
 - **Python approach**: Better for exploratory analysis, data pipelines, multi-DB support
 - **Rust approach**: Better for production systems requiring data integrity
 
@@ -833,6 +885,7 @@ def extract_players(self):
 ```
 
 **Characteristics:**
+
 - **Permissive**: Store any ID, even if entity doesn't exist
 - **No guarantees**: Database may have dangling references
 - **Simple**: No multi-pass complexity
@@ -946,6 +999,7 @@ with zipfile.ZipFile(self.zip_file_path, 'r') as zip_file:
 ```
 
 **Vulnerabilities:**
+
 - ❌ No file size limits (zip bomb vulnerable)
 - ❌ No path traversal checks
 - ❌ No compression ratio validation
@@ -953,6 +1007,7 @@ with zipfile.ZipFile(self.zip_file_path, 'r') as zip_file:
 - ❌ No malicious filename checks
 
 **Potential attack:**
+
 ```python
 # Malicious ZIP with path traversal
 # File in ZIP: "../../../../etc/passwd"
@@ -1055,15 +1110,15 @@ conn.execute(
 
 **Security comparison:**
 
-| Attack Vector | Python | Rust |
-|---------------|--------|------|
-| Zip bomb | ❌ Vulnerable | ✅ Protected (ratio check) |
-| Path traversal | ❌ Vulnerable | ✅ Protected (path validation) |
-| Oversized files | ❌ Vulnerable | ✅ Protected (size limits) |
-| Control chars in filenames | ❌ Vulnerable | ✅ Protected (char validation) |
-| Malformed XML | ⚠️  Basic check | ✅ Detailed validation |
-| Concurrent imports | ❌ Race conditions | ✅ Protected (locks) |
-| SQL injection | N/A (no SQL) | ✅ Protected (parameterized) |
+| Attack Vector              | Python             | Rust                           |
+| -------------------------- | ------------------ | ------------------------------ |
+| Zip bomb                   | ❌ Vulnerable      | ✅ Protected (ratio check)     |
+| Path traversal             | ❌ Vulnerable      | ✅ Protected (path validation) |
+| Oversized files            | ❌ Vulnerable      | ✅ Protected (size limits)     |
+| Control chars in filenames | ❌ Vulnerable      | ✅ Protected (char validation) |
+| Malformed XML              | ⚠️ Basic check     | ✅ Detailed validation         |
+| Concurrent imports         | ❌ Race conditions | ✅ Protected (locks)           |
+| SQL injection              | N/A (no SQL)       | ✅ Protected (parameterized)   |
 
 **Verdict:** Rust's security is **production-ready** for untrusted inputs. Python parser assumes trusted data and would require significant hardening for public-facing use.
 
@@ -1099,12 +1154,14 @@ return {
 ```
 
 **Pros:**
+
 - ✅ Quick to add (1 method, 1 line change)
 - ✅ No new files
 - ✅ Copy-paste similar methods
 - ✅ Immediate visible impact
 
 **Cons:**
+
 - ❌ File grows larger (already 2,100 lines)
 - ❌ Harder to find methods as file grows
 - ❌ No enforced structure
@@ -1153,6 +1210,7 @@ parse_wonders(&doc, &tx, &id_mapper)?;
 ```
 
 **Pros:**
+
 - ✅ Clear structure (new entity = new file)
 - ✅ Parallel development (no file conflicts)
 - ✅ Easy to test in isolation
@@ -1160,22 +1218,24 @@ parse_wonders(&doc, &tx, &id_mapper)?;
 - ✅ Compiler catches integration errors
 
 **Cons:**
+
 - ❌ More boilerplate (3 files to touch)
 - ❌ More indirection
 - ❌ Steeper learning curve
 
 **Code navigation:**
 
-| Task | Python | Rust |
-|------|--------|------|
-| Find player parsing | Search "def extract_players" in parser.py | Open `entities/players.rs` |
-| See all entity parsers | Scroll through parser.py | List files in `entities/` |
-| Add new entity | Add method to class (edit 1 file) | Create new module (create 1 file, edit 2 files) |
-| Refactor shared logic | Extract to `_helper()` method | Create shared module in `entities/` |
+| Task                   | Python                                    | Rust                                            |
+| ---------------------- | ----------------------------------------- | ----------------------------------------------- |
+| Find player parsing    | Search "def extract_players" in parser.py | Open `entities/players.rs`                      |
+| See all entity parsers | Scroll through parser.py                  | List files in `entities/`                       |
+| Add new entity         | Add method to class (edit 1 file)         | Create new module (create 1 file, edit 2 files) |
+| Refactor shared logic  | Extract to `_helper()` method             | Create shared module in `entities/`             |
 
 **Testing:**
 
 Python (integrated):
+
 ```python
 # test_parser.py - requires full XML
 def test_extract_players():
@@ -1186,6 +1246,7 @@ def test_extract_players():
 ```
 
 Rust (modular):
+
 ```rust
 // players.rs - can test with minimal XML
 #[test]
@@ -1197,6 +1258,7 @@ fn test_parse_players_basic() {
 ```
 
 **Verdict:**
+
 - **Python**: Better for rapid prototyping, small projects
 - **Rust**: Better for large-scale, long-term maintainability
 
@@ -1227,11 +1289,13 @@ class OldWorldSaveParser:
 ```
 
 **State diagram:**
+
 ```
 [Created] → extract_and_parse() → [Parsed] → extract_*() methods → [Data extracted]
 ```
 
 **Characteristics:**
+
 - State stored in instance variables (`self.root`)
 - Method ordering matters (must call extract_and_parse first)
 - Reusable parser instance (call multiple extract methods)
@@ -1255,6 +1319,7 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 ```
 
 **Data flow:**
+
 ```
 [ZIP file] → validate_and_extract_xml() → [XML string]
            → parse_xml() → [XmlDocument]
@@ -1264,6 +1329,7 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 ```
 
 **Characteristics:**
+
 - No shared state (each function receives dependencies)
 - Pure functions (same input → same output)
 - Explicit error propagation (`?` operator)
@@ -1282,6 +1348,7 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 5. **Good for exploration**: Perfect for understanding save file structure
 
 **Best use cases:**
+
 - Research projects
 - One-off data analysis
 - Prototyping new features
@@ -1298,6 +1365,7 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 6. **Type safety**: Compiler catches errors before runtime
 
 **Best use cases:**
+
 - Production systems
 - User-facing applications
 - Large save files (>50MB)
@@ -1310,6 +1378,7 @@ pub fn import_save_file(file_path: &str, conn: &Connection) -> Result<ImportResu
 For a new project, consider starting with **Python for prototyping**, then **port to Rust for production**:
 
 **Phase 1: Discovery (Python)**
+
 ```python
 # Quick script to explore save file structure
 parser = OldWorldSaveParser("test_save.zip")
@@ -1323,6 +1392,7 @@ events = parser.extract_events()
 ```
 
 **Phase 2: Production (Rust)**
+
 ```rust
 // Once structure is known, implement robust parser
 // - Add IdMapper for re-import support
@@ -1340,6 +1410,7 @@ Based on this analysis, the Rust parser in Per-Ankh has excellent foundations. R
 ### Short-term Improvements
 
 1. **Implement hybrid streaming for large files**
+
    ```rust
    // xml_loader.rs already has placeholder
    pub enum XmlDocument {
@@ -1349,6 +1420,7 @@ Based on this analysis, the Rust parser in Per-Ankh has excellent foundations. R
    ```
 
 2. **Add parser benchmarks**
+
    ```rust
    // benches/parser_benchmarks.rs
    #[bench]
@@ -1371,6 +1443,7 @@ Based on this analysis, the Rust parser in Per-Ankh has excellent foundations. R
 ### Medium-term Enhancements
 
 1. **Add parser plugin system**
+
    ```rust
    // Allow custom entity parsers
    trait EntityParser {
@@ -1381,6 +1454,7 @@ Based on this analysis, the Rust parser in Per-Ankh has excellent foundations. R
    ```
 
 2. **Implement incremental parsing**
+
    ```rust
    // For game updates (turn 50 → turn 100)
    // Only parse changed data (new events, updated stats)
@@ -1420,12 +1494,14 @@ Based on this analysis, the Rust parser in Per-Ankh has excellent foundations. R
 The Python and Rust parsers represent two fundamentally different approaches to the same problem:
 
 **Python** optimizes for **developer velocity** and **simplicity**:
+
 - Get working code quickly
 - Easy to understand and modify
 - Perfect for exploration and prototyping
 - Acceptable for small-scale, trusted data
 
 **Rust** optimizes for **correctness** and **production quality**:
+
 - Comprehensive error handling
 - Security-hardened input validation
 - High performance at scale
@@ -1469,12 +1545,12 @@ External dependencies: 7 (roxmltree, duckdb, zip, sha256, chrono, lazy_static, t
 
 **Complexity metrics:**
 
-| Metric | Python | Rust |
-|--------|--------|------|
-| Lines per file | 2,191 | ~292 avg |
-| Cyclomatic complexity (avg) | 4.2 | 3.1 |
-| Max function length | 127 lines | 89 lines |
-| Test coverage | Unknown | ~65% (estimated) |
+| Metric                      | Python    | Rust             |
+| --------------------------- | --------- | ---------------- |
+| Lines per file              | 2,191     | ~292 avg         |
+| Cyclomatic complexity (avg) | 4.2       | 3.1              |
+| Max function length         | 127 lines | 89 lines         |
+| Test coverage               | Unknown   | ~65% (estimated) |
 
 The Rust codebase is larger in total but more maintainable due to modularization. Average file size is ~300 lines vs. 2,191 for the monolith.
 

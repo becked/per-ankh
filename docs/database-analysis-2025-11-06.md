@@ -15,57 +15,57 @@ This analysis reveals significant improvements in parser coverage since the prev
 
 ## Table Row Counts
 
-| Table Name | Row Count | Status |
-|------------|-----------|--------|
-| family_opinion_history | 20,664 | Populated |
-| yield_history | 8,036 | Populated |
-| id_mappings | 5,821 | Populated |
-| tiles | 5,476 | Populated |
-| tile_changes | 2,201 | Populated |
-| yield_prices | 1,708 | Populated |
-| character_stats | 1,401 | Populated |
-| character_traits | 990 | Populated |
-| story_events | 764 | Populated |
-| military_history | 574 | Populated |
-| points_history | 574 | Populated |
-| characters | 297 | Populated |
-| technologies_completed | 277 | Populated |
-| technology_progress | 246 | Populated |
-| character_relationships | 121 | Populated |
-| technology_states | 90 | Populated |
-| player_units_produced | 84 | Populated |
-| diplomacy | 75 | Populated |
-| city_units_produced | 62 | Populated |
-| laws | 59 | Populated |
-| player_resources | 39 | Populated |
-| cities | 28 | Populated |
-| city_production_queue | 25 | Populated |
-| families | 15 | Populated |
-| player_council | 12 | Populated |
-| tribes | 10 | Populated |
-| religions | 9 | Populated |
-| player_goals | 8 | Populated |
-| city_projects_completed | 6 | Populated |
-| players | 5 | Populated |
-| schema_migrations | 2 | Populated |
-| matches | 1 | Populated |
-| character_marriages | 0 | Empty |
-| character_missions | 0 | Empty |
-| city_culture | 0 | Empty |
-| city_religions | 0 | Empty |
-| city_yields | 0 | Empty |
-| event_logs | 0 | Empty |
-| event_outcomes | 0 | Empty |
-| family_law_opinions | 0 | Empty |
-| legitimacy_history | 0 | Empty |
-| match_locks | 0 | Empty |
-| match_settings | 0 | Empty |
-| religion_opinion_history | 0 | Empty |
-| story_choices | 0 | Empty |
-| tile_visibility | 0 | Empty |
-| unit_promotions | 0 | Empty |
-| unit_types | 0 | Empty |
-| units | 0 | Empty |
+| Table Name               | Row Count | Status    |
+| ------------------------ | --------- | --------- |
+| family_opinion_history   | 20,664    | Populated |
+| yield_history            | 8,036     | Populated |
+| id_mappings              | 5,821     | Populated |
+| tiles                    | 5,476     | Populated |
+| tile_changes             | 2,201     | Populated |
+| yield_prices             | 1,708     | Populated |
+| character_stats          | 1,401     | Populated |
+| character_traits         | 990       | Populated |
+| story_events             | 764       | Populated |
+| military_history         | 574       | Populated |
+| points_history           | 574       | Populated |
+| characters               | 297       | Populated |
+| technologies_completed   | 277       | Populated |
+| technology_progress      | 246       | Populated |
+| character_relationships  | 121       | Populated |
+| technology_states        | 90        | Populated |
+| player_units_produced    | 84        | Populated |
+| diplomacy                | 75        | Populated |
+| city_units_produced      | 62        | Populated |
+| laws                     | 59        | Populated |
+| player_resources         | 39        | Populated |
+| cities                   | 28        | Populated |
+| city_production_queue    | 25        | Populated |
+| families                 | 15        | Populated |
+| player_council           | 12        | Populated |
+| tribes                   | 10        | Populated |
+| religions                | 9         | Populated |
+| player_goals             | 8         | Populated |
+| city_projects_completed  | 6         | Populated |
+| players                  | 5         | Populated |
+| schema_migrations        | 2         | Populated |
+| matches                  | 1         | Populated |
+| character_marriages      | 0         | Empty     |
+| character_missions       | 0         | Empty     |
+| city_culture             | 0         | Empty     |
+| city_religions           | 0         | Empty     |
+| city_yields              | 0         | Empty     |
+| event_logs               | 0         | Empty     |
+| event_outcomes           | 0         | Empty     |
+| family_law_opinions      | 0         | Empty     |
+| legitimacy_history       | 0         | Empty     |
+| match_locks              | 0         | Empty     |
+| match_settings           | 0         | Empty     |
+| religion_opinion_history | 0         | Empty     |
+| story_choices            | 0         | Empty     |
+| tile_visibility          | 0         | Empty     |
+| unit_promotions          | 0         | Empty     |
+| unit_types               | 0         | Empty     |
+| units                    | 0         | Empty     |
 
 ## Empty Tables (17)
 
@@ -74,30 +74,36 @@ The following tables contain no data:
 ### Critical Missing Data
 
 **Military System (3 tables)**
+
 - `units` - Individual unit tracking is completely missing
 - `unit_promotions` - Unit advancement data not captured
 - `unit_types` - Reference data for unit categories not populated
 
 **Character Social System (2 tables)**
+
 - `character_marriages` - Marriage tracking not implemented
 - `character_missions` - Character missions not being parsed
 
 **City Subsystems (3 tables)**
+
 - `city_culture` - Culture tracking by team not implemented
 - `city_religions` - City religion presence not tracked
 - `city_yields` - City-level yield progress not captured
 
 **Historical/Political Data (3 tables)**
+
 - `legitimacy_history` - Turn-by-turn legitimacy tracking not implemented
 - `religion_opinion_history` - Religion opinion over time not tracked
 - `family_law_opinions` - Family opinions on laws not captured
 
 **Event System (3 tables)**
+
 - `event_logs` - General event logging not implemented
 - `event_outcomes` - Event outcome tracking missing
 - `story_choices` - Player story choices not being recorded
 
 **Infrastructure Tables (3 tables)**
+
 - `match_locks` - Cross-process locking (operational table, expected to be mostly empty)
 - `match_settings` - Game settings details not parsed
 - `tile_visibility` - Fog of war tracking not implemented (optional feature)
@@ -109,6 +115,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### character_relationships (121 rows) - ✅ IMPROVED
 
 **Empty Columns:**
+
 - `relationship_value` (INTEGER) - Relationship strength not captured
 - `started_turn` (INTEGER) - Relationship start time not tracked
 - `ended_turn` (INTEGER) - Relationship end time not tracked
@@ -118,6 +125,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### character_traits (990 rows)
 
 **Empty Columns:**
+
 - `removed_turn` (INTEGER) - Trait removal timing not captured
 
 **Impact:** Cannot track when temporary traits (like illness) are removed. Only acquisition is tracked.
@@ -125,6 +133,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### characters (297 rows)
 
 **Empty Columns:**
+
 - `birth_city_id` (INTEGER) - Birthplace not captured
 - `death_reason` (VARCHAR) - Cause of death not tracked
 - `birth_father_id` (INTEGER) - Paternal lineage not captured
@@ -140,6 +149,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### cities (28 rows)
 
 **Empty Columns:**
+
 - `general_id` (INTEGER) - General assignments not tracked
 - `agent_id` (INTEGER) - Spy/agent assignments not tracked
 - `first_owner_player_id` (INTEGER) - Original founder not tracked
@@ -149,6 +159,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### city_production_queue (25 rows)
 
 **Empty Columns:**
+
 - `yield_costs` (VARCHAR) - Production costs not captured
 
 **Impact:** Cannot analyze resource costs for production items.
@@ -156,6 +167,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### diplomacy (75 rows)
 
 **Empty Columns:**
+
 - `war_score` (INTEGER) - War progress not tracked
 - `last_conflict_turn` (INTEGER) - Conflict timing not captured
 - `last_diplomacy_turn` (INTEGER) - Diplomatic action timing missing
@@ -166,6 +178,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### matches (1 rows)
 
 **Empty Columns:**
+
 - `map_aspect_ratio` (VARCHAR) - Map configuration detail missing
 - `simultaneous_turns` (INTEGER) - Turn mode not captured
 - `victory_conditions` (VARCHAR) - Victory settings not parsed
@@ -176,6 +189,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### player_council (12 rows)
 
 **Empty Columns:**
+
 - `appointed_turn` (INTEGER) - Council appointment timing not tracked
 
 **Impact:** Cannot analyze when council positions were filled.
@@ -183,6 +197,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### player_goals (8 rows)
 
 **Empty Columns:**
+
 - `failed_turn` (INTEGER) - Goal failure timing not tracked
 - `max_turns` (INTEGER) - Goal time limit not captured
 
@@ -191,6 +206,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### players (5 rows)
 
 **Empty Columns:**
+
 - `team_id` (INTEGER) - Team multiplayer data not present (expected for single-player saves)
 - `difficulty` (VARCHAR) - AI difficulty not captured
 - `last_turn_completed` (INTEGER) - Turn state not tracked
@@ -203,6 +219,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### religions (9 rows) - ✅ IMPROVED
 
 **Empty Columns:**
+
 - `xml_id` (INTEGER) - Original XML ID not stored (used for debugging)
 
 **Impact:** Minor impact; religion tracking is now functional (major improvement).
@@ -210,6 +227,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### story_events (764 rows)
 
 **Empty Columns:**
+
 - `secondary_character_id` (INTEGER) - Events with multiple characters not fully captured
 - `event_text` (VARCHAR) - Event descriptions not parsed
 
@@ -218,6 +236,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### technologies_completed (277 rows)
 
 **Empty Columns:**
+
 - `completed_turn` (INTEGER) - Technology completion timing not tracked
 
 **Impact:** Cannot analyze technology progression speed or create tech timelines.
@@ -225,6 +244,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### tile_changes (2,201 rows)
 
 **Empty Columns:**
+
 - `old_value` (VARCHAR) - Previous state before change not captured
 
 **Impact:** Change tracking records new values but not historical values, limiting temporal analysis.
@@ -232,6 +252,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### tiles (5,476 rows)
 
 **Empty Columns:**
+
 - `improvement_turns_left` (INTEGER) - Construction progress not tracked
 - `owner_player_id` (INTEGER) - Tile ownership not captured (or no tiles owned)
 - `owner_city_id` (INTEGER) - City territory not linked
@@ -241,6 +262,7 @@ The following tables have one or more columns that are completely empty (all NUL
 ### tribes (10 rows)
 
 **Empty Columns:**
+
 - `xml_id` (INTEGER) - Original XML ID not stored
 - `leader_character_id` (INTEGER) - Tribal leadership not linked
 - `allied_player_id` (INTEGER) - Tribal alliances not tracked
@@ -304,13 +326,13 @@ The following tables have one or more columns that are completely empty (all NUL
 
 ## Data Completeness Metrics
 
-| Metric | Value |
-|--------|-------|
-| Overall Table Completeness | 65.3% (32/49 tables) |
-| Critical Tables Populated | 25/33 (75.8%) |
-| Optional/Infrastructure Tables Empty | 14/16 (87.5%) |
-| Tables with Full Column Population | 16/32 (50.0%) |
-| Tables with Partial Column Population | 16/32 (50.0%) |
+| Metric                                | Value                |
+| ------------------------------------- | -------------------- |
+| Overall Table Completeness            | 65.3% (32/49 tables) |
+| Critical Tables Populated             | 25/33 (75.8%)        |
+| Optional/Infrastructure Tables Empty  | 14/16 (87.5%)        |
+| Tables with Full Column Population    | 16/32 (50.0%)        |
+| Tables with Partial Column Population | 16/32 (50.0%)        |
 
 ## Recommendations
 
@@ -403,6 +425,7 @@ Based on this analysis, the parser implementation should focus on:
 The parser has made significant progress, with 65.3% table population and several major improvements since the last report (character_relationships, religions). However, critical gaps remain in military unit tracking, character genealogy, and several subsystems.
 
 The highest impact improvements would be:
+
 1. Military unit parsing (enables tactical analysis)
 2. Character genealogy (enables dynasty analysis)
 3. Legitimacy history (completes time-series suite)

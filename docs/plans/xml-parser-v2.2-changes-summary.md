@@ -18,11 +18,13 @@ The plan has been updated from v2.1 to v2.2 with significant improvements to cor
 ### 1. UPSERT Strategy for Core Entities ✅
 
 **What Changed:**
+
 - Core entities (players, characters, cities, tiles, units, families, religions, tribes) now use `INSERT ... ON CONFLICT (match_id, xml_id) DO UPDATE` instead of DELETE-then-INSERT
 - Only derived/child tables use DELETE-then-INSERT
 - Reduces churn and eliminates temporary FK constraint violations
 
 **Implementation:**
+
 ```rust
 // OLD (v2.1): DELETE all, then INSERT
 fn delete_derived_match_data(tx: &Transaction, match_id: i64) -> Result<()> {
@@ -42,12 +44,14 @@ fn upsert_player(tx: &Transaction, player: &Player) -> Result<()> {
 ```
 
 **Benefits:**
+
 - More resilient if concurrent read occurs during import
 - Preserves referential integrity throughout update
 - No temporary FK violations
 - Cleaner transaction logs
 
 **Schema Requirements:** ✅ Already in place
+
 - Unique constraints on `(match_id, xml_id)` for all core entity tables (already in schema.sql)
 
 ---
@@ -55,11 +59,13 @@ fn upsert_player(tx: &Transaction, player: &Player) -> Result<()> {
 ### 2. Multi-Process Concurrency Control ✅
 
 **What Changed:**
+
 - Added database-level locking via `match_locks` table
 - In-process Mutex remains for same-app concurrency
 - Database lock prevents corruption from multiple app instances
 
 **New Component:**
+
 ```rust
 // Database-level lock (NEW in v2.2)
 fn acquire_db_lock(tx: &Transaction, game_id: &str) -> Result<()> {
@@ -74,14 +80,17 @@ fn acquire_db_lock(tx: &Transaction, game_id: &str) -> Result<()> {
 ```
 
 **New Features:**
+
 - Stale lock cleanup (10-minute timeout)
 - Process ID tracking for debugging
 - Automatic lock release on commit/rollback
 
 **Schema Addition Required:**
+
 - New `match_locks` table (see `schema-migration-v2.2.sql`)
 
 **Why This Matters:**
+
 - v2.1 only protected same-app concurrency
 - v2.2 protects across multiple app instances
 - Critical for desktop apps where users might run multiple instances
@@ -91,12 +100,14 @@ fn acquire_db_lock(tx: &Transaction, game_id: &str) -> Result<()> {
 ### 3. Enhanced ZIP Security ✅
 
 **What Changed:**
+
 - Path separator normalization (Windows `\` vs Unix `/`)
 - Control character rejection in filenames
 - Absolute path detection after normalization
 - Empty path component validation
 
 **New Validation Function:**
+
 ```rust
 fn validate_zip_path(path: &str) -> Result<()> {
     // Normalize separators
@@ -124,6 +135,7 @@ fn validate_zip_path(path: &str) -> Result<()> {
 ```
 
 **Security Improvements:**
+
 - Prevents Windows-specific path traversal (`foo\..\bar`)
 - Blocks filenames with control characters (potential exploit vectors)
 - Validates after normalization (defense in depth)
@@ -133,11 +145,13 @@ fn validate_zip_path(path: &str) -> Result<()> {
 ### 4. UTF-8 Encoding Validation ✅
 
 **What Changed:**
+
 - Explicit UTF-8 validation before parsing
 - Detects and warns about non-UTF-8 XML declarations
 - Better error messages for encoding issues
 
 **New Checks:**
+
 ```rust
 // Validate UTF-8 encoding
 if !xml_content.is_char_boundary(xml_content.len()) {
@@ -157,6 +171,7 @@ if let Some(first_line) = xml_content.lines().next() {
 ```
 
 **Benefits:**
+
 - Catches encoding issues before parser failure
 - Helpful error messages for users
 - Logs warnings for non-standard encodings
@@ -166,12 +181,14 @@ if let Some(first_line) = xml_content.lines().next() {
 ### 5. Enhanced Progress Reporting ✅
 
 **What Changed:**
+
 - All progress updates now include entity counts
 - File size display during XML parsing
 - Total entities imported on completion
 - Streaming updates during large entity parsing
 
 **New Progress Format:**
+
 ```rust
 // OLD (v2.1): Just percentages
 progress.on_progress("Parsing characters", 35);
@@ -187,6 +204,7 @@ progress.on_progress(ProgressInfo::with_counts(
 ```
 
 **Progress Milestones (v2.2):**
+
 - 5% - ZIP extracted
 - 10% - XML parsed (11.2 MB)
 - 15% - Match identified (new/updating)
@@ -197,6 +215,7 @@ progress.on_progress(ProgressInfo::with_counts(
 - 100% - Complete (12,600 entities imported) ← total
 
 **User Experience:**
+
 ```
 Before (v2.1): [████░░░░░░] 35% - Parsing characters
 After  (v2.2): [████░░░░░░] 35% - Parsing characters (125/450)
@@ -207,11 +226,13 @@ After  (v2.2): [████░░░░░░] 35% - Parsing characters (125/45
 ### 6. Schema Validation on Startup ✅
 
 **What Changed:**
+
 - Comprehensive validation before any import
 - Checks all tables, unique constraints, and DELETE_ORDER integrity
 - Detailed error messages for missing schema elements
 
 **New Validation:**
+
 ```rust
 pub fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
     // Check required tables
@@ -236,6 +257,7 @@ pub fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
 ```
 
 **Catches:**
+
 - Missing `match_locks` table
 - Missing unique constraints for UPSERT
 - Tables in DELETE_ORDER that don't exist
@@ -248,11 +270,13 @@ pub fn validate_schema(conn: &Connection) -> Result<Vec<String>> {
 ### 7. Centralized Sentinel Handling ✅
 
 **What Changed:**
+
 - New `sentinels` module for consistent handling
 - Functions: `normalize_id()`, `normalize_turn()`, `normalize_string()`
 - Strict mode validators for range checking
 
 **Implementation:**
+
 ```rust
 pub mod sentinels {
     pub const ID_NONE: i32 = -1;
@@ -277,6 +301,7 @@ pub mod sentinels {
 ```
 
 **Benefits:**
+
 - Consistent -1 → None conversion across codebase
 - Single source of truth for sentinel values
 - Easy to enable strict mode warnings
@@ -286,11 +311,13 @@ pub mod sentinels {
 ### 8. Enhanced Error Context ✅
 
 **What Changed:**
+
 - Element paths in all `Unknown*Id` errors
 - XML context excerpts capped at 300 chars
 - New `ConcurrencyLock` error type
 
 **Improvements:**
+
 ```rust
 // OLD (v2.1)
 #[error("Unknown player ID: {0}")]
@@ -305,6 +332,7 @@ UnknownPlayerId(i32, String), // (xml_id, element_path)
 ```
 
 **New Helper:**
+
 ```rust
 pub fn create_xml_context(xml: &str, position: usize) -> String {
     // Returns excerpt like: "...Previous context <Element ID=\"5\"> Next context..."
@@ -317,11 +345,13 @@ pub fn create_xml_context(xml: &str, position: usize) -> String {
 ### 9. Configurable Security Thresholds ✅
 
 **What Changed:**
+
 - `MAX_COMPRESSION_RATIO` made configurable (100.0x default)
 - Compression ratio logging for monitoring
 - Debug logs for high compression (>10x)
 
 **Implementation:**
+
 ```rust
 const MAX_COMPRESSION_RATIO: f64 = 100.0; // Tunable threshold
 
@@ -349,6 +379,7 @@ if compression_ratio > MAX_COMPRESSION_RATIO {
 **v2.2 Milestone 1:** 30+ deliverables, 17 success criteria
 
 **New Categories:**
+
 1. Schema & Database (4 items)
 2. File Ingestion & Security (7 items)
 3. ID Mapping & Stability (4 items)
@@ -376,10 +407,12 @@ if compression_ratio > MAX_COMPRESSION_RATIO {
 ## Files Changed
 
 ### Updated Files
+
 1. `docs/plans/xml-parser-implementation.md` - Main plan (v2.1 → v2.2)
 2. `docs/schema.sql` - Updated to v2.2 (added `match_locks` table)
 
 ### New Files
+
 3. `docs/plans/xml-parser-v2.2-changes-summary.md` - This document
 
 ---
@@ -401,6 +434,7 @@ The `match_locks` table is now included in the base schema (v2.2).
 If you have existing test databases from early development:
 
 1. **Drop and recreate:**
+
    ```bash
    rm your_database.db
    duckdb your_database.db < docs/schema.sql
@@ -460,6 +494,7 @@ All changes are backward-compatible with the existing schema (which already has 
 **Questions or Concerns?**
 
 If you have questions about any of these changes, please refer to:
+
 - Main plan: `docs/plans/xml-parser-implementation.md`
 - Specific sections by topic (search for section headings)
 - Reviewer feedback document (if available)

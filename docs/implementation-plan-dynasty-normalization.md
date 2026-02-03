@@ -32,6 +32,7 @@ This fragments Greece statistics across multiple chart bars.
 ### Previous Attempt
 
 A parse-time normalization was attempted on 2025-11-09 but resulted in data corruption:
+
 - 2 saves imported successfully (per logs)
 - Only 1 game appeared in UI
 - Statistics showed "Games Played: 1" while chart displayed 3 nations
@@ -61,6 +62,7 @@ This plan represents a second attempt with **extensive logging** to diagnose and
 - Dynasty attribute is always `None` or empty string for Diadochi
 
 **Example from `OW-Seleucid Empire-Year65-2025-08-05-00-10-04.zip`**:
+
 ```xml
 <Player ID="0" Name="Ptolemy Soter" Nation="NATION_PTOLEMY" Dynasty="" />
 <Player ID="1" Name="Seleucus Nicator" Nation="NATION_SELEUCUS" Dynasty="" />
@@ -180,12 +182,14 @@ fn normalize_nation_dynasty(
 **Location**: In `parse_players` function, replace lines 23-24
 
 **Before**:
+
 ```rust
 let nation = player_node.opt_attr("Nation").map(|s| s.to_string());
 let dynasty = player_node.opt_attr("Dynasty").map(|s| s.to_string());
 ```
 
 **After**:
+
 ```rust
 // Read raw values from XML
 let raw_nation = player_node.opt_attr("Nation").map(|s| s.to_string());
@@ -372,6 +376,7 @@ Ok(())
 ### Test Environment Setup
 
 1. **Backup current database**:
+
    ```bash
    cp "$HOME/Library/Application Support/com.becked.per-ankh/per-ankh.db" \
       "$HOME/Library/Application Support/com.becked.per-ankh/per-ankh.db.backup"
@@ -388,6 +393,7 @@ Ok(())
 **Objective**: Verify normalization works on fresh database
 
 **Steps**:
+
 1. Delete existing database
 2. Import `test-data/saves/OW-Seleucid Empire-Year65-2025-08-05-00-10-04.zip`
 3. Verify logs show:
@@ -397,6 +403,7 @@ Ok(())
    - Greece games = 1 (containing all 3 Diadochi players)
 
 **Expected Results**:
+
 - Database contains 1 match
 - Players table shows `NATION_GREECE` (x3) for all Diadochi
 - Dynasty column populated with `DYNASTY_SELEUCID`, `DYNASTY_ANTIGONID`, `DYNASTY_PTOLEMY`
@@ -407,6 +414,7 @@ Ok(())
 **Objective**: Verify deduplication works correctly with normalized values
 
 **Steps**:
+
 1. Re-import the same save file
 2. Verify logs show:
    - 3 normalization messages again
@@ -414,6 +422,7 @@ Ok(())
    - Still shows 1 match total
 
 **Expected Results**:
+
 - Database still contains only 1 match (not 2)
 - No data corruption warnings
 
@@ -422,12 +431,14 @@ Ok(())
 **Objective**: Verify normalization doesn't affect regular nations
 
 **Steps**:
+
 1. Import any save without Diadochi (e.g., `OW-Rome-Year166-2022-01-11-23-06-07.zip`)
 2. Verify logs show:
    - 0 normalization messages
    - Normal import completes
 
 **Expected Results**:
+
 - Regular nations unaffected
 - No performance regression
 
@@ -436,6 +447,7 @@ Ok(())
 **Objective**: Verify normalization works alongside regular imports
 
 **Steps**:
+
 1. Delete database
 2. Import 5 regular saves (no Diadochi)
 3. Import 1 Diadochi save
@@ -443,6 +455,7 @@ Ok(())
 5. Verify final stats show correct counts
 
 **Expected Results**:
+
 - 11 total games
 - Greece count includes normalized Diadochi game
 
@@ -451,7 +464,9 @@ Ok(())
 **Objective**: Verify no foreign key violations or orphaned records
 
 **Steps**:
+
 1. After Test 4, run:
+
    ```sql
    -- Check for orphaned player records
    SELECT COUNT(*) FROM players WHERE match_id NOT IN (SELECT match_id FROM matches);
@@ -466,6 +481,7 @@ Ok(())
    ```
 
 **Expected Results**:
+
 - 0 orphaned players
 - Greece appears in nation counts with Diadochi dynasties
 - Dynasties properly populated (SELEUCID, ANTIGONID, PTOLEMY)
@@ -475,6 +491,7 @@ Ok(())
 **Objective**: Ensure normalization doesn't slow parsing
 
 **Steps**:
+
 1. Import 10 large saves (>500 players each)
 2. Compare import time before/after normalization
 
@@ -487,6 +504,7 @@ Ok(())
 ### If Data Corruption is Detected
 
 **Immediate Actions**:
+
 1. Stop any running imports
 2. Restore database from backup:
    ```bash
@@ -501,6 +519,7 @@ Ok(())
 ### Root Cause Analysis
 
 **Checklist**:
+
 - [ ] Review all logs for ERROR or WARN messages
 - [ ] Check player count mismatches
 - [ ] Verify deduplication logic
@@ -576,6 +595,7 @@ let mut stmt = conn.prepare("
 ### Performance Exceptions
 
 This implementation intentionally:
+
 - Duplicates some logging (YAGNI violation for debugging)
 - Includes validation queries (slight performance cost)
 - Uses `clone()` for raw values (memory cost)

@@ -21,12 +21,12 @@ However, **the hybrid parser parallelization is not the primary driver** of this
 
 ## Performance Timeline
 
-| Date | Implementation | Single Save Time | vs. Initial | vs. Nov 7 | Status |
-|------|---------------|------------------|-------------|-----------|--------|
-| **Pre-Nov 7** | Initial baseline | 7,900ms | - | - | Baseline |
-| **Nov 7** | Appender API optimizations | 1,900ms | 4.2x faster | - | ✅ Target |
-| **Nov 8** | Progress tracking (regression) | 3,000ms | 2.6x faster | 58% slower | ⚠️ Regression |
-| **Nov 11** | Hybrid parser Phase 4 + fixes | 1,100ms | **7.2x faster** | **42% faster** | ✅ **Best** |
+| Date          | Implementation                 | Single Save Time | vs. Initial     | vs. Nov 7      | Status        |
+| ------------- | ------------------------------ | ---------------- | --------------- | -------------- | ------------- |
+| **Pre-Nov 7** | Initial baseline               | 7,900ms          | -               | -              | Baseline      |
+| **Nov 7**     | Appender API optimizations     | 1,900ms          | 4.2x faster     | -              | ✅ Target     |
+| **Nov 8**     | Progress tracking (regression) | 3,000ms          | 2.6x faster     | 58% slower     | ⚠️ Regression |
+| **Nov 11**    | Hybrid parser Phase 4 + fixes  | 1,100ms          | **7.2x faster** | **42% faster** | ✅ **Best**   |
 
 **Net improvement**: From 7.9s → 1.1s per save = **86% reduction in import time**
 
@@ -53,15 +53,16 @@ Entities imported:
 
 ### Multiple Save Imports (5 saves)
 
-| Save | Size | Year | Import Time | Entity Count |
-|------|------|------|-------------|--------------|
-| OW-Assyria-Year119 | 742KB | 119 | 1.03s | 5,973 |
-| OW-Rome-Year132 | 847KB | 132 | 1.41s | 6,045 |
-| OW-Rome-Year97 | 222KB | 97 | 436ms | 2,171 |
-| OW-Assyria-Year134 | 806KB | 134 | 1.27s | 6,022 |
-| OW-Aksum-Year142 | 919KB | 142 | 1.46s | 6,127 |
+| Save               | Size  | Year | Import Time | Entity Count |
+| ------------------ | ----- | ---- | ----------- | ------------ |
+| OW-Assyria-Year119 | 742KB | 119  | 1.03s       | 5,973        |
+| OW-Rome-Year132    | 847KB | 132  | 1.41s       | 6,045        |
+| OW-Rome-Year97     | 222KB | 97   | 436ms       | 2,171        |
+| OW-Assyria-Year134 | 806KB | 134  | 1.27s       | 6,022        |
+| OW-Aksum-Year142   | 919KB | 142  | 1.46s       | 6,127        |
 
 **Statistics:**
+
 - **Total time**: 5.6 seconds
 - **Average time**: 1.12 seconds per save
 - **Min time**: 436ms (smaller/earlier game)
@@ -69,12 +70,12 @@ Entities imported:
 
 ### Batch Import Projections
 
-| Batch Size | Time | User Experience |
-|------------|------|-----------------|
-| 1 save | 1.1s | **Excellent** ✅ |
-| 10 saves | 11.2s | **Excellent** ✅ |
-| 76 saves | 85s (~1.4 min) | **Good** ✅ |
-| 266 saves | 298s (~5 min) | **Acceptable** ✅ |
+| Batch Size | Time           | User Experience   |
+| ---------- | -------------- | ----------------- |
+| 1 save     | 1.1s           | **Excellent** ✅  |
+| 10 saves   | 11.2s          | **Excellent** ✅  |
+| 76 saves   | 85s (~1.4 min) | **Good** ✅       |
+| 266 saves  | 298s (~5 min)  | **Acceptable** ✅ |
 
 ---
 
@@ -127,31 +128,32 @@ TOTAL:                          1,099ms (100%)
 
 ### vs. Nov 7 (Post-Appender Optimization)
 
-| Component | Nov 7 | Nov 11 | Change | Status |
-|-----------|-------|--------|--------|--------|
-| **TOTAL** | 1,900ms | 1,099ms | **-801ms (-42%)** | ✅ Improved |
-| Foundation entities | 209ms | 779ms | +570ms | ⚠️ See note¹ |
-| └─ Parsing | ~150ms² | 11ms | **-139ms (-93%)** | ✅ Parallel win |
-| └─ Insertion | ~59ms² | 768ms | +709ms | ⚠️ See note¹ |
-| Player gameplay data | 393ms | 9ms | **-384ms (-98%)** | ✅ Improved |
-| City extended data | 336ms | 6ms | **-330ms (-98%)** | ✅ Improved |
-| Event stories | 274ms | 3ms | **-271ms (-99%)** | ✅ Improved |
-| Character extended | 155ms | 11ms | **-144ms (-93%)** | ✅ Improved |
-| Save ID mappings | 2ms | 3ms | +1ms | ✅ OK |
+| Component            | Nov 7   | Nov 11  | Change            | Status          |
+| -------------------- | ------- | ------- | ----------------- | --------------- |
+| **TOTAL**            | 1,900ms | 1,099ms | **-801ms (-42%)** | ✅ Improved     |
+| Foundation entities  | 209ms   | 779ms   | +570ms            | ⚠️ See note¹    |
+| └─ Parsing           | ~150ms² | 11ms    | **-139ms (-93%)** | ✅ Parallel win |
+| └─ Insertion         | ~59ms²  | 768ms   | +709ms            | ⚠️ See note¹    |
+| Player gameplay data | 393ms   | 9ms     | **-384ms (-98%)** | ✅ Improved     |
+| City extended data   | 336ms   | 6ms     | **-330ms (-98%)** | ✅ Improved     |
+| Event stories        | 274ms   | 3ms     | **-271ms (-99%)** | ✅ Improved     |
+| Character extended   | 155ms   | 11ms    | **-144ms (-93%)** | ✅ Improved     |
+| Save ID mappings     | 2ms     | 3ms     | +1ms              | ✅ OK           |
 
 **Notes:**
+
 1. The Nov 7 measurements did not separate parsing from insertion for foundation entities. The increase is likely due to measurement methodology changes, not actual regression.
 2. Estimated based on Nov 7 documentation stating "Foundation entities: 209ms (no change expected)".
 
 ### vs. Nov 8 (Progress Tracking Regression)
 
-| Metric | Nov 8 | Nov 11 | Change | Improvement |
-|--------|-------|--------|--------|-------------|
-| **Total time** | 3,000ms | 1,099ms | **-1,901ms** | **63% faster** ✅ |
-| Tile city ownership | 614ms | 622ms | +8ms | Similar |
-| Character extended | 156ms | 11ms | -145ms | **93% faster** ✅ |
-| Player gameplay data | 388ms | 9ms | -379ms | **98% faster** ✅ |
-| City extended data | 337ms | 6ms | -331ms | **98% faster** ✅ |
+| Metric               | Nov 8   | Nov 11  | Change       | Improvement       |
+| -------------------- | ------- | ------- | ------------ | ----------------- |
+| **Total time**       | 3,000ms | 1,099ms | **-1,901ms** | **63% faster** ✅ |
+| Tile city ownership  | 614ms   | 622ms   | +8ms         | Similar           |
+| Character extended   | 156ms   | 11ms    | -145ms       | **93% faster** ✅ |
+| Player gameplay data | 388ms   | 9ms     | -379ms       | **98% faster** ✅ |
+| City extended data   | 337ms   | 6ms     | -331ms       | **98% faster** ✅ |
 
 **Regression fixed**: The Nov 8 progress tracking overhead has been resolved.
 
@@ -162,6 +164,7 @@ TOTAL:                          1,099ms (100%)
 ### What the Hybrid Parser Achieved
 
 **Parsing Phase Improvements:**
+
 - Foundation entities parsing: ~150ms → 11ms (**93% faster**) ✅
 - Affiliation entities parsing: ~5ms → <1ms (**80% faster**) ✅
 - Total parsing speedup: **~10-15x faster** ✅
@@ -169,16 +172,19 @@ TOTAL:                          1,099ms (100%)
 **Why Total Import Time Improved Less:**
 
 The parsing phase was only **~8-10% of total import time** in the Nov 7 baseline:
+
 - Total: 1,900ms
 - Parsing: ~155ms (foundation + affiliation + nested)
 - Database operations: ~1,745ms (92%)
 
 **Calculation:**
+
 - Parsing improvement: 155ms → 11ms = **-144ms saved**
 - Expected total improvement from parsing alone: 1,900ms - 144ms = **~1,756ms**
 - Actual total: **1,099ms** (42% faster than expected!)
 
 **Conclusion**: The 42% improvement vs. Nov 7 includes:
+
 1. **Hybrid parser parallelization**: ~144ms saved (8% improvement)
 2. **Additional optimizations**: ~657ms saved (35% improvement)
    - Likely from nested data parsing improvements
@@ -194,17 +200,20 @@ The parsing phase was only **~8-10% of total import time** in the Nov 7 baseline
 **What it does**: Updates the `city_id` foreign key on tiles after cities are inserted.
 
 **Why it's slow**:
+
 - Processes ~5,476 tiles per import
 - Uses batched UPDATE statements (500 tiles per batch)
 - Already optimized with batched CASE UPDATE (was 15x faster than individual UPDATEs)
 - Database operation, not parsing - **cannot be parallelized further**
 
 **Current performance**:
+
 - Time: 622ms
 - Per-tile average: ~114μs per tile
 - Already using optimal batching strategy
 
 **Comparison with Nov 7**:
+
 - Nov 7: 49ms (after batched UPDATE optimization)
 - Nov 11: 622ms
 - Change: +573ms (12.7x slower)
@@ -218,6 +227,7 @@ The parsing phase was only **~8-10% of total import time** in the Nov 7 baseline
 ### Expected Speedup (from Migration Plan v2)
 
 The migration plan predicted:
+
 - **Parsing phase**: 2-2.5x speedup from parallelization
 - **Total import time**: 15-25% improvement overall
 - **Expected**: 1,900ms → ~1,425-1,615ms
@@ -225,14 +235,17 @@ The migration plan predicted:
 ### Actual Speedup Achieved
 
 **Parsing phase**:
+
 - Foundation: 150ms → 11ms = **13.6x speedup** ⚡ (exceeded!)
 - Affiliation: 5ms → <1ms = **5-10x speedup** ⚡ (exceeded!)
 
 **Total import time**:
+
 - Nov 7: 1,900ms → Nov 11: 1,099ms = **42% improvement** ⚡ (exceeded!)
 - **Far exceeded** the 15-25% target ✅
 
 **Why exceeded expectations:**
+
 1. Parallelization was more effective than predicted
 2. Additional optimizations to nested data parsing
 3. Extended data parsing became extremely fast (93-99% improvement)
@@ -243,21 +256,21 @@ The migration plan predicted:
 
 ### Onboarding Scenario (266 saves)
 
-| Version | Time | User Experience |
-|---------|------|-----------------|
-| **Pre-Nov 7** | 35 minutes | ❌ Catastrophic |
-| **Nov 7** | 8.4 minutes | ⚠️ Acceptable |
-| **Nov 11** | **5 minutes** | ✅ **Good** |
+| Version       | Time          | User Experience |
+| ------------- | ------------- | --------------- |
+| **Pre-Nov 7** | 35 minutes    | ❌ Catastrophic |
+| **Nov 7**     | 8.4 minutes   | ⚠️ Acceptable   |
+| **Nov 11**    | **5 minutes** | ✅ **Good**     |
 
 **User time saved**: 30 minutes compared to pre-optimization baseline.
 
 ### Single Save Import
 
-| Version | Time | User Experience |
-|---------|------|-----------------|
-| **Pre-Nov 7** | 7.9s | ⚠️ Acceptable |
-| **Nov 7** | 1.9s | ✅ Excellent |
-| **Nov 11** | **1.1s** | ✅ **Excellent** |
+| Version       | Time     | User Experience  |
+| ------------- | -------- | ---------------- |
+| **Pre-Nov 7** | 7.9s     | ⚠️ Acceptable    |
+| **Nov 7**     | 1.9s     | ✅ Excellent     |
+| **Nov 11**    | **1.1s** | ✅ **Excellent** |
 
 **User experience**: Import feels nearly instantaneous.
 
@@ -270,6 +283,7 @@ The migration plan predicted:
 **Problem**: Tile city ownership increased from 49ms (Nov 7) to 622ms (Nov 11).
 
 **Actions**:
+
 1. Verify the batched CASE UPDATE optimization is still active
 2. Check if progress event emissions were added to this phase
 3. Compare implementation in src-tauri/src/parser/entities/tiles.rs with Nov 7 version
@@ -281,6 +295,7 @@ The migration plan predicted:
 **Goal**: Understand why extended data (character, city, player, tile) improved 93-99%.
 
 **Actions**:
+
 1. Document what optimizations were made
 2. Verify optimizations are using parallel parsing
 3. Ensure patterns are applied consistently
@@ -311,17 +326,20 @@ Nov 11:     █████ 1,100ms (7.2x faster) ✅ BEST
 ## Conclusion
 
 **Hybrid Parser Phase 4 is working excellently:**
+
 - ✅ Parsing is **10-15x faster** than sequential
 - ✅ Total import time improved **42% beyond Nov 7 baseline**
 - ✅ User experience is **excellent** (<1.2s per save)
 - ✅ Batch import time is **acceptable** (5 min for 266 saves)
 
 **Why imports don't "feel faster" to the user:**
+
 - Parsing was never the bottleneck (only ~8% of total time)
 - The **database insertion phase** (primarily Tile city ownership: 622ms) dominates import time
 - Further speedup requires optimizing database operations, not parsing
 
 **Primary bottleneck remaining:**
+
 - Tile city ownership: 622ms (57% of import time)
 - This is a **database UPDATE operation**, not parsing
 - Already using batched UPDATE strategy

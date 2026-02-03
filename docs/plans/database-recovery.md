@@ -3,6 +3,7 @@
 ## Phase 1: Improve Error Context
 
 **Files:**
+
 - `src-tauri/src/db/schema.rs` - Add detailed error logging, return original error
 
 **Changes:**
@@ -40,6 +41,7 @@ Remove the `.context("Failed to initialize schema")` wrapper in `lib.rs` setup h
 ## Phase 2: Add Recovery Command
 
 **Files:**
+
 - `src-tauri/src/db/schema.rs` - Add `delete_database_files` function
 - `src-tauri/src/db/mod.rs` - Export new function
 - `src-tauri/src/lib.rs` - Add `recover_database` Tauri command
@@ -76,6 +78,7 @@ pub fn delete_database_files(db_path: &Path) -> std::io::Result<Vec<PathBuf>> {
 ```
 
 Unit test:
+
 ```rust
 #[test]
 fn test_delete_database_files() {
@@ -155,6 +158,7 @@ Register in `tauri::Builder`:
 ## Phase 3: Handle Startup Failure with Recovery Dialog
 
 **Files:**
+
 - `src-tauri/src/lib.rs` - Modify setup hook to catch errors and show recovery dialog
 - `src-tauri/Cargo.toml` - May need `tauri-plugin-dialog` if not present
 - `src-tauri/capabilities/default.json` - Add dialog permission if needed
@@ -221,10 +225,7 @@ Add dialog permission if not present:
 
 ```json
 {
-  "permissions": [
-    "dialog:default",
-    "dialog:allow-message"
-  ]
+	"permissions": ["dialog:default", "dialog:allow-message"]
 }
 ```
 
@@ -233,6 +234,7 @@ Add dialog permission if not present:
 ## Phase 4: Add Frontend API Binding
 
 **Files:**
+
 - `src/lib/api.ts` - Add `recoverDatabase` function
 
 **Changes:**
@@ -243,9 +245,9 @@ Add the recovery command binding:
 
 ```typescript
 export const api = {
-  // ... existing commands ...
+	// ... existing commands ...
 
-  recoverDatabase: () => invoke<string>("recover_database"),
+	recoverDatabase: () => invoke<string>("recover_database"),
 } as const;
 ```
 

@@ -25,19 +25,19 @@
 
 ### Single Save Import (OW-Assyria-Year119-2025-11-02-10-50-56.zip)
 
-| Metric | Nov 7 Baseline | Nov 8 Current | Change | % Change |
-|--------|---------------|---------------|--------|----------|
-| **Total import time** | 1,908ms | 2,485ms | +577ms | +30% |
-| **Throughput** | 3,129 entities/s | 2,403 entities/s | -726 entities/s | -23% |
-| **User experience** | Excellent | Good | Degraded | -1 tier |
+| Metric                | Nov 7 Baseline   | Nov 8 Current    | Change          | % Change |
+| --------------------- | ---------------- | ---------------- | --------------- | -------- |
+| **Total import time** | 1,908ms          | 2,485ms          | +577ms          | +30%     |
+| **Throughput**        | 3,129 entities/s | 2,403 entities/s | -726 entities/s | -23%     |
+| **User experience**   | Excellent        | Good             | Degraded        | -1 tier  |
 
 ### Multiple Save Import (5 saves, average)
 
-| Metric | Nov 7 Baseline | Nov 8 Current | Change | % Change |
-|--------|---------------|---------------|--------|----------|
-| **Average import time** | 1,900ms | 3,032ms | +1,132ms | +59% |
-| **Min time** | ~725ms¹ | 869ms | +144ms | +20% |
-| **Max time** | ~3,059ms² | 4,888ms | +1,829ms | +60% |
+| Metric                  | Nov 7 Baseline | Nov 8 Current | Change   | % Change |
+| ----------------------- | -------------- | ------------- | -------- | -------- |
+| **Average import time** | 1,900ms        | 3,032ms       | +1,132ms | +59%     |
+| **Min time**            | ~725ms¹        | 869ms         | +144ms   | +20%     |
+| **Max time**            | ~3,059ms²      | 4,888ms       | +1,829ms | +60%     |
 
 ¹ Estimated from Nov 7 data for small save (Year 97)
 ² Max from Nov 7 data for large save (Year 142)
@@ -48,32 +48,33 @@
 
 ### Current Performance (Nov 8, 2025)
 
-| Batch Size | Time | User Experience |
-|------------|------|-----------------|
-| 1 save | 3.0s | Good |
-| 10 saves | 30s | Acceptable |
-| 76 saves | 230s (~3.8 min) | Frustrating |
-| 266 saves | 806s (~13.4 min) | **Unacceptable** |
+| Batch Size | Time             | User Experience  |
+| ---------- | ---------------- | ---------------- |
+| 1 save     | 3.0s             | Good             |
+| 10 saves   | 30s              | Acceptable       |
+| 76 saves   | 230s (~3.8 min)  | Frustrating      |
+| 266 saves  | 806s (~13.4 min) | **Unacceptable** |
 
 ### Baseline Performance (Nov 7, 2025)
 
-| Batch Size | Time | User Experience |
-|------------|------|-----------------|
-| 1 save | 1.9s | Excellent |
-| 10 saves | 19s | Good |
-| 76 saves | 144s (~2.4 min) | Acceptable |
-| 266 saves | 505s (~8.4 min) | Acceptable |
+| Batch Size | Time            | User Experience |
+| ---------- | --------------- | --------------- |
+| 1 save     | 1.9s            | Excellent       |
+| 10 saves   | 19s             | Good            |
+| 76 saves   | 144s (~2.4 min) | Acceptable      |
+| 266 saves  | 505s (~8.4 min) | Acceptable      |
 
 ### Pre-Optimization Performance (Pre-Nov 7)
 
-| Batch Size | Time | User Experience |
-|------------|------|-----------------|
-| 1 save | 7.9s | Acceptable |
-| 10 saves | 79s (~1.3 min) | Frustrating |
-| 76 saves | 600s (~10 min) | **Unacceptable** |
-| 266 saves | 2,101s (~35 min) | **Catastrophic** |
+| Batch Size | Time             | User Experience  |
+| ---------- | ---------------- | ---------------- |
+| 1 save     | 7.9s             | Acceptable       |
+| 10 saves   | 79s (~1.3 min)   | Frustrating      |
+| 76 saves   | 600s (~10 min)   | **Unacceptable** |
+| 266 saves  | 2,101s (~35 min) | **Catastrophic** |
 
 **Status**:
+
 - ✅ Still 2.6x faster than pre-optimization baseline
 - ⚠️ **59% slower than Nov 7 optimized baseline**
 - ❌ Onboarding time increased from 8.4 min → 13.4 min (+5 minutes)
@@ -127,15 +128,15 @@
 
 ### Critical Regressions Identified
 
-| Component | Nov 7 | Nov 8 | Δ | % Change | Status |
-|-----------|-------|-------|---|----------|--------|
-| **Foundation entities** | 209ms | 777ms | +568ms | **+272%** | 🔥 CRITICAL |
-| └─ Tile city ownership | ~40ms³ | 614ms | +574ms | **+1,435%** | 🔥 CRITICAL |
-| Player gameplay data | 393ms | 388ms | -5ms | -1% | ✅ OK |
-| City extended data | 336ms | 337ms | +1ms | 0% | ✅ OK |
-| Character extended | 155ms | 156ms | +1ms | +1% | ✅ OK |
-| Event stories | 274ms | 272ms | -2ms | -1% | ✅ OK |
-| Save ID mappings | 2ms | 2ms | 0ms | 0% | ✅ OK |
+| Component               | Nov 7  | Nov 8 | Δ      | % Change    | Status      |
+| ----------------------- | ------ | ----- | ------ | ----------- | ----------- |
+| **Foundation entities** | 209ms  | 777ms | +568ms | **+272%**   | 🔥 CRITICAL |
+| └─ Tile city ownership  | ~40ms³ | 614ms | +574ms | **+1,435%** | 🔥 CRITICAL |
+| Player gameplay data    | 393ms  | 388ms | -5ms   | -1%         | ✅ OK       |
+| City extended data      | 336ms  | 337ms | +1ms   | 0%          | ✅ OK       |
+| Character extended      | 155ms  | 156ms | +1ms   | +1%         | ✅ OK       |
+| Event stories           | 274ms  | 272ms | -2ms   | -1%         | ✅ OK       |
+| Save ID mappings        | 2ms    | 2ms   | 0ms    | 0%          | ✅ OK       |
 
 ³ Estimated from Nov 7 performance results document: "Tile city ownership: 743ms → 49ms (15x faster)"
 
@@ -150,11 +151,13 @@
 **Hypothesis**: The November 7 optimization used batched CASE UPDATE statements that achieved 15x speedup (743ms → 49ms). The current implementation appears to have reverted or introduced additional overhead.
 
 **Evidence**:
+
 - Nov 7 optimization report states: "Tile city ownership: 743ms → 49ms (15x faster)"
 - Current benchmark shows: 614ms (similar to pre-optimization baseline of 743ms)
 - **Conclusion**: The batched UPDATE optimization has been partially or fully lost
 
 **Likely causes**:
+
 1. Progress event emission inside the tile ownership update loop
 2. Reversion to individual UPDATE statements instead of batched CASE UPDATE
 3. Additional work per tile (logging, progress tracking)
@@ -170,6 +173,7 @@
 **Observation**: Foundation entity total jumped from 209ms → 777ms.
 
 **Breakdown of increase**:
+
 - Tile city ownership: +574ms (primary driver)
 - Character birth cities: +76ms (new or increased work)
 - Character parents: +48ms (unchanged from baseline)
@@ -202,11 +206,13 @@ Based on git log analysis, the following features were added after Nov 7:
 ### Expected Overhead:
 
 **Progress Events**: Each event emission involves:
+
 - Serialization of progress data to JSON
 - IPC message send to frontend (cross-process communication)
 - Lock acquisition/release for thread safety
 
 **Impact**: If emitting events during tile ownership updates (5,476 tiles), this would explain the 574ms regression:
+
 - 574ms / 5,476 tiles = ~105μs per tile
 - This aligns with expected IPC overhead
 
@@ -217,12 +223,14 @@ Based on git log analysis, the following features were added after Nov 7:
 Despite the performance regression, data integrity remains intact:
 
 **Entity counts verified**:
+
 - ✅ 5 players (correct)
 - ✅ 449 characters (correct)
 - ✅ 43 cities (correct)
 - ✅ 5,476 tiles (correct)
 
 **Optimizations still active**:
+
 - ✅ Save ID mappings: 2ms (still using Appender API - 1,370x speedup maintained)
 - ✅ Character extended data: 156ms (still using Appender API - 18x speedup maintained)
 - ❌ Tile city ownership: 614ms (batched UPDATE optimization lost - regression detected)
@@ -231,11 +239,11 @@ Despite the performance regression, data integrity remains intact:
 
 ## Historical Performance Timeline
 
-| Date | Milestone | Single Save Time | Improvement | Status |
-|------|-----------|------------------|-------------|--------|
-| **Pre-Nov 7** | Initial state | 7,900ms | - | Baseline |
-| **Nov 7** | Appender optimization | 1,908ms | 4.2x faster | ✅ Target achieved |
-| **Nov 8** | Progress tracking added | 2,485ms | 3.2x faster vs. initial | ⚠️ Regression detected |
+| Date          | Milestone               | Single Save Time | Improvement             | Status                 |
+| ------------- | ----------------------- | ---------------- | ----------------------- | ---------------------- |
+| **Pre-Nov 7** | Initial state           | 7,900ms          | -                       | Baseline               |
+| **Nov 7**     | Appender optimization   | 1,908ms          | 4.2x faster             | ✅ Target achieved     |
+| **Nov 8**     | Progress tracking added | 2,485ms          | 3.2x faster vs. initial | ⚠️ Regression detected |
 
 **Net result**: Still 3.2x faster than initial baseline, but 30% slower than Nov 7 optimized state.
 
@@ -248,6 +256,7 @@ Despite the performance regression, data integrity remains intact:
 **Problem**: 614ms regression in tile city ownership updates
 
 **Investigation steps**:
+
 1. Review `src-tauri/src/parser/entities/tiles.rs:174-224` (batched UPDATE implementation from Nov 7)
 2. Check if batched CASE UPDATE logic is still active
 3. Verify no individual UPDATEs are being executed in a loop
@@ -256,6 +265,7 @@ Despite the performance regression, data integrity remains intact:
 **Hypothesis**: Progress events are being emitted inside the tile ownership loop.
 
 **Fix options**:
+
 - **Option A**: Remove progress events from tile ownership loop (fastest fix)
 - **Option B**: Emit progress events only every N tiles (e.g., every 500 tiles)
 - **Option C**: Move progress event emission outside the batched UPDATE operation
@@ -267,11 +277,13 @@ Despite the performance regression, data integrity remains intact:
 **Goal**: Quantify the performance impact of progress event emissions across all import phases.
 
 **Method**:
+
 1. Add timing instrumentation before/after each event emission
 2. Count total events emitted per import
 3. Measure average time per event emission
 
 **Expected findings**:
+
 - Events per import: Unknown (estimate: 10-100)
 - Time per event: Unknown (estimate: 5-20ms)
 - Total overhead: Likely 50-200ms
@@ -283,6 +295,7 @@ Despite the performance regression, data integrity remains intact:
 **Goal**: Ensure the Nov 7 batched UPDATE optimization is still active.
 
 **Method**:
+
 1. Read `src-tauri/src/parser/entities/tiles.rs` lines 174-224
 2. Verify `CASE WHEN` UPDATE statement is being used
 3. Check that chunk size is still 500 tiles per batch
@@ -297,6 +310,7 @@ Despite the performance regression, data integrity remains intact:
 **Benefit**: Zero overhead for benchmark tests and CLI imports.
 
 **Implementation**:
+
 ```rust
 if let Some(app_handle) = app {
     emit_progress_event(app_handle, progress_data)?;
@@ -311,27 +325,28 @@ if let Some(app_handle) = app {
 
 ### Short-term (Fix Tile Ownership Regression)
 
-| Target | Current | After Fix | Achievable? |
-|--------|---------|-----------|-------------|
-| Single save | 2.5s | < 2s | ✅ Yes (if regression fixed) |
-| 10 saves | 30s | < 20s | ✅ Yes |
-| 76 saves | 230s (~3.8 min) | < 150s (~2.5 min) | ✅ Yes |
-| 266 saves | 806s (~13.4 min) | < 520s (~8.7 min) | ✅ Yes |
+| Target      | Current          | After Fix         | Achievable?                  |
+| ----------- | ---------------- | ----------------- | ---------------------------- |
+| Single save | 2.5s             | < 2s              | ✅ Yes (if regression fixed) |
+| 10 saves    | 30s              | < 20s             | ✅ Yes                       |
+| 76 saves    | 230s (~3.8 min)  | < 150s (~2.5 min) | ✅ Yes                       |
+| 266 saves   | 806s (~13.4 min) | < 520s (~8.7 min) | ✅ Yes                       |
 
 ### Medium-term (Optimize Progress Events)
 
-| Target | Current | After Optimization | Achievable? |
-|--------|---------|-------------------|-------------|
-| Single save | 2.5s | < 1.5s | ⚠️ Aggressive |
-| 10 saves | 30s | < 15s | ✅ Yes |
-| 76 saves | 230s | < 120s (~2 min) | ✅ Yes |
-| 266 saves | 806s | < 420s (~7 min) | ✅ Yes |
+| Target      | Current | After Optimization | Achievable?   |
+| ----------- | ------- | ------------------ | ------------- |
+| Single save | 2.5s    | < 1.5s             | ⚠️ Aggressive |
+| 10 saves    | 30s     | < 15s              | ✅ Yes        |
+| 76 saves    | 230s    | < 120s (~2 min)    | ✅ Yes        |
+| 266 saves   | 806s    | < 420s (~7 min)    | ✅ Yes        |
 
 ---
 
 ## Conclusion
 
 **Summary**:
+
 - ✅ **Positive**: Still 3.2x faster than pre-optimization baseline
 - ❌ **Negative**: 59% regression from Nov 7 optimized state
 - ⚠️ **Critical**: Tile city ownership optimization has been lost (+574ms)
@@ -341,6 +356,7 @@ if let Some(app_handle) = app {
 **Impact**: User onboarding time increased from 8.4 minutes → 13.4 minutes for 266 saves.
 
 **Action required**:
+
 1. Fix tile city ownership regression (Priority 1 - Critical)
 2. Audit progress event overhead (Priority 2 - High)
 3. Validate batched UPDATE implementation (Priority 3 - Medium)

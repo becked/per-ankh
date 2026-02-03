@@ -24,17 +24,20 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Status**: All deliverables complete, though with DuckDB-specific adaptations
 
 ### Schema & Database ✅
+
 - [x] Database module with schema initialization from `schema.sql`
 - [x] Schema validation on startup
 - [x] UPSERT-ready unique constraints (non-partial indexes for DuckDB)
 - [x] `match_locks` table for concurrency control
 
 **Notes**:
+
 - DuckDB doesn't support partial indexes (indexes with WHERE clauses)
 - Created non-partial versions of unique indexes for UPSERT support
 - DuckDB doesn't support `information_schema` queries reliably - use direct table queries instead
 
 ### File Ingestion & Security ✅
+
 - [x] ZIP extraction with security validation
   - [x] Size limits (compressed 50MB, uncompressed 100MB)
   - [x] Path traversal checks with normalization
@@ -47,6 +50,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Files**: `src/parser/save_file.rs`
 
 ### ID Mapping & Stability ✅
+
 - [x] Complete `IdMapper` implementation
 - [x] ID stability mechanism (load/save mappings)
 - [x] UPSERT support using `ON CONFLICT (match_id, xml_id)`
@@ -55,6 +59,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Files**: `src/parser/id_mapper.rs`
 
 ### Concurrency Control ✅
+
 - [x] In-process locking (HashMap<String, Arc<Mutex<()>>>)
 - [x] Database-level locking (match_locks table)
 - [x] Stale lock cleanup (10-minute timeout)
@@ -63,6 +68,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Files**: `src/parser/import.rs:19-63`
 
 ### Parsing ✅
+
 - [x] Match metadata parser with UPSERT
 - [x] Player parser with UPSERT
 - [x] Transaction coordinator with DELETE for derived tables
@@ -70,6 +76,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Files**: `src/parser/import.rs:133-312`
 
 ### Infrastructure ✅
+
 - [x] XML parsing helpers (`XmlNodeExt` trait)
 - [x] Logging system (using `log` crate)
 - [x] Comprehensive error types with context
@@ -78,6 +85,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Files**: `src/parser/mod.rs`, `src/parser/xml_loader.rs`
 
 ### DuckDB Compatibility Fixes ✅
+
 - [x] Replace `CURRENT_TIMESTAMP` with `CAST(now() AS TIMESTAMP)`
 - [x] Remove SQLite-specific `PRAGMA journal_mode=WAL`
 - [x] Defer VIEW creation until after tables exist
@@ -93,6 +101,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 ### Completed Parsers ✅
 
 #### Players Parser ✅
+
 - **File**: `src/parser/entities/players.rs`
 - **Status**: Fully working
 - **Key Adaptations**:
@@ -102,6 +111,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 - **Test Result**: Successfully parses 2 players from test save
 
 #### Characters Parser ✅
+
 - **File**: `src/parser/entities/characters.rs`
 - **Status**: Pass 1 complete (core data)
 - **Key Adaptations**:
@@ -112,6 +122,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 - **TODO**: Pass 2 for parent relationships (deferred)
 
 #### Tiles Parser ✅
+
 - **File**: `src/parser/entities/tiles.rs`
 - **Status**: Fully working
 - **Key Adaptations**:
@@ -121,6 +132,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 - **Test Result**: Successfully parses ~3000 tiles (26 seconds)
 
 #### Cities Parser ✅
+
 - **File**: `src/parser/entities/cities.rs`
 - **Status**: Fully working (blocker resolved 2025-11-05)
 - **Key Adaptations**:
@@ -133,6 +145,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 - **Blocker Resolution**: Schema changed to allow NULL player_id, parser filters -1 values
 
 #### Tribes Parser ✅
+
 - **File**: `src/parser/entities/tribes.rs`
 - **Status**: Fully working
 - **Key Adaptations**:
@@ -147,6 +160,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 ### Not Implemented ⬜
 
 #### Families Parser ⬜
+
 - **File**: `src/parser/entities/families.rs`
 - **Status**: Code exists but DISABLED
 - **Reason**: Families don't exist as top-level XML elements
@@ -154,6 +168,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 - **Action Required**: May need to extract from player data or game config
 
 #### Religions Parser ⬜
+
 - **File**: `src/parser/entities/religions.rs`
 - **Status**: Code exists but DISABLED
 - **Reason**: Religions don't exist as top-level XML elements
@@ -161,6 +176,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 - **Action Required**: May need to extract from player/city/character data
 
 #### Unit Production Parsers ✅
+
 - **File**: `src/parser/entities/unit_production.rs`
 - **Status**: Fully working
 - **Key Discovery**: **Individual units do NOT exist in Old World save files**
@@ -183,6 +199,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Root Cause**: Cities parser was attempting to look up `Player="-1"` for cities in anarchy/being captured
 
 **Solution Implemented**:
+
 1. **Schema Change**: Changed `cities.player_id` from `NOT NULL` to nullable (docs/schema.sql:400)
 2. **Parser Change**: Added filtering to handle `Player="-1"` (src-tauri/src/parser/entities/cities.rs:18-30)
 
@@ -197,6 +214,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Status**: Blocked by Milestone 2 completion
 
 **Planned Parsers**:
+
 - Technology parser (completed + progress)
 - Law parser
 - Diplomacy parser
@@ -211,6 +229,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Status**: Blocked by Milestone 2 completion
 
 **Planned Parsers**:
+
 - Yield history (sparse format)
 - Points history
 - Military history
@@ -228,6 +247,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Status**: Blocked by Milestone 2 completion
 
 **Planned Parsers**:
+
 - Event log
 - Story events
 - Event choices
@@ -242,6 +262,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 **Status**: Blocked by earlier milestones
 
 **Deliverables**:
+
 - Comprehensive error messages
 - Performance profiling
 - Documentation
@@ -254,6 +275,7 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 ### XML Structure Reality vs. Plan
 
 The plan assumed XML would use hierarchical child elements like:
+
 ```xml
 <Player ID="0">
   <PlayerName>ninja</PlayerName>
@@ -262,6 +284,7 @@ The plan assumed XML would use hierarchical child elements like:
 ```
 
 **Reality**: Most data is stored as attributes:
+
 ```xml
 <Player ID="0" Name="ninja" Nation="NATION_CARTHAGE">
   <Legitimacy>96</Legitimacy>
@@ -290,6 +313,7 @@ The plan didn't account for DuckDB-specific limitations:
 ### -1 Sentinel Values Everywhere
 
 The plan didn't emphasize how pervasively `-1` is used:
+
 - Characters: `Player="-1"` for tribal characters
 - Tiles: `OwnerPlayer="-1"` for unclaimed tiles
 - Tribes: `AlliedPlayer="-1"` for non-allied tribes
@@ -305,6 +329,7 @@ The plan didn't emphasize how pervasively `-1` is used:
 Families and Religions don't exist as `<Family>` or `<Religion>` elements in the XML. They're referenced by constant names like `FAMILY_BARCID` or `RELIGION_JUDAISM`.
 
 **Implications**:
+
 - Can't populate families/religions tables from XML
 - May need to seed from game data files or extract from context
 - Foreign key relationships to these tables will fail
@@ -318,6 +343,7 @@ Families and Religions don't exist as `<Family>` or `<Religion>` elements in the
 **File**: `test-data/saves/OW-Carthage-Year39-2025-11-04-21-38-46.zip`
 
 **Progress**:
+
 ```
 ✅ ZIP extraction and validation
 ✅ XML parsing (roxmltree)
@@ -336,6 +362,7 @@ Families and Religions don't exist as `<Family>` or `<Religion>` elements in the
 **Performance**: 31.41 seconds total (acceptable for alpha)
 
 **Result**:
+
 ```
 Successfully imported match:
   Match ID: Some(1)
@@ -378,6 +405,7 @@ Successfully imported match:
 ## Files Modified This Session
 
 ### New Files Created
+
 - `src/parser/mod.rs` - Parser module with error types
 - `src/parser/save_file.rs` - ZIP extraction with security
 - `src/parser/xml_loader.rs` - XML parsing helpers
@@ -400,6 +428,7 @@ Successfully imported match:
 - `docs/debugging-get-player-negative-one.md` - Investigation report
 
 ### Modified Files
+
 - `src/lib.rs` - Made db and parser modules public for testing (2025-11-05)
 - `src/parser/entities/mod.rs` - Added unit_production module exports (2025-11-05)
 - `src/parser/import.rs` - Added unit production parsers to import flow + DELETE_ORDER (2025-11-05)
@@ -440,11 +469,13 @@ Successfully imported match:
 ## Success Metrics
 
 **Milestone 2 Success Criteria** (from plan):
+
 - [x] Can import full save file with all core entities
 - [x] Foreign keys validate correctly
 - [ ] Character parent relationships work (deferred to Pass 2)
 
 **Current Status**: ✅ **MILESTONE 2 COMPLETE**
+
 - ✅ Successfully imports complete save file (32 seconds)
 - ✅ All core entities parsed: players, characters, tribes, tiles, cities
 - ✅ Unit aggregate data parsed: player_units_produced, city_units_produced

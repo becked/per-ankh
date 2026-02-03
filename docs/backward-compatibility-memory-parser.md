@@ -13,6 +13,7 @@ The memory parser (`parse_player_memories` in `src-tauri/src/parser/entities/eve
 ## Format Differences
 
 ### 2024 Format (Not Supported)
+
 ```xml
 <Player ID="0">
   <MemoryPlayerList>
@@ -58,6 +59,7 @@ The memory parser (`parse_player_memories` in `src-tauri/src/parser/entities/eve
 ```
 
 ### 2025 Format (Currently Supported)
+
 ```xml
 <Player ID="0">
   <MemoryList>
@@ -92,31 +94,36 @@ The memory parser (`parse_player_memories` in `src-tauri/src/parser/entities/eve
 
 ## Key Differences
 
-| Aspect | 2024 | 2025 |
-|--------|------|------|
-| **Element structure** | 5 separate lists | 1 unified list |
-| **List names** | `Memory{Type}List` | `MemoryList` |
-| **Data element names** | `Memory{Type}Data` | `MemoryData` |
-| **Family targets** | Numeric ID (`<Family>4</Family>`) | String name (`<Family>FAMILY_DIDONIAN</Family>`) |
-| **Tribe targets** | Numeric ID (`<Tribe>2</Tribe>`) | String name (`<Tribe>TRIBE_NUMIDIANS</Tribe>`) |
-| **Religion targets** | Numeric ID (`<Religion>0</Religion>`) | String name (`<Religion>RELIGION_MANICHAEISM</Religion>`) |
+| Aspect                 | 2024                                  | 2025                                                      |
+| ---------------------- | ------------------------------------- | --------------------------------------------------------- |
+| **Element structure**  | 5 separate lists                      | 1 unified list                                            |
+| **List names**         | `Memory{Type}List`                    | `MemoryList`                                              |
+| **Data element names** | `Memory{Type}Data`                    | `MemoryData`                                              |
+| **Family targets**     | Numeric ID (`<Family>4</Family>`)     | String name (`<Family>FAMILY_DIDONIAN</Family>`)          |
+| **Tribe targets**      | Numeric ID (`<Tribe>2</Tribe>`)       | String name (`<Tribe>TRIBE_NUMIDIANS</Tribe>`)            |
+| **Religion targets**   | Numeric ID (`<Religion>0</Religion>`) | String name (`<Religion>RELIGION_MANICHAEISM</Religion>`) |
 
 ## Implementation Approach (DRY + YAGNI)
 
 ### Option 1: Fallback Pattern (Recommended)
+
 Extend the existing `parse_player_memories()` function to:
+
 1. Try parsing `MemoryList` (2025 format) - already works
 2. If empty, try parsing legacy lists (2024 format)
 
 **Benefits:**
+
 - Minimal code duplication
 - Single function handles both formats
 - No need to detect format version upfront
 
 ### Option 2: Wrapper Function
+
 Create a new `parse_player_memories_legacy()` function and call both from import.rs.
 
 **Drawbacks:**
+
 - Violates DRY (duplicate logic)
 - More complex call site
 - Not recommended
@@ -126,11 +133,13 @@ Create a new `parse_player_memories_legacy()` function and call both from import
 ### 1. Add ID Mapper Support for Legacy Numeric IDs
 
 The 2024 format stores families/tribes/religions as numeric IDs that need mapping. Check if IdMapper already has methods like:
+
 - `get_family_by_xml_id(i32) -> Result<String>`
 - `get_tribe_by_xml_id(i32) -> Result<String>`
 - `get_religion_by_xml_id(i32) -> Result<String>`
 
 If not, you may need to:
+
 1. Store numeric-to-string mappings during entity parsing
 2. OR just store the numeric ID as a string in the database (simpler, loses semantic info)
 
@@ -301,6 +310,7 @@ fn parse_legacy_memory_data(
 3. Query both: `SELECT * FROM memory_data WHERE match_id = X LIMIT 10;`
 
 Expected differences:
+
 - 2024: `target_family` will be "4", `target_tribe` will be "2", etc.
 - 2025: `target_family` will be "FAMILY_DIDONIAN", etc.
 

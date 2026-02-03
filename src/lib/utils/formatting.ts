@@ -11,21 +11,24 @@
  * formatEnum("IMPROVEMENT_GARRISON_1", "IMPROVEMENT_") // returns "Garrison"
  * formatEnum(null, "NATION_") // returns "Unknown"
  */
-export function formatEnum(value: string | null | undefined, prefix: string): string {
-  if (!value) return "Unknown";
+export function formatEnum(
+	value: string | null | undefined,
+	prefix: string,
+): string {
+	if (!value) return "Unknown";
 
-  // Remove the prefix
-  const withoutPrefix = value.replace(prefix, "");
+	// Remove the prefix
+	const withoutPrefix = value.replace(prefix, "");
 
-  // Convert to lowercase, replace underscores with spaces, and title-case each word
-  const formatted = withoutPrefix
-    .toLowerCase()
-    .split("_")
-    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(" ");
+	// Convert to lowercase, replace underscores with spaces, and title-case each word
+	const formatted = withoutPrefix
+		.toLowerCase()
+		.split("_")
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join(" ");
 
-  // Remove trailing numbers (e.g., "Garrison 1" -> "Garrison", "Poet 2" -> "Poet")
-  return formatted.replace(/\s+\d+$/, "");
+	// Remove trailing numbers (e.g., "Garrison 1" -> "Garrison", "Poet 2" -> "Poet")
+	return formatted.replace(/\s+\d+$/, "");
 }
 
 /**
@@ -41,21 +44,21 @@ export function formatEnum(value: string | null | undefined, prefix: string): st
  * formatMapClass(null) // returns "Unknown"
  */
 export function formatMapClass(value: string | null | undefined): string {
-  if (!value) return "Unknown";
+	if (!value) return "Unknown";
 
-  // Remove the MAPCLASS_MapScript prefix (if present), or just MAPCLASS_ prefix
-  let withoutPrefix = value.replace(/^MAPCLASS_MapScript/, "");
-  if (withoutPrefix === value) {
-    // MapScript wasn't present, try removing just MAPCLASS_
-    withoutPrefix = value.replace(/^MAPCLASS_/, "");
-  }
+	// Remove the MAPCLASS_MapScript prefix (if present), or just MAPCLASS_ prefix
+	let withoutPrefix = value.replace(/^MAPCLASS_MapScript/, "");
+	if (withoutPrefix === value) {
+		// MapScript wasn't present, try removing just MAPCLASS_
+		withoutPrefix = value.replace(/^MAPCLASS_/, "");
+	}
 
-  // Split PascalCase by inserting space before capital letters
-  // Then trim and clean up any extra spaces
-  return withoutPrefix
-    .replace(/([A-Z])/g, " $1")
-    .trim()
-    .replace(/\s+/g, " ");
+	// Split PascalCase by inserting space before capital letters
+	// Then trim and clean up any extra spaces
+	return withoutPrefix
+		.replace(/([A-Z])/g, " $1")
+		.trim()
+		.replace(/\s+/g, " ");
 }
 
 /**
@@ -69,9 +72,9 @@ export function formatMapClass(value: string | null | undefined): string {
  * formatDate(null) // returns "Unknown"
  */
 export function formatDate(dateStr: string | null | undefined): string {
-  if (!dateStr) return "Unknown";
-  const date = new Date(dateStr);
-  return date.toISOString().split('T')[0];
+	if (!dateStr) return "Unknown";
+	const date = new Date(dateStr);
+	return date.toISOString().split("T")[0];
 }
 
 /**
@@ -104,66 +107,75 @@ export function formatDate(dateStr: string | null | undefined): string {
  * stripMarkup(null) // returns ""
  */
 export function stripMarkup(text: string | null | undefined): string {
-  if (!text) return "";
+	if (!text) return "";
 
-  return text
-    // Remove all angle-bracket tags (Unity TextMeshPro rich text)
-    .replace(/<[^>]*>/g, "")
-    // Remove icon(...) patterns entirely
-    .replace(/icon\([^)]*\)\s*/g, "")
-    // Replace link(CONCEPT_SOMETHING) with formatted "Something"
-    .replace(/link\(CONCEPT_([^)]+)\)/g, (_, concept) => {
-      // Convert SOMETHING_LIKE_THIS to "Something Like This"
-      return concept
-        .toLowerCase()
-        .split("_")
-        .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
-    })
-    // Replace any remaining link(...) patterns with their content
-    .replace(/link\(([^)]+)\)/g, (_, content) => {
-      // Extract meaningful part after prefix (e.g., "TECH_IRONWORKING" -> "Ironworking")
-      const parts = content.split("_");
-      if (parts.length > 1) {
-        return parts.slice(1)
-          .map((word: string) => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
-          .join(" ");
-      }
-      return content;
-    })
-    .trim();
+	return (
+		text
+			// Remove all angle-bracket tags (Unity TextMeshPro rich text)
+			.replace(/<[^>]*>/g, "")
+			// Remove icon(...) patterns entirely
+			.replace(/icon\([^)]*\)\s*/g, "")
+			// Replace link(CONCEPT_SOMETHING) with formatted "Something"
+			.replace(/link\(CONCEPT_([^)]+)\)/g, (_, concept) => {
+				// Convert SOMETHING_LIKE_THIS to "Something Like This"
+				return concept
+					.toLowerCase()
+					.split("_")
+					.map((word: string) => word.charAt(0).toUpperCase() + word.slice(1))
+					.join(" ");
+			})
+			// Replace any remaining link(...) patterns with their content
+			.replace(/link\(([^)]+)\)/g, (_, content) => {
+				// Extract meaningful part after prefix (e.g., "TECH_IRONWORKING" -> "Ironworking")
+				const parts = content.split("_");
+				if (parts.length > 1) {
+					return parts
+						.slice(1)
+						.map(
+							(word: string) =>
+								word.charAt(0).toUpperCase() + word.slice(1).toLowerCase(),
+						)
+						.join(" ");
+				}
+				return content;
+			})
+			.trim()
+	);
 }
 
 export function formatGameTitle(game: {
-  game_name: string | null;
-  save_owner_nation: string | null;
-  total_turns: number | null;
-  match_id: number;
+	game_name: string | null;
+	save_owner_nation: string | null;
+	total_turns: number | null;
+	match_id: number;
 }): string {
-  // Check if game_name is a real name (not auto-generated "Game{number}")
-  const isRealName = game.game_name != null &&
-                     game.game_name !== "" &&
-                     !game.game_name.match(/^Game\d+$/);
+	// Check if game_name is a real name (not auto-generated "Game{number}")
+	const isRealName =
+		game.game_name != null &&
+		game.game_name !== "" &&
+		!game.game_name.match(/^Game\d+$/);
 
-  if (isRealName) {
-    return game.game_name!;
-  }
+	if (isRealName) {
+		return game.game_name!;
+	}
 
-  // Format nation by removing NATION_ prefix and capitalizing
-  const formattedNation = game.save_owner_nation ? formatEnum(game.save_owner_nation, "NATION_") : null;
+	// Format nation by removing NATION_ prefix and capitalizing
+	const formattedNation = game.save_owner_nation
+		? formatEnum(game.save_owner_nation, "NATION_")
+		: null;
 
-  // Fallback: use nation and turns if available
-  if (formattedNation !== null && game.total_turns != null) {
-    return `${formattedNation} - ${game.total_turns} turns`;
-  }
+	// Fallback: use nation and turns if available
+	if (formattedNation !== null && game.total_turns != null) {
+		return `${formattedNation} - ${game.total_turns} turns`;
+	}
 
-  if (formattedNation !== null) {
-    return formattedNation;
-  }
+	if (formattedNation !== null) {
+		return formattedNation;
+	}
 
-  if (game.total_turns != null) {
-    return `Turn ${game.total_turns}`;
-  }
+	if (game.total_turns != null) {
+		return `Turn ${game.total_turns}`;
+	}
 
-  return `Game ${game.match_id}`;
+	return `Game ${game.match_id}`;
 }

@@ -67,15 +67,18 @@ Once the tag is pushed, GitHub Actions will:
 Each release includes the following files:
 
 ### macOS
+
 - `Per-Ankh_x.x.x_aarch64.dmg` - Apple Silicon installer
 - `Per-Ankh_x.x.x_x64.dmg` - Intel Mac installer
 - `Per-Ankh.app.tar.gz` - Portable app bundle (both architectures)
 
 ### Windows
+
 - `Per-Ankh_x.x.x_x64-setup.exe` - NSIS installer (recommended)
 - `Per-Ankh_x.x.x_x64_en-US.msi` - MSI installer
 
 ### Linux
+
 - `per-ankh_x.x.x_amd64.deb` - Debian/Ubuntu package
 - `per-ankh-x.x.x-1.x86_64.rpm` - Fedora/RHEL package
 
@@ -108,11 +111,13 @@ npm run tauri:build
 ### Build Failures
 
 Check the GitHub Actions logs:
+
 1. Go to the "Actions" tab in your repository
 2. Click on the failed workflow run
 3. Expand the failed job to see detailed logs
 
 Common issues:
+
 - **Missing dependencies**: Ensure `package.json` and `Cargo.toml` are up to date
 - **Type errors**: Run `npm run check` locally first
 - **Rust compilation errors**: Run `cargo check` locally first
@@ -120,6 +125,7 @@ Common issues:
 ### Release Not Created
 
 Ensure:
+
 - Tag follows the `v*.*.*` pattern (e.g., `v0.1.0`, not `0.1.0`)
 - Repository has "Read and write permissions" for workflows (Settings > Actions > General > Workflow permissions)
 

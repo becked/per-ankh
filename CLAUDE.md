@@ -25,11 +25,13 @@ Per-Ankh is a desktop application that ingests completed save files from the Old
 ### Key Differences from Browser Environment
 
 **What DOESN'T Work:**
+
 - ❌ "Refresh the page" - This is a desktop app with hot-reload during development
 - ❌ Browser DevTools shortcuts (F12) - Use the app's development tools
 - ❌ Assuming synchronous browser APIs - Many are async in Tauri
 
 **What DOES Work:**
+
 - ✅ Hot reload during `npm run tauri dev` - File changes auto-update
 - ✅ Tauri command invocations via `invoke()` - Frontend ↔ Rust backend communication
 - ✅ Native OS dialogs - `window.confirm()`, `window.alert()`, file pickers
@@ -37,6 +39,7 @@ Per-Ankh is a desktop application that ingests completed save files from the Old
 ### Tauri-Specific API Behaviors
 
 **Native Dialogs are Async:**
+
 ```typescript
 // ❌ WRONG: Assumes browser behavior (synchronous)
 const confirmed = window.confirm("Are you sure?");
@@ -48,22 +51,26 @@ if (!confirmed) return;
 ```
 
 **File Operations:**
+
 - Use Tauri's dialog APIs for file/folder selection
 - File paths are OS-native (not URLs)
 - File operations happen in Rust backend, not frontend
 
 **State Management:**
+
 - Frontend state is ephemeral (resets on app restart)
 - Persistent state must be stored in DuckDB or app data directory
 - No localStorage/sessionStorage - use Tauri's storage plugin if needed
 
 **Development Workflow:**
+
 - `npm run tauri dev` - Runs app with hot reload
 - Changes to frontend auto-reload
 - Changes to Rust require recompilation (automatic)
 - Console logs appear in terminal, not browser DevTools
 
 **When Troubleshooting:**
+
 - Check terminal output for Rust panics/errors
 - Check browser console for frontend errors
 - Don't suggest "refresh the page" - suggest restarting dev server if needed
@@ -76,6 +83,7 @@ if (!confirmed) return;
 ### ALWAYS Use Tauri Built-ins
 
 **1. OS Integration:**
+
 - File/folder pickers → `@tauri-apps/plugin-dialog`
 - System dialogs → `@tauri-apps/plugin-dialog` (confirm, message)
 - Native menus, system tray, notifications
@@ -84,11 +92,13 @@ if (!confirmed) return;
 **Why:** Native OS integration required; web APIs won't work correctly.
 
 **2. Type Safety Issues:**
+
 - Any browser API that behaves differently in Tauri
 - Example: `window.confirm()` returns `Promise<boolean>` in Tauri but TypeScript types it as `boolean`
 - This creates silent bugs TypeScript cannot catch
 
 **3. Security-Sensitive:**
+
 - File system access
 - Shell commands
 - Process management
@@ -98,6 +108,7 @@ if (!confirmed) return;
 ### Prefer Tauri Built-ins
 
 **4. Desktop Features:**
+
 - Clipboard, keyboard shortcuts, app updates, persistence
 
 **Why:** Better integration, though alternatives exist.
@@ -105,6 +116,7 @@ if (!confirmed) return;
 ### Web Libraries Are Fine
 
 **5. Pure UI/Logic:**
+
 - Charts (ECharts), forms, layouts, data processing
 - Anything with no OS interaction
 
@@ -113,6 +125,7 @@ if (!confirmed) return;
 ### Decision Framework
 
 Ask yourself:
+
 1. Does it interact with the OS? → **Use Tauri**
 2. Does the browser API behave differently in Tauri? → **Use Tauri**
 3. Is it security-sensitive? → **Use Tauri**
@@ -126,7 +139,7 @@ const confirmed = window.confirm("Sure?"); // TypeScript thinks boolean!
 if (!confirmed) return; // Bug: actually checking if Promise is falsy
 
 // ✅ GOOD: Tauri plugin has correct types
-import { confirm } from '@tauri-apps/plugin-dialog';
+import { confirm } from "@tauri-apps/plugin-dialog";
 const confirmed = await confirm("Sure?", "Title"); // Properly typed as Promise<boolean>
 if (!confirmed) return; // TypeScript enforces await
 ```
@@ -136,6 +149,7 @@ if (!confirmed) return; // TypeScript enforces await
 ## Coding Standards
 
 ### Rust Standards
+
 - Use `rustfmt` for code formatting
 - Use `clippy` for linting
 - Follow Rust naming conventions (snake_case for functions/variables, CamelCase for types)
@@ -144,6 +158,7 @@ if (!confirmed) return; // TypeScript enforces await
 - Use `#[derive(Serialize, Deserialize)]` for types passed to frontend
 
 ### TypeScript/Svelte Standards
+
 - Always use TypeScript with strict mode enabled
 - Use ESLint for linting
 - Use Prettier for code formatting
@@ -156,6 +171,7 @@ if (!confirmed) return; // TypeScript enforces await
 **CRITICAL**: This project uses Svelte 5. Always use Svelte 5 runes and patterns.
 
 **Reactive State:**
+
 ```typescript
 // ✅ CORRECT: Svelte 5 runes
 let count = $state(0);
@@ -167,6 +183,7 @@ $: doubled = count * 2; // Old reactive statement syntax
 ```
 
 **Props:**
+
 ```typescript
 // ✅ CORRECT: Svelte 5 props
 let { name, age = 0 }: { name: string; age?: number } = $props();
@@ -177,14 +194,15 @@ export let age: number = 0;
 ```
 
 **Effects:**
+
 ```typescript
 // ✅ CORRECT: Svelte 5 effect
 $effect(() => {
-  console.log('count changed:', count);
+	console.log("count changed:", count);
 });
 
 // ❌ WRONG: Svelte 4 reactive statement
-$: console.log('count changed:', count);
+$: console.log("count changed:", count);
 ```
 
 **Effect Dependency Tracking:**
@@ -194,44 +212,45 @@ Svelte 5 `$effect` only tracks dependencies **at the point they're accessed**. I
 ```typescript
 // ✅ CORRECT: Access reactive values unconditionally to ensure tracking
 $effect(() => {
-  const currentOption = option;  // Always accessed → always tracked
-  if (chart && currentOption) {
-    chart.setOption(currentOption);
-  }
+	const currentOption = option; // Always accessed → always tracked
+	if (chart && currentOption) {
+		chart.setOption(currentOption);
+	}
 });
 
 // ❌ WRONG: Reactive value only accessed conditionally
 $effect(() => {
-  if (chart) {
-    chart.setOption(option);  // NOT tracked if chart is initially null
-  }
+	if (chart) {
+		chart.setOption(option); // NOT tracked if chart is initially null
+	}
 });
 ```
 
 **Store Integration:**
 When using Svelte stores with Svelte 5 runes, properly integrate them:
+
 ```typescript
 // ✅ CORRECT: Convert store to reactive state
-import { myStore } from './stores';
+import { myStore } from "./stores";
 
 let storeValue = $state(0);
 $effect(() => {
-  const unsubscribe = myStore.subscribe((value) => {
-    storeValue = value;
-  });
-  return unsubscribe;
+	const unsubscribe = myStore.subscribe((value) => {
+		storeValue = value;
+	});
+	return unsubscribe;
 });
 
 // Then use storeValue reactively
 $effect(() => {
-  if (storeValue > 0) {
-    // React to changes
-  }
+	if (storeValue > 0) {
+		// React to changes
+	}
 });
 
 // ❌ WRONG: Top-level subscribe (causes render failures)
 myStore.subscribe(() => {
-  // This will break component initialization
+	// This will break component initialization
 });
 ```
 
@@ -244,21 +263,23 @@ myStore.subscribe(() => {
 **Policy**: Use different operators based on context to prevent bugs from falsy coercion.
 
 **Domain/Data Layer (strict)**:
+
 - Use nullish coalescing (`??`) for null/undefined checks
 - Use explicit `!= null` checks for values where `0` or `""` are valid
 - **NEVER** use logical OR (`||`) in data computation or state management
 
 ```typescript
 // ✅ CORRECT: Data layer
-const chartData = playerData.map(p => p.points ?? 0);
-const filteredGames = games.filter(g => g.turn_number != null);
-const humanNation = game.nations.find(n => n.is_human) ?? null;
+const chartData = playerData.map((p) => p.points ?? 0);
+const filteredGames = games.filter((g) => g.turn_number != null);
+const humanNation = game.nations.find((n) => n.is_human) ?? null;
 
 // ❌ WRONG: Data layer
-const chartData = playerData.map(p => p.points || 0);  // 0 is valid!
+const chartData = playerData.map((p) => p.points || 0); // 0 is valid!
 ```
 
 **UI Rendering Layer (pragmatic)**:
+
 - Allow `||` only for display fallbacks where falsy values should show the fallback
 
 ```typescript
@@ -286,7 +307,8 @@ const nationName = game.nation?.replace("NATION_", "").toLowerCase()...;
 ```
 
 The utility handles:
-- Prefix removal (NATION_, RELIGION_, MAPSIZE_, LEVEL_)
+
+- Prefix removal (NATION*, RELIGION*, MAPSIZE*, LEVEL*)
 - Title casing
 - Multi-word support (e.g., "OLD_WORLD" → "Old World")
 - Null/undefined safety (returns "Unknown")
@@ -296,6 +318,7 @@ The utility handles:
 **Policy**: Use centralized color configuration with proper hierarchy.
 
 **UI Colors** (CSS variables as single source of truth):
+
 ```typescript
 // ✅ CORRECT: Use Tailwind classes
 <div class="bg-brown text-tan border-black">
@@ -310,20 +333,22 @@ The utility handles:
 ```
 
 **Chart Colors** (TypeScript constants):
+
 ```typescript
 import { CHART_COLORS, CHART_THEME, getChartColor } from "$lib/config";
 
 // ✅ CORRECT: Use chart theme and helper
 const chartOption: EChartsOption = {
-  ...CHART_THEME,
-  series: data.map((d, i) => ({
-    ...d,
-    itemStyle: { color: getChartColor(i) }
-  }))
+	...CHART_THEME,
+	series: data.map((d, i) => ({
+		...d,
+		itemStyle: { color: getChartColor(i) },
+	})),
 };
 ```
 
 **Nation/Tribe Colors** (TypeScript constants with helpers):
+
 ```typescript
 import { getNationColor, getCivilizationColor } from "$lib/config";
 
@@ -350,19 +375,21 @@ const stats = await invoke<GameStatistics>("get_game_statistics");
 ```
 
 **Benefits**:
+
 - Single source of truth for backend command names
 - Easy refactoring when command names change
 - Type-safe function signatures
 - Documents all available backend commands in one place
 
 **Adding new commands**:
+
 ```typescript
 // src/lib/api.ts
 export const api = {
-  // ... existing commands ...
+	// ... existing commands ...
 
-  getEconomicData: (matchId: number) =>
-    invoke<EconomicData>("get_economic_data", { matchId }),
+	getEconomicData: (matchId: number) =>
+		invoke<EconomicData>("get_economic_data", { matchId }),
 } as const;
 ```
 
@@ -373,6 +400,7 @@ export const api = {
 **Policy**: Always use parameterized queries to prevent SQL injection.
 
 **INSERT/UPDATE/DELETE queries**:
+
 ```rust
 // ✅ CORRECT: Parameterized query
 conn.execute(
@@ -385,6 +413,7 @@ conn.execute(&format!("INSERT INTO games (name) VALUES ('{}')", name))?;
 ```
 
 **SELECT queries (single row)**:
+
 ```rust
 // ✅ CORRECT: query_row with params
 let game = conn.query_row(
@@ -395,6 +424,7 @@ let game = conn.query_row(
 ```
 
 **SELECT queries (multiple rows)**:
+
 ```rust
 // ✅ CORRECT: prepare + query_map
 let mut stmt = conn.prepare("SELECT * FROM games WHERE turn > ?")?;
@@ -405,6 +435,7 @@ let games = stmt.query_map([min_turn], |row| {
 ```
 
 **Table/column names (CANNOT be parameterized)**:
+
 ```rust
 // ✅ CORRECT: Whitelist approach with comment
 let allowed_tables = vec!["games", "players", "nations"];
@@ -437,6 +468,7 @@ conn.execute(query, params)
 ```
 
 Benefits:
+
 - More concise and readable
 - Preserves full error chain for debugging
 - Consistent error formatting
@@ -447,6 +479,7 @@ Benefits:
 
 **ALTER TABLE Limitations**:
 DuckDB has very limited schema modification support compared to SQLite:
+
 - ❌ `ALTER TABLE ... DROP COLUMN` - Not supported
 - ❌ `ALTER TABLE ... RENAME COLUMN` - Not supported
 - ❌ `ALTER TABLE ... ALTER COLUMN TYPE` - Not supported
@@ -454,6 +487,7 @@ DuckDB has very limited schema modification support compared to SQLite:
 - ✅ `ALTER TABLE ... RENAME TO` - Supported
 
 **Schema Migration Pattern**:
+
 ```sql
 -- ❌ WRONG: Trying to modify columns (will fail)
 ALTER TABLE games DROP COLUMN old_field;
@@ -467,11 +501,11 @@ ALTER TABLE games_new RENAME TO games;
 
 **Other Syntax Differences**:
 
-| Feature | SQLite | DuckDB |
-|---------|--------|--------|
-| UPSERT | `INSERT OR REPLACE` | `INSERT ... ON CONFLICT` |
-| Type casting | `CAST(x AS type)` | `CAST()` or `x::type` |
-| RETURNING | Limited | Full support |
+| Feature      | SQLite              | DuckDB                   |
+| ------------ | ------------------- | ------------------------ |
+| UPSERT       | `INSERT OR REPLACE` | `INSERT ... ON CONFLICT` |
+| Type casting | `CAST(x AS type)`   | `CAST()` or `x::type`    |
+| RETURNING    | Limited             | Full support             |
 
 ```sql
 -- ❌ WRONG: SQLite upsert
@@ -491,6 +525,7 @@ ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
 The app uses a migration registry system to handle schema updates without requiring users to re-import their save files (when possible).
 
 **Key concepts**:
+
 - `CURRENT_SCHEMA_VERSION`: The target schema version (e.g., "2.12.0")
 - `MIGRATIONS`: Array of all migrations with version, description, and `is_breaking` flag
 - **Breaking migration**: Requires database reset (new XML data needed)
@@ -518,11 +553,13 @@ pub const CURRENT_SCHEMA_VERSION: &str = "2.13.0";
 ```
 
 **When to mark as breaking (`is_breaking: true`)**:
+
 - New data from XML that wasn't previously extracted
 - Changed parsing logic that produces different values
 - Structural changes that can't be computed from existing data
 
 **When to mark as non-breaking (`is_breaking: false`)**:
+
 - Adding columns with computable defaults or NULL
 - Adding new tables (empty until new saves are parsed)
 - Adding indexes or views
@@ -533,6 +570,7 @@ pub const CURRENT_SCHEMA_VERSION: &str = "2.13.0";
 ## Development Commands
 
 ### Initial Setup
+
 ```bash
 # Install Tauri CLI
 cargo install tauri-cli
@@ -542,6 +580,7 @@ npm install
 ```
 
 ### Running the Application
+
 ```bash
 # Run in development mode with hot reload
 npm run tauri dev
@@ -551,6 +590,7 @@ cargo tauri dev
 ```
 
 ### Building for Distribution
+
 ```bash
 # Build for current platform (creates .app, .exe, or Linux binary)
 npm run tauri build
@@ -559,6 +599,7 @@ npm run tauri build
 ```
 
 ### Testing
+
 ```bash
 # Run Rust tests
 cargo test
@@ -570,6 +611,7 @@ npm test
 ### Type Checking & Linting
 
 #### Rust
+
 ```bash
 # Check Rust code compiles
 cargo check
@@ -582,6 +624,7 @@ cargo fmt
 ```
 
 #### TypeScript/Svelte
+
 ```bash
 # Type check TypeScript
 npm run check
@@ -607,6 +650,7 @@ npm run types:generate
 ```
 
 **Important**:
+
 - Generated types are in `src/lib/types/` directory
 - Never edit these files manually - they're auto-generated
 - To add new types: add `#[derive(TS)]` and `#[ts(export)]` to your Rust struct
@@ -615,6 +659,7 @@ npm run types:generate
 ## Architecture
 
 ### Application Structure
+
 ```
 per-ankh/
 ├── src/                    # Svelte frontend source
@@ -638,11 +683,13 @@ per-ankh/
 ### Test Data
 
 The `test-data/saves/` directory contains sample Old World game save files that can be used for:
+
 - Development and manual testing without needing your own save files
 - Troubleshooting parsing or data issues
 - Reproducing bugs with known test data
 
 ### Data Flow
+
 1. **Ingestion**: Rust backend reads and parses Old World save files (XML/JSON format)
 2. **Storage**: Rust backend loads parsed data into DuckDB using Rust DuckDB bindings
 3. **Queries**: Frontend invokes Rust Tauri commands to query DuckDB
@@ -650,6 +697,7 @@ The `test-data/saves/` directory contains sample Old World game save files that 
 5. **Distribution**: Tauri bundles Rust backend, Svelte frontend, and DuckDB into native executable
 
 ### Key Considerations
+
 - **DuckDB file location**: Store in user data directory (use Tauri's `app_data_dir`)
 - **Save file parsing**: Handle different Old World game versions gracefully
 - **Error handling**: Rust errors should be serialized and displayed to user in UI
@@ -660,20 +708,24 @@ The `test-data/saves/` directory contains sample Old World game save files that 
 ## Development Principles
 
 ### YAGNI (You Ain't Gonna Need It)
+
 - Only implement what is needed NOW, not what "might be useful later"
 - Avoid premature abstraction
 
 ### DRY (Don't Repeat Yourself)
+
 - Reuse existing code patterns and logic
 - Extract duplicated code to shared functions
 
 ### Atomic Commits
+
 - Each commit should represent ONE logical change
 - Commit frequently (after each task/subtask completion)
 - Commit messages should clearly describe what changed and why
 - Don't batch multiple unrelated changes into one commit
 
 ### Code Comments
+
 - Comments should explain **WHY**, not **WHAT**
 - The code itself should be clear enough to show what it does
 - Document edge cases, business rules, and non-obvious decisions
@@ -682,10 +734,12 @@ The `test-data/saves/` directory contains sample Old World game save files that 
 ## Commit Messages
 
 Do NOT include these lines in commit messages:
+
 - `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
 - `Co-Authored-By: Claude <noreply@anthropic.com>`
 
 Use conventional commit format:
+
 - `feat:` for new features
 - `fix:` for bug fixes
 - `docs:` for documentation

@@ -8,13 +8,13 @@ Fix incorrect XML element name lookups. **Note:** There are two city parsers tha
 
 **`src-tauri/src/parser/parsers/cities.rs`** (struct-based parser)
 
-| Line | Current Code | Fix | Reason |
-|------|--------------|-----|--------|
-| 47-50 | `opt_child_text("GrowthProgress")` | Remove entirely | Doesn't exist in XML |
-| 57-59 | `opt_child_text("GeneralID")` | Remove entirely | Doesn't exist in city XML |
-| 61-63 | `opt_child_text("Agent")` | Remove entirely | Complex spy structure, handled in Phase 3 |
-| 76-79 | `opt_child_text("SpecialistCount")` | `opt_child_text("SpecialistProducedCount")` | XML uses `<SpecialistProducedCount>` |
-| 82-84 | `opt_child_text("FirstOwnerPlayerID")` | `opt_child_text("FirstPlayer")` | XML uses `<FirstPlayer>` |
+| Line  | Current Code                           | Fix                                         | Reason                                    |
+| ----- | -------------------------------------- | ------------------------------------------- | ----------------------------------------- |
+| 47-50 | `opt_child_text("GrowthProgress")`     | Remove entirely                             | Doesn't exist in XML                      |
+| 57-59 | `opt_child_text("GeneralID")`          | Remove entirely                             | Doesn't exist in city XML                 |
+| 61-63 | `opt_child_text("Agent")`              | Remove entirely                             | Complex spy structure, handled in Phase 3 |
+| 76-79 | `opt_child_text("SpecialistCount")`    | `opt_child_text("SpecialistProducedCount")` | XML uses `<SpecialistProducedCount>`      |
+| 82-84 | `opt_child_text("FirstOwnerPlayerID")` | `opt_child_text("FirstPlayer")`             | XML uses `<FirstPlayer>`                  |
 
 **`src-tauri/src/parser/entities/cities.rs`** (direct DB insert parser)
 
@@ -32,6 +32,7 @@ Also update the tuple construction (lines 113-132) and appender call (lines 146-
 **`src-tauri/src/parser/game_data.rs`** - `CityData` struct (lines 114-142)
 
 Remove fields:
+
 - `growth_progress: i32` (line 131)
 - `general_xml_id: Option<i32>` (line 135)
 - `agent_xml_id: Option<i32>` (line 136)
@@ -39,6 +40,7 @@ Remove fields:
 **`src-tauri/src/db/schema.sql`** - `cities` table (lines 402-429)
 
 Remove columns:
+
 - `growth_progress INTEGER DEFAULT 0` (line 417)
 - `general_id INTEGER` (line 420)
 - `agent_id INTEGER` (line 421)

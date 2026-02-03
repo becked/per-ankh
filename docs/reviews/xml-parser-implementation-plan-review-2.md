@@ -26,9 +26,9 @@ Key risks and gaps
 
 - Update-and-replace stability: Full delete + re‑insert will change database IDs unless you preserve them. If higher layers or external tools hold references by DB ID, those will break. Consider:
 
- ▫ Preserving DB IDs per GameId by storing the XML→DB mapping table in the database, reusing on update.
+▫ Preserving DB IDs per GameId by storing the XML→DB mapping table in the database, reusing on update.
 
- ▫ Or move to natural keys for lookups (GameId + xml_id + entity_type) and keep DB IDs internal.
+▫ Or move to natural keys for lookups (GameId + xml_id + entity_type) and keep DB IDs internal.
 
 - DuckDB savepoints: DuckDB supports savepoints, but ensure the Rust crate’s ‎⁠Transaction⁠ ‎⁠execute("SAVEPOINT ...")⁠ behaves as expected and doesn’t conflict with implicit autocommit. Test this thoroughly; otherwise fall back to sub‑transactions via a single outer transaction and phase‑scoped error handling.
 
@@ -36,11 +36,11 @@ Key risks and gaps
 
 - Zip safety: Handle zip bombs, path traversal (“zip slip”), oversized entries, and multiple XML files deterministically. You already define errors for invalid archives, but add strict limits:
 
- ▫ Maximum uncompressed XML size.
+▫ Maximum uncompressed XML size.
 
- ▫ Reject nested directories and normalize entry paths.
+▫ Reject nested directories and normalize entry paths.
 
- ▫ Ensure only one ‎⁠.xml⁠ entry, or select by a known filename pattern if multiple exist.
+▫ Ensure only one ‎⁠.xml⁠ entry, or select by a known filename pattern if multiple exist.
 
 - XXE/Entity expansion: quick‑xml doesn’t resolve external entities, which is good, but ensure no custom entity expansion or DTD processing is enabled anywhere. Treat the input as untrusted.
 
@@ -50,9 +50,9 @@ Key risks and gaps
 
 - Performance of bulk inserts: Per‑row prepared statements are fine, but DuckDB shines with columnar appends. Consider:
 
- ▫ Build in‑memory column arrays and use DuckDB’s ‎⁠append⁠ via the Rust bindings if available.
+▫ Build in‑memory column arrays and use DuckDB’s ‎⁠append⁠ via the Rust bindings if available.
 
- ▫ Or write CSV/Parquet to a temp file and ‎⁠COPY⁠ into tables for very large histories (only if I/O overhead is acceptable).
+▫ Or write CSV/Parquet to a temp file and ‎⁠COPY⁠ into tables for very large histories (only if I/O overhead is acceptable).
 
 Architecture and parser improvements
 
@@ -62,11 +62,11 @@ Architecture and parser improvements
 
 - Consistent Option handling: Your examples mix ‎⁠.ok()⁠ and ‎⁠and_then⁠. Standardize with helpers:
 
- ▫ Required: ‎⁠req_attr<T>("ID")⁠ → error on missing.
+▫ Required: ‎⁠req_attr<T>("ID")⁠ → error on missing.
 
- ▫ Optional: ‎⁠opt_child_text<T>("DeathTurn")⁠ → Option    <T>.
+▫ Optional: ‎⁠opt_child_text<T>("DeathTurn")⁠ → Option <T>.
 
- ▫ Sentinel: ‎⁠opt_sent_int("ChosenHeirID", -1)⁠ → Option    <i32>.
+▫ Sentinel: ‎⁠opt_sent_int("ChosenHeirID", -1)⁠ → Option <i32>.
 
 - Validation hooks: Add per‑entity ‎⁠validate(&model)⁠ that can log warnings (not errors) for out‑of-range values (negative citizens, invalid turns), enabling a “strict mode” flag later.
 

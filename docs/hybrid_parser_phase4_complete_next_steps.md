@@ -10,17 +10,20 @@
 Implemented in `src-tauri/src/parser/parsers/mod.rs` and integrated into `src-tauri/src/parser/import.rs`.
 
 **Foundation Entities** (4-way parallel):
+
 - Players
 - Characters
 - Cities
 - Tiles
 
 **Affiliation Entities** (3-way parallel):
+
 - Families
 - Religions
 - Tribes
 
 **Benchmark Results** (OW-Assyria-Year119, 9.8MB XML):
+
 ```
 XML Load + Parse: 89.46ms
 Parallel Parsing:  11.19ms
@@ -36,17 +39,20 @@ Total:            100.66ms
 ### Priority 1: High ROI (Recommended Next Steps)
 
 #### 1.1 Parallel Nested Data Parsing
+
 **Impact**: 1.5-2x additional speedup
 **Effort**: Medium
 **Status**: Not started
 
 Currently sequential in `import.rs` (lines ~470-530):
+
 - Character extended data (traits, opinions, memories, goals, etc.)
 - City extended data (yields, religions, production queues, buildings, etc.)
 - Player extended data (timeseries, goals, technology, culture, etc.)
 - Tile extended data (visibility, improvements)
 
 **Implementation approach**:
+
 ```rust
 // Use rayon's parallel iterators for per-entity nested data
 use rayon::prelude::*;
@@ -59,17 +65,20 @@ let character_extended: Vec<_> = characters_data.par_iter()
 **Expected benefit**: Parsing nested data in parallel could reduce this phase from ~X ms to ~X/N ms where N is number of cores.
 
 #### 1.2 Comprehensive Performance Benchmarking
+
 **Impact**: Identifies bottlenecks, validates speedup claims
 **Effort**: Low
 **Status**: Basic benchmark created (`src-tauri/src/bin/benchmark_parsing.rs`)
 
 **What's needed**:
+
 - Benchmark suite across multiple save sizes (small/medium/large)
 - Sequential baseline comparison (to measure actual speedup vs sequential)
 - Before/after metrics for nested data parallelization
 - Profile total import time breakdown (parse vs insert vs nested data)
 
 **Files to benchmark**:
+
 - Small: ~1-2MB XML, <50 turns
 - Medium: ~5-10MB XML, 100-150 turns (current test file)
 - Large: >20MB XML, 200+ turns
@@ -77,6 +86,7 @@ let character_extended: Vec<_> = characters_data.par_iter()
 ### Priority 2: Medium ROI (Nice to Have)
 
 #### 2.1 Streaming XML Parser for Large Files
+
 **Impact**: Reduces memory pressure for saves >20MB
 **Effort**: High
 **Status**: Not started (architecture already supports it)
@@ -86,11 +96,13 @@ Current approach loads entire XML into memory. For very large saves (>20MB), imp
 **Trade-off**: Adds complexity for edge case (most saves are <20MB).
 
 #### 2.2 Batch Insertion Tuning
+
 **Impact**: Small (~5-10% improvement)
 **Effort**: Medium
 **Status**: Already using DuckDB appenders (efficient)
 
 Current insertion uses DuckDB appenders which are already fast. Potential optimizations:
+
 - Profile insertion phase to identify slow tables
 - Tune batch sizes if needed
 - Experiment with transaction sizes
@@ -100,6 +112,7 @@ Current insertion uses DuckDB appenders which are already fast. Potential optimi
 ### Priority 3: Low ROI (YAGNI for Now)
 
 #### 3.1 Deduplication Strategy Optimization
+
 **Impact**: Minimal
 **Effort**: Low
 **Status**: Working correctly with in-memory deduplication
@@ -109,6 +122,7 @@ Current approach deduplicates in-memory before insertion (works well). Alternati
 **Trade-off**: Current approach is simple and works. Not worth optimizing unless profiling shows it's a bottleneck.
 
 #### 3.2 Memory Profiling and Optimization
+
 **Impact**: User experience for very large saves
 **Effort**: Medium
 **Status**: Not needed for typical saves
@@ -120,10 +134,12 @@ Peak memory usage is reasonable for typical saves. Only needed if users report i
 These were outlined in the migration plan as optional validation steps:
 
 ### Validation Layer
+
 **Status**: Not implemented (YAGNI approach)
 **Purpose**: Compare old parser vs new parser outputs
 
 **What it would include**:
+
 - `parser/validation.rs` - Compare parsed data structures
 - Database content comparison tests
 - Regression test suite
@@ -131,6 +147,7 @@ These were outlined in the migration plan as optional validation steps:
 **Why we skipped it**: Following DRY/YAGNI principles - prove speedup first, add validation if needed. Current approach works correctly (verified by existing tests and smoke tests).
 
 ### Comparison Tests
+
 **Status**: Not implemented
 **Purpose**: Automated tests comparing old vs new parser
 
@@ -141,11 +158,13 @@ Could be added if we want to validate correctness across many save files, but cu
 ✅ **Phase 4 is deployed and working in production**
 
 The UI is already using the new hybrid parser:
+
 - `src-tauri/src/lib.rs:182` → `import_save_file_cmd`
 - Calls `parser::import_save_file()` in `src-tauri/src/parser/import.rs:156`
 - Uses parallel parsing at lines 349 and 432
 
 Users get parallel parsing performance immediately when:
+
 - Importing individual save files through the UI
 - Batch importing multiple files
 - Re-importing updated saves
@@ -173,6 +192,7 @@ Stop here. The core parallelization is working and users are seeing benefits. Ad
 Created: `src-tauri/src/bin/benchmark_parsing.rs`
 
 **Usage**:
+
 ```bash
 cargo run --release --bin benchmark_parsing -- /path/to/save.xml
 ```

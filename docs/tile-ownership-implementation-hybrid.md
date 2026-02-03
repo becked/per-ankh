@@ -10,12 +10,14 @@ This document describes the hybrid approach to tile ownership tracking that comb
 ## Problem Statement
 
 The original parser was looking for non-existent XML elements:
+
 - `<OwnerPlayer>` - does not exist in XML
 - `<OwnerCity>` - does not exist in XML
 
 As a result, the `owner_player_id` and `owner_city_id` columns in the `tiles` table were always NULL.
 
 **Actual XML Structure:**
+
 ```xml
 <Tile ID="100">
   <CityTerritory>23</CityTerritory>  <!-- Which city owns this tile -->
@@ -32,12 +34,14 @@ As a result, the `owner_player_id` and `owner_city_id` columns in the `tiles` ta
 ### Hybrid Approach Components
 
 **1. Specialized Ownership Tracking**
+
 - New `tile_ownership_history` table for ownership data
 - Proper INTEGER type with foreign key validation
 - Optimized indexes for territorial expansion queries
 - Current ownership stored in `tiles` table
 
 **2. Generic Change Tracking**
+
 - Keep existing `tile_changes` table for terrain/vegetation
 - Remove ownership parsing from `tile_data.rs`
 - Maintain unified audit log for non-ownership changes
@@ -45,6 +49,7 @@ As a result, the `owner_player_id` and `owner_city_id` columns in the `tiles` ta
 ### Schema
 
 #### New Table: tile_ownership_history
+
 ```sql
 CREATE TABLE tile_ownership_history (
     tile_id INTEGER NOT NULL,
@@ -65,6 +70,7 @@ CREATE INDEX idx_tile_ownership_history_player
 ```
 
 #### Updated: tiles table
+
 ```sql
 -- Current ownership columns (previously always NULL)
 owner_player_id INTEGER,  -- Derived from latest OwnerHistory entry
@@ -72,6 +78,7 @@ owner_city_id INTEGER,    -- Parsed from CityTerritory element
 ```
 
 #### Unchanged: tile_changes table
+
 ```sql
 -- Continues to track terrain and vegetation changes
 CREATE TABLE tile_changes (
@@ -91,6 +98,7 @@ CREATE TABLE tile_changes (
 ### XML Parsing (src-tauri/src/parser/entities/tiles.rs)
 
 **City Ownership:**
+
 ```rust
 // Parse CityTerritory element
 let owner_city_xml_id = tile_node
@@ -103,6 +111,7 @@ let owner_city_db_id = match owner_city_xml_id {
 ```
 
 **Player Ownership:**
+
 ```rust
 // Parse OwnerHistory and derive current owner
 let mut owner_player_db_id = None;
@@ -154,6 +163,7 @@ if let Some(history_node) = tile_node.children().find(|n| n.has_tag_name("OwnerH
 **1. Remove Duplicate Parsing (src-tauri/src/parser/entities/tile_data.rs)**
 
 Delete lines 142-170 that parse OwnerHistory into tile_changes:
+
 ```rust
 // DELETE THIS SECTION:
 // Parse OwnerHistory
@@ -176,6 +186,7 @@ if let Some(owner_history) = tile_node
 **2. Update Documentation**
 
 Update `tile_data.rs` module documentation to clarify it no longer handles ownership:
+
 ```rust
 // Tile extended data parsers
 //
@@ -192,6 +203,7 @@ Update `tile_data.rs` module documentation to clarify it no longer handles owner
 ### Advantages
 
 **1. Optimized Ownership Queries**
+
 ```sql
 -- Fast territorial expansion analysis
 SELECT
@@ -206,40 +218,45 @@ ORDER BY turn;
 ```
 
 **2. Proper Type Safety**
+
 - `owner_player_id INTEGER` with foreign key validation
 - NULL for unowned tiles (semantic meaning)
 - No string parsing required
 
 **3. Minimal Disruption**
+
 - Keep existing terrain/vegetation tracking
 - No need to migrate existing tile_changes data
 - Single focused change
 
 **4. Best of Both Worlds**
+
 - Specialized table for high-value ownership analytics
 - Generic table for less-critical terrain/vegetation changes
 - Follows principle of optimizing what matters most
 
 ### Trade-offs vs Full Normalization (Option B)
 
-| Aspect | Hybrid | Full Normalization |
-|--------|--------|-------------------|
-| Tables | 2 (tile_ownership_history, tile_changes) | 3 (tile_ownership_history, tile_terrain_history, tile_vegetation_history) |
-| Query Performance | Excellent for ownership, good for others | Excellent for all |
-| Code Complexity | Low (minimal changes) | Medium (3 parsers to update) |
-| Schema Consistency | Mixed (specialized + generic) | Fully normalized |
-| Migration Effort | Low | Medium-High |
+| Aspect             | Hybrid                                   | Full Normalization                                                        |
+| ------------------ | ---------------------------------------- | ------------------------------------------------------------------------- |
+| Tables             | 2 (tile_ownership_history, tile_changes) | 3 (tile_ownership_history, tile_terrain_history, tile_vegetation_history) |
+| Query Performance  | Excellent for ownership, good for others | Excellent for all                                                         |
+| Code Complexity    | Low (minimal changes)                    | Medium (3 parsers to update)                                              |
+| Schema Consistency | Mixed (specialized + generic)            | Fully normalized                                                          |
+| Migration Effort   | Low                                      | Medium-High                                                               |
 
 ## Testing
 
 ### Test Results (2024 Save File)
 
 **Before Fix:**
+
 - `tiles.owner_player_id`: All NULL ❌
 - `tiles.owner_city_id`: All NULL ❌
 - `tile_changes` ownership records: 2,201 ✅
 
 **After Implementation:**
+
 - `tiles.owner_player_id`: Populated ✅
 - `tiles.owner_city_id`: Populated ✅
 - `tile_ownership_history` records: 2,201 ✅

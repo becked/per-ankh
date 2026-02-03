@@ -95,6 +95,7 @@ CREATE TABLE tribes (
 For each affected table, change from single-column PRIMARY KEY to composite PRIMARY KEY:
 
 #### Before (families example):
+
 ```sql
 CREATE TABLE families (
     family_id BIGINT NOT NULL PRIMARY KEY,
@@ -113,6 +114,7 @@ CREATE TABLE families (
 ```
 
 #### After:
+
 ```sql
 CREATE TABLE families (
     family_id INTEGER NOT NULL,  -- Changed from BIGINT to INTEGER for consistency
@@ -132,6 +134,7 @@ CREATE TABLE families (
 ```
 
 **Key Changes:**
+
 1. Change PRIMARY KEY from single column to `(id, match_id)`
 2. Change id column type from BIGINT to INTEGER (for consistency with other entity tables)
 3. Ensure all FOREIGN KEYs that reference this table include both columns
@@ -141,6 +144,7 @@ CREATE TABLE families (
 The schema.rs file creates unique indexes for XML ID lookups. These need to be updated:
 
 #### Before:
+
 ```sql
 CREATE UNIQUE INDEX IF NOT EXISTS idx_families_xml_id ON families(match_id, xml_id);
 ```
@@ -152,6 +156,7 @@ This remains correct - the unique constraint is per-match, which is what we want
 Review all foreign keys that reference the affected tables and ensure they use composite keys:
 
 #### Example - family_opinion_history references families:
+
 ```sql
 -- If there's a FK to families, it should be:
 FOREIGN KEY (family_id, match_id) REFERENCES families(family_id, match_id)
@@ -174,6 +179,7 @@ app.append_row(params![
 ```
 
 Ensure no UPSERT statements use `ON CONFLICT (id)` - they should either:
+
 1. Use `ON CONFLICT (id, match_id)` for true updates (same match)
 2. Remove ON CONFLICT entirely for fresh imports (current approach)
 
@@ -198,6 +204,7 @@ conn.execute(
 ## Tables Requiring Changes
 
 ### Critical (Prevent imports):
+
 1. ✅ **characters** - Already uses composite key `(character_id, match_id)`
 2. ✅ **players** - Already uses composite key `(player_id, match_id)`
 3. ✅ **cities** - Already uses composite key `(city_id, match_id)`
@@ -207,6 +214,7 @@ conn.execute(
 7. ❌ **religions** - Needs change to `(religion_id, match_id)`
 
 ### High Priority (Will cause issues soon):
+
 8. ❌ **city_production_queue** - `queue_id BIGINT NOT NULL PRIMARY KEY`
 9. ❌ **tile_changes** - `change_id BIGINT NOT NULL PRIMARY KEY`
 10. ❌ **player_goals** - `goal_id BIGINT NOT NULL PRIMARY KEY`
@@ -215,6 +223,7 @@ conn.execute(
 13. ❌ **memory_data** - `memory_id BIGINT NOT NULL PRIMARY KEY`
 
 ### Lower Priority (Less commonly used):
+
 14. ❌ **event_story_outcomes** - `outcome_id BIGINT NOT NULL PRIMARY KEY`
 15. **match_settings** - `setting_id BIGINT NOT NULL PRIMARY KEY` (may be OK as global)
 16. **matches** - `match_id BIGINT NOT NULL PRIMARY KEY` (correct - matches are top-level)
@@ -224,6 +233,7 @@ conn.execute(
 ### Step 1: Update docs/schema.sql
 
 For each affected table:
+
 1. Change PRIMARY KEY to composite `(id, match_id)`
 2. Change id type from BIGINT to INTEGER if needed
 3. Review and update any FKs that reference this table
@@ -232,6 +242,7 @@ For each affected table:
 ### Step 2: Update src-tauri/src/db/schema.rs
 
 The schema.rs file reads schema.sql and applies it. Verify:
+
 1. The unique index creation logic handles composite keys correctly
 2. Any schema validation code accounts for composite keys
 
@@ -254,6 +265,7 @@ sqlite3 src-tauri/per-ankh.db "SELECT match_id, game_id, total_turns FROM matche
 ### Step 4: Update Parsers
 
 Search codebase for:
+
 ```bash
 # Find potential issues
 grep -r "ON CONFLICT" src-tauri/src/parser/entities/
@@ -265,6 +277,7 @@ Review each instance and ensure match_id is properly included.
 ### Step 5: Integration Testing
 
 Test importing:
+
 1. Single save file (match_id = 1)
 2. Second save file (match_id = 2)
 3. Third save file with same GameId but different turn (match_id = 3)
@@ -274,10 +287,12 @@ Test importing:
 ## Data Type Consistency
 
 Current inconsistency in entity ID types:
+
 - Most entities: `INTEGER` (players, characters, cities, tiles, tribes)
 - Some entities: `BIGINT` (families, religions, various auto-generated IDs)
 
 **Recommendation:** Standardize on INTEGER for per-match entity IDs:
+
 - Sufficient range: -2,147,483,648 to 2,147,483,647
 - Each match gets independent ID sequences starting from 1
 - Only `match_id` should be BIGINT (global counter)

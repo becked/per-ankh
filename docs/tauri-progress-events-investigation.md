@@ -8,6 +8,7 @@
 ## Goal
 
 Implement real-time progress tracking for the file import feature, showing users:
+
 - Current file being processed
 - Progress bar (X of Y files)
 - Elapsed time
@@ -17,9 +18,11 @@ Implement real-time progress tracking for the file import feature, showing users
 ## Architecture
 
 ### Backend (Rust)
+
 Location: `src-tauri/src/lib.rs` - `import_files_batch()` function
 
 The backend:
+
 1. Iterates through files sequentially
 2. Imports each file using `parser::import_save_file()`
 3. Calculates progress metrics (current/total, elapsed, ETA, speed)
@@ -28,9 +31,11 @@ The backend:
 6. Returns `BatchImportResult` when all files are done
 
 ### Frontend (Svelte/TypeScript)
+
 Location: `src/lib/Header.svelte` and `src/lib/ImportModal.svelte`
 
 The frontend:
+
 1. Sets up event listener before starting import
 2. Opens modal when first progress event arrives
 3. Updates progress UI as events arrive
@@ -39,12 +44,15 @@ The frontend:
 ## What We Tried
 
 ### Attempt 1: Basic `app.emit()`
+
 **Backend**:
+
 ```rust
 app.emit("import-progress", &progress)
 ```
 
 **Frontend**:
+
 ```typescript
 import { listen } from "@tauri-apps/api/event";
 unlisten = await listen("import-progress", (event) => { ... });
@@ -55,7 +63,9 @@ unlisten = await listen("import-progress", (event) => { ... });
 **Frontend Logs**: No "Progress event received" logs
 
 ### Attempt 2: Window-specific emission
+
 **Backend**:
+
 ```rust
 app.emit_to("main", "import-progress", &progress)
 ```
@@ -66,7 +76,9 @@ app.emit_to("main", "import-progress", &progress)
 **Issue**: Window might not have label "main"
 
 ### Attempt 3: Get first window and emit to it
+
 **Backend**:
+
 ```rust
 match app.webview_windows().values().next() {
     Some(window) => {
@@ -77,6 +89,7 @@ match app.webview_windows().values().next() {
 ```
 
 **Frontend**:
+
 ```typescript
 import { getCurrentWebviewWindow } from "@tauri-apps/api/webviewWindow";
 const appWindow = getCurrentWebviewWindow();
@@ -88,12 +101,15 @@ unlisten = await appWindow.listen("import-progress", (event) => { ... });
 **Frontend Logs**: Still no events received
 
 ### Attempt 4: EventTarget::Any (Current attempt)
+
 **Backend**:
+
 ```rust
 app.emit_to(tauri::EventTarget::Any, "import-progress", &progress)
 ```
 
 **Frontend**: Back to global `listen()`
+
 ```typescript
 import { listen } from "@tauri-apps/api/event";
 unlisten = await listen("import-progress", (event) => { ... });
@@ -121,24 +137,27 @@ unlisten = await listen("import-progress", (event) => { ... });
 Since real-time events don't work, we implemented a simpler solution:
 
 **Frontend** (`src/lib/Header.svelte`):
+
 ```typescript
 async function handleImportFiles() {
-  // Show modal immediately with generic "Importing..." message
-  isImportModalOpen = true;
+	// Show modal immediately with generic "Importing..." message
+	isImportModalOpen = true;
 
-  // Start import (blocking call)
-  const result = await api.importFiles();
+	// Start import (blocking call)
+	const result = await api.importFiles();
 
-  // Update modal with results
-  importResult = result;
+	// Update modal with results
+	importResult = result;
 }
 ```
 
 **Modal States**:
+
 1. No result yet → Shows "Importing... Please wait"
 2. Result available → Shows "Import Complete!" with stats
 
 **User Experience**:
+
 - ✅ User gets immediate feedback (modal appears)
 - ✅ User sees results when complete
 - ❌ No real-time progress updates
@@ -148,13 +167,17 @@ async function handleImportFiles() {
 ## Possible Future Solutions
 
 ### 1. Investigate Tauri 2.x Event System Changes
+
 Tauri 2.x made significant changes to the event system. Check:
+
 - Official migration guide for event API changes
 - Tauri 2.x examples for event emission patterns
 - GitHub issues related to event delivery in Tauri 2.x
 
 ### 2. Try Different Event Scopes
+
 Tauri has multiple event scopes:
+
 ```rust
 // App-level events
 app.emit(...)
@@ -169,9 +192,11 @@ webview.emit(...)
 Try each systematically with matching frontend listeners.
 
 ### 3. Use Tauri's State Management
+
 Instead of events, use Tauri's state management:
 
 **Backend**:
+
 ```rust
 #[tauri::command]
 async fn get_import_progress(state: State<ImportState>) -> ImportProgress {
@@ -180,45 +205,54 @@ async fn get_import_progress(state: State<ImportState>) -> ImportProgress {
 ```
 
 **Frontend**: Poll every 500ms
+
 ```typescript
 const interval = setInterval(async () => {
-    const progress = await invoke("get_import_progress");
-    updateUI(progress);
+	const progress = await invoke("get_import_progress");
+	updateUI(progress);
 }, 500);
 ```
 
 ### 4. Use WebSockets
+
 Bypass Tauri events entirely:
+
 - Backend opens WebSocket server
 - Frontend connects and receives progress updates
 - More complex but more reliable
 
 ### 5. Server-Sent Events (SSE)
+
 Similar to WebSockets but simpler:
+
 - Backend creates SSE endpoint
 - Frontend uses EventSource API
 - One-way communication (server → client)
 
 ### 6. Check CSP Settings
+
 Content Security Policy might be blocking events:
 
 **Check**: `src-tauri/tauri.conf.json`
+
 ```json
 {
-  "tauri": {
-    "security": {
-      "csp": null  // Currently set to null
-    }
-  }
+	"tauri": {
+		"security": {
+			"csp": null // Currently set to null
+		}
+	}
 }
 ```
 
 Try explicitly allowing required protocols.
 
 ### 7. Add Middleware/Debugging
+
 Instrument the event pipeline:
 
 **Backend**:
+
 ```rust
 // Add detailed logging
 log::info!("Event channel: {:?}", app.event_channel());
@@ -226,26 +260,30 @@ log::info!("Windows: {:?}", app.webview_windows().keys());
 ```
 
 **Frontend**:
+
 ```typescript
 // Try catching ALL events
 listen("*", (event) => {
-    console.log("Any event received:", event);
+	console.log("Any event received:", event);
 });
 ```
 
 ## Files Modified
 
 ### Backend
+
 - `src-tauri/src/lib.rs` - Event emission in `import_files_batch()`
 - `src-tauri/Cargo.toml` - Added `tauri-plugin-dialog = "2"`
 
 ### Frontend
+
 - `src/lib/Header.svelte` - Import handling and modal control
 - `src/lib/ImportModal.svelte` - Progress/results display
 - `src/lib/api.ts` - Added `importFiles()` and `importDirectory()` commands
 - `package.json` - Added `"@tauri-apps/plugin-dialog": "^2"`
 
 ### Generated Types
+
 - `src/lib/types/ImportProgress.ts`
 - `src/lib/types/BatchImportResult.ts`
 - `src/lib/types/FileImportError.ts`
@@ -253,14 +291,16 @@ listen("*", (event) => {
 ## Key Code Locations
 
 **Backend event emission**: `src-tauri/src/lib.rs:635-643`
+
 ```rust
 app.emit_to(tauri::EventTarget::Any, "import-progress", &progress)
 ```
 
 **Frontend event listening**: `src/lib/Header.svelte:34-43` (currently disabled)
+
 ```typescript
 unlisten = await listen<ImportProgress>("import-progress", (event) => {
-    importProgress = event.payload;
+	importProgress = event.payload;
 });
 ```
 

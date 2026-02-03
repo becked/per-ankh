@@ -15,6 +15,7 @@ match_*.zip
 ```
 
 **Example:**
+
 - Archive: `match_426504721_anarkos-becked.zip`
 - Contains: `OW-Persia-Year69-2025-09-20-09-47-27.xml` (2.6 MB uncompressed)
 
@@ -51,12 +52,14 @@ The root element contains all game data. It has **31 attributes** defining game 
 #### Root Attributes
 
 **Game Identity:**
+
 - `GameId`: Unique UUID for the game session
 - `GameName`: Human-readable game name (e.g., "anarkos vs becked 2.0")
 - `SaveDate`: Date string when save was created (e.g., "20 September 2025")
 - `Version`: Game version (e.g., "Version: 1.0.79513")
 
 **Map Configuration:**
+
 - `MapWidth`: Map width in tiles (e.g., 46)
 - `MinLatitude`: Minimum latitude for map generation (e.g., 35)
 - `MaxLatitude`: Maximum latitude for map generation (e.g., 55)
@@ -67,10 +70,12 @@ The root element contains all game data. It has **31 attributes** defining game 
 - `MapSize`: Size category (e.g., `MAPSIZE_SMALLEST`)
 
 **Map Seeds:**
+
 - `FirstSeed`: Initial random seed (e.g., 58702068)
 - `MapSeed`: Map generation seed (same as FirstSeed in most cases)
 
 **Game Mode Settings:**
+
 - `GameMode`: Mode type (e.g., `NETWORK` for multiplayer)
 - `TurnStyle`: Turn timer style (e.g., `TURNSTYLE_TIGHT`)
 - `TurnTimer`: Turn timer duration (e.g., `TURNTIMER_SLOW`)
@@ -79,6 +84,7 @@ The root element contains all game data. It has **31 attributes** defining game 
 - `TribeLevel`: Barbarian tribe difficulty (e.g., `TRIBELEVEL_NORMAL`)
 
 **Game Rules:**
+
 - `Development`: Starting development level (e.g., `DEVELOPMENT_FLEDGLING`)
 - `HumanDevelopment`: Human player development (e.g., `DEVELOPMENT_NONE`)
 - `Advantage`: Player advantage setting (e.g., `ADVANTAGE_NONE`)
@@ -96,6 +102,7 @@ The root element contains all game data. It has **31 attributes** defining game 
 The root element contains multiple types of child elements, organized by function:
 
 **Count by Element Type (example from 2-player game):**
+
 - `Tile`: 2024 elements (map tiles)
 - `Character`: 101 elements (all characters in game)
 - `City`: 14 elements (all cities)
@@ -104,6 +111,7 @@ The root element contains multiple types of child elements, organized by functio
 - Various configuration sections: 1 element each
 
 **Configuration Sections:**
+
 - `GameContentEnabled`: DLC/expansion content hashes
 - `Team`: Player team assignments
 - `Difficulty`: Per-player difficulty settings
@@ -121,6 +129,7 @@ The root element contains multiple types of child elements, organized by functio
 - `MapSingleOptions`: Single-selection map options
 
 **Example GameContentEnabled:**
+
 ```xml
 <GameContentEnabled
   BASE_CONTENT.1="m9NE7EwYzrw8QIMAur1i2tbi1c3pTYKE4SCQAIFDj/A="
@@ -130,6 +139,7 @@ The root element contains multiple types of child elements, organized by functio
 ```
 
 **Example GameOptions:**
+
 ```xml
 <GameOptions>
   <GAMEOPTION_CUSTOM_LEADER />
@@ -141,6 +151,7 @@ The root element contains multiple types of child elements, organized by functio
 ```
 
 **Example VictoryEnabled:**
+
 ```xml
 <VictoryEnabled>
   <VICTORY_POINTS />
@@ -150,6 +161,7 @@ The root element contains multiple types of child elements, organized by functio
 ```
 
 **Example GameContent:**
+
 ```xml
 <GameContent>
   <DLC_HEROES_OF_AEGEAN />
@@ -173,6 +185,7 @@ The root element contains multiple types of child elements, organized by functio
 Players are identified by a 0-based `ID` attribute and contain comprehensive player state.
 
 **Example Attributes:**
+
 ```xml
 <Player
   ID="0"
@@ -188,6 +201,7 @@ Players are identified by a 0-based `ID` attribute and contain comprehensive pla
 ```
 
 **Key Attributes:**
+
 - `ID`: Player index (0-based, **IMPORTANT:** ID=0 is valid!)
 - `Name`: Player username
 - `Email`: Player email (usually empty in tournament saves)
@@ -238,6 +252,7 @@ Elements that are present (true) or absent (false):
 #### Resource/Yield Elements
 
 **YieldStockpile** - Current resource stockpiles:
+
 ```xml
 <YieldStockpile>
   <YIELD_CIVICS>253</YIELD_CIVICS>
@@ -253,6 +268,7 @@ Elements that are present (true) or absent (false):
 #### Technology Elements
 
 **TechProgress** - Research progress on technologies (cost in science points):
+
 ```xml
 <TechProgress>
   <TECH_STONECUTTING>856</TECH_STONECUTTING>
@@ -264,6 +280,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **TechCount** - Number of times each tech has been discovered:
+
 ```xml
 <TechCount>
   <TECH_IRONWORKING>1</TECH_IRONWORKING>
@@ -274,6 +291,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **Other Tech Elements:**
+
 - `TechAvailable`: Available techs to research
 - `TechLocked`: Locked technologies
 - `TechPassed`: Technologies passed on
@@ -283,6 +301,7 @@ Elements that are present (true) or absent (false):
 #### Laws and Government
 
 **ActiveLaw** - Currently active laws by category:
+
 ```xml
 <ActiveLaw>
   <LAW_SLAVERY>LAW_SLAVERY</LAW_SLAVERY>
@@ -294,6 +313,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **LawClassChangeCount** - Times each law category was changed:
+
 ```xml
 <LawClassChangeCount>
   <LAWCLASS_ORDERS>1</LAWCLASS_ORDERS>
@@ -306,6 +326,7 @@ Elements that are present (true) or absent (false):
 #### Goals and Missions
 
 **GoalList** - Active goals:
+
 ```xml
 <GoalList>
   <Goal>
@@ -321,6 +342,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **GoalStartedCount** - Count of started goals by type:
+
 ```xml
 <GoalStartedCount>
   <GOAL_IRON_THRONE>1</GOAL_IRON_THRONE>
@@ -331,6 +353,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **MissionStartedTurn** - Turn each mission type was started:
+
 ```xml
 <MissionStartedTurn>
   <MISSION_PRODUCTION>36</MISSION_PRODUCTION>
@@ -343,6 +366,7 @@ Elements that are present (true) or absent (false):
 #### Bonuses and Modifiers
 
 **BonusCount** - Count of bonuses applied (126+ different bonus types):
+
 ```xml
 <BonusCount>
   <BONUS_XP_CHARACTER_SMALL>8</BONUS_XP_CHARACTER_SMALL>
@@ -358,6 +382,7 @@ Elements that are present (true) or absent (false):
 #### Resources and Luxuries
 
 **ResourceRevealed** - Which resources have been discovered:
+
 ```xml
 <ResourceRevealed>
   <RESOURCE_FOOD>1</RESOURCE_FOOD>
@@ -372,6 +397,7 @@ Elements that are present (true) or absent (false):
 #### Families
 
 **Families** - List of family IDs in the nation:
+
 ```xml
 <Families>
   <Family>FAMILY_ACHAEMENID</Family>
@@ -381,6 +407,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **FamilyHeadID** - Character ID of each family head:
+
 ```xml
 <FamilyHeadID>
   <FAMILY_ACHAEMENID>9</FAMILY_ACHAEMENID>
@@ -390,6 +417,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **FamilySeatCityID** - City ID of family seats:
+
 ```xml
 <FamilySeatCityID>
   <FAMILY_ACHAEMENID>0</FAMILY_ACHAEMENID>
@@ -401,6 +429,7 @@ Elements that are present (true) or absent (false):
 #### Leaders and Council
 
 **Leaders** - List of leader character IDs:
+
 ```xml
 <Leaders>
   <Leader>9</Leader>
@@ -410,6 +439,7 @@ Elements that are present (true) or absent (false):
 ```
 
 **CouncilCharacter** - Characters in council positions:
+
 ```xml
 <CouncilCharacter>
   <COUNCIL_SPYMASTER>64</COUNCIL_SPYMASTER>
@@ -422,6 +452,7 @@ Elements that are present (true) or absent (false):
 Several elements track turn-by-turn history (typically one entry per turn):
 
 **LegitimacyHistory** - Legitimacy score per turn:
+
 ```xml
 <LegitimacyHistory>
   <T2>100</T2>
@@ -433,6 +464,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **MilitaryPowerHistory** - Military power rating per turn:
+
 ```xml
 <MilitaryPowerHistory>
   <T2>0</T2>
@@ -444,6 +476,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **PointsHistory** - Victory points per turn:
+
 ```xml
 <PointsHistory>
   <T2>0</T2>
@@ -455,6 +488,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **YieldRateHistory** - Production rates per turn by yield type:
+
 ```xml
 <YieldRateHistory>
   <YIELD_FOOD>
@@ -472,6 +506,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **FamilyOpinionHistory** - Family opinion ratings per turn:
+
 ```xml
 <FamilyOpinionHistory>
   <FAMILY_ACHAEMENID>
@@ -484,6 +519,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **ReligionOpinionHistory** - Religion opinion ratings per turn:
+
 ```xml
 <ReligionOpinionHistory>
   <RELIGION_PAGAN_PERSIA>
@@ -498,6 +534,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 #### Events and Stories
 
 **AllEventStoryTurn** - When each event story type was triggered:
+
 ```xml
 <AllEventStoryTurn>
   <EVENTSTORY_COURTIER_MISSION_PRODUCTION>36</EVENTSTORY_COURTIER_MISSION_PRODUCTION>
@@ -507,6 +544,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **EventClassTurn** - When each event class occurred:
+
 ```xml
 <EventClassTurn>
   <EVENTCLASS_FAMILY>69</EVENTCLASS_FAMILY>
@@ -521,6 +559,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 #### Production Tracking
 
 **UnitsProduced** - Count of units produced by type:
+
 ```xml
 <UnitsProduced>
   <UNIT_SETTLER>3</UNIT_SETTLER>
@@ -532,6 +571,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **UnitsProducedTurn** - Turn when each unit type was last produced:
+
 ```xml
 <UnitsProducedTurn>
   <UNIT_SETTLER>55</UNIT_SETTLER>
@@ -542,6 +582,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **ProjectsProduced** - Count of projects completed:
+
 ```xml
 <ProjectsProduced>
   <PROJECT_TRAIN_DISCIPLE>1</PROJECT_TRAIN_DISCIPLE>
@@ -554,6 +595,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 #### AI Data
 
 **AI** - AI decision-making data (53+ child elements):
+
 ```xml
 <AI>
   <LastCityProdRecalc>69</LastCityProdRecalc>
@@ -566,6 +608,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 #### UI and Player Interaction
 
 **PlayerOptions** - UI and gameplay preferences:
+
 ```xml
 <PlayerOptions>
   <PLAYEROPTION_NO_TUTORIAL />
@@ -573,6 +616,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **TurnSummary** - Summary data for the turn:
+
 ```xml
 <TurnSummary>
   <Turn>...</Turn>
@@ -580,6 +624,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **PopupList** - Queued UI popups:
+
 ```xml
 <PopupList>
   <Popup>...</Popup>
@@ -587,6 +632,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **Pings** - Map pings:
+
 ```xml
 <Pings>
   <Ping>...</Ping>
@@ -595,6 +641,7 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ```
 
 **ChatLogList** - In-game chat messages:
+
 ```xml
 <ChatLogList>
   <Chat>...</Chat>
@@ -629,41 +676,42 @@ Each `LogData` element represents a single historical event:
 
 ### LogData Fields
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `Text` | String | Rich text for UI display (with color/link markup) |
-| `Type` | Enum | Event type identifier |
-| `Data1` | String/Int | Primary event data (varies by Type) |
-| `Data2` | String/Int | Secondary event data (often "None") |
-| `Data3` | String/Int | Tertiary event data (often "None") |
-| `Turn` | Integer | Game turn when event occurred |
-| `TeamTurn` | Integer | Team turn index (usually 0) |
+| Field      | Type       | Description                                       |
+| ---------- | ---------- | ------------------------------------------------- |
+| `Text`     | String     | Rich text for UI display (with color/link markup) |
+| `Type`     | Enum       | Event type identifier                             |
+| `Data1`    | String/Int | Primary event data (varies by Type)               |
+| `Data2`    | String/Int | Secondary event data (often "None")               |
+| `Data3`    | String/Int | Tertiary event data (often "None")                |
+| `Turn`     | Integer    | Game turn when event occurred                     |
+| `TeamTurn` | Integer    | Team turn index (usually 0)                       |
 
 ### LogData Event Types
 
 **Common Event Types:**
 
-| Type | Data1 | Data2 | Data3 | Description |
-|------|-------|-------|-------|-------------|
-| `TECH_DISCOVERED` | Tech ID | None | None | Technology researched |
-| `LAW_ADOPTED` | Law ID | None | None | Law enacted |
-| `CITY_FOUNDED` | Tile ID | None | None | City founded |
-| `CITY_BREACHED` | Tile ID | None | None | City walls breached |
-| `CHARACTER_BIRTH` | Character ID | None | None | Character born |
-| `CHARACTER_DEATH` | Character ID | None | None | Character died |
-| `CHARACTER_SUCCESSION` | Character ID | None | None | New ruler crowned |
-| `GOAL_STARTED` | Goal index | None | None | Ambition/Legacy started |
-| `GOAL_FINISHED` | Goal index | None | None | Ambition/Legacy completed |
-| `GOAL_FAILED` | Goal index (-1) | None | None | Ambition/Legacy failed |
-| `RELIGION_FOUNDED` | Tile ID | Religion ID | None | Religion founded |
-| `TEAM_CONTACT` | Player ID | None | None | Met another player |
-| `TEAM_DIPLOMACY` | Player ID | None | None | Diplomatic action with player |
-| `TRIBE_CONTACT` | Tile ID | Tribe index | None | Met barbarian tribe |
-| `COURTIER` | Courtier type | Character ID | None | Courtier recruited |
+| Type                   | Data1           | Data2        | Data3 | Description                   |
+| ---------------------- | --------------- | ------------ | ----- | ----------------------------- |
+| `TECH_DISCOVERED`      | Tech ID         | None         | None  | Technology researched         |
+| `LAW_ADOPTED`          | Law ID          | None         | None  | Law enacted                   |
+| `CITY_FOUNDED`         | Tile ID         | None         | None  | City founded                  |
+| `CITY_BREACHED`        | Tile ID         | None         | None  | City walls breached           |
+| `CHARACTER_BIRTH`      | Character ID    | None         | None  | Character born                |
+| `CHARACTER_DEATH`      | Character ID    | None         | None  | Character died                |
+| `CHARACTER_SUCCESSION` | Character ID    | None         | None  | New ruler crowned             |
+| `GOAL_STARTED`         | Goal index      | None         | None  | Ambition/Legacy started       |
+| `GOAL_FINISHED`        | Goal index      | None         | None  | Ambition/Legacy completed     |
+| `GOAL_FAILED`          | Goal index (-1) | None         | None  | Ambition/Legacy failed        |
+| `RELIGION_FOUNDED`     | Tile ID         | Religion ID  | None  | Religion founded              |
+| `TEAM_CONTACT`         | Player ID       | None         | None  | Met another player            |
+| `TEAM_DIPLOMACY`       | Player ID       | None         | None  | Diplomatic action with player |
+| `TRIBE_CONTACT`        | Tile ID         | Tribe index  | None  | Met barbarian tribe           |
+| `COURTIER`             | Courtier type   | Character ID | None  | Courtier recruited            |
 
 ### LogData Count
 
 Typical counts in a 69-turn game:
+
 - Player 0: 68 LogData entries
 - Player 1: 63 LogData entries
 
@@ -674,6 +722,7 @@ The number of events varies based on gameplay activity.
 **CRITICAL:** LogData elements are stored in the Player's `PermanentLogList`, meaning they belong to that player's perspective.
 
 **Player ID Conversion:**
+
 - XML: `<Player ID="0">` → Database: `player_id = 1`
 - XML: `<Player ID="1">` → Database: `player_id = 2`
 - **Formula:** `database_player_id = xml_player_id + 1`
@@ -702,22 +751,22 @@ Each `MemoryData` element represents a memory stored in a player's mind:
 
 ### MemoryData Fields
 
-| Field | Type | Optional | Description |
-|-------|------|----------|-------------|
-| `Type` | Enum | Required | Memory type identifier |
-| `Turn` | Integer | Required | Turn when memory was created |
-| `Player` | Integer | Optional | Subject player (for MEMORYPLAYER_* events) |
-| `Family` | Enum | Optional | Subject family (for MEMORYFAMILY_* events) |
-| `Religion` | Enum | Optional | Subject religion (for MEMORYRELIGION_* events) |
-| `CharacterID` | Integer | Optional | Subject character (for MEMORYCHARACTER_* events) |
-| `Tribe` | Enum | Optional | Subject tribe (for MEMORYTRIBE_* events) |
-| `City` | Integer | Optional | Subject city (rarely used) |
+| Field         | Type    | Optional | Description                                        |
+| ------------- | ------- | -------- | -------------------------------------------------- |
+| `Type`        | Enum    | Required | Memory type identifier                             |
+| `Turn`        | Integer | Required | Turn when memory was created                       |
+| `Player`      | Integer | Optional | Subject player (for MEMORYPLAYER\_\* events)       |
+| `Family`      | Enum    | Optional | Subject family (for MEMORYFAMILY\_\* events)       |
+| `Religion`    | Enum    | Optional | Subject religion (for MEMORYRELIGION\_\* events)   |
+| `CharacterID` | Integer | Optional | Subject character (for MEMORYCHARACTER\_\* events) |
+| `Tribe`       | Enum    | Optional | Subject tribe (for MEMORYTRIBE\_\* events)         |
+| `City`        | Integer | Optional | Subject city (rarely used)                         |
 
 ### MemoryData Event Types and Ownership
 
 **Key Concept:** MemoryData events are stored in a player's MemoryList, representing that **player's perspective/memory**.
 
-#### MEMORYPLAYER_* Events
+#### MEMORYPLAYER\_\* Events
 
 **Ownership:** Uses `<Player>` child element (the opponent/subject)
 
@@ -732,12 +781,13 @@ Each `MemoryData` element represents a memory stored in a player's mind:
 
 **Interpretation:** Player 0 remembers that Player 1 attacked a city on turn 63.
 
-**Common MEMORYPLAYER_* Types:**
+**Common MEMORYPLAYER\_\* Types:**
+
 - `MEMORYPLAYER_ATTACKED_CITY`: Opponent attacked our city
 - `MEMORYPLAYER_ATTACKED_UNIT`: Opponent attacked our unit
 - `MEMORYPLAYER_CAPTURED_CITY`: Opponent captured a city
 
-#### MEMORYTRIBE/FAMILY/RELIGION_* Events
+#### MEMORYTRIBE/FAMILY/RELIGION\_\* Events
 
 **Ownership:** Uses owner `Player[@ID]` (the viewer/experiencer)
 
@@ -755,6 +805,7 @@ Each `MemoryData` element represents a memory stored in a player's mind:
 **Note:** These events have **NO `<Player>` child element** - the owner is implicit from the MemoryList location.
 
 **Common Types:**
+
 - `MEMORYTRIBE_ATTACKED_UNIT`: Tribe attacked our unit
 - `MEMORYFAMILY_FOUNDED_CITY`: Family founded a city
 - `MEMORYFAMILY_SLAVE_REVOLT_1`: Family had slave revolt
@@ -763,7 +814,7 @@ Each `MemoryData` element represents a memory stored in a player's mind:
 - `MEMORYRELIGION_FUNERAL_RITES`: Religion held funeral rites
 - `MEMORYRELIGION_SPREAD_RELIGION`: Religion spread
 
-#### MEMORYCHARACTER_* Events
+#### MEMORYCHARACTER\_\* Events
 
 **Ownership:** Uses owner `Player[@ID]`
 
@@ -776,18 +827,21 @@ Each `MemoryData` element represents a memory stored in a player's mind:
 ```
 
 **Common Types:**
+
 - `MEMORYCHARACTER_UPGRADED_RECENTLY`: Character upgraded
 - `MEMORYCHARACTER_SPOUSE_TOO_EXPENSIVE`: Marriage too expensive
 
 ### MemoryData Count
 
 Typical counts in a 69-turn game:
+
 - Player 0: 53 total MemoryData entries
 - Player 1: 56 total MemoryData entries
 
 ### Entity Field Usage Statistics
 
 From a sample 53-entry MemoryList:
+
 - `Player` field: 30/53 (56%)
 - `Tribe` field: 12/53 (22%)
 - `Family` field: 4/53 (7%)
@@ -798,6 +852,7 @@ From a sample 53-entry MemoryList:
 ### Database Mapping
 
 **Consistent with LogData mapping:**
+
 - XML `Player[@ID="0"]` → Database `player_id=1`
 - XML `Player[@ID="1"]` → Database `player_id=2`
 
@@ -821,6 +876,7 @@ From a sample 53-entry MemoryList:
 ```
 
 **Key Attributes:**
+
 - `ID`: Unique character identifier (0-based)
 - `BirthTurn`: Turn when born (negative = before game start)
 - `Player`: Owner player ID (-1 = no owner, barbarian, or dead)
@@ -831,6 +887,7 @@ From a sample 53-entry MemoryList:
 ### Character Children
 
 **Sample Structure (first 40 children):**
+
 ```xml
 <NicknameType>GENDERED_TEXT_NICKNAME_THE_VAN</NicknameType>
 <Portrait>CHARACTER_PORTRAIT_VANDAL_FEMA</Portrait>
@@ -855,6 +912,7 @@ From a sample 53-entry MemoryList:
 ```
 
 **Key Child Elements:**
+
 - `Level`: Character level/experience
 - `DeathTurn`: Turn when died (absent if alive)
 - `DeathReason`: Cause of death
@@ -883,6 +941,7 @@ From a sample 53-entry MemoryList:
 ```
 
 **Key Attributes:**
+
 - `ID`: Unique city identifier (0-based)
 - `TileID`: Map tile where city is located
 - `Player`: Owner player ID
@@ -925,6 +984,7 @@ From a sample 53-entry MemoryList:
 ```
 
 **Key Child Elements:**
+
 - `NameType`: City name identifier
 - `GovernorID`: Character ID of governor
 - `Citizens`: Population count
@@ -1017,6 +1077,7 @@ The Game element has **no attributes** (empty in samples).
 ```
 
 **Key Elements:**
+
 - `Seed`: Game random seed
 - `NextUnitID`, `NextCityID`, `NextCharacterID`: Next available IDs for entities
 - `Turn`: Current turn number
@@ -1046,11 +1107,13 @@ database_player_id = int(xml_id) + 1
 ### Data Sources - No Overlap
 
 **MemoryData Events** (limited historical data):
+
 - Character/diplomatic memories for AI decision-making
 - Event types: `MEMORYPLAYER_*`, `MEMORYFAMILY_*`, etc.
 - Location: `Player/MemoryList/MemoryData`
 
 **LogData Events** (comprehensive turn-by-turn logs):
+
 - Complete gameplay history
 - Event types: `LAW_ADOPTED`, `TECH_DISCOVERED`, `GOAL_STARTED`, etc.
 - Location: `Player/PermanentLogList/LogData`
@@ -1063,10 +1126,10 @@ database_player_id = int(xml_id) + 1
 
 **Player ID Assignment:**
 
-1. **MEMORYPLAYER_* events**: Use `<Player>` child element (the opponent/subject)
+1. **MEMORYPLAYER\_\* events**: Use `<Player>` child element (the opponent/subject)
    - Example: If Becked's memory says "MEMORYPLAYER_ATTACKED_CITY Player=1", it means Becked remembers Fluffbunny (Player 1) attacking a city
 
-2. **MEMORYTRIBE/FAMILY/RELIGION_* events**: Use owner `Player[@ID]` (the viewer)
+2. **MEMORYTRIBE/FAMILY/RELIGION\_\* events**: Use owner `Player[@ID]` (the viewer)
    - Example: If Becked's memory says "MEMORYTRIBE_ATTACKED_UNIT Tribe=Raiders", it means Becked witnessed/experienced Raiders attacking units
    - **No `<Player>` child element** exists for these events
 
@@ -1095,12 +1158,14 @@ database_player_id = int(xml_id) + 1
 ### Dynasties
 
 Dynasty IDs follow the pattern `DYNASTY_{NAME}`, e.g.:
+
 - `DYNASTY_CYRUS` (Persia)
 - `DYNASTY_DEFAULT`
 
 ### Technologies
 
 Tech IDs follow the pattern `TECH_{NAME}`, e.g.:
+
 - `TECH_IRONWORKING`
 - `TECH_TRAPPING`
 - `TECH_STONECUTTING`
@@ -1109,6 +1174,7 @@ Tech IDs follow the pattern `TECH_{NAME}`, e.g.:
 ### Laws
 
 Law IDs follow the pattern `LAW_{CATEGORY}_{NAME}`, e.g.:
+
 - `LAW_SLAVERY`
 - `LAW_ORDERS_LABOR_FORCE`
 - `LAW_TRAINING_CONSCRIPTION`
@@ -1131,6 +1197,7 @@ Law IDs follow the pattern `LAW_{CATEGORY}_{NAME}`, e.g.:
 ### Unit Types
 
 Unit IDs follow the pattern `UNIT_{NAME}`, e.g.:
+
 - `UNIT_SETTLER`
 - `UNIT_SCOUT`
 - `UNIT_WARRIOR`
@@ -1172,6 +1239,7 @@ Before finalizing this reference document, please clarify:
 ## Document Maintenance
 
 This document should be updated when:
+
 - Game version changes significantly
 - New DLC adds new data structures
 - New event types are discovered

@@ -1,71 +1,71 @@
 {
-  "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Per Ankh",
-  "version": "0.1.10",
-  "identifier": "com.becked.per-ankh",
-  "build": {
-    "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
-    "beforeBuildCommand": "npm run build",
-    "frontendDist": "../build"
-  },
-  "app": {
-    "windows": [
-      {
-        "title": "",
-        "width": 1280,
-        "height": 800,
-        "minWidth": 1024,
-        "minHeight": 600,
-        "titleBarStyle": "Overlay",
-        "backgroundColor": "#211A12"
-      }
-    ],
-    "security": {
-      "csp": null,
-      "capabilities": [
-        {
-          "identifier": "main-capability",
-          "description": "Main application permissions",
-          "windows": ["main"],
-          "permissions": [
-            "core:default",
-            "dialog:default",
-            "dialog:allow-confirm",
-            "dialog:allow-message",
-            "core:window:allow-start-dragging",
-            "updater:default",
-            "process:allow-restart"
-          ]
-        }
-      ]
-    }
-  },
-  "bundle": {
-    "active": true,
-    "createUpdaterArtifacts": true,
-    "targets": ["app", "dmg", "nsis", "msi", "deb", "rpm"],
-    "icon": [
-      "icons/32x32.png",
-      "icons/128x128.png",
-      "icons/128x128@2x.png",
-      "icons/icon.icns",
-      "icons/icon.ico"
-    ],
-    "macOS": {
-      "signingIdentity": null,
-      "entitlements": null
-    }
-  },
-  "plugins": {
-    "updater": {
-      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERFODlGRjRENEJBMTcyMDUKUldRRmNxRkxUZitKM3RQSE1hRzlDeHlPcDhKM3ZGRmdaZGFRMFduMitTNy9kRUVlenVnRTJ3NXcK",
-      "endpoints": [
-        "https://github.com/becked/per-ankh/releases/latest/download/latest.json"
-      ],
-      "windows": {
-        "installMode": "passive"
-      }
-    }
-  }
+	"$schema": "https://schema.tauri.app/config/2",
+	"productName": "Per Ankh",
+	"version": "0.1.10",
+	"identifier": "com.becked.per-ankh",
+	"build": {
+		"beforeDevCommand": "npm run dev",
+		"devUrl": "http://localhost:1420",
+		"beforeBuildCommand": "npm run build",
+		"frontendDist": "../build"
+	},
+	"app": {
+		"windows": [
+			{
+				"title": "",
+				"width": 1280,
+				"height": 800,
+				"minWidth": 1024,
+				"minHeight": 600,
+				"titleBarStyle": "Overlay",
+				"backgroundColor": "#211A12"
+			}
+		],
+		"security": {
+			"csp": null,
+			"capabilities": [
+				{
+					"identifier": "main-capability",
+					"description": "Main application permissions",
+					"windows": ["main"],
+					"permissions": [
+						"core:default",
+						"dialog:default",
+						"dialog:allow-confirm",
+						"dialog:allow-message",
+						"core:window:allow-start-dragging",
+						"updater:default",
+						"process:allow-restart"
+					]
+				}
+			]
+		}
+	},
+	"bundle": {
+		"active": true,
+		"createUpdaterArtifacts": true,
+		"targets": ["app", "dmg", "nsis", "msi", "deb", "rpm"],
+		"icon": [
+			"icons/32x32.png",
+			"icons/128x128.png",
+			"icons/128x128@2x.png",
+			"icons/icon.icns",
+			"icons/icon.ico"
+		],
+		"macOS": {
+			"signingIdentity": null,
+			"entitlements": null
+		}
+	},
+	"plugins": {
+		"updater": {
+			"pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IERFODlGRjRENEJBMTcyMDUKUldRRmNxRkxUZitKM3RQSE1hRzlDeHlPcDhKM3ZGRmdaZGFRMFduMitTNy9kRUVlenVnRTJ3NXcK",
+			"endpoints": [
+				"https://github.com/becked/per-ankh/releases/latest/download/latest.json"
+			],
+			"windows": {
+				"installMode": "passive"
+			}
+		}
+	}
 }

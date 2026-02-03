@@ -22,16 +22,19 @@
 ### Parser Categories
 
 **DOM Parsers** (Load entire document into memory):
+
 - **roxmltree** - Read-only DOM, arena allocation
 - **sxd-document** - Mutable DOM, W3C-like API
 - **minidom** - Simple DOM for XMPP/Jabber
 - **xmltree** - Basic DOM, element-focused
 
 **Streaming Parsers** (Event-based, low memory):
+
 - **quick-xml** - Fast pull parser (StAX-like)
 - **xml-rs** - Push parser (SAX-like)
 
 **Low-level Parsers** (Build your own abstraction):
+
 - **xmlparser** - Token-based, no allocations
 - **xml5ever** - HTML5-like parsing
 
@@ -61,6 +64,7 @@ assert_eq!(player.text(), Some("Alice"));
 ```
 
 **Pros:**
+
 - ✅ **Fastest DOM parser** - Arena allocation, zero-copy strings
 - ✅ **Memory efficient** - ~1.2-1.4x XML size (vs 2-3x for mutable DOM)
 - ✅ **Simple API** - Intuitive navigation, easy to learn
@@ -71,17 +75,20 @@ assert_eq!(player.text(), Some("Alice"));
 - ✅ **Namespace support** - Proper XML namespace handling
 
 **Cons:**
+
 - ❌ **Read-only** - Cannot modify the tree (not needed for us)
 - ❌ **DOM only** - Loads entire document (memory-bound for huge files)
 - ❌ **No validation** - DTD/Schema validation not supported
 - ❌ **Basic features** - No XPath, XSLT, or advanced XML features
 
 **Performance:**
+
 - Parse speed: **~500 MB/s** (very fast)
 - Memory overhead: **1.2-1.4x** XML size
 - Traversal: **O(1)** for parent/child access
 
 **Best for:**
+
 - Read-only XML processing
 - Multiple traversals of same document
 - Medium-sized files (<100 MB)
@@ -125,6 +132,7 @@ loop {
 ```
 
 **Pros:**
+
 - ✅ **Low memory** - Streaming, constant memory usage
 - ✅ **Fast** - One of the fastest Rust XML parsers
 - ✅ **Async support** - Works with tokio
@@ -134,6 +142,7 @@ loop {
 - ✅ **Flexible** - Can build custom abstractions on top
 
 **Cons:**
+
 - ❌ **Complex API** - Event-based, requires state machine
 - ❌ **Single pass** - Can't easily traverse back
 - ❌ **More code** - Verbose for simple tasks
@@ -141,11 +150,13 @@ loop {
 - ❌ **No DOM** - Must build your own tree if needed
 
 **Performance:**
+
 - Parse speed: **~600 MB/s** (fastest overall)
 - Memory overhead: **Constant** (~1-5 MB buffer)
 - Traversal: **O(n)** must re-parse to traverse again
 
 **Best for:**
+
 - Very large files (>100 MB)
 - Streaming processing
 - Extract-transform workflows
@@ -179,6 +190,7 @@ player.set_attribute_value("id", "2");
 ```
 
 **Pros:**
+
 - ✅ **Mutable DOM** - Can modify, create, delete nodes
 - ✅ **W3C-like API** - Familiar if you know DOM from web
 - ✅ **XPath support** - Via sxd-xpath crate
@@ -186,6 +198,7 @@ player.set_attribute_value("id", "2");
 - ✅ **Full features** - Processing instructions, CDATA, etc.
 
 **Cons:**
+
 - ❌ **Slower** - 3-4x slower than roxmltree
 - ❌ **More memory** - ~2.5-3x XML size
 - ❌ **Less maintained** - Last update 2022
@@ -193,11 +206,13 @@ player.set_attribute_value("id", "2");
 - ❌ **Older design** - Predates modern Rust idioms
 
 **Performance:**
+
 - Parse speed: **~150 MB/s** (slower)
 - Memory overhead: **2.5-3x** XML size
 - Traversal: **O(1)** for parent/child access
 
 **Best for:**
+
 - Need to modify XML
 - XPath queries required
 - W3C DOM familiarity important
@@ -238,23 +253,27 @@ for event in parser {
 ```
 
 **Pros:**
+
 - ✅ **Simple streaming** - Iterator-based, easier than quick-xml
 - ✅ **Low memory** - Constant memory usage
 - ✅ **Stable API** - Well-established, hasn't changed much
 - ✅ **Writer included** - Can generate XML
 
 **Cons:**
+
 - ❌ **Slower** - 2-3x slower than quick-xml
 - ❌ **Less maintained** - Infrequent updates
 - ❌ **Iterator overhead** - Not as fast as pull parser
 - ❌ **Limited features** - Basic functionality only
 
 **Performance:**
+
 - Parse speed: **~200 MB/s** (slower)
 - Memory overhead: **Constant** (~1 MB)
 - Traversal: **O(n)** must re-parse
 
 **Best for:**
+
 - Simple streaming use cases
 - Learning XML parsing concepts
 - When iterator style is preferred
@@ -291,6 +310,7 @@ for token in Tokenizer::from(xml) {
 ```
 
 **Pros:**
+
 - ✅ **Zero allocations** - String slices only
 - ✅ **Fastest** - Minimal overhead
 - ✅ **Tiny code** - ~2000 lines of code
@@ -298,16 +318,19 @@ for token in Tokenizer::from(xml) {
 - ✅ **Zero dependencies** - Standalone crate
 
 **Cons:**
+
 - ❌ **Low-level** - Must build your own abstractions
 - ❌ **No convenience** - Just tokens, no tree/structure
 - ❌ **More work** - Need to track state yourself
 
 **Performance:**
+
 - Parse speed: **~800 MB/s** (fastest raw parsing)
 - Memory overhead: **Zero** (string slices only)
 - Traversal: **N/A** (no tree structure)
 
 **Best for:**
+
 - Building custom parsers
 - Maximum performance critical
 - Learning XML parsing internals
@@ -335,22 +358,26 @@ assert_eq!(player.text(), "Alice");
 ```
 
 **Pros:**
+
 - ✅ **Simple API** - Very easy to use
 - ✅ **Mutable** - Can modify elements
 - ✅ **Builder pattern** - Easy to construct XML
 
 **Cons:**
+
 - ❌ **XMPP-focused** - Designed for specific use case
 - ❌ **Less flexible** - Opinionated structure
 - ❌ **Slower** - Not optimized for large files
 - ❌ **No attributes list** - Must know attribute names
 
 **Performance:**
+
 - Parse speed: **~200 MB/s**
 - Memory overhead: **2x** XML size
 - Traversal: **O(n)** for child search
 
 **Best for:**
+
 - XMPP/Jabber applications
 - Simple XML documents
 - Quick prototypes
@@ -376,21 +403,25 @@ assert_eq!(player.attributes.get("id").unwrap(), "1");
 ```
 
 **Pros:**
+
 - ✅ **Simple** - Straightforward API
 - ✅ **Mutable** - Can modify tree
 - ✅ **serde support** - Can serialize/deserialize
 
 **Cons:**
+
 - ❌ **Built on xml-rs** - Inherits its performance
 - ❌ **Generic design** - Not optimized for any use case
 - ❌ **Less features** - Basic functionality
 
 **Performance:**
+
 - Parse speed: **~150 MB/s**
 - Memory overhead: **2-2.5x** XML size
 - Traversal: **O(n)** child iteration
 
 **Best for:**
+
 - General-purpose XML
 - When serde integration needed
 - Simple document structures
@@ -403,32 +434,33 @@ assert_eq!(player.attributes.get("id").unwrap(), "1");
 
 Benchmark: Parsing 50 MB XML file (Old World save equivalent)
 
-| Parser | Parse Speed | Relative |
-|--------|-------------|----------|
-| **xmlparser** (tokens only) | ~800 MB/s | 1.0x (baseline) |
-| **quick-xml** (streaming) | ~600 MB/s | 0.75x |
-| **roxmltree** (DOM) | ~500 MB/s | 0.625x |
-| **xml-rs** (streaming) | ~200 MB/s | 0.25x |
-| **minidom** (DOM) | ~200 MB/s | 0.25x |
-| **xmltree** (DOM) | ~150 MB/s | 0.19x |
-| **sxd-document** (DOM) | ~150 MB/s | 0.19x |
+| Parser                      | Parse Speed | Relative        |
+| --------------------------- | ----------- | --------------- |
+| **xmlparser** (tokens only) | ~800 MB/s   | 1.0x (baseline) |
+| **quick-xml** (streaming)   | ~600 MB/s   | 0.75x           |
+| **roxmltree** (DOM)         | ~500 MB/s   | 0.625x          |
+| **xml-rs** (streaming)      | ~200 MB/s   | 0.25x           |
+| **minidom** (DOM)           | ~200 MB/s   | 0.25x           |
+| **xmltree** (DOM)           | ~150 MB/s   | 0.19x           |
+| **sxd-document** (DOM)      | ~150 MB/s   | 0.19x           |
 
 **For 50 MB XML:**
+
 - roxmltree: **~100ms** parse time
 - quick-xml: **~83ms** parse time
 - sxd-document: **~333ms** parse time
 
 ### Memory Overhead
 
-| Parser | Memory Overhead | 50 MB XML | Notes |
-|--------|-----------------|-----------|-------|
-| **xmlparser** | 0x (zero-copy) | 0 MB | Tokens only, no tree |
-| **quick-xml** | Constant | ~2-5 MB | Buffer size |
-| **roxmltree** | 1.2-1.4x | ~60-70 MB | Arena allocation |
-| **xml-rs** | Constant | ~1 MB | Buffer |
-| **minidom** | 2x | ~100 MB | Standard DOM |
-| **xmltree** | 2-2.5x | ~100-125 MB | Standard DOM |
-| **sxd-document** | 2.5-3x | ~125-150 MB | Mutable DOM |
+| Parser           | Memory Overhead | 50 MB XML   | Notes                |
+| ---------------- | --------------- | ----------- | -------------------- |
+| **xmlparser**    | 0x (zero-copy)  | 0 MB        | Tokens only, no tree |
+| **quick-xml**    | Constant        | ~2-5 MB     | Buffer size          |
+| **roxmltree**    | 1.2-1.4x        | ~60-70 MB   | Arena allocation     |
+| **xml-rs**       | Constant        | ~1 MB       | Buffer               |
+| **minidom**      | 2x              | ~100 MB     | Standard DOM         |
+| **xmltree**      | 2-2.5x          | ~100-125 MB | Standard DOM         |
+| **sxd-document** | 2.5-3x          | ~125-150 MB | Mutable DOM          |
 
 ### API Complexity (Lines of code to extract all players)
 
@@ -483,6 +515,7 @@ for child in root.children() {
 ```
 
 **Complexity ranking:**
+
 1. **roxmltree** - Simplest, most intuitive
 2. **sxd-document** - Verbose but familiar (W3C-like)
 3. **minidom/xmltree** - Similar to roxmltree
@@ -497,6 +530,7 @@ for child in root.children() {
 ### Our Use Case: Old World Save Files
 
 **Characteristics:**
+
 - File size: 5-10 MB compressed → 50-150 MB XML
 - Structure: Deep nesting, many elements (50k+ nodes)
 - Access pattern: Multiple passes, random access
@@ -506,19 +540,20 @@ for child in root.children() {
 
 ### Parser Scoring for Our Use Case
 
-| Parser | Speed | Memory | API | Features | Maintenance | **Total** |
-|--------|-------|--------|-----|----------|-------------|-----------|
-| **roxmltree** | 9/10 | 8/10 | 10/10 | 7/10 | 10/10 | **44/50** ✅ |
-| **quick-xml** | 10/10 | 10/10 | 5/10 | 8/10 | 9/10 | **42/50** |
-| **sxd-document** | 4/10 | 4/10 | 7/10 | 9/10 | 5/10 | **29/50** |
-| **xml-rs** | 5/10 | 10/10 | 6/10 | 6/10 | 6/10 | **33/50** |
-| **xmlparser** | 10/10 | 10/10 | 2/10 | 4/10 | 8/10 | **34/50** |
-| **minidom** | 5/10 | 6/10 | 8/10 | 6/10 | 7/10 | **32/50** |
-| **xmltree** | 4/10 | 5/10 | 7/10 | 7/10 | 6/10 | **29/50** |
+| Parser           | Speed | Memory | API   | Features | Maintenance | **Total**    |
+| ---------------- | ----- | ------ | ----- | -------- | ----------- | ------------ |
+| **roxmltree**    | 9/10  | 8/10   | 10/10 | 7/10     | 10/10       | **44/50** ✅ |
+| **quick-xml**    | 10/10 | 10/10  | 5/10  | 8/10     | 9/10        | **42/50**    |
+| **sxd-document** | 4/10  | 4/10   | 7/10  | 9/10     | 5/10        | **29/50**    |
+| **xml-rs**       | 5/10  | 10/10  | 6/10  | 6/10     | 6/10        | **33/50**    |
+| **xmlparser**    | 10/10 | 10/10  | 2/10  | 4/10     | 8/10        | **34/50**    |
+| **minidom**      | 5/10  | 6/10   | 8/10  | 6/10     | 7/10        | **32/50**    |
+| **xmltree**      | 4/10  | 5/10   | 7/10  | 7/10     | 6/10        | **29/50**    |
 
 **Breakdown:**
 
 **roxmltree (Winner):**
+
 - ✅ Fast enough (500 MB/s = 100ms for 50MB)
 - ✅ Memory efficient for DOM (1.2-1.4x)
 - ✅ Simplest API for multiple traversals
@@ -526,6 +561,7 @@ for child in root.children() {
 - ⚠️ Limited to read-only (fine for us)
 
 **quick-xml (Close second):**
+
 - ✅ Fastest overall (600 MB/s)
 - ✅ Best memory (constant ~5MB)
 - ❌ Complex API for our multi-pass use case
@@ -533,6 +569,7 @@ for child in root.children() {
 - 💡 **Good for future hybrid approach (large files)**
 
 **sxd-document:**
+
 - ❌ 3x slower than roxmltree
 - ❌ 2x more memory than roxmltree
 - ❌ Less maintained
@@ -545,6 +582,7 @@ for child in root.children() {
 ### Current Choice: ✅ Stick with roxmltree
 
 **Rationale:**
+
 1. **Perfect fit** - Read-only DOM with multiple traversals
 2. **Fast enough** - 100ms to parse 50MB is negligible
 3. **Simple API** - Easy to maintain and extend
@@ -583,6 +621,7 @@ fn parse_streaming_hybrid(xml_content: String) -> Result<XmlDocument> {
 ```
 
 **Benefits of hybrid:**
+
 - Files <20MB: Use roxmltree (simple, fast enough)
 - Files >=20MB: Use quick-xml streaming (lower memory)
 - Best of both worlds
@@ -590,6 +629,7 @@ fn parse_streaming_hybrid(xml_content: String) -> Result<XmlDocument> {
 ### Not Recommended
 
 **Don't switch to:**
+
 - ❌ **sxd-document** - Slower, more memory, less maintained
 - ❌ **xml-rs** - Slower than quick-xml, no advantage
 - ❌ **xmlparser** - Too low-level, would need to build DOM ourselves
@@ -707,11 +747,11 @@ fn extract_players(xml: &str) -> Result<Vec<(String, String)>> {
 
 **Scenario:** Parse 50 MB Old World save file, extract 2 players with 50 characters each
 
-| Parser | Parse Time | Memory Peak | Code LOC | Ease of Use |
-|--------|------------|-------------|----------|-------------|
-| **roxmltree** | 100ms | 70 MB | 150 | ★★★★★ |
-| **quick-xml** | 83ms | 52 MB | 450 | ★★☆☆☆ |
-| **sxd-document** | 333ms | 150 MB | 180 | ★★★☆☆ |
+| Parser           | Parse Time | Memory Peak | Code LOC | Ease of Use |
+| ---------------- | ---------- | ----------- | -------- | ----------- |
+| **roxmltree**    | 100ms      | 70 MB       | 150      | ★★★★★       |
+| **quick-xml**    | 83ms       | 52 MB       | 450      | ★★☆☆☆       |
+| **sxd-document** | 333ms      | 150 MB      | 180      | ★★★☆☆       |
 
 **Verdict:** roxmltree wins on balance of speed, memory, and developer experience.
 
@@ -722,6 +762,7 @@ fn extract_players(xml: &str) -> Result<Vec<(String, String)>> {
 ### Namespace Handling
 
 **roxmltree:**
+
 ```rust
 let doc = Document::parse(r#"<root xmlns:ow="http://oldworld.com"><ow:player /></root>"#)?;
 let root = doc.root_element();
@@ -732,6 +773,7 @@ assert_eq!(player.tag_name().namespace(), Some("http://oldworld.com"));
 ```
 
 **quick-xml:**
+
 ```rust
 let mut reader = Reader::from_str(xml);
 reader.trim_text(true);
@@ -751,6 +793,7 @@ loop {
 ### Error Handling
 
 **roxmltree:**
+
 ```rust
 match Document::parse(xml) {
     Ok(doc) => { /* use doc */ },
@@ -762,6 +805,7 @@ match Document::parse(xml) {
 ```
 
 **quick-xml:**
+
 ```rust
 match reader.read_event_into(&mut buf) {
     Ok(Event::Start(_)) => { /* ... */ },
@@ -777,6 +821,7 @@ match reader.read_event_into(&mut buf) {
 **None of these parsers do schema validation!**
 
 For DTD/XSD validation, you'd need:
+
 - **libxml2** bindings (C library)
 - **xmlschema** (Python, could call via FFI)
 - **Manual validation** after parsing
@@ -790,17 +835,20 @@ Old World saves don't have schemas, so this isn't needed.
 ### If Migrating from roxmltree to quick-xml
 
 **Pros of migration:**
+
 - Lower memory (50MB vs 70MB for 50MB XML)
 - Faster parsing (83ms vs 100ms)
 - Can handle arbitrarily large files
 
 **Cons of migration:**
+
 - 3x more code complexity
 - Harder to maintain
 - Multiple passes require re-parsing
 - Would need to build DOM on top for our use case
 
 **Recommendation:** Don't migrate unless:
+
 - Seeing >100MB save files regularly
 - Memory is constrained (<4GB RAM)
 - Have proven performance issues
@@ -864,18 +912,21 @@ If you encounter files >100MB (unlikely):
 If starting a new project with different requirements:
 
 **Choose roxmltree if:**
+
 - Read-only XML processing
 - Medium files (<100MB)
 - Multiple tree traversals
 - Value simplicity and maintainability
 
 **Choose quick-xml if:**
+
 - Very large files (>100MB)
 - Single-pass processing
 - Memory constrained (<2GB RAM)
 - Streaming required
 
 **Choose sxd-document if:**
+
 - Need to modify XML
 - XPath queries required
 - W3C DOM compatibility important

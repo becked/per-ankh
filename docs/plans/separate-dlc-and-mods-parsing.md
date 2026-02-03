@@ -3,6 +3,7 @@
 ## Overview
 
 The Version attribute in save files contains **mods only**. Actual DLCs are listed in the `<GameContent>` element. This plan separates the two by:
+
 1. Renaming the current `enabled_dlc` column/field to `enabled_mods`
 2. Adding new `enabled_dlc` column/field that parses from `<GameContent>`
 
@@ -18,11 +19,13 @@ The Version attribute in save files contains **mods only**. Actual DLCs are list
 **Changes:**
 
 In the `matches` table definition, find:
+
 ```sql
 enabled_dlc TEXT, -- DLC list (e.g., "New Portraits+Nobles of the Settled Lands 1+...")
 ```
 
 Replace with:
+
 ```sql
 enabled_mods TEXT, -- Mod list from Version string (e.g., "name-every-child1+different-leaders1")
 enabled_dlc TEXT, -- DLC list from GameContent (e.g., "DLC_HEROES_OF_AEGEAN+DLC_THE_SACRED_AND_THE_PROFANE")
@@ -40,6 +43,7 @@ enabled_dlc TEXT, -- DLC list from GameContent (e.g., "DLC_HEROES_OF_AEGEAN+DLC_
 ### 2.1 Rename `parse_version_string` return semantics
 
 Update function at line ~937:
+
 - Rename second tuple element from `dlcs` to `mods` in all variable names
 - Update doc comment to clarify it returns mods, not DLCs
 
@@ -101,6 +105,7 @@ fn parse_game_content(root: &Element) -> Option<String> {
 ### 2.3 Update import_match_data function
 
 At line ~1117, update variable naming:
+
 ```rust
 // Before:
 let (game_version, enabled_dlc) = root
@@ -209,6 +214,7 @@ fn test_parse_game_content() {
 ### 3.1 Update GameDetails struct
 
 At line ~72:
+
 ```rust
 // Before:
 pub enabled_dlc: Option<String>,
@@ -221,6 +227,7 @@ pub enabled_dlc: Option<String>,
 ### 3.2 Update SELECT query
 
 At lines ~347-349, update the SELECT:
+
 ```rust
 // Before:
 "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
@@ -238,6 +245,7 @@ At lines ~347-349, update the SELECT:
 ### 3.3 Update row mapping
 
 At lines ~370-373, update the field extraction:
+
 ```rust
 // Before:
 game_mode: row.get(8)?,
@@ -269,6 +277,7 @@ winner_player_id: row.get(13)?,
 Run `cargo test --lib export_bindings` to regenerate TypeScript types.
 
 The generated type will include:
+
 ```typescript
 enabled_mods: string | null;
 enabled_dlc: string | null;
@@ -279,6 +288,7 @@ enabled_dlc: string | null;
 ## Verification
 
 After implementation:
+
 1. `cargo check` - Ensure Rust compiles
 2. `cargo test` - Run unit tests including the new `test_parse_game_content`
 3. `cargo clippy` - Check for lints

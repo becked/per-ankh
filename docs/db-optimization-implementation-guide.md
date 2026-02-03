@@ -71,6 +71,7 @@ cargo test --release --test benchmark_import -- --nocapture
 **File**: `src-tauri/src/parser/entities/tiles.rs`
 
 ### Current Approach
+
 ```rust
 // Batches of 500 tiles (11 batches for 5,476 tiles)
 for batch in tile_id_mappings.chunks(500) {
@@ -80,6 +81,7 @@ for batch in tile_id_mappings.chunks(500) {
 ```
 
 ### Test: Single Mega-Batch
+
 ```rust
 // Single batch of all 5,476 tiles
 let all_cases: Vec<String> = tile_id_mappings.iter()
@@ -114,15 +116,18 @@ cargo test --release --test benchmark_import -- --nocapture
 **Result**: ❌ **REVERTED - Failed in practice**
 
 **Performance in release benchmark** (misleading):
+
 - Tile city ownership: 52-78ms (looked great!)
 
 **Performance in dev build** (actual problem):
+
 - Import 1 (619 tiles): 1,968ms (1.97 seconds)
 - Import 2 (820 tiles): 2,620ms (2.62 seconds)
 - Import 3 (820 tiles): 2,760ms (2.76 seconds)
 - Import 4+: Crashed with exit code 101
 
 **Why it failed**:
+
 1. **Massive SQL strings**: For 5476 tiles, creates ~100KB+ SQL query with thousands of WHEN clauses
 2. **Debug build performance**: String formatting/parsing 1000x slower in unoptimized builds
 3. **Database limits**: May hit DuckDB internal query size limits, causing crashes
@@ -140,6 +145,7 @@ cargo test --release --test benchmark_import -- --nocapture
 **DuckDB docs recommend**: "FROM clause approaches complete UPDATE in bulk for increased performance"
 
 ### Current Approach
+
 ```rust
 // CASE-based UPDATE (batch of 500)
 UPDATE tiles
@@ -240,11 +246,13 @@ cargo test --release --test benchmark_import -- --nocapture
 Insert tiles with `city_id` resolved upfront → No UPDATE needed.
 
 **Current flow**:
+
 1. Parse & insert tiles (city_id = NULL)
 2. Parse & insert cities
 3. UPDATE tiles.city_id ← 622ms bottleneck
 
 **New flow**:
+
 1. Parse tiles
 2. Parse cities
 3. **Build FK resolution map** (tile_xml_id → city_db_id)
@@ -389,13 +397,13 @@ cargo test --release --test benchmark_import -- --nocapture
 
 ## Success Criteria
 
-| Phase | Metric | Current | Target | Status |
-|-------|--------|---------|--------|--------|
-| 1. Transaction tuning | Commit time | 134ms → 41ms | <100ms | ✅ Completed |
-| 2. Mega-batch | Tile ownership | 622ms | <550ms | ❌ Failed - caused crashes |
-| 3. JOIN-based UPDATE | Tile ownership | - | <450ms | ⬜ Not attempted |
-| 4. Eliminate UPDATEs | Tile ownership | - | <100ms | ⬜ Not attempted |
-| **TOTAL** | **Import time** | **1,100ms** | **<500ms** | ⬜ **Phase 1 only - acceptable** |
+| Phase                 | Metric          | Current      | Target     | Status                           |
+| --------------------- | --------------- | ------------ | ---------- | -------------------------------- |
+| 1. Transaction tuning | Commit time     | 134ms → 41ms | <100ms     | ✅ Completed                     |
+| 2. Mega-batch         | Tile ownership  | 622ms        | <550ms     | ❌ Failed - caused crashes       |
+| 3. JOIN-based UPDATE  | Tile ownership  | -            | <450ms     | ⬜ Not attempted                 |
+| 4. Eliminate UPDATEs  | Tile ownership  | -            | <100ms     | ⬜ Not attempted                 |
+| **TOTAL**             | **Import time** | **1,100ms**  | **<500ms** | ⬜ **Phase 1 only - acceptable** |
 
 **Note**: Phase 1 checkpoint tuning alone provides acceptable performance for production use. Phase 2 attempted but failed due to fundamental SQL string size issues. Further optimization not pursued per YAGNI principle.
 

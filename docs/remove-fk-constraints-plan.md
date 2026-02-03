@@ -4,12 +4,12 @@
 
 ### Files Changed
 
-| File | Changes |
-|------|---------|
-| `docs/schema.sql` | Remove all `FOREIGN KEY` constraint lines; add `-- References:` comments; bump schema version; remove obsolete TODO comment about self-referential FKs |
-| `src-tauri/src/parser/tests.rs` | Delete the broken `test_import_and_reimport_same_file` test |
-| `src-tauri/src/parser/mod.rs` | Add `SchemaUpgrade(String)` variant to `ParseError` enum |
-| `src-tauri/src/db/schema.rs` | Add schema version check in `ensure_schema_ready()` to detect old schema and trigger reset |
+| File                            | Changes                                                                                                                                                |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `docs/schema.sql`               | Remove all `FOREIGN KEY` constraint lines; add `-- References:` comments; bump schema version; remove obsolete TODO comment about self-referential FKs |
+| `src-tauri/src/parser/tests.rs` | Delete the broken `test_import_and_reimport_same_file` test                                                                                            |
+| `src-tauri/src/parser/mod.rs`   | Add `SchemaUpgrade(String)` variant to `ParseError` enum                                                                                               |
+| `src-tauri/src/db/schema.rs`    | Add schema version check in `ensure_schema_ready()` to detect old schema and trigger reset                                                             |
 
 ### Schema Changes
 
@@ -17,53 +17,53 @@ Remove all `FOREIGN KEY (...)` lines from `docs/schema.sql`. Replace with docume
 
 **Tables with FK constraints to remove:**
 
-| Table | FK Constraints to Remove |
-|-------|-------------------------|
-| `matches` | `REFERENCES collections(collection_id)` |
-| `match_settings` | `FOREIGN KEY (match_id) REFERENCES matches` |
-| `players` | `FOREIGN KEY (match_id) REFERENCES matches` |
-| `player_resources` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `player_council` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `characters` | `FOREIGN KEY (match_id)`, `FOREIGN KEY (player_id, match_id)` |
-| `character_traits` | `FOREIGN KEY (character_id, match_id) REFERENCES characters` |
-| `character_relationships` | 2x `FOREIGN KEY ... REFERENCES characters` |
-| `character_marriages` | 2x `FOREIGN KEY ... REFERENCES characters` |
-| `character_stats` | `FOREIGN KEY (character_id, match_id) REFERENCES characters` |
-| `character_missions` | `FOREIGN KEY (character_id, match_id) REFERENCES characters` |
-| `families` | 3x FK (matches, players, characters) |
-| `family_opinion_history` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `family_law_opinions` | `FOREIGN KEY (family_id, match_id) REFERENCES families` |
-| `religions` | 3x FK (matches, players, characters) |
-| `religion_opinion_history` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `tribes` | 3x FK (matches, characters, players) |
-| `cities` | 4x FK (matches, players, 3x characters) |
-| `city_yields` | `FOREIGN KEY (city_id, match_id) REFERENCES cities` |
-| `city_culture` | `FOREIGN KEY (city_id, match_id) REFERENCES cities` |
-| `city_religions` | `FOREIGN KEY (city_id, match_id) REFERENCES cities` |
-| `city_production_queue` | `FOREIGN KEY (city_id, match_id) REFERENCES cities` |
-| `city_units_produced` | `FOREIGN KEY (city_id, match_id) REFERENCES cities` |
-| `city_projects_completed` | `FOREIGN KEY (city_id, match_id) REFERENCES cities` |
-| `tiles` | 3x FK (matches, players, cities) |
-| `tile_changes` | `FOREIGN KEY (tile_id, match_id) REFERENCES tiles` |
-| `tile_visibility` | `FOREIGN KEY (tile_id, match_id) REFERENCES tiles` |
-| `tile_ownership_history` | 2x FK (tiles, players) |
-| `player_units_produced` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `technologies_completed` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `technology_progress` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `technology_states` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `laws` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `diplomacy` | `FOREIGN KEY (match_id) REFERENCES matches` |
-| `player_goals` | 2x FK (players, characters) |
-| `event_logs` | 2x FK (matches, players) |
-| `story_events` | 5x FK (matches, players, 2x characters, cities) |
-| `story_choices` | `FOREIGN KEY (event_id, match_id) REFERENCES story_events` |
-| `event_outcomes` | 3x FK (matches, story_events, players) |
-| `memory_data` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `yield_history` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `points_history` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `military_history` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `legitimacy_history` | `FOREIGN KEY (player_id, match_id) REFERENCES players` |
-| `yield_prices` | `FOREIGN KEY (match_id) REFERENCES matches` |
+| Table                      | FK Constraints to Remove                                      |
+| -------------------------- | ------------------------------------------------------------- |
+| `matches`                  | `REFERENCES collections(collection_id)`                       |
+| `match_settings`           | `FOREIGN KEY (match_id) REFERENCES matches`                   |
+| `players`                  | `FOREIGN KEY (match_id) REFERENCES matches`                   |
+| `player_resources`         | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `player_council`           | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `characters`               | `FOREIGN KEY (match_id)`, `FOREIGN KEY (player_id, match_id)` |
+| `character_traits`         | `FOREIGN KEY (character_id, match_id) REFERENCES characters`  |
+| `character_relationships`  | 2x `FOREIGN KEY ... REFERENCES characters`                    |
+| `character_marriages`      | 2x `FOREIGN KEY ... REFERENCES characters`                    |
+| `character_stats`          | `FOREIGN KEY (character_id, match_id) REFERENCES characters`  |
+| `character_missions`       | `FOREIGN KEY (character_id, match_id) REFERENCES characters`  |
+| `families`                 | 3x FK (matches, players, characters)                          |
+| `family_opinion_history`   | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `family_law_opinions`      | `FOREIGN KEY (family_id, match_id) REFERENCES families`       |
+| `religions`                | 3x FK (matches, players, characters)                          |
+| `religion_opinion_history` | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `tribes`                   | 3x FK (matches, characters, players)                          |
+| `cities`                   | 4x FK (matches, players, 3x characters)                       |
+| `city_yields`              | `FOREIGN KEY (city_id, match_id) REFERENCES cities`           |
+| `city_culture`             | `FOREIGN KEY (city_id, match_id) REFERENCES cities`           |
+| `city_religions`           | `FOREIGN KEY (city_id, match_id) REFERENCES cities`           |
+| `city_production_queue`    | `FOREIGN KEY (city_id, match_id) REFERENCES cities`           |
+| `city_units_produced`      | `FOREIGN KEY (city_id, match_id) REFERENCES cities`           |
+| `city_projects_completed`  | `FOREIGN KEY (city_id, match_id) REFERENCES cities`           |
+| `tiles`                    | 3x FK (matches, players, cities)                              |
+| `tile_changes`             | `FOREIGN KEY (tile_id, match_id) REFERENCES tiles`            |
+| `tile_visibility`          | `FOREIGN KEY (tile_id, match_id) REFERENCES tiles`            |
+| `tile_ownership_history`   | 2x FK (tiles, players)                                        |
+| `player_units_produced`    | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `technologies_completed`   | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `technology_progress`      | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `technology_states`        | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `laws`                     | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `diplomacy`                | `FOREIGN KEY (match_id) REFERENCES matches`                   |
+| `player_goals`             | 2x FK (players, characters)                                   |
+| `event_logs`               | 2x FK (matches, players)                                      |
+| `story_events`             | 5x FK (matches, players, 2x characters, cities)               |
+| `story_choices`            | `FOREIGN KEY (event_id, match_id) REFERENCES story_events`    |
+| `event_outcomes`           | 3x FK (matches, story_events, players)                        |
+| `memory_data`              | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `yield_history`            | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `points_history`           | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `military_history`         | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `legitimacy_history`       | `FOREIGN KEY (player_id, match_id) REFERENCES players`        |
+| `yield_prices`             | `FOREIGN KEY (match_id) REFERENCES matches`                   |
 
 **Example transformation:**
 
@@ -159,6 +159,7 @@ if schema_exists {
 ```
 
 This piggybacks on the existing error handling in `lib.rs:1595-1643`:
+
 1. `ensure_schema_ready()` returns error
 2. Dialog shown: "Database initialization failed... Would you like to reset?"
 3. User clicks OK → recovery marker written → restart prompt
@@ -211,13 +212,13 @@ fn test_old_schema_triggers_upgrade_error() {
 
 ### Files Changed
 
-| File | Changes |
-|------|---------|
-| `src-tauri/src/parser/import.rs` | Remove Pass 2a/2d orchestration; merge into single-pass flow; reduce TOTAL_PHASES from 8 to 6 |
-| `src-tauri/src/parser/inserters/characters.rs` | Accept parent IDs directly in single pass; rename `insert_characters_core` to `insert_characters`; use two-phase ID mapping |
-| `src-tauri/src/parser/parsers/characters.rs` | Parse `BirthFatherID`, `BirthMotherID`, `BirthCityID` inline with core data |
+| File                                              | Changes                                                                                                                                                                                                            |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src-tauri/src/parser/import.rs`                  | Remove Pass 2a/2d orchestration; merge into single-pass flow; reduce TOTAL_PHASES from 8 to 6                                                                                                                      |
+| `src-tauri/src/parser/inserters/characters.rs`    | Accept parent IDs directly in single pass; rename `insert_characters_core` to `insert_characters`; use two-phase ID mapping                                                                                        |
+| `src-tauri/src/parser/parsers/characters.rs`      | Parse `BirthFatherID`, `BirthMotherID`, `BirthCityID` inline with core data                                                                                                                                        |
 | `src-tauri/src/parser/entities/character_data.rs` | Delete `parse_character_parent_relationships()` and `parse_character_birth_city()` functions; delete wrapper functions `parse_character_parent_relationships_pass2a()` and `parse_character_birth_cities_pass2b()` |
-| `src-tauri/src/parser/game_data.rs` | Add `birth_father_xml_id`, `birth_mother_xml_id`, `birth_city_xml_id` fields to `CharacterData` struct |
+| `src-tauri/src/parser/game_data.rs`               | Add `birth_father_xml_id`, `birth_mother_xml_id`, `birth_city_xml_id` fields to `CharacterData` struct                                                                                                             |
 
 ### Code Changes
 
@@ -307,6 +308,7 @@ pub fn insert_characters(
 #### 4. `src-tauri/src/parser/entities/character_data.rs`
 
 Delete these functions entirely:
+
 - `parse_character_parent_relationships()` (lines 335-377)
 - `parse_character_birth_city()` (lines 390-419)
 - `parse_character_parent_relationships_pass2a()` wrapper

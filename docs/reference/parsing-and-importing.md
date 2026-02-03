@@ -57,14 +57,14 @@ match_426504721_player-vs-opponent.zip
 
 The save file extractor (`save_file.rs`) enforces:
 
-| Constraint | Value |
-|------------|-------|
-| Max compressed size | 50 MB |
-| Max uncompressed size | 100 MB |
-| Max archive entries | 10 |
-| Max compression ratio | 100:1 (zip bomb detection) |
-| Path validation | No `..`, `/`, control characters |
-| Encoding | UTF-8 required |
+| Constraint            | Value                            |
+| --------------------- | -------------------------------- |
+| Max compressed size   | 50 MB                            |
+| Max uncompressed size | 100 MB                           |
+| Max archive entries   | 10                               |
+| Max compression ratio | 100:1 (zip bomb detection)       |
+| Path validation       | No `..`, `/`, control characters |
+| Encoding              | UTF-8 required                   |
 
 ### XML Structure
 
@@ -162,12 +162,13 @@ src-tauri/src/
 
 Each entity type has two corresponding modules:
 
-| Module | Responsibility | Dependencies |
-|--------|----------------|--------------|
-| `parsers/foo.rs` | XML → `FooData` struct | XML document only |
+| Module             | Responsibility            | Dependencies            |
+| ------------------ | ------------------------- | ----------------------- |
+| `parsers/foo.rs`   | XML → `FooData` struct    | XML document only       |
 | `inserters/foo.rs` | `FooData` → database rows | DB connection, IdMapper |
 
 This separation enables:
+
 - **Parallel parsing**: No shared mutable state (DB connection)
 - **Testability**: Parsers can be tested without database setup
 - **Caching**: Intermediate structs can be reused or inspected
@@ -274,12 +275,12 @@ Some data requires multiple passes because:
 
 The import uses these passes:
 
-| Pass | Purpose | Why separate? |
-|------|---------|---------------|
-| 2a | Character parent relationships | DuckDB FK constraint: can't update character after it's referenced |
-| 2b | Tile city ownership | City must be inserted first to get city_id |
-| 2c | Tile ownership history | Depends on tiles being inserted |
-| 2d | Character birth cities | Depends on cities being inserted |
+| Pass | Purpose                        | Why separate?                                                      |
+| ---- | ------------------------------ | ------------------------------------------------------------------ |
+| 2a   | Character parent relationships | DuckDB FK constraint: can't update character after it's referenced |
+| 2b   | Tile city ownership            | City must be inserted first to get city_id                         |
+| 2c   | Tile ownership history         | Depends on tiles being inserted                                    |
+| 2d   | Character birth cities         | Depends on cities being inserted                                   |
 
 ---
 

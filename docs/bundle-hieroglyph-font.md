@@ -7,6 +7,7 @@ On Linux systems, Egyptian hieroglyphs in the ImportModal display as boxes (□)
 **Affected component:** `src/lib/HieroglyphParade.svelte`
 
 **Current behavior:**
+
 - macOS: Works (system fonts have some coverage)
 - Windows: Works (Segoe UI Historic provides support)
 - Linux: Shows boxes (no default hieroglyph font)
@@ -26,6 +27,7 @@ npm install @fontsource/noto-sans-egyptian-hieroglyphs
 ```
 
 **Why Fontsource:**
+
 - npm-managed, easy to update
 - Optimized for web bundling (~250KB)
 - Vite/SvelteKit handles it automatically
@@ -37,17 +39,18 @@ Add font import to `src/lib/HieroglyphParade.svelte` in the `<style>` section (l
 
 ```svelte
 <style>
-  @import '@fontsource/noto-sans-egyptian-hieroglyphs';
+	@import "@fontsource/noto-sans-egyptian-hieroglyphs";
 
-  .parade-container {
-    /* existing styles */
-  }
+	.parade-container {
+		/* existing styles */
+	}
 
-  /* ... rest of styles ... */
+	/* ... rest of styles ... */
 </style>
 ```
 
 **Why scoped to component:**
+
 - Font only loads when ImportModal is used
 - Minimizes bundle size impact
 - Keeps font usage localized to where it's needed
@@ -58,36 +61,37 @@ Update the font-family declarations for hieroglyph-rendering elements in `src/li
 
 ```css
 .parade-item {
-  position: absolute;
-  font-size: 1.2rem;
-  color: var(--color-tan);
-  opacity: 0.9;
-  font-family: "Noto Sans Egyptian Hieroglyphs", sans-serif; /* ADD THIS LINE */
-  animation: parade-march 20s linear forwards;
-  right: -2.4rem;
-  white-space: nowrap;
-  line-height: 1;
+	position: absolute;
+	font-size: 1.2rem;
+	color: var(--color-tan);
+	opacity: 0.9;
+	font-family: "Noto Sans Egyptian Hieroglyphs", sans-serif; /* ADD THIS LINE */
+	animation: parade-march 20s linear forwards;
+	right: -2.4rem;
+	white-space: nowrap;
+	line-height: 1;
 }
 
 .hieroglyph-border {
-  position: absolute;
-  top: 4.5rem;
-  left: 1rem;
-  right: 1rem;
-  font-size: 0.5rem;
-  color: var(--color-tan);
-  opacity: 0.7;
-  font-family: "Noto Sans Egyptian Hieroglyphs", sans-serif; /* ADD THIS LINE */
-  white-space: nowrap;
-  overflow: hidden;
-  pointer-events: none;
-  z-index: 10;
-  letter-spacing: 0.15em;
-  line-height: 1;
+	position: absolute;
+	top: 4.5rem;
+	left: 1rem;
+	right: 1rem;
+	font-size: 0.5rem;
+	color: var(--color-tan);
+	opacity: 0.7;
+	font-family: "Noto Sans Egyptian Hieroglyphs", sans-serif; /* ADD THIS LINE */
+	white-space: nowrap;
+	overflow: hidden;
+	pointer-events: none;
+	z-index: 10;
+	letter-spacing: 0.15em;
+	line-height: 1;
 }
 ```
 
 **Why explicit font-family:**
+
 - Ensures hieroglyphs use the bundled font
 - Prevents fallback to system fonts that might not have coverage
 - Clear intent in the code
@@ -97,6 +101,7 @@ Update the font-family declarations for hieroglyph-rendering elements in `src/li
 **Development testing:**
 
 1. Run dev server:
+
    ```bash
    npm run tauri:dev
    ```
@@ -110,6 +115,7 @@ Update the font-family declarations for hieroglyph-rendering elements in `src/li
 **Build testing:**
 
 1. Create production build:
+
    ```bash
    npm run tauri:build
    ```
@@ -124,6 +130,7 @@ Update the font-family declarations for hieroglyph-rendering elements in `src/li
    - Font should add ~250KB to total bundle
 
 **What to verify:**
+
 - ✅ Static border hieroglyphs display correctly (lines 187, 199)
 - ✅ Animated parade hieroglyphs display correctly (lines 191-196)
 - ✅ No "tofu" boxes (□) on any platform
@@ -156,16 +163,19 @@ After successful implementation, update user-facing documentation if needed. Sin
 ### Alternative Approaches Considered
 
 **Option: Bundle font in static/ folder**
+
 - Requires manual download and updates
 - More complex @font-face declaration
 - ❌ Rejected: Less maintainable than npm package
 
 **Option: Add font to global app.css**
+
 - Font loads immediately on app start
 - Impacts startup time for unused feature
 - ❌ Rejected: Component-scoped is more efficient
 
 **Option: Require users to install system font**
+
 - No bundle size impact
 - ❌ Rejected: Poor user experience, fragmentation across platforms
 

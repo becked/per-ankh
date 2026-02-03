@@ -75,18 +75,21 @@ Batch 3 migrates extended and nested data entities to the hybrid parser architec
 Use this checklist for each remaining entity:
 
 ### 1. Planning
+
 - [ ] Read existing `entities/{name}.rs` to understand structure
 - [ ] Identify all data types needed (refer to DB schema)
 - [ ] Note any special parsing logic or edge cases
 - [ ] Identify dependencies on other entities (for ordering)
 
 ### 2. Data Types (`game_data.rs`)
+
 - [ ] Add struct definitions with `#[derive(Debug, Clone, Serialize, Deserialize)]`
 - [ ] Use XML IDs (not DB IDs) in structs
 - [ ] Document each field with inline comments
 - [ ] Add structs to `GameData` struct
 
 ### 3. Parser (`parsers/{name}.rs`)
+
 - [ ] Implement `parse_{name}_struct()` functions
 - [ ] Pure XML parsing (no DB dependency)
 - [ ] Proper error handling with `ParseError`
@@ -94,6 +97,7 @@ Use this checklist for each remaining entity:
 - [ ] Export from `parsers/mod.rs`
 
 ### 4. Inserter (`inserters/{name}.rs`)
+
 - [ ] Implement `insert_{name}()` functions
 - [ ] Map XML IDs to DB IDs using `IdMapper`
 - [ ] Use `deduplicate_rows_last_wins()` or `deduplicate_rows_first_wins()`
@@ -101,6 +105,7 @@ Use this checklist for each remaining entity:
 - [ ] Export from `inserters/mod.rs`
 
 ### 5. Testing
+
 - [ ] Add unit tests for parser (minimum 3 tests per function)
 - [ ] Test basic parsing
 - [ ] Test edge cases (empty data, missing fields)
@@ -108,6 +113,7 @@ Use this checklist for each remaining entity:
 - [ ] Verify all tests pass
 
 ### 6. Commit
+
 - [ ] Stage changes: `git add -A`
 - [ ] Commit with pattern: `feat: migrate {name} to hybrid parser (Phase 3 Batch 3)`
 - [ ] Include summary of changes in commit message
@@ -138,6 +144,7 @@ mod tests {
 **Why:** `XmlDocument` is an enum wrapper (not a type alias). Using `roxmltree::Document::parse()` directly causes type mismatch errors because it returns `Document<'_>` but parsers expect `&XmlDocument`.
 
 ### Parser Function Signature
+
 ```rust
 pub fn parse_{entity}_struct(doc: &XmlDocument) -> Result<Vec<{Entity}Data>> {
     let root = doc.root_element();
@@ -154,6 +161,7 @@ pub fn parse_{entity}_struct(doc: &XmlDocument) -> Result<Vec<{Entity}Data>> {
 ```
 
 ### Inserter Function Signature
+
 ```rust
 pub fn insert_{entities}(
     conn: &Connection,
@@ -183,6 +191,7 @@ pub fn insert_{entities}(
 ```
 
 ### Unit Test Template
+
 ```rust
 #[cfg(test)]
 mod tests {
@@ -217,21 +226,25 @@ mod tests {
 ## Special Considerations
 
 ### city_data
+
 - Multiple nested data types (production queue, culture, yields)
 - May need separate structs for each sub-type
 - Consider using a main function that calls sub-parsers
 
 ### player_data
+
 - Very large with many different data types
 - Good candidate for sub-modules
 - Consider splitting into `player_data/{resources,tech,laws,council,goals}.rs`
 
 ### timeseries
+
 - Large volume of data (historical tracking)
 - Ensure efficient parsing
 - May want to test memory usage
 
 ### events
+
 - Complex event story data with nested XML
 - May need recursive parsing for event chains
 - Test with various event types
@@ -246,6 +259,7 @@ mod tests {
 - ✅ All Batch 3 entities only reference Batch 1 & 2 entities (players, characters, cities, tiles)
 
 **Insertion Order (in `import.rs`):**
+
 1. Batch 1 entities (already done)
 2. Batch 2 entities (already done)
 3. Batch 3 entities (can be inserted in any order after Batch 1 & 2)
@@ -255,6 +269,7 @@ mod tests {
 ## Testing Strategy
 
 ### Unit Tests (Per Entity)
+
 - Test basic parsing with minimal XML
 - Test parsing with all optional fields present
 - Test parsing with all optional fields absent
@@ -262,10 +277,12 @@ mod tests {
 - Test parsing empty collections
 
 ### Integration Tests (After All Entities)
+
 - Not required per the plan (YAGNI principle)
 - Can be added later if needed for validation
 
 ### Memory Profiling (After Completion)
+
 - Profile complete `GameData` struct
 - Ensure total memory increase < 100-150 MB
 - Use `estimate_memory_usage()` utility if created
@@ -317,17 +334,20 @@ Once all 7 entities are migrated:
 ## Notes & Learnings
 
 ### What Worked Well
+
 - Following the established pattern from Batches 1 & 2
 - Writing tests first helps clarify data structures
 - Keeping XML IDs in structs simplifies parsing
 - DRY: Reusing deduplication utilities saves time
 
 ### Potential Issues
+
 - **Memory:** Keep an eye on struct sizes, especially for timeseries
 - **Complexity:** player_data and events may benefit from sub-modules
 - **Testing:** Ensure edge cases are covered (empty data, missing fields)
 
 ### Tips for Efficiency
+
 1. Copy structure from similar existing entity (e.g., character_data)
 2. Start with data types, then parser, then inserter
 3. Write tests as you go, not at the end

@@ -3,11 +3,13 @@
 ## Problem
 
 Current implementation in `src-tauri/src/parser/entities/players.rs:34`:
+
 ```rust
 let is_human = player_node.opt_attr("AIControlledToTurn").is_none();
 ```
 
 This logic is incorrect for 2025+ game saves:
+
 - **Actual behavior:** Attribute is always present
   - Human players: `AIControlledToTurn="0"`
   - AI players: `AIControlledToTurn="2147483647"`
@@ -23,11 +25,13 @@ Fix the detection logic to check the attribute value, not its presence.
 **File:** `src-tauri/src/parser/entities/players.rs`
 
 **Change line 34 from:**
+
 ```rust
 let is_human = player_node.opt_attr("AIControlledToTurn").is_none();
 ```
 
 **To:**
+
 ```rust
 let is_human = player_node
     .opt_attr("AIControlledToTurn")
@@ -46,6 +50,7 @@ let is_human = player_node
 ## Testing
 
 Re-import existing saves and verify:
+
 ```sql
 SELECT match_id, COUNT(*) as human_count
 FROM players
@@ -54,6 +59,7 @@ GROUP BY match_id;
 ```
 
 Expected results:
+
 - Single-player games: 1 human player per match
 - Hotseat games: 2+ human players per match
 

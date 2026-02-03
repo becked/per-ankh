@@ -28,10 +28,10 @@ City ──┬── tile_id → Tile (city center location)
 
 There are two distinct relationships between cities and tiles:
 
-| Relationship | Field | Description |
-|--------------|-------|-------------|
-| **City Location** | `cities.tile_id` | The tile where the city center sits |
-| **City Territory** | `tiles.owner_city_id` | All tiles controlled by this city |
+| Relationship       | Field                 | Description                         |
+| ------------------ | --------------------- | ----------------------------------- |
+| **City Location**  | `cities.tile_id`      | The tile where the city center sits |
+| **City Territory** | `tiles.owner_city_id` | All tiles controlled by this city   |
 
 ### Getting Improvements for a City
 
@@ -93,28 +93,28 @@ ORDER BY t.x, t.y
 
 ### Core Fields (CityData struct)
 
-| Field | Type | XML Element | Description |
-|-------|------|-------------|-------------|
-| `xml_id` | i32 | `ID` attr | Original XML City ID |
-| `city_name` | String | `NameType` or `Name` | City name |
-| `founded_turn` | i32 | `Founded` attr | Turn when city was founded |
-| `player_xml_id` | Option<i32> | `Player` attr | Owner player (None if in anarchy) |
-| `tile_xml_id` | i32 | `TileID` attr | Tile where city center sits |
-| `family` | Option<String> | `Family` attr | Controlling family (e.g., FAMILY_SAITE) |
-| `first_owner_player_xml_id` | Option<i32> | `FirstPlayer` | Original founder player |
-| `last_owner_player_xml_id` | Option<i32> | `LastPlayer` | Most recent owner |
-| `is_capital` | bool | `Capital` | Whether this is a capital city |
-| `citizens` | i32 | `Citizens` | Current population |
-| `governor_xml_id` | Option<i32> | `GovernorID` | Character ID of governor |
-| `governor_turn` | Option<i32> | `GovernorTurn` | Turn when governor was assigned |
-| `hurry_civics_count` | i32 | `HurryCivicsCount` | Times production was hurried with civics |
-| `hurry_money_count` | i32 | `HurryMoneyCount` | Times production was hurried with money |
-| `hurry_training_count` | i32 | `HurryTrainingCount` | Times production was hurried with training |
-| `hurry_population_count` | i32 | `HurryPopulationCount` | Times production was hurried with population |
-| `specialist_count` | i32 | `SpecialistProducedCount` | Lifetime specialists produced |
-| `growth_count` | i32 | `GrowthCount` | Total historical citizen growth |
-| `unit_production_count` | i32 | `UnitProductionCount` | Total units produced (aggregate) |
-| `buy_tile_count` | i32 | `BuyTileCount` | Tiles purchased |
+| Field                       | Type           | XML Element               | Description                                  |
+| --------------------------- | -------------- | ------------------------- | -------------------------------------------- |
+| `xml_id`                    | i32            | `ID` attr                 | Original XML City ID                         |
+| `city_name`                 | String         | `NameType` or `Name`      | City name                                    |
+| `founded_turn`              | i32            | `Founded` attr            | Turn when city was founded                   |
+| `player_xml_id`             | Option<i32>    | `Player` attr             | Owner player (None if in anarchy)            |
+| `tile_xml_id`               | i32            | `TileID` attr             | Tile where city center sits                  |
+| `family`                    | Option<String> | `Family` attr             | Controlling family (e.g., FAMILY_SAITE)      |
+| `first_owner_player_xml_id` | Option<i32>    | `FirstPlayer`             | Original founder player                      |
+| `last_owner_player_xml_id`  | Option<i32>    | `LastPlayer`              | Most recent owner                            |
+| `is_capital`                | bool           | `Capital`                 | Whether this is a capital city               |
+| `citizens`                  | i32            | `Citizens`                | Current population                           |
+| `governor_xml_id`           | Option<i32>    | `GovernorID`              | Character ID of governor                     |
+| `governor_turn`             | Option<i32>    | `GovernorTurn`            | Turn when governor was assigned              |
+| `hurry_civics_count`        | i32            | `HurryCivicsCount`        | Times production was hurried with civics     |
+| `hurry_money_count`         | i32            | `HurryMoneyCount`         | Times production was hurried with money      |
+| `hurry_training_count`      | i32            | `HurryTrainingCount`      | Times production was hurried with training   |
+| `hurry_population_count`    | i32            | `HurryPopulationCount`    | Times production was hurried with population |
+| `specialist_count`          | i32            | `SpecialistProducedCount` | Lifetime specialists produced                |
+| `growth_count`              | i32            | `GrowthCount`             | Total historical citizen growth              |
+| `unit_production_count`     | i32            | `UnitProductionCount`     | Total units produced (aggregate)             |
+| `buy_tile_count`            | i32            | `BuyTileCount`            | Tiles purchased                              |
 
 **Source:** `src-tauri/src/parser/game_data.rs`
 **Parser:** `src-tauri/src/parser/parsers/cities.rs`
@@ -123,48 +123,49 @@ ORDER BY t.x, t.y
 
 #### CityProductionItem (Production Queue)
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `city_xml_id` | i32 | City this queue belongs to |
-| `queue_position` | i32 | Position in queue (0 = currently building) |
-| `build_type` | String | BUILD_UNIT, BUILD_IMPROVEMENT, BUILD_PROJECT |
-| `item_type` | String | Specific item (e.g., UNIT_WORKER) |
-| `progress` | i32 | Production invested so far |
-| `is_repeat` | bool | Whether this repeats when complete |
+| Field            | Type   | Description                                  |
+| ---------------- | ------ | -------------------------------------------- |
+| `city_xml_id`    | i32    | City this queue belongs to                   |
+| `queue_position` | i32    | Position in queue (0 = currently building)   |
+| `build_type`     | String | BUILD_UNIT, BUILD_IMPROVEMENT, BUILD_PROJECT |
+| `item_type`      | String | Specific item (e.g., UNIT_WORKER)            |
+| `progress`       | i32    | Production invested so far                   |
+| `is_repeat`      | bool   | Whether this repeats when complete           |
 
 #### CityProjectCompleted
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `city_xml_id` | i32 | City that completed the project |
-| `project_type` | String | Format: "BUILD_TYPE.ITEM_TYPE" |
-| `count` | i32 | Number of times completed |
+| Field          | Type   | Description                     |
+| -------------- | ------ | ------------------------------- |
+| `city_xml_id`  | i32    | City that completed the project |
+| `project_type` | String | Format: "BUILD_TYPE.ITEM_TYPE"  |
+| `count`        | i32    | Number of times completed       |
 
 #### CityYield
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `city_xml_id` | i32 | City this yield belongs to |
-| `yield_type` | String | YIELD_GROWTH, YIELD_CULTURE, etc. |
-| `progress` | i32 | Accumulated progress |
+| Field         | Type   | Description                       |
+| ------------- | ------ | --------------------------------- |
+| `city_xml_id` | i32    | City this yield belongs to        |
+| `yield_type`  | String | YIELD_GROWTH, YIELD_CULTURE, etc. |
+| `progress`    | i32    | Accumulated progress              |
 
 #### CityReligion
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `city_xml_id` | i32 | City with this religion |
-| `religion` | String | RELIGION_JUDAISM, RELIGION_CHRISTIANITY, etc. |
+| Field         | Type   | Description                                   |
+| ------------- | ------ | --------------------------------------------- |
+| `city_xml_id` | i32    | City with this religion                       |
+| `religion`    | String | RELIGION_JUDAISM, RELIGION_CHRISTIANITY, etc. |
 
 #### CityCulture
 
-| Field | Type | XML Element | Description |
-|-------|------|-------------|-------------|
-| `city_xml_id` | i32 | `ID` attr | City this culture data belongs to |
-| `team_id` | i32 | `T.X` tag | Team/player this culture level is for |
-| `culture_level` | String | `TeamCulture.T.X` | Culture level as string enum |
-| `happiness_level` | i32 | `TeamHappinessLevel.T.X` or `TeamDiscontentLevel.T.X` | Happiness modifier for this team |
+| Field             | Type   | XML Element                                           | Description                           |
+| ----------------- | ------ | ----------------------------------------------------- | ------------------------------------- |
+| `city_xml_id`     | i32    | `ID` attr                                             | City this culture data belongs to     |
+| `team_id`         | i32    | `T.X` tag                                             | Team/player this culture level is for |
+| `culture_level`   | String | `TeamCulture.T.X`                                     | Culture level as string enum          |
+| `happiness_level` | i32    | `TeamHappinessLevel.T.X` or `TeamDiscontentLevel.T.X` | Happiness modifier for this team      |
 
 **Culture Level Values:**
+
 - `CULTURE_WEAK` (level 0)
 - `CULTURE_DEVELOPING` (level 1)
 - `CULTURE_STRONG` (level 2)
@@ -175,33 +176,33 @@ ORDER BY t.x, t.y
 
 #### CityProjectCount
 
-| Field | Type | XML Element | Description |
-|-------|------|-------------|-------------|
-| `city_xml_id` | i32 | `ID` attr | City that completed the projects |
-| `project_type` | String | tag name | Project type (e.g., PROJECT_WALLS) |
-| `count` | i32 | text | Number of times completed |
+| Field          | Type   | XML Element | Description                        |
+| -------------- | ------ | ----------- | ---------------------------------- |
+| `city_xml_id`  | i32    | `ID` attr   | City that completed the projects   |
+| `project_type` | String | tag name    | Project type (e.g., PROJECT_WALLS) |
+| `count`        | i32    | text        | Number of times completed          |
 
 **Note:** This is distinct from `CityProjectCompleted` which parses `<CompletedBuild>` (a log). This table parses `<ProjectCount>` (aggregated counts per project type).
 
 #### CityEnemyAgent
 
-| Field | Type | XML Element | Description |
-|-------|------|-------------|-------------|
-| `city_xml_id` | i32 | `ID` attr | City with enemy spy |
-| `enemy_player_xml_id` | i32 | `P.X` tag | Enemy player ID |
+| Field                    | Type        | XML Element            | Description                 |
+| ------------------------ | ----------- | ---------------------- | --------------------------- |
+| `city_xml_id`            | i32         | `ID` attr              | City with enemy spy         |
+| `enemy_player_xml_id`    | i32         | `P.X` tag              | Enemy player ID             |
 | `agent_character_xml_id` | Option<i32> | `AgentCharacterID.P.X` | Character ID of enemy agent |
-| `placed_turn` | Option<i32> | `AgentTurn.P.X` | Turn when agent was placed |
-| `agent_tile_xml_id` | Option<i32> | `AgentTileID.P.X` | Tile where agent is located |
+| `placed_turn`            | Option<i32> | `AgentTurn.P.X`        | Turn when agent was placed  |
+| `agent_tile_xml_id`      | Option<i32> | `AgentTileID.P.X`      | Tile where agent is located |
 
 **Note:** This tracks **enemy spies** in the city, keyed by player ID.
 
 #### CityLuxury
 
-| Field | Type | XML Element | Description |
-|-------|------|-------------|-------------|
-| `city_xml_id` | i32 | `ID` attr | City with luxury import |
-| `resource` | String | `LuxuryTurn.RESOURCE_X` tag | Resource type (e.g., RESOURCE_FUR) |
-| `imported_turn` | i32 | text | Turn when luxury was imported |
+| Field           | Type   | XML Element                 | Description                        |
+| --------------- | ------ | --------------------------- | ---------------------------------- |
+| `city_xml_id`   | i32    | `ID` attr                   | City with luxury import            |
+| `resource`      | String | `LuxuryTurn.RESOURCE_X` tag | Resource type (e.g., RESOURCE_FUR) |
+| `imported_turn` | i32    | text                        | Turn when luxury was imported      |
 
 **Source:** `src-tauri/src/parser/game_data.rs`
 **Parser:** `src-tauri/src/parser/parsers/city_data.rs`
@@ -212,23 +213,23 @@ The following data exists in save file XML but is not yet parsed:
 
 ### Medium Priority
 
-| Field | XML Element | Description |
-|-------|-------------|-------------|
+| Field           | XML Element       | Description                        |
+| --------------- | ----------------- | ---------------------------------- |
 | `YieldOverflow` | `<YieldOverflow>` | Overflow production per yield type |
 
 ### Event History
 
-| Field | XML Element | Description |
-|-------|-------------|-------------|
+| Field              | XML Element          | Description                             |
+| ------------------ | -------------------- | --------------------------------------- |
 | `EventStoryOption` | `<EventStoryOption>` | List of event choices made in this city |
-| `EventStoryTurn` | `<EventStoryTurn>` | When each event type occurred |
+| `EventStoryTurn`   | `<EventStoryTurn>`   | When each event type occurred           |
 
 ### Other
 
-| Field | XML Element | Description |
-|-------|-------------|-------------|
-| `TeamCultureStep` | `<TeamCultureStep>` | Culture level progression |
-| `PlayerFamily` | `<PlayerFamily>` | Historical family ownership by player |
+| Field             | XML Element         | Description                           |
+| ----------------- | ------------------- | ------------------------------------- |
+| `TeamCultureStep` | `<TeamCultureStep>` | Culture level progression             |
+| `PlayerFamily`    | `<PlayerFamily>`    | Historical family ownership by player |
 
 ## Raw XML Example
 
@@ -397,6 +398,7 @@ The `cities.specialist_count` field stores the **lifetime total specialists prod
 ### unit_production_count vs city_units_produced
 
 Two separate data sources track unit production:
+
 - `cities.unit_production_count` - The aggregate total units produced. Parser first checks for `<UnitProductionCount>` (older saves, 2022), then falls back to summing `<UnitProductionCounts>` children (newer saves, 2025+)
 - `city_units_produced` table - Parses `<UnitProductionCounts>`, the per-unit-type breakdown (e.g., 5 settlers, 1 worker)
 
@@ -405,5 +407,6 @@ Two separate data sources track unit production:
 ### city_projects_completed vs city_project_counts
 
 These tables serve different purposes:
+
 - `city_projects_completed` - Parses `<CompletedBuild>`, a log of all completed build queue items
 - `city_project_counts` - Parses `<ProjectCount>`, aggregated counts per project type (more efficient for statistics)
