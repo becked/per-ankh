@@ -42,66 +42,65 @@
   let error = $state<string | null>(null);
   let activeTab = $state<string>("events");
 
-  // Event log filter state
-  let searchTerm = $state("");
-  let selectedFilters = $state<string[]>([]);  // Combined log types and players with prefixes
+  // Chart series filter state - each chart has its own independent filter
+  type ChartFilterKey =
+    | "points" | "military" | "legitimacy"
+    | "science" | "civics" | "training" | "growth" | "culture"
+    | "happiness" | "orders" | "food" | "money" | "discontent"
+    | "iron" | "stone" | "wood" | "maintenance"
+    | "laws" | "techs";
 
-  // Event log sort state
-  let eventLogSortColumn = $state<string>("turn");
-  let eventLogSortDirection = $state<"asc" | "desc">("desc");
+  let chartFilters = $state<Record<ChartFilterKey, Record<string, boolean>>>({
+    points: {},
+    military: {},
+    legitimacy: {},
+    science: {},
+    civics: {},
+    training: {},
+    growth: {},
+    culture: {},
+    happiness: {},
+    orders: {},
+    food: {},
+    money: {},
+    discontent: {},
+    iron: {},
+    stone: {},
+    wood: {},
+    maintenance: {},
+    laws: {},
+    techs: {},
+  });
 
-  // Chart series filter state - each chart has its own independent state
-  let selectedPointsNations = $state<Record<string, boolean>>({});
-  let selectedLawsNations = $state<Record<string, boolean>>({});
-  let selectedMilitaryNations = $state<Record<string, boolean>>({});
-  let selectedLegitimacyNations = $state<Record<string, boolean>>({});
-  let selectedScienceNations = $state<Record<string, boolean>>({});
-  let selectedCivicsNations = $state<Record<string, boolean>>({});
-  let selectedTrainingNations = $state<Record<string, boolean>>({});
-  let selectedGrowthNations = $state<Record<string, boolean>>({});
-  let selectedCultureNations = $state<Record<string, boolean>>({});
-  let selectedHappinessNations = $state<Record<string, boolean>>({});
-  let selectedOrdersNations = $state<Record<string, boolean>>({});
-  let selectedFoodNations = $state<Record<string, boolean>>({});
-  let selectedMoneyNations = $state<Record<string, boolean>>({});
-  let selectedDiscontentNations = $state<Record<string, boolean>>({});
-  let selectedIronNations = $state<Record<string, boolean>>({});
-  let selectedStoneNations = $state<Record<string, boolean>>({});
-  let selectedWoodNations = $state<Record<string, boolean>>({});
-  let selectedMaintenanceNations = $state<Record<string, boolean>>({});
+  // Table state - consolidated for all sortable/filterable tables
+  type TableState = {
+    search: string;
+    sortColumn: string;
+    sortDirection: "asc" | "desc";
+    filters: string[];
+  };
 
-  // City table state
-  let citySearchTerm = $state("");
-  let citySortColumn = $state<string>("owner_nation");
-  let citySortDirection = $state<"asc" | "desc">("asc");
-  let selectedCityFilters = $state<string[]>([]);
+  type TableName = "events" | "cities" | "improvements" | "laws" | "techs" | "units";
 
-  // Improvements table state
-  let improvementSearchTerm = $state("");
-  let improvementSortColumn = $state<string>("improvement");
-  let improvementSortDirection = $state<"asc" | "desc">("asc");
-  let selectedImprovementFilters = $state<string[]>([]);
+  let tables = $state<Record<TableName, TableState>>({
+    events: { search: "", sortColumn: "turn", sortDirection: "desc", filters: [] },
+    cities: { search: "", sortColumn: "owner_nation", sortDirection: "asc", filters: [] },
+    improvements: { search: "", sortColumn: "improvement", sortDirection: "asc", filters: [] },
+    laws: { search: "", sortColumn: "nation", sortDirection: "asc", filters: [] },
+    techs: { search: "", sortColumn: "nation", sortDirection: "asc", filters: [] },
+    units: { search: "", sortColumn: "nation", sortDirection: "asc", filters: [] },
+  });
 
-  // Laws table state
-  let lawSearchTerm = $state("");
-  let lawSortColumn = $state<string>("nation");
-  let lawSortDirection = $state<"asc" | "desc">("asc");
-  let selectedLawFilters = $state<string[]>([]);  // Combined nations and laws with prefixes
-
-  // Tech chart filter state
-  let selectedTechsNations = $state<Record<string, boolean>>({});
-
-  // Tech table state
-  let techSearchTerm = $state("");
-  let techSortColumn = $state<string>("nation");
-  let techSortDirection = $state<"asc" | "desc">("asc");
-  let selectedTechFilters = $state<string[]>([]);  // Combined nations and techs with prefixes
-
-  // Units table state
-  let unitSearchTerm = $state("");
-  let unitSortColumn = $state<string>("nation");
-  let unitSortDirection = $state<"asc" | "desc">("asc");
-  let selectedUnitFilters = $state<string[]>([]);  // Combined nations and unit types with prefixes
+  // Generic toggle sort function for all tables
+  function toggleSort(tableName: TableName, columnKey: string) {
+    const table = tables[tableName];
+    if (table.sortColumn === columnKey) {
+      table.sortDirection = table.sortDirection === "asc" ? "desc" : "asc";
+    } else {
+      table.sortColumn = columnKey;
+      table.sortDirection = "asc";
+    }
+  }
 
   // City column definitions
   // format function receives the value AND the city object for context (e.g., capital star)
@@ -251,7 +250,7 @@
 
   // Parse selected city filters (nation only)
   const selectedCityNations = $derived(
-    selectedCityFilters
+    tables.cities.filters
       .filter(f => f.startsWith("nation:"))
       .map(f => f.replace("nation:", ""))
   );
@@ -268,8 +267,8 @@
     }
 
     // Filter by search term
-    if (citySearchTerm) {
-      const term = citySearchTerm.toLowerCase();
+    if (tables.cities.search) {
+      const term = tables.cities.search.toLowerCase();
       cities = cities.filter((city) =>
         city.city_name.toLowerCase().includes(term) ||
         (city.owner_nation?.toLowerCase().includes(term) ?? false) ||
@@ -279,7 +278,7 @@
     }
 
     // Sort
-    const column = CITY_COLUMNS.find((col) => col.key === citySortColumn);
+    const column = CITY_COLUMNS.find((col) => col.key === tables.cities.sortColumn);
     if (column) {
       cities = [...cities].sort((a, b) => {
         const aVal = column.sortValue ? column.sortValue(a) : column.getValue(a);
@@ -298,24 +297,12 @@
           cmp = (aVal as number) - (bVal as number);
         }
 
-        return citySortDirection === "asc" ? cmp : -cmp;
+        return tables.cities.sortDirection === "asc" ? cmp : -cmp;
       });
     }
 
     return cities;
   });
-
-  // Toggle sort column/direction
-  function toggleCitySort(columnKey: string) {
-    if (citySortColumn === columnKey) {
-      // Toggle direction if same column
-      citySortDirection = citySortDirection === "asc" ? "desc" : "asc";
-    } else {
-      // New column, default to ascending
-      citySortColumn = columnKey;
-      citySortDirection = "asc";
-    }
-  }
 
   // Format cell value using column's format function or default
   function formatCityCell(column: CityColumn, city: CityInfo): string {
@@ -335,7 +322,7 @@
 
   // Parse selected improvement filters (nation only)
   const selectedImprovementNations = $derived(
-    selectedImprovementFilters
+    tables.improvements.filters
       .filter(f => f.startsWith("nation:"))
       .map(f => f.replace("nation:", ""))
   );
@@ -372,8 +359,8 @@
     const rows: ImprovementPivotRow[] = [];
     for (const [improvement, counts] of pivotMap) {
       // Filter by search term
-      if (improvementSearchTerm) {
-        const term = improvementSearchTerm.toLowerCase();
+      if (tables.improvements.search) {
+        const term = tables.improvements.search.toLowerCase();
         if (!improvement.toLowerCase().includes(term)) {
           continue;
         }
@@ -386,34 +373,24 @@
 
     // Sort
     rows.sort((a, b) => {
-      if (improvementSortColumn === "improvement") {
+      if (tables.improvements.sortColumn === "improvement") {
         const cmp = a.improvement.localeCompare(b.improvement);
-        return improvementSortDirection === "asc" ? cmp : -cmp;
-      } else if (improvementSortColumn === "total") {
+        return tables.improvements.sortDirection === "asc" ? cmp : -cmp;
+      } else if (tables.improvements.sortColumn === "total") {
         const cmp = a.total - b.total;
-        return improvementSortDirection === "asc" ? cmp : -cmp;
-      } else if (improvementSortColumn.startsWith("nation:")) {
-        const nation = improvementSortColumn.replace("nation:", "");
+        return tables.improvements.sortDirection === "asc" ? cmp : -cmp;
+      } else if (tables.improvements.sortColumn.startsWith("nation:")) {
+        const nation = tables.improvements.sortColumn.replace("nation:", "");
         const aVal = a.counts[nation] ?? 0;
         const bVal = b.counts[nation] ?? 0;
         const cmp = aVal - bVal;
-        return improvementSortDirection === "asc" ? cmp : -cmp;
+        return tables.improvements.sortDirection === "asc" ? cmp : -cmp;
       }
       return a.improvement.localeCompare(b.improvement);
     });
 
     return rows;
   });
-
-  // Toggle improvement sort column/direction
-  function toggleImprovementSort(columnKey: string) {
-    if (improvementSortColumn === columnKey) {
-      improvementSortDirection = improvementSortDirection === "asc" ? "desc" : "asc";
-    } else {
-      improvementSortColumn = columnKey;
-      improvementSortDirection = "asc";
-    }
-  }
 
   // Get unique nations for law filter dropdown
   const uniqueLawNations = $derived(
@@ -431,7 +408,7 @@
 
   // Parse selected law filters (nation only now)
   const selectedLawNations = $derived(
-    selectedLawFilters
+    tables.laws.filters
       .filter(f => f.startsWith("nation:"))
       .map(f => f.replace("nation:", ""))
   );
@@ -467,8 +444,8 @@
     const rows: LawPivotRow[] = [];
     for (const [law, turns] of pivotMap) {
       // Filter by search term
-      if (lawSearchTerm) {
-        const term = lawSearchTerm.toLowerCase();
+      if (tables.laws.search) {
+        const term = tables.laws.search.toLowerCase();
         if (!law.toLowerCase().includes(term)) {
           continue;
         }
@@ -479,31 +456,21 @@
 
     // Sort by law name or by sort column
     rows.sort((a, b) => {
-      if (lawSortColumn === "law") {
+      if (tables.laws.sortColumn === "law") {
         const cmp = a.law.localeCompare(b.law);
-        return lawSortDirection === "asc" ? cmp : -cmp;
-      } else if (lawSortColumn.startsWith("nation:")) {
-        const nation = lawSortColumn.replace("nation:", "");
+        return tables.laws.sortDirection === "asc" ? cmp : -cmp;
+      } else if (tables.laws.sortColumn.startsWith("nation:")) {
+        const nation = tables.laws.sortColumn.replace("nation:", "");
         const aVal = a.turns[nation] ?? Infinity;
         const bVal = b.turns[nation] ?? Infinity;
         const cmp = aVal - bVal;
-        return lawSortDirection === "asc" ? cmp : -cmp;
+        return tables.laws.sortDirection === "asc" ? cmp : -cmp;
       }
       return a.law.localeCompare(b.law);
     });
 
     return rows;
   });
-
-  // Toggle law sort column/direction
-  function toggleLawSort(columnKey: string) {
-    if (lawSortColumn === columnKey) {
-      lawSortDirection = lawSortDirection === "asc" ? "desc" : "asc";
-    } else {
-      lawSortColumn = columnKey;
-      lawSortDirection = "asc";
-    }
-  }
 
   // Get unique nations for tech filter dropdown
   const uniqueTechNations = $derived(
@@ -521,7 +488,7 @@
 
   // Parse selected tech filters (nation only now)
   const selectedTechNations = $derived(
-    selectedTechFilters
+    tables.techs.filters
       .filter(f => f.startsWith("nation:"))
       .map(f => f.replace("nation:", ""))
   );
@@ -557,8 +524,8 @@
     const rows: TechPivotRow[] = [];
     for (const [tech, turns] of pivotMap) {
       // Filter by search term
-      if (techSearchTerm) {
-        const term = techSearchTerm.toLowerCase();
+      if (tables.techs.search) {
+        const term = tables.techs.search.toLowerCase();
         if (!tech.toLowerCase().includes(term)) {
           continue;
         }
@@ -569,31 +536,21 @@
 
     // Sort by tech name or by sort column
     rows.sort((a, b) => {
-      if (techSortColumn === "tech") {
+      if (tables.techs.sortColumn === "tech") {
         const cmp = a.tech.localeCompare(b.tech);
-        return techSortDirection === "asc" ? cmp : -cmp;
-      } else if (techSortColumn.startsWith("nation:")) {
-        const nation = techSortColumn.replace("nation:", "");
+        return tables.techs.sortDirection === "asc" ? cmp : -cmp;
+      } else if (tables.techs.sortColumn.startsWith("nation:")) {
+        const nation = tables.techs.sortColumn.replace("nation:", "");
         const aVal = a.turns[nation] ?? Infinity;
         const bVal = b.turns[nation] ?? Infinity;
         const cmp = aVal - bVal;
-        return techSortDirection === "asc" ? cmp : -cmp;
+        return tables.techs.sortDirection === "asc" ? cmp : -cmp;
       }
       return a.tech.localeCompare(b.tech);
     });
 
     return rows;
   });
-
-  // Toggle tech sort column/direction
-  function toggleTechSort(columnKey: string) {
-    if (techSortColumn === columnKey) {
-      techSortDirection = techSortDirection === "asc" ? "desc" : "asc";
-    } else {
-      techSortColumn = columnKey;
-      techSortDirection = "asc";
-    }
-  }
 
   // Get unique nations for unit filter dropdown
   const uniqueUnitNations = $derived(
@@ -611,7 +568,7 @@
 
   // Parse selected unit filters (nation only now)
   const selectedUnitNations = $derived(
-    selectedUnitFilters
+    tables.units.filters
       .filter(f => f.startsWith("nation:"))
       .map(f => f.replace("nation:", ""))
   );
@@ -648,8 +605,8 @@
     const rows: UnitPivotRow[] = [];
     for (const [unit_type, counts] of pivotMap) {
       // Filter by search term
-      if (unitSearchTerm) {
-        const term = unitSearchTerm.toLowerCase();
+      if (tables.units.search) {
+        const term = tables.units.search.toLowerCase();
         if (!unit_type.toLowerCase().includes(term)) {
           continue;
         }
@@ -663,34 +620,24 @@
 
     // Sort by unit type name or by sort column
     rows.sort((a, b) => {
-      if (unitSortColumn === "unit_type") {
+      if (tables.units.sortColumn === "unit_type") {
         const cmp = a.unit_type.localeCompare(b.unit_type);
-        return unitSortDirection === "asc" ? cmp : -cmp;
-      } else if (unitSortColumn === "total") {
+        return tables.units.sortDirection === "asc" ? cmp : -cmp;
+      } else if (tables.units.sortColumn === "total") {
         const cmp = a.total - b.total;
-        return unitSortDirection === "asc" ? cmp : -cmp;
-      } else if (unitSortColumn.startsWith("nation:")) {
-        const nation = unitSortColumn.replace("nation:", "");
+        return tables.units.sortDirection === "asc" ? cmp : -cmp;
+      } else if (tables.units.sortColumn.startsWith("nation:")) {
+        const nation = tables.units.sortColumn.replace("nation:", "");
         const aVal = a.counts[nation] ?? 0;
         const bVal = b.counts[nation] ?? 0;
         const cmp = aVal - bVal;
-        return unitSortDirection === "asc" ? cmp : -cmp;
+        return tables.units.sortDirection === "asc" ? cmp : -cmp;
       }
       return a.unit_type.localeCompare(b.unit_type);
     });
 
     return rows;
   });
-
-  // Toggle unit sort column/direction
-  function toggleUnitSort(columnKey: string) {
-    if (unitSortColumn === columnKey) {
-      unitSortDirection = unitSortDirection === "asc" ? "desc" : "asc";
-    } else {
-      unitSortColumn = columnKey;
-      unitSortDirection = "asc";
-    }
-  }
 
   // Helper to create default selection (all nations selected)
   function createDefaultSelection(players: { nation: string | null }[]): Record<string, boolean> {
@@ -703,49 +650,42 @@
   $effect(() => {
     if (playerHistory) {
       const defaultSelection = createDefaultSelection(playerHistory);
-      selectedPointsNations = { ...defaultSelection };
-      selectedMilitaryNations = { ...defaultSelection };
-      selectedLegitimacyNations = { ...defaultSelection };
-      selectedScienceNations = { ...defaultSelection };
-      selectedCivicsNations = { ...defaultSelection };
-      selectedTrainingNations = { ...defaultSelection };
-      selectedGrowthNations = { ...defaultSelection };
-      selectedCultureNations = { ...defaultSelection };
-      selectedHappinessNations = { ...defaultSelection };
-      selectedOrdersNations = { ...defaultSelection };
-      selectedFoodNations = { ...defaultSelection };
-      selectedMoneyNations = { ...defaultSelection };
-      selectedDiscontentNations = { ...defaultSelection };
-      selectedIronNations = { ...defaultSelection };
-      selectedStoneNations = { ...defaultSelection };
-      selectedWoodNations = { ...defaultSelection };
-      selectedMaintenanceNations = { ...defaultSelection };
+      // Initialize all player-based chart filters
+      const playerChartKeys: ChartFilterKey[] = [
+        "points", "military", "legitimacy",
+        "science", "civics", "training", "growth", "culture",
+        "happiness", "orders", "food", "money", "discontent",
+        "iron", "stone", "wood", "maintenance"
+      ];
+      for (const key of playerChartKeys) {
+        chartFilters[key] = { ...defaultSelection };
+      }
     }
   });
 
   // Initialize law adoption filter separately (uses lawAdoptionHistory data)
   $effect(() => {
     if (lawAdoptionHistory) {
-      selectedLawsNations = createDefaultSelection(lawAdoptionHistory);
+      chartFilters.laws = createDefaultSelection(lawAdoptionHistory);
     }
   });
 
   // Initialize tech discovery filter separately (uses techDiscoveryHistory data)
   $effect(() => {
     if (techDiscoveryHistory) {
-      selectedTechsNations = createDefaultSelection(techDiscoveryHistory);
+      chartFilters.techs = createDefaultSelection(techDiscoveryHistory);
     }
   });
 
   // Parse selected filters back into separate arrays
   const selectedLogTypes = $derived(
-    selectedFilters
+    tables.events.filters
       .filter(f => f.startsWith("logtype:"))
       .map(f => f.replace("logtype:", ""))
   );
 
   const selectedPlayers = $derived(
-    selectedFilters
+    tables.events.filters
       .filter(f => f.startsWith("player:"))
       .map(f => f.replace("player:", ""))
   );
@@ -791,7 +731,7 @@
           legend: {
             show: false,
             data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
-            selected: selectedPointsNations,
+            selected: chartFilters.points,
           },
           grid: {
             left: 60,
@@ -833,7 +773,7 @@
           legend: {
             show: false,
             data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
-            selected: selectedMilitaryNations,
+            selected: chartFilters.military,
           },
           xAxis: {
             type: "category",
@@ -865,7 +805,7 @@
           legend: {
             show: false,
             data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
-            selected: selectedLegitimacyNations,
+            selected: chartFilters.legitimacy,
           },
           xAxis: {
             type: "category",
@@ -938,20 +878,20 @@
   }
 
   // Create chart options for each yield type - each with its own independent state
-  const scienceChartOption = $derived(createYieldChartOption("YIELD_SCIENCE", "Science Production", "Science per Turn", selectedScienceNations));
-  const civicsChartOption = $derived(createYieldChartOption("YIELD_CIVICS", "Civics Production", "Civics per Turn", selectedCivicsNations));
-  const trainingChartOption = $derived(createYieldChartOption("YIELD_TRAINING", "Training Production", "Training per Turn", selectedTrainingNations));
-  const growthChartOption = $derived(createYieldChartOption("YIELD_GROWTH", "Growth Production", "Growth per Turn", selectedGrowthNations));
-  const cultureChartOption = $derived(createYieldChartOption("YIELD_CULTURE", "Culture Production", "Culture per Turn", selectedCultureNations));
-  const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn", selectedHappinessNations));
-  const ordersChartOption = $derived(createYieldChartOption("YIELD_ORDERS", "Orders", "Orders per Turn", selectedOrdersNations));
-  const foodChartOption = $derived(createYieldChartOption("YIELD_FOOD", "Food Production", "Food per Turn", selectedFoodNations));
-  const moneyChartOption = $derived(createYieldChartOption("YIELD_MONEY", "Money Income", "Gold per Turn", selectedMoneyNations));
-  const discontentChartOption = $derived(createYieldChartOption("YIELD_DISCONTENT", "Discontent", "Discontent per Turn", selectedDiscontentNations));
-  const ironChartOption = $derived(createYieldChartOption("YIELD_IRON", "Iron Production", "Iron per Turn", selectedIronNations));
-  const stoneChartOption = $derived(createYieldChartOption("YIELD_STONE", "Stone Production", "Stone per Turn", selectedStoneNations));
-  const woodChartOption = $derived(createYieldChartOption("YIELD_WOOD", "Wood Production", "Wood per Turn", selectedWoodNations));
-  const maintenanceChartOption = $derived(createYieldChartOption("YIELD_MAINTENANCE", "Maintenance Costs", "Maintenance per Turn", selectedMaintenanceNations));
+  const scienceChartOption = $derived(createYieldChartOption("YIELD_SCIENCE", "Science Production", "Science per Turn", chartFilters.science));
+  const civicsChartOption = $derived(createYieldChartOption("YIELD_CIVICS", "Civics Production", "Civics per Turn", chartFilters.civics));
+  const trainingChartOption = $derived(createYieldChartOption("YIELD_TRAINING", "Training Production", "Training per Turn", chartFilters.training));
+  const growthChartOption = $derived(createYieldChartOption("YIELD_GROWTH", "Growth Production", "Growth per Turn", chartFilters.growth));
+  const cultureChartOption = $derived(createYieldChartOption("YIELD_CULTURE", "Culture Production", "Culture per Turn", chartFilters.culture));
+  const happinessChartOption = $derived(createYieldChartOption("YIELD_HAPPINESS", "Happiness Production", "Happiness per Turn", chartFilters.happiness));
+  const ordersChartOption = $derived(createYieldChartOption("YIELD_ORDERS", "Orders", "Orders per Turn", chartFilters.orders));
+  const foodChartOption = $derived(createYieldChartOption("YIELD_FOOD", "Food Production", "Food per Turn", chartFilters.food));
+  const moneyChartOption = $derived(createYieldChartOption("YIELD_MONEY", "Money Income", "Gold per Turn", chartFilters.money));
+  const discontentChartOption = $derived(createYieldChartOption("YIELD_DISCONTENT", "Discontent", "Discontent per Turn", chartFilters.discontent));
+  const ironChartOption = $derived(createYieldChartOption("YIELD_IRON", "Iron Production", "Iron per Turn", chartFilters.iron));
+  const stoneChartOption = $derived(createYieldChartOption("YIELD_STONE", "Stone Production", "Stone per Turn", chartFilters.stone));
+  const woodChartOption = $derived(createYieldChartOption("YIELD_WOOD", "Wood Production", "Wood per Turn", chartFilters.wood));
+  const maintenanceChartOption = $derived(createYieldChartOption("YIELD_MAINTENANCE", "Maintenance Costs", "Maintenance per Turn", chartFilters.maintenance));
 
   // Create law adoption chart option
   // Uses ECharts legend.selected for filtering instead of filtering data directly
@@ -984,7 +924,7 @@
             legend: {
               show: false,
               data: nationNames,
-              selected: selectedLawsNations,
+              selected: chartFilters.laws,
             },
             tooltip: {
               trigger: 'item',
@@ -1084,7 +1024,7 @@
             legend: {
               show: false,
               data: nationNames,
-              selected: selectedTechsNations,
+              selected: chartFilters.techs,
             },
             tooltip: {
               trigger: 'item',
@@ -1147,12 +1087,13 @@
     loading = true;
     error = null;
     activeTab = "events";
-    eventLogSortColumn = "turn";
-    eventLogSortDirection = "desc";
-    citySortColumn = "owner_nation";
-    citySortDirection = "asc";
-    improvementSortColumn = "nation";
-    improvementSortDirection = "asc";
+    // Reset table states to defaults
+    tables.events = { search: "", sortColumn: "turn", sortDirection: "desc", filters: [] };
+    tables.cities = { search: "", sortColumn: "owner_nation", sortDirection: "asc", filters: [] };
+    tables.improvements = { search: "", sortColumn: "improvement", sortDirection: "asc", filters: [] };
+    tables.laws = { search: "", sortColumn: "nation", sortDirection: "asc", filters: [] };
+    tables.techs = { search: "", sortColumn: "nation", sortDirection: "asc", filters: [] };
+    tables.units = { search: "", sortColumn: "nation", sortDirection: "asc", filters: [] };
     cityVisibleColumns = Object.fromEntries(
       CITY_COLUMNS.map((col) => [col.key, col.defaultVisible])
     );
@@ -1313,8 +1254,8 @@
     // Filter
     let logs = processedEventLogs.filter(log => {
       // Search filter (case-insensitive) - searches log type, player, and description
-      if (searchTerm) {
-        const term = searchTerm.toLowerCase();
+      if (tables.events.search) {
+        const term = tables.events.search.toLowerCase();
         const matchesLogType = formatEnum(log.log_type, "").toLowerCase().includes(term);
         const matchesPlayer = log.player_name?.toLowerCase().includes(term) ?? false;
         const matchesDescription = log.description?.toLowerCase().includes(term) ?? false;
@@ -1338,7 +1279,7 @@
       let aVal: string | number | null;
       let bVal: string | number | null;
 
-      switch (eventLogSortColumn) {
+      switch (tables.events.sortColumn) {
         case "turn":
           aVal = a.turn;
           bVal = b.turn;
@@ -1373,7 +1314,7 @@
         cmp = (aVal as number) - (bVal as number);
       }
 
-      return eventLogSortDirection === "asc" ? cmp : -cmp;
+      return tables.events.sortDirection === "asc" ? cmp : -cmp;
     });
 
     return logs;
@@ -1381,14 +1322,14 @@
 
   // Check if any filters are active
   const hasActiveFilters = $derived(
-    searchTerm !== "" ||
-    selectedFilters.length > 0
+    tables.events.search !== "" ||
+    tables.events.filters.length > 0
   );
 
   // Clear all filters
   function clearFilters() {
-    searchTerm = "";
-    selectedFilters = [];
+    tables.events.search = "";
+    tables.events.filters = [];
   }
 
   // Handle map turn slider change
@@ -1421,17 +1362,6 @@
     }
   }
 
-  // Toggle event log sort column/direction
-  function toggleEventLogSort(columnKey: string) {
-    if (eventLogSortColumn === columnKey) {
-      // Toggle direction if same column
-      eventLogSortDirection = eventLogSortDirection === "asc" ? "desc" : "asc";
-    } else {
-      // New column, default to ascending
-      eventLogSortColumn = columnKey;
-      eventLogSortDirection = "asc";
-    }
-  }
 </script>
 
 {#if loading}
@@ -1591,7 +1521,7 @@
             <!-- Filters -->
             <div class="flex flex-wrap gap-3 mb-4 items-end">
               <!-- Combined Log Type and Player Filter -->
-              <Select.Root type="multiple" bind:value={selectedFilters}>
+              <Select.Root type="multiple" bind:value={tables.events.filters}>
                 <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
                   <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1656,15 +1586,15 @@
 
               <!-- Description search -->
               <SearchInput
-                bind:value={searchTerm}
+                bind:value={tables.events.search}
                 variant="field"
                 class="w-96"
               />
 
               <!-- Selected filter chips -->
-              {#if selectedFilters.length > 0}
+              {#if tables.events.filters.length > 0}
                 <div class="flex flex-wrap gap-1">
-                  {#each selectedFilters as filter}
+                  {#each tables.events.filters as filter}
                     <span class="px-2 py-1 rounded bg-brown text-white text-xs">
                       {filter.startsWith("logtype:")
                         ? formatEnum(filter.replace("logtype:", ""), "")
@@ -1686,47 +1616,47 @@
                   <tr>
                     <th
                       class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                      onclick={() => toggleEventLogSort("turn")}
+                      onclick={() => toggleSort("events", "turn")}
                     >
                       <span class="inline-flex items-center gap-1">
                         Turn
-                        {#if eventLogSortColumn === "turn"}
-                          <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                        {#if tables.events.sortColumn === "turn"}
+                          <span class="text-orange">{tables.events.sortDirection === "asc" ? "↑" : "↓"}</span>
                         {/if}
                       </span>
                     </th>
                     <th
                       class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                      onclick={() => toggleEventLogSort("log_type")}
+                      onclick={() => toggleSort("events", "log_type")}
                     >
                       <span class="inline-flex items-center gap-1">
                         Log Type
-                        {#if eventLogSortColumn === "log_type"}
-                          <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                        {#if tables.events.sortColumn === "log_type"}
+                          <span class="text-orange">{tables.events.sortDirection === "asc" ? "↑" : "↓"}</span>
                         {/if}
                       </span>
                     </th>
                     {#if showPlayerColumn}
                       <th
                         class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleEventLogSort("player_name")}
+                        onclick={() => toggleSort("events", "player_name")}
                       >
                         <span class="inline-flex items-center gap-1">
                           Player
-                          {#if eventLogSortColumn === "player_name"}
-                            <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                          {#if tables.events.sortColumn === "player_name"}
+                            <span class="text-orange">{tables.events.sortDirection === "asc" ? "↑" : "↓"}</span>
                           {/if}
                         </span>
                       </th>
                     {/if}
                     <th
                       class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                      onclick={() => toggleEventLogSort("description")}
+                      onclick={() => toggleSort("events", "description")}
                     >
                       <span class="inline-flex items-center gap-1">
                         Description
-                        {#if eventLogSortColumn === "description"}
-                          <span class="text-orange">{eventLogSortDirection === "asc" ? "↑" : "↓"}</span>
+                        {#if tables.events.sortColumn === "description"}
+                          <span class="text-orange">{tables.events.sortDirection === "asc" ? "↑" : "↓"}</span>
                         {/if}
                       </span>
                     </th>
@@ -1785,7 +1715,7 @@
               <!-- Controls row -->
               <div class="flex flex-wrap gap-3 mb-4 items-end">
                 <!-- Filter dropdown -->
-                <Select.Root type="multiple" bind:value={selectedLawFilters}>
+                <Select.Root type="multiple" bind:value={tables.laws.filters}>
                   <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
                     <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1827,16 +1757,16 @@
 
                 <!-- Search -->
                 <SearchInput
-                  bind:value={lawSearchTerm}
+                  bind:value={tables.laws.search}
                   placeholder="Search laws"
                   variant="field"
                   class="w-64"
                 />
 
                 <!-- Selected filter chips -->
-                {#if selectedLawFilters.length > 0}
+                {#if tables.laws.filters.length > 0}
                   <div class="flex flex-wrap gap-1">
-                    {#each selectedLawFilters as filter}
+                    {#each tables.laws.filters as filter}
                       <span class="px-2 py-1 rounded bg-brown text-white text-xs">
                         {formatEnum(filter.replace("nation:", ""), "NATION_")}
                       </span>
@@ -1858,13 +1788,13 @@
                       <!-- Law column header -->
                       <th
                         class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleLawSort("law")}
+                        onclick={() => toggleSort("laws", "law")}
                       >
                         <span class="inline-flex items-center gap-1">
                           Law
-                          {#if lawSortColumn === "law"}
+                          {#if tables.laws.sortColumn === "law"}
                             <span class="text-orange">
-                              {lawSortDirection === "asc" ? "↑" : "↓"}
+                              {tables.laws.sortDirection === "asc" ? "↑" : "↓"}
                             </span>
                           {/if}
                         </span>
@@ -1873,13 +1803,13 @@
                       {#each displayedLawNations as nation}
                         <th
                           class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                          onclick={() => toggleLawSort(`nation:${nation}`)}
+                          onclick={() => toggleSort("laws", `nation:${nation}`)}
                         >
                           <span class="inline-flex items-center gap-1 justify-center">
                             {formatEnum(nation, "NATION_")}
-                            {#if lawSortColumn === `nation:${nation}`}
+                            {#if tables.laws.sortColumn === `nation:${nation}`}
                               <span class="text-orange">
-                                {lawSortDirection === "asc" ? "↑" : "↓"}
+                                {tables.laws.sortDirection === "asc" ? "↑" : "↓"}
                               </span>
                             {/if}
                           </span>
@@ -1941,7 +1871,7 @@
               <!-- Controls row -->
               <div class="flex flex-wrap gap-3 mb-4 items-end">
                 <!-- Filter dropdown -->
-                <Select.Root type="multiple" bind:value={selectedTechFilters}>
+                <Select.Root type="multiple" bind:value={tables.techs.filters}>
                   <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
                     <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1983,16 +1913,16 @@
 
                 <!-- Search -->
                 <SearchInput
-                  bind:value={techSearchTerm}
+                  bind:value={tables.techs.search}
                   placeholder="Search technologies"
                   variant="field"
                   class="w-64"
                 />
 
                 <!-- Selected filter chips -->
-                {#if selectedTechFilters.length > 0}
+                {#if tables.techs.filters.length > 0}
                   <div class="flex flex-wrap gap-1">
-                    {#each selectedTechFilters as filter}
+                    {#each tables.techs.filters as filter}
                       <span class="px-2 py-1 rounded bg-brown text-white text-xs">
                         {formatEnum(filter.replace("nation:", ""), "NATION_")}
                       </span>
@@ -2014,13 +1944,13 @@
                       <!-- Technology column header -->
                       <th
                         class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleTechSort("tech")}
+                        onclick={() => toggleSort("techs", "tech")}
                       >
                         <span class="inline-flex items-center gap-1">
                           Technology
-                          {#if techSortColumn === "tech"}
+                          {#if tables.techs.sortColumn === "tech"}
                             <span class="text-orange">
-                              {techSortDirection === "asc" ? "↑" : "↓"}
+                              {tables.techs.sortDirection === "asc" ? "↑" : "↓"}
                             </span>
                           {/if}
                         </span>
@@ -2029,13 +1959,13 @@
                       {#each displayedTechNations as nation}
                         <th
                           class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                          onclick={() => toggleTechSort(`nation:${nation}`)}
+                          onclick={() => toggleSort("techs", `nation:${nation}`)}
                         >
                           <span class="inline-flex items-center gap-1 justify-center">
                             {formatEnum(nation, "NATION_")}
-                            {#if techSortColumn === `nation:${nation}`}
+                            {#if tables.techs.sortColumn === `nation:${nation}`}
                               <span class="text-orange">
-                                {techSortDirection === "asc" ? "↑" : "↓"}
+                                {tables.techs.sortDirection === "asc" ? "↑" : "↓"}
                               </span>
                             {/if}
                           </span>
@@ -2164,7 +2094,7 @@
               <!-- Controls row -->
               <div class="flex flex-wrap gap-3 mb-4 items-end">
                 <!-- Filter dropdown -->
-                <Select.Root type="multiple" bind:value={selectedUnitFilters}>
+                <Select.Root type="multiple" bind:value={tables.units.filters}>
                   <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
                     <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                       <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2206,16 +2136,16 @@
 
                 <!-- Search -->
                 <SearchInput
-                  bind:value={unitSearchTerm}
+                  bind:value={tables.units.search}
                   placeholder="Search units"
                   variant="field"
                   class="w-64"
                 />
 
                 <!-- Selected filter chips -->
-                {#if selectedUnitFilters.length > 0}
+                {#if tables.units.filters.length > 0}
                   <div class="flex flex-wrap gap-1">
-                    {#each selectedUnitFilters as filter}
+                    {#each tables.units.filters as filter}
                       <span class="px-2 py-1 rounded bg-brown text-white text-xs">
                         {formatEnum(filter.replace("nation:", ""), "NATION_")}
                       </span>
@@ -2237,13 +2167,13 @@
                       <!-- Unit column header -->
                       <th
                         class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleUnitSort("unit_type")}
+                        onclick={() => toggleSort("units", "unit_type")}
                       >
                         <span class="inline-flex items-center gap-1">
                           Unit
-                          {#if unitSortColumn === "unit_type"}
+                          {#if tables.units.sortColumn === "unit_type"}
                             <span class="text-orange">
-                              {unitSortDirection === "asc" ? "↑" : "↓"}
+                              {tables.units.sortDirection === "asc" ? "↑" : "↓"}
                             </span>
                           {/if}
                         </span>
@@ -2252,13 +2182,13 @@
                       {#each displayedUnitNations as nation}
                         <th
                           class="p-3 text-right border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                          onclick={() => toggleUnitSort(`nation:${nation}`)}
+                          onclick={() => toggleSort("units", `nation:${nation}`)}
                         >
                           <span class="inline-flex items-center gap-1 justify-end">
                             {formatEnum(nation, "NATION_")}
-                            {#if unitSortColumn === `nation:${nation}`}
+                            {#if tables.units.sortColumn === `nation:${nation}`}
                               <span class="text-orange">
-                                {unitSortDirection === "asc" ? "↑" : "↓"}
+                                {tables.units.sortDirection === "asc" ? "↑" : "↓"}
                               </span>
                             {/if}
                           </span>
@@ -2268,13 +2198,13 @@
                       {#if displayedUnitNations.length > 1}
                         <th
                           class="p-3 text-right border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                          onclick={() => toggleUnitSort("total")}
+                          onclick={() => toggleSort("units", "total")}
                         >
                           <span class="inline-flex items-center gap-1 justify-end">
                             Total
-                            {#if unitSortColumn === "total"}
+                            {#if tables.units.sortColumn === "total"}
                               <span class="text-orange">
-                                {unitSortDirection === "asc" ? "↑" : "↓"}
+                                {tables.units.sortDirection === "asc" ? "↑" : "↓"}
                               </span>
                             {/if}
                           </span>
@@ -2333,7 +2263,7 @@
             <!-- Table Controls -->
             <div class="flex flex-wrap gap-3 mb-4 items-end">
               <!-- Filter dropdown -->
-              <Select.Root type="multiple" bind:value={selectedCityFilters}>
+              <Select.Root type="multiple" bind:value={tables.cities.filters}>
                 <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
                   <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2375,16 +2305,16 @@
 
               <!-- Search -->
               <SearchInput
-                bind:value={citySearchTerm}
+                bind:value={tables.cities.search}
                 placeholder="Search"
                 variant="field"
                 class="w-64"
               />
 
               <!-- Selected filter chips -->
-              {#if selectedCityFilters.length > 0}
+              {#if tables.cities.filters.length > 0}
                 <div class="flex flex-wrap gap-1">
-                  {#each selectedCityFilters as filter}
+                  {#each tables.cities.filters as filter}
                     <span class="px-2 py-1 rounded bg-brown text-white text-xs">
                       {formatEnum(filter.replace("nation:", ""), "NATION_")}
                     </span>
@@ -2434,13 +2364,13 @@
                     {#each visibleCityColumns as column}
                       <th
                         class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleCitySort(column.key)}
+                        onclick={() => toggleSort("cities", column.key)}
                       >
                         <span class="inline-flex items-center gap-1">
                           {column.label}
-                          {#if citySortColumn === column.key}
+                          {#if tables.cities.sortColumn === column.key}
                             <span class="text-orange">
-                              {citySortDirection === "asc" ? "↑" : "↓"}
+                              {tables.cities.sortDirection === "asc" ? "↑" : "↓"}
                             </span>
                           {/if}
                         </span>
@@ -2484,7 +2414,7 @@
             <!-- Controls row -->
             <div class="flex flex-wrap gap-3 mb-4 items-end">
               <!-- Filter dropdown -->
-              <Select.Root type="multiple" bind:value={selectedImprovementFilters}>
+              <Select.Root type="multiple" bind:value={tables.improvements.filters}>
                 <Select.Trigger class="pl-9 pr-8 py-2 rounded border-2 border-black text-tan text-sm w-32 flex items-center justify-between relative" style="background-color: #201a13;">
                   <div class="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 text-brown" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -2526,16 +2456,16 @@
 
               <!-- Search -->
               <SearchInput
-                bind:value={improvementSearchTerm}
+                bind:value={tables.improvements.search}
                 placeholder="Search"
                 variant="field"
                 class="w-64"
               />
 
               <!-- Selected filter chips -->
-              {#if selectedImprovementFilters.length > 0}
+              {#if tables.improvements.filters.length > 0}
                 <div class="flex flex-wrap gap-1">
-                  {#each selectedImprovementFilters as filter}
+                  {#each tables.improvements.filters as filter}
                     <span class="px-2 py-1 rounded bg-brown text-white text-xs">
                       {formatEnum(filter.replace("nation:", ""), "NATION_")}
                     </span>
@@ -2557,13 +2487,13 @@
                     <!-- Improvement column header -->
                     <th
                       class="p-3 text-left border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                      onclick={() => toggleImprovementSort("improvement")}
+                      onclick={() => toggleSort("improvements", "improvement")}
                     >
                       <span class="inline-flex items-center gap-1">
                         Improvement
-                        {#if improvementSortColumn === "improvement"}
+                        {#if tables.improvements.sortColumn === "improvement"}
                           <span class="text-orange">
-                            {improvementSortDirection === "asc" ? "↑" : "↓"}
+                            {tables.improvements.sortDirection === "asc" ? "↑" : "↓"}
                           </span>
                         {/if}
                       </span>
@@ -2572,13 +2502,13 @@
                     {#each displayedImprovementNations as nation}
                       <th
                         class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleImprovementSort(`nation:${nation}`)}
+                        onclick={() => toggleSort("improvements", `nation:${nation}`)}
                       >
                         <span class="inline-flex items-center gap-1 justify-center">
                           {formatEnum(nation, "NATION_")}
-                          {#if improvementSortColumn === `nation:${nation}`}
+                          {#if tables.improvements.sortColumn === `nation:${nation}`}
                             <span class="text-orange">
-                              {improvementSortDirection === "asc" ? "↑" : "↓"}
+                              {tables.improvements.sortDirection === "asc" ? "↑" : "↓"}
                             </span>
                           {/if}
                         </span>
@@ -2588,13 +2518,13 @@
                     {#if displayedImprovementNations.length > 1}
                       <th
                         class="p-3 text-center border-b-2 border-brown text-brown font-bold cursor-pointer hover:bg-brown/20 select-none whitespace-nowrap"
-                        onclick={() => toggleImprovementSort("total")}
+                        onclick={() => toggleSort("improvements", "total")}
                       >
                         <span class="inline-flex items-center gap-1 justify-center">
                           Total
-                          {#if improvementSortColumn === "total"}
+                          {#if tables.improvements.sortColumn === "total"}
                             <span class="text-orange">
-                              {improvementSortDirection === "asc" ? "↑" : "↓"}
+                              {tables.improvements.sortDirection === "asc" ? "↑" : "↓"}
                             </span>
                           {/if}
                         </span>
