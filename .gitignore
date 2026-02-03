@@ -34,7 +34,6 @@ vite.config.ts.timestamp-*
 # Rust / Cargo
 /src-tauri/target/
 **/target/
-Cargo.lock
 **/*.rs.bk
 *.pdb
 /src-tauri/.cargo/config.toml
