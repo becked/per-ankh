@@ -8,14 +8,45 @@
 
 use super::{ParseError, Result};
 use roxmltree::Document;
+use std::mem::ManuallyDrop;
 
 const LARGE_FILE_THRESHOLD: usize = 20 * 1024 * 1024; // 20 MB
 
 /// XML parse strategy
+///
+/// Owns both the XML string and the parsed document. The document borrows from
+/// the string, so we use ManuallyDrop to ensure correct drop order: document
+/// first (releases borrows), then string memory is freed.
 pub enum XmlDocument {
     /// Full DOM for small files (< 20 MB)
-    FullDom(String, Document<'static>),
+    /// Stores: (raw pointer to string for cleanup, parsed document)
+    FullDom(*mut str, ManuallyDrop<Document<'static>>),
     // Future: StreamingHybrid for large files
+}
+
+// Safety: XmlDocument is safe to send/share between threads because:
+// - The *mut str is only used for cleanup in Drop, never mutated after creation
+// - Document<'static> is Send+Sync (roxmltree documents are thread-safe for reading)
+unsafe impl Send for XmlDocument {}
+unsafe impl Sync for XmlDocument {}
+
+impl Drop for XmlDocument {
+    fn drop(&mut self) {
+        match self {
+            XmlDocument::FullDom(ptr, doc) => {
+                // Safety: Must drop document first since it borrows from the string.
+                // Then reclaim the string memory allocated via Box::into_raw().
+                // This is safe because:
+                // 1. ptr was created from Box::into_raw() in parse_full_dom()
+                // 2. We are the sole owner of this allocation
+                // 3. Document is dropped before we free the memory it references
+                unsafe {
+                    ManuallyDrop::drop(doc);
+                    let _ = Box::from_raw(*ptr);
+                }
+            }
+        }
+    }
 }
 
 impl XmlDocument {
@@ -30,13 +61,6 @@ impl XmlDocument {
     pub fn document(&self) -> &Document<'_> {
         match self {
             XmlDocument::FullDom(_, doc) => doc,
-        }
-    }
-
-    /// Get the XML content string
-    pub fn xml_content(&self) -> &str {
-        match self {
-            XmlDocument::FullDom(content, _) => content,
         }
     }
 }
@@ -60,30 +84,47 @@ pub fn parse_xml(xml_content: String) -> Result<XmlDocument> {
 }
 
 fn parse_full_dom(xml_content: String) -> Result<XmlDocument> {
-    // Parse into Document
-    // Note: We need to leak the string to get a 'static lifetime for Document
-    // This is safe because XmlDocument owns the string
-    let content_static: &'static str = Box::leak(xml_content.clone().into_boxed_str());
-    let doc = Document::parse(content_static).map_err(|e| {
-        let position = e.pos();
-        ParseError::MalformedXML {
-            location: format!("line {}, col {}", position.row, position.col),
-            message: e.to_string(),
-            context: super::create_xml_context(&xml_content, 0),
+    // Convert string to raw pointer so we can reclaim memory in Drop.
+    // This satisfies roxmltree's 'static lifetime requirement while allowing cleanup.
+    let ptr: *mut str = Box::into_raw(xml_content.into_boxed_str());
+
+    // Safety: ptr is valid and we maintain ownership until Drop
+    let content_static: &'static str = unsafe { &*ptr };
+
+    let doc = match Document::parse(content_static) {
+        Ok(doc) => doc,
+        Err(e) => {
+            let position = e.pos();
+            let context = super::create_xml_context(content_static, 0);
+            // Safety: Reclaim memory before returning error (no Document to drop)
+            unsafe {
+                let _ = Box::from_raw(ptr);
+            }
+            return Err(ParseError::MalformedXML {
+                location: format!("line {}, col {}", position.row, position.col),
+                message: e.to_string(),
+                context,
+            });
         }
-    })?;
+    };
 
     // Validate root element is <Root>
     let root = doc.root_element();
     if !root.has_tag_name("Root") {
+        let tag_name = root.tag_name().name().to_string();
+        // Drop doc first (releases borrows), then free memory
+        drop(doc);
+        unsafe {
+            let _ = Box::from_raw(ptr);
+        }
         return Err(ParseError::MalformedXML {
             location: "root element".to_string(),
-            message: format!("Expected <Root>, found <{}>", root.tag_name().name()),
+            message: format!("Expected <Root>, found <{}>", tag_name),
             context: "XML must have <Root> as the root element".to_string(),
         });
     }
 
-    Ok(XmlDocument::FullDom(xml_content, doc))
+    Ok(XmlDocument::FullDom(ptr, ManuallyDrop::new(doc)))
 }
 
 /// Helper trait for roxmltree nodes with better error handling
