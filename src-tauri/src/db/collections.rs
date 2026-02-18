@@ -101,12 +101,13 @@ pub fn delete_collection(conn: &Connection, collection_id: i32) -> duckdb::Resul
 ///
 /// Only one collection can be the default at a time.
 pub fn set_default_collection(conn: &Connection, collection_id: i32) -> duckdb::Result<()> {
-    conn.execute("UPDATE collections SET is_default = FALSE", [])?;
-    conn.execute(
+    let tx = conn.unchecked_transaction()?;
+    tx.execute("UPDATE collections SET is_default = FALSE", [])?;
+    tx.execute(
         "UPDATE collections SET is_default = TRUE WHERE collection_id = ?",
         [collection_id],
     )?;
-    Ok(())
+    tx.commit()
 }
 
 /// Move specific matches to a collection
