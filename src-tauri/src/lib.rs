@@ -1166,6 +1166,7 @@ async fn reset_database_cmd(
         log::info!("Database reset completed successfully");
         Ok(())
     })
+    .context("Failed to reset database")
     .map_err(|e| e.to_string())?;
 
     Ok("Database reset successfully".to_string())
@@ -1179,6 +1180,7 @@ async fn reset_database_cmd(
 #[tauri::command]
 async fn recover_database(app_handle: tauri::AppHandle) -> Result<String, String> {
     let db_path = db::connection::get_db_path(&app_handle)
+        .context("Failed to get database path for recovery")
         .map_err(|e| e.to_string())?;
 
     log::warn!("Database recovery requested, writing marker for: {:?}", db_path);
@@ -1378,6 +1380,7 @@ async fn get_story_events(
 
         Ok(events)
     })
+    .context("Failed to get story events")
     .map_err(|e| e.to_string())
 }
 
@@ -1420,6 +1423,7 @@ async fn get_event_logs(
 
         Ok(logs)
     })
+    .context("Failed to get event logs")
     .map_err(|e| e.to_string())
 }
 
@@ -1483,6 +1487,7 @@ async fn debug_event_log_player_ids(
 
         Ok(result)
     })
+    .context("Failed to get event log debug data")
     .map_err(|e| e.to_string())
 }
 
