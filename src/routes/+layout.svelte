@@ -1,5 +1,6 @@
 <script lang="ts">
 	import "../app.css";
+	import type { Snippet } from "svelte";
 	import { onMount } from "svelte";
 	import Header from "$lib/Header.svelte";
 	import GameSidebar from "$lib/GameSidebar.svelte";
@@ -7,6 +8,7 @@
 	import { checkForUpdates } from "$lib/utils/updater";
 	import type { Update } from "@tauri-apps/plugin-updater";
 
+	let { children }: { children: Snippet } = $props();
 	let pendingUpdate = $state<Update | null>(null);
 
 	onMount(async () => {
@@ -37,7 +39,7 @@
 
 	<div class="flex flex-1 overflow-hidden">
 		<div class="flex min-w-0 flex-1 flex-col">
-			<slot />
+			{@render children()}
 		</div>
 		<GameSidebar />
 	</div>
