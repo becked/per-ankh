@@ -238,3 +238,279 @@ pub fn get_event_logs(conn: &Connection, match_id: i64) -> duckdb::Result<Vec<Ev
 
     Ok(logs)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::schema::create_schema;
+    use duckdb::Connection;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> Connection {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+        create_schema(&conn).unwrap();
+        std::mem::forget(dir);
+        conn
+    }
+
+    fn insert_match(conn: &Connection, match_id: i64, total_turns: i32) {
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns)
+             VALUES (?, ?, 'test.zip', ?, ?)",
+            duckdb::params![
+                match_id,
+                format!("game_{}", match_id),
+                format!("hash_{}", match_id),
+                total_turns
+            ],
+        )
+        .unwrap();
+    }
+
+    fn insert_player(
+        conn: &Connection,
+        player_id: i32,
+        match_id: i64,
+        name: &str,
+        nation: &str,
+        is_human: bool,
+        is_save_owner: bool,
+    ) {
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            duckdb::params![player_id, match_id, name, name.to_lowercase(), nation, is_human, is_save_owner],
+        )
+        .unwrap();
+    }
+
+    fn insert_event_log(
+        conn: &Connection,
+        log_id: i32,
+        match_id: i64,
+        turn: i32,
+        log_type: &str,
+        player_id: i32,
+        description: &str,
+        data1: Option<&str>,
+    ) {
+        conn.execute(
+            "INSERT INTO event_logs (log_id, match_id, turn, log_type, player_id, description, data1)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            duckdb::params![log_id, match_id, turn, log_type, player_id, description, data1],
+        )
+        .unwrap();
+    }
+
+    // ---- Tier 1: Contract tests ----
+
+    #[test]
+    fn test_get_game_details_returns_match() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        conn.execute(
+            "UPDATE matches SET game_name = 'Test Campaign' WHERE match_id = 1",
+            [],
+        )
+        .unwrap();
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME", true, true);
+        insert_player(&conn, 2, 1, "Greece", "NATION_GREECE", false, false);
+
+        let details = get_game_details(&conn, 1).unwrap();
+        assert_eq!(details.match_id, 1);
+        assert_eq!(details.game_name, Some("Test Campaign".to_string()));
+        assert_eq!(details.total_turns, 50);
+        assert_eq!(details.players.len(), 2);
+        assert!(details.players.iter().any(|p| p.is_human));
+    }
+
+    #[test]
+    fn test_get_current_laws_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        let laws = get_current_laws(&conn, 1).unwrap();
+        assert!(laws.is_empty());
+    }
+
+    #[test]
+    fn test_get_current_laws_with_data() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME", true, true);
+        conn.execute(
+            "INSERT INTO laws (player_id, match_id, law_category, law, adopted_turn, change_count)
+             VALUES (1, 1, 'LAWCLASS_SLAVERY_FREEDOM', 'LAW_SLAVERY', 10, 1)",
+            [],
+        )
+        .unwrap();
+
+        let laws = get_current_laws(&conn, 1).unwrap();
+        assert_eq!(laws.len(), 1);
+        assert_eq!(laws[0].law, "LAW_SLAVERY");
+        assert_eq!(laws[0].law_category, "LAWCLASS_SLAVERY_FREEDOM");
+        assert_eq!(laws[0].player_name, "Rome");
+    }
+
+    #[test]
+    fn test_get_completed_techs_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        let techs = get_completed_techs(&conn, 1).unwrap();
+        assert!(techs.is_empty());
+    }
+
+    #[test]
+    fn test_get_completed_techs_from_event_logs() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME", true, true);
+        insert_event_log(
+            &conn,
+            1,
+            1,
+            15,
+            "TECH_DISCOVERED",
+            1,
+            "Discovered Trapping",
+            Some("TECH_TRAPPING"),
+        );
+
+        let techs = get_completed_techs(&conn, 1).unwrap();
+        assert_eq!(techs.len(), 1);
+        assert_eq!(techs[0].tech, "TECH_TRAPPING");
+        assert_eq!(techs[0].completed_turn, 15);
+        assert_eq!(techs[0].player_name, "Rome");
+    }
+
+    #[test]
+    fn test_get_story_events_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        let events = get_story_events(&conn, 1).unwrap();
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn test_get_event_logs_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        let logs = get_event_logs(&conn, 1).unwrap();
+        assert!(logs.is_empty());
+    }
+
+    // ---- Tier 2: Synthetic fixture tests ----
+
+    #[test]
+    fn test_get_current_laws_adoption_turn_from_events() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME", true, true);
+
+        // Laws table has placeholder adopted_turn=0
+        conn.execute(
+            "INSERT INTO laws (player_id, match_id, law_category, law, adopted_turn, change_count)
+             VALUES (1, 1, 'LAWCLASS_SLAVERY_FREEDOM', 'LAW_SLAVERY', 0, 1)",
+            [],
+        )
+        .unwrap();
+
+        // Event log has the real adoption turn
+        insert_event_log(
+            &conn,
+            1,
+            1,
+            25,
+            "LAW_ADOPTED",
+            1,
+            "Adopted <link=HELP_LINK,HELP_LAW,LAW_SLAVERY>Slavery</link>",
+            None,
+        );
+
+        let laws = get_current_laws(&conn, 1).unwrap();
+        assert_eq!(laws.len(), 1);
+        // Should use turn from event_logs (25), not from laws table (0)
+        assert_eq!(laws[0].adopted_turn, 25);
+    }
+
+    #[test]
+    fn test_get_story_events_limit_100() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 200);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME", true, true);
+
+        // Insert 110 story events
+        for i in 1..=110 {
+            conn.execute(
+                "INSERT INTO story_events (event_id, match_id, event_type, player_id, occurred_turn)
+                 VALUES (?, 1, 'EVENTSTORY_TEST', 1, ?)",
+                duckdb::params![i, i],
+            )
+            .unwrap();
+        }
+
+        let events = get_story_events(&conn, 1).unwrap();
+        assert_eq!(events.len(), 100);
+        // Should be the most recent 100 (ordered DESC)
+        assert_eq!(events[0].occurred_turn, 110);
+        assert_eq!(events[99].occurred_turn, 11);
+    }
+
+    #[test]
+    fn test_get_event_logs_deduplication() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME", true, true);
+        insert_player(&conn, 2, 1, "Greece", "NATION_GREECE", false, false);
+
+        // Two event logs with same turn/type and identical content after markup stripping.
+        // Only the markup tags differ (different link IDs), but the text is the same.
+        insert_event_log(
+            &conn,
+            1,
+            1,
+            10,
+            "DIPLOMATIC_EVENT",
+            1,
+            "Peace declared between <link=PLAYER_1_ID>nations</link>",
+            None,
+        );
+        insert_event_log(
+            &conn,
+            2,
+            1,
+            10,
+            "DIPLOMATIC_EVENT",
+            2,
+            "Peace declared between <link=PLAYER_2_ID>nations</link>",
+            None,
+        );
+
+        let logs = get_event_logs(&conn, 1).unwrap();
+        // After stripping markup, both become "Peace declared between nations" → deduplicated
+        assert_eq!(logs.len(), 1);
+        // player_name should be NULL since COUNT > 1
+        assert!(logs[0].player_name.is_none());
+    }
+
+    // ---- Tier 3: Real save invariant tests ----
+
+    #[test]
+    #[ignore]
+    fn test_real_save_game_details_invariants() {
+        let fixture = match super::super::test_fixtures::get_imported_fixture() {
+            Some(f) => f,
+            None => return,
+        };
+        let conn = Connection::open(&fixture.db_path).unwrap();
+
+        let details = get_game_details(&conn, fixture.match_id).unwrap();
+        assert!(!details.players.is_empty(), "Should have players");
+        assert!(
+            details.players.iter().any(|p| p.is_human),
+            "At least one player should be human"
+        );
+        assert!(details.total_turns > 0);
+    }
+}

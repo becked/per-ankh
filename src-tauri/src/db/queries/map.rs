@@ -348,3 +348,345 @@ pub fn get_units_produced(
 
     Ok(units)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::schema::create_schema;
+    use duckdb::Connection;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> Connection {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+        create_schema(&conn).unwrap();
+        std::mem::forget(dir);
+        conn
+    }
+
+    fn insert_match(conn: &Connection, match_id: i64, total_turns: i32) {
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns)
+             VALUES (?, ?, 'test.zip', ?, ?)",
+            duckdb::params![
+                match_id,
+                format!("game_{}", match_id),
+                format!("hash_{}", match_id),
+                total_turns
+            ],
+        )
+        .unwrap();
+    }
+
+    fn insert_player(
+        conn: &Connection,
+        player_id: i32,
+        match_id: i64,
+        name: &str,
+        nation: &str,
+    ) {
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner)
+             VALUES (?, ?, ?, ?, ?, true, true)",
+            duckdb::params![player_id, match_id, name, name.to_lowercase(), nation],
+        )
+        .unwrap();
+    }
+
+    fn insert_tile(
+        conn: &Connection,
+        tile_id: i32,
+        match_id: i64,
+        x: i32,
+        y: i32,
+        owner_player_id: Option<i32>,
+        owner_city_id: Option<i32>,
+    ) {
+        conn.execute(
+            "INSERT INTO tiles (tile_id, match_id, x, y, owner_player_id, owner_city_id, terrain)
+             VALUES (?, ?, ?, ?, ?, ?, 'TERRAIN_TEMPERATE')",
+            duckdb::params![tile_id, match_id, x, y, owner_player_id, owner_city_id],
+        )
+        .unwrap();
+    }
+
+    fn insert_city(
+        conn: &Connection,
+        city_id: i32,
+        match_id: i64,
+        name: &str,
+        player_id: i32,
+        tile_id: i32,
+        founded_turn: i32,
+    ) {
+        conn.execute(
+            "INSERT INTO cities (city_id, match_id, city_name, player_id, tile_id, founded_turn)
+             VALUES (?, ?, ?, ?, ?, ?)",
+            duckdb::params![city_id, match_id, name, player_id, tile_id, founded_turn],
+        )
+        .unwrap();
+    }
+
+    fn insert_tile_ownership(
+        conn: &Connection,
+        tile_id: i32,
+        match_id: i64,
+        turn: i32,
+        owner_player_id: Option<i32>,
+    ) {
+        conn.execute(
+            "INSERT INTO tile_ownership_history (tile_id, match_id, turn, owner_player_id)
+             VALUES (?, ?, ?, ?)",
+            duckdb::params![tile_id, match_id, turn, owner_player_id],
+        )
+        .unwrap();
+    }
+
+    // ---- Tier 1: Contract tests ----
+
+    #[test]
+    fn test_get_map_tiles_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        let tiles = get_map_tiles(&conn, 1).unwrap();
+        assert!(tiles.is_empty());
+    }
+
+    #[test]
+    fn test_get_map_tiles_returns_data() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
+        insert_tile(&conn, 100, 1, 5, 10, Some(1), None);
+
+        let tiles = get_map_tiles(&conn, 1).unwrap();
+        assert_eq!(tiles.len(), 1);
+        assert_eq!(tiles[0].x, 5);
+        assert_eq!(tiles[0].y, 10);
+        assert_eq!(tiles[0].terrain, Some("TERRAIN_TEMPERATE".to_string()));
+        assert_eq!(tiles[0].owner_nation, Some("NATION_ROME".to_string()));
+    }
+
+    #[test]
+    fn test_get_map_tiles_at_turn_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        let tiles = get_map_tiles_at_turn(&conn, 1, 5).unwrap();
+        assert!(tiles.is_empty());
+    }
+
+    #[test]
+    fn test_get_city_statistics_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        let stats = get_city_statistics(&conn, 1).unwrap();
+        assert!(stats.cities.is_empty());
+    }
+
+    #[test]
+    fn test_get_city_statistics_with_data() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
+        insert_tile(&conn, 100, 1, 5, 5, Some(1), Some(10));
+        insert_city(&conn, 10, 1, "Roma", 1, 100, 1);
+
+        let stats = get_city_statistics(&conn, 1).unwrap();
+        assert_eq!(stats.cities.len(), 1);
+        assert_eq!(stats.cities[0].city_name, "Roma");
+        assert_eq!(stats.cities[0].owner_nation, Some("NATION_ROME".to_string()));
+        assert_eq!(stats.cities[0].founded_turn, 1);
+    }
+
+    #[test]
+    fn test_get_improvement_data_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        let data = get_improvement_data(&conn, 1).unwrap();
+        assert!(data.improvements.is_empty());
+    }
+
+    #[test]
+    fn test_get_improvement_data_filters_null() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
+
+        // Tile without improvement
+        insert_tile(&conn, 100, 1, 5, 5, Some(1), None);
+        // Tile with improvement
+        conn.execute(
+            "INSERT INTO tiles (tile_id, match_id, x, y, improvement, owner_player_id)
+             VALUES (101, 1, 6, 5, 'IMPROVEMENT_FARM', 1)",
+            [],
+        )
+        .unwrap();
+
+        let data = get_improvement_data(&conn, 1).unwrap();
+        // Only the tile with improvement should be returned
+        assert_eq!(data.improvements.len(), 1);
+        assert_eq!(data.improvements[0].improvement, "IMPROVEMENT_FARM");
+    }
+
+    #[test]
+    fn test_get_units_produced_empty() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        let units = get_units_produced(&conn, 1).unwrap();
+        assert!(units.is_empty());
+    }
+
+    #[test]
+    fn test_get_units_produced_with_data() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
+        conn.execute(
+            "INSERT INTO player_units_produced (player_id, match_id, unit_type, count)
+             VALUES (1, 1, 'UNIT_WARRIOR', 5)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO player_units_produced (player_id, match_id, unit_type, count)
+             VALUES (1, 1, 'UNIT_ARCHER', 3)",
+            [],
+        )
+        .unwrap();
+
+        let units = get_units_produced(&conn, 1).unwrap();
+        assert_eq!(units.len(), 2);
+        // Sorted by count DESC
+        assert_eq!(units[0].unit_type, "UNIT_WARRIOR");
+        assert_eq!(units[0].count, 5);
+        assert_eq!(units[1].unit_type, "UNIT_ARCHER");
+        assert_eq!(units[1].count, 3);
+    }
+
+    // ---- Tier 2: Synthetic fixture tests ----
+
+    #[test]
+    fn test_map_tiles_at_turn_ownership_reconstruction() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 20);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
+        insert_player(&conn, 2, 1, "Greece", "NATION_GREECE");
+        insert_tile(&conn, 100, 1, 5, 5, Some(2), None);
+
+        // Tile owned by Rome at turn 3, then transferred to Greece at turn 8
+        insert_tile_ownership(&conn, 100, 1, 3, Some(1));
+        insert_tile_ownership(&conn, 100, 1, 8, Some(2));
+
+        // At turn 5: should be owned by Rome (latest ownership <= 5 is turn 3)
+        let tiles_t5 = get_map_tiles_at_turn(&conn, 1, 5).unwrap();
+        assert_eq!(tiles_t5.len(), 1);
+        assert_eq!(tiles_t5[0].owner_nation, Some("NATION_ROME".to_string()));
+
+        // At turn 10: should be owned by Greece (latest ownership <= 10 is turn 8)
+        let tiles_t10 = get_map_tiles_at_turn(&conn, 1, 10).unwrap();
+        assert_eq!(tiles_t10.len(), 1);
+        assert_eq!(tiles_t10[0].owner_nation, Some("NATION_GREECE".to_string()));
+    }
+
+    #[test]
+    fn test_map_tiles_at_turn_hides_improvements_for_unowned() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 20);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
+
+        // Tile with improvement in current state
+        conn.execute(
+            "INSERT INTO tiles (tile_id, match_id, x, y, improvement, has_road, owner_player_id, terrain)
+             VALUES (100, 1, 5, 5, 'IMPROVEMENT_FARM', true, 1, 'TERRAIN_TEMPERATE')",
+            [],
+        )
+        .unwrap();
+
+        // Tile only became owned at turn 10
+        insert_tile_ownership(&conn, 100, 1, 10, Some(1));
+
+        // At turn 5: tile unowned → improvement and road should be hidden
+        let tiles_t5 = get_map_tiles_at_turn(&conn, 1, 5).unwrap();
+        assert_eq!(tiles_t5.len(), 1);
+        assert!(tiles_t5[0].improvement.is_none());
+        assert!(!tiles_t5[0].has_road);
+        assert!(tiles_t5[0].owner_nation.is_none());
+
+        // At turn 15: tile owned → improvement and road visible
+        let tiles_t15 = get_map_tiles_at_turn(&conn, 1, 15).unwrap();
+        assert_eq!(tiles_t15.len(), 1);
+        assert_eq!(tiles_t15[0].improvement, Some("IMPROVEMENT_FARM".to_string()));
+        assert!(tiles_t15[0].has_road);
+        assert_eq!(tiles_t15[0].owner_nation, Some("NATION_ROME".to_string()));
+    }
+
+    #[test]
+    fn test_map_tiles_religions_populated() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 50);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
+        insert_tile(&conn, 100, 1, 5, 5, Some(1), Some(10));
+        insert_city(&conn, 10, 1, "Roma", 1, 100, 1);
+
+        // Set up religion
+        conn.execute(
+            "INSERT INTO religions (religion_id, match_id, religion_name, founder_player_id, founded_turn)
+             VALUES (1, 1, 'RELIGION_ZOROASTRIANISM', 1, 5)",
+            [],
+        )
+        .unwrap();
+        conn.execute(
+            "INSERT INTO city_religions (city_id, match_id, religion, acquired_turn)
+             VALUES (10, 1, 'RELIGION_ZOROASTRIANISM', 5)",
+            [],
+        )
+        .unwrap();
+
+        let tiles = get_map_tiles(&conn, 1).unwrap();
+        assert_eq!(tiles.len(), 1);
+        assert_eq!(tiles[0].religions.len(), 1);
+        assert_eq!(tiles[0].religions[0].religion_name, "RELIGION_ZOROASTRIANISM");
+        assert_eq!(tiles[0].religions[0].founder_nation, Some("NATION_ROME".to_string()));
+    }
+
+    // ---- Tier 3: Real save invariant tests ----
+
+    #[test]
+    #[ignore]
+    fn test_real_save_map_tiles_invariants() {
+        let fixture = match super::super::test_fixtures::get_imported_fixture() {
+            Some(f) => f,
+            None => return,
+        };
+        let conn = Connection::open(&fixture.db_path).unwrap();
+
+        let tiles = get_map_tiles(&conn, fixture.match_id).unwrap();
+        assert!(!tiles.is_empty(), "Should have map tiles");
+        // All tiles should have valid coordinates
+        for tile in &tiles {
+            assert!(tile.x >= 0);
+            assert!(tile.y >= 0);
+        }
+    }
+
+    #[test]
+    #[ignore]
+    fn test_real_save_map_tiles_at_turn_count() {
+        let fixture = match super::super::test_fixtures::get_imported_fixture() {
+            Some(f) => f,
+            None => return,
+        };
+        let conn = Connection::open(&fixture.db_path).unwrap();
+
+        let current_tiles = get_map_tiles(&conn, fixture.match_id).unwrap();
+        let turn1_tiles = get_map_tiles_at_turn(&conn, fixture.match_id, 1).unwrap();
+
+        // All tiles exist from game start — counts should match
+        assert_eq!(
+            current_tiles.len(),
+            turn1_tiles.len(),
+            "Tile count should be same at turn 1 as current state"
+        );
+    }
+}
