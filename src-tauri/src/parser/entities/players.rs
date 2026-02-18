@@ -149,7 +149,7 @@ pub fn parse_players(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMap
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::info!("Parsed {} players", count);
     Ok(count)

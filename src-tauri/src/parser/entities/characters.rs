@@ -157,7 +157,7 @@ pub fn parse_characters_core(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::info!("Parsed {} characters (Pass 1: core data)", count);
     Ok(count)

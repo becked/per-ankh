@@ -54,6 +54,6 @@ pub fn insert_tribes(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

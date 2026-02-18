@@ -96,7 +96,7 @@ pub fn insert_tiles_core(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::info!("Inserted {} tiles (core data only)", tiles.len());
     Ok(())

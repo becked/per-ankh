@@ -190,7 +190,7 @@ impl IdMapper {
         }
 
         // Flush appender to commit all rows
-        drop(app);
+        app.flush()?;
 
         Ok(())
     }

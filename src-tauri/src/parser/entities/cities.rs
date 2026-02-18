@@ -183,7 +183,7 @@ pub fn parse_cities(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::info!("Parsed {} cities", count);
     Ok(count)

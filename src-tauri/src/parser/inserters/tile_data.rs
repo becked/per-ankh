@@ -63,7 +63,7 @@ pub fn insert_tile_visibility(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -114,6 +114,6 @@ pub fn insert_tile_changes(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

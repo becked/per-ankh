@@ -164,7 +164,7 @@ pub fn insert_characters(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::debug!("Inserted {} characters", count);
     Ok(count)

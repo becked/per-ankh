@@ -38,7 +38,7 @@ pub fn insert_player_units_produced(
         app.append_row(params![player_db_id, match_id, unit_type, count])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -74,6 +74,6 @@ pub fn insert_city_units_produced(
         app.append_row(params![city_db_id, match_id, unit_type, count])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

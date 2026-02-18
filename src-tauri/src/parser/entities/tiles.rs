@@ -200,8 +200,7 @@ pub fn parse_tiles(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMappe
         ])?;
     }
 
-    // Explicitly drop appender to ensure data is flushed
-    drop(app);
+    app.flush()?;
 
     log::info!("Parsed {} tiles (core data only)", count);
     Ok(count)
@@ -398,8 +397,7 @@ pub fn parse_tile_ownership_history(
         ownership_app.append_row(params![tile_db_id, match_id, turn, owner_db_id])?;
     }
 
-    // Explicitly drop appender to ensure data is flushed
-    drop(ownership_app);
+    ownership_app.flush()?;
 
     log::info!("Parsed {} tile ownership history records", count);
     Ok(count)

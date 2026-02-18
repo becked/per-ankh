@@ -96,7 +96,7 @@ pub fn insert_cities(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::info!("Inserted {} cities", cities.len());
     Ok(())

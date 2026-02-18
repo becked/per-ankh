@@ -70,7 +70,7 @@ pub fn parse_tribes(doc: &XmlDocument, conn: &Connection, id_mapper: &mut IdMapp
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::info!("Parsed {} tribes", count);
     Ok(count)
