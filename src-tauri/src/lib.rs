@@ -3,240 +3,19 @@
 // Modules:
 // - db: Database connection and schema management
 // - parser: ZIP extraction, XML parsing, ID mapping
+// - types: Serializable response types for Tauri commands
 
 pub mod db;
 pub mod parser;
+pub mod types;
 
 use anyhow::Context;
 use db::collections::Collection;
 use parser::ImportResult;
-use serde::Serialize;
 use std::path::PathBuf;
 use std::time::Instant;
 use tauri::{Emitter, Manager};
-use ts_rs::TS;
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct NationStats {
-    pub nation: String,
-    #[ts(type = "number")]
-    pub games_played: i64,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct GameStatistics {
-    #[ts(type = "number")]
-    pub total_games: i64,
-    pub nations: Vec<NationStats>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct GameInfo {
-    #[ts(type = "number")]
-    pub match_id: i64,
-    pub game_name: Option<String>,
-    pub save_date: Option<String>,
-    pub turn_year: Option<i32>,
-    pub save_owner_nation: Option<String>,
-    pub total_turns: Option<i32>,
-    pub save_owner_won: Option<bool>,
-    pub collection_id: i32,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct PlayerInfo {
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub is_human: bool,
-    pub legitimacy: Option<i32>,
-    pub state_religion: Option<String>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct GameDetails {
-    #[ts(type = "number")]
-    pub match_id: i64,
-    pub game_name: Option<String>,
-    pub save_date: Option<String>,
-    pub total_turns: i32,
-    pub map_size: Option<String>,
-    pub map_width: Option<i32>,
-    pub map_height: Option<i32>,
-    pub map_class: Option<String>,
-    pub game_mode: Option<String>,
-    pub opponent_level: Option<String>,
-    pub difficulty: Option<String>,
-    pub victory_conditions: Option<String>,
-    pub enabled_mods: Option<String>,
-    pub enabled_dlc: Option<String>,
-    #[ts(type = "number | null")]
-    pub winner_player_id: Option<i64>,
-    pub winner_name: Option<String>,
-    pub winner_civilization: Option<String>,
-    pub winner_victory_type: Option<String>,
-    pub players: Vec<PlayerInfo>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct PlayerHistoryPoint {
-    pub turn: i32,
-    pub points: Option<i32>,
-    pub military_power: Option<i32>,
-    pub legitimacy: Option<i32>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct PlayerHistory {
-    pub player_id: i32,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub history: Vec<PlayerHistoryPoint>,
-}
-
-#[derive(Debug, Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct YieldDataPoint {
-    pub turn: i32,
-    /// Display value (already converted from fixed-point by dividing by 10)
-    pub amount: Option<f64>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct YieldHistory {
-    pub player_id: i32,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub yield_type: String,
-    pub data: Vec<YieldDataPoint>,
-}
-
-/// A single save date entry for the calendar chart
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct SaveDateEntry {
-    /// Date in YYYY-MM-DD format
-    pub date: String,
-    /// Nation the save owner played as (e.g., "NATION_ROME")
-    pub nation: Option<String>,
-}
-
-#[derive(Clone, Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct ImportProgress {
-    /// Number of files processed so far
-    #[ts(type = "number")]
-    pub current: usize,
-    /// Total number of files to import
-    #[ts(type = "number")]
-    pub total: usize,
-    /// Name of the file currently being processed
-    pub current_file: String,
-    /// Milliseconds elapsed since import started
-    #[ts(type = "number")]
-    pub elapsed_ms: u64,
-    /// Estimated milliseconds remaining
-    #[ts(type = "number")]
-    pub estimated_remaining_ms: u64,
-    /// Import speed in files per second
-    pub speed: f64,
-    /// Result of the current file import (if completed)
-    pub result: Option<ImportResult>,
-    /// Current parsing phase within the file (e.g., "Parsing characters")
-    pub current_phase: Option<String>,
-    /// Progress within current file (0.0 to 1.0, where 1.0 = file complete)
-    pub file_progress: Option<f64>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct FileImportError {
-    pub file_name: String,
-    pub error: String,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct BatchImportResult {
-    #[ts(type = "number")]
-    pub total_files: usize,
-    #[ts(type = "number")]
-    pub successful: usize,
-    #[ts(type = "number")]
-    pub failed: usize,
-    #[ts(type = "number")]
-    pub skipped: usize,
-    pub errors: Vec<FileImportError>,
-    #[ts(type = "number")]
-    pub duration_ms: u64,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct NationDynastyRow {
-    pub nation: Option<String>,
-    pub dynasty: Option<String>,
-    #[ts(type = "number")]
-    pub count: i64,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct KnownOnlineId {
-    pub online_id: String,
-    pub player_names: Vec<String>,
-    #[ts(type = "number")]
-    pub save_count: i64,
-}
-
-/// Religion info with founder nation for map visualization
-#[derive(Serialize, Clone, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct ReligionInfo {
-    pub religion_name: String,
-    pub founder_nation: Option<String>,
-}
-
-/// Tile data for map visualization
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct MapTile {
-    pub x: i32,
-    pub y: i32,
-    pub terrain: Option<String>,
-    pub height: Option<String>,
-    pub vegetation: Option<String>,
-    pub resource: Option<String>,
-    pub improvement: Option<String>,
-    pub improvement_pillaged: bool,
-    pub has_road: bool,
-    pub specialist: Option<String>,
-    pub tribe_site: Option<String>,
-    /// All religions present in this tile's city (up to 5)
-    pub religions: Vec<ReligionInfo>,
-    pub river_w: bool,
-    pub river_sw: bool,
-    pub river_se: bool,
-    /// Resolved from owner_player_id -> players.nation
-    pub owner_nation: Option<String>,
-    /// Resolved from owner_city_id -> cities.city_name
-    pub owner_city: Option<String>,
-    /// True if this tile is a city center
-    pub is_city_center: bool,
-    /// True if this tile is a capital city center
-    pub is_capital: bool,
-    /// City ID for religion lookup (internal use)
-    #[serde(skip)]
-    #[ts(skip)]
-    pub owner_city_id: Option<i64>,
-}
+use types::*;
 
 // Initialize logging to both console and file (dev builds only)
 #[cfg(debug_assertions)]
@@ -295,394 +74,56 @@ async fn import_save_file_cmd(
     .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get game statistics
-///
-/// Returns total number of games and nation play counts
-/// Optionally filters by collection_id (None = all games)
 #[tauri::command]
 async fn get_game_statistics(
     collection_id: Option<i32>,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<GameStatistics, String> {
-    pool.with_connection(|conn| {
-        // Get total games count
-        let total_games: i64 = match collection_id {
-            Some(cid) => conn.query_row(
-                "SELECT COUNT(*) FROM matches WHERE collection_id = ?",
-                [cid],
-                |row| row.get(0),
-            )?,
-            None => conn.query_row(
-                "SELECT COUNT(*) FROM matches",
-                [],
-                |row| row.get(0),
-            )?,
-        };
-
-        // Get nation statistics - count games per save owner's nation
-        // Uses same logic as get_games_list: prefer is_save_owner, fall back to first human player
-        let base_query = "SELECT COALESCE(so.nation, fh.nation) as nation, COUNT(*) as games_played
-                 FROM matches m
-                 LEFT JOIN (
-                     SELECT match_id, nation FROM players WHERE is_save_owner = TRUE
-                 ) so ON m.match_id = so.match_id
-                 LEFT JOIN (
-                     SELECT match_id, nation,
-                            ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY player_id) as rn
-                     FROM players WHERE is_human = TRUE
-                 ) fh ON m.match_id = fh.match_id AND fh.rn = 1
-                 WHERE COALESCE(so.nation, fh.nation) IS NOT NULL";
-
-        let query = match collection_id {
-            Some(_) => format!("{} AND m.collection_id = ? GROUP BY COALESCE(so.nation, fh.nation) ORDER BY games_played DESC", base_query),
-            None => format!("{} GROUP BY COALESCE(so.nation, fh.nation) ORDER BY games_played DESC", base_query),
-        };
-
-        let mut stmt = conn.prepare(&query)?;
-
-        let nations = match collection_id {
-            Some(cid) => stmt
-                .query_map([cid], |row| {
-                    Ok(NationStats {
-                        nation: row.get(0)?,
-                        games_played: row.get(1)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-            None => stmt
-                .query_map([], |row| {
-                    Ok(NationStats {
-                        nation: row.get(0)?,
-                        games_played: row.get(1)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-        };
-
-        Ok(GameStatistics {
-            total_games,
-            nations,
-        })
-    })
-    .context("Failed to get game statistics")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::games::get_game_statistics(conn, collection_id)?))
+        .context("Failed to get game statistics")
+        .map_err(|e| e.to_string())
 }
 
-/// Get save dates with nation info for calendar chart
-///
-/// Returns one entry per save file with date and the save owner's nation
-/// Optionally filters by collection_id (None = all games)
 #[tauri::command]
 async fn get_save_dates(
     collection_id: Option<i32>,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<SaveDateEntry>, String> {
-    pool.with_connection(|conn| {
-        // Get save dates with nation from save owner
-        // Use STRFTIME to normalize to YYYY-MM-DD format
-        let base_query = "SELECT STRFTIME(m.save_date, '%Y-%m-%d') as date, p.nation
-             FROM matches m
-             LEFT JOIN players p ON m.match_id = p.match_id AND p.is_save_owner = TRUE
-             WHERE m.save_date IS NOT NULL";
-
-        let query = match collection_id {
-            Some(_) => format!("{} AND m.collection_id = ? ORDER BY m.save_date", base_query),
-            None => format!("{} ORDER BY m.save_date", base_query),
-        };
-
-        let mut stmt = conn.prepare(&query)?;
-
-        let entries = match collection_id {
-            Some(cid) => stmt
-                .query_map([cid], |row| {
-                    Ok(SaveDateEntry {
-                        date: row.get(0)?,
-                        nation: row.get(1)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-            None => stmt
-                .query_map([], |row| {
-                    Ok(SaveDateEntry {
-                        date: row.get(0)?,
-                        nation: row.get(1)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-        };
-
-        Ok(entries)
-    })
-    .context("Failed to get save dates")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::games::get_save_dates(conn, collection_id)?))
+        .context("Failed to get save dates")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get list of all games
-///
-/// Returns list of games with basic info sorted by save date (newest first)
-/// Optionally filters by collection_id (None = all games)
 #[tauri::command]
 async fn get_games_list(
     collection_id: Option<i32>,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<GameInfo>, String> {
-    pool.with_connection(|conn| {
-        // Get all games ordered by save_date (newest first)
-        // Join with save owner player (is_save_owner = TRUE) to get their nation and player_id
-        // Falls back to first human player's nation when save owner is unknown (e.g., multiplayer
-        // saves from opponent's machine where our OnlineID isn't present)
-        // Compare winner_player_id with save owner player_id to determine if save owner won
-        let base_query = "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
-                        m.total_turns,
-                        COALESCE(so.nation, fh.nation) as nation,
-                        CASE
-                            WHEN m.winner_player_id IS NULL THEN NULL
-                            WHEN so.player_id IS NOT NULL AND m.winner_player_id = so.player_id THEN TRUE
-                            WHEN so.player_id IS NOT NULL THEN FALSE
-                            ELSE NULL
-                        END as save_owner_won,
-                        m.collection_id
-                 FROM matches m
-                 LEFT JOIN (
-                     SELECT match_id, nation, player_id
-                     FROM players WHERE is_save_owner = TRUE
-                 ) so ON m.match_id = so.match_id
-                 LEFT JOIN (
-                     SELECT match_id, nation, player_id,
-                            ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY player_id) as rn
-                     FROM players WHERE is_human = TRUE
-                 ) fh ON m.match_id = fh.match_id AND fh.rn = 1";
-
-        let query = match collection_id {
-            Some(_) => format!("{} WHERE m.collection_id = ? ORDER BY m.save_date DESC", base_query),
-            None => format!("{} ORDER BY m.save_date DESC", base_query),
-        };
-
-        let mut stmt = conn.prepare(&query)?;
-
-        let games = match collection_id {
-            Some(cid) => stmt
-                .query_map([cid], |row| {
-                    Ok(GameInfo {
-                        match_id: row.get(0)?,
-                        game_name: row.get(1)?,
-                        save_date: row.get(2)?,
-                        turn_year: None,
-                        total_turns: row.get(3)?,
-                        save_owner_nation: row.get(4)?,
-                        save_owner_won: row.get(5)?,
-                        collection_id: row.get(6)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-            None => stmt
-                .query_map([], |row| {
-                    Ok(GameInfo {
-                        match_id: row.get(0)?,
-                        game_name: row.get(1)?,
-                        save_date: row.get(2)?,
-                        turn_year: None,
-                        total_turns: row.get(3)?,
-                        save_owner_nation: row.get(4)?,
-                        save_owner_won: row.get(5)?,
-                        collection_id: row.get(6)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?,
-        };
-
-        Ok(games)
-    })
-    .context("Failed to get games list")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::games::get_games_list(conn, collection_id)?))
+        .context("Failed to get games list")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get detailed information about a specific game
-///
-/// Returns game details including match info, map info, and player list
 #[tauri::command]
 async fn get_game_details(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<GameDetails, String> {
-    pool.with_connection(|conn| {
-        // Get match details with winner and save owner information via LEFT JOINs
-        let mut stmt = conn
-            .prepare(
-                "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
-                        m.total_turns, m.map_size, m.map_width, m.map_height, m.map_class,
-                        m.game_mode, m.opponent_level, m.victory_conditions, m.enabled_mods, m.enabled_dlc,
-                        m.winner_player_id,
-                        wp.player_name as winner_name,
-                        wp.nation as winner_civilization,
-                        m.winner_victory_type,
-                        so.difficulty as save_owner_difficulty
-                 FROM matches m
-                 LEFT JOIN players wp ON m.match_id = wp.match_id AND m.winner_player_id = wp.player_id
-                 LEFT JOIN players so ON m.match_id = so.match_id AND so.is_save_owner = TRUE
-                 WHERE m.match_id = ?"
-            )?;
-
-        let game_details = stmt
-            .query_row([match_id], |row| {
-                Ok(GameDetails {
-                    match_id: row.get(0)?,
-                    game_name: row.get(1)?,
-                    save_date: row.get(2)?,
-                    total_turns: row.get(3)?,
-                    map_size: row.get(4)?,
-                    map_width: row.get(5)?,
-                    map_height: row.get(6)?,
-                    map_class: row.get(7)?,
-                    game_mode: row.get(8)?,
-                    opponent_level: row.get(9)?,
-                    difficulty: row.get(17)?,
-                    victory_conditions: row.get(10)?,
-                    enabled_mods: row.get(11)?,
-                    enabled_dlc: row.get(12)?,
-                    winner_player_id: row.get(13)?,
-                    winner_name: row.get(14)?,
-                    winner_civilization: row.get(15)?,
-                    winner_victory_type: row.get(16)?,
-                    players: Vec::new(), // Will be filled below
-                })
-            })?;
-
-        // Get players for this match
-        let mut players_stmt = conn
-            .prepare(
-                "SELECT player_name, nation, is_human, legitimacy, state_religion
-                 FROM players
-                 WHERE match_id = ?
-                 ORDER BY player_name"
-            )?;
-
-        let players = players_stmt
-            .query_map([match_id], |row| {
-                Ok(PlayerInfo {
-                    player_name: row.get(0)?,
-                    nation: row.get(1)?,
-                    is_human: row.get(2)?,
-                    legitimacy: row.get(3)?,
-                    state_religion: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(GameDetails {
-            players,
-            ..game_details
-        })
-    })
-    .context("Failed to get game details")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::match_data::get_game_details(conn, match_id)?))
+        .context("Failed to get game details")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get player history data for charts
-///
-/// Returns time-series data for victory points, military power, and legitimacy.
-/// Uses forward-fill to handle sparse data from game v1.0.81366+ (January 2026)
-/// where history elements only record values when they change.
 #[tauri::command]
 async fn get_player_history(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerHistory>, String> {
-    pool.with_connection(|conn| {
-        // Get total turns for this match to generate complete turn sequence
-        let total_turns: i32 = conn.query_row(
-            "SELECT total_turns FROM matches WHERE match_id = ?",
-            [match_id],
-            |row| row.get(0),
-        )?;
-
-        // Get all players for this match
-        let mut players_stmt = conn
-            .prepare(
-                "SELECT player_id, player_name, nation
-                 FROM players
-                 WHERE match_id = ?
-                 ORDER BY player_name"
-            )?;
-
-        let players: Vec<(i32, String, Option<String>)> = players_stmt
-            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        let mut result = Vec::new();
-
-        for (player_id, player_name, nation) in players {
-            // Query with forward-fill using DuckDB window functions.
-            // Generates complete turn sequence and fills gaps with LAST_VALUE.
-            let mut history_stmt = conn
-                .prepare(
-                    "WITH turns AS (
-                        SELECT UNNEST(RANGE(1, ? + 1)) AS turn
-                    ),
-                    sparse_data AS (
-                        SELECT
-                            t.turn,
-                            ph.points,
-                            mh.military_power,
-                            lh.legitimacy
-                        FROM turns t
-                        LEFT JOIN points_history ph
-                            ON ph.match_id = ? AND ph.player_id = ? AND ph.turn = t.turn
-                        LEFT JOIN military_history mh
-                            ON mh.match_id = ? AND mh.player_id = ? AND mh.turn = t.turn
-                        LEFT JOIN legitimacy_history lh
-                            ON lh.match_id = ? AND lh.player_id = ? AND lh.turn = t.turn
-                    )
-                    SELECT
-                        turn,
-                        LAST_VALUE(points IGNORE NULLS) OVER (
-                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                        ) AS points,
-                        LAST_VALUE(military_power IGNORE NULLS) OVER (
-                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                        ) AS military_power,
-                        LAST_VALUE(legitimacy IGNORE NULLS) OVER (
-                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                        ) AS legitimacy
-                    FROM sparse_data
-                    ORDER BY turn"
-                )?;
-
-            let history: Vec<PlayerHistoryPoint> = history_stmt
-                .query_map(
-                    [total_turns, match_id as i32, player_id, match_id as i32, player_id, match_id as i32, player_id],
-                    |row| {
-                        Ok(PlayerHistoryPoint {
-                            turn: row.get(0)?,
-                            points: row.get(1)?,
-                            military_power: row.get(2)?,
-                            legitimacy: row.get(3)?,
-                        })
-                    },
-                )?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-
-            // Include nation for player color lookup
-            result.push(PlayerHistory {
-                player_id,
-                player_name,
-                nation,
-                history,
-            });
-        }
-
-        Ok(result)
-    })
-    .context("Failed to get player history")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::history::get_player_history(conn, match_id)?))
+        .context("Failed to get player history")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get yield history data for specific yield types
-///
-/// Returns time-series data for requested yield types (e.g., YIELD_SCIENCE, YIELD_CIVICS).
-/// Uses forward-fill to handle sparse data from game v1.0.81366+ (January 2026).
-/// Prefers yield_total_history (accurate cumulative totals) when available,
-/// falls back to yield_history (rate-based) for older saves.
 #[tauri::command]
 async fn get_yield_history(
     match_id: i64,
@@ -690,83 +131,7 @@ async fn get_yield_history(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<YieldHistory>, String> {
     pool.with_connection(|conn| {
-        // Get total turns for this match to generate complete turn sequence
-        let total_turns: i32 = conn.query_row(
-            "SELECT total_turns FROM matches WHERE match_id = ?",
-            [match_id],
-            |row| row.get(0),
-        )?;
-
-        // Get all players for this match
-        let mut players_stmt = conn
-            .prepare(
-                "SELECT player_id, player_name, nation
-                 FROM players
-                 WHERE match_id = ?
-                 ORDER BY player_name"
-            )?;
-
-        let players: Vec<(i32, String, Option<String>)> = players_stmt
-            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        let mut result = Vec::new();
-
-        // For each player and each yield type, get the history with forward-fill
-        for (player_id, player_name, nation) in players {
-            for yield_type in &yield_types {
-                // Query with forward-fill using DuckDB window functions.
-                // Prefers yield_total_history (accurate totals) when available,
-                // falls back to yield_history (rate-based) for older saves.
-                let mut yield_stmt = conn
-                    .prepare(
-                        "WITH turns AS (
-                            SELECT UNNEST(RANGE(1, ? + 1)) AS turn
-                        ),
-                        source_data AS (
-                            SELECT
-                                t.turn,
-                                COALESCE(tot.amount, rate.amount) AS amount
-                            FROM turns t
-                            LEFT JOIN yield_total_history tot
-                                ON tot.match_id = ? AND tot.player_id = ? AND tot.yield_type = ? AND tot.turn = t.turn
-                            LEFT JOIN yield_history rate
-                                ON rate.match_id = ? AND rate.player_id = ? AND rate.yield_type = ? AND rate.turn = t.turn
-                        )
-                        SELECT
-                            turn,
-                            LAST_VALUE(amount / 10.0 IGNORE NULLS) OVER (
-                                ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                            ) AS display_amount
-                        FROM source_data
-                        ORDER BY turn"
-                    )?;
-
-                let params: [&dyn duckdb::ToSql; 7] = [
-                    &total_turns,
-                    &match_id, &(player_id as i64), &yield_type.as_str(),
-                    &match_id, &(player_id as i64), &yield_type.as_str()
-                ];
-                let data: Vec<YieldDataPoint> = yield_stmt
-                    .query_map(&params[..], |row| {
-                        Ok(YieldDataPoint {
-                            turn: row.get(0)?,
-                            amount: row.get(1)?,
-                        })
-                    })?
-                    .collect::<std::result::Result<Vec<_>, _>>()?;
-
-                result.push(YieldHistory {
-                    player_id,
-                    player_name: player_name.clone(),
-                    nation: nation.clone(),
-                    yield_type: yield_type.clone(),
-                    data,
-                });
-            }
-        }
-
-        Ok(result)
+        Ok(db::queries::history::get_yield_history(conn, match_id, &yield_types)?)
     })
     .context("Failed to get yield history")
     .map_err(|e| e.to_string())
@@ -1025,122 +390,31 @@ async fn run_event_test(app: tauri::AppHandle) -> Result<String, String> {
     Ok("Event test started - will emit 12 events over 60 seconds".to_string())
 }
 
-/// Tauri command to get nation and dynasty data for debugging
-///
-/// Returns all unique combinations of nation and dynasty values from the database
 #[tauri::command]
 async fn get_nation_dynasty_data(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<NationDynastyRow>, String> {
-    pool.with_connection(|conn| {
-        let mut stmt = conn
-            .prepare(
-                "SELECT nation, dynasty, COUNT(*) as count
-                 FROM players
-                 GROUP BY nation, dynasty
-                 ORDER BY nation, dynasty"
-            )?;
-
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(NationDynastyRow {
-                    nation: row.get(0)?,
-                    dynasty: row.get(1)?,
-                    count: row.get(2)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(rows)
-    })
-    .context("Failed to get nation/dynasty data")
-    .map_err(|e| e.to_string())
-}
-
-/// Tauri command to get detailed player data per match for debugging
-///
-/// Returns match_id, nation, and dynasty for all players
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct PlayerDebugRow {
-    #[ts(type = "number")]
-    pub match_id: i64,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub dynasty: Option<String>,
-    pub is_human: bool,
+    pool.with_connection(|conn| Ok(db::queries::admin::get_nation_dynasty_data(conn)?))
+        .context("Failed to get nation/dynasty data")
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn get_player_debug_data(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerDebugRow>, String> {
-    pool.with_connection(|conn| {
-        let mut stmt = conn
-            .prepare(
-                "SELECT match_id, player_name, nation, dynasty, is_human
-                 FROM players
-                 ORDER BY match_id, player_name"
-            )?;
-
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(PlayerDebugRow {
-                    match_id: row.get(0)?,
-                    player_name: row.get(1)?,
-                    nation: row.get(2)?,
-                    dynasty: row.get(3)?,
-                    is_human: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(rows)
-    })
-    .context("Failed to get player debug data")
-    .map_err(|e| e.to_string())
-}
-
-/// Tauri command to get match data for debugging
-///
-/// Returns basic info about all matches in the database
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct MatchDebugRow {
-    #[ts(type = "number")]
-    pub match_id: i64,
-    pub game_id: String,
-    pub game_name: Option<String>,
-    pub file_name: String,
+    pool.with_connection(|conn| Ok(db::queries::admin::get_player_debug_data(conn)?))
+        .context("Failed to get player debug data")
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
 async fn get_match_debug_data(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<MatchDebugRow>, String> {
-    pool.with_connection(|conn| {
-        let mut stmt = conn
-            .prepare(
-                "SELECT match_id, game_id, game_name, file_name
-                 FROM matches
-                 ORDER BY match_id"
-            )?;
-
-        let rows = stmt
-            .query_map([], |row| {
-                Ok(MatchDebugRow {
-                    match_id: row.get(0)?,
-                    game_id: row.get(1)?,
-                    game_name: row.get(2)?,
-                    file_name: row.get(3)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(rows)
-    })
-    .context("Failed to get match debug data")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::admin::get_match_debug_data(conn)?))
+        .context("Failed to get match debug data")
+        .map_err(|e| e.to_string())
 }
 
 /// Tauri command to reset the database
@@ -1197,191 +471,14 @@ async fn recover_database(app_handle: tauri::AppHandle) -> Result<String, String
     Ok("Recovery marker written. Please restart the application to complete the database reset.".to_string())
 }
 
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct StoryEvent {
-    #[ts(type = "number")]
-    pub event_id: i64,
-    pub event_type: String,
-    pub player_name: String,
-    pub occurred_turn: i32,
-    pub primary_character_name: Option<String>,
-    pub city_name: Option<String>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct EventLog {
-    #[ts(type = "number")]
-    pub log_id: i64,
-    pub log_type: String,
-    pub turn: i32,
-    pub player_name: Option<String>,
-    pub description: Option<String>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct LawAdoptionDataPoint {
-    pub turn: i32,
-    pub law_count: i32,
-    /// The name of the law adopted at this point (None for synthetic start/end points)
-    pub law_name: Option<String>,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct LawAdoptionHistory {
-    pub player_id: i32,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub data: Vec<LawAdoptionDataPoint>,
-}
-
-/// A single law entry for a player
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct PlayerLaw {
-    pub player_id: i32,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub law_category: String,
-    pub law: String,
-    pub adopted_turn: i32,
-    pub change_count: i32,
-}
-
-/// A single data point in a tech discovery timeline
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct TechDiscoveryDataPoint {
-    pub turn: i32,
-    pub tech_count: i32,
-    /// The name of the tech discovered at this point (None for synthetic start/end points)
-    pub tech_name: Option<String>,
-}
-
-/// Tech discovery history for a player
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct TechDiscoveryHistory {
-    pub player_id: i32,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub data: Vec<TechDiscoveryDataPoint>,
-}
-
-/// A single completed tech entry for a player
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct PlayerTech {
-    pub player_id: i32,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub tech: String,
-    pub completed_turn: i32,
-}
-
-/// Unit production data for the Military tab
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct PlayerUnitProduced {
-    pub player_id: i32,
-    pub player_name: String,
-    pub nation: Option<String>,
-    pub unit_type: String,
-    pub count: i32,
-}
-
-/// City information for the Cities tab
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct CityInfo {
-    #[ts(type = "number")]
-    pub city_id: i64,
-    pub city_name: String,
-    pub owner_nation: Option<String>,
-    pub family: Option<String>,
-    pub founded_turn: i32,
-    pub is_capital: bool,
-    pub citizens: i32,
-    pub governor_name: Option<String>,
-    /// Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
-    pub culture_level: Option<String>,
-    pub growth_count: i32,
-    pub unit_production_count: i32,
-    pub specialist_count: i32,
-    pub buy_tile_count: i32,
-    pub hurry_civics_count: i32,
-    pub hurry_money_count: i32,
-    pub hurry_training_count: i32,
-    pub hurry_population_count: i32,
-}
-
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct CityStatistics {
-    pub cities: Vec<CityInfo>,
-}
-
-/// Single improvement with its city and owner information
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct ImprovementInfo {
-    pub nation: Option<String>,
-    pub city_name: Option<String>,
-    pub improvement: String,
-    pub specialist: Option<String>,
-    pub resource: Option<String>,
-}
-
-/// Response for get_improvement_data command
-#[derive(Serialize, TS)]
-#[ts(export, export_to = "../../src/lib/types/")]
-pub struct ImprovementData {
-    pub improvements: Vec<ImprovementInfo>,
-}
-
 #[tauri::command]
 async fn get_story_events(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<StoryEvent>, String> {
-    pool.with_connection(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT
-                se.event_id,
-                se.event_type,
-                p.player_name,
-                se.occurred_turn,
-                c.first_name as character_name,
-                ci.city_name
-             FROM story_events se
-             JOIN players p ON se.player_id = p.player_id AND se.match_id = p.match_id
-             LEFT JOIN characters c ON se.primary_character_id = c.character_id AND se.match_id = c.match_id
-             LEFT JOIN cities ci ON se.city_id = ci.city_id AND se.match_id = ci.match_id
-             WHERE se.match_id = ?
-             ORDER BY se.occurred_turn DESC, se.event_id DESC
-             LIMIT 100"
-        )?;
-
-        let events = stmt
-            .query_map([match_id], |row| {
-                Ok(StoryEvent {
-                    event_id: row.get(0)?,
-                    event_type: row.get(1)?,
-                    player_name: row.get(2)?,
-                    occurred_turn: row.get(3)?,
-                    primary_character_name: row.get(4)?,
-                    city_name: row.get(5)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(events)
-    })
-    .context("Failed to get story events")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::match_data::get_story_events(conn, match_id)?))
+        .context("Failed to get story events")
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -1389,717 +486,107 @@ async fn get_event_logs(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<EventLog>, String> {
-    pool.with_connection(|conn| {
-        // Strip markup tags from description for grouping to properly deduplicate
-        // events that differ only in player-specific markup (e.g., link IDs)
-        let mut stmt = conn.prepare(
-            "SELECT
-                MIN(el.log_id) as log_id,
-                el.log_type,
-                el.turn,
-                CASE
-                    WHEN COUNT(*) > 1 THEN NULL
-                    ELSE COALESCE(MAX(p.player_name), 'Player')
-                END as player_name,
-                MIN(el.description) as description
-             FROM event_logs el
-             LEFT JOIN players p ON el.player_id = p.player_id AND el.match_id = p.match_id
-             WHERE el.match_id = ?
-             GROUP BY el.turn, el.log_type, regexp_replace(el.description, '<[^>]*>', '', 'g')
-             ORDER BY el.turn DESC, MIN(el.log_id) DESC"
-        )?;
-
-        let logs = stmt
-            .query_map([match_id], |row| {
-                Ok(EventLog {
-                    log_id: row.get(0)?,
-                    log_type: row.get(1)?,
-                    turn: row.get(2)?,
-                    player_name: row.get(3)?,
-                    description: row.get(4)?,
-                })
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Ok(logs)
-    })
-    .context("Failed to get event logs")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::match_data::get_event_logs(conn, match_id)?))
+        .context("Failed to get event logs")
+        .map_err(|e| e.to_string())
 }
 
-/// Debug command to investigate player_id mismatch in event_logs
 #[tauri::command]
 async fn debug_event_log_player_ids(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<String, String> {
     pool.with_connection(|conn| {
-        // Get distinct player_ids from event_logs
-        let mut stmt = conn.prepare(
-            "SELECT DISTINCT player_id FROM event_logs WHERE match_id = ? ORDER BY player_id"
-        )?;
-        let event_log_ids: Vec<Option<i64>> = stmt
-            .query_map([match_id], |row| row.get(0))?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // Get player_ids from players table
-        let mut stmt = conn.prepare(
-            "SELECT player_id, player_name FROM players WHERE match_id = ? ORDER BY player_id"
-        )?;
-        let players: Vec<(i64, String)> = stmt
-            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?)))?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        // Get a sample of event_logs with their player_ids
-        let mut stmt = conn.prepare(
-            "SELECT log_id, turn, log_type, player_id, description
-             FROM event_logs
-             WHERE match_id = ?
-             ORDER BY turn DESC
-             LIMIT 10"
-        )?;
-        let sample_logs: Vec<(i64, i32, String, Option<i64>, Option<String>)> = stmt
-            .query_map([match_id], |row| {
-                Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?, row.get(4)?))
-            })?
-            .collect::<Result<Vec<_>, _>>()?;
-
-        let mut result = format!("=== Debug for match_id {} ===\n\n", match_id);
-
-        result.push_str("Player IDs in event_logs:\n");
-        for id in &event_log_ids {
-            result.push_str(&format!("  {:?}\n", id));
-        }
-
-        result.push_str("\nPlayers in players table:\n");
-        for (id, name) in &players {
-            result.push_str(&format!("  {} - {}\n", id, name));
-        }
-
-        result.push_str("\nSample event logs (last 10):\n");
-        for (log_id, turn, log_type, player_id, desc) in &sample_logs {
-            result.push_str(&format!(
-                "  log_id={}, turn={}, type={}, player_id={:?}, desc={}\n",
-                log_id, turn, log_type, player_id,
-                desc.as_ref().map(|s| &s[..s.len().min(50)]).unwrap_or("None")
-            ));
-        }
-
-        Ok(result)
+        Ok(db::queries::admin::debug_event_log_player_ids(conn, match_id)?)
     })
     .context("Failed to get event log debug data")
     .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get law adoption history for human players
-///
-/// Returns cumulative law adoption data over time for each human player in the match
 #[tauri::command]
 async fn get_law_adoption_history(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<LawAdoptionHistory>, String> {
     pool.with_connection(|conn| {
-        // Get the final turn number for this match
-        let final_turn: i32 = conn.query_row(
-            "SELECT total_turns FROM matches WHERE match_id = ?",
-            [match_id],
-            |row| row.get(0)
-        )?;
-
-        // Get all players for this match
-        let mut players_stmt = conn
-            .prepare(
-                "SELECT player_id, player_name, nation
-                 FROM players
-                 WHERE match_id = ?
-                 ORDER BY player_name"
-            )?;
-
-        let players: Vec<(i32, String, Option<String>)> = players_stmt
-            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        let mut result = Vec::new();
-
-        for (player_id, player_name, nation) in players {
-            // Get ALL law adoption events with their names and running cumulative law class count.
-            // This includes switches within the same class (which don't change the count).
-            //
-            // Note: data1 is NULL because law names (strings) can't be parsed as integers.
-            // Instead, we extract the law name from the description field using regex.
-            // Description format: "Adopted <link=HELP_LINK,HELP_LAW,LAW_XXX>Name</link>"
-            let mut law_stmt = conn
-                .prepare(
-                    "WITH law_mapping AS (
-                        -- Build a mapping of law -> law_category from all imported games
-                        SELECT DISTINCT law, law_category FROM laws
-                     ),
-                     all_law_events AS (
-                        -- Extract all law adoption events with law names
-                        SELECT
-                            e.turn,
-                            regexp_extract(e.description, 'HELP_LAW,([A-Z_]+)', 1) as law_name,
-                            e.log_id
-                        FROM event_logs e
-                        WHERE e.match_id = ?
-                          AND e.player_id = ?
-                          AND e.log_type = 'LAW_ADOPTED'
-                          AND e.description IS NOT NULL
-                     ),
-                     events_with_class AS (
-                        -- Join with law mapping to get law classes
-                        SELECT
-                            ale.turn,
-                            ale.law_name,
-                            m.law_category,
-                            ale.log_id
-                        FROM all_law_events ale
-                        JOIN law_mapping m ON ale.law_name = m.law
-                        WHERE ale.law_name IS NOT NULL
-                     ),
-                     first_class_adoption AS (
-                        -- For each law class, find the first turn it was adopted
-                        SELECT law_category, MIN(turn) as first_turn
-                        FROM events_with_class
-                        GROUP BY law_category
-                     ),
-                     events_with_cumulative AS (
-                        -- For each event, calculate cumulative law classes up to and including that turn
-                        SELECT
-                            e.turn,
-                            e.law_name,
-                            e.log_id,
-                            (SELECT COUNT(*) FROM first_class_adoption f WHERE f.first_turn <= e.turn) as cumulative_law_classes
-                        FROM events_with_class e
-                     )
-                     SELECT turn, cumulative_law_classes, law_name
-                     FROM events_with_cumulative
-                     ORDER BY turn, log_id"
-                )?;
-
-            let mut data: Vec<LawAdoptionDataPoint> = law_stmt
-                .query_map([match_id, player_id as i64], |row| {
-                    Ok(LawAdoptionDataPoint {
-                        turn: row.get(0)?,
-                        law_count: row.get(1)?,
-                        law_name: row.get(2)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-
-            // Prepend a starting point at turn 0 with 0 laws so the line starts from the origin
-            data.insert(0, LawAdoptionDataPoint {
-                turn: 0,
-                law_count: 0,
-                law_name: None,
-            });
-
-            // Append an ending point at the final turn to extend the line to the end of the chart
-            if let Some(last_point) = data.last() {
-                if last_point.turn < final_turn {
-                    data.push(LawAdoptionDataPoint {
-                        turn: final_turn,
-                        law_count: last_point.law_count,
-                        law_name: None,
-                    });
-                }
-            }
-
-            result.push(LawAdoptionHistory {
-                player_id,
-                player_name,
-                nation,
-                data,
-            });
-        }
-
-        Ok(result)
+        Ok(db::queries::history::get_law_adoption_history(conn, match_id)?)
     })
     .context("Failed to get law adoption history")
     .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get current laws for all players in a match
-///
-/// Returns each player's active laws from the laws table
 #[tauri::command]
 async fn get_current_laws(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerLaw>, String> {
-    pool.with_connection(|conn| {
-        // Get the actual adoption turn from event_logs (LAW_ADOPTED events)
-        // The laws table only stores placeholder values for adopted_turn
-        let mut stmt = conn.prepare(
-            "WITH law_adoptions AS (
-                -- Extract law adoption events with the law name from description
-                SELECT
-                    e.player_id,
-                    e.turn,
-                    regexp_extract(e.description, 'LAW_[A-Z_]+', 0) as law_name
-                FROM event_logs e
-                WHERE e.match_id = ?
-                AND e.log_type = 'LAW_ADOPTED'
-                AND e.description IS NOT NULL
-             ),
-             latest_adoptions AS (
-                -- Get the most recent adoption turn for each player+law combination
-                SELECT
-                    player_id,
-                    law_name,
-                    MAX(turn) as adopted_turn
-                FROM law_adoptions
-                GROUP BY player_id, law_name
-             )
-             SELECT
-                l.player_id,
-                p.player_name,
-                p.nation,
-                l.law_category,
-                l.law,
-                COALESCE(la.adopted_turn, 0) as adopted_turn,
-                l.change_count
-             FROM laws l
-             JOIN players p ON l.player_id = p.player_id AND l.match_id = p.match_id
-             LEFT JOIN latest_adoptions la ON l.player_id = la.player_id AND l.law = la.law_name
-             WHERE l.match_id = ?
-             ORDER BY p.nation, l.law_category"
-        )?;
-
-        let laws = stmt
-            .query_map([match_id, match_id], |row| {
-                Ok(PlayerLaw {
-                    player_id: row.get(0)?,
-                    player_name: row.get(1)?,
-                    nation: row.get(2)?,
-                    law_category: row.get(3)?,
-                    law: row.get(4)?,
-                    adopted_turn: row.get(5)?,
-                    change_count: row.get(6)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(laws)
-    })
-    .context("Failed to get current laws")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::match_data::get_current_laws(conn, match_id)?))
+        .context("Failed to get current laws")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get tech discovery history for all players in a match
-///
-/// Returns cumulative tech discovery data over time for each player
 #[tauri::command]
 async fn get_tech_discovery_history(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<TechDiscoveryHistory>, String> {
     pool.with_connection(|conn| {
-        // Get the final turn number for this match
-        let final_turn: i32 = conn.query_row(
-            "SELECT total_turns FROM matches WHERE match_id = ?",
-            [match_id],
-            |row| row.get(0)
-        )?;
-
-        // Get all players for this match
-        let mut players_stmt = conn
-            .prepare(
-                "SELECT player_id, player_name, nation
-                 FROM players
-                 WHERE match_id = ?
-                 ORDER BY player_name"
-            )?;
-
-        let players: Vec<(i32, String, Option<String>)> = players_stmt
-            .query_map([match_id], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        let mut result = Vec::new();
-
-        for (player_id, player_name, nation) in players {
-            // Get tech discoveries from event_logs (TECH_DISCOVERED events)
-            // data1 contains the tech name for these events
-            let mut tech_stmt = conn
-                .prepare(
-                    "WITH tech_discoveries AS (
-                        SELECT
-                            turn,
-                            data1 as tech_name,
-                            ROW_NUMBER() OVER (ORDER BY turn, log_id) as cumulative_count
-                        FROM event_logs
-                        WHERE match_id = ?
-                          AND player_id = ?
-                          AND log_type = 'TECH_DISCOVERED'
-                          AND data1 IS NOT NULL
-                     )
-                     SELECT turn, cumulative_count, tech_name
-                     FROM tech_discoveries
-                     ORDER BY turn, cumulative_count"
-                )?;
-
-            let mut data: Vec<TechDiscoveryDataPoint> = tech_stmt
-                .query_map([match_id, player_id as i64], |row| {
-                    Ok(TechDiscoveryDataPoint {
-                        turn: row.get(0)?,
-                        tech_count: row.get(1)?,
-                        tech_name: row.get(2)?,
-                    })
-                })?
-                .collect::<std::result::Result<Vec<_>, _>>()?;
-
-            // Prepend a starting point at turn 0 with 0 techs
-            data.insert(0, TechDiscoveryDataPoint {
-                turn: 0,
-                tech_count: 0,
-                tech_name: None,
-            });
-
-            // Append an ending point at the final turn to extend the line
-            if let Some(last_point) = data.last() {
-                if last_point.turn < final_turn {
-                    data.push(TechDiscoveryDataPoint {
-                        turn: final_turn,
-                        tech_count: last_point.tech_count,
-                        tech_name: None,
-                    });
-                }
-            }
-
-            result.push(TechDiscoveryHistory {
-                player_id,
-                player_name,
-                nation,
-                data,
-            });
-        }
-
-        Ok(result)
+        Ok(db::queries::history::get_tech_discovery_history(conn, match_id)?)
     })
     .context("Failed to get tech discovery history")
     .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get completed techs for all players in a match
-///
-/// Returns each player's completed technologies with discovery turn from event_logs
 #[tauri::command]
 async fn get_completed_techs(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerTech>, String> {
-    pool.with_connection(|conn| {
-        // Get completed techs from event_logs (TECH_DISCOVERED events)
-        // This gives us accurate turn numbers unlike the technologies_completed table
-        let mut stmt = conn.prepare(
-            "SELECT
-                e.player_id,
-                p.player_name,
-                p.nation,
-                e.data1 as tech,
-                e.turn as completed_turn
-             FROM event_logs e
-             JOIN players p ON e.player_id = p.player_id AND e.match_id = p.match_id
-             WHERE e.match_id = ?
-               AND e.log_type = 'TECH_DISCOVERED'
-               AND e.data1 IS NOT NULL
-             ORDER BY p.nation, e.turn, e.data1"
-        )?;
-
-        let techs = stmt
-            .query_map([match_id], |row| {
-                Ok(PlayerTech {
-                    player_id: row.get(0)?,
-                    player_name: row.get(1)?,
-                    nation: row.get(2)?,
-                    tech: row.get(3)?,
-                    completed_turn: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(techs)
-    })
-    .context("Failed to get completed techs")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::match_data::get_completed_techs(conn, match_id)?))
+        .context("Failed to get completed techs")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get units produced for all players in a match
-///
-/// Returns each player's unit production counts from player_units_produced table
 #[tauri::command]
 async fn get_units_produced(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerUnitProduced>, String> {
-    pool.with_connection(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT
-                u.player_id,
-                p.player_name,
-                p.nation,
-                u.unit_type,
-                u.count
-             FROM player_units_produced u
-             JOIN players p ON u.player_id = p.player_id AND u.match_id = p.match_id
-             WHERE u.match_id = ?
-             ORDER BY p.nation, u.count DESC, u.unit_type"
-        )?;
-
-        let units = stmt
-            .query_map([match_id], |row| {
-                Ok(PlayerUnitProduced {
-                    player_id: row.get(0)?,
-                    player_name: row.get(1)?,
-                    nation: row.get(2)?,
-                    unit_type: row.get(3)?,
-                    count: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(units)
-    })
-    .context("Failed to get units produced")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::map::get_units_produced(conn, match_id)?))
+        .context("Failed to get units produced")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get city statistics for a match
-///
-/// Returns all cities with their metrics for comparison charts
 #[tauri::command]
 async fn get_city_statistics(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<CityStatistics, String> {
-    pool.with_connection(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT
-                c.city_id,
-                c.city_name,
-                p.nation as owner_nation,
-                c.family,
-                c.founded_turn,
-                c.is_capital,
-                c.citizens,
-                gov.first_name as governor_name,
-                cc.culture_level,
-                c.growth_count,
-                c.unit_production_count,
-                c.specialist_count,
-                c.buy_tile_count,
-                c.hurry_civics_count,
-                c.hurry_money_count,
-                c.hurry_training_count,
-                c.hurry_population_count
-             FROM cities c
-             LEFT JOIN players p ON c.player_id = p.player_id AND c.match_id = p.match_id
-             LEFT JOIN characters gov ON c.governor_id = gov.character_id AND c.match_id = gov.match_id
-             LEFT JOIN city_culture cc ON c.city_id = cc.city_id AND c.match_id = cc.match_id
-                 AND cc.team_id = COALESCE(p.team_id, p.xml_id)
-             WHERE c.match_id = ?
-             ORDER BY c.city_name"
-        )?;
-
-        let cities = stmt
-            .query_map([match_id], |row| {
-                Ok(CityInfo {
-                    city_id: row.get(0)?,
-                    city_name: row.get(1)?,
-                    owner_nation: row.get(2)?,
-                    family: row.get(3)?,
-                    founded_turn: row.get(4)?,
-                    is_capital: row.get(5)?,
-                    citizens: row.get(6)?,
-                    governor_name: row.get(7)?,
-                    culture_level: row.get(8)?,
-                    growth_count: row.get(9)?,
-                    unit_production_count: row.get(10)?,
-                    specialist_count: row.get(11)?,
-                    buy_tile_count: row.get(12)?,
-                    hurry_civics_count: row.get(13)?,
-                    hurry_money_count: row.get(14)?,
-                    hurry_training_count: row.get(15)?,
-                    hurry_population_count: row.get(16)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(CityStatistics { cities })
-    })
-    .context("Failed to get city statistics")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::map::get_city_statistics(conn, match_id)?))
+        .context("Failed to get city statistics")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get all improvements for a match
-///
-/// Returns improvement data with nation, city, specialist, and resource info
 #[tauri::command]
 async fn get_improvement_data(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<ImprovementData, String> {
-    pool.with_connection(|conn| {
-        let mut stmt = conn.prepare(
-            "SELECT
-                p.nation,
-                c.city_name,
-                t.improvement,
-                t.specialist,
-                t.resource
-             FROM tiles t
-             LEFT JOIN cities c ON t.owner_city_id = c.city_id AND t.match_id = c.match_id
-             LEFT JOIN players p ON c.player_id = p.player_id AND c.match_id = p.match_id
-             WHERE t.match_id = ?
-               AND t.improvement IS NOT NULL
-             ORDER BY p.nation, c.city_name, t.improvement"
-        )?;
-
-        let improvements = stmt
-            .query_map([match_id], |row| {
-                Ok(ImprovementInfo {
-                    nation: row.get(0)?,
-                    city_name: row.get(1)?,
-                    improvement: row.get(2)?,
-                    specialist: row.get(3)?,
-                    resource: row.get(4)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(ImprovementData { improvements })
-    })
-    .context("Failed to get improvement data")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::map::get_improvement_data(conn, match_id)?))
+        .context("Failed to get improvement data")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get all map tiles for visualization
-///
-/// Returns tile data with terrain, resources, improvements, ownership, and ALL religions
 #[tauri::command]
 async fn get_map_tiles(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<MapTile>, String> {
-    pool.with_connection(|conn| {
-        // Step 1: Query all religions by city with founder nations
-        // Primary religion is determined by:
-        // 1. Owner nation's current state religion comes first
-        // 2. Then by when the owner nation adopted each religion (from story_events)
-        // 3. Then by when the city acquired the religion
-        // 4. Finally alphabetically by religion name
-        let mut religion_stmt = conn.prepare(
-            "SELECT cr.city_id, cr.religion, founder.nation as founder_nation
-             FROM city_religions cr
-             JOIN religions r ON cr.religion = r.religion_name AND cr.match_id = r.match_id
-             LEFT JOIN players founder ON r.founder_player_id = founder.player_id AND r.match_id = founder.match_id
-             JOIN cities c ON cr.city_id = c.city_id AND cr.match_id = c.match_id
-             LEFT JOIN players owner ON c.player_id = owner.player_id AND c.match_id = owner.match_id
-             LEFT JOIN story_events se
-                 ON se.player_id = owner.player_id
-                 AND se.match_id = cr.match_id
-                 AND se.event_type = cr.religion || '.EVENTSTORY_ADOPT_RELIGION'
-             WHERE cr.match_id = ?
-             ORDER BY
-                 cr.city_id,
-                 CASE WHEN cr.religion = owner.state_religion THEN 0 ELSE 1 END,
-                 se.occurred_turn NULLS LAST,
-                 cr.acquired_turn NULLS FIRST,
-                 cr.religion"
-        )?;
-
-        let mut city_religions: std::collections::HashMap<i64, Vec<ReligionInfo>> =
-            std::collections::HashMap::new();
-
-        let religion_rows = religion_stmt.query_map([match_id], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?,
-            ))
-        })?;
-
-        for row in religion_rows {
-            let (city_id, religion_name, founder_nation) = row?;
-            city_religions
-                .entry(city_id)
-                .or_insert_with(Vec::new)
-                .push(ReligionInfo {
-                    religion_name,
-                    founder_nation,
-                });
-        }
-
-        // Step 2: Query base tile data (without religion, but with owner_city_id)
-        // Also join with cities on tile_id to detect city center tiles
-        let mut stmt = conn.prepare(
-            "SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
-                    t.resource, t.improvement, t.improvement_pillaged, t.has_road,
-                    t.specialist, t.tribe_site,
-                    t.river_w, t.river_sw, t.river_se,
-                    p.nation, c.city_name, t.owner_city_id,
-                    city_center.city_id IS NOT NULL as is_city_center,
-                    COALESCE(city_center.is_capital, false) as is_capital
-             FROM tiles t
-             LEFT JOIN players p ON t.owner_player_id = p.player_id AND t.match_id = p.match_id
-             LEFT JOIN cities c ON t.owner_city_id = c.city_id AND t.match_id = c.match_id
-             LEFT JOIN cities city_center ON t.tile_id = city_center.tile_id AND t.match_id = city_center.match_id
-             WHERE t.match_id = ?
-             ORDER BY t.y, t.x"
-        )?;
-
-        let tiles = stmt
-            .query_map([match_id], |row| {
-                let owner_city_id: Option<i64> = row.get(16)?;
-                Ok(MapTile {
-                    x: row.get(0)?,
-                    y: row.get(1)?,
-                    terrain: row.get(2)?,
-                    height: row.get(3)?,
-                    vegetation: row.get(4)?,
-                    resource: row.get(5)?,
-                    improvement: row.get(6)?,
-                    improvement_pillaged: row.get::<_, Option<bool>>(7)?.unwrap_or(false),
-                    has_road: row.get::<_, Option<bool>>(8)?.unwrap_or(false),
-                    specialist: row.get(9)?,
-                    tribe_site: row.get(10)?,
-                    religions: Vec::new(), // Populated below
-                    river_w: row.get::<_, Option<bool>>(11)?.unwrap_or(false),
-                    river_sw: row.get::<_, Option<bool>>(12)?.unwrap_or(false),
-                    river_se: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
-                    owner_nation: row.get(14)?,
-                    owner_city: row.get(15)?,
-                    is_city_center: row.get::<_, Option<bool>>(17)?.unwrap_or(false),
-                    is_capital: row.get::<_, Option<bool>>(18)?.unwrap_or(false),
-                    owner_city_id,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        // Step 3: Populate religions from HashMap
-        let tiles_with_religions: Vec<MapTile> = tiles
-            .into_iter()
-            .map(|mut tile| {
-                if let Some(city_id) = tile.owner_city_id {
-                    if let Some(religions) = city_religions.get(&city_id) {
-                        tile.religions = religions.clone();
-                    }
-                }
-                tile
-            })
-            .collect();
-
-        Ok(tiles_with_religions)
-    })
-    .context("Failed to get map tiles")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::map::get_map_tiles(conn, match_id)?))
+        .context("Failed to get map tiles")
+        .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get map tiles at a specific turn for historical visualization
-///
-/// Returns tile data with ownership state reconstructed from tile_ownership_history.
-/// Improvements, roads, and religions are only shown if the tile was owned at the specified turn.
 #[tauri::command]
 async fn get_map_tiles_at_turn(
     match_id: i64,
@@ -2107,139 +594,7 @@ async fn get_map_tiles_at_turn(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<MapTile>, String> {
     pool.with_connection(|conn| {
-        // Step 1: Query all religions by city with founder nations
-        // Filter by: religion must be founded by this turn AND city acquired it by this turn
-        // Primary religion is determined by:
-        // 1. Owner nation's state religion at this turn (adoption must have happened by this turn)
-        // 2. Then by when the owner nation adopted each religion (if by this turn)
-        // 3. Then by when the city acquired the religion
-        // 4. Finally alphabetically by religion name
-        let mut religion_stmt = conn.prepare(
-            "SELECT cr.city_id, cr.religion, founder.nation as founder_nation
-             FROM city_religions cr
-             JOIN religions r ON cr.religion = r.religion_name AND cr.match_id = r.match_id
-             LEFT JOIN players founder ON r.founder_player_id = founder.player_id AND r.match_id = founder.match_id
-             JOIN cities c ON cr.city_id = c.city_id AND cr.match_id = c.match_id
-             LEFT JOIN players owner ON c.player_id = owner.player_id AND c.match_id = owner.match_id
-             LEFT JOIN story_events se
-                 ON se.player_id = owner.player_id
-                 AND se.match_id = cr.match_id
-                 AND se.event_type = cr.religion || '.EVENTSTORY_ADOPT_RELIGION'
-                 AND se.occurred_turn <= ?
-             WHERE cr.match_id = ?
-               AND (r.founded_turn IS NULL OR r.founded_turn <= ?)
-               AND (cr.acquired_turn IS NULL OR cr.acquired_turn <= ?)
-             ORDER BY
-                 cr.city_id,
-                 CASE WHEN cr.religion = owner.state_religion AND se.occurred_turn IS NOT NULL THEN 0 ELSE 1 END,
-                 se.occurred_turn NULLS LAST,
-                 cr.acquired_turn NULLS FIRST,
-                 cr.religion"
-        )?;
-
-        let mut city_religions: std::collections::HashMap<i64, Vec<ReligionInfo>> =
-            std::collections::HashMap::new();
-
-        let religion_rows = religion_stmt.query_map([turn as i64, match_id, turn as i64, turn as i64], |row| {
-            Ok((
-                row.get::<_, i64>(0)?,
-                row.get::<_, String>(1)?,
-                row.get::<_, Option<String>>(2)?,
-            ))
-        })?;
-
-        for row in religion_rows {
-            let (city_id, religion_name, founder_nation) = row?;
-            city_religions
-                .entry(city_id)
-                .or_insert_with(Vec::new)
-                .push(ReligionInfo {
-                    religion_name,
-                    founder_nation,
-                });
-        }
-
-        // Step 2: Query tile data with ownership at specific turn
-        // - Ownership comes from tile_ownership_history (latest record at or before turn)
-        // - Improvements/roads only shown if tile was owned at that turn
-        // - Resources, terrain, rivers are always shown (exist from game start)
-        // - City center/capital status only shown if city existed at this turn
-        let mut stmt = conn.prepare(
-            "WITH ownership_at_turn AS (
-                SELECT tile_id, owner_player_id
-                FROM (
-                    SELECT tile_id, owner_player_id,
-                           ROW_NUMBER() OVER (PARTITION BY tile_id ORDER BY turn DESC) as rn
-                    FROM tile_ownership_history
-                    WHERE match_id = ? AND turn <= ?
-                )
-                WHERE rn = 1
-            )
-            SELECT t.x, t.y, t.terrain, t.height, t.vegetation,
-                   t.resource,
-                   -- Only show improvement if tile was owned at this turn
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.improvement ELSE NULL END,
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.improvement_pillaged ELSE false END,
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.has_road ELSE false END,
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.specialist ELSE NULL END,
-                   t.tribe_site,
-                   t.river_w, t.river_sw, t.river_se,
-                   p.nation, c.city_name,
-                   -- Return city_id only if tile was owned at this turn (for religion lookup)
-                   CASE WHEN oh.owner_player_id IS NOT NULL THEN t.owner_city_id ELSE NULL END as owner_city_id,
-                   city_center.city_id IS NOT NULL as is_city_center,
-                   COALESCE(city_center.is_capital, false) as is_capital
-            FROM tiles t
-            LEFT JOIN ownership_at_turn oh ON t.tile_id = oh.tile_id
-            LEFT JOIN players p ON oh.owner_player_id = p.player_id AND p.match_id = ?
-            LEFT JOIN cities c ON t.owner_city_id = c.city_id AND c.match_id = ? AND c.founded_turn <= ?
-            LEFT JOIN cities city_center ON t.tile_id = city_center.tile_id AND city_center.match_id = ? AND city_center.founded_turn <= ?
-            WHERE t.match_id = ?
-            ORDER BY t.y, t.x"
-        )?;
-
-        let tiles = stmt
-            .query_map([match_id, turn as i64, match_id, match_id, turn as i64, match_id, turn as i64, match_id], |row| {
-                let owner_city_id: Option<i64> = row.get(16)?;
-                Ok(MapTile {
-                    x: row.get(0)?,
-                    y: row.get(1)?,
-                    terrain: row.get(2)?,
-                    height: row.get(3)?,
-                    vegetation: row.get(4)?,
-                    resource: row.get(5)?,
-                    improvement: row.get(6)?,
-                    improvement_pillaged: row.get::<_, Option<bool>>(7)?.unwrap_or(false),
-                    has_road: row.get::<_, Option<bool>>(8)?.unwrap_or(false),
-                    specialist: row.get(9)?,
-                    tribe_site: row.get(10)?,
-                    religions: Vec::new(), // Populated below
-                    river_w: row.get::<_, Option<bool>>(11)?.unwrap_or(false),
-                    river_sw: row.get::<_, Option<bool>>(12)?.unwrap_or(false),
-                    river_se: row.get::<_, Option<bool>>(13)?.unwrap_or(false),
-                    owner_nation: row.get(14)?,
-                    owner_city: row.get(15)?,
-                    is_city_center: row.get::<_, Option<bool>>(17)?.unwrap_or(false),
-                    is_capital: row.get::<_, Option<bool>>(18)?.unwrap_or(false),
-                    owner_city_id,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        // Step 3: Populate religions from HashMap (only if tile was owned at this turn)
-        let tiles_with_religions: Vec<MapTile> = tiles
-            .into_iter()
-            .map(|mut tile| {
-                if let Some(city_id) = tile.owner_city_id {
-                    if let Some(religions) = city_religions.get(&city_id) {
-                        tile.religions = religions.clone();
-                    }
-                }
-                tile
-            })
-            .collect();
-
-        Ok(tiles_with_religions)
+        Ok(db::queries::map::get_map_tiles_at_turn(conn, match_id, turn)?)
     })
     .context("Failed to get map tiles at turn")
     .map_err(|e| e.to_string())
@@ -2362,53 +717,13 @@ async fn move_matches_by_game_name(
         .map_err(|e| e.to_string())
 }
 
-/// Tauri command to get all known OnlineIDs with player names and save counts
-///
-/// Returns list of distinct OnlineIDs with aggregated player names, sorted by save count.
-/// Only counts saves in the default collection to prevent challenge games from polluting
-/// Primary User detection.
 #[tauri::command]
 async fn get_known_online_ids(
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<KnownOnlineId>, String> {
-    pool.with_connection(|conn| {
-        // Use string_agg to get comma-separated player names, then split in Rust
-        // DuckDB's list() returns a native list type that's harder to deserialize
-        // Only count saves in the default collection for Primary User detection
-        let mut stmt = conn.prepare(
-            "SELECT p.online_id,
-                    string_agg(DISTINCT p.player_name, '|||' ORDER BY p.player_name) as player_names,
-                    COUNT(*) as save_count
-             FROM players p
-             JOIN matches m ON p.match_id = m.match_id
-             JOIN collections c ON m.collection_id = c.collection_id
-             WHERE p.online_id IS NOT NULL
-               AND p.online_id != ''
-               AND c.is_default = TRUE
-             GROUP BY p.online_id
-             ORDER BY save_count DESC"
-        )?;
-
-        let results = stmt
-            .query_map([], |row| {
-                let names_str: String = row.get(1)?;
-                let player_names: Vec<String> = names_str
-                    .split("|||")
-                    .filter(|s| !s.is_empty())
-                    .map(|s| s.to_string())
-                    .collect();
-                Ok(KnownOnlineId {
-                    online_id: row.get(0)?,
-                    player_names,
-                    save_count: row.get(2)?,
-                })
-            })?
-            .collect::<std::result::Result<Vec<_>, _>>()?;
-
-        Ok(results)
-    })
-    .context("Failed to get known OnlineIDs")
-    .map_err(|e| e.to_string())
+    pool.with_connection(|conn| Ok(db::queries::admin::get_known_online_ids(conn)?))
+        .context("Failed to get known OnlineIDs")
+        .map_err(|e| e.to_string())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
