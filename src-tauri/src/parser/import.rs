@@ -350,8 +350,7 @@ fn import_save_file_internal(
     let match_id: i64 = tx
         .query_row("SELECT COALESCE(MAX(match_id), 0) + 1 FROM matches", [], |row| {
             row.get(0)
-        })
-        .unwrap_or(1);
+        })?;
 
     log::info!(
         "Creating new match {} (GameId: {}, Turn: {})",
