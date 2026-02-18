@@ -326,6 +326,11 @@
 		class="context-menu fixed z-50 min-w-[160px] rounded border-2 border-black bg-blue-gray shadow-lg"
 		style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
 		onclick={(e) => e.stopPropagation()}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') contextMenu = null;
+		}}
+		role="menu"
+		tabindex="-1"
 	>
 		<div class="border-b border-black px-3 py-2 text-sm text-white">
 			Move to Collection
