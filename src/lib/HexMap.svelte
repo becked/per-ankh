@@ -1676,7 +1676,7 @@
 <style>
 	.tooltip {
 		position: absolute;
-		background: rgba(50, 50, 50, 0.95);
+		background: rgba(33, 26, 18, 0.95);
 		color: white;
 		padding: 8px 12px;
 		border-radius: 4px;

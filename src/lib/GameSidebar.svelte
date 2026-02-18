@@ -448,7 +448,7 @@
 		left: 6px;
 		font-size: 8px;
 		font-weight: 600;
-		color: #79261d;
+		color: var(--color-dark-brown);
 		line-height: 1;
 	}
 
@@ -458,7 +458,7 @@
 		right: 4px;
 		font-size: 8px;
 		font-weight: 600;
-		color: #79261d;
+		color: var(--color-dark-brown);
 		line-height: 1;
 	}
 </style>
