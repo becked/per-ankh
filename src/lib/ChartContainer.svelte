@@ -9,9 +9,7 @@
 		title = "Chart",
 		controls,
 	}: {
-		// Using a broader type because ECharts types are overly strict
-		// and don't play well with TypeScript's inference
-		option: EChartsOption | Record<string, unknown>;
+		option: EChartsOption;
 		height?: string;
 		title?: string;
 		controls?: Snippet;

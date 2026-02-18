@@ -3,12 +3,10 @@
 	import * as echarts from "echarts";
 	import type { EChartsOption } from "echarts";
 
-	// Using a broader type because ECharts types are overly strict
 	let {
 		option,
 		height = "400px",
-	}: { option: EChartsOption | Record<string, unknown>; height?: string } =
-		$props();
+	}: { option: EChartsOption; height?: string } = $props();
 
 	let chartContainer: HTMLDivElement;
 	let chart: echarts.ECharts | null = null;
@@ -28,7 +26,7 @@
 			// Initialize chart if not already done
 			if (!chart) {
 				chart = echarts.init(chartContainer);
-				chart.setOption(option as any);
+				chart.setOption(option);
 			}
 		};
 
@@ -68,8 +66,7 @@
 		// when chart is initially null. See CLAUDE.md "Effect Dependency Tracking".
 		const currentOption = option;
 		if (chart && currentOption) {
-			// Type assertion needed due to echarts type definition incompatibility
-			chart.setOption(currentOption as any, true);
+			chart.setOption(currentOption, true);
 			// Force resize to handle tab visibility changes
 			chart.resize();
 		}

@@ -1206,7 +1206,7 @@
 									}
 								: {}),
 						})),
-					};
+					} as EChartsOption;
 				})()
 			: null,
 	);
@@ -1295,7 +1295,7 @@
 								symbolSize: 12,
 							},
 						})),
-					};
+					} as EChartsOption;
 				})()
 			: null,
 	);
