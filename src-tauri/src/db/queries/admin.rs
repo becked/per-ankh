@@ -180,3 +180,211 @@ pub fn get_known_online_ids(conn: &Connection) -> duckdb::Result<Vec<KnownOnline
 
     Ok(results)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::db::schema::create_schema;
+    use duckdb::Connection;
+    use tempfile::tempdir;
+
+    fn setup_test_db() -> Connection {
+        let dir = tempdir().unwrap();
+        let db_path = dir.path().join("test.db");
+        let conn = Connection::open(&db_path).unwrap();
+        create_schema(&conn).unwrap();
+        std::mem::forget(dir);
+        conn
+    }
+
+    fn insert_match(conn: &Connection, match_id: i64, total_turns: i32) {
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns)
+             VALUES (?, ?, 'test.zip', ?, ?)",
+            duckdb::params![
+                match_id,
+                format!("game_{}", match_id),
+                format!("hash_{}", match_id),
+                total_turns
+            ],
+        )
+        .unwrap();
+    }
+
+    fn insert_player(
+        conn: &Connection,
+        player_id: i32,
+        match_id: i64,
+        name: &str,
+        nation: &str,
+        is_human: bool,
+        is_save_owner: bool,
+    ) {
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner)
+             VALUES (?, ?, ?, ?, ?, ?, ?)",
+            duckdb::params![player_id, match_id, name, name.to_lowercase(), nation, is_human, is_save_owner],
+        )
+        .unwrap();
+    }
+
+    fn insert_player_with_online_id(
+        conn: &Connection,
+        player_id: i32,
+        match_id: i64,
+        name: &str,
+        nation: &str,
+        online_id: &str,
+    ) {
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, is_human, is_save_owner, online_id)
+             VALUES (?, ?, ?, ?, ?, true, false, ?)",
+            duckdb::params![player_id, match_id, name, name.to_lowercase(), nation, online_id],
+        )
+        .unwrap();
+    }
+
+    // ---- Tier 1: Contract tests ----
+
+    #[test]
+    fn test_get_nation_dynasty_data_empty() {
+        let conn = setup_test_db();
+        let data = get_nation_dynasty_data(&conn).unwrap();
+        assert!(data.is_empty());
+    }
+
+    #[test]
+    fn test_get_nation_dynasty_data_groups() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        insert_player(&conn, 1, 1, "Player1", "NATION_ROME", true, true);
+        conn.execute(
+            "UPDATE players SET dynasty = 'DYNASTY_JULIUS' WHERE player_id = 1 AND match_id = 1",
+            [],
+        )
+        .unwrap();
+        insert_player(&conn, 2, 1, "Player2", "NATION_ROME", false, false);
+        conn.execute(
+            "UPDATE players SET dynasty = 'DYNASTY_JULIUS' WHERE player_id = 2 AND match_id = 1",
+            [],
+        )
+        .unwrap();
+        insert_player(&conn, 3, 1, "Player3", "NATION_GREECE", false, false);
+
+        let data = get_nation_dynasty_data(&conn).unwrap();
+        assert_eq!(data.len(), 2); // ROME/JULIUS + GREECE/NULL
+        // Ordered by nation, dynasty
+        assert_eq!(data[0].nation, Some("NATION_GREECE".to_string()));
+        assert_eq!(data[0].count, 1);
+        assert_eq!(data[1].nation, Some("NATION_ROME".to_string()));
+        assert_eq!(data[1].dynasty, Some("DYNASTY_JULIUS".to_string()));
+        assert_eq!(data[1].count, 2);
+    }
+
+    #[test]
+    fn test_get_player_debug_data_returns_all() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        insert_match(&conn, 2, 20);
+        insert_player(&conn, 1, 1, "Alpha", "NATION_ROME", true, true);
+        insert_player(&conn, 1, 2, "Beta", "NATION_GREECE", true, true);
+
+        let data = get_player_debug_data(&conn).unwrap();
+        assert_eq!(data.len(), 2);
+        assert_eq!(data[0].match_id, 1);
+        assert_eq!(data[0].player_name, "Alpha");
+        assert_eq!(data[1].match_id, 2);
+        assert_eq!(data[1].player_name, "Beta");
+    }
+
+    #[test]
+    fn test_get_match_debug_data_returns_all() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        insert_match(&conn, 2, 20);
+
+        let data = get_match_debug_data(&conn).unwrap();
+        assert_eq!(data.len(), 2);
+        assert_eq!(data[0].match_id, 1);
+        assert_eq!(data[0].game_id, "game_1");
+        assert_eq!(data[1].match_id, 2);
+    }
+
+    #[test]
+    fn test_debug_event_log_player_ids_formatted() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        insert_player(&conn, 1, 1, "Rome", "NATION_ROME", true, true);
+        conn.execute(
+            "INSERT INTO event_logs (log_id, match_id, turn, log_type, player_id, description)
+             VALUES (1, 1, 5, 'TECH_DISCOVERED', 1, 'Discovered something')",
+            [],
+        )
+        .unwrap();
+
+        let result = debug_event_log_player_ids(&conn, 1).unwrap();
+        assert!(result.contains("=== Debug for match_id 1 ==="));
+        assert!(result.contains("Player IDs in event_logs"));
+        assert!(result.contains("Rome"));
+    }
+
+    #[test]
+    fn test_get_known_online_ids_empty() {
+        let conn = setup_test_db();
+        let data = get_known_online_ids(&conn).unwrap();
+        assert!(data.is_empty());
+    }
+
+    // ---- Tier 2: Synthetic fixture tests ----
+
+    #[test]
+    fn test_get_known_online_ids_requires_default_collection() {
+        let conn = setup_test_db();
+        // Default collection (id=1) already created by schema
+
+        // Create a non-default collection
+        conn.execute(
+            "INSERT INTO collections (collection_id, name, is_default) VALUES (2, 'Challenge', false)",
+            [],
+        )
+        .unwrap();
+
+        // Match in default collection with online_id
+        insert_match(&conn, 1, 10);
+        insert_player_with_online_id(&conn, 1, 1, "Rome", "NATION_ROME", "ONLINE_123");
+
+        // Match in non-default collection with online_id
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns, collection_id)
+             VALUES (2, 'game_2', 'test2.zip', 'hash_2', 10, 2)",
+            [],
+        )
+        .unwrap();
+        insert_player_with_online_id(&conn, 1, 2, "Greece", "NATION_GREECE", "ONLINE_456");
+
+        let data = get_known_online_ids(&conn).unwrap();
+        // Only ONLINE_123 from default collection should appear
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0].online_id, "ONLINE_123");
+    }
+
+    #[test]
+    fn test_get_known_online_ids_splits_names() {
+        let conn = setup_test_db();
+        insert_match(&conn, 1, 10);
+        insert_match(&conn, 2, 10);
+
+        // Same online_id, different player names across matches
+        insert_player_with_online_id(&conn, 1, 1, "Emperor Marcus", "NATION_ROME", "STEAM_42");
+        insert_player_with_online_id(&conn, 1, 2, "King Marcus", "NATION_ROME", "STEAM_42");
+
+        let data = get_known_online_ids(&conn).unwrap();
+        assert_eq!(data.len(), 1);
+        assert_eq!(data[0].online_id, "STEAM_42");
+        assert_eq!(data[0].save_count, 2);
+        // player_names should contain both distinct names
+        assert_eq!(data[0].player_names.len(), 2);
+        assert!(data[0].player_names.contains(&"Emperor Marcus".to_string()));
+        assert!(data[0].player_names.contains(&"King Marcus".to_string()));
+    }
+}
