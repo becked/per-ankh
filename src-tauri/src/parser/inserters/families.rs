@@ -82,7 +82,7 @@ pub fn insert_families(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 

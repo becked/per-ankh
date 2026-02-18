@@ -69,6 +69,6 @@ pub fn insert_diplomacy_relations(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

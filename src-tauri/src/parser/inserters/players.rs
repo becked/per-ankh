@@ -142,7 +142,7 @@ pub fn insert_players(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::debug!("Inserted {} players", count);
     Ok(count)

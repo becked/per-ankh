@@ -66,7 +66,7 @@ pub fn insert_city_production_queue(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -100,7 +100,7 @@ pub fn insert_city_projects_completed(
         app.append_row(params![city_id, match_id, project_type, count])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -133,7 +133,7 @@ pub fn insert_city_yields(
         app.append_row(params![city_id, match_id, yield_type, progress, 0, 0])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -165,7 +165,7 @@ pub fn insert_city_religions(
         app.append_row(params![city_id, match_id, religion, None::<i32>])?; // acquired_turn not available in XML
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -207,7 +207,7 @@ pub fn insert_city_culture(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -241,7 +241,7 @@ pub fn insert_city_project_counts(
         app.append_row(params![city_id, match_id, project_type, count])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -293,7 +293,7 @@ pub fn insert_city_enemy_agents(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -327,6 +327,6 @@ pub fn insert_city_luxuries(
         app.append_row(params![city_id, match_id, resource, imported_turn])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

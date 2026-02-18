@@ -92,7 +92,7 @@ pub fn insert_units(
             seed
         ])?;
     }
-    drop(app);
+    app.flush()?;
 
     log::info!("Inserted {} units", units.len());
     Ok(())
@@ -126,7 +126,7 @@ pub fn insert_unit_promotions(
     for (unit_id, match_id, promotion, is_acquired) in unique {
         app.append_row(params![unit_id, match_id, promotion, is_acquired])?;
     }
-    drop(app);
+    app.flush()?;
 
     log::info!("Inserted {} unit promotions", promotions.len());
     Ok(())
@@ -160,7 +160,7 @@ pub fn insert_unit_effects(
     for (unit_id, match_id, effect, stacks) in unique {
         app.append_row(params![unit_id, match_id, effect, stacks])?;
     }
-    drop(app);
+    app.flush()?;
 
     log::info!("Inserted {} unit effects", effects.len());
     Ok(())
@@ -195,7 +195,7 @@ pub fn insert_unit_families(
     for (unit_id, match_id, player_id, family_name) in unique {
         app.append_row(params![unit_id, match_id, player_id, family_name])?;
     }
-    drop(app);
+    app.flush()?;
 
     log::info!("Inserted {} unit family associations", families.len());
     Ok(())

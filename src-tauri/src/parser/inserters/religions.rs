@@ -74,6 +74,6 @@ pub fn insert_religions(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

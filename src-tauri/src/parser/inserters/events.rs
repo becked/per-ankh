@@ -44,7 +44,7 @@ pub fn insert_event_stories(
         event_id += 1;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -80,7 +80,7 @@ pub fn insert_event_logs(
         log_id += 1;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -124,6 +124,6 @@ pub fn insert_memory_data(
         memory_id += 1;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

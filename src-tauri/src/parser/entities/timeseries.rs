@@ -195,7 +195,7 @@ pub fn parse_game_yield_prices(
     for (match_id, turn, yield_type, price) in unique_rows {
         app.append_row(params![match_id, turn, yield_type, price])?;
     }
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
@@ -242,7 +242,7 @@ pub fn parse_military_power_history(
     for (player_id, match_id, turn, military_power) in unique_rows {
         app.append_row(params![player_id, match_id, turn, military_power])?;
     }
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
@@ -288,7 +288,7 @@ pub fn parse_points_history(
     for (player_id, match_id, turn, points) in unique_rows {
         app.append_row(params![player_id, match_id, turn, points])?;
     }
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
@@ -334,7 +334,7 @@ pub fn parse_legitimacy_history(
     for (player_id, match_id, turn, legitimacy) in unique_rows {
         app.append_row(params![player_id, match_id, turn, legitimacy])?;
     }
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
@@ -385,7 +385,7 @@ pub fn parse_yield_rate_history(
     for (player_id, match_id, turn, yield_type, amount) in unique_rows {
         app.append_row(params![player_id, match_id, turn, yield_type, amount])?;
     }
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
@@ -436,7 +436,7 @@ pub fn parse_family_opinion_history(
     for (player_id, match_id, family_name, turn, opinion) in unique_rows {
         app.append_row(params![player_id, match_id, family_name, turn, opinion])?;
     }
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
@@ -487,7 +487,7 @@ pub fn parse_religion_opinion_history(
     for (player_id, match_id, religion_name, turn, opinion) in unique_rows {
         app.append_row(params![player_id, match_id, religion_name, turn, opinion])?;
     }
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }

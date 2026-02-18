@@ -46,7 +46,7 @@ pub fn insert_player_resources(
         app.append_row(params![player_id, match_id, yield_type, amount])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -78,7 +78,7 @@ pub fn insert_technology_progress(
         app.append_row(params![player_id, match_id, tech, progress])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -110,7 +110,7 @@ pub fn insert_technologies_completed(
         app.append_row(params![player_id, match_id, tech, completed_turn])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -142,7 +142,7 @@ pub fn insert_technology_states(
         app.append_row(params![player_id, match_id, tech, state])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -183,7 +183,7 @@ pub fn insert_player_council(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -221,7 +221,7 @@ pub fn insert_laws(conn: &Connection, laws: &[Law], id_mapper: &IdMapper) -> Res
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -293,6 +293,6 @@ pub fn insert_player_goals(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

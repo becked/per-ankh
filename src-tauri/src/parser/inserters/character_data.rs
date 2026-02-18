@@ -47,7 +47,7 @@ pub fn insert_character_stats(
         app.append_row(params![character_id, match_id, stat_name, stat_value])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -94,7 +94,7 @@ pub fn insert_character_traits(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -155,7 +155,7 @@ pub fn insert_character_relationships(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }
 
@@ -202,6 +202,6 @@ pub fn insert_character_marriages(
         ])?;
     }
 
-    drop(app);
+    app.flush()?;
     Ok(())
 }

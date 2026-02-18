@@ -153,7 +153,7 @@ pub fn parse_families(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     log::info!("Parsed {} families", count);
     Ok(count)

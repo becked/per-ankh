@@ -115,7 +115,7 @@ pub fn parse_character_stats(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
@@ -181,7 +181,7 @@ pub fn parse_character_traits(
         }
 
         // Flush appender to commit all rows
-        drop(app);
+        app.flush()?;
 
         Ok(count)
     } else {
@@ -307,7 +307,7 @@ pub fn parse_character_relationships(
         }
 
         // Flush appender to commit all rows
-        drop(app);
+        app.flush()?;
 
         Ok(count)
     } else {
@@ -396,7 +396,7 @@ pub fn parse_character_marriages(
     }
 
     // Flush appender to commit all rows
-    drop(app);
+    app.flush()?;
 
     Ok(count)
 }
