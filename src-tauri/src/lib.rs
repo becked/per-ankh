@@ -417,6 +417,183 @@ async fn get_match_debug_data(
         .map_err(|e| e.to_string())
 }
 
+// ===== Share Commands =====
+
+/// Check if a match has been shared. Returns share info or null.
+#[tauri::command]
+async fn get_share_info(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Option<db::app_state::ShareInfo>, String> {
+    pool.with_connection(|conn| Ok(db::app_state::get_share_info(conn, match_id)?))
+        .context("Failed to get share info")
+        .map_err(|e| e.to_string())
+}
+
+/// Share a game: assemble data, compress, upload to the share API.
+/// Returns share info with URL. If already shared, returns existing info.
+#[tauri::command]
+async fn share_game(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<db::app_state::ShareInfo, String> {
+    // Phase 0: Check if already shared
+    let existing = pool
+        .with_connection(|conn| Ok(db::app_state::get_share_info(conn, match_id)?))
+        .map_err(|e| format!("Failed to check share status: {}", e))?;
+
+    if let Some(info) = existing {
+        log::info!("Match {} already shared as {}", match_id, info.share_id);
+        return Ok(info);
+    }
+
+    // Phase 1: Assemble data, serialize, compress, get app key (holds DB lock)
+    let (compressed, app_key, json_len) = pool
+        .with_connection(|conn| {
+            // Assemble all 12 queries into SharedGameData
+            let app_version = env!("CARGO_PKG_VERSION");
+            let shared_data = db::queries::share::assemble_shared_game_data(conn, match_id, app_version)
+                .map_err(|e| crate::parser::ParseError::InvalidFormat(format!("Assembly failed: {}", e)))?;
+            log::info!("Assembled shared game data for match {}", match_id);
+
+            // Serialize to JSON
+            let json_bytes = serde_json::to_vec(&shared_data)
+                .map_err(|e| crate::parser::ParseError::InvalidFormat(format!("JSON serialization failed: {}", e)))?;
+            let json_len = json_bytes.len();
+            log::info!("JSON size: {} bytes", json_len);
+
+            // Gzip compress
+            use flate2::write::GzEncoder;
+            use flate2::Compression;
+            use std::io::Write;
+
+            let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+            encoder
+                .write_all(&json_bytes)
+                .map_err(|e| crate::parser::ParseError::InvalidFormat(format!("Gzip compress failed: {}", e)))?;
+            let compressed = encoder
+                .finish()
+                .map_err(|e| crate::parser::ParseError::InvalidFormat(format!("Gzip finish failed: {}", e)))?;
+            log::info!(
+                "Compressed size: {} bytes (ratio: {:.1}%)",
+                compressed.len(),
+                (1.0 - compressed.len() as f64 / json_len as f64) * 100.0
+            );
+
+            // Get or create app key
+            let app_key = db::app_state::get_or_create_app_key(conn)
+                .map_err(|e| crate::parser::ParseError::InvalidFormat(format!("App key failed: {}", e)))?;
+
+            Ok((compressed, app_key, json_len))
+        })
+        .map_err(|e| format!("Failed to prepare share data: {}", e))?;
+
+    // Phase 2: Upload to share API (outside DB lock, async)
+    let upload_url = "https://api.per-ankh.app/v1/share";
+    let client = reqwest::Client::new();
+    let response = client
+        .post(upload_url)
+        .header("Content-Type", "application/gzip")
+        .header("X-App-Key", &app_key)
+        .body(compressed)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to upload: {}", e))?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Upload failed ({}): {}", status, body));
+    }
+
+    #[derive(serde::Deserialize)]
+    struct UploadResponse {
+        share_id: String,
+        url: String,
+        delete_token: String,
+    }
+
+    let upload_result: UploadResponse = response
+        .json()
+        .await
+        .map_err(|e| format!("Failed to parse upload response: {}", e))?;
+
+    log::info!("Game shared successfully: {} (JSON: {} bytes)", upload_result.url, json_len);
+
+    // Phase 3: Save share info locally (holds DB lock again)
+    let share_info = pool
+        .with_connection(|conn| {
+            db::app_state::save_share_info(
+                conn,
+                match_id,
+                &upload_result.share_id,
+                &upload_result.url,
+                &upload_result.delete_token,
+            )?;
+            Ok(db::app_state::ShareInfo {
+                share_id: upload_result.share_id.clone(),
+                share_url: upload_result.url.clone(),
+                shared_at: chrono::Utc::now().to_rfc3339(),
+            })
+        })
+        .map_err(|e| format!("Share uploaded but failed to save locally: {}", e))?;
+
+    Ok(share_info)
+}
+
+/// Delete a shared game from the cloud and remove local tracking.
+#[tauri::command]
+async fn delete_share(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<(), String> {
+    // Phase 1: Get delete credentials (holds DB lock)
+    let (share_id, delete_token, app_key) = pool
+        .with_connection(|conn| {
+            let (share_id, delete_token) = db::app_state::get_delete_token(conn, match_id)?
+                .ok_or_else(|| {
+                    crate::parser::ParseError::InvalidFormat(
+                        format!("Match {} is not shared", match_id),
+                    )
+                })?;
+            let app_key = db::app_state::get_or_create_app_key(conn)
+                .map_err(|e| crate::parser::ParseError::InvalidFormat(e.to_string()))?;
+            Ok((share_id, delete_token, app_key))
+        })
+        .map_err(|e| format!("Failed to get share info: {}", e))?;
+
+    // Phase 2: DELETE from share API (outside DB lock, async)
+    let delete_url = format!("https://api.per-ankh.app/v1/share/{}", share_id);
+    let client = reqwest::Client::new();
+    let response = client
+        .delete(&delete_url)
+        .header("X-Delete-Token", &delete_token)
+        .header("X-App-Key", &app_key)
+        .send()
+        .await
+        .map_err(|e| format!("Failed to contact share API: {}", e))?;
+
+    let status = response.status();
+    if status.as_u16() == 403 {
+        return Err(
+            "Delete token rejected by server. The share may have been created by a different installation."
+                .to_string(),
+        );
+    }
+    if !status.is_success() && status.as_u16() != 404 {
+        let body = response.text().await.unwrap_or_default();
+        return Err(format!("Delete failed ({}): {}", status, body));
+    }
+
+    // Phase 3: Clean up local record (holds DB lock)
+    // 200 = deleted, 404 = already gone — either way, remove local tracking
+    pool.with_connection(|conn| Ok(db::app_state::delete_share_info(conn, match_id)?))
+        .map_err(|e| format!("Remote deleted but failed to clean up locally: {}", e))?;
+
+    log::info!("Share {} deleted (status: {})", share_id, status);
+    Ok(())
+}
+
 /// Tauri command to reset the database
 ///
 /// Drops all tables and recreates the schema using the pooled connection.
@@ -773,7 +950,10 @@ pub fn run() {
             run_event_test,
             reset_database_cmd,
             recover_database,
-            debug_event_log_player_ids
+            debug_event_log_player_ids,
+            get_share_info,
+            share_game,
+            delete_share
         ]);
 
     builder
@@ -989,6 +1169,17 @@ pub fn run() {
             pool.with_connection(|conn| db::connection::cleanup_stale_locks(conn))
                 .context("Failed to cleanup stale locks")
                 .map_err(|e| e.to_string())?;
+
+            // Ensure app state tables exist (these survive database resets since
+            // they're defined in app_state.sql, not schema.sql)
+            pool.with_connection(|conn| {
+                db::app_state::ensure_app_state_tables(conn)
+                    .map_err(|e| crate::parser::ParseError::InvalidFormat(
+                        format!("App state init failed: {}", e),
+                    ))
+            })
+            .context("Failed to initialize app state tables")
+            .map_err(|e| e.to_string())?;
 
             // Store pool in Tauri state
             app.handle().manage(pool);

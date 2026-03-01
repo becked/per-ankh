@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from "$app/stores";
-	import { api } from "$lib/api";
+	import { webApi, type ShareError } from "$lib/api-web";
 	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { YieldHistory } from "$lib/types/YieldHistory";
@@ -33,7 +33,6 @@
 		getCivilizationColor,
 	} from "$lib/config";
 	import GamePageSkeleton from "$lib/GamePageSkeleton.svelte";
-	import ShareControl from "$lib/ShareControl.svelte";
 
 	let gameDetails = $state<GameDetails | null>(null);
 	let playerHistory = $state<PlayerHistory[] | null>(null);
@@ -51,6 +50,7 @@
 	let mapTilesLoading = $state(false);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let shareError = $state<ShareError | null>(null);
 	let activeTab = $state<string>("events");
 
 	// Chart series filter state - each chart has its own independent filter
@@ -1301,13 +1301,14 @@
 			: null,
 	);
 
-	// Fetch game data when route changes
+	// Fetch shared game data when route changes
 	$effect(() => {
-		const matchId = Number($page.params.id);
+		const shareId = $page.params.id as string;
 
-		// Reset state for new game
+		// Reset state for new share
 		loading = true;
 		error = null;
+		shareError = null;
 		activeTab = "events";
 		// Reset table states to defaults
 		tables.events = {
@@ -1351,18 +1352,18 @@
 		);
 
 		Promise.all([
-			api.getGameDetails(matchId),
-			api.getPlayerHistory(matchId),
-			api.getYieldHistory(matchId, Array.from(YIELD_TYPES)),
-			api.getEventLogs(matchId),
-			api.getLawAdoptionHistory(matchId),
-			api.getCurrentLaws(matchId),
-			api.getTechDiscoveryHistory(matchId),
-			api.getCompletedTechs(matchId),
-			api.getUnitsProduced(matchId),
-			api.getCityStatistics(matchId),
-			api.getImprovementData(matchId),
-			api.getMapTiles(matchId),
+			webApi.getGameDetails(shareId),
+			webApi.getPlayerHistory(shareId),
+			webApi.getYieldHistory(shareId),
+			webApi.getEventLogs(shareId),
+			webApi.getLawAdoptionHistory(shareId),
+			webApi.getCurrentLaws(shareId),
+			webApi.getTechDiscoveryHistory(shareId),
+			webApi.getCompletedTechs(shareId),
+			webApi.getUnitsProduced(shareId),
+			webApi.getCityStatistics(shareId),
+			webApi.getImprovementData(shareId),
+			webApi.getMapTiles(shareId),
 		])
 			.then(
 				([
@@ -1396,7 +1397,12 @@
 				},
 			)
 			.catch((err) => {
-				error = String(err);
+				const errStr = String(err);
+				if (errStr === "SHARE_NOT_FOUND" || errStr === "NETWORK_ERROR" || errStr === "CORRUPT_DATA") {
+					shareError = errStr as ShareError;
+				} else {
+					error = errStr;
+				}
 			})
 			.finally(() => {
 				loading = false;
@@ -1603,39 +1609,27 @@
 		return logs;
 	});
 
-	// Handle map turn slider change
-	async function handleMapTurnChange(turn: number) {
-		if (!gameDetails || mapTilesLoading) return;
-
-		selectedMapTurn = turn;
-
-		// Fetch tiles at the specified turn
-		if (turn === gameDetails.total_turns) {
-			// For final turn, use the regular endpoint (current state)
-			mapTilesLoading = true;
-			try {
-				mapTiles = await api.getMapTiles(gameDetails.match_id);
-			} catch (err) {
-				console.error("Failed to fetch map tiles:", err);
-			} finally {
-				mapTilesLoading = false;
-			}
-		} else {
-			// For historical turns, use the historical endpoint
-			mapTilesLoading = true;
-			try {
-				mapTiles = await api.getMapTilesAtTurn(gameDetails.match_id, turn);
-			} catch (err) {
-				console.error("Failed to fetch map tiles at turn:", err);
-			} finally {
-				mapTilesLoading = false;
-			}
-		}
-	}
+	// Map turn slider not available in shared view (final turn only)
 </script>
 
 {#if loading}
 	<GamePageSkeleton />
+{:else if shareError === "SHARE_NOT_FOUND"}
+	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+		<h1 class="mb-4 text-3xl font-bold text-gray-200">Share Not Found</h1>
+		<p class="text-brown">This shared game does not exist or has been deleted.</p>
+		<p class="mt-2 text-sm text-brown">Shared links expire after 2 years.</p>
+	</main>
+{:else if shareError === "NETWORK_ERROR"}
+	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+		<h1 class="mb-4 text-3xl font-bold text-gray-200">Connection Error</h1>
+		<p class="text-brown">Could not reach the server. Please check your connection and try again.</p>
+	</main>
+{:else if shareError === "CORRUPT_DATA"}
+	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+		<h1 class="mb-4 text-3xl font-bold text-gray-200">Data Error</h1>
+		<p class="text-brown">The shared game data could not be loaded. It may be corrupted.</p>
+	</main>
 {:else if error}
 	<main class="isolate flex-1 overflow-y-auto bg-blue-gray px-4 pb-8 pt-4">
 		<p class="rounded border-2 border-orange bg-brown p-4 font-bold text-white">
@@ -1644,12 +1638,14 @@
 	</main>
 {:else if gameDetails}
 	<main class="isolate flex-1 overflow-y-auto bg-blue-gray px-4 pb-8 pt-4">
+		<!-- Share banner -->
+		<div class="mb-4 rounded border border-brown/30 bg-[#201a13] px-4 py-2 text-center text-xs text-brown">
+			Shared game from <a href="https://per-ankh.app" class="text-orange hover:underline">Per Ankh</a> — Old World Game Analytics
+		</div>
+
 		<div class="mb-8 flex items-baseline justify-between">
 			<h1 class="text-3xl font-bold text-gray-200">{gameTitle}</h1>
-			<div class="flex items-center gap-4">
-				<ShareControl matchId={gameDetails.match_id} />
-				<p class="text-sm text-brown">{formatDate(gameDetails.save_date)}</p>
-			</div>
+			<p class="text-sm text-brown">{formatDate(gameDetails.save_date)}</p>
 		</div>
 
 		<!-- Summary Section -->
@@ -3231,9 +3227,6 @@
 					<HexMap
 						tiles={mapTiles}
 						height="600px"
-						totalTurns={gameDetails?.total_turns ?? null}
-						selectedTurn={selectedMapTurn}
-						onTurnChange={handleMapTurnChange}
 					/>
 				{:else}
 					<p class="italic text-brown">Loading map data...</p>

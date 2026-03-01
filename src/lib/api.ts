@@ -20,6 +20,7 @@ import type { MapTile } from "$lib/types/MapTile";
 import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 import type { SaveDateEntry } from "$lib/types/SaveDateEntry";
 import type { Collection } from "$lib/types/Collection";
+import type { ShareInfo } from "$lib/types/ShareInfo";
 
 /**
  * Centralized API layer for all Tauri backend commands.
@@ -261,4 +262,24 @@ export const api = {
 	 */
 	moveMatchesByGameName: (pattern: string, collectionId: number) =>
 		invoke<number>("move_matches_by_game_name", { pattern, collectionId }),
+
+	// ===== Share =====
+
+	/**
+	 * Check if a game has been shared. Returns null if not shared.
+	 */
+	getShareInfo: (matchId: number) =>
+		invoke<ShareInfo | null>("get_share_info", { matchId }),
+
+	/**
+	 * Share a game to the cloud. Returns share info with URL.
+	 * If already shared, returns existing share info.
+	 */
+	shareGame: (matchId: number) =>
+		invoke<ShareInfo>("share_game", { matchId }),
+
+	/**
+	 * Delete a shared game from the cloud and remove local tracking.
+	 */
+	deleteShare: (matchId: number) => invoke<void>("delete_share", { matchId }),
 } as const;

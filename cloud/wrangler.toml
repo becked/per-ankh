@@ -1,0 +1,28 @@
+name = "per-ankh-share-api"
+main = "src/index.ts"
+compatibility_date = "2024-12-01"
+
+# Custom domain: api.per-ankh.app
+# Wrangler creates the DNS record automatically
+routes = [{ pattern = "api.per-ankh.app", custom_domain = true }]
+
+# R2 blob storage for shared game data
+[[r2_buckets]]
+binding = "SHARE_BUCKET"
+bucket_name = "per-ankh-shares"
+
+# D1 database for share index and event logging
+[[d1_databases]]
+binding = "SHARE_DB"
+database_name = "per-ankh-share-index"
+database_id = "e57449fd-6c9f-4b16-a013-322f9669182b"
+
+[vars]
+# Max compressed payload size (5 MB)
+MAX_COMPRESSED_SIZE = "5242880"
+# Max decompressed payload size (20 MB) — gzip bomb protection
+MAX_DECOMPRESSED_SIZE = "20971520"
+# CORS: only allow requests from the web viewer domain
+ALLOWED_ORIGIN = "https://per-ankh.app"
+# Rate limit: max uploads per app key per hour
+RATE_LIMIT_PER_HOUR = "10"
