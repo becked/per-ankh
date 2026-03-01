@@ -107,6 +107,11 @@ pub fn get_delete_token(conn: &Connection, match_id: i64) -> duckdb::Result<Opti
     }
 }
 
+/// Count shared games. Used for the sidebar "Shared (N)" badge.
+pub fn get_shared_games_count(conn: &Connection) -> duckdb::Result<i64> {
+    conn.query_row("SELECT COUNT(*) FROM shared_games", [], |row| row.get(0))
+}
+
 /// Delete local share tracking for a match.
 pub fn delete_share_info(conn: &Connection, match_id: i64) -> duckdb::Result<()> {
     conn.execute(

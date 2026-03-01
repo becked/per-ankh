@@ -266,6 +266,17 @@ export const api = {
 	// ===== Share =====
 
 	/**
+	 * Get list of all shared games (for sidebar "Shared" virtual filter).
+	 */
+	getSharedGamesList: () =>
+		invoke<GameInfo[]>("get_shared_games_list"),
+
+	/**
+	 * Get count of shared games (for sidebar badge).
+	 */
+	getSharedGamesCount: () => invoke<number>("get_shared_games_count"),
+
+	/**
 	 * Check if a game has been shared. Returns null if not shared.
 	 */
 	getShareInfo: (matchId: number) =>

@@ -17,6 +17,7 @@
 
 	let games = $state<GameInfo[]>([]);
 	let collections = $state<Collection[]>([]);
+	let sharedCount = $state(0);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
@@ -36,7 +37,7 @@
 		return unsubscribe;
 	});
 
-	let currentCollectionId = $state<number | null>(get(activeCollectionId));
+	let currentCollectionId = $state<number | "shared" | null>(get(activeCollectionId));
 	$effect.pre(() => {
 		const unsubscribe = activeCollectionId.subscribe((value) => {
 			currentCollectionId = value;
@@ -52,6 +53,7 @@
 	async function fetchCollections() {
 		try {
 			collections = await api.getCollections();
+			sharedCount = await api.getSharedGamesCount();
 		} catch (err) {
 			console.error("Failed to load collections:", err);
 		}
@@ -61,7 +63,11 @@
 		loading = true;
 		error = null;
 		try {
-			games = await api.getGamesList(currentCollectionId);
+			if (currentCollectionId === "shared") {
+				games = await api.getSharedGamesList();
+			} else {
+				games = await api.getGamesList(currentCollectionId);
+			}
 		} catch (err) {
 			error = String(err);
 		} finally {
@@ -88,7 +94,7 @@
 
 	function handleCollectionChange(e: Event) {
 		const value = (e.target as HTMLSelectElement).value;
-		const id = value === "all" ? null : Number(value);
+		const id = value === "all" ? null : value === "shared" ? "shared" : Number(value);
 		activeCollectionId.set(id);
 	}
 
@@ -255,6 +261,9 @@
 			onchange={handleCollectionChange}
 		>
 			<option value="all">All Collections</option>
+			{#if sharedCount > 0}
+				<option value="shared">Shared ({sharedCount})</option>
+			{/if}
 			{#each collections as c (c.collection_id)}
 				<option value={c.collection_id}>
 					{c.name} ({c.match_count})

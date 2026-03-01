@@ -417,6 +417,26 @@ async fn get_match_debug_data(
         .map_err(|e| e.to_string())
 }
 
+/// Get list of all shared games for the sidebar "Shared" virtual filter.
+#[tauri::command]
+async fn get_shared_games_list(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<types::GameInfo>, String> {
+    pool.with_connection(|conn| Ok(db::queries::games::get_shared_games_list(conn)?))
+        .context("Failed to get shared games list")
+        .map_err(|e| e.to_string())
+}
+
+/// Get count of shared games for the sidebar badge.
+#[tauri::command]
+async fn get_shared_games_count(
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<i64, String> {
+    pool.with_connection(|conn| Ok(db::app_state::get_shared_games_count(conn)?))
+        .context("Failed to get shared games count")
+        .map_err(|e| e.to_string())
+}
+
 // ===== Share Commands =====
 
 /// Check if a match has been shared. Returns share info or null.
@@ -951,6 +971,8 @@ pub fn run() {
             reset_database_cmd,
             recover_database,
             debug_event_log_player_ids,
+            get_shared_games_list,
+            get_shared_games_count,
             get_share_info,
             share_game,
             delete_share
