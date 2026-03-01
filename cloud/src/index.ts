@@ -17,6 +17,10 @@ interface Env {
 	MAX_DECOMPRESSED_SIZE: string;
 	ALLOWED_ORIGIN: string;
 	RATE_LIMIT_PER_HOUR: string;
+	DOWNLOAD_RATE_LIMIT_PER_HOUR: string;
+	IP_RATE_LIMIT_PER_HOUR: string;
+	GLOBAL_UPLOAD_LIMIT_PER_HOUR: string;
+	UPLOADS_ENABLED: string;
 }
 
 // UUID v4 format: 8-4-4-4-12 hex chars
@@ -74,9 +78,7 @@ async function decompressWithLimit(
 		totalSize += value.byteLength;
 		if (totalSize > maxBytes) {
 			reader.cancel();
-			throw new Error(
-				`Decompressed size exceeds limit (${maxBytes} bytes)`,
-			);
+			throw new Error("Decompressed payload too large");
 		}
 		chunks.push(value);
 	}
@@ -89,6 +91,21 @@ async function decompressWithLimit(
 		offset += chunk.byteLength;
 	}
 	return result;
+}
+
+// Probabilistic cleanup of old events (runs ~2% of the time)
+async function maybeCleanupEvents(db: D1Database): Promise<void> {
+	if (Math.random() > 0.02) return;
+
+	try {
+		await db
+			.prepare(
+				"DELETE FROM events WHERE created_at < datetime('now', '-90 days')",
+			)
+			.run();
+	} catch (e) {
+		console.error("Event cleanup failed:", e);
+	}
 }
 
 async function logEvent(
@@ -112,14 +129,18 @@ async function logEvent(
 				metadata ? JSON.stringify(metadata) : null,
 			)
 			.run();
+
+		await maybeCleanupEvents(db);
 	} catch (e) {
 		// Log failure is non-critical — don't fail the request
 		console.error("Failed to log event:", e);
 	}
 }
 
-// Check rate limit: count recent uploads from same app_key
-async function checkRateLimit(
+// === Rate Limiting ===
+
+// Per-app-key upload rate limit (D1)
+async function checkKeyRateLimit(
 	db: D1Database,
 	appKey: string,
 	maxPerHour: number,
@@ -134,69 +155,167 @@ async function checkRateLimit(
 	return (result?.count ?? 0) < maxPerHour;
 }
 
+// Per-IP upload rate limit — catches app-key rotation attacks (D1)
+async function checkIpRateLimit(
+	db: D1Database,
+	ip: string,
+	maxPerHour: number,
+): Promise<boolean> {
+	const result = await db
+		.prepare(
+			"SELECT COUNT(*) as count FROM events WHERE ip_address = ? AND event_type = 'upload' AND created_at > datetime('now', '-1 hour')",
+		)
+		.bind(ip)
+		.first<{ count: number }>();
+
+	return (result?.count ?? 0) < maxPerHour;
+}
+
+// Global upload circuit breaker — emergency brake for distributed attacks (D1)
+async function checkGlobalUploadLimit(
+	db: D1Database,
+	maxPerHour: number,
+): Promise<boolean> {
+	const result = await db
+		.prepare(
+			"SELECT COUNT(*) as count FROM events WHERE event_type = 'upload' AND created_at > datetime('now', '-1 hour')",
+		)
+		.first<{ count: number }>();
+
+	return (result?.count ?? 0) < maxPerHour;
+}
+
+// Per-IP download rate limit — lightweight counter via Cache API (per-POP)
+async function checkDownloadRateLimit(
+	ip: string,
+	maxPerHour: number,
+): Promise<boolean> {
+	const cache = caches.default;
+	const url = new URL(`https://rate-limit.internal/download/${ip}`);
+
+	const cached = await cache.match(url);
+	const count = cached ? parseInt(await cached.text()) + 1 : 1;
+
+	const response = new Response(String(count), {
+		headers: { "Cache-Control": "max-age=3600" },
+	});
+	await cache.put(url, response);
+
+	return count <= maxPerHour;
+}
+
+// === Blocklist ===
+
+async function checkBlocklists(
+	db: D1Database,
+	appKey: string,
+	ip: string | null,
+): Promise<boolean> {
+	const blockedKey = await db
+		.prepare("SELECT 1 FROM blocked_keys WHERE app_key = ?")
+		.bind(appKey)
+		.first();
+	if (blockedKey) return true;
+
+	if (ip) {
+		const blockedIp = await db
+			.prepare("SELECT 1 FROM blocked_ips WHERE ip_address = ?")
+			.bind(ip)
+			.first();
+		if (blockedIp) return true;
+	}
+
+	return false;
+}
+
 // === Endpoint Handlers ===
 
 async function handleUpload(
 	request: Request,
 	env: Env,
 ): Promise<Response> {
-	// 1. Require X-App-Key header
+	// 1. Kill switch
+	if (env.UPLOADS_ENABLED !== "true") {
+		return errorResponse("Uploads temporarily disabled", 503, env);
+	}
+
+	// 2. Require X-App-Key header
 	const appKey = request.headers.get("X-App-Key");
 	if (!appKey || !UUID_REGEX.test(appKey)) {
 		return errorResponse(
-			"Missing or invalid X-App-Key header (must be UUID v4)",
+			"Missing or invalid X-App-Key header",
 			400,
 			env,
 		);
 	}
 
-	// 2. Require Content-Type: application/gzip
+	// 3. Extract IP early for rate limiting and blocklist checks
+	const ip = request.headers.get("CF-Connecting-IP");
+
+	// 4. Check blocklists before doing any expensive work
+	const blocked = await checkBlocklists(env.SHARE_DB, appKey, ip);
+	if (blocked) {
+		return errorResponse("Forbidden", 403, env);
+	}
+
+	// 5. Require Content-Type: application/gzip
 	const contentType = request.headers.get("Content-Type");
 	if (contentType !== "application/gzip") {
-		return errorResponse(
-			"Content-Type must be application/gzip",
-			400,
-			env,
-		);
+		return errorResponse("Content-Type must be application/gzip", 400, env);
 	}
 
-	// 3. Check compressed body size
+	// 6. Early Content-Length check before buffering the body
 	const maxCompressed = parseInt(env.MAX_COMPRESSED_SIZE);
+	const contentLength = request.headers.get("Content-Length");
+	if (contentLength) {
+		const declaredSize = parseInt(contentLength, 10);
+		if (!Number.isNaN(declaredSize) && declaredSize > maxCompressed) {
+			return errorResponse("Payload too large", 413, env);
+		}
+	}
+
+	// 7. Read and check actual compressed body size
 	const body = await request.arrayBuffer();
 	if (body.byteLength > maxCompressed) {
-		return errorResponse(
-			`Payload too large (${body.byteLength} bytes > ${maxCompressed} byte limit)`,
-			413,
-			env,
-		);
+		console.error(`Rejected upload: ${body.byteLength} bytes > ${maxCompressed} limit`);
+		return errorResponse("Payload too large", 413, env);
 	}
 	if (body.byteLength === 0) {
 		return errorResponse("Empty payload", 400, env);
 	}
 
-	// 4. Rate limit by app_key
+	// 8. Rate limits: per-key, per-IP, global
 	const maxPerHour = parseInt(env.RATE_LIMIT_PER_HOUR);
-	const withinLimit = await checkRateLimit(env.SHARE_DB, appKey, maxPerHour);
-	if (!withinLimit) {
-		return errorResponse(
-			`Rate limit exceeded (max ${maxPerHour} uploads per hour)`,
-			429,
-			env,
-		);
+	const withinKeyLimit = await checkKeyRateLimit(env.SHARE_DB, appKey, maxPerHour);
+	if (!withinKeyLimit) {
+		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
 	}
 
-	// 5. Decompress with size limit (gzip bomb protection)
+	if (ip) {
+		const ipMaxPerHour = parseInt(env.IP_RATE_LIMIT_PER_HOUR);
+		const withinIpLimit = await checkIpRateLimit(env.SHARE_DB, ip, ipMaxPerHour);
+		if (!withinIpLimit) {
+			return errorResponse("Rate limit exceeded. Try again later.", 429, env);
+		}
+	}
+
+	const globalMax = parseInt(env.GLOBAL_UPLOAD_LIMIT_PER_HOUR);
+	const withinGlobalLimit = await checkGlobalUploadLimit(env.SHARE_DB, globalMax);
+	if (!withinGlobalLimit) {
+		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
+	}
+
+	// 9. Decompress with size limit (gzip bomb protection)
 	const maxDecompressed = parseInt(env.MAX_DECOMPRESSED_SIZE);
 	let decompressed: Uint8Array;
 	try {
 		decompressed = await decompressWithLimit(body, maxDecompressed);
 	} catch (e) {
-		const message =
-			e instanceof Error ? e.message : "Decompression failed";
-		return errorResponse(message, 413, env);
+		console.error(`Decompression rejected: ${e instanceof Error ? e.message : "unknown"}`);
+		return errorResponse("Decompressed payload too large", 413, env);
 	}
 
-	// 6. Parse JSON
+	// 10. Parse JSON
 	let parsed: unknown;
 	try {
 		const text = new TextDecoder().decode(decompressed);
@@ -205,26 +324,22 @@ async function handleUpload(
 		return errorResponse("Invalid JSON in decompressed payload", 400, env);
 	}
 
-	// 7. Validate schema
+	// 11. Validate schema
 	const validation = validateSharePayload(parsed);
 	if (!validation.valid) {
-		return errorResponse(
-			`Schema validation failed: ${validation.error}`,
-			400,
-			env,
-		);
+		console.error(`Validation failed for app_key=${appKey}: ${validation.error}`);
+		return errorResponse("Invalid payload", 400, env);
 	}
 
-	// 8. Generate IDs
+	// 12. Generate IDs
 	const shareId = nanoid(21);
 	const deleteToken = nanoid(32);
 
-	// 9. Extract metadata for D1 index
+	// 13. Extract metadata for D1 index
 	const metadata = extractMetadata(parsed as Record<string, unknown>);
 	const blobVersion = (parsed as Record<string, unknown>).version as number;
-	const ip = request.headers.get("CF-Connecting-IP");
 
-	// 10. Write to R2 (do this first — if D1 fails, orphaned blob is harmless)
+	// 14. Write to R2 (do this first — if D1 fails, orphaned blob is harmless)
 	const r2Key = `${shareId}.json.gz`;
 	await env.SHARE_BUCKET.put(r2Key, body, {
 		httpMetadata: {
@@ -237,7 +352,7 @@ async function handleUpload(
 		},
 	});
 
-	// 11. Write to D1 share index
+	// 15. Write to D1 share index
 	const createdAt = new Date().toISOString();
 	try {
 		await env.SHARE_DB.prepare(
@@ -258,18 +373,19 @@ async function handleUpload(
 			)
 			.run();
 	} catch (e) {
-		// D1 write failed after R2 succeeded — log but don't fail the upload.
-		// The blob is accessible via R2; the D1 record is for admin/gallery only.
-		console.error("Failed to write D1 share index:", e);
+		console.error(
+			`ORPHANED_BLOB: R2 key=${r2Key} has no D1 index entry. share_id=${shareId}`,
+			e,
+		);
 	}
 
-	// 12. Log upload event
+	// 16. Log upload event
 	await logEvent(env.SHARE_DB, "upload", shareId, appKey, ip, {
 		blob_size: body.byteLength,
 		decompressed_size: decompressed.byteLength,
 	});
 
-	// 13. Return share info
+	// 17. Return share info
 	const shareUrl = `https://per-ankh.app/share/${shareId}`;
 	return jsonResponse(
 		{
@@ -284,8 +400,17 @@ async function handleUpload(
 
 async function handleDownload(
 	shareId: string,
+	request: Request,
 	env: Env,
 ): Promise<Response> {
+	// Rate limit downloads per IP via Cache API
+	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+	const maxDownloads = parseInt(env.DOWNLOAD_RATE_LIMIT_PER_HOUR);
+	const withinLimit = await checkDownloadRateLimit(ip, maxDownloads);
+	if (!withinLimit) {
+		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
+	}
+
 	const r2Key = `${shareId}.json.gz`;
 	const object = await env.SHARE_BUCKET.get(r2Key);
 
@@ -293,9 +418,11 @@ async function handleDownload(
 		return errorResponse("Share not found", 404, env);
 	}
 
-	// Decompress in the Worker — Cloudflare's CDN strips Content-Encoding: gzip
-	// from Worker responses, so we must return raw JSON and let the edge
-	// handle transparent compression based on the client's Accept-Encoding.
+	// Decompress in Worker because Cloudflare CDN strips Content-Encoding
+	// from Worker responses. Acceptable because:
+	// 1. CDN caches decompressed response for 1 hour (Cache-Control header)
+	// 2. Decompression of ~1MB takes <10ms
+	// 3. Download rate limiting prevents cache-busting abuse
 	const compressed = await object.arrayBuffer();
 	const ds = new DecompressionStream("gzip");
 	const writer = ds.writable.getWriter();
@@ -380,7 +507,7 @@ export default {
 		// Route: GET /v1/share/{id}
 		const getMatch = url.pathname.match(/^\/v1\/share\/([A-Za-z0-9_-]{21})$/);
 		if (method === "GET" && getMatch) {
-			return handleDownload(getMatch[1], env);
+			return handleDownload(getMatch[1], request, env);
 		}
 
 		// Route: DELETE /v1/share/{id}

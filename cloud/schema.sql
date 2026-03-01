@@ -34,3 +34,24 @@ CREATE TABLE IF NOT EXISTS events (
 
 CREATE INDEX IF NOT EXISTS idx_events_share_id ON events(share_id);
 CREATE INDEX IF NOT EXISTS idx_events_created_at ON events(created_at);
+
+-- Composite indexes for rate limit queries
+CREATE INDEX IF NOT EXISTS idx_events_app_key_type_created
+    ON events(app_key, event_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_ip_type_created
+    ON events(ip_address, event_type, created_at);
+CREATE INDEX IF NOT EXISTS idx_events_type_created
+    ON events(event_type, created_at);
+
+-- Blocklists for abuse prevention
+CREATE TABLE IF NOT EXISTS blocked_keys (
+    app_key TEXT PRIMARY KEY,
+    reason TEXT,
+    blocked_at TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS blocked_ips (
+    ip_address TEXT PRIMARY KEY,
+    reason TEXT,
+    blocked_at TEXT NOT NULL DEFAULT (datetime('now'))
+);

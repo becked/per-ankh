@@ -26,3 +26,11 @@ MAX_DECOMPRESSED_SIZE = "20971520"
 ALLOWED_ORIGIN = "https://per-ankh.app"
 # Rate limit: max uploads per app key per hour
 RATE_LIMIT_PER_HOUR = "10"
+# Rate limit: max downloads per IP per hour (via Cache API)
+DOWNLOAD_RATE_LIMIT_PER_HOUR = "200"
+# Rate limit: max uploads per IP per hour (catches key rotation)
+IP_RATE_LIMIT_PER_HOUR = "20"
+# Global circuit breaker: max total uploads per hour across all users
+GLOBAL_UPLOAD_LIMIT_PER_HOUR = "200"
+# Kill switch: set to "false" via `wrangler secret put` to disable uploads without redeploying
+UPLOADS_ENABLED = "true"
