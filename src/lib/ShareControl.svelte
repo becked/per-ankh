@@ -9,12 +9,15 @@
 
 	let { matchId }: Props = $props();
 
+	type ShareStatus = "loading" | "not_shared" | "sharing" | "shared" | "deleting" | "error";
+
 	// State as separate variables to match codebase patterns
 	let shareInfo = $state<ShareInfo | null>(null);
-	let status = $state<string>("loading"); // loading | not_shared | sharing | shared | deleting | error
+	let status = $state<ShareStatus>("loading");
 	let errorMessage = $state<string | null>(null);
 	let popoverOpen = $state(false);
 	let copied = $state(false);
+	let copyTimer: ReturnType<typeof setTimeout> | null = null;
 
 	// Load share status on mount / matchId change
 	$effect(() => {
@@ -80,8 +83,10 @@
 		try {
 			await navigator.clipboard.writeText(shareInfo.share_url);
 			copied = true;
-			setTimeout(() => {
+			if (copyTimer) clearTimeout(copyTimer);
+			copyTimer = setTimeout(() => {
 				copied = false;
+				copyTimer = null;
 			}, 2000);
 		} catch {
 			// Fallback: select text in the input

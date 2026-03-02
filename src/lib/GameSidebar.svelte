@@ -52,8 +52,10 @@
 
 	async function fetchCollections() {
 		try {
-			collections = await api.getCollections();
-			sharedCount = await api.getSharedGamesCount();
+			[collections, sharedCount] = await Promise.all([
+				api.getCollections(),
+				api.getSharedGamesCount(),
+			]);
 		} catch (err) {
 			console.error("Failed to load collections:", err);
 		}
