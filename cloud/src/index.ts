@@ -339,7 +339,7 @@ async function handleUpload(
 	const metadata = extractMetadata(parsed as Record<string, unknown>);
 	const blobVersion = (parsed as Record<string, unknown>).version as number;
 
-	// 14. Write to R2 (do this first — if D1 fails, orphaned blob is harmless)
+	// 14. Write to R2 (do this first — if D1 fails, we clean up the blob)
 	const r2Key = `${shareId}.json.gz`;
 	await env.SHARE_BUCKET.put(r2Key, body, {
 		httpMetadata: {
@@ -374,9 +374,15 @@ async function handleUpload(
 			.run();
 	} catch (e) {
 		console.error(
-			`ORPHANED_BLOB: R2 key=${r2Key} has no D1 index entry. share_id=${shareId}`,
+			`D1_INSERT_FAILED: Cleaning up R2 key=${r2Key}. share_id=${shareId}`,
 			e,
 		);
+		try {
+			await env.SHARE_BUCKET.delete(r2Key);
+		} catch (cleanupErr) {
+			console.error(`ORPHANED_BLOB: R2 cleanup failed for key=${r2Key}`, cleanupErr);
+		}
+		return errorResponse("Failed to create share", 500, env);
 	}
 
 	// 16. Log upload event
