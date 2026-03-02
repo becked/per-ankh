@@ -1,1 +1,0 @@
-import{a as i,f as s}from"../chunks/Bb0FMqA9.js";import{i as t,j as l}from"../chunks/DTanQnyf.js";import{s as n}from"../chunks/C8oKfOde.js";var d=s('<div class="flex h-screen flex-col overflow-hidden bg-blue-gray"><!></div>');function c(r,e){var o=d(),a=t(o);n(a,()=>e.children),l(o),i(r,o)}export{c as component};
