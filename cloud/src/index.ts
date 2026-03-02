@@ -450,13 +450,17 @@ async function handleDelete(
 	request: Request,
 	env: Env,
 ): Promise<Response> {
-	// 1. Require X-Delete-Token header
+	// 1. Require X-Delete-Token and X-App-Key headers
 	const deleteToken = request.headers.get("X-Delete-Token");
 	if (!deleteToken) {
 		return errorResponse("Missing X-Delete-Token header", 400, env);
 	}
+	const appKey = request.headers.get("X-App-Key");
+	if (!appKey) {
+		return errorResponse("Missing X-App-Key header", 400, env);
+	}
 
-	// 2. Look up share in D1 and verify token
+	// 2. Look up share in D1 and verify credentials
 	const share = await env.SHARE_DB.prepare(
 		"SELECT share_id, delete_token, app_key FROM shares WHERE share_id = ?",
 	)
@@ -467,8 +471,8 @@ async function handleDelete(
 		return errorResponse("Share not found", 404, env);
 	}
 
-	if (share.delete_token !== deleteToken) {
-		return errorResponse("Invalid delete token", 403, env);
+	if (share.delete_token !== deleteToken || share.app_key !== appKey) {
+		return errorResponse("Invalid delete credentials", 403, env);
 	}
 
 	// 3. Delete R2 blob
