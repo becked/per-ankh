@@ -88,22 +88,6 @@
 		}
 	}
 
-	async function handleNativeShare() {
-		if (!shareInfo) return;
-		try {
-			if (navigator.share) {
-				await navigator.share({
-					title: "Per Ankh — Game Analytics",
-					url: shareInfo.share_url,
-				});
-			} else {
-				await handleCopy();
-			}
-		} catch {
-			// User cancelled native share dialog
-		}
-	}
-
 	function handleRetry() {
 		if (shareInfo) {
 			// Was shared before error (e.g., delete failed) — restore
@@ -249,14 +233,7 @@
 					</button>
 				</div>
 
-				<div class="flex items-center justify-between">
-					<button
-						type="button"
-						class="text-xs text-brown transition-colors hover:text-orange"
-						onclick={handleNativeShare}
-					>
-						Share via...
-					</button>
+				<div class="flex justify-end">
 					<button
 						type="button"
 						class="text-xs text-red-400 transition-colors hover:text-red-300"

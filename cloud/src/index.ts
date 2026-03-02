@@ -258,33 +258,7 @@ async function handleUpload(
 		return errorResponse("Forbidden", 403, env);
 	}
 
-	// 5. Require Content-Type: application/gzip
-	const contentType = request.headers.get("Content-Type");
-	if (contentType !== "application/gzip") {
-		return errorResponse("Content-Type must be application/gzip", 400, env);
-	}
-
-	// 6. Early Content-Length check before buffering the body
-	const maxCompressed = parseInt(env.MAX_COMPRESSED_SIZE);
-	const contentLength = request.headers.get("Content-Length");
-	if (contentLength) {
-		const declaredSize = parseInt(contentLength, 10);
-		if (!Number.isNaN(declaredSize) && declaredSize > maxCompressed) {
-			return errorResponse("Payload too large", 413, env);
-		}
-	}
-
-	// 7. Read and check actual compressed body size
-	const body = await request.arrayBuffer();
-	if (body.byteLength > maxCompressed) {
-		console.error(`Rejected upload: ${body.byteLength} bytes > ${maxCompressed} limit`);
-		return errorResponse("Payload too large", 413, env);
-	}
-	if (body.byteLength === 0) {
-		return errorResponse("Empty payload", 400, env);
-	}
-
-	// 8. Rate limits: per-key, per-IP, global
+	// 5. Rate limits: per-key, per-IP, global (before body buffering)
 	const maxPerHour = parseInt(env.RATE_LIMIT_PER_HOUR);
 	const withinKeyLimit = await checkKeyRateLimit(env.SHARE_DB, appKey, maxPerHour);
 	if (!withinKeyLimit) {
@@ -303,6 +277,32 @@ async function handleUpload(
 	const withinGlobalLimit = await checkGlobalUploadLimit(env.SHARE_DB, globalMax);
 	if (!withinGlobalLimit) {
 		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
+	}
+
+	// 6. Require Content-Type: application/gzip
+	const contentType = request.headers.get("Content-Type");
+	if (contentType !== "application/gzip") {
+		return errorResponse("Content-Type must be application/gzip", 400, env);
+	}
+
+	// 7. Early Content-Length check before buffering the body
+	const maxCompressed = parseInt(env.MAX_COMPRESSED_SIZE);
+	const contentLength = request.headers.get("Content-Length");
+	if (contentLength) {
+		const declaredSize = parseInt(contentLength, 10);
+		if (!Number.isNaN(declaredSize) && declaredSize > maxCompressed) {
+			return errorResponse("Payload too large", 413, env);
+		}
+	}
+
+	// 8. Read and check actual compressed body size
+	const body = await request.arrayBuffer();
+	if (body.byteLength > maxCompressed) {
+		console.error(`Rejected upload: ${body.byteLength} bytes > ${maxCompressed} limit`);
+		return errorResponse("Payload too large", 413, env);
+	}
+	if (body.byteLength === 0) {
+		return errorResponse("Empty payload", 400, env);
 	}
 
 	// 9. Decompress with size limit (gzip bomb protection)
