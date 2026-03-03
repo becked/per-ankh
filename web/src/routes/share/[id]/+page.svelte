@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from "$app/stores";
 	import { webApi, type ShareError } from "$lib/api-web";
+	import { formatEnum } from "$lib/utils/formatting";
 	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { YieldHistory } from "$lib/types/YieldHistory";
@@ -31,6 +32,20 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let shareError = $state<ShareError | null>(null);
+
+	// Build a descriptive page title from game data
+	const pageTitle = $derived.by(() => {
+		if (!gameDetails) return "Shared Game — Per Ankh";
+		const isRealName =
+			gameDetails.game_name != null &&
+			gameDetails.game_name !== "" &&
+			!gameDetails.game_name.match(/^Game\d+$/);
+		if (isRealName) return `${gameDetails.game_name} — Per Ankh`;
+		const humanPlayer = gameDetails.players.find((p) => p.is_human);
+		const nation = humanPlayer?.nation ? formatEnum(humanPlayer.nation, "NATION_") : null;
+		if (nation) return `${nation} T${gameDetails.total_turns} — Per Ankh`;
+		return `Shared Game — Per Ankh`;
+	});
 
 	// Fetch shared game data when route changes
 	$effect(() => {
@@ -97,6 +112,10 @@
 	});
 </script>
 
+<svelte:head>
+	<title>{pageTitle}</title>
+</svelte:head>
+
 {#if loading}
 	<GamePageSkeleton />
 {:else if shareError === "SHARE_NOT_FOUND"}
@@ -139,7 +158,7 @@
 		>
 			{#snippet preTabs()}
 				<div class="mb-4 rounded border border-brown/30 bg-[#201a13] px-4 py-2 text-center text-xs text-brown">
-					Shared game from <a href="https://per-ankh.app" class="text-orange hover:underline">Per Ankh</a> — Old World Game Analytics
+					Shared game
 				</div>
 			{/snippet}
 		</GameDetailView>

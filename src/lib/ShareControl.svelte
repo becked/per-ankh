@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { api } from "$lib/api";
 	import { showConfirm } from "$lib/utils/dialogs";
+	import { refreshData } from "$lib/stores/refresh";
 	import type { ShareInfo } from "$lib/types/ShareInfo";
 
 	interface Props {
@@ -18,6 +19,7 @@
 	let popoverOpen = $state(false);
 	let copied = $state(false);
 	let copyTimer: ReturnType<typeof setTimeout> | null = null;
+	let urlInput = $state<HTMLInputElement | null>(null);
 
 	// Load share status on mount / matchId change
 	$effect(() => {
@@ -51,6 +53,7 @@
 			shareInfo = info;
 			status = "shared";
 			popoverOpen = true;
+			refreshData.trigger();
 		} catch (err) {
 			errorMessage = String(err);
 			status = "error";
@@ -72,6 +75,7 @@
 			shareInfo = null;
 			status = "not_shared";
 			popoverOpen = false;
+			refreshData.trigger();
 		} catch (err) {
 			errorMessage = String(err);
 			status = "error";
@@ -89,7 +93,8 @@
 				copyTimer = null;
 			}, 2000);
 		} catch {
-			// Fallback: select text in the input
+			// Fallback: select text so user can Ctrl+C
+			urlInput?.select();
 		}
 	}
 
@@ -110,9 +115,15 @@
 			popoverOpen = false;
 		}
 	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === "Escape" && popoverOpen) {
+			popoverOpen = false;
+		}
+	}
 </script>
 
-<svelte:window onclick={handleClickOutside} />
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
 <div class="share-control relative">
 	{#if status === "loading"}
@@ -217,12 +228,16 @@
 			<div
 				class="absolute right-0 top-full z-50 mt-2 w-72 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
 			>
-				<div class="mb-2 text-xs font-bold uppercase tracking-wide text-brown">
+				<div class="mb-1 text-xs font-bold uppercase tracking-wide text-brown">
 					Share Link
+				</div>
+				<div class="mb-2 text-[10px] text-brown">
+					Shared {new Date(shareInfo.shared_at).toLocaleDateString()}
 				</div>
 
 				<div class="mb-3 flex items-center gap-1.5">
 					<input
+						bind:this={urlInput}
 						type="text"
 						readonly
 						value={shareInfo.share_url}
@@ -279,7 +294,7 @@
 		</button>
 	{:else if status === "error"}
 		<div class="flex items-center gap-2">
-			<span class="max-w-48 truncate text-xs text-red-400">{errorMessage}</span>
+			<span class="max-w-48 truncate text-xs text-red-400" title={errorMessage}>{errorMessage}</span>
 			<button
 				type="button"
 				class="text-xs text-tan underline transition-colors hover:text-orange"
