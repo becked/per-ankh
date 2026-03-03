@@ -3,7 +3,7 @@
 	import SearchInput from "$lib/SearchInput.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { type TableState, CITY_COLUMNS, formatCityCell } from "./helpers";
+	import { type TableState, CITY_COLUMNS, formatCityCell, toggleSort } from "./helpers";
 
 	let {
 		cityStatistics,
@@ -61,7 +61,7 @@
 	);
 
 	// Filtered and sorted cities
-	const filteredSortedCities = $derived(() => {
+	const filteredSortedCities = $derived.by(() => {
 		let cities = cityStatistics.cities;
 
 		if (selectedCityNations.length > 0) {
@@ -112,14 +112,6 @@
 		return cities;
 	});
 
-	function handleToggleSort(columnKey: string) {
-		if (tableState.sortColumn === columnKey) {
-			tableState.sortDirection = tableState.sortDirection === "asc" ? "desc" : "asc";
-		} else {
-			tableState.sortColumn = columnKey;
-			tableState.sortDirection = "asc";
-		}
-	}
 </script>
 
 <h2 class="mb-4 mt-0 font-bold text-tan">Cities</h2>
@@ -247,7 +239,7 @@
 
 		<!-- Results count -->
 		<span class="ml-auto text-sm text-brown">
-			{filteredSortedCities().length} / {cityStatistics.cities.length} cities
+			{filteredSortedCities.length} / {cityStatistics.cities.length} cities
 		</span>
 	</div>
 
@@ -262,7 +254,7 @@
 					{#each visibleCityColumns as column (column.key)}
 						<th
 							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-							onclick={() => handleToggleSort(column.key)}
+							onclick={() => toggleSort(tableState, column.key)}
 						>
 							<span class="inline-flex items-center gap-1">
 								{column.label}
@@ -277,7 +269,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each filteredSortedCities() as city (city.city_name)}
+				{#each filteredSortedCities as city (city.city_name)}
 					<tr class="hover:bg-brown/20 transition-colors duration-200">
 						{#each visibleCityColumns as column (column.key)}
 							<td

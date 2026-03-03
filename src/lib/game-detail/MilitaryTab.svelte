@@ -7,7 +7,7 @@
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
-	import { type TableState, getPlayerColor } from "./helpers";
+	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
 
 	let {
 		playerHistory,
@@ -86,7 +86,7 @@
 		total: number;
 	};
 
-	const unitPivotData = $derived(() => {
+	const unitPivotData = $derived.by(() => {
 		if (unitsProduced.length === 0) return [];
 
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
@@ -136,14 +136,6 @@
 		return rows;
 	});
 
-	function handleToggleSort(columnKey: string) {
-		if (tableState.sortColumn === columnKey) {
-			tableState.sortDirection = tableState.sortDirection === "asc" ? "desc" : "asc";
-		} else {
-			tableState.sortColumn = columnKey;
-			tableState.sortDirection = "asc";
-		}
-	}
 </script>
 
 <h2 class="mb-4 mt-0 font-bold text-tan">Military</h2>
@@ -248,7 +240,7 @@
 
 			<!-- Results count -->
 			<span class="ml-auto text-sm text-brown">
-				{unitPivotData().length} unit types
+				{unitPivotData.length} unit types
 			</span>
 		</div>
 
@@ -259,7 +251,7 @@
 					<tr>
 						<th
 							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-							onclick={() => handleToggleSort("unit_type")}
+							onclick={() => toggleSort(tableState, "unit_type")}
 						>
 							<span class="inline-flex items-center gap-1">
 								Unit
@@ -273,7 +265,7 @@
 						{#each displayedUnitNations as nation (nation)}
 							<th
 								class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-right font-bold text-brown"
-								onclick={() => handleToggleSort(`nation:${nation}`)}
+								onclick={() => toggleSort(tableState, `nation:${nation}`)}
 							>
 								<span
 									class="inline-flex items-center justify-end gap-1"
@@ -290,7 +282,7 @@
 						{#if displayedUnitNations.length > 1}
 							<th
 								class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-right font-bold text-brown"
-								onclick={() => handleToggleSort("total")}
+								onclick={() => toggleSort(tableState, "total")}
 							>
 								<span
 									class="inline-flex items-center justify-end gap-1"
@@ -307,7 +299,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each unitPivotData() as row (row.unit_type)}
+					{#each unitPivotData as row (row.unit_type)}
 						<tr class="hover:bg-brown/10">
 							<td
 								class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"

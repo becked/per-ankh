@@ -550,11 +550,11 @@ async fn share_game(
                 &upload_result.url,
                 &upload_result.delete_token,
             )?;
-            Ok(db::app_state::ShareInfo {
-                share_id: upload_result.share_id.clone(),
-                share_url: upload_result.url.clone(),
-                shared_at: chrono::Utc::now().to_rfc3339(),
-            })
+            // Read back from DB to ensure consistent timestamp format with subsequent get_share_info calls
+            db::app_state::get_share_info(conn, match_id)?
+                .ok_or_else(|| crate::parser::ParseError::InvalidFormat(
+                    "Failed to read back share info after save".into(),
+                ))
         })
         .map_err(|e| format!("Share uploaded but failed to save locally: {}", e))?;
 
@@ -606,7 +606,7 @@ async fn delete_share(
     }
 
     // Phase 3: Clean up local record (holds DB lock)
-    // 200 = deleted, 404 = already gone — either way, remove local tracking
+    // 204 = deleted, 404 = already gone — either way, remove local tracking
     pool.with_connection(|conn| Ok(db::app_state::delete_share_info(conn, match_id)?))
         .map_err(|e| format!("Remote deleted but failed to clean up locally: {}", e))?;
 

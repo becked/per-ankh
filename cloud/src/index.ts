@@ -54,6 +54,15 @@ function errorResponse(error: string, status: number, env: Env): Response {
 	return jsonResponse({ error }, status, env);
 }
 
+// Constant-time string comparison to prevent timing attacks on secret tokens
+function timingSafeEqual(a: string, b: string): boolean {
+	const encoder = new TextEncoder();
+	const bufA = encoder.encode(a);
+	const bufB = encoder.encode(b);
+	if (bufA.byteLength !== bufB.byteLength) return false;
+	return crypto.subtle.timingSafeEqual(bufA, bufB);
+}
+
 // Decompress gzipped data with a size limit to prevent gzip bombs
 async function decompressWithLimit(
 	compressed: ArrayBuffer,
@@ -471,7 +480,7 @@ async function handleDelete(
 		return errorResponse("Share not found", 404, env);
 	}
 
-	if (share.delete_token !== deleteToken || share.app_key !== appKey) {
+	if (!timingSafeEqual(share.delete_token, deleteToken) || !timingSafeEqual(share.app_key, appKey)) {
 		return errorResponse("Invalid delete credentials", 403, env);
 	}
 
@@ -488,7 +497,10 @@ async function handleDelete(
 	const ip = request.headers.get("CF-Connecting-IP");
 	await logEvent(env.SHARE_DB, "delete", shareId, share.app_key, ip);
 
-	return jsonResponse({ deleted: true }, 200, env);
+	return new Response(null, {
+		status: 204,
+		headers: corsHeaders(env),
+	});
 }
 
 // === Router ===

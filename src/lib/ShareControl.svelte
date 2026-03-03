@@ -21,6 +21,24 @@
 	let copyTimer: ReturnType<typeof setTimeout> | null = null;
 	let urlInput = $state<HTMLInputElement | null>(null);
 
+	function formatSharedDate(timestamp: string): string {
+		// DuckDB CURRENT_TIMESTAMP is UTC but the cast-to-string has no timezone indicator;
+		// append "Z" so JavaScript parses it as UTC
+		const date = new Date(timestamp.replace(" ", "T") + "Z");
+		const month = date.toLocaleString("en-US", { month: "long", timeZone: "UTC" });
+		const day = date.getUTCDate();
+		const year = date.getUTCFullYear();
+		const ordinal =
+			day % 10 === 1 && day !== 11
+				? "st"
+				: day % 10 === 2 && day !== 12
+					? "nd"
+					: day % 10 === 3 && day !== 13
+						? "rd"
+						: "th";
+		return `${month} ${day}${ordinal}, ${year}`;
+	}
+
 	// Load share status on mount / matchId change
 	$effect(() => {
 		const id = matchId; // track dependency
@@ -95,6 +113,22 @@
 		} catch {
 			// Fallback: select text so user can Ctrl+C
 			urlInput?.select();
+		}
+	}
+
+	async function handleNativeShare() {
+		if (!shareInfo) return;
+		try {
+			if (navigator.share) {
+				await navigator.share({
+					title: "Per Ankh — Game Analytics",
+					url: shareInfo.share_url,
+				});
+			} else {
+				await handleCopy();
+			}
+		} catch {
+			// User cancelled native share dialog
 		}
 	}
 
@@ -232,7 +266,7 @@
 					Share Link
 				</div>
 				<div class="mb-2 text-[10px] text-brown">
-					Shared {new Date(shareInfo.shared_at).toLocaleDateString()}
+					Shared {formatSharedDate(shareInfo.shared_at)}
 				</div>
 
 				<div class="mb-3 flex items-center gap-1.5">
@@ -253,7 +287,14 @@
 					</button>
 				</div>
 
-				<div class="flex justify-end">
+				<div class="flex items-center justify-between">
+					<button
+						type="button"
+						class="text-xs text-brown transition-colors hover:text-orange"
+						onclick={handleNativeShare}
+					>
+						Share via...
+					</button>
 					<button
 						type="button"
 						class="text-xs text-red-400 transition-colors hover:text-red-300"

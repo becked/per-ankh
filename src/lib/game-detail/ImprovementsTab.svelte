@@ -3,7 +3,7 @@
 	import SearchInput from "$lib/SearchInput.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { type TableState } from "./helpers";
+	import { type TableState, toggleSort } from "./helpers";
 
 	let {
 		improvementData,
@@ -47,7 +47,7 @@
 		total: number;
 	};
 
-	const improvementPivotData = $derived(() => {
+	const improvementPivotData = $derived.by(() => {
 		if (improvementData.improvements.length === 0) return [];
 
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
@@ -94,14 +94,6 @@
 		return rows;
 	});
 
-	function handleToggleSort(columnKey: string) {
-		if (tableState.sortColumn === columnKey) {
-			tableState.sortDirection = tableState.sortDirection === "asc" ? "desc" : "asc";
-		} else {
-			tableState.sortColumn = columnKey;
-			tableState.sortDirection = "asc";
-		}
-	}
 </script>
 
 {#if improvementData.improvements.length === 0}
@@ -193,7 +185,7 @@
 
 		<!-- Results count -->
 		<span class="ml-auto text-sm text-brown">
-			{improvementPivotData().length} improvements
+			{improvementPivotData.length} improvements
 		</span>
 	</div>
 
@@ -207,7 +199,7 @@
 				<tr>
 					<th
 						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-						onclick={() => handleToggleSort("improvement")}
+						onclick={() => toggleSort(tableState, "improvement")}
 					>
 						<span class="inline-flex items-center gap-1">
 							Improvement
@@ -224,7 +216,7 @@
 						<th
 							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
 							onclick={() =>
-								handleToggleSort(`nation:${nation}`)}
+								toggleSort(tableState, `nation:${nation}`)}
 						>
 							<span
 								class="inline-flex items-center justify-center gap-1"
@@ -243,7 +235,7 @@
 					{#if displayedImprovementNations.length > 1}
 						<th
 							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
-							onclick={() => handleToggleSort("total")}
+							onclick={() => toggleSort(tableState, "total")}
 						>
 							<span
 								class="inline-flex items-center justify-center gap-1"
@@ -262,7 +254,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each improvementPivotData() as row (row.improvement)}
+				{#each improvementPivotData as row (row.improvement)}
 					<tr class="hover:bg-brown/10">
 						<td
 							class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"

@@ -7,7 +7,7 @@
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
-	import { type TableState, getPlayerColor } from "./helpers";
+	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
 
 	let {
 		techDiscoveryHistory,
@@ -134,7 +134,7 @@
 		turns: Record<string, number | null>;
 	};
 
-	const techPivotData = $derived(() => {
+	const techPivotData = $derived.by(() => {
 		if (completedTechs.length === 0) return [];
 
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
@@ -177,14 +177,6 @@
 		return rows;
 	});
 
-	function handleToggleSort(columnKey: string) {
-		if (tableState.sortColumn === columnKey) {
-			tableState.sortDirection = tableState.sortDirection === "asc" ? "desc" : "asc";
-		} else {
-			tableState.sortColumn = columnKey;
-			tableState.sortDirection = "asc";
-		}
-	}
 </script>
 
 {#if techDiscoveryChartOption}
@@ -291,7 +283,7 @@
 
 			<!-- Results count -->
 			<span class="ml-auto text-sm text-brown">
-				{techPivotData().length} technologies
+				{techPivotData.length} technologies
 			</span>
 		</div>
 
@@ -305,7 +297,7 @@
 					<tr>
 						<th
 							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-							onclick={() => handleToggleSort("tech")}
+							onclick={() => toggleSort(tableState, "tech")}
 						>
 							<span class="inline-flex items-center gap-1">
 								Technology
@@ -319,7 +311,7 @@
 						{#each displayedTechNations as nation (nation)}
 							<th
 								class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
-								onclick={() => handleToggleSort(`nation:${nation}`)}
+								onclick={() => toggleSort(tableState, `nation:${nation}`)}
 							>
 								<span
 									class="inline-flex items-center justify-center gap-1"
@@ -336,7 +328,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each techPivotData() as row (row.tech)}
+					{#each techPivotData as row (row.tech)}
 						<tr class="hover:bg-brown/10">
 							<td
 								class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"

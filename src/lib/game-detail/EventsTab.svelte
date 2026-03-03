@@ -8,7 +8,7 @@
 	import { Select } from "bits-ui";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
-	import { type TableState, getPlayerColor } from "./helpers";
+	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
 
 	let {
 		eventLogs,
@@ -138,7 +138,7 @@
 	);
 
 	// Filtered and sorted event logs
-	const filteredEventLogs = $derived(() => {
+	const filteredEventLogs = $derived.by(() => {
 		let logs = processedEventLogs.filter((log) => {
 			if (tableState.search) {
 				const term = tableState.search.toLowerCase();
@@ -211,14 +211,6 @@
 		return logs;
 	});
 
-	function handleToggleSort(columnKey: string) {
-		if (tableState.sortColumn === columnKey) {
-			tableState.sortDirection = tableState.sortDirection === "asc" ? "desc" : "asc";
-		} else {
-			tableState.sortColumn = columnKey;
-			tableState.sortDirection = "asc";
-		}
-	}
 </script>
 
 <h2 class="mb-4 mt-0 font-bold text-tan">Game History</h2>
@@ -360,7 +352,7 @@
 
 		<!-- Results count -->
 		<span class="ml-auto text-sm text-brown">
-			{filteredEventLogs()?.length ?? 0} / {processedEventLogs.length} events
+			{filteredEventLogs?.length ?? 0} / {processedEventLogs.length} events
 		</span>
 	</div>
 
@@ -373,7 +365,7 @@
 				<tr>
 					<th
 						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-						onclick={() => handleToggleSort("turn")}
+						onclick={() => toggleSort(tableState, "turn")}
 					>
 						<span class="inline-flex items-center gap-1">
 							Turn
@@ -388,7 +380,7 @@
 					</th>
 					<th
 						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-						onclick={() => handleToggleSort("log_type")}
+						onclick={() => toggleSort(tableState, "log_type")}
 					>
 						<span class="inline-flex items-center gap-1">
 							Log Type
@@ -404,7 +396,7 @@
 					{#if showPlayerColumn}
 						<th
 							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-							onclick={() => handleToggleSort("player_name")}
+							onclick={() => toggleSort(tableState, "player_name")}
 						>
 							<span class="inline-flex items-center gap-1">
 								Player
@@ -420,7 +412,7 @@
 					{/if}
 					<th
 						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
-						onclick={() => handleToggleSort("description")}
+						onclick={() => toggleSort(tableState, "description")}
 					>
 						<span class="inline-flex items-center gap-1">
 							Description
@@ -436,7 +428,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each filteredEventLogs() ?? [] as log, i (i)}
+				{#each filteredEventLogs ?? [] as log, i (i)}
 					<tr class="hover:bg-brown/20 transition-colors duration-200">
 						<td class="border-brown/50 border-b p-3 text-left text-tan"
 							>{log.turn}</td

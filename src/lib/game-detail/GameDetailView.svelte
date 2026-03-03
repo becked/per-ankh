@@ -116,7 +116,7 @@
 		}),
 	);
 
-	const winnerColor = $derived(() => {
+	const winnerColor = $derived.by(() => {
 		if (!gameDetails.winner_civilization) return undefined;
 		return getCivilizationColor(gameDetails.winner_civilization);
 	});
@@ -184,7 +184,7 @@
 			>
 			<span
 				class="text-xl font-bold"
-				style:color={winnerColor() ?? "#EEEEEE"}
+				style:color={winnerColor ?? "#EEEEEE"}
 			>
 				{#if gameDetails.winner_player_id}
 					{#if gameDetails.winner_name}
