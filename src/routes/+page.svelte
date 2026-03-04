@@ -23,7 +23,7 @@
 	});
 
 	// Subscribe to collection filter
-	let currentCollectionId = $state<number | null>(get(activeCollectionId));
+	let currentCollectionId = $state<number | "shared" | null>(get(activeCollectionId));
 	$effect.pre(() => {
 		const unsubscribe = activeCollectionId.subscribe((value) => {
 			currentCollectionId = value;
@@ -238,9 +238,11 @@
 		loading = true;
 		error = null;
 		try {
+			// "shared" virtual filter doesn't apply to stats — show all
+			const statsFilter = currentCollectionId === "shared" ? null : currentCollectionId;
 			const [statsResult, datesResult] = await Promise.all([
-				api.getGameStatistics(currentCollectionId),
-				api.getSaveDates(currentCollectionId),
+				api.getGameStatistics(statsFilter),
+				api.getSaveDates(statsFilter),
 			]);
 			stats = statsResult;
 			saveDates = datesResult;

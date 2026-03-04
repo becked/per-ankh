@@ -1,0 +1,1 @@
+../../../src/lib/GamePageSkeleton.svelte

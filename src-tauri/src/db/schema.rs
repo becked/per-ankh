@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Current schema version - increment when schema changes
-pub const CURRENT_SCHEMA_VERSION: &str = "2.13.0";
+pub const CURRENT_SCHEMA_VERSION: &str = "2.14.0";
 
 // ============================================================================
 // MIGRATION REGISTRY
@@ -83,6 +83,11 @@ pub const MIGRATIONS: &[Migration] = &[
         version: "2.13.0",
         description: "Change event_logs data1/data2/data3 from INTEGER to VARCHAR",
         is_breaking: true,
+    },
+    Migration {
+        version: "2.14.0",
+        description: "Share game feature (app state tables managed separately via app_state.sql)",
+        is_breaking: false,
     },
 ];
 
@@ -647,6 +652,12 @@ fn run_migration(conn: &Connection, migration: &Migration) -> Result<()> {
             log::info!("Migration v2.12.0: Recording migration system update");
             Ok(())
         }
+        // 2.14.0: Share game feature — app state tables are managed by
+        // app_state::ensure_app_state_tables(), not the migration system
+        "2.14.0" => {
+            log::info!("Migration v2.14.0: Share game feature (app state tables managed separately)");
+            Ok(())
+        }
         // Breaking migrations don't have incremental logic - they require reset
         // These are kept for documentation and the is_breaking flag
         _ if migration.is_breaking => {
@@ -1053,8 +1064,8 @@ mod tests {
         assert!(!pending.is_empty(), "Should have pending migrations from 2.4.0");
         assert_eq!(pending[0].version, "2.5.0", "First pending should be 2.5.0");
 
-        // From 2.13.0 (current), no migrations should be pending
-        let pending = get_pending_migrations("2.13.0");
+        // From current version, no migrations should be pending
+        let pending = get_pending_migrations(CURRENT_SCHEMA_VERSION);
         assert!(pending.is_empty(), "Should have no pending migrations from current version");
 
         // From 2.7.0, should have 2.8.0+ pending
@@ -1065,11 +1076,11 @@ mod tests {
 
     #[test]
     fn test_has_breaking_migration() {
-        // 2.4.0 -> 2.13.0 has breaking migrations (2.6.0+)
+        // 2.4.0 -> current has breaking migrations (2.6.0+)
         assert!(has_breaking_migration("2.4.0"));
 
-        // 2.13.0 -> 2.13.0 has no pending migrations
-        assert!(!has_breaking_migration("2.13.0"));
+        // Current version has no pending migrations
+        assert!(!has_breaking_migration(CURRENT_SCHEMA_VERSION));
     }
 
     #[test]

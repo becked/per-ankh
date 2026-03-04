@@ -8,6 +8,7 @@ pub mod games;
 pub mod history;
 pub mod map;
 pub mod match_data;
+pub mod share;
 
 use crate::types::ReligionInfo;
 use duckdb::Connection;
