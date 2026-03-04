@@ -1,6 +1,8 @@
 import { check, type Update } from "@tauri-apps/plugin-updater";
 import { relaunch } from "@tauri-apps/plugin-process";
 
+const CHECK_TIMEOUT_MS = 10_000;
+
 /**
  * Result of an update check.
  */
@@ -14,9 +16,21 @@ export interface UpdateCheckResult {
 /**
  * Check for application updates.
  * Returns update information if available, null values if up-to-date.
+ * Times out after 10 seconds if GitHub is unreachable or slow.
  */
 export async function checkForUpdates(): Promise<UpdateCheckResult> {
-	const update = await check();
+	const update = await Promise.race([
+		check(),
+		new Promise<never>((_, reject) =>
+			setTimeout(
+				() =>
+					reject(
+						new Error("Update check timed out — GitHub may be unreachable"),
+					),
+				CHECK_TIMEOUT_MS,
+			),
+		),
+	]);
 
 	if (update) {
 		return {
@@ -40,11 +54,13 @@ export async function checkForUpdates(): Promise<UpdateCheckResult> {
  *
  * @param update - The update object from checkForUpdates()
  * @param onProgress - Optional callback for download progress (0-100)
+ * @param isCancelled - Optional callback checked before relaunching; if true, skips relaunch
  * @throws Error if download or installation fails
  */
 export async function downloadAndInstall(
 	update: Update,
 	onProgress?: (percent: number) => void,
+	isCancelled?: () => boolean,
 ): Promise<void> {
 	let downloaded = 0;
 	let contentLength = 0;
@@ -65,5 +81,7 @@ export async function downloadAndInstall(
 		}
 	});
 
-	await relaunch();
+	if (!isCancelled?.()) {
+		await relaunch();
+	}
 }

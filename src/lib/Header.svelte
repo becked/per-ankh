@@ -2,10 +2,10 @@
 	import { goto } from "$app/navigation";
 	import { onMount, onDestroy } from "svelte";
 	import { listen, type UnlistenFn } from "@tauri-apps/api/event";
+	import { get } from "svelte/store";
 	import ImportModal from "$lib/ImportModal.svelte";
 	import SettingsModal from "$lib/SettingsModal.svelte";
 	import CollectionsModal from "$lib/CollectionsModal.svelte";
-	import UpdateModal from "$lib/UpdateModal.svelte";
 	import SearchInput from "$lib/SearchInput.svelte";
 
 	import { api } from "$lib/api";
@@ -13,15 +13,30 @@
 	import type { BatchImportResult } from "$lib/types/BatchImportResult";
 	import { refreshData } from "$lib/stores/refresh";
 	import { searchQuery } from "$lib/stores/search";
+	import { pendingUpdate } from "$lib/stores/update";
 	import { showConfirm, showSuccess, showError } from "$lib/utils/dialogs";
+	import type { Update } from "@tauri-apps/plugin-updater";
+
+	interface Props {
+		onOpenUpdateModal: () => void;
+	}
+
+	let { onOpenUpdateModal }: Props = $props();
 
 	let isMenuOpen = $state(false);
 	let isImportModalOpen = $state(false);
 	let isSettingsModalOpen = $state(false);
 	let isCollectionsModalOpen = $state(false);
-	let isUpdateModalOpen = $state(false);
 	let importProgress: ImportProgress | null = $state(null);
 	let importResult: BatchImportResult | null = $state(null);
+
+	let currentPendingUpdate = $state<Update | null>(get(pendingUpdate));
+	$effect.pre(() => {
+		const unsubscribe = pendingUpdate.subscribe((value) => {
+			currentPendingUpdate = value;
+		});
+		return unsubscribe;
+	});
 
 	async function navigateToSummary() {
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- Navigation is awaited
@@ -44,7 +59,7 @@
 
 	function openUpdateModal() {
 		isMenuOpen = false;
-		isUpdateModalOpen = true;
+		onOpenUpdateModal();
 	}
 
 	async function handleImportFiles() {
@@ -224,11 +239,15 @@
 				</button>
 				<div class="border-t border-black"></div>
 				<button
-					class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+					class="w-full px-3 py-1.5 text-left text-xs transition-colors hover:bg-[#35302b] {currentPendingUpdate
+						? 'font-semibold text-orange'
+						: 'text-tan'}"
 					type="button"
 					onclick={openUpdateModal}
 				>
-					Check for Updates...
+					{currentPendingUpdate
+						? `Update Available (v${currentPendingUpdate.version})`
+						: "Check for Updates"}
 				</button>
 			</div>
 		{/if}
@@ -272,12 +291,5 @@
 	bind:isOpen={isCollectionsModalOpen}
 	onClose={() => {
 		isCollectionsModalOpen = false;
-	}}
-/>
-
-<UpdateModal
-	bind:isOpen={isUpdateModalOpen}
-	onClose={() => {
-		isUpdateModalOpen = false;
 	}}
 />
