@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Update } from "@tauri-apps/plugin-updater";
 	import { checkForUpdates, downloadAndInstall } from "$lib/utils/updater";
+	import { pendingUpdate } from "$lib/stores/update";
 
 	interface Props {
 		isOpen: boolean;
@@ -16,6 +17,7 @@
 	let isDownloading = $state(false);
 	let downloadProgress = $state(0);
 	let error = $state<string | null>(null);
+	let cancelled = $state(false);
 
 	async function handleCheckForUpdates() {
 		checking = true;
@@ -28,6 +30,7 @@
 			if (result.available && result.update) {
 				update = result.update;
 				currentVersion = result.currentVersion;
+				pendingUpdate.set(result.update);
 			} else {
 				isUpToDate = true;
 				currentVersion = result.currentVersion;
@@ -43,13 +46,24 @@
 		if (!update) return;
 
 		isDownloading = true;
+		cancelled = false;
 		error = null;
 		downloadProgress = 0;
 
 		try {
-			await downloadAndInstall(update, (percent) => {
-				downloadProgress = percent;
-			});
+			await downloadAndInstall(
+				update,
+				(percent) => {
+					downloadProgress = percent;
+				},
+				() => cancelled,
+			);
+			// Download completed and app is relaunching (unless cancelled)
+			if (cancelled) {
+				// Update was installed but relaunch was skipped — it will apply on next launch
+				pendingUpdate.set(null);
+				isDownloading = false;
+			}
 		} catch (err) {
 			error = err instanceof Error ? err.message : String(err);
 			isDownloading = false;
@@ -57,14 +71,15 @@
 	}
 
 	function handleClose() {
-		if (!isDownloading) {
-			onClose();
+		if (isDownloading) {
+			cancelled = true;
 		}
+		onClose();
 	}
 
 	function handleKeydown(event: KeyboardEvent) {
-		if (event.key === "Escape" && !isDownloading) {
-			onClose();
+		if (event.key === "Escape") {
+			handleClose();
 		}
 	}
 
@@ -75,6 +90,7 @@
 			error = null;
 			isDownloading = false;
 			downloadProgress = 0;
+			cancelled = false;
 			handleCheckForUpdates();
 		}
 	});
@@ -200,12 +216,11 @@
 			</div>
 
 			<button
-				class="w-full rounded border-2 border-black bg-brown px-4 py-2 font-semibold text-tan transition-opacity hover:opacity-80 disabled:cursor-not-allowed disabled:opacity-50"
+				class="w-full rounded border-2 border-black bg-brown px-4 py-2 font-semibold text-tan transition-opacity hover:opacity-80"
 				type="button"
 				onclick={handleClose}
-				disabled={isDownloading}
 			>
-				{isDownloading ? "Installing..." : "Close"}
+				{isDownloading ? "Cancel" : "Close"}
 			</button>
 		</div>
 	</div>
