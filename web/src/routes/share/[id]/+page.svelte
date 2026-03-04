@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from "$app/stores";
-	import { api } from "$lib/api";
+	import { webApi, type ShareError } from "$lib/api-web";
+	import { formatEnum } from "$lib/utils/formatting";
 	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { YieldHistory } from "$lib/types/YieldHistory";
@@ -14,9 +15,7 @@
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import type { MapTile } from "$lib/types/MapTile";
 	import GamePageSkeleton from "$lib/GamePageSkeleton.svelte";
-	import ShareControl from "$lib/ShareControl.svelte";
 	import { GameDetailView } from "$lib/game-detail";
-	import { YIELD_TYPES } from "$lib/game-detail/helpers";
 
 	let gameDetails = $state<GameDetails | null>(null);
 	let playerHistory = $state<PlayerHistory[] | null>(null);
@@ -30,31 +29,45 @@
 	let cityStatistics = $state<CityStatistics | null>(null);
 	let improvementData = $state<ImprovementData | null>(null);
 	let mapTiles = $state<MapTile[] | null>(null);
-	let selectedMapTurn = $state<number | null>(null);
-	let mapTilesLoading = $state(false);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let shareError = $state<ShareError | null>(null);
 
-	// Fetch game data when route changes
+	// Build a descriptive page title from game data
+	const pageTitle = $derived.by(() => {
+		if (!gameDetails) return "Shared Game — Per Ankh";
+		const isRealName =
+			gameDetails.game_name != null &&
+			gameDetails.game_name !== "" &&
+			!gameDetails.game_name.match(/^Game\d+$/);
+		if (isRealName) return `${gameDetails.game_name} — Per Ankh`;
+		const humanPlayer = gameDetails.players.find((p) => p.is_human);
+		const nation = humanPlayer?.nation ? formatEnum(humanPlayer.nation, "NATION_") : null;
+		if (nation) return `${nation} T${gameDetails.total_turns} — Per Ankh`;
+		return `Shared Game — Per Ankh`;
+	});
+
+	// Fetch shared game data when route changes
 	$effect(() => {
-		const matchId = Number($page.params.id);
+		const shareId = $page.params.id as string;
 
 		loading = true;
 		error = null;
+		shareError = null;
 
 		Promise.all([
-			api.getGameDetails(matchId),
-			api.getPlayerHistory(matchId),
-			api.getYieldHistory(matchId, Array.from(YIELD_TYPES)),
-			api.getEventLogs(matchId),
-			api.getLawAdoptionHistory(matchId),
-			api.getCurrentLaws(matchId),
-			api.getTechDiscoveryHistory(matchId),
-			api.getCompletedTechs(matchId),
-			api.getUnitsProduced(matchId),
-			api.getCityStatistics(matchId),
-			api.getImprovementData(matchId),
-			api.getMapTiles(matchId),
+			webApi.getGameDetails(shareId),
+			webApi.getPlayerHistory(shareId),
+			webApi.getYieldHistory(shareId),
+			webApi.getEventLogs(shareId),
+			webApi.getLawAdoptionHistory(shareId),
+			webApi.getCurrentLaws(shareId),
+			webApi.getTechDiscoveryHistory(shareId),
+			webApi.getCompletedTechs(shareId),
+			webApi.getUnitsProduced(shareId),
+			webApi.getCityStatistics(shareId),
+			webApi.getImprovementData(shareId),
+			webApi.getMapTiles(shareId),
 		])
 			.then(
 				([
@@ -83,47 +96,44 @@
 					cityStatistics = cityStats;
 					improvementData = impData;
 					mapTiles = tiles;
-					selectedMapTurn = details.total_turns;
 				},
 			)
 			.catch((err) => {
-				error = String(err);
+				const errStr = String(err);
+				if (errStr === "SHARE_NOT_FOUND" || errStr === "NETWORK_ERROR" || errStr === "CORRUPT_DATA") {
+					shareError = errStr as ShareError;
+				} else {
+					error = errStr;
+				}
 			})
 			.finally(() => {
 				loading = false;
 			});
 	});
-
-	// Handle map turn slider change
-	async function handleMapTurnChange(turn: number) {
-		if (!gameDetails || mapTilesLoading) return;
-
-		selectedMapTurn = turn;
-
-		if (turn === gameDetails.total_turns) {
-			mapTilesLoading = true;
-			try {
-				mapTiles = await api.getMapTiles(gameDetails.match_id);
-			} catch (err) {
-				console.error("Failed to fetch map tiles:", err);
-			} finally {
-				mapTilesLoading = false;
-			}
-		} else {
-			mapTilesLoading = true;
-			try {
-				mapTiles = await api.getMapTilesAtTurn(gameDetails.match_id, turn);
-			} catch (err) {
-				console.error("Failed to fetch map tiles at turn:", err);
-			} finally {
-				mapTilesLoading = false;
-			}
-		}
-	}
 </script>
+
+<svelte:head>
+	<title>{pageTitle}</title>
+</svelte:head>
 
 {#if loading}
 	<GamePageSkeleton />
+{:else if shareError === "SHARE_NOT_FOUND"}
+	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+		<h1 class="mb-4 text-3xl font-bold text-gray-200">Share Not Found</h1>
+		<p class="text-brown">This shared game does not exist or has been deleted.</p>
+		<p class="mt-2 text-sm text-brown">Shared links expire after 2 years.</p>
+	</main>
+{:else if shareError === "NETWORK_ERROR"}
+	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+		<h1 class="mb-4 text-3xl font-bold text-gray-200">Connection Error</h1>
+		<p class="text-brown">Could not reach the server. Please check your connection and try again.</p>
+	</main>
+{:else if shareError === "CORRUPT_DATA"}
+	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+		<h1 class="mb-4 text-3xl font-bold text-gray-200">Data Error</h1>
+		<p class="text-brown">The shared game data could not be loaded. It may be corrupted.</p>
+	</main>
 {:else if error}
 	<main class="isolate flex-1 overflow-y-auto bg-blue-gray px-4 pb-8 pt-4">
 		<p class="rounded border-2 border-orange bg-brown p-4 font-bold text-white">
@@ -145,11 +155,11 @@
 			{cityStatistics}
 			{improvementData}
 			{mapTiles}
-			{selectedMapTurn}
-			onMapTurnChange={handleMapTurnChange}
 		>
-			{#snippet headerActions()}
-				<ShareControl matchId={gameDetails!.match_id} />
+			{#snippet preTabs()}
+				<div class="mb-4 rounded border border-brown/30 bg-[#201a13] px-4 py-2 text-center text-xs text-brown">
+					Shared game
+				</div>
 			{/snippet}
 		</GameDetailView>
 	</main>

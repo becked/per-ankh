@@ -663,7 +663,11 @@ npm run types:generate
 ```
 per-ankh/
 ├── src/                    # Svelte frontend source
-│   ├── lib/               # Svelte components
+│   ├── lib/               # Svelte components and utilities
+│   │   ├── game-detail/   # Shared game detail view (desktop + web)
+│   │   ├── config/        # Chart colors, nation colors, theme
+│   │   ├── types/         # Auto-generated TypeScript types from Rust
+│   │   └── utils/         # Formatting utilities
 │   ├── routes/            # App pages/routes
 │   └── App.svelte         # Main app component
 ├── src-tauri/             # Rust backend source
@@ -674,6 +678,8 @@ per-ankh/
 │   │   └── parser.rs     # Save file parsing
 │   ├── Cargo.toml        # Rust dependencies
 │   └── tauri.conf.json   # Tauri configuration
+├── web/                    # Static web viewer for shared games
+│   └── src/lib/           # Symlinks to src/lib/ for shared components
 ├── test-data/             # Test fixtures
 │   └── saves/            # Sample Old World save files for development/testing
 ├── package.json           # Frontend dependencies
@@ -704,6 +710,44 @@ The `test-data/saves/` directory contains sample Old World game save files that 
 - **State management**: Use Svelte stores for reactive state
 - **Tauri commands**: Keep commands focused and single-responsibility
 - **Type safety**: Ensure Rust types match TypeScript interfaces for Tauri IPC
+
+### Game Detail View (Shared Desktop + Web)
+
+The game detail page is shared between the desktop app and the web share viewer via `src/lib/game-detail/`. The web project symlinks to this directory.
+
+**Architecture:**
+
+```
+Wrapper Page (thin, context-specific)
+  ├── Desktop: data fetching via Tauri API, map turn slider, ShareControl
+  ├── Web: data fetching via HTTP, error handling, share banner
+  │
+  └── GameDetailView (receives all loaded data as non-null props)
+        ├── Owns: activeTab, chartFilters, tables, cityVisibleColumns
+        ├── Accepts snippet props: headerActions, preTabs
+        │
+        └── Tab Components (receive data + $bindable state slices)
+```
+
+**Adding a new yield chart**: Add one entry to `YIELD_CHART_CONFIG` in `src/lib/game-detail/helpers.ts`:
+
+```typescript
+{ yieldType: "YIELD_NEW", title: "New Yield", yAxisLabel: "Per Turn", filterKey: "new" },
+```
+
+Also add `"new"` to the `ChartFilterKey` type and `PLAYER_CHART_KEYS` array in the same file.
+
+**Adding a new tab**: Create a new `FooTab.svelte` in `src/lib/game-detail/`, then add a `Tabs.Trigger` and `Tabs.Content` in `GameDetailView.svelte`. Both desktop and web get the tab automatically.
+
+**Key files:**
+
+| File | Purpose |
+|------|---------|
+| `src/lib/game-detail/helpers.ts` | Types, constants (YIELD_CHART_CONFIG, CITY_COLUMNS), pure functions |
+| `src/lib/game-detail/GameDetailView.svelte` | Orchestrator: summary, tabs, persistent UI state |
+| `src/lib/game-detail/index.ts` | Re-export for clean imports |
+| `src/routes/game/[id]/+page.svelte` | Desktop wrapper (~150 lines) |
+| `web/src/routes/share/[id]/+page.svelte` | Web wrapper (~150 lines) |
 
 ## Development Principles
 

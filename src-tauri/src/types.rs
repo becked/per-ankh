@@ -394,3 +394,27 @@ pub struct ImprovementInfo {
 pub struct ImprovementData {
     pub improvements: Vec<ImprovementInfo>,
 }
+
+/// Assembled game data for sharing via the share API.
+/// All 12 game detail query results bundled into one JSON blob.
+///
+/// NOT exposed to the desktop frontend (no TS derive) — only serialized
+/// to JSON for upload to the Cloudflare Worker.
+#[derive(Serialize)]
+pub struct SharedGameData {
+    pub version: u32,
+    pub created_at: String,
+    pub app_version: String,
+    pub game_details: GameDetails,
+    pub player_history: Vec<PlayerHistory>,
+    pub yield_history: Vec<YieldHistory>,
+    pub event_logs: Vec<EventLog>,
+    pub law_adoption_history: Vec<LawAdoptionHistory>,
+    pub current_laws: Vec<PlayerLaw>,
+    pub tech_discovery_history: Vec<TechDiscoveryHistory>,
+    pub completed_techs: Vec<PlayerTech>,
+    pub units_produced: Vec<PlayerUnitProduced>,
+    pub city_statistics: CityStatistics,
+    pub improvement_data: ImprovementData,
+    pub map_tiles: Vec<MapTile>,
+}

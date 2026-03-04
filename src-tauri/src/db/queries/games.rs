@@ -186,6 +186,51 @@ pub fn get_games_list(
     Ok(games)
 }
 
+/// Get list of all shared games, sorted by save date (newest first).
+/// Joins matches with shared_games (app state table) to find shared games.
+pub fn get_shared_games_list(conn: &Connection) -> duckdb::Result<Vec<GameInfo>> {
+    let query = "SELECT m.match_id, m.game_name, CAST(m.save_date AS VARCHAR) as save_date,
+                    m.total_turns,
+                    COALESCE(so.nation, fh.nation) as nation,
+                    CASE
+                        WHEN m.winner_player_id IS NULL THEN NULL
+                        WHEN so.player_id IS NOT NULL AND m.winner_player_id = so.player_id THEN TRUE
+                        WHEN so.player_id IS NOT NULL THEN FALSE
+                        ELSE NULL
+                    END as save_owner_won,
+                    m.collection_id
+             FROM matches m
+             INNER JOIN shared_games sg ON m.match_id = sg.match_id
+             LEFT JOIN (
+                 SELECT match_id, nation, player_id
+                 FROM players WHERE is_save_owner = TRUE
+             ) so ON m.match_id = so.match_id
+             LEFT JOIN (
+                 SELECT match_id, nation, player_id,
+                        ROW_NUMBER() OVER (PARTITION BY match_id ORDER BY player_id) as rn
+                 FROM players WHERE is_human = TRUE
+             ) fh ON m.match_id = fh.match_id AND fh.rn = 1
+             ORDER BY m.save_date DESC";
+
+    let mut stmt = conn.prepare(query)?;
+    let games = stmt
+        .query_map([], |row| {
+            Ok(GameInfo {
+                match_id: row.get(0)?,
+                game_name: row.get(1)?,
+                save_date: row.get(2)?,
+                turn_year: None,
+                total_turns: row.get(3)?,
+                save_owner_nation: row.get(4)?,
+                save_owner_won: row.get(5)?,
+                collection_id: row.get(6)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(games)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
