@@ -739,6 +739,17 @@ Also add `"new"` to the `ChartFilterKey` type and `PLAYER_CHART_KEYS` array in t
 
 **Adding a new tab**: Create a new `FooTab.svelte` in `src/lib/game-detail/`, then add a `Tabs.Trigger` and `Tabs.Content` in `GameDetailView.svelte`. Both desktop and web get the tab automatically.
 
+**When changes require new backend data (share implications):**
+
+UI-only changes (rearranging layout, new charts using existing data) propagate to the web viewer automatically via symlinks — just redeploy the web app. But if a new chart/tab needs data not already in `SharedGameData`, you must update 4 layers:
+
+1. **Rust** (`src-tauri/src/db/queries/share.rs`): Add the field to `SharedGameData` and query it in `assemble_shared_game_data()`
+2. **Cloudflare Worker** (`cloud/src/index.ts`): Update schema validation to accept the new field
+3. **Web API** (`web/src/lib/api-web.ts`): Add a `webApi` function that slices the new field from the cached blob
+4. **Shared component** (`src/lib/game-detail/`): The new tab/chart itself
+
+Previously shared games won't have the new field, so the web viewer must handle it being absent (e.g., `data.newField ?? []`).
+
 **Key files:**
 
 | File | Purpose |
