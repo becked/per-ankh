@@ -1,5 +1,5 @@
 <!-- Skeleton loading state for the game page -->
-<!-- Matches the layout of +page.svelte exactly to prevent layout shift -->
+<!-- Matches the layout of GameDetailView.svelte exactly to prevent layout shift -->
 
 <main class="isolate flex-1 overflow-y-auto bg-blue-gray px-4 pb-8 pt-4">
 	<!-- Header with title and date - exact same classes as real page -->
@@ -77,58 +77,70 @@
 	<!-- Tab Navigation - exact same text and classes as real tabs -->
 	<div class="flex">
 		<div
-			class="rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #35302B;"
+		>
+			Overview
+		</div>
+		<div
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
+			style="background-color: #2a2622;"
+		>
+			Timeline
+		</div>
+		<div
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
+			style="background-color: #2a2622;"
 		>
 			Events
 		</div>
 		<div
-			class="border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
 			Laws
 		</div>
 		<div
-			class="border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
 			Techs
 		</div>
 		<div
-			class="border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
 			Yields
 		</div>
 		<div
-			class="border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
 			Military
 		</div>
 		<div
-			class="border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
 			Cities
 		</div>
 		<div
-			class="border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
 			Improvements
 		</div>
 		<div
-			class="border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold text-tan"
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
 			Map
 		</div>
 		<div
-			class="rounded-tr-lg border-2 border-b-0 border-black px-6 py-3 font-bold text-tan"
+			class="rounded-tr-lg border-2 border-b-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
-			Game Settings
+			Settings
 		</div>
 	</div>
 
