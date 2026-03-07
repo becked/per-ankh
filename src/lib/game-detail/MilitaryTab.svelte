@@ -1,8 +1,10 @@
 <script lang="ts">
+	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { EChartsOption } from "echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import Chart from "$lib/Chart.svelte";
 	import SearchInput from "$lib/SearchInput.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -10,6 +12,7 @@
 	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
 
 	let {
+		gameDetails,
 		playerHistory,
 		unitsProduced,
 		chartFilter = $bindable<Record<string, boolean>>({}),
@@ -20,6 +23,7 @@
 			filters: [],
 		}),
 	}: {
+		gameDetails: GameDetails;
 		playerHistory: PlayerHistory[];
 		unitsProduced: PlayerUnitProduced[];
 		chartFilter?: Record<string, boolean>;
@@ -57,6 +61,106 @@
 					})),
 				}
 			: null,
+	);
+
+	// ─── Army composition pie charts ─────────────────────────────────
+	const RANGED_KEYWORDS = ["ARCHER", "BOWMAN", "CROSSBOW", "SLINGER", "SKIRMISHER", "JAVELINEER", "CLUB_THROWER"];
+	const CAVALRY_KEYWORDS = ["CAVALRY", "CHARIOT", "CATAPHRACT", "HORSEMAN", "RIDER", "LANCER", "MOUNTED", "ELEPHANT", "CAMEL"];
+	const SIEGE_KEYWORDS = ["BALLISTA", "ONAGER", "SIEGE", "CATAPULT", "RAM", "TORSION"];
+	const NAVAL_KEYWORDS = ["BIREME", "TRIREME", "DROMON", "QUINQUEREME", "PENTECONTER", "GALLEY", "SHIP", "LONGBOAT"];
+	const SUPPORT_KEYWORDS = ["WORKER", "MILITIA", "SETTLER", "SCOUT", "CARAVAN", "DISCIPLE", "DIPLOMAT", "MISSIONARY", "SPY", "MONK", "CLERIC", "PROPHET", "ENVOY", "TRADER"];
+
+	type UnitClass = "Infantry" | "Ranged" | "Cavalry" | "Siege" | "Naval";
+
+	function classifyUnit(unitType: string): UnitClass | null {
+		const upper = unitType.toUpperCase();
+		if (SUPPORT_KEYWORDS.some((k) => upper.includes(k))) return null;
+		if (NAVAL_KEYWORDS.some((k) => upper.includes(k))) return "Naval";
+		if (SIEGE_KEYWORDS.some((k) => upper.includes(k))) return "Siege";
+		if (CAVALRY_KEYWORDS.some((k) => upper.includes(k))) return "Cavalry";
+		if (RANGED_KEYWORDS.some((k) => upper.includes(k))) return "Ranged";
+		return "Infantry";
+	}
+
+	const UNIT_CLASS_COLORS: Record<UnitClass, string> = {
+		Infantry: "#C87941",
+		Ranged: "#B8860B",
+		Cavalry: "#CD853F",
+		Siege: "#A0522D",
+		Naval: "#8B4513",
+	};
+
+	type ArmyPieData = {
+		nation: string | null;
+		nationLabel: string;
+		color: string;
+		pieOption: EChartsOption;
+	};
+
+	const armyPieCharts = $derived<ArmyPieData[]>(
+		gameDetails.players
+			.map((p, i) => {
+				const playerUnits = unitsProduced.filter((u) => u.nation === p.nation);
+				const classCounts: Partial<Record<UnitClass, number>> = {};
+				for (const u of playerUnits) {
+					const cls = classifyUnit(u.unit_type);
+					if (cls == null) continue;
+					classCounts[cls] = (classCounts[cls] ?? 0) + u.count;
+				}
+				const slices = (Object.entries(classCounts) as [UnitClass, number][])
+					.filter(([, count]) => count > 0)
+					.sort(([, a], [, b]) => b - a);
+
+				if (slices.length === 0) return null;
+
+				const pieOption: EChartsOption = {
+					backgroundColor: "#211A12",
+					animation: false,
+					title: {
+						text: formatEnum(p.nation, "NATION_"),
+						left: "center",
+						top: 8,
+						textStyle: { color: getPlayerColor(p.nation, i), fontSize: 14 },
+					},
+					tooltip: {
+						trigger: "item",
+						formatter: (params: any) => `${params.name}: ${params.value} (${params.percent}%)`,
+					},
+					series: [{
+						type: "pie",
+						radius: ["30%", "60%"],
+						center: ["50%", "55%"],
+						avoidLabelOverlap: false,
+						label: {
+							show: true,
+							position: "outside",
+							formatter: "{b} {d}%",
+							fontSize: 10,
+							color: "#D2B48C",
+						},
+						labelLine: {
+							show: true,
+							length: 8,
+							length2: 6,
+							lineStyle: { color: "#666" },
+						},
+						data: slices.map(([unitClass, count]) => ({
+							name: unitClass,
+							value: count,
+							itemStyle: { color: UNIT_CLASS_COLORS[unitClass] },
+						})),
+					}],
+				};
+
+				return {
+					nation: p.nation,
+					nationLabel: formatEnum(p.nation, "NATION_"),
+					color: getPlayerColor(p.nation, i),
+					pieOption,
+				};
+			})
+			.filter((d): d is ArmyPieData => d != null)
+			.sort((a, b) => a.nationLabel.localeCompare(b.nationLabel)),
 	);
 
 	// ─── Units pivot table logic ──────────────────────────────────────
@@ -147,6 +251,20 @@
 		height="400px"
 		title="Military Power"
 	/>
+{/if}
+
+<!-- Army Composition Pie Charts -->
+{#if armyPieCharts.length > 0}
+	<div
+		class="mb-6 grid gap-4"
+		style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));"
+	>
+		{#each armyPieCharts as chart (chart.nation)}
+			<div class="overflow-hidden rounded-lg border-2 border-tan">
+				<Chart option={chart.pieOption} height="200px" />
+			</div>
+		{/each}
+	</div>
 {/if}
 
 <!-- Units Produced Table -->

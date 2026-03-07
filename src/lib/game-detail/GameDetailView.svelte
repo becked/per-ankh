@@ -27,6 +27,9 @@
 		createDefaultCityVisibleColumns,
 		createDefaultSelection,
 	} from "./helpers";
+	import type { TimelineCategory } from "./helpers";
+	import OverviewTab from "./OverviewTab.svelte";
+	import TimelineTab from "./TimelineTab.svelte";
 	import EventsTab from "./EventsTab.svelte";
 	import LawsTab from "./LawsTab.svelte";
 	import TechsTab from "./TechsTab.svelte";
@@ -75,10 +78,19 @@
 	} = $props();
 
 	// ─── Persistent UI state ──────────────────────────────────────────
-	let activeTab = $state<string>("events");
+	let activeTab = $state<string>("overview");
 	let chartFilters = $state(createDefaultChartFilters());
 	let tables = $state(createDefaultTableStates());
 	let cityVisibleColumns = $state(createDefaultCityVisibleColumns());
+	let timelineFilters = $state<Record<TimelineCategory, boolean>>({
+		tech: true,
+		law: true,
+		city: true,
+		religion: false,
+		wonder: false,
+		military: false,
+		other: false,
+	});
 
 	// ─── Initialize chart filters when data loads ─────────────────────
 	$effect(() => {
@@ -251,8 +263,22 @@
 	<!-- Tab Navigation -->
 	<Tabs.List class="flex">
 		<Tabs.Trigger
-			value="events"
+			value="overview"
 			class="cursor-pointer rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+		>
+			Overview
+		</Tabs.Trigger>
+
+		<Tabs.Trigger
+			value="timeline"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+		>
+			Timeline
+		</Tabs.Trigger>
+
+		<Tabs.Trigger
+			value="events"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Events
 		</Tabs.Trigger>
@@ -310,9 +336,45 @@
 			value="settings"
 			class="cursor-pointer rounded-tr-lg border-2 border-b-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
-			Game Settings
+			Settings
 		</Tabs.Trigger>
 	</Tabs.List>
+
+	<!-- Tab Content: Overview -->
+	<Tabs.Content
+		value="overview"
+		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
+		style="background-color: #35302B;"
+	>
+		<OverviewTab
+			{gameDetails}
+			{playerHistory}
+			{allYields}
+			{completedTechs}
+			{currentLaws}
+			{unitsProduced}
+			{cityStatistics}
+			{victoryPointsEnabled}
+			{improvementData}
+		/>
+	</Tabs.Content>
+
+	<!-- Tab Content: Timeline -->
+	<Tabs.Content
+		value="timeline"
+		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
+		style="background-color: #35302B;"
+	>
+		<TimelineTab
+			{gameDetails}
+			{techDiscoveryHistory}
+			{lawAdoptionHistory}
+			{cityStatistics}
+			{eventLogs}
+			{playerHistory}
+			bind:categoryFilters={timelineFilters}
+		/>
+	</Tabs.Content>
 
 	<!-- Tab Content: Events -->
 	<Tabs.Content
@@ -379,6 +441,7 @@
 		style="background-color: #35302B;"
 	>
 		<MilitaryTab
+			{gameDetails}
 			{playerHistory}
 			{unitsProduced}
 			bind:chartFilter={chartFilters.military}
