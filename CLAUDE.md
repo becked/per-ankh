@@ -748,6 +748,8 @@ UI-only changes (rearranging layout, new charts using existing data) propagate t
 3. **Web API** (`web/src/lib/api-web.ts`): Add a `webApi` function that slices the new field from the cached blob
 4. **Shared component** (`src/lib/game-detail/`): The new tab/chart itself
 
+**Deploy ordering**: The Cloudflare Worker must be deployed with the new schema version **before** releasing the desktop app update. Otherwise, users on the new app version will have their share requests rejected by the Worker's schema validation. See `cloud/src/validation.ts` for the `KNOWN_SCHEMA_VERSIONS` list.
+
 Previously shared games won't have the new field, so the web viewer must handle it being absent (e.g., `data.newField ?? []`).
 
 **Key files:**
