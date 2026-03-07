@@ -11,6 +11,8 @@
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { GameReligion } from "$lib/types/GameReligion";
+	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { MapTile } from "$lib/types/MapTile";
 	import { Tabs } from "bits-ui";
 	import {
@@ -52,6 +54,8 @@
 		unitsProduced,
 		cityStatistics,
 		improvementData,
+		gameReligions,
+		playerWonders,
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -69,6 +73,8 @@
 		unitsProduced: PlayerUnitProduced[];
 		cityStatistics: CityStatistics;
 		improvementData: ImprovementData;
+		gameReligions: GameReligion[];
+		playerWonders: PlayerWonder[];
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -356,6 +362,8 @@
 			{cityStatistics}
 			{victoryPointsEnabled}
 			{improvementData}
+			{gameReligions}
+			{playerWonders}
 		/>
 	</Tabs.Content>
 

@@ -43,8 +43,7 @@
 
 	// ─── Interesting event log types ─────────────────────────────────
 	const EVENT_LOG_CATEGORIES: Record<string, TimelineCategory> = {
-		WONDER_BUILT: "wonder",
-		WONDER_STARTED: "wonder",
+		WONDER_ACTIVITY: "wonder",
 		RELIGION_FOUNDED: "religion",
 		RELIGION_SPREAD: "religion",
 		THEOLOGY_ESTABLISHED: "religion",

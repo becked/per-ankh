@@ -745,12 +745,32 @@ async fn get_completed_techs(
 }
 
 #[tauri::command]
+async fn get_player_wonders(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<PlayerWonder>, String> {
+    pool.with_connection(|conn| Ok(db::queries::match_data::get_player_wonders(conn, match_id)?))
+        .context("Failed to get player wonders")
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 async fn get_units_produced(
     match_id: i64,
     pool: tauri::State<'_, db::connection::DbPool>,
 ) -> Result<Vec<PlayerUnitProduced>, String> {
     pool.with_connection(|conn| Ok(db::queries::map::get_units_produced(conn, match_id)?))
         .context("Failed to get units produced")
+        .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn get_game_religions(
+    match_id: i64,
+    pool: tauri::State<'_, db::connection::DbPool>,
+) -> Result<Vec<GameReligion>, String> {
+    pool.with_connection(|conn| Ok(db::queries::match_data::get_game_religions(conn, match_id)?))
+        .context("Failed to get game religions")
         .map_err(|e| e.to_string())
 }
 
@@ -949,7 +969,9 @@ pub fn run() {
             get_current_laws,
             get_tech_discovery_history,
             get_completed_techs,
+            get_player_wonders,
             get_units_produced,
+            get_game_religions,
             get_city_statistics,
             get_improvement_data,
             get_map_tiles,

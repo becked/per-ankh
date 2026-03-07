@@ -74,6 +74,12 @@ pub fn assemble_shared_game_data(
     let map_tiles = super::map::get_map_tiles(conn, match_id)
         .context("Failed to query map tiles")?;
 
+    let game_religions = super::match_data::get_game_religions(conn, match_id)
+        .context("Failed to query game religions")?;
+
+    let player_wonders = super::match_data::get_player_wonders(conn, match_id)
+        .context("Failed to query player wonders")?;
+
     Ok(SharedGameData {
         version: 1,
         created_at: chrono::Utc::now().to_rfc3339(),
@@ -90,6 +96,8 @@ pub fn assemble_shared_game_data(
         city_statistics,
         improvement_data,
         map_tiles,
+        game_religions,
+        player_wonders,
     })
 }
 
@@ -170,7 +178,7 @@ mod tests {
         let size_mb = json.len() as f64 / (1024.0 * 1024.0);
         assert!(size_mb < 5.0, "JSON size should be < 5 MB, was {:.2} MB", size_mb);
 
-        // Verify it has all 15 top-level fields
+        // Verify it has all 16 top-level fields
         let parsed: serde_json::Value = serde_json::from_slice(&json).unwrap();
         assert!(parsed.get("version").is_some());
         assert!(parsed.get("created_at").is_some());
@@ -187,6 +195,7 @@ mod tests {
         assert!(parsed.get("city_statistics").is_some());
         assert!(parsed.get("improvement_data").is_some());
         assert!(parsed.get("map_tiles").is_some());
+        assert!(parsed.get("game_religions").is_some());
     }
 
     #[test]

@@ -16,6 +16,8 @@ import type { PlayerTech } from "$lib/types/PlayerTech";
 import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 import type { CityStatistics } from "$lib/types/CityStatistics";
 import type { ImprovementData } from "$lib/types/ImprovementData";
+import type { GameReligion } from "$lib/types/GameReligion";
+import type { PlayerWonder } from "$lib/types/PlayerWonder";
 import type { MapTile } from "$lib/types/MapTile";
 import type { KnownOnlineId } from "$lib/types/KnownOnlineId";
 import type { SaveDateEntry } from "$lib/types/SaveDateEntry";
@@ -121,6 +123,18 @@ export const api = {
 	 */
 	getImprovementData: (matchId: number) =>
 		invoke<ImprovementData>("get_improvement_data", { matchId }),
+
+	/**
+	 * Get completed wonders for all players in a match.
+	 */
+	getPlayerWonders: (matchId: number) =>
+		invoke<PlayerWonder[]>("get_player_wonders", { matchId }),
+
+	/**
+	 * Get all religions founded in a match.
+	 */
+	getGameReligions: (matchId: number) =>
+		invoke<GameReligion[]>("get_game_religions", { matchId }),
 
 	/**
 	 * Get all map tiles for a match.

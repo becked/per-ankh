@@ -7,6 +7,8 @@
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { GameReligion } from "$lib/types/GameReligion";
+	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { type PlayerSummary, type SpriteCategory, getPlayerColor } from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
@@ -21,6 +23,8 @@
 		cityStatistics,
 		victoryPointsEnabled,
 		improvementData,
+		gameReligions,
+		playerWonders,
 	}: {
 		gameDetails: GameDetails;
 		playerHistory: PlayerHistory[];
@@ -31,6 +35,8 @@
 		cityStatistics: CityStatistics;
 		victoryPointsEnabled: boolean;
 		improvementData: ImprovementData;
+		gameReligions: GameReligion[];
+		playerWonders: PlayerWonder[];
 	} = $props();
 
 	// ─── Unit classification ─────────────────────────────────────────
@@ -121,8 +127,14 @@
 	// ─── Player summaries with army composition ──────────────────────
 	type ArmySlice = { unitClass: UnitClass; count: number; pct: number };
 
+	type PlayerReligion = { religion_name: string; founded_turn: number | null };
+
+	type PlayerWonderEntry = { wonder: string; completed_turn: number };
+
 	type PlayerOverview = PlayerSummary & {
 		army: ArmySlice[];
+		religions: PlayerReligion[];
+		wonders: PlayerWonderEntry[];
 	};
 
 	const playerOverviews = $derived<PlayerOverview[]>(
@@ -152,6 +164,14 @@
 				}))
 				.sort((a, b) => b.count - a.count);
 
+			const religions: PlayerReligion[] = gameReligions
+				.filter((r) => r.founder_nation === p.nation)
+				.map((r) => ({ religion_name: r.religion_name, founded_turn: r.founded_turn }));
+
+			const wonders: PlayerWonderEntry[] = playerWonders
+				.filter((w) => w.nation === p.nation)
+				.map((w) => ({ wonder: w.wonder, completed_turn: w.completed_turn }));
+
 			return {
 				playerName: p.player_name,
 				nation: p.nation,
@@ -170,6 +190,8 @@
 					.length,
 				unitsTotal: totalUnits,
 				religion: p.state_religion,
+				religions,
+				wonders,
 				army,
 			};
 		}).sort((a, b) => {
@@ -248,12 +270,17 @@
 </script>
 
 <!-- Nation cards -->
-<div class="mb-4 grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
+<div
+	class="mb-4 rounded-lg border border-tan p-4"
+	style="background-color: #2a2622;"
+>
+	<h3 class="mb-3 text-base font-bold text-tan">Nations</h3>
+	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
 	{#each playerOverviews as player, i (player.nation ?? i)}
 			{@const borderColor = getPlayerColor(player.nation, i)}
 			<div
-				class="relative rounded-lg border-2 border-tan p-4"
-				style="background-color: #2a2622;"
+				class="relative rounded-lg p-3"
+				style="background-color: #35302B;"
 			>
 				{#if player.isWinner}
 					<span
@@ -298,9 +325,7 @@
 					</div>
 				</div>
 
-				<!-- Army Composition -->
 				{#if player.army.length > 0}
-					<p class="mb-1 text-xs text-gray-400">Army Composition</p>
 					<div class="mb-3 flex h-5 overflow-hidden rounded">
 						{#each player.army as slice (slice.unitClass)}
 							{#if slice.pct > 0}
@@ -326,43 +351,66 @@
 				<div
 					class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs"
 				>
-					<span class="text-brown">Cities</span>
-					<span class="font-medium text-gray-200"
+					<span class="font-bold text-gray-400">Cities</span>
+					<span class="font-medium text-[#DBDEE3]"
 						>{player.cityCount}</span
 					>
 
-					<span class="text-brown">Techs</span>
-					<span class="font-medium text-gray-200"
+					<span class="font-bold text-gray-400">Techs</span>
+					<span class="font-medium text-[#DBDEE3]"
 						>{player.techCount}</span
 					>
 
-					<span class="text-brown">Laws</span>
-					<span class="font-medium text-gray-200"
+					<span class="font-bold text-gray-400">Laws</span>
+					<span class="font-medium text-[#DBDEE3]"
 						>{player.lawCount}</span
 					>
 
-					{#if player.religion}
-						<span class="text-brown">Religion</span>
+					{#if player.religions.length > 0}
+						<span class="font-bold text-gray-400">Religions</span>
+						<span class="flex flex-wrap items-center gap-y-0.5 font-medium text-[#DBDEE3]">
+							{#each player.religions as rel, i (rel.religion_name)}
+								<span class="flex items-center gap-0.5">
+									<SpriteIcon
+										category="religions"
+										value={rel.religion_name}
+										size={12}
+										alt={formatEnum(rel.religion_name, "RELIGION_")}
+									/>
+									{formatEnum(rel.religion_name, "RELIGION_")}{#if i < player.religions.length - 1},&nbsp;{/if}
+								</span>
+							{/each}
+						</span>
+					{:else if player.religion}
+						<span class="font-bold text-gray-400">Religion</span>
 						<span
-							class="flex items-center gap-1 font-medium text-gray-200"
+							class="flex items-center gap-0.5 font-medium text-[#DBDEE3]"
 						>
 							<SpriteIcon
 								category="religions"
 								value={player.religion}
-								size={14}
+								size={12}
 								alt={formatEnum(player.religion, "RELIGION_")}
 							/>
 							{formatEnum(player.religion, "RELIGION_")}
 						</span>
 					{/if}
+
+					{#if player.wonders.length > 0}
+						<span class="font-bold text-gray-400">Wonders</span>
+						<span class="font-medium text-[#DBDEE3]">
+							{player.wonders.map((w) => formatEnum(w.wonder, "IMPROVEMENT_")).join(", ")}
+						</span>
+					{/if}
 				</div>
 			</div>
 	{/each}
+	</div>
 </div>
 
 <!-- Key Metrics -->
 <div
-	class="rounded-lg border-2 border-tan p-4"
+	class="rounded-lg border border-tan p-4"
 	style="background-color: #2a2622;"
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Key Metrics</h3>
@@ -397,7 +445,7 @@
 										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(player.value)}"
 									></div>
 								</div>
-								<span class="w-10 text-right text-[11px] font-medium text-gray-300">
+								<span class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]">
 									{formatValue(player.value)}
 								</span>
 							</div>
@@ -436,7 +484,7 @@
 										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(player.value)}"
 									></div>
 								</div>
-								<span class="w-10 text-right text-[11px] font-medium text-gray-300">
+								<span class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]">
 									{formatValue(player.value)}
 								</span>
 							</div>

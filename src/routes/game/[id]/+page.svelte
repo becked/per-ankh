@@ -12,6 +12,8 @@
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { GameReligion } from "$lib/types/GameReligion";
+	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { MapTile } from "$lib/types/MapTile";
 	import GamePageSkeleton from "$lib/GamePageSkeleton.svelte";
 	import ShareControl from "$lib/ShareControl.svelte";
@@ -29,6 +31,8 @@
 	let unitsProduced = $state<PlayerUnitProduced[] | null>(null);
 	let cityStatistics = $state<CityStatistics | null>(null);
 	let improvementData = $state<ImprovementData | null>(null);
+	let gameReligions = $state<GameReligion[] | null>(null);
+	let playerWonders = $state<PlayerWonder[] | null>(null);
 	let mapTiles = $state<MapTile[] | null>(null);
 	let selectedMapTurn = $state<number | null>(null);
 	let mapTilesLoading = $state(false);
@@ -54,6 +58,8 @@
 			api.getUnitsProduced(matchId),
 			api.getCityStatistics(matchId),
 			api.getImprovementData(matchId),
+			api.getGameReligions(matchId),
+			api.getPlayerWonders(matchId),
 			api.getMapTiles(matchId),
 		])
 			.then(
@@ -69,6 +75,8 @@
 					units,
 					cityStats,
 					impData,
+					religions,
+					wonders,
 					tiles,
 				]) => {
 					gameDetails = details;
@@ -82,6 +90,8 @@
 					unitsProduced = units;
 					cityStatistics = cityStats;
 					improvementData = impData;
+					gameReligions = religions;
+					playerWonders = wonders;
 					mapTiles = tiles;
 					selectedMapTurn = details.total_turns;
 				},
@@ -130,7 +140,7 @@
 			Error: {error}
 		</p>
 	</main>
-{:else if gameDetails && playerHistory && allYields && eventLogs && lawAdoptionHistory && currentLaws && techDiscoveryHistory && completedTechs && unitsProduced && cityStatistics && improvementData}
+{:else if gameDetails && playerHistory && allYields && eventLogs && lawAdoptionHistory && currentLaws && techDiscoveryHistory && completedTechs && unitsProduced && cityStatistics && improvementData && gameReligions && playerWonders}
 	<main class="isolate flex-1 overflow-y-auto bg-blue-gray px-4 pb-8 pt-4">
 		<GameDetailView
 			{gameDetails}
@@ -144,6 +154,8 @@
 			{unitsProduced}
 			{cityStatistics}
 			{improvementData}
+			{gameReligions}
+			{playerWonders}
 			{mapTiles}
 			{selectedMapTurn}
 			onMapTurnChange={handleMapTurnChange}

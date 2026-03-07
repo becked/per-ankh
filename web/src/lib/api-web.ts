@@ -17,6 +17,8 @@ import type { PlayerTech } from "$lib/types/PlayerTech";
 import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 import type { CityStatistics } from "$lib/types/CityStatistics";
 import type { ImprovementData } from "$lib/types/ImprovementData";
+import type { GameReligion } from "$lib/types/GameReligion";
+import type { PlayerWonder } from "$lib/types/PlayerWonder";
 import type { MapTile } from "$lib/types/MapTile";
 
 const API_BASE = "https://api.per-ankh.app/v1";
@@ -37,6 +39,8 @@ interface SharedGameData {
 	units_produced: PlayerUnitProduced[];
 	city_statistics: CityStatistics;
 	improvement_data: ImprovementData;
+	game_religions: GameReligion[];
+	player_wonders: PlayerWonder[];
 	map_tiles: MapTile[];
 }
 
@@ -120,6 +124,12 @@ export const webApi = {
 
 	getImprovementData: async (shareId: string): Promise<ImprovementData> =>
 		(await getSharedData(shareId)).improvement_data,
+
+	getGameReligions: async (shareId: string): Promise<GameReligion[]> =>
+		(await getSharedData(shareId)).game_religions ?? [],
+
+	getPlayerWonders: async (shareId: string): Promise<PlayerWonder[]> =>
+		(await getSharedData(shareId)).player_wonders ?? [],
 
 	getMapTiles: async (shareId: string): Promise<MapTile[]> =>
 		(await getSharedData(shareId)).map_tiles,
