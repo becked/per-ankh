@@ -187,6 +187,15 @@ pub struct KnownOnlineId {
     pub save_count: i64,
 }
 
+/// Religion founded in a game, with founder nation and founding turn
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct GameReligion {
+    pub religion_name: String,
+    pub founded_turn: Option<i32>,
+    pub founder_nation: Option<String>,
+}
+
 /// Religion info with founder nation for map visualization
 #[derive(Serialize, Clone, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
@@ -335,6 +344,17 @@ pub struct PlayerTech {
     pub completed_turn: i32,
 }
 
+/// A completed wonder for a player
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "../../src/lib/types/")]
+pub struct PlayerWonder {
+    pub player_id: i32,
+    pub player_name: String,
+    pub nation: Option<String>,
+    pub wonder: String,
+    pub completed_turn: i32,
+}
+
 /// Unit production data for the Military tab
 #[derive(Serialize, TS)]
 #[ts(export, export_to = "../../src/lib/types/")]
@@ -417,4 +437,6 @@ pub struct SharedGameData {
     pub city_statistics: CityStatistics,
     pub improvement_data: ImprovementData,
     pub map_tiles: Vec<MapTile>,
+    pub game_religions: Vec<GameReligion>,
+    pub player_wonders: Vec<PlayerWonder>,
 }

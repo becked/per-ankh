@@ -11,6 +11,8 @@
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { GameReligion } from "$lib/types/GameReligion";
+	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { MapTile } from "$lib/types/MapTile";
 	import { Tabs } from "bits-ui";
 	import {
@@ -27,6 +29,9 @@
 		createDefaultCityVisibleColumns,
 		createDefaultSelection,
 	} from "./helpers";
+	import type { TimelineCategory } from "./helpers";
+	import OverviewTab from "./OverviewTab.svelte";
+	import TimelineTab from "./TimelineTab.svelte";
 	import EventsTab from "./EventsTab.svelte";
 	import LawsTab from "./LawsTab.svelte";
 	import TechsTab from "./TechsTab.svelte";
@@ -49,6 +54,8 @@
 		unitsProduced,
 		cityStatistics,
 		improvementData,
+		gameReligions,
+		playerWonders,
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -66,6 +73,8 @@
 		unitsProduced: PlayerUnitProduced[];
 		cityStatistics: CityStatistics;
 		improvementData: ImprovementData;
+		gameReligions: GameReligion[];
+		playerWonders: PlayerWonder[];
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -75,10 +84,18 @@
 	} = $props();
 
 	// ─── Persistent UI state ──────────────────────────────────────────
-	let activeTab = $state<string>("events");
+	let activeTab = $state<string>("overview");
 	let chartFilters = $state(createDefaultChartFilters());
 	let tables = $state(createDefaultTableStates());
 	let cityVisibleColumns = $state(createDefaultCityVisibleColumns());
+	let timelineFilters = $state<Record<TimelineCategory, boolean>>({
+		tech: true,
+		law: true,
+		city: true,
+		religion: false,
+		wonder: false,
+		battle: false,
+	});
 
 	// ─── Initialize chart filters when data loads ─────────────────────
 	$effect(() => {
@@ -251,68 +268,126 @@
 	<!-- Tab Navigation -->
 	<Tabs.List class="flex">
 		<Tabs.Trigger
+			value="overview"
+			class="cursor-pointer rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+		>
+			Overview
+		</Tabs.Trigger>
+
+		<!-- Timeline tab hidden pending redesign
+		<Tabs.Trigger
+			value="timeline"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+		>
+			Timeline
+		</Tabs.Trigger>
+		-->
+
+		<Tabs.Trigger
 			value="events"
-			class="cursor-pointer rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Events
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="laws"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Laws
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="techs"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Techs
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="economics"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Yields
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="military"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Military
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="cities"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Cities
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="improvements"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Improvements
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="map"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Map
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
 			value="settings"
-			class="cursor-pointer rounded-tr-lg border-2 border-b-0 border-black px-6 py-3 font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
+			class="cursor-pointer rounded-tr-lg border-2 border-b-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
-			Game Settings
+			Settings
 		</Tabs.Trigger>
 	</Tabs.List>
+
+	<!-- Tab Content: Overview -->
+	<Tabs.Content
+		value="overview"
+		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
+		style="background-color: #35302B;"
+	>
+		<OverviewTab
+			{gameDetails}
+			{playerHistory}
+			{allYields}
+			{completedTechs}
+			{currentLaws}
+			{unitsProduced}
+			{cityStatistics}
+			{victoryPointsEnabled}
+			{improvementData}
+			{gameReligions}
+			{playerWonders}
+		/>
+	</Tabs.Content>
+
+	<!-- Timeline tab hidden pending redesign
+	<Tabs.Content
+		value="timeline"
+		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
+		style="background-color: #35302B;"
+	>
+		<TimelineTab
+			{gameDetails}
+			{techDiscoveryHistory}
+			{lawAdoptionHistory}
+			{cityStatistics}
+			{eventLogs}
+			{playerHistory}
+			{allYields}
+			{playerWonders}
+			{gameReligions}
+			bind:categoryFilters={timelineFilters}
+		/>
+	</Tabs.Content>
+	-->
 
 	<!-- Tab Content: Events -->
 	<Tabs.Content
@@ -379,6 +454,7 @@
 		style="background-color: #35302B;"
 	>
 		<MilitaryTab
+			{gameDetails}
 			{playerHistory}
 			{unitsProduced}
 			bind:chartFilter={chartFilters.military}

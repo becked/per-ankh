@@ -1,7 +1,8 @@
 // Match detail, events, laws, and tech queries
 
 use crate::types::{
-    EventLog, GameDetails, PlayerInfo, PlayerLaw, PlayerTech, StoryEvent,
+    EventLog, GameDetails, GameReligion, PlayerInfo, PlayerLaw, PlayerTech, PlayerWonder,
+    StoryEvent,
 };
 use duckdb::Connection;
 
@@ -168,6 +169,52 @@ pub fn get_completed_techs(conn: &Connection, match_id: i64) -> duckdb::Result<V
     Ok(techs)
 }
 
+/// Get completed wonders in a match.
+///
+/// Wonder completion events (WONDER_ACTIVITY with "completed" in description) are
+/// broadcast to all players, so we deduplicate by wonder name (data2).
+/// The builder nation is resolved by matching the wonder improvement on the map
+/// (tiles table) back to its owner.
+pub fn get_player_wonders(conn: &Connection, match_id: i64) -> duckdb::Result<Vec<PlayerWonder>> {
+    let mut stmt = conn.prepare(
+        "WITH completed_wonders AS (
+            SELECT
+                e.data2 as wonder,
+                MIN(e.turn) as completed_turn
+            FROM event_logs e
+            WHERE e.match_id = ?
+              AND e.log_type = 'WONDER_ACTIVITY'
+              AND e.description LIKE '%completed%'
+              AND e.data2 IS NOT NULL
+            GROUP BY e.data2
+         )
+         SELECT
+            COALESCE(p.player_id, 0) as player_id,
+            COALESCE(p.player_name, 'Unknown') as player_name,
+            p.nation,
+            cw.wonder,
+            cw.completed_turn
+         FROM completed_wonders cw
+         LEFT JOIN tiles t ON t.improvement = cw.wonder AND t.match_id = ?
+         LEFT JOIN players p ON t.owner_player_id = p.player_id AND t.match_id = p.match_id
+         ORDER BY p.nation, cw.completed_turn, cw.wonder",
+    )?;
+
+    let wonders = stmt
+        .query_map([match_id, match_id], |row| {
+            Ok(PlayerWonder {
+                player_id: row.get(0)?,
+                player_name: row.get(1)?,
+                nation: row.get(2)?,
+                wonder: row.get(3)?,
+                completed_turn: row.get(4)?,
+            })
+        })?
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+
+    Ok(wonders)
+}
+
 /// Get story events for a match.
 pub fn get_story_events(conn: &Connection, match_id: i64) -> duckdb::Result<Vec<StoryEvent>> {
     let mut stmt = conn.prepare(
@@ -201,6 +248,29 @@ pub fn get_story_events(conn: &Connection, match_id: i64) -> duckdb::Result<Vec<
         .collect::<Result<Vec<_>, _>>()?;
 
     Ok(events)
+}
+
+/// Get all religions founded in a match with founder nation.
+pub fn get_game_religions(conn: &Connection, match_id: i64) -> duckdb::Result<Vec<GameReligion>> {
+    let mut stmt = conn.prepare(
+        "SELECT r.religion_name, r.founded_turn, p.nation as founder_nation
+         FROM religions r
+         LEFT JOIN players p ON r.founder_player_id = p.player_id AND r.match_id = p.match_id
+         WHERE r.match_id = ?
+         ORDER BY r.founded_turn NULLS LAST, r.religion_name",
+    )?;
+
+    let religions = stmt
+        .query_map([match_id], |row| {
+            Ok(GameReligion {
+                religion_name: row.get(0)?,
+                founded_turn: row.get(1)?,
+                founder_nation: row.get(2)?,
+            })
+        })?
+        .collect::<Result<Vec<_>, _>>()?;
+
+    Ok(religions)
 }
 
 /// Get event logs for a match, deduplicated by stripping markup tags.

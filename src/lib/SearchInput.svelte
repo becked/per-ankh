@@ -26,7 +26,7 @@
 		field: {
 			icon: "text-brown",
 			input:
-				"py-2 border-2 border-black rounded text-tan text-sm placeholder-brown placeholder:opacity-70",
+				"py-2 rounded text-tan text-sm placeholder-brown placeholder:opacity-70",
 			bg: "background-color: #201a13;",
 		},
 	};

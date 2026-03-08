@@ -1,15 +1,18 @@
 <script lang="ts">
+	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { EChartsOption } from "echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import Chart from "$lib/Chart.svelte";
 	import SearchInput from "$lib/SearchInput.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
-	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
+	import { type TableState, type UnitClass, getPlayerColor, toggleSort, classifyUnit, UNIT_CLASS_COLORS } from "./helpers";
 
 	let {
+		gameDetails,
 		playerHistory,
 		unitsProduced,
 		chartFilter = $bindable<Record<string, boolean>>({}),
@@ -20,6 +23,7 @@
 			filters: [],
 		}),
 	}: {
+		gameDetails: GameDetails;
 		playerHistory: PlayerHistory[];
 		unitsProduced: PlayerUnitProduced[];
 		chartFilter?: Record<string, boolean>;
@@ -57,6 +61,80 @@
 					})),
 				}
 			: null,
+	);
+
+	// ─── Army composition pie charts ─────────────────────────────────
+	type ArmyPieData = {
+		nation: string | null;
+		nationLabel: string;
+		color: string;
+		pieOption: EChartsOption;
+	};
+
+	const armyPieCharts = $derived<ArmyPieData[]>(
+		gameDetails.players
+			.map((p, i) => {
+				const playerUnits = unitsProduced.filter((u) => u.nation === p.nation);
+				const classCounts: Partial<Record<UnitClass, number>> = {};
+				for (const u of playerUnits) {
+					const cls = classifyUnit(u.unit_type);
+					if (cls == null) continue;
+					classCounts[cls] = (classCounts[cls] ?? 0) + u.count;
+				}
+				const slices = (Object.entries(classCounts) as [UnitClass, number][])
+					.filter(([, count]) => count > 0)
+					.sort(([, a], [, b]) => b - a);
+
+				if (slices.length === 0) return null;
+
+				const pieOption: EChartsOption = {
+					backgroundColor: "#211A12",
+					animation: false,
+					title: {
+						text: formatEnum(p.nation, "NATION_"),
+						left: "center",
+						top: 8,
+						textStyle: { color: getPlayerColor(p.nation, i), fontSize: 14 },
+					},
+					tooltip: {
+						trigger: "item",
+						formatter: (params: any) => `${params.name}: ${params.value} (${params.percent}%)`,
+					},
+					series: [{
+						type: "pie",
+						radius: ["30%", "60%"],
+						center: ["50%", "55%"],
+						avoidLabelOverlap: false,
+						label: {
+							show: true,
+							position: "outside",
+							formatter: "{b} {d}%",
+							fontSize: 10,
+							color: "#D2B48C",
+						},
+						labelLine: {
+							show: true,
+							length: 8,
+							length2: 6,
+							lineStyle: { color: "#666" },
+						},
+						data: slices.map(([unitClass, count]) => ({
+							name: unitClass,
+							value: count,
+							itemStyle: { color: UNIT_CLASS_COLORS[unitClass] },
+						})),
+					}],
+				};
+
+				return {
+					nation: p.nation,
+					nationLabel: formatEnum(p.nation, "NATION_"),
+					color: getPlayerColor(p.nation, i),
+					pieOption,
+				};
+			})
+			.filter((d): d is ArmyPieData => d != null)
+			.sort((a, b) => a.nationLabel.localeCompare(b.nationLabel)),
 	);
 
 	// ─── Units pivot table logic ──────────────────────────────────────
@@ -149,11 +227,25 @@
 	/>
 {/if}
 
+<!-- Army Composition Pie Charts -->
+{#if armyPieCharts.length > 0}
+	<div
+		class="mb-6 grid gap-4"
+		style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));"
+	>
+		{#each armyPieCharts as chart (chart.nation)}
+			<div class="overflow-hidden rounded-lg">
+				<Chart option={chart.pieOption} height="200px" />
+			</div>
+		{/each}
+	</div>
+{/if}
+
 <!-- Units Produced Table -->
 {#if unitsProduced.length > 0}
 	<div
-		class="mt-6 rounded-lg border-2 border-black p-6"
-		style="background-color: #201a13;"
+		class="mt-6 rounded-lg p-4"
+		style="background-color: #2a2622;"
 	>
 		<h3 class="mb-4 font-bold text-tan">Units Produced</h3>
 
@@ -162,7 +254,7 @@
 			<!-- Filter dropdown -->
 			<Select.Root type="multiple" bind:value={tableState.filters}>
 				<Select.Trigger
-					class="relative flex w-32 items-center justify-between rounded border-2 border-black py-2 pl-9 pr-8 text-sm text-tan"
+					class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
 					style="background-color: #201a13;"
 				>
 					<div
@@ -188,13 +280,13 @@
 				</Select.Trigger>
 				<Select.Portal>
 					<Select.Content
-						class="z-50 max-h-64 overflow-y-auto rounded border-2 border-black bg-[#201a13] shadow-lg"
+						class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
 					>
 						<Select.Viewport>
 							{#if uniqueUnitNations.length > 0}
 								<Select.Group>
 									<Select.GroupHeading
-										class="border-brown/50 border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
+										class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
 									>
 										Nations
 									</Select.GroupHeading>
@@ -245,12 +337,15 @@
 		</div>
 
 		<!-- Units Pivot Table -->
-		<div class="overflow-x-auto">
+		<div
+			class="overflow-x-auto rounded-lg"
+			style="background-color: #35302B;"
+		>
 			<table class="w-full">
 				<thead>
 					<tr>
 						<th
-							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
+							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
 							onclick={() => toggleSort(tableState, "unit_type")}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -264,7 +359,7 @@
 						</th>
 						{#each displayedUnitNations as nation (nation)}
 							<th
-								class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-right font-bold text-brown"
+								class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-right font-bold text-brown"
 								onclick={() => toggleSort(tableState, `nation:${nation}`)}
 							>
 								<span
@@ -281,7 +376,7 @@
 						{/each}
 						{#if displayedUnitNations.length > 1}
 							<th
-								class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-right font-bold text-brown"
+								class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-right font-bold text-brown"
 								onclick={() => toggleSort(tableState, "total")}
 							>
 								<span
@@ -302,20 +397,20 @@
 					{#each unitPivotData as row (row.unit_type)}
 						<tr class="hover:bg-brown/10">
 							<td
-								class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"
+								class="whitespace-nowrap border-b border-[#2a2622] p-3 text-left text-tan"
 							>
 								{formatEnum(row.unit_type, "UNIT_")}
 							</td>
 							{#each displayedUnitNations as nation (nation)}
 								<td
-									class="border-brown/50 whitespace-nowrap border-b p-3 text-right text-tan"
+									class="whitespace-nowrap border-b border-[#2a2622] p-3 text-right text-tan"
 								>
 									{row.counts[nation] ?? 0}
 								</td>
 							{/each}
 							{#if displayedUnitNations.length > 1}
 								<td
-									class="border-brown/50 whitespace-nowrap border-b p-3 text-right font-bold text-tan"
+									class="whitespace-nowrap border-b border-[#2a2622] p-3 text-right font-bold text-tan"
 								>
 									{row.total}
 								</td>
