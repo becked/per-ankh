@@ -99,3 +99,47 @@ This command:
 - Identifies completely empty tables
 - Identifies columns that are empty (all NULL) in populated tables
 - Calculates overall data completeness percentage
+
+### Cloud Admin CLI
+
+Manage shared games on Cloudflare (D1 + R2) using `cloud/admin.sh`. Requires `wrangler` auth (`wrangler login`) and `jq`.
+
+```bash
+# Summary statistics
+./cloud/admin.sh stats
+
+# List recent shares
+./cloud/admin.sh list
+./cloud/admin.sh list --limit 10
+
+# Show full details for a share
+./cloud/admin.sh info <share_id>
+
+# List app keys with share counts
+./cloud/admin.sh keys
+
+# List shares from a specific app key
+./cloud/admin.sh by-key <app_key>
+
+# View recent events (uploads/deletes)
+./cloud/admin.sh events
+./cloud/admin.sh events --type upload --limit 20
+
+# Delete a share (prompts for confirmation)
+./cloud/admin.sh delete <share_id>
+
+# Block/unblock app keys and IPs
+./cloud/admin.sh block-key <key> "spam uploads"
+./cloud/admin.sh block-ip <ip> "abuse"
+./cloud/admin.sh unblock-key <key>
+./cloud/admin.sh unblock-ip <ip>
+./cloud/admin.sh blocked
+
+# Nuclear option: block key + delete all its shares
+./cloud/admin.sh nuke-key <app_key> "reason"
+
+# Show all commands
+./cloud/admin.sh help
+```
+
+When a share is deleted server-side, the desktop user's app continues to show "Shared" status (local state) until they either visit the link (sees "Share Not Found") or click "Delete share" (handled gracefully — 404 treated as success, local state cleaned up).

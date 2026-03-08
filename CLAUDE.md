@@ -608,6 +608,32 @@ cargo test
 npm test
 ```
 
+### Cloud Admin CLI
+
+`cloud/admin.sh` manages shared games on Cloudflare (D1 database + R2 blob storage). Uses `wrangler` commands directly — no API key needed, relies on Wrangler auth.
+
+**Prerequisites**: `jq`, `wrangler` (via npx from cloud/)
+
+```bash
+./cloud/admin.sh stats                          # Summary: total shares, size, keys, 24h activity
+./cloud/admin.sh list [--limit N]               # List shares (default 50)
+./cloud/admin.sh info <share_id>                # Full details for one share
+./cloud/admin.sh keys                           # App keys with share counts
+./cloud/admin.sh by-key <app_key>               # Shares from a specific key
+./cloud/admin.sh events [--type T] [--limit N]  # Audit log (upload/delete events)
+./cloud/admin.sh delete <share_id>              # Delete share (D1 + R2, prompts y/N)
+./cloud/admin.sh block-key <key> [reason]       # Block an app key
+./cloud/admin.sh block-ip <ip> [reason]         # Block an IP
+./cloud/admin.sh unblock-key <key>              # Unblock
+./cloud/admin.sh unblock-ip <ip>                # Unblock
+./cloud/admin.sh blocked                        # List all blocked keys/IPs
+./cloud/admin.sh nuke-key <key> [reason]        # Block key + delete ALL its shares (requires typing "nuke")
+```
+
+**Implementation**: Wraps `wrangler d1 execute per-ankh-share-index --remote` for D1 queries and `wrangler r2 object delete per-ankh-shares/{id}.json.gz` for blob cleanup. Never exposes `delete_token` in output.
+
+**Desktop UX on admin delete**: Desktop app continues showing "Shared" status (local DuckDB state). When user visits the link, web viewer shows "Share Not Found". When user clicks "Delete share" in app, 404 from Worker is treated as success and local state is cleaned up gracefully.
+
 ### Type Checking & Linting
 
 #### Rust
