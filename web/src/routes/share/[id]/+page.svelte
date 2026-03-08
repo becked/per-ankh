@@ -169,7 +169,7 @@
 			{mapTiles}
 		>
 			{#snippet preTabs()}
-				<div class="mb-4 rounded border border-brown/30 bg-[#201a13] px-4 py-2 text-center text-xs text-brown">
+				<div class="mb-4 rounded bg-[#2a2622] px-4 py-2 text-center text-xs text-brown">
 					Shared game
 				</div>
 			{/snippet}
