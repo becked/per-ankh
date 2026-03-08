@@ -5,10 +5,14 @@
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { EventLog } from "$lib/types/EventLog";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
+	import type { YieldHistory } from "$lib/types/YieldHistory";
+	import type { PlayerWonder } from "$lib/types/PlayerWonder";
+	import type { GameReligion } from "$lib/types/GameReligion";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
 	import {
 		type TimelineEvent,
 		type TimelineCategory,
+		type SpriteCategory,
 		getPlayerColor,
 	} from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
@@ -20,14 +24,16 @@
 		cityStatistics,
 		eventLogs,
 		playerHistory,
+		allYields,
+		playerWonders,
+		gameReligions,
 		categoryFilters = $bindable<Record<TimelineCategory, boolean>>({
 			tech: true,
 			law: true,
 			city: true,
 			religion: false,
 			wonder: false,
-			military: false,
-			other: false,
+			battle: false,
 		}),
 	}: {
 		gameDetails: GameDetails;
@@ -36,22 +42,34 @@
 		cityStatistics: CityStatistics;
 		eventLogs: EventLog[];
 		playerHistory: PlayerHistory[];
+		allYields: YieldHistory[];
+		playerWonders: PlayerWonder[];
+		gameReligions: GameReligion[];
 		categoryFilters?: Record<TimelineCategory, boolean>;
 	} = $props();
 
 	let showMetrics = $state(true);
 
-	// ─── Interesting event log types ─────────────────────────────────
+	// ─── Event log types (structured data handles wonders/religion founding) ─
 	const EVENT_LOG_CATEGORIES: Record<string, TimelineCategory> = {
-		WONDER_ACTIVITY: "wonder",
-		RELIGION_FOUNDED: "religion",
 		RELIGION_SPREAD: "religion",
 		THEOLOGY_ESTABLISHED: "religion",
-		CITY_CAPTURED: "military",
-		CITY_RAZED: "military",
-		WAR_DECLARED: "military",
-		PEACE_DECLARED: "military",
 	};
+
+	// ─── Player columns ─────────────────────────────────────────────
+	type PlayerColumn = {
+		nation: string | null;
+		playerName: string;
+		index: number;
+	};
+
+	const playerColumns = $derived<PlayerColumn[]>(
+		gameDetails.players.map((p, i) => ({
+			nation: p.nation,
+			playerName: p.player_name,
+			index: i,
+		})),
+	);
 
 	// ─── Build unified event list ────────────────────────────────────
 	const allEvents = $derived.by<TimelineEvent[]>(() => {
@@ -104,11 +122,38 @@
 			});
 		}
 
-		// Interesting events from event logs
+		// Wonders from structured data
+		for (const wonder of playerWonders) {
+			events.push({
+				turn: wonder.completed_turn,
+				nation: wonder.nation,
+				playerName: wonder.player_name,
+				category: "wonder",
+				label: formatEnum(wonder.wonder, "IMPROVEMENT_"),
+				enumValue: wonder.wonder,
+				spriteCategory: null,
+			});
+		}
+
+		// Religions from structured data
+		for (const religion of gameReligions) {
+			if (religion.founded_turn != null) {
+				events.push({
+					turn: religion.founded_turn,
+					nation: religion.founder_nation,
+					playerName: formatEnum(religion.founder_nation, "NATION_"),
+					category: "religion",
+					label: "Founded " + formatEnum(religion.religion_name, "RELIGION_"),
+					enumValue: religion.religion_name,
+					spriteCategory: "religions",
+				});
+			}
+		}
+
+		// Additional events from event logs (religion spread, theology)
 		for (const log of eventLogs) {
 			const cat = EVENT_LOG_CATEGORIES[log.log_type];
 			if (cat) {
-				// Try to find the nation from player_name
 				const matchingPlayer = gameDetails.players.find(
 					(p) => p.player_name === log.player_name,
 				);
@@ -126,6 +171,29 @@
 			}
 		}
 
+		// Battles: detect 20%+ military power drops between consecutive turns
+		for (const player of playerHistory) {
+			for (let j = 1; j < player.history.length; j++) {
+				const prev = player.history[j - 1];
+				const curr = player.history[j];
+				if (prev.military_power != null && curr.military_power != null && prev.military_power > 0) {
+					const drop = (prev.military_power - curr.military_power) / prev.military_power;
+					if (drop >= 0.2) {
+						const pctLost = Math.round(drop * 100);
+						events.push({
+							turn: curr.turn,
+							nation: player.nation,
+							playerName: player.player_name,
+							category: "battle",
+							label: `Lost ${pctLost}% military power (${prev.military_power} → ${curr.military_power})`,
+							enumValue: `BATTLE_${player.nation}_${curr.turn}`,
+							spriteCategory: null,
+						});
+					}
+				}
+			}
+		}
+
 		return events.sort((a, b) => a.turn - b.turn);
 	});
 
@@ -134,78 +202,124 @@
 		allEvents.filter((e) => categoryFilters[e.category] !== false),
 	);
 
-	// ─── Group by turn, then by nation within each turn ──────────────
-	type TurnGroup = {
-		turn: number;
-		nationGroups: {
-			nation: string | null;
-			events: TimelineEvent[];
-		}[];
+	// ─── Metrics: leader per metric per turn ─────────────────────────
+	type MetricLeader = {
+		nation: string | null;
+		value: number;
+		playerIndex: number;
 	};
 
-	const turnGroups = $derived.by<TurnGroup[]>(() => {
+	type TurnMetrics = {
+		orders: MetricLeader | null;
+		military: MetricLeader | null;
+		science: MetricLeader | null;
+		vp: MetricLeader | null;
+	};
+
+	const turnMetricsMap = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const byTurn = new Map<number, TimelineEvent[]>();
+		const result = new Map<number, TurnMetrics>();
+
+		// Build yield indexes: nation → turn → amount
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+		const ordersIndex = new Map<string, Map<number, number>>();
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+		const scienceIndex = new Map<string, Map<number, number>>();
+
+		for (const yh of allYields) {
+			const nationKey = yh.nation ?? "__unknown__";
+			if (yh.yield_type === "YIELD_ORDERS" || yh.yield_type === "YIELD_SCIENCE") {
+				const targetIndex = yh.yield_type === "YIELD_ORDERS" ? ordersIndex : scienceIndex;
+				// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+				const turnMap = new Map<number, number>();
+				for (const dp of yh.data) {
+					if (dp.amount != null) {
+						turnMap.set(dp.turn, dp.amount);
+					}
+				}
+				targetIndex.set(nationKey, turnMap);
+			}
+		}
+
+		// Collect all turns that have events
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Set used locally in function, not as reactive state
+		const eventTurns = new Set<number>();
+		for (const e of filteredEvents) {
+			eventTurns.add(e.turn);
+		}
+
+		// For each event turn, find the leader in each metric
+		for (const turn of eventTurns) {
+			const metrics: TurnMetrics = { orders: null, military: null, science: null, vp: null };
+
+			for (let i = 0; i < gameDetails.players.length; i++) {
+				const player = gameDetails.players[i];
+				const nationKey = player.nation ?? "__unknown__";
+
+				// Orders
+				const ordersVal = ordersIndex.get(nationKey)?.get(turn);
+				if (ordersVal != null && (metrics.orders == null || ordersVal > metrics.orders.value)) {
+					metrics.orders = { nation: player.nation, value: ordersVal, playerIndex: i };
+				}
+
+				// Science
+				const scienceVal = scienceIndex.get(nationKey)?.get(turn);
+				if (scienceVal != null && (metrics.science == null || scienceVal > metrics.science.value)) {
+					metrics.science = { nation: player.nation, value: scienceVal, playerIndex: i };
+				}
+
+				// Military & VP from playerHistory
+				const ph = playerHistory.find((p) => p.nation === player.nation);
+				const point = ph?.history.find((h) => h.turn === turn);
+				if (point) {
+					if (point.military_power != null && (metrics.military == null || point.military_power > metrics.military.value)) {
+						metrics.military = { nation: player.nation, value: point.military_power, playerIndex: i };
+					}
+					if (point.points != null && (metrics.vp == null || point.points > metrics.vp.value)) {
+						metrics.vp = { nation: player.nation, value: point.points, playerIndex: i };
+					}
+				}
+			}
+
+			result.set(turn, metrics);
+		}
+
+		return result;
+	});
+
+	// ─── Build table rows: turn → events by nation ──────────────────
+	type TableRow = {
+		turn: number;
+		eventsByNation: Map<string, TimelineEvent[]>;
+	};
+
+	const tableRows = $derived.by<TableRow[]>(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+		const byTurn = new Map<number, Map<string, TimelineEvent[]>>();
+
 		for (const event of filteredEvents) {
-			const existing = byTurn.get(event.turn);
+			let turnMap = byTurn.get(event.turn);
+			if (!turnMap) {
+				// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+				turnMap = new Map();
+				byTurn.set(event.turn, turnMap);
+			}
+			const nationKey = event.nation ?? "__unknown__";
+			const existing = turnMap.get(nationKey);
 			if (existing) {
 				existing.push(event);
 			} else {
-				byTurn.set(event.turn, [event]);
+				turnMap.set(nationKey, [event]);
 			}
 		}
 
 		return [...byTurn.entries()]
 			.sort(([a], [b]) => a - b)
-			.map(([turn, events]) => {
-				// Sub-group by nation
-				// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-				const byNation = new Map<
-					string,
-					TimelineEvent[]
-				>();
-				for (const event of events) {
-					const key = event.nation ?? "__unknown__";
-					const existing = byNation.get(key);
-					if (existing) {
-						existing.push(event);
-					} else {
-						byNation.set(key, [event]);
-					}
-				}
-
-				const nationGroups = [...byNation.entries()].map(
-					([nation, evts]) => ({
-						nation:
-							nation === "__unknown__" ? null : nation,
-						events: evts,
-					}),
-				);
-
-				return { turn, nationGroups };
-			});
+			.map(([turn, nationMap]) => ({
+				turn,
+				eventsByNation: nationMap,
+			}));
 	});
-
-	// ─── Metric lookup helper ────────────────────────────────────────
-	function getMetricsAtTurn(turn: number) {
-		const metrics: {
-			nation: string | null;
-			vp: number | null;
-			military: number | null;
-		}[] = [];
-		for (const player of playerHistory) {
-			// History is sorted by turn; find matching or last before
-			const point = player.history.find((h) => h.turn === turn);
-			if (point) {
-				metrics.push({
-					nation: player.nation,
-					vp: point.points,
-					military: point.military_power,
-				});
-			}
-		}
-		return metrics;
-	}
 
 	// ─── Category display config ─────────────────────────────────────
 	const CATEGORY_LABELS: Record<TimelineCategory, string> = {
@@ -214,159 +328,162 @@
 		city: "Cities",
 		religion: "Religion",
 		wonder: "Wonders",
-		military: "Military",
-		other: "Other",
+		battle: "Battles",
 	};
 
+	// Sprite config for each filter category
+	const CATEGORY_SPRITES: Record<TimelineCategory, { category: SpriteCategory; value: string }> = {
+		tech: { category: "techs", value: "TECH_SCHOLARSHIP" },
+		law: { category: "laws", value: "LAW_CENTRALIZATION" },
+		city: { category: "yields", value: "YIELD_GROWTH" },
+		religion: { category: "religions", value: "RELIGION_FOUNDED" },
+		wonder: { category: "icons", value: "IMPROVEMENT_FINISHED" },
+		battle: { category: "icons", value: "MILITARY" },
+	};
+
+	// Fallback emoji icons for events without sprites
 	const CATEGORY_ICONS: Record<TimelineCategory, string> = {
 		tech: "🔬",
 		law: "📜",
 		city: "🏛",
 		religion: "⛪",
 		wonder: "🏗",
-		military: "⚔",
-		other: "📋",
+		battle: "⚔",
 	};
+
+	// ─── Metric column config ────────────────────────────────────────
+	const METRIC_COLUMNS: { key: keyof TurnMetrics; yieldSprite: string; label: string }[] = [
+		{ key: "orders", yieldSprite: "YIELD_ORDERS", label: "Orders" },
+		{ key: "military", yieldSprite: "YIELD_TRAINING", label: "Military" },
+		{ key: "science", yieldSprite: "YIELD_SCIENCE", label: "Science" },
+		{ key: "vp", yieldSprite: "YIELD_LEGITIMACY", label: "VP" },
+	];
 </script>
 
-<h2 class="mb-4 mt-0 font-bold text-tan">Timeline</h2>
+<div class="rounded-lg border border-tan p-4" style="background-color: #2a2622;">
+	<h3 class="mb-3 text-base font-bold text-tan">Timeline</h3>
 
-<!-- Filter controls -->
-<div class="mb-4 flex flex-wrap items-center gap-3">
-	{#each Object.entries(CATEGORY_LABELS) as [key, label] (key)}
-		{@const category = key as TimelineCategory}
-		<label class="flex cursor-pointer items-center gap-1.5 text-sm">
-			<input
-				type="checkbox"
-				bind:checked={categoryFilters[category]}
-				class="accent-brown"
-			/>
-			<span class="text-gray-300"
-				>{CATEGORY_ICONS[category]} {label}</span
-			>
-		</label>
-	{/each}
-
-	<div class="ml-auto">
-		<label class="flex cursor-pointer items-center gap-1.5 text-sm">
-			<input
-				type="checkbox"
-				bind:checked={showMetrics}
-				class="accent-brown"
-			/>
-			<span class="text-gray-300">Show Metrics</span>
-		</label>
-	</div>
-</div>
-
-<!-- Results count -->
-<p class="mb-4 text-sm text-brown">
-	{filteredEvents.length} events across {turnGroups.length} turns
-</p>
-
-<!-- Timeline -->
-{#if turnGroups.length === 0}
-	<p class="py-8 text-center text-gray-400">
-		No events match the current filters.
-	</p>
-{:else}
-	<div class="space-y-1">
-		{#each turnGroups as group (group.turn)}
-			<div
-				class="rounded-lg border border-black/50 p-3"
-				style="background-color: #2a2622;"
-			>
-				<!-- Turn header with optional metrics -->
-				<div class="mb-2 flex items-center justify-between">
-					<span class="text-sm font-bold text-tan"
-						>Turn {group.turn}</span
-					>
-
-					{#if showMetrics}
-						{@const metrics = getMetricsAtTurn(group.turn)}
-						{#if metrics.length > 0}
-							<div class="flex gap-3 text-xs text-gray-400">
-								{#each metrics as m, i (m.nation ?? i)}
-									<span
-										class="flex items-center gap-1"
-									>
-										<span
-											class="inline-block h-2 w-2 rounded-full"
-											style="background-color: {getPlayerColor(m.nation, i)};"
-										></span>
-										{#if m.vp != null}
-											<span
-												>VP:{m.vp}</span
-											>
-										{/if}
-										{#if m.military != null}
-											<span
-												>Mil:{m.military}</span
-											>
-										{/if}
-									</span>
-								{/each}
-							</div>
-						{/if}
-					{/if}
-				</div>
-
-				<!-- Nation groups -->
-				{#each group.nationGroups as ng, ngIdx (ng.nation ?? ngIdx)}
-					{@const nationColor = getPlayerColor(
-						ng.nation,
-						ngIdx,
-					)}
-					<div
-						class="mb-1 rounded border-l-4 py-1 pl-3 pr-2 last:mb-0"
-						style="border-color: {nationColor}; background-color: rgba(255,255,255,0.03);"
-					>
-						<!-- Nation label -->
-						<div
-							class="mb-1 flex items-center gap-1.5 text-xs font-bold"
-							style="color: {nationColor};"
-						>
-							{#if ng.nation}
-								<SpriteIcon
-									category="crests"
-									value={ng.nation}
-									size={18}
-									alt={formatEnum(
-										ng.nation,
-										"NATION_",
-									)}
-								/>
-							{/if}
-							{formatEnum(ng.nation, "NATION_")}
-						</div>
-
-						<!-- Events -->
-						<div class="flex flex-wrap gap-x-4 gap-y-1">
-							{#each ng.events as event (event.enumValue + event.label)}
-								<div
-									class="flex items-center gap-1.5 text-sm text-gray-200"
-								>
-									{#if event.spriteCategory}
-										<SpriteIcon
-											category={event.spriteCategory}
-											value={event.enumValue}
-											size={22}
-											alt={event.label}
-										/>
-									{:else}
-										<span class="text-base"
-											>{CATEGORY_ICONS[
-												event.category
-											]}</span
-										>
-									{/if}
-									<span>{event.label}</span>
-								</div>
-							{/each}
-						</div>
-					</div>
-				{/each}
-			</div>
+	<!-- Filter controls -->
+	<div class="mb-3 flex flex-wrap items-center gap-3">
+		{#each Object.entries(CATEGORY_LABELS) as [key, label] (key)}
+			{@const category = key as TimelineCategory}
+			{@const sprite = CATEGORY_SPRITES[category]}
+			<label class="flex cursor-pointer items-center gap-1.5 text-sm">
+				<input
+					type="checkbox"
+					bind:checked={categoryFilters[category]}
+					class="accent-brown"
+				/>
+				<SpriteIcon category={sprite.category} value={sprite.value} size={16} alt={label} />
+				<span class="text-gray-300">{label}</span>
+			</label>
 		{/each}
+
+		<div class="ml-auto">
+			<label class="flex cursor-pointer items-center gap-1.5 text-sm">
+				<input
+					type="checkbox"
+					bind:checked={showMetrics}
+					class="accent-brown"
+				/>
+				<span class="text-gray-300">Show Metrics</span>
+			</label>
+		</div>
 	</div>
-{/if}
+
+	<!-- Results count -->
+	<p class="mb-3 text-sm text-brown">
+		{filteredEvents.length} events across {tableRows.length} turns
+	</p>
+
+	<!-- Timeline table -->
+	{#if tableRows.length === 0}
+		<p class="py-8 text-center text-gray-400">
+			No events match the current filters.
+		</p>
+	{:else}
+		<div class="overflow-x-auto rounded-lg p-3" style="background-color: #201a13;">
+		<table class="border-collapse">
+			<thead>
+				<tr>
+					<th class="sticky left-0 z-20 bg-[#201a13] px-2 py-1 text-left text-xs font-bold text-brown">
+						Turn
+					</th>
+					{#if showMetrics}
+						{#each METRIC_COLUMNS as metric (metric.key)}
+							<th class="px-1 py-1 text-center" title={metric.label}>
+								<SpriteIcon category="yields" value={metric.yieldSprite} size={16} alt={metric.label} />
+							</th>
+						{/each}
+					{/if}
+					{#each playerColumns as player (player.nation ?? player.index)}
+						<th class="px-1 py-1 text-center text-xs font-bold" style="color: {getPlayerColor(player.nation, player.index)};">
+							<div class="flex items-center justify-center gap-1">
+								{#if player.nation}
+									<SpriteIcon category="crests" value={player.nation} size={18} alt={formatEnum(player.nation, "NATION_")} />
+								{/if}
+								{formatEnum(player.nation, "NATION_")}
+							</div>
+						</th>
+					{/each}
+				</tr>
+				<tr>
+					<td class="sticky left-0 z-20 h-0.5 bg-[#201a13]"></td>
+					{#if showMetrics}
+						{#each METRIC_COLUMNS as _ (_.key)}
+							<td class="h-0.5 bg-brown/30"></td>
+						{/each}
+					{/if}
+					{#each playerColumns as player (player.nation ?? player.index)}
+						<td class="h-0.5" style="background-color: {getPlayerColor(player.nation, player.index)};"></td>
+					{/each}
+				</tr>
+			</thead>
+			<tbody>
+				{#each tableRows as row (row.turn)}
+					{@const metrics = turnMetricsMap.get(row.turn)}
+					<tr class="border-b border-brown/30 hover:bg-brown/10">
+						<td class="sticky left-0 z-10 bg-[#201a13] px-2 py-0.5 text-xs font-bold text-tan align-top">
+							{row.turn}
+						</td>
+						{#if showMetrics}
+							{#each METRIC_COLUMNS as metric (metric.key)}
+								{@const leader = metrics?.[metric.key]}
+								<td class="px-1 py-0.5 text-center align-top whitespace-nowrap">
+									{#if leader}
+										<div class="inline-flex items-center gap-px">
+											{#if leader.nation}
+												<SpriteIcon category="crests" value={leader.nation} size={12} alt={formatEnum(leader.nation, "NATION_")} />
+											{/if}
+											<span class="text-[10px] font-medium" style="color: {getPlayerColor(leader.nation, leader.playerIndex)};">
+												{metric.key === "vp" ? leader.value : Math.round(leader.value * 10) / 10}
+											</span>
+										</div>
+									{/if}
+								</td>
+							{/each}
+						{/if}
+						{#each playerColumns as player (player.nation ?? player.index)}
+							{@const nationKey = player.nation ?? "__unknown__"}
+							{@const events = row.eventsByNation.get(nationKey) ?? []}
+							<td class="px-1 py-0.5 align-top">
+								<div class="flex flex-wrap gap-0.5">
+									{#each events as event (event.enumValue + event.turn + event.label)}
+										<span title={event.label} class="inline-flex">
+											{#if event.spriteCategory}
+												<SpriteIcon category={event.spriteCategory} value={event.enumValue} size={18} alt={event.label} />
+											{:else}
+												<span class="text-sm leading-none">{CATEGORY_ICONS[event.category]}</span>
+											{/if}
+										</span>
+									{/each}
+								</div>
+							</td>
+						{/each}
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+		</div>
+	{/if}
+</div>

@@ -407,8 +407,7 @@ export type TimelineCategory =
 	| "city"
 	| "religion"
 	| "wonder"
-	| "military"
-	| "other";
+	| "battle";
 
 export type TimelineEvent = {
 	turn: number;

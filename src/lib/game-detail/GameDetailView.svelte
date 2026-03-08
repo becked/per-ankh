@@ -94,8 +94,7 @@
 		city: true,
 		religion: false,
 		wonder: false,
-		military: false,
-		other: false,
+		battle: false,
 	});
 
 	// ─── Initialize chart filters when data loads ─────────────────────
@@ -275,12 +274,14 @@
 			Overview
 		</Tabs.Trigger>
 
+		<!-- Timeline tab hidden pending redesign
 		<Tabs.Trigger
 			value="timeline"
 			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
 			Timeline
 		</Tabs.Trigger>
+		-->
 
 		<Tabs.Trigger
 			value="events"
@@ -367,7 +368,7 @@
 		/>
 	</Tabs.Content>
 
-	<!-- Tab Content: Timeline -->
+	<!-- Timeline tab hidden pending redesign
 	<Tabs.Content
 		value="timeline"
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
@@ -380,9 +381,13 @@
 			{cityStatistics}
 			{eventLogs}
 			{playerHistory}
+			{allYields}
+			{playerWonders}
+			{gameReligions}
 			bind:categoryFilters={timelineFilters}
 		/>
 	</Tabs.Content>
+	-->
 
 	<!-- Tab Content: Events -->
 	<Tabs.Content
