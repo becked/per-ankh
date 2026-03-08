@@ -213,27 +213,29 @@
 
 </script>
 
-<h2 class="mb-4 mt-0 font-bold text-tan">Game History</h2>
-{#if !victoryPointsEnabled}
-	<div
-		class="mb-6 rounded-lg border-2 border-black p-6"
-		style="background-color: #201a13;"
-	>
-		<h3 class="mb-2 font-bold text-tan">Victory Points</h3>
-		<p class="italic text-brown">
-			Victory Points not enabled for this game (enabled: {victoryConditions}).
-		</p>
-	</div>
-{:else if pointsChartOption}
-	<ChartContainer
-		option={pointsChartOption}
-		height="400px"
-		title="Victory Points"
-	/>
-{/if}
+<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
+	{#if !victoryPointsEnabled}
+		<div
+			class="rounded-lg p-6"
+			style="background-color: #35302B;"
+		>
+			<h3 class="mb-2 font-bold text-tan">Victory Points</h3>
+			<p class="italic text-brown">
+				Victory Points not enabled for this game (enabled: {victoryConditions}).
+			</p>
+		</div>
+	{:else if pointsChartOption}
+		<ChartContainer
+			option={pointsChartOption}
+			height="400px"
+			title="Victory Points"
+		/>
+	{/if}
+</div>
 
 <!-- Event Logs Table -->
-<h3 class="mb-4 mt-8 font-bold text-tan">Event Logs</h3>
+<div class="rounded-lg p-4" style="background-color: #2a2622;">
+<h3 class="mb-4 mt-0 font-bold text-tan">Event Logs</h3>
 {#if processedEventLogs.length === 0}
 	<p class="p-8 text-center italic text-brown">
 		No event logs recorded
@@ -244,7 +246,7 @@
 		<!-- Combined Log Type and Player Filter -->
 		<Select.Root type="multiple" bind:value={tableState.filters}>
 			<Select.Trigger
-				class="relative flex w-32 items-center justify-between rounded border-2 border-black py-2 pl-9 pr-8 text-sm text-tan"
+				class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
 				style="background-color: #201a13;"
 			>
 				<div
@@ -270,14 +272,14 @@
 			</Select.Trigger>
 			<Select.Portal>
 				<Select.Content
-					class="z-50 max-h-64 overflow-y-auto rounded border-2 border-black bg-[#201a13] shadow-lg"
+					class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
 				>
 					<Select.Viewport>
 						<!-- Players Group (only show if player column is visible) -->
 						{#if showPlayerColumn && uniquePlayers.length > 0}
 							<Select.Group>
 								<Select.GroupHeading
-									class="border-brown/50 border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
+									class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
 								>
 									Players
 								</Select.GroupHeading>
@@ -302,9 +304,9 @@
 						{#if uniqueLogTypes.length > 0}
 							<Select.Group>
 								<Select.GroupHeading
-									class="border-brown/50 border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown {showPlayerColumn &&
+									class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown {showPlayerColumn &&
 									uniquePlayers.length > 0
-										? 'border-t-brown/50 border-t'
+										? 'border-t border-[#2a2622]'
 										: ''}"
 								>
 									Log Types
@@ -358,13 +360,13 @@
 
 	<div
 		class="min-h-[36rem] overflow-x-auto rounded-lg"
-		style="background-color: #201a13;"
+		style="background-color: #35302B;"
 	>
 		<table class="w-full">
 			<thead>
 				<tr>
 					<th
-						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
+						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
 						onclick={() => toggleSort(tableState, "turn")}
 					>
 						<span class="inline-flex items-center gap-1">
@@ -379,7 +381,7 @@
 						</span>
 					</th>
 					<th
-						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
+						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
 						onclick={() => toggleSort(tableState, "log_type")}
 					>
 						<span class="inline-flex items-center gap-1">
@@ -395,7 +397,7 @@
 					</th>
 					{#if showPlayerColumn}
 						<th
-							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
+							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
 							onclick={() => toggleSort(tableState, "player_name")}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -411,7 +413,7 @@
 						</th>
 					{/if}
 					<th
-						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
+						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
 						onclick={() => toggleSort(tableState, "description")}
 					>
 						<span class="inline-flex items-center gap-1">
@@ -429,21 +431,20 @@
 			</thead>
 			<tbody>
 				{#each filteredEventLogs ?? [] as log, i (i)}
-					<tr class="hover:bg-brown/20 transition-colors duration-200">
-						<td class="border-brown/50 border-b p-3 text-left text-tan"
+					<tr class="transition-colors duration-200">
+						<td class="border-b border-[#2a2622] p-3 text-left text-tan"
 							>{log.turn}</td
 						>
-						<td class="border-brown/50 border-b p-3 text-left text-tan">
-							<code class="text-sm">{formatEnum(log.log_type, "")}</code
-							>
+						<td class="border-b border-[#2a2622] p-3 text-left text-tan">
+{formatEnum(log.log_type, "")}
 						</td>
 						{#if showPlayerColumn}
 							<td
-								class="border-brown/50 border-b p-3 text-left text-tan"
+								class="border-b border-[#2a2622] p-3 text-left text-tan"
 								>{log.player_name ?? ""}</td
 							>
 						{/if}
-						<td class="border-brown/50 border-b p-3 text-left text-tan"
+						<td class="border-b border-[#2a2622] p-3 text-left text-tan"
 							>{log.description || "—"}</td
 						>
 					</tr>
@@ -461,3 +462,4 @@
 		</table>
 	</div>
 {/if}
+</div>
