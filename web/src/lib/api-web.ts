@@ -126,10 +126,10 @@ export const webApi = {
 		(await getSharedData(shareId)).improvement_data,
 
 	getGameReligions: async (shareId: string): Promise<GameReligion[]> =>
-		(await getSharedData(shareId)).game_religions ?? [],
+		(await getSharedData(shareId)).game_religions,
 
 	getPlayerWonders: async (shareId: string): Promise<PlayerWonder[]> =>
-		(await getSharedData(shareId)).player_wonders ?? [],
+		(await getSharedData(shareId)).player_wonders,
 
 	getMapTiles: async (shareId: string): Promise<MapTile[]> =>
 		(await getSharedData(shareId)).map_tiles,

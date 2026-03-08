@@ -10,7 +10,7 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { type PlayerSummary, type SpriteCategory, getPlayerColor } from "./helpers";
+	import { type PlayerSummary, type SpriteCategory, type UnitClass, getPlayerColor, classifyUnit, UNIT_CLASS_COLORS } from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
 	let {
@@ -38,83 +38,6 @@
 		gameReligions: GameReligion[];
 		playerWonders: PlayerWonder[];
 	} = $props();
-
-	// ─── Unit classification ─────────────────────────────────────────
-	const RANGED_KEYWORDS = [
-		"ARCHER",
-		"BOWMAN",
-		"CROSSBOW",
-		"SLINGER",
-		"SKIRMISHER",
-		"JAVELINEER",
-		"CLUB_THROWER",
-	];
-	const CAVALRY_KEYWORDS = [
-		"CAVALRY",
-		"CHARIOT",
-		"CATAPHRACT",
-		"HORSEMAN",
-		"RIDER",
-		"LANCER",
-		"MOUNTED",
-		"ELEPHANT",
-		"CAMEL",
-	];
-	const SIEGE_KEYWORDS = [
-		"BALLISTA",
-		"ONAGER",
-		"SIEGE",
-		"CATAPULT",
-		"RAM",
-		"TORSION",
-	];
-	const NAVAL_KEYWORDS = [
-		"BIREME",
-		"TRIREME",
-		"DROMON",
-		"QUINQUEREME",
-		"PENTECONTER",
-		"GALLEY",
-		"SHIP",
-		"LONGBOAT",
-	];
-	const SUPPORT_KEYWORDS = [
-		"WORKER",
-		"MILITIA",
-		"SETTLER",
-		"SCOUT",
-		"CARAVAN",
-		"DISCIPLE",
-		"DIPLOMAT",
-		"MISSIONARY",
-		"SPY",
-		"MONK",
-		"CLERIC",
-		"PROPHET",
-		"ENVOY",
-		"TRADER",
-	];
-
-	type UnitClass = "Infantry" | "Ranged" | "Cavalry" | "Siege" | "Naval";
-
-	function classifyUnit(unitType: string): UnitClass | null {
-		const upper = unitType.toUpperCase();
-		if (SUPPORT_KEYWORDS.some((k) => upper.includes(k))) return null;
-		if (NAVAL_KEYWORDS.some((k) => upper.includes(k))) return "Naval";
-		if (SIEGE_KEYWORDS.some((k) => upper.includes(k))) return "Siege";
-		if (CAVALRY_KEYWORDS.some((k) => upper.includes(k)))
-			return "Cavalry";
-		if (RANGED_KEYWORDS.some((k) => upper.includes(k))) return "Ranged";
-		return "Infantry";
-	}
-
-	const UNIT_CLASS_COLORS: Record<UnitClass, string> = {
-		Infantry: "#C87941",
-		Ranged: "#B8860B",
-		Cavalry: "#CD853F",
-		Siege: "#A0522D",
-		Naval: "#8B4513",
-	};
 
 	const UNIT_CLASS_ABBREV: Record<UnitClass, string> = {
 		Infantry: "Inf",
@@ -263,7 +186,6 @@
 	]);
 
 	function formatValue(value: number): string {
-		if (value >= 10000) return `${(value / 1000).toFixed(1)}k`;
 		if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
 		return value.toString();
 	}

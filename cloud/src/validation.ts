@@ -44,6 +44,8 @@ const REQUIRED_TOP_LEVEL_FIELDS = [
 	"city_statistics",
 	"improvement_data",
 	"map_tiles",
+	"game_religions",
+	"player_wonders",
 ] as const;
 
 function isObject(value: unknown): value is Record<string, unknown> {
@@ -115,6 +117,8 @@ export function validateSharePayload(data: unknown): ValidationResult {
 		{ field: "completed_techs", maxLength: MAX_TECHS },
 		{ field: "units_produced", maxLength: MAX_UNITS },
 		{ field: "map_tiles", maxLength: MAX_MAP_TILES },
+		{ field: "game_religions", maxLength: MAX_PLAYERS },
+		{ field: "player_wonders", maxLength: MAX_CITIES },
 	];
 
 	for (const { field, maxLength } of arrayChecks) {

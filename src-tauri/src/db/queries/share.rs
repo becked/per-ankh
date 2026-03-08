@@ -196,6 +196,7 @@ mod tests {
         assert!(parsed.get("improvement_data").is_some());
         assert!(parsed.get("map_tiles").is_some());
         assert!(parsed.get("game_religions").is_some());
+        assert!(parsed.get("player_wonders").is_some());
     }
 
     #[test]
