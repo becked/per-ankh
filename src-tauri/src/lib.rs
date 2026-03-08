@@ -68,7 +68,14 @@ async fn import_save_file_cmd(
 ) -> Result<ImportResult, String> {
     // Import save file using pooled connection (single-file import, no intra-file progress)
     pool.with_connection(|conn| {
-        parser::import_save_file(&file_path, conn, None, None, None, None, None)
+        let result = parser::import_save_file(&file_path, conn, None, None, None, None, None)?;
+        // Reprocess save owners after successful new import for consistency
+        if result.success && result.is_new {
+            if let Err(e) = db::reprocess_save_owners(conn) {
+                log::warn!("Failed to reprocess save owners after import: {}", e);
+            }
+        }
+        Ok(result)
     })
     .context("Import failed")
     .map_err(|e| e.to_string())
@@ -336,6 +343,17 @@ fn import_files_batch(
         }
 
         log::info!("Progress event emitted successfully");
+    }
+
+    // Reprocess save owners after all imports to ensure consistency
+    // (fixes games imported before primary_user_online_id was set)
+    if successful > 0 {
+        if let Err(e) = pool.with_connection(|conn| {
+            db::reprocess_save_owners(conn)?;
+            Ok(())
+        }) {
+            log::warn!("Failed to reprocess save owners after batch import: {}", e);
+        }
     }
 
     let final_result = BatchImportResult {

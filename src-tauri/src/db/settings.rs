@@ -47,6 +47,15 @@ pub fn set_primary_user_online_id(conn: &Connection, online_id: &str) -> duckdb:
 pub fn reprocess_save_owners(conn: &Connection) -> duckdb::Result<usize> {
     let primary_online_id = get_primary_user_online_id(conn)?;
 
+    // Step 0: Fix is_human flags — old parser versions only checked AIControlledToTurn=0,
+    // missing players with OnlineIDs but non-zero AIControlledToTurn (inactive multiplayer humans).
+    // This must run before the human count logic below.
+    conn.execute(
+        "UPDATE players SET is_human = TRUE
+         WHERE online_id IS NOT NULL AND online_id != '' AND is_human = FALSE",
+        [],
+    )?;
+
     // Step 1: Clear all save owner flags
     conn.execute("UPDATE players SET is_save_owner = FALSE", [])?;
 
