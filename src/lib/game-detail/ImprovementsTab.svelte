@@ -99,6 +99,7 @@
 {#if improvementData.improvements.length === 0}
 	<p class="p-8 text-center italic text-brown">No improvements found</p>
 {:else}
+<div class="rounded-lg p-4" style="background-color: #2a2622;">
 	<!-- Controls row -->
 	<div class="mb-4 flex flex-wrap items-end gap-3">
 		<!-- Filter dropdown -->
@@ -107,7 +108,7 @@
 			bind:value={tableState.filters}
 		>
 			<Select.Trigger
-				class="relative flex w-32 items-center justify-between rounded border-2 border-black py-2 pl-9 pr-8 text-sm text-tan"
+				class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
 				style="background-color: #201a13;"
 			>
 				<div
@@ -133,13 +134,13 @@
 			</Select.Trigger>
 			<Select.Portal>
 				<Select.Content
-					class="z-50 max-h-64 overflow-y-auto rounded border-2 border-black bg-[#201a13] shadow-lg"
+					class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
 				>
 					<Select.Viewport>
 						{#if uniqueImprovementNations.length > 0}
 							<Select.Group>
 								<Select.GroupHeading
-									class="border-brown/50 border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
+									class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
 								>
 									Nations
 								</Select.GroupHeading>
@@ -192,13 +193,13 @@
 	<!-- Improvements pivot table -->
 	<div
 		class="overflow-x-auto rounded-lg"
-		style="background-color: #201a13;"
+		style="background-color: #35302B;"
 	>
 		<table class="w-full">
 			<thead>
 				<tr>
 					<th
-						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
+						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
 						onclick={() => toggleSort(tableState, "improvement")}
 					>
 						<span class="inline-flex items-center gap-1">
@@ -214,7 +215,7 @@
 					</th>
 					{#each displayedImprovementNations as nation (nation)}
 						<th
-							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
+							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-center font-bold text-brown"
 							onclick={() =>
 								toggleSort(tableState, `nation:${nation}`)}
 						>
@@ -234,7 +235,7 @@
 					{/each}
 					{#if displayedImprovementNations.length > 1}
 						<th
-							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-center font-bold text-brown"
+							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-center font-bold text-brown"
 							onclick={() => toggleSort(tableState, "total")}
 						>
 							<span
@@ -257,20 +258,20 @@
 				{#each improvementPivotData as row (row.improvement)}
 					<tr class="hover:bg-brown/10">
 						<td
-							class="border-brown/50 whitespace-nowrap border-b p-3 text-left text-tan"
+							class="whitespace-nowrap border-b border-[#2a2622] p-3 text-left text-tan"
 						>
 							{formatEnum(row.improvement, "IMPROVEMENT_")}
 						</td>
 						{#each displayedImprovementNations as nation (nation)}
 							<td
-								class="border-brown/50 whitespace-nowrap border-b p-3 text-center text-tan"
+								class="whitespace-nowrap border-b border-[#2a2622] p-3 text-center text-tan"
 							>
 								{row.counts[nation] ?? 0}
 							</td>
 						{/each}
 						{#if displayedImprovementNations.length > 1}
 							<td
-								class="border-brown/50 whitespace-nowrap border-b p-3 text-center font-bold text-tan"
+								class="whitespace-nowrap border-b border-[#2a2622] p-3 text-center font-bold text-tan"
 							>
 								{row.total}
 							</td>
@@ -290,4 +291,5 @@
 			</tbody>
 		</table>
 	</div>
+</div>
 {/if}

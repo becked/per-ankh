@@ -86,12 +86,6 @@
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
-			Timeline
-		</div>
-		<div
-			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
-		>
 			Events
 		</div>
 		<div

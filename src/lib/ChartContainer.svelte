@@ -62,8 +62,8 @@
 		</div>
 	{/if}
 	<div
-		class="relative rounded-lg border-2 border-tan p-1"
-		style="background-color: var(--color-chart-frame)"
+		class="relative rounded-lg overflow-hidden"
+		style="background-color: #35302B;"
 	>
 		<!-- Expand button -->
 		<button
@@ -100,38 +100,37 @@
 	class="fullscreen-dialog {isClosing ? 'closing' : ''}"
 >
 	<div class="dialog-content">
-		<!-- Close button -->
-		<button
-			onclick={closeFullscreen}
-			class="bg-black/30 hover:bg-black/50 absolute right-0 top-0 z-10 cursor-pointer rounded p-2 transition-colors focus:outline-none"
-			aria-label="Close fullscreen"
-			title="Close fullscreen (Esc)"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				class="h-5 w-5 text-white"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke="currentColor"
-				stroke-width="2"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					d="M6 18L18 6M6 6l12 12"
-				/>
-			</svg>
-		</button>
-
 		{#if controls}
 			<div class="bg-black/90 mb-4 flex-shrink-0 rounded-lg px-4 py-3">
 				{@render controls()}
 			</div>
 		{/if}
 		<div
-			class="min-h-0 flex-1 rounded-lg p-1"
-			style="background-color: var(--color-chart-frame)"
+			class="relative min-h-0 flex-1 overflow-hidden rounded-lg"
+			style="background-color: #35302B;"
 		>
+			<!-- Close button -->
+			<button
+				onclick={closeFullscreen}
+				class="bg-black/20 hover:bg-black/40 absolute right-3 top-3 z-10 cursor-pointer rounded p-1.5 transition-colors focus:outline-none"
+				aria-label="Close fullscreen"
+				title="Close fullscreen (Esc)"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-4 w-4 text-white"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M6 18L18 6M6 6l12 12"
+					/>
+				</svg>
+			</button>
 			<Chart {option} height="100%" />
 		</div>
 	</div>
@@ -258,9 +257,5 @@
 		max-height: 90vh;
 		display: flex;
 		flex-direction: column;
-		border: 2px solid var(--color-tan);
-		border-radius: 0.5rem;
-		padding: 1rem;
-		background-color: #35302b;
 	}
 </style>

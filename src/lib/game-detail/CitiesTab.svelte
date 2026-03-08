@@ -114,17 +114,17 @@
 
 </script>
 
-<h2 class="mb-4 mt-0 font-bold text-tan">Cities</h2>
-
 {#if cityStatistics.cities.length === 0}
 	<p class="p-8 text-center italic text-brown">No cities found</p>
 {:else}
+<div class="rounded-lg p-4" style="background-color: #2a2622;">
+	<h2 class="mb-4 mt-0 font-bold text-tan">Cities</h2>
 	<!-- Table Controls -->
 	<div class="mb-4 flex flex-wrap items-end gap-3">
 		<!-- Filter dropdown -->
 		<Select.Root type="multiple" bind:value={tableState.filters}>
 			<Select.Trigger
-				class="relative flex w-32 items-center justify-between rounded border-2 border-black py-2 pl-9 pr-8 text-sm text-tan"
+				class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
 				style="background-color: #201a13;"
 			>
 				<div
@@ -150,13 +150,13 @@
 			</Select.Trigger>
 			<Select.Portal>
 				<Select.Content
-					class="z-50 max-h-64 overflow-y-auto rounded border-2 border-black bg-[#201a13] shadow-lg"
+					class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
 				>
 					<Select.Viewport>
 						{#if uniqueCityNations.length > 0}
 							<Select.Group>
 								<Select.GroupHeading
-									class="border-brown/50 border-b px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
+									class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
 								>
 									Nations
 								</Select.GroupHeading>
@@ -207,7 +207,7 @@
 			onValueChange={handleColumnVisibilityChange}
 		>
 			<Select.Trigger
-				class="flex items-center gap-2 rounded border-2 border-black px-4 py-2 text-sm text-tan"
+				class="flex items-center gap-2 rounded px-4 py-2 text-sm text-tan"
 				style="background-color: #201a13;"
 			>
 				<span>Columns</span>
@@ -215,7 +215,7 @@
 			</Select.Trigger>
 			<Select.Portal>
 				<Select.Content
-					class="z-50 max-h-80 overflow-y-auto rounded border-2 border-black bg-[#201a13] shadow-lg"
+					class="z-50 max-h-80 overflow-y-auto rounded bg-[#201a13] shadow-lg"
 				>
 					<Select.Viewport>
 						{#each CITY_COLUMNS as column (column.key)}
@@ -246,14 +246,14 @@
 	<!-- City Details Table -->
 	<div
 		class="overflow-x-auto rounded-lg"
-		style="background-color: #201a13;"
+		style="background-color: #35302B;"
 	>
 		<table class="w-full">
 			<thead>
 				<tr>
 					{#each visibleCityColumns as column (column.key)}
 						<th
-							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-brown p-3 text-left font-bold text-brown"
+							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
 							onclick={() => toggleSort(tableState, column.key)}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -273,7 +273,7 @@
 					<tr class="hover:bg-brown/20 transition-colors duration-200">
 						{#each visibleCityColumns as column (column.key)}
 							<td
-								class="border-brown/50 border-b p-3 text-left text-tan {column.key ===
+								class="border-b border-[#2a2622] p-3 text-left text-tan {column.key ===
 								'city_name'
 									? 'font-bold'
 									: ''} whitespace-nowrap"
@@ -295,4 +295,5 @@
 			</tbody>
 		</table>
 	</div>
+</div>
 {/if}

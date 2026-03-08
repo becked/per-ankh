@@ -271,7 +271,7 @@
 
 <!-- Nation cards -->
 <div
-	class="mb-4 rounded-lg border border-tan p-4"
+	class="mb-4 rounded-lg p-4"
 	style="background-color: #2a2622;"
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Nations</h3>
@@ -410,7 +410,7 @@
 
 <!-- Key Metrics -->
 <div
-	class="rounded-lg border border-tan p-4"
+	class="rounded-lg p-4"
 	style="background-color: #2a2622;"
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Key Metrics</h3>
