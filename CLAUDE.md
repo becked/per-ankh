@@ -762,6 +762,78 @@ Previously shared games won't have the new field, so the web viewer must handle 
 | `src/routes/game/[id]/+page.svelte` | Desktop wrapper (~150 lines) |
 | `web/src/routes/share/[id]/+page.svelte` | Web wrapper (~150 lines) |
 
+## Player Identity & Winner Model
+
+### User Identity (`primary_user_online_id`)
+
+The app identifies "you" (the current user) via a Steam/GOG/Epic OnlineID stored in `user_settings`:
+
+```sql
+SELECT value FROM user_settings WHERE key = 'primary_user_online_id'
+```
+
+- **Auto-detected** on first import from the most common `online_id` across all players
+- **Manually configurable** via Settings UI (calls `set_primary_user_online_id` Tauri command)
+- Used to set `is_save_owner = TRUE` on the user's player in each match
+
+### Save Owner (`is_save_owner`)
+
+Despite the name, `is_save_owner` identifies the **app user's player** in each match — not who created the save file. It's the "whose perspective are we showing?" flag.
+
+**How it's set** (via `reprocess_save_owners()` in `src-tauri/src/db/settings.rs`):
+
+| Game type | Logic |
+|-----------|-------|
+| Single-player (1 human) | The sole human player |
+| Multiplayer (2+ humans) | Player whose `online_id` matches `primary_user_online_id` |
+| Multiplayer, no primary ID set | Falls back to `AIControlledToTurn=0` (file creator) |
+
+**When it's reprocessed**: On every import, when `primary_user_online_id` changes, and via schema migrations.
+
+### Winner Determination
+
+**Who won a game:**
+
+```sql
+-- Winner's identity
+SELECT wp.player_name, wp.nation AS winner_civilization
+FROM matches m
+JOIN players wp ON m.match_id = wp.match_id AND m.winner_player_id = wp.player_id
+```
+
+**Did the user win:**
+
+```sql
+-- For a specific match
+SELECT m.winner_player_id = so.player_id AS user_won
+FROM matches m
+JOIN players so ON m.match_id = so.match_id AND so.is_save_owner = TRUE
+WHERE m.match_id = ? AND m.winner_player_id IS NOT NULL
+```
+
+**For reports/filters**, use `is_save_owner = TRUE` to find the user's player, then compare against `winner_player_id`:
+
+```sql
+-- All games with win/loss status
+SELECT m.match_id, m.game_name,
+       CASE
+           WHEN m.winner_player_id IS NULL THEN 'in_progress'
+           WHEN m.winner_player_id = so.player_id THEN 'won'
+           ELSE 'lost'
+       END AS result
+FROM matches m
+LEFT JOIN players so ON m.match_id = so.match_id AND so.is_save_owner = TRUE
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src-tauri/src/db/settings.rs` | `reprocess_save_owners()`, get/set `primary_user_online_id` |
+| `src-tauri/src/parser/import.rs` | `determine_save_owner()` (import-time detection) |
+| `src-tauri/src/db/queries/games.rs` | Sidebar queries computing `save_owner_won` |
+| `src-tauri/src/db/queries/match_data.rs` | Game detail query with `winner_civilization` |
+
 ## Development Principles
 
 ### YAGNI (You Ain't Gonna Need It)

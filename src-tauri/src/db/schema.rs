@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
 /// Current schema version - increment when schema changes
-pub const CURRENT_SCHEMA_VERSION: &str = "2.14.0";
+pub const CURRENT_SCHEMA_VERSION: &str = "2.15.0";
 
 // ============================================================================
 // MIGRATION REGISTRY
@@ -87,6 +87,11 @@ pub const MIGRATIONS: &[Migration] = &[
     Migration {
         version: "2.14.0",
         description: "Share game feature (app state tables managed separately via app_state.sql)",
+        is_breaking: false,
+    },
+    Migration {
+        version: "2.15.0",
+        description: "Fix save owner detection priority for multiplayer games",
         is_breaking: false,
     },
 ];
@@ -656,6 +661,21 @@ fn run_migration(conn: &Connection, migration: &Migration) -> Result<()> {
         // app_state::ensure_app_state_tables(), not the migration system
         "2.14.0" => {
             log::info!("Migration v2.14.0: Share game feature (app state tables managed separately)");
+            Ok(())
+        }
+        // 2.15.0: Fix multiplayer save owner detection
+        // 1. Fix is_human flags: old parser only checked AIControlledToTurn=0, missing players
+        //    with OnlineIDs but non-zero AIControlledToTurn (inactive multiplayer humans)
+        // 2. Reprocess save owners using primary_user_online_id instead of AIControlledToTurn=0
+        "2.15.0" => {
+            log::info!("Migration v2.15.0: Fixing is_human flags and reprocessing save owners");
+            // Players with an OnlineID are human (Steam/GOG/Epic account)
+            conn.execute(
+                "UPDATE players SET is_human = TRUE
+                 WHERE online_id IS NOT NULL AND online_id != '' AND is_human = FALSE",
+                [],
+            )?;
+            crate::db::settings::reprocess_save_owners(conn)?;
             Ok(())
         }
         // Breaking migrations don't have incremental logic - they require reset

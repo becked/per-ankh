@@ -1007,13 +1007,15 @@ fn update_winner(
     Ok(())
 }
 
-/// Determine which player is the save owner (the person whose machine created this save)
+/// Determine which player is the "save owner" (the primary app user) for this match.
+///
+/// Despite the name, this identifies the app user's player — not who created the save file.
+/// This is used for sidebar display (trophy icon, nation badge) to show the user's perspective.
 ///
 /// Detection priority:
 /// 1. If only one human player exists → they are the save owner
-/// 2. If multiple humans and one has AIControlledToTurn=0 → they are the save owner
-///    (in multiplayer, only the active player can save the game)
-/// 3. If primary_user_online_id is set → match player by OnlineID
+/// 2. If primary_user_online_id is set → match player by OnlineID
+/// 3. If multiple humans and one has AIControlledToTurn=0 → use that player as fallback
 /// 4. Otherwise → leave is_save_owner = false for all players (unknown)
 fn determine_save_owner(
     tx: &Connection,
@@ -1027,31 +1029,38 @@ fn determine_save_owner(
         // Single human = save owner (covers all single-player games)
         Some(human_players[0].xml_id)
     } else if human_players.len() > 1 {
-        // Multiple humans (multiplayer): first try AIControlledToTurn=0 detection
-        // The player with AIControlledToTurn=0 is the active player who created the save
-        let active_player = human_players
-            .iter()
-            .find(|p| p.ai_controlled_to_turn == Some(0));
+        // Multiple humans (multiplayer): prefer primary user OnlineID match
+        let primary_online_id = crate::db::settings::get_primary_user_online_id(tx)
+            .map_err(|e| ParseError::InvalidFormat(e.to_string()))?;
 
-        if let Some(player) = active_player {
+        let primary_match = primary_online_id.as_ref().and_then(|online_id| {
+            players_data
+                .iter()
+                .find(|p| p.online_id.as_ref() == Some(online_id))
+        });
+
+        if let Some(player) = primary_match {
             log::debug!(
-                "Detected save owner via AIControlledToTurn=0: {} (xml_id={})",
+                "Detected save owner via primary_user_online_id: {} (xml_id={})",
                 player.player_name,
                 player.xml_id
             );
             Some(player.xml_id)
         } else {
-            // Fallback: try to match by primary user OnlineID
-            let primary_online_id = crate::db::settings::get_primary_user_online_id(tx)
-                .map_err(|e| ParseError::InvalidFormat(e.to_string()))?;
+            // Fallback: AIControlledToTurn=0 is the active player who created the save
+            let active_player = human_players
+                .iter()
+                .find(|p| p.ai_controlled_to_turn == Some(0));
 
-            if let Some(ref online_id) = primary_online_id {
-                players_data
-                    .iter()
-                    .find(|p| p.online_id.as_ref() == Some(online_id))
-                    .map(|p| p.xml_id)
+            if let Some(player) = active_player {
+                log::debug!(
+                    "Detected save owner via AIControlledToTurn=0 fallback: {} (xml_id={})",
+                    player.player_name,
+                    player.xml_id
+                );
+                Some(player.xml_id)
             } else {
-                None // No primary user configured and no active player, can't determine save owner
+                None // No primary user configured and no active player
             }
         }
     } else {
@@ -1659,6 +1668,109 @@ mod tests {
             |row| row.get(0),
         ).unwrap();
         assert!(!player_b_owner, "PlayerB should NOT be save owner (no primary user set)");
+    }
+
+    #[test]
+    fn test_determine_save_owner_primary_user_overrides_active_player() {
+        // The critical multiplayer case: primary_user_online_id and AIControlledToTurn=0
+        // point to DIFFERENT players. Primary user should win.
+        let conn = setup_test_db();
+
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // Set primary user to PlayerB's OnlineID
+        crate::db::settings::set_primary_user_online_id(&conn, "PLAYER_B_ID").unwrap();
+
+        // PlayerA: file creator (AIControlledToTurn=0), NOT the app user
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (1, 1, 'PlayerA', 'playera', 'NATION_ROME', 'PLAYER_A_ID', TRUE)",
+            [],
+        ).unwrap();
+        // PlayerB: app user (matches primary_user_online_id), NOT the file creator
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (2, 1, 'PlayerB', 'playerb', 'NATION_GREECE', 'PLAYER_B_ID', TRUE)",
+            [],
+        ).unwrap();
+
+        let mut id_mapper = IdMapper::new(1, &conn, true).unwrap();
+        id_mapper.map_player(0);
+        id_mapper.map_player(1);
+
+        // PlayerA has AIControlledToTurn=0 (file creator), PlayerB has AIControlledToTurn=100
+        let players_data = vec![
+            make_test_player_with_turn(0, true, Some("PLAYER_A_ID"), Some(0)),
+            make_test_player_with_turn(1, true, Some("PLAYER_B_ID"), Some(100)),
+        ];
+
+        determine_save_owner(&conn, 1, &players_data, &id_mapper).unwrap();
+
+        // PlayerA (file creator) should NOT be save owner
+        let player_a_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!player_a_owner, "PlayerA (file creator) should NOT be save owner when primary user is set");
+
+        // PlayerB (primary user) SHOULD be save owner
+        let player_b_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(player_b_owner, "PlayerB (primary user) should be save owner even though PlayerA created the file");
+    }
+
+    #[test]
+    fn test_determine_save_owner_falls_back_to_active_player() {
+        // When no primary_user_online_id is set, AIControlledToTurn=0 is the fallback
+        let conn = setup_test_db();
+
+        conn.execute(
+            "INSERT INTO matches (match_id, game_id, file_name, file_hash, total_turns) VALUES (1, 'test', 'test.zip', 'abc123', 100)",
+            [],
+        ).unwrap();
+
+        // DO NOT set primary user
+
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (1, 1, 'PlayerA', 'playera', 'NATION_ROME', 'PLAYER_A_ID', TRUE)",
+            [],
+        ).unwrap();
+        conn.execute(
+            "INSERT INTO players (player_id, match_id, player_name, player_name_normalized, nation, online_id, is_human) VALUES (2, 1, 'PlayerB', 'playerb', 'NATION_GREECE', 'PLAYER_B_ID', TRUE)",
+            [],
+        ).unwrap();
+
+        let mut id_mapper = IdMapper::new(1, &conn, true).unwrap();
+        id_mapper.map_player(0);
+        id_mapper.map_player(1);
+
+        // PlayerA has AIControlledToTurn=0 (active/file creator)
+        let players_data = vec![
+            make_test_player_with_turn(0, true, Some("PLAYER_A_ID"), Some(0)),
+            make_test_player_with_turn(1, true, Some("PLAYER_B_ID"), Some(100)),
+        ];
+
+        determine_save_owner(&conn, 1, &players_data, &id_mapper).unwrap();
+
+        // PlayerA should be save owner via AIControlledToTurn=0 fallback
+        let player_a_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 1 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(player_a_owner, "PlayerA should be save owner via AIControlledToTurn=0 fallback");
+
+        let player_b_owner: bool = conn.query_row(
+            "SELECT is_save_owner FROM players WHERE player_id = 2 AND match_id = 1",
+            [],
+            |row| row.get(0),
+        ).unwrap();
+        assert!(!player_b_owner, "PlayerB should NOT be save owner");
     }
 
     #[test]
