@@ -402,6 +402,7 @@
 			{victoryPointsEnabled}
 			{victoryConditions}
 			bind:chartFilter={chartFilters.points}
+			bind:legitimacyChartFilter={chartFilters.legitimacy}
 			bind:tableState={tables.events}
 		/>
 	</Tabs.Content>
@@ -442,7 +443,6 @@
 	>
 		<YieldsTab
 			{allYields}
-			{playerHistory}
 			bind:chartFilters
 		/>
 	</Tabs.Content>

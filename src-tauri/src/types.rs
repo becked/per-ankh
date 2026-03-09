@@ -95,8 +95,10 @@ pub struct PlayerHistory {
 #[ts(export, export_to = "../../src/lib/types/")]
 pub struct YieldDataPoint {
     pub turn: i32,
-    /// Display value (already converted from fixed-point by dividing by 10)
-    pub amount: Option<f64>,
+    /// Per-turn production rate (from yield_history, divided by 10)
+    pub rate: Option<f64>,
+    /// Cumulative total (from yield_total_history or computed running sum, divided by 10)
+    pub cumulative: Option<f64>,
 }
 
 #[derive(Serialize, TS)]

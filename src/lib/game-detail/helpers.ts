@@ -62,6 +62,8 @@ export type CityColumn = {
 	sortValue?: (city: CityInfo) => string | number;
 };
 
+export type YieldMode = "rate" | "cumulative";
+
 export type YieldChartConfig = {
 	yieldType: string;
 	title: string;
@@ -109,20 +111,20 @@ export const PLAYER_CHART_KEYS: ChartFilterKey[] = [
 ];
 
 export const YIELD_CHART_CONFIG: YieldChartConfig[] = [
-	{ yieldType: "YIELD_SCIENCE", title: "Science Production", yAxisLabel: "Science per Turn", filterKey: "science" },
-	{ yieldType: "YIELD_CIVICS", title: "Civics Production", yAxisLabel: "Civics per Turn", filterKey: "civics" },
-	{ yieldType: "YIELD_TRAINING", title: "Training Production", yAxisLabel: "Training per Turn", filterKey: "training" },
-	{ yieldType: "YIELD_GROWTH", title: "Growth Production", yAxisLabel: "Growth per Turn", filterKey: "growth" },
-	{ yieldType: "YIELD_CULTURE", title: "Culture Production", yAxisLabel: "Culture per Turn", filterKey: "culture" },
-	{ yieldType: "YIELD_HAPPINESS", title: "Happiness Production", yAxisLabel: "Happiness per Turn", filterKey: "happiness" },
-	{ yieldType: "YIELD_ORDERS", title: "Orders", yAxisLabel: "Orders per Turn", filterKey: "orders" },
-	{ yieldType: "YIELD_FOOD", title: "Food Production", yAxisLabel: "Food per Turn", filterKey: "food" },
-	{ yieldType: "YIELD_MONEY", title: "Money Income", yAxisLabel: "Gold per Turn", filterKey: "money" },
-	{ yieldType: "YIELD_DISCONTENT", title: "Discontent", yAxisLabel: "Discontent per Turn", filterKey: "discontent" },
-	{ yieldType: "YIELD_IRON", title: "Iron Production", yAxisLabel: "Iron per Turn", filterKey: "iron" },
-	{ yieldType: "YIELD_STONE", title: "Stone Production", yAxisLabel: "Stone per Turn", filterKey: "stone" },
-	{ yieldType: "YIELD_WOOD", title: "Wood Production", yAxisLabel: "Wood per Turn", filterKey: "wood" },
-	{ yieldType: "YIELD_MAINTENANCE", title: "Maintenance Costs", yAxisLabel: "Maintenance per Turn", filterKey: "maintenance" },
+	{ yieldType: "YIELD_SCIENCE", title: "Science", yAxisLabel: "Science", filterKey: "science" },
+	{ yieldType: "YIELD_CIVICS", title: "Civics", yAxisLabel: "Civics", filterKey: "civics" },
+	{ yieldType: "YIELD_TRAINING", title: "Training", yAxisLabel: "Training", filterKey: "training" },
+	{ yieldType: "YIELD_GROWTH", title: "Growth", yAxisLabel: "Growth", filterKey: "growth" },
+	{ yieldType: "YIELD_CULTURE", title: "Culture", yAxisLabel: "Culture", filterKey: "culture" },
+	{ yieldType: "YIELD_HAPPINESS", title: "Happiness", yAxisLabel: "Happiness", filterKey: "happiness" },
+	{ yieldType: "YIELD_ORDERS", title: "Orders", yAxisLabel: "Orders", filterKey: "orders" },
+	{ yieldType: "YIELD_FOOD", title: "Food", yAxisLabel: "Food", filterKey: "food" },
+	{ yieldType: "YIELD_MONEY", title: "Money", yAxisLabel: "Gold", filterKey: "money" },
+	{ yieldType: "YIELD_DISCONTENT", title: "Discontent", yAxisLabel: "Discontent", filterKey: "discontent" },
+	{ yieldType: "YIELD_IRON", title: "Iron", yAxisLabel: "Iron", filterKey: "iron" },
+	{ yieldType: "YIELD_STONE", title: "Stone", yAxisLabel: "Stone", filterKey: "stone" },
+	{ yieldType: "YIELD_WOOD", title: "Wood", yAxisLabel: "Wood", filterKey: "wood" },
+	{ yieldType: "YIELD_MAINTENANCE", title: "Maintenance", yAxisLabel: "Maintenance", filterKey: "maintenance" },
 ];
 
 // Column order: Nation, Name, Family, Founded, Culture, Specialists, Growth, Population, Tiles Bought
@@ -510,17 +512,21 @@ export function createYieldChartOption(
 	title: string,
 	yAxisLabel: string,
 	selectedNationsState: Record<string, boolean>,
+	mode: YieldMode = "rate",
 ): EChartsOption | null {
 	if (allYields.length === 0) return null;
 
 	const yieldData = allYields.filter((y) => y.yield_type === yieldType);
 	if (yieldData.length === 0) return null;
 
+	const fullTitle = mode === "rate" ? `${title} per Turn` : `Cumulative ${title}`;
+	const fullYAxisLabel = mode === "rate" ? `${yAxisLabel} per Turn` : `Total ${yAxisLabel}`;
+
 	return {
 		...CHART_THEME,
 		title: {
 			...CHART_THEME.title,
-			text: title,
+			text: fullTitle,
 		},
 		legend: {
 			show: false,
@@ -542,14 +548,16 @@ export function createYieldChartOption(
 		},
 		yAxis: {
 			type: "value",
-			name: yAxisLabel,
+			name: fullYAxisLabel,
 			nameLocation: "middle",
 			nameGap: 40,
 		},
 		series: yieldData.map((playerYield, i) => ({
 			name: formatEnum(playerYield.nation, "NATION_"),
 			type: "line",
-			data: playerYield.data.map((d: YieldDataPoint) => d.amount),
+			data: playerYield.data.map((d: YieldDataPoint) =>
+				mode === "rate" ? d.rate : d.cumulative,
+			),
 			itemStyle: { color: getPlayerColor(playerYield.nation, i) },
 		})),
 	};
