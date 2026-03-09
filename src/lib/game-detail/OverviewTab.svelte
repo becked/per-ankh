@@ -154,7 +154,7 @@
 	function yieldMetric(yieldType: string, label: string): MetricBar {
 		return buildMetric(label, (nation) => {
 			const yieldData = allYields.find((y) => y.nation === nation && y.yield_type === yieldType);
-			return Math.round(yieldData?.data.at(-1)?.amount ?? 0);
+			return Math.round(yieldData?.data.at(-1)?.rate ?? 0);
 		}, { category: "yields", value: yieldType });
 	}
 

@@ -233,8 +233,8 @@
 				// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 				const turnMap = new Map<number, number>();
 				for (const dp of yh.data) {
-					if (dp.amount != null) {
-						turnMap.set(dp.turn, dp.amount);
+					if (dp.rate != null) {
+						turnMap.set(dp.turn, dp.rate);
 					}
 				}
 				targetIndex.set(nationKey, turnMap);

@@ -186,7 +186,7 @@
 	{:else if status === "not_shared"}
 		<button
 			type="button"
-			class="flex items-center gap-1.5 rounded border border-brown/30 px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+			class="flex items-center gap-1.5 rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 			onclick={handleShare}
 		>
 			<svg
@@ -208,7 +208,7 @@
 	{:else if status === "sharing"}
 		<button
 			type="button"
-			class="flex items-center gap-1.5 rounded border border-brown/30 px-2.5 py-1 text-xs text-brown"
+			class="flex items-center gap-1.5 rounded border border-tan px-2.5 py-1 text-xs text-brown"
 			disabled
 		>
 			<svg
@@ -238,7 +238,7 @@
 			type="button"
 			class="flex items-center gap-1.5 rounded border px-2.5 py-1 text-xs transition-colors {popoverOpen
 				? 'border-orange text-orange'
-				: 'border-brown/30 text-tan hover:border-orange hover:text-orange'}"
+				: 'border-tan text-tan hover:border-orange hover:text-orange'}"
 			onclick={() => (popoverOpen = !popoverOpen)}
 		>
 			<svg
@@ -275,12 +275,12 @@
 						type="text"
 						readonly
 						value={shareInfo.share_url}
-						class="flex-1 rounded border border-brown/30 bg-[#1a1714] px-2 py-1 text-xs text-tan"
+						class="flex-1 rounded border border-tan bg-[#1a1714] px-2 py-1 text-xs text-tan"
 						onclick={(e) => (e.target as HTMLInputElement).select()}
 					/>
 					<button
 						type="button"
-						class="rounded border border-brown/30 px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+						class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 						onclick={handleCopy}
 					>
 						{copied ? "Copied!" : "Copy"}
@@ -308,7 +308,7 @@
 	{:else if status === "deleting"}
 		<button
 			type="button"
-			class="flex items-center gap-1.5 rounded border border-brown/30 px-2.5 py-1 text-xs text-brown"
+			class="flex items-center gap-1.5 rounded border border-tan px-2.5 py-1 text-xs text-brown"
 			disabled
 		>
 			<svg

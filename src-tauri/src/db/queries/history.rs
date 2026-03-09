@@ -100,8 +100,9 @@ pub fn get_player_history(
 
 /// Get yield history for specific yield types with forward-fill.
 ///
-/// Prefers yield_total_history (accurate cumulative totals) when available,
-/// falls back to yield_history (rate-based) for older saves.
+/// Returns both per-turn rate and cumulative total for each data point.
+/// When yield_total_history is unavailable (older saves), cumulative is
+/// computed as a running sum of the forward-filled rate values.
 pub fn get_yield_history(
     conn: &Connection,
     match_id: i64,
@@ -124,9 +125,9 @@ pub fn get_yield_history(
     } in players
     {
         for yield_type in yield_types {
-            // Query with forward-fill using DuckDB window functions.
-            // Prefers yield_total_history (accurate totals) when available,
-            // falls back to yield_history (rate-based) for older saves.
+            // Returns both rate (from yield_history) and cumulative (from
+            // yield_total_history) with forward-fill. When no cumulative data
+            // exists (older saves), computes it as a running sum of rate.
             let mut yield_stmt = conn.prepare(
                 "WITH turns AS (
                     SELECT UNNEST(RANGE(1, ? + 1)) AS turn
@@ -134,24 +135,46 @@ pub fn get_yield_history(
                 source_data AS (
                     SELECT
                         t.turn,
-                        COALESCE(tot.amount, rate.amount) AS amount
+                        rate.amount AS rate_raw,
+                        tot.amount AS cumul_raw
                     FROM turns t
-                    LEFT JOIN yield_total_history tot
-                        ON tot.match_id = ? AND tot.player_id = ? AND tot.yield_type = ? AND tot.turn = t.turn
                     LEFT JOIN yield_history rate
                         ON rate.match_id = ? AND rate.player_id = ? AND rate.yield_type = ? AND rate.turn = t.turn
+                    LEFT JOIN yield_total_history tot
+                        ON tot.match_id = ? AND tot.player_id = ? AND tot.yield_type = ? AND tot.turn = t.turn
+                ),
+                filled AS (
+                    SELECT
+                        turn,
+                        LAST_VALUE(rate_raw / 10.0 IGNORE NULLS) OVER (
+                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS rate,
+                        LAST_VALUE(cumul_raw / 10.0 IGNORE NULLS) OVER (
+                            ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+                        ) AS cumul_from_db
+                    FROM source_data
+                ),
+                has_totals AS (
+                    SELECT COUNT(*) > 0 AS has_data
+                    FROM yield_total_history
+                    WHERE match_id = ? AND player_id = ? AND yield_type = ?
                 )
                 SELECT
-                    turn,
-                    LAST_VALUE(amount / 10.0 IGNORE NULLS) OVER (
-                        ORDER BY turn ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
-                    ) AS display_amount
-                FROM source_data
-                ORDER BY turn",
+                    f.turn,
+                    f.rate,
+                    CASE
+                        WHEN ht.has_data THEN f.cumul_from_db
+                        ELSE SUM(COALESCE(f.rate, 0)) OVER (ORDER BY f.turn)
+                    END AS cumulative
+                FROM filled f, has_totals ht
+                ORDER BY f.turn",
             )?;
 
-            let params: [&dyn duckdb::ToSql; 7] = [
+            let params: [&dyn duckdb::ToSql; 10] = [
                 &total_turns,
+                &match_id,
+                &(player_id as i64),
+                &yield_type.as_str(),
                 &match_id,
                 &(player_id as i64),
                 &yield_type.as_str(),
@@ -163,7 +186,8 @@ pub fn get_yield_history(
                 .query_map(&params[..], |row| {
                     Ok(YieldDataPoint {
                         turn: row.get(0)?,
-                        amount: row.get(1)?,
+                        rate: row.get(1)?,
+                        cumulative: row.get(2)?,
                     })
                 })?
                 .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -524,7 +548,9 @@ mod tests {
         assert_eq!(yields.len(), 1);
         assert_eq!(yields[0].yield_type, "YIELD_FOOD");
         assert_eq!(yields[0].data.len(), 5);
-        assert!(yields[0].data.iter().all(|d| d.amount.is_none()));
+        assert!(yields[0].data.iter().all(|d| d.rate.is_none()));
+        // Cumulative should be 0 for all turns (running sum of 0s)
+        assert!(yields[0].data.iter().all(|d| d.cumulative == Some(0.0)));
     }
 
     #[test]
@@ -626,36 +652,48 @@ mod tests {
     }
 
     #[test]
-    fn test_yield_history_prefers_total_over_rate() {
+    fn test_yield_history_returns_both_rate_and_cumulative() {
         let conn = setup_test_db();
         insert_match(&conn, 1, 5);
         insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
 
-        // Both tables have data for same turn — total should win
+        // Both tables have data for same turn
         insert_yield_total_history(&conn, 1, 1, "YIELD_FOOD", 3, 1000); // 1000/10 = 100.0
         insert_yield_history(&conn, 1, 1, "YIELD_FOOD", 3, 500); // 500/10 = 50.0
 
         let yields = get_yield_history(&conn, 1, &["YIELD_FOOD".to_string()]).unwrap();
         let data = &yields[0].data;
 
-        // Turn 3 should use yield_total_history value (1000/10 = 100.0)
-        assert_eq!(data[2].amount, Some(100.0));
+        // Turn 3: rate from yield_history, cumulative from yield_total_history
+        assert_eq!(data[2].rate, Some(50.0));
+        assert_eq!(data[2].cumulative, Some(100.0));
     }
 
     #[test]
-    fn test_yield_history_falls_back_to_rate() {
+    fn test_yield_history_computes_cumulative_from_rate() {
         let conn = setup_test_db();
         insert_match(&conn, 1, 5);
         insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
 
-        // Only yield_history has data (no yield_total_history)
-        insert_yield_history(&conn, 1, 1, "YIELD_FOOD", 2, 500); // 500/10 = 50.0
+        // Only yield_history has data (no yield_total_history) — older save
+        insert_yield_history(&conn, 1, 1, "YIELD_FOOD", 1, 100); // 10.0/turn
+        insert_yield_history(&conn, 1, 1, "YIELD_FOOD", 3, 200); // 20.0/turn
 
         let yields = get_yield_history(&conn, 1, &["YIELD_FOOD".to_string()]).unwrap();
         let data = &yields[0].data;
 
-        // Should fall back to yield_history value
-        assert_eq!(data[1].amount, Some(50.0));
+        // Rate: forward-filled
+        assert_eq!(data[0].rate, Some(10.0));  // turn 1: actual
+        assert_eq!(data[1].rate, Some(10.0));  // turn 2: forward-filled
+        assert_eq!(data[2].rate, Some(20.0));  // turn 3: actual
+        assert_eq!(data[3].rate, Some(20.0));  // turn 4: forward-filled
+
+        // Cumulative: running sum of forward-filled rate
+        assert_eq!(data[0].cumulative, Some(10.0));   // 10
+        assert_eq!(data[1].cumulative, Some(20.0));   // 10 + 10
+        assert_eq!(data[2].cumulative, Some(40.0));   // 10 + 10 + 20
+        assert_eq!(data[3].cumulative, Some(60.0));   // 10 + 10 + 20 + 20
+        assert_eq!(data[4].cumulative, Some(80.0));   // 10 + 10 + 20 + 20 + 20
     }
 
     #[test]
@@ -664,10 +702,12 @@ mod tests {
         insert_match(&conn, 1, 3);
         insert_player(&conn, 1, 1, "Rome", "NATION_ROME");
         insert_yield_total_history(&conn, 1, 1, "YIELD_CIVICS", 1, 150);
+        insert_yield_history(&conn, 1, 1, "YIELD_CIVICS", 1, 50);
 
         let yields = get_yield_history(&conn, 1, &["YIELD_CIVICS".to_string()]).unwrap();
-        // 150 / 10.0 = 15.0
-        assert_eq!(yields[0].data[0].amount, Some(15.0));
+        // cumulative: 150 / 10.0 = 15.0, rate: 50 / 10.0 = 5.0
+        assert_eq!(yields[0].data[0].cumulative, Some(15.0));
+        assert_eq!(yields[0].data[0].rate, Some(5.0));
     }
 
     #[test]

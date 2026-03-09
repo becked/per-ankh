@@ -17,6 +17,7 @@
 		victoryPointsEnabled,
 		victoryConditions,
 		chartFilter = $bindable<Record<string, boolean>>({}),
+		legitimacyChartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
 			search: "",
 			sortColumn: "turn",
@@ -30,10 +31,53 @@
 		victoryPointsEnabled: boolean;
 		victoryConditions: string;
 		chartFilter?: Record<string, boolean>;
+		legitimacyChartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
 
-	// ─── Chart option ─────────────────────────────────────────────────
+	// ─── Chart options ────────────────────────────────────────────────
+	const legitimacyChartOption = $derived<EChartsOption | null>(
+		playerHistory
+			? {
+					...CHART_THEME,
+					title: {
+						...CHART_THEME.title,
+						text: "Legitimacy",
+					},
+					legend: {
+						show: false,
+						data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
+						selected: legitimacyChartFilter,
+					},
+					grid: {
+						left: 60,
+						right: 40,
+						top: 80,
+						bottom: 60,
+					},
+					xAxis: {
+						type: "category",
+						name: "Turn",
+						nameLocation: "middle",
+						nameGap: 30,
+						data: playerHistory[0]?.history.map((h) => h.turn) ?? [],
+					},
+					yAxis: {
+						type: "value",
+						name: "Legitimacy",
+						nameLocation: "middle",
+						nameGap: 40,
+					},
+					series: playerHistory.map((player, i) => ({
+						name: formatEnum(player.nation, "NATION_"),
+						type: "line",
+						data: player.history.map((h) => h.legitimacy),
+						itemStyle: { color: getPlayerColor(player.nation, i) },
+					})),
+				}
+			: null,
+	);
+
 	const pointsChartOption = $derived<EChartsOption | null>(
 		playerHistory
 			? {
@@ -229,6 +273,14 @@
 			option={pointsChartOption}
 			height="400px"
 			title="Victory Points"
+		/>
+	{/if}
+
+	{#if legitimacyChartOption}
+		<ChartContainer
+			option={legitimacyChartOption}
+			height="400px"
+			title="Legitimacy"
 		/>
 	{/if}
 </div>

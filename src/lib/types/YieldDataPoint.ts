@@ -2,6 +2,10 @@
 
 export type YieldDataPoint = { turn: number, 
 /**
- * Display value (already converted from fixed-point by dividing by 10)
+ * Per-turn production rate (from yield_history, divided by 10)
  */
-amount: number | null, };
+rate: number | null, 
+/**
+ * Cumulative total (from yield_total_history or computed running sum, divided by 10)
+ */
+cumulative: number | null, };
