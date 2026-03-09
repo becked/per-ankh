@@ -192,14 +192,14 @@
 
 	<!-- Improvements pivot table -->
 	<div
-		class="overflow-x-auto rounded-lg"
+		class="rounded-lg"
 		style="background-color: #35302B;"
 	>
 		<table class="w-full">
 			<thead>
 				<tr>
 					<th
-						class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
+						class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
 						onclick={() => toggleSort(tableState, "improvement")}
 					>
 						<span class="inline-flex items-center gap-1">
@@ -215,7 +215,7 @@
 					</th>
 					{#each displayedImprovementNations as nation (nation)}
 						<th
-							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-center font-bold text-brown"
+							class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-center font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
 							onclick={() =>
 								toggleSort(tableState, `nation:${nation}`)}
 						>
@@ -235,7 +235,7 @@
 					{/each}
 					{#if displayedImprovementNations.length > 1}
 						<th
-							class="hover:bg-brown/20 cursor-pointer select-none whitespace-nowrap border-b-2 border-[#2a2622] p-3 text-center font-bold text-brown"
+							class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-center font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
 							onclick={() => toggleSort(tableState, "total")}
 						>
 							<span
