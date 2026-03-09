@@ -258,17 +258,7 @@
 </script>
 
 <div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
-	{#if !victoryPointsEnabled}
-		<div
-			class="rounded-lg p-6"
-			style="background-color: #35302B;"
-		>
-			<h3 class="mb-2 font-bold text-tan">Victory Points</h3>
-			<p class="italic text-brown">
-				Victory Points not enabled for this game (enabled: {victoryConditions}).
-			</p>
-		</div>
-	{:else if pointsChartOption}
+	{#if victoryPointsEnabled && pointsChartOption}
 		<ChartContainer
 			option={pointsChartOption}
 			height="400px"
