@@ -118,7 +118,6 @@
 	<p class="p-8 text-center italic text-brown">No cities found</p>
 {:else}
 <div class="rounded-lg p-4" style="background-color: #2a2622;">
-	<h2 class="mb-4 mt-0 font-bold text-tan">Cities</h2>
 	<!-- Table Controls -->
 	<div class="mb-4 flex flex-wrap items-end gap-3">
 		<!-- Filter dropdown -->
