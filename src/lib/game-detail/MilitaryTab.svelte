@@ -216,8 +216,6 @@
 
 </script>
 
-<h2 class="mb-4 mt-0 font-bold text-tan">Military</h2>
-
 <!-- Military Power Chart -->
 {#if militaryChartOption}
 	<ChartContainer

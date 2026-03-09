@@ -16,7 +16,6 @@
 	} = $props();
 </script>
 
-<h2 class="mb-4 mt-0 font-bold text-tan">World Map</h2>
 {#if mapTiles}
 	<HexMap
 		tiles={mapTiles}
