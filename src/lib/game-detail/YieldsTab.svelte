@@ -22,8 +22,7 @@
 	let yieldMode = $state<YieldMode>("rate");
 </script>
 
-<div class="mb-4 flex items-center gap-4">
-	<h2 class="mt-0 font-bold text-tan">Yields</h2>
+<div class="mb-4 flex items-center">
 	<ToggleGroup.Root
 		type="single"
 		value={yieldMode}
