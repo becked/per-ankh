@@ -1,5 +1,52 @@
 # Changelog
 
+## [0.2.0] - 2026-03-26
+
+### Added
+
+- Share game feature with cloud infrastructure and web viewer — upload game analytics to Cloudflare and share a public link at per-ankh.app/share/{id} with the full tab experience in a browser
+- Virtual "Shared" filter in sidebar collection dropdown to find all shared games
+- Overview tab with nation profile cards, army composition bars, key metrics comparison, wonders, and sprite icons
+- Timeline tab with multi-column table showing techs, laws, cities, battles, and religions per turn
+- Cumulative/per-turn toggle for all yield charts
+- Sticky table headers in game detail tabs
+- Cloud admin CLI (`cloud/admin.sh`) for managing shared games, blocking keys/IPs, and viewing audit logs
+- Auto-updater UX improvements: modal dialog with progress, cancellation, and timeout
+- ESLint and Prettier for frontend linting and formatting
+- Three-tier database query tests (67 tests across 6 modules)
+- Content Security Policy enabled in Tauri config
+
+### Changed
+
+- UI refresh across all game detail tabs: borderless panels, consistent dark theme, system font stack for charts
+- Extracted shared game detail components from desktop and web pages into reusable `src/lib/game-detail/` module (47% code reduction)
+- Extracted query logic from `lib.rs` into `db/queries/` modules
+- Consolidated game detail page state into typed objects
+- Military tab now includes army composition pie charts per nation
+- Replaced hardcoded hex colors with CSS variables
+- Replaced `as any` and broad types with strict `EChartsOption` typing
+- Removed redundant section headings from Yields, Military, Cities, and Map tabs
+
+### Fixed
+
+- Sidebar trophy now uses `primary_user_online_id` instead of save file creator
+- Victory points panel hidden when not applicable instead of showing disabled message
+- XML parser memory leak — parser memory now properly reclaimed
+- Glob command injection vulnerability resolved
+- All Tauri command error conversions now use `.context()` for proper error messages
+- Accessibility warnings resolved in GameSidebar and HexMap
+- Deprecated `<slot>` replaced with `{@render children()}` in layout
+- `set_default_collection` wrapped in transaction for atomicity
+- `match_id` query error now propagated instead of silent fallback
+- Appender errors surfaced via explicit `app.flush()` instead of `drop(app)`
+
+### Security
+
+- Updated wrangler to v4 to resolve OS command injection vulnerability (GHSA-wqxr-x6cw-wg6g)
+- Updated npm dependencies to resolve security vulnerabilities
+- Updated bytes and time crates to patch security vulnerabilities
+- Cloud share API hardened with rate limiting, blocklists, timing-safe token comparison, and error sanitization
+
 ## [0.1.10] - 2026-02-02
 
 ### Added
