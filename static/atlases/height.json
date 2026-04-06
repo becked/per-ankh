@@ -1,0 +1,25 @@
+{
+  "atlas": "height.webp",
+  "cellWidth": 211,
+  "cellHeight": 181,
+  "sprites": {
+    "HEIGHT_HILL": {
+      "x": 0,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "HEIGHT_MOUNTAIN": {
+      "x": 211,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "HEIGHT_VOLCANO": {
+      "x": 422,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    }
+  }
+}
