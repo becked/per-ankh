@@ -186,7 +186,7 @@
 				sprite.width,
 				sprite.height,
 				Math.round(px - b.minPx),
-				Math.round(b.maxPy - py),
+				Math.round(py - b.minPy),
 			);
 		}
 
@@ -213,7 +213,7 @@
 					sprite.width,
 					sprite.height,
 					Math.round(px - b.minPx),
-					Math.round(b.maxPy - py),
+					Math.round(py - b.minPy),
 				);
 			}
 		}
