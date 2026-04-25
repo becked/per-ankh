@@ -268,7 +268,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each filteredSortedCities as city (city.city_name)}
+				{#each filteredSortedCities as city (city.city_id)}
 					<tr class="hover:bg-brown/20 transition-colors duration-200">
 						{#each visibleCityColumns as column (column.key)}
 							<td
