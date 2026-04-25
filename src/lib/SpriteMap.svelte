@@ -46,9 +46,12 @@
 	 */
 	function hexToPixel(x: number, y: number): [number, number] {
 		const px = x * HEX_H_SPACING + ((y + 1) % 2) * (HEX_H_SPACING / 2);
-		// No Y negation: game Y increases northward, deck.gl Y increases upward.
-		// This keeps sprites right-side up (shadows/lighting match game orientation).
-		const py = y * HEX_V_SPACING;
+		// Negate Y so that game-north (high game Y) maps to low world Y.
+		// With OrthographicView's default flipY=true, low world Y renders at the
+		// top of the screen — matching the game's orientation. Keeping a single
+		// coordinate convention here means the BitmapLayer, PolygonLayer, and
+		// view target all stay aligned.
+		const py = -y * HEX_V_SPACING;
 		return [px, py];
 	}
 
@@ -186,7 +189,7 @@
 				sprite.width,
 				sprite.height,
 				Math.round(px - b.minPx),
-				Math.round(py - b.minPy),
+				Math.round(b.maxPy - py),
 			);
 		}
 
@@ -213,7 +216,7 @@
 					sprite.width,
 					sprite.height,
 					Math.round(px - b.minPx),
-					Math.round(py - b.minPy),
+					Math.round(b.maxPy - py),
 				);
 			}
 		}
