@@ -8,7 +8,7 @@ Items deferred from the initial sprite-based map implementation. Each builds on 
 Colored border lines at hex edges where ownership changes. The prospector uses 5 stacked PathLayers at decreasing widths/increasing opacity for a glow effect. Requires neighbor comparison logic to identify border edges.
 
 ### Improvement/Resource/Specialist/City Icons (IconLayer)
-Render actual game sprites for tile contents using deck.gl IconLayer with atlas textures. Atlases already exist in pinacotheca output (`improvement.webp`, `resource.webp`, `specialist.webp`, `city.webp`) — need to be bundled into `static/atlases/`. Religious building names need a swap lookup (DB: `IMPROVEMENT_MONASTERY_CHRISTIANITY`, sprite: `IMPROVEMENT_CHRISTIANITY_MONASTERY`).
+Render actual game sprites for tile contents using deck.gl IconLayer with atlas textures. Atlases already exist in pinacotheca output (`improvement.webp`, `resource.webp`, `specialist.webp`, `city.webp`) — drop them into `assets/atlas-sources/` and extend `scripts/bake-atlases.ts` to process them, then they end up in `static/atlases/`. Religious building names need a swap lookup (DB: `IMPROVEMENT_MONASTERY_CHRISTIANITY`, sprite: `IMPROVEMENT_CHRISTIANITY_MONASTERY`).
 
 ### Toggle Controls
 Layer visibility toggles for ownership overlay, borders, improvements, resources, specialists, cities. deck.gl layers with `visible: false` have zero GPU cost.
@@ -30,22 +30,14 @@ Text labels below city center tiles. Deferred because it depends on city IconLay
 
 ## Known Visual Issues
 
-### Ownership Polygon Misalignment
-The PolygonLayer hex polygons (using radii 120x88 from the atlas reference) don't perfectly align with the terrain sprite hex masks. Visible as a slight offset between the ownership tint and the terrain hex border. Needs investigation — could be the documented radii being slightly different from the actual sprite mask, or BitmapLayer texture interpolation shifting the rendered image at certain zoom levels.
-
 ### Extra Water Tiles at Coastlines
 Our map renders more water tiles than the game shows at coastlines (e.g., 4 water tiles west of a coastal city where the game shows 2). The land and mountain tiles match correctly, so this isn't a coast-vs-ocean terrain type issue. Troubleshooting steps:
 1. Check if the row offset `(y+1)%2` is inverted — try `y%2` and compare coastlines. Wrong offset shifts every other row by half a hex, which at vertical coastlines adds/removes a visible water tile per row.
 2. Check if the DB includes tiles beyond the game's playable boundary that the game doesn't render (fog-of-war, map edges). Compare tile count against `map_info.width * map_info.height` if available.
 3. Pick specific coastal tiles from the screenshot, find their (x,y) coordinates, and check what terrain/height values the DB has for them vs their neighbors.
 
-### Hex Grid Borders
-Dark borders visible between adjacent terrain tiles. These are baked into the terrain sprites from the game's art style (hex grid lines are part of the 3D rendering). Not a compositing bug. Could potentially be addressed in pinacotheca's masking pipeline by clipping a few pixels further inward, but this is cosmetic.
-
-### Map Orientation / Sprite Flipping
-Atlas sprites from pinacotheca are stored with Y=0 at bottom (Unity texture convention). The SpriteMap compositing flips each sprite vertically via `ctx.scale(1, -1)` during `drawImage`. When adding future IconLayers for improvements/resources/etc., these will need the same vertical flip treatment — or pinacotheca could be updated to flip sprites at extraction time, which would be cleaner.
-
-The prospector's `hexToPixel` uses `(mapHeight - 1 - y) * spacing` to flip Y for Pixi.js (screen coords, Y-down). Per-ankh uses `y * spacing` with no negation, relying on deck.gl's Y-up coordinate system to put north at top. Both produce the same visual result. Reference: `~/Projects/Old World/prospector/docs/map-viewer-implementation.md` lines 222-229.
+### Sprite Vertical-Flip Convention
+Pinacotheca-extracted sprites are right-side-up in the source webp, but the SpriteMap's offscreen-canvas / deck.gl BitmapLayer pipeline consumes vertically-flipped content. The terrain and height atlases handle this in `scripts/bake-atlases.ts` — the bake applies a vertical flip alongside the bevel-clip — so the runtime can blit cells directly. When adding new atlas-backed layers (improvement/resource/specialist/city IconLayers), either route them through the same bake script so the flip is pre-applied, or apply the flip per-draw at runtime. The prospector's Pixi.js renderer takes a different approach (`(mapHeight - 1 - y) * spacing` in `hexToPixel` for screen coords, Y-down); reference: `~/Projects/Old World/prospector/docs/map-viewer-implementation.md` lines 222-229.
 
 ## Known Code Issues
 

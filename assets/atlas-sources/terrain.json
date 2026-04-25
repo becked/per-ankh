@@ -1,0 +1,61 @@
+{
+  "atlas": "terrain.webp",
+  "cellWidth": 211,
+  "cellHeight": 181,
+  "sprites": {
+    "TERRAIN_ARID": {
+      "x": 0,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_FROST": {
+      "x": 211,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_LUSH": {
+      "x": 422,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_MARSH": {
+      "x": 633,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_SAND": {
+      "x": 844,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_TEMPERATE": {
+      "x": 1055,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_TUNDRA": {
+      "x": 1266,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_URBAN": {
+      "x": 1477,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "TERRAIN_WATER": {
+      "x": 1688,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    }
+  }
+}

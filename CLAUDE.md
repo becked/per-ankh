@@ -788,6 +788,28 @@ Previously shared games won't have the new field, so the web viewer must handle 
 | `src/routes/game/[id]/+page.svelte` | Desktop wrapper (~150 lines) |
 | `web/src/routes/share/[id]/+page.svelte` | Web wrapper (~150 lines) |
 
+## Map Atlas Pipeline
+
+The sprite map's terrain and height atlases are split into source and baked variants:
+
+- `assets/atlas-sources/{terrain,height}.{webp,json}` — raw output from Pinacotheca. Right-side-up, with the game's 3D-rendered dark beveled edges baked into each sprite.
+- `static/atlases/{terrain,height}.{webp,json}` — baked output that the runtime fetches. Hex-clipped, upscaled to push the bevel past the cell boundary, and Y-flipped to match the offscreen-canvas / deck.gl pipeline. The runtime (`src/lib/SpriteMap.svelte`) blits cells directly with no per-sprite transforms.
+
+**Both source and baked are committed to git.** The bake is on-demand only — not part of `tauri:dev` or `tauri:build`.
+
+**When to re-bake:**
+
+- Pinacotheca / the game ships new sprites → drop them into `assets/atlas-sources/` and re-bake.
+- Re-tuning the bevel-trim parameters (`SPRITE_SCALE_X`, `SPRITE_SCALE_Y` in `scripts/bake-atlases.ts`) → re-bake.
+
+```bash
+npm run bake:atlases
+```
+
+This reads `assets/atlas-sources/`, applies extract → lanczos3 upscale → vertical flip → center-crop → hex alpha mask, and writes the results to `static/atlases/`. Visually inspect the dev server's Map Beta tab after re-baking; commit both source and baked atlases together.
+
+**When adding new atlas-backed layers** (improvement / resource / specialist / city IconLayers): either route the new atlases through this same bake script (preferred — flip and bevel-clip applied for free), or apply the Y-flip per-draw at runtime if the layer doesn't need bevel masking.
+
 ## Player Identity & Winner Model
 
 ### User Identity (`primary_user_online_id`)

@@ -5,21 +5,16 @@
 	import type { MapTile } from "$lib/types/MapTile";
 	import { getCivilizationColor } from "$lib/config";
 
-	// Hex geometry from atlas reference (pointy-top, matching sprite masks)
+	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
+	// Atlases are pre-baked by scripts/bake-atlases.ts: the bevel masking
+	// (hex-clip + upscale + Y-flip) happens at build time, so the runtime
+	// just blits each cell directly. Used here for the ownership polygon.
 	const HEX_H_SPACING = 199;
 	const HEX_V_SPACING = 132;
 	// Elliptical hex radii derived from grid spacing so polygons tessellate
 	// exactly: H_SPACING = 2 * apothem = R_X * sqrt(3); V_SPACING = 1.5 * R_Y.
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
-	// Sprites have a dark beveled edge baked in by the game's 3D renderer.
-	// We upscale each sprite and clip it to the full hex, pushing the bevel
-	// past the hex boundary so it gets clipped off. Adjacent hexes still
-	// tessellate exactly (no gaps). 1.0 = no upscale; higher trims more bevel.
-	// Y is more aggressive because top/bottom bevels (esp. the hill cliff
-	// shadow) are noticeably thicker than the side bevels.
-	const SPRITE_SCALE_X = 1.13;
-	const SPRITE_SCALE_Y = 1.32;
 
 	interface AtlasManifest {
 		atlas: string;
@@ -155,11 +150,10 @@
 	}
 
 	/**
-	 * Draw a sprite flipped vertically. Atlas sprites are stored with Y=0 at
-	 * bottom (Unity convention), so we flip during compositing so they render
-	 * right-side up in the canvas image.
+	 * Blit a sprite cell from the baked atlas. Hex-clipping, upscale, and
+	 * Y-flip are pre-applied by scripts/bake-atlases.ts.
 	 */
-	function drawFlippedSprite(
+	function drawSprite(
 		ctx: OffscreenCanvasRenderingContext2D,
 		atlas: ImageBitmap,
 		sx: number,
@@ -169,27 +163,7 @@
 		dx: number,
 		dy: number,
 	) {
-		ctx.save();
-
-		// Clip to the full hex centered on the sprite, then draw upscaled so the
-		// baked bevel is pushed past the hex edge and clipped off.
-		const cx = dx + sw / 2;
-		const cy = dy + sh / 2;
-		ctx.beginPath();
-		for (let i = 0; i < 6; i++) {
-			const angle = (Math.PI / 3) * i - Math.PI / 2;
-			const x = cx + HEX_RADIUS_X * Math.cos(angle);
-			const y = cy + HEX_RADIUS_Y * Math.sin(angle);
-			if (i === 0) ctx.moveTo(x, y);
-			else ctx.lineTo(x, y);
-		}
-		ctx.closePath();
-		ctx.clip();
-
-		ctx.translate(cx, cy);
-		ctx.scale(SPRITE_SCALE_X, -SPRITE_SCALE_Y);
-		ctx.drawImage(atlas, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
-		ctx.restore();
+		ctx.drawImage(atlas, sx, sy, sw, sh, dx, dy, sw, sh);
 	}
 
 	/**
@@ -214,7 +188,7 @@
 			if (!sprite) continue;
 
 			const [px, py] = hexToPixel(tile.x, tile.y);
-			drawFlippedSprite(
+			drawSprite(
 				ctx,
 				terrainAtlas,
 				sprite.x,
@@ -242,7 +216,7 @@
 				if (!sprite) continue;
 
 				const [px, py] = hexToPixel(tile.x, tile.y);
-				drawFlippedSprite(
+				drawSprite(
 					ctx,
 					heightAtlas,
 					sprite.x,
