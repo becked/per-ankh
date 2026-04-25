@@ -8,9 +8,18 @@
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks)
 	const HEX_H_SPACING = 199;
 	const HEX_V_SPACING = 132;
-	// Elliptical hex radii matching the sprite mask (pointy-top)
-	const HEX_RADIUS_X = 120;
-	const HEX_RADIUS_Y = 88;
+	// Elliptical hex radii derived from grid spacing so polygons tessellate
+	// exactly: H_SPACING = 2 * apothem = R_X * sqrt(3); V_SPACING = 1.5 * R_Y.
+	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
+	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
+	// Sprites have a dark beveled edge baked in by the game's 3D renderer.
+	// We upscale each sprite and clip it to the full hex, pushing the bevel
+	// past the hex boundary so it gets clipped off. Adjacent hexes still
+	// tessellate exactly (no gaps). 1.0 = no upscale; higher trims more bevel.
+	// Y is more aggressive because top/bottom bevels (esp. the hill cliff
+	// shadow) are noticeably thicker than the side bevels.
+	const SPRITE_SCALE_X = 1.13;
+	const SPRITE_SCALE_Y = 1.32;
 
 	interface AtlasManifest {
 		atlas: string;
@@ -161,9 +170,25 @@
 		dy: number,
 	) {
 		ctx.save();
-		ctx.translate(dx, dy + sh);
-		ctx.scale(1, -1);
-		ctx.drawImage(atlas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+		// Clip to the full hex centered on the sprite, then draw upscaled so the
+		// baked bevel is pushed past the hex edge and clipped off.
+		const cx = dx + sw / 2;
+		const cy = dy + sh / 2;
+		ctx.beginPath();
+		for (let i = 0; i < 6; i++) {
+			const angle = (Math.PI / 3) * i - Math.PI / 2;
+			const x = cx + HEX_RADIUS_X * Math.cos(angle);
+			const y = cy + HEX_RADIUS_Y * Math.sin(angle);
+			if (i === 0) ctx.moveTo(x, y);
+			else ctx.lineTo(x, y);
+		}
+		ctx.closePath();
+		ctx.clip();
+
+		ctx.translate(cx, cy);
+		ctx.scale(SPRITE_SCALE_X, -SPRITE_SCALE_Y);
+		ctx.drawImage(atlas, sx, sy, sw, sh, -sw / 2, -sh / 2, sw, sh);
 		ctx.restore();
 	}
 
