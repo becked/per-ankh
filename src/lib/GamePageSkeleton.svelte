@@ -131,6 +131,12 @@
 			Map
 		</div>
 		<div
+			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
+			style="background-color: #2a2622;"
+		>
+			Map Beta
+		</div>
+		<div
 			class="rounded-tr-lg border-2 border-b-0 border-black px-3 py-2 text-sm font-bold text-tan"
 			style="background-color: #2a2622;"
 		>
