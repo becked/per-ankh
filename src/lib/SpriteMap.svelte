@@ -143,6 +143,28 @@
 	}
 
 	/**
+	 * Draw a sprite flipped vertically. Atlas sprites are stored with Y=0 at
+	 * bottom (Unity convention), so we flip during compositing so they render
+	 * right-side up in the canvas image.
+	 */
+	function drawFlippedSprite(
+		ctx: OffscreenCanvasRenderingContext2D,
+		atlas: ImageBitmap,
+		sx: number,
+		sy: number,
+		sw: number,
+		sh: number,
+		dx: number,
+		dy: number,
+	) {
+		ctx.save();
+		ctx.translate(dx, dy + sh);
+		ctx.scale(1, -1);
+		ctx.drawImage(atlas, sx, sy, sw, sh, 0, 0, sw, sh);
+		ctx.restore();
+	}
+
+	/**
 	 * Composite terrain + height sprites into a single image.
 	 * Runs once per tile data change.
 	 */
@@ -157,24 +179,6 @@
 		const ctx = canvas.getContext("2d");
 		if (!ctx) return null;
 
-		// Atlas sprites are stored with Y=0 at bottom (Unity convention).
-		// Flip each sprite vertically during compositing using canvas transforms.
-		function drawFlipped(
-			atlas: ImageBitmap,
-			sx: number,
-			sy: number,
-			sw: number,
-			sh: number,
-			dx: number,
-			dy: number,
-		) {
-			ctx.save();
-			ctx.translate(dx, dy + sh);
-			ctx.scale(1, -1);
-			ctx.drawImage(atlas, sx, sy, sw, sh, 0, 0, sw, sh);
-			ctx.restore();
-		}
-
 		// Draw terrain base for every tile
 		for (const tile of mapTiles) {
 			if (!tile.terrain) continue;
@@ -182,7 +186,8 @@
 			if (!sprite) continue;
 
 			const [px, py] = hexToPixel(tile.x, tile.y);
-			drawFlipped(
+			drawFlippedSprite(
+				ctx,
 				terrainAtlas,
 				sprite.x,
 				sprite.y,
@@ -209,7 +214,8 @@
 				if (!sprite) continue;
 
 				const [px, py] = hexToPixel(tile.x, tile.y);
-				drawFlipped(
+				drawFlippedSprite(
+					ctx,
 					heightAtlas,
 					sprite.x,
 					sprite.y,
