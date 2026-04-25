@@ -40,6 +40,9 @@
 	let heightManifest: AtlasManifest | null = $state(null);
 	let assetsLoaded = $state(false);
 
+	// Layer visibility toggles
+	let showOwnership = $state(true);
+
 	/**
 	 * Convert hex grid coordinates to pixel position.
 	 * Pointy-top orientation with even-r offset, Y-flipped for screen coords.
@@ -233,7 +236,7 @@
 	/**
 	 * Build deck.gl layers from tile data.
 	 */
-	function createLayers(mapTiles: MapTile[]) {
+	function createLayers(mapTiles: MapTile[], showOwnershipLayer: boolean) {
 		const result = compositeTerrainImage(mapTiles);
 		if (!result) return [];
 
@@ -258,7 +261,7 @@
 		);
 
 		// Ownership overlay — translucent hex fills for owned tiles
-		const ownedTiles = mapTiles.filter((t) => t.owner_nation);
+		const ownedTiles = showOwnershipLayer ? mapTiles.filter((t) => t.owner_nation) : [];
 		if (ownedTiles.length > 0) {
 			interface OwnershipTile {
 				polygon: [number, number][];
@@ -372,15 +375,16 @@
 				maxZoom: 4,
 			},
 			controller: true,
-			layers: createLayers(tiles),
+			layers: createLayers(tiles, showOwnership),
 		});
 	}
 
-	// Re-render layers when tiles change
+	// Re-render layers when tiles or visibility toggles change
 	$effect(() => {
 		const currentTiles = tiles;
+		const currentShowOwnership = showOwnership;
 		if (deck && assetsLoaded && currentTiles.length > 0) {
-			deck.setProps({ layers: createLayers(currentTiles) });
+			deck.setProps({ layers: createLayers(currentTiles, currentShowOwnership) });
 		}
 	});
 
@@ -416,8 +420,18 @@
 	});
 </script>
 
-<div class="sprite-map-container" style="height: {height};">
-	<canvas bind:this={deckCanvas} class="sprite-map-canvas"></canvas>
+<div class="flex flex-col gap-4">
+	<!-- Layer toggles -->
+	<div class="flex items-center gap-3 text-sm">
+		<label class="marker-toggle">
+			<input type="checkbox" bind:checked={showOwnership} />
+			<span class="marker-label">Ownership</span>
+		</label>
+	</div>
+
+	<div class="sprite-map-container" style="height: {height};">
+		<canvas bind:this={deckCanvas} class="sprite-map-canvas"></canvas>
+	</div>
 </div>
 
 <style>
@@ -433,5 +447,55 @@
 		width: 100%;
 		height: 100%;
 		display: block;
+	}
+
+	.marker-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		cursor: pointer;
+	}
+
+	.marker-toggle input[type="checkbox"] {
+		appearance: none;
+		width: 14px;
+		height: 14px;
+		border: 2px solid var(--color-tan);
+		border-radius: 3px;
+		background: transparent;
+		cursor: pointer;
+		position: relative;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease;
+	}
+
+	.marker-toggle input[type="checkbox"]:checked {
+		background: var(--color-tan);
+	}
+
+	.marker-toggle input[type="checkbox"]:checked::after {
+		content: "";
+		position: absolute;
+		left: 3px;
+		top: 0px;
+		width: 4px;
+		height: 8px;
+		border: solid #1a1a1a;
+		border-width: 0 2px 2px 0;
+		transform: rotate(45deg);
+	}
+
+	.marker-toggle:hover input[type="checkbox"] {
+		border-color: white;
+	}
+
+	.marker-label {
+		color: var(--color-tan);
+		user-select: none;
+	}
+
+	.marker-toggle:hover .marker-label {
+		color: white;
 	}
 </style>
