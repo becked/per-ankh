@@ -4,29 +4,39 @@ Items deferred from the initial sprite-based map implementation. Each builds on 
 
 ## Deferred Features
 
-### Territory Borders (PathLayer)
-Colored border lines at hex edges where ownership changes. The prospector uses 5 stacked PathLayers at decreasing widths/increasing opacity for a glow effect. Requires neighbor comparison logic to identify border edges.
-
 ### Improvement/Resource/Specialist/City Icons (IconLayer)
-Render actual game sprites for tile contents using deck.gl IconLayer with atlas textures. Atlases already exist in pinacotheca output (`improvement.webp`, `resource.webp`, `specialist.webp`, `city.webp`) — drop them into `assets/atlas-sources/` and extend `scripts/bake-atlases.ts` to process them, then they end up in `static/atlases/`. Religious building names need a swap lookup (DB: `IMPROVEMENT_MONASTERY_CHRISTIANITY`, sprite: `IMPROVEMENT_CHRISTIANITY_MONASTERY`).
+Render actual game sprites for tile contents using deck.gl IconLayer with atlas textures. Atlases already exist in pinacotheca output (`improvement.webp`, `resource.webp`, `specialist.webp`, `city.webp`) — drop them into `assets/atlas-sources/` and extend `scripts/bake-atlases.ts` to process them, then they end up in `static/atlases/`. Religious building names need a swap lookup (DB: `IMPROVEMENT_MONASTERY_CHRISTIANITY`, sprite: `IMPROVEMENT_CHRISTIANITY_MONASTERY`). Each new layer should follow the memoize-on-tiles + `visible`-toggle pattern (see "Implementation Patterns" below).
 
-### Toggle Controls
-Layer visibility toggles for ownership overlay, borders, improvements, resources, specialists, cities. deck.gl layers with `visible: false` have zero GPU cost.
+### Additional Toggles
+The Political and Religion toggles exist; remaining deferred toggles are City Sites, Capitals, Urban improvements, Rural improvements (and any future overlay). Each should be its own `$state(boolean)`, its own data prep memoized via `$derived.by(() => …)` keyed on `tiles`, and an always-built deck.gl layer whose `visible` is bound to the toggle. This keeps toggle latency at zero buffer rebuilds.
 
 ### Tooltips
-Make ownership PolygonLayer pickable, wire up `onHover` callback to show tile details. Can reuse tooltip content builder from HexMap.
+Add a separate `PolygonLayer` covering all tiles with full hex polygons and a fully transparent fill (`getFillColor: [0,0,0,0]`) marked `pickable: true`, then wire `onHover` to surface tile details. A dedicated invisible picking layer keeps the visible overlays (PathLayer borders, religion fills) free of pickability concerns and produces consistent hit testing whether or not Political/Religion are toggled on. Tooltip content can reuse the builder from HexMap.
 
 ### Turn Slider / Playback
-Reuse the existing turn change callback pattern (`onTurnChange` prop). Terrain compositing runs once per turn change (~50ms), so playback should be smooth.
+Reuse the existing turn change callback pattern (`onTurnChange` prop). Terrain compositing runs once per turn change; political/religion data prep also rebuild on tile change. Playback should be smooth, but worth profiling once wired up since the Chaikin smoothing pass adds work.
 
 ### Fullscreen Mode
 Native `<dialog>` with a second Deck instance, same pattern as HexMap.
 
-### Color Mode Switching
-The sprite map inherently shows terrain + political ownership. Additional modes (religion, resource, height, vegetation) could override the ownership overlay color or switch to analytical flat-color view.
-
 ### City Name Labels (TextLayer)
 Text labels below city center tiles. Deferred because it depends on city IconLayer being in place.
+
+## Implementation Patterns
+
+### Memoize-on-tiles + Visible-Toggle
+The political and religion overlays establish the pattern for all future overlays:
+
+1. Hold per-overlay state as `let showFoo = $state(boolean)`.
+2. Compute the overlay's render-ready data via `$derived.by(() => …)` keyed on `tiles`. The derivative re-runs only when tiles change, not when toggles flip.
+3. Always build the deck.gl layer in the `$effect`, passing the memoized data as `data`. Bind `visible: showFoo` to the toggle.
+4. Toggling becomes a single `setProps` with the same data reference and a different `visible` — deck.gl reuses GPU buffers; flips are effectively free.
+
+### Smoothed Boundary Curves (Chaikin)
+Political nation borders chain boundary edges per territory island into closed paths, applying Chaikin's corner-cutting algorithm (3 iterations) for the in-game silky-curve look. Sub-borders chain similarly but use the open-path Chaikin variant since they branch at multi-city junctions. The same pattern can be reused for any future "territory boundary" rendering.
+
+### Per-vertex Centroid Inset
+Both nation borders and religion fills use a per-vertex inset toward the centroid of same-nation tiles meeting at that vertex. Adjacent same-nation tiles compute the same centroid → identical inset positions → boundaries chain cleanly without gaps. Religion fills inherit this so they stop at the political border instead of bleeding past it. The current inset constant is `NATION_BORDER_INSET = 0.10` (10%); tunable.
 
 ## Known Visual Issues
 
