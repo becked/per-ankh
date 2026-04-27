@@ -51,6 +51,8 @@
 	let terrainManifest: AtlasManifest | null = $state(null);
 	let heightAtlas: ImageBitmap | null = $state(null);
 	let heightManifest: AtlasManifest | null = $state(null);
+	let improvementAtlas: ImageBitmap | null = $state(null);
+	let improvementManifest: AtlasManifest | null = $state(null);
 	let assetsLoaded = $state(false);
 
 	// Layer visibility toggles
@@ -232,7 +234,27 @@
 		}
 		const colsPerChunk = Math.ceil(mapColCount / chunkCount);
 
+		// Improvement summary logged once for the whole map (not per chunk).
+		if (improvementAtlas && improvementManifest) {
+			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+			const allImprovements = new Map<string, number>();
+			for (const tile of mapTiles) {
+				if (!tile.improvement) continue;
+				allImprovements.set(
+					tile.improvement,
+					(allImprovements.get(tile.improvement) ?? 0) + 1,
+				);
+			}
+			console.log(
+				`[improvements-test] map summary:`,
+				Object.fromEntries(
+					[...allImprovements.entries()].sort((a, b) => b[1] - a[1]),
+				),
+			);
+		}
+
 		const chunks: Array<{ bitmap: ImageBitmap; bounds: MapBounds }> = [];
+		let totalImprovementsRendered = 0;
 
 		for (let i = 0; i < chunkCount; i++) {
 			const colStart = i * colsPerChunk;
@@ -295,7 +317,39 @@
 				}
 			}
 
+			// Improvements (test) — atlas currently contains Library / Granary /
+			// Watermill / Hanging Gardens; other improvements silently skipped.
+			if (improvementAtlas && improvementManifest) {
+				for (const tile of chunkTiles) {
+					if (!tile.improvement) continue;
+					const sprite = improvementManifest.sprites[tile.improvement];
+					if (!sprite) continue;
+
+					const [px, py] = hexToPixel(tile.x, tile.y);
+					drawSprite(
+						ctx,
+						improvementAtlas,
+						sprite.x,
+						sprite.y,
+						sprite.width,
+						sprite.height,
+						Math.round(px - b.minPx),
+						Math.round(b.maxPy - py),
+					);
+					console.log(
+						`[improvements-test] rendered ${tile.improvement} at (${tile.x},${tile.y}) — nation=${tile.owner_nation ?? "—"} city=${tile.owner_city ?? "—"}`,
+					);
+					totalImprovementsRendered++;
+				}
+			}
+
 			chunks.push({ bitmap: canvas.transferToImageBitmap(), bounds: b });
+		}
+
+		if (improvementAtlas && improvementManifest) {
+			console.log(
+				`[improvements-test] chunked into ${chunks.length} bitmap(s); rendered ${totalImprovementsRendered} improvement sprite(s) total`,
+			);
 		}
 
 		return chunks.length > 0 ? chunks : null;
@@ -920,12 +974,18 @@
 
 	onMount(() => {
 		// Load atlas assets
-		Promise.all([loadAtlas("terrain"), loadAtlas("height")])
-			.then(([terrain, heightData]) => {
+		Promise.all([
+			loadAtlas("terrain"),
+			loadAtlas("height"),
+			loadAtlas("improvements-test"),
+		])
+			.then(([terrain, heightData, improvements]) => {
 				terrainAtlas = terrain.image;
 				terrainManifest = terrain.manifest;
 				heightAtlas = heightData.image;
 				heightManifest = heightData.manifest;
+				improvementAtlas = improvements.image;
+				improvementManifest = improvements.manifest;
 				assetsLoaded = true;
 			})
 			.catch((err) => {
