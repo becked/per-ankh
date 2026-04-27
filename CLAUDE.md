@@ -793,7 +793,7 @@ Previously shared games won't have the new field, so the web viewer must handle 
 The sprite map's terrain and height atlases are split into source and baked variants:
 
 - `assets/atlas-sources/{terrain,height}.{webp,json}` — raw output from Pinacotheca. Right-side-up, with the game's 3D-rendered dark beveled edges baked into each sprite.
-- `static/atlases/{terrain,height}.{webp,json}` — baked output that the runtime fetches. Hex-clipped, upscaled to push the bevel past the cell boundary, and Y-flipped to match the offscreen-canvas / deck.gl pipeline. The runtime (`src/lib/SpriteMap.svelte`) blits cells directly with no per-sprite transforms.
+- `static/atlases/{terrain,height}.{webp,json}` — baked output that the runtime fetches. Hex-clipped and upscaled to push the bevel past the cell boundary, then center-cropped. The runtime (`src/lib/SpriteMap.svelte`) feeds these straight to deck.gl `IconLayer`, which samples cells with no per-draw transform.
 
 **Both source and baked are committed to git.** The bake is on-demand only — not part of `tauri:dev` or `tauri:build`.
 
@@ -806,9 +806,9 @@ The sprite map's terrain and height atlases are split into source and baked vari
 npm run bake:atlases
 ```
 
-This reads `assets/atlas-sources/`, applies extract → lanczos3 upscale → vertical flip → center-crop → hex alpha mask, and writes the results to `static/atlases/`. Visually inspect the dev server's Map Beta tab after re-baking; commit both source and baked atlases together.
+This reads `assets/atlas-sources/`, applies extract → lanczos3 upscale → center-crop → hex alpha mask, and writes the results to `static/atlases/`. Visually inspect the dev server's Map Beta tab after re-baking; commit both source and baked atlases together.
 
-**When adding new atlas-backed layers** (improvement / resource / specialist / city IconLayers): either route the new atlases through this same bake script (preferred — flip and bevel-clip applied for free), or apply the Y-flip per-draw at runtime if the layer doesn't need bevel masking.
+**When adding new atlas-backed layers** (resource / specialist / city IconLayers): route the new atlases through this same bake script — bevel-clipping is applied for free and the output orientation matches what `IconLayer` expects (right-side-up, billboard-mode sampling).
 
 ## Player Identity & Winner Model
 

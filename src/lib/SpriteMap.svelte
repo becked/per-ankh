@@ -1,15 +1,15 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { Deck, OrthographicView } from "@deck.gl/core";
-	import { BitmapLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
+	import { IconLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
 	import type { MapTile } from "$lib/types/MapTile";
 	import { getCivilizationColor } from "$lib/config";
 
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
-	// Atlases are pre-baked by scripts/bake-atlases.ts: the bevel masking
-	// (hex-clip + upscale + Y-flip) happens at build time, so the runtime
-	// just blits each cell directly. The dimensions also drive overlay
-	// polygons (religion fill) and edge segments (political borders).
+	// Atlases are pre-baked by scripts/bake-atlases.ts: hex-clip + bevel-trim
+	// upscale happen at build time. The runtime feeds the baked atlas straight
+	// to deck.gl IconLayer, which samples it as-is. The dimensions also drive
+	// overlay polygons (religion fill) and edge segments (political borders).
 	const HEX_H_SPACING = 199;
 	const HEX_V_SPACING = 132;
 	// Elliptical hex radii derived from grid spacing so polygons tessellate
@@ -17,13 +17,9 @@
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 
-	// Maps ≥82 wide produce composite bitmaps that exceed WebGL's
-	// GL_MAX_TEXTURE_SIZE (typically 16384). compositeTerrainImage splits the
-	// composite into N horizontal chunks where each chunk's offscreen canvas
-	// stays under SAFE_CHUNK_WIDTH. Chunk count = ceil(totalWidth / SAFE_CHUNK_WIDTH).
-	// 16000 leaves margin under 16384 for cell rounding and the half-shift on
-	// odd rows. See docs/map-beta-future-work.md "BitmapLayer Texture-Size Ceiling".
-	const SAFE_CHUNK_WIDTH = 16000;
+	const TERRAIN_ATLAS_URL = "/atlases/terrain.webp";
+	const HEIGHT_ATLAS_URL = "/atlases/height.webp";
+	const IMPROVEMENT_ATLAS_URL = "/atlases/improvements-test.webp";
 
 	interface AtlasManifest {
 		atlas: string;
@@ -46,12 +42,10 @@
 	let deckCanvas: HTMLCanvasElement;
 	let deck: Deck<OrthographicView> | null = $state(null);
 
-	// Atlas assets (loaded once)
-	let terrainAtlas: ImageBitmap | null = $state(null);
+	// Atlas manifests (loaded once). The matching .webp URLs are passed to
+	// IconLayer's iconAtlas prop, which fetches and decodes the texture itself.
 	let terrainManifest: AtlasManifest | null = $state(null);
-	let heightAtlas: ImageBitmap | null = $state(null);
 	let heightManifest: AtlasManifest | null = $state(null);
-	let improvementAtlas: ImageBitmap | null = $state(null);
 	let improvementManifest: AtlasManifest | null = $state(null);
 	let assetsLoaded = $state(false);
 
@@ -68,8 +62,8 @@
 		// Negate Y so that game-north (high game Y) maps to low world Y.
 		// With OrthographicView's default flipY=true, low world Y renders at the
 		// top of the screen — matching the game's orientation. Keeping a single
-		// coordinate convention here means the BitmapLayer, PolygonLayer, and
-		// view target all stay aligned.
+		// coordinate convention here means IconLayer, PolygonLayer, and view
+		// target all stay aligned.
 		const py = -y * HEX_V_SPACING;
 		return [px, py];
 	}
@@ -126,233 +120,9 @@
 		];
 	}
 
-	/**
-	 * Load an atlas image and its JSON manifest.
-	 */
-	async function loadAtlas(
-		name: string,
-	): Promise<{ image: ImageBitmap; manifest: AtlasManifest }> {
-		const [imageResponse, manifestResponse] = await Promise.all([
-			fetch(`/atlases/${name}.webp`),
-			fetch(`/atlases/${name}.json`),
-		]);
-		const manifest: AtlasManifest = await manifestResponse.json();
-		const blob = await imageResponse.blob();
-		const image = await createImageBitmap(blob);
-		return { image, manifest };
-	}
-
-	/**
-	 * Calculate the pixel bounding box for all tiles in world coordinates.
-	 */
-	interface MapBounds {
-		width: number;
-		height: number;
-		minPx: number;
-		maxPx: number;
-		minPy: number;
-		maxPy: number;
-		halfW: number;
-		halfH: number;
-	}
-
-	function calculateMapBounds(mapTiles: MapTile[]): MapBounds {
-		let minPx = Infinity,
-			maxPx = -Infinity;
-		let minPy = Infinity,
-			maxPy = -Infinity;
-
-		for (const tile of mapTiles) {
-			const [px, py] = hexToPixel(tile.x, tile.y);
-			minPx = Math.min(minPx, px);
-			maxPx = Math.max(maxPx, px);
-			minPy = Math.min(minPy, py);
-			maxPy = Math.max(maxPy, py);
-		}
-
-		const spriteW = terrainManifest?.cellWidth ?? 211;
-		const spriteH = terrainManifest?.cellHeight ?? 181;
-		const halfW = spriteW / 2;
-		const halfH = spriteH / 2;
-
-		return {
-			width: Math.ceil(maxPx - minPx + spriteW),
-			height: Math.ceil(maxPy - minPy + spriteH),
-			minPx,
-			maxPx,
-			minPy,
-			maxPy,
-			halfW,
-			halfH,
-		};
-	}
-
-	/**
-	 * Blit a sprite cell from the baked atlas. Hex-clipping, upscale, and
-	 * Y-flip are pre-applied by scripts/bake-atlases.ts.
-	 */
-	function drawSprite(
-		ctx: OffscreenCanvasRenderingContext2D,
-		atlas: ImageBitmap,
-		sx: number,
-		sy: number,
-		sw: number,
-		sh: number,
-		dx: number,
-		dy: number,
-	) {
-		ctx.drawImage(atlas, sx, sy, sw, sh, dx, dy, sw, sh);
-	}
-
-	/**
-	 * Composite terrain + height sprites into one or more bitmaps.
-	 * Runs once per tile data change.
-	 *
-	 * Returns an array of chunks because the full-map composite can exceed
-	 * WebGL's GL_MAX_TEXTURE_SIZE on maps ≥82 wide. Each chunk owns a
-	 * contiguous range of columns; tiles are painted in exactly one chunk
-	 * (the one containing their column). Adjacent chunks' BitmapLayer bounds
-	 * may overlap by ~one sprite width in world coords, but each chunk only
-	 * holds its own sprites, so there's no double-painting.
-	 */
-	function compositeTerrainImage(mapTiles: MapTile[]): Array<{
-		bitmap: ImageBitmap;
-		bounds: MapBounds;
-	}> | null {
-		if (!terrainAtlas || !terrainManifest) return null;
-
-		const overall = calculateMapBounds(mapTiles);
-		const chunkCount = Math.max(
-			1,
-			Math.ceil(overall.width / SAFE_CHUNK_WIDTH),
-		);
-
-		// Column-based chunking: tiles assigned by floor(x / colsPerChunk).
-		let mapColCount = 0;
-		for (const t of mapTiles) {
-			if (t.x + 1 > mapColCount) mapColCount = t.x + 1;
-		}
-		const colsPerChunk = Math.ceil(mapColCount / chunkCount);
-
-		// Improvement summary logged once for the whole map (not per chunk).
-		if (improvementAtlas && improvementManifest) {
-			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-			const allImprovements = new Map<string, number>();
-			for (const tile of mapTiles) {
-				if (!tile.improvement) continue;
-				allImprovements.set(
-					tile.improvement,
-					(allImprovements.get(tile.improvement) ?? 0) + 1,
-				);
-			}
-			console.log(
-				`[improvements-test] map summary:`,
-				Object.fromEntries(
-					[...allImprovements.entries()].sort((a, b) => b[1] - a[1]),
-				),
-			);
-		}
-
-		const chunks: Array<{ bitmap: ImageBitmap; bounds: MapBounds }> = [];
-		let totalImprovementsRendered = 0;
-
-		for (let i = 0; i < chunkCount; i++) {
-			const colStart = i * colsPerChunk;
-			const colEnd = (i + 1) * colsPerChunk;
-			const chunkTiles = mapTiles.filter(
-				(t) => t.x >= colStart && t.x < colEnd,
-			);
-			if (chunkTiles.length === 0) continue;
-
-			const b = calculateMapBounds(chunkTiles);
-			const canvas = new OffscreenCanvas(b.width, b.height);
-			const ctx = canvas.getContext("2d");
-			if (!ctx) continue;
-
-			// Terrain
-			for (const tile of chunkTiles) {
-				if (!tile.terrain) continue;
-				const sprite = terrainManifest.sprites[tile.terrain];
-				if (!sprite) continue;
-
-				const [px, py] = hexToPixel(tile.x, tile.y);
-				drawSprite(
-					ctx,
-					terrainAtlas,
-					sprite.x,
-					sprite.y,
-					sprite.width,
-					sprite.height,
-					Math.round(px - b.minPx),
-					Math.round(b.maxPy - py),
-				);
-			}
-
-			// Heights
-			if (heightAtlas && heightManifest) {
-				for (const tile of chunkTiles) {
-					if (!tile.height) continue;
-					if (
-						tile.height === "HEIGHT_FLAT" ||
-						tile.height === "HEIGHT_OCEAN" ||
-						tile.height === "HEIGHT_COAST" ||
-						tile.height === "HEIGHT_LAKE"
-					) {
-						continue;
-					}
-					const sprite = heightManifest.sprites[tile.height];
-					if (!sprite) continue;
-
-					const [px, py] = hexToPixel(tile.x, tile.y);
-					drawSprite(
-						ctx,
-						heightAtlas,
-						sprite.x,
-						sprite.y,
-						sprite.width,
-						sprite.height,
-						Math.round(px - b.minPx),
-						Math.round(b.maxPy - py),
-					);
-				}
-			}
-
-			// Improvements (test) — atlas currently contains Library / Granary /
-			// Watermill / Hanging Gardens; other improvements silently skipped.
-			if (improvementAtlas && improvementManifest) {
-				for (const tile of chunkTiles) {
-					if (!tile.improvement) continue;
-					const sprite = improvementManifest.sprites[tile.improvement];
-					if (!sprite) continue;
-
-					const [px, py] = hexToPixel(tile.x, tile.y);
-					drawSprite(
-						ctx,
-						improvementAtlas,
-						sprite.x,
-						sprite.y,
-						sprite.width,
-						sprite.height,
-						Math.round(px - b.minPx),
-						Math.round(b.maxPy - py),
-					);
-					console.log(
-						`[improvements-test] rendered ${tile.improvement} at (${tile.x},${tile.y}) — nation=${tile.owner_nation ?? "—"} city=${tile.owner_city ?? "—"}`,
-					);
-					totalImprovementsRendered++;
-				}
-			}
-
-			chunks.push({ bitmap: canvas.transferToImageBitmap(), bounds: b });
-		}
-
-		if (improvementAtlas && improvementManifest) {
-			console.log(
-				`[improvements-test] chunked into ${chunks.length} bitmap(s); rendered ${totalImprovementsRendered} improvement sprite(s) total`,
-			);
-		}
-
-		return chunks.length > 0 ? chunks : null;
+	async function loadManifest(name: string): Promise<AtlasManifest> {
+		const response = await fetch(`/atlases/${name}.json`);
+		return (await response.json()) as AtlasManifest;
 	}
 
 	interface NationBorder {
@@ -807,12 +577,8 @@
 		return fills;
 	}
 
-	// Memoized derivatives — recomputed only when `tiles` (or atlas state) change,
-	// not on layer-toggle flips.
-	const terrainComposite = $derived.by(() => {
-		if (!assetsLoaded || tiles.length === 0) return null;
-		return compositeTerrainImage(tiles);
-	});
+	// Memoized derivatives — recomputed only when `tiles` change, not on
+	// layer-toggle flips.
 	const politicalData = $derived.by<PoliticalData>(() => {
 		if (tiles.length === 0) return { borders: [], subBorders: [] };
 		return computePoliticalData(tiles);
@@ -902,36 +668,75 @@
 		});
 	}
 
-	// Assemble layers from memoized derivatives. Toggling showPolitical / showReligion
-	// only flips the `visible` prop — deck.gl reuses GPU buffers because each layer's
-	// `data` reference is unchanged. Buffers rebuild only when `tiles` change, which
-	// invalidates the derivatives.
+	// Assemble layers. Toggling showPolitical / showReligion only flips the
+	// `visible` prop — deck.gl reuses GPU buffers because each layer's `data`
+	// reference is unchanged. Buffers rebuild only when `tiles` (and thus the
+	// political/religion derivatives + the inline-filtered IconLayer data) change.
 	$effect(() => {
 		if (!deck) return;
-		const composite = terrainComposite;
+		if (!assetsLoaded) return;
+		const tm = terrainManifest;
+		const hm = heightManifest;
+		const im = improvementManifest;
+		if (!tm || !hm || !im) return;
 		const political = politicalData;
 		const fills = religionFills;
 		const pol = showPolitical;
 		const rel = showReligion;
-		if (!composite || composite.length === 0) return;
-
-		const terrainLayers = composite.map((chunk, i) => {
-			const b = chunk.bounds;
-			return new BitmapLayer({
-				id: `terrain-layer-${i}`,
-				image: chunk.bitmap,
-				bounds: [
-					b.minPx - b.halfW,
-					b.minPy - b.halfH,
-					b.maxPx + b.halfW,
-					b.maxPy + b.halfH,
-				],
-			});
-		});
 
 		deck.setProps({
 			layers: [
-				...terrainLayers,
+				new IconLayer<MapTile>({
+					id: "terrain-icons",
+					data: tiles.filter(
+						(t) => t.terrain != null && tm.sprites[t.terrain] != null,
+					),
+					iconAtlas: TERRAIN_ATLAS_URL,
+					iconMapping: tm.sprites,
+					getIcon: (d: MapTile) => d.terrain as string,
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => tm.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
+				new IconLayer<MapTile>({
+					id: "height-icons",
+					data: tiles.filter((t) => {
+						if (t.height == null) return false;
+						if (
+							t.height === "HEIGHT_FLAT" ||
+							t.height === "HEIGHT_OCEAN" ||
+							t.height === "HEIGHT_COAST" ||
+							t.height === "HEIGHT_LAKE"
+						)
+							return false;
+						return hm.sprites[t.height] != null;
+					}),
+					iconAtlas: HEIGHT_ATLAS_URL,
+					iconMapping: hm.sprites,
+					getIcon: (d: MapTile) => d.height as string,
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => hm.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
+				new IconLayer<MapTile>({
+					id: "improvement-icons",
+					data: tiles.filter(
+						(t) =>
+							t.improvement != null && im.sprites[t.improvement] != null,
+					),
+					iconAtlas: IMPROVEMENT_ATLAS_URL,
+					iconMapping: im.sprites,
+					getIcon: (d: MapTile) => d.improvement as string,
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => im.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
 				new PolygonLayer<ReligionFill>({
 					id: "religion-layer",
 					data: fills,
@@ -973,23 +778,19 @@
 	});
 
 	onMount(() => {
-		// Load atlas assets
 		Promise.all([
-			loadAtlas("terrain"),
-			loadAtlas("height"),
-			loadAtlas("improvements-test"),
+			loadManifest("terrain"),
+			loadManifest("height"),
+			loadManifest("improvements-test"),
 		])
-			.then(([terrain, heightData, improvements]) => {
-				terrainAtlas = terrain.image;
-				terrainManifest = terrain.manifest;
-				heightAtlas = heightData.image;
-				heightManifest = heightData.manifest;
-				improvementAtlas = improvements.image;
-				improvementManifest = improvements.manifest;
+			.then(([terrain, height, improvements]) => {
+				terrainManifest = terrain;
+				heightManifest = height;
+				improvementManifest = improvements;
 				assetsLoaded = true;
 			})
 			.catch((err) => {
-				console.error("Failed to load map atlases:", err);
+				console.error("Failed to load map atlas manifests:", err);
 			});
 
 		// Poll for canvas visibility (same pattern as HexMap)

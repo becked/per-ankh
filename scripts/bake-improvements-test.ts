@@ -209,12 +209,10 @@ async function bakeCell(
 		.png()
 		.toBuffer();
 
-	const masked = await sharp(centered)
+	return sharp(centered)
 		.composite([{ input: hexMask, blend: "dest-in" }])
 		.png()
 		.toBuffer();
-
-	return sharp(masked).flip().png().toBuffer();
 }
 
 interface Resolution {

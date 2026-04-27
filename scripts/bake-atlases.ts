@@ -4,8 +4,8 @@
 //
 // One-shot script. Run via `npm run bake:atlases` after pulling fresh sprites
 // from Pinacotheca or after re-tuning SPRITE_SCALE_X/Y below. The runtime
-// (src/lib/SpriteMap.svelte) just blits cells from the baked atlas — no clip,
-// no scale, no flip.
+// (src/lib/SpriteMap.svelte) feeds the baked atlas directly to deck.gl
+// IconLayer, which samples it as-is — no per-draw clip, scale, or flip.
 //
 // To re-tune the bevel trim:
 //   1. Adjust SPRITE_SCALE_X / SPRITE_SCALE_Y here.
@@ -66,14 +66,13 @@ async function bakeCell(
 	const upscaledW = Math.round(sw * SPRITE_SCALE_X);
 	const upscaledH = Math.round(sh * SPRITE_SCALE_Y);
 
-	// Extract → upscale (lanczos3) → vertical flip. The flip matches the
-	// runtime's ctx.scale(1, -1) — source sprites are right-side-up, but the
-	// runtime offscreen-canvas / deck.gl pipeline consumes flipped content.
-	// Baking the flip lets the runtime drop the per-sprite transform.
+	// Extract → upscale (lanczos3). No Y-flip: deck.gl IconLayer's billboard
+	// mode samples the atlas in screen-natural orientation (top-of-image at
+	// top-of-screen), bypassing the OrthographicView flipY. Pre-flipping
+	// would render every sprite upside-down at runtime.
 	const upscaled = await sharp(source)
 		.extract({ left: sx, top: sy, width: sw, height: sh })
 		.resize(upscaledW, upscaledH, { kernel: "lanczos3" })
-		.flip()
 		.toBuffer();
 
 	// Center-crop back to the cell size; the bevel rows have been pushed past
