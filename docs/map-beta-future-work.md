@@ -38,6 +38,33 @@ Political nation borders chain boundary edges per territory island into closed p
 ### Per-vertex Centroid Inset
 Both nation borders and religion fills use a per-vertex inset toward the centroid of same-nation tiles meeting at that vertex. Adjacent same-nation tiles compute the same centroid → identical inset positions → boundaries chain cleanly without gaps. Religion fills inherit this so they stop at the political border instead of bleeding past it. The current inset constant is `NATION_BORDER_INSET = 0.10` (10%); tunable.
 
+### BitmapLayer Texture-Size Ceiling (Why Terrain Is Chunked)
+The terrain + height pass paints all tiles into one offscreen canvas, then uploads the resulting `ImageBitmap` to deck.gl as a single `BitmapLayer`. That texture's max dimension is bound by WebGL's `GL_MAX_TEXTURE_SIZE` — typically 16384 on modern GPUs.
+
+For a pointy-top hex grid with `HEX_H_SPACING = 199` and `cellWidth = 211`, the composite width works out to `(map_width - 1) * 199 + 99.5 + 211`. That crosses 16384 at map width 82 (composite = 16430). Larger maps fail harder: a 100-wide map computes to 20012, ~22% over the limit. About 25% of typical imported games use maps ≥82 wide.
+
+**Failure mode.** WebGL rejects the texture upload (`glTexStorage2D: Desired resource size is greater than max texture size`), `BitmapLayer` renders black. PathLayer/PolygonLayer overlays (political borders, religion fills) still render correctly because they don't go through a single big texture — they're vector geometry.
+
+**Solution: chunk the composite into N horizontal strips.** Each chunk gets its own offscreen canvas, `ImageBitmap`, and `BitmapLayer`. Number of chunks computed as `ceil(totalWidth / safeChunkWidth)` where `safeChunkWidth ≈ 14000` (under-limit with margin). Each tile is painted in exactly one chunk based on its X column; chunks are sized to include the sprite extent of tiles at the chunk's right edge so a sprite straddling the boundary is owned and fully painted by one chunk. Adjacent chunks' BitmapLayers may overlap by a sprite width but no double-painting occurs because each tile is owned by exactly one chunk. Memoize-on-tiles still works — chunks rebuild only when `tiles` changes.
+
+### BitmapLayer vs IconLayer Trade-offs
+Terrain + height are stacked into one image and rendered via `BitmapLayer` (with chunking, see above). Improvements / resources / specialists / city sprites are planned as separate `IconLayer`s that render per-tile from an atlas. The two approaches diverge on six axes:
+
+| Axis | BitmapLayer | IconLayer |
+|---|---|---|
+| Atlas Y-orientation | Wants vertically-flipped pixels (OpenGL `V=0` at bottom) | Expects right-side-up atlas |
+| Position model | One image positioned by `bounds: [l, b, r, t]` rectangle | Per-icon `getPosition` (point) + `anchorX`/`anchorY` |
+| Stacking | Pre-composited into one image (terrain → height painted over) | Multiple layers stacked by render order |
+| Texture-size ceiling | Bound by `GL_MAX_TEXTURE_SIZE` over the whole map | Bound only by atlas size (small) |
+| Per-tile-data update cost | Heavy: repaint 6724 sprites + upload ~178MB ImageBitmap | Light: rebuild data array + buffer upload |
+| Picking | Whole rectangle, not per-tile | Per-icon, free |
+
+**Today's choice for terrain.** Chunked BitmapLayer wins on minimizing change from the existing pipeline, preserves the carefully-tuned offscreen-canvas blit pattern, and handles all map sizes once chunking is in place. The texture-ceiling concern is contained.
+
+**When to migrate terrain to IconLayer.** Two plausible triggers: (a) the planned turn slider / playback feels slow because every turn change repaints the giant offscreen canvas; (b) we want per-tile picking for terrain (tooltips currently rely on a separate invisible PolygonLayer per the deferred-features list). Migration cost: re-bake atlases without the Y-flip (split bake into two flavors, or run a per-draw flip), replace `compositeTerrainImage` with stacked terrain + height IconLayers, verify render order is preserved across overlay layers.
+
+**For now, new sprite layers.** Improvements / resources / specialists / city follow the IconLayer pattern from day one — they're sparse (most tiles have no improvement) and don't compete for offscreen-canvas pixels. Their atlases need to be right-side-up; either bake them un-flipped or apply the flip per-draw.
+
 ## Known Visual Issues
 
 ### Extra Water Tiles at Coastlines

@@ -17,6 +17,14 @@
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 
+	// Maps ≥82 wide produce composite bitmaps that exceed WebGL's
+	// GL_MAX_TEXTURE_SIZE (typically 16384). compositeTerrainImage splits the
+	// composite into N horizontal chunks where each chunk's offscreen canvas
+	// stays under SAFE_CHUNK_WIDTH. Chunk count = ceil(totalWidth / SAFE_CHUNK_WIDTH).
+	// 16000 leaves margin under 16384 for cell rounding and the half-shift on
+	// odd rows. See docs/map-beta-future-work.md "BitmapLayer Texture-Size Ceiling".
+	const SAFE_CHUNK_WIDTH = 16000;
+
 	interface AtlasManifest {
 		atlas: string;
 		cellWidth: number;
@@ -195,58 +203,60 @@
 	}
 
 	/**
-	 * Composite terrain + height sprites into a single image.
+	 * Composite terrain + height sprites into one or more bitmaps.
 	 * Runs once per tile data change.
+	 *
+	 * Returns an array of chunks because the full-map composite can exceed
+	 * WebGL's GL_MAX_TEXTURE_SIZE on maps ≥82 wide. Each chunk owns a
+	 * contiguous range of columns; tiles are painted in exactly one chunk
+	 * (the one containing their column). Adjacent chunks' BitmapLayer bounds
+	 * may overlap by ~one sprite width in world coords, but each chunk only
+	 * holds its own sprites, so there's no double-painting.
 	 */
-	function compositeTerrainImage(mapTiles: MapTile[]): {
+	function compositeTerrainImage(mapTiles: MapTile[]): Array<{
 		bitmap: ImageBitmap;
 		bounds: MapBounds;
-	} | null {
+	}> | null {
 		if (!terrainAtlas || !terrainManifest) return null;
 
-		const b = calculateMapBounds(mapTiles);
-		const canvas = new OffscreenCanvas(b.width, b.height);
-		const ctx = canvas.getContext("2d");
-		if (!ctx) return null;
+		const overall = calculateMapBounds(mapTiles);
+		const chunkCount = Math.max(
+			1,
+			Math.ceil(overall.width / SAFE_CHUNK_WIDTH),
+		);
 
-		// Draw terrain base for every tile
-		for (const tile of mapTiles) {
-			if (!tile.terrain) continue;
-			const sprite = terrainManifest.sprites[tile.terrain];
-			if (!sprite) continue;
-
-			const [px, py] = hexToPixel(tile.x, tile.y);
-			drawSprite(
-				ctx,
-				terrainAtlas,
-				sprite.x,
-				sprite.y,
-				sprite.width,
-				sprite.height,
-				Math.round(px - b.minPx),
-				Math.round(b.maxPy - py),
-			);
+		// Column-based chunking: tiles assigned by floor(x / colsPerChunk).
+		let mapColCount = 0;
+		for (const t of mapTiles) {
+			if (t.x + 1 > mapColCount) mapColCount = t.x + 1;
 		}
+		const colsPerChunk = Math.ceil(mapColCount / chunkCount);
 
-		// Draw heights on top
-		if (heightAtlas && heightManifest) {
-			for (const tile of mapTiles) {
-				if (!tile.height) continue;
-				if (
-					tile.height === "HEIGHT_FLAT" ||
-					tile.height === "HEIGHT_OCEAN" ||
-					tile.height === "HEIGHT_COAST" ||
-					tile.height === "HEIGHT_LAKE"
-				) {
-					continue;
-				}
-				const sprite = heightManifest.sprites[tile.height];
+		const chunks: Array<{ bitmap: ImageBitmap; bounds: MapBounds }> = [];
+
+		for (let i = 0; i < chunkCount; i++) {
+			const colStart = i * colsPerChunk;
+			const colEnd = (i + 1) * colsPerChunk;
+			const chunkTiles = mapTiles.filter(
+				(t) => t.x >= colStart && t.x < colEnd,
+			);
+			if (chunkTiles.length === 0) continue;
+
+			const b = calculateMapBounds(chunkTiles);
+			const canvas = new OffscreenCanvas(b.width, b.height);
+			const ctx = canvas.getContext("2d");
+			if (!ctx) continue;
+
+			// Terrain
+			for (const tile of chunkTiles) {
+				if (!tile.terrain) continue;
+				const sprite = terrainManifest.sprites[tile.terrain];
 				if (!sprite) continue;
 
 				const [px, py] = hexToPixel(tile.x, tile.y);
 				drawSprite(
 					ctx,
-					heightAtlas,
+					terrainAtlas,
 					sprite.x,
 					sprite.y,
 					sprite.width,
@@ -255,9 +265,40 @@
 					Math.round(b.maxPy - py),
 				);
 			}
+
+			// Heights
+			if (heightAtlas && heightManifest) {
+				for (const tile of chunkTiles) {
+					if (!tile.height) continue;
+					if (
+						tile.height === "HEIGHT_FLAT" ||
+						tile.height === "HEIGHT_OCEAN" ||
+						tile.height === "HEIGHT_COAST" ||
+						tile.height === "HEIGHT_LAKE"
+					) {
+						continue;
+					}
+					const sprite = heightManifest.sprites[tile.height];
+					if (!sprite) continue;
+
+					const [px, py] = hexToPixel(tile.x, tile.y);
+					drawSprite(
+						ctx,
+						heightAtlas,
+						sprite.x,
+						sprite.y,
+						sprite.width,
+						sprite.height,
+						Math.round(px - b.minPx),
+						Math.round(b.maxPy - py),
+					);
+				}
+			}
+
+			chunks.push({ bitmap: canvas.transferToImageBitmap(), bounds: b });
 		}
 
-		return { bitmap: canvas.transferToImageBitmap(), bounds: b };
+		return chunks.length > 0 ? chunks : null;
 	}
 
 	interface NationBorder {
@@ -818,21 +859,25 @@
 		const fills = religionFills;
 		const pol = showPolitical;
 		const rel = showReligion;
-		if (!composite) return;
+		if (!composite || composite.length === 0) return;
 
-		const { bitmap, bounds: b } = composite;
-		const left = b.minPx - b.halfW;
-		const right = b.maxPx + b.halfW;
-		const top = b.maxPy + b.halfH;
-		const bottom = b.minPy - b.halfH;
+		const terrainLayers = composite.map((chunk, i) => {
+			const b = chunk.bounds;
+			return new BitmapLayer({
+				id: `terrain-layer-${i}`,
+				image: chunk.bitmap,
+				bounds: [
+					b.minPx - b.halfW,
+					b.minPy - b.halfH,
+					b.maxPx + b.halfW,
+					b.maxPy + b.halfH,
+				],
+			});
+		});
 
 		deck.setProps({
 			layers: [
-				new BitmapLayer({
-					id: "terrain-layer",
-					image: bitmap,
-					bounds: [left, bottom, right, top],
-				}),
+				...terrainLayers,
 				new PolygonLayer<ReligionFill>({
 					id: "religion-layer",
 					data: fills,
