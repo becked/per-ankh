@@ -808,21 +808,36 @@ npm run bake:atlases
 
 ### Improvements (`scripts/bake-improvements.ts`)
 
-- Source: pinacotheca's pre-baked `improvement.{webp,json}` atlas at `~/Projects/Old World/pinacotheca/output/atlases/`. Pinacotheca's keys are `zIconName` values (icon-asset filenames).
-- Mapping: `Reference/XML/Infos/improvement.xml` (+ `Reference/XML/Mods/*/Infos/improvement-{add,change}.xml`) provides the `zType → zIconName` translation. Save files emit `zType` into `tiles.improvement`; many `zType`s share one `zIconName` by design (e.g. all sun-god shrines → `IMPROVEMENT_SHRINE_SUN`). Multiple manifest entries point at the same packed cell.
+- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/improvements/IMPROVEMENT_3D_*.png`. We deliberately ingest the raw renders, not pinacotheca's pre-baked `output/atlases/improvement.{webp,json}` (which is the 2D icon set — mixing 2D and 3D in one atlas would look inconsistent).
+- Mapping: `Reference/XML/Infos/improvement.xml` (+ `improvement-event.xml`, `improvement-event-sap.xml`, plus `Reference/XML/Mods/*/Infos/improvement-{add,change}.xml`) provides the `zType → zIconName` translation. Save files emit `zType` into `tiles.improvement`; many `zType`s share one `zIconName` by design (e.g. all sun-god shrines → `IMPROVEMENT_SHRINE_SUN`). Multiple manifest entries point at the same packed cell.
 - Output: `assets/atlas-sources/improvements.{webp,json}` and `static/atlases/improvements.{webp,json}`, keyed by `zType`.
-- Transform: hex-clip + safe-scale fit. **No bevel-trim** — improvement sprites are isolated building models on a transparent ground patch, so there's no perimeter bevel to push past the cell boundary.
+- Transform: hex-clip + scale fit at `SAFE_SCALE = 0.77` with `fit:"inside"`. **No bevel-trim** — these are isolated building models on a transparent ground patch, so there's no perimeter bevel to push past the cell boundary. A `brightness` lift (`IMPROVEMENT_BRIGHTEN_TWEAK`) is applied so the focal building reads clearly against urban tiles underneath.
+
+**Nation URBAN / CAPITAL variants** — same atlas, different keys. The bake also scans the same directory for `IMPROVEMENT_3D_<NATION>_(URBAN|CAPITAL).png` and emits synthetic sprite keys that don't correspond to any `zType`:
+
+- `URBAN_<NATION>` — the per-nation built-up tile texture (Greek temples, Egyptian mudbrick, etc.). Baked at `NATION_VARIANT_SCALE = 1.0` with `fit:"cover"` so it fully covers the hex (TERRAIN_URBAN no longer draws underneath nation-owned urban tiles).
+- `URBAN_<NATION>_FADED` — same source, run through a Gaussian blur (`FADED_URBAN_TWEAK`) so individual rooftops dissolve under the focal improvement on top.
+- `CAPITAL_<NATION>` — the nation's capital complex (Roman forum, Persian apadana). Baked at `NATION_VARIANT_SCALE = 1.0` with `fit:"inside"` so the whole building stays in frame, brightened by `IMPROVEMENT_BRIGHTEN_TWEAK`.
+
+The runtime (`src/lib/SpriteMap.svelte`) draws these via two extra `IconLayer`s — `urban-overlay-icons` (between terrain and height) and `capital-overlay-icons` (after improvements). The terrain layer's filter skips TERRAIN_URBAN tiles where a nation tile exists, and the improvement layer skips capital tiles where a capital sprite exists, so each tile shows exactly one of: TERRAIN_URBAN, URBAN_<NATION>(_FADED), or CAPITAL_<NATION> (with URBAN_<NATION>_FADED layered underneath).
+
+A small alias map in `SpriteMap.svelte` (`URBAN_NATION_ALIASES`) routes `NATION_MAURYA` and `NATION_TAMIL` to the shared `URBAN_INDIA` cell — pinacotheca renders one urban tile per cultural family, not per nation.
 
 **Re-bake when:**
 
-- Pinacotheca ships a refreshed `output/atlases/improvement.{webp,json}`.
+- Pinacotheca ships refreshed `IMPROVEMENT_3D_*.png` renders (new buildings, refreshed art, new nation URBAN/CAPITAL variants).
 - `Reference/XML/` is refreshed against a current OW install (picks up new DLC `zType`s).
+- Tuning the visible knobs in `scripts/bake-improvements.ts`:
+  - `SAFE_SCALE` — improvement inset within the hex
+  - `NATION_VARIANT_SCALE` — fill scale for URBAN/CAPITAL variants
+  - `FADED_URBAN_TWEAK` — blur (and/or brightness/saturation) for the village-under-improvement variant
+  - `IMPROVEMENT_BRIGHTEN_TWEAK` — brightness lift for foreground 3D buildings + capitals
 
 ```bash
 npm run bake:improvements
 ```
 
-`zType`s present in saves but absent from the Reference XML (typically newer DLC content not yet vendored) silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose `zIconName` is missing from pinacotheca's atlas.
+`zType`s present in saves but absent from the Reference XML (typically newer DLC content not yet vendored) silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose `zIconName` is missing from pinacotheca's render set, and falls those `zType`s back to a generic city sprite.
 
 ### Both pipelines
 

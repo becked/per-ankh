@@ -21,6 +21,45 @@
 	const HEIGHT_ATLAS_URL = "/atlases/height.webp";
 	const IMPROVEMENT_ATLAS_URL = "/atlases/improvements.webp";
 
+	// Pinacotheca renders one urban tile per cultural family, not one per
+	// nation. NATION_MAURYA and NATION_TAMIL share INDIA_URBAN; nations not
+	// listed here use their own NATION_<NAME> directly. Looked up only after
+	// `URBAN_<NATION>` misses, so direct nation tiles always win.
+	const URBAN_NATION_ALIASES: Record<string, string> = {
+		NATION_MAURYA: "INDIA",
+		NATION_TAMIL: "INDIA",
+	};
+
+	function nationKeyFromOwner(owner: string): string {
+		return owner.replace(/^NATION_/, "");
+	}
+
+	function urbanSpriteFor(
+		owner: string | null,
+		hasImprovement: boolean,
+		manifest: AtlasManifest,
+	): string | null {
+		if (!owner) return null;
+		const direct = nationKeyFromOwner(owner);
+		const candidates = [direct, URBAN_NATION_ALIASES[owner]].filter(
+			(n): n is string => n != null,
+		);
+		for (const n of candidates) {
+			const key = hasImprovement ? `URBAN_${n}_FADED` : `URBAN_${n}`;
+			if (manifest.sprites[key]) return key;
+		}
+		return null;
+	}
+
+	function capitalSpriteFor(
+		owner: string | null,
+		manifest: AtlasManifest,
+	): string | null {
+		if (!owner) return null;
+		const key = `CAPITAL_${nationKeyFromOwner(owner)}`;
+		return manifest.sprites[key] ? key : null;
+	}
+
 	interface AtlasManifest {
 		atlas: string;
 		cellWidth: number;
@@ -693,9 +732,19 @@
 			layers: [
 				new IconLayer<MapTile>({
 					id: "terrain-icons",
-					data: tiles.filter(
-						(t) => t.terrain != null && tm.sprites[t.terrain] != null,
-					),
+					// TERRAIN_URBAN tiles in a known nation are skipped here so the
+					// urban-overlay layer's full-hex URBAN_<NATION> sprite stands in
+					// for them — no base-terrain bleed-through around the edges.
+					data: tiles.filter((t) => {
+						if (t.terrain == null || tm.sprites[t.terrain] == null) return false;
+						if (
+							t.terrain === "TERRAIN_URBAN" &&
+							urbanSpriteFor(t.owner_nation, t.improvement != null, im) != null
+						) {
+							return false;
+						}
+						return true;
+					}),
 					iconAtlas: TERRAIN_ATLAS_URL,
 					iconMapping: tm.sprites,
 					getIcon: (d: MapTile) => {
@@ -710,6 +759,41 @@
 					},
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 					getSize: () => tm.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
+				// Nation-specific urban tile substituting for TERRAIN_URBAN. The
+				// pinacotheca renders are tile-shaped 3D vignettes (Greek temples,
+				// Egyptian mudbrick, etc.) keyed by owner_nation. Baked with
+				// fit:"cover" so the hex is fully covered — terrain-icons skips
+				// these tiles so there's no double-draw. Faded variant fires when
+				// any building (regular improvement or a capital sprite) needs to
+				// read as the focal point on top. Tiles without a matching nation
+				// tile fall through to terrain-icons drawing the base TERRAIN_URBAN.
+				new IconLayer<MapTile>({
+					id: "urban-overlay-icons",
+					data: tiles.filter(
+						(t) =>
+							t.terrain === "TERRAIN_URBAN" &&
+							urbanSpriteFor(
+								t.owner_nation,
+								t.improvement != null ||
+									(t.is_capital && capitalSpriteFor(t.owner_nation, im) != null),
+								im,
+							) != null,
+					),
+					iconAtlas: IMPROVEMENT_ATLAS_URL,
+					iconMapping: im.sprites,
+					getIcon: (d: MapTile) =>
+						urbanSpriteFor(
+							d.owner_nation,
+							d.improvement != null ||
+								(d.is_capital && capitalSpriteFor(d.owner_nation, im) != null),
+							im,
+						) as string,
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => im.cellWidth,
 					sizeUnits: "common",
 					sizeBasis: "width",
 					pickable: false,
@@ -738,9 +822,15 @@
 				}),
 				new IconLayer<MapTile>({
 					id: "improvement-icons",
+					// Capital tiles are excluded so the capital-overlay layer can
+					// substitute the nation-specific CAPITAL_<NATION> render in place
+					// of whatever city-center improvement the save emitted (PALACE,
+					// IMPROVEMENT_CITY, etc.).
 					data: tiles.filter(
 						(t) =>
-							t.improvement != null && im.sprites[t.improvement] != null,
+							t.improvement != null &&
+							im.sprites[t.improvement] != null &&
+							!(t.is_capital && capitalSpriteFor(t.owner_nation, im) != null),
 					),
 					iconAtlas: IMPROVEMENT_ATLAS_URL,
 					iconMapping: im.sprites,
@@ -762,7 +852,11 @@
 							? tiles.filter(
 									(t) =>
 										t.improvement != null &&
-										im.sprites[t.improvement] == null,
+										im.sprites[t.improvement] == null &&
+										!(
+											t.is_capital &&
+											capitalSpriteFor(t.owner_nation, im) != null
+										),
 								)
 							: [],
 					iconAtlas: IMPROVEMENT_ATLAS_URL,
@@ -771,6 +865,25 @@
 							? { __FALLBACK__: im.fallbackSprite }
 							: {},
 					getIcon: () => "__FALLBACK__",
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => im.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
+				// Capital tiles render the nation-specific 3D capital complex
+				// (Roman forum, Persian apadana, etc.). Drawn after the regular
+				// improvement layer so it sits on top in case both fire.
+				new IconLayer<MapTile>({
+					id: "capital-overlay-icons",
+					data: tiles.filter(
+						(t) =>
+							t.is_capital && capitalSpriteFor(t.owner_nation, im) != null,
+					),
+					iconAtlas: IMPROVEMENT_ATLAS_URL,
+					iconMapping: im.sprites,
+					getIcon: (d: MapTile) =>
+						capitalSpriteFor(d.owner_nation, im) as string,
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 					getSize: () => im.cellWidth,
 					sizeUnits: "common",

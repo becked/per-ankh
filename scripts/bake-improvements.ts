@@ -55,6 +55,28 @@ const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 // aspect ~1.5.
 const SAFE_SCALE = 0.77;
 
+// Per-nation URBAN/CAPITAL renders bake at full cell scale — the URBAN
+// variants ARE the ground texture (no inset would leave hex corners empty),
+// and the CAPITAL building complexes are focal-point buildings that should
+// dominate their tile rather than sit small inside it like the SAFE_SCALE
+// improvements do. Fit differs (URBAN cover, CAPITAL inside) — see the
+// nationVariants assembly below.
+const NATION_VARIANT_SCALE = 1.0;
+
+// Background URBAN_<NATION>_FADED variant drawn under improvements/capitals
+// on urban tiles. Color and brightness left as-is so the village hue/lift
+// matches the bare-urban tile next door; only a Gaussian blur dissolves
+// individual rooftops so they don't compete with the focal 3D building on
+// top. The improvement layer carries its own brightness boost (see
+// IMPROVEMENT_BRIGHTEN_TWEAK below) for figure/ground separation.
+const FADED_URBAN_TWEAK = { blur: 2.5 };
+
+// Brightness lift applied to regular improvements and CAPITAL_<NATION>
+// renders so the focal 3D building reads clearly above the urban village
+// underneath. Doesn't touch URBAN_<NATION> (background) or URBAN_<NATION>_FADED
+// (handled separately above).
+const IMPROVEMENT_BRIGHTEN_TWEAK = { brightness: 1.5 };
+
 function buildHexMaskSvg(cellW: number, cellH: number): string {
 	const cx = cellW / 2;
 	const cy = cellH / 2;
@@ -71,12 +93,19 @@ function buildHexMaskSvg(cellW: number, cellH: number): string {
 async function bakeCell(
 	sourcePath: string,
 	hexMask: Buffer,
+	options: {
+		scale?: number;
+		fit?: "inside" | "cover";
+		tweak?: { brightness?: number; saturation?: number; blur?: number };
+	} = {},
 ): Promise<Buffer> {
-	const safeW = Math.round(CELL_W * SAFE_SCALE);
-	const safeH = Math.round(CELL_H * SAFE_SCALE);
+	const scale = options.scale ?? SAFE_SCALE;
+	const fit = options.fit ?? "inside";
+	const targetW = Math.round(CELL_W * scale);
+	const targetH = Math.round(CELL_H * scale);
 
 	const fitted = await sharp(sourcePath)
-		.resize(safeW, safeH, { fit: "inside" })
+		.resize(targetW, targetH, { fit, position: "center" })
 		.png()
 		.toBuffer();
 	const fittedMeta = await sharp(fitted).metadata();
@@ -98,7 +127,20 @@ async function bakeCell(
 		.png()
 		.toBuffer();
 
-	return sharp(centered)
+	let toned = centered;
+	if (options.tweak) {
+		const { blur, ...modulate } = options.tweak;
+		if (modulate.brightness != null || modulate.saturation != null) {
+			toned = await sharp(toned).modulate(modulate).png().toBuffer();
+		}
+		if (blur != null && blur > 0) {
+			// Blur before the hex mask so the blur radius doesn't bleed alpha
+			// past the hex boundary; the mask hard-clips after blurring.
+			toned = await sharp(toned).blur(blur).png().toBuffer();
+		}
+	}
+
+	return sharp(toned)
 		.composite([{ input: hexMask, blend: "dest-in" }])
 		.png()
 		.toBuffer();
@@ -259,10 +301,63 @@ async function main(): Promise<void> {
 		}
 	}
 
+	// Discover nation-specific URBAN/CAPITAL renders. These don't appear in
+	// improvement.xml (they aren't gameplay improvements — they're cosmetic
+	// per-nation tile renders pinacotheca ships alongside the regular
+	// improvement set). They're keyed in the atlas by synthetic
+	// URBAN_<NATION>, URBAN_<NATION>_FADED, CAPITAL_<NATION> entries that the
+	// runtime SpriteMap looks up directly off owner_nation / is_capital.
+	const VARIANT_RE = /^IMPROVEMENT_3D_([A-Z]+)_(URBAN|CAPITAL)\.png$/;
+	const dirEntries = await readdir(PINACOTHECA_3D_DIR);
+	interface NationVariant {
+		spriteKey: string;
+		path: string;
+		// URBAN variants substitute for TERRAIN_URBAN, so they bake at fit:"cover"
+		// to fully cover the hex (sides cropped — the pinacotheca renders are
+		// aspect ~1.69 vs the hex's 1.16, but content sits roughly hex-shaped in
+		// the center, so the cropped strips are mostly empty).
+		// CAPITAL variants are isolated 3D building complexes drawn on top of
+		// the urban tile, so fit:"inside" keeps the whole building visible.
+		fit: "inside" | "cover";
+		tweak?: { brightness?: number; saturation?: number; blur?: number };
+	}
+	const nationVariants: NationVariant[] = [];
+	for (const filename of dirEntries.sort()) {
+		const m = VARIANT_RE.exec(filename);
+		if (!m) continue;
+		const [, nation, kind] = m;
+		const path = resolve(PINACOTHECA_3D_DIR, filename);
+		if (kind === "URBAN") {
+			nationVariants.push({
+				spriteKey: `URBAN_${nation}`,
+				path,
+				fit: "cover",
+			});
+			nationVariants.push({
+				spriteKey: `URBAN_${nation}_FADED`,
+				path,
+				fit: "cover",
+				tweak: FADED_URBAN_TWEAK,
+			});
+		} else {
+			nationVariants.push({
+				spriteKey: `CAPITAL_${nation}`,
+				path,
+				fit: "inside",
+				tweak: IMPROVEMENT_BRIGHTEN_TWEAK,
+			});
+		}
+	}
+	if (nationVariants.length > 0) {
+		console.log(
+			`[improvements] ${nationVariants.length} nation variant cell(s) discovered (URBAN/CAPITAL × nation, plus _FADED for URBAN)`,
+		);
+	}
+
 	// Grid layout: a single-row atlas at this cell count would exceed
 	// GL_MAX_TEXTURE_SIZE (typically 16384). Roughly square keeps both
 	// dimensions well under.
-	const numCells = iconToZTypes.size;
+	const numCells = iconToZTypes.size + nationVariants.length;
 	const cols = Math.ceil(Math.sqrt(numCells));
 	const rows = Math.ceil(numCells / cols);
 
@@ -289,7 +384,9 @@ async function main(): Promise<void> {
 	let cellIndex = 0;
 	for (const [zIconName, zTypes] of iconToZTypes) {
 		const path = threeDPathFor(zIconName);
-		const baked = await bakeCell(path, hexMask);
+		const baked = await bakeCell(path, hexMask, {
+			tweak: IMPROVEMENT_BRIGHTEN_TWEAK,
+		});
 		cells.push(baked);
 
 		const col = cellIndex % cols;
@@ -315,6 +412,30 @@ async function main(): Promise<void> {
 				`[improvements] ${zIconName} ← ${zTypes.length} zTypes share cell ${cellIndex}: ${zTypes.join(", ")}`,
 			);
 		}
+		cellIndex++;
+	}
+
+	// Nation URBAN/CAPITAL variants bake at full cell scale. URBAN uses
+	// fit:"cover" so the hex is fully covered (no TERRAIN_URBAN bleed-through);
+	// CAPITAL uses fit:"inside" so the entire building stays in frame.
+	for (const variant of nationVariants) {
+		const baked = await bakeCell(variant.path, hexMask, {
+			scale: NATION_VARIANT_SCALE,
+			fit: variant.fit,
+			tweak: variant.tweak,
+		});
+		cells.push(baked);
+		const col = cellIndex % cols;
+		const row = Math.floor(cellIndex / cols);
+		sprites[variant.spriteKey] = {
+			x: col * CELL_W,
+			y: row * CELL_H,
+			width: CELL_W,
+			height: CELL_H,
+		};
+		console.log(
+			`[improvements] ${variant.spriteKey} (cell ${cellIndex})`,
+		);
 		cellIndex++;
 	}
 

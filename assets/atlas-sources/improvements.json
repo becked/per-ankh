@@ -15,608 +15,608 @@
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_RUINS_2": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_FORT": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_FARM": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_MINE": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_PASTURE": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_CAMP": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_GROVE": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_WINDMILL": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_MINOR_CITY": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_SLUMS": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_LAURION_MINE": {
-      "x": 211,
-      "y": 0,
-      "width": 211,
-      "height": 181
-    },
     "IMPROVEMENT_RUINS_1": {
       "x": 422,
       "y": 0,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_RUINS_3": {
+    "IMPROVEMENT_RUINS_2": {
       "x": 633,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_RUINS_3": {
+      "x": 844,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_RUINS_4": {
-      "x": 844,
+      "x": 1055,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_1": {
-      "x": 1055,
+      "x": 1266,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_1_GAUL": {
-      "x": 1055,
+      "x": 1266,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_2": {
-      "x": 1266,
+      "x": 1477,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_2_GAUL": {
-      "x": 1266,
+      "x": 1477,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KEMET_FORT": {
-      "x": 1266,
+      "x": 1477,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_3": {
-      "x": 1477,
+      "x": 1688,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SPARTAN_CAMP": {
-      "x": 1477,
+      "x": 1688,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_3_GAUL": {
-      "x": 1477,
+      "x": 1688,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_4": {
-      "x": 1688,
+      "x": 1899,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SETTLEMENT_4_GAUL": {
-      "x": 1688,
+      "x": 1899,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_FORT": {
+      "x": 2110,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MINOR_CITY": {
+      "x": 2110,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_FARM": {
+      "x": 2321,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MINE": {
+      "x": 2532,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_LAURION_MINE": {
+      "x": 2532,
       "y": 0,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_QUARRY": {
-      "x": 1899,
-      "y": 0,
+      "x": 0,
+      "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_LUMBERMILL": {
-      "x": 2110,
-      "y": 0,
+      "x": 211,
+      "y": 181,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_PASTURE": {
+      "x": 422,
+      "y": 181,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CAMP": {
+      "x": 633,
+      "y": 181,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SLUMS": {
+      "x": 633,
+      "y": 181,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GROVE": {
+      "x": 844,
+      "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_NETS": {
-      "x": 0,
+      "x": 1055,
       "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HARBOR": {
-      "x": 211,
+      "x": 1266,
       "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_GRANARY": {
-      "x": 422,
+      "x": 1477,
       "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_WATERMILL": {
-      "x": 633,
+      "x": 1688,
+      "y": 181,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_WINDMILL": {
+      "x": 1899,
       "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HAMLET": {
-      "x": 844,
+      "x": 2110,
       "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_VILLAGE": {
-      "x": 1055,
+      "x": 2321,
       "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_TOWN": {
-      "x": 1266,
+      "x": 2532,
       "y": 181,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_BARRACKS": {
-      "x": 1477,
-      "y": 181,
+      "x": 0,
+      "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_RANGE": {
-      "x": 1688,
-      "y": 181,
+      "x": 211,
+      "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_BALEARIC_RANGE": {
-      "x": 1688,
-      "y": 181,
+      "x": 211,
+      "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_THEATER_1": {
-      "x": 1899,
-      "y": 181,
+      "x": 422,
+      "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_THEATER_2": {
-      "x": 2110,
-      "y": 181,
+      "x": 633,
+      "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_THEATER_3": {
-      "x": 0,
+      "x": 844,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_BATHS_1": {
-      "x": 211,
+      "x": 1055,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_BATHS_2": {
-      "x": 422,
+      "x": 1266,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_BATHS_3": {
-      "x": 633,
+      "x": 1477,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MARKET_1": {
-      "x": 844,
+      "x": 1688,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MARKET_2": {
-      "x": 1055,
+      "x": 1899,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MARKET_3": {
-      "x": 1266,
+      "x": 2110,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_LIBRARY_1": {
-      "x": 1477,
+      "x": 2321,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_GREAT_LIBRARY": {
-      "x": 1477,
+      "x": 2321,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_LIBRARY_2": {
-      "x": 1688,
+      "x": 2532,
       "y": 362,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_LIBRARY_3": {
-      "x": 1899,
-      "y": 362,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_COURTHOUSE_1": {
-      "x": 2110,
-      "y": 362,
-      "width": 211,
-      "height": 181
-    },
-    "IMPROVEMENT_COURTHOUSE_2": {
       "x": 0,
       "y": 543,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_COURTHOUSE_3": {
+    "IMPROVEMENT_COURTHOUSE_1": {
       "x": 211,
       "y": 543,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_GARRISON_1": {
+    "IMPROVEMENT_COURTHOUSE_2": {
       "x": 422,
       "y": 543,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_GARRISON_2": {
+    "IMPROVEMENT_COURTHOUSE_3": {
       "x": 633,
       "y": 543,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_GARRISON_3": {
+    "IMPROVEMENT_GARRISON_1": {
       "x": 844,
       "y": 543,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_SHRINE_NINURTA": {
+    "IMPROVEMENT_GARRISON_2": {
       "x": 1055,
+      "y": 543,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GARRISON_3": {
+      "x": 1266,
+      "y": 543,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_NINURTA": {
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_BELLONA": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_TARHUN": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_APEDEMEK": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_MAHREM": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_ORLAGNO": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_FOREST_FIRE_MONUMENT": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SWORD_CULT": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CAVALRY_CULT": {
-      "x": 1055,
+      "x": 1477,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_NUSKA": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_ATAR": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_SOL": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_MEDR": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_MURUGAN": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_OF_VICTORY": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_OF_THE_HERO": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_AMAZON_CULT": {
-      "x": 1266,
+      "x": 1688,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_NABU": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_ATHENA": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_INDRA": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_MAYON": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_TRIBE_PAGANISM": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MARTYR_CULT": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CULT_OF_THE_ANGELIC_DIVINE": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CULT_OF_ISIS_AND_SERAPIS": {
-      "x": 1477,
+      "x": 1899,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_SHAMASH": {
-      "x": 1688,
+      "x": 2110,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_RA": {
-      "x": 1688,
+      "x": 2110,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_HVAR_KHSHAITA": {
-      "x": 1688,
+      "x": 2110,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_SERAPIS": {
-      "x": 1688,
+      "x": 2110,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_MANDULIS": {
-      "x": 1688,
+      "x": 2110,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_SURYA": {
-      "x": 1688,
+      "x": 2110,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_MELQART": {
-      "x": 1899,
+      "x": 2321,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_POSEIDON": {
-      "x": 1899,
+      "x": 2321,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_ANAHITA": {
-      "x": 1899,
+      "x": 2321,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_BEHER": {
-      "x": 1899,
+      "x": 2321,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_VARUNA": {
-      "x": 1899,
+      "x": 2321,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CULT_OF_THE_HEALER": {
-      "x": 1899,
+      "x": 2321,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_ISHTAR": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_BAAL_HAMMON": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_FERONIA": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_SEBIUMEKER": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_ASTAR": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_TIRUMAL": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_GODS_CONSORT_SHRINE": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_SHRINE_OF_THE_FALLEN_GODDESS": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_ECSTATIC_CULT": {
-      "x": 2110,
+      "x": 2532,
       "y": 543,
       "width": 211,
       "height": 181
@@ -820,368 +820,560 @@
       "height": 181
     },
     "IMPROVEMENT_TEMPLE_CHRISTIANITY": {
-      "x": 0,
-      "y": 905,
+      "x": 2321,
+      "y": 724,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_TEMPLE_MANICHAEISM": {
-      "x": 211,
-      "y": 905,
+      "x": 2532,
+      "y": 724,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CATHEDRAL_ZOROASTRIANISM": {
-      "x": 422,
+      "x": 0,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CATHEDRAL_JUDAISM": {
-      "x": 633,
+      "x": 211,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CATHEDRAL_CHRISTIANITY": {
-      "x": 844,
+      "x": 422,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CATHEDRAL_MANICHAEISM": {
-      "x": 1055,
+      "x": 633,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HOLY_SITE_ZOROASTRIANISM": {
-      "x": 1266,
+      "x": 844,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HOLY_SITE_JUDAISM": {
-      "x": 1477,
+      "x": 1055,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HOLY_SITE_CHRISTIANITY": {
-      "x": 1688,
+      "x": 1266,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HOLY_SITE_MANICHAEISM": {
-      "x": 1899,
+      "x": 1477,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_PYRAMIDS": {
-      "x": 2110,
+      "x": 1688,
       "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_GREAT_ZIGGURAT": {
-      "x": 0,
-      "y": 1086,
+      "x": 1899,
+      "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_ORACLE": {
-      "x": 211,
-      "y": 1086,
+      "x": 2110,
+      "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HANGING_GARDENS": {
-      "x": 422,
-      "y": 1086,
+      "x": 2321,
+      "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_NECROPOLIS": {
-      "x": 633,
-      "y": 1086,
+      "x": 2532,
+      "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MORTUARY": {
-      "x": 633,
-      "y": 1086,
+      "x": 2532,
+      "y": 905,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_ISHTAR_GATE": {
-      "x": 844,
+      "x": 0,
       "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_LIGHTHOUSE": {
-      "x": 1055,
+      "x": 211,
       "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_APADANA": {
-      "x": 1266,
+      "x": 422,
       "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MAUSOLEUM": {
-      "x": 1477,
+      "x": 633,
       "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_ACROPOLIS": {
-      "x": 1688,
+      "x": 844,
       "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_COLOSSUS": {
-      "x": 1899,
+      "x": 1055,
       "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MUSAEUM": {
-      "x": 2110,
+      "x": 1266,
       "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_CIRCUS_MAXIMUS": {
-      "x": 0,
-      "y": 1267,
+      "x": 1477,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_PANTHEON": {
-      "x": 211,
-      "y": 1267,
+      "x": 1688,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HAGIA_SOPHIA": {
-      "x": 422,
-      "y": 1267,
+      "x": 1899,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_VIA_RECTA_SOUK": {
-      "x": 633,
-      "y": 1267,
+      "x": 2110,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_ALTAR_ATEN": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KARNAK_CENTER": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KARNAK_NORTH": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KARNAK_NORTHEAST": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KARNAK_NORTHWEST": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KARNAK_SOUTH": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KARNAK_SOUTHEAST": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KARNAK_SOUTHWEST": {
-      "x": 844,
-      "y": 1267,
+      "x": 2321,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_KUSHITE_PYRAMIDS": {
-      "x": 1055,
-      "y": 1267,
+      "x": 2532,
+      "y": 1086,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_AKSUM_STELE_1": {
-      "x": 1266,
+      "x": 0,
       "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_AKSUM_STELE_2": {
-      "x": 1477,
+      "x": 211,
       "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_AKSUM_STELE_3": {
-      "x": 1688,
+      "x": 422,
       "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_JERWAN_AQUEDUCT": {
-      "x": 1899,
+      "x": 633,
       "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_YAZILIKAYA": {
-      "x": 2110,
+      "x": 844,
       "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_ROYAL_LIBRARY": {
-      "x": 0,
-      "y": 1448,
+      "x": 1055,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_JEBEL_BARKAL": {
-      "x": 211,
-      "y": 1448,
+      "x": 1266,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_AL_KHAZNEH": {
-      "x": 422,
-      "y": 1448,
+      "x": 1477,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_COTHON": {
-      "x": 633,
-      "y": 1448,
+      "x": 1688,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HELIOPOLIS": {
-      "x": 844,
-      "y": 1448,
+      "x": 1899,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_COLOSSEUM": {
-      "x": 1055,
-      "y": 1448,
+      "x": 2110,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_ESTATES": {
-      "x": 1266,
-      "y": 1448,
+      "x": 2321,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_STUPA": {
-      "x": 1477,
-      "y": 1448,
+      "x": 2532,
+      "y": 1267,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_PILLAR_EDICT": {
-      "x": 1688,
+      "x": 0,
       "y": 1448,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_THE_MAHAVIHARA": {
-      "x": 1899,
+      "x": 211,
       "y": 1448,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_MONUMENTAL_BUDDHAS": {
-      "x": 2110,
+      "x": 422,
       "y": 1448,
       "width": 211,
       "height": 181
     },
     "IMPROVEMENT_HILL_FORT": {
+      "x": 633,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_HINDUISM": {
+      "x": 844,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_HINDUISM": {
+      "x": 1055,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_HINDUISM": {
+      "x": 1266,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_BUDDHISM": {
+      "x": 1477,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_BUDDHISM": {
+      "x": 1688,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_BUDDHISM": {
+      "x": 1899,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HOLY_SITE_BUDDHISM": {
+      "x": 2110,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_AKSUM": {
+      "x": 2321,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_AKSUM": {
+      "x": 2532,
+      "y": 1448,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_AKSUM_FADED": {
       "x": 0,
       "y": 1629,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_MONASTERY_HINDUISM": {
+    "CAPITAL_ASSYRIA": {
       "x": 211,
       "y": 1629,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_TEMPLE_HINDUISM": {
+    "URBAN_ASSYRIA": {
       "x": 422,
       "y": 1629,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_CATHEDRAL_HINDUISM": {
+    "URBAN_ASSYRIA_FADED": {
       "x": 633,
       "y": 1629,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_MONASTERY_BUDDHISM": {
+    "CAPITAL_BABYLONIA": {
       "x": 844,
       "y": 1629,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_TEMPLE_BUDDHISM": {
+    "URBAN_BABYLONIA": {
       "x": 1055,
       "y": 1629,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_CATHEDRAL_BUDDHISM": {
+    "URBAN_BABYLONIA_FADED": {
       "x": 1266,
       "y": 1629,
       "width": 211,
       "height": 181
     },
-    "IMPROVEMENT_HOLY_SITE_BUDDHISM": {
+    "CAPITAL_CARTHAGE": {
       "x": 1477,
       "y": 1629,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_CARTHAGE": {
+      "x": 1688,
+      "y": 1629,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_CARTHAGE_FADED": {
+      "x": 1899,
+      "y": 1629,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_EGYPT": {
+      "x": 2110,
+      "y": 1629,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_EGYPT": {
+      "x": 2321,
+      "y": 1629,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_EGYPT_FADED": {
+      "x": 2532,
+      "y": 1629,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_GREECE": {
+      "x": 0,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_GREECE": {
+      "x": 211,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_GREECE_FADED": {
+      "x": 422,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_HITTITE": {
+      "x": 633,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_HITTITE": {
+      "x": 844,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_HITTITE_FADED": {
+      "x": 1055,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_INDIA": {
+      "x": 1266,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_INDIA_FADED": {
+      "x": 1477,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_MAURYA": {
+      "x": 1688,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_PERSIA": {
+      "x": 1899,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_PERSIA": {
+      "x": 2110,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_PERSIA_FADED": {
+      "x": 2321,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_ROME": {
+      "x": 2532,
+      "y": 1810,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_ROME": {
+      "x": 0,
+      "y": 1991,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_ROME_FADED": {
+      "x": 211,
+      "y": 1991,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_TAMIL": {
+      "x": 422,
+      "y": 1991,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_YUEZHI": {
+      "x": 633,
+      "y": 1991,
       "width": 211,
       "height": 181
     }
   },
   "fallbackSprite": {
-    "x": 211,
+    "x": 2110,
     "y": 0,
     "width": 211,
     "height": 181
