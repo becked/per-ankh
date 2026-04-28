@@ -34,6 +34,13 @@ const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 const SPRITE_SCALE_X = 1.13;
 const SPRITE_SCALE_Y = 1.32;
 
+// Synthesized faded variant of TERRAIN_URBAN, baked alongside the regular
+// sprites and appended as an extra cell in the terrain atlas at runtime.
+// SpriteMap routes to this cell on urban tiles that have an improvement so
+// the 3D building reads as the focal point on a faded urban texture.
+// brightness >1 lightens; saturation <1 desaturates (1 = no change).
+const FADED_URBAN_TWEAK = { brightness: 1.2, saturation: 0.55 };
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
@@ -62,6 +69,7 @@ async function bakeCell(
 	cellW: number,
 	cellH: number,
 	hexMask: Buffer,
+	tweak: { brightness?: number; saturation?: number } | undefined,
 ): Promise<Buffer> {
 	const upscaledW = Math.round(sw * SPRITE_SCALE_X);
 	const upscaledH = Math.round(sh * SPRITE_SCALE_Y);
@@ -83,9 +91,13 @@ async function bakeCell(
 		.extract({ left: cropLeft, top: cropTop, width: cellW, height: cellH })
 		.toBuffer();
 
+	const toned = tweak
+		? await sharp(cropped).modulate(tweak).toBuffer()
+		: cropped;
+
 	// Apply the hex alpha mask: dest-in keeps the underlay where the mask is
 	// opaque (inside the hex) and clears it elsewhere.
-	return sharp(cropped)
+	return sharp(toned)
 		.composite([{ input: hexMask, blend: "dest-in" }])
 		.toBuffer();
 }
@@ -122,14 +134,44 @@ async function bakeAtlas(name: string): Promise<void> {
 			manifest.cellWidth,
 			manifest.cellHeight,
 			hexMask,
+			undefined,
 		);
 		composites.push({ input: baked, left: sprite.x, top: sprite.y });
 		console.log(`  ${spriteName} → (${sprite.x},${sprite.y})`);
 	}
 
+	// Append a faded TERRAIN_URBAN variant for the terrain atlas. The output
+	// atlas is widened by one cell; the manifest gets a synthetic
+	// TERRAIN_URBAN_FADED entry pointing at the new cell.
+	let outputWidth = meta.width;
+	const outputSprites = { ...manifest.sprites };
+	if (name === "terrain" && manifest.sprites.TERRAIN_URBAN) {
+		const u = manifest.sprites.TERRAIN_URBAN;
+		const fadedBaked = await bakeCell(
+			source,
+			u.x,
+			u.y,
+			u.width,
+			u.height,
+			manifest.cellWidth,
+			manifest.cellHeight,
+			hexMask,
+			FADED_URBAN_TWEAK,
+		);
+		composites.push({ input: fadedBaked, left: outputWidth, top: 0 });
+		outputSprites.TERRAIN_URBAN_FADED = {
+			x: outputWidth,
+			y: 0,
+			width: manifest.cellWidth,
+			height: manifest.cellHeight,
+		};
+		console.log(`  TERRAIN_URBAN_FADED → (${outputWidth},0)`);
+		outputWidth += manifest.cellWidth;
+	}
+
 	await sharp({
 		create: {
-			width: meta.width,
+			width: outputWidth,
 			height: meta.height,
 			channels: 4,
 			background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -139,7 +181,11 @@ async function bakeAtlas(name: string): Promise<void> {
 		.webp({ lossless: true })
 		.toFile(outputWebp);
 
-	await writeFile(outputJson, manifestText);
+	const outputManifest = { ...manifest, sprites: outputSprites };
+	await writeFile(
+		outputJson,
+		JSON.stringify(outputManifest, null, 2) + "\n",
+	);
 	console.log(`[${name}] wrote ${outputWebp}`);
 }
 

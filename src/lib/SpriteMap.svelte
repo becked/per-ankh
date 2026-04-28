@@ -698,7 +698,16 @@
 					),
 					iconAtlas: TERRAIN_ATLAS_URL,
 					iconMapping: tm.sprites,
-					getIcon: (d: MapTile) => d.terrain as string,
+					getIcon: (d: MapTile) => {
+						if (
+							d.terrain === "TERRAIN_URBAN" &&
+							d.improvement != null &&
+							tm.sprites.TERRAIN_URBAN_FADED != null
+						) {
+							return "TERRAIN_URBAN_FADED";
+						}
+						return d.terrain as string;
+					},
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 					getSize: () => tm.cellWidth,
 					sizeUnits: "common",

@@ -56,6 +56,12 @@
       "y": 0,
       "width": 211,
       "height": 181
+    },
+    "TERRAIN_URBAN_FADED": {
+      "x": 1899,
+      "y": 0,
+      "width": 211,
+      "height": 181
     }
   }
 }
