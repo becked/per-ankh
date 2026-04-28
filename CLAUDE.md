@@ -790,25 +790,43 @@ Previously shared games won't have the new field, so the web viewer must handle 
 
 ## Map Atlas Pipeline
 
-The sprite map's terrain and height atlases are split into source and baked variants:
+The sprite map's terrain, height, and improvement atlases are baked from Pinacotheca outputs into runtime-ready atlases. Two pipelines, split because the transformations differ.
+
+### Terrain / height (`scripts/bake-atlases.ts`)
 
 - `assets/atlas-sources/{terrain,height}.{webp,json}` — raw output from Pinacotheca. Right-side-up, with the game's 3D-rendered dark beveled edges baked into each sprite.
 - `static/atlases/{terrain,height}.{webp,json}` — baked output that the runtime fetches. Hex-clipped and upscaled to push the bevel past the cell boundary, then center-cropped. The runtime (`src/lib/SpriteMap.svelte`) feeds these straight to deck.gl `IconLayer`, which samples cells with no per-draw transform.
 
-**Both source and baked are committed to git.** The bake is on-demand only — not part of `tauri:dev` or `tauri:build`.
-
-**When to re-bake:**
+**Re-bake when:**
 
 - Pinacotheca / the game ships new sprites → drop them into `assets/atlas-sources/` and re-bake.
-- Re-tuning the bevel-trim parameters (`SPRITE_SCALE_X`, `SPRITE_SCALE_Y` in `scripts/bake-atlases.ts`) → re-bake.
+- Re-tuning the bevel-trim parameters (`SPRITE_SCALE_X`, `SPRITE_SCALE_Y` in `scripts/bake-atlases.ts`).
 
 ```bash
 npm run bake:atlases
 ```
 
-This reads `assets/atlas-sources/`, applies extract → lanczos3 upscale → center-crop → hex alpha mask, and writes the results to `static/atlases/`. Visually inspect the dev server's Map Beta tab after re-baking; commit both source and baked atlases together.
+### Improvements (`scripts/bake-improvements.ts`)
 
-**When adding new atlas-backed layers** (resource / specialist / city IconLayers): route the new atlases through this same bake script — bevel-clipping is applied for free and the output orientation matches what `IconLayer` expects (right-side-up, billboard-mode sampling).
+- Source: pinacotheca's pre-baked `improvement.{webp,json}` atlas at `~/Projects/Old World/pinacotheca/output/atlases/`. Pinacotheca's keys are `zIconName` values (icon-asset filenames).
+- Mapping: `Reference/XML/Infos/improvement.xml` (+ `Reference/XML/Mods/*/Infos/improvement-{add,change}.xml`) provides the `zType → zIconName` translation. Save files emit `zType` into `tiles.improvement`; many `zType`s share one `zIconName` by design (e.g. all sun-god shrines → `IMPROVEMENT_SHRINE_SUN`). Multiple manifest entries point at the same packed cell.
+- Output: `assets/atlas-sources/improvements.{webp,json}` and `static/atlases/improvements.{webp,json}`, keyed by `zType`.
+- Transform: hex-clip + safe-scale fit. **No bevel-trim** — improvement sprites are isolated building models on a transparent ground patch, so there's no perimeter bevel to push past the cell boundary.
+
+**Re-bake when:**
+
+- Pinacotheca ships a refreshed `output/atlases/improvement.{webp,json}`.
+- `Reference/XML/` is refreshed against a current OW install (picks up new DLC `zType`s).
+
+```bash
+npm run bake:improvements
+```
+
+`zType`s present in saves but absent from the Reference XML (typically newer DLC content not yet vendored) silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose `zIconName` is missing from pinacotheca's atlas.
+
+### Both pipelines
+
+**Source and baked are committed to git.** Baking is on-demand — not part of `tauri:dev` or `tauri:build`. Visually inspect the dev server's Map Beta tab after re-baking; commit source and baked atlases together.
 
 ## Player Identity & Winner Model
 

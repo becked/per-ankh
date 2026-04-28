@@ -19,7 +19,7 @@
 
 	const TERRAIN_ATLAS_URL = "/atlases/terrain.webp";
 	const HEIGHT_ATLAS_URL = "/atlases/height.webp";
-	const IMPROVEMENT_ATLAS_URL = "/atlases/improvements-test.webp";
+	const IMPROVEMENT_ATLAS_URL = "/atlases/improvements.webp";
 
 	interface AtlasManifest {
 		atlas: string;
@@ -29,6 +29,11 @@
 			string,
 			{ x: number; y: number; width: number; height: number }
 		>;
+		// Optional generic-improvement cell. Drawn on any tile whose
+		// `improvement` value isn't a key in `sprites` — e.g. zTypes from mod
+		// content not vendored into Reference/XML. Only the improvement atlas
+		// emits this; terrain/height manifests don't.
+		fallbackSprite?: { x: number; y: number; width: number; height: number };
 	}
 
 	let {
@@ -737,6 +742,32 @@
 					sizeBasis: "width",
 					pickable: false,
 				}),
+				// Fallback layer for improvements whose zType isn't in the manifest
+				// (typically mod content not vendored into Reference/XML). Reuses
+				// the same atlas; just samples the fallbackSprite cell for every
+				// matching tile.
+				new IconLayer<MapTile>({
+					id: "improvement-fallback-icons",
+					data:
+						im.fallbackSprite != null
+							? tiles.filter(
+									(t) =>
+										t.improvement != null &&
+										im.sprites[t.improvement] == null,
+								)
+							: [],
+					iconAtlas: IMPROVEMENT_ATLAS_URL,
+					iconMapping:
+						im.fallbackSprite != null
+							? { __FALLBACK__: im.fallbackSprite }
+							: {},
+					getIcon: () => "__FALLBACK__",
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => im.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
 				new PolygonLayer<ReligionFill>({
 					id: "religion-layer",
 					data: fills,
@@ -781,7 +812,7 @@
 		Promise.all([
 			loadManifest("terrain"),
 			loadManifest("height"),
-			loadManifest("improvements-test"),
+			loadManifest("improvements"),
 		])
 			.then(([terrain, height, improvements]) => {
 				terrainManifest = terrain;
