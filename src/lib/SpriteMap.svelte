@@ -17,62 +17,125 @@
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 
-	const TERRAIN_ATLAS_URL = "/atlases/terrain.webp";
-	const HEIGHT_ATLAS_URL = "/atlases/height.webp";
-	const IMPROVEMENT_ATLAS_URL = "/atlases/improvements.webp";
+	// Atlas paths. Tauri serves these from static/atlases/ via SvelteKit; cloud
+	// will swap in a versioned R2 URL prefix without touching the runtime
+	// (see docs/cloud-rewrite-spec.md "Map Assets").
+	const ATLAS_BASE = "/atlases";
+	const TERRAIN_ATLAS_URL = `${ATLAS_BASE}/terrain.webp`;
+	const HEIGHT_ATLAS_URL = `${ATLAS_BASE}/height.webp`;
+	const IMPROVEMENTS_BASE_ATLAS_URL = `${ATLAS_BASE}/improvements-base.webp`;
+	const RESOURCES_ATLAS_URL = `${ATLAS_BASE}/resources.webp`;
+	const familyAtlasUrl = (family: string): string =>
+		`${ATLAS_BASE}/improvements-urban-${family}.webp`;
 
-	// Pinacotheca renders one urban tile per cultural family, not one per
-	// nation. NATION_MAURYA and NATION_TAMIL share INDIA_URBAN; nations not
-	// listed here use their own NATION_<NAME> directly. Looked up only after
-	// `URBAN_<NATION>` misses, so direct nation tiles always win.
-	const URBAN_NATION_ALIASES: Record<string, string> = {
-		NATION_MAURYA: "INDIA",
-		NATION_TAMIL: "INDIA",
-	};
-
-	function nationKeyFromOwner(owner: string): string {
-		return owner.replace(/^NATION_/, "");
-	}
-
-	function urbanSpriteFor(
-		owner: string | null,
-		hasImprovement: boolean,
-		manifest: AtlasManifest,
-	): string | null {
-		if (!owner) return null;
-		const direct = nationKeyFromOwner(owner);
-		const candidates = [direct, URBAN_NATION_ALIASES[owner]].filter(
-			(n): n is string => n != null,
-		);
-		for (const n of candidates) {
-			const key = hasImprovement ? `URBAN_${n}_FADED` : `URBAN_${n}`;
-			if (manifest.sprites[key]) return key;
-		}
-		return null;
-	}
-
-	function capitalSpriteFor(
-		owner: string | null,
-		manifest: AtlasManifest,
-	): string | null {
-		if (!owner) return null;
-		const key = `CAPITAL_${nationKeyFromOwner(owner)}`;
-		return manifest.sprites[key] ? key : null;
+	interface NationAliasEntry {
+		urban: string;
+		capital: string;
 	}
 
 	interface AtlasManifest {
 		atlas: string;
 		cellWidth: number;
 		cellHeight: number;
+		bakedAt?: string;
+		pinacothecaVersion?: string;
 		sprites: Record<
 			string,
 			{ x: number; y: number; width: number; height: number }
 		>;
 		// Optional generic-improvement cell. Drawn on any tile whose
 		// `improvement` value isn't a key in `sprites` — e.g. zTypes from mod
-		// content not vendored into Reference/XML. Only the improvement atlas
-		// emits this; terrain/height manifests don't.
+		// content not vendored into Reference/XML. Only the improvements-base
+		// manifest emits this; terrain/height/resources/family manifests don't.
 		fallbackSprite?: { x: number; y: number; width: number; height: number };
+	}
+
+	interface NationAliasPayload {
+		bakedAt?: string;
+		aliases: Record<string, NationAliasEntry>;
+	}
+
+	// Lookup helpers parameterized over the alias map and family-manifest
+	// cache so they can run inside reactive layer-build effects without
+	// closing over module-scope state. Returning null is the "no render path
+	// available" signal — the caller falls through to the next layer.
+
+	function urbanFamilyFor(
+		owner: string | null,
+		aliases: Map<string, NationAliasEntry>,
+	): string | null {
+		if (!owner) return null;
+		return aliases.get(owner)?.urban ?? null;
+	}
+
+	function capitalFamilyFor(
+		owner: string | null,
+		aliases: Map<string, NationAliasEntry>,
+	): string | null {
+		if (!owner) return null;
+		return aliases.get(owner)?.capital ?? null;
+	}
+
+	// Returns the urban family whose composite atlas covers (tile.improvement,
+	// owner_nation), or null. Used both to filter tiles into per-family
+	// composite IconLayers AND to decide whether the urban-empty / base /
+	// fallback layers should suppress drawing on this tile (composite wins).
+	function compositeFamilyFor(
+		tile: MapTile,
+		aliases: Map<string, NationAliasEntry>,
+		familyManifests: Record<string, AtlasManifest>,
+	): string | null {
+		if (!tile.improvement || !tile.owner_nation) return null;
+		const family = urbanFamilyFor(tile.owner_nation, aliases);
+		if (!family) return null;
+		const fm = familyManifests[family];
+		return fm?.sprites[tile.improvement] ? family : null;
+	}
+
+	// Returns the CAPITAL_<family> sprite key from improvements-base for a
+	// capital tile, or null if the tile isn't a capital or the resolved family
+	// has no capital render. Capital sprites include their own ground patch
+	// (pinacotheca 2.2.0+), so no URBAN underlay is drawn beneath them.
+	function capitalSpriteKeyFor(
+		tile: MapTile,
+		aliases: Map<string, NationAliasEntry>,
+		baseManifest: AtlasManifest,
+	): string | null {
+		if (!tile.is_capital || !tile.owner_nation) return null;
+		const cf = capitalFamilyFor(tile.owner_nation, aliases);
+		if (!cf) return null;
+		const key = `CAPITAL_${cf}`;
+		return baseManifest.sprites[key] ? key : null;
+	}
+
+	function urbanEmptySpriteKeyFor(
+		tile: MapTile,
+		aliases: Map<string, NationAliasEntry>,
+		baseManifest: AtlasManifest,
+	): string | null {
+		if (tile.terrain !== "TERRAIN_URBAN") return null;
+		const family = urbanFamilyFor(tile.owner_nation, aliases);
+		if (!family) return null;
+		const key = `URBAN_${family}`;
+		return baseManifest.sprites[key] ? key : null;
+	}
+
+	// Resource variant pick: SOLO with a rural improvement, HERD without.
+	// Falls back to the other variant if only one is in the atlas (handles a
+	// pinacotheca render set that ships only HERD or only SOLO for some
+	// resource). Returns null if neither variant exists.
+	function resourceSpriteKeyFor(
+		tile: MapTile,
+		resourceManifest: AtlasManifest,
+	): string | null {
+		if (tile.resource == null) return null;
+		const preferred = tile.improvement != null ? "SOLO" : "HERD";
+		const fallback = preferred === "SOLO" ? "HERD" : "SOLO";
+		const preferredKey = `${tile.resource}_${preferred}`;
+		if (resourceManifest.sprites[preferredKey]) return preferredKey;
+		const fallbackKey = `${tile.resource}_${fallback}`;
+		if (resourceManifest.sprites[fallbackKey]) return fallbackKey;
+		return null;
 	}
 
 	let {
@@ -86,11 +149,21 @@
 	let deckCanvas: HTMLCanvasElement;
 	let deck: Deck<OrthographicView> | null = $state(null);
 
-	// Atlas manifests (loaded once). The matching .webp URLs are passed to
-	// IconLayer's iconAtlas prop, which fetches and decodes the texture itself.
+	// Always-loaded atlases — fetched once at mount and cached for the session.
+	// The matching .webp URLs are passed to IconLayer's iconAtlas prop, which
+	// fetches and decodes the texture itself.
 	let terrainManifest: AtlasManifest | null = $state(null);
 	let heightManifest: AtlasManifest | null = $state(null);
-	let improvementManifest: AtlasManifest | null = $state(null);
+	let improvementsBaseManifest: AtlasManifest | null = $state(null);
+	let resourcesManifest: AtlasManifest | null = $state(null);
+	// Nation → {urban, capital} family alias, baked from nation.xml. Single
+	// source of truth at runtime for resolving owner_nation to atlas keys.
+	let nationAliases: Map<string, NationAliasEntry> = $state(new Map());
+	// Lazy-loaded urban-composite atlases keyed by urban family. Each entry
+	// fetched on first sight of a tile whose nation maps to that family.
+	// Treated as a frozen record so $effect tracks shallow changes by
+	// reassigning the whole object on insert (simpler than per-key reactivity).
+	let familyManifests: Record<string, AtlasManifest> = $state({});
 	let assetsLoaded = $state(false);
 
 	// Layer visibility toggles
@@ -712,48 +785,119 @@
 		});
 	}
 
+	// Lazy-load the urban-composite atlas for `family` if it isn't already
+	// cached. Idempotent: concurrent calls for the same family race on the
+	// fetch but resolve to the same manifest write. We swap the whole record
+	// so the layers $effect tracks insertions via reassignment.
+	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- module-scope guard, not reactive state
+	const familyLoadsInFlight = new Set<string>();
+	async function ensureFamilyAtlas(family: string): Promise<void> {
+		if (familyManifests[family] || familyLoadsInFlight.has(family)) return;
+		familyLoadsInFlight.add(family);
+		try {
+			const manifest = await loadManifest(`improvements-urban-${family}`);
+			familyManifests = { ...familyManifests, [family]: manifest };
+		} catch (err) {
+			console.error(`Failed to load family atlas ${family}:`, err);
+		} finally {
+			familyLoadsInFlight.delete(family);
+		}
+	}
+
+	// React to tile changes by ensuring every present-on-map nation's urban
+	// family atlas is loaded. Reads `tiles` and `nationAliases`; mutates
+	// `familyManifests` (which the layers effect tracks separately). Doesn't
+	// re-trigger on its own writes since it doesn't read familyManifests.
+	$effect(() => {
+		if (nationAliases.size === 0) return;
+		const al = nationAliases;
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Set, not reactive state
+		const needed = new Set<string>();
+		for (const tile of tiles) {
+			if (!tile.owner_nation) continue;
+			const family = al.get(tile.owner_nation)?.urban;
+			if (family) needed.add(family);
+		}
+		for (const f of needed) {
+			ensureFamilyAtlas(f);
+		}
+	});
+
 	// Assemble layers. Toggling showPolitical / showReligion only flips the
 	// `visible` prop — deck.gl reuses GPU buffers because each layer's `data`
 	// reference is unchanged. Buffers rebuild only when `tiles` (and thus the
-	// political/religion derivatives + the inline-filtered IconLayer data) change.
+	// political/religion derivatives + the inline-filtered IconLayer data) or
+	// the per-family manifest cache change.
 	$effect(() => {
 		if (!deck) return;
 		if (!assetsLoaded) return;
 		const tm = terrainManifest;
 		const hm = heightManifest;
-		const im = improvementManifest;
-		if (!tm || !hm || !im) return;
+		const ibm = improvementsBaseManifest;
+		const rm = resourcesManifest;
+		const al = nationAliases;
+		const fms = familyManifests;
+		if (!tm || !hm || !ibm || !rm) return;
 		const political = politicalData;
 		const fills = religionFills;
 		const pol = showPolitical;
 		const rel = showReligion;
 
+		// Per-family composite IconLayers — one per family that has any tile
+		// AND a loaded manifest. Iterating over loaded manifests means
+		// pre-fetch families that aren't on the current map don't add empty
+		// layers, and tiles whose family hasn't loaded yet fall through to the
+		// urban-empty + base layers until the fetch resolves.
+		const compositeLayers = Object.keys(fms).map((family) => {
+			const fm = fms[family];
+			return new IconLayer<MapTile>({
+				id: `urban-composite-${family}`,
+				data: tiles.filter(
+					(t) => compositeFamilyFor(t, al, fms) === family,
+				),
+				iconAtlas: familyAtlasUrl(family),
+				iconMapping: fm.sprites,
+				getIcon: (d: MapTile) => d.improvement as string,
+				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+				getSize: () => fm.cellWidth,
+				sizeUnits: "common",
+				sizeBasis: "width",
+				pickable: false,
+			});
+		});
+
 		deck.setProps({
 			layers: [
+				// Terrain. Always draws — including under nation-aware urban
+				// layers. Pinacotheca's URBAN/CAPITAL/composite renders are
+				// buildings on a hex-clipped ground patch, so the cell corners
+				// outside the inscribed hex are transparent and would otherwise
+				// reveal the canvas as visible black gaps.
+				//
+				// For TERRAIN_URBAN tiles owned by a known nation, draw
+				// TERRAIN_TEMPERATE instead. Pinacotheca composes its urban
+				// renders with TERRAIN_TEMPERATE as the biome base (see
+				// pinacotheca/docs/urban-improvement-composites.md
+				// "render_layered_ground orchestrates biome (TERRAIN_TEMPERATE)
+				// → urban PVT planes → ..."), so the corners that get clipped
+				// were temperate-toned in the source render — having
+				// TERRAIN_TEMPERATE peek through matches the original
+				// composition. Bare TERRAIN_URBAN tiles (no nation) keep their
+				// own grey-brown texture since no urban-overlay covers them.
 				new IconLayer<MapTile>({
 					id: "terrain-icons",
-					// TERRAIN_URBAN tiles in a known nation are skipped here so the
-					// urban-overlay layer's full-hex URBAN_<NATION> sprite stands in
-					// for them — no base-terrain bleed-through around the edges.
-					data: tiles.filter((t) => {
-						if (t.terrain == null || tm.sprites[t.terrain] == null) return false;
-						if (
-							t.terrain === "TERRAIN_URBAN" &&
-							urbanSpriteFor(t.owner_nation, t.improvement != null, im) != null
-						) {
-							return false;
-						}
-						return true;
-					}),
+					data: tiles.filter(
+						(t) => t.terrain != null && tm.sprites[t.terrain] != null,
+					),
 					iconAtlas: TERRAIN_ATLAS_URL,
 					iconMapping: tm.sprites,
 					getIcon: (d: MapTile) => {
 						if (
 							d.terrain === "TERRAIN_URBAN" &&
-							d.improvement != null &&
-							tm.sprites.TERRAIN_URBAN_FADED != null
+							urbanFamilyFor(d.owner_nation, al) != null &&
+							tm.sprites.TERRAIN_TEMPERATE != null
 						) {
-							return "TERRAIN_URBAN_FADED";
+							return "TERRAIN_TEMPERATE";
 						}
 						return d.terrain as string;
 					},
@@ -763,37 +907,23 @@
 					sizeBasis: "width",
 					pickable: false,
 				}),
-				// Nation-specific urban tile substituting for TERRAIN_URBAN. The
-				// pinacotheca renders are tile-shaped 3D vignettes (Greek temples,
-				// Egyptian mudbrick, etc.) keyed by owner_nation. Baked with
-				// fit:"cover" so the hex is fully covered — terrain-icons skips
-				// these tiles so there's no double-draw. Faded variant fires when
-				// any building (regular improvement or a capital sprite) needs to
-				// read as the focal point on top. Tiles without a matching nation
-				// tile fall through to terrain-icons drawing the base TERRAIN_URBAN.
+				// Empty urban background — drawn on urban tiles where no
+				// composite covers AND not a capital. Fills the hex with the
+				// nation's URBAN_<family> backdrop.
 				new IconLayer<MapTile>({
-					id: "urban-overlay-icons",
-					data: tiles.filter(
-						(t) =>
-							t.terrain === "TERRAIN_URBAN" &&
-							urbanSpriteFor(
-								t.owner_nation,
-								t.improvement != null ||
-									(t.is_capital && capitalSpriteFor(t.owner_nation, im) != null),
-								im,
-							) != null,
-					),
-					iconAtlas: IMPROVEMENT_ATLAS_URL,
-					iconMapping: im.sprites,
+					id: "urban-empty-icons",
+					data: tiles.filter((t) => {
+						if (urbanEmptySpriteKeyFor(t, al, ibm) == null) return false;
+						if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
+						if (compositeFamilyFor(t, al, fms) != null) return false;
+						return true;
+					}),
+					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
+					iconMapping: ibm.sprites,
 					getIcon: (d: MapTile) =>
-						urbanSpriteFor(
-							d.owner_nation,
-							d.improvement != null ||
-								(d.is_capital && capitalSpriteFor(d.owner_nation, im) != null),
-							im,
-						) as string,
+						urbanEmptySpriteKeyFor(d, al, ibm) as string,
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => im.cellWidth,
+					getSize: () => ibm.cellWidth,
 					sizeUnits: "common",
 					sizeBasis: "width",
 					pickable: false,
@@ -820,72 +950,97 @@
 					sizeBasis: "width",
 					pickable: false,
 				}),
+				// Resource sprites (animals/fish/minerals). Drawn after height
+				// so they sit on the underlying terrain, and before the
+				// improvement-base layer so rural improvements
+				// (Pasture/Camp/Mine) draw their structure on top.
+				//
+				// Variant selection: SOLO when the tile carries a rural
+				// improvement (a single figure tucks neatly inside the fence
+				// or mining structure), HERD on bare tiles (the herd reads as
+				// the wild resource). Falls back to whichever variant the
+				// atlas has if only one is present.
+				//
+				// Composite tiles already bake any resource visuals into the
+				// urban scene, but urban tiles don't carry resources in save
+				// data, so this layer never fires on them.
 				new IconLayer<MapTile>({
-					id: "improvement-icons",
-					// Capital tiles are excluded so the capital-overlay layer can
-					// substitute the nation-specific CAPITAL_<NATION> render in place
-					// of whatever city-center improvement the save emitted (PALACE,
-					// IMPROVEMENT_CITY, etc.).
+					id: "resource-icons",
 					data: tiles.filter(
-						(t) =>
-							t.improvement != null &&
-							im.sprites[t.improvement] != null &&
-							!(t.is_capital && capitalSpriteFor(t.owner_nation, im) != null),
+						(t) => resourceSpriteKeyFor(t, rm) != null,
 					),
-					iconAtlas: IMPROVEMENT_ATLAS_URL,
-					iconMapping: im.sprites,
-					getIcon: (d: MapTile) => d.improvement as string,
+					iconAtlas: RESOURCES_ATLAS_URL,
+					iconMapping: rm.sprites,
+					getIcon: (d: MapTile) => resourceSpriteKeyFor(d, rm) as string,
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => im.cellWidth,
+					getSize: () => rm.cellWidth,
 					sizeUnits: "common",
 					sizeBasis: "width",
 					pickable: false,
 				}),
-				// Fallback layer for improvements whose zType isn't in the manifest
-				// (typically mod content not vendored into Reference/XML). Reuses
-				// the same atlas; just samples the fallbackSprite cell for every
-				// matching tile.
+				...compositeLayers,
+				// Single-improvement renders (rural, ruins, settlements,
+				// non-urban-buildable wonders). Excludes tiles already covered
+				// by a composite layer or by the capital layer.
+				new IconLayer<MapTile>({
+					id: "improvement-icons",
+					data: tiles.filter((t) => {
+						if (t.improvement == null) return false;
+						if (ibm.sprites[t.improvement] == null) return false;
+						if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
+						if (compositeFamilyFor(t, al, fms) != null) return false;
+						return true;
+					}),
+					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
+					iconMapping: ibm.sprites,
+					getIcon: (d: MapTile) => d.improvement as string,
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => ibm.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
+				// Fallback for improvements whose zType isn't in the base
+				// manifest AND has no composite — typically mod content not
+				// vendored into Reference/XML. Samples the fallback cell.
 				new IconLayer<MapTile>({
 					id: "improvement-fallback-icons",
 					data:
-						im.fallbackSprite != null
-							? tiles.filter(
-									(t) =>
-										t.improvement != null &&
-										im.sprites[t.improvement] == null &&
-										!(
-											t.is_capital &&
-											capitalSpriteFor(t.owner_nation, im) != null
-										),
-								)
+						ibm.fallbackSprite != null
+							? tiles.filter((t) => {
+									if (t.improvement == null) return false;
+									if (ibm.sprites[t.improvement] != null) return false;
+									if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
+									if (compositeFamilyFor(t, al, fms) != null) return false;
+									return true;
+								})
 							: [],
-					iconAtlas: IMPROVEMENT_ATLAS_URL,
+					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
 					iconMapping:
-						im.fallbackSprite != null
-							? { __FALLBACK__: im.fallbackSprite }
+						ibm.fallbackSprite != null
+							? { __FALLBACK__: ibm.fallbackSprite }
 							: {},
 					getIcon: () => "__FALLBACK__",
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => im.cellWidth,
+					getSize: () => ibm.cellWidth,
 					sizeUnits: "common",
 					sizeBasis: "width",
 					pickable: false,
 				}),
-				// Capital tiles render the nation-specific 3D capital complex
-				// (Roman forum, Persian apadana, etc.). Drawn after the regular
-				// improvement layer so it sits on top in case both fire.
+				// Capital tiles. Drawn last among the icon layers so the
+				// capital complex sits on top of any composite that might also
+				// match (the composite layer's filter already excludes
+				// capitals, so this is belt-and-suspenders).
 				new IconLayer<MapTile>({
 					id: "capital-overlay-icons",
 					data: tiles.filter(
-						(t) =>
-							t.is_capital && capitalSpriteFor(t.owner_nation, im) != null,
+						(t) => capitalSpriteKeyFor(t, al, ibm) != null,
 					),
-					iconAtlas: IMPROVEMENT_ATLAS_URL,
-					iconMapping: im.sprites,
-					getIcon: (d: MapTile) =>
-						capitalSpriteFor(d.owner_nation, im) as string,
+					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
+					iconMapping: ibm.sprites,
+					getIcon: (d: MapTile) => capitalSpriteKeyFor(d, al, ibm) as string,
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => im.cellWidth,
+					getSize: () => ibm.cellWidth,
 					sizeUnits: "common",
 					sizeBasis: "width",
 					pickable: false,
@@ -930,16 +1085,31 @@
 		});
 	});
 
+	async function loadNationAliases(): Promise<Map<string, NationAliasEntry>> {
+		const response = await fetch(`${ATLAS_BASE}/nation-asset-aliases.json`);
+		const payload = (await response.json()) as NationAliasPayload;
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- assigned to $state Map below
+		const map = new Map<string, NationAliasEntry>();
+		for (const [nation, entry] of Object.entries(payload.aliases)) {
+			map.set(nation, entry);
+		}
+		return map;
+	}
+
 	onMount(() => {
 		Promise.all([
 			loadManifest("terrain"),
 			loadManifest("height"),
-			loadManifest("improvements"),
+			loadManifest("improvements-base"),
+			loadManifest("resources"),
+			loadNationAliases(),
 		])
-			.then(([terrain, height, improvements]) => {
+			.then(([terrain, height, improvementsBase, resources, aliases]) => {
 				terrainManifest = terrain;
 				heightManifest = height;
-				improvementManifest = improvements;
+				improvementsBaseManifest = improvementsBase;
+				resourcesManifest = resources;
+				nationAliases = aliases;
 				assetsLoaded = true;
 			})
 			.catch((err) => {

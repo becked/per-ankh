@@ -16,15 +16,25 @@ import sharp from "sharp";
 import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { readPinacothecaVersion } from "./lib/atlas-bake.js";
 
-interface AtlasManifest {
+interface SpriteRect {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+}
+
+interface SourceManifest {
 	atlas: string;
 	cellWidth: number;
 	cellHeight: number;
-	sprites: Record<
-		string,
-		{ x: number; y: number; width: number; height: number }
-	>;
+	sprites: Record<string, SpriteRect>;
+}
+
+interface OutputManifest extends SourceManifest {
+	bakedAt: string;
+	pinacothecaVersion: string;
 }
 
 const HEX_H_SPACING = 199;
@@ -34,18 +44,15 @@ const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 const SPRITE_SCALE_X = 1.13;
 const SPRITE_SCALE_Y = 1.32;
 
-// Synthesized faded variant of TERRAIN_URBAN, baked alongside the regular
-// sprites and appended as an extra cell in the terrain atlas at runtime.
-// SpriteMap routes to this cell on urban tiles that have an improvement so
-// the 3D building reads as the focal point on a faded urban texture.
-// brightness >1 lightens; saturation <1 desaturates (1 = no change).
-const FADED_URBAN_TWEAK = { brightness: 1.2, saturation: 0.55 };
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
 const SOURCE_DIR = resolve(REPO_ROOT, "assets/atlas-sources");
 const OUTPUT_DIR = resolve(REPO_ROOT, "static/atlases");
+const PINACOTHECA_PYPROJECT = resolve(
+	REPO_ROOT,
+	"../../../../pinacotheca/pyproject.toml",
+);
 
 function buildHexMaskSvg(cellW: number, cellH: number): string {
 	const cx = cellW / 2;
@@ -69,7 +76,6 @@ async function bakeCell(
 	cellW: number,
 	cellH: number,
 	hexMask: Buffer,
-	tweak: { brightness?: number; saturation?: number } | undefined,
 ): Promise<Buffer> {
 	const upscaledW = Math.round(sw * SPRITE_SCALE_X);
 	const upscaledH = Math.round(sh * SPRITE_SCALE_Y);
@@ -91,25 +97,25 @@ async function bakeCell(
 		.extract({ left: cropLeft, top: cropTop, width: cellW, height: cellH })
 		.toBuffer();
 
-	const toned = tweak
-		? await sharp(cropped).modulate(tweak).toBuffer()
-		: cropped;
-
 	// Apply the hex alpha mask: dest-in keeps the underlay where the mask is
 	// opaque (inside the hex) and clears it elsewhere.
-	return sharp(toned)
+	return sharp(cropped)
 		.composite([{ input: hexMask, blend: "dest-in" }])
 		.toBuffer();
 }
 
-async function bakeAtlas(name: string): Promise<void> {
+async function bakeAtlas(
+	name: string,
+	bakedAt: string,
+	pinacothecaVersion: string,
+): Promise<void> {
 	const sourceWebp = resolve(SOURCE_DIR, `${name}.webp`);
 	const sourceJson = resolve(SOURCE_DIR, `${name}.json`);
 	const outputWebp = resolve(OUTPUT_DIR, `${name}.webp`);
 	const outputJson = resolve(OUTPUT_DIR, `${name}.json`);
 
 	const manifestText = await readFile(sourceJson, "utf-8");
-	const manifest: AtlasManifest = JSON.parse(manifestText);
+	const manifest: SourceManifest = JSON.parse(manifestText);
 	const source = await readFile(sourceWebp);
 	const meta = await sharp(source).metadata();
 	if (!meta.width || !meta.height) {
@@ -134,44 +140,14 @@ async function bakeAtlas(name: string): Promise<void> {
 			manifest.cellWidth,
 			manifest.cellHeight,
 			hexMask,
-			undefined,
 		);
 		composites.push({ input: baked, left: sprite.x, top: sprite.y });
 		console.log(`  ${spriteName} → (${sprite.x},${sprite.y})`);
 	}
 
-	// Append a faded TERRAIN_URBAN variant for the terrain atlas. The output
-	// atlas is widened by one cell; the manifest gets a synthetic
-	// TERRAIN_URBAN_FADED entry pointing at the new cell.
-	let outputWidth = meta.width;
-	const outputSprites = { ...manifest.sprites };
-	if (name === "terrain" && manifest.sprites.TERRAIN_URBAN) {
-		const u = manifest.sprites.TERRAIN_URBAN;
-		const fadedBaked = await bakeCell(
-			source,
-			u.x,
-			u.y,
-			u.width,
-			u.height,
-			manifest.cellWidth,
-			manifest.cellHeight,
-			hexMask,
-			FADED_URBAN_TWEAK,
-		);
-		composites.push({ input: fadedBaked, left: outputWidth, top: 0 });
-		outputSprites.TERRAIN_URBAN_FADED = {
-			x: outputWidth,
-			y: 0,
-			width: manifest.cellWidth,
-			height: manifest.cellHeight,
-		};
-		console.log(`  TERRAIN_URBAN_FADED → (${outputWidth},0)`);
-		outputWidth += manifest.cellWidth;
-	}
-
 	await sharp({
 		create: {
-			width: outputWidth,
+			width: meta.width,
 			height: meta.height,
 			channels: 4,
 			background: { r: 0, g: 0, b: 0, alpha: 0 },
@@ -181,18 +157,24 @@ async function bakeAtlas(name: string): Promise<void> {
 		.webp({ lossless: true })
 		.toFile(outputWebp);
 
-	const outputManifest = { ...manifest, sprites: outputSprites };
-	await writeFile(
-		outputJson,
-		JSON.stringify(outputManifest, null, 2) + "\n",
-	);
+	const outputManifest: OutputManifest = {
+		...manifest,
+		bakedAt,
+		pinacothecaVersion,
+	};
+	await writeFile(outputJson, JSON.stringify(outputManifest, null, 2) + "\n");
 	console.log(`[${name}] wrote ${outputWebp}`);
 }
 
 async function main(): Promise<void> {
 	await mkdir(OUTPUT_DIR, { recursive: true });
-	await bakeAtlas("terrain");
-	await bakeAtlas("height");
+	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
+	const bakedAt = new Date().toISOString();
+	console.log(
+		`[atlases] pinacotheca ${pinacothecaVersion}, baked at ${bakedAt}`,
+	);
+	await bakeAtlas("terrain", bakedAt, pinacothecaVersion);
+	await bakeAtlas("height", bakedAt, pinacothecaVersion);
 }
 
 main().catch((err) => {

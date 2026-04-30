@@ -1,0 +1,747 @@
+{
+  "atlas": "improvements-urban-EGYPT.webp",
+  "cellWidth": 211,
+  "cellHeight": 181,
+  "bakedAt": "2026-04-30T16:45:56.444Z",
+  "pinacothecaVersion": "2.2.0",
+  "sprites": {
+    "IMPROVEMENT_LIBRARY_2": {
+      "x": 0,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_AL_KHAZNEH": {
+      "x": 213,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_THEATER_3": {
+      "x": 426,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_APADANA": {
+      "x": 639,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_BARRACKS": {
+      "x": 852,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_BUDDHISM": {
+      "x": 1065,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HOLY_SITE_BUDDHISM": {
+      "x": 1278,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_BUDDHISM": {
+      "x": 1491,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_BUDDHISM": {
+      "x": 1704,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_CHRISTIANITY": {
+      "x": 0,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_CHRISTIANITY": {
+      "x": 213,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_CHRISTIANITY": {
+      "x": 426,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CIRCUS_MAXIMUS": {
+      "x": 639,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_BATHS_1": {
+      "x": 852,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_COLOSSEUM": {
+      "x": 1065,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_COURTHOUSE_1": {
+      "x": 1278,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MARKET_3": {
+      "x": 1491,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GARRISON_1": {
+      "x": 1704,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GARRISON_2": {
+      "x": 0,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GARRISON_3": {
+      "x": 213,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_VIA_RECTA_SOUK": {
+      "x": 426,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GREAT_ZIGGURAT": {
+      "x": 639,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MARKET_2": {
+      "x": 852,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HAGIA_SOPHIA": {
+      "x": 1065,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HAMLET": {
+      "x": 1278,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HANGING_GARDENS": {
+      "x": 1491,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_BATHS_3": {
+      "x": 1704,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_HINDUISM": {
+      "x": 0,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_HINDUISM": {
+      "x": 213,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_HINDUISM": {
+      "x": 426,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HOLY_SITE_CHRISTIANITY": {
+      "x": 639,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HOLY_SITE_JUDAISM": {
+      "x": 852,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HOLY_SITE_MANICHAEISM": {
+      "x": 1065,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HOLY_SITE_ZOROASTRIANISM": {
+      "x": 1278,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ISHTAR_GATE": {
+      "x": 1491,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_JERWAN_AQUEDUCT": {
+      "x": 1704,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_JUDAISM": {
+      "x": 0,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_JUDAISM": {
+      "x": 213,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_JUDAISM": {
+      "x": 426,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_LIBRARY_1": {
+      "x": 639,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GREAT_LIBRARY": {
+      "x": 639,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_MANICHAEISM": {
+      "x": 852,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_MANICHAEISM": {
+      "x": 1065,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_MANICHAEISM": {
+      "x": 1278,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MARKET_1": {
+      "x": 1491,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_COURTHOUSE_2": {
+      "x": 1704,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONUMENTAL_BUDDHAS": {
+      "x": 0,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MUSAEUM": {
+      "x": 213,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_THE_MAHAVIHARA": {
+      "x": 426,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_THEATER_1": {
+      "x": 639,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_COURTHOUSE_3": {
+      "x": 852,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_PANTHEON": {
+      "x": 1065,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_PILLAR_EDICT": {
+      "x": 1278,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_RANGE": {
+      "x": 1491,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_BALEARIC_RANGE": {
+      "x": 1491,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ROYAL_LIBRARY": {
+      "x": 1704,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_STUPA": {
+      "x": 0,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_ESHMUN": {
+      "x": 213,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_ISIS": {
+      "x": 213,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_KAMRUSEPA": {
+      "x": 213,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_THE_MARUTS": {
+      "x": 213,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_NEITH": {
+      "x": 426,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_MITHRA": {
+      "x": 426,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_HALKI": {
+      "x": 426,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_NANA": {
+      "x": 426,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_DUAL_CULT": {
+      "x": 426,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_ISHTAR": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_BAAL_HAMMON": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_FERONIA": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_SEBIUMEKER": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_ASTAR": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_TIRUMAL": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GODS_CONSORT_SHRINE": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_OF_THE_FALLEN_GODDESS": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ECSTATIC_CULT": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_SHAMASH": {
+      "x": 852,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_RA": {
+      "x": 852,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_HVAR_KHSHAITA": {
+      "x": 852,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_SERAPIS": {
+      "x": 852,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_MANDULIS": {
+      "x": 852,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_SURYA": {
+      "x": 852,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_ERESHKIGAL": {
+      "x": 1065,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_OSIRIS": {
+      "x": 1065,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_HADES": {
+      "x": 1065,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_OESHO": {
+      "x": 1065,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_FOREST_FIRE_TOMB": {
+      "x": 1065,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CULT_OF_MITHRAS": {
+      "x": 1065,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_NINURTA": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_BELLONA": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_TARHUN": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_APEDEMEK": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_MAHREM": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_ORLAGNO": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_FOREST_FIRE_MONUMENT": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SWORD_CULT": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CAVALRY_CULT": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_NABU": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_ATHENA": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_INDRA": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_MAYON": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SHRINE_TRIBE_PAGANISM": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MARTYR_CULT": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CULT_OF_THE_ANGELIC_DIVINE": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CULT_OF_ISIS_AND_SERAPIS": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ALTAR_ATEN": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KARNAK_CENTER": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KARNAK_NORTH": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KARNAK_NORTHEAST": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KARNAK_NORTHWEST": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KARNAK_SOUTH": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KARNAK_SOUTHEAST": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KARNAK_SOUTHWEST": {
+      "x": 1704,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_THEATER_2": {
+      "x": 0,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TOWN": {
+      "x": 213,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_LIBRARY_3": {
+      "x": 426,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_VILLAGE": {
+      "x": 639,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_BATHS_2": {
+      "x": 852,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_YAZILIKAYA": {
+      "x": 1065,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CATHEDRAL_ZOROASTRIANISM": {
+      "x": 1278,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_ZOROASTRIANISM": {
+      "x": 1491,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MONASTERY_CARTHAGE": {
+      "x": 1491,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_ZOROASTRIANISM": {
+      "x": 1704,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_TEMPLE_CARTHAGE": {
+      "x": 1704,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    }
+  }
+}

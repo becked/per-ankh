@@ -1,33 +1,69 @@
 // Bake improvement sprites pulled from pinacotheca's individual 3D-rendered
-// PNGs into a hex-clipped per-ankh atlas keyed by save-file zType. Save files
-// emit zType values (gameplay enum, e.g. IMPROVEMENT_BATHS_2) into
-// tiles.improvement; pinacotheca renders each icon as
-// IMPROVEMENT_3D_<zIconName>.png (e.g. IMPROVEMENT_3D_WARM_BATHS.png). The
-// translation from zType to zIconName comes from improvement.xml's paired
-// <zType>/<zIconName> fields. Many zTypes share one zIconName by design (e.g.
-// every sun-god shrine maps to IMPROVEMENT_SHRINE_SUN), so multiple manifest
-// entries can point at the same packed cell.
+// PNGs into per-ankh atlases keyed by save-file zType.
 //
-// Pinacotheca also ships a pre-baked atlas at output/atlases/improvement.* —
-// that one is the 2D icon set, not the 3D renders. We deliberately consume the
-// individual 3D PNGs instead. zIconNames without a 3D variant (typically small
-// resource extractors pinacotheca hasn't rendered in 3D yet) are skipped with
-// a log line; we don't fall back to 2D, since mixing 2D and 3D in the same
-// atlas would look inconsistent.
+// OUTPUTS (all in static/atlases/ + assets/atlas-sources/):
+//   improvements-base.{webp,json}        — non-urban-buildable improvements
+//                                          (rural, ruins, settlements, wonders),
+//                                          plus URBAN_<FAMILY> backgrounds and
+//                                          CAPITAL_<FAMILY> per-nation cities.
+//   improvements-urban-<FAMILY>.{webp,json} × 10 (one per urban-asset family) —
+//                                          per-(improvement, family) urban
+//                                          composites pre-baked by pinacotheca.
+//   nation-asset-aliases.json            — derived from nation.xml. Maps every
+//                                          NATION_* zType to its urban + capital
+//                                          family suffix (e.g. NATION_KUSH →
+//                                          urban=EGYPT, capital=EGYPT). Source of
+//                                          truth at runtime for atlas selection.
 //
-// Sources:
-//   ~/Projects/Old World/pinacotheca/extracted/sprites/improvements/IMPROVEMENT_3D_*.png
-//   ../../Reference/XML/Infos/improvement.xml (+ Mods/*/Infos/improvement-{add,change}.xml)
-// Output:
-//   assets/atlas-sources/improvements.{webp,json}
-//   static/atlases/improvements.{webp,json}
+// SOURCES:
+//   ~/Projects/Old World/pinacotheca/extracted/sprites/improvements/
+//     IMPROVEMENT_3D_<ICON>.png                     — single render
+//     IMPROVEMENT_3D_<FAMILY>_URBAN.png             — empty urban tile
+//     IMPROVEMENT_3D_<FAMILY>_CAPITAL.png           — capital city
+//     IMPROVEMENT_3D_<ICON>_<FAMILY>_URBAN.png      — composite (urban tile + improvement)
+//   ../../Reference/XML/Infos/improvement.xml + improvement-event*.xml + Mods/*/Infos/...
+//   ../../Reference/XML/Infos/nation.xml + Mods/*/Infos/nation-{add,change}.xml
+//
+// Runtime (src/lib/SpriteMap.svelte):
+//   1. Loads nation-asset-aliases.json + improvements-base + only the per-family
+//      atlases for nations actually present on the loaded map (lazy by family).
+//   2. For a tile with owner_nation N and improvement I:
+//        family = aliases[N].urban
+//        if improvements-urban-<family>.sprites[I] exists → draw composite
+//        else                                              → fall back to base
+//   3. Capital tiles draw CAPITAL_<aliases[N].capital> from improvements-base
+//      directly — pinacotheca's capital renders include their own ground patch,
+//      so no URBAN underlay is needed.
+//
+// The alias map is derived from XML rather than hardcoded so DLC-added nations
+// (KEMET, SPARTA, PTOLEMY, etc.) propagate automatically on the next bake.
 //
 // Run: npm run bake:improvements
 
 import sharp from "sharp";
-import { readFile, writeFile, mkdir, readdir, access } from "node:fs/promises";
+import {
+	readFile,
+	writeFile,
+	mkdir,
+	readdir,
+	access,
+	rm,
+} from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+	CELL_W,
+	CELL_H,
+	FULL_SCALE,
+	type AtlasManifest,
+	type SpriteRect,
+	type BakeCellOptions,
+	bakeCell,
+	buildHexMaskSvg,
+	placeCellGrid,
+	readPinacothecaVersion,
+	writeAtlas,
+} from "./lib/atlas-bake.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -35,120 +71,36 @@ const REPO_ROOT = resolve(__dirname, "..");
 // Worktree-relative paths: REPO_ROOT is .claude/worktrees/<branch>/, so
 // pinacotheca is 4 up (sibling of per-ankh) and Reference is 3 up (inside
 // per-ankh).
+const PINACOTHECA_ROOT = resolve(REPO_ROOT, "../../../../pinacotheca");
 const PINACOTHECA_3D_DIR = resolve(
-	REPO_ROOT,
-	"../../../../pinacotheca/extracted/sprites/improvements",
+	PINACOTHECA_ROOT,
+	"extracted/sprites/improvements",
 );
+const PINACOTHECA_PYPROJECT = resolve(PINACOTHECA_ROOT, "pyproject.toml");
 const REFERENCE_XML_DIR = resolve(REPO_ROOT, "../../../Reference/XML");
 
-const CELL_W = 211;
-const CELL_H = 181;
-const HEX_H_SPACING = 199;
-const HEX_V_SPACING = 132;
-const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
-const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
+const SOURCE_DIR = resolve(REPO_ROOT, "assets/atlas-sources");
+const OUTPUT_DIR = resolve(REPO_ROOT, "static/atlases");
 
-// Scale factor applied before center-placing each 3D PNG inside the per-ankh
-// hex cell. The cell rectangle (211×181) is bigger than the inscribed
-// pointy-top hex, so fitting to full cell lets content reach hex corners and
-// visibly spill into neighbours. 0.77 ≈ inscribed-rectangle width for asset
-// aspect ~1.5.
-const SAFE_SCALE = 0.77;
-
-// Per-nation URBAN/CAPITAL renders bake at full cell scale — the URBAN
-// variants ARE the ground texture (no inset would leave hex corners empty),
-// and the CAPITAL building complexes are focal-point buildings that should
-// dominate their tile rather than sit small inside it like the SAFE_SCALE
-// improvements do. Fit differs (URBAN cover, CAPITAL inside) — see the
-// nationVariants assembly below.
-const NATION_VARIANT_SCALE = 1.0;
-
-// Background URBAN_<NATION>_FADED variant drawn under improvements/capitals
-// on urban tiles. Color and brightness left as-is so the village hue/lift
-// matches the bare-urban tile next door; only a Gaussian blur dissolves
-// individual rooftops so they don't compete with the focal 3D building on
-// top. The improvement layer carries its own brightness boost (see
-// IMPROVEMENT_BRIGHTEN_TWEAK below) for figure/ground separation.
-const FADED_URBAN_TWEAK = { blur: 2.5 };
-
-// Brightness lift applied to regular improvements and CAPITAL_<NATION>
-// renders so the focal 3D building reads clearly above the urban village
-// underneath. Doesn't touch URBAN_<NATION> (background) or URBAN_<NATION>_FADED
-// (handled separately above).
+// Brightness lift applied to single improvements + capital standalones so the
+// focal building reads clearly. Composites are NOT tweaked — pinacotheca
+// already balances the lighting in its per-(improvement, nation) renders.
 const IMPROVEMENT_BRIGHTEN_TWEAK = { brightness: 1.5 };
 
-function buildHexMaskSvg(cellW: number, cellH: number): string {
-	const cx = cellW / 2;
-	const cy = cellH / 2;
-	const points: string[] = [];
-	for (let i = 0; i < 6; i++) {
-		const angle = (Math.PI / 3) * i - Math.PI / 2;
-		const x = cx + HEX_RADIUS_X * Math.cos(angle);
-		const y = cy + HEX_RADIUS_Y * Math.sin(angle);
-		points.push(`${x.toFixed(3)},${y.toFixed(3)}`);
-	}
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${cellW}" height="${cellH}"><polygon points="${points.join(" ")}" fill="white"/></svg>`;
+// Filenames removed from both static/atlases/ and assets/atlas-sources/ at
+// the start of every bake. Catches the prior single-atlas layout
+// (improvements.webp/json) so it doesn't ship alongside the new split atlases.
+const STALE_OUTPUTS = ["improvements.webp", "improvements.json"];
+
+interface NationAliasEntry {
+	urban: string;
+	capital: string;
 }
 
-async function bakeCell(
-	sourcePath: string,
-	hexMask: Buffer,
-	options: {
-		scale?: number;
-		fit?: "inside" | "cover";
-		tweak?: { brightness?: number; saturation?: number; blur?: number };
-	} = {},
-): Promise<Buffer> {
-	const scale = options.scale ?? SAFE_SCALE;
-	const fit = options.fit ?? "inside";
-	const targetW = Math.round(CELL_W * scale);
-	const targetH = Math.round(CELL_H * scale);
-
-	const fitted = await sharp(sourcePath)
-		.resize(targetW, targetH, { fit, position: "center" })
-		.png()
-		.toBuffer();
-	const fittedMeta = await sharp(fitted).metadata();
-	if (!fittedMeta.width || !fittedMeta.height) {
-		throw new Error(`could not read fitted dimensions for ${sourcePath}`);
-	}
-
-	const offsetX = Math.round((CELL_W - fittedMeta.width) / 2);
-	const offsetY = Math.round((CELL_H - fittedMeta.height) / 2);
-	const centered = await sharp({
-		create: {
-			width: CELL_W,
-			height: CELL_H,
-			channels: 4,
-			background: { r: 0, g: 0, b: 0, alpha: 0 },
-		},
-	})
-		.composite([{ input: fitted, left: offsetX, top: offsetY }])
-		.png()
-		.toBuffer();
-
-	let toned = centered;
-	if (options.tweak) {
-		const { blur, ...modulate } = options.tweak;
-		if (modulate.brightness != null || modulate.saturation != null) {
-			toned = await sharp(toned).modulate(modulate).png().toBuffer();
-		}
-		if (blur != null && blur > 0) {
-			// Blur before the hex mask so the blur radius doesn't bleed alpha
-			// past the hex boundary; the mask hard-clips after blurring.
-			toned = await sharp(toned).blur(blur).png().toBuffer();
-		}
-	}
-
-	return sharp(toned)
-		.composite([{ input: hexMask, blend: "dest-in" }])
-		.png()
-		.toBuffer();
-}
-
-// Parse an improvement XML file and add discovered <zType>→<zIconName> pairs
-// to the given map. Existing entries are not overwritten — base
-// improvement.xml wins, mod adds fill gaps.
+// Parse <Entry> blocks from any of the improvement XML files and merge their
+// <zType>→<zIconName> pairs into the given map. First definition wins so
+// improvement.xml's base entries are never clobbered by mod overrides that
+// only adjust gameplay fields.
 function parseImprovementXml(xml: string, map: Map<string, string>): void {
 	const entryRe = /<Entry>([\s\S]*?)<\/Entry>/g;
 	let entryMatch: RegExpExecArray | null;
@@ -167,24 +119,30 @@ function parseImprovementXml(xml: string, map: Map<string, string>): void {
 // define event-spawned variants (cult shrines, special tile improvements like
 // LAURION_MINE, etc.) that also appear in save data. Mod directories may add
 // or change entries via improvement-{add,change}.xml.
-const BASE_XML_FILENAMES = [
+const BASE_IMPROVEMENT_XMLS = [
 	"improvement.xml",
 	"improvement-event.xml",
 	"improvement-event-sap.xml",
 ];
-const MOD_XML_FILENAMES = [
+const MOD_IMPROVEMENT_XMLS = [
 	"improvement-add.xml",
 	"improvement-change.xml",
 	"improvement-event-add.xml",
 	"improvement-event-change.xml",
 ];
 
-async function loadModImprovementXmlPaths(modsRoot: string): Promise<string[]> {
+const BASE_NATION_XML = "nation.xml";
+const MOD_NATION_XMLS = ["nation-add.xml", "nation-change.xml"];
+
+async function listModXmls(
+	modsRoot: string,
+	filenames: readonly string[],
+): Promise<string[]> {
 	const entries = await readdir(modsRoot, { withFileTypes: true });
 	const paths: string[] = [];
 	for (const e of entries) {
 		if (!e.isDirectory()) continue;
-		for (const name of MOD_XML_FILENAMES) {
+		for (const name of filenames) {
 			const path = resolve(modsRoot, e.name, "Infos", name);
 			try {
 				await access(path);
@@ -198,9 +156,8 @@ async function loadModImprovementXmlPaths(modsRoot: string): Promise<string[]> {
 }
 
 async function buildZTypeMap(): Promise<Map<string, string>> {
-	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- one-off bake script, not Svelte runtime
 	const map = new Map<string, string>();
-	for (const name of BASE_XML_FILENAMES) {
+	for (const name of BASE_IMPROVEMENT_XMLS) {
 		const path = resolve(REFERENCE_XML_DIR, "Infos", name);
 		try {
 			const xml = await readFile(path, "utf-8");
@@ -209,8 +166,9 @@ async function buildZTypeMap(): Promise<Map<string, string>> {
 			console.warn(`[improvements] WARN: missing base XML ${name}`);
 		}
 	}
-	const modPaths = await loadModImprovementXmlPaths(
+	const modPaths = await listModXmls(
 		resolve(REFERENCE_XML_DIR, "Mods"),
+		MOD_IMPROVEMENT_XMLS,
 	);
 	for (const path of modPaths) {
 		const xml = await readFile(path, "utf-8");
@@ -219,62 +177,214 @@ async function buildZTypeMap(): Promise<Map<string, string>> {
 	return map;
 }
 
-function threeDPathFor(zIconName: string): string {
-	return resolve(PINACOTHECA_3D_DIR, `IMPROVEMENT_3D_${zIconName.replace(/^IMPROVEMENT_/, "")}.png`);
+// `ASSET_VARIATION_<FAMILY>_URBAN` → `<FAMILY>`. Returns null for anything that
+// doesn't match the expected shape (e.g. mod scenarios that point at custom
+// asset variations we haven't audited).
+function extractUrbanFamily(asset: string): string | null {
+	const m = /^ASSET_VARIATION_(.+)_URBAN$/.exec(asset);
+	return m ? m[1] : null;
 }
 
-async function fileExists(path: string): Promise<boolean> {
+// `ASSET_VARIATION_CITY_<FAMILY>_CAPITAL` → `<FAMILY>`. Capital asset tags
+// always carry the `CITY_` infix, distinguishing them from urban tags.
+function extractCapitalFamily(asset: string): string | null {
+	const m = /^ASSET_VARIATION_CITY_(.+)_CAPITAL$/.exec(asset);
+	return m ? m[1] : null;
+}
+
+// Parse <UrbanAsset>/<CapitalAsset> from a nation.xml-style file and merge the
+// resolved family aliases into `map`. Last definition wins so DLC nation-add
+// entries override the base; nation-change entries that only tweak gameplay
+// fields without touching asset tags don't disturb the alias resolution.
+function parseNationXml(
+	xml: string,
+	map: Map<string, NationAliasEntry>,
+): void {
+	const entryRe = /<Entry>([\s\S]*?)<\/Entry>/g;
+	let entryMatch: RegExpExecArray | null;
+	while ((entryMatch = entryRe.exec(xml)) !== null) {
+		const body = entryMatch[1];
+		const zType = /<zType>([^<]+)<\/zType>/.exec(body)?.[1];
+		const urbanAsset = /<UrbanAsset>([^<]+)<\/UrbanAsset>/.exec(body)?.[1];
+		const capitalAsset = /<CapitalAsset>([^<]+)<\/CapitalAsset>/.exec(body)?.[1];
+		if (!zType) continue;
+		const urban = urbanAsset ? extractUrbanFamily(urbanAsset) : null;
+		const capital = capitalAsset
+			? extractCapitalFamily(capitalAsset)
+			: null;
+		// nation-change.xml entries often omit asset fields entirely (only
+		// adjust gameplay traits). Don't replace an existing alias with nulls.
+		const existing = map.get(zType);
+		map.set(zType, {
+			urban: urban ?? existing?.urban ?? "",
+			capital: capital ?? existing?.capital ?? "",
+		});
+	}
+}
+
+async function buildNationAliases(): Promise<Map<string, NationAliasEntry>> {
+	const map = new Map<string, NationAliasEntry>();
+	const basePath = resolve(REFERENCE_XML_DIR, "Infos", BASE_NATION_XML);
 	try {
-		await access(path);
-		return true;
+		const xml = await readFile(basePath, "utf-8");
+		parseNationXml(xml, map);
 	} catch {
-		return false;
+		console.warn(`[improvements] WARN: missing ${BASE_NATION_XML}`);
+	}
+	const modPaths = await listModXmls(
+		resolve(REFERENCE_XML_DIR, "Mods"),
+		MOD_NATION_XMLS,
+	);
+	for (const path of modPaths) {
+		const xml = await readFile(path, "utf-8");
+		parseNationXml(xml, map);
+	}
+	// Drop any entry that ended up without both fields (shouldn't happen, but
+	// keeps the JSON output strict). Nations missing UrbanAsset would otherwise
+	// surface as runtime lookup failures.
+	for (const [nation, entry] of map) {
+		if (!entry.urban || !entry.capital) {
+			console.warn(
+				`[improvements] WARN: ${nation} alias incomplete (urban=${entry.urban || "-"}, capital=${entry.capital || "-"}); dropping`,
+			);
+			map.delete(nation);
+		}
+	}
+	return map;
+}
+
+interface PngClassification {
+	composites: Map<string, Map<string, string>>; // family -> zIconName -> path
+	standaloneUrban: Map<string, string>; // family -> path
+	standaloneCapital: Map<string, string>; // family -> path
+	singles: Map<string, string>; // zIconName -> path
+}
+
+// Walk pinacotheca's improvements directory and bucket each PNG by filename
+// shape. The urban-family set (extracted from nation aliases) is the
+// authoritative disambiguator: anything ending `_<FAMILY>_URBAN` with FAMILY
+// in that set is a composite; `_<FAMILY>_URBAN` (single field) with FAMILY in
+// the set is a standalone urban tile; anything else is a single render.
+async function classifyPinacothecaPngs(
+	urbanFamilies: Set<string>,
+	capitalFamilies: Set<string>,
+): Promise<PngClassification> {
+	const dirEntries = await readdir(PINACOTHECA_3D_DIR);
+	const composites = new Map<string, Map<string, string>>();
+	const standaloneUrban = new Map<string, string>();
+	const standaloneCapital = new Map<string, string>();
+	const singles = new Map<string, string>();
+
+	for (const filename of dirEntries) {
+		if (!filename.startsWith("IMPROVEMENT_3D_") || !filename.endsWith(".png")) {
+			continue;
+		}
+		const stem = filename.slice(0, -".png".length);
+		const path = resolve(PINACOTHECA_3D_DIR, filename);
+
+		const urbanMatch = /^IMPROVEMENT_3D_(.+)_URBAN$/.exec(stem);
+		if (urbanMatch) {
+			const middle = urbanMatch[1];
+			const tokens = middle.split("_");
+			const last = tokens[tokens.length - 1];
+			if (tokens.length === 1 && urbanFamilies.has(last)) {
+				standaloneUrban.set(last, path);
+				continue;
+			}
+			if (tokens.length >= 2 && urbanFamilies.has(last)) {
+				const namePart = tokens.slice(0, -1).join("_");
+				const zIconName = `IMPROVEMENT_${namePart}`;
+				let familyMap = composites.get(last);
+				if (!familyMap) {
+					familyMap = new Map<string, string>();
+					composites.set(last, familyMap);
+				}
+				familyMap.set(zIconName, path);
+				continue;
+			}
+			// _URBAN with an unrecognised family suffix — fall through to single.
+			// Lets us still surface mod content with non-standard naming rather
+			// than silently dropping it.
+		}
+
+		const capitalMatch = /^IMPROVEMENT_3D_(.+)_CAPITAL$/.exec(stem);
+		if (capitalMatch && capitalFamilies.has(capitalMatch[1])) {
+			standaloneCapital.set(capitalMatch[1], path);
+			continue;
+		}
+
+		// Plain single render. Filenames carry the `_3D_` infix as a render-set
+		// marker; the manifest key (zIconName, matching XML) drops it. Same
+		// transform composites already apply.
+		const zIconName = stem.replace(/^IMPROVEMENT_3D_/, "IMPROVEMENT_");
+		singles.set(zIconName, path);
+	}
+
+	return { composites, standaloneUrban, standaloneCapital, singles };
+}
+
+async function removeStaleOutputs(): Promise<void> {
+	for (const dir of [SOURCE_DIR, OUTPUT_DIR]) {
+		for (const name of STALE_OUTPUTS) {
+			const path = resolve(dir, name);
+			try {
+				await rm(path, { force: true });
+			} catch {
+				// Already gone.
+			}
+		}
 	}
 }
 
-async function main(): Promise<void> {
-	const zTypeMap = await buildZTypeMap();
-	console.log(
-		`[improvements] loaded ${zTypeMap.size} zType→zIconName mappings from XML`,
-	);
+interface BakeContext {
+	hexMask: Buffer;
+	bakedAt: string;
+	pinacothecaVersion: string;
+}
 
-	// zIconNames without a 3D render fall back to FALLBACK_ICON so the map
-	// always shows *something* on a developed tile, even if the specific
-	// improvement art isn't available yet. The fallback is the generic city
-	// sprite — a reasonable visual stand-in for "developed tile of unknown
-	// type" since most missing renders are settlement-adjacent (FARM, MINE,
-	// FORT, CITY_SITE, OUTPOST_RUINS, etc.).
-	const FALLBACK_ICON = "IMPROVEMENT_CITY";
-	const fallbackAvailable = await fileExists(threeDPathFor(FALLBACK_ICON));
-	if (!fallbackAvailable) {
-		console.warn(
-			`[improvements] WARN: fallback icon ${FALLBACK_ICON} has no 3D PNG; missing zIconNames will be skipped instead`,
-		);
-	}
-
+async function bakeBaseAtlas(
+	ctx: BakeContext,
+	zTypeMap: Map<string, string>,
+	classification: PngClassification,
+	keptIcons: Set<string>,
+): Promise<void> {
 	// Group zTypes by zIconName so multiple zTypes sharing one icon point at
-	// the same packed cell. zTypes whose mapped zIconName has no 3D render get
-	// remapped to FALLBACK_ICON.
-	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- one-off bake script, not Svelte runtime
+	// the same packed cell. zTypes whose mapped zIconName has no kept render
+	// (it has composites instead, OR it's missing entirely) get remapped to
+	// the fallback icon if available.
+	const FALLBACK_ICON = "IMPROVEMENT_CITY";
+	const fallbackKept = keptIcons.has(FALLBACK_ICON);
+
 	const iconToZTypes = new Map<string, string[]>();
-	// eslint-disable-next-line svelte/prefer-svelte-reactivity -- one-off bake script, not Svelte runtime
 	const fallbackByIcon = new Map<string, string[]>();
 	const skipped: { zType: string; zIconName: string }[] = [];
 	for (const [zType, zIconName] of zTypeMap) {
-		let resolvedIcon = zIconName;
-		if (!(await fileExists(threeDPathFor(zIconName)))) {
-			if (!fallbackAvailable) {
-				skipped.push({ zType, zIconName });
-				continue;
-			}
-			resolvedIcon = FALLBACK_ICON;
+		// zIconName has a kept single render: zType maps to that single's cell.
+		if (keptIcons.has(zIconName)) {
+			const list = iconToZTypes.get(zIconName);
+			if (list) list.push(zType);
+			else iconToZTypes.set(zIconName, [zType]);
+			continue;
+		}
+		// zIconName has composites instead: per-family atlases own this zType,
+		// nothing to do at the base layer. Don't fall back to FALLBACK_ICON
+		// here — the runtime composite-then-base layering already handles miss
+		// cases via the (always-present) fallbackSprite.
+		const hasComposite = Array.from(classification.composites.values()).some(
+			(familyMap) => familyMap.has(zIconName),
+		);
+		if (hasComposite) continue;
+		// Truly missing: route to fallback.
+		if (fallbackKept) {
 			const list = fallbackByIcon.get(zIconName);
 			if (list) list.push(zType);
 			else fallbackByIcon.set(zIconName, [zType]);
+			const flist = iconToZTypes.get(FALLBACK_ICON);
+			if (flist) flist.push(zType);
+			else iconToZTypes.set(FALLBACK_ICON, [zType]);
+		} else {
+			skipped.push({ zType, zIconName });
 		}
-		const list = iconToZTypes.get(resolvedIcon);
-		if (list) list.push(zType);
-		else iconToZTypes.set(resolvedIcon, [zType]);
 	}
 
 	if (fallbackByIcon.size > 0) {
@@ -283,7 +393,7 @@ async function main(): Promise<void> {
 			0,
 		);
 		console.log(
-			`[improvements] ${total} zType(s) across ${fallbackByIcon.size} zIconName(s) have no 3D render — falling back to ${FALLBACK_ICON}:`,
+			`[improvements-base] ${total} zType(s) across ${fallbackByIcon.size} zIconName(s) missing 3D render — falling back to ${FALLBACK_ICON}:`,
 		);
 		for (const [icon, zTypes] of fallbackByIcon) {
 			console.log(
@@ -291,204 +401,274 @@ async function main(): Promise<void> {
 			);
 		}
 	}
-
 	if (skipped.length > 0) {
 		console.log(
-			`[improvements] ${skipped.length} zType(s) skipped (fallback unavailable):`,
+			`[improvements-base] ${skipped.length} zType(s) skipped (no fallback):`,
 		);
 		for (const s of skipped) {
 			console.log(`  SKIP ${s.zType} → ${s.zIconName}`);
 		}
 	}
 
-	// Discover nation-specific URBAN/CAPITAL renders. These don't appear in
-	// improvement.xml (they aren't gameplay improvements — they're cosmetic
-	// per-nation tile renders pinacotheca ships alongside the regular
-	// improvement set). They're keyed in the atlas by synthetic
-	// URBAN_<NATION>, URBAN_<NATION>_FADED, CAPITAL_<NATION> entries that the
-	// runtime SpriteMap looks up directly off owner_nation / is_capital.
-	const VARIANT_RE = /^IMPROVEMENT_3D_([A-Z]+)_(URBAN|CAPITAL)\.png$/;
-	const dirEntries = await readdir(PINACOTHECA_3D_DIR);
-	interface NationVariant {
-		spriteKey: string;
+	// Compose the cell list: kept singles, then per-family URBAN/CAPITAL
+	// standalones. Order is purposeful for predictable manifest layout —
+	// singles alphabetical, then URBAN_<family> alphabetical, then
+	// CAPITAL_<family> alphabetical.
+	type Cell = {
+		key: string;
 		path: string;
-		// URBAN variants substitute for TERRAIN_URBAN, so they bake at fit:"cover"
-		// to fully cover the hex (sides cropped — the pinacotheca renders are
-		// aspect ~1.69 vs the hex's 1.16, but content sits roughly hex-shaped in
-		// the center, so the cropped strips are mostly empty).
-		// CAPITAL variants are isolated 3D building complexes drawn on top of
-		// the urban tile, so fit:"inside" keeps the whole building visible.
-		fit: "inside" | "cover";
-		tweak?: { brightness?: number; saturation?: number; blur?: number };
-	}
-	const nationVariants: NationVariant[] = [];
-	for (const filename of dirEntries.sort()) {
-		const m = VARIANT_RE.exec(filename);
-		if (!m) continue;
-		const [, nation, kind] = m;
-		const path = resolve(PINACOTHECA_3D_DIR, filename);
-		if (kind === "URBAN") {
-			nationVariants.push({
-				spriteKey: `URBAN_${nation}`,
-				path,
-				fit: "cover",
-			});
-			nationVariants.push({
-				spriteKey: `URBAN_${nation}_FADED`,
-				path,
-				fit: "cover",
-				tweak: FADED_URBAN_TWEAK,
-			});
-		} else {
-			nationVariants.push({
-				spriteKey: `CAPITAL_${nation}`,
-				path,
-				fit: "inside",
-				tweak: IMPROVEMENT_BRIGHTEN_TWEAK,
-			});
+		options: BakeCellOptions;
+		// zTypes that should map to this cell in the manifest sprites table;
+		// empty if the key itself IS the manifest key (URBAN_*/CAPITAL_*).
+		zTypes: string[];
+	};
+	const cells: Cell[] = [];
+	const sortedIcons = Array.from(iconToZTypes.keys()).sort();
+	for (const zIconName of sortedIcons) {
+		// zIconName is in keptIcons OR is FALLBACK_ICON (which we ensured is kept
+		// above before adding to iconToZTypes).
+		const path = classification.singles.get(zIconName);
+		if (!path) {
+			// Should not happen given the keptIcons / fallbackKept gating above.
+			console.warn(
+				`[improvements-base] WARN: no PNG for ${zIconName}, skipping`,
+			);
+			continue;
 		}
-	}
-	if (nationVariants.length > 0) {
-		console.log(
-			`[improvements] ${nationVariants.length} nation variant cell(s) discovered (URBAN/CAPITAL × nation, plus _FADED for URBAN)`,
-		);
-	}
-
-	// Grid layout: a single-row atlas at this cell count would exceed
-	// GL_MAX_TEXTURE_SIZE (typically 16384). Roughly square keeps both
-	// dimensions well under.
-	const numCells = iconToZTypes.size + nationVariants.length;
-	const cols = Math.ceil(Math.sqrt(numCells));
-	const rows = Math.ceil(numCells / cols);
-
-	const hexMaskSvg = buildHexMaskSvg(CELL_W, CELL_H);
-	const hexMask = Buffer.from(hexMaskSvg);
-
-	const cells: Buffer[] = [];
-	const sprites: Record<
-		string,
-		{ x: number; y: number; width: number; height: number }
-	> = {};
-
-	// Captured during the loop so the manifest can carry an explicit
-	// fallbackSprite for runtime use — the runtime draws this cell on any
-	// tile whose improvement isn't in the sprites map (e.g. zTypes from mod
-	// content not vendored into Reference).
-	let fallbackSprite: {
-		x: number;
-		y: number;
-		width: number;
-		height: number;
-	} | null = null;
-
-	let cellIndex = 0;
-	for (const [zIconName, zTypes] of iconToZTypes) {
-		const path = threeDPathFor(zIconName);
-		const baked = await bakeCell(path, hexMask, {
-			tweak: IMPROVEMENT_BRIGHTEN_TWEAK,
+		cells.push({
+			key: zIconName,
+			path,
+			options: { tweak: IMPROVEMENT_BRIGHTEN_TWEAK },
+			zTypes: iconToZTypes.get(zIconName) ?? [],
 		});
-		cells.push(baked);
+	}
+	for (const family of Array.from(classification.standaloneUrban.keys()).sort()) {
+		cells.push({
+			key: `URBAN_${family}`,
+			path: classification.standaloneUrban.get(family)!,
+			options: { scale: FULL_SCALE, fit: "cover" },
+			zTypes: [],
+		});
+	}
+	for (const family of Array.from(
+		classification.standaloneCapital.keys(),
+	).sort()) {
+		cells.push({
+			key: `CAPITAL_${family}`,
+			path: classification.standaloneCapital.get(family)!,
+			// Same treatment as URBAN_<FAMILY> and composites: pinacotheca
+			// 2.2.0+ ships capitals as self-contained tile renders with
+			// embedded ground (biome + PVT splats + buildings), so they're
+			// cover-fit to fill the hex like every other urban-style tile.
+			// No brightness tweak — pinacotheca's own lighting is balanced.
+			options: { scale: FULL_SCALE, fit: "cover" },
+			zTypes: [],
+		});
+	}
 
-		const col = cellIndex % cols;
-		const row = Math.floor(cellIndex / cols);
-		const cell = {
-			x: col * CELL_W,
-			y: row * CELL_H,
-			width: CELL_W,
-			height: CELL_H,
-		};
-		for (const zType of zTypes) {
-			sprites[zType] = cell;
-		}
-		if (zIconName === FALLBACK_ICON) {
-			fallbackSprite = cell;
-		}
-		if (zTypes.length === 1) {
+	const grid = placeCellGrid(cells.length);
+	const sprites: Record<string, SpriteRect> = {};
+	let fallbackSprite: SpriteRect | undefined;
+	const composites: sharp.OverlayOptions[] = [];
+
+	for (let i = 0; i < cells.length; i++) {
+		const cell = cells[i];
+		const rect = grid.cellAt(i);
+		const baked = await bakeCell(cell.path, ctx.hexMask, cell.options);
+		composites.push({ input: baked, left: rect.x, top: rect.y });
+
+		if (cell.zTypes.length > 0) {
+			for (const zType of cell.zTypes) sprites[zType] = rect;
+			if (cell.key === "IMPROVEMENT_CITY") fallbackSprite = rect;
 			console.log(
-				`[improvements] ${zTypes[0]} → ${zIconName} (cell ${cellIndex})`,
+				`[improvements-base] ${cell.key} → cell ${i} (${cell.zTypes.length} zType${cell.zTypes.length === 1 ? "" : "s"})`,
 			);
 		} else {
-			console.log(
-				`[improvements] ${zIconName} ← ${zTypes.length} zTypes share cell ${cellIndex}: ${zTypes.join(", ")}`,
-			);
+			sprites[cell.key] = rect;
+			console.log(`[improvements-base] ${cell.key} → cell ${i}`);
 		}
-		cellIndex++;
 	}
 
-	// Nation URBAN/CAPITAL variants bake at full cell scale. URBAN uses
-	// fit:"cover" so the hex is fully covered (no TERRAIN_URBAN bleed-through);
-	// CAPITAL uses fit:"inside" so the entire building stays in frame.
-	for (const variant of nationVariants) {
-		const baked = await bakeCell(variant.path, hexMask, {
-			scale: NATION_VARIANT_SCALE,
-			fit: variant.fit,
-			tweak: variant.tweak,
-		});
-		cells.push(baked);
-		const col = cellIndex % cols;
-		const row = Math.floor(cellIndex / cols);
-		sprites[variant.spriteKey] = {
-			x: col * CELL_W,
-			y: row * CELL_H,
-			width: CELL_W,
-			height: CELL_H,
-		};
-		console.log(
-			`[improvements] ${variant.spriteKey} (cell ${cellIndex})`,
-		);
-		cellIndex++;
-	}
-
-	if (cells.length === 0) {
-		console.log("[improvements] no cells to bake");
-		return;
-	}
-
-	const atlasW = cols * CELL_W;
-	const atlasH = rows * CELL_H;
-	const composites: sharp.OverlayOptions[] = cells.map((buf, i) => ({
-		input: buf,
-		left: (i % cols) * CELL_W,
-		top: Math.floor(i / cols) * CELL_H,
-	}));
-
-	const atlasBuffer = await sharp({
-		create: {
-			width: atlasW,
-			height: atlasH,
-			channels: 4,
-			background: { r: 0, g: 0, b: 0, alpha: 0 },
-		},
-	})
-		.composite(composites)
-		.webp({ lossless: true })
-		.toBuffer();
-
-	const manifest = {
-		atlas: "improvements.webp",
+	const manifest: AtlasManifest = {
+		atlas: "improvements-base.webp",
 		cellWidth: CELL_W,
 		cellHeight: CELL_H,
+		bakedAt: ctx.bakedAt,
+		pinacothecaVersion: ctx.pinacothecaVersion,
 		sprites,
-		// Optional: present when FALLBACK_ICON is bakeable. The runtime draws
-		// this cell on any tile whose `improvement` value isn't a key in
-		// `sprites` — e.g. zTypes from mod content not vendored into
-		// Reference/XML. Absent if no 3D render exists for FALLBACK_ICON.
 		...(fallbackSprite ? { fallbackSprite } : {}),
 	};
-	const manifestText = JSON.stringify(manifest, null, 2) + "\n";
 
-	const sourceDir = resolve(REPO_ROOT, "assets/atlas-sources");
-	const outputDir = resolve(REPO_ROOT, "static/atlases");
-	await mkdir(sourceDir, { recursive: true });
-	await mkdir(outputDir, { recursive: true });
-
-	await writeFile(resolve(sourceDir, "improvements.webp"), atlasBuffer);
-	await writeFile(resolve(sourceDir, "improvements.json"), manifestText);
-	await writeFile(resolve(outputDir, "improvements.webp"), atlasBuffer);
-	await writeFile(resolve(outputDir, "improvements.json"), manifestText);
+	await writeAtlas({
+		name: "improvements-base",
+		manifest,
+		composites,
+		width: grid.atlasWidth,
+		height: grid.atlasHeight,
+		sourceDir: SOURCE_DIR,
+		outputDir: OUTPUT_DIR,
+	});
 	console.log(
-		`[improvements] wrote ${atlasW}×${atlasH} atlas (${cols}×${rows} grid, ${cells.length} cells, ${Object.keys(sprites).length} zTypes) to assets/ and static/`,
+		`[improvements-base] wrote ${grid.atlasWidth}×${grid.atlasHeight} (${grid.cols}×${grid.rows}, ${cells.length} cells)`,
 	);
+}
+
+async function bakeFamilyAtlas(
+	ctx: BakeContext,
+	family: string,
+	familyMap: Map<string, string>,
+	zTypeMap: Map<string, string>,
+): Promise<void> {
+	// One cell per zIconName in this family; multiple zTypes resolving to the
+	// same zIconName share the cell.
+	const iconToZTypes = new Map<string, string[]>();
+	for (const [zType, zIconName] of zTypeMap) {
+		if (!familyMap.has(zIconName)) continue;
+		const list = iconToZTypes.get(zIconName);
+		if (list) list.push(zType);
+		else iconToZTypes.set(zIconName, [zType]);
+	}
+
+	const sortedIcons = Array.from(iconToZTypes.keys()).sort();
+	const grid = placeCellGrid(sortedIcons.length);
+	const sprites: Record<string, SpriteRect> = {};
+	const composites: sharp.OverlayOptions[] = [];
+
+	for (let i = 0; i < sortedIcons.length; i++) {
+		const zIconName = sortedIcons[i];
+		const path = familyMap.get(zIconName)!;
+		const rect = grid.cellAt(i);
+		// Composites are pre-balanced by pinacotheca — no tweak. Full-cell
+		// scale with cover fit so the urban background reaches all hex
+		// corners (the composite IS the entire urban tile, not an inset
+		// focal building).
+		const baked = await bakeCell(path, ctx.hexMask, {
+			scale: FULL_SCALE,
+			fit: "cover",
+		});
+		composites.push({ input: baked, left: rect.x, top: rect.y });
+		const zTypes = iconToZTypes.get(zIconName) ?? [];
+		for (const zType of zTypes) sprites[zType] = rect;
+	}
+
+	const name = `improvements-urban-${family}`;
+	const manifest: AtlasManifest = {
+		atlas: `${name}.webp`,
+		cellWidth: CELL_W,
+		cellHeight: CELL_H,
+		bakedAt: ctx.bakedAt,
+		pinacothecaVersion: ctx.pinacothecaVersion,
+		sprites,
+	};
+	await writeAtlas({
+		name,
+		manifest,
+		composites,
+		width: grid.atlasWidth,
+		height: grid.atlasHeight,
+		sourceDir: SOURCE_DIR,
+		outputDir: OUTPUT_DIR,
+	});
+	console.log(
+		`[${name}] wrote ${grid.atlasWidth}×${grid.atlasHeight} (${grid.cols}×${grid.rows}, ${sortedIcons.length} cells, ${Object.keys(sprites).length} zTypes)`,
+	);
+}
+
+async function writeNationAliases(
+	aliases: Map<string, NationAliasEntry>,
+	bakedAt: string,
+): Promise<void> {
+	const sortedNations = Array.from(aliases.keys()).sort();
+	const obj: Record<string, NationAliasEntry> = {};
+	for (const nation of sortedNations) {
+		obj[nation] = aliases.get(nation)!;
+	}
+	const payload = {
+		bakedAt,
+		// Each entry is { urban: <family>, capital: <family> }, both required.
+		// Runtime treats this as the single source of truth for resolving
+		// owner_nation → which atlas / which sprite key.
+		aliases: obj,
+	};
+	const text = JSON.stringify(payload, null, 2) + "\n";
+	await writeFile(resolve(SOURCE_DIR, "nation-asset-aliases.json"), text);
+	await writeFile(resolve(OUTPUT_DIR, "nation-asset-aliases.json"), text);
+	console.log(
+		`[nation-aliases] wrote ${sortedNations.length} nation aliases`,
+	);
+}
+
+async function main(): Promise<void> {
+	await mkdir(SOURCE_DIR, { recursive: true });
+	await mkdir(OUTPUT_DIR, { recursive: true });
+	await removeStaleOutputs();
+
+	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
+	const bakedAt = new Date().toISOString();
+	const ctx: BakeContext = {
+		hexMask: Buffer.from(buildHexMaskSvg(CELL_W, CELL_H)),
+		bakedAt,
+		pinacothecaVersion,
+	};
+	console.log(
+		`[improvements] pinacotheca ${pinacothecaVersion}, baked at ${bakedAt}`,
+	);
+
+	const aliases = await buildNationAliases();
+	const urbanFamilies = new Set<string>();
+	const capitalFamilies = new Set<string>();
+	for (const entry of aliases.values()) {
+		urbanFamilies.add(entry.urban);
+		capitalFamilies.add(entry.capital);
+	}
+	console.log(
+		`[improvements] discovered ${aliases.size} nations across ${urbanFamilies.size} urban families and ${capitalFamilies.size} capital families`,
+	);
+	await writeNationAliases(aliases, bakedAt);
+
+	const zTypeMap = await buildZTypeMap();
+	console.log(
+		`[improvements] loaded ${zTypeMap.size} zType→zIconName mappings`,
+	);
+
+	const classification = await classifyPinacothecaPngs(
+		urbanFamilies,
+		capitalFamilies,
+	);
+	const compositeIcons = new Set<string>();
+	for (const familyMap of classification.composites.values()) {
+		for (const icon of familyMap.keys()) compositeIcons.add(icon);
+	}
+	const keptIcons = new Set<string>();
+	for (const icon of classification.singles.keys()) {
+		// Drop singles whose zIconName has any composite — composites supersede
+		// them on every nation's urban tile, so the single is dead weight.
+		// Singles for non-urban-buildable improvements (rural, ruins,
+		// settlements, wonders that don't sit on urban tiles) stay because no
+		// composite covers them.
+		if (!compositeIcons.has(icon)) keptIcons.add(icon);
+	}
+	console.log(
+		`[improvements] singles: ${classification.singles.size} total, ${keptIcons.size} kept (${classification.singles.size - keptIcons.size} dropped — superseded by composites)`,
+	);
+	console.log(
+		`[improvements] standalones: ${classification.standaloneUrban.size} urban, ${classification.standaloneCapital.size} capital`,
+	);
+	let totalComposites = 0;
+	for (const familyMap of classification.composites.values()) {
+		totalComposites += familyMap.size;
+	}
+	console.log(
+		`[improvements] composites: ${totalComposites} across ${classification.composites.size} families`,
+	);
+
+	await bakeBaseAtlas(ctx, zTypeMap, classification, keptIcons);
+
+	const sortedFamilies = Array.from(classification.composites.keys()).sort();
+	for (const family of sortedFamilies) {
+		const familyMap = classification.composites.get(family)!;
+		await bakeFamilyAtlas(ctx, family, familyMap, zTypeMap);
+	}
 }
 
 main().catch((err) => {

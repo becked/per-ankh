@@ -18,7 +18,9 @@
 		"format": "prettier --write .",
 		"format:check": "prettier --check .",
 		"bake:atlases": "tsx scripts/bake-atlases.ts",
-		"bake:improvements": "tsx scripts/bake-improvements.ts"
+		"bake:improvements": "tsx scripts/bake-improvements.ts",
+		"bake:resources": "tsx scripts/bake-resources.ts",
+		"bake:all": "npm run bake:atlases && npm run bake:improvements && npm run bake:resources"
 	},
 	"license": "MIT",
 	"dependencies": {

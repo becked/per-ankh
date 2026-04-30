@@ -1,0 +1,105 @@
+{
+  "bakedAt": "2026-04-30T16:45:56.444Z",
+  "aliases": {
+    "NATION_AKSUM": {
+      "urban": "AKSUM",
+      "capital": "AKSUM"
+    },
+    "NATION_AMUN": {
+      "urban": "EGYPT",
+      "capital": "EGYPT"
+    },
+    "NATION_ANTIGONUS": {
+      "urban": "GREECE",
+      "capital": "GREECE"
+    },
+    "NATION_ASSYRIA": {
+      "urban": "ASSYRIA",
+      "capital": "ASSYRIA"
+    },
+    "NATION_ATHENS": {
+      "urban": "GREECE",
+      "capital": "GREECE"
+    },
+    "NATION_BABYLONIA": {
+      "urban": "BABYLONIA",
+      "capital": "BABYLONIA"
+    },
+    "NATION_CARTHAGE": {
+      "urban": "CARTHAGE",
+      "capital": "CARTHAGE"
+    },
+    "NATION_EGYPT": {
+      "urban": "EGYPT",
+      "capital": "EGYPT"
+    },
+    "NATION_GREECE": {
+      "urban": "GREECE",
+      "capital": "GREECE"
+    },
+    "NATION_HITTITE": {
+      "urban": "HITTITE",
+      "capital": "HITTITE"
+    },
+    "NATION_HYKSOS": {
+      "urban": "CARTHAGE",
+      "capital": "CARTHAGE"
+    },
+    "NATION_KEMET": {
+      "urban": "EGYPT",
+      "capital": "EGYPT"
+    },
+    "NATION_KERMA": {
+      "urban": "EGYPT",
+      "capital": "EGYPT"
+    },
+    "NATION_KUSH": {
+      "urban": "EGYPT",
+      "capital": "EGYPT"
+    },
+    "NATION_MAURYA": {
+      "urban": "INDIA",
+      "capital": "MAURYA"
+    },
+    "NATION_MINOAN": {
+      "urban": "GREECE",
+      "capital": "GREECE"
+    },
+    "NATION_MITANNI": {
+      "urban": "ASSYRIA",
+      "capital": "ASSYRIA"
+    },
+    "NATION_PERSIA": {
+      "urban": "PERSIA",
+      "capital": "PERSIA"
+    },
+    "NATION_PTOLEMY": {
+      "urban": "GREECE",
+      "capital": "GREECE"
+    },
+    "NATION_ROME": {
+      "urban": "ROME",
+      "capital": "ROME"
+    },
+    "NATION_SELEUCUS": {
+      "urban": "GREECE",
+      "capital": "GREECE"
+    },
+    "NATION_SPARTA": {
+      "urban": "GREECE",
+      "capital": "GREECE"
+    },
+    "NATION_TAMIL": {
+      "urban": "INDIA",
+      "capital": "TAMIL"
+    },
+    "NATION_THEBES": {
+      "urban": "EGYPT",
+      "capital": "EGYPT"
+    },
+    "NATION_YUEZHI": {
+      "urban": "INDIA",
+      "capital": "YUEZHI"
+    }
+  }
+}

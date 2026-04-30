@@ -1,0 +1,423 @@
+{
+  "atlas": "improvements-base.webp",
+  "cellWidth": 211,
+  "cellHeight": 181,
+  "bakedAt": "2026-04-30T16:45:56.444Z",
+  "pinacothecaVersion": "2.2.0",
+  "sprites": {
+    "IMPROVEMENT_RUINS_4": {
+      "x": 0,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CAMP": {
+      "x": 213,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SLUMS": {
+      "x": 213,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HILL_FORT": {
+      "x": 426,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_FORT": {
+      "x": 639,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MINOR_CITY": {
+      "x": 639,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_CITY_SITE": {
+      "x": 852,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_COLOSSUS": {
+      "x": 1065,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_COTHON": {
+      "x": 1278,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_RUINS_3": {
+      "x": 1491,
+      "y": 0,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ESTATES": {
+      "x": 0,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_FARM": {
+      "x": 213,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GRANARY": {
+      "x": 426,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_GROVE": {
+      "x": 639,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HARBOR": {
+      "x": 852,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_HELIOPOLIS": {
+      "x": 1065,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_RUINS_1": {
+      "x": 1278,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_JEBEL_BARKAL": {
+      "x": 1491,
+      "y": 183,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KUSHITE_PYRAMIDS": {
+      "x": 0,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_LIGHTHOUSE": {
+      "x": 213,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_LUMBERMILL": {
+      "x": 426,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MAUSOLEUM": {
+      "x": 639,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MINE": {
+      "x": 852,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_LAURION_MINE": {
+      "x": 852,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_NECROPOLIS": {
+      "x": 1065,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_MORTUARY": {
+      "x": 1065,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_NETS": {
+      "x": 1278,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ORACLE": {
+      "x": 1491,
+      "y": 366,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_RUINS_2": {
+      "x": 0,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ACROPOLIS": {
+      "x": 213,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_PASTURE": {
+      "x": 426,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_PYRAMIDS": {
+      "x": 639,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_QUARRY": {
+      "x": 852,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_ANCIENT_RUINS": {
+      "x": 1065,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_1": {
+      "x": 1278,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_1_GAUL": {
+      "x": 1278,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_2": {
+      "x": 1491,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_2_GAUL": {
+      "x": 1491,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_KEMET_FORT": {
+      "x": 1491,
+      "y": 549,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_3": {
+      "x": 0,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SPARTAN_CAMP": {
+      "x": 0,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_3_GAUL": {
+      "x": 0,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_4": {
+      "x": 213,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_SETTLEMENT_4_GAUL": {
+      "x": 213,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_WATERMILL": {
+      "x": 426,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "IMPROVEMENT_WINDMILL": {
+      "x": 639,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_AKSUM": {
+      "x": 852,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_ASSYRIA": {
+      "x": 1065,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_BABYLONIA": {
+      "x": 1278,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_CARTHAGE": {
+      "x": 1491,
+      "y": 732,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_EGYPT": {
+      "x": 0,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_GREECE": {
+      "x": 213,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_HITTITE": {
+      "x": 426,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_INDIA": {
+      "x": 639,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_PERSIA": {
+      "x": 852,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "URBAN_ROME": {
+      "x": 1065,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_AKSUM": {
+      "x": 1278,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_ASSYRIA": {
+      "x": 1491,
+      "y": 915,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_BABYLONIA": {
+      "x": 0,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_CARTHAGE": {
+      "x": 213,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_EGYPT": {
+      "x": 426,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_GREECE": {
+      "x": 639,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_HITTITE": {
+      "x": 852,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_MAURYA": {
+      "x": 1065,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_PERSIA": {
+      "x": 1278,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_ROME": {
+      "x": 1491,
+      "y": 1098,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_TAMIL": {
+      "x": 0,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    },
+    "CAPITAL_YUEZHI": {
+      "x": 213,
+      "y": 1281,
+      "width": 211,
+      "height": 181
+    }
+  },
+  "fallbackSprite": {
+    "x": 639,
+    "y": 0,
+    "width": 211,
+    "height": 181
+  }
+}
