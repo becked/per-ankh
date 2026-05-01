@@ -803,16 +803,28 @@ The sprite map's terrain, height, resource, and improvement atlases are baked fr
 
 ### Hex cell aspect
 
-`HEX_H_SPACING=199`, `HEX_V_SPACING=122` — pointy-top R=5 world hex projected through the game's fixed 45° camera tilt: 8.66 wide × 7.07 tall = 1.225 image aspect. Cell rect 211×167 wraps the inscribed hex 199×162.7 with a small gutter. These constants are mirrored in `scripts/bake-atlases.ts` and `src/lib/SpriteMap.svelte` — keep all three sites in sync. The hex polygon math (vertex generation in `buildHexMask`, runtime `hexPolygon`, neighbor lookup, religion fill / political border inset) all derives from `HEX_RADIUS_X = H_SPACING / sqrt(3)` and `HEX_RADIUS_Y = V_SPACING / 1.5`.
+`HEX_H_SPACING=199`, `HEX_V_SPACING=122` — pointy-top R=5 world hex projected through the game's fixed 45° camera tilt: 8.66 wide × 7.07 tall = 1.225 image aspect. Cell rect 211×167 wraps the inscribed hex 199×162.7 with a small gutter. These constants live in `scripts/lib/atlas-bake.ts` and are mirrored in `src/lib/SpriteMap.svelte` — keep both sites in sync. The hex polygon math (vertex generation in `buildHexMask`, runtime `hexPolygon`, neighbor lookup, religion fill / political border inset) all derives from `HEX_RADIUS_X = H_SPACING / sqrt(3)` and `HEX_RADIUS_Y = V_SPACING / 1.5`.
 
-### Terrain / height (`scripts/bake-atlases.ts`)
+### Terrain (`scripts/bake-terrain-3d.ts`)
 
-- `assets/atlas-sources/{terrain,height}.{webp,json}` — raw output from Pinacotheca. Right-side-up, with the game's 3D-rendered dark beveled edges baked into each sprite.
-- `static/atlases/{terrain,height}.{webp,json}` — baked output that the runtime fetches. Hex-clipped and upscaled (`SPRITE_SCALE_X=1.13`, `SPRITE_SCALE_Y=1.32`) to push the bevel past the cell boundary, then center-cropped.
-- The bake uses `manifest.cellWidth/cellHeight` from the source manifest (= pinacotheca's choice). When pinacotheca's terrain atlas predates per-ankh's aspect change, the inscribed hex sits centered with a few px of vertical padding inside the larger cell — visually fine, just wastes some atlas pixels until pinacotheca re-cuts.
+One packed atlas keyed by `TERRAIN_3D_<BIOME>_<HEIGHT>`. Runtime stacks two layers per tile: a FLAT base that fills per-ankh's hex extent edge-to-edge, and (only on HILL/MOUNTAIN/VOLCANO) a relief sprite drawn on top.
+
+- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/terrains/TERRAIN_3D_*.png` (28 cells: 6 land biomes × 4 heights + URBAN_FLAT + 3 WATER_*).
+- FLAT and WATER_* renders use pinacotheca's `padding=0` autocrop — the rendered hex covers 100% of the source image, so cover-fit lands the hex at per-ankh's full hex extent and tiles tessellate edge-to-edge with no canvas-color seams.
+- HILL/MOUNTAIN/VOLCANO renders include spire/peak content that legitimately extends past the hex bbox (groundHex pixel bbox covers ~80–98% of source image, with the rest being the peak rising above and lateral mountain spread). Two things differ from FLAT/WATER for these:
+  - **Bake** (`bakeReliefCell` in `scripts/bake-terrain-3d.ts`): we anchor on the sidecar's `groundHex.pixelBbox` rather than cover-fit. Scale so groundHex height matches per-ankh's hex extent, then position the scaled source so groundHex bottom-center lands at the cell hex bottom-center. The hex base fills per-ankh's hex; lateral mountain spread overflows the cell sides and is hex-clipped; peak content extends into the small margin above the inscribed hex and is naturally cropped at the cell top. Without this anchoring, naive cover-fit shrinks the hex base AND the peak content together, so mountains read as small hills inside the cell.
+  - **Runtime**: drawn on top of a FLAT base layer rather than alone. Same architectural pattern that makes nation-owned URBAN tiles work today (TEMPERATE underlay beneath the URBAN/CAPITAL overlay) and that lets cathedral/ziggurat improvements draw on top of terrain.
+- Output: `static/atlases/terrain-3d.{webp,json}`.
+- Sprite key shape mirrors the source filenames as-is (`TERRAIN_3D_<BIOME>_<HEIGHT>`).
+- **Runtime resolution** (`src/lib/SpriteMap.svelte` `terrain3dBaseKey` + `terrain3dReliefKey`): per tile resolves a base key (always returned) and an optional relief key (HILL/MOUNTAIN/VOLCANO only) with these rules applying to both:
+  - `TERRAIN_FROST → TUNDRA` — pinacotheca clarified that in-game frost tiles are literally `TERRAIN_TUNDRA`; `TERRAIN_FROST` is an orphan UI icon with no 3D backing.
+  - `TERRAIN_WATER` → base `WATER_<HEIGHT>` (HEIGHT_OCEAN/COAST/LAKE), no relief layer (water has no spire content).
+  - Bare `TERRAIN_URBAN` (no nation owner) → base `URBAN_FLAT`, no relief (only URBAN_FLAT is rendered).
+  - Nation-owned `TERRAIN_URBAN` → base `TEMPERATE_FLAT` + `TEMPERATE_<HEIGHT>` relief on HILL+. The TEMPERATE underlay matches pinacotheca's render composition (their urban renders are composed on a TEMPERATE base) and gives the URBAN/CAPITAL overlay's hex-clip a backstop in the cell corners.
+  - Other land biomes → base `<BIOME>_FLAT` + `<BIOME>_<HEIGHT>` relief on HILL+.
 
 ```bash
-npm run bake:atlases
+npm run bake:terrain-3d
 ```
 
 ### Resources (`scripts/bake-resources.ts`)
@@ -835,17 +847,17 @@ Two output atlases: a base atlas with single-improvement sprites + per-nation UR
   - `improvements-urban-{AKSUM,…,ROME}.{webp,json}` — 10 family atlases for per-(improvement, family) composites baked from `IMPROVEMENT_3D_<NAME>_<FAMILY>_URBAN.png`. Same `FULL_SCALE` cover-fit treatment.
   - `nation-asset-aliases.json` — derived from `nation.xml`. Maps every `NATION_*` zType to its urban + capital family. Single source of truth at runtime for resolving owner_nation → which atlas / which sprite key.
 
-All layered sprites (URBAN/CAPITAL standalones + composites) are exactly `CELL_W × CELL_H = 211×167`, hex-clipped, no anchor metadata. Pinacotheca's hex-prism clip constrains rendered content laterally (≤ 6px lateral overflow across all 711 renders, just antialiased mask edges), so cover-fit + hex-clip lands the scene cleanly inside the cell. Tall buildings (ziggurats, palace towers, cathedral spires) that extend above the hex top vertex get compressed and partially clipped at the cell apex — that's the deliberate trade-off vs the now-removed taller-than-cell sprite + spire-overflow approach, which created jarring rectangular cuts above each tile's hex.
+Per-ankh bakes each variable-size source PNG into a fixed `CELL_W × CELL_H = 211×167` cell in the packed atlas via cover-fit + binary-alpha hex mask. Pinacotheca's renderer leaves ~32 px transparent padding around rendered content (~95% coverage in both dimensions, per pinacotheca's autocrop step). For improvements the padding is load-bearing: single-improvement renders (Pasture/Camp/Mine) end up localized within the hex with terrain peeking around them — the desired rural-improvement look — and URBAN/CAPITAL renders, which pinacotheca composes on a TERRAIN_TEMPERATE base, let the runtime's TEMPERATE underlay (drawn by the terrain-3d layer beneath) peek through to match the source composition. Tall buildings (ziggurats, palace towers, cathedral spires) that extend above the hex top vertex get compressed and partially clipped at the cell apex — that's the deliberate trade-off vs the now-removed taller-than-cell sprite + spire-overflow approach, which created jarring rectangular cuts above each tile's hex.
 
-**Runtime layer order** (`src/lib/SpriteMap.svelte`): terrain → nation-tile-icons (URBAN/CAPITAL standalones) → height → resources → per-family composite layers → single-improvement layer. Each tile is filtered to at most one of these layers; `compositeFamilyFor()` and `capitalSpriteKeyFor()` decide which.
+**Runtime layer order** (`src/lib/SpriteMap.svelte`): terrain-3d-base → terrain-3d-relief (HILL/MOUNTAIN/VOLCANO only) → nation-tile-icons (URBAN/CAPITAL standalones) → resources → per-family composite layers → single-improvement layer. Each non-terrain tile is filtered to at most one of the upper layers; `compositeFamilyFor()` and `capitalSpriteKeyFor()` decide which.
 
 **Re-bake when:**
 
-- Pinacotheca ships refreshed `IMPROVEMENT_3D_*.png` renders.
+- Pinacotheca ships refreshed `IMPROVEMENT_3D_*.png` or `TERRAIN_3D_*.png` renders.
 - `Reference/XML/` is refreshed against a current OW install (picks up new DLC `zType`s and nation aliases).
 - Tuning bake knobs:
   - `SAFE_SCALE=0.77` — single-improvement inset within the hex.
-  - `FULL_SCALE=1.0` — cover-fit fill for URBAN/CAPITAL/composites.
+  - `FULL_SCALE=1.0` — cover-fit fill for terrain-3d cells and URBAN/CAPITAL/composites.
   - `IMPROVEMENT_BRIGHTEN_TWEAK` — brightness lift for single-improvement focal buildings.
 
 ```bash

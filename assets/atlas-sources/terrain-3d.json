@@ -1,0 +1,177 @@
+{
+  "atlas": "terrain-3d.webp",
+  "cellWidth": 211,
+  "cellHeight": 167,
+  "bakedAt": "2026-05-01T21:13:32.646Z",
+  "pinacothecaVersion": "2.2.0",
+  "sprites": {
+    "TERRAIN_3D_ARID_FLAT": {
+      "x": 0,
+      "y": 0,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_ARID_HILL": {
+      "x": 213,
+      "y": 0,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_ARID_MOUNTAIN": {
+      "x": 426,
+      "y": 0,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_ARID_VOLCANO": {
+      "x": 639,
+      "y": 0,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_LUSH_FLAT": {
+      "x": 852,
+      "y": 0,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_LUSH_HILL": {
+      "x": 1065,
+      "y": 0,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_LUSH_MOUNTAIN": {
+      "x": 0,
+      "y": 169,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_LUSH_VOLCANO": {
+      "x": 213,
+      "y": 169,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_MARSH_FLAT": {
+      "x": 426,
+      "y": 169,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_MARSH_HILL": {
+      "x": 639,
+      "y": 169,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_MARSH_MOUNTAIN": {
+      "x": 852,
+      "y": 169,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_MARSH_VOLCANO": {
+      "x": 1065,
+      "y": 169,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_SAND_FLAT": {
+      "x": 0,
+      "y": 338,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_SAND_HILL": {
+      "x": 213,
+      "y": 338,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_SAND_MOUNTAIN": {
+      "x": 426,
+      "y": 338,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_SAND_VOLCANO": {
+      "x": 639,
+      "y": 338,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TEMPERATE_FLAT": {
+      "x": 852,
+      "y": 338,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TEMPERATE_HILL": {
+      "x": 1065,
+      "y": 338,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TEMPERATE_MOUNTAIN": {
+      "x": 0,
+      "y": 507,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TEMPERATE_VOLCANO": {
+      "x": 213,
+      "y": 507,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TUNDRA_FLAT": {
+      "x": 426,
+      "y": 507,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TUNDRA_HILL": {
+      "x": 639,
+      "y": 507,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TUNDRA_MOUNTAIN": {
+      "x": 852,
+      "y": 507,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_TUNDRA_VOLCANO": {
+      "x": 1065,
+      "y": 507,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_URBAN_FLAT": {
+      "x": 0,
+      "y": 676,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_WATER_COAST": {
+      "x": 213,
+      "y": 676,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_WATER_LAKE": {
+      "x": 426,
+      "y": 676,
+      "width": 211,
+      "height": 167
+    },
+    "TERRAIN_3D_WATER_OCEAN": {
+      "x": 639,
+      "y": 676,
+      "width": 211,
+      "height": 167
+    }
+  }
+}

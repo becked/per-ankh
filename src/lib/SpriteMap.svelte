@@ -8,10 +8,12 @@
 	import MapTooltip from "$lib/MapTooltip.svelte";
 
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
-	// Atlases are pre-baked by scripts/bake-atlases.ts: hex-clip + bevel-trim
-	// upscale happen at build time. The runtime feeds the baked atlas straight
-	// to deck.gl IconLayer, which samples it as-is. The dimensions also drive
-	// overlay polygons (religion fill) and edge segments (political borders).
+	// Atlases are pre-baked by scripts/bake-terrain-3d.ts (terrain),
+	// scripts/bake-improvements.ts (urban), and scripts/bake-resources.ts:
+	// hex-clip + cover-fit happen at build time. The runtime feeds each baked
+	// atlas straight to deck.gl IconLayer, which samples it as-is. The
+	// dimensions also drive overlay polygons (religion fill) and edge segments
+	// (political borders).
 	//
 	// Aspect tracks the game's on-screen hex: pointy-top R = 5 world units
 	// (8.66 × 10) viewed at the camera's fixed 45° pitch → 8.66 × 7.07
@@ -28,8 +30,7 @@
 	// will swap in a versioned R2 URL prefix without touching the runtime
 	// (see docs/cloud-rewrite-spec.md "Map Assets").
 	const ATLAS_BASE = "/atlases";
-	const TERRAIN_ATLAS_URL = `${ATLAS_BASE}/terrain.webp`;
-	const HEIGHT_ATLAS_URL = `${ATLAS_BASE}/height.webp`;
+	const TERRAIN_3D_ATLAS_URL = `${ATLAS_BASE}/terrain-3d.webp`;
 	const IMPROVEMENTS_BASE_ATLAS_URL = `${ATLAS_BASE}/improvements-base.webp`;
 	const RESOURCES_ATLAS_URL = `${ATLAS_BASE}/resources.webp`;
 	const familyAtlasUrl = (family: string): string =>
@@ -115,6 +116,96 @@
 		return baseManifest.sprites[key] ? key : null;
 	}
 
+	// Resolve a tile to its packed terrain-3d sprite keys. Two layers stack
+	// per tile: a FLAT base that fills per-ankh's hex extent edge-to-edge, and
+	// (only on HILL/MOUNTAIN/VOLCANO) a relief sprite drawn on top.
+	//
+	// Why two layers: pinacotheca's HILL/MOUNTAIN/VOLCANO renders include
+	// spire/peak content that legitimately extends past the hex bbox (e.g.
+	// MOUNTAIN's groundHex is only 81% × 85% of source image). Cover-fit
+	// shrinks the hex base into the cell to fit the full image, leaving a
+	// visible canvas-color ring around relief tiles. Mirroring the URBAN /
+	// CATHEDRAL pattern, we draw the matching FLAT sprite (which fills the
+	// hex edge-to-edge) underneath, then layer the relief on top — same
+	// trick that makes nation-owned urban tiles and tall improvements work.
+	//
+	// Resolution rules (apply to both base and relief):
+	//   FROST → TUNDRA   pinacotheca clarified that in-game frost tiles are
+	//                    literally TERRAIN_TUNDRA; TERRAIN_FROST is an orphan
+	//                    icon with no 3D backing.
+	//   WATER            HEIGHT_OCEAN/COAST/LAKE → TERRAIN_3D_WATER_*; no
+	//                    relief layer (water has no spire content).
+	//   URBAN, no nation TERRAIN_3D_URBAN_FLAT for the base; no relief
+	//                    (only URBAN_FLAT is rendered).
+	//   URBAN, owned     TERRAIN_3D_TEMPERATE_FLAT base + TEMPERATE_<height>
+	//                    relief — pinacotheca composes urban renders on a
+	//                    TERRAIN_TEMPERATE base, so a temperate underlay
+	//                    matches the source composition and gives the
+	//                    URBAN/CAPITAL overlay's hex-clip the right
+	//                    backstop.
+	//   Land biomes      TERRAIN_3D_<biome>_FLAT base + <biome>_<height>
+	//                    relief.
+	function terrain3dBaseKey(
+		tile: MapTile,
+		aliases: Map<string, NationAliasEntry>,
+		manifest: AtlasManifest,
+	): string | null {
+		const t = tile.terrain;
+		if (!t) return null;
+		const biomePart =
+			t === "TERRAIN_FROST" ? "TUNDRA" : t.replace(/^TERRAIN_/, "");
+		if (biomePart === "WATER") {
+			const heightPart = tile.height
+				? tile.height.replace(/^HEIGHT_/, "")
+				: "OCEAN";
+			const key = `TERRAIN_3D_WATER_${heightPart}`;
+			return manifest.sprites[key] ? key : null;
+		}
+		if (biomePart === "URBAN") {
+			const family = urbanFamilyFor(tile.owner_nation, aliases);
+			if (family) {
+				return manifest.sprites.TERRAIN_3D_TEMPERATE_FLAT
+					? "TERRAIN_3D_TEMPERATE_FLAT"
+					: null;
+			}
+			return manifest.sprites.TERRAIN_3D_URBAN_FLAT
+				? "TERRAIN_3D_URBAN_FLAT"
+				: null;
+		}
+		const key = `TERRAIN_3D_${biomePart}_FLAT`;
+		return manifest.sprites[key] ? key : null;
+	}
+
+	function terrain3dReliefKey(
+		tile: MapTile,
+		aliases: Map<string, NationAliasEntry>,
+		manifest: AtlasManifest,
+	): string | null {
+		const t = tile.terrain;
+		if (!t) return null;
+		const heightPart = tile.height
+			? tile.height.replace(/^HEIGHT_/, "")
+			: "FLAT";
+		if (
+			heightPart !== "HILL" &&
+			heightPart !== "MOUNTAIN" &&
+			heightPart !== "VOLCANO"
+		) {
+			return null;
+		}
+		const biomePart =
+			t === "TERRAIN_FROST" ? "TUNDRA" : t.replace(/^TERRAIN_/, "");
+		if (biomePart === "WATER") return null;
+		if (biomePart === "URBAN") {
+			const family = urbanFamilyFor(tile.owner_nation, aliases);
+			if (!family) return null;
+			const key = `TERRAIN_3D_TEMPERATE_${heightPart}`;
+			return manifest.sprites[key] ? key : null;
+		}
+		const key = `TERRAIN_3D_${biomePart}_${heightPart}`;
+		return manifest.sprites[key] ? key : null;
+	}
+
 	// Resource variant pick: SOLO with a rural improvement, HERD without.
 	// Falls back to the other variant if only one is in the atlas (handles a
 	// pinacotheca render set that ships only HERD or only SOLO for some
@@ -185,8 +276,7 @@
 	// Always-loaded atlases — fetched once at mount and cached for the session.
 	// The matching .webp URLs are passed to IconLayer's iconAtlas prop, which
 	// fetches and decodes the texture itself.
-	let terrainManifest: AtlasManifest | null = $state(null);
-	let heightManifest: AtlasManifest | null = $state(null);
+	let terrain3dManifest: AtlasManifest | null = $state(null);
 	let improvementsBaseManifest: AtlasManifest | null = $state(null);
 	let resourcesManifest: AtlasManifest | null = $state(null);
 	// Nation → {urban, capital} family alias, baked from nation.xml. Single
@@ -259,15 +349,32 @@
 		}
 	}
 
-	// Resolve owner_nation → crest sprite key. Variant nations (NATION_AMUN,
-	// NATION_ATHENS, …) don't have their own CREST_NATION_X; the urban-family
-	// alias maps them to their parent civ's crest. Falls back to the raw
-	// owner_nation if no alias entry, and SpriteIcon hides on 404.
+	// CREST_NATION_*.png shipped under static/sprites/crests. Drives the
+	// fallback chain in resolveNationCrestKey — keep in sync when crests are
+	// added or removed (re-bake / re-vendor pinacotheca crests).
+	const KNOWN_NATION_CRESTS = new Set([
+		"AKSUM", "ASSYRIA", "BABYLONIA", "CARTHAGE", "EGYPT", "GREECE",
+		"HITTITE", "HYKSOS", "KUSH", "MAURYA", "MITANNI", "PERSIA",
+		"ROME", "TAMIL", "YUEZHI",
+	]);
+
+	// Resolve owner_nation → crest sprite key with a 3-tier fallback:
+	//   1. The nation's own crest if shipped (handles MAURYA/TAMIL/YUEZHI,
+	//      KUSH/HYKSOS/MITANNI — which all have their own crest but whose
+	//      urban-family alias points elsewhere).
+	//   2. The urban-family alias's crest if shipped (handles variant
+	//      nations like NATION_AMUN/ATHENS/PTOLEMY that have no own crest).
+	//   3. CREST_TRIBE_GENERIC as a last resort (e.g. INDIA family — no
+	//      CREST_NATION_INDIA exists in the game).
 	function resolveNationCrestKey(ownerNation: string | null): string | null {
 		if (!ownerNation) return null;
+		const stem = ownerNation.replace(/^NATION_/, "");
+		if (KNOWN_NATION_CRESTS.has(stem)) return `NATION_${stem}`;
 		const alias = nationAliases.get(ownerNation);
-		if (alias?.urban) return `NATION_${alias.urban}`;
-		return ownerNation;
+		if (alias?.urban && KNOWN_NATION_CRESTS.has(alias.urban)) {
+			return `NATION_${alias.urban}`;
+		}
+		return "TRIBE_GENERIC";
 	}
 
 	// Project a world-space tile center to canvas-local screen pixels via the
@@ -1001,13 +1108,12 @@
 	$effect(() => {
 		if (!deck) return;
 		if (!assetsLoaded) return;
-		const tm = terrainManifest;
-		const hm = heightManifest;
+		const t3d = terrain3dManifest;
 		const ibm = improvementsBaseManifest;
 		const rm = resourcesManifest;
 		const al = nationAliases;
 		const fms = familyManifests;
-		if (!tm || !hm || !ibm || !rm) return;
+		if (!t3d || !ibm || !rm) return;
 		const political = politicalData;
 		const fills = religionFills;
 		const pol = showPolitical;
@@ -1038,41 +1144,45 @@
 
 		deck.setProps({
 			layers: [
-				// Terrain. Always draws — including under nation-aware urban
-				// layers. Pinacotheca's URBAN/CAPITAL/composite renders are
-				// buildings on a hex-clipped ground patch, so the cell corners
-				// outside the inscribed hex are transparent and would otherwise
-				// reveal the canvas as visible black gaps.
-				//
-				// For TERRAIN_URBAN tiles owned by a known nation, draw
-				// TERRAIN_TEMPERATE instead. Pinacotheca composes its urban
-				// renders with TERRAIN_TEMPERATE as the biome base (see
-				// pinacotheca/docs/urban-improvement-composites.md
-				// "render_layered_ground orchestrates biome (TERRAIN_TEMPERATE)
-				// → urban PVT planes → ..."), so the corners that get clipped
-				// were temperate-toned in the source render — having
-				// TERRAIN_TEMPERATE peek through matches the original
-				// composition. Bare TERRAIN_URBAN tiles (no nation) keep their
-				// own grey-brown texture since no urban-overlay covers them.
+				// Terrain base layer: <BIOME>_FLAT for every land tile,
+				// WATER_<height> for water, URBAN_FLAT (or TEMPERATE_FLAT if
+				// nation-owned) for urban. Always draws — fills per-ankh's
+				// hex extent edge-to-edge so adjacent tiles tessellate cleanly.
+				// Also serves as the backstop under nation URBAN/CAPITAL
+				// overlays whose hex-clip leaves the cell corners transparent.
 				new IconLayer<MapTile>({
-					id: "terrain-icons",
+					id: "terrain-3d-base",
 					data: tiles.filter(
-						(t) => t.terrain != null && tm.sprites[t.terrain] != null,
+						(t) => terrain3dBaseKey(t, al, t3d) != null,
 					),
-					iconAtlas: TERRAIN_ATLAS_URL,
-					iconMapping: tm.sprites,
-					getIcon: (d: MapTile) => {
-						if (
-							d.terrain === "TERRAIN_URBAN" &&
-							urbanFamilyFor(d.owner_nation, al) != null &&
-							tm.sprites.TERRAIN_TEMPERATE != null
-						) {
-							return "TERRAIN_TEMPERATE";
-						}
-						return d.terrain as string;
-					},
+					iconAtlas: TERRAIN_3D_ATLAS_URL,
+					iconMapping: t3d.sprites,
+					getIcon: (d: MapTile) =>
+						terrain3dBaseKey(d, al, t3d) as string,
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => tm.cellWidth,
+					getSize: () => t3d.cellWidth,
+					sizeUnits: "common",
+					sizeBasis: "width",
+					pickable: false,
+				}),
+				// Terrain relief layer: HILL/MOUNTAIN/VOLCANO sprites drawn
+				// on top of the base. Pinacotheca's relief renders include
+				// spire/peak content extending past the hex bbox (the hex
+				// base is only ~80–98% of source image), so cover-fit shrinks
+				// the hex to ~80% of per-ankh's hex extent. The base layer
+				// underneath fills the ring; the relief sprite contributes
+				// the actual mountain/hill content on top.
+				new IconLayer<MapTile>({
+					id: "terrain-3d-relief",
+					data: tiles.filter(
+						(t) => terrain3dReliefKey(t, al, t3d) != null,
+					),
+					iconAtlas: TERRAIN_3D_ATLAS_URL,
+					iconMapping: t3d.sprites,
+					getIcon: (d: MapTile) =>
+						terrain3dReliefKey(d, al, t3d) as string,
+					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+					getSize: () => t3d.cellWidth,
 					sizeUnits: "common",
 					sizeBasis: "width",
 					pickable: false,
@@ -1107,32 +1217,10 @@
 					sizeBasis: "width",
 					pickable: false,
 				}),
-				new IconLayer<MapTile>({
-					id: "height-icons",
-					data: tiles.filter((t) => {
-						if (t.height == null) return false;
-						if (
-							t.height === "HEIGHT_FLAT" ||
-							t.height === "HEIGHT_OCEAN" ||
-							t.height === "HEIGHT_COAST" ||
-							t.height === "HEIGHT_LAKE"
-						)
-							return false;
-						return hm.sprites[t.height] != null;
-					}),
-					iconAtlas: HEIGHT_ATLAS_URL,
-					iconMapping: hm.sprites,
-					getIcon: (d: MapTile) => d.height as string,
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => hm.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
-				}),
-				// Resource sprites (animals/fish/minerals). Drawn after height
-				// so they sit on the underlying terrain, and before the
-				// improvement layer so rural improvements (Pasture/Camp/Mine)
-				// draw their structure on top.
+				// Resource sprites (animals/fish/minerals). Drawn after the
+				// terrain layer so they sit on the underlying biome/relief,
+				// and before the improvement layer so rural improvements
+				// (Pasture/Camp/Mine) draw their structure on top.
 				//
 				// Variant selection: SOLO when the tile carries a rural
 				// improvement (a single figure tucks neatly inside the fence
@@ -1274,15 +1362,13 @@
 
 	onMount(() => {
 		Promise.all([
-			loadManifest("terrain"),
-			loadManifest("height"),
+			loadManifest("terrain-3d"),
 			loadManifest("improvements-base"),
 			loadManifest("resources"),
 			loadNationAliases(),
 		])
-			.then(([terrain, height, improvementsBase, resources, aliases]) => {
-				terrainManifest = terrain;
-				heightManifest = height;
+			.then(([terrain3d, improvementsBase, resources, aliases]) => {
+				terrain3dManifest = terrain3d;
 				improvementsBaseManifest = improvementsBase;
 				resourcesManifest = resources;
 				nationAliases = aliases;
