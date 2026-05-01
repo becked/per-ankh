@@ -1,14 +1,17 @@
 <script lang="ts">
 	import type { MapTile } from "$lib/types/MapTile";
-	import HexMap from "$lib/HexMap.svelte";
+	import type { CityInfo } from "$lib/types/CityInfo";
+	import SpriteMap from "$lib/SpriteMap.svelte";
 
 	let {
 		mapTiles,
+		cities = [],
 		totalTurns = null,
 		selectedTurn = null,
 		onTurnChange = null,
 	}: {
 		mapTiles: MapTile[] | null;
+		cities?: CityInfo[];
 		totalTurns?: number | null;
 		selectedTurn?: number | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
@@ -17,12 +20,13 @@
 </script>
 
 {#if mapTiles}
-	<HexMap
+	<SpriteMap
 		tiles={mapTiles}
+		{cities}
 		height="600px"
 		totalTurns={onTurnChange ? totalTurns : null}
 		selectedTurn={onTurnChange ? selectedTurn : null}
-		onTurnChange={onTurnChange}
+		{onTurnChange}
 	/>
 {:else}
 	<p class="italic text-brown">Loading map data...</p>

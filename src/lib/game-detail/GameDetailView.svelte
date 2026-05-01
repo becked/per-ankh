@@ -40,7 +40,6 @@
 	import CitiesTab from "./CitiesTab.svelte";
 	import ImprovementsTab from "./ImprovementsTab.svelte";
 	import MapTab from "./MapTab.svelte";
-	import MapBetaTab from "./MapBetaTab.svelte";
 	import SettingsTab from "./SettingsTab.svelte";
 
 	let {
@@ -341,13 +340,6 @@
 		</Tabs.Trigger>
 
 		<Tabs.Trigger
-			value="map-beta"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Map Beta
-		</Tabs.Trigger>
-
-		<Tabs.Trigger
 			value="settings"
 			class="cursor-pointer rounded-tr-lg border-2 border-b-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
 		>
@@ -502,20 +494,6 @@
 		style="background-color: #35302B;"
 	>
 		<MapTab
-			{mapTiles}
-			totalTurns={gameDetails.total_turns}
-			selectedTurn={selectedMapTurn}
-			onTurnChange={onMapTurnChange}
-		/>
-	</Tabs.Content>
-
-	<!-- Tab Content: Map Beta -->
-	<Tabs.Content
-		value="map-beta"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
-		<MapBetaTab
 			{mapTiles}
 			cities={cityStatistics.cities}
 			totalTurns={gameDetails.total_turns}

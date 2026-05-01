@@ -60,7 +60,7 @@
 	const improvementLabel = $derived.by(() => {
 		if (!tile.improvement) return null;
 		let imp = formatEnum(tile.improvement, "IMPROVEMENT_");
-		// Match HexMap's shrine/monastery rebranding for readability.
+		// Rebrand shrines and monasteries so the deity reads first (e.g. "Sun Shrine").
 		if (imp.startsWith("Shrine ")) imp = imp.replace("Shrine ", "") + " Shrine";
 		else if (imp.startsWith("Monastery "))
 			imp = imp.replace("Monastery ", "") + " Monastery";
