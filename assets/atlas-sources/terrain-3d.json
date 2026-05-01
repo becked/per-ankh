@@ -2,7 +2,7 @@
   "atlas": "terrain-3d.webp",
   "cellWidth": 211,
   "cellHeight": 167,
-  "bakedAt": "2026-05-01T21:13:32.646Z",
+  "bakedAt": "2026-05-01T21:23:36.439Z",
   "pinacothecaVersion": "2.2.0",
   "sprites": {
     "TERRAIN_3D_ARID_FLAT": {
