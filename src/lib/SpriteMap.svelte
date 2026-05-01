@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount } from "svelte";
+	import { onMount, tick } from "svelte";
 	import { Deck, OrthographicView } from "@deck.gl/core";
 	import { IconLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
 	import type { MapTile } from "$lib/types/MapTile";
@@ -320,11 +320,28 @@
 	let lockedTooltips = $state<LockedTooltip[]>([]);
 	// Bumped from Deck.onViewStateChange to force re-derivation of locked
 	// tooltips' screen positions. Cheaper than tracking the full viewState
-	// object (we only ever need to re-project, not read).
+	// object (we only ever need to read-only re-project, not the whole state).
 	let viewVersion = $state(0);
 	let containerEl: HTMLDivElement | null = $state(null);
 	let containerWidth = $state(0);
 	let containerHeight = $state(0);
+
+	// ─── Fullscreen state (mirror of normal view) ─────────────────────
+	// Same dual-deck pattern as HexMap: WebGL contexts can't move between
+	// canvases, so a separate Deck instance is bound to the dialog's canvas
+	// and fed the same layers via the layer-build $effect. Hover + view
+	// version are tracked independently so the two views' tooltips don't
+	// fight each other; locked tooltips are shared (pinning persists).
+	let dialogRef: HTMLDialogElement | null = $state(null);
+	let isClosing = $state(false);
+	let fullscreenCanvas: HTMLCanvasElement;
+	let fullscreenDeck: Deck<OrthographicView> | null = $state(null);
+	let fullscreenHoverState = $state<HoverState | null>(null);
+	let fullscreenViewVersion = $state(0);
+	let fullscreenContainerEl: HTMLDivElement | null = $state(null);
+	let fullscreenContainerWidth = $state(0);
+	let fullscreenContainerHeight = $state(0);
+	const ANIMATION_DURATION = 200; // ms — keep in sync with CSS
 
 	function tileKey(t: MapTile): string {
 		return `${t.x},${t.y}`;
@@ -338,10 +355,7 @@
 			return;
 		}
 		const [wx, wy] = hexToPixel(tile.x, tile.y);
-		lockedTooltips = [
-			...lockedTooltips,
-			{ key, tile, worldX: wx, worldY: wy },
-		];
+		lockedTooltips = [...lockedTooltips, { key, tile, worldX: wx, worldY: wy }];
 	}
 
 	function handleContextMenu(e: MouseEvent) {
@@ -356,13 +370,37 @@
 		}
 	}
 
+	function handleFullscreenContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		if (!fullscreenDeck || !fullscreenCanvas) return;
+		const rect = fullscreenCanvas.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const y = e.clientY - rect.top;
+		const picked = fullscreenDeck.pickObject({ x, y, radius: 0 });
+		if (picked && picked.object) {
+			toggleLockedTile(picked.object as MapTile);
+		}
+	}
+
 	// CREST_NATION_*.png shipped under static/sprites/crests. Drives the
 	// fallback chain in resolveNationCrestKey — keep in sync when crests are
 	// added or removed (re-bake / re-vendor pinacotheca crests).
 	const KNOWN_NATION_CRESTS = new Set([
-		"AKSUM", "ASSYRIA", "BABYLONIA", "CARTHAGE", "EGYPT", "GREECE",
-		"HITTITE", "HYKSOS", "KUSH", "MAURYA", "MITANNI", "PERSIA",
-		"ROME", "TAMIL", "YUEZHI",
+		"AKSUM",
+		"ASSYRIA",
+		"BABYLONIA",
+		"CARTHAGE",
+		"EGYPT",
+		"GREECE",
+		"HITTITE",
+		"HYKSOS",
+		"KUSH",
+		"MAURYA",
+		"MITANNI",
+		"PERSIA",
+		"ROME",
+		"TAMIL",
+		"YUEZHI",
 	]);
 
 	// Resolve owner_nation → crest sprite key with a 3-tier fallback:
@@ -393,11 +431,15 @@
 	interface DeckWithViewports {
 		getViewports(): PickViewport[];
 	}
-	function projectWorld(wx: number, wy: number): [number, number] | null {
-		if (!deck) return null;
+	function projectWorld(
+		wx: number,
+		wy: number,
+		target: Deck<OrthographicView> | null = deck,
+	): [number, number] | null {
+		if (!target) return null;
 		// getViewports lives on Deck's runtime API but isn't on its public TS
 		// surface. Narrow via a local interface rather than `any`.
-		const viewports = (deck as unknown as DeckWithViewports).getViewports?.();
+		const viewports = (target as unknown as DeckWithViewports).getViewports?.();
 		if (!viewports || viewports.length === 0) return null;
 		const screen = viewports[0].project([wx, wy, 0]);
 		return [screen[0], screen[1]];
@@ -415,7 +457,20 @@
 		void viewVersion;
 		const out: LockedScreen[] = [];
 		for (const l of lockedTooltips) {
-			const screen = projectWorld(l.worldX, l.worldY);
+			const screen = projectWorld(l.worldX, l.worldY, deck);
+			if (!screen) continue;
+			out.push({ ...l, sx: screen[0], sy: screen[1] });
+		}
+		return out;
+	});
+
+	// Same logic, projected through the fullscreen deck so locked tooltips
+	// follow camera moves in the dialog independently of the normal view.
+	const lockedScreenFullscreen = $derived.by<LockedScreen[]>(() => {
+		void fullscreenViewVersion;
+		const out: LockedScreen[] = [];
+		for (const l of lockedTooltips) {
+			const screen = projectWorld(l.worldX, l.worldY, fullscreenDeck);
 			if (!screen) continue;
 			out.push({ ...l, sx: screen[0], sy: screen[1] });
 		}
@@ -428,6 +483,12 @@
 	const showHover = $derived.by(() => {
 		if (!hoverState) return false;
 		const k = tileKey(hoverState.tile);
+		return !lockedTooltips.some((l) => l.key === k);
+	});
+
+	const showFullscreenHover = $derived.by(() => {
+		if (!fullscreenHoverState) return false;
+		const k = tileKey(fullscreenHoverState.tile);
 		return !lockedTooltips.some((l) => l.key === k);
 	});
 
@@ -1069,6 +1130,108 @@
 		});
 	}
 
+	function initFullscreenDeck() {
+		if (!fullscreenCanvas || !assetsLoaded) return;
+
+		const width = fullscreenCanvas.clientWidth;
+		const canvasHeight = fullscreenCanvas.clientHeight;
+		if (width === 0 || canvasHeight === 0) return;
+
+		if (fullscreenDeck) {
+			fullscreenDeck.finalize();
+			fullscreenDeck = null;
+		}
+
+		fullscreenCanvas.width = width * window.devicePixelRatio;
+		fullscreenCanvas.height = canvasHeight * window.devicePixelRatio;
+
+		const viewState = calculateViewState(fullscreenCanvas);
+
+		fullscreenDeck = new Deck({
+			canvas: fullscreenCanvas,
+			width,
+			height: canvasHeight,
+			useDevicePixels: true,
+			views: new OrthographicView({ id: "ortho" }),
+			initialViewState: {
+				...viewState,
+				minZoom: -6,
+				maxZoom: 4,
+			},
+			controller: true,
+			onViewStateChange: () => {
+				fullscreenViewVersion++;
+			},
+			onHover: (info: { object?: MapTile; x: number; y: number }) => {
+				if (info.object) {
+					fullscreenHoverState = {
+						tile: info.object,
+						x: info.x,
+						y: info.y,
+					};
+				} else {
+					fullscreenHoverState = null;
+				}
+			},
+			layers: [],
+		});
+	}
+
+	function openFullscreen() {
+		dialogRef?.showModal();
+		// `tick()` resolves on the microtask queue, before the browser commits
+		// layout for the dialog's display flip. At that point the canvas still
+		// reports clientWidth/Height === 0 and initFullscreenDeck bails out at
+		// its early-return guard, leaving the dialog with the bare container
+		// background visible. Poll on rAF until the canvas has been laid out.
+		const tryInit = () => {
+			if (!fullscreenCanvas || fullscreenDeck) return;
+			// Bail if the dialog was closed before layout completed —
+			// otherwise the rAF chain would keep polling against a hidden
+			// canvas forever.
+			if (!dialogRef?.open) return;
+			if (
+				fullscreenCanvas.clientWidth === 0 ||
+				fullscreenCanvas.clientHeight === 0
+			) {
+				requestAnimationFrame(tryInit);
+				return;
+			}
+			initFullscreenDeck();
+		};
+		requestAnimationFrame(tryInit);
+	}
+
+	function closeFullscreen() {
+		if (!dialogRef || isClosing) return;
+		isClosing = true;
+		setTimeout(() => {
+			dialogRef?.close();
+			isClosing = false;
+			// Tear down the fullscreen deck so we don't accumulate WebGL
+			// contexts on repeat open/close (browsers cap at ~16).
+			if (fullscreenDeck) {
+				fullscreenDeck.finalize();
+				fullscreenDeck = null;
+			}
+			fullscreenHoverState = null;
+		}, ANIMATION_DURATION);
+	}
+
+	function handleDialogClose() {
+		// Strip focus from whichever button triggered the close so the focus
+		// ring doesn't end up on the expand button.
+		if (document.activeElement instanceof HTMLElement) {
+			document.activeElement.blur();
+		}
+	}
+
+	function handleBackdropClick(event: MouseEvent) {
+		if (event.target === dialogRef) {
+			closeFullscreen();
+		}
+	}
+
 	// Lazy-load the urban-composite atlas for `family` if it isn't already
 	// cached. Idempotent: concurrent calls for the same family race on the
 	// fetch but resolve to the same manifest write. We swap the whole record
@@ -1107,20 +1270,19 @@
 		}
 	});
 
-	// Assemble layers. Toggling showPolitical / showReligion only flips the
-	// `visible` prop — deck.gl reuses GPU buffers because each layer's `data`
-	// reference is unchanged. Buffers rebuild only when `tiles` (and thus the
-	// political/religion derivatives + the inline-filtered IconLayer data) or
-	// the per-family manifest cache change.
-	$effect(() => {
-		if (!deck) return;
-		if (!assetsLoaded) return;
+	// Build the full layer set for a single Deck. Each Deck instance owns
+	// its own GL context, and a Layer instance binds GPU resources to the
+	// first context it draws into; sharing a Layer between two Decks
+	// silently breaks rendering in the second. So when both the inline and
+	// fullscreen decks are live we call this twice to get fresh instances
+	// per deck.
+	function buildLayers() {
 		const t3d = terrain3dManifest;
 		const ibm = improvementsBaseManifest;
 		const rm = resourcesManifest;
 		const al = nationAliases;
 		const fms = familyManifests;
-		if (!t3d || !ibm || !rm) return;
+		if (!t3d || !ibm || !rm) return null;
 		const political = politicalData;
 		const fills = religionFills;
 		const pol = showPolitical;
@@ -1129,15 +1291,13 @@
 		// Per-family composite IconLayers — one per family that has any tile
 		// AND a loaded manifest. Iterating over loaded manifests means
 		// pre-fetch families that aren't on the current map don't add empty
-		// layers, and tiles whose family hasn't loaded yet fall through to the
-		// urban-empty + base layers until the fetch resolves.
+		// layers, and tiles whose family hasn't loaded yet fall through to
+		// the urban-empty + base layers until the fetch resolves.
 		const compositeLayers = Object.keys(fms).map((family) => {
 			const fm = fms[family];
 			return new IconLayer<MapTile>({
 				id: `urban-composite-${family}`,
-				data: tiles.filter(
-					(t) => compositeFamilyFor(t, al, fms) === family,
-				),
+				data: tiles.filter((t) => compositeFamilyFor(t, al, fms) === family),
 				iconAtlas: familyAtlasUrl(family),
 				iconMapping: fm.sprites,
 				getIcon: (d: MapTile) => d.improvement as string,
@@ -1149,211 +1309,231 @@
 			});
 		});
 
-		deck.setProps({
-			layers: [
-				// Terrain base layer: <BIOME>_FLAT for every land tile,
-				// WATER_<height> for water, URBAN_FLAT (or TEMPERATE_FLAT if
-				// nation-owned) for urban. Always draws — fills per-ankh's
-				// hex extent edge-to-edge so adjacent tiles tessellate cleanly.
-				// Also serves as the backstop under nation URBAN/CAPITAL
-				// overlays whose hex-clip leaves the cell corners transparent.
-				new IconLayer<MapTile>({
-					id: "terrain-3d-base",
-					data: tiles.filter(
-						(t) => terrain3dBaseKey(t, al, t3d) != null,
-					),
-					iconAtlas: TERRAIN_3D_ATLAS_URL,
-					iconMapping: t3d.sprites,
-					getIcon: (d: MapTile) =>
-						terrain3dBaseKey(d, al, t3d) as string,
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => t3d.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
+		return [
+			// Terrain base layer: <BIOME>_FLAT for every land tile,
+			// WATER_<height> for water, URBAN_FLAT (or TEMPERATE_FLAT if
+			// nation-owned) for urban. Always draws — fills per-ankh's
+			// hex extent edge-to-edge so adjacent tiles tessellate cleanly.
+			// Also serves as the backstop under nation URBAN/CAPITAL
+			// overlays whose hex-clip leaves the cell corners transparent.
+			new IconLayer<MapTile>({
+				id: "terrain-3d-base",
+				data: tiles.filter((t) => terrain3dBaseKey(t, al, t3d) != null),
+				iconAtlas: TERRAIN_3D_ATLAS_URL,
+				iconMapping: t3d.sprites,
+				getIcon: (d: MapTile) => terrain3dBaseKey(d, al, t3d) as string,
+				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+				getSize: () => t3d.cellWidth,
+				sizeUnits: "common",
+				sizeBasis: "width",
+				pickable: false,
+			}),
+			// Terrain relief layer: HILL/MOUNTAIN/VOLCANO sprites drawn
+			// on top of the base. Pinacotheca's relief renders include
+			// spire/peak content extending past the hex bbox (the hex
+			// base is only ~80–98% of source image), so cover-fit shrinks
+			// the hex to ~80% of per-ankh's hex extent. The base layer
+			// underneath fills the ring; the relief sprite contributes
+			// the actual mountain/hill content on top.
+			new IconLayer<MapTile>({
+				id: "terrain-3d-relief",
+				data: tiles.filter((t) => terrain3dReliefKey(t, al, t3d) != null),
+				iconAtlas: TERRAIN_3D_ATLAS_URL,
+				iconMapping: t3d.sprites,
+				getIcon: (d: MapTile) => terrain3dReliefKey(d, al, t3d) as string,
+				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+				getSize: () => t3d.cellWidth,
+				sizeUnits: "common",
+				sizeBasis: "width",
+				pickable: false,
+			}),
+			// Per-nation tile render — capital city for capital tiles, the
+			// nation's urban backdrop everywhere else. Both come from
+			// improvements-base, both fully cover the inscribed hex, and
+			// neither is ever overdrawn by a composite (capitals don't have
+			// composite-eligible improvements; urban-empty tiles already
+			// filter out composite-covered ones).
+			new IconLayer<MapTile>({
+				id: "nation-tile-icons",
+				data: tiles.filter((t) => {
+					const cap = capitalSpriteKeyFor(t, al, ibm);
+					if (cap != null) return true;
+					if (t.terrain !== "TERRAIN_URBAN") return false;
+					const family = urbanFamilyFor(t.owner_nation, al);
+					if (family == null) return false;
+					if (compositeFamilyFor(t, al, fms) != null) return false;
+					return ibm.sprites[`URBAN_${family}`] != null;
 				}),
-				// Terrain relief layer: HILL/MOUNTAIN/VOLCANO sprites drawn
-				// on top of the base. Pinacotheca's relief renders include
-				// spire/peak content extending past the hex bbox (the hex
-				// base is only ~80–98% of source image), so cover-fit shrinks
-				// the hex to ~80% of per-ankh's hex extent. The base layer
-				// underneath fills the ring; the relief sprite contributes
-				// the actual mountain/hill content on top.
-				new IconLayer<MapTile>({
-					id: "terrain-3d-relief",
-					data: tiles.filter(
-						(t) => terrain3dReliefKey(t, al, t3d) != null,
-					),
-					iconAtlas: TERRAIN_3D_ATLAS_URL,
-					iconMapping: t3d.sprites,
-					getIcon: (d: MapTile) =>
-						terrain3dReliefKey(d, al, t3d) as string,
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => t3d.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
+				iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
+				iconMapping: ibm.sprites,
+				getIcon: (d: MapTile) => {
+					const cap = capitalSpriteKeyFor(d, al, ibm);
+					if (cap != null) return cap;
+					return `URBAN_${urbanFamilyFor(d.owner_nation, al)}`;
+				},
+				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+				getSize: () => ibm.cellWidth,
+				sizeUnits: "common",
+				sizeBasis: "width",
+				pickable: false,
+			}),
+			// Resource sprites (animals/fish/minerals). Drawn after the
+			// terrain layer so they sit on the underlying biome/relief,
+			// and before the improvement layer so rural improvements
+			// (Pasture/Camp/Mine) draw their structure on top.
+			//
+			// Variant selection: SOLO when the tile carries a rural
+			// improvement (a single figure tucks neatly inside the fence
+			// or mining structure), HERD on bare tiles (the herd reads as
+			// the wild resource). Falls back to whichever variant the
+			// atlas has if only one is present.
+			//
+			// Aliased urban tiles are skipped — pinacotheca's urban-tile
+			// renders (composites and standalones) already incorporate the
+			// scene without wild-resource visuals, matching the game's own
+			// behavior of replacing the resource model with city imagery.
+			new IconLayer<MapTile>({
+				id: "resource-icons",
+				data: tiles.filter((t) => {
+					if (resourceSpriteKeyFor(t, rm) == null) return false;
+					if (
+						t.terrain === "TERRAIN_URBAN" &&
+						urbanFamilyFor(t.owner_nation, al) != null
+					) {
+						return false;
+					}
+					return true;
 				}),
-				// Per-nation tile render — capital city for capital tiles, the
-				// nation's urban backdrop everywhere else. Both come from
-				// improvements-base, both fully cover the inscribed hex, and
-				// neither is ever overdrawn by a composite (capitals don't have
-				// composite-eligible improvements; urban-empty tiles already
-				// filter out composite-covered ones).
-				new IconLayer<MapTile>({
-					id: "nation-tile-icons",
-					data: tiles.filter((t) => {
-						const cap = capitalSpriteKeyFor(t, al, ibm);
-						if (cap != null) return true;
-						if (t.terrain !== "TERRAIN_URBAN") return false;
-						const family = urbanFamilyFor(t.owner_nation, al);
-						if (family == null) return false;
-						if (compositeFamilyFor(t, al, fms) != null) return false;
-						return ibm.sprites[`URBAN_${family}`] != null;
-					}),
-					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
-					iconMapping: ibm.sprites,
-					getIcon: (d: MapTile) => {
-						const cap = capitalSpriteKeyFor(d, al, ibm);
-						if (cap != null) return cap;
-						return `URBAN_${urbanFamilyFor(d.owner_nation, al)}`;
-					},
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => ibm.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
+				iconAtlas: RESOURCES_ATLAS_URL,
+				iconMapping: rm.sprites,
+				getIcon: (d: MapTile) => resourceSpriteKeyFor(d, rm) as string,
+				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+				getSize: () => rm.cellWidth,
+				sizeUnits: "common",
+				sizeBasis: "width",
+				pickable: false,
+			}),
+			// Single-improvement renders (rural, ruins, settlements,
+			// non-urban-buildable wonders). Synthesizes a __FALLBACK__
+			// icon for zTypes the base manifest doesn't know — typically
+			// mod content not vendored into Reference/XML — by extending
+			// the iconMapping with the manifest's fallbackSprite cell.
+			// Excludes tiles already covered by a composite layer or by
+			// the nation-tile layer (capitals).
+			new IconLayer<MapTile>({
+				id: "improvement-icons",
+				data: tiles.filter((t) => {
+					if (t.improvement == null) return false;
+					if (
+						ibm.sprites[t.improvement] == null &&
+						ibm.fallbackSprite == null
+					) {
+						return false;
+					}
+					if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
+					if (compositeFamilyFor(t, al, fms) != null) return false;
+					return true;
 				}),
-				// Resource sprites (animals/fish/minerals). Drawn after the
-				// terrain layer so they sit on the underlying biome/relief,
-				// and before the improvement layer so rural improvements
-				// (Pasture/Camp/Mine) draw their structure on top.
-				//
-				// Variant selection: SOLO when the tile carries a rural
-				// improvement (a single figure tucks neatly inside the fence
-				// or mining structure), HERD on bare tiles (the herd reads as
-				// the wild resource). Falls back to whichever variant the
-				// atlas has if only one is present.
-				//
-				// Aliased urban tiles are skipped — pinacotheca's urban-tile
-				// renders (composites and standalones) already incorporate the
-				// scene without wild-resource visuals, matching the game's own
-				// behavior of replacing the resource model with city imagery.
-				new IconLayer<MapTile>({
-					id: "resource-icons",
-					data: tiles.filter((t) => {
-						if (resourceSpriteKeyFor(t, rm) == null) return false;
-						if (
-							t.terrain === "TERRAIN_URBAN" &&
-							urbanFamilyFor(t.owner_nation, al) != null
-						) {
-							return false;
-						}
-						return true;
-					}),
-					iconAtlas: RESOURCES_ATLAS_URL,
-					iconMapping: rm.sprites,
-					getIcon: (d: MapTile) => resourceSpriteKeyFor(d, rm) as string,
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => rm.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
-				}),
-				// Single-improvement renders (rural, ruins, settlements,
-				// non-urban-buildable wonders). Synthesizes a __FALLBACK__
-				// icon for zTypes the base manifest doesn't know — typically
-				// mod content not vendored into Reference/XML — by extending
-				// the iconMapping with the manifest's fallbackSprite cell.
-				// Excludes tiles already covered by a composite layer or by
-				// the nation-tile layer (capitals).
-				new IconLayer<MapTile>({
-					id: "improvement-icons",
-					data: tiles.filter((t) => {
-						if (t.improvement == null) return false;
-						if (
-							ibm.sprites[t.improvement] == null &&
-							ibm.fallbackSprite == null
-						) {
-							return false;
-						}
-						if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
-						if (compositeFamilyFor(t, al, fms) != null) return false;
-						return true;
-					}),
-					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
-					iconMapping: {
-						...ibm.sprites,
-						...(ibm.fallbackSprite
-							? { __FALLBACK__: ibm.fallbackSprite }
-							: {}),
-					},
-					getIcon: (d: MapTile) =>
-						ibm.sprites[d.improvement as string] != null
-							? (d.improvement as string)
-							: "__FALLBACK__",
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => ibm.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
-				}),
-				...compositeLayers,
-				new PolygonLayer<ReligionFill>({
-					id: "religion-layer",
-					data: fills,
-					getPolygon: (d: ReligionFill) => d.polygon,
-					getFillColor: (d: ReligionFill) => d.color,
-					stroked: false,
-					filled: true,
-					pickable: false,
-					visible: rel,
-				}),
-				new PathLayer<NationBorder>({
-					id: "political-sub-borders",
-					data: political.subBorders,
-					getPath: (d: NationBorder) => d.path,
-					getColor: (d: NationBorder) => d.color,
-					getWidth: (d: NationBorder) => d.width,
-					widthUnits: "pixels",
-					widthMinPixels: 1,
-					jointRounded: true,
-					capRounded: true,
-					pickable: false,
-					visible: pol,
-				}),
-				new PathLayer<NationBorder>({
-					id: "political-borders",
-					data: political.borders,
-					getPath: (d: NationBorder) => d.path,
-					getColor: (d: NationBorder) => d.color,
-					getWidth: (d: NationBorder) => d.width,
-					widthUnits: "pixels",
-					widthMinPixels: 1,
-					jointRounded: true,
-					capRounded: true,
-					pickable: false,
-					visible: pol,
-				}),
-				// Invisible pickable layer so hover/right-click resolve to the
-				// correct hex regardless of which sprite layer happens to draw
-				// on top. Uses the exact hexPolygon shape so picking matches
-				// the inscribed hex (no slop into neighboring tiles at corners).
-				// Sits last so it receives picks above all visual layers.
-				new PolygonLayer<MapTile>({
-					id: "tile-picking",
-					data: tiles,
-					getPolygon: (d: MapTile) => {
-						const [cx, cy] = hexToPixel(d.x, d.y);
-						return hexPolygon(cx, cy);
-					},
-					getFillColor: [0, 0, 0, 0],
-					stroked: false,
-					filled: true,
-					pickable: true,
-				}),
-			],
-		});
+				iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
+				iconMapping: {
+					...ibm.sprites,
+					...(ibm.fallbackSprite ? { __FALLBACK__: ibm.fallbackSprite } : {}),
+				},
+				getIcon: (d: MapTile) =>
+					ibm.sprites[d.improvement as string] != null
+						? (d.improvement as string)
+						: "__FALLBACK__",
+				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+				getSize: () => ibm.cellWidth,
+				sizeUnits: "common",
+				sizeBasis: "width",
+				pickable: false,
+			}),
+			...compositeLayers,
+			new PolygonLayer<ReligionFill>({
+				id: "religion-layer",
+				data: fills,
+				getPolygon: (d: ReligionFill) => d.polygon,
+				getFillColor: (d: ReligionFill) => d.color,
+				stroked: false,
+				filled: true,
+				pickable: false,
+				visible: rel,
+			}),
+			new PathLayer<NationBorder>({
+				id: "political-sub-borders",
+				data: political.subBorders,
+				getPath: (d: NationBorder) => d.path,
+				getColor: (d: NationBorder) => d.color,
+				getWidth: (d: NationBorder) => d.width,
+				widthUnits: "pixels",
+				widthMinPixels: 1,
+				jointRounded: true,
+				capRounded: true,
+				pickable: false,
+				visible: pol,
+			}),
+			new PathLayer<NationBorder>({
+				id: "political-borders",
+				data: political.borders,
+				getPath: (d: NationBorder) => d.path,
+				getColor: (d: NationBorder) => d.color,
+				getWidth: (d: NationBorder) => d.width,
+				widthUnits: "pixels",
+				widthMinPixels: 1,
+				jointRounded: true,
+				capRounded: true,
+				pickable: false,
+				visible: pol,
+			}),
+			// Invisible pickable layer so hover/right-click resolve to the
+			// correct hex regardless of which sprite layer happens to draw
+			// on top. Uses the exact hexPolygon shape so picking matches
+			// the inscribed hex (no slop into neighboring tiles at corners).
+			// Sits last so it receives picks above all visual layers.
+			new PolygonLayer<MapTile>({
+				id: "tile-picking",
+				data: tiles,
+				getPolygon: (d: MapTile) => {
+					const [cx, cy] = hexToPixel(d.x, d.y);
+					return hexPolygon(cx, cy);
+				},
+				getFillColor: [0, 0, 0, 0],
+				stroked: false,
+				filled: true,
+				pickable: true,
+			}),
+		];
+	}
+
+	$effect(() => {
+		const targetDeck = deck;
+		const targetFullscreenDeck = fullscreenDeck;
+		if (!targetDeck && !targetFullscreenDeck) return;
+		if (!assetsLoaded) return;
+
+		// Touch all reactive deps that buildLayers reads, so the effect
+		// re-runs when any of them change. buildLayers itself isn't called
+		// inside a tracked context for both decks (we call it twice), so we
+		// list the deps explicitly here.
+		void terrain3dManifest;
+		void improvementsBaseManifest;
+		void resourcesManifest;
+		void nationAliases;
+		void familyManifests;
+		void tiles;
+		void politicalData;
+		void religionFills;
+		void showPolitical;
+		void showReligion;
+
+		const inlineLayers = buildLayers();
+		if (inlineLayers) targetDeck?.setProps({ layers: inlineLayers });
+		// Fresh layer instances for the second deck — Layer objects bind GPU
+		// state to a single Deck's GL context, so reusing the same instances
+		// breaks rendering in the second one.
+		const fsLayers = buildLayers();
+		if (fsLayers) targetFullscreenDeck?.setProps({ layers: fsLayers });
 	});
 
 	// ─── Turn slider + playback ───────────────────────────────────────
@@ -1482,12 +1662,30 @@
 				deck.finalize();
 				deck = null;
 			}
+			if (fullscreenDeck) {
+				fullscreenDeck.finalize();
+				fullscreenDeck = null;
+			}
 		};
+	});
+
+	// Track fullscreen container size for tooltip edge-clamping. The
+	// container only exists in the DOM after the first dialog open; bind
+	// reactivity to fullscreenContainerEl so the observer attaches as soon
+	// as it appears and tears down if the element is replaced.
+	$effect(() => {
+		const el = fullscreenContainerEl;
+		if (!el) return;
+		const ro = new ResizeObserver(() => {
+			fullscreenContainerWidth = el.clientWidth;
+			fullscreenContainerHeight = el.clientHeight;
+		});
+		ro.observe(el);
+		return () => ro.disconnect();
 	});
 </script>
 
-<div class="flex flex-col gap-4">
-	<!-- Layer toggles + turn controls -->
+{#snippet controlsBar(trailingBtn: "expand" | "close" | "none")}
 	<div class="flex flex-wrap items-center gap-4 text-sm">
 		<div class="flex items-center gap-3">
 			<label class="marker-toggle">
@@ -1500,84 +1698,139 @@
 			</label>
 		</div>
 
-		{#if showTurnSlider}
-			<div class="ml-auto flex items-center gap-3">
-				<span class="text-sm font-bold text-brown">Turn:</span>
-				<div class="flex items-center">
-					<button
-						onclick={togglePlayback}
-						class="rounded p-1.5 transition-colors {isPlaying
-							? 'bg-brown text-tan'
-							: 'bg-brown/30 hover:bg-brown/50'}"
-						aria-label={isPlaying ? "Pause" : "Play"}
-						title={isPlaying ? "Pause" : "Play (1x)"}
+		<div class="ml-auto flex items-center gap-6">
+			{#if showTurnSlider}
+				<div class="flex items-center gap-3">
+					<span class="text-sm font-bold text-brown">Turn:</span>
+					<div class="flex items-center">
+						<button
+							onclick={togglePlayback}
+							class="rounded p-1.5 transition-colors {isPlaying
+								? 'bg-brown text-tan'
+								: 'bg-brown/30 hover:bg-brown/50'}"
+							aria-label={isPlaying ? "Pause" : "Play"}
+							title={isPlaying ? "Pause" : "Play (1x)"}
+						>
+							{#if isPlaying}
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4 text-tan"
+									fill="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<rect x="6" y="4" width="4" height="16" />
+									<rect x="14" y="4" width="4" height="16" />
+								</svg>
+							{:else}
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4 text-tan"
+									fill="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path d="M8 5v14l11-7z" />
+								</svg>
+							{/if}
+						</button>
+						<button
+							onclick={toggleFastPlayback}
+							class="rounded p-1.5 transition-colors {isFastPlaying
+								? 'bg-brown text-tan'
+								: 'bg-brown/30 hover:bg-brown/50'}"
+							aria-label={isFastPlaying ? "Pause" : "Fast Forward"}
+							title={isFastPlaying ? "Pause" : "Fast Forward (2x)"}
+						>
+							{#if isFastPlaying}
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4 text-tan"
+									fill="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<rect x="6" y="4" width="4" height="16" />
+									<rect x="14" y="4" width="4" height="16" />
+								</svg>
+							{:else}
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4 text-tan"
+									fill="currentColor"
+									viewBox="0 0 24 24"
+								>
+									<path d="M4 5v14l8-7z" />
+									<path d="M12 5v14l8-7z" />
+								</svg>
+							{/if}
+						</button>
+					</div>
+					<input
+						type="range"
+						min="1"
+						max={totalTurns}
+						value={selectedTurn}
+						oninput={handleSliderChange}
+						class="turn-slider w-48"
+					/>
+					<span class="w-8 text-right text-sm font-bold text-tan"
+						>{selectedTurn}</span
 					>
-						{#if isPlaying}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-4 w-4 text-tan"
-								fill="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<rect x="6" y="4" width="4" height="16" />
-								<rect x="14" y="4" width="4" height="16" />
-							</svg>
-						{:else}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-4 w-4 text-tan"
-								fill="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path d="M8 5v14l11-7z" />
-							</svg>
-						{/if}
-					</button>
-					<button
-						onclick={toggleFastPlayback}
-						class="rounded p-1.5 transition-colors {isFastPlaying
-							? 'bg-brown text-tan'
-							: 'bg-brown/30 hover:bg-brown/50'}"
-						aria-label={isFastPlaying ? "Pause" : "Fast Forward"}
-						title={isFastPlaying ? "Pause" : "Fast Forward (2x)"}
-					>
-						{#if isFastPlaying}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-4 w-4 text-tan"
-								fill="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<rect x="6" y="4" width="4" height="16" />
-								<rect x="14" y="4" width="4" height="16" />
-							</svg>
-						{:else}
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								class="h-4 w-4 text-tan"
-								fill="currentColor"
-								viewBox="0 0 24 24"
-							>
-								<path d="M4 5v14l8-7z" />
-								<path d="M12 5v14l8-7z" />
-							</svg>
-						{/if}
-					</button>
 				</div>
-				<input
-					type="range"
-					min="1"
-					max={totalTurns}
-					value={selectedTurn}
-					oninput={handleSliderChange}
-					class="turn-slider w-48"
-				/>
-				<span class="w-8 text-right text-sm font-bold text-tan"
-					>{selectedTurn}</span
+			{/if}
+
+			{#if trailingBtn === "expand"}
+				<!-- Expand button (chart-style: semi-transparent overlay icon) -->
+				<button
+					onclick={openFullscreen}
+					class="bg-black/20 hover:bg-black/40 cursor-pointer rounded p-1.5 transition-colors focus:outline-none"
+					aria-label="Expand map to fullscreen"
+					title="Expand to fullscreen"
 				>
-			</div>
-		{/if}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-4 w-4 text-white"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"
+						/>
+					</svg>
+				</button>
+			{:else if trailingBtn === "close"}
+				<!-- Close button (matches expand styling so it slots into the same row) -->
+				<button
+					onclick={closeFullscreen}
+					class="bg-black/20 hover:bg-black/40 cursor-pointer rounded p-1.5 transition-colors focus:outline-none"
+					aria-label="Close fullscreen"
+					title="Close fullscreen (Esc)"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-4 w-4 text-white"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M6 18L18 6M6 6l12 12"
+						/>
+					</svg>
+				</button>
+			{/if}
+		</div>
 	</div>
+{/snippet}
+
+<div class="flex flex-col gap-4">
+	<!-- Layer toggles + turn controls + expand button -->
+	{@render controlsBar("expand")}
 
 	<div
 		class="sprite-map-container"
@@ -1621,6 +1874,68 @@
 		{/each}
 	</div>
 </div>
+
+<!-- Fullscreen dialog (chart-style: native <dialog> in browser top layer) -->
+<dialog
+	bind:this={dialogRef}
+	onclick={handleBackdropClick}
+	onclose={handleDialogClose}
+	class="fullscreen-dialog {isClosing ? 'closing' : ''}"
+>
+	<div class="dialog-content">
+		<!-- Mirrored controls bar with the close button slotted in the same
+		     position the expand button occupies in the normal view. -->
+		<div class="bg-black/90 mb-4 flex-shrink-0 rounded-lg px-4 py-3">
+			{@render controlsBar("close")}
+		</div>
+
+		<!-- Fullscreen sprite map -->
+		<div
+			class="sprite-map-container relative min-h-0 flex-1"
+			bind:this={fullscreenContainerEl}
+		>
+			<canvas
+				bind:this={fullscreenCanvas}
+				class="sprite-map-canvas"
+				oncontextmenu={handleFullscreenContextMenu}
+			></canvas>
+
+			{#if showFullscreenHover && fullscreenHoverState}
+				<MapTooltip
+					tile={fullscreenHoverState.tile}
+					cityFamily={fullscreenHoverState.tile.owner_city
+						? (cityFamilyCrestByName.get(
+								fullscreenHoverState.tile.owner_city,
+							) ?? null)
+						: null}
+					nationCrestKey={resolveNationCrestKey(
+						fullscreenHoverState.tile.owner_nation,
+					)}
+					screenX={fullscreenHoverState.x}
+					screenY={fullscreenHoverState.y}
+					containerWidth={fullscreenContainerWidth}
+					containerHeight={fullscreenContainerHeight}
+				/>
+			{/if}
+
+			{#each lockedScreenFullscreen as locked (locked.key)}
+				<MapTooltip
+					tile={locked.tile}
+					cityFamily={locked.tile.owner_city
+						? (cityFamilyCrestByName.get(locked.tile.owner_city) ?? null)
+						: null}
+					nationCrestKey={resolveNationCrestKey(locked.tile.owner_nation)}
+					pinned
+					screenX={locked.sx}
+					screenY={locked.sy}
+					containerWidth={fullscreenContainerWidth}
+					containerHeight={fullscreenContainerHeight}
+					onClose={() => toggleLockedTile(locked.tile)}
+				/>
+			{/each}
+		</div>
+	</div>
+</dialog>
 
 <style>
 	.sprite-map-container {
@@ -1724,5 +2039,120 @@
 
 	.turn-slider::-moz-range-thumb:hover {
 		background: var(--color-tan);
+	}
+
+	/* Fullscreen dialog — mirrors ChartContainer.svelte's behavior. */
+	.fullscreen-dialog {
+		border: none;
+		padding: 0;
+		background: transparent;
+		max-width: none;
+		max-height: none;
+		width: 100vw;
+		height: 100vh;
+		outline: none;
+	}
+
+	.fullscreen-dialog:not([open]) {
+		display: none;
+	}
+
+	.fullscreen-dialog[open] {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		animation: dialogFadeIn 0.2s ease-out;
+	}
+
+	.fullscreen-dialog[open] .dialog-content {
+		animation: dialogZoomIn 0.2s ease-out;
+	}
+
+	.fullscreen-dialog[open]::backdrop {
+		animation: backdropFadeIn 0.2s ease-out;
+	}
+
+	.fullscreen-dialog.closing {
+		animation: dialogFadeOut 0.2s ease-in forwards;
+	}
+
+	.fullscreen-dialog.closing .dialog-content {
+		animation: dialogZoomOut 0.2s ease-in forwards;
+	}
+
+	.fullscreen-dialog.closing::backdrop {
+		animation: backdropFadeOut 0.2s ease-in forwards;
+	}
+
+	@keyframes dialogFadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	@keyframes dialogFadeOut {
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0;
+		}
+	}
+
+	@keyframes dialogZoomIn {
+		from {
+			opacity: 0;
+			transform: scale(0.95);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
+	}
+
+	@keyframes dialogZoomOut {
+		from {
+			opacity: 1;
+			transform: scale(1);
+		}
+		to {
+			opacity: 0;
+			transform: scale(0.95);
+		}
+	}
+
+	@keyframes backdropFadeIn {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+
+	@keyframes backdropFadeOut {
+		from {
+			opacity: 1;
+		}
+		to {
+			opacity: 0;
+		}
+	}
+
+	.fullscreen-dialog::backdrop {
+		background: rgba(0, 0, 0, 0.8);
+	}
+
+	.dialog-content {
+		position: relative;
+		width: 95vw;
+		height: 90vh;
+		max-width: 95vw;
+		max-height: 90vh;
+		display: flex;
+		flex-direction: column;
 	}
 </style>
