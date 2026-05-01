@@ -52,7 +52,9 @@
 		if (!tile.terrain) return null;
 		// When inside a city, "Urban" duplicates the city header — suppress.
 		if (tile.terrain === "TERRAIN_URBAN" && tile.owner_nation) return null;
-		return formatEnum(tile.terrain, "TERRAIN_");
+		const terrain = formatEnum(tile.terrain, "TERRAIN_");
+		if (!tile.height) return terrain;
+		return `${terrain} ${formatEnum(tile.height, "HEIGHT_")}`;
 	});
 
 	const improvementLabel = $derived.by(() => {
@@ -126,7 +128,7 @@
 
 	<div class="rows">
 		<span class="label">Tile</span>
-		<span class="value">({tile.x}, {tile.y})</span>
+		<span class="value">{tile.x}, {tile.y}</span>
 		{#if terrainLabel}
 			<span class="label">Terrain</span>
 			<span class="value">{terrainLabel}</span>
