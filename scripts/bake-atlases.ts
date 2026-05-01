@@ -37,8 +37,11 @@ interface OutputManifest extends SourceManifest {
 	pinacothecaVersion: string;
 }
 
+// Pointy-top hex inscribed at game-accurate 1.225 aspect (8.66 wide ×
+// 7.07 tall after 45° tilt). Mirrors scripts/lib/atlas-bake.ts and
+// src/lib/SpriteMap.svelte — keep all three in sync.
 const HEX_H_SPACING = 199;
-const HEX_V_SPACING = 132;
+const HEX_V_SPACING = 122;
 const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 const SPRITE_SCALE_X = 1.13;

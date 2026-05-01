@@ -10,10 +10,17 @@ import { resolve } from "node:path";
 
 // Hex geometry — cell size matches the runtime SpriteMap.svelte hex spacing
 // constants. Don't change one without the other.
+//
+// Aspect tracks the game's actual on-screen hex (per the decompiled
+// GameCamera.cs / MapEditor.cs): pointy-top hex with size R = 5 world
+// units (8.66 wide × 10 tall) viewed at the camera's fixed 45° pitch,
+// projecting to width 8.66 × height 10·sin(45°) = 7.07 — aspect 1.225.
+// Pinacotheca renders at the same 45° tilt, so its image hex matches
+// per-ankh's cell hex pixel-for-pixel up to scale.
 export const CELL_W = 211;
-export const CELL_H = 181;
+export const CELL_H = 167;
 export const HEX_H_SPACING = 199;
-export const HEX_V_SPACING = 132;
+export const HEX_V_SPACING = 122;
 export const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 export const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 
@@ -57,17 +64,70 @@ export interface BakeCellOptions {
 	tweak?: { brightness?: number; saturation?: number };
 }
 
-export function buildHexMaskSvg(cellW: number, cellH: number): string {
+
+
+// Build a hex-clip alpha mask as a binary-alpha PNG buffer (each pixel is
+// either fully opaque or fully transparent — no antialiased gradient at the
+// inscribed hex boundary). Why binary: an antialiased SVG-rasterized mask
+// produces a one-pixel half-alpha row along the diagonal hex edges. When two
+// adjacent baked cells are drawn next to each other on the map, both
+// contribute that half-alpha pixel at the same screen position, and standard
+// "over" compositing leaves ~25% of the underlying terrain visible — a dark
+// seam along every diagonal hex edge. Binary alpha eliminates that: at any
+// screen pixel along a shared edge, exactly one tile is fully opaque and the
+// other is fully transparent (point-in-polygon test is consistent across
+// tiles). The cost is single-pixel staircase aliasing on the diagonals,
+// which is invisible at typical zoom and far better than a seam.
+//
+// Async because the raw RGBA buffer is converted to PNG via sharp; callers
+// should call this once per bake and reuse the resulting buffer across
+// every cell of a given size.
+export async function buildHexMask(
+	cellW: number,
+	cellH: number,
+): Promise<Buffer> {
 	const cx = cellW / 2;
 	const cy = cellH / 2;
-	const points: string[] = [];
+	const vertices: [number, number][] = [];
 	for (let i = 0; i < 6; i++) {
 		const angle = (Math.PI / 3) * i - Math.PI / 2;
-		const x = cx + HEX_RADIUS_X * Math.cos(angle);
-		const y = cy + HEX_RADIUS_Y * Math.sin(angle);
-		points.push(`${x.toFixed(3)},${y.toFixed(3)}`);
+		vertices.push([
+			cx + HEX_RADIUS_X * Math.cos(angle),
+			cy + HEX_RADIUS_Y * Math.sin(angle),
+		]);
 	}
-	return `<svg xmlns="http://www.w3.org/2000/svg" width="${cellW}" height="${cellH}"><polygon points="${points.join(" ")}" fill="white"/></svg>`;
+
+	// Standard ray-casting point-in-polygon test, evaluated at the center of
+	// each pixel. Edge-case ties on horizontal scans are handled by the
+	// strict-inequality `yi > py !== yj > py` predicate.
+	const insideHex = (px: number, py: number): boolean => {
+		let inside = false;
+		for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+			const [xi, yi] = vertices[i];
+			const [xj, yj] = vertices[j];
+			const crosses =
+				yi > py !== yj > py &&
+				px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+			if (crosses) inside = !inside;
+		}
+		return inside;
+	};
+
+	const data = Buffer.alloc(cellW * cellH * 4);
+	for (let y = 0; y < cellH; y++) {
+		for (let x = 0; x < cellW; x++) {
+			const idx = (y * cellW + x) * 4;
+			data[idx] = 255;
+			data[idx + 1] = 255;
+			data[idx + 2] = 255;
+			data[idx + 3] = insideHex(x + 0.5, y + 0.5) ? 255 : 0;
+		}
+	}
+	return sharp(data, {
+		raw: { width: cellW, height: cellH, channels: 4 },
+	})
+		.png()
+		.toBuffer();
 }
 
 // Resize the source PNG to fit the cell, optionally apply a brightness /

@@ -10,8 +10,13 @@
 	// upscale happen at build time. The runtime feeds the baked atlas straight
 	// to deck.gl IconLayer, which samples it as-is. The dimensions also drive
 	// overlay polygons (religion fill) and edge segments (political borders).
+	//
+	// Aspect tracks the game's on-screen hex: pointy-top R = 5 world units
+	// (8.66 × 10) viewed at the camera's fixed 45° pitch → 8.66 × 7.07
+	// pixel-projected, aspect 1.225. Pinacotheca renders at the same tilt,
+	// so cell hex matches its image hex up to a uniform scale.
 	const HEX_H_SPACING = 199;
-	const HEX_V_SPACING = 132;
+	const HEX_V_SPACING = 122;
 	// Elliptical hex radii derived from grid spacing so polygons tessellate
 	// exactly: H_SPACING = 2 * apothem = R_X * sqrt(3); V_SPACING = 1.5 * R_Y.
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
@@ -105,18 +110,6 @@
 		const cf = capitalFamilyFor(tile.owner_nation, aliases);
 		if (!cf) return null;
 		const key = `CAPITAL_${cf}`;
-		return baseManifest.sprites[key] ? key : null;
-	}
-
-	function urbanEmptySpriteKeyFor(
-		tile: MapTile,
-		aliases: Map<string, NationAliasEntry>,
-		baseManifest: AtlasManifest,
-	): string | null {
-		if (tile.terrain !== "TERRAIN_URBAN") return null;
-		const family = urbanFamilyFor(tile.owner_nation, aliases);
-		if (!family) return null;
-		const key = `URBAN_${family}`;
 		return baseManifest.sprites[key] ? key : null;
 	}
 
@@ -737,8 +730,15 @@
 			minPy = Math.min(minPy, py);
 			maxPy = Math.max(maxPy, py);
 		}
-		const mapWidth = maxPx - minPx + 211;
-		const mapHeight = maxPy - minPy + 181;
+		// Cell-bbox margin around the map's hex-center extent, so the
+		// outermost tiles aren't clipped at the viewport edge. Read from
+		// the loaded manifest (pinacotheca's atlas is the source of truth
+		// for cell dimensions) — falling back to the per-ankh constants
+		// if the manifest hasn't loaded yet.
+		const cellMarginW = improvementsBaseManifest?.cellWidth ?? 211;
+		const cellMarginH = improvementsBaseManifest?.cellHeight ?? 167;
+		const mapWidth = maxPx - minPx + cellMarginW;
+		const mapHeight = maxPy - minPy + cellMarginH;
 
 		// Calculate zoom to fit map in canvas
 		const canvasWidth = target.clientWidth;
@@ -907,21 +907,30 @@
 					sizeBasis: "width",
 					pickable: false,
 				}),
-				// Empty urban background — drawn on urban tiles where no
-				// composite covers AND not a capital. Fills the hex with the
-				// nation's URBAN_<family> backdrop.
+				// Per-nation tile render — capital city for capital tiles, the
+				// nation's urban backdrop everywhere else. Both come from
+				// improvements-base, both fully cover the inscribed hex, and
+				// neither is ever overdrawn by a composite (capitals don't have
+				// composite-eligible improvements; urban-empty tiles already
+				// filter out composite-covered ones).
 				new IconLayer<MapTile>({
-					id: "urban-empty-icons",
+					id: "nation-tile-icons",
 					data: tiles.filter((t) => {
-						if (urbanEmptySpriteKeyFor(t, al, ibm) == null) return false;
-						if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
+						const cap = capitalSpriteKeyFor(t, al, ibm);
+						if (cap != null) return true;
+						if (t.terrain !== "TERRAIN_URBAN") return false;
+						const family = urbanFamilyFor(t.owner_nation, al);
+						if (family == null) return false;
 						if (compositeFamilyFor(t, al, fms) != null) return false;
-						return true;
+						return ibm.sprites[`URBAN_${family}`] != null;
 					}),
 					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
 					iconMapping: ibm.sprites,
-					getIcon: (d: MapTile) =>
-						urbanEmptySpriteKeyFor(d, al, ibm) as string,
+					getIcon: (d: MapTile) => {
+						const cap = capitalSpriteKeyFor(d, al, ibm);
+						if (cap != null) return cap;
+						return `URBAN_${urbanFamilyFor(d.owner_nation, al)}`;
+					},
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 					getSize: () => ibm.cellWidth,
 					sizeUnits: "common",
@@ -952,8 +961,8 @@
 				}),
 				// Resource sprites (animals/fish/minerals). Drawn after height
 				// so they sit on the underlying terrain, and before the
-				// improvement-base layer so rural improvements
-				// (Pasture/Camp/Mine) draw their structure on top.
+				// improvement layer so rural improvements (Pasture/Camp/Mine)
+				// draw their structure on top.
 				//
 				// Variant selection: SOLO when the tile carries a rural
 				// improvement (a single figure tucks neatly inside the fence
@@ -961,14 +970,22 @@
 				// the wild resource). Falls back to whichever variant the
 				// atlas has if only one is present.
 				//
-				// Composite tiles already bake any resource visuals into the
-				// urban scene, but urban tiles don't carry resources in save
-				// data, so this layer never fires on them.
+				// Aliased urban tiles are skipped — pinacotheca's urban-tile
+				// renders (composites and standalones) already incorporate the
+				// scene without wild-resource visuals, matching the game's own
+				// behavior of replacing the resource model with city imagery.
 				new IconLayer<MapTile>({
 					id: "resource-icons",
-					data: tiles.filter(
-						(t) => resourceSpriteKeyFor(t, rm) != null,
-					),
+					data: tiles.filter((t) => {
+						if (resourceSpriteKeyFor(t, rm) == null) return false;
+						if (
+							t.terrain === "TERRAIN_URBAN" &&
+							urbanFamilyFor(t.owner_nation, al) != null
+						) {
+							return false;
+						}
+						return true;
+					}),
 					iconAtlas: RESOURCES_ATLAS_URL,
 					iconMapping: rm.sprites,
 					getIcon: (d: MapTile) => resourceSpriteKeyFor(d, rm) as string,
@@ -978,73 +995,45 @@
 					sizeBasis: "width",
 					pickable: false,
 				}),
-				...compositeLayers,
 				// Single-improvement renders (rural, ruins, settlements,
-				// non-urban-buildable wonders). Excludes tiles already covered
-				// by a composite layer or by the capital layer.
+				// non-urban-buildable wonders). Synthesizes a __FALLBACK__
+				// icon for zTypes the base manifest doesn't know — typically
+				// mod content not vendored into Reference/XML — by extending
+				// the iconMapping with the manifest's fallbackSprite cell.
+				// Excludes tiles already covered by a composite layer or by
+				// the nation-tile layer (capitals).
 				new IconLayer<MapTile>({
 					id: "improvement-icons",
 					data: tiles.filter((t) => {
 						if (t.improvement == null) return false;
-						if (ibm.sprites[t.improvement] == null) return false;
+						if (
+							ibm.sprites[t.improvement] == null &&
+							ibm.fallbackSprite == null
+						) {
+							return false;
+						}
 						if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
 						if (compositeFamilyFor(t, al, fms) != null) return false;
 						return true;
 					}),
 					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
-					iconMapping: ibm.sprites,
-					getIcon: (d: MapTile) => d.improvement as string,
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => ibm.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
-				}),
-				// Fallback for improvements whose zType isn't in the base
-				// manifest AND has no composite — typically mod content not
-				// vendored into Reference/XML. Samples the fallback cell.
-				new IconLayer<MapTile>({
-					id: "improvement-fallback-icons",
-					data:
-						ibm.fallbackSprite != null
-							? tiles.filter((t) => {
-									if (t.improvement == null) return false;
-									if (ibm.sprites[t.improvement] != null) return false;
-									if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
-									if (compositeFamilyFor(t, al, fms) != null) return false;
-									return true;
-								})
-							: [],
-					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
-					iconMapping:
-						ibm.fallbackSprite != null
+					iconMapping: {
+						...ibm.sprites,
+						...(ibm.fallbackSprite
 							? { __FALLBACK__: ibm.fallbackSprite }
-							: {},
-					getIcon: () => "__FALLBACK__",
+							: {}),
+					},
+					getIcon: (d: MapTile) =>
+						ibm.sprites[d.improvement as string] != null
+							? (d.improvement as string)
+							: "__FALLBACK__",
 					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 					getSize: () => ibm.cellWidth,
 					sizeUnits: "common",
 					sizeBasis: "width",
 					pickable: false,
 				}),
-				// Capital tiles. Drawn last among the icon layers so the
-				// capital complex sits on top of any composite that might also
-				// match (the composite layer's filter already excludes
-				// capitals, so this is belt-and-suspenders).
-				new IconLayer<MapTile>({
-					id: "capital-overlay-icons",
-					data: tiles.filter(
-						(t) => capitalSpriteKeyFor(t, al, ibm) != null,
-					),
-					iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
-					iconMapping: ibm.sprites,
-					getIcon: (d: MapTile) => capitalSpriteKeyFor(d, al, ibm) as string,
-					getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-					getSize: () => ibm.cellWidth,
-					sizeUnits: "common",
-					sizeBasis: "width",
-					pickable: false,
-				}),
+				...compositeLayers,
 				new PolygonLayer<ReligionFill>({
 					id: "religion-layer",
 					data: fills,

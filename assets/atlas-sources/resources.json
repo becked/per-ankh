@@ -1,249 +1,249 @@
 {
   "atlas": "resources.webp",
   "cellWidth": 211,
-  "cellHeight": 181,
-  "bakedAt": "2026-04-30T15:38:13.716Z",
+  "cellHeight": 167,
+  "bakedAt": "2026-05-01T13:29:02.687Z",
   "pinacothecaVersion": "2.2.0",
   "sprites": {
     "RESOURCE_CAMEL_HERD": {
       "x": 0,
       "y": 0,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_CAMEL_SOLO": {
       "x": 213,
       "y": 0,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_CATTLE_HERD": {
       "x": 426,
       "y": 0,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_CATTLE_SOLO": {
       "x": 639,
       "y": 0,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_CITRUS_HERD": {
       "x": 852,
       "y": 0,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_CITRUS_SOLO": {
       "x": 1065,
       "y": 0,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_CRAB_HERD": {
       "x": 1278,
       "y": 0,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_CRAB_SOLO": {
       "x": 0,
-      "y": 183,
+      "y": 169,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_EBONY_HERD": {
       "x": 213,
-      "y": 183,
+      "y": 169,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_EBONY_SOLO": {
       "x": 426,
-      "y": 183,
+      "y": 169,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_ELEPHANT_HERD": {
       "x": 639,
-      "y": 183,
+      "y": 169,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_ELEPHANT_SOLO": {
       "x": 852,
-      "y": 183,
+      "y": 169,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_FISH_HERD": {
       "x": 1065,
-      "y": 183,
+      "y": 169,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_FISH_SOLO": {
       "x": 1278,
-      "y": 183,
+      "y": 169,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_FUR_HERD": {
       "x": 0,
-      "y": 366,
+      "y": 338,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_FUR_SOLO": {
       "x": 213,
-      "y": 366,
+      "y": 338,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_GAME_HERD": {
       "x": 426,
-      "y": 366,
+      "y": 338,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_GAME_SOLO": {
       "x": 639,
-      "y": 366,
+      "y": 338,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_GOAT_HERD": {
       "x": 852,
-      "y": 366,
+      "y": 338,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_GOAT_SOLO": {
       "x": 1065,
-      "y": 366,
+      "y": 338,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_HORSE_HERD": {
       "x": 1278,
-      "y": 366,
+      "y": 338,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_HORSE_SOLO": {
       "x": 0,
-      "y": 549,
+      "y": 507,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_INCENSE_HERD": {
       "x": 213,
-      "y": 549,
+      "y": 507,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_INCENSE_SOLO": {
       "x": 426,
-      "y": 549,
+      "y": 507,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_JADE_HERD": {
       "x": 639,
-      "y": 549,
+      "y": 507,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_JADE_SOLO": {
       "x": 852,
-      "y": 549,
+      "y": 507,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_PEARL_HERD": {
       "x": 1065,
-      "y": 549,
+      "y": 507,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_PEARL_SOLO": {
       "x": 1278,
-      "y": 549,
+      "y": 507,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_PIG_HERD": {
       "x": 0,
-      "y": 732,
+      "y": 676,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_PIG_SOLO": {
       "x": 213,
-      "y": 732,
+      "y": 676,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SALT_HERD": {
       "x": 426,
-      "y": 732,
+      "y": 676,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SALT_SOLO": {
       "x": 639,
-      "y": 732,
+      "y": 676,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SHEEP_HERD": {
       "x": 852,
-      "y": 732,
+      "y": 676,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SHEEP_SOLO": {
       "x": 1065,
-      "y": 732,
+      "y": 676,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SILK_HERD": {
       "x": 1278,
-      "y": 732,
+      "y": 676,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SILK_SOLO": {
       "x": 0,
-      "y": 915,
+      "y": 845,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SPICES_HERD": {
       "x": 213,
-      "y": 915,
+      "y": 845,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_SPICES_SOLO": {
       "x": 426,
-      "y": 915,
+      "y": 845,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_STONE_HERD": {
       "x": 639,
-      "y": 915,
+      "y": 845,
       "width": 211,
-      "height": 181
+      "height": 167
     },
     "RESOURCE_STONE_SOLO": {
       "x": 852,
-      "y": 915,
+      "y": 845,
       "width": 211,
-      "height": 181
+      "height": 167
     }
   }
 }

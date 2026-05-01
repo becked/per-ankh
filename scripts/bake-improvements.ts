@@ -59,7 +59,7 @@ import {
 	type SpriteRect,
 	type BakeCellOptions,
 	bakeCell,
-	buildHexMaskSvg,
+	buildHexMask,
 	placeCellGrid,
 	readPinacothecaVersion,
 	writeAtlas,
@@ -413,23 +413,22 @@ async function bakeBaseAtlas(
 	// Compose the cell list: kept singles, then per-family URBAN/CAPITAL
 	// standalones. Order is purposeful for predictable manifest layout —
 	// singles alphabetical, then URBAN_<family> alphabetical, then
-	// CAPITAL_<family> alphabetical.
+	// CAPITAL_<family> alphabetical. All sprites are CELL_W×CELL_H —
+	// pinacotheca's hex-prism clip already constrains content to a hex
+	// shape, so cover-fit + hex-clip lands the rendered scene cleanly
+	// inside the cell with no anchor offset or spire overflow.
 	type Cell = {
 		key: string;
 		path: string;
 		options: BakeCellOptions;
-		// zTypes that should map to this cell in the manifest sprites table;
-		// empty if the key itself IS the manifest key (URBAN_*/CAPITAL_*).
 		zTypes: string[];
 	};
 	const cells: Cell[] = [];
+
 	const sortedIcons = Array.from(iconToZTypes.keys()).sort();
 	for (const zIconName of sortedIcons) {
-		// zIconName is in keptIcons OR is FALLBACK_ICON (which we ensured is kept
-		// above before adding to iconToZTypes).
 		const path = classification.singles.get(zIconName);
 		if (!path) {
-			// Should not happen given the keptIcons / fallbackKept gating above.
 			console.warn(
 				`[improvements-base] WARN: no PNG for ${zIconName}, skipping`,
 			);
@@ -456,11 +455,6 @@ async function bakeBaseAtlas(
 		cells.push({
 			key: `CAPITAL_${family}`,
 			path: classification.standaloneCapital.get(family)!,
-			// Same treatment as URBAN_<FAMILY> and composites: pinacotheca
-			// 2.2.0+ ships capitals as self-contained tile renders with
-			// embedded ground (biome + PVT splats + buildings), so they're
-			// cover-fit to fill the hex like every other urban-style tile.
-			// No brightness tweak — pinacotheca's own lighting is balanced.
 			options: { scale: FULL_SCALE, fit: "cover" },
 			zTypes: [],
 		});
@@ -509,7 +503,7 @@ async function bakeBaseAtlas(
 		outputDir: OUTPUT_DIR,
 	});
 	console.log(
-		`[improvements-base] wrote ${grid.atlasWidth}×${grid.atlasHeight} (${grid.cols}×${grid.rows}, ${cells.length} cells)`,
+		`[improvements-base] wrote ${grid.atlasWidth}×${grid.atlasHeight} (${cells.length} cells)`,
 	);
 }
 
@@ -519,8 +513,11 @@ async function bakeFamilyAtlas(
 	familyMap: Map<string, string>,
 	zTypeMap: Map<string, string>,
 ): Promise<void> {
-	// One cell per zIconName in this family; multiple zTypes resolving to the
-	// same zIconName share the cell.
+	// One cell per zIconName in this family; multiple zTypes resolving
+	// to the same zIconName share the cell. Per-(improvement, family)
+	// composites are layered renders (biome + PVT + buildings); cover-
+	// fit + hex-clip lands them inside the cell. No tweak — pinacotheca
+	// already balances composite lighting.
 	const iconToZTypes = new Map<string, string[]>();
 	for (const [zType, zIconName] of zTypeMap) {
 		if (!familyMap.has(zIconName)) continue;
@@ -538,10 +535,6 @@ async function bakeFamilyAtlas(
 		const zIconName = sortedIcons[i];
 		const path = familyMap.get(zIconName)!;
 		const rect = grid.cellAt(i);
-		// Composites are pre-balanced by pinacotheca — no tweak. Full-cell
-		// scale with cover fit so the urban background reaches all hex
-		// corners (the composite IS the entire urban tile, not an inset
-		// focal building).
 		const baked = await bakeCell(path, ctx.hexMask, {
 			scale: FULL_SCALE,
 			fit: "cover",
@@ -570,7 +563,7 @@ async function bakeFamilyAtlas(
 		outputDir: OUTPUT_DIR,
 	});
 	console.log(
-		`[${name}] wrote ${grid.atlasWidth}×${grid.atlasHeight} (${grid.cols}×${grid.rows}, ${sortedIcons.length} cells, ${Object.keys(sprites).length} zTypes)`,
+		`[${name}] wrote ${grid.atlasWidth}×${grid.atlasHeight} (${sortedIcons.length} cells, ${Object.keys(sprites).length} zTypes)`,
 	);
 }
 
@@ -606,7 +599,7 @@ async function main(): Promise<void> {
 	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
 	const bakedAt = new Date().toISOString();
 	const ctx: BakeContext = {
-		hexMask: Buffer.from(buildHexMaskSvg(CELL_W, CELL_H)),
+		hexMask: await buildHexMask(CELL_W, CELL_H),
 		bakedAt,
 		pinacothecaVersion,
 	};

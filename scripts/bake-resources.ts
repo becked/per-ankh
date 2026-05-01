@@ -35,7 +35,7 @@ import {
 	type AtlasManifest,
 	type SpriteRect,
 	bakeCell,
-	buildHexMaskSvg,
+	buildHexMask,
 	placeCellGrid,
 	readPinacothecaVersion,
 	writeAtlas,
@@ -120,7 +120,7 @@ async function main(): Promise<void> {
 
 	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
 	const bakedAt = new Date().toISOString();
-	const hexMask = Buffer.from(buildHexMaskSvg(CELL_W, CELL_H));
+	const hexMask = await buildHexMask(CELL_W, CELL_H);
 	console.log(
 		`[resources] pinacotheca ${pinacothecaVersion}, baked at ${bakedAt}`,
 	);
