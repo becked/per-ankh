@@ -49,6 +49,7 @@ import {
 	access,
 	rm,
 } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -68,16 +69,40 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
-// Worktree-relative paths: REPO_ROOT is .claude/worktrees/<branch>/, so
-// pinacotheca is 4 up (sibling of per-ankh) and Reference is 3 up (inside
-// per-ankh).
-const PINACOTHECA_ROOT = resolve(REPO_ROOT, "../../../../pinacotheca");
+// Two layouts in active use: the per-ankh worktree under
+// .claude/worktrees/<branch>/ and the main repo at <Old World>/per-ankh/.
+// Probe both; first one that exists wins.
+const PINACOTHECA_ROOT = (() => {
+	const candidates = [
+		resolve(REPO_ROOT, "../../../../pinacotheca"),
+		resolve(REPO_ROOT, "../pinacotheca"),
+	];
+	const found = candidates.find((p) => existsSync(p));
+	if (!found) {
+		throw new Error(
+			`could not locate pinacotheca; tried:\n  ${candidates.join("\n  ")}`,
+		);
+	}
+	return found;
+})();
 const PINACOTHECA_3D_DIR = resolve(
 	PINACOTHECA_ROOT,
 	"extracted/sprites/improvements",
 );
 const PINACOTHECA_PYPROJECT = resolve(PINACOTHECA_ROOT, "pyproject.toml");
-const REFERENCE_XML_DIR = resolve(REPO_ROOT, "../../../Reference/XML");
+const REFERENCE_XML_DIR = (() => {
+	const candidates = [
+		resolve(REPO_ROOT, "../../../Reference/XML"),
+		resolve(REPO_ROOT, "Reference/XML"),
+	];
+	const found = candidates.find((p) => existsSync(p));
+	if (!found) {
+		throw new Error(
+			`could not locate Reference/XML; tried:\n  ${candidates.join("\n  ")}`,
+		);
+	}
+	return found;
+})();
 
 const SOURCE_DIR = resolve(REPO_ROOT, "assets/atlas-sources");
 const OUTPUT_DIR = resolve(REPO_ROOT, "static/atlases");
