@@ -3,7 +3,14 @@
 /**
  * City information for the Cities tab
  */
-export type CityInfo = { city_id: number, city_name: string, owner_nation: string | null, family: string | null, founded_turn: number, is_capital: boolean, citizens: number, governor_name: string | null, 
+export type CityInfo = { city_id: number, city_name: string, owner_nation: string | null, family: string | null, 
+/**
+ * Family class enum (FAMILYCLASS_CHAMPIONS, FAMILYCLASS_LANDOWNERS, ...).
+ * Frontend uses this as the crest fallback when the per-family crest art
+ * isn't in our shipped sprite set — every class has a CREST_ARCHETYPE_X
+ * sprite available, but only a small subset of families do.
+ */
+family_class: string | null, founded_turn: number, is_capital: boolean, citizens: number, governor_name: string | null, 
 /**
  * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
  */

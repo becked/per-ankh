@@ -3,7 +3,9 @@
 	import { Deck, OrthographicView } from "@deck.gl/core";
 	import { IconLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
 	import type { MapTile } from "$lib/types/MapTile";
+	import type { CityInfo } from "$lib/types/CityInfo";
 	import { getCivilizationColor } from "$lib/config";
+	import MapTooltip from "$lib/MapTooltip.svelte";
 
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
 	// Atlases are pre-baked by scripts/bake-atlases.ts: hex-clip + bevel-trim
@@ -133,11 +135,49 @@
 
 	let {
 		tiles,
+		cities = [],
 		height = "600px",
 	}: {
 		tiles: MapTile[];
+		// Used to resolve owner_city → family for the tooltip's family crest.
+		// Empty array is fine — tooltip just omits the family crest.
+		cities?: CityInfo[];
 		height?: string;
 	} = $props();
+
+	// Family crest sprites we actually ship. Anything not in this set falls
+	// back to the family-class archetype crest (CREST_ARCHETYPE_X). Sourced
+	// from static/sprites/crests/CREST_FAMILY_*.png at the time of writing —
+	// expand only when adding more PNGs to that dir.
+	const KNOWN_FAMILY_CRESTS = new Set([
+		"FAMILY_ANTIGONUS",
+		"FAMILY_ANTIPATER",
+		"FAMILY_ATHENS",
+		"FAMILY_CASSANDER",
+		"FAMILY_PTOLEMY",
+		"FAMILY_SELEUCID",
+	]);
+
+	// city_name → resolved crest sprite key (or null when no crest is
+	// renderable). Resolution prefers a per-family crest when we ship the
+	// art; otherwise falls back to the family-class archetype crest, which
+	// always exists for non-null family_class values. Recomputed when the
+	// cities prop changes; tile lookups stay O(1) inside the tooltip resolver.
+	const cityFamilyCrestByName = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
+		const map = new Map<string, string | null>();
+		for (const c of cities) {
+			let key: string | null = null;
+			if (c.family && KNOWN_FAMILY_CRESTS.has(c.family)) {
+				key = c.family;
+			} else if (c.family_class) {
+				// FAMILYCLASS_CHAMPIONS → ARCHETYPE_CHAMPIONS
+				key = c.family_class.replace(/^FAMILYCLASS_/, "ARCHETYPE_");
+			}
+			map.set(c.city_name, key);
+		}
+		return map;
+	});
 
 	let deckCanvas: HTMLCanvasElement;
 	let deck: Deck<OrthographicView> | null = $state(null);
@@ -162,6 +202,120 @@
 	// Layer visibility toggles
 	let showPolitical = $state(true);
 	let showReligion = $state(false);
+
+	// ─── Tooltip state ────────────────────────────────────────────────
+	// Hover position is in canvas-local CSS pixels (deck.gl onHover already
+	// converts). Locked tooltips store world coords and reproject on every
+	// view-state change so they stay anchored to their tile when the user
+	// pans/zooms.
+	interface HoverState {
+		tile: MapTile;
+		x: number;
+		y: number;
+	}
+	interface LockedTooltip {
+		key: string; // `${tile.x},${tile.y}` — used to dedupe & identify
+		tile: MapTile;
+		worldX: number;
+		worldY: number;
+	}
+	let hoverState = $state<HoverState | null>(null);
+	let lockedTooltips = $state<LockedTooltip[]>([]);
+	// Bumped from Deck.onViewStateChange to force re-derivation of locked
+	// tooltips' screen positions. Cheaper than tracking the full viewState
+	// object (we only ever need to re-project, not read).
+	let viewVersion = $state(0);
+	let containerEl: HTMLDivElement | null = $state(null);
+	let containerWidth = $state(0);
+	let containerHeight = $state(0);
+
+	function tileKey(t: MapTile): string {
+		return `${t.x},${t.y}`;
+	}
+
+	function toggleLockedTile(tile: MapTile) {
+		const key = tileKey(tile);
+		const existing = lockedTooltips.find((l) => l.key === key);
+		if (existing) {
+			lockedTooltips = lockedTooltips.filter((l) => l.key !== key);
+			return;
+		}
+		const [wx, wy] = hexToPixel(tile.x, tile.y);
+		lockedTooltips = [
+			...lockedTooltips,
+			{ key, tile, worldX: wx, worldY: wy },
+		];
+	}
+
+	function handleContextMenu(e: MouseEvent) {
+		e.preventDefault();
+		if (!deck || !deckCanvas) return;
+		const rect = deckCanvas.getBoundingClientRect();
+		const x = e.clientX - rect.left;
+		const y = e.clientY - rect.top;
+		const picked = deck.pickObject({ x, y, radius: 0 });
+		if (picked && picked.object) {
+			toggleLockedTile(picked.object as MapTile);
+		}
+	}
+
+	// Resolve owner_nation → crest sprite key. Variant nations (NATION_AMUN,
+	// NATION_ATHENS, …) don't have their own CREST_NATION_X; the urban-family
+	// alias maps them to their parent civ's crest. Falls back to the raw
+	// owner_nation if no alias entry, and SpriteIcon hides on 404.
+	function resolveNationCrestKey(ownerNation: string | null): string | null {
+		if (!ownerNation) return null;
+		const alias = nationAliases.get(ownerNation);
+		if (alias?.urban) return `NATION_${alias.urban}`;
+		return ownerNation;
+	}
+
+	// Project a world-space tile center to canvas-local screen pixels via the
+	// current Deck viewport. Returns null if Deck or viewport isn't ready.
+	interface PickViewport {
+		// eslint-disable-next-line no-unused-vars -- arg name documents the call shape
+		project(coords: [number, number, number]): [number, number, number];
+	}
+	interface DeckWithViewports {
+		getViewports(): PickViewport[];
+	}
+	function projectWorld(wx: number, wy: number): [number, number] | null {
+		if (!deck) return null;
+		// getViewports lives on Deck's runtime API but isn't on its public TS
+		// surface. Narrow via a local interface rather than `any`.
+		const viewports = (deck as unknown as DeckWithViewports).getViewports?.();
+		if (!viewports || viewports.length === 0) return null;
+		const screen = viewports[0].project([wx, wy, 0]);
+		return [screen[0], screen[1]];
+	}
+
+	interface LockedScreen extends LockedTooltip {
+		sx: number;
+		sy: number;
+	}
+
+	// Re-project locked tooltips on every view-state change. Anchors that
+	// project off-canvas (e.g. extreme zoom-out) are dropped from the render.
+	const lockedScreen = $derived.by<LockedScreen[]>(() => {
+		// Track viewVersion so this re-derives when the camera moves.
+		void viewVersion;
+		const out: LockedScreen[] = [];
+		for (const l of lockedTooltips) {
+			const screen = projectWorld(l.worldX, l.worldY);
+			if (!screen) continue;
+			out.push({ ...l, sx: screen[0], sy: screen[1] });
+		}
+		return out;
+	});
+
+	// Suppress hover tooltip when the hovered tile is already pinned — avoids
+	// double-rendering on the same anchor. Deck still emits hover; we just
+	// don't render the floating one.
+	const showHover = $derived.by(() => {
+		if (!hoverState) return false;
+		const k = tileKey(hoverState.tile);
+		return !lockedTooltips.some((l) => l.key === k);
+	});
 
 	/**
 	 * Convert hex grid coordinates to pixel position.
@@ -780,6 +934,22 @@
 				maxZoom: 4,
 			},
 			controller: true,
+			// Bump viewVersion so locked tooltips re-project on every camera
+			// change. Locked screen positions are derived from worldX/worldY
+			// against the current viewport (see lockedScreen $derived).
+			onViewStateChange: () => {
+				viewVersion++;
+			},
+			// Hover dispatch: deck.gl returns the picked layer's data item.
+			// Our pickable PolygonLayer is fed the MapTile array directly,
+			// so `object` is a MapTile (or undefined when off any tile).
+			onHover: (info: { object?: MapTile; x: number; y: number }) => {
+				if (info.object) {
+					hoverState = { tile: info.object, x: info.x, y: info.y };
+				} else {
+					hoverState = null;
+				}
+			},
 			// Layers populated by the $effect below as soon as derivatives resolve.
 			layers: [],
 		});
@@ -1070,6 +1240,23 @@
 					pickable: false,
 					visible: pol,
 				}),
+				// Invisible pickable layer so hover/right-click resolve to the
+				// correct hex regardless of which sprite layer happens to draw
+				// on top. Uses the exact hexPolygon shape so picking matches
+				// the inscribed hex (no slop into neighboring tiles at corners).
+				// Sits last so it receives picks above all visual layers.
+				new PolygonLayer<MapTile>({
+					id: "tile-picking",
+					data: tiles,
+					getPolygon: (d: MapTile) => {
+						const [cx, cy] = hexToPixel(d.x, d.y);
+						return hexPolygon(cx, cy);
+					},
+					getFillColor: [0, 0, 0, 0],
+					stroked: false,
+					filled: true,
+					pickable: true,
+				}),
 			],
 		});
 	});
@@ -1113,8 +1300,21 @@
 			}
 		}, 100);
 
+		// Track container size for tooltip edge-flip clamping. ResizeObserver
+		// fires on initial mount too, so no separate initialization needed.
+		let resizeObserver: ResizeObserver | null = null;
+		if (containerEl) {
+			resizeObserver = new ResizeObserver(() => {
+				if (!containerEl) return;
+				containerWidth = containerEl.clientWidth;
+				containerHeight = containerEl.clientHeight;
+			});
+			resizeObserver.observe(containerEl);
+		}
+
 		return () => {
 			clearInterval(visibilityCheck);
+			resizeObserver?.disconnect();
 			if (deck) {
 				deck.finalize();
 				deck = null;
@@ -1136,8 +1336,46 @@
 		</label>
 	</div>
 
-	<div class="sprite-map-container" style="height: {height};">
-		<canvas bind:this={deckCanvas} class="sprite-map-canvas"></canvas>
+	<div
+		class="sprite-map-container"
+		style="height: {height};"
+		bind:this={containerEl}
+	>
+		<canvas
+			bind:this={deckCanvas}
+			class="sprite-map-canvas"
+			oncontextmenu={handleContextMenu}
+		></canvas>
+
+		{#if showHover && hoverState}
+			<MapTooltip
+				tile={hoverState.tile}
+				cityFamily={hoverState.tile.owner_city
+					? (cityFamilyCrestByName.get(hoverState.tile.owner_city) ?? null)
+					: null}
+				nationCrestKey={resolveNationCrestKey(hoverState.tile.owner_nation)}
+				screenX={hoverState.x}
+				screenY={hoverState.y}
+				{containerWidth}
+				{containerHeight}
+			/>
+		{/if}
+
+		{#each lockedScreen as locked (locked.key)}
+			<MapTooltip
+				tile={locked.tile}
+				cityFamily={locked.tile.owner_city
+					? (cityFamilyCrestByName.get(locked.tile.owner_city) ?? null)
+					: null}
+				nationCrestKey={resolveNationCrestKey(locked.tile.owner_nation)}
+				pinned
+				screenX={locked.sx}
+				screenY={locked.sy}
+				{containerWidth}
+				{containerHeight}
+				onClose={() => toggleLockedTile(locked.tile)}
+			/>
+		{/each}
 	</div>
 </div>
 

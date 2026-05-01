@@ -515,7 +515,7 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<MapBetaTab {mapTiles} />
+		<MapBetaTab {mapTiles} cities={cityStatistics.cities} />
 	</Tabs.Content>
 
 	<!-- Tab Content: Settings -->
