@@ -44,11 +44,11 @@ import {
 } from "./lib/atlas-bake.js";
 import sharp from "sharp";
 
-// SOLO resources sit alongside a rural improvement (Pasture/Camp/Mine) which
-// itself bakes at SAFE_SCALE. Baking SOLO at the same scale makes the single
-// animal/figure read as a peer to the structure; shrinking it produces the
-// "accessory next to the building" look the game has.
-const SOLO_SCALE = 0.4;
+// SOLO resources sit alongside a rural improvement (Pasture/Camp/Mine). Small
+// scale + slight transparency reads as an accessory next to the structure
+// rather than competing with it for visual weight.
+const SOLO_SCALE = 0.3;
+const SOLO_OPACITY = 0.7;
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -163,8 +163,10 @@ async function main(): Promise<void> {
 		// No brightness tweak. Resources are typically clusters of small
 		// figures (animals, fish, etc.); brightening washes them out and the
 		// improvement layer drawn on top already carries its own lift.
-		const scale = pick.variant === "SOLO" ? SOLO_SCALE : SAFE_SCALE;
-		const baked = await bakeCell(pick.path, hexMask, { scale });
+		const isSolo = pick.variant === "SOLO";
+		const scale = isSolo ? SOLO_SCALE : SAFE_SCALE;
+		const opacity = isSolo ? SOLO_OPACITY : 1;
+		const baked = await bakeCell(pick.path, hexMask, { scale, opacity });
 		composites.push({ input: baked, left: rect.x, top: rect.y });
 		const key = `RESOURCE_${pick.name}_${pick.variant}`;
 		sprites[key] = rect;

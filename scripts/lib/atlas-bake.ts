@@ -62,6 +62,7 @@ export interface BakeCellOptions {
 	scale?: number;
 	fit?: "inside" | "cover";
 	tweak?: { brightness?: number; saturation?: number };
+	opacity?: number;
 }
 
 
@@ -171,10 +172,19 @@ export async function bakeCell(
 		toned = await sharp(toned).modulate(options.tweak).png().toBuffer();
 	}
 
-	return sharp(toned)
+	const clipped = await sharp(toned)
 		.composite([{ input: hexMask, blend: "dest-in" }])
 		.png()
 		.toBuffer();
+
+	if (options.opacity != null && options.opacity < 1) {
+		return sharp(clipped)
+			.ensureAlpha()
+			.linear([1, 1, 1, options.opacity], [0, 0, 0, 0])
+			.png()
+			.toBuffer();
+	}
+	return clipped;
 }
 
 export interface CellGrid {
