@@ -790,48 +790,54 @@ Previously shared games won't have the new field, so the web viewer must handle 
 
 ## Map Atlas Pipeline
 
-The sprite map's terrain, height, and improvement atlases are baked from Pinacotheca outputs into runtime-ready atlases. Two pipelines, split because the transformations differ.
+The sprite map's terrain, height, resource, and improvement atlases are baked from Pinacotheca outputs into runtime-ready atlases. Three bake scripts share `scripts/lib/atlas-bake.ts` for cell geometry (`CELL_W=211`, `CELL_H=167`), hex masking, and grid packing.
+
+### Hex cell aspect
+
+`HEX_H_SPACING=199`, `HEX_V_SPACING=122` — pointy-top R=5 world hex projected through the game's fixed 45° camera tilt: 8.66 wide × 7.07 tall = 1.225 image aspect. Cell rect 211×167 wraps the inscribed hex 199×162.7 with a small gutter. These constants are mirrored in `scripts/bake-atlases.ts` and `src/lib/SpriteMap.svelte` — keep all three sites in sync. The hex polygon math (vertex generation in `buildHexMask`, runtime `hexPolygon`, neighbor lookup, religion fill / political border inset) all derives from `HEX_RADIUS_X = H_SPACING / sqrt(3)` and `HEX_RADIUS_Y = V_SPACING / 1.5`.
 
 ### Terrain / height (`scripts/bake-atlases.ts`)
 
 - `assets/atlas-sources/{terrain,height}.{webp,json}` — raw output from Pinacotheca. Right-side-up, with the game's 3D-rendered dark beveled edges baked into each sprite.
-- `static/atlases/{terrain,height}.{webp,json}` — baked output that the runtime fetches. Hex-clipped and upscaled to push the bevel past the cell boundary, then center-cropped. The runtime (`src/lib/SpriteMap.svelte`) feeds these straight to deck.gl `IconLayer`, which samples cells with no per-draw transform.
-
-**Re-bake when:**
-
-- Pinacotheca / the game ships new sprites → drop them into `assets/atlas-sources/` and re-bake.
-- Re-tuning the bevel-trim parameters (`SPRITE_SCALE_X`, `SPRITE_SCALE_Y` in `scripts/bake-atlases.ts`).
+- `static/atlases/{terrain,height}.{webp,json}` — baked output that the runtime fetches. Hex-clipped and upscaled (`SPRITE_SCALE_X=1.13`, `SPRITE_SCALE_Y=1.32`) to push the bevel past the cell boundary, then center-cropped.
+- The bake uses `manifest.cellWidth/cellHeight` from the source manifest (= pinacotheca's choice). When pinacotheca's terrain atlas predates per-ankh's aspect change, the inscribed hex sits centered with a few px of vertical padding inside the larger cell — visually fine, just wastes some atlas pixels until pinacotheca re-cuts.
 
 ```bash
 npm run bake:atlases
 ```
 
+### Resources (`scripts/bake-resources.ts`)
+
+- Source: `assets/atlas-sources/resources.{webp,json}` from pinacotheca, with HERD/SOLO variants per resource.
+- Output: `static/atlases/resources.{webp,json}` — hex-clipped, `SAFE_SCALE=0.77` inset.
+
+```bash
+npm run bake:resources
+```
+
 ### Improvements (`scripts/bake-improvements.ts`)
 
-- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/improvements/IMPROVEMENT_3D_*.png`. We deliberately ingest the raw renders, not pinacotheca's pre-baked `output/atlases/improvement.{webp,json}` (which is the 2D icon set — mixing 2D and 3D in one atlas would look inconsistent).
+Two output atlases: a base atlas with single-improvement sprites + per-nation URBAN/CAPITAL standalones, and 10 family atlases for per-(improvement, family) urban composites.
+
+- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/improvements/IMPROVEMENT_3D_*.png` plus their JSON sidecars. We deliberately ingest the raw renders, not pinacotheca's pre-baked `output/atlases/improvement.{webp,json}` (which is the 2D icon set — mixing 2D and 3D in one atlas would look inconsistent).
 - Mapping: `Reference/XML/Infos/improvement.xml` (+ `improvement-event.xml`, `improvement-event-sap.xml`, plus `Reference/XML/Mods/*/Infos/improvement-{add,change}.xml`) provides the `zType → zIconName` translation. Save files emit `zType` into `tiles.improvement`; many `zType`s share one `zIconName` by design (e.g. all sun-god shrines → `IMPROVEMENT_SHRINE_SUN`). Multiple manifest entries point at the same packed cell.
-- Output: `assets/atlas-sources/improvements.{webp,json}` and `static/atlases/improvements.{webp,json}`, keyed by `zType`.
-- Transform: hex-clip + scale fit at `SAFE_SCALE = 0.77` with `fit:"inside"`. **No bevel-trim** — these are isolated building models on a transparent ground patch, so there's no perimeter bevel to push past the cell boundary. A `brightness` lift (`IMPROVEMENT_BRIGHTEN_TWEAK`) is applied so the focal building reads clearly against urban tiles underneath.
+- Output:
+  - `improvements-base.{webp,json}` — single-improvement sprites (`SAFE_SCALE=0.77` inset, brightness-lifted via `IMPROVEMENT_BRIGHTEN_TWEAK`) plus 22 standalones (`URBAN_<FAMILY>` / `CAPITAL_<FAMILY>` keyed sprites, `FULL_SCALE=1.0` cover-fit).
+  - `improvements-urban-{AKSUM,…,ROME}.{webp,json}` — 10 family atlases for per-(improvement, family) composites baked from `IMPROVEMENT_3D_<NAME>_<FAMILY>_URBAN.png`. Same `FULL_SCALE` cover-fit treatment.
+  - `nation-asset-aliases.json` — derived from `nation.xml`. Maps every `NATION_*` zType to its urban + capital family. Single source of truth at runtime for resolving owner_nation → which atlas / which sprite key.
 
-**Nation URBAN / CAPITAL variants** — same atlas, different keys. The bake also scans the same directory for `IMPROVEMENT_3D_<NATION>_(URBAN|CAPITAL).png` and emits synthetic sprite keys that don't correspond to any `zType`:
+All layered sprites (URBAN/CAPITAL standalones + composites) are exactly `CELL_W × CELL_H = 211×167`, hex-clipped, no anchor metadata. Pinacotheca's hex-prism clip constrains rendered content laterally (≤ 6px lateral overflow across all 711 renders, just antialiased mask edges), so cover-fit + hex-clip lands the scene cleanly inside the cell. Tall buildings (ziggurats, palace towers, cathedral spires) that extend above the hex top vertex get compressed and partially clipped at the cell apex — that's the deliberate trade-off vs the now-removed taller-than-cell sprite + spire-overflow approach, which created jarring rectangular cuts above each tile's hex.
 
-- `URBAN_<NATION>` — the per-nation built-up tile texture (Greek temples, Egyptian mudbrick, etc.). Baked at `NATION_VARIANT_SCALE = 1.0` with `fit:"cover"` so it fully covers the hex (TERRAIN_URBAN no longer draws underneath nation-owned urban tiles).
-- `URBAN_<NATION>_FADED` — same source, run through a Gaussian blur (`FADED_URBAN_TWEAK`) so individual rooftops dissolve under the focal improvement on top.
-- `CAPITAL_<NATION>` — the nation's capital complex (Roman forum, Persian apadana). Baked at `NATION_VARIANT_SCALE = 1.0` with `fit:"inside"` so the whole building stays in frame, brightened by `IMPROVEMENT_BRIGHTEN_TWEAK`.
-
-The runtime (`src/lib/SpriteMap.svelte`) draws these via two extra `IconLayer`s — `urban-overlay-icons` (between terrain and height) and `capital-overlay-icons` (after improvements). The terrain layer's filter skips TERRAIN_URBAN tiles where a nation tile exists, and the improvement layer skips capital tiles where a capital sprite exists, so each tile shows exactly one of: TERRAIN_URBAN, URBAN_<NATION>(_FADED), or CAPITAL_<NATION> (with URBAN_<NATION>_FADED layered underneath).
-
-A small alias map in `SpriteMap.svelte` (`URBAN_NATION_ALIASES`) routes `NATION_MAURYA` and `NATION_TAMIL` to the shared `URBAN_INDIA` cell — pinacotheca renders one urban tile per cultural family, not per nation.
+**Runtime layer order** (`src/lib/SpriteMap.svelte`): terrain → nation-tile-icons (URBAN/CAPITAL standalones) → height → resources → per-family composite layers → single-improvement layer. Each tile is filtered to at most one of these layers; `compositeFamilyFor()` and `capitalSpriteKeyFor()` decide which.
 
 **Re-bake when:**
 
-- Pinacotheca ships refreshed `IMPROVEMENT_3D_*.png` renders (new buildings, refreshed art, new nation URBAN/CAPITAL variants).
-- `Reference/XML/` is refreshed against a current OW install (picks up new DLC `zType`s).
-- Tuning the visible knobs in `scripts/bake-improvements.ts`:
-  - `SAFE_SCALE` — improvement inset within the hex
-  - `NATION_VARIANT_SCALE` — fill scale for URBAN/CAPITAL variants
-  - `FADED_URBAN_TWEAK` — blur (and/or brightness/saturation) for the village-under-improvement variant
-  - `IMPROVEMENT_BRIGHTEN_TWEAK` — brightness lift for foreground 3D buildings + capitals
+- Pinacotheca ships refreshed `IMPROVEMENT_3D_*.png` renders.
+- `Reference/XML/` is refreshed against a current OW install (picks up new DLC `zType`s and nation aliases).
+- Tuning bake knobs:
+  - `SAFE_SCALE=0.77` — single-improvement inset within the hex.
+  - `FULL_SCALE=1.0` — cover-fit fill for URBAN/CAPITAL/composites.
+  - `IMPROVEMENT_BRIGHTEN_TWEAK` — brightness lift for single-improvement focal buildings.
 
 ```bash
 npm run bake:improvements
