@@ -21,6 +21,18 @@ This software is provided "as is" without warranty of any kind.
 
 ## Development
 
+### Setup
+
+After cloning, activate the repo's git hooks (one-time, per clone):
+
+```bash
+git config core.hooksPath scripts/hooks
+```
+
+This wires up the pre-commit hook that regenerates TypeScript types from Rust
+structs and stages them alongside your commit. `.git/hooks/` isn't versioned,
+so this step is required on every clone (and every git worktree).
+
 ### Common Development Tasks
 
 Use the `per-ankh.sh` helper script for common operations:

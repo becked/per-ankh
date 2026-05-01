@@ -577,7 +577,16 @@ cargo install tauri-cli
 
 # Install frontend dependencies
 npm install
+
+# Activate the repo's git hooks (regenerates TS types when committing Rust)
+git config core.hooksPath scripts/hooks
 ```
+
+The hook in `scripts/hooks/pre-commit` runs `cargo test --lib export_bindings`
+in a subshell when Rust files are staged, then `git add`s any updated
+`src/lib/types/*.ts` so the regenerated bindings ride along with the commit.
+It's per-clone setup — `.git/hooks/` isn't versioned, so each new clone needs
+the `git config core.hooksPath` step.
 
 ### Running the Application
 

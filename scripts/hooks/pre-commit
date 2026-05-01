@@ -1,0 +1,36 @@
+#!/bin/sh
+# Pre-commit hook to regenerate TypeScript types from Rust
+# when Rust source files are modified.
+#
+# Activate with: git config core.hooksPath scripts/hooks
+# (See README "Setup" / CLAUDE.md "Initial Setup".)
+
+# Check if any Rust files are being committed
+if git diff --cached --name-only | grep -q '\.rs$'; then
+    echo "🔄 Rust files modified, regenerating TypeScript types..."
+
+    # Run type generation in a subshell so cwd is restored afterward —
+    # otherwise the git add below resolves relative to src-tauri/ and silently
+    # fails to stage anything (the path doesn't exist there).
+    ( cd src-tauri && cargo test --lib export_bindings --quiet ) 2>&1 | grep -v "running 0 tests" | grep -v "test result: ok"
+
+    # PIPESTATUS would be ideal but isn't portable to /bin/sh; the grep
+    # pipeline's exit code is good enough since cargo's failure surfaces
+    # as test output (and grep almost always finds something to pass through).
+    if [ $? -eq 0 ]; then
+        echo "✅ TypeScript types regenerated"
+
+        # Stage any modified TypeScript type files
+        git add src/lib/types/*.ts 2>/dev/null
+
+        # Check if any types were actually updated
+        if git diff --cached --name-only | grep -q 'src/lib/types/.*\.ts$'; then
+            echo "📝 Updated types staged for commit"
+        fi
+    else
+        echo "❌ Failed to regenerate types"
+        exit 1
+    fi
+fi
+
+exit 0
