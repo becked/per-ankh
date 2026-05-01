@@ -515,7 +515,13 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<MapBetaTab {mapTiles} cities={cityStatistics.cities} />
+		<MapBetaTab
+			{mapTiles}
+			cities={cityStatistics.cities}
+			totalTurns={gameDetails.total_turns}
+			selectedTurn={selectedMapTurn}
+			onTurnChange={onMapTurnChange}
+		/>
 	</Tabs.Content>
 
 	<!-- Tab Content: Settings -->

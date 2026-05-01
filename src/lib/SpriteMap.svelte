@@ -228,12 +228,19 @@
 		tiles,
 		cities = [],
 		height = "600px",
+		totalTurns = null,
+		selectedTurn = null,
+		onTurnChange = null,
 	}: {
 		tiles: MapTile[];
 		// Used to resolve owner_city → family for the tooltip's family crest.
 		// Empty array is fine — tooltip just omits the family crest.
 		cities?: CityInfo[];
 		height?: string;
+		totalTurns?: number | null;
+		selectedTurn?: number | null;
+		// eslint-disable-next-line no-unused-vars -- Callback type signature
+		onTurnChange?: ((turn: number) => Promise<void> | void) | null;
 	} = $props();
 
 	// Family crest sprites we actually ship. Anything not in this set falls
@@ -1349,6 +1356,76 @@
 		});
 	});
 
+	// ─── Turn slider + playback ───────────────────────────────────────
+	// Same pattern as HexMap: debounce slider input so we don't fire a backend
+	// fetch on every intermediate value while the user drags.
+	let sliderDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+
+	function handleSliderChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		const turn = parseInt(target.value, 10);
+		if (sliderDebounceTimer) clearTimeout(sliderDebounceTimer);
+		sliderDebounceTimer = setTimeout(() => {
+			void onTurnChange?.(turn);
+		}, 100);
+	}
+
+	const showTurnSlider = $derived(
+		totalTurns != null && selectedTurn != null && onTurnChange != null,
+	);
+
+	let isPlaying = $state(false);
+	let isFastPlaying = $state(false);
+	let playbackInterval: ReturnType<typeof setInterval> | null = null;
+	const PLAYBACK_SPEED_MS = 300;
+	const FAST_PLAYBACK_SPEED_MS = 150;
+
+	function startPlayback(fast: boolean) {
+		if (totalTurns == null || selectedTurn == null) return;
+		stopPlayback();
+		if (selectedTurn >= totalTurns) {
+			void onTurnChange?.(1);
+		}
+		isPlaying = !fast;
+		isFastPlaying = fast;
+		const speed = fast ? FAST_PLAYBACK_SPEED_MS : PLAYBACK_SPEED_MS;
+		playbackInterval = setInterval(() => {
+			if (selectedTurn != null && totalTurns != null) {
+				if (selectedTurn >= totalTurns) {
+					stopPlayback();
+				} else {
+					void onTurnChange?.(selectedTurn + 1);
+				}
+			}
+		}, speed);
+	}
+
+	function stopPlayback() {
+		isPlaying = false;
+		isFastPlaying = false;
+		if (playbackInterval) {
+			clearInterval(playbackInterval);
+			playbackInterval = null;
+		}
+	}
+
+	function togglePlayback() {
+		if (isPlaying) stopPlayback();
+		else startPlayback(false);
+	}
+
+	function toggleFastPlayback() {
+		if (isFastPlaying) stopPlayback();
+		else startPlayback(true);
+	}
+
+	$effect(() => {
+		return () => {
+			if (playbackInterval) clearInterval(playbackInterval);
+			if (sliderDebounceTimer) clearTimeout(sliderDebounceTimer);
+		};
+	});
+
 	async function loadNationAliases(): Promise<Map<string, NationAliasEntry>> {
 		const response = await fetch(`${ATLAS_BASE}/nation-asset-aliases.json`);
 		const payload = (await response.json()) as NationAliasPayload;
@@ -1410,16 +1487,96 @@
 </script>
 
 <div class="flex flex-col gap-4">
-	<!-- Layer toggles -->
-	<div class="flex items-center gap-3 text-sm">
-		<label class="marker-toggle">
-			<input type="checkbox" bind:checked={showPolitical} />
-			<span class="marker-label">Political</span>
-		</label>
-		<label class="marker-toggle">
-			<input type="checkbox" bind:checked={showReligion} />
-			<span class="marker-label">Religion</span>
-		</label>
+	<!-- Layer toggles + turn controls -->
+	<div class="flex flex-wrap items-center gap-4 text-sm">
+		<div class="flex items-center gap-3">
+			<label class="marker-toggle">
+				<input type="checkbox" bind:checked={showPolitical} />
+				<span class="marker-label">Political</span>
+			</label>
+			<label class="marker-toggle">
+				<input type="checkbox" bind:checked={showReligion} />
+				<span class="marker-label">Religion</span>
+			</label>
+		</div>
+
+		{#if showTurnSlider}
+			<div class="ml-auto flex items-center gap-3">
+				<span class="text-sm font-bold text-brown">Turn:</span>
+				<div class="flex items-center">
+					<button
+						onclick={togglePlayback}
+						class="rounded p-1.5 transition-colors {isPlaying
+							? 'bg-brown text-tan'
+							: 'bg-brown/30 hover:bg-brown/50'}"
+						aria-label={isPlaying ? "Pause" : "Play"}
+						title={isPlaying ? "Pause" : "Play (1x)"}
+					>
+						{#if isPlaying}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-4 w-4 text-tan"
+								fill="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<rect x="6" y="4" width="4" height="16" />
+								<rect x="14" y="4" width="4" height="16" />
+							</svg>
+						{:else}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-4 w-4 text-tan"
+								fill="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path d="M8 5v14l11-7z" />
+							</svg>
+						{/if}
+					</button>
+					<button
+						onclick={toggleFastPlayback}
+						class="rounded p-1.5 transition-colors {isFastPlaying
+							? 'bg-brown text-tan'
+							: 'bg-brown/30 hover:bg-brown/50'}"
+						aria-label={isFastPlaying ? "Pause" : "Fast Forward"}
+						title={isFastPlaying ? "Pause" : "Fast Forward (2x)"}
+					>
+						{#if isFastPlaying}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-4 w-4 text-tan"
+								fill="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<rect x="6" y="4" width="4" height="16" />
+								<rect x="14" y="4" width="4" height="16" />
+							</svg>
+						{:else}
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-4 w-4 text-tan"
+								fill="currentColor"
+								viewBox="0 0 24 24"
+							>
+								<path d="M4 5v14l8-7z" />
+								<path d="M12 5v14l8-7z" />
+							</svg>
+						{/if}
+					</button>
+				</div>
+				<input
+					type="range"
+					min="1"
+					max={totalTurns}
+					value={selectedTurn}
+					oninput={handleSliderChange}
+					class="turn-slider w-48"
+				/>
+				<span class="w-8 text-right text-sm font-bold text-tan"
+					>{selectedTurn}</span
+				>
+			</div>
+		{/if}
 	</div>
 
 	<div
@@ -1528,5 +1685,44 @@
 
 	.marker-toggle:hover .marker-label {
 		color: white;
+	}
+
+	.turn-slider {
+		-webkit-appearance: none;
+		appearance: none;
+		height: 6px;
+		background: #4a4540;
+		border-radius: 3px;
+		outline: none;
+		cursor: pointer;
+	}
+
+	.turn-slider::-webkit-slider-thumb {
+		-webkit-appearance: none;
+		appearance: none;
+		width: 16px;
+		height: 16px;
+		background: var(--color-brown);
+		border-radius: 50%;
+		cursor: pointer;
+		transition: background 0.15s ease;
+	}
+
+	.turn-slider::-webkit-slider-thumb:hover {
+		background: var(--color-tan);
+	}
+
+	.turn-slider::-moz-range-thumb {
+		width: 16px;
+		height: 16px;
+		background: var(--color-brown);
+		border-radius: 50%;
+		cursor: pointer;
+		border: none;
+		transition: background 0.15s ease;
+	}
+
+	.turn-slider::-moz-range-thumb:hover {
+		background: var(--color-tan);
 	}
 </style>
