@@ -57,6 +57,7 @@ vite.config.ts.timestamp-*
 # Content"). They're regenerated locally rather than tracked in git.
 static/atlases/
 static/sprites/
+assets/atlas-sources/
 
 # DuckDB Database Files
 *.db
