@@ -52,6 +52,12 @@ vite.config.ts.timestamp-*
 .env.*
 !.env.example
 
+# Bake outputs — derived from a local pinacotheca checkout via `npm run bake:all`.
+# These are visual assets owned by Mohawk Games (see LICENSE "Third-Party
+# Content"). They're regenerated locally rather than tracked in git.
+static/atlases/
+static/sprites/
+
 # DuckDB Database Files
 *.db
 *.db.wal

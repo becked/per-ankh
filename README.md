@@ -25,32 +25,70 @@ This software is provided "as is" without warranty of any kind.
 
 ### Setup
 
-After cloning, activate the repo's git hooks (one-time, per clone):
+After cloning:
+
+**1. Activate the repo's git hooks** (one-time, per clone):
 
 ```bash
 git config core.hooksPath scripts/hooks
 ```
 
-This wires up the pre-commit hook that regenerates TypeScript types from Rust
+Wires up the pre-commit hook that regenerates TypeScript types from Rust
 structs and stages them alongside your commit. `.git/hooks/` isn't versioned,
 so this step is required on every clone (and every git worktree).
 
-#### Asset paths (only needed before running `bake:*` scripts)
+**2. Install dependencies:**
 
-The `bake:*` scripts read sprite renders and reference XML from outside this
-repo. Copy `.env.example` to `.env` and fill in the absolute paths for your
-local checkouts:
+```bash
+npm install
+```
+
+**3. Configure asset paths.** The visual assets under `static/atlases/` and
+`static/sprites/` are derived from *Old World* and are not committed to git
+(see the "Third-Party Content" section of [LICENSE](LICENSE)). They're
+regenerated locally from your own [pinacotheca](https://github.com/becked/pinacotheca)
+checkout and Old World install.
+
+You'll need:
+
+- A pinacotheca checkout (anywhere on disk).
+- An Old World install (the `bake:improvements` step reads its reference XML).
+
+Copy `.env.example` to `.env` and fill in absolute paths:
 
 ```bash
 cp .env.example .env
 ```
 
-- `PINACOTHECA_DIR` — your [pinacotheca](https://github.com/becked/pinacotheca) checkout. Required by all `bake:*` commands.
-- `OLD_WORLD_REFERENCE_DIR` — root of an Old World reference checkout containing an `XML/` subdir (or a symlink into a Steam install). Required only by `bake:improvements`.
+- `PINACOTHECA_DIR` — your pinacotheca checkout root.
+- `OLD_WORLD_REFERENCE_DIR` — directory containing an `XML/` subdir (typically your Old World install). Only required by `bake:improvements`.
 
-Both fall back to relative-path candidates if unset, so existing local layouts
-(pinacotheca as a sibling of per-ankh; Reference at the repo root) still work
-without configuring `.env`.
+Both env vars fall back to relative-path candidates if unset (pinacotheca as a
+sibling of per-ankh; a `Reference/` directory or symlink at the repo root),
+but the env-var path is recommended on Windows since it sidesteps any
+symlink-permission concerns.
+
+**4. Bake the assets:**
+
+```bash
+npm run bake:all
+```
+
+This populates `static/atlases/` and `static/sprites/` from your pinacotheca
+checkout. Re-run any time pinacotheca refreshes its renders.
+
+### Upgrading from a previous local checkout
+
+If you cloned per-ankh before `static/atlases/` and `static/sprites/` were
+gitignored, those directories are removed from the working tree on pull. After
+pulling these changes, run:
+
+```bash
+npm run bake:all
+```
+
+to regenerate them locally. You'll need `PINACOTHECA_DIR` configured in `.env`
+(see step 3 above).
 
 ### Common Development Tasks
 
