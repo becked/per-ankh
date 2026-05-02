@@ -24,7 +24,7 @@
 
 - DLC nations and tribes now render with correct colors (off-by-one tribe color palette corrected)
 
-
+## [0.2.0] - 2026-03-27
 
 ### Added
 
@@ -279,7 +279,8 @@
 - Real-time import progress events
 - GitHub Actions release workflow
 
-[Unreleased]: https://github.com/becked/per-ankh/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/becked/per-ankh/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/becked/per-ankh/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/becked/per-ankh/compare/v0.1.10...v0.2.0
 [0.1.10]: https://github.com/becked/per-ankh/compare/v0.1.9...v0.1.10
 [0.1.9]: https://github.com/becked/per-ankh/compare/v0.1.8...v0.1.9
