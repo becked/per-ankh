@@ -1,8 +1,9 @@
 [package]
 name = "per-ankh"
 version = "0.3.0"
-description = "A Tauri App"
-authors = ["you"]
+description = "Desktop analytics for Old World save files"
+authors = ["Jeffery Beck"]
+license = "MIT"
 edition = "2021"
 default-run = "per-ankh"
 [[bin]]

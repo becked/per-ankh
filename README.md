@@ -10,7 +10,9 @@ Per-Ankh imports Old World game save files and provides data visualizations and 
 
 Per-Ankh is an independent, unofficial fan project. It is not affiliated with, endorsed by, sponsored by, or connected to Mohawk Games, Hooded Horse, or any of their affiliates.
 
-"Old World" is a trademark of Mohawk Games. All game content, including save file formats and game data, remains the intellectual property of Mohawk Games.
+"Old World" is a trademark of Mohawk Games. Mohawk Games holds the copyright in *Old World* and all of its visual assets, save file formats, and game data.
+
+Per-Ankh's source code is licensed under the MIT License (see [LICENSE](LICENSE)). The visual assets bundled under `static/atlases/` and `static/sprites/` are derived from *Old World* and remain the property of Mohawk Games — they are **not** covered by the MIT License and are included solely as build artifacts to support analysis of save files from games the end user legally owns. See the "Third-Party Content" section of [LICENSE](LICENSE) for details.
 
 This application:
 

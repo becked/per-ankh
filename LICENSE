@@ -19,3 +19,29 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
+
+-------------------------------------------------------------------------------
+
+Third-Party Content
+
+The MIT license above applies to source code authored by the Per-Ankh
+maintainers.
+
+The following directories contain visual assets derived from the video
+game "Old World":
+
+  - static/atlases/
+  - static/sprites/
+
+"Old World" and all related visual assets, save file formats, and game
+data are the copyrighted property of Mohawk Games. These assets are
+NOT licensed under the MIT license above. They are bundled with this
+application solely as build artifacts to support analysis of save files
+from games the end user legally owns. They may not be redistributed,
+relicensed, or used outside of this application without permission from
+Mohawk Games.
+
+"Old World" is a trademark of Mohawk Games. Use of the name in this
+project is descriptive only. Per-Ankh is an independent, unofficial
+fan project, not affiliated with, endorsed by, or sponsored by Mohawk
+Games or Hooded Horse.

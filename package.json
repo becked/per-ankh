@@ -1,7 +1,7 @@
 {
 	"name": "per-ankh",
 	"version": "0.3.0",
-	"description": "",
+	"description": "Desktop analytics for Old World save files",
 	"type": "module",
 	"scripts": {
 		"dev": "vite dev",
