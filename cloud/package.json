@@ -17,5 +17,10 @@
 		"typescript": "^5.6.0",
 		"vitest": "^2.1.0",
 		"wrangler": "^4.0.0"
+	},
+	"overrides": {
+		"@cloudflare/vitest-pool-workers": {
+			"wrangler": "3.114.17"
+		}
 	}
 }
