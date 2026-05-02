@@ -105,7 +105,7 @@
 					improvementData = impData;
 					gameReligions = religions;
 					playerWonders = wonders;
-					mapTiles = tiles;
+					mapTiles = tiles ?? [];
 				},
 			)
 			.catch((err) => {
@@ -150,7 +150,7 @@
 			Error: {error}
 		</p>
 	</main>
-{:else if gameDetails && playerHistory && allYields && eventLogs && lawAdoptionHistory && currentLaws && techDiscoveryHistory && completedTechs && unitsProduced && cityStatistics && improvementData && gameReligions && playerWonders}
+{:else if gameDetails && playerHistory && allYields && eventLogs && lawAdoptionHistory && currentLaws && techDiscoveryHistory && completedTechs && unitsProduced && cityStatistics && improvementData && gameReligions && playerWonders && mapTiles}
 	<main class="isolate flex-1 overflow-y-auto bg-blue-gray px-4 pb-8 pt-4">
 		<GameDetailView
 			{gameDetails}
@@ -171,6 +171,16 @@
 			{#snippet preTabs()}
 				<div class="mb-4 rounded bg-[#2a2622] px-4 py-2 text-center text-xs text-brown">
 					Shared game
+				</div>
+			{/snippet}
+			{#snippet mapMissingMessage()}
+				<div class="space-y-2 text-brown">
+					<p class="font-bold">This shared game doesn't include map data.</p>
+					<p>
+						It was likely created before map sharing was supported. To fix it,
+						open the game in the Per Ankh desktop app, delete the share, and
+						share it again.
+					</p>
 				</div>
 			{/snippet}
 		</GameDetailView>

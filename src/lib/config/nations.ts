@@ -25,8 +25,11 @@ export const NATION_COLORS = {
 	GREECE: "#2360BC", // Dark Blue
 	HITTITE: "#80E3E8", // Cyan
 	KUSH: "#FFFFB6", // Light Yellow
+	MAURYA: "#A749FF", // Purple
 	PERSIA: "#C04E4A", // Red
 	ROME: "#880D56", // Purple/Burgundy
+	TAMIL: "#00B281", // Teal/Green
+	YUEZHI: "#AD7E00", // Mustard/Gold
 } as const;
 
 /**
@@ -35,12 +38,13 @@ export const NATION_COLORS = {
  * Tribes are minor factions with distinct colors separate from major nations.
  */
 export const TRIBE_COLORS = {
-	GAULS: "#C84732", // Red-Orange
-	VANDALS: "#87DB40", // Lime Green
-	DANES: "#9C5DFF", // Purple
-	THRACIANS: "#3CCDC2", // Teal
-	SCYTHIANS: "#D89A18", // Orange/Gold
-	NUMIDIANS: "#E6E1CA", // Beige/Light Tan
+	GAULS: "#87DB40", // Lime Green
+	VANDALS: "#9C5DFF", // Purple
+	DANES: "#3CCDC2", // Teal
+	THRACIANS: "#D89A18", // Orange/Gold
+	SCYTHIANS: "#E6E1CA", // Beige/Light Tan
+	NUMIDIANS: "#FFDD67", // Light Yellow
+	HUNS: "#AB3157", // Dark Pink/Magenta
 } as const;
 
 /**

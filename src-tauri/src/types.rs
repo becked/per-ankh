@@ -377,6 +377,11 @@ pub struct CityInfo {
     pub city_name: String,
     pub owner_nation: Option<String>,
     pub family: Option<String>,
+    /// Family class enum (FAMILYCLASS_CHAMPIONS, FAMILYCLASS_LANDOWNERS, ...).
+    /// Frontend uses this as the crest fallback when the per-family crest art
+    /// isn't in our shipped sprite set — every class has a CREST_ARCHETYPE_X
+    /// sprite available, but only a small subset of families do.
+    pub family_class: Option<String>,
     pub founded_turn: i32,
     pub is_capital: bool,
     pub citizens: i32,

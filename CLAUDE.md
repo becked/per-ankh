@@ -577,7 +577,16 @@ cargo install tauri-cli
 
 # Install frontend dependencies
 npm install
+
+# Activate the repo's git hooks (regenerates TS types when committing Rust)
+git config core.hooksPath scripts/hooks
 ```
+
+The hook in `scripts/hooks/pre-commit` runs `cargo test --lib export_bindings`
+in a subshell when Rust files are staged, then `git add`s any updated
+`src/lib/types/*.ts` so the regenerated bindings ride along with the commit.
+It's per-clone setup — `.git/hooks/` isn't versioned, so each new clone needs
+the `git config core.hooksPath` step.
 
 ### Running the Application
 
@@ -787,6 +796,91 @@ Previously shared games won't have the new field, so the web viewer must handle 
 | `src/lib/game-detail/index.ts` | Re-export for clean imports |
 | `src/routes/game/[id]/+page.svelte` | Desktop wrapper (~150 lines) |
 | `web/src/routes/share/[id]/+page.svelte` | Web wrapper (~150 lines) |
+
+## Map Atlas Pipeline
+
+The sprite map's terrain, height, resource, and improvement atlases are baked from Pinacotheca outputs into runtime-ready atlases. Three bake scripts share `scripts/lib/atlas-bake.ts` for cell geometry (`CELL_W=211`, `CELL_H=167`), hex masking, and grid packing.
+
+### Hex cell aspect
+
+`HEX_H_SPACING=199`, `HEX_V_SPACING=122` — pointy-top R=5 world hex projected through the game's fixed 45° camera tilt: 8.66 wide × 7.07 tall = 1.225 image aspect. Cell rect 211×167 wraps the inscribed hex 199×162.7 with a small gutter. These constants live in `scripts/lib/atlas-bake.ts` and are mirrored in `src/lib/SpriteMap.svelte` — keep both sites in sync. The hex polygon math (vertex generation in `buildHexMask`, runtime `hexPolygon`, neighbor lookup, religion fill / political border inset) all derives from `HEX_RADIUS_X = H_SPACING / sqrt(3)` and `HEX_RADIUS_Y = V_SPACING / 1.5`.
+
+### Terrain (`scripts/bake-terrain-3d.ts`)
+
+One packed atlas keyed by `TERRAIN_3D_<BIOME>_<HEIGHT>`. Runtime stacks two layers per tile: a FLAT base that fills per-ankh's hex extent edge-to-edge, and (only on HILL/MOUNTAIN/VOLCANO) a relief sprite drawn on top.
+
+- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/terrains/TERRAIN_3D_*.png` (28 cells: 6 land biomes × 4 heights + URBAN_FLAT + 3 WATER_*).
+- FLAT and WATER_* renders use pinacotheca's `padding=0` autocrop — the rendered hex covers 100% of the source image, so cover-fit lands the hex at per-ankh's full hex extent and tiles tessellate edge-to-edge with no canvas-color seams.
+- HILL/MOUNTAIN/VOLCANO renders include spire/peak content that legitimately extends past the hex bbox (groundHex pixel bbox covers ~80–98% of source image, with the rest being the peak rising above and lateral mountain spread). Two things differ from FLAT/WATER for these:
+  - **Bake** (`bakeReliefCell` in `scripts/bake-terrain-3d.ts`): we anchor on the sidecar's `groundHex.pixelBbox` rather than cover-fit. Scale so groundHex height matches per-ankh's hex extent, then position the scaled source so groundHex bottom-center lands at the cell hex bottom-center. The hex base fills per-ankh's hex; lateral mountain spread overflows the cell sides and is hex-clipped; peak content extends into the small margin above the inscribed hex and is naturally cropped at the cell top. Without this anchoring, naive cover-fit shrinks the hex base AND the peak content together, so mountains read as small hills inside the cell.
+  - **Runtime**: drawn on top of a FLAT base layer rather than alone. Same architectural pattern that makes nation-owned URBAN tiles work today (TEMPERATE underlay beneath the URBAN/CAPITAL overlay) and that lets cathedral/ziggurat improvements draw on top of terrain.
+- Output: `static/atlases/terrain-3d.{webp,json}`.
+- Sprite key shape mirrors the source filenames as-is (`TERRAIN_3D_<BIOME>_<HEIGHT>`).
+- **Runtime resolution** (`src/lib/SpriteMap.svelte` `terrain3dBaseKey` + `terrain3dReliefKey`): per tile resolves a base key (always returned) and an optional relief key (HILL/MOUNTAIN/VOLCANO only) with these rules applying to both:
+  - `TERRAIN_FROST → TUNDRA` — pinacotheca clarified that in-game frost tiles are literally `TERRAIN_TUNDRA`; `TERRAIN_FROST` is an orphan UI icon with no 3D backing.
+  - `TERRAIN_WATER` → base `WATER_<HEIGHT>` (HEIGHT_OCEAN/COAST/LAKE), no relief layer (water has no spire content).
+  - Bare `TERRAIN_URBAN` (no nation owner) → base `URBAN_FLAT`, no relief (only URBAN_FLAT is rendered).
+  - Nation-owned `TERRAIN_URBAN` → base `TEMPERATE_FLAT` + `TEMPERATE_<HEIGHT>` relief on HILL+. The TEMPERATE underlay matches pinacotheca's render composition (their urban renders are composed on a TEMPERATE base) and gives the URBAN/CAPITAL overlay's hex-clip a backstop in the cell corners.
+  - Other land biomes → base `<BIOME>_FLAT` + `<BIOME>_<HEIGHT>` relief on HILL+.
+
+```bash
+npm run bake:terrain-3d
+```
+
+### Resources (`scripts/bake-resources.ts`)
+
+- Source: `assets/atlas-sources/resources.{webp,json}` from pinacotheca, with HERD/SOLO variants per resource.
+- Output: `static/atlases/resources.{webp,json}` — hex-clipped, `SAFE_SCALE=0.77` inset.
+
+```bash
+npm run bake:resources
+```
+
+### Improvements (`scripts/bake-improvements.ts`)
+
+Two output atlases: a base atlas with single-improvement sprites + per-nation URBAN/CAPITAL standalones, and 10 family atlases for per-(improvement, family) urban composites.
+
+- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/improvements/IMPROVEMENT_3D_*.png` plus their JSON sidecars. We deliberately ingest the raw renders, not pinacotheca's pre-baked `output/atlases/improvement.{webp,json}` (which is the 2D icon set — mixing 2D and 3D in one atlas would look inconsistent).
+- Mapping: `Reference/XML/Infos/improvement.xml` (+ `improvement-event.xml`, `improvement-event-sap.xml`, plus `Reference/XML/Mods/*/Infos/improvement-{add,change}.xml`) provides the `zType → zIconName` translation. Save files emit `zType` into `tiles.improvement`; many `zType`s share one `zIconName` by design (e.g. all sun-god shrines → `IMPROVEMENT_SHRINE_SUN`). Multiple manifest entries point at the same packed cell.
+- Output:
+  - `improvements-base.{webp,json}` — single-improvement sprites (`SAFE_SCALE=0.77` inset, brightness-lifted via `IMPROVEMENT_BRIGHTEN_TWEAK`) plus 22 standalones (`URBAN_<FAMILY>` / `CAPITAL_<FAMILY>` keyed sprites, `FULL_SCALE=1.0` cover-fit).
+  - `improvements-urban-{AKSUM,…,ROME}.{webp,json}` — 10 family atlases for per-(improvement, family) composites baked from `IMPROVEMENT_3D_<NAME>_<FAMILY>_URBAN.png`. Same `FULL_SCALE` cover-fit treatment.
+  - `nation-asset-aliases.json` — derived from `nation.xml`. Maps every `NATION_*` zType to its urban + capital family. Single source of truth at runtime for resolving owner_nation → which atlas / which sprite key.
+
+Per-ankh bakes each variable-size source PNG into a fixed `CELL_W × CELL_H = 211×167` cell in the packed atlas via cover-fit + binary-alpha hex mask. Pinacotheca's renderer leaves ~32 px transparent padding around rendered content (~95% coverage in both dimensions, per pinacotheca's autocrop step). For improvements the padding is load-bearing: single-improvement renders (Pasture/Camp/Mine) end up localized within the hex with terrain peeking around them — the desired rural-improvement look — and URBAN/CAPITAL renders, which pinacotheca composes on a TERRAIN_TEMPERATE base, let the runtime's TEMPERATE underlay (drawn by the terrain-3d layer beneath) peek through to match the source composition. Tall buildings (ziggurats, palace towers, cathedral spires) that extend above the hex top vertex get compressed and partially clipped at the cell apex — that's the deliberate trade-off vs the now-removed taller-than-cell sprite + spire-overflow approach, which created jarring rectangular cuts above each tile's hex.
+
+**Runtime layer order** (`src/lib/SpriteMap.svelte`): terrain-3d-base → terrain-3d-relief (HILL/MOUNTAIN/VOLCANO only) → nation-tile-icons (URBAN/CAPITAL standalones) → resources → per-family composite layers → single-improvement layer. Each non-terrain tile is filtered to at most one of the upper layers; `compositeFamilyFor()` and `capitalSpriteKeyFor()` decide which.
+
+**Re-bake when:**
+
+- Pinacotheca ships refreshed `IMPROVEMENT_3D_*.png` or `TERRAIN_3D_*.png` renders.
+- `Reference/XML/` is refreshed against a current OW install (picks up new DLC `zType`s and nation aliases).
+- Tuning bake knobs:
+  - `SAFE_SCALE=0.77` — single-improvement inset within the hex.
+  - `FULL_SCALE=1.0` — cover-fit fill for terrain-3d cells and URBAN/CAPITAL/composites.
+  - `IMPROVEMENT_BRIGHTEN_TWEAK` — brightness lift for single-improvement focal buildings.
+
+```bash
+npm run bake:improvements
+```
+
+`zType`s present in saves but absent from the Reference XML (typically newer DLC content not yet vendored) silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose `zIconName` is missing from pinacotheca's render set, and falls those `zType`s back to a generic city sprite.
+
+### Crests (`scripts/bake-crests.ts`)
+
+Not a sprite-pack — a directory scan. Reads `static/sprites/crests/CREST_*.png` and emits a generated TypeScript module at `src/lib/generated/crests.ts` exporting `FAMILY_CRESTS` and `NATION_CRESTS` sets. `SpriteMap.svelte` imports those sets synchronously inside `$derived` blocks (city-tooltip + nation-crest fallback chains), so a generated TS module is preferable to a runtime-fetched JSON manifest — no load-state guard needed.
+
+Re-bake when adding or removing crest PNGs under `static/sprites/crests/`:
+
+```bash
+npm run bake:crests
+```
+
+The generated file is committed alongside the source crests.
+
+### Both pipelines
+
+**Source and baked are committed to git.** Baking is on-demand — not part of `tauri:dev` or `tauri:build`. Visually inspect the dev server's Map Beta tab after re-baking; commit source and baked atlases together.
 
 ## Player Identity & Winner Model
 

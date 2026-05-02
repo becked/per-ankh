@@ -64,6 +64,12 @@ test-data/saves/*
 !test-data/saves/sample.xml
 !test-data/saves/README.md
 
+# Game asset reference checkout (XML, source, graphics) — read by
+# scripts/bake-improvements.ts at bake time. Local-only; not committed.
+# Bare name (not Reference/) so it also matches when Reference is a symlink
+# into the Steam install directory.
+Reference
+
 # Python (from old experiments/demos)
 __pycache__/
 *.py[cod]

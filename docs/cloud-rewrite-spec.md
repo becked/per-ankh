@@ -14,6 +14,7 @@ This document specifies the architecture and implementation details for rewritin
 8. [Save File Management](#8-save-file-management)
 9. [Cloudflare Resource Limits](#9-cloudflare-resource-limits)
 10. [Schema Versioning & Migrations](#10-schema-versioning--migrations)
+11. [Map Assets](#11-map-assets)
 
 ---
 
@@ -1167,6 +1168,74 @@ For changes touching both Worker and frontend:
 3. (Optional) Reprocess old blobs
 
 Worker must accept new versions **before** the frontend starts sending them. Same principle as documented in `CLAUDE.md` for the current share system.
+
+---
+
+## 11. Map Assets
+
+The map sprite atlases are baked offline from pinacotheca's renders (see `CLAUDE.md` "Map Atlas Pipeline"). Today the Tauri build bundles them into `static/atlases/`; in the cloud rewrite they move to R2.
+
+### Hosting
+
+- **Bucket:** R2 `per-ankh-assets` (separate from the existing `per-ankh-shares` bucket)
+- **Domain:** `assets.per-ankh.app` (custom domain on the R2 bucket, public read, no Worker in the path)
+- **Caching:** Cloudflare CDN edge cache in front of R2 ⇒ first request per region warms cache, subsequent reads hit the edge
+- **Cache headers:** `Cache-Control: public, max-age=31536000, immutable` on every asset
+- **Cost:** ~50 MB total → free R2 tier; bandwidth free within Cloudflare's network
+
+### Versioning
+
+URLs include a path prefix that changes on every atlas re-bake:
+
+```
+https://assets.per-ankh.app/v<N>/atlases/{name}.{webp,json}
+https://assets.per-ankh.app/v<N>/atlases/nation-asset-aliases.json
+```
+
+`N` is incremented in the bake script's output and committed alongside the atlases. The frontend reads the active prefix from a build-time constant (or a small JSON manifest fetched once at app start). Old prefixes stay live so in-flight clients on a stale build don't break.
+
+### Atlas inventory
+
+Same set the Tauri build produces (12 WebP/JSON pairs + 1 alias JSON):
+
+| Atlas | Cells | Approx size (lossless WebP) | Loaded |
+|---|---|---|---|
+| `terrain.{webp,json}` | 9 | ~150 KB | always |
+| `height.{webp,json}` | 3 | ~85 KB | always |
+| `improvements-base.{webp,json}` | 58 | ~1.7 MB | always |
+| `resources.{webp,json}` | 20 | ~350 KB | always |
+| `improvements-urban-<FAMILY>.{webp,json}` × 10 | ~70-75 each | ~3.2-3.8 MB each | lazy by family |
+| `nation-asset-aliases.json` | — | ~2 KB | always |
+
+Always-loaded set: ~2.3 MB. Per-match family fetches: ~3-4 MB per nation present on the map. Worst case (10-nation match): ~37 MB total.
+
+### Lazy loading
+
+The runtime fetches `nation-asset-aliases.json` + the always-loaded atlases on app start. Once tiles arrive, `SpriteMap.svelte` derives the set of urban families present on the map (`unique(tiles.map(t => aliases[t.owner_nation].urban))`) and fires parallel fetches for each family atlas. Tiles whose family hasn't loaded yet fall through to the empty-urban + base layers; once the family atlas resolves, deck.gl picks up the new IconLayer and the composite renders on the next frame.
+
+### Bake pipeline
+
+Same scripts as Tauri (`scripts/bake-{atlases,improvements,resources}.ts`). Cloud build adds one extra step: after the bake writes `static/atlases/`, an upload step pushes those files to R2 under the new version prefix and updates the active-prefix manifest.
+
+```bash
+# Tauri (today): bake + bundle
+npm run bake:all
+
+# Cloud (future): bake + upload
+npm run bake:all
+npm run atlases:upload   # wrangler r2 object put per-ankh-assets/v<N>/atlases/...
+```
+
+Atlas content is identical between Tauri and cloud — the only difference is where the runtime fetches from.
+
+### Migration ordering (cloud cutover)
+
+1. Bake locally and upload to R2 under prefix `v1/`
+2. Deploy frontend that reads from `assets.per-ankh.app/v1/...`
+3. Tauri continues serving from `static/atlases/` (no change)
+4. On future re-bake: bump to `v2/`, upload, redeploy frontend
+
+Old prefixes can be deleted from R2 once no client traffic is hitting them (CDN cache + browser cache lifetime determines the safe-delete window — give it a few weeks).
 
 ---
 

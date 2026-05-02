@@ -61,6 +61,7 @@
 		selectedMapTurn = null,
 		headerActions,
 		preTabs,
+		mapMissingMessage,
 	}: {
 		gameDetails: GameDetails;
 		playerHistory: PlayerHistory[];
@@ -81,6 +82,7 @@
 		selectedMapTurn?: number | null;
 		headerActions?: Snippet;
 		preTabs?: Snippet;
+		mapMissingMessage?: Snippet;
 	} = $props();
 
 	// ─── Persistent UI state ──────────────────────────────────────────
@@ -495,9 +497,11 @@
 	>
 		<MapTab
 			{mapTiles}
+			cities={cityStatistics.cities}
 			totalTurns={gameDetails.total_turns}
 			selectedTurn={selectedMapTurn}
 			onTurnChange={onMapTurnChange}
+			missingMessage={mapMissingMessage}
 		/>
 	</Tabs.Content>
 
