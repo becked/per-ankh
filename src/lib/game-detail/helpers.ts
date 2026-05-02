@@ -306,7 +306,7 @@ export function createDefaultCityVisibleColumns(): Record<string, boolean> {
 
 // ─── Sprite Helpers ─────────────────────────────────────────────────
 
-export type SpriteCategory = "crests" | "techs" | "laws" | "yields" | "religions" | "theology" | "icons" | "units";
+export type SpriteCategory = "crests" | "techs" | "laws" | "yields" | "religions" | "icons" | "units";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
