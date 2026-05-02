@@ -6,6 +6,7 @@
 	import ImportModal from "$lib/ImportModal.svelte";
 	import SettingsModal from "$lib/SettingsModal.svelte";
 	import CollectionsModal from "$lib/CollectionsModal.svelte";
+	import AboutModal from "$lib/AboutModal.svelte";
 	import SearchInput from "$lib/SearchInput.svelte";
 
 	import { api } from "$lib/api";
@@ -27,6 +28,7 @@
 	let isImportModalOpen = $state(false);
 	let isSettingsModalOpen = $state(false);
 	let isCollectionsModalOpen = $state(false);
+	let isAboutModalOpen = $state(false);
 	let importProgress: ImportProgress | null = $state(null);
 	let importResult: BatchImportResult | null = $state(null);
 
@@ -60,6 +62,11 @@
 	function openUpdateModal() {
 		isMenuOpen = false;
 		onOpenUpdateModal();
+	}
+
+	function openAboutModal() {
+		isMenuOpen = false;
+		isAboutModalOpen = true;
 	}
 
 	async function handleImportFiles() {
@@ -249,6 +256,14 @@
 						? `Update Available (v${currentPendingUpdate.version})`
 						: "Check for Updates"}
 				</button>
+				<div class="border-t border-black"></div>
+				<button
+					class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+					type="button"
+					onclick={openAboutModal}
+				>
+					About
+				</button>
 			</div>
 		{/if}
 	</div>
@@ -291,5 +306,12 @@
 	bind:isOpen={isCollectionsModalOpen}
 	onClose={() => {
 		isCollectionsModalOpen = false;
+	}}
+/>
+
+<AboutModal
+	bind:isOpen={isAboutModalOpen}
+	onClose={() => {
+		isAboutModalOpen = false;
 	}}
 />

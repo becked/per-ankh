@@ -10,10 +10,16 @@
 		</a>
 		<div class="flex items-center gap-3">
 			<span class="text-xs text-brown">Old World Game Analytics</span>
+			<a href="/about" class="text-xs text-tan transition-colors hover:text-orange">
+				About
+			</a>
 			<a href="https://github.com/becked/per-ankh/releases/latest" class="rounded border border-brown/30 px-2 py-0.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange">
 				Download
 			</a>
 		</div>
 	</header>
 	{@render children()}
+	<footer class="border-t border-black bg-[#1a1714] px-4 py-2 text-center text-[11px] text-brown">
+		Per Ankh is an unofficial fan tool. Old World and all related assets © Mohawk Games. Not affiliated with or endorsed by Mohawk Games.
+	</footer>
 </div>
