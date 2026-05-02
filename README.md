@@ -35,6 +35,23 @@ This wires up the pre-commit hook that regenerates TypeScript types from Rust
 structs and stages them alongside your commit. `.git/hooks/` isn't versioned,
 so this step is required on every clone (and every git worktree).
 
+#### Asset paths (only needed before running `bake:*` scripts)
+
+The `bake:*` scripts read sprite renders and reference XML from outside this
+repo. Copy `.env.example` to `.env` and fill in the absolute paths for your
+local checkouts:
+
+```bash
+cp .env.example .env
+```
+
+- `PINACOTHECA_DIR` — your [pinacotheca](https://github.com/becked/pinacotheca) checkout. Required by all `bake:*` commands.
+- `OLD_WORLD_REFERENCE_DIR` — root of an Old World reference checkout containing an `XML/` subdir (or a symlink into a Steam install). Required only by `bake:improvements`.
+
+Both fall back to relative-path candidates if unset, so existing local layouts
+(pinacotheca as a sibling of per-ankh; Reference at the repo root) still work
+without configuring `.env`.
+
 ### Common Development Tasks
 
 Use the `per-ankh.sh` helper script for common operations:

@@ -42,7 +42,6 @@
 // Run: npm run bake:terrain-3d
 
 import sharp from "sharp";
-import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -59,6 +58,7 @@ import {
 	readPinacothecaVersion,
 	writeAtlas,
 } from "./lib/atlas-bake.js";
+import { resolvePinacotheca } from "./lib/paths.js";
 
 interface TerrainSidecar {
 	world: {
@@ -160,23 +160,7 @@ function isReliefKey(key: string): boolean {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const REPO_ROOT = resolve(__dirname, "..");
-// Resolve pinacotheca's checkout. Two layouts in active use: the per-ankh
-// worktree under .claude/worktrees/<branch>/ (4 up, matches bake-improvements.ts)
-// and the main repo at <Old World>/per-ankh/ (1 up, for bakes run outside a
-// worktree). Probe both; first one that exists wins.
-const PINACOTHECA_ROOT = (() => {
-	const candidates = [
-		resolve(REPO_ROOT, "../../../../pinacotheca"),
-		resolve(REPO_ROOT, "../pinacotheca"),
-	];
-	const found = candidates.find((p) => existsSync(p));
-	if (!found) {
-		throw new Error(
-			`could not locate pinacotheca; tried:\n  ${candidates.join("\n  ")}`,
-		);
-	}
-	return found;
-})();
+const PINACOTHECA_ROOT = resolvePinacotheca();
 const PINACOTHECA_3D_DIR = resolve(
 	PINACOTHECA_ROOT,
 	"extracted/sprites/terrains",

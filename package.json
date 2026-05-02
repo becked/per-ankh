@@ -21,7 +21,8 @@
 		"bake:improvements": "tsx scripts/bake-improvements.ts",
 		"bake:resources": "tsx scripts/bake-resources.ts",
 		"bake:crests": "tsx scripts/bake-crests.ts",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:crests"
+		"bake:sprites": "tsx scripts/bake-sprites.ts",
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:crests && npm run bake:sprites"
 	},
 	"license": "MIT",
 	"dependencies": {
@@ -45,6 +46,7 @@
 		"@typescript-eslint/parser": "^8.54.0",
 		"autoprefixer": "^10.4.21",
 		"baseline-browser-mapping": "^2.9.19",
+		"dotenv": "^17.4.2",
 		"eslint": "^9.39.2",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.14.0",
