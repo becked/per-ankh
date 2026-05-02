@@ -1,6 +1,30 @@
 # Changelog
 
-## [0.2.0] - 2026-03-26
+## [0.3.0] - 2026-05-01
+
+### Added
+
+- Sprite-based map view replacing the legacy hex map — terrain rendered as 3D per-(biome, height) sprites with nation-specific urban and capital tiles, resources, and improvements composited per tile
+- Political and religion overlays on the map with smoothed boundaries
+- Hover and right-click-pinned tooltips on map tiles, including terrain height and tile coordinates
+- Turn slider and play/pause controls for stepping through the game on the map
+- Fullscreen toggle for the map tab
+- Shared games render the new sprite map in the web viewer; older shares without map data show an explanatory message
+- Atlas bake pipeline: `npm run bake:terrain-3d`, `bake:improvements`, `bake:resources`, `bake:crests` (or `bake:all`) regenerate runtime atlases from pinacotheca renders and OW Reference XML
+- Map Atlas Pipeline section in `CLAUDE.md` documenting cell geometry, hex masking, and per-script bake responsibilities
+
+### Changed
+
+- Map sprites rendered via deck.gl `IconLayer` instead of bitmap composite, lifting prior `GL_MAX_TEXTURE_SIZE` cap on large maps
+- Improvement atlas now driven by XML `zType` → `zIconName` mapping (including DLC `improvement-add`/`improvement-change` mods)
+- Hex grid aligned to game-accurate 1.225 aspect ratio at 45° camera tilt
+- Resource sprites toned down: SOLO variants render at 0.30 scale and 70% opacity to reduce visual noise
+
+### Fixed
+
+- DLC nations and tribes now render with correct colors (off-by-one tribe color palette corrected)
+
+
 
 ### Added
 
