@@ -866,6 +866,18 @@ npm run bake:improvements
 
 `zType`s present in saves but absent from the Reference XML (typically newer DLC content not yet vendored) silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose `zIconName` is missing from pinacotheca's render set, and falls those `zType`s back to a generic city sprite.
 
+### Crests (`scripts/bake-crests.ts`)
+
+Not a sprite-pack — a directory scan. Reads `static/sprites/crests/CREST_*.png` and emits a generated TypeScript module at `src/lib/generated/crests.ts` exporting `FAMILY_CRESTS` and `NATION_CRESTS` sets. `SpriteMap.svelte` imports those sets synchronously inside `$derived` blocks (city-tooltip + nation-crest fallback chains), so a generated TS module is preferable to a runtime-fetched JSON manifest — no load-state guard needed.
+
+Re-bake when adding or removing crest PNGs under `static/sprites/crests/`:
+
+```bash
+npm run bake:crests
+```
+
+The generated file is committed alongside the source crests.
+
 ### Both pipelines
 
 **Source and baked are committed to git.** Baking is on-demand — not part of `tauri:dev` or `tauri:build`. Visually inspect the dev server's Map Beta tab after re-baking; commit source and baked atlases together.

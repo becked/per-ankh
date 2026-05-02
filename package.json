@@ -20,7 +20,8 @@
 		"bake:terrain-3d": "tsx scripts/bake-terrain-3d.ts",
 		"bake:improvements": "tsx scripts/bake-improvements.ts",
 		"bake:resources": "tsx scripts/bake-resources.ts",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources"
+		"bake:crests": "tsx scripts/bake-crests.ts",
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:crests"
 	},
 	"license": "MIT",
 	"dependencies": {

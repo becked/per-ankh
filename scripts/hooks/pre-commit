@@ -9,15 +9,14 @@
 if git diff --cached --name-only | grep -q '\.rs$'; then
     echo "🔄 Rust files modified, regenerating TypeScript types..."
 
-    # Run type generation in a subshell so cwd is restored afterward —
-    # otherwise the git add below resolves relative to src-tauri/ and silently
-    # fails to stage anything (the path doesn't exist there).
-    ( cd src-tauri && cargo test --lib export_bindings --quiet ) 2>&1 | grep -v "running 0 tests" | grep -v "test result: ok"
-
-    # PIPESTATUS would be ideal but isn't portable to /bin/sh; the grep
-    # pipeline's exit code is good enough since cargo's failure surfaces
-    # as test output (and grep almost always finds something to pass through).
-    if [ $? -eq 0 ]; then
+    # Capture cargo's actual exit status — piping through grep would mask it
+    # (in /bin/sh, $? after a pipeline reflects only the last command).
+    # Run in a subshell so cwd is restored afterward; otherwise the git add
+    # below resolves relative to src-tauri/ and silently stages nothing.
+    cargo_out=$(mktemp)
+    if ( cd src-tauri && cargo test --lib export_bindings --quiet ) >"$cargo_out" 2>&1; then
+        grep -v "running 0 tests" "$cargo_out" | grep -v "test result: ok"
+        rm -f "$cargo_out"
         echo "✅ TypeScript types regenerated"
 
         # Stage any modified TypeScript type files
@@ -28,7 +27,9 @@ if git diff --cached --name-only | grep -q '\.rs$'; then
             echo "📝 Updated types staged for commit"
         fi
     else
-        echo "❌ Failed to regenerate types"
+        cat "$cargo_out" >&2
+        rm -f "$cargo_out"
+        echo "❌ Failed to regenerate types" >&2
         exit 1
     fi
 fi

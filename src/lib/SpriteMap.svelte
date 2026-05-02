@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { onMount, tick } from "svelte";
+	import { onMount } from "svelte";
 	import { Deck, OrthographicView } from "@deck.gl/core";
 	import { IconLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityInfo } from "$lib/types/CityInfo";
 	import { getCivilizationColor } from "$lib/config";
+	import { FAMILY_CRESTS, NATION_CRESTS } from "$lib/generated/crests";
 	import MapTooltip from "$lib/MapTooltip.svelte";
 
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
@@ -243,30 +244,19 @@
 		onTurnChange?: ((turn: number) => Promise<void> | void) | null;
 	} = $props();
 
-	// Family crest sprites we actually ship. Anything not in this set falls
-	// back to the family-class archetype crest (CREST_ARCHETYPE_X). Sourced
-	// from static/sprites/crests/CREST_FAMILY_*.png at the time of writing —
-	// expand only when adding more PNGs to that dir.
-	const KNOWN_FAMILY_CRESTS = new Set([
-		"FAMILY_ANTIGONUS",
-		"FAMILY_ANTIPATER",
-		"FAMILY_ATHENS",
-		"FAMILY_CASSANDER",
-		"FAMILY_PTOLEMY",
-		"FAMILY_SELEUCID",
-	]);
-
 	// city_name → resolved crest sprite key (or null when no crest is
 	// renderable). Resolution prefers a per-family crest when we ship the
 	// art; otherwise falls back to the family-class archetype crest, which
 	// always exists for non-null family_class values. Recomputed when the
 	// cities prop changes; tile lookups stay O(1) inside the tooltip resolver.
+	// FAMILY_CRESTS membership comes from $lib/generated/crests, baked from
+	// static/sprites/crests/CREST_FAMILY_*.png.
 	const cityFamilyCrestByName = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const map = new Map<string, string | null>();
 		for (const c of cities) {
 			let key: string | null = null;
-			if (c.family && KNOWN_FAMILY_CRESTS.has(c.family)) {
+			if (c.family && FAMILY_CRESTS.has(c.family)) {
 				key = c.family;
 			} else if (c.family_class) {
 				// FAMILYCLASS_CHAMPIONS → ARCHETYPE_CHAMPIONS
@@ -382,27 +372,6 @@
 		}
 	}
 
-	// CREST_NATION_*.png shipped under static/sprites/crests. Drives the
-	// fallback chain in resolveNationCrestKey — keep in sync when crests are
-	// added or removed (re-bake / re-vendor pinacotheca crests).
-	const KNOWN_NATION_CRESTS = new Set([
-		"AKSUM",
-		"ASSYRIA",
-		"BABYLONIA",
-		"CARTHAGE",
-		"EGYPT",
-		"GREECE",
-		"HITTITE",
-		"HYKSOS",
-		"KUSH",
-		"MAURYA",
-		"MITANNI",
-		"PERSIA",
-		"ROME",
-		"TAMIL",
-		"YUEZHI",
-	]);
-
 	// Resolve owner_nation → crest sprite key with a 3-tier fallback:
 	//   1. The nation's own crest if shipped (handles MAURYA/TAMIL/YUEZHI,
 	//      KUSH/HYKSOS/MITANNI — which all have their own crest but whose
@@ -411,12 +380,14 @@
 	//      nations like NATION_AMUN/ATHENS/PTOLEMY that have no own crest).
 	//   3. CREST_TRIBE_GENERIC as a last resort (e.g. INDIA family — no
 	//      CREST_NATION_INDIA exists in the game).
+	// NATION_CRESTS membership comes from $lib/generated/crests, baked from
+	// static/sprites/crests/CREST_NATION_*.png.
 	function resolveNationCrestKey(ownerNation: string | null): string | null {
 		if (!ownerNation) return null;
 		const stem = ownerNation.replace(/^NATION_/, "");
-		if (KNOWN_NATION_CRESTS.has(stem)) return `NATION_${stem}`;
+		if (NATION_CRESTS.has(stem)) return `NATION_${stem}`;
 		const alias = nationAliases.get(ownerNation);
-		if (alias?.urban && KNOWN_NATION_CRESTS.has(alias.urban)) {
+		if (alias?.urban && NATION_CRESTS.has(alias.urban)) {
 			return `NATION_${alias.urban}`;
 		}
 		return "TRIBE_GENERIC";
@@ -1017,14 +988,21 @@
 	}
 
 	// Memoized derivatives — recomputed only when `tiles` change, not on
-	// layer-toggle flips.
+	// layer-toggle flips. The console.time blocks are DEV-only so we can
+	// profile during turn-slider scrubbing without shipping log spam.
 	const politicalData = $derived.by<PoliticalData>(() => {
 		if (tiles.length === 0) return { borders: [], subBorders: [] };
-		return computePoliticalData(tiles);
+		if (import.meta.env.DEV) console.time("computePoliticalData");
+		const result = computePoliticalData(tiles);
+		if (import.meta.env.DEV) console.timeEnd("computePoliticalData");
+		return result;
 	});
 	const religionFills = $derived.by<ReligionFill[]>(() => {
 		if (tiles.length === 0) return [];
-		return computeReligionFills(tiles);
+		if (import.meta.env.DEV) console.time("computeReligionFills");
+		const result = computeReligionFills(tiles);
+		if (import.meta.env.DEV) console.timeEnd("computeReligionFills");
+		return result;
 	});
 
 	/**
