@@ -92,15 +92,12 @@ type ParseError = { type: "error"; message: string; code: string };
 self.onmessage = async (e: MessageEvent<ParseRequest>) => {
   try {
     postMessage({ type: "progress", phase: "Extracting ZIP", percent: 0 });
-    const rawXml = extractXmlFromZip(e.data.file);
+    const xml = extractXmlFromZip(e.data.file);
 
-    postMessage({ type: "progress", phase: "Stripping replay data", percent: 10 });
-    const xml = stripReplayData(rawXml);
-
-    postMessage({ type: "progress", phase: "Parsing XML", percent: 20 });
+    postMessage({ type: "progress", phase: "Parsing XML", percent: 15 });
     const doc = parseXml(xml);
 
-    postMessage({ type: "progress", phase: "Extracting game data", percent: 35 });
+    postMessage({ type: "progress", phase: "Extracting game data", percent: 30 });
     const gameData = extractAllGameData(doc);
 
     postMessage({ type: "result", data: gameData, rawZip: e.data.file });
@@ -145,19 +142,6 @@ function extractXmlFromZip(buffer: ArrayBuffer): string {
 ```
 
 Validation rules match the Rust implementation exactly (same size limits, same zip bomb detection).
-
-### Replay Stripping
-
-Old World saves with the "replay" option enabled embed full per-turn game-state snapshots inside the XML. These bloat affected files dramatically (the user's largest saves are ~28 MB XML; without replay they would typically be 8–10 MB). Replay data is not used by Per-Ankh — the per-turn data we *do* use (yields, tech adoption, etc.) is encoded as sparse `<T2>40</T2>`-style elements on each entity, separately from the replay block.
-
-After ZIP extraction and before XML parsing, the worker strips the replay block. The exact element name and structure will be identified when parser work begins by inspecting a save with replay enabled. Pseudocode:
-
-```typescript
-// After extractXmlFromZip(), before parseXml()
-const xml = stripReplayData(rawXml);
-```
-
-The strip is a string-level operation (delete the block by tag boundaries) so we never materialize the replay nodes in `fast-xml-parser`'s output.
 
 ### XML Parsing
 
@@ -354,6 +338,15 @@ class ParseError extends Error {
 ```
 
 Error codes: `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_ARCHIVE`, `NO_XML`, `ZIP_BOMB`, `MISSING_FIELD`, `INVALID_FORMAT`, `INCOMPLETE_GAME`, `NO_GAME_ID`, `NO_PLAYERS`.
+
+### Test Corpus
+
+Two sources of save files for parser development and parity testing:
+
+- `test-data/saves/` — checked into the repo for unit tests. Empty in fresh clones; populate locally with a representative subset before running tests.
+- `~/Library/Application Support/OldWorld/Saves/Completed/` — the developer's personal completed-saves library on macOS, containing hundreds of real games across all nations and many game versions. This is the realistic corpus for parity testing the TS parser against the existing Rust parser's output. Path differs on Windows / Linux; macOS path is the relevant one for the primary developer.
+
+Parity test harness (phase 1): a CLI that runs the TS parser over a directory of saves and diffs the resulting `GameData` JSON against the equivalent output from the Rust parser. Differences flagged for investigation. The harness is the validation gate before parser work moves on to wiring up the Worker and UI.
 
 ---
 
@@ -1193,7 +1186,7 @@ User selects .zip file
 Browser: validate file extension, basic size check
   │
   ▼
-Web Worker: extractXmlFromZip() → stripReplayData() → parseXml() → extractAllGameData()
+Web Worker: extractXmlFromZip() → parseXml() → extractAllGameData()
   │  (progress events via postMessage to UI)
   ▼
 Web Worker: validateCompletedGame() — must have winner
@@ -1429,8 +1422,14 @@ Old prefixes can be deleted from R2 once no client traffic is hitting them (CDN 
 
 ## Appendix A: File Organization
 
+The cloud rewrite is built **in-place** in the existing `per-ankh` repo, not in a separate `per-ankh-cloud/` repository. The Tauri desktop app remains in the tree during the transition window. When desktop is deprecated and removed, that's a separate mechanical diff.
+
+Rationale: shared code (`src/lib/game-detail/`, `src/lib/config/`, `src/lib/utils/`, `src/lib/types/`, sprite/atlas pipeline, scripts) is already in this repo. A separate cloud repo would require either symlinks (as `web/` does today) or copy-and-diverge. In-place avoids both. The cost is that desktop and cloud code coexist for a few months; mitigation is keeping cloud-only paths obvious (`src/routes/games/`, `src/routes/upload/`, `cloud/`).
+
+### What the cloud rewrite adds to the existing repo
+
 ```
-per-ankh-cloud/
+per-ankh/
 ├── src/
 │   ├── lib/
 │   │   ├── parser/                    # NEW: TypeScript parser
@@ -1456,38 +1455,46 @@ per-ankh-cloud/
 │   │   │       ├── events.ts
 │   │   │       ├── match-metadata.ts
 │   │   │       └── index.ts
-│   │   ├── api.ts                     # REWRITTEN: fetch-based
-│   │   ├── game-detail/               # REUSED from desktop
-│   │   ├── config/                    # REUSED
-│   │   ├── types/                     # REUSED (hand-maintained)
-│   │   ├── utils/                     # REUSED
-│   │   ├── UploadModal.svelte         # NEW
-│   │   ├── LoginButton.svelte         # NEW
-│   │   ├── UserMenu.svelte            # NEW
-│   │   ├── Dashboard.svelte           # NEW
-│   │   ├── GameLibrary.svelte         # NEW
-│   │   └── VisibilityToggle.svelte    # NEW (replaces ShareControl)
+│   │   ├── api.ts                     # MIGRATED: dual desktop/cloud during
+│   │   │                              #   transition; eventually fetch-only
+│   │   ├── UploadModal.svelte         # NEW (cloud-only)
+│   │   ├── LoginButton.svelte         # NEW (cloud-only)
+│   │   ├── UserMenu.svelte            # NEW (cloud-only)
+│   │   ├── Dashboard.svelte           # NEW (cloud-only)
+│   │   ├── GameLibrary.svelte         # NEW (cloud-only)
+│   │   └── VisibilityToggle.svelte    # NEW (cloud-only; replaces ShareControl)
 │   └── routes/
-│       ├── +layout.svelte             # Auth-aware header
-│       ├── +page.svelte               # Dashboard or landing
-│       ├── login/+page.svelte
-│       ├── auth/callback/+page.svelte
-│       ├── games/+page.svelte         # Game library
-│       ├── games/[id]/+page.svelte    # Game detail
-│       └── upload/+page.svelte
-├── cloud/
+│       ├── login/+page.svelte         # NEW
+│       ├── auth/callback/+page.svelte # NEW
+│       ├── games/+page.svelte         # NEW (cloud library)
+│       ├── games/[id]/+page.svelte    # NEW (cloud detail)
+│       └── upload/+page.svelte        # NEW
+├── cloud/                             # EXISTS (current share Worker)
 │   ├── src/
-│   │   ├── index.ts                   # API router
-│   │   ├── auth.ts                    # Discord OAuth
-│   │   ├── validation.ts              # Blob validation
-│   │   └── queries.ts                 # D1 query helpers
-│   ├── migrations/
-│   │   └── 0001_initial.sql
-│   └── wrangler.toml
-├── static/
-│   └── sprites/                       # REUSED
-└── package.json
+│   │   ├── index.ts                   # EXTENDED: add /v1/games, /v1/auth, etc.
+│   │   ├── auth.ts                    # NEW: Discord OAuth
+│   │   ├── validation.ts              # EXTENDED: new blob schema
+│   │   └── queries.ts                 # NEW: D1 helpers
+│   └── migrations/                    # NEW
+│       └── 0001_initial.sql
+└── ...
 ```
+
+### Reused as-is by the cloud rewrite
+
+| Path | Notes |
+|------|-------|
+| `src/lib/game-detail/` | Direct imports — no symlinks needed (vs. how `web/` works today) |
+| `src/lib/config/` | Chart colors, nation/tribe colors, theme |
+| `src/lib/utils/` | `formatEnum()`, `formatDate()`, `stripMarkup()`, etc. |
+| `src/lib/types/` | TypeScript types (hand-maintained once Rust source goes away) |
+| `src/lib/Chart.svelte`, `ChartContainer.svelte`, `HexMap.svelte`, `SearchInput.svelte` | Shared UI |
+| `static/sprites/`, `static/atlases/` | Same assets; atlases additionally hosted on R2 per §11 |
+| `scripts/bake-*.ts` | Atlas bake pipeline, augmented with R2 upload step (§11) |
+
+### Stays for desktop only (until Tauri deprecation)
+
+`src-tauri/`, `src/routes/game/[id]/` (desktop's pre-existing route), `src/lib/ShareControl.svelte`, `src/lib/GameSidebar.svelte` (Tauri-specific version), and the Tauri `invoke()` paths in `api.ts`. These are deleted in the desktop-removal commit, separate from the cloud-rewrite work.
 
 ## Appendix B: Key Source Files for Parser Port
 
