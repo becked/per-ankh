@@ -67,6 +67,18 @@ This document specifies the architecture and implementation details for rewritin
 
 The Rust parser (~5,300 LOC across 17 modules) is rewritten in TypeScript. The inserter layer (~2,700 LOC) is eliminated — the parser returns structured data directly, no database writes on the client.
 
+### Why TypeScript, not WASM
+
+We considered porting the existing Rust parser to WASM via `wasm-bindgen` to avoid rewriting working code. Rejected for v1:
+
+- **Save sizes don't justify it.** Largest observed save is 28 MB XML; typical is 5–15 MB. Pure-JS parsing handles this in 80–150 MB heap, which is fine on any laptop and acceptable on mobile. The original memory argument for WASM doesn't hold.
+- **Bundle cost.** WASM build of the parser would add ~500 KB–1 MB to every page load. TS port is ~60 KB (`fast-xml-parser` + `fflate`).
+- **Build and iteration complexity.** Cargo workspace alongside Vite, slower compile cycle, harder debugging across the WASM/JS boundary.
+- **Two-language maintenance after Tauri deprecation.** With desktop going away, keeping Rust solely for the WASM parser means maintaining a Cargo workspace and Rust knowledge for one purpose. Higher contributor barrier; no other reason to keep Rust.
+- **The "free reuse" isn't free.** The Rust parser is currently entangled with DuckDB types and the inserter layer. Extracting just the pure parsing code would be ~2–3 days of cleanup before it could be wrapped for WASM.
+
+The TS port is a clean break aligned with deprecating Tauri.
+
 ### Web Worker Setup
 
 ```typescript
@@ -80,12 +92,15 @@ type ParseError = { type: "error"; message: string; code: string };
 self.onmessage = async (e: MessageEvent<ParseRequest>) => {
   try {
     postMessage({ type: "progress", phase: "Extracting ZIP", percent: 0 });
-    const xml = extractXmlFromZip(e.data.file);
+    const rawXml = extractXmlFromZip(e.data.file);
 
-    postMessage({ type: "progress", phase: "Parsing XML", percent: 15 });
+    postMessage({ type: "progress", phase: "Stripping replay data", percent: 10 });
+    const xml = stripReplayData(rawXml);
+
+    postMessage({ type: "progress", phase: "Parsing XML", percent: 20 });
     const doc = parseXml(xml);
 
-    postMessage({ type: "progress", phase: "Extracting game data", percent: 30 });
+    postMessage({ type: "progress", phase: "Extracting game data", percent: 35 });
     const gameData = extractAllGameData(doc);
 
     postMessage({ type: "result", data: gameData, rawZip: e.data.file });
@@ -130,6 +145,19 @@ function extractXmlFromZip(buffer: ArrayBuffer): string {
 ```
 
 Validation rules match the Rust implementation exactly (same size limits, same zip bomb detection).
+
+### Replay Stripping
+
+Old World saves with the "replay" option enabled embed full per-turn game-state snapshots inside the XML. These bloat affected files dramatically (the user's largest saves are ~28 MB XML; without replay they would typically be 8–10 MB). Replay data is not used by Per-Ankh — the per-turn data we *do* use (yields, tech adoption, etc.) is encoded as sparse `<T2>40</T2>`-style elements on each entity, separately from the replay block.
+
+After ZIP extraction and before XML parsing, the worker strips the replay block. The exact element name and structure will be identified when parser work begins by inspecting a save with replay enabled. Pseudocode:
+
+```typescript
+// After extractXmlFromZip(), before parseXml()
+const xml = stripReplayData(rawXml);
+```
+
+The strip is a string-level operation (delete the block by tag boundaries) so we never materialize the replay nodes in `fast-xml-parser`'s output.
 
 ### XML Parsing
 
@@ -333,10 +361,14 @@ Error codes: `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_ARCHIVE`, `NO_XML`, `ZIP_B
 
 ### Design: Two-Tier Storage
 
+D1 holds anything we aggregate across games. R2 holds full per-game data for single-game detail rendering.
+
 | Tier | Storage | Contents | Purpose |
 |------|---------|----------|---------|
-| Queryable | D1 | User accounts, game metadata, player summaries | Cross-game stats, game listing, filtering |
-| Blob | R2 | Full parsed game JSON + raw save ZIPs | Game detail view rendering |
+| Queryable | D1 | Users, game metadata, end-of-game player summaries, per-turn yield/military/legitimacy series, tech and law adoption events | Cross-game aggregates, game listing, filtering, dashboards, future tournament analytics |
+| Blob | R2 | Full parsed game JSON + raw save ZIPs | Single-game detail rendering (events, characters, tile history, family opinion, etc.) |
+
+Anything we view one game at a time stays in the R2 blob. Anything we ever want to compute across many games at once goes in D1.
 
 ### D1 Schema
 
@@ -362,10 +394,10 @@ CREATE TABLE games (
   game_id TEXT PRIMARY KEY,               -- nanoid(21), used in URLs
   user_id TEXT NOT NULL REFERENCES users(user_id),
 
-  -- Identity (dedup key)
+  -- Identity
   xml_game_id TEXT NOT NULL,              -- GameId from <Root GameId="...">
   total_turns INTEGER NOT NULL,           -- From <Game><Turn>
-  file_hash TEXT NOT NULL,                -- SHA-256 of raw ZIP
+  file_hash TEXT NOT NULL,                -- SHA-256 of raw ZIP (dedup key)
 
   -- Display
   game_name TEXT,
@@ -399,15 +431,16 @@ CREATE TABLE games (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
 
-  UNIQUE (user_id, xml_game_id, total_turns)
+  UNIQUE (user_id, file_hash)
 );
 
 CREATE INDEX idx_games_user ON games(user_id);
 CREATE INDEX idx_games_public ON games(is_public) WHERE is_public = TRUE;
 
 -- ============================================================
--- PLAYER SUMMARIES (for cross-game statistics)
--- One row per player per game. Denormalized for query speed.
+-- PLAYER SUMMARIES (end-of-game per-player state)
+-- One row per player per game. Drives Nations, Families, Rulers,
+-- Cities (via milestones), and skill-rating dashboards.
 -- ============================================================
 
 CREATE TABLE player_summaries (
@@ -417,27 +450,112 @@ CREATE TABLE player_summaries (
   -- Identity
   player_name TEXT NOT NULL,
   nation TEXT,
+  family_classes TEXT,                    -- JSON array of family classes picked, in order
+  pick_order INTEGER,                     -- 0-based pick slot
   is_human BOOLEAN NOT NULL,
   is_uploader BOOLEAN NOT NULL,           -- Is this the uploading user's player?
+
+  -- Starting ruler attributes
+  starting_ruler_archetype TEXT,
+  starting_ruler_traits TEXT,             -- JSON array
+  starting_ruler_reign_turns INTEGER,
+  succession_count INTEGER,
 
   -- Final state
   final_points INTEGER,
   final_military_power INTEGER,
   final_legitimacy INTEGER,
-
-  -- Counts
-  cities_count INTEGER,
+  cities_total INTEGER,
+  cities_founded INTEGER,
   techs_completed INTEGER,
   laws_count INTEGER,
-  units_produced_total INTEGER,
+
+  -- Milestones (per-player; cross-match "first to N" comparisons happen in queries)
+  fifth_city_turn INTEGER,                -- turn this player founded their 5th city; NULL if never
+  tenth_city_turn INTEGER,
+  fourth_law_turn INTEGER,
+  seventh_law_turn INTEGER,
 
   -- Result
   is_winner BOOLEAN NOT NULL DEFAULT FALSE,
+  vp_margin INTEGER,                      -- this player's VP minus 2nd place; can be negative
 
   PRIMARY KEY (game_id, player_index)
 );
 
 CREATE INDEX idx_summaries_nation ON player_summaries(nation);
+CREATE INDEX idx_summaries_archetype ON player_summaries(starting_ruler_archetype);
+
+-- ============================================================
+-- GAME PLAYER TURN (per-turn numeric series, wide format)
+-- One row per (game, player, turn). Drives all Yields-tab charts,
+-- military/legitimacy progression, science vs. win-rate correlation.
+-- Wide format chosen over long-format (game,player,turn,metric,value)
+-- to keep row counts manageable: 200 turns × 8 players = 1,600 rows
+-- per game vs. 48,000 in long format.
+-- ============================================================
+
+CREATE TABLE game_player_turn (
+  game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+  player_index INTEGER NOT NULL,
+  turn INTEGER NOT NULL,
+
+  -- 14 yields × (per-turn rate + cumulative)
+  food_per_turn INTEGER,           food_cumulative INTEGER,
+  growth_per_turn INTEGER,         growth_cumulative INTEGER,
+  science_per_turn INTEGER,        science_cumulative INTEGER,
+  culture_per_turn INTEGER,        culture_cumulative INTEGER,
+  civics_per_turn INTEGER,         civics_cumulative INTEGER,
+  training_per_turn INTEGER,       training_cumulative INTEGER,
+  money_per_turn INTEGER,          money_cumulative INTEGER,
+  orders_per_turn INTEGER,         orders_cumulative INTEGER,
+  happiness_per_turn INTEGER,      happiness_cumulative INTEGER,
+  discontent_per_turn INTEGER,     discontent_cumulative INTEGER,
+  iron_per_turn INTEGER,           iron_cumulative INTEGER,
+  stone_per_turn INTEGER,          stone_cumulative INTEGER,
+  wood_per_turn INTEGER,           wood_cumulative INTEGER,
+  maintenance_per_turn INTEGER,    maintenance_cumulative INTEGER,
+
+  -- Other per-turn metrics
+  military_power INTEGER,
+  legitimacy INTEGER,
+
+  PRIMARY KEY (game_id, player_index, turn)
+);
+
+CREATE INDEX idx_gpt_game ON game_player_turn(game_id);
+
+-- ============================================================
+-- TECH EVENTS (when each tech was researched)
+-- Drives tech timing heatmap, tech popularity, winner-vs-loser advantage.
+-- ============================================================
+
+CREATE TABLE tech_events (
+  game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+  player_index INTEGER NOT NULL,
+  tech TEXT NOT NULL,                     -- e.g. 'TECH_MASONRY'
+  turn INTEGER NOT NULL,
+  PRIMARY KEY (game_id, player_index, tech)
+);
+
+CREATE INDEX idx_tech_events_tech ON tech_events(tech);
+
+-- ============================================================
+-- LAW EVENTS (when each law was adopted)
+-- Drives law timing distribution, time-to-4th/7th law charts.
+-- A law may appear multiple times if swapped in and out, hence
+-- (game_id, player_index, law, turn) PK rather than unique on law.
+-- ============================================================
+
+CREATE TABLE law_events (
+  game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+  player_index INTEGER NOT NULL,
+  law TEXT NOT NULL,
+  turn INTEGER NOT NULL,
+  PRIMARY KEY (game_id, player_index, law, turn)
+);
+
+CREATE INDEX idx_law_events_law ON law_events(law);
 
 -- ============================================================
 -- EVENTS (audit log + rate limiting)
@@ -559,10 +677,8 @@ interface WinnerInfo {
 
 ### Cross-Game Query Examples
 
-All powered by D1 `games` + `player_summaries` tables:
-
 ```sql
--- Win rate by nation
+-- Win rate by nation (player_summaries)
 SELECT ps.nation,
        COUNT(*) AS games,
        SUM(CASE WHEN ps.is_winner THEN 1 ELSE 0 END) AS wins
@@ -571,14 +687,36 @@ JOIN games g ON ps.game_id = g.game_id
 WHERE g.user_id = ? AND ps.is_uploader = TRUE
 GROUP BY ps.nation;
 
--- Overall stats
-SELECT COUNT(*) AS total_games,
-       SUM(CASE WHEN g.user_won THEN 1 ELSE 0 END) AS total_wins,
-       AVG(g.total_turns) AS avg_game_length
-FROM games g
-WHERE g.user_id = ?;
+-- Average science per turn at turn 50, winners vs. losers (game_player_turn)
+SELECT ps.is_winner,
+       AVG(gpt.science_per_turn) AS avg_science
+FROM game_player_turn gpt
+JOIN player_summaries ps
+  ON gpt.game_id = ps.game_id AND gpt.player_index = ps.player_index
+WHERE gpt.turn = 50
+GROUP BY ps.is_winner;
 
--- Recent games
+-- Tech timing heatmap: average research turn per tech (tech_events)
+SELECT tech,
+       AVG(turn) AS avg_turn,
+       COUNT(*) AS times_researched
+FROM tech_events
+GROUP BY tech;
+
+-- Time-to-4th-law distribution (player_summaries milestone)
+SELECT fourth_law_turn
+FROM player_summaries
+WHERE fourth_law_turn IS NOT NULL;
+
+-- Ruler archetype win rate (player_summaries)
+SELECT starting_ruler_archetype,
+       COUNT(*) AS games,
+       SUM(CASE WHEN is_winner THEN 1 ELSE 0 END) AS wins
+FROM player_summaries
+WHERE starting_ruler_archetype IS NOT NULL
+GROUP BY starting_ruler_archetype;
+
+-- Recent games for a user
 SELECT game_id, game_name, user_nation, total_turns, victory_type,
        user_won, created_at
 FROM games
@@ -586,6 +724,31 @@ WHERE user_id = ?
 ORDER BY created_at DESC
 LIMIT 10;
 ```
+
+### Storage Estimates
+
+For a 200-turn, 8-player game:
+
+| Table | Rows/game | At 10K games | Approx. storage |
+|---|---|---|---|
+| `game_player_turn` | 1,600 | 16M | ~3.2 GB |
+| `tech_events` | ~400 | 4M | ~250 MB |
+| `law_events` | ~160 | 1.6M | ~100 MB |
+| `player_summaries` | 8 | 80K | ~20 MB |
+| `games` | 1 | 10K | ~3 MB |
+
+Total at 10K games: ~3.6 GB → comfortable in D1's 10 GB limit. At 30K games we approach the limit; mitigations available include bucketing `game_player_turn` by 5-turn windows (5× row reduction, minimal information loss for trend charts).
+
+### Deferred to Later Migrations
+
+Data we'd want for additional dashboards but isn't in v1:
+
+- **Family opinion over time** — heaviest time-series (~9,600 rows/game). Add when a family-opinion-cross-match dashboard ships.
+- **Event category timeline per turn** — events bucketed by category and turn. Single-game version computes from the R2 blob.
+- **Starting ruler survival per turn** — needs character per-turn data.
+- **City founding events** — beyond `fifth_city_turn`/`tenth_city_turn` milestones.
+
+Adding these later is a non-breaking migration: new tables only, no changes to v1 tables.
 
 ---
 
@@ -639,7 +802,7 @@ Validation:
 2. Rate limited (per-user: 20/hour)
 3. Decompress and validate blob (schema, array bounds, required fields)
 4. `match_metadata.winner` must exist (completed game only)
-5. Duplicate check: `UNIQUE (user_id, xml_game_id, total_turns)`
+5. Duplicate check: `UNIQUE (user_id, file_hash)` on raw ZIP bytes. Re-uploading the same physical file → 409 with existing `game_id`. Two different saves of the "same" game (e.g. replayed from earlier autosave) are both stored.
 6. Size limits: 10 MB compressed blob, 50 MB raw ZIP
 
 Processing:
@@ -647,7 +810,9 @@ Processing:
 2. Write `saves/{game_id}.zip` to R2
 3. Insert into D1 `games` (metadata extracted from blob)
 4. Insert into D1 `player_summaries` (one row per player, extracted from blob)
-5. Log upload event
+5. Insert into D1 `game_player_turn` (one row per player per turn, ~1,600 rows/game)
+6. Insert into D1 `tech_events` and `law_events` (sparse rows, ~400 + ~160/game)
+7. Log upload event
 
 Response: `201 { game_id, url }` | `400` | `409 { existing_game_id }` | `413` | `429`
 
@@ -690,7 +855,7 @@ Response: `200 { game_id, is_public }`
 
 **`DELETE /games/:id`** — Delete game
 
-Removes: D1 `games` row (cascades to `player_summaries`), R2 blob, R2 ZIP.
+Removes: D1 `games` row (cascades to `player_summaries`, `game_player_turn`, `tech_events`, `law_events`), R2 blob, R2 ZIP.
 
 Response: `204`
 
@@ -800,15 +965,13 @@ The access token is discarded after step 11 — Per-Ankh only needs identity, no
 // KV key format: session:{token}
 interface SessionData {
   user_id: string;
-  discord_id: string;
-  display_name: string;
-  avatar_url: string | null;
-  created_at: string;
 }
 
 // Cookie settings
 // session=<nanoid(32)>; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000; Path=/
 ```
+
+The session payload is intentionally minimal. Display name, avatar, and Discord ID are looked up from D1 when needed (e.g., for `/auth/me` or rendering the user menu). KV would let us cache more, but doing so means changes to user data lag behind active sessions until they expire — and our scale doesn't make the extra D1 read painful.
 
 ### Environment Secrets
 
@@ -1030,7 +1193,7 @@ User selects .zip file
 Browser: validate file extension, basic size check
   │
   ▼
-Web Worker: extractXmlFromZip() → parseXml() → extractAllGameData()
+Web Worker: extractXmlFromZip() → stripReplayData() → parseXml() → extractAllGameData()
   │  (progress events via postMessage to UI)
   ▼
 Web Worker: validateCompletedGame() — must have winner
@@ -1039,7 +1202,7 @@ Web Worker: validateCompletedGame() — must have winner
 Browser: receives GameData + raw ZIP bytes
   │
   ▼
-Browser: gzip GameData JSON, build FormData (blob + zip)
+Browser: gzip GameData JSON, hash raw ZIP, build FormData (blob + zip + file_hash)
   │
   ▼
 POST /v1/games (multipart: gzipped blob + raw ZIP)
@@ -1048,10 +1211,13 @@ POST /v1/games (multipart: gzipped blob + raw ZIP)
 Worker: validate session → rate limit → decompress → schema check
   │
   ▼
-Worker: duplicate check (user_id, xml_game_id, total_turns)
+Worker: duplicate check on (user_id, file_hash)
   │
   ▼
-Worker: R2 put (blob + zip) → D1 insert (games + player_summaries)
+Worker: R2 put (blob + zip)
+  │
+  ▼
+Worker: D1 insert (games + player_summaries + game_player_turn + tech_events + law_events)
   │
   ▼
 Response: { game_id } → navigate to /games/{game_id}
@@ -1059,11 +1225,12 @@ Response: { game_id } → navigate to /games/{game_id}
 
 ### Duplicate Detection
 
-The `games` table has `UNIQUE (user_id, xml_game_id, total_turns)`. The `xml_game_id` comes from the XML root attribute `<Root GameId="...">`. The `total_turns` comes from `<Game><Turn>...</Turn></Game>`.
+The `games` table has `UNIQUE (user_id, file_hash)` on the raw ZIP bytes' SHA-256.
 
-Same game at same turn number from same user = duplicate → `409 Conflict` with the existing `game_id`.
+- Re-uploading the same physical save file → `409 Conflict` with the existing `game_id`. The user gets a clear "you already have this" message.
+- Two different files (different ZIP bytes) are always treated as different games, even if they share `xml_game_id` and `total_turns`. This handles the legitimate case where a user replayed from an earlier autosave and ended a game differently — both records stored.
 
-Same game at different turn numbers = different records (but only completed games are accepted, so this would mean a different game end state — unlikely but valid, e.g., if the user replays from an earlier save).
+Earlier drafts keyed dedup on `(user_id, xml_game_id, total_turns)`, but that rejects valid distinct end-states. File-hash keying is more permissive and never errors on something the user can't fix.
 
 ### Batch Upload
 
@@ -1075,20 +1242,15 @@ Initial version: single file at a time. Future enhancement:
 
 ### Reprocessing
 
-Raw ZIPs are kept in R2 at `saves/{game_id}.zip`. When the parser changes:
+Raw ZIPs are kept in R2 at `saves/{game_id}.zip`. When the parser changes materially (see §10 parser version rules), v1 uses **lazy client-side reprocess**:
 
-**Option A: Admin-triggered batch reprocess**
-1. Deploy new parser version
-2. Admin endpoint iterates games with `parser_version < current`
-3. For each: download ZIP from R2 → parse → overwrite blob → update D1
-4. Run as a Durable Object or external script for long-running work
+1. When a user views a game whose `parser_version` is below the current version, the frontend shows a "Re-import available" banner.
+2. User clicks "Re-import" → frontend downloads the ZIP from R2, re-parses in the Web Worker, uploads the new blob via the standard upload endpoint (which detects the duplicate file hash and updates the existing game in place rather than creating a new one).
+3. No server-side parsing. The Worker stays cheap.
 
-**Option B: Lazy client-side reprocess**
-1. When user views a game with outdated `parser_version`, frontend shows a banner
-2. User clicks "Re-import" → frontend downloads ZIP from R2, re-parses, uploads new blob
-3. No server-side parsing needed
+This aligns with the browser-first principle and avoids needing a Durable Object or batch job for v1. If we later need to reprocess en masse (e.g., after a MAJOR parser version bump), an admin batch path can be added — it's not in v1 scope.
 
-Both options are viable. Option B is simpler and aligns with browser-first parsing.
+The upload endpoint needs a small extension to handle re-imports: when a `(user_id, file_hash)` collision is detected and the incoming `parser_version` is newer than the existing row's, overwrite the blob and D1 rows in place rather than returning 409.
 
 ---
 
@@ -1102,11 +1264,11 @@ The free tier's 10ms CPU limit is too tight for gzip decompression of 1-5 MB blo
 
 | Limit | Value | Per-Ankh Impact |
 |-------|-------|----------------|
-| Database size | 10 GB | ~200 bytes/game + ~100 bytes/player summary. Supports millions of games. |
-| Rows read/query | 10M | Cross-game queries bounded by user's game count (<500). |
-| Rows written/query | 100K | Inserting ~8 player_summaries per upload. |
-| Free tier reads | 5M/day | Sufficient for early usage. |
-| Free tier writes | 100K/day | ~12,500 game uploads/day. |
+| Database size | 10 GB | At ~360 KB/game (mostly `game_player_turn`), supports ~28K games before mitigation needed. See §3 storage estimates. |
+| Rows read/query | 10M | Cross-game aggregates well below this (e.g., 200 games × 1,600 rows = 320K). |
+| Rows written/query | 100K | ~2,200 rows per upload (1 game + 8 summaries + 1,600 turn rows + ~400 tech + ~160 law). Well within. |
+| Workers Paid writes/month | 50M | At 800 uploads/month × 2,200 rows = 1.76M writes. ~3.5% of quota. |
+| Workers Paid reads/month | 25B | Effectively unbounded for our scale. |
 
 ### R2
 
@@ -1158,12 +1320,22 @@ interface FullGameData {
 
 ### Parser Version Tracking
 
-Each blob records `parser_version` (semver string). When the parser changes materially:
+Each blob records `parser_version` (semver string). When the parser changes:
 
-1. Bump parser version in frontend
+1. Bump parser version in frontend per the rules below
 2. Worker records `parser_version` in D1 `games` table
 3. Games with old parser versions show "Re-import available" badge
-4. User can trigger re-import (downloads ZIP from R2, re-parses, uploads)
+4. User can trigger re-import (downloads ZIP from R2, re-parses, uploads — see §8)
+
+#### Bump rules
+
+- **PATCH** — bug fix that changes the *value* of a field for some games. Example: correcting a misread sentinel that was producing 0 instead of `null`. Old blobs render but show wrong data. UI shows the "Re-import available" badge on games whose `parser_version` is below the current PATCH; user can opt in to re-import.
+- **MINOR** — additive: new field added to `FullGameData`. Old blobs lack it; frontend handles missing fields with `?? null` / `?? []`. No re-import needed for old blobs to keep working. Optional badge if the new field unlocks a visible feature on the detail page.
+- **MAJOR** — breaking schema change (rename, removal, type change). Old blobs won't render correctly. Avoid. If unavoidable, requires an admin batch reprocess from raw ZIPs and a coordinated Worker + frontend deploy.
+
+Decision rule for whether to bump: *would a reasonable user expect the data shown to change after a re-import?* If yes, bump PATCH or higher. Refactors and pure-perf changes do not bump version.
+
+The current parser version ships as a build-time constant in the frontend; the badge logic compares the D1 row's stored version against that constant.
 
 ### D1 Migrations
 
