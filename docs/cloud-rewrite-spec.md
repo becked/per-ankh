@@ -347,9 +347,9 @@ Error codes: `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_ARCHIVE`, `NO_XML`, `ZIP_B
 
 CREATE TABLE users (
   user_id TEXT PRIMARY KEY,               -- nanoid(21)
-  steam_id TEXT NOT NULL UNIQUE,          -- Steam 64-bit ID
-  display_name TEXT NOT NULL,             -- Steam persona name
-  avatar_url TEXT,                        -- Steam avatar URL
+  discord_id TEXT NOT NULL UNIQUE,        -- Discord snowflake ID
+  display_name TEXT NOT NULL,             -- Discord global_name (or username fallback)
+  avatar_url TEXT,                        -- Discord CDN avatar URL
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_login_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -604,18 +604,18 @@ Cookie: session=<token>
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/auth/steam/callback` | No | Exchange Steam OpenID assertion for session |
+| `POST` | `/auth/discord/callback` | No | Exchange Discord OAuth code for session |
 | `POST` | `/auth/logout` | Yes | Clear session |
 | `GET` | `/auth/me` | Yes | Return current user info |
 
-**`POST /auth/steam/callback`**
+**`POST /auth/discord/callback`**
 
-Request: `{ openid_params: Record<string, string> }`
+Request: `{ code: string, redirect_uri: string }`
 Response: `200 { user_id, display_name, avatar_url }` + `Set-Cookie: session=...`
 
 **`GET /auth/me`**
 
-Response: `200 { user_id, display_name, avatar_url, steam_id }` or `401`
+Response: `200 { user_id, display_name, avatar_url, discord_id }` or `401`
 
 #### Games
 
@@ -738,48 +738,61 @@ Rate limit checks query `events` table (same pattern as `cloud/src/index.ts`).
 
 ## 5. Authentication
 
-### Steam OpenID 2.0 Flow
+### Discord OAuth 2.0 Flow
 
-Steam uses OpenID 2.0 (not OAuth 2.0):
+Standard authorization-code OAuth 2.0. Discord is the right primary for Per-Ankh: the Old World community already organizes there, and a single token exchange returns username + avatar (no second profile fetch needed, unlike Steam's OpenID + Web API two-step).
 
 ```
-1. User clicks "Sign in with Steam"
+1. User clicks "Sign in with Discord"
 
-2. Frontend redirects to Steam:
-   https://steamcommunity.com/openid/login?
-     openid.ns=http://specs.openid.net/auth/2.0
-     &openid.mode=checkid_setup
-     &openid.return_to=https://per-ankh.app/auth/callback
-     &openid.realm=https://per-ankh.app
-     &openid.identity=http://specs.openid.net/auth/2.0/identifier_select
-     &openid.claimed_id=http://specs.openid.net/auth/2.0/identifier_select
+2. Frontend redirects to Discord:
+   https://discord.com/api/oauth2/authorize?
+     client_id=<DISCORD_CLIENT_ID>
+     &redirect_uri=https://per-ankh.app/auth/callback
+     &response_type=code
+     &scope=identify
 
-3. User authenticates on steamcommunity.com
+3. User authorizes on discord.com
 
-4. Steam redirects to:
-   https://per-ankh.app/auth/callback?openid.claimed_id=...&openid.sig=...
+4. Discord redirects to:
+   https://per-ankh.app/auth/callback?code=<AUTH_CODE>
 
-5. SvelteKit callback page sends params to API:
-   POST /v1/auth/steam/callback { openid_params: { ... } }
+5. SvelteKit callback page sends code to API:
+   POST /v1/auth/discord/callback
+     { code: <AUTH_CODE>, redirect_uri: "https://per-ankh.app/auth/callback" }
 
-6. Worker validates by calling Steam:
-   POST https://steamcommunity.com/openid/login
-     openid.mode=check_authentication + all received params
+6. Worker exchanges code for access token:
+   POST https://discord.com/api/oauth2/token
+     grant_type=authorization_code
+     &code=<AUTH_CODE>
+     &redirect_uri=...
+     &client_id=<DISCORD_CLIENT_ID>
+     &client_secret=<DISCORD_CLIENT_SECRET>
 
-7. Steam responds: is_valid:true
+7. Discord responds: { access_token, token_type, expires_in, ... }
 
-8. Worker extracts Steam ID from claimed_id URL:
-   https://steamcommunity.com/openid/id/76561198115360497
-                                          ^^^^^^^^^^^^^^^^
+8. Worker fetches user profile:
+   GET https://discord.com/api/users/@me
+     Authorization: Bearer <access_token>
 
-9. Worker fetches display name via Steam Web API:
-   GET https://api.steampowered.com/ISteamUser/GetPlayerSummaries/v2/
-     ?key=STEAM_API_KEY&steamids=76561198115360497
+9. Discord responds:
+   {
+     id: "1234567890",                    // snowflake → discord_id
+     username: "playername",
+     global_name: "Player Name",          // preferred display name
+     avatar: "a1b2c3...",                 // hash, may be null
+     ...
+   }
 
-10. Creates/updates user in D1
-11. Creates session in KV (30-day TTL)
-12. Returns Set-Cookie
+10. Worker computes avatar URL:
+    https://cdn.discordapp.com/avatars/<id>/<avatar>.png  (or default)
+
+11. Creates/updates user in D1 (display_name = global_name ?? username)
+12. Creates session in KV (30-day TTL)
+13. Returns Set-Cookie
 ```
+
+The access token is discarded after step 11 — Per-Ankh only needs identity, not ongoing Discord API access. Session lifetime is independent of Discord's token expiry.
 
 ### Session Management
 
@@ -787,7 +800,7 @@ Steam uses OpenID 2.0 (not OAuth 2.0):
 // KV key format: session:{token}
 interface SessionData {
   user_id: string;
-  steam_id: string;
+  discord_id: string;
   display_name: string;
   avatar_url: string | null;
   created_at: string;
@@ -800,15 +813,18 @@ interface SessionData {
 ### Environment Secrets
 
 ```
-STEAM_API_KEY  — Steam Web API key (for fetching player profile)
+DISCORD_CLIENT_ID      — Discord application client ID (public, but kept in env for parity)
+DISCORD_CLIENT_SECRET  — Discord application client secret (used in token exchange)
 ```
 
 ### Future Auth Providers
 
-To add GOG, Epic, or Google OAuth later:
-1. Add `gog_id TEXT UNIQUE`, `google_id TEXT UNIQUE`, etc. to `users` table
-2. Add corresponding OAuth callback endpoints
+To add Steam, GOG, Epic, or Google OAuth later:
+1. Add `steam_id TEXT UNIQUE`, `google_id TEXT UNIQUE`, etc. to `users` table
+2. Add corresponding callback endpoints (Steam uses OpenID 2.0; the others use OAuth 2.0)
 3. Account linking: same user can connect multiple providers
+
+A future Discord-guild gating layer (e.g. requiring membership in the Old World Discord to register for tournaments) would call `GET /users/@me/guilds` at login time, which requires adding the `guilds` scope to step 2 of the flow above.
 
 ---
 
@@ -845,12 +861,12 @@ These components and files transfer directly to the web app:
 
 | Component | Purpose |
 |-----------|---------|
-| `LoginButton.svelte` | Steam login, redirects to Steam OpenID |
+| `LoginButton.svelte` | Discord login, redirects to Discord OAuth authorize URL |
 | `UserMenu.svelte` | Logged-in user avatar + dropdown |
 | `UploadModal.svelte` | File selection, Web Worker progress, upload to API |
 | `Dashboard.svelte` | Cross-game stats (win rate, nations chart) |
 | `GameLibrary.svelte` | Sortable/filterable grid of games |
-| `src/routes/auth/callback/+page.svelte` | Processes Steam redirect |
+| `src/routes/auth/callback/+page.svelte` | Processes Discord redirect (extracts `code`, posts to API) |
 
 ### API Layer
 
@@ -874,11 +890,11 @@ async function authFetch(path: string, init?: RequestInit): Promise<Response> {
 export const api = {
   // Auth
   getMe: () => authFetch("/auth/me").then(r => r.json()),
-  steamCallback: (params: Record<string, string>) =>
-    fetch(`${API_BASE}/auth/steam/callback`, {
+  discordCallback: (code: string, redirectUri: string) =>
+    fetch(`${API_BASE}/auth/discord/callback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(params),
+      body: JSON.stringify({ code, redirect_uri: redirectUri }),
       credentials: "include",
     }),
   logout: () => authFetch("/auth/logout", { method: "POST" }),
@@ -916,8 +932,8 @@ export const api = {
 src/routes/
   +layout.svelte                — Header with auth state, navigation
   +page.svelte                  — Dashboard (logged in) or landing page
-  login/+page.svelte            — "Sign in with Steam" button
-  auth/callback/+page.svelte    — Processes Steam redirect
+  login/+page.svelte            — "Sign in with Discord" button
+  auth/callback/+page.svelte    — Processes Discord redirect
   games/+page.svelte            — Game library
   games/[id]/+page.svelte       — Game detail view
   upload/+page.svelte           — Upload with Web Worker progress
@@ -1290,7 +1306,7 @@ per-ankh-cloud/
 ├── cloud/
 │   ├── src/
 │   │   ├── index.ts                   # API router
-│   │   ├── auth.ts                    # Steam OpenID
+│   │   ├── auth.ts                    # Discord OAuth
 │   │   ├── validation.ts              # Blob validation
 │   │   └── queries.ts                 # D1 query helpers
 │   ├── migrations/
