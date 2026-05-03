@@ -59,7 +59,6 @@ This document specifies the architecture and implementation details for rewritin
 - **Browser-first computation.** All save file parsing happens client-side. The server never parses save files. Server costs stay minimal.
 - **Two-tier storage.** D1 holds small queryable rows (cross-game stats). R2 holds large blobs (full game data). This keeps D1 small and R2 cheap.
 - **Progressive sharing.** Games are private by default. Sharing is a visibility toggle, not a separate upload step.
-- **Fault-tolerant.** If the backend is down, users can still parse and view saves locally (future enhancement). The core parser runs entirely in the browser.
 
 ---
 
