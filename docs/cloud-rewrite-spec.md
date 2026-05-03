@@ -341,10 +341,11 @@ Error codes: `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_ARCHIVE`, `NO_XML`, `ZIP_B
 
 ### Test Corpus
 
-Two sources of save files for parser development and parity testing:
+Three sources of save files for parser development and parity testing:
 
 - `test-data/saves/` — checked into the repo for unit tests. Empty in fresh clones; populate locally with a representative subset before running tests.
-- `~/Library/Application Support/OldWorld/Saves/Completed/` — the developer's personal completed-saves library on macOS, containing hundreds of real games across all nations and many game versions. This is the realistic corpus for parity testing the TS parser against the existing Rust parser's output. Path differs on Windows / Linux; macOS path is the relevant one for the primary developer.
+- `~/Library/Application Support/OldWorld/Saves/Completed/` — the developer's personal completed-saves library on macOS, containing hundreds of real games across all nations and many game versions. Realistic single-player corpus. Path differs on Windows / Linux; macOS path is the relevant one for the primary developer.
+- `~/Projects/Old World/prospector/saves/` — the multiplayer save files from the last tournament (~60 saves, two-human-player matches). The realistic two-player tournament corpus, which exercises code paths that single-player saves don't (e.g., multiple human players, online IDs, distinct shapes of `is_human` distribution).
 
 Parity test harness (phase 1): a CLI that runs the TS parser over a directory of saves and diffs the resulting `GameData` JSON against the equivalent output from the Rust parser. Differences flagged for investigation. The harness is the validation gate before parser work moves on to wiring up the Worker and UI.
 
