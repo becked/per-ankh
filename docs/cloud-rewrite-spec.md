@@ -71,7 +71,7 @@ The Rust parser (~5,300 LOC across 17 modules) is rewritten in TypeScript. The i
 
 We considered porting the existing Rust parser to WASM via `wasm-bindgen` to avoid rewriting working code. Rejected for v1:
 
-- **Save sizes don't justify it.** Largest observed save is 28 MB XML; typical is 5–15 MB. Pure-JS parsing handles this in 80–150 MB heap, which is fine on any laptop and acceptable on mobile. The original memory argument for WASM doesn't hold.
+- **Save sizes don't justify it.** Across the recent corpus (140 single-player saves from 2025–2026 plus 60 tournament saves), uncompressed XML runs ~3–7 MB typical with a measured max of ~12 MB. Pure-JS parsing handles that in roughly 60–120 MB heap, which is fine on any laptop. (Mobile is moot — the game doesn't run there, so saves never originate from a phone.)
 - **Bundle cost.** WASM build of the parser would add ~500 KB–1 MB to every page load. TS port is ~60 KB (`fast-xml-parser` + `fflate`).
 - **Build and iteration complexity.** Cargo workspace alongside Vite, slower compile cycle, harder debugging across the WASM/JS boundary.
 - **Two-language maintenance after Tauri deprecation.** With desktop going away, keeping Rust solely for the WASM parser means maintaining a Cargo workspace and Rust knowledge for one purpose. Higher contributor barrier; no other reason to keep Rust.
@@ -100,7 +100,12 @@ self.onmessage = async (e: MessageEvent<ParseRequest>) => {
     postMessage({ type: "progress", phase: "Extracting game data", percent: 30 });
     const gameData = extractAllGameData(doc);
 
-    postMessage({ type: "result", data: gameData, rawZip: e.data.file });
+    // Transfer rawZip ArrayBuffer (zero-copy). gameData is structured-cloned
+    // (4-18 MB copy) — acceptable for a one-shot post on parse completion.
+    postMessage(
+      { type: "result", data: gameData, rawZip: e.data.file },
+      [e.data.file],
+    );
   } catch (err) {
     postMessage({ type: "error", message: err.message, code: err.code ?? "PARSE_ERROR" });
   }
@@ -249,18 +254,77 @@ function parseSparseHistory(
 
 ### Sentinel Value Handling
 
-Replaces `src-tauri/src/parser/xml_loader.rs` sentinel module. Old World XML uses `-1` for "not set":
+Replaces `src-tauri/src/parser/xml_loader.rs` sentinel module. Old World XML uses `-1` for "not set" on IDs/turns/counts and the empty string `""` for absent string values:
 
 ```typescript
 // src/lib/parser/sentinels.ts
+export const ID_NONE = -1;
+export const TURN_INVALID = -1;
+export const COUNT_NONE = -1;
+
 export function normalizeId(id: number): number | null {
-  return id === -1 ? null : id;
+  return id === ID_NONE ? null : id;
 }
 
 export function normalizeTurn(turn: number): number | null {
-  return turn < 0 ? null : turn;
+  return turn === TURN_INVALID || turn < 0 ? null : turn;
+}
+
+export function normalizeCount(count: number): number | null {
+  return count === COUNT_NONE ? null : count;
+}
+
+export function normalizeString(s: string): string | null {
+  return s === "" ? null : s;
+}
+
+// Strict-mode validators (parity with Rust validate_turn / validate_count)
+export function validateTurn(turn: number, maxExpected: number): boolean {
+  return turn >= 0 && turn <= maxExpected;
+}
+
+export function validateCount(count: number): boolean {
+  return count >= 0;
 }
 ```
+
+### XML Quirks to Pin
+
+A few Old World XML conventions don't fall out of the helpers above and need to be explicit in the TS port. Each is currently handled correctly in `src-tauri/src/parser/parsers/`; verify with that source if a parity diff disagrees.
+
+**`Player ID="0"` is a valid player.** Old World uses 0-based IDs across every entity type. Never gate on falsiness:
+
+```typescript
+// ❌ skips player 0
+if (xmlId) { ... }
+
+// ✅
+if (xmlId != null) { ... }
+```
+
+**`Player="-1"` on an entity reference means "no owning player".** Distinct from the `-1` ID sentinel (which means "unset"); on a reference field it means the entity is unowned (barbarians, dead characters, neutral tiles). Both normalize to `null` via `normalizeId`, which is the right output — just don't conflate them in error messages.
+
+**`is_human` derivation.** From `parsers/players.rs:51-54`:
+
+```typescript
+const hasOnlineId = optStr(p["@_OnlineID"]) != null;
+const aiControlledToTurn = optInt(p["@_AIControlledToTurn"]);
+// In multiplayer, only the active player has AIControlledToTurn=0 — the
+// other humans have AIControlledToTurn>0 because they're not the active
+// player. Without the OnlineID branch they'd be mis-flagged as AI.
+const isHuman = hasOnlineId || aiControlledToTurn === 0;
+// Default if neither attribute is set: AI (false).
+```
+
+The `OnlineID` branch is the load-bearing part. Reference docs that show only the `AIControlledToTurn === 0` rule are outdated.
+
+**No multi-pass for cross-references.** The Rust import has Pass 2a/2b/2c/2d for character parents, tile city ownership, tile ownership history, and character birth cities. Those passes exist purely because DuckDB FKs require referenced rows to be inserted first — the underlying XML data (e.g. `<Tile><CityTerritory>X</CityTerritory>`) is right there in a single traversal. The TS port extracts every cross-reference inline (one more field on the relevant struct), keyed by the XML ID. No FK constraints, no second passes.
+
+**No deduplication.** The Rust inserters call `deduplicate_rows_last_wins` on tiles, units, visibility, and production. Two distinct reasons, neither of which applies to the TS port:
+1. **Tiles/units dedup is defensive** against a historical Rust parser bug (the call site has a comment about "pre-existing duplicates from previous buggy optimization attempts"). Real saves don't have duplicate XML element IDs — verified across single-player + tournament corpus.
+2. **Visibility/production dedup is collapsing time-series into latest-state for DB storage.** The cloud blob keeps the full history, so there's nothing to collapse.
+
+If a duplicate ID ever appears in a save, the TS parser should surface it as a parse error rather than silently dedup.
 
 ### Winner Detection
 
@@ -322,6 +386,14 @@ src/lib/parser/
     events.ts            — From parsers/events.rs
     match-metadata.ts    — Root attributes, Game element, winner detection
     index.ts             — Orchestrator: calls all parsers, returns GameData
+
+> **Note on Rust source layout.** `src-tauri/src/parser/` contains three sibling
+> directories: `parsers/` (pure XML→struct, no DB — the TS port target),
+> `inserters/` (takes parsed structs and writes to DuckDB), and `entities/`
+> (legacy combined parse+insert path; superseded except for tile ownership
+> history). The TS port mirrors `parsers/` only; `inserters/` is replaced by
+> direct JSON construction in the Worker, and `entities/` logic is folded into
+> the equivalent `parsers/` files where still relevant.
 ```
 
 Estimated total: **~2,700 LOC TypeScript** vs ~5,300 LOC Rust parsers + ~2,700 LOC inserters. The reduction comes from eliminating the inserter layer, TS being more concise for optional chaining and object construction, and `fast-xml-parser` returning JS objects directly.
@@ -347,7 +419,73 @@ Three sources of save files for parser development and parity testing:
 - `~/Library/Application Support/OldWorld/Saves/Completed/` — the developer's personal completed-saves library on macOS, containing hundreds of real games across all nations and many game versions. Realistic single-player corpus. Path differs on Windows / Linux; macOS path is the relevant one for the primary developer.
 - `~/Projects/Old World/prospector/saves/` — the multiplayer save files from the last tournament (~60 saves, two-human-player matches). The realistic two-player tournament corpus, which exercises code paths that single-player saves don't (e.g., multiple human players, online IDs, distinct shapes of `is_human` distribution).
 
-Parity test harness (phase 1): a CLI that runs the TS parser over a directory of saves and diffs the resulting `GameData` JSON against the equivalent output from the Rust parser. Differences flagged for investigation. The harness is the validation gate before parser work moves on to wiring up the Worker and UI.
+### Parity Test Harness
+
+The harness is the validation gate for the TS parser. It is built **first**, against the simplest entity (e.g. families), and extended entity-by-entity as the port progresses. The TS port of an entity is not considered done until parity passes for that entity across the full corpus.
+
+#### Reference: Rust pure-struct dump
+
+The Rust `parsers/` directory already returns serializable typed structs from `game_data.rs` with no DB dependency. A small CLI binary wraps these calls and emits JSON:
+
+```rust
+// src-tauri/src/bin/dump_parsed.rs
+// Usage: cargo run --bin dump_parsed -- <save.zip> > parsed.json
+
+fn main() -> anyhow::Result<()> {
+    let path = std::env::args().nth(1).expect("usage: dump_parsed <save.zip>");
+    let xml = parser::save_file::extract_xml(&path)?;
+    let doc = parser::xml_loader::parse(&xml)?;
+
+    // Call every parse_*_struct() in parsers/ and collect into one envelope
+    let dump = ParsedDump {
+        players: parser::parsers::parse_players_struct(&doc)?,
+        characters: parser::parsers::parse_characters_struct(&doc)?,
+        // ...one entry per parser/ module...
+    };
+    serde_json::to_writer_pretty(std::io::stdout(), &dump)?;
+    Ok(())
+}
+```
+
+No new parsing logic — just `serde_json` over existing structs. `game_data.rs` types already derive `Serialize` for the Tauri IPC boundary.
+
+#### TS dump
+
+The TS parser emits the same envelope shape, written to disk by a thin CLI wrapper around the Worker entry point (running in Node, not the browser).
+
+#### Diff CLI
+
+```
+parity-diff <rust-dump.json> <ts-dump.json>
+```
+
+Walks both trees and reports differences per JSON path. Aggregate report at end of run gives pass/fail counts and the most common failure modes across the corpus.
+
+#### Diff rules
+
+**Flag (parity failure):**
+- Value mismatch on any primitive
+- Field present on one side, absent on the other (after null-normalization, see below)
+- Type mismatch (number vs string, etc.)
+- Array length mismatch
+- Set membership differences (after sorting both sides on a stable key)
+
+**Tolerate (silent):**
+- JSON object key ordering
+- `null` vs missing key — canonical form is `null`; both sides normalized before diff
+- Whitespace in string fields (trimmed before compare)
+- Float precision below 6 decimals (defensive — OW XML is mostly integers)
+- Array ordering for unordered collections, after sorting on a stable key (player by `xml_id`, city by `xml_id`, tile by `(x, y)`, etc.)
+
+**ID handling:** the Rust `parsers/` output preserves XML IDs (no `IdMapper` involvement at the pure-parse layer), so a direct ID-to-ID diff works without normalization.
+
+#### Sequencing
+
+1. Add `dump_parsed` Rust binary
+2. Build `parity-diff` CLI (~200 LOC, single-file)
+3. Port one entity end-to-end (suggest `families.ts` — small, self-contained)
+4. Run harness on the full corpus; resolve diffs until clean
+5. Repeat (3) and (4) for each remaining entity, in roughly ascending complexity order
 
 ---
 
@@ -447,7 +585,10 @@ CREATE TABLE player_summaries (
   family_classes TEXT,                    -- JSON array of family classes picked, in order
   pick_order INTEGER,                     -- 0-based pick slot
   is_human BOOLEAN NOT NULL,
-  is_uploader BOOLEAN NOT NULL,           -- Is this the uploading user's player?
+  is_uploader BOOLEAN NOT NULL,           -- Player(s) selected by the uploader at upload time
+                                          --   (see §8 "Uploader's Player Selection").
+                                          --   Multiple TRUE rows allowed for admin/tournament uploads
+                                          --   covering several human players in the same save.
 
   -- Starting ruler attributes
   starting_ruler_archetype TEXT,
@@ -1196,13 +1337,20 @@ Web Worker: validateCompletedGame() — must have winner
 Browser: receives GameData + raw ZIP bytes
   │
   ▼
-Browser: gzip GameData JSON, hash raw ZIP, build FormData (blob + zip + file_hash)
+Browser: shows uploader's-player picker (humans only; see "Uploader's Player Selection")
+  │  → user selects one or more player_index values; default = sole human (auto-skip
+  │     picker entirely on single-player saves)
+  ▼
+Browser: gzip GameData JSON, hash raw ZIP, build FormData (blob + zip + file_hash + uploader_player_indexes)
   │
   ▼
-POST /v1/games (multipart: gzipped blob + raw ZIP)
+POST /v1/games (multipart: gzipped blob + raw ZIP, plus uploader_player_indexes form field)
   │
   ▼
 Worker: validate session → rate limit → decompress → schema check
+  │
+  ▼
+Worker: validate uploader_player_indexes (each refers to a human player in the blob)
   │
   ▼
 Worker: duplicate check on (user_id, file_hash)
@@ -1212,10 +1360,27 @@ Worker: R2 put (blob + zip)
   │
   ▼
 Worker: D1 insert (games + player_summaries + game_player_turn + tech_events + law_events)
-  │
+  │  → set is_uploader = TRUE on rows whose player_index ∈ uploader_player_indexes
   ▼
 Response: { game_id } → navigate to /games/{game_id}
 ```
+
+### Uploader's Player Selection
+
+For v1, the uploading user explicitly tells us which player(s) in the save belong to them. No auto-detection from save-file OnlineIDs.
+
+**Why explicit selection (not auto):**
+- Discord OAuth identity has no inherent link to Steam/GOG/Epic OnlineIDs in the save. Auto-detection would require a separate "link your platform IDs" account-settings flow, which isn't in v1 scope.
+- Admin and tournament uploads need to upload on behalf of others — a single tournament organizer should be able to upload all match saves and correctly attribute each to the players involved. Auto-detection from the organizer's identity is wrong by construction here.
+- Single-player saves (one human) are the common case; the picker is auto-skipped for those, so the friction is paid only when it's actually needed.
+
+**UI:** after parse completes, the upload modal shows a list of human players (`is_human = true`) with name, nation, and OnlineID, each with a checkbox. The uploading user is the default selection if exactly one human is present. For multi-human saves the uploader checks one or more boxes; tournament organizers typically check all human players.
+
+**Parser implication:** the parser must expose, for every human player: `xml_id`, `player_index`, `name`, `nation`, `online_id` (string, may be null for older saves). These are already extracted from XML — the change is just ensuring they survive into the picker-side data the upload UI sees, separately from the full `GameData` blob (which gets gzipped and uploaded as-is).
+
+**Wire format:** the upload `FormData` includes a `uploader_player_indexes` field — a JSON array of 0-based player indexes, e.g. `[0]` for single-player or `[1, 3]` for a tournament organizer marking two of the four humans in a match.
+
+**Future (out of scope for v1):** an account-settings page where users link their Steam/GOG/Epic OnlineIDs, and the upload UI pre-checks any boxes whose OnlineID matches. The picker stays as a fallback so admin uploads still work.
 
 ### Duplicate Detection
 
@@ -1505,14 +1670,22 @@ These Rust files define the extraction logic to be ported to TypeScript, listed 
 |-----------|-----|-----------|-------|
 | `src-tauri/src/parser/parsers/player_data.rs` | 706 | `parsers/player-data.ts` | Resources, tech, council, laws, goals |
 | `src-tauri/src/parser/parsers/city_data.rs` | 667 | `parsers/cities.ts` | City nested data (9 sub-entities) |
-| `src-tauri/src/parser/parsers/timeseries.rs` | ~400 | `parsers/timeseries.ts` | 8 time-series types |
-| `src-tauri/src/parser/parsers/events.rs` | ~350 | `parsers/events.ts` | Stories, logs, memories |
-| `src-tauri/src/parser/parsers/characters.rs` | ~300 | `parsers/characters.ts` | Character core data |
-| `src-tauri/src/parser/parsers/character_data.rs` | ~250 | `parsers/character-data.ts` | Stats, traits, relationships |
+| `src-tauri/src/parser/parsers/events.rs` | 459 | `parsers/events.ts` | Stories, logs, memories |
+| `src-tauri/src/parser/parsers/timeseries.rs` | 437 | `parsers/timeseries.ts` | 8 time-series types |
+| `src-tauri/src/parser/parsers/character_data.rs` | 395 | `parsers/character-data.ts` | Stats, traits, relationships |
+| `src-tauri/src/parser/parsers/units.rs` | 364 | `parsers/units.ts` | Units + promotions/effects |
+| `src-tauri/src/parser/parsers/cities.rs` | 333 | `parsers/cities.ts` | City core data |
+| `src-tauri/src/parser/parsers/tile_data.rs` | 298 | `parsers/tiles.ts` | Per-tile nested data |
 | `src-tauri/src/parser/parsers/players.rs` | 256 | `parsers/players.ts` | Player core data |
-| `src-tauri/src/parser/parsers/tiles.rs` | ~250 | `parsers/tiles.ts` | Tiles + ownership history |
-| `src-tauri/src/parser/parsers/units.rs` | ~200 | `parsers/units.ts` | Units + promotions/effects |
-| `src-tauri/src/parser/parsers/diplomacy.rs` | ~150 | `parsers/diplomacy.ts` | Relations |
+| `src-tauri/src/parser/parsers/diplomacy.rs` | 231 | `parsers/diplomacy.ts` | Relations |
+| `src-tauri/src/parser/parsers/tiles.rs` | 223 | `parsers/tiles.ts` | Tile core + ownership history |
+| `src-tauri/src/parser/parsers/characters.rs` | 203 | `parsers/characters.ts` | Character core data |
+| `src-tauri/src/parser/parsers/families.rs` | 173 | `parsers/families.ts` | Families |
+| `src-tauri/src/parser/parsers/religions.rs` | 151 | `parsers/religions.ts` | Religions |
+| `src-tauri/src/parser/parsers/unit_production.rs` | 134 | `parsers/units.ts` (merged) | Per-player/per-city unit production |
+| `src-tauri/src/parser/parsers/tribes.rs` | 74 | `parsers/tribes.ts` | Tribes |
 | `src-tauri/src/parser/game_data.rs` | 668 | `parser/types.ts` | All entity type definitions |
+
+The `parsers/` directory total is ~5,300 LOC. Both `inserters/` (~2,275 LOC, replaced by JSON construction in the Worker) and `entities/` (~5,300 LOC, the legacy combined parse+insert path) are out of scope for the port.
 
 The `GameData` struct in `game_data.rs` has 59 fields across entity types — each becomes a TypeScript interface.
