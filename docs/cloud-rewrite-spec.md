@@ -82,6 +82,7 @@ The TS port is a clean break aligned with deprecating Tauri.
 
 ```typescript
 // src/lib/parser/worker.ts
+/// <reference lib="webworker" />
 
 type ParseRequest = { type: "parse"; file: ArrayBuffer; fileName: string };
 type ParseProgress = { type: "progress"; phase: string; percent: number };
@@ -101,15 +102,29 @@ self.onmessage = async (e: MessageEvent<ParseRequest>) => {
 
     // Transfer rawZip ArrayBuffer (zero-copy). gameData is structured-cloned
     // (4-18 MB copy) — acceptable for a one-shot post on parse completion.
+    // Caveat: by this point the parser must not retain Uint8Array views into
+    // e.data.file. Transferring detaches the buffer; any retained view would
+    // throw on first access on the main thread.
     postMessage(
       { type: "result", data: gameData, rawZip: e.data.file },
       [e.data.file],
     );
   } catch (err) {
-    postMessage({ type: "error", message: err.message, code: err.code ?? "PARSE_ERROR" });
+    const message = err instanceof Error ? err.message : String(err);
+    const code = err instanceof ParseError ? err.code : "PARSE_ERROR";
+    postMessage({ type: "error", message, code });
   }
 };
 ```
+
+**Instantiation (Vite).** The main thread imports the worker module via Vite's `?worker` query so the build pipeline emits a separate chunk and the runtime gets a typed constructor:
+
+```typescript
+import ParserWorker from "$lib/parser/worker?worker";
+const worker = new ParserWorker();
+```
+
+**Cancellation.** v1 single-file upload doesn't need cancellation — the user closes the modal and we ignore late `result` messages. The §8 batch-upload future scope will need it; the most ergonomic shape is one `MessageChannel` per parse request (request/response correlation + `port.close()` on abort) layered on top of the union-type protocol above. Comlink is an option if the protocol grows further; not pulled in for v1.
 
 ### ZIP Extraction
 
@@ -230,26 +245,33 @@ function optInt(val: unknown): number | null {
 }
 ```
 
+`parseInt(String(val), 10)` is intentionally lenient: `"12.7"` → `12`, `"12abc"` → `12`. The parity harness (Rust dump vs. TS dump diff) catches any drift if upstream XML changes shape — strict numeric parsing here would just push errors out of `optInt` into ad-hoc try/catch at every call site, with the same coverage.
+
 ### Sparse Timeseries Pattern
 
 Old World encodes turn-by-turn data as `<T2>40</T2><T5>55</T5>` child elements (sparse — only turns with data are present):
 
 ```typescript
+const TURN_KEY = /^T(\d+)$/;
+
 function parseSparseHistory(
   parent: Record<string, unknown>
 ): Array<{ turn: number; value: number }> {
   const result: Array<{ turn: number; value: number }> = [];
   for (const [key, val] of Object.entries(parent)) {
-    if (!key.startsWith("T")) continue;
-    const turn = parseInt(key.slice(1), 10);
+    const match = TURN_KEY.exec(key);
+    if (!match) continue; // skips siblings like "Type", "TileX"
+    const turn = parseInt(match[1], 10);
     const value = parseInt(String(val), 10);
-    if (!Number.isNaN(turn) && !Number.isNaN(value)) {
+    if (!Number.isNaN(value)) {
       result.push({ turn, value });
     }
   }
   return result;
 }
 ```
+
+`startsWith("T")` would match siblings like `Type` or `TileX`; the regex anchors to "T followed only by digits" so the filter is intentional rather than coincidental on `parseInt` returning NaN.
 
 ### Sentinel Value Handling
 
@@ -330,11 +352,12 @@ If a duplicate ID ever appears in a save, the TS parser should surface it as a p
 From `src-tauri/src/parser/import.rs` `update_winner()`. A game is complete only if a winner can be determined:
 
 ```typescript
-function detectWinner(gameElement: XmlNode): WinnerInfo | null {
+function detectWinner(gameElement: Record<string, unknown>): WinnerInfo | null {
   // Primary: TeamVictories element
-  const teamVictories = gameElement.TeamVictories;
+  const teamVictories = gameElement.TeamVictories as Record<string, unknown> | undefined;
   if (teamVictories) {
-    const teamEntry = asArray(teamVictories.Team).find(t => t["@_Victory"]);
+    const teams = asArray(teamVictories.Team) as Array<Record<string, unknown>>;
+    const teamEntry = teams.find(t => t["@_Victory"]);
     if (teamEntry) {
       return {
         winningTeamId: parseInt(String(teamEntry["#text"]), 10),
@@ -342,16 +365,25 @@ function detectWinner(gameElement: XmlNode): WinnerInfo | null {
       };
     }
   }
-  // Fallback: Victory element
-  if (gameElement.Victory) {
-    return {
-      winningTeamId: null,
-      victoryType: String(gameElement.Victory["@_type"] ?? gameElement.Victory),
-    };
+  // Fallback: Victory element. fast-xml-parser yields a string when the
+  // element has only text content and an object when it carries attributes;
+  // branch on shape rather than coercing — String({}) is "[object Object]".
+  const victory = gameElement.Victory;
+  if (typeof victory === "string" && victory !== "") {
+    return { winningTeamId: null, victoryType: victory };
+  }
+  if (victory && typeof victory === "object") {
+    const v = victory as Record<string, unknown>;
+    const type = v["@_type"] ?? v["#text"];
+    if (typeof type === "string" && type !== "") {
+      return { winningTeamId: null, victoryType: type };
+    }
   }
   return null;
 }
 ```
+
+Reference parity: `src-tauri/src/parser/parsers/match_metadata.rs` `update_winner()`.
 
 The winning team ID is then mapped to a player via the `<Team><PlayerTeam>` elements.
 
@@ -512,7 +544,9 @@ CREATE TABLE users (
   user_id TEXT PRIMARY KEY,               -- nanoid(21)
   discord_id TEXT NOT NULL UNIQUE,        -- Discord snowflake ID
   display_name TEXT NOT NULL,             -- Discord global_name (or username fallback)
-  avatar_url TEXT,                        -- Discord CDN avatar URL
+  avatar_hash TEXT,                       -- Discord avatar hash; URL built at read time.
+                                          --   NULL → fall back to default-avatar URL
+                                          --   computed from (discord_id >> 22) % 6
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_login_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -901,14 +935,23 @@ Cookie: session=<token>
 
 | Method | Path | Auth | Description |
 |--------|------|------|-------------|
-| `POST` | `/auth/discord/callback` | No | Exchange Discord OAuth code for session |
+| `POST` | `/auth/discord/start` | No | Begin OAuth: generates `state` + PKCE verifier, returns authorize URL |
+| `POST` | `/auth/discord/callback` | No | Validate `state`, exchange code for session |
 | `POST` | `/auth/logout` | Yes | Clear session |
 | `GET` | `/auth/me` | Yes | Return current user info |
 
+**`POST /auth/discord/start`**
+
+Request: `{}`
+Response: `200 { authorize_url: string }` + `Set-Cookie: oauth_pending=...; Max-Age=300; HttpOnly; Secure; SameSite=Lax`
+
+Generates `state` + PKCE verifier, stores them in KV under a short-lived key referenced by the `oauth_pending` cookie. See §5 for the full flow.
+
 **`POST /auth/discord/callback`**
 
-Request: `{ code: string, redirect_uri: string }`
-Response: `200 { user_id, display_name, avatar_url }` + `Set-Cookie: session=...`
+Request: `{ code: string, state: string, redirect_uri: string }` (also reads `oauth_pending` cookie)
+Response: `200 { user_id, display_name, avatar_url }` + `Set-Cookie: session=...; Set-Cookie: oauth_pending=; Max-Age=0` (clears pending cookie)
+Errors: `400` on missing/mismatched `state` or expired pending cookie.
 
 **`GET /auth/me`**
 
@@ -1042,56 +1085,76 @@ Rate limit checks query `events` table (same pattern as `cloud/src/index.ts`).
 Standard authorization-code OAuth 2.0. Discord is the right primary for Per-Ankh: the Old World community already organizes there, and a single token exchange returns username + avatar (no second profile fetch needed, unlike Steam's OpenID + Web API two-step).
 
 ```
-1. User clicks "Sign in with Discord"
+1. User clicks "Sign in with Discord". Frontend calls
+   POST /v1/auth/discord/start (no auth required).
 
-2. Frontend redirects to Discord:
+2. Worker generates a 32-byte random `state`, a PKCE `code_verifier`, and
+   derives `code_challenge = BASE64URL(SHA-256(code_verifier))`. It writes
+   { state, code_verifier } to KV under a short-lived key (5 min TTL) and
+   returns the authorize URL plus a HttpOnly, Secure, SameSite=Lax cookie
+   `oauth_pending=<kv_key>; Max-Age=300`.
+
+3. Frontend follows the URL:
    https://discord.com/api/oauth2/authorize?
      client_id=<DISCORD_CLIENT_ID>
      &redirect_uri=https://per-ankh.app/auth/callback
      &response_type=code
      &scope=identify
+     &state=<STATE>
+     &code_challenge=<CODE_CHALLENGE>
+     &code_challenge_method=S256
 
-3. User authorizes on discord.com
+4. User authorizes on discord.com.
 
-4. Discord redirects to:
-   https://per-ankh.app/auth/callback?code=<AUTH_CODE>
+5. Discord redirects to:
+   https://per-ankh.app/auth/callback?code=<AUTH_CODE>&state=<STATE>
 
-5. SvelteKit callback page sends code to API:
+6. SvelteKit callback page sends code + state to API (cookie carries the
+   pending key):
    POST /v1/auth/discord/callback
-     { code: <AUTH_CODE>, redirect_uri: "https://per-ankh.app/auth/callback" }
+     { code: <AUTH_CODE>, state: <STATE>, redirect_uri: "https://per-ankh.app/auth/callback" }
 
-6. Worker exchanges code for access token:
+7. Worker reads `oauth_pending` cookie → KV entry. Validates the request
+   `state` matches the stored `state` (constant-time compare). Deletes the
+   KV entry (single-use). On mismatch or missing entry: 400 + clear cookie.
+
+8. Worker exchanges code for access token, sending the PKCE verifier:
    POST https://discord.com/api/oauth2/token
      grant_type=authorization_code
      &code=<AUTH_CODE>
      &redirect_uri=...
      &client_id=<DISCORD_CLIENT_ID>
      &client_secret=<DISCORD_CLIENT_SECRET>
+     &code_verifier=<CODE_VERIFIER>
 
-7. Discord responds: { access_token, token_type, expires_in, ... }
+9. Discord responds: { access_token, token_type, expires_in, ... }
 
-8. Worker fetches user profile:
-   GET https://discord.com/api/users/@me
-     Authorization: Bearer <access_token>
+10. Worker fetches user profile:
+    GET https://discord.com/api/users/@me
+      Authorization: Bearer <access_token>
 
-9. Discord responds:
-   {
-     id: "1234567890",                    // snowflake → discord_id
-     username: "playername",
-     global_name: "Player Name",          // preferred display name
-     avatar: "a1b2c3...",                 // hash, may be null
-     ...
-   }
+11. Discord responds:
+    {
+      id: "1234567890",                   // snowflake → discord_id
+      username: "playername",
+      global_name: "Player Name",         // preferred display name
+      avatar: "a1b2c3...",                // hash, may be null
+      ...
+    }
 
-10. Worker computes avatar URL:
-    https://cdn.discordapp.com/avatars/<id>/<avatar>.png  (or default)
+12. Worker stores the avatar hash in D1 (URL is constructed at read time).
+    Display URL form:
+      https://cdn.discordapp.com/avatars/<id>/<avatar>.png         // custom
+      https://cdn.discordapp.com/embed/avatars/<(id >> 22) % 6>.png // default
+    Storing the hash rather than a fully-formed URL keeps avatars fresh
+    across Discord-side changes without re-running OAuth.
 
-11. Creates/updates user in D1 (display_name = global_name ?? username)
-12. Creates session in KV (30-day TTL)
-13. Returns Set-Cookie
+13. Creates/updates user in D1 (display_name = global_name ?? username).
+14. Creates session in KV (30-day TTL).
+15. Clears the oauth_pending cookie and returns Set-Cookie: session=...
 ```
 
-The access token is discarded after step 11 — Per-Ankh only needs identity, not ongoing Discord API access. Session lifetime is independent of Discord's token expiry.
+The access token is discarded after step 13 — Per-Ankh only needs identity, not ongoing Discord API access. Session lifetime is independent of Discord's token expiry.
 
 ### Session Management
 
@@ -1104,6 +1167,8 @@ interface SessionData {
 // Cookie settings
 // session=<nanoid(32)>; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000; Path=/
 ```
+
+`Domain=` is intentionally omitted. The Worker sets the cookie host-only on `api.per-ankh.app`. The SvelteKit frontend at `per-ankh.app` shares the same registrable domain (`per-ankh.app`), so requests from frontend → API are *same-site* even though they're cross-origin — `credentials: "include"` fetches send the cookie. Conversely, an attacker site at `evil.example` cannot trigger SameSite=Lax cookies on cross-site POST/DELETE/PATCH (Lax only sends cookies on top-level GET navigations across sites), so authenticated mutations are CSRF-protected without needing tokens. If the API ever moved to a foreign domain (e.g. `per-ankh-api.workers.dev`), this story breaks and CSRF tokens would be required — keep the same-eTLD+1 invariant in mind when changing infra.
 
 The session payload is intentionally minimal. Display name, avatar, and Discord ID are looked up from D1 when needed (e.g., for `/auth/me` or rendering the user menu). KV would let us cache more, but doing so means changes to user data lag behind active sessions until they expire — and our scale doesn't make the extra D1 read painful.
 
@@ -1142,7 +1207,7 @@ These components and files transfer directly to the web app:
 | `src/lib/SearchInput.svelte` | Reusable search input |
 | `src/lib/config/` | Chart colors, nation colors, terrain colors, theme |
 | `src/lib/utils/formatting.ts` | `formatEnum()`, `formatDate()`, `stripMarkup()`, etc. |
-| `src/lib/types/` | All TypeScript type definitions (now hand-maintained) |
+| `src/lib/types/` | TypeScript types — types in `src/lib/types/` keep their current shape during the transition; new cloud-side request/response types are inferred from Valibot schemas under `cloud/src/schemas/` (see "API Contract Validation" below) |
 | `static/sprites/` | All sprite assets |
 
 ### Rewritten
@@ -1165,116 +1230,267 @@ These components and files transfer directly to the web app:
 | `GameLibrary.svelte` | Sortable/filterable grid of games |
 | `src/routes/auth/callback/+page.svelte` | Processes Discord redirect (extracts `code`, posts to API) |
 
+### Routing & Data Loading
+
+**Divergence from the legacy share viewer.** The existing `web/src/routes/share/[id]/+page.svelte` and the desktop `src/routes/game/[id]/+page.svelte` both fetch in `$effect` and read params via the legacy `import { page } from "$app/stores"` store. Cloud-rewrite routes deliberately diverge:
+
+- **Data fetching lives in `+page.ts` `load()` (universal) or `+page.server.ts` (server-only).** Public-game URLs become SSR-rendered, which is what makes Discord/Twitter/Slack OG-card unfurling work — the entire point of `is_public = TRUE` is sharing the URL into chat. `$effect`-fetched pages render an empty shell to scrapers. SvelteKit's `load()` also handles navigation race conditions automatically (the previous load is aborted via `signal`), which the `$effect` pattern doesn't.
+- **Reactive page state via `import { page } from "$app/state"`** (the rune-backed reactive), not the `$app/stores` store API. New code only.
+
+The legacy share viewer at `web/share/[id]` keeps its current pattern — it's served by the legacy share Worker (§7) and not part of v1 cloud-rewrite scope.
+
 ### API Layer
 
 ```typescript
 // src/lib/api.ts
 const API_BASE = import.meta.env.VITE_API_URL;
 
-async function authFetch(path: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
+export class ApiError extends Error {
+  constructor(
+    public status: number,
+    public code: string | null,
+    message: string,
+    public payload: unknown,
+  ) {
+    super(message);
+    this.name = "ApiError";
+  }
+}
+
+export class UnauthorizedError extends ApiError {
+  constructor(payload: unknown) {
+    super(401, "UNAUTHORIZED", "Unauthorized", payload);
+    this.name = "UnauthorizedError";
+  }
+}
+
+type FetchLike = typeof fetch;
+
+async function authFetch(
+  path: string,
+  init?: RequestInit & { fetch?: FetchLike },
+): Promise<Response> {
+  const f = init?.fetch ?? fetch;
+  const res = await f(`${API_BASE}${path}`, {
     ...init,
     credentials: "include",
   });
-  if (res.status === 401) {
-    goto("/login");
-    throw new Error("Unauthorized");
+
+  if (res.ok) return res;
+
+  // Try to parse a structured error body { code, message, ... }
+  let payload: unknown = null;
+  let code: string | null = null;
+  let message = res.statusText;
+  if (res.headers.get("content-type")?.includes("application/json")) {
+    try {
+      payload = await res.json();
+      if (payload && typeof payload === "object") {
+        const p = payload as Record<string, unknown>;
+        if (typeof p.code === "string") code = p.code;
+        if (typeof p.message === "string") message = p.message;
+      }
+    } catch {
+      /* fall through */
+    }
+  } else {
+    try {
+      message = await res.text();
+    } catch {
+      /* fall through */
+    }
   }
-  if (!res.ok) throw new Error(await res.text());
-  return res;
+
+  if (res.status === 401) throw new UnauthorizedError(payload);
+  throw new ApiError(res.status, code, message, payload);
 }
+```
+
+The route layer (`+page.ts` `load`, `+layout.ts` `load`, `+error.svelte`) decides what to do with `UnauthorizedError`:
+
+```typescript
+// src/routes/games/+page.ts
+import { redirect } from "@sveltejs/kit";
+import { api } from "$lib/api";
+import { UnauthorizedError } from "$lib/api";
+import type { PageLoad } from "./$types";
+
+export const load: PageLoad = async ({ fetch, url }) => {
+  try {
+    return { games: await api.listGames({}, { fetch }) };
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+    }
+    throw err;
+  }
+};
+```
+
+The `api` object passes the SvelteKit-injected `fetch` through so server-side `load`s benefit from request coalescing and cookie forwarding for same-eTLD+1 hosts:
+
+```typescript
+type CallOpts = { fetch?: FetchLike };
 
 export const api = {
   // Auth
-  getMe: () => authFetch("/auth/me").then(r => r.json()),
-  discordCallback: (code: string, redirectUri: string) =>
+  getMe: (opts?: CallOpts) =>
+    authFetch("/auth/me", opts).then(r => r.json()),
+  discordCallback: (code: string, state: string, redirectUri: string) =>
     fetch(`${API_BASE}/auth/discord/callback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, redirect_uri: redirectUri }),
+      body: JSON.stringify({ code, state, redirect_uri: redirectUri }),
       credentials: "include",
     }),
-  logout: () => authFetch("/auth/logout", { method: "POST" }),
+  logout: (opts?: CallOpts) =>
+    authFetch("/auth/logout", { ...opts, method: "POST" }),
 
   // Games
-  listGames: (params?: Record<string, string>) =>
-    authFetch(`/games?${new URLSearchParams(params)}`).then(r => r.json()),
-  getGame: (gameId: string) =>
-    authFetch(`/games/${gameId}`).then(r => r.json()),
-  uploadGame: (formData: FormData) =>
-    authFetch("/games", { method: "POST", body: formData }),
-  deleteGame: (gameId: string) =>
-    authFetch(`/games/${gameId}`, { method: "DELETE" }),
-  toggleVisibility: (gameId: string, isPublic: boolean) =>
+  listGames: (params: Record<string, string>, opts?: CallOpts) =>
+    authFetch(`/games?${new URLSearchParams(params)}`, opts).then(r => r.json()),
+  getGame: (gameId: string, opts?: CallOpts) =>
+    authFetch(`/games/${gameId}`, opts).then(r => r.json()),
+  uploadGame: (formData: FormData, opts?: CallOpts) =>
+    authFetch("/games", { ...opts, method: "POST", body: formData }),
+  deleteGame: (gameId: string, opts?: CallOpts) =>
+    authFetch(`/games/${gameId}`, { ...opts, method: "DELETE" }),
+  toggleVisibility: (gameId: string, isPublic: boolean, opts?: CallOpts) =>
     authFetch(`/games/${gameId}`, {
+      ...opts,
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ is_public: isPublic }),
     }),
-  downloadSave: (gameId: string) =>
-    authFetch(`/games/${gameId}/download`),
+  downloadSave: (gameId: string, opts?: CallOpts) =>
+    authFetch(`/games/${gameId}/download`, opts),
 
   // Stats
-  getStats: () => authFetch("/stats").then(r => r.json()),
+  getStats: (opts?: CallOpts) => authFetch("/stats", opts).then(r => r.json()),
 
-  // Public (no auth)
-  getPublicGame: (gameId: string) =>
-    fetch(`${API_BASE}/games/${gameId}`).then(r => r.json()),
+  // Public (no auth) — used in +page.ts loads for is_public games
+  getPublicGame: (gameId: string, opts?: CallOpts) => {
+    const f = opts?.fetch ?? fetch;
+    return f(`${API_BASE}/games/${gameId}`).then(r => r.json());
+  },
 } as const;
 ```
+
+**Server-side cookie forwarding.** The frontend at `per-ankh.app` and the API at `api.per-ankh.app` share `per-ankh.app` as eTLD+1, so the SvelteKit-injected `fetch` automatically forwards the incoming request's `Cookie` header to the API during SSR `load`. If we ever moved the API off the same eTLD+1 (e.g. to `*.workers.dev`), `load`s would have to forward `Cookie` explicitly via `event.request.headers.get("cookie")`. Same invariant called out in §5 around CSRF.
+
+### API Contract Validation
+
+The API contract is defined once with [Valibot](https://valibot.dev/) schemas (preferred over Zod for bundle size — meaningful when shipped to the client) under `cloud/src/schemas/`:
+
+```typescript
+// cloud/src/schemas/game.ts
+import * as v from "valibot";
+
+export const GameListItemSchema = v.object({
+  game_id: v.string(),
+  game_name: v.nullable(v.string()),
+  save_date: v.nullable(v.string()),
+  total_turns: v.number(),
+  user_nation: v.nullable(v.string()),
+  user_won: v.nullable(v.boolean()),
+  // ...
+});
+
+export const GameListResponseSchema = v.object({
+  games: v.array(GameListItemSchema),
+  total: v.number(),
+});
+
+export type GameListItem = v.InferOutput<typeof GameListItemSchema>;
+export type GameListResponse = v.InferOutput<typeof GameListResponseSchema>;
+```
+
+The Worker validates request bodies and emits responses that conform to the same schemas; the frontend's `api.ts` parses each response with `v.parse(schema, json)` so a v3-Worker-vs-v2-frontend mismatch surfaces as a typed error at the boundary instead of an `undefined.foo` crash deep in a tab component. Inferred TS types replace the hand-maintained interfaces in §3 and the `FullGameData` interface in §10 — one schema source of truth, types fall out for free, and version-validation in §10 reuses the same parser.
+
+**Migration path.** Existing `cloud/src/validation.ts` (hand-rolled checks for the legacy share endpoints) keeps working unchanged; only the new `/v1/games`, `/v1/auth`, `/v1/stats` endpoints adopt Valibot. Legacy endpoints can migrate incrementally, no big-bang rewrite.
+
+### Snake_case interface fields
+
+`FullGameData` and the D1 row shapes use `snake_case` to match server JSON exactly — no `transformResponse` step, no naming drift between Worker and frontend. New fields stay snake_case; the convention is documented here so contributors don't reflexively camelCase. Component-local props (e.g. inside `GameDetailView`) remain camelCase as today.
 
 ### Route Structure
 
 ```
 src/routes/
   +layout.svelte                — Header with auth state, navigation
+  +layout.ts                    — Loads /auth/me; passes user (or null) to children
   +page.svelte                  — Dashboard (logged in) or landing page
+  +page.ts                      — Loads /stats when authenticated
   login/+page.svelte            — "Sign in with Discord" button
-  auth/callback/+page.svelte    — Processes Discord redirect
+  auth/callback/+page.svelte    — Processes Discord redirect (state + code)
   games/+page.svelte            — Game library
-  games/[id]/+page.svelte       — Game detail view
-  upload/+page.svelte           — Upload with Web Worker progress
+  games/+page.ts                — Loads /games list
+  games/[id]/+page.svelte       — Game detail view (renders data.game)
+  games/[id]/+page.ts           — Loads /games/:id (auth-aware: public or private)
+  upload/+page.svelte           — Upload with Web Worker progress (no load)
 ```
 
 ### Game Detail Page
 
-Structurally identical to the existing web share viewer (`web/src/routes/share/[id]/+page.svelte`), which already fetches a JSON blob and passes it to `GameDetailView`:
+Game detail is split into a `+page.ts` `load` and a thin `+page.svelte` consumer:
+
+```typescript
+// src/routes/games/[id]/+page.ts
+import { api, UnauthorizedError, ApiError } from "$lib/api";
+import { error, redirect } from "@sveltejs/kit";
+import type { PageLoad } from "./$types";
+
+export const load: PageLoad = async ({ params, fetch, url }) => {
+  try {
+    const game = await api.getGame(params.id, { fetch });
+    return { game };
+  } catch (err) {
+    if (err instanceof UnauthorizedError) {
+      // Could be a private game viewed signed-out — try the public path
+      try {
+        const game = await api.getPublicGame(params.id, { fetch });
+        return { game };
+      } catch {
+        throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+      }
+    }
+    if (err instanceof ApiError && err.status === 404) {
+      throw error(404, "Game not found");
+    }
+    throw err;
+  }
+};
+```
 
 ```svelte
+<!-- src/routes/games/[id]/+page.svelte -->
 <script lang="ts">
-  import { api } from "$lib/api";
   import GameDetailView from "$lib/game-detail/GameDetailView.svelte";
-  import { page } from "$app/stores";
+  import type { PageData } from "./$types";
 
-  let data = $state<FullGameData | null>(null);
-  let error = $state<string | null>(null);
-
-  $effect(() => {
-    api.getGame($page.params.id)
-      .then(d => { data = d; })
-      .catch(e => { error = e.message; });
-  });
+  let { data }: { data: PageData } = $props();
+  const game = $derived(data.game);
 </script>
 
-{#if data}
-  <GameDetailView
-    gameDetails={data.game_details}
-    playerHistory={data.player_history}
-    allYields={data.yield_history}
-    eventLogs={data.event_logs}
-    lawAdoptionHistory={data.law_adoption_history}
-    currentLaws={data.current_laws}
-    techDiscoveryHistory={data.tech_discovery_history}
-    completedTechs={data.completed_techs}
-    unitsProduced={data.units_produced}
-    cityStatistics={data.city_statistics}
-    improvementData={data.improvement_data}
-    gameReligions={data.game_religions}
-    playerWonders={data.player_wonders}
-    mapTiles={data.map_tiles}
-  />
-{/if}
+<GameDetailView
+  gameDetails={game.game_details}
+  playerHistory={game.player_history}
+  allYields={game.yield_history}
+  eventLogs={game.event_logs}
+  lawAdoptionHistory={game.law_adoption_history}
+  currentLaws={game.current_laws}
+  techDiscoveryHistory={game.tech_discovery_history}
+  completedTechs={game.completed_techs}
+  unitsProduced={game.units_produced}
+  cityStatistics={game.city_statistics}
+  improvementData={game.improvement_data}
+  gameReligions={game.game_religions}
+  playerWonders={game.player_wonders}
+  mapTiles={game.map_tiles}
+/>
 ```
+
+Errors surface through a sibling `+error.svelte`. There's no `$effect`, no `error` state to manage, no loading flicker — the route is fully resolved before the component renders.
 
 ---
 
@@ -1652,7 +1868,7 @@ per-ankh/
 | `src/lib/game-detail/` | Direct imports — no symlinks needed (vs. how `web/` works today) |
 | `src/lib/config/` | Chart colors, nation/tribe colors, theme |
 | `src/lib/utils/` | `formatEnum()`, `formatDate()`, `stripMarkup()`, etc. |
-| `src/lib/types/` | TypeScript types (hand-maintained once Rust source goes away) |
+| `src/lib/types/` | TypeScript types (kept in place during transition; new request/response types come from Valibot schemas in `cloud/src/schemas/`) |
 | `src/lib/Chart.svelte`, `ChartContainer.svelte`, `HexMap.svelte`, `SearchInput.svelte` | Shared UI |
 | `static/sprites/`, `static/atlases/` | Same assets; atlases additionally hosted on R2 per §11 |
 | `scripts/bake-*.ts` | Atlas bake pipeline, augmented with R2 upload step (§11) |
