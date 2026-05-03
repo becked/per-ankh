@@ -119,3 +119,7 @@ coverage/
 *.tmp
 *.temp
 .cache/
+
+# Parser parity test harness reports — regenerated per run, not committed.
+# See scripts/parity/ and docs/cloud-rewrite-spec.md §2.
+scripts/parity/reports/

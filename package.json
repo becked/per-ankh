@@ -22,7 +22,10 @@
 		"bake:resources": "tsx scripts/bake-resources.ts",
 		"bake:crests": "tsx scripts/bake-crests.ts",
 		"bake:sprites": "tsx scripts/bake-sprites.ts",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:crests"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:crests",
+		"parity:smoke": "tsx scripts/parity/run.ts --smoke",
+		"parity:full": "tsx scripts/parity/run.ts --full",
+		"parity:self-check": "tsx scripts/parity/run.ts --smoke --mode rust-vs-rust"
 	},
 	"license": "MIT",
 	"dependencies": {

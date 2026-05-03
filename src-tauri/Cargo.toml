@@ -10,6 +10,12 @@ default-run = "per-ankh"
 name = "per-ankh"
 path = "src/main.rs"
 
+# Parity test harness: dumps parsed game data for comparison against the
+# TypeScript parser port. See docs/cloud-rewrite-spec.md §2.
+[[bin]]
+name = "dump_parsed"
+path = "src/bin/dump_parsed.rs"
+
 # Dev tools moved to examples/ to avoid Tauri bundling them
 [[example]]
 name = "benchmark_parsing"
