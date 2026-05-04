@@ -11,6 +11,7 @@ import {
 	findDescendant,
 	getElementChildren,
 	isElement,
+	parseNameKeyedIntMap,
 	requireInt,
 } from "../parse-xml.js";
 
@@ -31,9 +32,9 @@ export function parseFamilies(root: Record<string, unknown>): Family[] {
 		if (!isElement(player)) continue;
 		const playerXmlId = requireInt(player["@_ID"], "Player.ID");
 
-		const heads = parseFamilyMapping(player.FamilyHeadID);
-		const seats = parseFamilyMapping(player.FamilySeatCityID);
-		const turnsNoLeader = parseFamilyMapping(player.FamilyTurnsNoLeader);
+		const heads = parseNameKeyedIntMap(player.FamilyHeadID);
+		const seats = parseNameKeyedIntMap(player.FamilySeatCityID);
+		const turnsNoLeader = parseNameKeyedIntMap(player.FamilyTurnsNoLeader);
 
 		const playerFamilies = new Set<string>([
 			...heads.keys(),
@@ -78,23 +79,3 @@ function parseFamilyClasses(
 	return classes;
 }
 
-/**
- * Parse a per-player family-keyed integer mapping element (FamilyHeadID,
- * FamilySeatCityID, or FamilyTurnsNoLeader). Returns family name → integer.
- *
- * Children that aren't parseable as integers are silently skipped, matching
- * families.rs line 128 (`if let Ok(value) = value_str.parse::<i32>()`).
- */
-function parseFamilyMapping(node: unknown): Map<string, number> {
-	const mapping = new Map<string, number>();
-	if (!isElement(node)) return mapping;
-
-	for (const [familyName, value] of getElementChildren(node)) {
-		if (typeof value !== "string") continue;
-		const n = parseInt(value, 10);
-		if (!Number.isNaN(n)) {
-			mapping.set(familyName, n);
-		}
-	}
-	return mapping;
-}

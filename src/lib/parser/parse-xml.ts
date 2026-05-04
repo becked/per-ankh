@@ -134,6 +134,30 @@ export function getElementChildren(
 }
 
 /**
+ * Parse a container whose children are dynamically named with text-integer
+ * values, e.g.:
+ *
+ *   <FamilyHeadID>
+ *     <FAMILY_FABIUS>68</FAMILY_FABIUS>
+ *     <FAMILY_VALERIUS>95</FAMILY_VALERIUS>
+ *   </FamilyHeadID>
+ *
+ * Returns child name → integer. Children whose text doesn't parse as int are
+ * silently skipped (matches the Rust `child.text().and_then(parse).ok()`
+ * pattern used in families.rs / religions.rs).
+ */
+export function parseNameKeyedIntMap(node: unknown): Map<string, number> {
+	const out = new Map<string, number>();
+	if (!isElement(node)) return out;
+	for (const [name, value] of getElementChildren(node)) {
+		if (typeof value !== "string") continue;
+		const n = parseInt(value, 10);
+		if (!Number.isNaN(n)) out.set(name, n);
+	}
+	return out;
+}
+
+/**
  * Depth-first search for the first descendant element with the given tag
  * name, in document order. Mirrors roxmltree's `descendants().find(...)`.
  *
