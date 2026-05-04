@@ -201,6 +201,43 @@ export function parseNameKeyedIntMap(node: unknown): Map<string, number> {
 }
 
 /**
+ * Strict-mode parser for `<Container><CHILD_NAME>int</CHILD_NAME>...` shapes.
+ * Each child's tag name is paired with its integer value. Missing text or
+ * unparseable integers throw a ParseError — mirrors `?` propagation in
+ * Rust parsers that use `text().ok_or_else(...)?` followed by `.parse::<i32>()?`.
+ *
+ * Used by character_data (Rating, Stat, TraitTurn) and player_data
+ * (YieldStockpile, TechProgress, TechCount, CouncilCharacter).
+ *
+ * Returns an array of {name, value} pairs in document order. Callers map
+ * these into entity rows.
+ */
+export function collectStrictNamedInts(
+	node: unknown,
+	parentLabel: string,
+): Array<{ name: string; value: number }> {
+	const out: Array<{ name: string; value: number }> = [];
+	if (!isElement(node)) return out;
+	for (const [name, value] of getElementChildren(node)) {
+		if (typeof value !== "string" || value === "") {
+			throw new ParseError(
+				`${parentLabel}.${name} value`,
+				"MISSING_FIELD",
+			);
+		}
+		const n = parseInt(value, 10);
+		if (Number.isNaN(n)) {
+			throw new ParseError(
+				`Invalid integer in ${parentLabel}.${name}: ${value}`,
+				"INVALID_FORMAT",
+			);
+		}
+		out.push({ name, value: n });
+	}
+	return out;
+}
+
+/**
  * Parse a container whose children have prefix-stripped integer keys, e.g.:
  *
  *   <AgentTurn>

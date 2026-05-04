@@ -27,7 +27,14 @@
 		"unit_effects",
 		"unit_families",
 		"player_units_produced",
-		"city_units_produced"
+		"city_units_produced",
+		"player_resources",
+		"technology_progress",
+		"technologies_completed",
+		"technology_states",
+		"player_council",
+		"laws",
+		"player_goals"
 	],
 	"tolerances": {
 		"floatPrecisionDigits": 6,

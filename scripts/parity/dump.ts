@@ -66,6 +66,22 @@ import {
 	type Player,
 } from "../../src/lib/parser/parsers/players.js";
 import {
+	parseLaws,
+	parsePlayerCouncil,
+	parsePlayerGoals,
+	parsePlayerResources,
+	parseTechnologiesCompleted,
+	parseTechnologyProgress,
+	parseTechnologyStates,
+	type Law,
+	type PlayerCouncil,
+	type PlayerGoal,
+	type PlayerResource,
+	type TechnologyCompleted,
+	type TechnologyProgress,
+	type TechnologyState,
+} from "../../src/lib/parser/parsers/player-data.js";
+import {
 	parseReligions,
 	type Religion,
 } from "../../src/lib/parser/parsers/religions.js";
@@ -175,8 +191,20 @@ const PARSERS: Record<string, ParserFn> = {
 	city_religions: (root) => parseCityReligions(root).map(cityReligionToRow),
 	city_yields: (root) => parseCityYields(root).map(cityYieldToRow),
 	families: (root) => parseFamilies(root).map(familyToRow),
+	laws: (root) => parseLaws(root).map(lawToRow),
+	player_council: (root) =>
+		parsePlayerCouncil(root).map(playerCouncilToRow),
+	player_goals: (root) => parsePlayerGoals(root).map(playerGoalToRow),
+	player_resources: (root) =>
+		parsePlayerResources(root).map(playerResourceToRow),
 	players: (root) => parsePlayers(root).map(playerToRow),
 	religions: (root) => parseReligions(root).map(religionToRow),
+	technologies_completed: (root) =>
+		parseTechnologiesCompleted(root).map(technologyCompletedToRow),
+	technology_progress: (root) =>
+		parseTechnologyProgress(root).map(technologyProgressToRow),
+	technology_states: (root) =>
+		parseTechnologyStates(root).map(technologyStateToRow),
 	tile_changes: (root) => parseTileChanges(root).map(tileChangeToRow),
 	tile_visibility: (root) =>
 		parseTileVisibility(root).map(tileVisibilityToRow),
@@ -406,6 +434,76 @@ function playerToRow(p: Player): Record<string, unknown> {
 		tiles_purchased: p.tilesPurchased,
 		state_religion_changes: p.stateReligionChanges,
 		tribe_mercenaries_hired: p.tribeMercenariesHired,
+	};
+}
+
+function lawToRow(l: Law): Record<string, unknown> {
+	return {
+		player_xml_id: l.playerXmlId,
+		law_category: l.lawCategory,
+		law: l.law,
+		adopted_turn: l.adoptedTurn,
+		change_count: l.changeCount,
+	};
+}
+
+function playerCouncilToRow(c: PlayerCouncil): Record<string, unknown> {
+	return {
+		player_xml_id: c.playerXmlId,
+		position: c.position,
+		character_xml_id: c.characterXmlId,
+		appointed_turn: c.appointedTurn,
+	};
+}
+
+function playerGoalToRow(g: PlayerGoal): Record<string, unknown> {
+	return {
+		player_xml_id: g.playerXmlId,
+		goal_xml_id: g.goalXmlId,
+		goal_type: g.goalType,
+		leader_character_xml_id: g.leaderCharacterXmlId,
+		started_turn: g.startedTurn,
+		completed_turn: g.completedTurn,
+		failed_turn: g.failedTurn,
+		max_turns: g.maxTurns,
+		progress: g.progress,
+		goal_state: g.goalState,
+	};
+}
+
+function playerResourceToRow(r: PlayerResource): Record<string, unknown> {
+	return {
+		player_xml_id: r.playerXmlId,
+		yield_type: r.yieldType,
+		amount: r.amount,
+	};
+}
+
+function technologyCompletedToRow(
+	t: TechnologyCompleted,
+): Record<string, unknown> {
+	return {
+		player_xml_id: t.playerXmlId,
+		tech: t.tech,
+		completed_turn: t.completedTurn,
+	};
+}
+
+function technologyProgressToRow(
+	t: TechnologyProgress,
+): Record<string, unknown> {
+	return {
+		player_xml_id: t.playerXmlId,
+		tech: t.tech,
+		progress: t.progress,
+	};
+}
+
+function technologyStateToRow(t: TechnologyState): Record<string, unknown> {
+	return {
+		player_xml_id: t.playerXmlId,
+		tech: t.tech,
+		state: t.state,
 	};
 }
 

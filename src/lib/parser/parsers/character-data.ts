@@ -5,7 +5,7 @@
 import { ParseError } from "../extract-zip.js";
 import {
 	asArray,
-	getElementChildren,
+	collectStrictNamedInts,
 	isElement,
 	optInt,
 	optStr,
@@ -53,36 +53,6 @@ function* eachCharacter(
 		const characterXmlId = requireInt(node["@_ID"], "Character.ID");
 		yield [characterXmlId, node];
 	}
-}
-
-/**
- * Strict-mode parser for `<Rating>`/`<Stat>`/`<TraitTurn>` style
- * named-int-children containers. Missing text or unparseable values throw.
- * Mirrors `?` propagation in character_data.rs (lines 32–39, 56–58, 88–95).
- */
-function collectStrictNamedInts(
-	node: unknown,
-	parentLabel: string,
-): Array<{ name: string; value: number }> {
-	const out: Array<{ name: string; value: number }> = [];
-	if (!isElement(node)) return out;
-	for (const [name, value] of getElementChildren(node)) {
-		if (typeof value !== "string" || value === "") {
-			throw new ParseError(
-				`${parentLabel}.${name} value`,
-				"MISSING_FIELD",
-			);
-		}
-		const n = parseInt(value, 10);
-		if (Number.isNaN(n)) {
-			throw new ParseError(
-				`Invalid integer in ${parentLabel}.${name}: ${value}`,
-				"INVALID_FORMAT",
-			);
-		}
-		out.push({ name, value: n });
-	}
-	return out;
 }
 
 // ---------- Character stats (character_data.rs:20–70) ----------
