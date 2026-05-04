@@ -71,6 +71,20 @@ import {
 	parseTribes,
 	type Tribe,
 } from "../../src/lib/parser/parsers/tribes.js";
+import {
+	parseCityUnitsProduced,
+	parsePlayerUnitsProduced,
+	parseUnitEffects,
+	parseUnitFamilies,
+	parseUnitPromotions,
+	parseUnits,
+	type CityUnitProduction,
+	type PlayerUnitProduction,
+	type Unit,
+	type UnitEffect,
+	type UnitFamily,
+	type UnitPromotion,
+} from "../../src/lib/parser/parsers/units.js";
 
 const SCHEMA_VERSION = 1;
 
@@ -150,6 +164,15 @@ const PARSERS: Record<string, ParserFn> = {
 		parseTileVisibility(root).map(tileVisibilityToRow),
 	tiles: (root) => parseTiles(root).map(tileToRow),
 	tribes: (root) => parseTribes(root).map(tribeToRow),
+	units: (root) => parseUnits(root).map(unitToRow),
+	unit_promotions: (root) =>
+		parseUnitPromotions(root).map(unitPromotionToRow),
+	unit_effects: (root) => parseUnitEffects(root).map(unitEffectToRow),
+	unit_families: (root) => parseUnitFamilies(root).map(unitFamilyToRow),
+	player_units_produced: (root) =>
+		parsePlayerUnitsProduced(root).map(playerUnitProductionToRow),
+	city_units_produced: (root) =>
+		parseCityUnitsProduced(root).map(cityUnitProductionToRow),
 };
 
 function characterToRow(c: Character): Record<string, unknown> {
@@ -389,6 +412,71 @@ function tribeToRow(t: Tribe): Record<string, unknown> {
 		leader_character_xml_id: t.leaderCharacterXmlId,
 		allied_player_xml_id: t.alliedPlayerXmlId,
 		religion: t.religion,
+	};
+}
+
+function unitToRow(u: Unit): Record<string, unknown> {
+	return {
+		xml_id: u.xmlId,
+		tile_xml_id: u.tileXmlId,
+		unit_type: u.unitType,
+		player_xml_id: u.playerXmlId,
+		tribe: u.tribe,
+		xp: u.xp,
+		level: u.level,
+		create_turn: u.createTurn,
+		facing: u.facing,
+		original_player_xml_id: u.originalPlayerXmlId,
+		turns_since_last_move: u.turnsSinceLastMove,
+		gender: u.gender,
+		is_sleeping: u.isSleeping,
+		current_formation: u.currentFormation,
+		// i64 seed: pre-stringified by the parser via optI64Str.
+		seed: u.seed,
+	};
+}
+
+function unitPromotionToRow(p: UnitPromotion): Record<string, unknown> {
+	return {
+		unit_xml_id: p.unitXmlId,
+		promotion: p.promotion,
+		is_acquired: p.isAcquired,
+	};
+}
+
+function unitEffectToRow(e: UnitEffect): Record<string, unknown> {
+	return {
+		unit_xml_id: e.unitXmlId,
+		effect: e.effect,
+		stacks: e.stacks,
+	};
+}
+
+function unitFamilyToRow(f: UnitFamily): Record<string, unknown> {
+	return {
+		unit_xml_id: f.unitXmlId,
+		player_xml_id: f.playerXmlId,
+		family_name: f.familyName,
+	};
+}
+
+function playerUnitProductionToRow(
+	p: PlayerUnitProduction,
+): Record<string, unknown> {
+	return {
+		player_xml_id: p.playerXmlId,
+		unit_type: p.unitType,
+		count: p.count,
+	};
+}
+
+function cityUnitProductionToRow(
+	c: CityUnitProduction,
+): Record<string, unknown> {
+	return {
+		city_xml_id: c.cityXmlId,
+		unit_type: c.unitType,
+		count: c.count,
 	};
 }
 

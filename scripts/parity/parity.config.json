@@ -17,7 +17,13 @@
 		"tile_changes",
 		"tile_visibility",
 		"tiles",
-		"tribes"
+		"tribes",
+		"units",
+		"unit_promotions",
+		"unit_effects",
+		"unit_families",
+		"player_units_produced",
+		"city_units_produced"
 	],
 	"tolerances": {
 		"floatPrecisionDigits": 6,
