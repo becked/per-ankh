@@ -230,6 +230,35 @@ export const cloudApi = {
 		return res.json() as Promise<{ game_id: string; is_public: boolean }>;
 	},
 
+	// Download the raw save .zip for a game. Auth required (any logged-in
+	// user); the Worker enforces is_public-or-owner. Throws
+	// UnauthorizedError on 401 — caller should bounce anonymous viewers
+	// to /login. Throws ApiError(404) on private-not-owned (existence
+	// hidden) and ApiError(429) on rate limit.
+	downloadGame: async (
+		id: string,
+		opts?: CallOpts,
+	): Promise<{ blob: Blob; filename: string }> => {
+		const res = await request(`/games/${id}/download`, opts);
+		const blob = await res.blob();
+		const cd = res.headers.get("content-disposition") ?? "";
+		// RFC 6266: prefer filename*=UTF-8'' over plain filename when both
+		// are present so non-ASCII game names land correctly.
+		const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
+		const asciiMatch = cd.match(/filename="([^"]+)"/);
+		let filename = `${id}.zip`;
+		if (utf8Match) {
+			try {
+				filename = decodeURIComponent(utf8Match[1]);
+			} catch {
+				if (asciiMatch) filename = asciiMatch[1];
+			}
+		} else if (asciiMatch) {
+			filename = asciiMatch[1];
+		}
+		return { blob, filename };
+	},
+
 	uploadGame: async (
 		formData: FormData,
 		opts?: CallOpts,

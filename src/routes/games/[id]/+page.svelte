@@ -5,7 +5,11 @@
 	import type { MapTile } from "$lib/types/MapTile";
 	import { GameDetailView } from "$lib/game-detail";
 	import { reconstructMapTiles } from "$lib/game-detail/reconstruct-map-tiles";
-	import { cloudApi } from "$lib/api-cloud";
+	import {
+		cloudApi,
+		ApiError,
+		UnauthorizedError,
+	} from "$lib/api-cloud";
 	import { formatEnum } from "$lib/utils/formatting";
 	import VisibilityToggle from "$lib/VisibilityToggle.svelte";
 
@@ -48,6 +52,7 @@
 	let selectedMapTurn = $state<number | null>(null);
 	let mapTiles = $state<MapTile[]>([]);
 	let deleting = $state(false);
+	let downloading = $state(false);
 	// Visibility toggle state — read from the server-injected `is_public`
 	// field on owner responses. Initialise at component construction (not in
 	// $effect) so the SSR'd HTML renders the correct toggle position;
@@ -71,6 +76,41 @@
 	async function handleMapTurnChange(turn: number) {
 		selectedMapTurn = turn;
 		mapTiles = reconstructMapTiles(game, turn);
+	}
+
+	async function downloadSave() {
+		downloading = true;
+		try {
+			const { blob, filename } = await cloudApi.downloadGame(gameId);
+			// Trigger a browser-level save via a synthetic anchor click. This
+			// is the standard pattern for authenticated downloads — we can't
+			// use a plain `<a href>` because the request needs cookie auth
+			// and the response needs to be saved with the right filename.
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = filename;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			if (err instanceof UnauthorizedError) {
+				// Anonymous viewer clicked Download on a public game — bounce
+				// to login so they can come back signed-in. The post-login
+				// `next` is honored via the OAuth round-trip (auth.ts).
+				const next = encodeURIComponent(page.url.pathname);
+				await goto(`/login?next=${next}`);
+				return;
+			}
+			if (err instanceof ApiError && err.status === 429) {
+				alert("Too many downloads. Try again in an hour.");
+				return;
+			}
+			alert(`Download failed: ${err instanceof Error ? err.message : err}`);
+		} finally {
+			downloading = false;
+		}
 	}
 
 	async function deleteGame() {
@@ -109,6 +149,14 @@
 				<VisibilityToggle {gameId} bind:isPublic />
 				<button
 					type="button"
+					onclick={downloadSave}
+					disabled={downloading}
+					class="rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange disabled:opacity-50"
+				>
+					{downloading ? "Downloading…" : "Download save"}
+				</button>
+				<button
+					type="button"
 					onclick={deleteGame}
 					disabled={deleting}
 					class="rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange disabled:opacity-50"
@@ -117,7 +165,17 @@
 				</button>
 			</div>
 		{:else}
-			<span class="text-xs text-tan opacity-70">Shared game</span>
+			<div class="flex items-center gap-3">
+				<span class="text-xs text-tan opacity-70">Shared game</span>
+				<button
+					type="button"
+					onclick={downloadSave}
+					disabled={downloading}
+					class="rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange disabled:opacity-50"
+				>
+					{downloading ? "Downloading…" : "Download save"}
+				</button>
+			</div>
 		{/if}
 	</header>
 	<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">

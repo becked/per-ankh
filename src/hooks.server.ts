@@ -17,7 +17,11 @@ import type { Handle } from "@sveltejs/kit";
 // We need content-type so the request() helper in api-cloud.ts can
 // distinguish JSON error bodies from text. Cache-Control is forwarded so
 // the browser respects upstream cache hints when the page is hydrated.
-const ALLOWED_RESPONSE_HEADERS = new Set(["content-type", "cache-control"]);
+const ALLOWED_RESPONSE_HEADERS = new Set([
+	"content-type",
+	"cache-control",
+	"content-disposition",
+]);
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event, {

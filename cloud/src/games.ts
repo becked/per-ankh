@@ -55,6 +55,11 @@ const ANON_READS_PER_HOUR = 200;
 // minute for an hour straight is well past human use.
 const PER_USER_PATCH_PER_HOUR = 60;
 
+// Save-download limits. Per-user is the meaningful signal (auth required);
+// per-IP is a backstop for one user spamming from one IP.
+const PER_USER_DOWNLOADS_PER_HOUR = 50;
+const PER_IP_DOWNLOADS_PER_HOUR = 100;
+
 // User agents we treat as link-preview scrapers and exempt from anon read
 // rate-limiting. Trivially spoofable, but the data is public — this is
 // availability defense, not security. Match by case-insensitive prefix.
@@ -87,33 +92,29 @@ const TECH_LAW_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / 4); // 24
 
 // ---------- Rate limit checks (D1 events table) ----------
 
-async function countUploadsSince(
+// Count `events` rows with the given event_type in the last hour, optionally
+// filtered by user_id or ip_address. Used for per-user / per-IP / global
+// rate limits across upload, visibility_change, and download paths.
+//
+// `event_type` is a fixed allowlist rather than free-form to keep the SQL
+// safely parameterized (event_type can't be a bind parameter — it's part
+// of the WHERE clause structure — but the allowlist closes the injection
+// path while still letting all callers share one query shape).
+type RateLimitedEventType = "upload" | "visibility_change" | "download";
+
+async function countEventsSince(
 	db: D1Database,
+	eventType: RateLimitedEventType,
 	column: "user_id" | "ip_address" | null,
 	value: string | null,
 ): Promise<number> {
 	const where = column
-		? `${column} = ? AND event_type = 'upload' AND created_at > datetime('now', '-1 hour')`
-		: `event_type = 'upload' AND created_at > datetime('now', '-1 hour')`;
+		? `${column} = ? AND event_type = ? AND created_at > datetime('now', '-1 hour')`
+		: `event_type = ? AND created_at > datetime('now', '-1 hour')`;
 	const stmt = db.prepare(`SELECT COUNT(*) as count FROM events WHERE ${where}`);
 	const result = await (column && value !== null
-		? stmt.bind(value).first<{ count: number }>()
-		: stmt.first<{ count: number }>());
-	return result?.count ?? 0;
-}
-
-// Per-user PATCH-events count in the last hour. Mirrors the upload counter
-// pattern but keys on event_type='visibility_change'.
-async function countPatchesSince(db: D1Database, userId: string): Promise<number> {
-	const result = await db
-		.prepare(
-			`SELECT COUNT(*) as count FROM events
-			 WHERE user_id = ?
-			   AND event_type = 'visibility_change'
-			   AND created_at > datetime('now', '-1 hour')`,
-		)
-		.bind(userId)
-		.first<{ count: number }>();
+		? stmt.bind(value, eventType).first<{ count: number }>()
+		: stmt.bind(eventType).first<{ count: number }>());
 	return result?.count ?? 0;
 }
 
@@ -155,6 +156,44 @@ function stripOnlineIds(blob: unknown): unknown {
 		return entry;
 	});
 	return { ...b, player_roster: newRoster };
+}
+
+// ---------- Save-download filename helpers ----------
+
+// Sanitize a user-supplied game_name into a filesystem-safe filename for
+// the Content-Disposition header. Keeps printable Unicode (so non-ASCII
+// names like "Caesar Civil War" survive into the filename* UTF-8 form),
+// strips path separators and control chars, collapses whitespace, trims
+// to a sensible length. Falls back to the gameId on null/empty/all-junk.
+function buildSaveFilename(name: string | null, gameId: string): string {
+	if (!name) return `${gameId}.zip`;
+	// Strip path separators, drive colons, quotes, control chars, and shell
+	// glob metacharacters. Replace runs of whitespace with a single space.
+	const cleaned = name
+		// eslint-disable-next-line no-control-regex
+		.replace(/[\x00-\x1f\x7f/\\:*?"<>|]/g, " ")
+		.replace(/\s+/g, " ")
+		.trim()
+		.replace(/^[.\s]+|[.\s]+$/g, ""); // strip leading/trailing dots+spaces (Windows hates them)
+	if (!cleaned) return `${gameId}.zip`;
+	// 120 chars + ".zip" stays under the typical filesystem 255-char limit
+	// even with UTF-8 multi-byte expansion.
+	const truncated = cleaned.length > 120 ? cleaned.slice(0, 120) : cleaned;
+	return `${truncated}.zip`;
+}
+
+// Build an RFC 6266 Content-Disposition value with both an ASCII fallback
+// and a UTF-8 form. Browsers prefer `filename*=UTF-8''...`; older clients
+// fall back to plain `filename="..."`.
+function buildContentDisposition(filename: string): string {
+	// ASCII fallback: replace any non-ASCII char with '_' so the quoted
+	// `filename` value stays in the latin-1 character set HTTP headers
+	// historically allowed. Modern browsers ignore this when filename* is
+	// present; it's a safety net for clients that don't speak RFC 5987.
+	// eslint-disable-next-line no-control-regex
+	const ascii = filename.replace(/[^\x20-\x7e]/g, "_").replace(/"/g, "");
+	const encoded = encodeURIComponent(filename);
+	return `attachment; filename="${ascii}"; filename*=UTF-8''${encoded}`;
 }
 
 // ---------- Helpers for D1 inserts ----------
@@ -490,13 +529,13 @@ export async function handleGameUpload(
 	const ip = request.headers.get("CF-Connecting-IP");
 
 	// Rate limits (per-user, per-IP, global)
-	if ((await countUploadsSince(env.SHARE_DB, "user_id", userId)) >= PER_USER_UPLOADS_PER_HOUR) {
+	if ((await countEventsSince(env.SHARE_DB, "upload", "user_id", userId)) >= PER_USER_UPLOADS_PER_HOUR) {
 		return errorResponse("Per-user upload limit exceeded", 429, cors, "RATE_LIMIT_USER");
 	}
-	if (ip && (await countUploadsSince(env.SHARE_DB, "ip_address", ip)) >= PER_IP_UPLOADS_PER_HOUR) {
+	if (ip && (await countEventsSince(env.SHARE_DB, "upload", "ip_address", ip)) >= PER_IP_UPLOADS_PER_HOUR) {
 		return errorResponse("Per-IP upload limit exceeded", 429, cors, "RATE_LIMIT_IP");
 	}
-	if ((await countUploadsSince(env.SHARE_DB, null, null)) >= GLOBAL_UPLOADS_PER_HOUR) {
+	if ((await countEventsSince(env.SHARE_DB, "upload", null, null)) >= GLOBAL_UPLOADS_PER_HOUR) {
 		return errorResponse("Global upload limit exceeded", 429, cors, "RATE_LIMIT_GLOBAL");
 	}
 
@@ -873,7 +912,7 @@ export async function handleGamePatch(
 		return errorResponse("Not found", 404, cors, "NOT_FOUND");
 	}
 
-	if ((await countPatchesSince(env.SHARE_DB, userId)) >= PER_USER_PATCH_PER_HOUR) {
+	if ((await countEventsSince(env.SHARE_DB, "visibility_change", "user_id", userId)) >= PER_USER_PATCH_PER_HOUR) {
 		return errorResponse(
 			"Per-user toggle limit exceeded",
 			429,
@@ -968,4 +1007,101 @@ export async function handleGameDelete(
 	}
 
 	return new Response(null, { status: 204, headers: cors });
+}
+
+// GET /v1/games/:id/download — stream the raw save .zip from R2.
+//
+// Auth model (decided in design discussion, not the original spec):
+//   - Auth required (any logged-in user, not just owner).
+//   - Game must be is_public = TRUE OR requester is owner.
+//   - 404 on signed-in non-owner of a private game (don't leak existence;
+//     mirrors the JSON GET path).
+//   - 401 on anonymous; the frontend bounces to /login?next=...
+//
+// Why not anonymous: the JSON GET strips player_roster.online_id for
+// anonymous viewers (PII), but the raw ZIP contains the original XML
+// with OnlineIDs intact. Letting anonymous download would undo the strip
+// via this route. Auth-gating preserves PII without on-the-fly XML
+// rewriting and gives us a per-user audit trail.
+export async function handleGameDownload(
+	gameId: string,
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const session = await sessionFromRequest(env, request);
+	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	const userId = session.data.user_id;
+
+	const row = await env.SHARE_DB.prepare(
+		"SELECT user_id, is_public, game_name FROM games WHERE game_id = ?",
+	)
+		.bind(gameId)
+		.first<{ user_id: string; is_public: number; game_name: string | null }>();
+	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
+
+	const isOwner = row.user_id === userId;
+	const isPublic = row.is_public === 1;
+	if (!isOwner && !isPublic) {
+		// Don't leak existence — same shape as a genuine 404.
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+
+	// Per-user limit (meaningful — auth-bound) + per-IP backstop.
+	if (
+		(await countEventsSince(env.SHARE_DB, "download", "user_id", userId)) >=
+		PER_USER_DOWNLOADS_PER_HOUR
+	) {
+		return errorResponse(
+			"Per-user download limit exceeded",
+			429, cors, "RATE_LIMIT_USER",
+		);
+	}
+	const ip = request.headers.get("CF-Connecting-IP");
+	if (
+		ip &&
+		(await countEventsSince(env.SHARE_DB, "download", "ip_address", ip)) >=
+			PER_IP_DOWNLOADS_PER_HOUR
+	) {
+		return errorResponse(
+			"Per-IP download limit exceeded",
+			429, cors, "RATE_LIMIT_IP",
+		);
+	}
+
+	const obj = await env.SHARE_BUCKET.get(`saves/${gameId}.zip`);
+	if (!obj) return errorResponse("Save missing", 404, cors, "BLOB_MISSING");
+
+	const filename = buildSaveFilename(row.game_name, gameId);
+
+	// Audit event — fire-and-forget so a logging hiccup doesn't 500 the
+	// download. Caught + logged in case of error.
+	env.SHARE_DB.prepare(
+		`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+		 VALUES ('download', ?, ?, ?, ?)`,
+	)
+		.bind(gameId, userId, ip, JSON.stringify({ size: obj.size }))
+		.run()
+		.catch((e: unknown) => {
+			console.error("Failed to log download event:", e);
+		});
+
+	// Stream R2 body straight through. obj.body is a ReadableStream — no
+	// buffering, memory-safe even at the 50MB R2 ceiling.
+	// Access-Control-Expose-Headers is set per-response (not in the global
+	// CORS helper) so cross-origin JS in the browser can read
+	// Content-Disposition to pick the filename.
+	return new Response(obj.body, {
+		status: 200,
+		headers: {
+			"Content-Type": "application/zip",
+			"Content-Length": String(obj.size),
+			"Content-Disposition": buildContentDisposition(filename),
+			"Cache-Control": "private, max-age=300",
+			...cors,
+			Vary: "Cookie, Origin",
+			"Access-Control-Expose-Headers": "Content-Disposition",
+		},
+	});
 }

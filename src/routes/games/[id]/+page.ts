@@ -1,25 +1,9 @@
 import { error, redirect } from "@sveltejs/kit";
-import {
-	cloudApi,
-	ApiError,
-	UnauthorizedError,
-} from "$lib/api-cloud";
+import { cloudApi, ApiError, UnauthorizedError } from "$lib/api-cloud";
 import type { PageLoad } from "./$types";
 
-// Game detail load — owner first, public fallback, login redirect last.
-//
-//   1. Try the authenticated GET. Owner: 200 + full payload.
-//   2. On 401 (no session, or session-but-not-owner-of-private-game),
-//      try the public GET. Public game: 200 + PII-stripped payload.
-//   3. Public path 401 means the game is genuinely private — redirect
-//      to /login?next=... so the user can sign in and try again as owner.
-//   4. 404 anywhere → standard 404 page.
-//
-// Returns `isOwner` so the page can conditionally render the visibility
-// toggle and other owner-only affordances.
 // Translate the API's `ApiError` into the right SvelteKit response —
-// either a typed `error()` page or a re-thrown unhandled. Centralized so
-// owner and public paths handle the same statuses identically.
+// either a typed `error()` page or a re-thrown unhandled.
 function mapApiErrorToPage(err: unknown): never {
 	if (err instanceof ApiError && err.status === 404) {
 		throw error(404, "Game not found");
@@ -28,32 +12,36 @@ function mapApiErrorToPage(err: unknown): never {
 		throw error(403, "You don't have access to this game");
 	}
 	if (err instanceof ApiError && err.status === 429) {
-		// Per-IP read limiter is exhausted. Surface a real 429 page rather
-		// than a 500 — re-render is the user's only remedy, and this lets
-		// scrapers/CDNs respect the rate limit instead of caching a 500.
+		// Per-IP read limiter exhausted. Surface as 429 (not 500) so re-load
+		// is the user's only remedy and CDNs respect the limit instead of
+		// caching a 500.
 		throw error(429, "Too many requests. Try again in a few minutes.");
 	}
 	throw err;
 }
 
+// Game detail load.
+//
+// The API's `GET /v1/games/:id` is unified — it serves owners (full
+// payload, with `is_public` injected) and anonymous viewers of public
+// games (PII-stripped, no `is_public`) on the same endpoint. The signal
+// for "I'm the owner" is the presence of the `is_public` field on the
+// response, since the Worker injects it only when isOwner is true.
+//
+// 401 here means a genuinely private game viewed without a valid session
+// (or signed-in non-owner of a private game gets 403, handled separately
+// — anonymous+private is the only 401 case the load needs to redirect on).
 export const load: PageLoad = async ({ params, fetch, url }) => {
 	try {
 		const game = await cloudApi.getGame(params.id, { fetch });
-		return { game, isOwner: true };
+		const isOwner = "is_public" in game;
+		return { game, isOwner };
 	} catch (err) {
 		if (err instanceof UnauthorizedError) {
-			try {
-				const game = await cloudApi.getPublicGame(params.id, { fetch });
-				return { game, isOwner: false };
-			} catch (publicErr) {
-				if (publicErr instanceof UnauthorizedError) {
-					throw redirect(
-						303,
-						`/login?next=${encodeURIComponent(url.pathname)}`,
-					);
-				}
-				return mapApiErrorToPage(publicErr);
-			}
+			throw redirect(
+				303,
+				`/login?next=${encodeURIComponent(url.pathname)}`,
+			);
 		}
 		return mapApiErrorToPage(err);
 	}

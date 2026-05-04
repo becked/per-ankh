@@ -31,6 +31,7 @@ import type { AuthEnv } from "./auth";
 import {
 	handleGameDelete,
 	handleGameDetail,
+	handleGameDownload,
 	handleGameList,
 	handleGamePatch,
 	handleGameUpload,
@@ -540,6 +541,12 @@ export default {
 			if (method === "GET") return handleGameDetail(gameMatch[1], request, env);
 			if (method === "PATCH") return handleGamePatch(gameMatch[1], request, env);
 			if (method === "DELETE") return handleGameDelete(gameMatch[1], request, env);
+		}
+		const downloadMatch = url.pathname.match(
+			/^\/v1\/games\/([A-Za-z0-9_-]{21})\/download$/,
+		);
+		if (method === "GET" && downloadMatch) {
+			return handleGameDownload(downloadMatch[1], request, env);
 		}
 
 		// === Cloud rewrite: /v1/users/* ===
