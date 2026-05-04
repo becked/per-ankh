@@ -28,6 +28,10 @@ import {
 	type Family,
 } from "../../src/lib/parser/parsers/families.js";
 import {
+	parsePlayers,
+	type Player,
+} from "../../src/lib/parser/parsers/players.js";
+import {
 	parseReligions,
 	type Religion,
 } from "../../src/lib/parser/parsers/religions.js";
@@ -93,6 +97,7 @@ type ParserFn = (root: Record<string, unknown>) => Record<string, unknown>[];
 
 const PARSERS: Record<string, ParserFn> = {
 	families: (root) => parseFamilies(root).map(familyToRow),
+	players: (root) => parsePlayers(root).map(playerToRow),
 	religions: (root) => parseReligions(root).map(religionToRow),
 	tribes: (root) => parseTribes(root).map(tribeToRow),
 };
@@ -105,6 +110,36 @@ function familyToRow(f: Family): Record<string, unknown> {
 		head_character_xml_id: f.headCharacterXmlId,
 		seat_city_xml_id: f.seatCityXmlId,
 		turns_without_leader: f.turnsWithoutLeader,
+	};
+}
+
+function playerToRow(p: Player): Record<string, unknown> {
+	return {
+		xml_id: p.xmlId,
+		player_name: p.playerName,
+		nation: p.nation,
+		dynasty: p.dynasty,
+		team_id: p.teamId,
+		is_human: p.isHuman,
+		is_save_owner: p.isSaveOwner,
+		online_id: p.onlineId,
+		email: p.email,
+		ai_controlled_to_turn: p.aiControlledToTurn,
+		difficulty: p.difficulty,
+		last_turn_completed: p.lastTurnCompleted,
+		turn_ended: p.turnEnded,
+		legitimacy: p.legitimacy,
+		succession_gender: p.successionGender,
+		state_religion: p.stateReligion,
+		founder_character_xml_id: p.founderCharacterXmlId,
+		chosen_heir_xml_id: p.chosenHeirXmlId,
+		original_capital_city_xml_id: p.originalCapitalCityXmlId,
+		time_stockpile: p.timeStockpile,
+		tech_researching: p.techResearching,
+		ambition_delay: p.ambitionDelay,
+		tiles_purchased: p.tilesPurchased,
+		state_religion_changes: p.stateReligionChanges,
+		tribe_mercenaries_hired: p.tribeMercenariesHired,
 	};
 }
 

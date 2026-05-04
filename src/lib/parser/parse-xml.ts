@@ -87,8 +87,13 @@ export function asArray<T>(val: T | T[] | undefined | null): T[] {
 	return Array.isArray(val) ? val : [val];
 }
 
+/**
+ * Require an attribute or child-text string. Empty strings ARE accepted —
+ * matches Rust's `req_attr` (which only errors on missing, not empty). Use
+ * requireInt instead when the value must be a parseable integer.
+ */
 export function requireStr(val: unknown, path: string): string {
-	if (typeof val !== "string" || val === "") {
+	if (typeof val !== "string") {
 		throw new ParseError(`Missing required field: ${path}`, "MISSING_FIELD");
 	}
 	return val;
@@ -102,8 +107,22 @@ export function requireInt(val: unknown, path: string): number {
 	return n;
 }
 
+/**
+ * Optional child-text string. Empty/whitespace-only text → null, matching
+ * Rust's `opt_child_text` (which trims and filters empty). fast-xml-parser
+ * trims tag values by default, so the empty-string check covers both cases.
+ */
 export function optStr(val: unknown): string | null {
 	return typeof val === "string" && val !== "" ? val : null;
+}
+
+/**
+ * Optional attribute string. Preserves empty strings, matching Rust's
+ * `opt_attr` (which returns `Some("")` for `<Foo Bar="">`). Use this for
+ * attribute reads where Rust would emit `""` rather than `null`.
+ */
+export function optAttrStr(val: unknown): string | null {
+	return typeof val === "string" ? val : null;
 }
 
 export function optInt(val: unknown): number | null {

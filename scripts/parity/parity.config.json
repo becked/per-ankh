@@ -1,6 +1,6 @@
 {
 	"schemaVersion": 1,
-	"implemented": ["families", "religions", "tribes"],
+	"implemented": ["families", "players", "religions", "tribes"],
 	"tolerances": {
 		"floatPrecisionDigits": 6,
 		"trimStrings": true,
