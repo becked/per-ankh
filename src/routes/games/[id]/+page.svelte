@@ -6,23 +6,66 @@
 	import { GameDetailView } from "$lib/game-detail";
 	import { reconstructMapTiles } from "$lib/game-detail/reconstruct-map-tiles";
 	import { cloudApi } from "$lib/api-cloud";
+	import { formatEnum } from "$lib/utils/formatting";
+	import VisibilityToggle from "$lib/VisibilityToggle.svelte";
 
 	let { data }: { data: PageData } = $props();
 	const game = $derived(data.game);
+	const isOwner = $derived(data.isOwner);
 	// Cloud game id from URL — distinct from the in-game `xml_game_id`
 	// which is the GameId attribute on the save's <Root> element.
 	const gameId = $derived(page.params.id ?? "");
 
+	// OG tags for Discord/Slack/Twitter unfurls. Composed from server-known
+	// match metadata only — no PII concerns; same data anonymous viewers
+	// already see in the page body.
+	const PUBLIC_ORIGIN = (
+		import.meta.env.VITE_PUBLIC_ORIGIN ?? "https://per-ankh.app"
+	) as string;
+	const ogTitle = $derived(game.game_details.game_name ?? "Old World game");
+	const ogDescription = $derived(
+		(() => {
+			const gd = game.game_details;
+			const parts: string[] = [];
+			if (gd.winner_civilization) {
+				parts.push(formatEnum(gd.winner_civilization, "NATION_"));
+			} else if (gd.winner_name) {
+				parts.push(gd.winner_name);
+			}
+			if (gd.winner_victory_type) {
+				const v = formatEnum(gd.winner_victory_type, "VICTORY_");
+				parts.push(`won by ${v}`);
+			}
+			parts.push(`turn ${gd.total_turns}`);
+			return parts.length > 0
+				? parts.join(", ")
+				: "An Old World save game on Per-Ankh.";
+		})(),
+	);
+	const ogUrl = $derived(`${PUBLIC_ORIGIN}/games/${gameId}`);
+	const ogImage = $derived(`${PUBLIC_ORIGIN}/og-default.png`);
+
 	let selectedMapTurn = $state<number | null>(null);
 	let mapTiles = $state<MapTile[]>([]);
 	let deleting = $state(false);
+	// Visibility toggle state — read from the server-injected `is_public`
+	// field on owner responses. Initialise at component construction (not in
+	// $effect) so the SSR'd HTML renders the correct toggle position;
+	// $effect doesn't run during SSR. The $effect below re-syncs on
+	// client-side navigation between games. Public viewers don't see the
+	// toggle.
+	// svelte-ignore state_referenced_locally
+	let isPublic = $state(
+		(data.game as { is_public?: boolean }).is_public ?? false,
+	);
 
-	// Initialise map state when the loaded game changes (route navigation
-	// keeps the component alive across game ids).
+	// Re-sync map + visibility state when the loaded game changes (route
+	// navigation keeps the component alive across game ids).
 	$effect(() => {
 		const g = game;
 		selectedMapTurn = g.game_details.total_turns;
 		mapTiles = g.map_tiles;
+		isPublic = (g as { is_public?: boolean }).is_public ?? false;
 	});
 
 	async function handleMapTurnChange(turn: number) {
@@ -44,20 +87,38 @@
 </script>
 
 <svelte:head>
-	<title>{game.game_details.game_name ?? "Game"} — Per-Ankh</title>
+	<title>{ogTitle} — Per-Ankh</title>
+	<meta property="og:title" content={ogTitle} />
+	<meta property="og:description" content={ogDescription} />
+	<meta property="og:url" content={ogUrl} />
+	<meta property="og:image" content={ogImage} />
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Per-Ankh" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={ogTitle} />
+	<meta name="twitter:description" content={ogDescription} />
+	<meta name="twitter:image" content={ogImage} />
+	<meta name="description" content={ogDescription} />
 </svelte:head>
 
 <main class="isolate flex h-screen flex-1 flex-col overflow-hidden bg-blue-gray">
 	<header class="flex shrink-0 items-center justify-between border-b border-brown bg-[#2a2622] px-4 py-2">
 		<a href="/games" class="text-sm text-tan hover:text-orange">← Games</a>
-		<button
-			type="button"
-			onclick={deleteGame}
-			disabled={deleting}
-			class="rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange disabled:opacity-50"
-		>
-			{deleting ? "Deleting…" : "Delete game"}
-		</button>
+		{#if isOwner}
+			<div class="flex items-center gap-3">
+				<VisibilityToggle {gameId} bind:isPublic />
+				<button
+					type="button"
+					onclick={deleteGame}
+					disabled={deleting}
+					class="rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange disabled:opacity-50"
+				>
+					{deleting ? "Deleting…" : "Delete game"}
+				</button>
+			</div>
+		{:else}
+			<span class="text-xs text-tan opacity-70">Shared game</span>
+		{/if}
 	</header>
 	<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 		<GameDetailView

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { cloudApi, ApiError } from "$lib/api-cloud";
+	import { safeNext } from "$lib/utils/safe-next";
 
 	let busy = $state(false);
 	let error = $state<string | null>(null);
@@ -9,7 +10,12 @@
 		error = null;
 		try {
 			const redirectUri = `${window.location.origin}/auth/callback`;
-			const { authorize_url } = await cloudApi.discordStart(redirectUri);
+			// Read the post-login redirect target from the URL and sanitize
+			// before sending to the worker. The worker re-validates with the
+			// same rules — defense in depth.
+			const params = new URLSearchParams(window.location.search);
+			const next = safeNext(params.get("next"));
+			const { authorize_url } = await cloudApi.discordStart(redirectUri, next);
 			window.location.href = authorize_url;
 		} catch (err) {
 			busy = false;

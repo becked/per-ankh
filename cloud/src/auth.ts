@@ -49,6 +49,28 @@ interface OAuthPending {
 	state: string;
 	code_verifier: string;
 	redirect_uri: string;
+	// Internal post-login redirect target (e.g. "/games/abc"). Always a
+	// same-origin path; validated by safeNext before storage.
+	next: string;
+}
+
+const DEFAULT_NEXT = "/dashboard";
+
+// Server-side mirror of src/lib/utils/safe-next.ts. Anything that isn't a
+// relative same-origin path collapses to /dashboard, neutralizing
+// open-redirect attempts via `?next=...`.
+function safeNext(raw: unknown): string {
+	if (typeof raw !== "string" || !raw) return DEFAULT_NEXT;
+	let decoded: string;
+	try {
+		decoded = decodeURIComponent(raw);
+	} catch {
+		return DEFAULT_NEXT;
+	}
+	if (!decoded.startsWith("/")) return DEFAULT_NEXT;
+	if (decoded.startsWith("//")) return DEFAULT_NEXT;
+	if (decoded.includes("\\")) return DEFAULT_NEXT;
+	return decoded;
 }
 
 interface DiscordTokenResponse {
@@ -129,9 +151,9 @@ export async function handleDiscordStart(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 
-	let body: { redirect_uri?: string };
+	let body: { redirect_uri?: string; next?: string };
 	try {
-		body = await readJsonBody<{ redirect_uri?: string }>(request);
+		body = await readJsonBody<{ redirect_uri?: string; next?: string }>(request);
 	} catch {
 		return errorResponse("Invalid JSON body", 400, cors, "INVALID_BODY");
 	}
@@ -140,6 +162,7 @@ export async function handleDiscordStart(
 	if (!redirectUri || typeof redirectUri !== "string") {
 		return errorResponse("redirect_uri required", 400, cors, "MISSING_REDIRECT_URI");
 	}
+	const next = safeNext(body.next);
 
 	const state = generateState();
 	const { verifier, challenge } = await generatePkce();
@@ -149,6 +172,7 @@ export async function handleDiscordStart(
 		state,
 		code_verifier: verifier,
 		redirect_uri: redirectUri,
+		next,
 	};
 	await env.SESSIONS_KV.put(oauthKey(kvId), JSON.stringify(pending), {
 		expirationTtl: OAUTH_PENDING_TTL_SECONDS,
@@ -349,12 +373,18 @@ export async function handleDiscordCallback(
 	if (isHttps) clearPending.push("Secure");
 	headers.append("Set-Cookie", clearPending.join("; "));
 
+	// `next` is server-validated; the frontend can goto it directly. Re-run
+	// safeNext as belt-and-suspenders in case an older OAuthPending shape
+	// from before this field was introduced lacks it.
+	const postLoginNext = safeNext(pending.next);
+
 	return new Response(
 		JSON.stringify({
 			user_id: upsert.user_id,
 			discord_id: upsert.discord_id,
 			display_name: upsert.display_name,
 			avatar_url: buildAvatarUrl(upsert.discord_id, upsert.avatar_hash),
+			next: postLoginNext,
 		}),
 		{ status: 200, headers },
 	);

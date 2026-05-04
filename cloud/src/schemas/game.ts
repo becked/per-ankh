@@ -194,3 +194,11 @@ export const UploaderPlayerIndexSchema = v.nullable(
 );
 
 export type UploaderPlayerIndex = v.InferOutput<typeof UploaderPlayerIndexSchema>;
+
+// ----- PATCH /v1/games/:id body -----
+
+export const GamePatchSchema = v.object({
+	is_public: v.boolean(),
+});
+
+export type GamePatch = v.InferOutput<typeof GamePatchSchema>;

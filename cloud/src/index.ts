@@ -32,6 +32,7 @@ import {
 	handleGameDelete,
 	handleGameDetail,
 	handleGameList,
+	handleGamePatch,
 	handleGameUpload,
 } from "./games";
 import type { GamesEnv } from "./games";
@@ -537,6 +538,7 @@ export default {
 		const gameMatch = url.pathname.match(/^\/v1\/games\/([A-Za-z0-9_-]{21})$/);
 		if (gameMatch) {
 			if (method === "GET") return handleGameDetail(gameMatch[1], request, env);
+			if (method === "PATCH") return handleGamePatch(gameMatch[1], request, env);
 			if (method === "DELETE") return handleGameDelete(gameMatch[1], request, env);
 		}
 

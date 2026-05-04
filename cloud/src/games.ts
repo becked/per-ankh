@@ -14,6 +14,7 @@ import { nanoid } from "nanoid";
 import * as v from "valibot";
 import {
 	FullGameDataSchema,
+	GamePatchSchema,
 	UploaderPlayerIndexSchema,
 	type FullGameData,
 	type PlayerRosterEntry,
@@ -47,6 +48,33 @@ const PER_USER_UPLOADS_PER_HOUR = 20;
 const PER_IP_UPLOADS_PER_HOUR = 30;
 const GLOBAL_UPLOADS_PER_HOUR = 500;
 
+// Anonymous public-game read limit (per-IP, per-POP via Cache API).
+const ANON_READS_PER_HOUR = 200;
+
+// Per-user PATCH limit on visibility toggles. Generous — one toggle per
+// minute for an hour straight is well past human use.
+const PER_USER_PATCH_PER_HOUR = 60;
+
+// User agents we treat as link-preview scrapers and exempt from anon read
+// rate-limiting. Trivially spoofable, but the data is public — this is
+// availability defense, not security. Match by case-insensitive prefix.
+const SCRAPER_UA_PREFIXES = [
+	"discordbot/",
+	"slackbot-linkexpanding",
+	"slackbot/",
+	"twitterbot/",
+	"facebookexternalhit/",
+	"linkedinbot/",
+	"telegrambot",
+	"whatsapp/",
+];
+
+function isScraperUA(ua: string | null): boolean {
+	if (!ua) return false;
+	const lower = ua.toLowerCase();
+	return SCRAPER_UA_PREFIXES.some((p) => lower.startsWith(p));
+}
+
 // D1 caps bound parameters at 100 per query (much tighter than standalone
 // SQLite's 999). Multi-row INSERTs chunked so N_rows × N_cols ≤ 99 to
 // leave headroom. The trade-off vs the ex-990 cap is more statements per
@@ -72,6 +100,61 @@ async function countUploadsSince(
 		? stmt.bind(value).first<{ count: number }>()
 		: stmt.first<{ count: number }>());
 	return result?.count ?? 0;
+}
+
+// Per-user PATCH-events count in the last hour. Mirrors the upload counter
+// pattern but keys on event_type='visibility_change'.
+async function countPatchesSince(db: D1Database, userId: string): Promise<number> {
+	const result = await db
+		.prepare(
+			`SELECT COUNT(*) as count FROM events
+			 WHERE user_id = ?
+			   AND event_type = 'visibility_change'
+			   AND created_at > datetime('now', '-1 hour')`,
+		)
+		.bind(userId)
+		.first<{ count: number }>();
+	return result?.count ?? 0;
+}
+
+// Per-IP anonymous read counter via Cache API (per-POP). Modeled on the
+// legacy `checkDownloadRateLimit` in cloud/src/index.ts. Cheap (no D1 hit),
+// scoped to a single edge POP — fine for availability defense, not for
+// global accounting. Returns true when within the limit.
+async function checkAnonReadRateLimit(ip: string, maxPerHour: number): Promise<boolean> {
+	const cache = caches.default;
+	const url = new URL(`https://rate-limit.internal/anon-read/${ip}`);
+
+	const cached = await cache.match(url);
+	const count = cached ? parseInt(await cached.text(), 10) + 1 : 1;
+
+	const response = new Response(String(count), {
+		headers: { "Cache-Control": "max-age=3600" },
+	});
+	await cache.put(url, response);
+
+	return count <= maxPerHour;
+}
+
+// Strip Steam/GOG/Epic OnlineIDs from a parsed FullGameData blob before
+// returning it to anonymous viewers. The owner clicked Make Public on
+// their own game; opponents' platform IDs are not theirs to publish.
+//
+// `player_name` is intentionally preserved — it's the in-game identity
+// used to discuss who won. `online_id` is the cross-platform tracking
+// surface and is the only field we strip.
+function stripOnlineIds(blob: unknown): unknown {
+	if (!blob || typeof blob !== "object") return blob;
+	const b = blob as Record<string, unknown>;
+	const roster = b.player_roster;
+	if (!Array.isArray(roster)) return blob;
+	const newRoster = roster.map((entry) => {
+		if (entry && typeof entry === "object" && "online_id" in entry) {
+			return { ...(entry as Record<string, unknown>), online_id: null };
+		}
+		return entry;
+	});
+	return { ...b, player_roster: newRoster };
 }
 
 // ---------- Helpers for D1 inserts ----------
@@ -689,17 +772,41 @@ export async function handleGameDetail(
 	const cors = cloudCorsHeaders(env, request);
 
 	const session = await sessionFromRequest(env, request);
-	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
-	const userId = session.data.user_id;
 
 	const row = await env.SHARE_DB.prepare(
-		"SELECT user_id FROM games WHERE game_id = ?",
+		"SELECT user_id, is_public FROM games WHERE game_id = ?",
 	)
 		.bind(gameId)
-		.first<{ user_id: string }>();
+		.first<{ user_id: string; is_public: number }>();
 	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
-	if (row.user_id !== userId) {
-		return errorResponse("Forbidden", 403, cors, "FORBIDDEN");
+
+	const isOwner = session?.data.user_id === row.user_id;
+	const isPublic = row.is_public === 1;
+
+	if (!isOwner && !isPublic) {
+		// Anonymous → 401 so the frontend can redirect to /login.
+		// Signed-in non-owner → 403 (the game exists but isn't theirs).
+		return session
+			? errorResponse("Forbidden", 403, cors, "FORBIDDEN")
+			: errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	// Anonymous public reads: rate-limit per IP per POP, exempting known
+	// link-preview scrapers (Discord/Slack/Twitter/etc.).
+	if (!isOwner) {
+		const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+		const ua = request.headers.get("User-Agent");
+		if (!isScraperUA(ua)) {
+			const ok = await checkAnonReadRateLimit(ip, ANON_READS_PER_HOUR);
+			if (!ok) {
+				return errorResponse(
+					"Rate limit exceeded. Try again later.",
+					429,
+					cors,
+					"RATE_LIMIT",
+				);
+			}
+		}
 	}
 
 	const obj = await env.SHARE_BUCKET.get(`games/${gameId}.json.gz`);
@@ -710,19 +817,107 @@ export async function handleGameDetail(
 	// Decompress in Worker — Cloudflare strips Content-Encoding from Worker
 	// responses, so we can't pass the compressed body through directly.
 	const compressed = await obj.arrayBuffer();
-	const ds = new DecompressionStream("gzip");
-	const writer = ds.writable.getWriter();
-	writer.write(compressed);
-	writer.close();
+	const decompressed = await decompressWithLimit(compressed, MAX_BLOB_DECOMPRESSED);
 
-	return new Response(ds.readable, {
+	// Parse, transform, re-serialize. Owner gets an `is_public` flag
+	// injected for the visibility toggle's initial state; anonymous viewers
+	// get the blob with online_id stripped (PII protection — see
+	// stripOnlineIds). FullGameData is a looseObject schema so the extra
+	// is_public top-level field is non-breaking.
+	const parsed = JSON.parse(new TextDecoder().decode(decompressed)) as unknown;
+	const transformed = isOwner
+		? { ...(parsed as Record<string, unknown>), is_public: isPublic }
+		: stripOnlineIds(parsed);
+	const bodyText = JSON.stringify(transformed);
+
+	// Vary: Cookie keeps the public-cache key correct. Scrapers send no
+	// Cookie header → single edge cache key. Cookie-bearing requests bypass
+	// the public cache (correctness > hit rate). Origin must also be in
+	// Vary so the credentialed-CORS response isn't reused for a different
+	// origin — combine both rather than letting `...cors` clobber Cookie.
+	return new Response(bodyText, {
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
-			"Cache-Control": "private, max-age=300",
+			"Cache-Control": isOwner
+				? "private, max-age=300"
+				: "public, max-age=3600, s-maxage=3600",
 			...cors,
+			Vary: "Cookie, Origin",
 		},
 	});
+}
+
+// PATCH /v1/games/:id — toggle visibility (owner-only). Body shape:
+//   { is_public: boolean }
+// Returns the updated row subset. Per-user 60/hr rate limit on toggles
+// (event_type='visibility_change' in audit log).
+export async function handleGamePatch(
+	gameId: string,
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const session = await sessionFromRequest(env, request);
+	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	const userId = session.data.user_id;
+
+	const row = await env.SHARE_DB.prepare(
+		"SELECT user_id FROM games WHERE game_id = ?",
+	)
+		.bind(gameId)
+		.first<{ user_id: string }>();
+	// Don't leak existence: 404 covers both "no game" and "not yours".
+	if (!row || row.user_id !== userId) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+
+	if ((await countPatchesSince(env.SHARE_DB, userId)) >= PER_USER_PATCH_PER_HOUR) {
+		return errorResponse(
+			"Per-user toggle limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_USER",
+		);
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = await request.json();
+	} catch {
+		return errorResponse("Invalid JSON body", 400, cors, "INVALID_JSON");
+	}
+	const validation = v.safeParse(GamePatchSchema, parsed);
+	if (!validation.success) {
+		return errorResponse(
+			`Invalid body: ${validation.issues[0]?.message ?? "unknown"}`,
+			400,
+			cors,
+			"INVALID_BODY",
+		);
+	}
+	const { is_public } = validation.output;
+
+	await env.SHARE_DB.prepare(
+		"UPDATE games SET is_public = ?, updated_at = datetime('now') WHERE game_id = ?",
+	)
+		.bind(is_public ? 1 : 0, gameId)
+		.run();
+
+	const ip = request.headers.get("CF-Connecting-IP");
+	try {
+		await env.SHARE_DB.prepare(
+			`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+			 VALUES ('visibility_change', ?, ?, ?, ?)`,
+		)
+			.bind(gameId, userId, ip, JSON.stringify({ is_public }))
+			.run();
+	} catch (e) {
+		console.error("Failed to log visibility_change event:", e);
+	}
+
+	return jsonResponse({ game_id: gameId, is_public }, 200, cors);
 }
 
 export async function handleGameDelete(

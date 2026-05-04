@@ -4,9 +4,17 @@ import { sveltekit } from "@sveltejs/kit/vite";
 // @ts-expect-error process is a nodejs global
 const host = process.env.TAURI_DEV_HOST;
 
+// @ts-expect-error process is a nodejs global
+const buildTarget = process.env.BUILD_TARGET ?? "tauri";
+
 // https://vite.dev/config/
 export default defineConfig(async () => ({
 	plugins: [sveltekit()],
+
+	// Static define so layout-level `ssr` toggles dead-code-eliminate per target.
+	define: {
+		__BUILD_TARGET__: JSON.stringify(buildTarget),
+	},
 
 	// Vite options tailored for Tauri development and only applied in `tauri dev` or `tauri build`
 	//

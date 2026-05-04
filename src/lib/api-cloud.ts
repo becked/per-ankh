@@ -77,16 +77,24 @@ export class DuplicateUploadError extends ApiError {
 export type FetchLike = typeof fetch;
 export interface CallOpts {
 	fetch?: FetchLike;
+	// Explicit Cookie header for server-side load() calls in dev (where
+	// localhost:5173 ↔ localhost:8787 isn't same-eTLD+1, so SvelteKit's
+	// event.fetch won't auto-forward). Production uses the auto-forward
+	// path between per-ankh.app and api.per-ankh.app.
+	cookie?: string;
 }
 
 async function request(
 	path: string,
 	init: RequestInit & CallOpts = {},
 ): Promise<Response> {
-	const { fetch: customFetch, ...rest } = init;
+	const { fetch: customFetch, cookie, ...rest } = init;
 	const f = customFetch ?? fetch;
+	const headers = new Headers(rest.headers);
+	if (cookie) headers.set("Cookie", cookie);
 	const res = await f(`${API_BASE}${path}`, {
 		...rest,
+		headers,
 		credentials: "include",
 	});
 
@@ -138,17 +146,22 @@ async function postJson<T>(
 	return res.json() as Promise<T>;
 }
 
+export interface CallbackResponse extends UserMe {
+	// Server-validated post-login destination. Always a same-origin path.
+	next: string;
+}
+
 export const cloudApi = {
 	// --- Auth ---
-	discordStart: (redirectUri: string, opts?: CallOpts) =>
+	discordStart: (redirectUri: string, next: string | null, opts?: CallOpts) =>
 		postJson<{ authorize_url: string }>(
 			"/auth/discord/start",
-			{ redirect_uri: redirectUri },
+			{ redirect_uri: redirectUri, next: next ?? undefined },
 			opts,
 		),
 
 	discordCallback: (code: string, state: string, redirectUri: string, opts?: CallOpts) =>
-		postJson<UserMe>(
+		postJson<CallbackResponse>(
 			"/auth/discord/callback",
 			{ code, state, redirect_uri: redirectUri },
 			opts,
@@ -174,9 +187,47 @@ export const cloudApi = {
 		return res.json() as Promise<GameListResponse>;
 	},
 
-	getGame: async (id: string, opts?: CallOpts): Promise<FullGameData> => {
+	// Owner GET — returns the blob with an `is_public` flag injected by the
+	// Worker so the visibility toggle has its initial state. The `is_public`
+	// field is server-supplied metadata, not part of the parser's output.
+	getGame: async (
+		id: string,
+		opts?: CallOpts,
+	): Promise<FullGameData & { is_public?: boolean }> => {
 		const res = await request(`/games/${id}`, opts);
+		return res.json() as Promise<FullGameData & { is_public?: boolean }>;
+	},
+
+	// Anonymous public read — no credentials, no auto-redirect to login.
+	// Used as a fallback when getGame() returns 401 (the user isn't signed in
+	// or doesn't own the game). 401 from this path means the game is
+	// genuinely private; 404 means it doesn't exist.
+	getPublicGame: async (id: string, opts?: CallOpts): Promise<FullGameData> => {
+		const f = opts?.fetch ?? fetch;
+		const headers = new Headers();
+		// No credentials: include — anonymous read.
+		const res = await f(`${API_BASE}/games/${id}`, { headers });
+		if (res.status === 401) throw new UnauthorizedError();
+		if (res.status === 404)
+			throw new ApiError(404, "NOT_FOUND", "Game not found");
+		if (!res.ok) {
+			throw new ApiError(res.status, null, res.statusText);
+		}
 		return res.json() as Promise<FullGameData>;
+	},
+
+	toggleVisibility: async (
+		id: string,
+		isPublic: boolean,
+		opts?: CallOpts,
+	): Promise<{ game_id: string; is_public: boolean }> => {
+		const res = await request(`/games/${id}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ is_public: isPublic }),
+		});
+		return res.json() as Promise<{ game_id: string; is_public: boolean }>;
 	},
 
 	uploadGame: async (

@@ -2,6 +2,7 @@
 	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
 	import { cloudApi, ApiError } from "$lib/api-cloud";
+	import { safeNext } from "$lib/utils/safe-next";
 
 	type Status =
 		| { kind: "loading" }
@@ -30,8 +31,11 @@
 		try {
 			const me = await cloudApi.discordCallback(code, state, redirectUri);
 			status = { kind: "success", displayName: me.display_name };
-			// Brief pause so the user sees the confirmation, then dashboard.
-			setTimeout(() => goto("/dashboard", { replaceState: true }), 500);
+			// Use the server-validated `next` from OAuthPending. safeNext is
+			// defense-in-depth in case the worker is from before the field
+			// was introduced and `next` comes back undefined.
+			const target = safeNext(me.next);
+			setTimeout(() => goto(target, { replaceState: true }), 500);
 		} catch (err) {
 			const message =
 				err instanceof ApiError

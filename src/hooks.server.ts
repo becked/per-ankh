@@ -1,0 +1,41 @@
+// Security headers emitted on every SSR'd response.
+//
+// CSP is configured separately via `kit.csp` in svelte.config.js so
+// SvelteKit can inject hashes for its inline hydration script. Other
+// hardening — XFO, Referrer-Policy, Permissions-Policy, X-Content-Type-
+// Options — applies regardless of the request type.
+//
+// This hook only runs under `adapter-cloudflare`. The static (Tauri)
+// build doesn't invoke server hooks; the desktop app has its own
+// security model via Tauri's CSP config in tauri.conf.json.
+
+import type { Handle } from "@sveltejs/kit";
+
+// Headers from server-side fetches in load() that we need to read in
+// our API client. By default SvelteKit filters all response headers from
+// `event.fetch` for security (don't leak Set-Cookie etc. to the client).
+// We need content-type so the request() helper in api-cloud.ts can
+// distinguish JSON error bodies from text. Cache-Control is forwarded so
+// the browser respects upstream cache hints when the page is hydrated.
+const ALLOWED_RESPONSE_HEADERS = new Set(["content-type", "cache-control"]);
+
+export const handle: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event, {
+		filterSerializedResponseHeaders: (name) =>
+			ALLOWED_RESPONSE_HEADERS.has(name.toLowerCase()),
+	});
+
+	response.headers.set("X-Content-Type-Options", "nosniff");
+	// Block iframe embedding entirely. Public game cards work without
+	// iframes (Discord/Slack/Twitter scrape OG tags then render their own
+	// preview). If embed support becomes desirable later, switch to a
+	// `frame-ancestors` allowlist.
+	response.headers.set("X-Frame-Options", "DENY");
+	response.headers.set("Referrer-Policy", "strict-origin-when-cross-origin");
+	response.headers.set(
+		"Permissions-Policy",
+		"camera=(), microphone=(), geolocation=()",
+	);
+
+	return response;
+};
