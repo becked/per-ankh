@@ -1,6 +1,10 @@
 {
 	"schemaVersion": 1,
 	"implemented": [
+		"character_marriages",
+		"character_relationships",
+		"character_stats",
+		"character_traits",
 		"characters",
 		"cities",
 		"city_culture",

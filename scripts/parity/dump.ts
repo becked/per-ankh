@@ -24,6 +24,16 @@ import type { ParityConfig } from "./types.js";
 import { extractXmlFromZip } from "../../src/lib/parser/extract-zip.js";
 import { parseSaveXml } from "../../src/lib/parser/parse-xml.js";
 import {
+	parseCharacterMarriages,
+	parseCharacterRelationships,
+	parseCharacterStats,
+	parseCharacterTraits,
+	type CharacterMarriage,
+	type CharacterRelationship,
+	type CharacterStat,
+	type CharacterTrait,
+} from "../../src/lib/parser/parsers/character-data.js";
+import {
 	parseCharacters,
 	type Character,
 } from "../../src/lib/parser/parsers/characters.js";
@@ -142,6 +152,14 @@ function parseArgs(argv: string[]): CliArgs {
 type ParserFn = (root: Record<string, unknown>) => Record<string, unknown>[];
 
 const PARSERS: Record<string, ParserFn> = {
+	character_marriages: (root) =>
+		parseCharacterMarriages(root).map(characterMarriageToRow),
+	character_relationships: (root) =>
+		parseCharacterRelationships(root).map(characterRelationshipToRow),
+	character_stats: (root) =>
+		parseCharacterStats(root).map(characterStatToRow),
+	character_traits: (root) =>
+		parseCharacterTraits(root).map(characterTraitToRow),
 	characters: (root) => parseCharacters(root).map(characterToRow),
 	cities: (root) => parseCities(root).map(cityToRow),
 	city_culture: (root) => parseCityCulture(root).map(cityCultureToRow),
@@ -206,6 +224,47 @@ function characterToRow(c: Character): Record<string, unknown> {
 		// seed is i64 in Rust; emit as JSON string when set, null when unset.
 		// Per scripts/parity/dump.ts I64_STRING_FIELDS convention.
 		seed: c.seed,
+	};
+}
+
+function characterStatToRow(s: CharacterStat): Record<string, unknown> {
+	return {
+		character_xml_id: s.characterXmlId,
+		stat_name: s.statName,
+		stat_value: s.statValue,
+	};
+}
+
+function characterTraitToRow(t: CharacterTrait): Record<string, unknown> {
+	return {
+		character_xml_id: t.characterXmlId,
+		trait_name: t.traitName,
+		acquired_turn: t.acquiredTurn,
+		removed_turn: t.removedTurn,
+	};
+}
+
+function characterRelationshipToRow(
+	r: CharacterRelationship,
+): Record<string, unknown> {
+	return {
+		character_xml_id: r.characterXmlId,
+		related_character_xml_id: r.relatedCharacterXmlId,
+		relationship_type: r.relationshipType,
+		relationship_value: r.relationshipValue,
+		started_turn: r.startedTurn,
+		ended_turn: r.endedTurn,
+	};
+}
+
+function characterMarriageToRow(
+	m: CharacterMarriage,
+): Record<string, unknown> {
+	return {
+		character_xml_id: m.characterXmlId,
+		spouse_xml_id: m.spouseXmlId,
+		married_turn: m.marriedTurn,
+		divorced_turn: m.divorcedTurn,
 	};
 }
 

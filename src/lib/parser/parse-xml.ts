@@ -27,22 +27,14 @@ const ALWAYS_ARRAY_TAGS = new Set([
 	"Tribe",
 	"Unit",
 	"DiplomacyRelation",
-	// Per-Player event collections
+	// Per-Player event collections (events port not yet landed; verified
+	// against rust source when porting that module).
 	"LogData",
 	"GoalData",
-	// Character_data sub-collections
-	"TraitTurn",
-	"RelationshipData",
-	"SpouseData",
 	// Cities: BuildQueue / CompletedBuild children
 	"QueueInfo",
-	// Tiles sub-collections
-	"TileChange",
-	"TileVisibility",
-	// Units sub-collections
-	"UnitPromotion",
-	"UnitEffect",
-	"UnitFamily",
+	// Character_data: <RelationshipList> children
+	"RelationshipData",
 ]);
 
 const xmlParser = new XMLParser({
