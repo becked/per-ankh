@@ -24,6 +24,10 @@ import type { ParityConfig } from "./types.js";
 import { extractXmlFromZip } from "../../src/lib/parser/extract-zip.js";
 import { parseSaveXml } from "../../src/lib/parser/parse-xml.js";
 import {
+	parseCharacters,
+	type Character,
+} from "../../src/lib/parser/parsers/characters.js";
+import {
 	parseFamilies,
 	type Family,
 } from "../../src/lib/parser/parsers/families.js";
@@ -96,11 +100,46 @@ function parseArgs(argv: string[]): CliArgs {
 type ParserFn = (root: Record<string, unknown>) => Record<string, unknown>[];
 
 const PARSERS: Record<string, ParserFn> = {
+	characters: (root) => parseCharacters(root).map(characterToRow),
 	families: (root) => parseFamilies(root).map(familyToRow),
 	players: (root) => parsePlayers(root).map(playerToRow),
 	religions: (root) => parseReligions(root).map(religionToRow),
 	tribes: (root) => parseTribes(root).map(tribeToRow),
 };
+
+function characterToRow(c: Character): Record<string, unknown> {
+	return {
+		xml_id: c.xmlId,
+		first_name: c.firstName,
+		gender: c.gender,
+		player_xml_id: c.playerXmlId,
+		tribe: c.tribe,
+		family: c.family,
+		nation: c.nation,
+		religion: c.religion,
+		birth_turn: c.birthTurn,
+		death_turn: c.deathTurn,
+		death_reason: c.deathReason,
+		birth_father_xml_id: c.birthFatherXmlId,
+		birth_mother_xml_id: c.birthMotherXmlId,
+		birth_city_xml_id: c.birthCityXmlId,
+		cognomen: c.cognomen,
+		archetype: c.archetype,
+		portrait: c.portrait,
+		xp: c.xp,
+		level: c.level,
+		is_royal: c.isRoyal,
+		is_infertile: c.isInfertile,
+		became_leader_turn: c.becameLeaderTurn,
+		abdicated_turn: c.abdicatedTurn,
+		was_religion_head: c.wasReligionHead,
+		was_family_head: c.wasFamilyHead,
+		nation_joined_turn: c.nationJoinedTurn,
+		// seed is i64 in Rust; emit as JSON string when set, null when unset.
+		// Per scripts/parity/dump.ts I64_STRING_FIELDS convention.
+		seed: c.seed,
+	};
+}
 
 function familyToRow(f: Family): Record<string, unknown> {
 	return {
