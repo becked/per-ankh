@@ -2,11 +2,19 @@
 	// Cloud upload flow:
 	//   1. User picks a save .zip
 	//   2. Web Worker parses → FullGameData + rawZip (transferable)
-	//   3. If ≥2 humans, show player picker (pre-checked from prior uploads
-	//      via cloudApi.getMyOnlineIds()); else auto-skip with the sole human.
+	//   3. Picker is always shown (even for single-human saves) — radio
+	//      buttons over the human players plus a "None / observer" option.
+	//      Default selection: a human whose online_id is in the user's
+	//      knownOnlineIds set; otherwise null (observer).
 	//   4. Gzip the FullGameData JSON in-browser (CompressionStream).
 	//   5. POST multipart to /v1/games. On 201, navigate to /games/{id}.
 	//   6. On 409 (DuplicateUploadError), surface link to existing game.
+	//
+	// "Observer mode" (`uploaderIndex === null`) means the uploader has no
+	// claim on any player — covers tournament admins archiving matches and
+	// users uploading a friend's save. Server records games.user_nation
+	// and games.user_won as NULL, no is_uploader=TRUE rows, no online_id
+	// captured into user_online_ids.
 
 	import { goto } from "$app/navigation";
 	import ParserWorker from "$lib/parser/worker?worker";
@@ -18,6 +26,8 @@
 		DuplicateUploadError,
 	} from "$lib/api-cloud";
 
+	const OBSERVER: null = null;
+
 	type Status =
 		| { kind: "idle" }
 		| { kind: "parsing"; phase: string; percent: number }
@@ -26,7 +36,7 @@
 				data: FullGameData;
 				rawZip: ArrayBuffer;
 				humans: PlayerRosterEntry[];
-				selected: Set<number>;
+				selected: number | null;
 				fileName: string;
 		  }
 		| { kind: "uploading"; fileName: string }
@@ -45,8 +55,8 @@
 	}
 
 	// Fetch the user's known online_ids in the background. The picker reads
-	// this set when it opens; if the fetch hasn't finished by then, no rows
-	// are pre-checked (acceptable degradation — user just clicks).
+	// this set when it opens; if the fetch hasn't finished by then, the
+	// default just falls back to "observer" (acceptable degradation).
 	async function refreshKnownOnlineIds() {
 		try {
 			const ids = await cloudApi.getMyOnlineIds();
@@ -92,49 +102,50 @@
 		);
 	}
 
+	// Pick a sensible default: if exactly one human's online_id matches the
+	// uploader's known ids, pre-select that human. Anything else (zero
+	// matches, or ambiguous multiple matches) defaults to observer so we
+	// never make an auto-claim that's wrong.
+	function defaultSelection(humans: PlayerRosterEntry[]): number | null {
+		const matches = humans.filter(
+			(h) => h.online_id && knownOnlineIds.has(h.online_id),
+		);
+		return matches.length === 1 ? matches[0].player_index : OBSERVER;
+	}
+
 	function onParsed(data: FullGameData, rawZip: ArrayBuffer, fileName: string) {
 		const humans = data.player_roster.filter((p) => p.is_human);
-
-		if (humans.length === 0) {
-			status = {
-				kind: "error",
-				message: "No human players found in this save",
-			};
-			return;
-		}
-
-		if (humans.length === 1) {
-			// Auto-skip picker for singleplayer. Sole human is the uploader.
-			void doUpload(data, rawZip, fileName, [humans[0].player_index]);
-			return;
-		}
-
-		// Multi-human: pre-check rows whose online_id matches any of ours.
-		const selected = new Set<number>(
-			humans
-				.filter((h) => h.online_id && knownOnlineIds.has(h.online_id))
-				.map((h) => h.player_index),
-		);
-		status = { kind: "picker", data, rawZip, humans, selected, fileName };
+		// Note: we don't error on humans.length === 0 anymore — an all-AI
+		// save is technically valid for archival upload (observer mode).
+		status = {
+			kind: "picker",
+			data,
+			rawZip,
+			humans,
+			selected: defaultSelection(humans),
+			fileName,
+		};
 	}
 
-	function togglePicker(playerIndex: number) {
+	function selectPlayer(value: number | null) {
 		if (status.kind !== "picker") return;
-		const next = new Set(status.selected);
-		if (next.has(playerIndex)) next.delete(playerIndex);
-		else next.add(playerIndex);
-		status = { ...status, selected: next };
+		status = { ...status, selected: value };
 	}
+
+	const submitLabel = $derived.by(() => {
+		if (status.kind !== "picker") return "";
+		// Local copy so the .find() closure keeps the narrowed type.
+		const picker = status;
+		if (picker.selected === OBSERVER) return "Upload as observer";
+		const human = picker.humans.find(
+			(h) => h.player_index === picker.selected,
+		);
+		return human ? `Upload as ${human.player_name}` : "Upload";
+	});
 
 	async function submitPicker() {
 		if (status.kind !== "picker") return;
-		if (status.selected.size === 0) return;
-		await doUpload(
-			status.data,
-			status.rawZip,
-			status.fileName,
-			[...status.selected],
-		);
+		await doUpload(status.data, status.rawZip, status.fileName, status.selected);
 	}
 
 	async function gzipJson(obj: unknown): Promise<Blob> {
@@ -149,7 +160,7 @@
 		data: FullGameData,
 		rawZip: ArrayBuffer,
 		fileName: string,
-		uploaderIndexes: number[],
+		uploaderIndex: number | null,
 	) {
 		status = { kind: "uploading", fileName };
 
@@ -157,13 +168,13 @@
 		const form = new FormData();
 		form.append("data", blobGz, "game.json.gz");
 		form.append("save", new Blob([rawZip], { type: "application/zip" }), fileName);
-		form.append("uploader_player_indexes", JSON.stringify(uploaderIndexes));
+		form.append("uploader_player_index", JSON.stringify(uploaderIndex));
 
 		try {
 			const res = await cloudApi.uploadGame(form);
 			status = { kind: "done", gameId: res.game_id };
-			// Refresh known ids — we just learned a new one if the picked
-			// player had an online_id.
+			// Refresh known ids — we just learned one if the picked human
+			// had an online_id (observer uploads don't change the set).
 			void refreshKnownOnlineIds();
 			await goto(`/games/${res.game_id}`);
 		} catch (err) {
@@ -203,17 +214,19 @@
 	{:else if status.kind === "picker"}
 		<h2 class="mb-1 text-lg font-bold text-tan">Which player is you?</h2>
 		<p class="mb-4 text-xs text-brown">
-			This save has multiple human players. Pick the player(s) that
-			belong to your account. We'll remember and pre-check next time.
+			Pick the player that belongs to your account, or "None" if
+			you're uploading on someone else's behalf (e.g. archiving a
+			tournament match or a friend's game).
 		</p>
 		<ul class="mb-4 space-y-2">
 			{#each status.humans as human (human.player_index)}
 				<li>
 					<label class="flex cursor-pointer items-center gap-3 rounded border border-brown p-2 hover:bg-brown/30">
 						<input
-							type="checkbox"
-							checked={status.selected.has(human.player_index)}
-							onchange={() => togglePicker(human.player_index)}
+							type="radio"
+							name="uploader-pick"
+							checked={status.selected === human.player_index}
+							onchange={() => selectPlayer(human.player_index)}
 						/>
 						<div class="flex-1 text-sm text-tan">
 							<div class="font-bold">{human.player_name}</div>
@@ -229,6 +242,23 @@
 					</label>
 				</li>
 			{/each}
+			<li>
+				<label class="flex cursor-pointer items-center gap-3 rounded border border-dashed border-brown p-2 hover:bg-brown/30">
+					<input
+						type="radio"
+						name="uploader-pick"
+						checked={status.selected === null}
+						onchange={() => selectPlayer(null)}
+					/>
+					<div class="flex-1 text-sm text-tan">
+						<div class="font-bold">None — I'm just uploading this</div>
+						<div class="text-xs text-brown">
+							No player attribution. Game appears in your library
+							as "Observed".
+						</div>
+					</div>
+				</label>
+			</li>
 		</ul>
 		<div class="flex justify-between">
 			<button
@@ -241,10 +271,9 @@
 			<button
 				type="button"
 				onclick={submitPicker}
-				disabled={status.selected.size === 0}
-				class="rounded bg-orange px-4 py-1 text-sm font-bold text-white hover:bg-orange/80 disabled:opacity-50"
+				class="rounded bg-orange px-4 py-1 text-sm font-bold text-white hover:bg-orange/80"
 			>
-				Upload
+				{submitLabel}
 			</button>
 		</div>
 	{:else if status.kind === "uploading"}

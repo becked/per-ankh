@@ -171,13 +171,18 @@ export type PlayerRosterEntry = v.InferOutput<typeof PlayerRosterEntrySchema>;
 
 // ----- Upload form metadata -----
 //
-// `uploader_player_indexes` is sent as a JSON string in the multipart form
-// (form fields are strings). We parse it before validating.
+// `uploader_player_index` is sent as a JSON string in the multipart form
+// (form fields are strings) — either a non-negative integer naming a human
+// player from `player_roster`, or `null` for "observer mode" (uploading on
+// someone else's behalf, e.g. a tournament admin or archival upload).
+//
+// The invariant is: an uploader is at most one human. Earlier drafts
+// allowed an array of indexes, but a single user can't legitimately *be*
+// multiple players, and the multi-pick interpretation made games.user_nation
+// (derived from the first picked nation) ambiguous.
 
-export const UploaderPlayerIndexesSchema = v.pipe(
-	v.array(v.pipe(v.number(), v.integer(), v.minValue(0))),
-	v.minLength(1, "Must select at least one player"),
-	v.maxLength(MAX_PLAYERS),
+export const UploaderPlayerIndexSchema = v.nullable(
+	v.pipe(v.number(), v.integer(), v.minValue(0)),
 );
 
-export type UploaderPlayerIndexes = v.InferOutput<typeof UploaderPlayerIndexesSchema>;
+export type UploaderPlayerIndex = v.InferOutput<typeof UploaderPlayerIndexSchema>;

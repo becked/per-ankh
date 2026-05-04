@@ -49,7 +49,11 @@
 								</div>
 							</div>
 							<div class="text-right text-xs">
-								{#if game.user_won === true}
+								{#if game.user_nation === null}
+									<span class="rounded bg-brown px-2 py-1 font-bold text-tan">
+										OBSERVED
+									</span>
+								{:else if game.user_won === true}
 									<span class="rounded bg-green-700 px-2 py-1 font-bold text-white">
 										WON
 									</span>

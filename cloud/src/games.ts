@@ -14,7 +14,7 @@ import { nanoid } from "nanoid";
 import * as v from "valibot";
 import {
 	FullGameDataSchema,
-	UploaderPlayerIndexesSchema,
+	UploaderPlayerIndexSchema,
 	type FullGameData,
 	type PlayerRosterEntry,
 } from "./schemas/game";
@@ -97,14 +97,14 @@ interface GameRowInputs {
 	blob: FullGameData;
 	fileHash: string;
 	blobSize: number;
-	uploaderIndexes: number[];
+	uploaderIndex: number | null;
 }
 
 function buildGameRow(inp: GameRowInputs): {
 	sql: string;
 	bindings: unknown[];
 } {
-	const { gameId, userId, blob, fileHash, blobSize, uploaderIndexes } = inp;
+	const { gameId, userId, blob, fileHash, blobSize, uploaderIndex } = inp;
 	const md = blob.match_metadata;
 	const gd = blob.game_details as {
 		winner_name: string | null;
@@ -113,13 +113,16 @@ function buildGameRow(inp: GameRowInputs): {
 	const winner = md.winner;
 	const victoryType = winner?.victory_type ?? null;
 
-	// uploader's nation: nation of the first picked player (if multiple,
-	// the first picked).
+	// In observer mode (uploaderIndex === null) user_nation and user_won are
+	// both NULL — the uploader has no claim on the game's outcome.
 	const roster = blob.player_roster as PlayerRosterEntry[];
-	const uploader = roster.find((p) => uploaderIndexes.includes(p.player_index));
-	const userNation = uploader?.nation ?? null;
-	const userWon =
-		winner && uploaderIndexes.includes(winner.winner_player_xml_id);
+	let userNation: string | null = null;
+	let userWon: boolean | null = null;
+	if (uploaderIndex !== null) {
+		const uploader = roster.find((p) => p.player_index === uploaderIndex);
+		userNation = uploader?.nation ?? null;
+		userWon = winner ? winner.winner_player_xml_id === uploaderIndex : null;
+	}
 
 	return {
 		sql: `INSERT INTO games (
@@ -146,7 +149,7 @@ function buildGameRow(inp: GameRowInputs): {
 interface SummaryRowInputs {
 	gameId: string;
 	roster: PlayerRosterEntry[];
-	uploaderIndexes: number[];
+	uploaderIndex: number | null;
 	winnerIndex: number | null;
 }
 
@@ -154,7 +157,7 @@ function buildSummaryStatements(
 	db: D1Database,
 	inp: SummaryRowInputs,
 ): D1PreparedStatement[] {
-	const { gameId, roster, uploaderIndexes, winnerIndex } = inp;
+	const { gameId, roster, uploaderIndex, winnerIndex } = inp;
 	const stmt = db.prepare(
 		`INSERT INTO player_summaries (
 			game_id, player_index, player_name, nation, is_human, is_uploader, is_winner
@@ -167,7 +170,7 @@ function buildSummaryStatements(
 			p.player_name,
 			p.nation,
 			p.is_human ? 1 : 0,
-			uploaderIndexes.includes(p.player_index) ? 1 : 0,
+			uploaderIndex !== null && p.player_index === uploaderIndex ? 1 : 0,
 			winnerIndex !== null && p.player_index === winnerIndex ? 1 : 0,
 		),
 	);
@@ -393,7 +396,7 @@ export async function handleGameUpload(
 	// workers-types DOM lib subset.
 	const dataPart = form.get("data");
 	const savePart = form.get("save");
-	const indexesRaw = form.get("uploader_player_indexes");
+	const indexRaw = form.get("uploader_player_index");
 	const isBlobLike = (v: unknown): v is Blob =>
 		!!v && typeof v === "object" && typeof (v as { arrayBuffer?: unknown }).arrayBuffer === "function";
 
@@ -403,10 +406,10 @@ export async function handleGameUpload(
 	if (!isBlobLike(savePart)) {
 		return errorResponse("Missing 'save' part", 400, cors, "MISSING_SAVE");
 	}
-	if (typeof indexesRaw !== "string") {
+	if (typeof indexRaw !== "string") {
 		return errorResponse(
-			"Missing 'uploader_player_indexes' field",
-			400, cors, "MISSING_INDEXES",
+			"Missing 'uploader_player_index' field",
+			400, cors, "MISSING_INDEX",
 		);
 	}
 	const dataBlob = dataPart;
@@ -449,38 +452,38 @@ export async function handleGameUpload(
 	}
 	const blob = validation.output;
 
-	// Parse + validate uploader indexes
-	let indexes: number[];
+	// Parse + validate uploader index. JSON-encoded so we can carry the
+	// `null` sentinel for observer mode (form fields are strings).
+	let indexParsed: unknown;
 	try {
-		indexes = JSON.parse(indexesRaw);
+		indexParsed = JSON.parse(indexRaw);
 	} catch {
 		return errorResponse(
-			"uploader_player_indexes is not valid JSON",
-			400, cors, "INVALID_INDEXES_JSON",
+			"uploader_player_index is not valid JSON",
+			400, cors, "INVALID_INDEX_JSON",
 		);
 	}
-	const indexValidation = v.safeParse(UploaderPlayerIndexesSchema, indexes);
+	const indexValidation = v.safeParse(UploaderPlayerIndexSchema, indexParsed);
 	if (!indexValidation.success) {
 		return errorResponse(
-			`uploader_player_indexes: ${indexValidation.issues[0]?.message ?? "invalid"}`,
-			400, cors, "INVALID_INDEXES",
+			`uploader_player_index: ${indexValidation.issues[0]?.message ?? "invalid"}`,
+			400, cors, "INVALID_INDEX",
 		);
 	}
 
-	// Validate every index references a human player in the roster.
+	// If a player was named, it must reference a human in the roster.
+	// `null` = observer upload, no claim on any player.
 	const roster = blob.player_roster as PlayerRosterEntry[];
 	const humansByIndex = new Map<number, PlayerRosterEntry>(
 		roster.filter((p) => p.is_human).map((p) => [p.player_index, p]),
 	);
-	for (const idx of indexValidation.output) {
-		if (!humansByIndex.has(idx)) {
-			return errorResponse(
-				`Player index ${idx} not found among humans`,
-				400, cors, "UNKNOWN_PLAYER_INDEX",
-			);
-		}
+	const uploaderIndex = indexValidation.output;
+	if (uploaderIndex !== null && !humansByIndex.has(uploaderIndex)) {
+		return errorResponse(
+			`Player index ${uploaderIndex} not found among humans`,
+			400, cors, "UNKNOWN_PLAYER_INDEX",
+		);
 	}
-	const uploaderIndexes = indexValidation.output;
 
 	// Server-side hash of the raw ZIP. Don't trust client.
 	const rawZip = await saveBlob.arrayBuffer();
@@ -528,10 +531,10 @@ export async function handleGameUpload(
 	// D1 inserts as a single transactional batch
 	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
 	const gameRow = buildGameRow({
-		gameId, userId, blob, fileHash, blobSize: dataBlob.size, uploaderIndexes,
+		gameId, userId, blob, fileHash, blobSize: dataBlob.size, uploaderIndex,
 	});
 	const summaryStmts = buildSummaryStatements(env.SHARE_DB, {
-		gameId, roster, uploaderIndexes, winnerIndex,
+		gameId, roster, uploaderIndex, winnerIndex,
 	});
 	const gptStmts = buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob);
 	const techStmts = buildTechEventStatements(env.SHARE_DB, gameId, blob);
@@ -563,16 +566,17 @@ export async function handleGameUpload(
 		return errorResponse("Database write failed", 500, cors, "D1_FAILED");
 	}
 
-	// Auto-link OnlineIDs from picked humans
-	const pickedOnlineIds = uploaderIndexes
-		.map((idx) => humansByIndex.get(idx)?.online_id)
-		.filter((id): id is string => typeof id === "string" && id !== "");
-	if (pickedOnlineIds.length > 0) {
-		try {
-			await captureOnlineIds(env, userId, pickedOnlineIds);
-		} catch (e) {
-			// Non-fatal — uploads still succeed even if linking fails.
-			console.error("captureOnlineIds failed:", e);
+	// Auto-link the picked human's OnlineID. Observer uploads (uploaderIndex
+	// null) capture nothing — they shouldn't pollute the user's known-id set.
+	if (uploaderIndex !== null) {
+		const pickedOnlineId = humansByIndex.get(uploaderIndex)?.online_id;
+		if (typeof pickedOnlineId === "string" && pickedOnlineId !== "") {
+			try {
+				await captureOnlineIds(env, userId, [pickedOnlineId]);
+			} catch (e) {
+				// Non-fatal — uploads still succeed even if linking fails.
+				console.error("captureOnlineIds failed:", e);
+			}
 		}
 	}
 
@@ -590,7 +594,7 @@ export async function handleGameUpload(
 					blob_size: dataBlob.size,
 					decompressed_size: decompressed.byteLength,
 					zip_size: rawZip.byteLength,
-					uploader_indexes: uploaderIndexes,
+					uploader_index: uploaderIndex,
 				}),
 			)
 			.run();
