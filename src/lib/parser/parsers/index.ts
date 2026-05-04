@@ -100,6 +100,7 @@ import {
 	type FullGameData,
 	type MemoryInfo,
 	type PlayerGoalInfo,
+	type PlayerNationEntry,
 	type PlayerResourceInfo,
 	type ReligionOpinionEntry,
 	type TileOwnershipEntry,
@@ -246,6 +247,10 @@ export function extractAllGameData(
 	const tileOwnershipWire: TileOwnershipEntry[] = tileOwnership.map(
 		(o) => tileOwnershipToRow(o) as unknown as TileOwnershipEntry,
 	);
+	const playerNations: PlayerNationEntry[] = players.map((p) => ({
+		player_xml_id: p.xmlId,
+		nation: p.nation,
+	}));
 
 	return {
 		version: 2,
@@ -269,6 +274,7 @@ export function extractAllGameData(
 		player_wonders: playerWonders,
 
 		tile_ownership_history: tileOwnershipWire,
+		player_nations: playerNations,
 		characters: charactersWire,
 		character_traits: characterTraitsWire,
 		character_relationships: characterRelationshipsWire,

@@ -272,6 +272,19 @@ export interface TileOwnershipEntry {
 	owner_player_xml_id: number | null;
 }
 
+/**
+ * Player xml_id → nation lookup, sparse. Cloud-only sidecar consumed by the
+ * runtime map-turn-slider reconstruction (see
+ * `src/lib/game-detail/reconstruct-map-tiles.ts`) to resolve
+ * `tile_ownership_history.owner_player_xml_id` → owning nation. The wire
+ * `PlayerInfo` does not carry xml_id (it's a desktop-shared type), so this
+ * sidecar fills the gap.
+ */
+export interface PlayerNationEntry {
+	player_xml_id: number;
+	nation: string | null;
+}
+
 // ---------- The envelope ----------
 
 export interface FullGameData {
@@ -299,6 +312,7 @@ export interface FullGameData {
 
 	// New cloud-only fields (spec §3 lines 790–806).
 	tile_ownership_history: TileOwnershipEntry[];
+	player_nations: PlayerNationEntry[];
 	characters: CharacterInfo[];
 	character_traits: CharacterTraitInfo[];
 	character_relationships: CharacterRelationshipInfo[];
@@ -322,4 +336,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.0.0";
+export const PARSER_VERSION = "2.1.0";
