@@ -60,6 +60,14 @@ import {
 	type Religion,
 } from "../../src/lib/parser/parsers/religions.js";
 import {
+	parseTiles,
+	parseTileChanges,
+	parseTileVisibility,
+	type Tile,
+	type TileChange,
+	type TileVisibility,
+} from "../../src/lib/parser/parsers/tiles.js";
+import {
 	parseTribes,
 	type Tribe,
 } from "../../src/lib/parser/parsers/tribes.js";
@@ -137,6 +145,10 @@ const PARSERS: Record<string, ParserFn> = {
 	families: (root) => parseFamilies(root).map(familyToRow),
 	players: (root) => parsePlayers(root).map(playerToRow),
 	religions: (root) => parseReligions(root).map(religionToRow),
+	tile_changes: (root) => parseTileChanges(root).map(tileChangeToRow),
+	tile_visibility: (root) =>
+		parseTileVisibility(root).map(tileVisibilityToRow),
+	tiles: (root) => parseTiles(root).map(tileToRow),
 	tribes: (root) => parseTribes(root).map(tribeToRow),
 };
 
@@ -322,6 +334,52 @@ function religionToRow(r: Religion): Record<string, unknown> {
 		founder_player_xml_id: r.founderPlayerXmlId,
 		head_character_xml_id: r.headCharacterXmlId,
 		holy_city_xml_id: r.holyCityXmlId,
+	};
+}
+
+function tileToRow(t: Tile): Record<string, unknown> {
+	return {
+		xml_id: t.xmlId,
+		x: t.x,
+		y: t.y,
+		terrain: t.terrain,
+		height: t.height,
+		vegetation: t.vegetation,
+		river_w: t.riverW,
+		river_sw: t.riverSw,
+		river_se: t.riverSe,
+		resource: t.resource,
+		improvement: t.improvement,
+		improvement_pillaged: t.improvementPillaged,
+		improvement_disabled: t.improvementDisabled,
+		improvement_turns_left: t.improvementTurnsLeft,
+		specialist: t.specialist,
+		has_road: t.hasRoad,
+		owner_player_xml_id: t.ownerPlayerXmlId,
+		tribe_site: t.tribeSite,
+		religion: t.religion,
+		// i64 fields: pre-stringified by the parser (optI64Str).
+		// Per I64_STRING_FIELDS at top of this file.
+		init_seed: t.initSeed,
+		turn_seed: t.turnSeed,
+	};
+}
+
+function tileVisibilityToRow(v: TileVisibility): Record<string, unknown> {
+	return {
+		tile_xml_id: v.tileXmlId,
+		team_id: v.teamId,
+		revealed_turn: v.revealedTurn,
+		visible_owner_player_xml_id: v.visibleOwnerPlayerXmlId,
+	};
+}
+
+function tileChangeToRow(c: TileChange): Record<string, unknown> {
+	return {
+		tile_xml_id: c.tileXmlId,
+		turn: c.turn,
+		change_type: c.changeType,
+		new_value: c.newValue,
 	};
 }
 

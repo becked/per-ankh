@@ -125,6 +125,38 @@ export function optAttrStr(val: unknown): string | null {
 	return typeof val === "string" ? val : null;
 }
 
+const I64_MIN = -(1n << 63n);
+const I64_MAX = (1n << 63n) - 1n;
+
+/**
+ * Optional i64 field, returned as a string to avoid JS Number precision
+ * loss above 2^53. Validates format AND i64 range (-2^63 .. 2^63-1) —
+ * non-integer or out-of-range strings normalize to null, matching Rust's
+ * `opt_child_text(...).and_then(|s| s.parse::<i64>().ok())`.
+ *
+ * The range check is load-bearing for tile seeds: OW writes u64-shaped
+ * values (e.g. ~1.4e19) into `<InitSeed>` and `<TurnSeed>`, half of which
+ * exceed i64 max. Rust's parse::<i64>() rejects those (None); without the
+ * range guard, this helper would emit them as strings while Rust emits
+ * null, producing a parity diff on every overflowing seed.
+ *
+ * The parity harness emits i64 fields as JSON strings on the Rust side
+ * too (see dump_parsed.rs `I64_STRING_FIELDS`), so passing the string
+ * through unchanged gives matching dump output without ever going through
+ * Number.
+ */
+export function optI64Str(val: unknown): string | null {
+	if (typeof val !== "string" || val === "") return null;
+	if (!/^-?\d+$/.test(val)) return null;
+	try {
+		const big = BigInt(val);
+		if (big < I64_MIN || big > I64_MAX) return null;
+		return val;
+	} catch {
+		return null;
+	}
+}
+
 export function optInt(val: unknown): number | null {
 	if (val === undefined || val === null || val === "") return null;
 	const n = parseInt(String(val), 10);
