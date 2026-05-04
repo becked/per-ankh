@@ -92,3 +92,33 @@ export function parsePlayers(root: Record<string, unknown>): Player[] {
 
 	return players;
 }
+
+export function playerToRow(p: Player): Record<string, unknown> {
+	return {
+		xml_id: p.xmlId,
+		player_name: p.playerName,
+		nation: p.nation,
+		dynasty: p.dynasty,
+		team_id: p.teamId,
+		is_human: p.isHuman,
+		is_save_owner: p.isSaveOwner,
+		online_id: p.onlineId,
+		email: p.email,
+		ai_controlled_to_turn: p.aiControlledToTurn,
+		difficulty: p.difficulty,
+		last_turn_completed: p.lastTurnCompleted,
+		turn_ended: p.turnEnded,
+		legitimacy: p.legitimacy,
+		succession_gender: p.successionGender,
+		state_religion: p.stateReligion,
+		founder_character_xml_id: p.founderCharacterXmlId,
+		chosen_heir_xml_id: p.chosenHeirXmlId,
+		original_capital_city_xml_id: p.originalCapitalCityXmlId,
+		time_stockpile: p.timeStockpile,
+		tech_researching: p.techResearching,
+		ambition_delay: p.ambitionDelay,
+		tiles_purchased: p.tilesPurchased,
+		state_religion_changes: p.stateReligionChanges,
+		tribe_mercenaries_hired: p.tribeMercenariesHired,
+	};
+}

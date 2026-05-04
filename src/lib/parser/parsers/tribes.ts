@@ -38,3 +38,12 @@ export function parseTribes(root: Record<string, unknown>): Tribe[] {
 
 	return tribes;
 }
+
+export function tribeToRow(t: Tribe): Record<string, unknown> {
+	return {
+		tribe_id: t.tribeId,
+		leader_character_xml_id: t.leaderCharacterXmlId,
+		allied_player_xml_id: t.alliedPlayerXmlId,
+		religion: t.religion,
+	};
+}

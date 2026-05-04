@@ -200,3 +200,48 @@ export function parseCharacterMarriages(
 
 	return out;
 }
+
+// ---------- ToRow mappers (snake_case wire format) ----------
+
+export function characterStatToRow(s: CharacterStat): Record<string, unknown> {
+	return {
+		character_xml_id: s.characterXmlId,
+		stat_name: s.statName,
+		stat_value: s.statValue,
+	};
+}
+
+export function characterTraitToRow(
+	t: CharacterTrait,
+): Record<string, unknown> {
+	return {
+		character_xml_id: t.characterXmlId,
+		trait_name: t.traitName,
+		acquired_turn: t.acquiredTurn,
+		removed_turn: t.removedTurn,
+	};
+}
+
+export function characterRelationshipToRow(
+	r: CharacterRelationship,
+): Record<string, unknown> {
+	return {
+		character_xml_id: r.characterXmlId,
+		related_character_xml_id: r.relatedCharacterXmlId,
+		relationship_type: r.relationshipType,
+		relationship_value: r.relationshipValue,
+		started_turn: r.startedTurn,
+		ended_turn: r.endedTurn,
+	};
+}
+
+export function characterMarriageToRow(
+	m: CharacterMarriage,
+): Record<string, unknown> {
+	return {
+		character_xml_id: m.characterXmlId,
+		spouse_xml_id: m.spouseXmlId,
+		married_turn: m.marriedTurn,
+		divorced_turn: m.divorcedTurn,
+	};
+}

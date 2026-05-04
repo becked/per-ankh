@@ -79,3 +79,13 @@ function parseFamilyClasses(
 	return classes;
 }
 
+export function familyToRow(f: Family): Record<string, unknown> {
+	return {
+		family_name: f.familyName,
+		family_class: f.familyClass,
+		player_xml_id: f.playerXmlId,
+		head_character_xml_id: f.headCharacterXmlId,
+		seat_city_xml_id: f.seatCityXmlId,
+		turns_without_leader: f.turnsWithoutLeader,
+	};
+}

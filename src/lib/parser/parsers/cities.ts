@@ -395,3 +395,107 @@ export function parseCityCulture(
 
 	return out;
 }
+
+// ---------- ToRow mappers (snake_case wire format) ----------
+
+export function cityToRow(c: City): Record<string, unknown> {
+	return {
+		xml_id: c.xmlId,
+		city_name: c.cityName,
+		founded_turn: c.foundedTurn,
+		player_xml_id: c.playerXmlId,
+		tile_xml_id: c.tileXmlId,
+		family: c.family,
+		first_owner_player_xml_id: c.firstOwnerPlayerXmlId,
+		last_owner_player_xml_id: c.lastOwnerPlayerXmlId,
+		is_capital: c.isCapital,
+		citizens: c.citizens,
+		governor_xml_id: c.governorXmlId,
+		governor_turn: c.governorTurn,
+		hurry_civics_count: c.hurryCivicsCount,
+		hurry_money_count: c.hurryMoneyCount,
+		hurry_training_count: c.hurryTrainingCount,
+		hurry_population_count: c.hurryPopulationCount,
+		specialist_count: c.specialistCount,
+		growth_count: c.growthCount,
+		unit_production_count: c.unitProductionCount,
+		buy_tile_count: c.buyTileCount,
+	};
+}
+
+export function cityProductionItemToRow(
+	i: CityProductionItem,
+): Record<string, unknown> {
+	return {
+		city_xml_id: i.cityXmlId,
+		queue_position: i.queuePosition,
+		build_type: i.buildType,
+		item_type: i.itemType,
+		progress: i.progress,
+		is_repeat: i.isRepeat,
+	};
+}
+
+export function cityProjectCompletedToRow(
+	p: CityProjectCompleted,
+): Record<string, unknown> {
+	return {
+		city_xml_id: p.cityXmlId,
+		project_type: p.projectType,
+		count: p.count,
+	};
+}
+
+export function cityProjectCountToRow(
+	p: CityProjectCount,
+): Record<string, unknown> {
+	return {
+		city_xml_id: p.cityXmlId,
+		project_type: p.projectType,
+		count: p.count,
+	};
+}
+
+export function cityEnemyAgentToRow(
+	a: CityEnemyAgent,
+): Record<string, unknown> {
+	return {
+		city_xml_id: a.cityXmlId,
+		enemy_player_xml_id: a.enemyPlayerXmlId,
+		agent_character_xml_id: a.agentCharacterXmlId,
+		placed_turn: a.placedTurn,
+		agent_tile_xml_id: a.agentTileXmlId,
+	};
+}
+
+export function cityLuxuryToRow(l: CityLuxury): Record<string, unknown> {
+	return {
+		city_xml_id: l.cityXmlId,
+		resource: l.resource,
+		imported_turn: l.importedTurn,
+	};
+}
+
+export function cityYieldToRow(y: CityYield): Record<string, unknown> {
+	return {
+		city_xml_id: y.cityXmlId,
+		yield_type: y.yieldType,
+		progress: y.progress,
+	};
+}
+
+export function cityReligionToRow(r: CityReligion): Record<string, unknown> {
+	return {
+		city_xml_id: r.cityXmlId,
+		religion: r.religion,
+	};
+}
+
+export function cityCultureToRow(c: CityCulture): Record<string, unknown> {
+	return {
+		city_xml_id: c.cityXmlId,
+		team_id: c.teamId,
+		culture_level: c.cultureLevel,
+		happiness_level: c.happinessLevel,
+	};
+}

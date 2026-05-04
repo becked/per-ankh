@@ -47,3 +47,13 @@ export function parseReligions(root: Record<string, unknown>): Religion[] {
 
 	return religions;
 }
+
+export function religionToRow(r: Religion): Record<string, unknown> {
+	return {
+		religion_name: r.religionName,
+		founded_turn: r.foundedTurn,
+		founder_player_xml_id: r.founderPlayerXmlId,
+		head_character_xml_id: r.headCharacterXmlId,
+		holy_city_xml_id: r.holyCityXmlId,
+	};
+}

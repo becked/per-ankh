@@ -111,3 +111,19 @@ function parseTeamDiplomacy(
 		});
 	}
 }
+
+export function diplomacyRelationToRow(
+	d: DiplomacyRelation,
+): Record<string, unknown> {
+	return {
+		entity1_type: d.entity1Type,
+		entity1_id: d.entity1Id,
+		entity2_type: d.entity2Type,
+		entity2_id: d.entity2Id,
+		relation: d.relation,
+		war_score: d.warScore,
+		last_conflict_turn: d.lastConflictTurn,
+		last_diplomacy_turn: d.lastDiplomacyTurn,
+		diplomacy_blocked_until_turn: d.diplomacyBlockedUntilTurn,
+	};
+}

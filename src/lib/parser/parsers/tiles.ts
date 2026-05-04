@@ -207,6 +207,50 @@ export function parseTileVisibility(
 	return out;
 }
 
+// ---------- Tile ownership history (entities/tiles.rs:343–404) ----------
+//
+// Each `<OwnerHistory>` block holds `<TX>player_xml_id</TX>` children
+// recording every change of ownership. Owner = -1 means "unowned" — emitted
+// as null. Cloud-blob equivalent of the desktop's `tile_ownership_history`
+// table. Mirrors `parse_tile_ownership_history` in
+// src-tauri/src/parser/entities/tiles.rs.
+
+export interface TileOwnership {
+	tileXmlId: number;
+	turn: number;
+	ownerPlayerXmlId: number | null;
+}
+
+export function parseTileOwnershipHistory(
+	root: Record<string, unknown>,
+): TileOwnership[] {
+	const out: TileOwnership[] = [];
+
+	for (const [tileXmlId, node] of eachTile(root)) {
+		const historyNode = node.OwnerHistory;
+		if (!isElement(historyNode)) continue;
+
+		for (const [tag, value] of getElementChildren(historyNode)) {
+			if (!tag.startsWith("T")) continue;
+			const turnSuffix = tag.slice(1);
+			if (turnSuffix === "") continue;
+			const turn = parseInt(turnSuffix, 10);
+			if (Number.isNaN(turn)) continue;
+			if (typeof value !== "string" || value === "") continue;
+			const ownerRaw = parseInt(value, 10);
+			if (Number.isNaN(ownerRaw)) continue;
+
+			out.push({
+				tileXmlId,
+				turn,
+				ownerPlayerXmlId: ownerRaw >= 0 ? ownerRaw : null,
+			});
+		}
+	}
+
+	return out;
+}
+
 // ---------- Tile changes (tile_data.rs:99–179) ----------
 
 export function parseTileChanges(
@@ -234,4 +278,61 @@ export function parseTileChanges(
 	}
 
 	return out;
+}
+
+// ---------- ToRow mappers (snake_case wire format) ----------
+
+export function tileToRow(t: Tile): Record<string, unknown> {
+	return {
+		xml_id: t.xmlId,
+		x: t.x,
+		y: t.y,
+		terrain: t.terrain,
+		height: t.height,
+		vegetation: t.vegetation,
+		river_w: t.riverW,
+		river_sw: t.riverSw,
+		river_se: t.riverSe,
+		resource: t.resource,
+		improvement: t.improvement,
+		improvement_pillaged: t.improvementPillaged,
+		improvement_disabled: t.improvementDisabled,
+		improvement_turns_left: t.improvementTurnsLeft,
+		specialist: t.specialist,
+		has_road: t.hasRoad,
+		owner_player_xml_id: t.ownerPlayerXmlId,
+		tribe_site: t.tribeSite,
+		religion: t.religion,
+		// i64 fields: pre-stringified by the parser via optI64Str.
+		init_seed: t.initSeed,
+		turn_seed: t.turnSeed,
+	};
+}
+
+export function tileVisibilityToRow(
+	v: TileVisibility,
+): Record<string, unknown> {
+	return {
+		tile_xml_id: v.tileXmlId,
+		team_id: v.teamId,
+		revealed_turn: v.revealedTurn,
+		visible_owner_player_xml_id: v.visibleOwnerPlayerXmlId,
+	};
+}
+
+export function tileChangeToRow(c: TileChange): Record<string, unknown> {
+	return {
+		tile_xml_id: c.tileXmlId,
+		turn: c.turn,
+		change_type: c.changeType,
+		new_value: c.newValue,
+	};
+}
+
+export function tileOwnershipToRow(o: TileOwnership): Record<string, unknown> {
+	return {
+		tile_xml_id: o.tileXmlId,
+		turn: o.turn,
+		owner_player_xml_id: o.ownerPlayerXmlId,
+	};
 }

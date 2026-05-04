@@ -91,3 +91,36 @@ export function parseCharacters(root: Record<string, unknown>): Character[] {
 
 	return characters;
 }
+
+export function characterToRow(c: Character): Record<string, unknown> {
+	return {
+		xml_id: c.xmlId,
+		first_name: c.firstName,
+		gender: c.gender,
+		player_xml_id: c.playerXmlId,
+		tribe: c.tribe,
+		family: c.family,
+		nation: c.nation,
+		religion: c.religion,
+		birth_turn: c.birthTurn,
+		death_turn: c.deathTurn,
+		death_reason: c.deathReason,
+		birth_father_xml_id: c.birthFatherXmlId,
+		birth_mother_xml_id: c.birthMotherXmlId,
+		birth_city_xml_id: c.birthCityXmlId,
+		cognomen: c.cognomen,
+		archetype: c.archetype,
+		portrait: c.portrait,
+		xp: c.xp,
+		level: c.level,
+		is_royal: c.isRoyal,
+		is_infertile: c.isInfertile,
+		became_leader_turn: c.becameLeaderTurn,
+		abdicated_turn: c.abdicatedTurn,
+		was_religion_head: c.wasReligionHead,
+		was_family_head: c.wasFamilyHead,
+		nation_joined_turn: c.nationJoinedTurn,
+		// seed is i64 in Rust; emit as JSON string when set, null when unset.
+		seed: c.seed,
+	};
+}

@@ -283,3 +283,70 @@ export function parseCityUnitsProduced(
 
 	return out;
 }
+
+// ---------- ToRow mappers (snake_case wire format) ----------
+
+export function unitToRow(u: Unit): Record<string, unknown> {
+	return {
+		xml_id: u.xmlId,
+		tile_xml_id: u.tileXmlId,
+		unit_type: u.unitType,
+		player_xml_id: u.playerXmlId,
+		tribe: u.tribe,
+		xp: u.xp,
+		level: u.level,
+		create_turn: u.createTurn,
+		facing: u.facing,
+		original_player_xml_id: u.originalPlayerXmlId,
+		turns_since_last_move: u.turnsSinceLastMove,
+		gender: u.gender,
+		is_sleeping: u.isSleeping,
+		current_formation: u.currentFormation,
+		// i64 seed: pre-stringified by the parser via optI64Str.
+		seed: u.seed,
+	};
+}
+
+export function unitPromotionToRow(p: UnitPromotion): Record<string, unknown> {
+	return {
+		unit_xml_id: p.unitXmlId,
+		promotion: p.promotion,
+		is_acquired: p.isAcquired,
+	};
+}
+
+export function unitEffectToRow(e: UnitEffect): Record<string, unknown> {
+	return {
+		unit_xml_id: e.unitXmlId,
+		effect: e.effect,
+		stacks: e.stacks,
+	};
+}
+
+export function unitFamilyToRow(f: UnitFamily): Record<string, unknown> {
+	return {
+		unit_xml_id: f.unitXmlId,
+		player_xml_id: f.playerXmlId,
+		family_name: f.familyName,
+	};
+}
+
+export function playerUnitProductionToRow(
+	p: PlayerUnitProduction,
+): Record<string, unknown> {
+	return {
+		player_xml_id: p.playerXmlId,
+		unit_type: p.unitType,
+		count: p.count,
+	};
+}
+
+export function cityUnitProductionToRow(
+	c: CityUnitProduction,
+): Record<string, unknown> {
+	return {
+		city_xml_id: c.cityXmlId,
+		unit_type: c.unitType,
+		count: c.count,
+	};
+}
