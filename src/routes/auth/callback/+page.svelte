@@ -30,8 +30,8 @@
 		try {
 			const me = await cloudApi.discordCallback(code, state, redirectUri);
 			status = { kind: "success", displayName: me.display_name };
-			// Brief pause so the user sees the confirmation, then home.
-			setTimeout(() => goto("/", { replaceState: true }), 500);
+			// Brief pause so the user sees the confirmation, then dashboard.
+			setTimeout(() => goto("/dashboard", { replaceState: true }), 500);
 		} catch (err) {
 			const message =
 				err instanceof ApiError

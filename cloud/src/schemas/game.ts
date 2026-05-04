@@ -36,10 +36,18 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 // 2.0.0 — initial cloud-rewrite blob
 // 2.1.0 — added player_nations sidecar (Phase 1 prep)
 // 2.2.0 — added player_roster sidecar (Phase 2 picker + summaries)
+// 2.3.0 — added city_statistics.cities[].first_owner_player_xml_id
+//         (powers cities_founded / fifth_city_turn / tenth_city_turn
+//         milestones in player_summaries)
+// 2.3.1 — completed_techs deduped by (player_id, tech), earliest turn wins
+//         (Old World grants same tech twice via free-tech events; the
+//         cloud tech_events PK can't accept duplicates)
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
 	"2.2.0",
+	"2.3.0",
+	"2.3.1",
 ]);
 
 // ----- Reusable atoms -----

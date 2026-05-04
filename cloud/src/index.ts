@@ -37,8 +37,10 @@ import {
 import type { GamesEnv } from "./games";
 import { handleListOnlineIds } from "./online-ids";
 import type { OnlineIdsEnv } from "./online-ids";
+import { handleStats } from "./stats";
+import type { StatsEnv } from "./stats";
 
-interface Env extends AuthEnv, GamesEnv, OnlineIdsEnv {
+interface Env extends AuthEnv, GamesEnv, OnlineIdsEnv, StatsEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
 	SESSIONS_KV: KVNamespace;
@@ -502,7 +504,8 @@ export default {
 			url.pathname.startsWith("/v1/auth/") ||
 			url.pathname === "/v1/games" ||
 			url.pathname.startsWith("/v1/games/") ||
-			url.pathname.startsWith("/v1/users/");
+			url.pathname.startsWith("/v1/users/") ||
+			url.pathname === "/v1/stats";
 		if (method === "OPTIONS") {
 			const headers = isCloudPath
 				? cloudCorsHeaders(env, request)
@@ -540,6 +543,11 @@ export default {
 		// === Cloud rewrite: /v1/users/* ===
 		if (method === "GET" && url.pathname === "/v1/users/me/online-ids") {
 			return handleListOnlineIds(request, env);
+		}
+
+		// === Cloud rewrite: /v1/stats ===
+		if (method === "GET" && url.pathname === "/v1/stats") {
+			return handleStats(request, env);
 		}
 
 		// === Legacy: /v1/share/* ===

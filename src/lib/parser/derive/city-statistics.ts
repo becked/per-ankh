@@ -71,6 +71,7 @@ export function deriveCityStatistics(
 			owner_nation: owner?.nation ?? null,
 			family: c.family,
 			family_class: family?.familyClass ?? null,
+			first_owner_player_xml_id: c.firstOwnerPlayerXmlId,
 			founded_turn: c.foundedTurn,
 			is_capital: c.isCapital,
 			citizens: c.citizens,

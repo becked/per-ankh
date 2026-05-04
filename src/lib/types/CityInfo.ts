@@ -10,7 +10,13 @@ export type CityInfo = { city_id: number, city_name: string, owner_nation: strin
  * isn't in our shipped sprite set — every class has a CREST_ARCHETYPE_X
  * sprite available, but only a small subset of families do.
  */
-family_class: string | null, founded_turn: number, is_capital: boolean, citizens: number, governor_name: string | null, 
+family_class: string | null, 
+/**
+ * xml_id of the player who founded this city. Stable across captures, so
+ * cross-game milestones (cities_founded, fifth_city_turn, ...) attribute
+ * to the founder rather than the current owner.
+ */
+first_owner_player_xml_id: number | null, founded_turn: number, is_capital: boolean, citizens: number, governor_name: string | null, 
 /**
  * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
  */

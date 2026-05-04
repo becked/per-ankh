@@ -21,6 +21,7 @@
 		page.url.pathname === "/login" ||
 			page.url.pathname.startsWith("/auth/") ||
 			page.url.pathname === "/upload" ||
+			page.url.pathname === "/dashboard" ||
 			page.url.pathname === "/games" ||
 			page.url.pathname.startsWith("/games/"),
 	);

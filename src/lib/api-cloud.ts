@@ -38,6 +38,14 @@ export interface GameListResponse {
 	total: number;
 }
 
+// Cross-game stats for the cloud /dashboard. Mirrors desktop GameStatistics
+// + SaveDateEntry shapes so the same chart-building helpers render both.
+export interface StatsResponse {
+	total_games: number;
+	nations: Array<{ nation: string; games_played: number }>;
+	save_dates: Array<{ date: string; nation: string | null }>;
+}
+
 export class ApiError extends Error {
 	constructor(
 		public status: number,
@@ -193,5 +201,11 @@ export const cloudApi = {
 		const res = await request("/users/me/online-ids", opts);
 		const body = (await res.json()) as { online_ids: string[] };
 		return body.online_ids;
+	},
+
+	// --- Stats ---
+	getStats: async (opts?: CallOpts): Promise<StatsResponse> => {
+		const res = await request("/stats", opts);
+		return res.json() as Promise<StatsResponse>;
 	},
 } as const;

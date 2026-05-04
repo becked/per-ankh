@@ -382,6 +382,10 @@ pub struct CityInfo {
     /// isn't in our shipped sprite set — every class has a CREST_ARCHETYPE_X
     /// sprite available, but only a small subset of families do.
     pub family_class: Option<String>,
+    /// xml_id of the player who founded this city. Stable across captures, so
+    /// cross-game milestones (cities_founded, fifth_city_turn, ...) attribute
+    /// to the founder rather than the current owner.
+    pub first_owner_player_xml_id: Option<i32>,
     pub founded_turn: i32,
     pub is_capital: bool,
     pub citizens: i32,

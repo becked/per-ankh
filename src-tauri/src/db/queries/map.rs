@@ -236,6 +236,7 @@ pub fn get_city_statistics(conn: &Connection, match_id: i64) -> duckdb::Result<C
             p.nation as owner_nation,
             c.family,
             f.family_class,
+            fp.xml_id as first_owner_player_xml_id,
             c.founded_turn,
             c.is_capital,
             c.citizens,
@@ -251,6 +252,7 @@ pub fn get_city_statistics(conn: &Connection, match_id: i64) -> duckdb::Result<C
             c.hurry_population_count
          FROM cities c
          LEFT JOIN players p ON c.player_id = p.player_id AND c.match_id = p.match_id
+         LEFT JOIN players fp ON c.first_owner_player_id = fp.player_id AND c.match_id = fp.match_id
          LEFT JOIN characters gov ON c.governor_id = gov.character_id AND c.match_id = gov.match_id
          LEFT JOIN city_culture cc ON c.city_id = cc.city_id AND c.match_id = cc.match_id
              AND cc.team_id = COALESCE(p.team_id, p.xml_id)
@@ -267,19 +269,20 @@ pub fn get_city_statistics(conn: &Connection, match_id: i64) -> duckdb::Result<C
                 owner_nation: row.get(2)?,
                 family: row.get(3)?,
                 family_class: row.get(4)?,
-                founded_turn: row.get(5)?,
-                is_capital: row.get(6)?,
-                citizens: row.get(7)?,
-                governor_name: row.get(8)?,
-                culture_level: row.get(9)?,
-                growth_count: row.get(10)?,
-                unit_production_count: row.get(11)?,
-                specialist_count: row.get(12)?,
-                buy_tile_count: row.get(13)?,
-                hurry_civics_count: row.get(14)?,
-                hurry_money_count: row.get(15)?,
-                hurry_training_count: row.get(16)?,
-                hurry_population_count: row.get(17)?,
+                first_owner_player_xml_id: row.get(5)?,
+                founded_turn: row.get(6)?,
+                is_capital: row.get(7)?,
+                citizens: row.get(8)?,
+                governor_name: row.get(9)?,
+                culture_level: row.get(10)?,
+                growth_count: row.get(11)?,
+                unit_production_count: row.get(12)?,
+                specialist_count: row.get(13)?,
+                buy_tile_count: row.get(14)?,
+                hurry_civics_count: row.get(15)?,
+                hurry_money_count: row.get(16)?,
+                hurry_training_count: row.get(17)?,
+                hurry_population_count: row.get(18)?,
             })
         })?
         .collect::<std::result::Result<Vec<_>, _>>()?;

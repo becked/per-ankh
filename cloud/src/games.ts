@@ -28,6 +28,10 @@ import {
 import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 import { captureOnlineIds } from "./online-ids";
+import {
+	buildSummaryGameContext,
+	derivePlayerSummary,
+} from "./derive-player-summary";
 
 export interface GamesEnv extends SessionEnv {
 	SHARE_BUCKET: R2Bucket;
@@ -148,32 +152,64 @@ function buildGameRow(inp: GameRowInputs): {
 
 interface SummaryRowInputs {
 	gameId: string;
-	roster: PlayerRosterEntry[];
+	blob: FullGameData;
 	uploaderIndex: number | null;
 	winnerIndex: number | null;
 }
 
+// Insert one row per roster entry. 24 columns × 1 row = 24 binds per stmt,
+// well under D1's 100-param cap. All statements bundle into the same
+// db.batch() call as the rest of the upload writes (single transaction).
 function buildSummaryStatements(
 	db: D1Database,
 	inp: SummaryRowInputs,
 ): D1PreparedStatement[] {
-	const { gameId, roster, uploaderIndex, winnerIndex } = inp;
+	const { gameId, blob, uploaderIndex, winnerIndex } = inp;
+	const roster = blob.player_roster as PlayerRosterEntry[];
+	const ctx = buildSummaryGameContext(blob);
+
 	const stmt = db.prepare(
 		`INSERT INTO player_summaries (
-			game_id, player_index, player_name, nation, is_human, is_uploader, is_winner
-		) VALUES (?,?,?,?,?,?,?)`,
+			game_id, player_index, player_name, nation, family_classes,
+			is_human, is_uploader,
+			starting_ruler_archetype, starting_ruler_traits,
+			starting_ruler_reign_turns, succession_count,
+			final_points, final_military_power, final_legitimacy,
+			cities_total, cities_founded, techs_completed, laws_count,
+			fifth_city_turn, tenth_city_turn, fourth_law_turn, seventh_law_turn,
+			is_winner, vp_margin
+		) VALUES (?,?,?,?,?, ?,?, ?,?,?,?, ?,?,?,?,?,?,?, ?,?,?,?, ?,?)`,
 	);
-	return roster.map((p) =>
-		stmt.bind(
+
+	return roster.map((p) => {
+		const s = derivePlayerSummary(blob, p, ctx);
+		return stmt.bind(
 			gameId,
 			p.player_index,
 			p.player_name,
 			p.nation,
+			s.family_classes,
 			p.is_human ? 1 : 0,
 			uploaderIndex !== null && p.player_index === uploaderIndex ? 1 : 0,
+			s.starting_ruler_archetype,
+			s.starting_ruler_traits,
+			s.starting_ruler_reign_turns,
+			s.succession_count,
+			s.final_points,
+			s.final_military_power,
+			s.final_legitimacy,
+			s.cities_total,
+			s.cities_founded,
+			s.techs_completed,
+			s.laws_count,
+			s.fifth_city_turn,
+			s.tenth_city_turn,
+			s.fourth_law_turn,
+			s.seventh_law_turn,
 			winnerIndex !== null && p.player_index === winnerIndex ? 1 : 0,
-		),
-	);
+			s.vp_margin,
+		);
+	});
 }
 
 // game_player_turn: build chunked multi-row INSERTs from yield_history +
@@ -534,7 +570,7 @@ export async function handleGameUpload(
 		gameId, userId, blob, fileHash, blobSize: dataBlob.size, uploaderIndex,
 	});
 	const summaryStmts = buildSummaryStatements(env.SHARE_DB, {
-		gameId, roster, uploaderIndex, winnerIndex,
+		gameId, blob, uploaderIndex, winnerIndex,
 	});
 	const gptStmts = buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob);
 	const techStmts = buildTechEventStatements(env.SHARE_DB, gameId, blob);

@@ -2,6 +2,14 @@
 //
 // Reads TECH_DISCOVERED event_logs (data1 carries the tech name); resolves
 // player_name + nation. ORDER BY p.nation, e.turn, e.data1.
+//
+// Dedupe: Old World can grant the same tech to a player more than once
+// (free-tech events from ruins/tribes/characters can fire alongside or
+// duplicate a normal research). The wire shape `completed_techs` is
+// semantically a set (one entry per tech per player), and downstream
+// consumers — the cloud D1 `tech_events` PK (game_id, player_index, tech)
+// and the player_summaries `techs_completed` count — require uniqueness.
+// Keep the earliest turn for each (player_id, tech) pair.
 
 import type { EventLog as ParsedEventLog } from "../parsers/events.js";
 import type { Player } from "../parsers/players.js";
@@ -13,7 +21,7 @@ export function deriveCompletedTechs(
 	players: Player[],
 ): PlayerTech[] {
 	const playerMap = playerByXmlId(players);
-	const out: PlayerTech[] = [];
+	const byKey = new Map<string, PlayerTech>();
 
 	for (const log of eventLogs) {
 		if (log.logType !== "TECH_DISCOVERED") continue;
@@ -21,7 +29,11 @@ export function deriveCompletedTechs(
 		const player = playerMap.get(log.playerXmlId);
 		if (!player) continue;
 
-		out.push({
+		const key = `${player.xmlId}:${log.data1}`;
+		const existing = byKey.get(key);
+		if (existing && existing.completed_turn <= log.turn) continue;
+
+		byKey.set(key, {
 			player_id: player.xmlId,
 			player_name: player.playerName,
 			nation: player.nation,
@@ -30,6 +42,7 @@ export function deriveCompletedTechs(
 		});
 	}
 
+	const out = Array.from(byKey.values());
 	out.sort(
 		(a, b) =>
 			strCmp(a.nation ?? "", b.nation ?? "") ||
