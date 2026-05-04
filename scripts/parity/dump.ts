@@ -58,6 +58,10 @@ import {
 	type CityYield,
 } from "../../src/lib/parser/parsers/cities.js";
 import {
+	parseDiplomacyRelations,
+	type DiplomacyRelation,
+} from "../../src/lib/parser/parsers/diplomacy.js";
+import {
 	parseFamilies,
 	type Family,
 } from "../../src/lib/parser/parsers/families.js";
@@ -190,6 +194,8 @@ const PARSERS: Record<string, ParserFn> = {
 		parseCityProjectsCompleted(root).map(cityProjectCompletedToRow),
 	city_religions: (root) => parseCityReligions(root).map(cityReligionToRow),
 	city_yields: (root) => parseCityYields(root).map(cityYieldToRow),
+	diplomacy_relations: (root) =>
+		parseDiplomacyRelations(root).map(diplomacyRelationToRow),
 	families: (root) => parseFamilies(root).map(familyToRow),
 	laws: (root) => parseLaws(root).map(lawToRow),
 	player_council: (root) =>
@@ -393,6 +399,22 @@ function cityCultureToRow(c: CityCulture): Record<string, unknown> {
 		team_id: c.teamId,
 		culture_level: c.cultureLevel,
 		happiness_level: c.happinessLevel,
+	};
+}
+
+function diplomacyRelationToRow(
+	d: DiplomacyRelation,
+): Record<string, unknown> {
+	return {
+		entity1_type: d.entity1Type,
+		entity1_id: d.entity1Id,
+		entity2_type: d.entity2Type,
+		entity2_id: d.entity2Id,
+		relation: d.relation,
+		war_score: d.warScore,
+		last_conflict_turn: d.lastConflictTurn,
+		last_diplomacy_turn: d.lastDiplomacyTurn,
+		diplomacy_blocked_until_turn: d.diplomacyBlockedUntilTurn,
 	};
 }
 

@@ -34,7 +34,8 @@
 		"technology_states",
 		"player_council",
 		"laws",
-		"player_goals"
+		"player_goals",
+		"diplomacy_relations"
 	],
 	"tolerances": {
 		"floatPrecisionDigits": 6,
