@@ -23,6 +23,7 @@ pub mod character_data;
 pub mod city_data;
 pub mod diplomacy;
 pub mod events;
+pub mod match_metadata;
 pub mod player_data;
 pub mod tile_data;
 pub mod timeseries;
@@ -49,8 +50,10 @@ pub use city_data::{
 };
 pub use diplomacy::parse_diplomacy_relations;
 pub use events::parse_events_struct;
+pub use match_metadata::parse_match_metadata_struct;
 pub use player_data::parse_all_player_data;
 pub use tile_data::{parse_tile_changes_struct, parse_tile_visibility_struct};
+pub use tiles::parse_tile_ownership_history_struct;
 pub use timeseries::{parse_all_player_timeseries, parse_yield_price_history_struct};
 pub use units::parse_units_struct;
 

@@ -1,6 +1,6 @@
 // Tiles parser - pure parsing without database dependency
 
-use crate::parser::game_data::TileData;
+use crate::parser::game_data::{TileData, TileOwnership};
 use crate::parser::xml_loader::{XmlDocument, XmlNodeExt};
 use crate::parser::Result;
 
@@ -136,6 +136,60 @@ pub fn parse_tiles_struct(doc: &XmlDocument) -> Result<Vec<TileData>> {
     }
 
     Ok(tiles)
+}
+
+/// Parse every Tile's `<OwnerHistory>` block into a flat row list.
+///
+/// Mirrors the parsing semantics of `entities::tiles::parse_tile_ownership_history`
+/// (which writes to DuckDB); this pure-parse variant is used by `dump_parsed`
+/// to provide parity coverage for the equivalent TypeScript parser
+/// (`src/lib/parser/parsers/tiles.ts::parseTileOwnershipHistory`).
+///
+/// `<OwnerHistory>` children are tagged `T{turn}` with text content equal to
+/// the owning player's XML id (or `-1` for "unowned"). Children that don't
+/// match this shape (non-`T` prefix, unparseable turn, missing/unparseable
+/// text) are silently skipped — same behavior as the legacy entity-pass.
+pub fn parse_tile_ownership_history_struct(doc: &XmlDocument) -> Result<Vec<TileOwnership>> {
+    let root = doc.root_element();
+    let mut out = Vec::new();
+
+    for tile_node in root.children().filter(|n| n.has_tag_name("Tile")) {
+        let tile_xml_id = tile_node.req_attr("ID")?.parse::<i32>()?;
+
+        let history_node = match tile_node.children().find(|n| n.has_tag_name("OwnerHistory")) {
+            Some(n) => n,
+            None => continue,
+        };
+
+        for turn_node in history_node.children() {
+            let tag_name = turn_node.tag_name().name();
+            let turn_str = match tag_name.strip_prefix('T') {
+                Some(s) => s,
+                None => continue,
+            };
+            let turn = match turn_str.parse::<i32>() {
+                Ok(t) => t,
+                Err(_) => continue,
+            };
+            let text = match turn_node.text() {
+                Some(t) => t,
+                None => continue,
+            };
+            let owner_raw = match text.parse::<i32>() {
+                Ok(o) => o,
+                Err(_) => continue,
+            };
+            let owner_player_xml_id = if owner_raw >= 0 { Some(owner_raw) } else { None };
+
+            out.push(TileOwnership {
+                tile_xml_id,
+                turn,
+                owner_player_xml_id,
+            });
+        }
+    }
+
+    Ok(out)
 }
 
 #[cfg(test)]

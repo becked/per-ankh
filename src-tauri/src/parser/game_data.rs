@@ -149,6 +149,19 @@ pub struct CityData {
     pub buy_tile_count: i32,
 }
 
+/// One ownership-change record from a tile's `<OwnerHistory>` block.
+/// Mirrors the row shape of the desktop `tile_ownership_history` table; the
+/// pure-parse path is used by `dump_parsed` for parity coverage of the
+/// equivalent TypeScript parser.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TileOwnership {
+    pub tile_xml_id: i32,
+    pub turn: i32,
+    /// XML id of the owning player; `None` when the source XML had `-1`
+    /// (the "unowned" sentinel).
+    pub owner_player_xml_id: Option<i32>,
+}
+
 /// Tile entity data parsed from XML
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TileData {

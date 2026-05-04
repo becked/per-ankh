@@ -115,11 +115,14 @@ import {
 	yieldRateHistoryToRow,
 	yieldTotalHistoryToRow,
 } from "../../src/lib/parser/parsers/timeseries.js";
+import { parseMatchMetadata } from "../../src/lib/parser/parsers/match-metadata.js";
 import {
 	parseTiles,
 	parseTileChanges,
+	parseTileOwnershipHistory,
 	parseTileVisibility,
 	tileChangeToRow,
+	tileOwnershipToRow,
 	tileToRow,
 	tileVisibilityToRow,
 } from "../../src/lib/parser/parsers/tiles.js";
@@ -257,10 +260,36 @@ const PARSERS: Record<string, ParserFn> = {
 	event_logs: (root) => parseEventLogs(root).map(eventLogToRow),
 	memory_data: (root) => parseMemoryData(root).map(memoryDataToRow),
 	tile_changes: (root) => parseTileChanges(root).map(tileChangeToRow),
+	tile_ownership_history: (root) =>
+		parseTileOwnershipHistory(root).map(tileOwnershipToRow),
 	tile_visibility: (root) =>
 		parseTileVisibility(root).map(tileVisibilityToRow),
 	tiles: (root) => parseTiles(root).map(tileToRow),
 	tribes: (root) => parseTribes(root).map(tribeToRow),
+	// match_metadata is a single object — wrap as a 1-element array so the
+	// diff CLI handles it uniformly with per-row entities. Re-parses players
+	// inside the closure to satisfy match_metadata's resolved-winner needs;
+	// cheap (≤8 players per game). Also flattens `winner` into top-level
+	// winner_* keys to mirror `flatten_winner` on the Rust side — diff.ts
+	// only compares primitive fields.
+	match_metadata: (root) => {
+		const m = parseMatchMetadata(
+			root,
+			parsePlayers(root),
+		) as unknown as Record<string, unknown>;
+		const { winner, ...rest } = m;
+		const w = winner as
+			| { winner_player_xml_id: number; winner_team_id: number | null; victory_type: string }
+			| null;
+		return [
+			{
+				...rest,
+				winner_player_xml_id: w?.winner_player_xml_id ?? null,
+				winner_team_id: w?.winner_team_id ?? null,
+				winner_victory_type: w?.victory_type ?? null,
+			},
+		];
+	},
 	units: (root) => parseUnits(root).map(unitToRow),
 	unit_promotions: (root) =>
 		parseUnitPromotions(root).map(unitPromotionToRow),

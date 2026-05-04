@@ -46,7 +46,9 @@
 		"religion_opinion_history",
 		"event_stories",
 		"event_logs",
-		"memory_data"
+		"memory_data",
+		"match_metadata",
+		"tile_ownership_history"
 	],
 	"tolerances": {
 		"floatPrecisionDigits": 6,
@@ -254,6 +256,14 @@
 				"target_tribe",
 				"target_religion"
 			]
+		},
+		"match_metadata": {
+			"key": "match_metadata",
+			"sortKeys": ["xml_game_id"]
+		},
+		"tile_ownership_history": {
+			"key": "tile_ownership_history",
+			"sortKeys": ["tile_xml_id", "turn"]
 		}
 	}
 }

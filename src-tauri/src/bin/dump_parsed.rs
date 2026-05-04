@@ -71,6 +71,30 @@ fn parse_args() -> Result<Args> {
     })
 }
 
+/// Inline a `winner: { winner_player_xml_id, winner_team_id, victory_type }`
+/// nested object into top-level `winner_player_xml_id`, `winner_team_id`,
+/// `winner_victory_type` keys. Removes the `winner` key. When winner is
+/// null/absent, the three flattened keys are emitted as null. Mirrors the
+/// equivalent TS-side flattening in `scripts/parity/dump.ts`.
+fn flatten_winner(value: &mut Value) {
+    let obj = match value.as_object_mut() {
+        Some(o) => o,
+        None => return,
+    };
+    let winner = obj.remove("winner").unwrap_or(Value::Null);
+    let (player_xml_id, team_id, victory_type) = match winner {
+        Value::Object(mut w) => (
+            w.remove("winner_player_xml_id").unwrap_or(Value::Null),
+            w.remove("winner_team_id").unwrap_or(Value::Null),
+            w.remove("victory_type").unwrap_or(Value::Null),
+        ),
+        _ => (Value::Null, Value::Null, Value::Null),
+    };
+    obj.insert("winner_player_xml_id".into(), player_xml_id);
+    obj.insert("winner_team_id".into(), team_id);
+    obj.insert("winner_victory_type".into(), victory_type);
+}
+
 /// Convert a slice of serializable rows into a JSON array where each element
 /// gains a `dump_index` field at its array position, and any field name in
 /// `i64_string_fields` is rewritten from a JSON number to a JSON string.
@@ -160,6 +184,8 @@ fn main() -> Result<()> {
         .context("parse_tile_visibility_struct")?;
     let tile_changes =
         parsers::parse_tile_changes_struct(&xml_doc).context("parse_tile_changes_struct")?;
+    let tile_ownership_history = parsers::parse_tile_ownership_history_struct(&xml_doc)
+        .context("parse_tile_ownership_history_struct")?;
 
     // Units (composite return).
     let parsed_units = parsers::parse_units_struct(&xml_doc).context("parse_units_struct")?;
@@ -189,6 +215,10 @@ fn main() -> Result<()> {
     // Events (3-tuple return).
     let (event_stories, event_logs, memory_data) =
         parsers::parse_events_struct(&xml_doc).context("parse_events_struct")?;
+
+    // Match metadata (depends on parsed players for winner resolution).
+    let match_metadata = parsers::parse_match_metadata_struct(&xml_doc, &players)
+        .context("parse_match_metadata_struct")?;
 
     // Build envelope as a Map directly (the json! macro hits recursion limits
     // on a flat object this large).
@@ -263,6 +293,10 @@ fn main() -> Result<()> {
         rows_with_index(&tile_visibility, &[]),
     );
     envelope.insert("tile_changes".into(), rows_with_index(&tile_changes, &[]));
+    envelope.insert(
+        "tile_ownership_history".into(),
+        rows_with_index(&tile_ownership_history, &[]),
+    );
 
     envelope.insert(
         "units".into(),
@@ -351,6 +385,24 @@ fn main() -> Result<()> {
     );
     envelope.insert("event_logs".into(), rows_with_index(&event_logs, &[]));
     envelope.insert("memory_data".into(), rows_with_index(&memory_data, &[]));
+
+    // match_metadata is a single object — wrap as a 1-element array so the
+    // existing diff CLI handles it uniformly with the per-row entities. Also
+    // flatten the nested `winner` sub-object into top-level winner_* keys —
+    // diff.ts only handles primitive fields, and a nested object would always
+    // look like a value mismatch even when the contents are equivalent.
+    let mut metadata_value =
+        serde_json::to_value(&match_metadata).expect("MatchMetadataStruct serializes");
+    flatten_winner(&mut metadata_value);
+    let mut metadata_with_index = metadata_value;
+    metadata_with_index
+        .as_object_mut()
+        .expect("metadata is object")
+        .insert("dump_index".into(), json!(0));
+    envelope.insert(
+        "match_metadata".into(),
+        Value::Array(vec![metadata_with_index]),
+    );
 
     let envelope = Value::Object(envelope);
 
