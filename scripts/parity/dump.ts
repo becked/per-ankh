@@ -27,6 +27,10 @@ import {
 	parseFamilies,
 	type Family,
 } from "../../src/lib/parser/parsers/families.js";
+import {
+	parseTribes,
+	type Tribe,
+} from "../../src/lib/parser/parsers/tribes.js";
 
 const SCHEMA_VERSION = 1;
 
@@ -85,6 +89,7 @@ type ParserFn = (root: Record<string, unknown>) => Record<string, unknown>[];
 
 const PARSERS: Record<string, ParserFn> = {
 	families: (root) => parseFamilies(root).map(familyToRow),
+	tribes: (root) => parseTribes(root).map(tribeToRow),
 };
 
 function familyToRow(f: Family): Record<string, unknown> {
@@ -95,6 +100,15 @@ function familyToRow(f: Family): Record<string, unknown> {
 		head_character_xml_id: f.headCharacterXmlId,
 		seat_city_xml_id: f.seatCityXmlId,
 		turns_without_leader: f.turnsWithoutLeader,
+	};
+}
+
+function tribeToRow(t: Tribe): Record<string, unknown> {
+	return {
+		tribe_id: t.tribeId,
+		leader_character_xml_id: t.leaderCharacterXmlId,
+		allied_player_xml_id: t.alliedPlayerXmlId,
+		religion: t.religion,
 	};
 }
 

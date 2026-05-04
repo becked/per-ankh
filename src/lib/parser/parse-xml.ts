@@ -6,10 +6,16 @@
 import { XMLParser } from "fast-xml-parser";
 import { ParseError } from "./extract-zip.js";
 
-// Elements that can repeat as siblings and must always be arrays even when a
-// single instance exists. Without this, fast-xml-parser would give a single
-// object for one Player and an array for two — every parser would need to
-// guard against both shapes.
+// Container elements that can repeat as siblings and must always be arrays
+// even when a single instance exists. Without this, fast-xml-parser would
+// give a single object for one Player and an array for two — every parser
+// would need to guard against both shapes.
+//
+// The isLeafNode predicate below excludes leaf-text elements with the same
+// name (e.g. <Religion>RELIGION_BUDDHISM</Religion> as a child of a Tribe is
+// a leaf reference, not a top-level Religion container). Without that guard,
+// such leaves get wrapped in `[...]` and parsers see strings where they
+// expect a single value.
 const ALWAYS_ARRAY_TAGS = new Set([
 	"Player",
 	"Character",
@@ -47,7 +53,8 @@ const xmlParser = new XMLParser({
 	parseTagValue: false,
 	ignoreDeclaration: true,
 	ignorePiTags: true,
-	isArray: (name) => ALWAYS_ARRAY_TAGS.has(name),
+	isArray: (name, _jpath, isLeafNode) =>
+		!isLeafNode && ALWAYS_ARRAY_TAGS.has(name),
 });
 
 /**
