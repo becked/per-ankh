@@ -195,7 +195,14 @@ pub struct TileData {
 
     // Ownership (XML IDs)
     pub owner_player_xml_id: Option<i32>,
-    // Note: owner_city_id is NOT set during parsing - it will be populated in Pass 2b
+    /// XML id of the city whose territory this tile belongs to (from the
+    /// `<CityTerritory>` child element). Distinct from `owner_player_xml_id`
+    /// (player-level) and from being a city center (city.tile_xml_id).
+    /// The desktop reads this in `entities/tiles.rs::update_tile_city_ownership`
+    /// as a separate post-import pass; the cloud parsers expose it inline.
+    pub city_territory_xml_id: Option<i32>,
+    // Note: owner_city_id (DB id) is NOT set during parsing - it's populated
+    // by the inserter pass that maps city_territory_xml_id through IdMapper.
 
     // Sites
     pub tribe_site: Option<String>,

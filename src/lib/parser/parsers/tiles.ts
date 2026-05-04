@@ -33,6 +33,9 @@ export interface Tile {
 	specialist: string | null;
 	hasRoad: boolean;
 	ownerPlayerXmlId: number | null;
+	/** XML id of the city whose territory this tile belongs to. Distinct
+	 * from `ownerPlayerXmlId` (the player) and from being a city center. */
+	cityTerritoryXmlId: number | null;
 	tribeSite: string | null;
 	religion: string | null;
 	// i64 in Rust — kept as JSON string at the dump boundary to dodge
@@ -167,6 +170,7 @@ export function parseTiles(root: Record<string, unknown>): Tile[] {
 			// presence check correctly distinguishes "has road" from "no road".
 			hasRoad: "Road" in node,
 			ownerPlayerXmlId: parseLatestOwnerFromHistory(node.OwnerHistory),
+			cityTerritoryXmlId: optInt(node.CityTerritory),
 			tribeSite: optStr(node.TribeSite),
 			religion: optStr(node.Religion),
 			initSeed: optI64Str(node.InitSeed),
@@ -301,6 +305,7 @@ export function tileToRow(t: Tile): Record<string, unknown> {
 		specialist: t.specialist,
 		has_road: t.hasRoad,
 		owner_player_xml_id: t.ownerPlayerXmlId,
+		city_territory_xml_id: t.cityTerritoryXmlId,
 		tribe_site: t.tribeSite,
 		religion: t.religion,
 		// i64 fields: pre-stringified by the parser via optI64Str.

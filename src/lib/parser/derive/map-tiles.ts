@@ -1,18 +1,18 @@
 // derive/map-tiles.ts — port of get_map_tiles (map.rs:12–76).
 //
-// Direct projection over parsed Tile[] resolving owner_nation and city
-// metadata. The Rust query relies on `tiles.owner_city_id` (a column
-// populated by the inserter via territory-radius rules); the parser does
-// not expose that, so:
+// Direct projection over parsed Tile[] resolving owner metadata. Three
+// distinct tile→entity relationships are used (mirroring the Rust query's
+// three LEFT JOINs):
 //
-//   - owner_city / owner_city_id approximations: null for now. The
-//     downstream UI groups by nation primarily; per-city attribution is a
-//     follow-on PR (port the Rust `update_tile_city_ownership` logic).
-//   - is_city_center / is_capital: true when this tile_xml_id matches a
-//     city's tile_xml_id (city center).
-//   - religions: the per-city religions array, attached when the tile is a
-//     city center. (Rust attaches to every tile in the city's territory,
-//     which we don't track yet — same caveat as owner_city.)
+//   - `tile.ownerPlayerXmlId` (from OwnerHistory's latest entry) →
+//     player.nation = `owner_nation`. Tile-level player ownership.
+//   - `tile.cityTerritoryXmlId` → city.cityName = `owner_city`. City-level
+//     territory attribution; can diverge from owner_nation when a tile is
+//     in a city's territory but separately conquered/unowned.
+//   - `tile.xmlId === city.tileXmlId` → city center; drives is_city_center
+//     + is_capital flags.
+//
+// religions attach by city territory (the city the tile belongs to).
 
 import type { City, CityReligion } from "../parsers/cities.js";
 import type { Player } from "../parsers/players.js";
@@ -70,14 +70,29 @@ export function deriveMapTiles(
 		});
 	}
 
+	// Build city-by-xml-id map for territory lookups.
+	const cityByXmlId = new Map<number, (typeof cities)[number]>();
+	for (const c of cities) cityByXmlId.set(c.xmlId, c);
+
 	const out: MapTile[] = tiles.map((t) => {
-		const owner =
+		const territoryCity =
+			t.cityTerritoryXmlId !== null
+				? cityByXmlId.get(t.cityTerritoryXmlId)
+				: undefined;
+		// owner_nation chains via the tile's direct player ownership
+		// (latest OwnerHistory entry), NOT via the city. Mirrors the Rust
+		// `LEFT JOIN players p ON t.owner_player_id = p.player_id` clause —
+		// these can diverge from territory city attribution (e.g. a tile in
+		// a city's territory may be temporarily unowned during a war).
+		const tilePlayer =
 			t.ownerPlayerXmlId !== null
 				? playerMap.get(t.ownerPlayerXmlId)
 				: undefined;
 		const center = cityCenterByTile.get(t.xmlId);
 		const tileReligions =
-			center !== undefined ? (religionsByCity.get(center.xmlId) ?? []) : [];
+			territoryCity !== undefined
+				? (religionsByCity.get(territoryCity.xmlId) ?? [])
+				: [];
 		return {
 			x: t.x,
 			y: t.y,
@@ -94,8 +109,8 @@ export function deriveMapTiles(
 			river_w: t.riverW,
 			river_sw: t.riverSw,
 			river_se: t.riverSe,
-			owner_nation: owner?.nation ?? null,
-			owner_city: center?.cityName ?? null,
+			owner_nation: tilePlayer?.nation ?? null,
+			owner_city: territoryCity?.cityName ?? null,
 			is_city_center: center !== undefined,
 			is_capital: center?.isCapital ?? false,
 		};

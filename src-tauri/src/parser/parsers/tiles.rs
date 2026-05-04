@@ -96,6 +96,11 @@ pub fn parse_tiles_struct(doc: &XmlDocument) -> Result<Vec<TileData>> {
             }
         }
 
+        // City territory (the city this tile belongs to, by XML id).
+        let city_territory_xml_id = tile_node
+            .opt_child_text("CityTerritory")
+            .and_then(|s| s.parse::<i32>().ok());
+
         // Sites
         let tribe_site = tile_node.opt_child_text("TribeSite").map(|s| s.to_string());
 
@@ -128,6 +133,7 @@ pub fn parse_tiles_struct(doc: &XmlDocument) -> Result<Vec<TileData>> {
             specialist,
             has_road,
             owner_player_xml_id,
+            city_territory_xml_id,
             tribe_site,
             religion,
             init_seed,
