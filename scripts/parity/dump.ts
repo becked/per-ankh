@@ -62,6 +62,14 @@ import {
 	type DiplomacyRelation,
 } from "../../src/lib/parser/parsers/diplomacy.js";
 import {
+	parseEventLogs,
+	parseEventStories,
+	parseMemoryData,
+	type EventLog,
+	type EventStory,
+	type MemoryData,
+} from "../../src/lib/parser/parsers/events.js";
+import {
 	parseFamilies,
 	type Family,
 } from "../../src/lib/parser/parsers/families.js";
@@ -245,6 +253,9 @@ const PARSERS: Record<string, ParserFn> = {
 		parseFamilyOpinionHistory(root).map(familyOpinionHistoryToRow),
 	religion_opinion_history: (root) =>
 		parseReligionOpinionHistory(root).map(religionOpinionHistoryToRow),
+	event_stories: (root) => parseEventStories(root).map(eventStoryToRow),
+	event_logs: (root) => parseEventLogs(root).map(eventLogToRow),
+	memory_data: (root) => parseMemoryData(root).map(memoryDataToRow),
 	tile_changes: (root) => parseTileChanges(root).map(tileChangeToRow),
 	tile_visibility: (root) =>
 		parseTileVisibility(root).map(tileVisibilityToRow),
@@ -449,6 +460,41 @@ function diplomacyRelationToRow(
 		last_conflict_turn: d.lastConflictTurn,
 		last_diplomacy_turn: d.lastDiplomacyTurn,
 		diplomacy_blocked_until_turn: d.diplomacyBlockedUntilTurn,
+	};
+}
+
+function eventStoryToRow(s: EventStory): Record<string, unknown> {
+	return {
+		event_type: s.eventType,
+		player_xml_id: s.playerXmlId,
+		occurred_turn: s.occurredTurn,
+		primary_character_xml_id: s.primaryCharacterXmlId,
+		city_xml_id: s.cityXmlId,
+	};
+}
+
+function eventLogToRow(l: EventLog): Record<string, unknown> {
+	return {
+		player_xml_id: l.playerXmlId,
+		log_type: l.logType,
+		turn: l.turn,
+		description: l.description,
+		data1: l.data1,
+		data2: l.data2,
+		data3: l.data3,
+	};
+}
+
+function memoryDataToRow(m: MemoryData): Record<string, unknown> {
+	return {
+		player_xml_id: m.playerXmlId,
+		memory_type: m.memoryType,
+		turn: m.turn,
+		target_player_xml_id: m.targetPlayerXmlId,
+		target_character_xml_id: m.targetCharacterXmlId,
+		target_family: m.targetFamily,
+		target_tribe: m.targetTribe,
+		target_religion: m.targetReligion,
 	};
 }
 

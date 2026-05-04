@@ -43,7 +43,10 @@
 		"yield_rate_history",
 		"yield_total_history",
 		"family_opinion_history",
-		"religion_opinion_history"
+		"religion_opinion_history",
+		"event_stories",
+		"event_logs",
+		"memory_data"
 	],
 	"tolerances": {
 		"floatPrecisionDigits": 6,
