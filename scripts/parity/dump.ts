@@ -21,6 +21,12 @@ import { readFile, writeFile, mkdir } from "node:fs/promises";
 import { dirname } from "node:path";
 import { sha256File } from "./cache.js";
 import type { ParityConfig } from "./types.js";
+import { extractXmlFromZip } from "../../src/lib/parser/extract-zip.js";
+import { parseSaveXml } from "../../src/lib/parser/parse-xml.js";
+import {
+	parseFamilies,
+	type Family,
+} from "../../src/lib/parser/parsers/families.js";
 
 const SCHEMA_VERSION = 1;
 
@@ -67,22 +73,30 @@ function parseArgs(argv: string[]): CliArgs {
 }
 
 /**
- * Registry of (entity key) → (parser function). As each TS parser is
- * implemented, add an import and an entry here. The dump CLI iterates
- * `manifest.implemented` and calls the registered function for each entry.
+ * Registry of (entity key) → (parser function). Each parser takes the
+ * unwrapped root element object (children of `<Root>`) and returns an array
+ * of plain-JSON rows in snake_case form, matching the Rust serde dump.
  *
  * Per-entity i64 fields that need JSON-string serialization (rather than
- * number) live in I64_STRING_FIELDS below — the TS parser is expected to
- * emit those fields as strings already, but the table is the canonical
- * spec the parsers must match.
+ * number) live in I64_STRING_FIELDS below — when porting an entity that has
+ * any, the corresponding `toRow` mapper must emit those fields as strings.
  */
-type ParserFn = (xml: unknown) => Record<string, unknown>[];
+type ParserFn = (root: Record<string, unknown>) => Record<string, unknown>[];
 
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
 const PARSERS: Record<string, ParserFn> = {
-	// families: (xml) => parseFamilies(xml).map(toRow),
-	// Add entries here as parsers come online.
+	families: (root) => parseFamilies(root).map(familyToRow),
 };
+
+function familyToRow(f: Family): Record<string, unknown> {
+	return {
+		family_name: f.familyName,
+		family_class: f.familyClass,
+		player_xml_id: f.playerXmlId,
+		head_character_xml_id: f.headCharacterXmlId,
+		seat_city_xml_id: f.seatCityXmlId,
+		turns_without_leader: f.turnsWithoutLeader,
+	};
+}
 
 // Reference for parser implementers — fields that must be emitted as JSON
 // strings rather than numbers (JS Number cannot safely hold i64).
@@ -92,6 +106,17 @@ const I64_STRING_FIELDS: Record<string, readonly string[]> = {
 	tiles: ["init_seed", "turn_seed"],
 	units: ["seed"],
 };
+
+/**
+ * Inject `dump_index: i` into each row at its array position, mirroring the
+ * Rust dump's `rows_with_index` helper. The diff CLI uses this as a
+ * tiebreaker when sort keys aren't unique.
+ */
+function withDumpIndex(
+	rows: Record<string, unknown>[],
+): Record<string, unknown>[] {
+	return rows.map((row, i) => ({ ...row, dump_index: i }));
+}
 
 async function main(): Promise<void> {
 	const args = parseArgs(process.argv.slice(2));
@@ -114,15 +139,23 @@ async function main(): Promise<void> {
 		save_sha256: saveSha,
 	};
 
-	// XML loading is deferred until at least one parser is registered. While
-	// the implemented list is empty, the envelope is metadata-only.
+	// Skip XML load entirely while no parsers are registered — the empty
+	// envelope is a valid input for the diff CLI (every entity becomes
+	// not_ported).
 	if (manifest.implemented.length > 0) {
-		// TODO: when adding the first parser, load fflate + fast-xml-parser,
-		// extract the XML from the zip, parse it, and dispatch through the
-		// registry. Until then, this branch is unreachable.
-		throw new Error(
-			"TS parsing pipeline not yet wired up — the implemented list is non-empty but the XML loader hasn't been hooked up. See dump.ts comments.",
+		const buf = await readFile(args.save);
+		const ab = buf.buffer.slice(
+			buf.byteOffset,
+			buf.byteOffset + buf.byteLength,
 		);
+		const xml = extractXmlFromZip(ab);
+		const root = parseSaveXml(xml);
+
+		for (const key of manifest.implemented) {
+			const parser = PARSERS[key];
+			const rows = parser(root);
+			envelope[key] = withDumpIndex(rows);
+		}
 	}
 
 	await mkdir(dirname(args.out), { recursive: true });
