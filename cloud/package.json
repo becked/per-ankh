@@ -5,10 +5,12 @@
 	"scripts": {
 		"dev": "wrangler dev",
 		"deploy": "wrangler deploy",
-		"d1:init": "wrangler d1 execute per-ankh-share-index --file=schema.sql"
+		"migrate:local": "wrangler d1 migrations apply per-ankh-share-index --local",
+		"migrate:remote": "wrangler d1 migrations apply per-ankh-share-index --remote"
 	},
 	"dependencies": {
-		"nanoid": "^5.0.0"
+		"nanoid": "^5.0.0",
+		"valibot": "^1.3.1"
 	},
 	"devDependencies": {
 		"@cloudflare/workers-types": "^4.20241205.0",

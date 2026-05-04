@@ -285,6 +285,29 @@ export interface PlayerNationEntry {
 	nation: string | null;
 }
 
+/**
+ * Cloud-side per-player roster, in XML order. Two consumers:
+ *
+ *   1. Upload modal picker (spec §8) — filters where `is_human === true`,
+ *      pre-checks rows whose `online_id` matches one of the uploader's
+ *      known ids (captured from prior uploads). Submits selected
+ *      `player_index`es back to the server as `uploader_player_indexes`.
+ *
+ *   2. Worker `/v1/games` POST — iterates the full roster to insert one
+ *      `player_summaries` row per player, with `is_uploader` flagged on
+ *      indexes the picker submitted.
+ *
+ * Cloud-only sidecar: the desktop-shared `PlayerInfo` carries neither
+ * `xml_id` nor `online_id`. PARSER_VERSION 2.2.0+.
+ */
+export interface PlayerRosterEntry {
+	player_index: number; // 0-based, matches XML Player ID
+	player_name: string;
+	nation: string | null;
+	is_human: boolean;
+	online_id: string | null;
+}
+
 // ---------- The envelope ----------
 
 export interface FullGameData {
@@ -313,6 +336,7 @@ export interface FullGameData {
 	// New cloud-only fields (spec §3 lines 790–806).
 	tile_ownership_history: TileOwnershipEntry[];
 	player_nations: PlayerNationEntry[];
+	player_roster: PlayerRosterEntry[];
 	characters: CharacterInfo[];
 	character_traits: CharacterTraitInfo[];
 	character_relationships: CharacterRelationshipInfo[];
@@ -336,4 +360,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.1.0";
+export const PARSER_VERSION = "2.2.0";

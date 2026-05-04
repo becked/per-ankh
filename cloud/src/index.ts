@@ -1,39 +1,69 @@
-// Per-Ankh Share API — Cloudflare Worker
+// Per-Ankh Worker — legacy share endpoints + cloud rewrite endpoints.
 //
-// Endpoints:
+// Legacy (desktop, being decommissioned):
 //   POST   /v1/share       — Upload a shared game blob
 //   GET    /v1/share/{id}  — Download a shared game blob
 //   DELETE /v1/share/{id}  — Delete a shared game blob
 //
-// Storage: R2 for blobs, D1 for share index and event logging.
+// Cloud rewrite (browser-first):
+//   POST   /v1/auth/discord/start
+//   POST   /v1/auth/discord/callback
+//   GET    /v1/auth/me
+//   POST   /v1/auth/logout
+//
+// Storage: R2 for blobs, D1 for indices/users, KV for sessions+OAuth state.
 
 import { nanoid } from "nanoid";
 import { validateSharePayload, extractMetadata } from "./validation";
+import {
+	cloudCorsHeaders,
+	decompressWithLimit,
+	legacyCorsHeaders,
+	timingSafeEqual,
+} from "./util";
+import {
+	handleDiscordCallback,
+	handleDiscordStart,
+	handleLogout,
+	handleMe,
+} from "./auth";
+import type { AuthEnv } from "./auth";
+import {
+	handleGameDelete,
+	handleGameDetail,
+	handleGameList,
+	handleGameUpload,
+} from "./games";
+import type { GamesEnv } from "./games";
+import { handleListOnlineIds } from "./online-ids";
+import type { OnlineIdsEnv } from "./online-ids";
 
-interface Env {
+interface Env extends AuthEnv, GamesEnv, OnlineIdsEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
+	SESSIONS_KV: KVNamespace;
 	MAX_COMPRESSED_SIZE: string;
 	MAX_DECOMPRESSED_SIZE: string;
 	ALLOWED_ORIGIN: string;
+	ALLOWED_ORIGINS: string;
 	RATE_LIMIT_PER_HOUR: string;
 	DOWNLOAD_RATE_LIMIT_PER_HOUR: string;
 	IP_RATE_LIMIT_PER_HOUR: string;
 	GLOBAL_UPLOAD_LIMIT_PER_HOUR: string;
 	UPLOADS_ENABLED: string;
+	DISCORD_CLIENT_ID: string;
+	DISCORD_CLIENT_SECRET: string;
 }
 
 // UUID v4 format: 8-4-4-4-12 hex chars
 const UUID_REGEX =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Legacy /v1/share/* uses the single-origin CORS helper. New /v1/auth/*
+// endpoints use the multi-origin helper (cookie-credentialed) defined in
+// util.ts.
 function corsHeaders(env: Env): Record<string, string> {
-	return {
-		"Access-Control-Allow-Origin": env.ALLOWED_ORIGIN,
-		"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-		"Access-Control-Allow-Headers": "Content-Type, X-App-Key, X-Delete-Token",
-		"Access-Control-Max-Age": "86400",
-	};
+	return legacyCorsHeaders(env);
 }
 
 function jsonResponse(
@@ -52,54 +82,6 @@ function jsonResponse(
 
 function errorResponse(error: string, status: number, env: Env): Response {
 	return jsonResponse({ error }, status, env);
-}
-
-// Constant-time string comparison to prevent timing attacks on secret tokens
-function timingSafeEqual(a: string, b: string): boolean {
-	const encoder = new TextEncoder();
-	const bufA = encoder.encode(a);
-	const bufB = encoder.encode(b);
-	if (bufA.byteLength !== bufB.byteLength) return false;
-	return crypto.subtle.timingSafeEqual(bufA, bufB);
-}
-
-// Decompress gzipped data with a size limit to prevent gzip bombs
-async function decompressWithLimit(
-	compressed: ArrayBuffer,
-	maxBytes: number,
-): Promise<Uint8Array> {
-	const ds = new DecompressionStream("gzip");
-	const writer = ds.writable.getWriter();
-	const reader = ds.readable.getReader();
-
-	// Write compressed data
-	writer.write(compressed);
-	writer.close();
-
-	// Read decompressed data with size tracking
-	const chunks: Uint8Array[] = [];
-	let totalSize = 0;
-
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-
-		totalSize += value.byteLength;
-		if (totalSize > maxBytes) {
-			reader.cancel();
-			throw new Error("Decompressed payload too large");
-		}
-		chunks.push(value);
-	}
-
-	// Concatenate chunks
-	const result = new Uint8Array(totalSize);
-	let offset = 0;
-	for (const chunk of chunks) {
-		result.set(chunk, offset);
-		offset += chunk.byteLength;
-	}
-	return result;
 }
 
 // Probabilistic cleanup of old events (runs ~2% of the time)
@@ -513,26 +495,63 @@ export default {
 		const url = new URL(request.url);
 		const method = request.method;
 
-		// Handle CORS preflight
+		// CORS preflight: pick the right helper based on path. Cloud routes
+		// (/v1/auth, /v1/games, /v1/users) need credentialed CORS (echoes
+		// Origin); legacy /v1/share uses the single-origin variant.
+		const isCloudPath =
+			url.pathname.startsWith("/v1/auth/") ||
+			url.pathname === "/v1/games" ||
+			url.pathname.startsWith("/v1/games/") ||
+			url.pathname.startsWith("/v1/users/");
 		if (method === "OPTIONS") {
-			return new Response(null, {
-				status: 204,
-				headers: corsHeaders(env),
-			});
+			const headers = isCloudPath
+				? cloudCorsHeaders(env, request)
+				: corsHeaders(env);
+			return new Response(null, { status: 204, headers });
 		}
 
-		// Route: POST /v1/share
+		// === Cloud rewrite: /v1/auth/* ===
+		if (method === "POST" && url.pathname === "/v1/auth/discord/start") {
+			return handleDiscordStart(request, env);
+		}
+		if (method === "POST" && url.pathname === "/v1/auth/discord/callback") {
+			return handleDiscordCallback(request, env);
+		}
+		if (method === "GET" && url.pathname === "/v1/auth/me") {
+			return handleMe(request, env);
+		}
+		if (method === "POST" && url.pathname === "/v1/auth/logout") {
+			return handleLogout(request, env);
+		}
+
+		// === Cloud rewrite: /v1/games/* ===
+		if (method === "POST" && url.pathname === "/v1/games") {
+			return handleGameUpload(request, env);
+		}
+		if (method === "GET" && url.pathname === "/v1/games") {
+			return handleGameList(request, env);
+		}
+		const gameMatch = url.pathname.match(/^\/v1\/games\/([A-Za-z0-9_-]{21})$/);
+		if (gameMatch) {
+			if (method === "GET") return handleGameDetail(gameMatch[1], request, env);
+			if (method === "DELETE") return handleGameDelete(gameMatch[1], request, env);
+		}
+
+		// === Cloud rewrite: /v1/users/* ===
+		if (method === "GET" && url.pathname === "/v1/users/me/online-ids") {
+			return handleListOnlineIds(request, env);
+		}
+
+		// === Legacy: /v1/share/* ===
 		if (method === "POST" && url.pathname === "/v1/share") {
 			return handleUpload(request, env);
 		}
 
-		// Route: GET /v1/share/{id}
 		const getMatch = url.pathname.match(/^\/v1\/share\/([A-Za-z0-9_-]{21})$/);
 		if (method === "GET" && getMatch) {
 			return handleDownload(getMatch[1], request, env);
 		}
 
-		// Route: DELETE /v1/share/{id}
 		const deleteMatch = url.pathname.match(
 			/^\/v1\/share\/([A-Za-z0-9_-]{21})$/,
 		);

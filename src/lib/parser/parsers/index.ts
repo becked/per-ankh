@@ -101,6 +101,7 @@ import {
 	type MemoryInfo,
 	type PlayerGoalInfo,
 	type PlayerNationEntry,
+	type PlayerRosterEntry,
 	type PlayerResourceInfo,
 	type ReligionOpinionEntry,
 	type TileOwnershipEntry,
@@ -251,6 +252,13 @@ export function extractAllGameData(
 		player_xml_id: p.xmlId,
 		nation: p.nation,
 	}));
+	const playerRoster: PlayerRosterEntry[] = players.map((p) => ({
+		player_index: p.xmlId,
+		player_name: p.playerName,
+		nation: p.nation,
+		is_human: p.isHuman,
+		online_id: p.onlineId,
+	}));
 
 	return {
 		version: 2,
@@ -275,6 +283,7 @@ export function extractAllGameData(
 
 		tile_ownership_history: tileOwnershipWire,
 		player_nations: playerNations,
+		player_roster: playerRoster,
 		characters: charactersWire,
 		character_traits: characterTraitsWire,
 		character_relationships: characterRelationshipsWire,
