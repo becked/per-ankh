@@ -90,6 +90,24 @@ import {
 	type Religion,
 } from "../../src/lib/parser/parsers/religions.js";
 import {
+	parseFamilyOpinionHistory,
+	parseLegitimacyHistory,
+	parseMilitaryPowerHistory,
+	parsePointsHistory,
+	parseReligionOpinionHistory,
+	parseYieldPriceHistory,
+	parseYieldRateHistory,
+	parseYieldTotalHistory,
+	type FamilyOpinionHistory,
+	type LegitimacyHistory,
+	type MilitaryPowerHistory,
+	type PointsHistory,
+	type ReligionOpinionHistory,
+	type YieldPriceHistory,
+	type YieldRateHistory,
+	type YieldTotalHistory,
+} from "../../src/lib/parser/parsers/timeseries.js";
+import {
 	parseTiles,
 	parseTileChanges,
 	parseTileVisibility,
@@ -211,6 +229,22 @@ const PARSERS: Record<string, ParserFn> = {
 		parseTechnologyProgress(root).map(technologyProgressToRow),
 	technology_states: (root) =>
 		parseTechnologyStates(root).map(technologyStateToRow),
+	yield_price_history: (root) =>
+		parseYieldPriceHistory(root).map(yieldPriceHistoryToRow),
+	military_power_history: (root) =>
+		parseMilitaryPowerHistory(root).map(militaryPowerHistoryToRow),
+	points_history: (root) =>
+		parsePointsHistory(root).map(pointsHistoryToRow),
+	legitimacy_history: (root) =>
+		parseLegitimacyHistory(root).map(legitimacyHistoryToRow),
+	yield_rate_history: (root) =>
+		parseYieldRateHistory(root).map(yieldRateHistoryToRow),
+	yield_total_history: (root) =>
+		parseYieldTotalHistory(root).map(yieldTotalHistoryToRow),
+	family_opinion_history: (root) =>
+		parseFamilyOpinionHistory(root).map(familyOpinionHistoryToRow),
+	religion_opinion_history: (root) =>
+		parseReligionOpinionHistory(root).map(religionOpinionHistoryToRow),
 	tile_changes: (root) => parseTileChanges(root).map(tileChangeToRow),
 	tile_visibility: (root) =>
 		parseTileVisibility(root).map(tileVisibilityToRow),
@@ -582,6 +616,88 @@ function tileChangeToRow(c: TileChange): Record<string, unknown> {
 		turn: c.turn,
 		change_type: c.changeType,
 		new_value: c.newValue,
+	};
+}
+
+function yieldPriceHistoryToRow(
+	h: YieldPriceHistory,
+): Record<string, unknown> {
+	return {
+		turn: h.turn,
+		yield_type: h.yieldType,
+		price: h.price,
+	};
+}
+
+function militaryPowerHistoryToRow(
+	h: MilitaryPowerHistory,
+): Record<string, unknown> {
+	return {
+		player_xml_id: h.playerXmlId,
+		turn: h.turn,
+		military_power: h.militaryPower,
+	};
+}
+
+function pointsHistoryToRow(h: PointsHistory): Record<string, unknown> {
+	return {
+		player_xml_id: h.playerXmlId,
+		turn: h.turn,
+		points: h.points,
+	};
+}
+
+function legitimacyHistoryToRow(
+	h: LegitimacyHistory,
+): Record<string, unknown> {
+	return {
+		player_xml_id: h.playerXmlId,
+		turn: h.turn,
+		legitimacy: h.legitimacy,
+	};
+}
+
+function yieldRateHistoryToRow(
+	h: YieldRateHistory,
+): Record<string, unknown> {
+	return {
+		player_xml_id: h.playerXmlId,
+		turn: h.turn,
+		yield_type: h.yieldType,
+		amount: h.amount,
+	};
+}
+
+function yieldTotalHistoryToRow(
+	h: YieldTotalHistory,
+): Record<string, unknown> {
+	return {
+		player_xml_id: h.playerXmlId,
+		turn: h.turn,
+		yield_type: h.yieldType,
+		amount: h.amount,
+	};
+}
+
+function familyOpinionHistoryToRow(
+	h: FamilyOpinionHistory,
+): Record<string, unknown> {
+	return {
+		player_xml_id: h.playerXmlId,
+		family_name: h.familyName,
+		turn: h.turn,
+		opinion: h.opinion,
+	};
+}
+
+function religionOpinionHistoryToRow(
+	h: ReligionOpinionHistory,
+): Record<string, unknown> {
+	return {
+		player_xml_id: h.playerXmlId,
+		religion_name: h.religionName,
+		turn: h.turn,
+		opinion: h.opinion,
 	};
 }
 

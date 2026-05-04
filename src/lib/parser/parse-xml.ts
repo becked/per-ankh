@@ -238,6 +238,76 @@ export function collectStrictNamedInts(
 }
 
 /**
+ * Strict-mode parser for sparse-turn-keyed history containers, e.g.:
+ *
+ *   <MilitaryPowerHistory>
+ *     <T2>40</T2>
+ *     <T5>55</T5>
+ *   </MilitaryPowerHistory>
+ *
+ * Returns `[{turn, value}]` pairs. Non-`T`-prefixed children are silently
+ * skipped (mirrors Rust's `if !turn_tag.starts_with('T') { continue; }`).
+ * Invalid turn (after `T`-strip) and missing/unparseable text both throw
+ * a ParseError — mirrors `?` propagation in timeseries.rs:32, 40.
+ */
+export function parseSparseHistory(
+	node: unknown,
+	parentLabel: string,
+): Array<{ turn: number; value: number }> {
+	const out: Array<{ turn: number; value: number }> = [];
+	if (!isElement(node)) return out;
+	for (const [tag, value] of getElementChildren(node)) {
+		if (!tag.startsWith("T")) continue;
+		const turn = parseInt(tag.slice(1), 10);
+		if (Number.isNaN(turn)) {
+			throw new ParseError(`Invalid turn tag: ${tag}`, "INVALID_FORMAT");
+		}
+		if (typeof value !== "string" || value === "") {
+			throw new ParseError(
+				`${parentLabel}.<${tag}>`,
+				"MISSING_FIELD",
+			);
+		}
+		const n = parseInt(value, 10);
+		if (Number.isNaN(n)) {
+			throw new ParseError(
+				`Invalid integer in ${tag}: ${value}`,
+				"INVALID_FORMAT",
+			);
+		}
+		out.push({ turn, value: n });
+	}
+	return out;
+}
+
+/**
+ * Strict-mode parser for nested-by-type sparse history containers, e.g.:
+ *
+ *   <YieldRateHistory>
+ *     <YIELD_GROWTH>
+ *       <T2>10</T2>
+ *     </YIELD_GROWTH>
+ *   </YieldRateHistory>
+ *
+ * Returns `[{typeName, turn, value}]` triples. Same strict T-prefix and
+ * text semantics as `parseSparseHistory` — mirrors timeseries.rs:71, 81.
+ */
+export function parseSparseHistoryByType(
+	node: unknown,
+	parentLabel: string,
+): Array<{ typeName: string; turn: number; value: number }> {
+	const out: Array<{ typeName: string; turn: number; value: number }> = [];
+	if (!isElement(node)) return out;
+	for (const [typeName, typeNode] of getElementChildren(node)) {
+		if (!isElement(typeNode)) continue;
+		for (const inner of parseSparseHistory(typeNode, parentLabel)) {
+			out.push({ typeName, turn: inner.turn, value: inner.value });
+		}
+	}
+	return out;
+}
+
+/**
  * Parse a container whose children have prefix-stripped integer keys, e.g.:
  *
  *   <AgentTurn>

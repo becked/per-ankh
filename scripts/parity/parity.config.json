@@ -35,7 +35,15 @@
 		"player_council",
 		"laws",
 		"player_goals",
-		"diplomacy_relations"
+		"diplomacy_relations",
+		"yield_price_history",
+		"military_power_history",
+		"points_history",
+		"legitimacy_history",
+		"yield_rate_history",
+		"yield_total_history",
+		"family_opinion_history",
+		"religion_opinion_history"
 	],
 	"tolerances": {
 		"floatPrecisionDigits": 6,
