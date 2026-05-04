@@ -1,6 +1,21 @@
 {
 	"schemaVersion": 1,
-	"implemented": ["characters", "families", "players", "religions", "tribes"],
+	"implemented": [
+		"characters",
+		"cities",
+		"city_culture",
+		"city_enemy_agents",
+		"city_luxuries",
+		"city_production_queue",
+		"city_project_counts",
+		"city_projects_completed",
+		"city_religions",
+		"city_yields",
+		"families",
+		"players",
+		"religions",
+		"tribes"
+	],
 	"tolerances": {
 		"floatPrecisionDigits": 6,
 		"trimStrings": true,

@@ -6,40 +6,40 @@
 import { XMLParser } from "fast-xml-parser";
 import { ParseError } from "./extract-zip.js";
 
-// Container elements that can repeat as siblings and must always be arrays
-// even when a single instance exists. Without this, fast-xml-parser would
-// give a single object for one Player and an array for two — every parser
-// would need to guard against both shapes.
+// Element names that can repeat as siblings under a single parent. Without
+// the array wrap, fast-xml-parser produces a single object for one
+// occurrence and an array for two — every parser would need to guard both
+// shapes. Only true sibling-repetition cases belong here; single-instance
+// container wrappers (e.g. <Religion> under a City, holding religion-name
+// children) must NOT be listed, or they'd get wrapped to `[obj]` and force
+// every read site to unwrap.
 //
-// The isLeafNode predicate below excludes leaf-text elements with the same
-// name (e.g. <Religion>RELIGION_BUDDHISM</Religion> as a child of a Tribe is
-// a leaf reference, not a top-level Religion container). Without that guard,
-// such leaves get wrapped in `[...]` and parsers see strings where they
-// expect a single value.
+// The isLeafNode predicate in the parser config below also excludes
+// leaf-text elements with the same name (e.g. <Religion>RELIGION_BUDDHISM</>
+// as a child of a Tribe is a leaf reference, not a container).
 const ALWAYS_ARRAY_TAGS = new Set([
+	// Top-level repeating elements
 	"Player",
 	"Character",
 	"Tile",
 	"City",
 	"Family",
-	"Religion",
 	"Tribe",
 	"Unit",
+	"DiplomacyRelation",
+	// Per-Player event collections
 	"LogData",
 	"GoalData",
-	"DiplomacyRelation",
+	// Character_data sub-collections
 	"TraitTurn",
 	"RelationshipData",
 	"SpouseData",
-	"CompletedBuild",
-	"BuildQueueEntry",
-	"ProjectCount",
-	"AgentData",
-	"LuxuryData",
-	"CityReligion",
-	"TeamCulture",
+	// Cities: BuildQueue / CompletedBuild children
+	"QueueInfo",
+	// Tiles sub-collections
 	"TileChange",
 	"TileVisibility",
+	// Units sub-collections
 	"UnitPromotion",
 	"UnitEffect",
 	"UnitFamily",
@@ -172,6 +172,37 @@ export function parseNameKeyedIntMap(node: unknown): Map<string, number> {
 		if (typeof value !== "string") continue;
 		const n = parseInt(value, 10);
 		if (!Number.isNaN(n)) out.set(name, n);
+	}
+	return out;
+}
+
+/**
+ * Parse a container whose children have prefix-stripped integer keys, e.g.:
+ *
+ *   <AgentTurn>
+ *     <P.2>10</P.2>
+ *     <P.4>15</P.4>
+ *   </AgentTurn>
+ *
+ * Returns Map<key-int, value-int>. Children whose tag name doesn't start
+ * with the prefix, or whose stripped key/value isn't a parseable int, are
+ * silently skipped. Used for `P.X` (player-keyed) and `T.X` (team-keyed)
+ * containers in cities and tiles.
+ */
+export function parsePrefixedKeyedIntMap(
+	node: unknown,
+	prefix: string,
+): Map<number, number> {
+	const out = new Map<number, number>();
+	if (!isElement(node)) return out;
+	for (const [tagName, value] of getElementChildren(node)) {
+		if (!tagName.startsWith(prefix)) continue;
+		if (typeof value !== "string") continue;
+		const key = parseInt(tagName.slice(prefix.length), 10);
+		if (Number.isNaN(key)) continue;
+		const v = parseInt(value, 10);
+		if (Number.isNaN(v)) continue;
+		out.set(key, v);
 	}
 	return out;
 }
