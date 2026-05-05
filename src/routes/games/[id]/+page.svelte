@@ -11,7 +11,10 @@
 		UnauthorizedError,
 	} from "$lib/api-cloud";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { isNewer } from "$lib/utils/semver";
+	import { PARSER_VERSION } from "$lib/parser/types";
 	import VisibilityToggle from "$lib/VisibilityToggle.svelte";
+	import ReimportButton from "$lib/ReimportButton.svelte";
 
 	let { data }: { data: PageData } = $props();
 	const game = $derived(data.game);
@@ -62,6 +65,15 @@
 	// svelte-ignore state_referenced_locally
 	let isPublic = $state(
 		(data.game as { is_public?: boolean }).is_public ?? false,
+	);
+
+	// Re-import banner: shown to owners when the stored parser_version is
+	// older than the current build's PARSER_VERSION. The blob carries
+	// parser_version through from the gzipped JSON in R2, so this works
+	// without a separate API call. Hidden for anonymous viewers (public
+	// games) and non-owner signed-in viewers (`isOwner` is false in both).
+	const isReimportAvailable = $derived(
+		isOwner && isNewer(PARSER_VERSION, game.parser_version),
 	);
 
 	// Re-sync map + visibility state when the loaded game changes (route
@@ -178,6 +190,15 @@
 			</div>
 		{/if}
 	</header>
+	{#if isReimportAvailable}
+		<div class="flex shrink-0 items-center justify-between border-b border-orange bg-orange/10 px-4 py-2">
+			<p class="text-xs text-tan">
+				This game was parsed with an older version ({game.parser_version}).
+				Re-import to refresh the data.
+			</p>
+			<ReimportButton {gameId} />
+		</div>
+	{/if}
 	<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 		<GameDetailView
 			gameDetails={game.game_details}

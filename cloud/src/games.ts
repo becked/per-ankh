@@ -100,21 +100,33 @@ const TECH_LAW_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / 4); // 24
 // safely parameterized (event_type can't be a bind parameter — it's part
 // of the WHERE clause structure — but the allowlist closes the injection
 // path while still letting all callers share one query shape).
-type RateLimitedEventType = "upload" | "visibility_change" | "download";
+type RateLimitedEventType =
+	| "upload"
+	| "reimport"
+	| "visibility_change"
+	| "download";
+
+// Upload rate limits cover both first-time uploads and re-imports — both
+// hit the same R2 puts + D1 batch, so they cost the same.
+const UPLOAD_EVENT_TYPES = ["upload", "reimport"] as const;
 
 async function countEventsSince(
 	db: D1Database,
-	eventType: RateLimitedEventType,
+	eventType: RateLimitedEventType | readonly RateLimitedEventType[],
 	column: "user_id" | "ip_address" | null,
 	value: string | null,
 ): Promise<number> {
+	const types: RateLimitedEventType[] = Array.isArray(eventType)
+		? [...eventType]
+		: [eventType as RateLimitedEventType];
+	const placeholders = types.map(() => "?").join(", ");
 	const where = column
-		? `${column} = ? AND event_type = ? AND created_at > datetime('now', '-1 hour')`
-		: `event_type = ? AND created_at > datetime('now', '-1 hour')`;
+		? `${column} = ? AND event_type IN (${placeholders}) AND created_at > datetime('now', '-1 hour')`
+		: `event_type IN (${placeholders}) AND created_at > datetime('now', '-1 hour')`;
 	const stmt = db.prepare(`SELECT COUNT(*) as count FROM events WHERE ${where}`);
 	const result = await (column && value !== null
-		? stmt.bind(value, eventType).first<{ count: number }>()
-		: stmt.bind(eventType).first<{ count: number }>());
+		? stmt.bind(value, ...types).first<{ count: number }>()
+		: stmt.bind(...types).first<{ count: number }>());
 	return result?.count ?? 0;
 }
 
@@ -215,6 +227,23 @@ function buildMultiRowInsert(
 	return `INSERT INTO ${table} (${columns.join(",")}) VALUES ${valuesClause}`;
 }
 
+// ---------- Semver helper ----------
+
+// Strict numeric semver compare. Returns -1, 0, or 1 for a < b, a == b, a > b.
+// Three-segment "X.Y.Z" only — no pre-release/build suffix support, since
+// PARSER_VERSION never carries one. Non-numeric segments compare as 0.
+function compareSemver(a: string, b: string): number {
+	const pa = a.split(".").map((s) => parseInt(s, 10) || 0);
+	const pb = b.split(".").map((s) => parseInt(s, 10) || 0);
+	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+		const da = pa[i] ?? 0;
+		const db = pb[i] ?? 0;
+		if (da < db) return -1;
+		if (da > db) return 1;
+	}
+	return 0;
+}
+
 // ---------- Field extractors (FullGameData → DB rows) ----------
 
 interface GameRowInputs {
@@ -224,13 +253,20 @@ interface GameRowInputs {
 	fileHash: string;
 	blobSize: number;
 	uploaderIndex: number | null;
+	// Re-import overrides — preserve the existing row's URL-stable fields
+	// instead of resetting them from defaults.
+	createdAtOverride?: string;
+	isPublicOverride?: boolean;
 }
 
 function buildGameRow(inp: GameRowInputs): {
 	sql: string;
 	bindings: unknown[];
 } {
-	const { gameId, userId, blob, fileHash, blobSize, uploaderIndex } = inp;
+	const {
+		gameId, userId, blob, fileHash, blobSize, uploaderIndex,
+		createdAtOverride, isPublicOverride,
+	} = inp;
 	const md = blob.match_metadata;
 	const gd = blob.game_details as {
 		winner_name: string | null;
@@ -250,6 +286,36 @@ function buildGameRow(inp: GameRowInputs): {
 		userWon = winner ? winner.winner_player_xml_id === uploaderIndex : null;
 	}
 
+	const isPublic = isPublicOverride === undefined ? 0 : isPublicOverride ? 1 : 0;
+
+	// On re-import, REPLACE the games row (cascades child deletes), preserve
+	// created_at and is_public, and bump updated_at to now. On first upload,
+	// rely on column defaults for created_at/updated_at and is_public=FALSE.
+	if (createdAtOverride !== undefined) {
+		return {
+			sql: `INSERT OR REPLACE INTO games (
+				game_id, user_id, xml_game_id, total_turns, file_hash,
+				game_name, save_date, map_size, map_class, game_mode,
+				difficulty, opponent_level,
+				winner_nation, winner_name, victory_type,
+				user_nation, user_won,
+				is_public,
+				blob_version, blob_size_bytes, parser_version,
+				created_at, updated_at
+			) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?, datetime('now'))`,
+			bindings: [
+				gameId, userId, md.xml_game_id, md.total_turns, fileHash,
+				md.game_name, md.save_date, md.map_size, md.map_class, md.game_mode,
+				md.difficulty, md.opponent_level,
+				gd.winner_civilization, gd.winner_name, victoryType,
+				userNation, userWon === null ? null : userWon ? 1 : 0,
+				isPublic,
+				blob.version, blobSize, blob.parser_version,
+				createdAtOverride,
+			],
+		};
+	}
+
 	return {
 		sql: `INSERT INTO games (
 			game_id, user_id, xml_game_id, total_turns, file_hash,
@@ -266,7 +332,7 @@ function buildGameRow(inp: GameRowInputs): {
 			md.difficulty, md.opponent_level,
 			gd.winner_civilization, gd.winner_name, victoryType,
 			userNation, userWon === null ? null : userWon ? 1 : 0,
-			0, // is_public default false
+			isPublic,
 			blob.version, blobSize, blob.parser_version,
 		],
 	};
@@ -528,14 +594,15 @@ export async function handleGameUpload(
 	const userId = session.data.user_id;
 	const ip = request.headers.get("CF-Connecting-IP");
 
-	// Rate limits (per-user, per-IP, global)
-	if ((await countEventsSince(env.SHARE_DB, "upload", "user_id", userId)) >= PER_USER_UPLOADS_PER_HOUR) {
+	// Rate limits (per-user, per-IP, global). Counts uploads + re-imports
+	// together — re-imports are the same R2/D1 work as a fresh upload.
+	if ((await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, "user_id", userId)) >= PER_USER_UPLOADS_PER_HOUR) {
 		return errorResponse("Per-user upload limit exceeded", 429, cors, "RATE_LIMIT_USER");
 	}
-	if (ip && (await countEventsSince(env.SHARE_DB, "upload", "ip_address", ip)) >= PER_IP_UPLOADS_PER_HOUR) {
+	if (ip && (await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, "ip_address", ip)) >= PER_IP_UPLOADS_PER_HOUR) {
 		return errorResponse("Per-IP upload limit exceeded", 429, cors, "RATE_LIMIT_IP");
 	}
-	if ((await countEventsSince(env.SHARE_DB, "upload", null, null)) >= GLOBAL_UPLOADS_PER_HOUR) {
+	if ((await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, null, null)) >= GLOBAL_UPLOADS_PER_HOUR) {
 		return errorResponse("Global upload limit exceeded", 429, cors, "RATE_LIMIT_GLOBAL");
 	}
 
@@ -647,22 +714,49 @@ export async function handleGameUpload(
 	const rawZip = await saveBlob.arrayBuffer();
 	const fileHash = await sha256Hex(rawZip);
 
-	// Dedup check
+	// Dedup check. A `(user_id, file_hash)` collision is one of two cases:
+	//   - Same-or-older parser_version → return 409 (don't downgrade, no
+	//     point overwriting with identical content).
+	//   - Newer parser_version → re-import path: reuse the existing game_id
+	//     so URLs stay stable, REPLACE the games row (cascades child rows),
+	//     overwrite the R2 blob with the new gzipped JSON. ZIP bytes match
+	//     by hash so the ZIP put is idempotent.
 	const existing = await env.SHARE_DB.prepare(
-		"SELECT game_id FROM games WHERE user_id = ? AND file_hash = ?",
+		`SELECT game_id, parser_version, created_at, is_public
+		 FROM games WHERE user_id = ? AND file_hash = ?`,
 	)
 		.bind(userId, fileHash)
-		.first<{ game_id: string }>();
+		.first<{
+			game_id: string;
+			parser_version: string;
+			created_at: string;
+			is_public: number;
+		}>();
+
+	let isReimport = false;
+	let existingCreatedAt: string | undefined;
+	let existingIsPublic: boolean | undefined;
+	let existingParserVersion: string | undefined;
+	let gameId: string;
 	if (existing) {
-		return jsonResponse(
-			{ error: "Duplicate", code: "DUPLICATE", existing_game_id: existing.game_id },
-			409,
-			cors,
-		);
+		const cmp = compareSemver(blob.parser_version, existing.parser_version);
+		if (cmp <= 0) {
+			return jsonResponse(
+				{ error: "Duplicate", code: "DUPLICATE", existing_game_id: existing.game_id },
+				409,
+				cors,
+			);
+		}
+		isReimport = true;
+		gameId = existing.game_id;
+		existingCreatedAt = existing.created_at;
+		existingIsPublic = existing.is_public === 1;
+		existingParserVersion = existing.parser_version;
+	} else {
+		gameId = nanoid(21);
 	}
 
-	// Game id + R2 keys
-	const gameId = nanoid(21);
+	// R2 keys
 	const blobKey = `games/${gameId}.json.gz`;
 	const zipKey = `saves/${gameId}.zip`;
 
@@ -686,10 +780,17 @@ export async function handleGameUpload(
 		return errorResponse("Storage write failed", 500, cors, "R2_FAILED");
 	}
 
-	// D1 inserts as a single transactional batch
+	// D1 inserts as a single transactional batch. On re-import the games
+	// row uses INSERT OR REPLACE — REPLACE fires ON DELETE CASCADE on the
+	// child tables (player_summaries, game_player_turn, tech_events,
+	// law_events) so the fresh child INSERTs in this batch land into a
+	// cleared slate. created_at and is_public are preserved from the
+	// existing row.
 	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
 	const gameRow = buildGameRow({
 		gameId, userId, blob, fileHash, blobSize: dataBlob.size, uploaderIndex,
+		createdAtOverride: existingCreatedAt,
+		isPublicOverride: existingIsPublic,
 	});
 	const summaryStmts = buildSummaryStatements(env.SHARE_DB, {
 		gameId, blob, uploaderIndex, winnerIndex,
@@ -710,16 +811,26 @@ export async function handleGameUpload(
 		await env.SHARE_DB.batch(allStatements);
 	} catch (e) {
 		console.error(
-			`D1_INSERT_FAILED: cleaning up R2 game_id=${gameId}`,
+			`D1_INSERT_FAILED: ${isReimport ? "preserving" : "cleaning up"} R2 game_id=${gameId}`,
 			e,
 		);
-		try {
-			await Promise.all([
-				env.SHARE_BUCKET.delete(blobKey),
-				env.SHARE_BUCKET.delete(zipKey),
-			]);
-		} catch (cleanupErr) {
-			console.error(`ORPHANED_BLOB: R2 cleanup failed game_id=${gameId}`, cleanupErr);
+		// On first-upload failure: D1 has nothing pointing at the R2 blobs
+		// we just wrote, so delete them to avoid orphans.
+		// On re-import failure: D1 still references the R2 blobs (the
+		// REPLACE rolled back), but the blob bytes have already been
+		// overwritten with the new payload. Deleting them would delete
+		// the user's existing game entirely. Leave R2 alone — the old D1
+		// row continues to render the new (fresher) data, with a stale
+		// parser_version badge. Acceptable degraded state vs. data loss.
+		if (!isReimport) {
+			try {
+				await Promise.all([
+					env.SHARE_BUCKET.delete(blobKey),
+					env.SHARE_BUCKET.delete(zipKey),
+				]);
+			} catch (cleanupErr) {
+				console.error(`ORPHANED_BLOB: R2 cleanup failed game_id=${gameId}`, cleanupErr);
+			}
 		}
 		return errorResponse("Database write failed", 500, cors, "D1_FAILED");
 	}
@@ -738,13 +849,16 @@ export async function handleGameUpload(
 		}
 	}
 
-	// Audit log
+	// Audit log — distinct event_type for re-imports so admin tooling
+	// (cloud/admin.sh events --type reimport) can filter cleanly. Both
+	// types count toward upload rate limits (UPLOAD_EVENT_TYPES).
 	try {
 		await env.SHARE_DB.prepare(
 			`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
-			 VALUES ('upload', ?, ?, ?, ?)`,
+			 VALUES (?, ?, ?, ?, ?)`,
 		)
 			.bind(
+				isReimport ? "reimport" : "upload",
 				gameId,
 				userId,
 				ip,
@@ -753,6 +867,12 @@ export async function handleGameUpload(
 					decompressed_size: decompressed.byteLength,
 					zip_size: rawZip.byteLength,
 					uploader_index: uploaderIndex,
+					...(isReimport
+						? {
+							from_version: existingParserVersion,
+							to_version: blob.parser_version,
+						}
+						: {}),
 				}),
 			)
 			.run();
@@ -760,6 +880,19 @@ export async function handleGameUpload(
 		console.error("Failed to log upload event:", e);
 	}
 
+	if (isReimport) {
+		return jsonResponse(
+			{
+				game_id: gameId,
+				url: `/games/${gameId}`,
+				reimported: true,
+				from_version: existingParserVersion,
+				to_version: blob.parser_version,
+			},
+			200,
+			cors,
+		);
+	}
 	return jsonResponse(
 		{ game_id: gameId, url: `/games/${gameId}` },
 		201,

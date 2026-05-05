@@ -1,6 +1,6 @@
 <script lang="ts">
 	// Cloud upload flow:
-	//   1. User picks a save .zip
+	//   1. User picks a save .zip (or `prefilled` prop is set for re-import)
 	//   2. Web Worker parses → FullGameData + rawZip (transferable)
 	//   3. Picker is always shown (even for single-human saves) — radio
 	//      buttons over the human players plus a "None / observer" option.
@@ -8,6 +8,8 @@
 	//      knownOnlineIds set; otherwise null (observer).
 	//   4. Gzip the FullGameData JSON in-browser (CompressionStream).
 	//   5. POST multipart to /v1/games. On 201, navigate to /games/{id}.
+	//      On 200 with reimported:true, the caller's `onDone` decides
+	//      what to do (typically invalidateAll to refresh the page).
 	//   6. On 409 (DuplicateUploadError), surface link to existing game.
 	//
 	// "Observer mode" (`uploaderIndex === null`) means the uploader has no
@@ -26,6 +28,27 @@
 		DuplicateUploadError,
 	} from "$lib/api-cloud";
 
+	// Pre-filled mode is the entry point for re-import. The owner's already
+	// fetched the raw ZIP from R2 (see ReimportButton.svelte) — we skip the
+	// idle state and run it through the same parse → picker → upload flow,
+	// reusing all the existing code paths. The Worker recognises the
+	// file_hash collision + newer parser_version as an in-place overwrite,
+	// so the upload itself is unchanged from the client's perspective.
+	let {
+		prefilled,
+		onDone,
+	}: {
+		prefilled?: { rawZip: ArrayBuffer; fileName: string };
+		// Callback fired after a successful upload OR re-import. Lets the
+		// caller decide whether to navigate (first upload) or just refresh
+		// the current page (re-import). When omitted, default behavior is
+		// to navigate to /games/{id}.
+		onDone?: (
+			gameId: string,
+			info: { reimported: boolean },
+		) => void | Promise<void>;
+	} = $props();
+
 	const OBSERVER: null = null;
 
 	type Status =
@@ -41,12 +64,15 @@
 		  }
 		| { kind: "uploading"; fileName: string }
 		| { kind: "duplicate"; existingGameId: string }
-		| { kind: "done"; gameId: string }
+		| { kind: "done"; gameId: string; reimported: boolean }
 		| { kind: "error"; message: string };
 
 	let status = $state<Status>({ kind: "idle" });
 	let worker: Worker | null = null;
 	let knownOnlineIds = $state<Set<string>>(new Set());
+	// True when this modal instance was opened for a re-import. Used to
+	// switch picker/done copy and to suppress the file-pick UI.
+	const isReimportMode = $derived(prefilled !== undefined);
 
 	function reset() {
 		worker?.terminate();
@@ -71,13 +97,7 @@
 		refreshKnownOnlineIds();
 	});
 
-	async function onPick(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		input.value = "";
-
-		const buffer = await file.arrayBuffer();
+	function startParse(buffer: ArrayBuffer, fileName: string) {
 		status = { kind: "parsing", phase: "Starting", percent: 0 };
 
 		worker?.terminate();
@@ -89,7 +109,7 @@
 			} else if (msg.type === "result") {
 				worker?.terminate();
 				worker = null;
-				onParsed(msg.data, msg.rawZip, file.name);
+				onParsed(msg.data, msg.rawZip, fileName);
 			} else {
 				worker?.terminate();
 				worker = null;
@@ -97,10 +117,29 @@
 			}
 		};
 		worker.postMessage(
-			{ type: "parse", file: buffer, fileName: file.name },
+			{ type: "parse", file: buffer, fileName },
 			{ transfer: [buffer] },
 		);
 	}
+
+	async function onPick(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+		input.value = "";
+		const buffer = await file.arrayBuffer();
+		startParse(buffer, file.name);
+	}
+
+	// Pre-filled (re-import) flow: kick off parsing as soon as the modal
+	// mounts with a `prefilled` prop. Only fire once — guarded by the
+	// `idle` status check so prop reactivity in unusual cases doesn't
+	// re-trigger.
+	$effect(() => {
+		if (prefilled && status.kind === "idle") {
+			startParse(prefilled.rawZip, prefilled.fileName);
+		}
+	});
 
 	// Pick a sensible default: if exactly one human's online_id matches the
 	// uploader's known ids, pre-select that human. Anything else (zero
@@ -172,11 +211,16 @@
 
 		try {
 			const res = await cloudApi.uploadGame(form);
-			status = { kind: "done", gameId: res.game_id };
+			const reimported = res.reimported === true;
+			status = { kind: "done", gameId: res.game_id, reimported };
 			// Refresh known ids — we just learned one if the picked human
 			// had an online_id (observer uploads don't change the set).
 			void refreshKnownOnlineIds();
-			await goto(`/games/${res.game_id}`);
+			if (onDone) {
+				await onDone(res.game_id, { reimported });
+			} else {
+				await goto(`/games/${res.game_id}`);
+			}
 		} catch (err) {
 			if (err instanceof DuplicateUploadError) {
 				status = { kind: "duplicate", existingGameId: err.existingGameId };
@@ -194,29 +238,45 @@
 </script>
 
 <div class="rounded border-2 border-brown bg-[#2a2622] p-6">
+	{#if isReimportMode && prefilled}
+		<p class="mb-3 text-xs uppercase tracking-wide text-brown">
+			Re-importing {prefilled.fileName}
+		</p>
+	{/if}
 	{#if status.kind === "idle"}
-		<label class="block">
-			<span class="mb-2 block text-sm font-bold text-tan">
-				Pick a save zip
-			</span>
-			<input
-				type="file"
-				accept=".zip"
-				onchange={onPick}
-				class="block w-full text-sm text-tan file:mr-4 file:rounded file:border-0 file:bg-brown file:px-4 file:py-2 file:text-sm file:font-bold file:text-tan hover:file:bg-orange"
-			/>
-		</label>
+		{#if !isReimportMode}
+			<label class="block">
+				<span class="mb-2 block text-sm font-bold text-tan">
+					Pick a save zip
+				</span>
+				<input
+					type="file"
+					accept=".zip"
+					onchange={onPick}
+					class="block w-full text-sm text-tan file:mr-4 file:rounded file:border-0 file:bg-brown file:px-4 file:py-2 file:text-sm file:font-bold file:text-tan hover:file:bg-orange"
+				/>
+			</label>
+		{:else}
+			<p class="text-sm text-tan">Starting…</p>
+		{/if}
 	{:else if status.kind === "parsing"}
 		<p class="mb-2 text-sm text-tan">
 			{status.phase} — {status.percent}%
 		</p>
 		<progress value={status.percent} max={100} class="w-full"></progress>
 	{:else if status.kind === "picker"}
-		<h2 class="mb-1 text-lg font-bold text-tan">Which player is you?</h2>
+		<h2 class="mb-1 text-lg font-bold text-tan">
+			{isReimportMode ? "Confirm your player" : "Which player is you?"}
+		</h2>
 		<p class="mb-4 text-xs text-brown">
-			Pick the player that belongs to your account, or "None" if
-			you're uploading on someone else's behalf (e.g. archiving a
-			tournament match or a friend's game).
+			{#if isReimportMode}
+				Re-imports refresh the parsed data — confirm the same player
+				you originally picked, or change it if you got it wrong.
+			{:else}
+				Pick the player that belongs to your account, or "None" if
+				you're uploading on someone else's behalf (e.g. archiving a
+				tournament match or a friend's game).
+			{/if}
 		</p>
 		<ul class="mb-4 space-y-2">
 			{#each status.humans as human (human.player_index)}
@@ -277,10 +337,17 @@
 			</button>
 		</div>
 	{:else if status.kind === "uploading"}
-		<p class="text-sm text-tan">Uploading {status.fileName}…</p>
+		<p class="text-sm text-tan">
+			{isReimportMode ? "Updating" : "Uploading"} {status.fileName}…
+		</p>
 	{:else if status.kind === "duplicate"}
 		<p class="mb-3 text-sm text-tan">
-			You've already uploaded this save.
+			{#if isReimportMode}
+				This save is already at the current parser version — nothing
+				to refresh.
+			{:else}
+				You've already uploaded this save.
+			{/if}
 		</p>
 		<a
 			class="text-sm font-bold text-orange underline"
@@ -288,17 +355,21 @@
 		>
 			Open the existing game →
 		</a>
-		<div class="mt-4">
-			<button
-				type="button"
-				onclick={reset}
-				class="rounded bg-brown/40 px-3 py-1 text-sm text-tan hover:bg-brown"
-			>
-				Pick another file
-			</button>
-		</div>
+		{#if !isReimportMode}
+			<div class="mt-4">
+				<button
+					type="button"
+					onclick={reset}
+					class="rounded bg-brown/40 px-3 py-1 text-sm text-tan hover:bg-brown"
+				>
+					Pick another file
+				</button>
+			</div>
+		{/if}
 	{:else if status.kind === "done"}
-		<p class="text-sm text-tan">Uploaded. Redirecting…</p>
+		<p class="text-sm text-tan">
+			{status.reimported ? "Updated" : "Uploaded"}. Redirecting…
+		</p>
 	{:else}
 		<p class="mb-2 font-bold text-orange">Upload failed</p>
 		<p class="mb-4 break-words text-sm text-tan">{status.message}</p>

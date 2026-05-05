@@ -38,6 +38,18 @@ export interface GameListResponse {
 	total: number;
 }
 
+// Worker response for POST /v1/games. First-time uploads get 201 with the
+// minimal shape; re-imports (file_hash collision + newer parser_version)
+// get 200 with `reimported: true` plus the version pair, so the client can
+// distinguish "Uploaded" from "Updated" copy.
+export interface UploadGameResponse {
+	game_id: string;
+	url: string;
+	reimported?: boolean;
+	from_version?: string;
+	to_version?: string;
+}
+
 // Cross-game stats for the cloud /dashboard. Mirrors desktop GameStatistics
 // + SaveDateEntry shapes so the same chart-building helpers render both.
 export interface StatsResponse {
@@ -262,7 +274,7 @@ export const cloudApi = {
 	uploadGame: async (
 		formData: FormData,
 		opts?: CallOpts,
-	): Promise<{ game_id: string; url: string }> => {
+	): Promise<UploadGameResponse> => {
 		// Important: do NOT set Content-Type — the browser sets it with the
 		// multipart boundary. Setting it manually breaks parsing.
 		const res = await request("/games", {
@@ -270,7 +282,7 @@ export const cloudApi = {
 			method: "POST",
 			body: formData,
 		});
-		return res.json() as Promise<{ game_id: string; url: string }>;
+		return res.json() as Promise<UploadGameResponse>;
 	},
 
 	deleteGame: async (id: string, opts?: CallOpts): Promise<void> => {
