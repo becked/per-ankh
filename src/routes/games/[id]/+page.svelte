@@ -153,7 +153,7 @@
 	<meta name="description" content={ogDescription} />
 </svelte:head>
 
-<main class="isolate flex h-screen flex-1 flex-col overflow-hidden bg-blue-gray">
+<main class="isolate flex flex-1 flex-col overflow-hidden">
 	<header class="flex shrink-0 items-center justify-between border-b border-brown bg-[#2a2622] px-4 py-2">
 		<a href="/games" class="text-sm text-tan hover:text-orange">← Games</a>
 		{#if isOwner}

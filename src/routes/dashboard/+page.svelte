@@ -204,7 +204,7 @@
 	therefore need their own scroll container; mirroring the pattern from
 	src/routes/games/[id]/+page.svelte:50.
 -->
-<main class="isolate flex h-screen flex-col overflow-hidden bg-blue-gray">
+<main class="isolate flex flex-1 flex-col overflow-hidden">
 	<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
 		<h1 class="mb-8 text-3xl font-bold text-gray-200">Overview</h1>
 

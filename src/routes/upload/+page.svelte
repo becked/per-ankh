@@ -20,7 +20,7 @@
 	<title>Upload — Per-Ankh</title>
 </svelte:head>
 
-<main class="min-h-screen bg-blue-gray px-4 py-8">
+<main class="flex-1 overflow-y-auto px-4 py-8">
 	<div class="mx-auto max-w-xl">
 		<h1 class="mb-4 font-serif text-2xl text-tan">Upload a save</h1>
 		{#if ready}
