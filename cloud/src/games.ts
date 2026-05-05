@@ -1011,8 +1011,12 @@ export async function handleGameDetail(
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
+			// Owners get no-store so post-mutation reloads (re-import,
+			// visibility toggle, etc.) always see fresh data instead of a
+			// 5-minute browser-cached blob. Public viewers still get a CDN
+			// cache — they're the read-volume tier.
 			"Cache-Control": isOwner
-				? "private, max-age=300"
+				? "private, no-store"
 				: "public, max-age=3600, s-maxage=3600",
 			...cors,
 			Vary: "Cookie, Origin",
