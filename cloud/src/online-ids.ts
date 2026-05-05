@@ -54,3 +54,30 @@ export async function handleListOnlineIds(
 	const onlineIds = await getUserOnlineIds(env, session.data.user_id);
 	return jsonResponse({ online_ids: onlineIds }, 200, cors);
 }
+
+// DELETE /v1/users/me/online-ids/:online_id — remove a user's manually-managed
+// link. Idempotent — returns 204 whether or not the row existed (DELETE on a
+// missing row is a no-op the user doesn't need to know about). Composite
+// primary key (user_id, online_id) ensures only the caller's own row is
+// touched. Re-uploading a save where the same online_id appears will
+// auto-relink it via captureOnlineIds.
+export async function handleRemoveOnlineId(
+	onlineId: string,
+	request: Request,
+	env: OnlineIdsEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	await env.SHARE_DB.prepare(
+		"DELETE FROM user_online_ids WHERE user_id = ? AND online_id = ?",
+	)
+		.bind(session.data.user_id, onlineId)
+		.run();
+
+	return new Response(null, { status: 204, headers: cors });
+}

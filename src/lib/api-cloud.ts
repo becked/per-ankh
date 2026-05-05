@@ -295,6 +295,16 @@ export const cloudApi = {
 		return body.online_ids;
 	},
 
+	// DELETE /users/me/online-ids/:online_id — remove a manually-managed
+	// link. Idempotent on the server, so callers don't need to handle 404.
+	// IDs auto-relink on the next upload that contains them.
+	removeOnlineId: async (onlineId: string, opts?: CallOpts): Promise<void> => {
+		await request(`/users/me/online-ids/${encodeURIComponent(onlineId)}`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
 	// --- Stats ---
 	getStats: async (opts?: CallOpts): Promise<StatsResponse> => {
 		const res = await request("/stats", opts);

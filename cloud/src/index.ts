@@ -37,7 +37,7 @@ import {
 	handleGameUpload,
 } from "./games";
 import type { GamesEnv } from "./games";
-import { handleListOnlineIds } from "./online-ids";
+import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
 import type { OnlineIdsEnv } from "./online-ids";
 import { handleStats } from "./stats";
 import type { StatsEnv } from "./stats";
@@ -552,6 +552,12 @@ export default {
 		// === Cloud rewrite: /v1/users/* ===
 		if (method === "GET" && url.pathname === "/v1/users/me/online-ids") {
 			return handleListOnlineIds(request, env);
+		}
+		const onlineIdMatch = url.pathname.match(
+			/^\/v1\/users\/me\/online-ids\/(.+)$/,
+		);
+		if (method === "DELETE" && onlineIdMatch) {
+			return handleRemoveOnlineId(decodeURIComponent(onlineIdMatch[1]), request, env);
 		}
 
 		// === Cloud rewrite: /v1/stats ===

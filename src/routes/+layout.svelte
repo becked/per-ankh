@@ -24,6 +24,7 @@
 			page.url.pathname.startsWith("/auth/") ||
 			page.url.pathname === "/upload" ||
 			page.url.pathname === "/dashboard" ||
+			page.url.pathname === "/account" ||
 			page.url.pathname === "/games" ||
 			page.url.pathname.startsWith("/games/"),
 	);
