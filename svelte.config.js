@@ -24,6 +24,14 @@ const adapter =
 // bits-ui portals, and ECharts inject inline `style=` attributes whose
 // hashes change too frequently to enumerate. Tighten only after CSP-report
 // data shows it's safe.
+// In `vite dev` (NODE_ENV !== "production") the cloud Worker runs on
+// http://localhost:8787 and the frontend on http://localhost:1420 — two
+// different origins, so client-side fetches need it whitelisted in
+// connect-src. Production CSP stays tight (only api.per-ankh.app).
+const isDev = process.env.NODE_ENV !== "production";
+const connectSrc = ["self", "https://api.per-ankh.app"];
+if (isDev) connectSrc.push("http://localhost:8787");
+
 const cloudCsp = {
 	mode: /** @type {const} */ ("hash"),
 	directives: {
@@ -31,7 +39,7 @@ const cloudCsp = {
 		"script-src": ["self"],
 		"style-src": ["self", "unsafe-inline"],
 		"img-src": ["self", "data:", "https://cdn.discordapp.com"],
-		"connect-src": ["self", "https://api.per-ankh.app"],
+		"connect-src": connectSrc,
 		"font-src": ["self"],
 		"object-src": ["none"],
 		"frame-ancestors": ["none"],
