@@ -18,6 +18,7 @@ import { validateSharePayload, extractMetadata } from "./validation";
 import {
 	cloudCorsHeaders,
 	decompressWithLimit,
+	getClientIp,
 	legacyCorsHeaders,
 	timingSafeEqual,
 } from "./util";
@@ -245,7 +246,7 @@ async function handleUpload(
 	}
 
 	// 3. Extract IP early for rate limiting and blocklist checks
-	const ip = request.headers.get("CF-Connecting-IP");
+	const ip = getClientIp(request);
 
 	// 4. Check blocklists before doing any expensive work
 	const blocked = await checkBlocklists(env.SHARE_DB, appKey, ip);
@@ -404,8 +405,9 @@ async function handleDownload(
 	request: Request,
 	env: Env,
 ): Promise<Response> {
-	// Rate limit downloads per IP via Cache API
-	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+	// Rate limit downloads per IP via Cache API. Untrusted IP (CF-RAY missing)
+	// → use a single shared "untrusted" bucket rather than skipping the limit.
+	const ip = getClientIp(request) ?? "untrusted";
 	const maxDownloads = parseInt(env.DOWNLOAD_RATE_LIMIT_PER_HOUR);
 	const withinLimit = await checkDownloadRateLimit(ip, maxDownloads);
 	if (!withinLimit) {

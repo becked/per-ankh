@@ -23,6 +23,7 @@ import {
 	cloudCorsHeaders,
 	decompressWithLimit,
 	errorResponse,
+	getClientIp,
 	jsonResponse,
 	sha256Hex,
 } from "./util";
@@ -592,7 +593,7 @@ export async function handleGameUpload(
 	const session = await sessionFromRequest(env, request);
 	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	const userId = session.data.user_id;
-	const ip = request.headers.get("CF-Connecting-IP");
+	const ip = getClientIp(request);
 
 	// Rate limits (per-user, per-IP, global). Counts uploads + re-imports
 	// together — re-imports are the same R2/D1 work as a fresh upload.
@@ -964,9 +965,11 @@ export async function handleGameDetail(
 	}
 
 	// Anonymous public reads: rate-limit per IP per POP, exempting known
-	// link-preview scrapers (Discord/Slack/Twitter/etc.).
+	// link-preview scrapers (Discord/Slack/Twitter/etc.). Untrusted IP
+	// (CF-RAY missing) → shared "untrusted" bucket so per-IP enforcement
+	// doesn't silently degrade in a misconfigured topology.
 	if (!isOwner) {
-		const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+		const ip = getClientIp(request) ?? "untrusted";
 		const ua = request.headers.get("User-Agent");
 		if (!isScraperUA(ua)) {
 			const ok = await checkAnonReadRateLimit(ip, ANON_READS_PER_HOUR);
@@ -1024,6 +1027,13 @@ export async function handleGameDetail(
 	});
 }
 
+// CSRF stance for PATCH/DELETE on /v1/games/:id and DELETE on /v1/games/:id:
+// session cookies are SameSite=Lax + Secure. PATCH/DELETE are non-simple
+// methods, so a cross-site fetch hits a CORS preflight and is blocked by the
+// ALLOWED_ORIGINS allowlist; HTML forms can't emit PATCH/DELETE at all. No
+// CSRF token is needed under that stance — if we ever loosen CORS or accept
+// POST mutations, revisit and add an `X-CSRF-Token` requirement.
+//
 // PATCH /v1/games/:id — toggle visibility (owner-only). Body shape:
 //   { is_public: boolean }
 // Returns the updated row subset. Per-user 60/hr rate limit on toggles
@@ -1195,7 +1205,7 @@ export async function handleGameDownload(
 			429, cors, "RATE_LIMIT_USER",
 		);
 	}
-	const ip = request.headers.get("CF-Connecting-IP");
+	const ip = getClientIp(request);
 	if (
 		ip &&
 		(await countEventsSince(env.SHARE_DB, "download", "ip_address", ip)) >=

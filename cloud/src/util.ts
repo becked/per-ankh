@@ -97,6 +97,20 @@ export function isSecureRequest(request: Request): boolean {
 	return new URL(request.url).protocol === "https:";
 }
 
+// Trusted client IP for rate-limit / blocklist paths. Returns null when
+// the request didn't traverse Cloudflare's edge (CF-RAY absent), so
+// per-IP buckets don't silently collapse onto a shared null/"unknown" key
+// in a misconfigured topology. Rate-limit callers should fall back to
+// global/per-user limits when this returns null and treat the warn line
+// as a misconfiguration signal.
+export function getClientIp(request: Request): string | null {
+	if (!request.headers.get("CF-RAY")) {
+		console.warn("getClientIp: CF-RAY missing — request not via CF edge");
+		return null;
+	}
+	return request.headers.get("CF-Connecting-IP");
+}
+
 // base64url encoding of an ArrayBuffer or Uint8Array, no padding.
 export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
 	const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
