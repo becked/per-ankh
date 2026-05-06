@@ -21,6 +21,7 @@ Companion to [`cloud-rewrite-spec.md`](./cloud-rewrite-spec.md). The spec says
 10. [Phase G — Desktop preservation for end users](#10-phase-g--desktop-preservation-for-end-users)
 11. [Rollback story](#11-rollback-story)
 12. [Smaller follow-ups](#12-smaller-follow-ups)
+13. [Observability fast-follow](#13-observability-fast-follow)
 
 ---
 
@@ -202,13 +203,29 @@ parser port if a parity-style bug surfaces post-Tauri-removal), so
 
 ### Verify before merging — fold in if missing
 
-**Worker observability.** Phase E's bake exit criteria require monitoring
-D1 query duration, R2 counts, error rate split by route, and rate-limit hit
-counts. What emits those metrics today? Cloudflare's dashboards cover
-request counts and CPU but not custom dimensions. If the worker has no
-structured logging hooks yet, add them in #35 — touching every handler in a
-follow-up PR is more disruptive than landing the instrumentation now, and
-without it the bake phase is flying blind on its own success criteria.
+**Worker observability — must land in #35.** The bake exit criteria in §8
+need data, and structured logging is the one observability primitive that
+is genuinely painful to retrofit (touches every handler). Cloudflare-side
+wiring (alerts, Logpush destination) is Phase D — see §7. Land in this PR:
+
+- **Structured JSON logs across every handler.** Fields: `request_id`,
+  `route`, `user_id` (when authed), `status`, `duration_ms`, error class
+  on failures. Emitted via `console.log` so Logpush can pick them up
+  unchanged once a destination is wired in Phase D.
+- **PII rule for logs.** Same logic that drives `stripOnlineIds` for blobs
+  applies to logs. Never log request bodies on upload/reimport routes;
+  Discord IDs and OnlineIDs are PII and don't belong in log fields beyond
+  the opaque internal `user_id`. One line in the logging conventions
+  before the first handler emits anything — retroactive scrubbing of
+  Logpush sinks is painful.
+- **Audit log completeness check.** `audit_events` already exists; verify
+  every state-mutating endpoint (upload, reimport, visibility PATCH,
+  delete, online_id remove, download) writes to it. Easy to gap; hard to
+  backfill once a security review needs the trail.
+- **CSP `report-uri` (or `report-to`) endpoint.** A trivial
+  `POST /v1/csp-report` handler that structured-logs the violation. CSP
+  is configured today; without a reporting endpoint, week-one violations
+  are silently lost.
 
 **Worker test coverage.** `cd cloud && npm test` is in the PR's test plan.
 If it's smoke tests on one or two endpoints, the auth flow + upload
@@ -325,6 +342,15 @@ needed for desktop.
   `assets.per-ankh.app` → R2 bucket
 - Set production `VITE_API_URL=https://api.per-ankh.app/v1` and
   `VITE_PUBLIC_ORIGIN=https://per-ankh.app` at build time
+- Cloudflare alerts configured: Worker 5xx rate, CPU-exceeded, D1 errors.
+  Free, dashboard-driven; the floor for a public surface
+- **Logpush destination — DECISION REQUIRED.** Logpush needs a sink (R2,
+  S3, Datadog, Baselime, etc.). Pick before cutover so the structured logs
+  landed in Phase A actually go somewhere queryable. Default if nothing
+  else is decided: R2 bucket, query later with DuckDB — cheap and
+  Cloudflare-native
+- CSP report endpoint deployed and routed to logs (handler landed in
+  Phase A)
 
 **Conservative rate limits at launch:**
 
@@ -536,6 +562,32 @@ Phase E (bake) since none touch the rollback surface.
 | Mobile-width header layout | `/games/[id]` header has 4 owner buttons + the new top `CloudHeader`; narrow screens may need a collapse menu |
 | Account-deletion path | Privacy compliance. Currently no UI to delete the user record + cascade to games + R2 blobs |
 | Unlink-Discord | Intentionally not offered today — Discord is the only auth provider, no recovery path. Add once a second provider exists |
+
+---
+
+## 13. Observability fast-follow
+
+The cutover-blocking observability work in §4 (structured logs, PII rule,
+audit completeness, CSP reporting) and §7 (Cloudflare alerts, Logpush sink)
+is the floor — enough to know *when* something is broken in production. The
+items below are the polish that makes problems debuggable rather than just
+detectable. Target: shipping within 2 weeks of cutover, during the bake
+window or immediately after.
+
+| Item | Notes | Target |
+|------|-------|--------|
+| Error tracking | Sentry's Cloudflare SDK or Baselime (Cloudflare-acquired, native integration). Free tier covers a single-dev launch | Week 1 |
+| Synthetic uptime check | Cloudflare Health Checks or external pinger on `/v1/stats` every 1–5 min, page on failure. Catches DNS / certificate / whole-site-down failure modes that handler-level alerts miss | Week 1 |
+| Real dashboard | Cloudflare's built-in Worker Analytics, or Logpush → Grafana / Honeycomb / Baselime. Decide once the queries you actually want are clear | Week 2 |
+| 2–3 SLOs | Recommend: `p95 anonymous read < 500ms`, `p95 upload < 10s`, `error rate < 0.5%`. Documents the bar so "is this a P1?" has a non-vibes answer. Don't pick five | Week 2 |
+
+### Security follow (track but not blocking)
+
+| Item | Notes |
+|------|-------|
+| Dependabot | Ten minutes; GitHub-native; covers npm + worker deps |
+| Audit-log review cadence | Quarterly grep through `audit_events` for unusual patterns (mass deletes, high-frequency reimports, PATCHes from unexpected IPs) |
+| Documented incident response | One paragraph naming P0/P1, the rollback levers (DNS revert, worker rollback, KV session bust), and a brief checklist. Solo-dev value is mostly future-you at 11pm in the middle of an incident |
 
 ---
 
