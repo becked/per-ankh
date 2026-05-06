@@ -157,18 +157,48 @@ async function checkAnonReadRateLimit(ip: string, maxPerHour: number): Promise<b
 // `player_name` is intentionally preserved — it's the in-game identity
 // used to discuss who won. `online_id` is the cross-platform tracking
 // surface and is the only field we strip.
+//
+// Deep walk by design: most of FullGameData is typed as `v.unknown()` /
+// `v.array(v.unknown())` in schemas/game.ts (player_history, player_nations,
+// game_religions, current_laws, completed_techs, map_tiles, etc. — opaque
+// parser payloads round-tripped to R2). Today only `player_roster` carries
+// `online_id`, but a future parser version that lands the field anywhere
+// else would silently leak past a roster-only sweep. The walk preserves
+// the input subtree by reference whenever no rewrite happens, so unchanged
+// branches don't allocate.
 function stripOnlineIds(blob: unknown): unknown {
-	if (!blob || typeof blob !== "object") return blob;
-	const b = blob as Record<string, unknown>;
-	const roster = b.player_roster;
-	if (!Array.isArray(roster)) return blob;
-	const newRoster = roster.map((entry) => {
-		if (entry && typeof entry === "object" && "online_id" in entry) {
-			return { ...(entry as Record<string, unknown>), online_id: null };
+	return stripOnlineIdsDeep(blob);
+}
+
+function stripOnlineIdsDeep(node: unknown): unknown {
+	if (Array.isArray(node)) {
+		let changed = false;
+		const out: unknown[] = new Array(node.length);
+		for (let i = 0; i < node.length; i++) {
+			const next = stripOnlineIdsDeep(node[i]);
+			if (next !== node[i]) changed = true;
+			out[i] = next;
 		}
-		return entry;
-	});
-	return { ...b, player_roster: newRoster };
+		return changed ? out : node;
+	}
+	if (node !== null && typeof node === "object") {
+		const obj = node as Record<string, unknown>;
+		let changed = false;
+		const out: Record<string, unknown> = {};
+		for (const key of Object.keys(obj)) {
+			const value = obj[key];
+			if (key === "online_id" && value !== null) {
+				out[key] = null;
+				changed = true;
+			} else {
+				const next = stripOnlineIdsDeep(value);
+				if (next !== value) changed = true;
+				out[key] = next;
+			}
+		}
+		return changed ? out : node;
+	}
+	return node;
 }
 
 // ---------- Save-download filename helpers ----------

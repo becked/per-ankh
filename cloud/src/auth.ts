@@ -244,7 +244,12 @@ export async function handleDiscordCallback(
 	}
 
 	// Read + delete the pending entry (single-use) regardless of validation
-	// outcome, so a leaked code can't be reused.
+	// outcome, so a leaked code can't be reused. KV has no atomic
+	// compare-and-delete, so two parallel callbacks with the same
+	// oauth_pending cookie can both pass state validation here; the race
+	// is gated downstream by Discord rejecting the second `code` exchange
+	// (Discord enforces single-use authorization codes), so at most one
+	// session is ever issued. If we ever swap auth providers, revisit.
 	const pendingRaw = await env.SESSIONS_KV.get(oauthKey(pendingId));
 	await env.SESSIONS_KV.delete(oauthKey(pendingId));
 	if (!pendingRaw) {
