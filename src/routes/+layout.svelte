@@ -19,8 +19,13 @@
 	// can't break out of the root layout, so we branch here instead.
 	// Once Tauri is removed, this gate goes away — root becomes the cloud
 	// layout outright.
+	//
+	// Root `/` is dual-purpose: cloud build serves the marketing landing,
+	// Tauri build serves the desktop overview dashboard. Treat `/` as a
+	// cloud route only when this is the cloud build.
 	const isCloudRoute = $derived(
-		page.url.pathname === "/login" ||
+		(page.url.pathname === "/" && __BUILD_TARGET__ === "cloud") ||
+			page.url.pathname === "/login" ||
 			page.url.pathname.startsWith("/auth/") ||
 			page.url.pathname === "/upload" ||
 			page.url.pathname === "/dashboard" ||
@@ -30,10 +35,11 @@
 	);
 
 	// Cloud header is shown on every cloud route except the auth flow
-	// (login + OAuth callback) — those have no user context and the
-	// header would just be visual noise during sign-in.
+	// (login + OAuth callback) and the marketing landing — none of those
+	// have a user context that would make the nav meaningful.
 	const showCloudHeader = $derived(
 		isCloudRoute &&
+			page.url.pathname !== "/" &&
 			page.url.pathname !== "/login" &&
 			!page.url.pathname.startsWith("/auth/"),
 	);
