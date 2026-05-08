@@ -36,6 +36,7 @@ export interface AuthEnv extends SessionEnv {
 	ALLOWED_ORIGINS: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
+	ALLOWED_DISCORD_ID: string;
 }
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
@@ -327,6 +328,16 @@ export async function handleDiscordCallback(
 		return errorResponse("Discord returned no user id", 502, cors, "NO_USER_ID");
 	}
 
+	if (!timingSafeEqual(discordUser.id, env.ALLOWED_DISCORD_ID)) {
+		console.warn(`Login denied for discord_id=${discordUser.id}`);
+		return errorResponse(
+			"This beta is invite-only.",
+			403,
+			cors,
+			"NOT_AUTHORIZED",
+		);
+	}
+
 	const displayName = discordUser.global_name ?? discordUser.username;
 	const email = discordUser.email ?? null;
 	const emailVerified = discordUser.verified ?? null;
@@ -411,6 +422,15 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
 
 	if (!row) {
 		// Session points at a deleted user — clean up and 401.
+		await deleteSession(env, session.token);
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	// Defensive: revoke sessions for users who were provisioned before the
+	// initial-release allowlist was deployed (or whose access was revoked
+	// post-login). The callback gate prevents new mismatches from being
+	// created; this catches any stale entry already in KV.
+	if (!timingSafeEqual(row.discord_id, env.ALLOWED_DISCORD_ID)) {
 		await deleteSession(env, session.token);
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}

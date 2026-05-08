@@ -58,6 +58,7 @@ interface Env extends AuthEnv, GamesEnv, OnlineIdsEnv, StatsEnv {
 	UPLOADS_ENABLED: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
+	ALLOWED_DISCORD_ID: string;
 }
 
 // UUID v4 format: 8-4-4-4-12 hex chars
