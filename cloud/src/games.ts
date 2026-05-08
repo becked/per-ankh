@@ -1040,13 +1040,15 @@ export async function handleGameDetail(
 		status: 200,
 		headers: {
 			"Content-Type": "application/json",
-			// Owners get no-store so post-mutation reloads (re-import,
-			// visibility toggle, etc.) always see fresh data instead of a
-			// 5-minute browser-cached blob. Public viewers still get a CDN
-			// cache — they're the read-volume tier.
+			// Owners get no-store so post-mutation reloads (reparse,
+			// visibility toggle) always see fresh data. Public viewers
+			// cache 1h in the browser (max-age) but only 60s at the edge
+			// (s-maxage) — short edge TTL means a Make Private toggle
+			// propagates within ~1min instead of hanging on the CDN for
+			// an hour.
 			"Cache-Control": isOwner
 				? "private, no-store"
-				: "public, max-age=3600, s-maxage=3600",
+				: "public, max-age=3600, s-maxage=60",
 			...cors,
 			Vary: "Cookie, Origin",
 		},

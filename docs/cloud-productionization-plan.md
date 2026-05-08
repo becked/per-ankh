@@ -41,7 +41,9 @@ Companion to [`cloud-rewrite-spec.md`](./cloud-rewrite-spec.md). The spec says
 - `/v1/stats` + `/dashboard` mirroring desktop overview
 - `player_summaries` backfill — 16 milestone columns populated on every upload
 - Public sharing UX — `is_public` toggle, anonymous viewing, OG-card
-  unfurling, online_id PII strip, Cache-Control split + `Vary: Cookie, Origin`
+  unfurling, online_id PII strip, Cache-Control split (`s-maxage=60` on
+  public reads so Make Private toggles propagate within ~1min) +
+  `Vary: Cookie, Origin`
 - adapter-cloudflare SSR — `BUILD_TARGET` env switch, per-route `ssr=false`
   for `/upload` + `/auth/callback`, hooks.server.ts security headers,
   `kit.csp` hash mode
