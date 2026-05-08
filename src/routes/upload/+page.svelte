@@ -3,7 +3,7 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { cloudApi } from "$lib/api-cloud";
-	import UploadModal from "$lib/UploadModal.svelte";
+	import BulkUploadModal from "$lib/BulkUploadModal.svelte";
 
 	let ready = $state(false);
 
@@ -25,7 +25,7 @@
 	<div class="mx-auto max-w-xl">
 		<h1 class="mb-4 font-serif text-2xl text-tan">Upload a save</h1>
 		{#if ready}
-			<UploadModal />
+			<BulkUploadModal />
 		{:else}
 			<p class="text-sm text-brown">Loading…</p>
 		{/if}
