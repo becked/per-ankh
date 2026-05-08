@@ -19,6 +19,7 @@
 	// captured into user_online_ids.
 
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import ParserWorker from "$lib/parser/worker?worker";
 	import type { FullGameData, PlayerRosterEntry } from "$lib/parser/types";
 	import type { WorkerMessage } from "$lib/parser/worker";
@@ -43,10 +44,8 @@
 		// caller decide whether to navigate (first upload) or just refresh
 		// the current page (re-import). When omitted, default behavior is
 		// to navigate to /games/{id}.
-		onDone?: (
-			gameId: string,
-			info: { reimported: boolean },
-		) => void | Promise<void>;
+		// eslint-disable-next-line no-unused-vars -- Callback type signature
+		onDone?: (gameId: string, info: { reimported: boolean }) => void | Promise<void>;
 	} = $props();
 
 	const OBSERVER: null = null;
@@ -219,7 +218,7 @@
 			if (onDone) {
 				await onDone(res.game_id, { reimported });
 			} else {
-				await goto(`/games/${res.game_id}`);
+				await goto(resolve("/games/[id]", { id: res.game_id }));
 			}
 		} catch (err) {
 			if (err instanceof DuplicateUploadError) {
@@ -351,7 +350,7 @@
 		</p>
 		<a
 			class="text-sm font-bold text-orange underline"
-			href={`/games/${status.existingGameId}`}
+			href={resolve("/games/[id]", { id: status.existingGameId })}
 		>
 			Open the existing game →
 		</a>

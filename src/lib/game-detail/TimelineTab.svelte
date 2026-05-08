@@ -223,7 +223,6 @@
 		// Build yield indexes: nation → turn → amount
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const ordersIndex = new Map<string, Map<number, number>>();
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const scienceIndex = new Map<string, Map<number, number>>();
 
 		for (const yh of allYields) {

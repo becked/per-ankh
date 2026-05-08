@@ -31,6 +31,7 @@
 	} from "./helpers";
 	import type { TimelineCategory } from "./helpers";
 	import OverviewTab from "./OverviewTab.svelte";
+	// eslint-disable-next-line no-unused-vars -- TimelineTab pending redesign, see commented block below
 	import TimelineTab from "./TimelineTab.svelte";
 	import EventsTab from "./EventsTab.svelte";
 	import LawsTab from "./LawsTab.svelte";
@@ -90,6 +91,7 @@
 	let chartFilters = $state(createDefaultChartFilters());
 	let tables = $state(createDefaultTableStates());
 	let cityVisibleColumns = $state(createDefaultCityVisibleColumns());
+	// eslint-disable-next-line no-unused-vars -- TimelineTab pending redesign, see commented block below
 	let timelineFilters = $state<Record<TimelineCategory, boolean>>({
 		tech: true,
 		law: true,
@@ -402,7 +404,6 @@
 			{playerHistory}
 			{gameDetails}
 			{victoryPointsEnabled}
-			{victoryConditions}
 			bind:chartFilter={chartFilters.points}
 			bind:legitimacyChartFilter={chartFilters.legitimacy}
 			bind:tableState={tables.events}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { cloudApi, ApiError } from "$lib/api-cloud";
 	import { safeNext } from "$lib/utils/safe-next";
 
@@ -35,6 +36,7 @@
 			// defense-in-depth in case the worker is from before the field
 			// was introduced and `next` comes back undefined.
 			const target = safeNext(me.next);
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- target is server- and client-validated via safeNext(); resolve()'s branded route types don't admit dynamic paths
 			setTimeout(() => goto(target, { replaceState: true }), 500);
 		} catch (err) {
 			const message =
@@ -58,7 +60,7 @@
 		{:else}
 			<p class="font-semibold text-red-700">Sign-in failed</p>
 			<p class="mt-2 break-words text-sm text-brown">{status.message}</p>
-			<a class="mt-4 inline-block text-sm underline text-brown" href="/login">Try again</a>
+			<a class="mt-4 inline-block text-sm underline text-brown" href={resolve("/login")}>Try again</a>
 		{/if}
 	</div>
 </div>

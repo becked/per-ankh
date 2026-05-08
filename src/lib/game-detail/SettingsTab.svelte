@@ -49,7 +49,7 @@
 		<div class="flex flex-col gap-1 rounded-lg p-3" style="background-color: #35302B;">
 			<span class="text-sm font-bold text-brown">Victory Conditions:</span>
 			<ul class="list-disc pl-5 text-base text-tan">
-				{#each victoryConditions.split(", ") as item}
+				{#each victoryConditions.split(", ") as item (item)}
 					<li>{item}</li>
 				{/each}
 			</ul>
@@ -59,7 +59,7 @@
 		<div class="flex flex-col gap-1 rounded-lg p-3" style="background-color: #35302B;">
 			<span class="text-sm font-bold text-brown">DLC Enabled:</span>
 			<ul class="list-disc pl-5 text-base text-tan">
-				{#each dlcList.split(", ") as item}
+				{#each dlcList.split(", ") as item (item)}
 					<li>{item}</li>
 				{/each}
 			</ul>
@@ -69,7 +69,7 @@
 		<div class="flex flex-col gap-1 rounded-lg p-3" style="background-color: #35302B;">
 			<span class="text-sm font-bold text-brown">Mods Enabled:</span>
 			<ul class="list-disc pl-5 text-base text-tan">
-				{#each modsList.split(", ") as item}
+				{#each modsList.split(", ") as item (item)}
 					<li>{item}</li>
 				{/each}
 			</ul>

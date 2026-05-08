@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import type { PageData } from "./$types";
 	import type { MapTile } from "$lib/types/MapTile";
@@ -112,6 +113,7 @@
 				// to login so they can come back signed-in. The post-login
 				// `next` is honored via the OAuth round-trip (auth.ts).
 				const next = encodeURIComponent(page.url.pathname);
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic next-query construction; resolve()'s branded types don't admit dynamic search strings
 				await goto(`/login?next=${next}`);
 				return;
 			}
@@ -130,7 +132,7 @@
 		deleting = true;
 		try {
 			await cloudApi.deleteGame(gameId);
-			await goto("/games", { replaceState: true });
+			await goto(resolve("/games"), { replaceState: true });
 		} catch (err) {
 			deleting = false;
 			alert(`Delete failed: ${err instanceof Error ? err.message : err}`);
@@ -155,7 +157,7 @@
 
 <main class="isolate flex flex-1 flex-col overflow-hidden">
 	<header class="flex shrink-0 items-center justify-between border-b border-brown bg-[#2a2622] px-4 py-2">
-		<a href="/games" class="text-sm text-tan hover:text-orange">← Games</a>
+		<a href={resolve("/games")} class="text-sm text-tan hover:text-orange">← Games</a>
 		{#if isOwner}
 			<div class="flex items-center gap-3">
 				<VisibilityToggle {gameId} bind:isPublic />

@@ -48,6 +48,7 @@ export type ParseErrorMsg = {
 
 export type WorkerMessage = ParseProgress | ParseResult | ParseErrorMsg;
 
+// eslint-disable-next-line no-undef -- Web Worker global, not in eslint browser env
 const ctx = self as unknown as DedicatedWorkerGlobalScope;
 
 ctx.onmessage = (e: MessageEvent<ParseRequest>) => {

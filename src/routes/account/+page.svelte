@@ -1,22 +1,18 @@
 <script lang="ts">
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { cloudApi } from "$lib/api-cloud";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
 
-	// OnlineID list state — initialised from the loader, then mutated
-	// optimistically on Remove. Server-side delete is idempotent so we
-	// don't need to handle 404 specially. The $effect below re-syncs if
-	// the route loads with new data (e.g. user navigates away and back).
-	// svelte-ignore state_referenced_locally
-	let onlineIds = $state<string[]>([...data.onlineIds]);
+	// OnlineID list state — derived from the loader so it re-syncs whenever
+	// the route reloads with fresh data, but writable so Remove can mutate
+	// optimistically. Server-side delete is idempotent so we don't need to
+	// handle 404 specially. On rejection we restore the previous value.
+	let onlineIds = $derived<string[]>([...data.onlineIds]);
 	let removeError = $state<string | null>(null);
 	let loggingOut = $state(false);
-
-	$effect(() => {
-		onlineIds = [...data.onlineIds];
-	});
 
 	async function removeId(id: string) {
 		removeError = null;
@@ -41,7 +37,7 @@
 			// valid server-side and the next page load shows them signed in.
 			console.warn("Logout request failed:", err);
 		}
-		await goto("/", { replaceState: true });
+		await goto(resolve("/"), { replaceState: true });
 	}
 </script>
 

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from "svelte";
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { cloudApi } from "$lib/api-cloud";
 	import UploadModal from "$lib/UploadModal.svelte";
 
@@ -9,7 +10,7 @@
 	onMount(async () => {
 		const me = await cloudApi.getMe();
 		if (!me) {
-			await goto("/login?next=/upload", { replaceState: true });
+			await goto(resolve("/login?next=/upload"), { replaceState: true });
 			return;
 		}
 		ready = true;

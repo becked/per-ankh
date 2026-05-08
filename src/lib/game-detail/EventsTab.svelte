@@ -15,7 +15,6 @@
 		playerHistory,
 		gameDetails,
 		victoryPointsEnabled,
-		victoryConditions,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		legitimacyChartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
@@ -29,7 +28,6 @@
 		playerHistory: PlayerHistory[];
 		gameDetails: GameDetails;
 		victoryPointsEnabled: boolean;
-		victoryConditions: string;
 		chartFilter?: Record<string, boolean>;
 		legitimacyChartFilter?: Record<string, boolean>;
 		tableState?: TableState;

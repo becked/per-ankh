@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { PageData } from "./$types";
+	import { resolve } from "$app/paths";
 	import { formatEnum, formatDate } from "$lib/utils/formatting";
 
 	let { data }: { data: PageData } = $props();
@@ -14,7 +15,7 @@
 		<div class="mb-6 flex items-center justify-between">
 			<h1 class="font-serif text-2xl text-tan">Your games</h1>
 			<a
-				href="/upload"
+				href={resolve("/upload")}
 				class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
 			>
 				Upload
@@ -24,7 +25,7 @@
 		{#if data.games.length === 0}
 			<div class="rounded border-2 border-brown bg-[#2a2622] p-8 text-center">
 				<p class="mb-4 text-tan">No games yet.</p>
-				<a href="/upload" class="text-sm font-bold text-orange underline">
+				<a href={resolve("/upload")} class="text-sm font-bold text-orange underline">
 					Upload your first game
 				</a>
 			</div>
@@ -33,7 +34,7 @@
 				{#each data.games as game (game.game_id)}
 					<li>
 						<a
-							href={`/games/${game.game_id}`}
+							href={resolve("/games/[id]", { id: game.game_id })}
 							class="flex items-center gap-4 rounded border border-brown bg-[#2a2622] p-3 hover:border-orange"
 						>
 							<div class="flex-1 min-w-0">

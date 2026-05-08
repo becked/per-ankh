@@ -9,6 +9,7 @@
 	// chrome stable as the user signs in/out.
 
 	import { page } from "$app/state";
+	import { resolve } from "$app/paths";
 	import type { UserMe } from "$lib/api-cloud";
 
 	let { user }: { user: UserMe | null } = $props();
@@ -17,7 +18,7 @@
 		{ href: "/dashboard", label: "Dashboard" },
 		{ href: "/games", label: "Games" },
 		{ href: "/upload", label: "Upload" },
-	];
+	] as const;
 
 	function isActive(href: string): boolean {
 		const path = page.url.pathname;
@@ -28,14 +29,14 @@
 <header
 	class="flex shrink-0 flex-wrap items-center gap-3 border-b border-brown bg-[#2a2622] px-4 py-2"
 >
-	<a href="/dashboard" class="text-sm font-bold text-tan hover:text-orange">
+	<a href={resolve("/dashboard")} class="text-sm font-bold text-tan hover:text-orange">
 		Per-Ankh
 	</a>
 
 	<nav class="flex items-center gap-1">
 		{#each navItems as item (item.href)}
 			<a
-				href={item.href}
+				href={resolve(item.href)}
 				class="rounded px-2 py-1 text-xs hover:bg-brown/40 hover:text-orange {isActive(
 					item.href,
 				)
@@ -50,7 +51,7 @@
 	<div class="ml-auto flex items-center gap-2">
 		{#if user}
 			<a
-				href="/account"
+				href={resolve("/account")}
 				class="flex items-center gap-2 rounded px-2 py-1 hover:bg-brown/40"
 				title="Account settings"
 			>
@@ -65,7 +66,7 @@
 			</a>
 		{:else}
 			<a
-				href="/login"
+				href={resolve("/login")}
 				class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80"
 			>
 				Sign in
