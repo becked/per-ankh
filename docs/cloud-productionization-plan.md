@@ -109,8 +109,11 @@ Phase C   Atlas migration to R2                    (deploy assets bucket)
 Phase D   Production cutover                       (DNS + Worker + secrets)
    │      conservative rate limits
    │
-Phase E   Bake                                     (defined success criteria)
-   │      ship deferred follow-ups during this window
+Phase E   Bake                                     (two stages)
+   │      ├─ E1: solo bake (gate on, single ID allowlisted)
+   │      ├─ Allowlist expand (single ID → cohort)
+   │      └─ E2: cohort bake (≥ 5 invitees, full criteria)
+   │      ship deferred follow-ups during either stage
    │
 Phase F   Tauri sweep                              (split into 2 PRs)
    │      ├─ F1: drop src-tauri/ + Tauri-only frontend
@@ -335,8 +338,10 @@ needed for desktop.
 - D1 database created, migrations applied (already rehearsed in B2)
 - KV namespace for sessions
 - R2 buckets: parsed-game blobs, raw save ZIPs, atlases (from C)
-- Secrets via `wrangler secret put`: `DISCORD_CLIENT_SECRET`, anything else
-  `cloud/src/auth.ts` reads from `env`
+- Secrets via `wrangler secret put`: `DISCORD_CLIENT_SECRET`,
+  `ALLOWED_DISCORD_ID` (single-ID login allowlist for initial release —
+  fail-closed if unset, so don't skip), anything else `cloud/src/auth.ts`
+  reads from `env`
 - `wrangler-frontend.toml` for the SSR Worker (separate from `cloud/wrangler.toml`)
 - Custom domains: `per-ankh.app` → SSR Worker, `api.per-ankh.app` → API Worker,
   `assets.per-ankh.app` → R2 bucket
@@ -368,7 +373,8 @@ Tune up during bake based on real usage.
 **Smoke checklist (do in this order, against prod, before announcing):**
 
 1. Anonymous load of static `/` — 200, no errors
-2. `/login` → Discord OAuth → callback → `/dashboard` round-trip
+2. `/login` → Discord OAuth → callback → `/dashboard` round-trip (verifies
+   the allowlisted Discord ID logs in successfully — see §7 secrets)
 3. Upload one save — appears in `/games`
 4. Toggle public on that game; load `/games/[id]` in a logged-out browser
 5. Download the raw save back via the download endpoint
@@ -383,29 +389,71 @@ landing if one exists, or keep DNS unannounced until fixed.
 ## 8. Phase E — Bake
 
 The bake exists to surface bugs before we burn the rollback path (Tauri
-removal). It is **not** open-ended.
+removal). It is **not** open-ended, and it splits into **two stages** because
+the initial release ships behind the `ALLOWED_DISCORD_ID` allowlist (§7). A
+solo user can't exercise the failure modes that diverse save shapes,
+concurrent activity, and varied network conditions surface — so we bake
+gated, expand the allowlist, then bake again with a small cohort before the
+Tauri sweep.
 
-### Exit criteria — all must hold before Phase F1 ships
+### Stage 1: solo bake (gate on)
 
-- **≥ 50 successful uploads** from **≥ 10 distinct Discord users**
+Only the allowlisted Discord ID can log in or upload. Anonymous reads on
+public games still work (no session check), but the authenticated surface is
+exercised by one person. Goal: catch obvious bugs and validate stability
+under real personal use before inviting anyone else.
+
+**Stage 1 exit criteria — all must hold:**
+
+- **≥ 14 calendar days** of continuous availability
+- **Real personal-use corpus uploaded** — every save the owner actually wants
+  on the cloud has been imported successfully (the personal-use proxy for
+  "I've kicked the tires on the flows I care about")
+- **Zero P0 incidents.** P0 = data loss, auth bypass, PII leak, sustained
+  5xx > 1% of requests, or any incident requiring a worker rollback
+- **No unresolved P1 bugs.** P1 = breaks a user flow but has a workaround
+
+A parser-version bump during stage 1 is **fine** — bug-fixing the parser is
+expected here, and the share-blob shape doesn't need to be frozen until
+stage 2 begins. Use stage 1 to settle the shape.
+
+### Allowlist expand
+
+Between stages: convert `ALLOWED_DISCORD_ID` from a single ID to a
+comma-separated list of cohort members (5–10 invitees recommended). This
+requires the small code-shape change in §12 (single equality → `Set<string>`
+membership) and a `wrangler secret put` with the new value.
+
+### Stage 2: cohort bake (allowlist expanded)
+
+The cohort joins. Stage 2 catches what solo can't: diverse save shapes,
+unusual Discord profile data, concurrent uploads, network conditions in
+different regions.
+
+**Stage 2 exit criteria — all must hold before Phase F1 ships:**
+
+- **≥ 7 calendar days** of cohort bake (clock starts at allowlist expand)
+- **≥ 50 successful uploads** from **≥ 5 distinct Discord users** (scaled
+  down from the original ≥ 10 since the cohort itself is small; raise if
+  you invite more)
 - **≥ 200 public-share views** (any combination of authed + anonymous reads
-  on `/games/[id]`)
-- **≥ 7 calendar days** of continuous availability (proxy for "we'd have
-  noticed by now")
-- **Zero P0 incidents** during the window. P0 = data loss, auth bypass, PII
-  leak, sustained 5xx > 1% of requests, or any incident requiring a worker
-  rollback
-- **No unresolved P1 bugs** in the cloud app. P1 = breaks a user flow but has
-  a workaround (e.g. re-import fails for one save format)
-- **Parser version unchanged** across the window (a parser bump mid-bake
-  resets the clock — it changes the share-blob shape and we want bake on the
-  shape that ships)
+  on `/games/[id]` — can accumulate during stage 1 too, but in practice
+  stage 2 is when public games multiply)
+- **Zero P0 incidents** during the stage 2 window
+- **No unresolved P1 bugs**
+- **Parser version unchanged** across stage 2 specifically — stage 2 is the
+  cohort-validation pass on the share-blob shape that ships, so a parser
+  bump resets the stage 2 clock (not the stage 1 one)
 
-### What to do during the bake window
+### What to do during either stage
 
 Ship the §12 deferred follow-ups. They don't touch the rollback surface
 (still no destructive removals), and they're easier to land while the Tauri
 build is around as a sanity check.
+
+If stage 1 surfaces a parser or share-blob bug, fix it during stage 1 —
+re-baking the parser is cheap before the cohort joins. Don't let parser
+churn leak into stage 2.
 
 ### What to monitor
 
@@ -537,7 +585,7 @@ desktop users, plus the `https://per-ankh.app` link for the hosted app.
 | A (merge) | Fully | Tauri build still works; cloud Worker not deployed |
 | B (verification) | N/A | No code changes — operational checks against staging/throwaway infra |
 | C (atlases) | Fully | Tauri loads from local; cloud build URL is a constant |
-| D (cutover) | Partially | DNS-level rollback to landing page if catastrophic; D1 schema migrations are forward-only and stay |
+| D (cutover) | Mostly | `ALLOWED_DISCORD_ID` gate keeps the surface area to one user, so a botched cutover doesn't expose anything; DNS-level rollback to landing page if catastrophic; D1 schema migrations are forward-only and stay |
 | E (bake) | Partially | Same as D; users on desktop can still ignore cloud |
 | F1 (Tauri drop) | Code-reversible | Revert PR; but users lose desktop binaries (G covers this) |
 | F2 (harness drop) | Code-reversible | Revert PR; harness is dev-only |
@@ -562,6 +610,7 @@ Phase E (bake) since none touch the rollback surface.
 | Mobile-width header layout | `/games/[id]` header has 4 owner buttons + the new top `CloudHeader`; narrow screens may need a collapse menu |
 | Account-deletion path | Privacy compliance. Currently no UI to delete the user record + cascade to games + R2 blobs |
 | Unlink-Discord | Intentionally not offered today — Discord is the only auth provider, no recovery path. Add once a second provider exists |
+| Retire/expand `ALLOWED_DISCORD_ID` allowlist | Single-ID gate added in `feat(cloud): gate login to a single Discord ID for initial release`. To open up: delete the gate in `handleDiscordCallback` + `handleMe` (both in `cloud/src/auth.ts`), drop `ALLOWED_DISCORD_ID` from `AuthEnv` + `Env` (auth.ts, index.ts), `wrangler secret delete ALLOWED_DISCORD_ID`. To expand to a beta cohort, swap to a comma-separated list + `Set<string>` membership instead |
 
 ---
 
@@ -612,3 +661,8 @@ window or immediately after.
 - **Disable the auto-updater in `desktop-final` before building binaries.**
   Otherwise the final desktop build looks broken once the update endpoints
   are torn down.
+- **Initial release ships with a single-user Discord ID allowlist
+  (`ALLOWED_DISCORD_ID`, set out-of-band).** Lets us deploy publicly while
+  limiting blast radius before bake. Legacy `/v1/share/*` is unaffected
+  (no session check). The gate is fail-closed if the secret is missing,
+  so prod must have it set before deploy. See §12 for retirement steps.
