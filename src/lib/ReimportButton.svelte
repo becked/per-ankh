@@ -72,7 +72,7 @@
 		onclick={startReimport}
 		class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80"
 	>
-		Re-import
+		Reparse
 	</button>
 {:else if state.kind === "downloading"}
 	<button

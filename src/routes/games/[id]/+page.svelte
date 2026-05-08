@@ -194,7 +194,7 @@
 		<div class="flex shrink-0 items-center justify-between border-b border-orange bg-orange/10 px-4 py-2">
 			<p class="text-xs text-tan">
 				This game was parsed with an older version ({game.parser_version}).
-				Re-import to refresh the data.
+				Click Reparse for the latest version ({PARSER_VERSION}).
 			</p>
 			<ReimportButton {gameId} />
 		</div>
