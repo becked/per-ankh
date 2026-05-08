@@ -92,47 +92,47 @@ to regenerate them locally. You'll need `PINACOTHECA_DIR` configured in `.env`
 
 ### Common Development Tasks
 
-Use the `per-ankh.sh` helper script for common operations:
+Use the `tauri.sh` helper script for common operations:
 
 ```bash
 # Import a single save file
-./per-ankh.sh import test-data/saves/OW-Greece-Year74-2022-01-02-20-28-07.zip
+./tauri.sh import test-data/saves/OW-Greece-Year74-2022-01-02-20-28-07.zip
 
 # Import all test saves
-./per-ankh.sh import-all
+./tauri.sh import-all
 
 # Import only Greece saves
-./per-ankh.sh import-all test-data/saves per-ankh.db "OW-Greece*.zip"
+./tauri.sh import-all test-data/saves per-ankh.db "OW-Greece*.zip"
 
 # Clean database and reimport all saves
-./per-ankh.sh clean && ./per-ankh.sh import-all
+./tauri.sh clean && ./tauri.sh import-all
 
 # Run the app in development mode
-./per-ankh.sh dev
+./tauri.sh dev
 
 # Build for distribution
-./per-ankh.sh build
+./tauri.sh build
 
 # Run tests
-./per-ankh.sh test
+./tauri.sh test
 
 # Run specific test
-./per-ankh.sh test test_import_babylonia_save
+./tauri.sh test test_import_babylonia_save
 
 # Check code quality (cargo check, clippy, fmt)
-./per-ankh.sh check
+./tauri.sh check
 
 # Format code
-./per-ankh.sh format
+./tauri.sh format
 
 # Show database info
-./per-ankh.sh db-info
+./tauri.sh db-info
 
 # Analyze database contents (empty tables, empty columns)
-./per-ankh.sh db-analyze
+./tauri.sh db-analyze
 
 # Show all available commands
-./per-ankh.sh help
+./tauri.sh help
 ```
 
 #### Integration Tests
@@ -141,13 +141,13 @@ Run the full integration test suite using the helper script:
 
 ```bash
 # Run all tests
-./per-ankh.sh test-release
+./tauri.sh test-release
 
 # Test importing a single save file
-./per-ankh.sh test-release test_import_babylonia_save
+./tauri.sh test-release test_import_babylonia_save
 
 # Test importing multiple different saves
-./per-ankh.sh test-release test_import_multiple_saves
+./tauri.sh test-release test_import_multiple_saves
 ```
 
 ### Database Schema
@@ -159,7 +159,7 @@ The schema is managed by a versioned migration system in `src-tauri/src/db/schem
 Analyze the database to check table population and identify empty tables or columns:
 
 ```bash
-./per-ankh.sh db-analyze
+./tauri.sh db-analyze
 ```
 
 This command:

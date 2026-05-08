@@ -326,7 +326,7 @@ For each new parser:
 
 1. **Unit test:** Add test in the parser module with sample XML
 2. **Integration test:** Run full import and check row counts
-3. **Validation:** Use `./per-ankh.sh db-analyze` to verify data populated
+3. **Validation:** Use `./tauri.sh db-analyze` to verify data populated
 4. **Query test:** Write example queries in `src-tauri/examples/query_matches.rs`
 
 ---
