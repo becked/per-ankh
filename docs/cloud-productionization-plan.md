@@ -45,8 +45,9 @@ Companion to [`cloud-rewrite-spec.md`](./cloud-rewrite-spec.md). The spec says
 - adapter-cloudflare SSR — `BUILD_TARGET` env switch, per-route `ssr=false`
   for `/upload` + `/auth/callback`, hooks.server.ts security headers,
   `kit.csp` hash mode
-- Anonymous read rate limit (200/hr per-IP via Cache API) with social-unfurler
-  UA bypass; PATCH visibility limit (60/hr per-user)
+- Anonymous read rate limit (200/hr per-IP via D1 `events` table, global
+  rather than per-POP) with social-unfurler UA bypass; PATCH visibility
+  limit (60/hr per-user via D1)
 - `safeNext` open-redirect sanitizer (client + server)
 - 429 surfaces as a proper 429 page on the SSR'd game route
 - Raw save download — `GET /v1/games/:id/download`, auth-gated,
@@ -611,6 +612,7 @@ Phase E (bake) since none touch the rollback surface.
 | Account-deletion path | Privacy compliance. Currently no UI to delete the user record + cascade to games + R2 blobs |
 | Unlink-Discord | Intentionally not offered today — Discord is the only auth provider, no recovery path. Add once a second provider exists |
 | Retire/expand `ALLOWED_DISCORD_ID` allowlist | Single-ID gate added in `feat(cloud): gate login to a single Discord ID for initial release`. To open up: delete the gate in `handleDiscordCallback` + `handleMe` (both in `cloud/src/auth.ts`), drop `ALLOWED_DISCORD_ID` from `AuthEnv` + `Env` (auth.ts, index.ts), `wrangler secret delete ALLOWED_DISCORD_ID`. To expand to a beta cohort, swap to a comma-separated list + `Set<string>` membership instead |
+| Prune `anon_read` rows from `events` | Anon-read rate limit writes one row per public-game view (D1 store, not Cache API). The hourly-window query only needs the last hour, so older rows are dead weight. Add a scheduled Worker (Cron Trigger) that runs `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily, or shorter if D1 row count starts to matter during bake. Other event types (upload, delete, visibility_change, download) stay forever — they're audit log, not just rate-limit accounting |
 
 ---
 

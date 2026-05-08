@@ -49,7 +49,7 @@ const PER_USER_UPLOADS_PER_HOUR = 20;
 const PER_IP_UPLOADS_PER_HOUR = 30;
 const GLOBAL_UPLOADS_PER_HOUR = 500;
 
-// Anonymous public-game read limit (per-IP, per-POP via Cache API).
+// Anonymous public-game read limit (per-IP, global via D1 `events` table).
 const ANON_READS_PER_HOUR = 200;
 
 // Per-user PATCH limit on visibility toggles. Generous — one toggle per
@@ -95,7 +95,7 @@ const TECH_LAW_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / 4); // 24
 
 // Count `events` rows with the given event_type in the last hour, optionally
 // filtered by user_id or ip_address. Used for per-user / per-IP / global
-// rate limits across upload, visibility_change, and download paths.
+// rate limits across upload, visibility_change, download, and anon_read.
 //
 // `event_type` is a fixed allowlist rather than free-form to keep the SQL
 // safely parameterized (event_type can't be a bind parameter — it's part
@@ -105,7 +105,8 @@ type RateLimitedEventType =
 	| "upload"
 	| "reimport"
 	| "visibility_change"
-	| "download";
+	| "download"
+	| "anon_read";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.
@@ -129,25 +130,6 @@ async function countEventsSince(
 		? stmt.bind(value, ...types).first<{ count: number }>()
 		: stmt.bind(...types).first<{ count: number }>());
 	return result?.count ?? 0;
-}
-
-// Per-IP anonymous read counter via Cache API (per-POP). Modeled on the
-// legacy `checkDownloadRateLimit` in cloud/src/index.ts. Cheap (no D1 hit),
-// scoped to a single edge POP — fine for availability defense, not for
-// global accounting. Returns true when within the limit.
-async function checkAnonReadRateLimit(ip: string, maxPerHour: number): Promise<boolean> {
-	const cache = caches.default;
-	const url = new URL(`https://rate-limit.internal/anon-read/${ip}`);
-
-	const cached = await cache.match(url);
-	const count = cached ? parseInt(await cached.text(), 10) + 1 : 1;
-
-	const response = new Response(String(count), {
-		headers: { "Cache-Control": "max-age=3600" },
-	});
-	await cache.put(url, response);
-
-	return count <= maxPerHour;
 }
 
 // Strip Steam/GOG/Epic OnlineIDs from a parsed FullGameData blob before
@@ -994,16 +976,19 @@ export async function handleGameDetail(
 			: errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
 
-	// Anonymous public reads: rate-limit per IP per POP, exempting known
-	// link-preview scrapers (Discord/Slack/Twitter/etc.). Untrusted IP
-	// (CF-RAY missing) → shared "untrusted" bucket so per-IP enforcement
-	// doesn't silently degrade in a misconfigured topology.
+	// Anonymous public reads: rate-limit per IP via the D1 `events` table
+	// (global, not per-POP), exempting known link-preview scrapers
+	// (Discord/Slack/Twitter/etc.). Untrusted IP (CF-RAY missing) → shared
+	// "untrusted" bucket so per-IP enforcement doesn't silently degrade in
+	// a misconfigured topology.
 	if (!isOwner) {
 		const ip = getClientIp(request) ?? "untrusted";
 		const ua = request.headers.get("User-Agent");
 		if (!isScraperUA(ua)) {
-			const ok = await checkAnonReadRateLimit(ip, ANON_READS_PER_HOUR);
-			if (!ok) {
+			const count = await countEventsSince(
+				env.SHARE_DB, "anon_read", "ip_address", ip,
+			);
+			if (count >= ANON_READS_PER_HOUR) {
 				return errorResponse(
 					"Rate limit exceeded. Try again later.",
 					429,
@@ -1011,6 +996,17 @@ export async function handleGameDetail(
 					"RATE_LIMIT",
 				);
 			}
+			// Audit-log fire-and-forget — same pattern as the download path.
+			// A logging hiccup mustn't 500 a public-game view.
+			env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, game_id, ip_address)
+				 VALUES ('anon_read', ?, ?)`,
+			)
+				.bind(gameId, ip)
+				.run()
+				.catch((e: unknown) => {
+					console.error("Failed to log anon_read event:", e);
+				});
 		}
 	}
 
