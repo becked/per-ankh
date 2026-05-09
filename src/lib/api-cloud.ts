@@ -31,6 +31,7 @@ export interface GameListItem {
 	map_size: string | null;
 	is_public: boolean;
 	created_at: string;
+	parser_version: string;
 }
 
 export interface GameListResponse {

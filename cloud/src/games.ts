@@ -963,7 +963,7 @@ export async function handleGameList(
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT game_id, game_name, save_date, total_turns,
 		        user_nation, user_won, winner_nation, victory_type,
-		        map_size, is_public, created_at
+		        map_size, is_public, created_at, parser_version
 		 FROM games WHERE user_id = ?
 		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
 	)

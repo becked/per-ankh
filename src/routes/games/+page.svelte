@@ -1,9 +1,23 @@
 <script lang="ts">
 	import type { PageData } from "./$types";
+	import { invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { formatEnum, formatDate } from "$lib/utils/formatting";
+	import { PARSER_VERSION } from "$lib/parser/types";
+	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
 
 	let { data }: { data: PageData } = $props();
+
+	const eligible = $derived(
+		data.games.filter((g) => g.parser_version !== PARSER_VERSION),
+	);
+
+	let reparseOpen = $state(false);
+
+	async function onReparseClose(didReparse: boolean) {
+		reparseOpen = false;
+		if (didReparse) await invalidateAll();
+	}
 </script>
 
 <svelte:head>
@@ -14,12 +28,23 @@
 	<div class="mx-auto max-w-4xl">
 		<div class="mb-6 flex items-center justify-between">
 			<h1 class="font-serif text-2xl text-tan">Your games</h1>
-			<a
-				href={resolve("/upload")}
-				class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
-			>
-				Upload
-			</a>
+			<div class="flex items-center gap-2">
+				{#if eligible.length > 0}
+					<button
+						type="button"
+						onclick={() => (reparseOpen = true)}
+						class="rounded bg-brown px-3 py-2 text-sm font-bold text-tan hover:bg-orange hover:text-white"
+					>
+						Reparse {eligible.length} game{eligible.length === 1 ? "" : "s"}
+					</button>
+				{/if}
+				<a
+					href={resolve("/upload")}
+					class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
+				>
+					Upload
+				</a>
+			</div>
 		</div>
 
 		{#if data.games.length === 0}
@@ -80,3 +105,7 @@
 		{/if}
 	</div>
 </main>
+
+{#if reparseOpen}
+	<BulkReparseModal games={eligible} onClose={onReparseClose} />
+{/if}
