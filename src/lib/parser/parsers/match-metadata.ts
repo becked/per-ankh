@@ -56,10 +56,15 @@ export function parseMatchMetadata(
 	const gameName =
 		optAttrStr(root["@_GameName"]) ?? optStr(root.GameName);
 
-	const victoryConditions = parseVictoryConditions(root);
+	const victoryEnabled = parseVictoryEnabledList(root);
+	const victoryConditions = victoryEnabled.length > 0
+		? victoryEnabled.join("+")
+		: null;
 	const teamAssignments = parseTeamAssignments(root);
 
-	const rawWinner = detectRawWinner(root, gameNode);
+	const gameOver = "GameOver" in gameNode;
+
+	const rawWinner = detectRawWinner(root, gameNode, victoryEnabled);
 	const winner = rawWinner
 		? resolveWinner(rawWinner, players, teamAssignments)
 		: null;
@@ -80,6 +85,7 @@ export function parseMatchMetadata(
 		victory_conditions: victoryConditions,
 		enabled_mods: enabledMods,
 		enabled_dlc: enabledDlc,
+		game_over: gameOver,
 		winner,
 	};
 }
@@ -165,15 +171,22 @@ function parseSaveDate(dateStr: string): string | null {
 
 // ---------- Victory conditions ----------
 
-function parseVictoryConditions(
+/**
+ * Ordered list of enabled victory types from `<VictoryEnabled>`. Two consumers:
+ *   1. `victory_conditions` field — joined with `+` for compact storage.
+ *   2. Mapping a `<WinnerVictory>` integer to a `VICTORY_*` string for the
+ *      legacy winner format (older save versions). The integer is a runtime
+ *      info-list index; this list is the per-save snapshot of that order.
+ */
+function parseVictoryEnabledList(
 	root: Record<string, unknown>,
-): string | null {
+): string[] {
 	const ve = root.VictoryEnabled;
-	if (!isElement(ve)) return null;
+	if (!isElement(ve)) return [];
 
 	const names: string[] = [];
 	for (const [name] of getElementChildren(ve)) names.push(name);
-	return names.length > 0 ? names.join("+") : null;
+	return names;
 }
 
 // ---------- Team assignments ----------
@@ -204,16 +217,21 @@ function parseTeamAssignments(root: Record<string, unknown>): number[] {
 // ---------- Winner detection ----------
 
 /**
- * Pull a raw winner from XML. Two sources, in priority order (mirrors
- * import.rs:1241–1281):
+ * Pull a raw winner from XML. Three sources, in priority order:
  *   1. `<Game><TeamVictories><Team Victory="...">winning_team_id</Team></TeamVictories>`
- *   2. `<Victory winner="player_xml_id" type="...">` at the root.
- * Returns the team-id form for (1) and the player-id form for (2). The
+ *      — newer save format (≥ ~1.0.79513).
+ *   2. `<Game><WinnerTeam>N</WinnerTeam><WinnerVictory>N</WinnerVictory>`
+ *      — legacy save format (≤ ~1.0.70671). `WinnerVictory` is an integer
+ *      index into the per-save `<VictoryEnabled>` list, passed in here.
+ *   3. `<Victory winner="player_xml_id" type="...">` at the root — older
+ *      single-player fallback shape (rarely seen in modern saves).
+ * Returns the team-id form for (1)/(2) and the player-id form for (3). The
  * resolver below maps either back to a player.
  */
 function detectRawWinner(
 	root: Record<string, unknown>,
 	gameNode: Record<string, unknown>,
+	victoryEnabled: string[],
 ): RawWinnerInfo | { player_xml_id: number; victory_type: string } | null {
 	const teamVictories = gameNode.TeamVictories;
 	if (isElement(teamVictories)) {
@@ -231,6 +249,19 @@ function detectRawWinner(
 			if (teamIdRaw !== null && victoryType !== null) {
 				return { team_id: teamIdRaw, victory_type: victoryType };
 			}
+		}
+	}
+
+	// Legacy format: <WinnerTeam>int</WinnerTeam> + <WinnerVictory>int</WinnerVictory>.
+	// Both elements are present on completed games in older versions and absent
+	// in newer versions — checking both ensures we don't misread a default-zero
+	// integer when only one is set.
+	const winnerTeamId = optInt(gameNode.WinnerTeam);
+	const winnerVictoryIdx = optInt(gameNode.WinnerVictory);
+	if (winnerTeamId !== null && winnerVictoryIdx !== null) {
+		const victoryType = victoryEnabled[winnerVictoryIdx];
+		if (victoryType !== undefined) {
+			return { team_id: winnerTeamId, victory_type: victoryType };
 		}
 	}
 

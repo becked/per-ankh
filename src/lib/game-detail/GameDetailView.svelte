@@ -207,7 +207,7 @@
 				class="text-xl font-bold"
 				style:color={winnerColor ?? "#EEEEEE"}
 			>
-				{#if gameDetails.winner_player_id}
+				{#if gameDetails.winner_civilization}
 					{#if gameDetails.winner_name}
 						{gameDetails.winner_name} - {formatEnum(
 							gameDetails.winner_civilization,
@@ -217,7 +217,7 @@
 						{formatEnum(gameDetails.winner_civilization, "NATION_")}
 					{/if}
 				{:else}
-					In Progress
+					Unknown
 				{/if}
 			</span>
 

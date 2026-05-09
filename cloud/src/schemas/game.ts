@@ -42,12 +42,15 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 // 2.3.1 — completed_techs deduped by (player_id, tech), earliest turn wins
 //         (Old World grants same tech twice via free-tech events; the
 //         cloud tech_events PK can't accept duplicates)
+// 2.4.0 — winner detection for legacy <WinnerTeam>/<WinnerVictory> XML
+//         format (older OW versions); adds `match_metadata.game_over`.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
 	"2.2.0",
 	"2.3.0",
 	"2.3.1",
+	"2.4.0",
 ]);
 
 // ----- Reusable atoms -----
@@ -116,6 +119,10 @@ const MatchMetadataSchema = v.object({
 	victory_conditions: v.nullable(v.string()),
 	enabled_mods: v.nullable(v.string()),
 	enabled_dlc: v.nullable(v.string()),
+	// `game_over` was added in parser_version 2.4.0. `v.optional` (rather
+	// than required) tolerates the deploy gap where the Worker has been
+	// updated but the frontend still emits 2.3.1 blobs.
+	game_over: v.optional(v.boolean()),
 	winner: v.nullable(WinnerInfoSchema),
 });
 

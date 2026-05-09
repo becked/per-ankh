@@ -594,6 +594,26 @@ function buildLawEventStatements(
 	return statements;
 }
 
+// D1 returns BOOLEAN columns as integers (0/1) — not JS booleans. Any row
+// that's serialized straight back to the client must coerce, otherwise
+// callers comparing with `=== true` / `=== false` silently fall through.
+// Internal Worker code that compares with `=== 1` is fine and intentional.
+function coerceD1Bool(v: unknown): boolean | null {
+	if (v === null || v === undefined) return null;
+	return v === 1 || v === true;
+}
+
+// Normalize a /v1/games row to the wire types declared in
+// src/lib/api-cloud.ts `GameListItem`. Boolean columns: `user_won`,
+// `is_public`. Other fields pass through unchanged.
+function normalizeGameListRow(row: Record<string, unknown>): Record<string, unknown> {
+	return {
+		...row,
+		user_won: coerceD1Bool(row.user_won),
+		is_public: coerceD1Bool(row.is_public) ?? false,
+	};
+}
+
 // ---------- Handlers ----------
 
 export async function handleGameUpload(
@@ -689,6 +709,19 @@ export async function handleGameUpload(
 		);
 	}
 	const blob = validation.output;
+
+	// Spec §4 gate: only completed games are uploadable. `<GameOver/>` is
+	// the universal completion signal across all save formats. A null
+	// `winner` is acceptable — very old saves (≤ ~1.0.60668) record
+	// completion via GameOver but no winner element exists in the XML.
+	// The frontend's `validateCompletedGame` already enforces this; the
+	// duplicate check here is defense-in-depth against a hand-crafted blob.
+	if (blob.match_metadata.game_over !== true) {
+		return errorResponse(
+			"Save is not a completed game — only completed games can be uploaded.",
+			400, cors, "NOT_COMPLETED",
+		);
+	}
 
 	// Parse + validate uploader index. JSON-encoded so we can carry the
 	// `null` sentinel for observer mode (form fields are strings).
@@ -942,8 +975,11 @@ export async function handleGameList(
 		.bind(userId)
 		.first<{ count: number }>();
 
+	const games = (rows.results ?? []).map((r) =>
+		normalizeGameListRow(r as Record<string, unknown>),
+	);
 	return jsonResponse(
-		{ games: rows.results ?? [], total: total?.count ?? 0 },
+		{ games, total: total?.count ?? 0 },
 		200,
 		cors,
 	);

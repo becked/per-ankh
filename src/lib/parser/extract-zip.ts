@@ -18,7 +18,7 @@ export type ParseErrorCode =
 	| "ZIP_BOMB"
 	| "MISSING_FIELD"
 	| "INVALID_FORMAT"
-	| "INCOMPLETE_GAME"
+	| "NOT_COMPLETED"
 	| "NO_GAME_ID"
 	| "NO_PLAYERS";
 

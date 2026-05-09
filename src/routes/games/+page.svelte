@@ -63,7 +63,9 @@
 										LOST
 									</span>
 								{:else}
-									<span class="text-brown">In progress</span>
+									<span class="rounded bg-brown px-2 py-1 font-bold text-tan">
+										ENDED
+									</span>
 								{/if}
 							</div>
 						</a>

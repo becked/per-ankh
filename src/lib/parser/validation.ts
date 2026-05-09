@@ -8,14 +8,17 @@ import { requireStr } from "./parse-xml.js";
 import type { FullGameData } from "./types.js";
 
 /**
- * Throws `ParseError("INCOMPLETE_GAME")` if the parsed game has no
- * detected winner. Returns void on success.
+ * Single completion gate: reject saves without `<Game><GameOver/>`. A null
+ * `winner` is allowed — pre-1.0.62443 saves end with `<GameOver/>` but
+ * record no winner XML at all (the game's runtime decided the outcome and
+ * never persisted it). Those games surface as "Ended" in the UI rather
+ * than failing import.
  */
 export function validateCompletedGame(data: FullGameData): void {
-	if (data.match_metadata.winner === null) {
+	if (!data.match_metadata.game_over) {
 		throw new ParseError(
-			"Game has no winner — only completed games can be uploaded.",
-			"INCOMPLETE_GAME",
+			"Save is not a completed game — only completed games can be uploaded.",
+			"NOT_COMPLETED",
 		);
 	}
 }
