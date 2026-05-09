@@ -1,5 +1,12 @@
 # Per-Ankh Cloud Productionization Plan
 
+> **Superseded by [`cloud-deploy-plan.md`](./cloud-deploy-plan.md)** — the
+> active deploy checklist. This document remains as historical context: the
+> bake-stage criteria, atlas-to-R2 plan, and §13 observability menu reflect
+> earlier thinking that no longer matches the project shape (solo, no formal
+> bake, real test users arrive with the next feature). Decision rationale in
+> the Appendix is still useful background; treat the rest as archival.
+
 > **Update (post-Tauri removal):** Phase F (Tauri sweep) and Phase G (desktop preservation) below were superseded by [`tauri-removal-plan.md`](./tauri-removal-plan.md), which we ran without waiting for the bake window. v0.2.0 is the desktop-final GitHub Release. The bake-related phases (B–E) and observability follow-ups (§13) are still the active runbook for cutover. Read sections F and G as historical context only.
 
 Sequencing plan for taking the cloud rewrite (PR #35, branch `cloud-rewrite`)
