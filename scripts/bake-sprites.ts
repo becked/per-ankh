@@ -9,6 +9,8 @@
 //   improvements/IMPROVEMENT_FINISHED.png        → icons/IMPROVEMENT_FINISHED.png
 //   other/Cycle_Military_Normal.png              → icons/MILITARY.png
 //   other/VICTORY_Normal.png                     → icons/VICTORY_NORMAL.png
+//   other/MAP_OVERVIEW_Normal.png                → icons/MAP_OVERVIEW.png
+//   other/Cycle_Normal_EndTurn.png               → icons/TURN.png
 //
 // OUTPUT:
 //   static/sprites/<category>/*.png
@@ -66,6 +68,14 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	{
 		source: "other/VICTORY_Normal.png",
 		target: "VICTORY_NORMAL.png",
+	},
+	{
+		source: "other/MAP_OVERVIEW_Normal.png",
+		target: "MAP_OVERVIEW.png",
+	},
+	{
+		source: "other/Cycle_Normal_EndTurn.png",
+		target: "TURN.png",
 	},
 ];
 
