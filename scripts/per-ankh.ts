@@ -1,8 +1,7 @@
-// Central CLI for the cloud-based per-ankh app (Worker + SvelteKit).
+// Central CLI for the per-ankh cloud app (Worker + SvelteKit).
 // Invoked via the `per-ankh` bash shim at repo root: `./per-ankh <command>`.
 //
-// Coexists with `dev.sh` (Tauri, decommissioning) and `cloud/admin.sh`
-// (CF admin — to be folded into `./per-ankh admin` over time).
+// `cloud/admin.sh` (CF admin) is to be folded into `./per-ankh admin` over time.
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
