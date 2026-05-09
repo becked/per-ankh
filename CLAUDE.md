@@ -1,343 +1,144 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+Guidance for Claude Code (claude.ai/code) when working with this repository.
 
 ## Project Overview
 
-Per-Ankh is a desktop application that ingests completed save files from the Old World game and provides data visualizations and analytics. The application is packaged for distribution to end users.
+Per-Ankh is a web app at <https://per-ankh.app> for analyzing Old World save files. Saves are parsed in the browser, persisted to Cloudflare, and visualized through interactive charts and a hex-tile map.
 
 ## Technology Stack
 
-- **Application Framework**: Tauri - native desktop application framework
-- **Backend**: Rust - handles data processing, file parsing, and DuckDB queries
-- **Frontend Framework**: Svelte 5 - reactive UI framework with runes
-- **Frontend Language**: TypeScript - type-safe JavaScript
-- **Visualization**: Apache ECharts - interactive charting library
-- **Database**: DuckDB (Rust bindings) - handles data storage and analytical queries
-- **Package Manager**:
-  - Frontend: npm/pnpm - manages JavaScript dependencies
-  - Backend: Cargo - manages Rust dependencies
+- **Frontend:** SvelteKit 2 + Svelte 5 + TypeScript, deployed via `@sveltejs/adapter-cloudflare`. Source under `src/`.
+- **API Worker:** Cloudflare Worker under `cloud/` (TypeScript, Valibot for validation, nanoid for IDs).
+- **Backing services:** D1 (relational metadata), R2 (raw save ZIPs + parsed game blobs), KV (sessions).
+- **Parser:** TypeScript, running in a Web Worker on the upload page. Source under `src/lib/parser/`.
+- **Charts:** Apache ECharts.
+- **Legacy share viewer:** static SvelteKit app under `web/`, serving `per-ankh.app/share/[id]` for share links created by the (now-removed) desktop app. Frozen.
 
-## ⚠️ Tauri Desktop Environment - NOT a Web Browser
+## Repo layout
 
-**CRITICAL**: This is a native desktop application built with Tauri, NOT a traditional web application.
-
-### Key Differences from Browser Environment
-
-**What DOESN'T Work:**
-
-- ❌ "Refresh the page" - This is a desktop app with hot-reload during development
-- ❌ Browser DevTools shortcuts (F12) - Use the app's development tools
-- ❌ Assuming synchronous browser APIs - Many are async in Tauri
-
-**What DOES Work:**
-
-- ✅ Hot reload during `npm run tauri dev` - File changes auto-update
-- ✅ Tauri command invocations via `invoke()` - Frontend ↔ Rust backend communication
-- ✅ Native OS dialogs - `window.confirm()`, `window.alert()`, file pickers
-
-### Tauri-Specific API Behaviors
-
-**Native Dialogs are Async:**
-
-```typescript
-// ❌ WRONG: Assumes browser behavior (synchronous)
-const confirmed = window.confirm("Are you sure?");
-if (!confirmed) return;
-
-// ✅ CORRECT: Tauri returns Promise
-const confirmed = await window.confirm("Are you sure?");
-if (!confirmed) return;
+```
+per-ankh/
+├── src/                      # SvelteKit app (cloud routes + shared components)
+│   ├── lib/                  # Components, stores, parser, api-cloud client
+│   ├── routes/               # /, /login, /auth/callback, /dashboard, /upload,
+│   │                         #   /games, /games/[id], /account
+│   └── hooks.server.ts       # SSR security headers
+├── cloud/                    # Cloudflare Worker (API)
+│   ├── src/                  # Handlers, validation, util
+│   ├── migrations/           # D1 migrations (numbered, forward-only)
+│   ├── wrangler.toml         # Worker config
+│   └── admin.sh              # CLI for D1/R2 admin
+├── web/                      # Legacy share viewer (static SvelteKit, frozen)
+├── scripts/                  # Asset bake scripts + ./per-ankh CLI
+├── static/                   # Static assets, including baked atlases/sprites
+└── docs/                     # Spec, productionization plan, ADRs
 ```
 
-**File Operations:**
+## Environment
 
-- Use Tauri's dialog APIs for file/folder selection
-- File paths are OS-native (not URLs)
-- File operations happen in Rust backend, not frontend
+This is a web app deployed to Cloudflare. There is no desktop runtime, no DuckDB, no Rust. Assume browser semantics for the frontend and Cloudflare Worker semantics for the API.
 
-**State Management:**
-
-- Frontend state is ephemeral (resets on app restart)
-- Persistent state must be stored in DuckDB or app data directory
-- No localStorage/sessionStorage - use Tauri's storage plugin if needed
-
-**Development Workflow:**
-
-- `npm run tauri dev` - Runs app with hot reload
-- Changes to frontend auto-reload
-- Changes to Rust require recompilation (automatic)
-- Console logs appear in terminal, not browser DevTools
-
-**When Troubleshooting:**
-
-- Check terminal output for Rust panics/errors
-- Check browser console for frontend errors
-- Don't suggest "refresh the page" - suggest restarting dev server if needed
-- Remember: User is running a compiled desktop app, not visiting a URL
-
-## Tauri Built-ins vs Web APIs
-
-**Principle:** Prefer Tauri built-ins for type safety. We use TypeScript to catch bugs at compile time.
-
-### ALWAYS Use Tauri Built-ins
-
-**1. OS Integration:**
-
-- File/folder pickers → `@tauri-apps/plugin-dialog`
-- System dialogs → `@tauri-apps/plugin-dialog` (confirm, message)
-- Native menus, system tray, notifications
-- Window management
-
-**Why:** Native OS integration required; web APIs won't work correctly.
-
-**2. Type Safety Issues:**
-
-- Any browser API that behaves differently in Tauri
-- Example: `window.confirm()` returns `Promise<boolean>` in Tauri but TypeScript types it as `boolean`
-- This creates silent bugs TypeScript cannot catch
-
-**3. Security-Sensitive:**
-
-- File system access
-- Shell commands
-- Process management
-
-**Why:** Tauri APIs are sandboxed and secured by default.
-
-### Prefer Tauri Built-ins
-
-**4. Desktop Features:**
-
-- Clipboard, keyboard shortcuts, app updates, persistence
-
-**Why:** Better integration, though alternatives exist.
-
-### Web Libraries Are Fine
-
-**5. Pure UI/Logic:**
-
-- Charts (ECharts), forms, layouts, data processing
-- Anything with no OS interaction
-
-**Why:** No desktop-specific concerns.
-
-### Decision Framework
-
-Ask yourself:
-
-1. Does it interact with the OS? → **Use Tauri**
-2. Does the browser API behave differently in Tauri? → **Use Tauri**
-3. Is it security-sensitive? → **Use Tauri**
-4. Is it pure UI/logic with no OS interaction? → **Web libraries OK**
-
-### Example: Dialogs
-
-```typescript
-// ❌ BAD: window.confirm() is Promise<boolean> in Tauri but typed as boolean
-const confirmed = window.confirm("Sure?"); // TypeScript thinks boolean!
-if (!confirmed) return; // Bug: actually checking if Promise is falsy
-
-// ✅ GOOD: Tauri plugin has correct types
-import { confirm } from "@tauri-apps/plugin-dialog";
-const confirmed = await confirm("Sure?", "Title"); // Properly typed as Promise<boolean>
-if (!confirmed) return; // TypeScript enforces await
-```
-
-**Reference:** See `docs/dialog-audit-report.md` for detailed analysis of dialog usage.
+The `./per-ankh` script at repo root spawns SvelteKit dev (port 1420) and Wrangler dev (port 8787) together. See `scripts/per-ankh.ts`.
 
 ## Coding Standards
 
-### Rust Standards
+### TypeScript / Svelte
 
-- Use `rustfmt` for code formatting
-- Use `clippy` for linting
-- Follow Rust naming conventions (snake_case for functions/variables, CamelCase for types)
-- Handle errors explicitly with `Result<T, E>` types
-- Avoid `.unwrap()` in production code - use proper error handling
-- Use `#[derive(Serialize, Deserialize)]` for types passed to frontend
+- Use TypeScript with strict mode.
+- ESLint + Prettier enforced (`npm run lint`, `npm run format`).
+- Naming: camelCase for functions/variables, PascalCase for components.
+- Prefer `const` over `let`.
+- When displaying XML/backend enum values in UI, use `formatEnum()` from `$lib/utils/formatting`.
 
-### TypeScript/Svelte Standards
+### Svelte 5 (runes)
 
-- Always use TypeScript with strict mode enabled
-- Use ESLint for linting
-- Use Prettier for code formatting
-- Follow consistent naming conventions (camelCase for functions/variables, PascalCase for components)
-- Prefer `const` over `let` when variables don't need reassignment
-- **When displaying XML/backend enum values in UI**: Always use `formatEnum()` from `$lib/utils/formatting` (see "Frontend: Enum Formatting" section below)
-
-### Svelte 5 Standards
-
-**CRITICAL**: This project uses Svelte 5. Always use Svelte 5 runes and patterns.
-
-**Reactive State:**
+This project uses Svelte 5 runes throughout. Don't mix Svelte 4 patterns — they compile but cause silent rendering failures.
 
 ```typescript
-// ✅ CORRECT: Svelte 5 runes
+// Reactive state
 let count = $state(0);
 let doubled = $derived(count * 2);
 
-// ❌ WRONG: Svelte 4 patterns
-let count = 0; // No reactivity
-$: doubled = count * 2; // Old reactive statement syntax
-```
-
-**Props:**
-
-```typescript
-// ✅ CORRECT: Svelte 5 props
+// Props
 let { name, age = 0 }: { name: string; age?: number } = $props();
 
-// ❌ WRONG: Svelte 4 export
-export let name: string;
-export let age: number = 0;
-```
-
-**Effects:**
-
-```typescript
-// ✅ CORRECT: Svelte 5 effect
+// Effects
 $effect(() => {
 	console.log("count changed:", count);
 });
-
-// ❌ WRONG: Svelte 4 reactive statement
-$: console.log("count changed:", count);
 ```
 
-**Effect Dependency Tracking:**
-
-Svelte 5 `$effect` only tracks dependencies **at the point they're accessed**. If a reactive value is only accessed inside a conditional block, it may not be tracked when the condition is initially false.
+**Effect dependency tracking.** `$effect` only tracks values it actually reads at runtime. Read reactive values unconditionally if you want them tracked even when an early-return branch is taken:
 
 ```typescript
-// ✅ CORRECT: Access reactive values unconditionally to ensure tracking
+// Tracked correctly — both `chart` and `option` read every run
 $effect(() => {
-	const currentOption = option; // Always accessed → always tracked
-	if (chart && currentOption) {
-		chart.setOption(currentOption);
-	}
+	const currentOption = option;
+	if (chart && currentOption) chart.setOption(currentOption);
 });
 
-// ❌ WRONG: Reactive value only accessed conditionally
+// Bug: `option` is only read when `chart` is truthy. If chart is initially
+// null, `option` is never tracked, so updates to it don't trigger reruns.
 $effect(() => {
-	if (chart) {
-		chart.setOption(option); // NOT tracked if chart is initially null
-	}
+	if (chart) chart.setOption(option);
 });
 ```
 
-**Store Integration:**
-When using Svelte stores with Svelte 5 runes, properly integrate them:
+**Stores with runes.** Convert store values to `$state` and subscribe inside an effect rather than subscribing at module top-level (which breaks component initialization):
 
 ```typescript
-// ✅ CORRECT: Convert store to reactive state
 import { myStore } from "./stores";
 
 let storeValue = $state(0);
 $effect(() => {
-	const unsubscribe = myStore.subscribe((value) => {
-		storeValue = value;
+	const unsubscribe = myStore.subscribe((v) => {
+		storeValue = v;
 	});
 	return unsubscribe;
 });
-
-// Then use storeValue reactively
-$effect(() => {
-	if (storeValue > 0) {
-		// React to changes
-	}
-});
-
-// ❌ WRONG: Top-level subscribe (causes render failures)
-myStore.subscribe(() => {
-	// This will break component initialization
-});
 ```
-
-**Why this matters**: Mixing Svelte 4 and Svelte 5 patterns causes silent failures where components fail to render. The code may compile but the app shows a blank screen.
-
-## Code Quality Standards
 
 ### Frontend: Null/Undefined Handling
 
-**Policy**: Use different operators based on context to prevent bugs from falsy coercion.
+Use different operators based on context to prevent bugs from falsy coercion.
 
-**Domain/Data Layer (strict)**:
-
-- Use nullish coalescing (`??`) for null/undefined checks
-- Use explicit `!= null` checks for values where `0` or `""` are valid
-- **NEVER** use logical OR (`||`) in data computation or state management
+**Domain/data layer (strict):** use `??` for null/undefined; use `!= null` when `0` or `""` are valid; **never** use `||` for data computation.
 
 ```typescript
-// ✅ CORRECT: Data layer
 const chartData = playerData.map((p) => p.points ?? 0);
 const filteredGames = games.filter((g) => g.turn_number != null);
-const humanNation = game.nations.find((n) => n.is_human) ?? null;
-
-// ❌ WRONG: Data layer
-const chartData = playerData.map((p) => p.points || 0); // 0 is valid!
 ```
 
-**UI Rendering Layer (pragmatic)**:
-
-- Allow `||` only for display fallbacks where falsy values should show the fallback
+**UI rendering (pragmatic):** `||` is fine for display fallbacks where falsy values should show the fallback.
 
 ```typescript
-// ✅ CORRECT: UI rendering
 <h1>{game.name || "Unknown Game"}</h1>
-<span>{player.name || "Anonymous"}</span>
-
-// ✅ CORRECT: UI rendering with zero handling
 <span>{score != null ? score : "N/A"}</span>
 ```
 
 ### Frontend: Enum Formatting
 
-**Policy**: Use the shared `formatEnum()` utility for consistent formatting of backend enum values.
+Use `formatEnum()` from `$lib/utils/formatting` for consistent formatting of backend enum values (handles `NATION_*`, `RELIGION_*`, `MAPSIZE_*`, `LEVEL_*` prefix removal, title casing, multi-word, null safety).
 
 ```typescript
 import { formatEnum } from "$lib/utils/formatting";
-
-// ✅ CORRECT: Use utility
 const nationName = formatEnum(game.nation, "NATION_");
-const religionName = formatEnum(player.religion, "RELIGION_");
-
-// ❌ WRONG: Inline string manipulation
-const nationName = game.nation?.replace("NATION_", "").toLowerCase()...;
 ```
-
-The utility handles:
-
-- Prefix removal (NATION*, RELIGION*, MAPSIZE*, LEVEL*)
-- Title casing
-- Multi-word support (e.g., "OLD_WORLD" → "Old World")
-- Null/undefined safety (returns "Unknown")
 
 ### Frontend: Color Usage
 
-**Policy**: Use centralized color configuration with proper hierarchy.
+**UI colors** — use Tailwind classes / CSS variables; don't hardcode hex.
 
-**UI Colors** (CSS variables as single source of truth):
-
-```typescript
-// ✅ CORRECT: Use Tailwind classes
+```svelte
 <div class="bg-brown text-tan border-black">
-
-// ✅ CORRECT: Custom CSS with variables
-.custom-element {
-  background: var(--color-tan);
-}
-
-// ❌ WRONG: Hardcoded colors
-<div style="background: #D2B48C">
 ```
 
-**Chart Colors** (TypeScript constants):
+**Chart colors** — use the centralized constants:
 
 ```typescript
 import { CHART_COLORS, CHART_THEME, getChartColor } from "$lib/config";
 
-// ✅ CORRECT: Use chart theme and helper
 const chartOption: EChartsOption = {
 	...CHART_THEME,
 	series: data.map((d, i) => ({
@@ -347,652 +148,125 @@ const chartOption: EChartsOption = {
 };
 ```
 
-**Nation/Tribe Colors** (TypeScript constants with helpers):
+**Nation/civilization colors** — use the helpers:
 
 ```typescript
 import { getNationColor, getCivilizationColor } from "$lib/config";
-
-// ✅ CORRECT: Use helper functions
 const color = getCivilizationColor(player.nation) ?? getChartColor(i);
 ```
 
-**Reference**: See `docs/reference/color-scheme.md` for complete color palette documentation.
+Reference: `docs/reference/color-scheme.md`.
 
 ### Frontend: API Layer
 
-**Policy**: Use the centralized API layer (`src/lib/api.ts`) for all Tauri backend calls.
+All Worker calls go through `src/lib/api-cloud.ts` (`cloudApi`). It's a thin fetch wrapper that handles auth, JSON parsing, and typed error classes (e.g. `UnauthorizedError`).
 
 ```typescript
-import { api } from "$lib/api";
-
-// ✅ CORRECT: Use API layer
-const stats = await api.getGameStatistics();
-const details = await api.getGameDetails(matchId);
-
-// ❌ WRONG: Direct invoke calls
-import { invoke } from "@tauri-apps/api/core";
-const stats = await invoke<GameStatistics>("get_game_statistics");
+import { cloudApi } from "$lib/api-cloud";
+const games = await cloudApi.listGames();
 ```
 
-**Benefits**:
+Adding new endpoints: extend the `cloudApi` object in `api-cloud.ts`. Keep request/response types adjacent to the function for now; split into per-domain modules once the file outgrows it.
 
-- Single source of truth for backend command names
-- Easy refactoring when command names change
-- Type-safe function signatures
-- Documents all available backend commands in one place
+## Cloud Worker
 
-**Adding new commands**:
+Lives under `cloud/`. Handlers in `cloud/src/`, validation via Valibot in `cloud/src/schemas/` and `cloud/src/validation.ts`. Routing is hand-rolled (URL pattern matching) — no router library.
 
-```typescript
-// src/lib/api.ts
-export const api = {
-	// ... existing commands ...
+### D1 migrations
 
-	getEconomicData: (matchId: number) =>
-		invoke<EconomicData>("get_economic_data", { matchId }),
-} as const;
-```
-
-**Future**: When `api.ts` grows to 30-40+ functions, split into domain modules (games, players, economics, etc.).
-
-### Backend: SQL Query Safety
-
-**Policy**: Always use parameterized queries to prevent SQL injection.
-
-**INSERT/UPDATE/DELETE queries**:
-
-```rust
-// ✅ CORRECT: Parameterized query
-conn.execute(
-    "INSERT INTO games (name, turn) VALUES (?, ?)",
-    params![game_name, turn_number]
-)?;
-
-// ❌ WRONG: String interpolation
-conn.execute(&format!("INSERT INTO games (name) VALUES ('{}')", name))?;
-```
-
-**SELECT queries (single row)**:
-
-```rust
-// ✅ CORRECT: query_row with params
-let game = conn.query_row(
-    "SELECT * FROM games WHERE id = ?",
-    [game_id],
-    |row| Ok(Game { id: row.get(0)?, name: row.get(1)? })
-)?;
-```
-
-**SELECT queries (multiple rows)**:
-
-```rust
-// ✅ CORRECT: prepare + query_map
-let mut stmt = conn.prepare("SELECT * FROM games WHERE turn > ?")?;
-let games = stmt.query_map([min_turn], |row| {
-    Ok(Game { id: row.get(0)?, name: row.get(1)? })
-})?
-.collect::<Result<Vec<_>, _>>()?;
-```
-
-**Table/column names (CANNOT be parameterized)**:
-
-```rust
-// ✅ CORRECT: Whitelist approach with comment
-let allowed_tables = vec!["games", "players", "nations"];
-if allowed_tables.contains(&table_name) {
-    // Safe: table_name validated against whitelist
-    let query = format!("SELECT COUNT(*) FROM {}", table_name);
-    conn.query_row(&query, [], |row| row.get(0))?
-}
-```
-
-**Reference**: See `src-tauri/src/db/connection.rs` for detailed query pattern documentation.
-
-### Backend: Error Context
-
-**Policy**: Use `anyhow::Context` for cleaner, more ergonomic error handling.
-
-```rust
-use anyhow::Context;
-
-// ✅ CORRECT: Use Context trait
-conn.execute(query, params)
-    .context("Failed to insert game data")?;
-
-let file = File::open(path)
-    .context("Failed to open save file")?;
-
-// ❌ WRONG: Verbose map_err
-conn.execute(query, params)
-    .map_err(|e| format!("Failed to insert game data: {}", e))?;
-```
-
-Benefits:
-
-- More concise and readable
-- Preserves full error chain for debugging
-- Consistent error formatting
-
-### Backend: DuckDB (Not SQLite!)
-
-**Policy**: DuckDB has different syntax and capabilities from SQLite. Don't assume SQLite patterns work.
-
-**ALTER TABLE Limitations**:
-DuckDB has very limited schema modification support compared to SQLite:
-
-- ❌ `ALTER TABLE ... DROP COLUMN` - Not supported
-- ❌ `ALTER TABLE ... RENAME COLUMN` - Not supported
-- ❌ `ALTER TABLE ... ALTER COLUMN TYPE` - Not supported
-- ✅ `ALTER TABLE ... ADD COLUMN` - Supported
-- ✅ `ALTER TABLE ... RENAME TO` - Supported
-
-**Schema Migration Pattern**:
-
-```sql
--- ❌ WRONG: Trying to modify columns (will fail)
-ALTER TABLE games DROP COLUMN old_field;
-ALTER TABLE games RENAME COLUMN foo TO bar;
-
--- ✅ CORRECT: Create new table, migrate data, swap
-CREATE TABLE games_new AS SELECT id, name, turn FROM games;
-DROP TABLE games;
-ALTER TABLE games_new RENAME TO games;
-```
-
-**Other Syntax Differences**:
-
-| Feature      | SQLite              | DuckDB                   |
-| ------------ | ------------------- | ------------------------ |
-| UPSERT       | `INSERT OR REPLACE` | `INSERT ... ON CONFLICT` |
-| Type casting | `CAST(x AS type)`   | `CAST()` or `x::type`    |
-| RETURNING    | Limited             | Full support             |
-
-```sql
--- ❌ WRONG: SQLite upsert
-INSERT OR REPLACE INTO games (id, name) VALUES (1, 'Test');
-
--- ✅ CORRECT: DuckDB upsert
-INSERT INTO games (id, name) VALUES (1, 'Test')
-ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name;
-```
-
-**When in doubt**: Check https://duckdb.org/docs/sql/introduction before assuming SQLite syntax works.
-
-### Backend: Schema Migrations
-
-**Location**: `src-tauri/src/db/schema.rs`
-
-The app uses a migration registry system to handle schema updates without requiring users to re-import their save files (when possible).
-
-**Key concepts**:
-
-- `CURRENT_SCHEMA_VERSION`: The target schema version (e.g., "2.12.0")
-- `MIGRATIONS`: Array of all migrations with version, description, and `is_breaking` flag
-- **Breaking migration**: Requires database reset (new XML data needed)
-- **Non-breaking migration**: Can update schema incrementally (add columns, tables, indexes)
-
-**Adding a new migration**:
-
-```rust
-// 1. Add to MIGRATIONS array in schema.rs:
-Migration {
-    version: "2.13.0",
-    description: "Add player statistics columns",
-    is_breaking: false,  // true if needs re-parsing
-},
-
-// 2. Add migration logic in run_migration():
-"2.13.0" => {
-    conn.execute("ALTER TABLE players ADD COLUMN total_cities INTEGER", [])?;
-    conn.execute("UPDATE players SET total_cities = ...", [])?;
-    Ok(())
-}
-
-// 3. Update CURRENT_SCHEMA_VERSION:
-pub const CURRENT_SCHEMA_VERSION: &str = "2.13.0";
-```
-
-**When to mark as breaking (`is_breaking: true`)**:
-
-- New data from XML that wasn't previously extracted
-- Changed parsing logic that produces different values
-- Structural changes that can't be computed from existing data
-
-**When to mark as non-breaking (`is_breaking: false`)**:
-
-- Adding columns with computable defaults or NULL
-- Adding new tables (empty until new saves are parsed)
-- Adding indexes or views
-- Removing unused columns (just stop using them in code)
-
-**Structural check**: The system checks if the database structure matches the current schema before requiring a reset. If structure is current but migration records are outdated, it updates records without resetting.
-
-## Development Commands
-
-### Initial Setup
-
-```bash
-# Install Tauri CLI
-cargo install tauri-cli
-
-# Install frontend dependencies
-npm install
-
-# Activate the repo's git hooks (regenerates TS types when committing Rust)
-git config core.hooksPath scripts/hooks
-```
-
-The hook in `scripts/hooks/pre-commit` runs `cargo test --lib export_bindings`
-in a subshell when Rust files are staged, then `git add`s any updated
-`src/lib/types/*.ts` so the regenerated bindings ride along with the commit.
-It's per-clone setup — `.git/hooks/` isn't versioned, so each new clone needs
-the `git config core.hooksPath` step.
-
-### Running the Application
-
-```bash
-# Run in development mode with hot reload
-npm run tauri dev
-
-# Or using cargo directly
-cargo tauri dev
-```
-
-### Building for Distribution
-
-```bash
-# Build for current platform (creates .app, .exe, or Linux binary)
-npm run tauri build
-
-# Build creates optimized bundle in src-tauri/target/release/bundle/
-```
-
-### Testing
-
-```bash
-# Run Rust tests
-cargo test
-
-# Run frontend tests (when added)
-npm test
-```
+- `cloud/migrations/` is numbered (`0001_*.sql`, `0002_*.sql`, …) and forward-only. There is no `down`.
+- Apply locally: `(cd cloud && npm run migrate:local)`.
+- Apply remote: `(cd cloud && npm run migrate:remote)`.
+- Always rehearse a new migration on a throwaway D1 before running it on production.
 
 ### Cloud Admin CLI
 
-`cloud/admin.sh` manages shared games on Cloudflare (D1 database + R2 blob storage). Uses `wrangler` commands directly — no API key needed, relies on Wrangler auth.
-
-**Prerequisites**: `jq`, `wrangler` (via npx from cloud/)
+`cloud/admin.sh` manages D1 records and R2 blobs via `wrangler` (no API key — relies on Wrangler auth). Requires `jq`. Run `./cloud/admin.sh help` for commands. Common usage:
 
 ```bash
-./cloud/admin.sh stats                          # Summary: total shares, size, keys, 24h activity
-./cloud/admin.sh list [--limit N]               # List shares (default 50)
-./cloud/admin.sh info <share_id>                # Full details for one share
-./cloud/admin.sh keys                           # App keys with share counts
-./cloud/admin.sh by-key <app_key>               # Shares from a specific key
-./cloud/admin.sh events [--type T] [--limit N]  # Audit log (upload/delete events)
-./cloud/admin.sh delete <share_id>              # Delete share (D1 + R2, prompts y/N)
-./cloud/admin.sh block-key <key> [reason]       # Block an app key
-./cloud/admin.sh block-ip <ip> [reason]         # Block an IP
-./cloud/admin.sh unblock-key <key>              # Unblock
-./cloud/admin.sh unblock-ip <ip>                # Unblock
-./cloud/admin.sh blocked                        # List all blocked keys/IPs
-./cloud/admin.sh nuke-key <key> [reason]        # Block key + delete ALL its shares (requires typing "nuke")
+./cloud/admin.sh stats              # Summary
+./cloud/admin.sh list [--limit N]   # Recent shares
+./cloud/admin.sh info <share_id>    # Full details
+./cloud/admin.sh delete <id>        # Delete (D1 + R2)
+./cloud/admin.sh block-key <key>    # Block an app key
+./cloud/admin.sh nuke-key <key>     # Block + delete all shares (typing "nuke" required)
 ```
 
-**Implementation**: Wraps `wrangler d1 execute per-ankh-share-index --remote` for D1 queries and `wrangler r2 object delete per-ankh-shares/{id}.json.gz` for blob cleanup. Never exposes `delete_token` in output.
+The `./cloud/admin.sh` script never exposes `delete_token` in output.
 
-**Desktop UX on admin delete**: Desktop app continues showing "Shared" status (local DuckDB state). When user visits the link, web viewer shows "Share Not Found". When user clicks "Delete share" in app, 404 from Worker is treated as success and local state is cleaned up gracefully.
+## Asset Bake Pipeline
 
-### Type Checking & Linting
-
-#### Rust
+The sprite map's terrain, hex, resource, and improvement atlases are baked from a local [pinacotheca](https://github.com/becked/pinacotheca) checkout. Both source PNGs (`assets/atlas-sources/`) and outputs (`static/atlases/`, `static/sprites/`) are gitignored — bake locally on demand.
 
 ```bash
-# Check Rust code compiles
-cargo check
-
-# Run Clippy linter
-cargo clippy
-
-# Format Rust code
-cargo fmt
+npm run bake:terrain-3d   # Terrain atlas (terrain-3d.{webp,json})
+npm run bake:improvements # Improvements (base + per-family urban atlases)
+npm run bake:resources    # Resource icons
+npm run bake:sprites      # Misc sprites
+npm run bake:crests       # Generates src/lib/generated/crests.ts (committed)
+npm run bake:all          # Run them all
 ```
 
-#### TypeScript/Svelte
-
-```bash
-# Type check TypeScript
-npm run check
-
-# Run ESLint
-npm run lint
-
-# Format with Prettier
-npm run format
-```
-
-### TypeScript Type Generation
-
-TypeScript types are automatically generated from Rust structs using `ts-rs`:
-
-```bash
-# Manually regenerate types (rarely needed)
-npm run types:generate
+Shared cell geometry / hex masking lives in `scripts/lib/atlas-bake.ts`. Constants `CELL_W=211`, `CELL_H=167`, `HEX_H_SPACING=199`, `HEX_V_SPACING=122` are mirrored in `src/lib/SpriteMap.svelte` — keep both sites in sync if either changes.
 
-# Types are automatically regenerated when:
-# 1. Running npm run tauri:dev or npm run tauri:build
-# 2. Committing Rust files (via git pre-commit hook)
-```
-
-**Important**:
+### Re-bake when
 
-- Generated types are in `src/lib/types/` directory
-- Never edit these files manually - they're auto-generated
-- To add new types: add `#[derive(TS)]` and `#[ts(export)]` to your Rust struct
-- Run tests to generate: `cargo test --lib export_bindings`
+- Pinacotheca ships refreshed renders.
+- `Reference/XML/` is refreshed against a current Old World install (picks up new DLC `zType`s and nation aliases).
 
-## Architecture
+`zType`s present in saves but absent from `Reference/XML/` silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose target is missing and falls those `zType`s back to a generic city sprite.
 
-### Application Structure
+Visually inspect `Map` tab in the dev server after re-baking; commit source and baked artifacts together when needed.
 
-```
-per-ankh/
-├── src/                    # Svelte frontend source
-│   ├── lib/               # Svelte components and utilities
-│   │   ├── game-detail/   # Shared game detail view (desktop + web)
-│   │   ├── config/        # Chart colors, nation colors, theme
-│   │   ├── types/         # Auto-generated TypeScript types from Rust
-│   │   └── utils/         # Formatting utilities
-│   ├── routes/            # App pages/routes
-│   └── App.svelte         # Main app component
-├── src-tauri/             # Rust backend source
-│   ├── src/
-│   │   ├── main.rs       # Tauri app entry point
-│   │   ├── commands.rs   # Tauri command handlers
-│   │   ├── db.rs         # DuckDB integration
-│   │   └── parser.rs     # Save file parsing
-│   ├── Cargo.toml        # Rust dependencies
-│   └── tauri.conf.json   # Tauri configuration
-├── web/                    # Static web viewer for shared games
-│   └── src/lib/           # Symlinks to src/lib/ for shared components
-├── test-data/             # Test fixtures
-│   └── saves/            # Sample Old World save files for development/testing
-├── package.json           # Frontend dependencies
-└── tsconfig.json         # TypeScript configuration
-```
+### Crests
 
-### Test Data
+`scripts/bake-crests.ts` is a directory scan, not a sprite-pack. Reads `static/sprites/crests/CREST_*.png` and emits `src/lib/generated/crests.ts` exporting `FAMILY_CRESTS` and `NATION_CRESTS` sets. Re-bake when adding/removing crest PNGs.
 
-The `test-data/saves/` directory contains sample Old World game save files that can be used for:
+## Game Detail View (shared with legacy `web/`)
 
-- Development and manual testing without needing your own save files
-- Troubleshooting parsing or data issues
-- Reproducing bugs with known test data
+The `/games/[id]` page is built from `src/lib/game-detail/`. The legacy share viewer at `web/src/routes/share/[id]/` symlinks back into `src/lib/` (specifically `game-detail/`, `types/`, `config/`, `generated/`, plus several top-level shared components like `SpriteMap`, `Chart`, `MapTooltip`).
 
-### Data Flow
+This means UI-only changes propagate to the legacy share viewer automatically when `web/` redeploys.
 
-1. **Ingestion**: Rust backend reads and parses Old World save files (XML/JSON format)
-2. **Storage**: Rust backend loads parsed data into DuckDB using Rust DuckDB bindings
-3. **Queries**: Frontend invokes Rust Tauri commands to query DuckDB
-4. **Visualization**: Svelte components receive data and render with ECharts
-5. **Distribution**: Tauri bundles Rust backend, Svelte frontend, and DuckDB into native executable
+**Adding a yield chart:** add one entry to `YIELD_CHART_CONFIG` in `src/lib/game-detail/helpers.ts`. Also add the new key to `ChartFilterKey` and `PLAYER_CHART_KEYS` in the same file.
 
-### Key Considerations
+**Adding a tab:** create `FooTab.svelte` in `src/lib/game-detail/`, then add a `Tabs.Trigger` and `Tabs.Content` in `GameDetailView.svelte`.
 
-- **DuckDB file location**: Store in user data directory (use Tauri's `app_data_dir`)
-- **Save file parsing**: Handle different Old World game versions gracefully
-- **Error handling**: Rust errors should be serialized and displayed to user in UI
-- **State management**: Use Svelte stores for reactive state
-- **Tauri commands**: Keep commands focused and single-responsibility
-- **Type safety**: Ensure Rust types match TypeScript interfaces for Tauri IPC
+**Changes that need new backend data:**
 
-### Game Detail View (Shared Desktop + Web)
+UI-only changes work without touching the backend. But if a new chart/tab needs data not in the existing share blob, you must update both:
 
-The game detail page is shared between the desktop app and the web share viewer via `src/lib/game-detail/`. The web project symlinks to this directory.
+1. The cloud Worker (`cloud/src/`) — add the field to the share blob shape and to validation schemas.
+2. The web/ viewer's `webApi` if the new field needs to be sliced from the cached blob.
 
-**Architecture:**
+Deploy the Worker schema change before releasing the frontend that depends on it.
 
-```
-Wrapper Page (thin, context-specific)
-  ├── Desktop: data fetching via Tauri API, map turn slider, ShareControl
-  ├── Web: data fetching via HTTP, error handling, share banner
-  │
-  └── GameDetailView (receives all loaded data as non-null props)
-        ├── Owns: activeTab, chartFilters, tables, cityVisibleColumns
-        ├── Accepts snippet props: headerActions, preTabs
-        │
-        └── Tab Components (receive data + $bindable state slices)
-```
+## Game / User Identity Notes
 
-**Adding a new yield chart**: Add one entry to `YIELD_CHART_CONFIG` in `src/lib/game-detail/helpers.ts`:
-
-```typescript
-{ yieldType: "YIELD_NEW", title: "New Yield", yAxisLabel: "Per Turn", filterKey: "new" },
-```
-
-Also add `"new"` to the `ChartFilterKey` type and `PLAYER_CHART_KEYS` array in the same file.
-
-**Adding a new tab**: Create a new `FooTab.svelte` in `src/lib/game-detail/`, then add a `Tabs.Trigger` and `Tabs.Content` in `GameDetailView.svelte`. Both desktop and web get the tab automatically.
-
-**When changes require new backend data (share implications):**
-
-UI-only changes (rearranging layout, new charts using existing data) propagate to the web viewer automatically via symlinks — just redeploy the web app. But if a new chart/tab needs data not already in `SharedGameData`, you must update 4 layers:
-
-1. **Rust** (`src-tauri/src/db/queries/share.rs`): Add the field to `SharedGameData` and query it in `assemble_shared_game_data()`
-2. **Cloudflare Worker** (`cloud/src/index.ts`): Update schema validation to accept the new field
-3. **Web API** (`web/src/lib/api-web.ts`): Add a `webApi` function that slices the new field from the cached blob
-4. **Shared component** (`src/lib/game-detail/`): The new tab/chart itself
-
-**Deploy ordering**: The Cloudflare Worker must be deployed with the new schema version **before** releasing the desktop app update. Otherwise, users on the new app version will have their share requests rejected by the Worker's schema validation. See `cloud/src/validation.ts` for the `KNOWN_SCHEMA_VERSIONS` list.
-
-Previously shared games won't have the new field, so the web viewer must handle it being absent (e.g., `data.newField ?? []`).
-
-**Key files:**
-
-| File | Purpose |
-|------|---------|
-| `src/lib/game-detail/helpers.ts` | Types, constants (YIELD_CHART_CONFIG, CITY_COLUMNS), pure functions |
-| `src/lib/game-detail/GameDetailView.svelte` | Orchestrator: summary, tabs, persistent UI state |
-| `src/lib/game-detail/index.ts` | Re-export for clean imports |
-| `src/routes/game/[id]/+page.svelte` | Desktop wrapper (~150 lines) |
-| `web/src/routes/share/[id]/+page.svelte` | Web wrapper (~150 lines) |
-
-## Map Atlas Pipeline
-
-The sprite map's terrain, height, resource, and improvement atlases are baked from Pinacotheca outputs into runtime-ready atlases. Three bake scripts share `scripts/lib/atlas-bake.ts` for cell geometry (`CELL_W=211`, `CELL_H=167`), hex masking, and grid packing.
-
-### Hex cell aspect
-
-`HEX_H_SPACING=199`, `HEX_V_SPACING=122` — pointy-top R=5 world hex projected through the game's fixed 45° camera tilt: 8.66 wide × 7.07 tall = 1.225 image aspect. Cell rect 211×167 wraps the inscribed hex 199×162.7 with a small gutter. These constants live in `scripts/lib/atlas-bake.ts` and are mirrored in `src/lib/SpriteMap.svelte` — keep both sites in sync. The hex polygon math (vertex generation in `buildHexMask`, runtime `hexPolygon`, neighbor lookup, religion fill / political border inset) all derives from `HEX_RADIUS_X = H_SPACING / sqrt(3)` and `HEX_RADIUS_Y = V_SPACING / 1.5`.
-
-### Terrain (`scripts/bake-terrain-3d.ts`)
-
-One packed atlas keyed by `TERRAIN_3D_<BIOME>_<HEIGHT>`. Runtime stacks two layers per tile: a FLAT base that fills per-ankh's hex extent edge-to-edge, and (only on HILL/MOUNTAIN/VOLCANO) a relief sprite drawn on top.
-
-- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/terrains/TERRAIN_3D_*.png` (28 cells: 6 land biomes × 4 heights + URBAN_FLAT + 3 WATER_*).
-- FLAT and WATER_* renders use pinacotheca's `padding=0` autocrop — the rendered hex covers 100% of the source image, so cover-fit lands the hex at per-ankh's full hex extent and tiles tessellate edge-to-edge with no canvas-color seams.
-- HILL/MOUNTAIN/VOLCANO renders include spire/peak content that legitimately extends past the hex bbox (groundHex pixel bbox covers ~80–98% of source image, with the rest being the peak rising above and lateral mountain spread). Two things differ from FLAT/WATER for these:
-  - **Bake** (`bakeReliefCell` in `scripts/bake-terrain-3d.ts`): we anchor on the sidecar's `groundHex.pixelBbox` rather than cover-fit. Scale so groundHex height matches per-ankh's hex extent, then position the scaled source so groundHex bottom-center lands at the cell hex bottom-center. The hex base fills per-ankh's hex; lateral mountain spread overflows the cell sides and is hex-clipped; peak content extends into the small margin above the inscribed hex and is naturally cropped at the cell top. Without this anchoring, naive cover-fit shrinks the hex base AND the peak content together, so mountains read as small hills inside the cell.
-  - **Runtime**: drawn on top of a FLAT base layer rather than alone. Same architectural pattern that makes nation-owned URBAN tiles work today (TEMPERATE underlay beneath the URBAN/CAPITAL overlay) and that lets cathedral/ziggurat improvements draw on top of terrain.
-- Output: `static/atlases/terrain-3d.{webp,json}`.
-- Sprite key shape mirrors the source filenames as-is (`TERRAIN_3D_<BIOME>_<HEIGHT>`).
-- **Runtime resolution** (`src/lib/SpriteMap.svelte` `terrain3dBaseKey` + `terrain3dReliefKey`): per tile resolves a base key (always returned) and an optional relief key (HILL/MOUNTAIN/VOLCANO only) with these rules applying to both:
-  - `TERRAIN_FROST → TUNDRA` — pinacotheca clarified that in-game frost tiles are literally `TERRAIN_TUNDRA`; `TERRAIN_FROST` is an orphan UI icon with no 3D backing.
-  - `TERRAIN_WATER` → base `WATER_<HEIGHT>` (HEIGHT_OCEAN/COAST/LAKE), no relief layer (water has no spire content).
-  - Bare `TERRAIN_URBAN` (no nation owner) → base `URBAN_FLAT`, no relief (only URBAN_FLAT is rendered).
-  - Nation-owned `TERRAIN_URBAN` → base `TEMPERATE_FLAT` + `TEMPERATE_<HEIGHT>` relief on HILL+. The TEMPERATE underlay matches pinacotheca's render composition (their urban renders are composed on a TEMPERATE base) and gives the URBAN/CAPITAL overlay's hex-clip a backstop in the cell corners.
-  - Other land biomes → base `<BIOME>_FLAT` + `<BIOME>_<HEIGHT>` relief on HILL+.
-
-```bash
-npm run bake:terrain-3d
-```
-
-### Resources (`scripts/bake-resources.ts`)
-
-- Source: `assets/atlas-sources/resources.{webp,json}` from pinacotheca, with HERD/SOLO variants per resource.
-- Output: `static/atlases/resources.{webp,json}` — hex-clipped, `SAFE_SCALE=0.77` inset.
-
-```bash
-npm run bake:resources
-```
-
-### Improvements (`scripts/bake-improvements.ts`)
-
-Two output atlases: a base atlas with single-improvement sprites + per-nation URBAN/CAPITAL standalones, and 10 family atlases for per-(improvement, family) urban composites.
-
-- Source: individual 3D-rendered PNGs at `~/Projects/Old World/pinacotheca/extracted/sprites/improvements/IMPROVEMENT_3D_*.png` plus their JSON sidecars. We deliberately ingest the raw renders, not pinacotheca's pre-baked `output/atlases/improvement.{webp,json}` (which is the 2D icon set — mixing 2D and 3D in one atlas would look inconsistent).
-- Mapping: `Reference/XML/Infos/improvement.xml` (+ `improvement-event.xml`, `improvement-event-sap.xml`, plus `Reference/XML/Mods/*/Infos/improvement-{add,change}.xml`) provides the `zType → zIconName` translation. Save files emit `zType` into `tiles.improvement`; many `zType`s share one `zIconName` by design (e.g. all sun-god shrines → `IMPROVEMENT_SHRINE_SUN`). Multiple manifest entries point at the same packed cell.
-- Output:
-  - `improvements-base.{webp,json}` — single-improvement sprites (`SAFE_SCALE=0.77` inset, brightness-lifted via `IMPROVEMENT_BRIGHTEN_TWEAK`) plus 22 standalones (`URBAN_<FAMILY>` / `CAPITAL_<FAMILY>` keyed sprites, `FULL_SCALE=1.0` cover-fit).
-  - `improvements-urban-{AKSUM,…,ROME}.{webp,json}` — 10 family atlases for per-(improvement, family) composites baked from `IMPROVEMENT_3D_<NAME>_<FAMILY>_URBAN.png`. Same `FULL_SCALE` cover-fit treatment.
-  - `nation-asset-aliases.json` — derived from `nation.xml`. Maps every `NATION_*` zType to its urban + capital family. Single source of truth at runtime for resolving owner_nation → which atlas / which sprite key.
-
-Per-ankh bakes each variable-size source PNG into a fixed `CELL_W × CELL_H = 211×167` cell in the packed atlas via cover-fit + binary-alpha hex mask. Pinacotheca's renderer leaves ~32 px transparent padding around rendered content (~95% coverage in both dimensions, per pinacotheca's autocrop step). For improvements the padding is load-bearing: single-improvement renders (Pasture/Camp/Mine) end up localized within the hex with terrain peeking around them — the desired rural-improvement look — and URBAN/CAPITAL renders, which pinacotheca composes on a TERRAIN_TEMPERATE base, let the runtime's TEMPERATE underlay (drawn by the terrain-3d layer beneath) peek through to match the source composition. Tall buildings (ziggurats, palace towers, cathedral spires) that extend above the hex top vertex get compressed and partially clipped at the cell apex — that's the deliberate trade-off vs the now-removed taller-than-cell sprite + spire-overflow approach, which created jarring rectangular cuts above each tile's hex.
-
-**Runtime layer order** (`src/lib/SpriteMap.svelte`): terrain-3d-base → terrain-3d-relief (HILL/MOUNTAIN/VOLCANO only) → nation-tile-icons (URBAN/CAPITAL standalones) → resources → per-family composite layers → single-improvement layer. Each non-terrain tile is filtered to at most one of the upper layers; `compositeFamilyFor()` and `capitalSpriteKeyFor()` decide which.
-
-**Re-bake when:**
-
-- Pinacotheca ships refreshed `IMPROVEMENT_3D_*.png` or `TERRAIN_3D_*.png` renders.
-- `Reference/XML/` is refreshed against a current OW install (picks up new DLC `zType`s and nation aliases).
-- Tuning bake knobs:
-  - `SAFE_SCALE=0.77` — single-improvement inset within the hex.
-  - `FULL_SCALE=1.0` — cover-fit fill for terrain-3d cells and URBAN/CAPITAL/composites.
-  - `IMPROVEMENT_BRIGHTEN_TWEAK` — brightness lift for single-improvement focal buildings.
-
-```bash
-npm run bake:improvements
-```
-
-`zType`s present in saves but absent from the Reference XML (typically newer DLC content not yet vendored) silently won't render until Reference is updated. The bake logs any `zType → zIconName` whose `zIconName` is missing from pinacotheca's render set, and falls those `zType`s back to a generic city sprite.
-
-### Crests (`scripts/bake-crests.ts`)
-
-Not a sprite-pack — a directory scan. Reads `static/sprites/crests/CREST_*.png` and emits a generated TypeScript module at `src/lib/generated/crests.ts` exporting `FAMILY_CRESTS` and `NATION_CRESTS` sets. `SpriteMap.svelte` imports those sets synchronously inside `$derived` blocks (city-tooltip + nation-crest fallback chains), so a generated TS module is preferable to a runtime-fetched JSON manifest — no load-state guard needed.
-
-Re-bake when adding or removing crest PNGs under `static/sprites/crests/`:
-
-```bash
-npm run bake:crests
-```
-
-The generated file is committed alongside the source crests.
-
-### Both pipelines
-
-**Source and baked are committed to git.** Baking is on-demand — not part of `tauri:dev` or `tauri:build`. Visually inspect the dev server's Map Beta tab after re-baking; commit source and baked atlases together.
-
-## Player Identity & Winner Model
-
-### User Identity (`primary_user_online_id`)
-
-The app identifies "you" (the current user) via a Steam/GOG/Epic OnlineID stored in `user_settings`:
-
-```sql
-SELECT value FROM user_settings WHERE key = 'primary_user_online_id'
-```
-
-- **Auto-detected** on first import from the most common `online_id` across all players
-- **Manually configurable** via Settings UI (calls `set_primary_user_online_id` Tauri command)
-- Used to set `is_save_owner = TRUE` on the user's player in each match
-
-### Save Owner (`is_save_owner`)
-
-Despite the name, `is_save_owner` identifies the **app user's player** in each match — not who created the save file. It's the "whose perspective are we showing?" flag.
-
-**How it's set** (via `reprocess_save_owners()` in `src-tauri/src/db/settings.rs`):
-
-| Game type | Logic |
-|-----------|-------|
-| Single-player (1 human) | The sole human player |
-| Multiplayer (2+ humans) | Player whose `online_id` matches `primary_user_online_id` |
-| Multiplayer, no primary ID set | Falls back to `AIControlledToTurn=0` (file creator) |
-
-**When it's reprocessed**: On every import, when `primary_user_online_id` changes, and via schema migrations.
-
-### Winner Determination
-
-**Who won a game:**
-
-```sql
--- Winner's identity
-SELECT wp.player_name, wp.nation AS winner_civilization
-FROM matches m
-JOIN players wp ON m.match_id = wp.match_id AND m.winner_player_id = wp.player_id
-```
-
-**Did the user win:**
-
-```sql
--- For a specific match
-SELECT m.winner_player_id = so.player_id AS user_won
-FROM matches m
-JOIN players so ON m.match_id = so.match_id AND so.is_save_owner = TRUE
-WHERE m.match_id = ? AND m.winner_player_id IS NOT NULL
-```
-
-**For reports/filters**, use `is_save_owner = TRUE` to find the user's player, then compare against `winner_player_id`:
-
-```sql
--- All games with win/loss status
-SELECT m.match_id, m.game_name,
-       CASE
-           WHEN m.winner_player_id IS NULL THEN 'in_progress'
-           WHEN m.winner_player_id = so.player_id THEN 'won'
-           ELSE 'lost'
-       END AS result
-FROM matches m
-LEFT JOIN players so ON m.match_id = so.match_id AND so.is_save_owner = TRUE
-```
-
-### Key Files
-
-| File | Purpose |
-|------|---------|
-| `src-tauri/src/db/settings.rs` | `reprocess_save_owners()`, get/set `primary_user_online_id` |
-| `src-tauri/src/parser/import.rs` | `determine_save_owner()` (import-time detection) |
-| `src-tauri/src/db/queries/games.rs` | Sidebar queries computing `save_owner_won` |
-| `src-tauri/src/db/queries/match_data.rs` | Game detail query with `winner_civilization` |
+- Each game records the uploader's nation (`user_nation`) and win flag (`user_won`) at upload time. Re-uploads from a different perspective produce a new game record.
+- Upload supports an "observer" mode (`uploaderIndex === null`) for tournament admins archiving matches or users uploading a friend's save. Server records nation and won as NULL, no `is_uploader=TRUE` rows, no online_id captured.
+- Multiplayer games store `online_id` (Steam/GOG/Epic) for each human player; PII (`online_id`, `discord_id`, `username` outside the player roster) is stripped from share blobs and never logged.
 
 ## Development Principles
 
-### YAGNI (You Ain't Gonna Need It)
-
-- Only implement what is needed NOW, not what "might be useful later"
-- Avoid premature abstraction
-
-### DRY (Don't Repeat Yourself)
-
-- Reuse existing code patterns and logic
-- Extract duplicated code to shared functions
-
-### Atomic Commits
-
-- Each commit should represent ONE logical change
-- Commit frequently (after each task/subtask completion)
-- Commit messages should clearly describe what changed and why
-- Don't batch multiple unrelated changes into one commit
-
-### Code Comments
-
-- Comments should explain **WHY**, not **WHAT**
-- The code itself should be clear enough to show what it does
-- Document edge cases, business rules, and non-obvious decisions
-- Example: Good comment explains XML ID mapping rationale, not just the formula
+- **YAGNI.** Implement what's needed now, not what might be useful later.
+- **DRY.** Reuse existing patterns; extract shared logic.
+- **Atomic commits.** One logical change per commit.
+- **Comments explain WHY.** The code shows WHAT. Document edge cases, business rules, non-obvious decisions.
 
 ## Commit Messages
 
-Do NOT include these lines in commit messages:
+Conventional commits:
+
+- `feat:` new features
+- `fix:` bug fixes
+- `docs:` documentation
+- `test:` tests
+- `refactor:` code changes that don't add features or fix bugs
+- `perf:` performance
+- `chore:` maintenance
+
+Do **not** include the following lines in commit messages:
 
 - `🤖 Generated with [Claude Code](https://claude.com/claude-code)`
 - `Co-Authored-By: Claude <noreply@anthropic.com>`
-
-Use conventional commit format:
-
-- `feat:` for new features
-- `fix:` for bug fixes
-- `docs:` for documentation
-- `test:` for tests
-- `refactor:` for code changes that don't add features or fix bugs
-- `perf:` for performance improvements
-- `chore:` for maintenance tasks

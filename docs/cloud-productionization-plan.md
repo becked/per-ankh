@@ -1,11 +1,13 @@
 # Per-Ankh Cloud Productionization Plan
 
+> **Update (post-Tauri removal):** Phase F (Tauri sweep) and Phase G (desktop preservation) below were superseded by [`tauri-removal-plan.md`](./tauri-removal-plan.md), which we ran without waiting for the bake window. v0.2.0 is the desktop-final GitHub Release. The bake-related phases (B–E) and observability follow-ups (§13) are still the active runbook for cutover. Read sections F and G as historical context only.
+
 Sequencing plan for taking the cloud rewrite (PR #35, branch `cloud-rewrite`)
 from "merged but unreleased" through production cutover, bake-in, Tauri
 removal, and end-user preservation of the legacy desktop build.
 
 Companion to [`cloud-rewrite-spec.md`](./cloud-rewrite-spec.md). The spec says
-*what* we built; this doc says *how we ship it without breaking anyone*.
+_what_ we built; this doc says _how we ship it without breaking anyone_.
 
 ## Table of Contents
 
@@ -158,19 +160,19 @@ or bake, just through the small follow-up commits closing out the review.
 
 Full text in the GitHub review on PR #35. Summary:
 
-| Severity | Finding | Where |
-|----------|---------|-------|
-| High | `safeNext` reject `?`, `#`, `%3d` post-decode | `cloud/src/auth.ts:62`, `src/lib/utils/safe-next.ts` |
-| High | `CF-Connecting-IP` trust — assert `CF-RAY` presence | `cloud/src/index.ts:248`, `games.ts:595,969` |
-| High | CSRF stance on PATCH/DELETE — token check or documented SameSite=Lax assumption | `cloud/src/games.ts` |
-| Medium | `stripOnlineIds` deep-walk or schema tightening so PII can't appear outside `player_roster` | `cloud/src/games.ts:159`, `cloud/src/schemas/game.ts` |
-| Medium | OAuth callback read-then-delete — comment the dependency on Discord as the gate | `cloud/src/auth.ts:248` |
-| Medium | Verify owner endpoints actually emit `Cache-Control: no-store` (commit `466e062` claims it; grep before deploy) | `cloud/src/games.ts` |
-| Medium | Server-side `parser_version` validation on re-import (currently client-side only) | `cloud/src/games.ts` re-import branch |
-| Low | Inline doc on `stripOnlineIds` locking in the assumption | `cloud/src/games.ts:159` |
-| Low | Compound D1 index `games(user_id, is_public)` | `cloud/migrations/0002_cloud_schema.sql` |
-| Low | Verify fast-xml-parser entity decoding matches Rust | parser test or harness assertion |
-| Low | Confirm `dump_index` field is emitted by both Rust `dump_parsed` and TS `dump.ts` | parity harness |
+| Severity | Finding                                                                                                         | Where                                                 |
+| -------- | --------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| High     | `safeNext` reject `?`, `#`, `%3d` post-decode                                                                   | `cloud/src/auth.ts:62`, `src/lib/utils/safe-next.ts`  |
+| High     | `CF-Connecting-IP` trust — assert `CF-RAY` presence                                                             | `cloud/src/index.ts:248`, `games.ts:595,969`          |
+| High     | CSRF stance on PATCH/DELETE — token check or documented SameSite=Lax assumption                                 | `cloud/src/games.ts`                                  |
+| Medium   | `stripOnlineIds` deep-walk or schema tightening so PII can't appear outside `player_roster`                     | `cloud/src/games.ts:159`, `cloud/src/schemas/game.ts` |
+| Medium   | OAuth callback read-then-delete — comment the dependency on Discord as the gate                                 | `cloud/src/auth.ts:248`                               |
+| Medium   | Verify owner endpoints actually emit `Cache-Control: no-store` (commit `466e062` claims it; grep before deploy) | `cloud/src/games.ts`                                  |
+| Medium   | Server-side `parser_version` validation on re-import (currently client-side only)                               | `cloud/src/games.ts` re-import branch                 |
+| Low      | Inline doc on `stripOnlineIds` locking in the assumption                                                        | `cloud/src/games.ts:159`                              |
+| Low      | Compound D1 index `games(user_id, is_public)`                                                                   | `cloud/migrations/0002_cloud_schema.sql`              |
+| Low      | Verify fast-xml-parser entity decoding matches Rust                                                             | parser test or harness assertion                      |
+| Low      | Confirm `dump_index` field is emitted by both Rust `dump_parsed` and TS `dump.ts`                               | parity harness                                        |
 
 If any finding is intentionally deferred (e.g. the Low-severity compound
 index isn't worth the migration), leave a comment in the relevant file
@@ -283,7 +285,7 @@ insurance.
 ### B2. PII audit on cached blobs
 
 The code-level fix for the `stripOnlineIds` Medium finding lands in Phase A
-(deep-walk strip and/or schema tightening). This step is the *verification*:
+(deep-walk strip and/or schema tightening). This step is the _verification_:
 run a one-off script over the existing cached blobs that recursively scans
 for keys named `online_id`, `discord_id`, or `username` outside
 `player_roster`. Confirm zero hits before opening signups.
@@ -365,11 +367,11 @@ needed for desktop.
 Lower the limits described in the spec by ~2x for the first week. Easier to
 loosen than to tighten after abuse:
 
-| Limit | Spec value | Launch value |
-|-------|-----------|--------------|
-| Anonymous read | 200/hr per-IP | 100/hr per-IP |
-| PATCH visibility | 60/hr per-user | 30/hr per-user |
-| Download | 50/hr per-user + 100/hr per-IP | 25/hr per-user + 50/hr per-IP |
+| Limit            | Spec value                     | Launch value                  |
+| ---------------- | ------------------------------ | ----------------------------- |
+| Anonymous read   | 200/hr per-IP                  | 100/hr per-IP                 |
+| PATCH visibility | 60/hr per-user                 | 30/hr per-user                |
+| Download         | 50/hr per-user + 100/hr per-IP | 25/hr per-user + 50/hr per-IP |
 
 Tune up during bake based on real usage.
 
@@ -583,16 +585,16 @@ desktop users, plus the `https://per-ankh.app` link for the hosted app.
 
 ## 11. Rollback story
 
-| Phase | What's reversible | How |
-|-------|-------------------|-----|
-| A (merge) | Fully | Tauri build still works; cloud Worker not deployed |
-| B (verification) | N/A | No code changes — operational checks against staging/throwaway infra |
-| C (atlases) | Fully | Tauri loads from local; cloud build URL is a constant |
-| D (cutover) | Mostly | `ALLOWED_DISCORD_ID` gate keeps the surface area to one user, so a botched cutover doesn't expose anything; DNS-level rollback to landing page if catastrophic; D1 schema migrations are forward-only and stay |
-| E (bake) | Partially | Same as D; users on desktop can still ignore cloud |
-| F1 (Tauri drop) | Code-reversible | Revert PR; but users lose desktop binaries (G covers this) |
-| F2 (harness drop) | Code-reversible | Revert PR; harness is dev-only |
-| G (release) | Tag is permanent | Cannot un-publish a release that's been downloaded |
+| Phase             | What's reversible | How                                                                                                                                                                                                            |
+| ----------------- | ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A (merge)         | Fully             | Tauri build still works; cloud Worker not deployed                                                                                                                                                             |
+| B (verification)  | N/A               | No code changes — operational checks against staging/throwaway infra                                                                                                                                           |
+| C (atlases)       | Fully             | Tauri loads from local; cloud build URL is a constant                                                                                                                                                          |
+| D (cutover)       | Mostly            | `ALLOWED_DISCORD_ID` gate keeps the surface area to one user, so a botched cutover doesn't expose anything; DNS-level rollback to landing page if catastrophic; D1 schema migrations are forward-only and stay |
+| E (bake)          | Partially         | Same as D; users on desktop can still ignore cloud                                                                                                                                                             |
+| F1 (Tauri drop)   | Code-reversible   | Revert PR; but users lose desktop binaries (G covers this)                                                                                                                                                     |
+| F2 (harness drop) | Code-reversible   | Revert PR; harness is dev-only                                                                                                                                                                                 |
+| G (release)       | Tag is permanent  | Cannot un-publish a release that's been downloaded                                                                                                                                                             |
 
 The cliff is at Phase F1. Everything before it has a clean back-out;
 everything after relies on Phase G having already cut a real download for
@@ -605,16 +607,16 @@ users who want desktop.
 Tracked here so they don't clutter the sequencing above. All can ship during
 Phase E (bake) since none touch the rollback surface.
 
-| Item | Notes |
-|------|-------|
-| Dynamic per-game OG image | Per-nation crest + winner; satori + resvg-wasm Worker route. Replaces the static `og-default.png` |
-| `_routes.json` tuning | adapter-cloudflare warns about 292 dropped exclude rules; static asset paths invoke the SSR Worker unnecessarily. Easier after Phase C since the static boundary is clearer |
-| Real Discord/Slack/Twitter unfurl test | Needs a deployed public URL — runs after Phase D |
-| Mobile-width header layout | `/games/[id]` header has 4 owner buttons + the new top `CloudHeader`; narrow screens may need a collapse menu |
-| Account-deletion path | Privacy compliance. Currently no UI to delete the user record + cascade to games + R2 blobs |
-| Unlink-Discord | Intentionally not offered today — Discord is the only auth provider, no recovery path. Add once a second provider exists |
-| Retire/expand `ALLOWED_DISCORD_ID` allowlist | Single-ID gate added in `feat(cloud): gate login to a single Discord ID for initial release`. To open up: delete the gate in `handleDiscordCallback` + `handleMe` (both in `cloud/src/auth.ts`), drop `ALLOWED_DISCORD_ID` from `AuthEnv` + `Env` (auth.ts, index.ts), `wrangler secret delete ALLOWED_DISCORD_ID`. To expand to a beta cohort, swap to a comma-separated list + `Set<string>` membership instead |
-| Prune `anon_read` rows from `events` | Anon-read rate limit writes one row per public-game view (D1 store, not Cache API). The hourly-window query only needs the last hour, so older rows are dead weight. Add a scheduled Worker (Cron Trigger) that runs `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily, or shorter if D1 row count starts to matter during bake. Other event types (upload, delete, visibility_change, download) stay forever — they're audit log, not just rate-limit accounting |
+| Item                                         | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
+| -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dynamic per-game OG image                    | Per-nation crest + winner; satori + resvg-wasm Worker route. Replaces the static `og-default.png`                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| `_routes.json` tuning                        | adapter-cloudflare warns about 292 dropped exclude rules; static asset paths invoke the SSR Worker unnecessarily. Easier after Phase C since the static boundary is clearer                                                                                                                                                                                                                                                                                                                                            |
+| Real Discord/Slack/Twitter unfurl test       | Needs a deployed public URL — runs after Phase D                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
+| Mobile-width header layout                   | `/games/[id]` header has 4 owner buttons + the new top `CloudHeader`; narrow screens may need a collapse menu                                                                                                                                                                                                                                                                                                                                                                                                          |
+| Account-deletion path                        | Privacy compliance. Currently no UI to delete the user record + cascade to games + R2 blobs                                                                                                                                                                                                                                                                                                                                                                                                                            |
+| Unlink-Discord                               | Intentionally not offered today — Discord is the only auth provider, no recovery path. Add once a second provider exists                                                                                                                                                                                                                                                                                                                                                                                               |
+| Retire/expand `ALLOWED_DISCORD_ID` allowlist | Single-ID gate added in `feat(cloud): gate login to a single Discord ID for initial release`. To open up: delete the gate in `handleDiscordCallback` + `handleMe` (both in `cloud/src/auth.ts`), drop `ALLOWED_DISCORD_ID` from `AuthEnv` + `Env` (auth.ts, index.ts), `wrangler secret delete ALLOWED_DISCORD_ID`. To expand to a beta cohort, swap to a comma-separated list + `Set<string>` membership instead                                                                                                      |
+| Prune `anon_read` rows from `events`         | Anon-read rate limit writes one row per public-game view (D1 store, not Cache API). The hourly-window query only needs the last hour, so older rows are dead weight. Add a scheduled Worker (Cron Trigger) that runs `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily, or shorter if D1 row count starts to matter during bake. Other event types (upload, delete, visibility_change, download) stay forever — they're audit log, not just rate-limit accounting |
 
 ---
 
@@ -622,24 +624,24 @@ Phase E (bake) since none touch the rollback surface.
 
 The cutover-blocking observability work in §4 (structured logs, PII rule,
 audit completeness, CSP reporting) and §7 (Cloudflare alerts, Logpush sink)
-is the floor — enough to know *when* something is broken in production. The
+is the floor — enough to know _when_ something is broken in production. The
 items below are the polish that makes problems debuggable rather than just
 detectable. Target: shipping within 2 weeks of cutover, during the bake
 window or immediately after.
 
-| Item | Notes | Target |
-|------|-------|--------|
-| Error tracking | Sentry's Cloudflare SDK or Baselime (Cloudflare-acquired, native integration). Free tier covers a single-dev launch | Week 1 |
+| Item                   | Notes                                                                                                                                                                               | Target |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------ |
+| Error tracking         | Sentry's Cloudflare SDK or Baselime (Cloudflare-acquired, native integration). Free tier covers a single-dev launch                                                                 | Week 1 |
 | Synthetic uptime check | Cloudflare Health Checks or external pinger on `/v1/stats` every 1–5 min, page on failure. Catches DNS / certificate / whole-site-down failure modes that handler-level alerts miss | Week 1 |
-| Real dashboard | Cloudflare's built-in Worker Analytics, or Logpush → Grafana / Honeycomb / Baselime. Decide once the queries you actually want are clear | Week 2 |
-| 2–3 SLOs | Recommend: `p95 anonymous read < 500ms`, `p95 upload < 10s`, `error rate < 0.5%`. Documents the bar so "is this a P1?" has a non-vibes answer. Don't pick five | Week 2 |
+| Real dashboard         | Cloudflare's built-in Worker Analytics, or Logpush → Grafana / Honeycomb / Baselime. Decide once the queries you actually want are clear                                            | Week 2 |
+| 2–3 SLOs               | Recommend: `p95 anonymous read < 500ms`, `p95 upload < 10s`, `error rate < 0.5%`. Documents the bar so "is this a P1?" has a non-vibes answer. Don't pick five                      | Week 2 |
 
 ### Security follow (track but not blocking)
 
-| Item | Notes |
-|------|-------|
-| Dependabot | Ten minutes; GitHub-native; covers npm + worker deps |
-| Audit-log review cadence | Quarterly grep through `audit_events` for unusual patterns (mass deletes, high-frequency reimports, PATCHes from unexpected IPs) |
+| Item                         | Notes                                                                                                                                                                                           |
+| ---------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Dependabot                   | Ten minutes; GitHub-native; covers npm + worker deps                                                                                                                                            |
+| Audit-log review cadence     | Quarterly grep through `audit_events` for unusual patterns (mass deletes, high-frequency reimports, PATCHes from unexpected IPs)                                                                |
 | Documented incident response | One paragraph naming P0/P1, the rollback levers (DNS revert, worker rollback, KV session bust), and a brief checklist. Solo-dev value is mostly future-you at 11pm in the middle of an incident |
 
 ---
