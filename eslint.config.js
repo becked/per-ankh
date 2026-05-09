@@ -17,7 +17,6 @@ export default [
 			},
 			globals: {
 				...globals.browser,
-				__BUILD_TARGET__: "readonly",
 			},
 		},
 		plugins: {
@@ -37,7 +36,6 @@ export default [
 			},
 			globals: {
 				...globals.browser,
-				__BUILD_TARGET__: "readonly",
 			},
 		},
 	},

@@ -1,9 +1,6 @@
-// Cloud API client — fetch wrapper for the Per-Ankh Worker.
-//
-// This file is the cloud-rewrite counterpart of `src/lib/api.ts` (which
-// uses Tauri's invoke() for desktop). During the transition both coexist;
-// this file is consumed by all cloud-route pages (`/login`, `/auth/callback`,
-// `/games`, `/games/[id]`, `/upload`).
+// Cloud API client — fetch wrapper for the Per-Ankh Worker. Consumed by
+// all cloud pages (`/login`, `/auth/callback`, `/games`, `/games/[id]`,
+// `/upload`).
 //
 // Configure via VITE_API_URL (see .env.example).
 

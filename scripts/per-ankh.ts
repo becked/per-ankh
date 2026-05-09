@@ -79,7 +79,7 @@ function cmdDev(): never {
 	// `npm` may not resolve under spawn() with shell:false (e.g. when managed
 	// by nvm/fnm/Volta), so we skip the indirection. The npm scripts these
 	// replicate are: cloud/package.json "dev" → wrangler dev, root
-	// package.json "dev:cloud" → BUILD_TARGET=cloud vite dev.
+	// package.json "dev" → vite dev.
 	const specs: ChildSpec[] = [
 		{
 			label: "worker",
@@ -94,7 +94,6 @@ function cmdDev(): never {
 			cwd: REPO_ROOT,
 			command: resolve(REPO_ROOT, "node_modules/.bin/vite"),
 			args: ["dev"],
-			env: { ...process.env, BUILD_TARGET: "cloud" },
 		},
 	];
 
@@ -166,7 +165,7 @@ function printHelp(): void {
 			"  - cloud/.dev.vars has DISCORD_CLIENT_SECRET",
 			"  - D1 migrations applied: (cd cloud && npm run migrate:local)",
 			"",
-			"Coexists with dev.sh (Tauri) and cloud/admin.sh (CF admin).",
+			"Coexists with cloud/admin.sh (CF admin).",
 			"",
 		].join("\n"),
 	);

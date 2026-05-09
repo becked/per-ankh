@@ -1,16 +1,11 @@
 <script lang="ts">
-	// Cloud counterpart of src/lib/GameSidebar.svelte. Different enough from
-	// the desktop version to warrant a separate component:
-	//   - Data comes in as props (loaded by /dashboard/+page.ts), not via
-	//     Tauri commands; refresh is `invalidateAll()`, not a refresh store.
-	//   - Field shape: game_id (string), user_nation/user_won (vs desktop
-	//     match_id (number), save_owner_nation/save_owner_won).
+	// Sidebar listing the user's games (loaded by /dashboard/+page.ts).
+	//   - Data comes in as props; refresh is `invalidateAll()`.
+	//   - Field shape: game_id (string), user_nation/user_won.
 	//   - Filtering/searching is client-side over the props array. The
 	//     server cap on listGames is 200 — switch to server-side if a user
 	//     ever exceeds that ceiling.
-	//   - "Public (N)" pseudo-filter replaces desktop's "Shared" pseudo-
-	//     collection (every game is in the cloud now; what used to be
-	//     "shared" is the is_public flag).
+	//   - "Public (N)" pseudo-filter surfaces games where is_public is set.
 
 	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
@@ -160,7 +155,6 @@
 	}
 
 	async function navigateToGame(gameId: string) {
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- Navigation is awaited
 		await goto(resolve("/games/[id]", { id: gameId }));
 	}
 

@@ -27,8 +27,8 @@
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 
-	// Atlas paths. Tauri serves these from static/atlases/ via SvelteKit; cloud
-	// will swap in a versioned R2 URL prefix without touching the runtime
+	// Atlas paths. Served from static/atlases/ via SvelteKit. A future change
+	// can swap in a versioned R2 URL prefix here without touching the runtime
 	// (see docs/cloud-rewrite-spec.md "Map Assets").
 	const ATLAS_BASE = "/atlases";
 	const TERRAIN_3D_ATLAS_URL = `${ATLAS_BASE}/terrain-3d.webp`;

@@ -4,10 +4,6 @@
 // SvelteKit can inject hashes for its inline hydration script. Other
 // hardening — XFO, Referrer-Policy, Permissions-Policy, X-Content-Type-
 // Options — applies regardless of the request type.
-//
-// This hook only runs under `adapter-cloudflare`. The static (Tauri)
-// build doesn't invoke server hooks; the desktop app has its own
-// security model via Tauri's CSP config in tauri.conf.json.
 
 import type { Handle } from "@sveltejs/kit";
 import { dev } from "$app/environment";

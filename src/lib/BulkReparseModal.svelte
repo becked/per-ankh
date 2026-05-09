@@ -49,6 +49,7 @@
 		onClose,
 	}: {
 		games: GameListItem[];
+		// eslint-disable-next-line no-unused-vars -- callback type parameter name is documentation
 		onClose: (didReparse: boolean) => void;
 	} = $props();
 

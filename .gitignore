@@ -36,22 +36,6 @@ vite.config.ts.timestamp-*
 # cloud/.wrangler (already ignored by cloud/.gitignore).
 .wrangler/
 
-# Rust / Cargo
-/src-tauri/target/
-**/target/
-**/*.rs.bk
-*.pdb
-/src-tauri/.cargo/config.toml
-
-# Tauri Build Outputs
-/src-tauri/target/
-/src-tauri/WixTools/
-/src-tauri/gen/
-
-# Tauri Signing Keys
-.tauri-signing-key
-.tauri-signing-key.pub
-
 # Environment Variables
 .env
 .env.*
