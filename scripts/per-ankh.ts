@@ -156,7 +156,7 @@ function printHelp(): void {
 			"  ./per-ankh <command>",
 			"",
 			"Commands:",
-			"  dev        Run Worker (:8787) + SvelteKit (:5173) locally, foreground.",
+			"  dev        Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
 			"  --help,-h  Show this help.",
 			"",
 			"Preconditions for `dev`:",

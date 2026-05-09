@@ -101,7 +101,7 @@ export type FetchLike = typeof fetch;
 export interface CallOpts {
 	fetch?: FetchLike;
 	// Explicit Cookie header for server-side load() calls in dev (where
-	// localhost:5173 ↔ localhost:8787 isn't same-eTLD+1, so SvelteKit's
+	// localhost:1420 ↔ localhost:8787 isn't same-eTLD+1, so SvelteKit's
 	// event.fetch won't auto-forward). Production uses the auto-forward
 	// path between per-ankh.app and api.per-ankh.app.
 	cookie?: string;
