@@ -32,7 +32,7 @@
 			if (err instanceof UnauthorizedError) {
 				state = {
 					kind: "error",
-					message: "Session expired — please sign in again.",
+					message: "Session expired — please log in again.",
 				};
 				return;
 			}

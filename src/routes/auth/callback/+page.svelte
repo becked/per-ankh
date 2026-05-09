@@ -44,23 +44,51 @@
 					? `${err.code ?? err.status}: ${err.message}`
 					: err instanceof Error
 						? err.message
-						: "Sign-in failed";
+						: "Login failed";
 			status = { kind: "error", message };
 		}
 	});
 </script>
 
-<div class="flex min-h-screen items-center justify-center bg-blue-gray p-4">
-	<div class="w-full max-w-sm rounded border-2 border-border-gray bg-tan p-8 text-center">
-		{#if status.kind === "loading"}
-			<p class="text-brown">Completing sign-in…</p>
-		{:else if status.kind === "success"}
-			<p class="text-brown">Signed in as {status.displayName}.</p>
-			<p class="mt-2 text-xs text-brown">Redirecting…</p>
-		{:else}
-			<p class="font-semibold text-red-700">Sign-in failed</p>
-			<p class="mt-2 break-words text-sm text-brown">{status.message}</p>
-			<a class="mt-4 inline-block text-sm underline text-brown" href={resolve("/login")}>Try again</a>
-		{/if}
+<div class="flex min-h-screen flex-col bg-blue-gray">
+	<!--
+		Stripped-down header for the auth flow: just the centered wordmark,
+		no hamburger / search. Matches /login so the OAuth round-trip feels
+		visually continuous.
+	-->
+	<header
+		class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+	>
+		<div class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200">
+			𓉑 Per Ankh
+		</div>
+	</header>
+
+	<div class="flex flex-1 items-center justify-center p-4">
+		<div class="w-full max-w-sm rounded-lg p-4" style="background-color: #2a2622;">
+			<h3 class="mb-3 text-base font-bold text-tan">Login</h3>
+			<div class="rounded-lg p-3" style="background-color: #35302B;">
+				{#if status.kind === "loading"}
+					<p class="text-xs text-gray-400">Logging in…</p>
+				{:else if status.kind === "success"}
+					<p class="text-xs text-tan">
+						Logged in as
+						<span class="font-bold">{status.displayName}</span>.
+					</p>
+					<p class="mt-1 text-xs text-gray-400">Redirecting…</p>
+				{:else}
+					<p class="text-xs font-bold text-red-400">Login failed</p>
+					<p class="mt-2 break-words text-xs text-gray-400">
+						{status.message}
+					</p>
+					<a
+						href={resolve("/login")}
+						class="mt-3 inline-block rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange"
+					>
+						Try again
+					</a>
+				{/if}
+			</div>
+		</div>
 	</div>
 </div>
