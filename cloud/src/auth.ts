@@ -18,6 +18,7 @@ import {
 	base64UrlEncode,
 	cloudCorsHeaders,
 	errorResponse,
+	getClientIp,
 	jsonResponse,
 	parseCookies,
 	timingSafeEqual,
@@ -336,9 +337,23 @@ export async function handleDiscordCallback(
 	}
 
 	if (!timingSafeEqual(discordUser.id, env.ALLOWED_DISCORD_ID)) {
-		// discord_id is PII — don't include it in fields. The event itself
-		// is enough for moderation; deeper investigation goes through the
-		// audit_events table (when the login-audit gap is closed).
+		// Audit trail captures the rejected discord_id for moderation.
+		// The events table is internal D1 — discord_id stored here is NOT
+		// shipped to Logpush. Structured logs scrub via the PII deny-list
+		// (logWarn below carries no discord_id field).
+		try {
+			await env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, ip_address, metadata)
+				 VALUES ('login_denied', ?, ?)`,
+			)
+				.bind(
+					getClientIp(request),
+					JSON.stringify({ discord_id: discordUser.id }),
+				)
+				.run();
+		} catch (e) {
+			logError("audit_event_log_failed", e, { event_type: "login_denied" });
+		}
 		logWarn("login_denied");
 		return errorResponse(
 			"This beta is invite-only.",
@@ -391,6 +406,20 @@ export async function handleDiscordCallback(
 		.run();
 
 	const sessionToken = await createSession(env, upsert.user_id);
+
+	// Audit log. Fire-and-forget — a logging hiccup mustn't fail an
+	// otherwise successful login. First-vs-returning is derivable
+	// offline from users.created_at vs last_login_at.
+	try {
+		await env.SHARE_DB.prepare(
+			`INSERT INTO events (event_type, user_id, ip_address)
+			 VALUES ('login', ?, ?)`,
+		)
+			.bind(upsert.user_id, getClientIp(request))
+			.run();
+	} catch (e) {
+		logError("audit_event_log_failed", e, { event_type: "login" });
+	}
 
 	const headers = new Headers({
 		"Content-Type": "application/json",
@@ -473,6 +502,19 @@ export async function handleLogout(request: Request, env: AuthEnv): Promise<Resp
 	const session = await sessionFromRequest(env, request);
 	if (session) {
 		await deleteSession(env, session.token);
+		// Audit trail only when a real session was torn down. Anonymous
+		// hits to /v1/auth/logout still 204 (idempotent), but there's no
+		// "logout" to record.
+		try {
+			await env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, user_id, ip_address)
+				 VALUES ('logout', ?, ?)`,
+			)
+				.bind(session.data.user_id, getClientIp(request))
+				.run();
+		} catch (e) {
+			logError("audit_event_log_failed", e, { event_type: "logout" });
+		}
 	}
 
 	return new Response(null, {

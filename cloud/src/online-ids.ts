@@ -2,9 +2,10 @@
 // selections (see games.ts handleGameUpload step "Auto-link OnlineIDs").
 // Read by the picker before each upload to pre-check matching humans.
 
-import { cloudCorsHeaders, errorResponse, jsonResponse } from "./util";
+import { cloudCorsHeaders, errorResponse, getClientIp, jsonResponse } from "./util";
 import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
+import { logError } from "./log";
 
 export interface OnlineIdsEnv extends SessionEnv {
 	SHARE_DB: D1Database;
@@ -73,11 +74,35 @@ export async function handleRemoveOnlineId(
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
 
-	await env.SHARE_DB.prepare(
+	const result = await env.SHARE_DB.prepare(
 		"DELETE FROM user_online_ids WHERE user_id = ? AND online_id = ?",
 	)
 		.bind(session.data.user_id, onlineId)
 		.run();
+
+	// Only audit when a row was actually removed. The endpoint is
+	// idempotent (no-op DELETEs return 204) so UI retries don't pollute
+	// the trail. The events table is internal D1 — `online_id` in
+	// metadata is NOT shipped to Logpush (PII deny-list).
+	const changes = result.meta?.changes ?? 0;
+	if (changes > 0) {
+		try {
+			await env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, user_id, ip_address, metadata)
+				 VALUES ('online_id_remove', ?, ?, ?)`,
+			)
+				.bind(
+					session.data.user_id,
+					getClientIp(request),
+					JSON.stringify({ online_id: onlineId }),
+				)
+				.run();
+		} catch (e) {
+			logError("audit_event_log_failed", e, {
+				event_type: "online_id_remove",
+			});
+		}
+	}
 
 	return new Response(null, { status: 204, headers: cors });
 }
