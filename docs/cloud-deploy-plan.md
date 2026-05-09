@@ -13,8 +13,11 @@ the old doc stays as historical context.
 - Initial release ships gated to a single Discord ID via `ALLOWED_DISCORD_ID`
   (fail-closed if unset). Allowlist expands when test users join the next
   feature.
-- Legacy `/v1/share/*` endpoints and the `web/` viewer are untouched and
-  continue to serve `per-ankh.app/share/[id]` for old desktop-app share links.
+- Legacy `/v1/share/*` endpoints stay live on the API Worker. The legacy
+  share viewer (`web/`) currently owns `per-ankh.app` via a Cloudflare
+  Pages custom domain attachment; deploy moves `per-ankh.app` to the new
+  SSR Worker and adds a `/share/*` redirect to keep old share URLs
+  resolving (see §3.8 + §4 step 5).
 
 Real test users will arrive with the next feature, providing live feedback;
 that's why this plan deliberately skips formal bake stages.
@@ -102,22 +105,36 @@ export const ATLAS_MANIFEST = {
 } as const;
 ```
 
-**Frontend change.** `src/lib/SpriteMap.svelte:33-38` currently builds atlas
-URLs from a `ATLAS_BASE` constant and hardcoded names. Replace with
-manifest lookups:
+**Frontend change.** Three sites reference these paths today, all need to
+move to manifest lookups:
 
-```typescript
-import { ATLAS_MANIFEST } from "$lib/generated/atlas-manifest";
+1. `src/lib/SpriteMap.svelte:33-38` — atlas `.webp` URLs built from
+   `ATLAS_BASE` + hardcoded names:
+   ```typescript
+   import { ATLAS_MANIFEST } from "$lib/generated/atlas-manifest";
 
-const TERRAIN_3D_ATLAS_URL = ATLAS_MANIFEST["terrain-3d.webp"];
-const IMPROVEMENTS_BASE_ATLAS_URL = ATLAS_MANIFEST["improvements-base.webp"];
-// ...
-const urbanAtlasUrl = (family: string) =>
-	ATLAS_MANIFEST[`improvements-urban-${family}.webp`];
-```
+   const TERRAIN_3D_ATLAS_URL = ATLAS_MANIFEST["terrain-3d.webp"];
+   const IMPROVEMENTS_BASE_ATLAS_URL = ATLAS_MANIFEST["improvements-base.webp"];
+   // ...
+   const urbanAtlasUrl = (family: string) =>
+   	ATLAS_MANIFEST[`improvements-urban-${family}.webp`];
+   ```
+2. `src/lib/SpriteMap.svelte:534` — `fetch(\`/atlases/${name}.json\`)` for
+   per-atlas cell-coordinate sidecars. The `.json` and `.webp` for the same
+   atlas must share a hash so the pair stays in sync; the bake script
+   should derive one hash per logical atlas (e.g. from the source PNG) and
+   apply it to both files.
+3. `src/lib/game-detail/helpers.ts:394,399,401` — constructs `/sprites/...`
+   URLs by convention (`/sprites/crests/CREST_${enumValue}.png`,
+   `/sprites/${category}/${filename}.png`). For hashed sprite filenames,
+   helpers.ts needs to read from a sprite manifest (same generated-file
+   pattern as atlases) instead of building URLs by convention.
 
-The same pattern applies to anything else referencing baked atlas/sprite
-filenames; grep for `/atlases/` and `/sprites/` to find them.
+Also: `src/lib/SpriteMap.svelte:30-32` has a stale comment about a planned
+R2 migration — drop or update it as part of this change.
+
+A grep for `/atlases/` and `/sprites/` across `src/` confirms these are the
+only sites; rerun before merging in case anything new lands.
 
 **Cache headers.** With content-hashed paths in place, create `_headers` at
 the **repo root** (not in `static/`):
@@ -181,6 +198,50 @@ Cloudflare dashboard → Notifications. Enable:
 Free, 5-minute setup. No SLOs yet — the next feature's user feedback will
 shape what's worth measuring.
 
+### 3.8. Pages → SSR Worker domain swap + `/share/*` redirect
+
+Today, `per-ankh.app` is the custom domain on the Pages project named
+`per-ankh` (which serves the legacy `web/` static SPA, including
+`/share/[id]` via SPA routing). The Pages project also has its own
+auto-assigned hostname `per-ankh-web.pages.dev`, which keeps working
+regardless of the custom domain.
+
+A single Cloudflare hostname can be either a Pages custom domain or a
+Worker custom domain — not both. Cutover swaps `per-ankh.app` from Pages
+to the new SSR Worker, and the SSR Worker handles `/share/*` by
+301-redirecting to the Pages-native hostname.
+
+**Code change (lands in the SSR Worker before deploy).** Add a `/share/*`
+handler high in `src/hooks.server.ts` so it short-circuits before any
+SvelteKit routing:
+
+```typescript
+// In src/hooks.server.ts handle()
+if (event.url.pathname.startsWith("/share/")) {
+	const id = event.url.pathname.slice("/share/".length);
+	return Response.redirect(
+		`https://per-ankh-web.pages.dev/share/${id}`,
+		301,
+	);
+}
+```
+
+Verify with `curl -I https://per-ankh.app/share/test` after deploy: expect
+`HTTP/2 301` with `location: https://per-ankh-web.pages.dev/share/test`.
+
+The actual domain detach + reattach is a §4 step (it has to happen at
+cutover, between Pages serving the old SPA and the new Worker serving the
+new app).
+
+**Why redirect instead of bundling web/ into the new Worker.** web/'s
+adapter-static SPA assumes it's mounted at the root (`_app/immutable/...`
+paths are absolute). Path-prefixing the SPA into a subdirectory would
+need either a base-path config in `web/svelte.config.js` and a re-deploy,
+or asset-tree restructuring at copy time. Both are more work than a
+one-liner redirect, and the redirect cost on legacy share URLs is
+negligible (no new ones can be created — the desktop app that produced
+them is gone).
+
 ## 4. Deploy
 
 In order:
@@ -194,7 +255,7 @@ In order:
    npx wrangler d1 create per-ankh-rehearsal
    # paste the returned id into a temporary wrangler.toml override, then:
    cd cloud && npx wrangler d1 migrations apply per-ankh-rehearsal --remote
-   # confirm 0001..0004 land cleanly, then:
+   # confirm 0001..0005 land cleanly, then:
    npx wrangler d1 delete per-ankh-rehearsal
    ```
 3. **Apply migrations to prod D1.**
@@ -205,16 +266,29 @@ In order:
    ```bash
    cd cloud && npx wrangler deploy
    ```
-5. **Deploy the frontend Worker.** From the repo root:
+5. **Detach `per-ankh.app` from the Pages project.** Cloudflare dashboard
+   → Workers & Pages → Pages project `per-ankh` → Custom domains → remove
+   `per-ankh.app`. The Pages project keeps serving at
+   `per-ankh-web.pages.dev` — that's what the §3.8 redirect targets, so
+   don't delete the Pages project itself. Brief window between this step
+   and step 6 where `per-ankh.app` returns a Cloudflare error; acceptable
+   for a pre-announce cutover.
+6. **Deploy the frontend Worker.** From the repo root:
    ```bash
    npm run build
    npx wrangler deploy
    ```
-6. **Verify custom domains resolve** — `api.per-ankh.app` and
-   `per-ankh.app` both serve from Cloudflare. The `routes` blocks in the
-   two `wrangler.toml`s create the DNS records automatically; if they
-   don't, do it manually in the dashboard.
-7. **Run §5 smoke test against prod.** Do not announce until it passes.
+   The `routes` block in the new wrangler.toml attaches `per-ankh.app` as
+   a custom domain on this Worker as part of the deploy. If the attach
+   fails because the Pages detach hasn't fully propagated, wait 30s and
+   retry the deploy.
+7. **Verify custom domains resolve.** `curl -I https://per-ankh.app/`
+   should return the new SSR Worker's response (look for SvelteKit-style
+   `link: </_app/...>` modulepreload headers from the new build, distinct
+   from the current Pages headers). `curl -I https://per-ankh.app/share/test`
+   should return `301` with `location: https://per-ankh-web.pages.dev/share/test`.
+   `curl -I https://api.per-ankh.app/v1/stats` should return `200`.
+8. **Run §5 smoke test against prod.** Do not announce until it passes.
 
 ## 5. Smoke test
 
@@ -228,10 +302,17 @@ Against the live `https://per-ankh.app`. Run in this order:
 4. Toggle public on that game, then load `/games/[id]` in a logged-out
    browser. Confirms anonymous read path works and PII is stripped.
 5. Download the raw save back via the download endpoint.
-6. Reparse — bump `parser_version` locally if needed to trigger the banner.
+6. Reparse the test game. The Reparse button on `/games/[id]`
+   (`src/lib/ReimportButton.svelte`) only appears when the stored
+   `parser_version` is older than the frontend's `PARSER_VERSION`; if
+   they're equal, bump `PARSER_VERSION` locally to surface the button.
+   The bulk equivalent is the dashboard's `BulkReparseModal`.
 7. Delete the test game.
-8. Load an old `/share/[id]` URL from the legacy share viewer — confirms
-   the `web/` deploy and `/v1/share/*` legacy endpoints still work.
+8. Load an old `https://per-ankh.app/share/[id]` URL in a browser —
+   confirms the SSR Worker 301-redirects to `per-ankh-web.pages.dev/share/[id]`
+   and the Pages deployment still serves the page. Also confirms
+   `/v1/share/*` legacy API endpoints (which the page calls under the
+   hood) still work.
 
 If any step fails, do not announce. Fix and re-deploy.
 
