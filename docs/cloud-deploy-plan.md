@@ -54,11 +54,14 @@ skip it — login will hard-fail with no helpful diagnostic until it's set.
 
 ### 3.3. Discord OAuth app
 
-In the Discord developer portal for client `1500901451034263604`
-(value at `cloud/wrangler.toml:68`), add `https://per-ankh.app/auth/callback`
-as an authorized redirect URI alongside the existing localhost entry.
-The redirect URI is supplied by the frontend at request time
-(`cloud/src/auth.ts:164`), but Discord rejects URIs not on its list.
+Both prod and dev redirect URIs are already configured in the Discord
+developer portal for client `1500901451034263604`
+(`https://per-ankh.app/auth/callback` + `http://localhost:1420/auth/callback`).
+Nothing to do — just spot-check the portal still lists both before deploy.
+
+Background, in case it ever needs revisiting: the redirect URI is supplied
+by the frontend at request time (`cloud/src/auth.ts:164`), and Discord
+rejects URIs not on its allowlist.
 
 ### 3.4. Content-hashed atlas + sprite paths
 
