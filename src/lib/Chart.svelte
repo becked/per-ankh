@@ -1,12 +1,18 @@
 <script lang="ts">
 	import { onMount, tick } from "svelte";
 	import * as echarts from "echarts";
-	import type { EChartsOption } from "echarts";
+	import type { ECElementEvent, EChartsOption } from "echarts";
 
 	let {
 		option,
 		height = "400px",
-	}: { option: EChartsOption; height?: string } = $props();
+		onItemClick,
+	}: {
+		option: EChartsOption;
+		height?: string;
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onItemClick?: (params: ECElementEvent) => void;
+	} = $props();
 
 	let chartContainer: HTMLDivElement;
 	let chart: echarts.ECharts | null = null;
@@ -27,6 +33,11 @@
 			if (!chart) {
 				chart = echarts.init(chartContainer);
 				chart.setOption(option);
+				// Read onItemClick at click time so prop updates take effect
+				// without needing to rebind the listener.
+				chart.on("click", (params) => {
+					onItemClick?.(params as ECElementEvent);
+				});
 			}
 		};
 

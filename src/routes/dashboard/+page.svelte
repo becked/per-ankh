@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { EChartsOption } from "echarts";
+	import type { ECElementEvent, EChartsOption } from "echarts";
 	import Chart from "$lib/Chart.svelte";
 	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
@@ -14,6 +14,28 @@
 
 	let { data }: { data: PageData } = $props();
 	const stats = $derived(data.stats);
+
+	// Cross-filter state for the sidebar. Clicking a nation bar or calendar
+	// day toggles the corresponding filter; clicking the same value again
+	// clears it. Both filters are independent and combine.
+	let selectedNation = $state<string | null>(null);
+	let selectedDate = $state<string | null>(null);
+
+	function handleNationClick(params: ECElementEvent) {
+		if (params.componentType !== "series" || params.seriesType !== "bar") return;
+		const nation = stats.nations[params.dataIndex]?.nation;
+		if (!nation) return;
+		selectedNation = selectedNation === nation ? null : nation;
+	}
+
+	function handleCalendarClick(params: ECElementEvent) {
+		if (params.componentType !== "series" || params.seriesType !== "custom") return;
+		// Custom-series value tuple: [date, nationsJson, colorsJson]
+		const value = params.value as [string, string, string] | undefined;
+		const date = value?.[0];
+		if (!date) return;
+		selectedDate = selectedDate === date ? null : date;
+	}
 
 	const chartOption = $derived<EChartsOption>({
 		...CHART_THEME,
@@ -232,7 +254,11 @@
 					class="mb-8 rounded-lg border-2 border-black p-1"
 					style="background-color: var(--color-chart-frame)"
 				>
-					<Chart option={chartOption} height="400px" />
+					<Chart
+						option={chartOption}
+						height="400px"
+						onItemClick={handleNationClick}
+					/>
 				</div>
 			{/if}
 
@@ -241,7 +267,11 @@
 					class="mb-8 rounded-lg border-2 border-black p-1"
 					style="background-color: var(--color-chart-frame)"
 				>
-					<Chart option={calendarChartOption} height="250px" />
+					<Chart
+						option={calendarChartOption}
+						height="250px"
+						onItemClick={handleCalendarClick}
+					/>
 				</div>
 			{/if}
 		</div>
@@ -252,5 +282,9 @@
 		collections={data.collections}
 		publicCount={data.publicCount}
 		currentGameId={null}
+		{selectedNation}
+		{selectedDate}
+		onClearNationFilter={() => (selectedNation = null)}
+		onClearDateFilter={() => (selectedDate = null)}
 	/>
 </div>

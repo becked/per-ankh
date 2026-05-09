@@ -34,9 +34,25 @@
 		collections: CollectionInfo[];
 		publicCount: number;
 		currentGameId: string | null;
+		// Cross-filter state from the dashboard charts. Both narrow the visible
+		// list; combine when both are set. Sidebar renders a chip per active
+		// filter and calls the matching clear callback when the user dismisses.
+		selectedNation?: string | null;
+		selectedDate?: string | null;
+		onClearNationFilter?: () => void;
+		onClearDateFilter?: () => void;
 	}
 
-	let { games, collections, publicCount, currentGameId }: Props = $props();
+	let {
+		games,
+		collections,
+		publicCount,
+		currentGameId,
+		selectedNation = null,
+		selectedDate = null,
+		onClearNationFilter,
+		onClearDateFilter,
+	}: Props = $props();
 
 	let width = $derived($sidebarWidth);
 	let dragging = $state(false);
@@ -170,13 +186,25 @@
 		});
 	}
 
-	// First filter by collection/public, then by search query.
+	// First filter by collection/public, then by chart cross-filters
+	// (nation + save date), then by search query.
 	const filteredGames = $derived.by(() => {
 		let result = games;
 		if (activeFilter === "public") {
 			result = result.filter((g) => g.is_public);
 		} else if (typeof activeFilter === "number") {
 			result = result.filter((g) => g.collection_id === activeFilter);
+		}
+
+		if (selectedNation) {
+			result = result.filter((g) => g.user_nation === selectedNation);
+		}
+		if (selectedDate) {
+			// stats.save_dates uses YYYY-MM-DD; GameListItem.save_date is full
+			// ISO 8601, so compare against the leading day component.
+			result = result.filter(
+				(g) => g.save_date != null && g.save_date.substring(0, 10) === selectedDate,
+			);
 		}
 
 		const query = $searchQuery.trim().toLowerCase();
@@ -263,6 +291,33 @@
 				</option>
 			{/each}
 		</select>
+
+		{#if selectedNation || selectedDate}
+			<div class="mt-1.5 flex flex-wrap gap-1">
+				{#if selectedNation}
+					<button
+						type="button"
+						class="filter-chip"
+						onclick={() => onClearNationFilter?.()}
+						title="Clear nation filter"
+					>
+						<span>{formatEnum(selectedNation, "NATION_")}</span>
+						<span class="chip-x" aria-hidden="true">×</span>
+					</button>
+				{/if}
+				{#if selectedDate}
+					<button
+						type="button"
+						class="filter-chip"
+						onclick={() => onClearDateFilter?.()}
+						title="Clear date filter"
+					>
+						<span>{selectedDate}</span>
+						<span class="chip-x" aria-hidden="true">×</span>
+					</button>
+				{/if}
+			</div>
+		{/if}
 	</div>
 
 	<div
@@ -495,6 +550,31 @@
 		font-size: 8px;
 		font-weight: 600;
 		color: var(--color-dark-brown);
+		line-height: 1;
+	}
+
+	.filter-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		padding: 2px 6px;
+		border-radius: 9999px;
+		border: 1px solid #000;
+		background-color: #c1872f;
+		color: #000;
+		font-size: 10px;
+		font-weight: 600;
+		line-height: 1;
+		cursor: pointer;
+		transition: background-color 150ms ease;
+	}
+
+	.filter-chip:hover {
+		background-color: #f2a93b;
+	}
+
+	.chip-x {
+		font-size: 12px;
 		line-height: 1;
 	}
 </style>
