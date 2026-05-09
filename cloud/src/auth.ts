@@ -30,6 +30,7 @@ import {
 	sessionFromRequest,
 } from "./session";
 import type { SessionEnv } from "./session";
+import { logError, logWarn } from "./log";
 
 export interface AuthEnv extends SessionEnv {
 	SHARE_DB: D1Database;
@@ -296,7 +297,10 @@ export async function handleDiscordCallback(
 	});
 	if (!tokenRes.ok) {
 		const detail = await tokenRes.text().catch(() => "");
-		console.error(`Discord token exchange failed (${tokenRes.status}): ${detail}`);
+		logError("discord_token_exchange_failed", null, {
+			discord_status: tokenRes.status,
+			discord_detail: detail.slice(0, 500),
+		});
 		return errorResponse(
 			"Discord token exchange failed",
 			502,
@@ -320,7 +324,10 @@ export async function handleDiscordCallback(
 	});
 	if (!userRes.ok) {
 		const detail = await userRes.text().catch(() => "");
-		console.error(`Discord user fetch failed (${userRes.status}): ${detail}`);
+		logError("discord_user_fetch_failed", null, {
+			discord_status: userRes.status,
+			discord_detail: detail.slice(0, 500),
+		});
 		return errorResponse("Discord user fetch failed", 502, cors, "USER_FETCH_FAILED");
 	}
 	const discordUser = (await userRes.json()) as DiscordUser;
@@ -329,7 +336,10 @@ export async function handleDiscordCallback(
 	}
 
 	if (!timingSafeEqual(discordUser.id, env.ALLOWED_DISCORD_ID)) {
-		console.warn(`Login denied for discord_id=${discordUser.id}`);
+		// discord_id is PII — don't include it in fields. The event itself
+		// is enough for moderation; deeper investigation goes through the
+		// audit_events table (when the login-audit gap is closed).
+		logWarn("login_denied");
 		return errorResponse(
 			"This beta is invite-only.",
 			403,

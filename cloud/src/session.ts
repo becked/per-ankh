@@ -7,6 +7,7 @@
 //   oauth:<nanoid(21)>    → OAuthPending   (5-min TTL, see auth.ts)
 
 import { nanoid } from "nanoid";
+import { setUserId } from "./log";
 import { isSecureRequest, parseCookies } from "./util";
 
 export interface SessionEnv {
@@ -60,6 +61,11 @@ export async function deleteSession(env: SessionEnv, token: string): Promise<voi
 
 // Read session token from cookie + look up in KV. Returns null if cookie
 // missing or KV entry expired/missing. Caller turns null into 401.
+//
+// On success, also annotates the request-scoped log context with the
+// resolved user_id so the access log + any subsequent event logs in the
+// same request carry the user attribution. Single chokepoint — every
+// authed handler benefits without touching its body.
 export async function sessionFromRequest(
 	env: SessionEnv,
 	request: Request,
@@ -69,6 +75,7 @@ export async function sessionFromRequest(
 	if (!token) return null;
 	const data = await readSession(env, token);
 	if (!data) return null;
+	setUserId(data.user_id);
 	return { token, data };
 }
 

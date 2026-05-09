@@ -23,6 +23,14 @@ import {
 	timingSafeEqual,
 } from "./util";
 import {
+	emitAccessLog,
+	getRequestId,
+	logError,
+	logWarn,
+	runWithLogContext,
+	setRoute,
+} from "./log";
+import {
 	handleDiscordCallback,
 	handleDiscordStart,
 	handleLogout,
@@ -47,6 +55,7 @@ import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
 import type { OnlineIdsEnv } from "./online-ids";
 import { handleStats } from "./stats";
 import type { StatsEnv } from "./stats";
+import { handleCspReport } from "./csp";
 
 interface Env extends AuthEnv, GamesEnv, CollectionsEnv, OnlineIdsEnv, StatsEnv {
 	SHARE_BUCKET: R2Bucket;
@@ -106,7 +115,7 @@ async function maybeCleanupEvents(db: D1Database): Promise<void> {
 			)
 			.run();
 	} catch (e) {
-		console.error("Event cleanup failed:", e);
+		logError("event_cleanup_failed", e);
 	}
 }
 
@@ -135,7 +144,7 @@ async function logEvent(
 		await maybeCleanupEvents(db);
 	} catch (e) {
 		// Log failure is non-critical — don't fail the request
-		console.error("Failed to log event:", e);
+		logError("audit_event_log_failed", e, { event_type: eventType });
 	}
 }
 
@@ -300,7 +309,10 @@ async function handleUpload(
 	// 8. Read and check actual compressed body size
 	const body = await request.arrayBuffer();
 	if (body.byteLength > maxCompressed) {
-		console.error(`Rejected upload: ${body.byteLength} bytes > ${maxCompressed} limit`);
+		logWarn("legacy_upload_oversized", {
+			size: body.byteLength,
+			limit: maxCompressed,
+		});
 		return errorResponse("Payload too large", 413, env);
 	}
 	if (body.byteLength === 0) {
@@ -313,7 +325,9 @@ async function handleUpload(
 	try {
 		decompressed = await decompressWithLimit(body, maxDecompressed);
 	} catch (e) {
-		console.error(`Decompression rejected: ${e instanceof Error ? e.message : "unknown"}`);
+		logWarn("legacy_decompress_failed", {
+			message: e instanceof Error ? e.message : "unknown",
+		});
 		return errorResponse("Decompressed payload too large", 413, env);
 	}
 
@@ -329,7 +343,12 @@ async function handleUpload(
 	// 11. Validate schema
 	const validation = validateSharePayload(parsed);
 	if (!validation.valid) {
-		console.error(`Validation failed for app_key=${appKey}: ${validation.error}`);
+		// app_key is on the PII deny-list — passing it surfaces as
+		// [REDACTED] in the log line.
+		logWarn("legacy_validation_failed", {
+			app_key: appKey,
+			error: validation.error,
+		});
 		return errorResponse("Invalid payload", 400, env);
 	}
 
@@ -375,14 +394,14 @@ async function handleUpload(
 			)
 			.run();
 	} catch (e) {
-		console.error(
-			`D1_INSERT_FAILED: Cleaning up R2 key=${r2Key}. share_id=${shareId}`,
-			e,
-		);
+		logError("d1_insert_failed", e, { share_id: shareId, r2_key: r2Key });
 		try {
 			await env.SHARE_BUCKET.delete(r2Key);
 		} catch (cleanupErr) {
-			console.error(`ORPHANED_BLOB: R2 cleanup failed for key=${r2Key}`, cleanupErr);
+			logError("orphaned_blob", cleanupErr, {
+				share_id: shareId,
+				r2_key: r2Key,
+			});
 		}
 		return errorResponse("Failed to create share", 500, env);
 	}
@@ -498,107 +517,202 @@ async function handleDelete(
 }
 
 // === Router ===
+//
+// Routes are declared as a typed table so the dispatch loop can:
+//   (a) match by exact path or regex,
+//   (b) set the route pattern (e.g. "GET /v1/games/:id") on the log
+//       context for stable per-route grouping in Logpush,
+//   (c) keep route additions to a single self-describing edit.
+//
+// More-specific patterns (e.g. /v1/games/:id/download) MUST appear before
+// more-generic ones (/v1/games/:id) — first match wins.
+
+type RouteHandler = (
+	request: Request,
+	env: Env,
+	match: RegExpMatchArray | null,
+) => Promise<Response>;
+
+interface RouteSpec {
+	method: string;
+	match: { kind: "path"; path: string } | { kind: "regex"; regex: RegExp };
+	route: string;
+	handler: RouteHandler;
+}
+
+const ROUTES: RouteSpec[] = [
+	// Cloud rewrite: /v1/auth/*
+	{ method: "POST", match: { kind: "path", path: "/v1/auth/discord/start" },
+		route: "POST /v1/auth/discord/start",
+		handler: (r, e) => handleDiscordStart(r, e) },
+	{ method: "POST", match: { kind: "path", path: "/v1/auth/discord/callback" },
+		route: "POST /v1/auth/discord/callback",
+		handler: (r, e) => handleDiscordCallback(r, e) },
+	{ method: "GET", match: { kind: "path", path: "/v1/auth/me" },
+		route: "GET /v1/auth/me",
+		handler: (r, e) => handleMe(r, e) },
+	{ method: "POST", match: { kind: "path", path: "/v1/auth/logout" },
+		route: "POST /v1/auth/logout",
+		handler: (r, e) => handleLogout(r, e) },
+
+	// Cloud rewrite: /v1/games/*
+	{ method: "POST", match: { kind: "path", path: "/v1/games" },
+		route: "POST /v1/games",
+		handler: (r, e) => handleGameUpload(r, e) },
+	{ method: "GET", match: { kind: "path", path: "/v1/games" },
+		route: "GET /v1/games",
+		handler: (r, e) => handleGameList(r, e) },
+	{ method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/download$/ },
+		route: "GET /v1/games/:id/download",
+		handler: (r, e, m) => handleGameDownload(m![1], r, e) },
+	{ method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
+		route: "GET /v1/games/:id",
+		handler: (r, e, m) => handleGameDetail(m![1], r, e) },
+	{ method: "PATCH",
+		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
+		route: "PATCH /v1/games/:id",
+		handler: (r, e, m) => handleGamePatch(m![1], r, e) },
+	{ method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
+		route: "DELETE /v1/games/:id",
+		handler: (r, e, m) => handleGameDelete(m![1], r, e) },
+
+	// Cloud rewrite: /v1/collections
+	{ method: "GET", match: { kind: "path", path: "/v1/collections" },
+		route: "GET /v1/collections",
+		handler: (r, e) => handleCollectionsList(r, e) },
+	{ method: "POST", match: { kind: "path", path: "/v1/collections" },
+		route: "POST /v1/collections",
+		handler: (r, e) => handleCollectionCreate(r, e) },
+
+	// Cloud rewrite: /v1/users/me/online-ids
+	{ method: "GET", match: { kind: "path", path: "/v1/users/me/online-ids" },
+		route: "GET /v1/users/me/online-ids",
+		handler: (r, e) => handleListOnlineIds(r, e) },
+	{ method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/users\/me\/online-ids\/(.+)$/ },
+		route: "DELETE /v1/users/me/online-ids/:id",
+		handler: (r, e, m) => handleRemoveOnlineId(decodeURIComponent(m![1]), r, e) },
+
+	// Cloud rewrite: /v1/stats
+	{ method: "GET", match: { kind: "path", path: "/v1/stats" },
+		route: "GET /v1/stats",
+		handler: (r, e) => handleStats(r, e) },
+
+	// CSP violation reports — unauthenticated; the browser POSTs here
+	// directly when the page's CSP triggers. See cloud/src/csp.ts.
+	{ method: "POST", match: { kind: "path", path: "/v1/csp-report" },
+		route: "POST /v1/csp-report",
+		handler: (r) => handleCspReport(r) },
+
+	// Legacy: /v1/share/*
+	{ method: "POST", match: { kind: "path", path: "/v1/share" },
+		route: "POST /v1/share",
+		handler: (r, e) => handleUpload(r, e) },
+	{ method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/share\/([A-Za-z0-9_-]{21})$/ },
+		route: "GET /v1/share/:id",
+		handler: (r, e, m) => handleDownload(m![1], r, e) },
+	{ method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/share\/([A-Za-z0-9_-]{21})$/ },
+		route: "DELETE /v1/share/:id",
+		handler: (r, e, m) => handleDelete(m![1], r, e) },
+];
+
+// Cloud paths use credentialed (echo-Origin) CORS so cookies traverse
+// per-ankh.app ↔ api.per-ankh.app. Legacy /v1/share uses single-origin.
+// /v1/csp-report rides cloud-CORS too — browsers don't preflight CSP
+// reports, but listing it here keeps OPTIONS responses correct for any
+// tooling that does.
+function isCloudPath(pathname: string): boolean {
+	return (
+		pathname.startsWith("/v1/auth/") ||
+		pathname === "/v1/games" ||
+		pathname.startsWith("/v1/games/") ||
+		pathname === "/v1/collections" ||
+		pathname.startsWith("/v1/users/") ||
+		pathname === "/v1/stats" ||
+		pathname === "/v1/csp-report"
+	);
+}
+
+function dispatch(request: Request, env: Env): Promise<Response> {
+	const url = new URL(request.url);
+	for (const r of ROUTES) {
+		if (r.method !== request.method) continue;
+		if (r.match.kind === "path") {
+			if (r.match.path !== url.pathname) continue;
+			setRoute(r.route);
+			return r.handler(request, env, null);
+		}
+		const m = url.pathname.match(r.match.regex);
+		if (!m) continue;
+		setRoute(r.route);
+		return r.handler(request, env, m);
+	}
+	// 404 — pick CORS based on path so error responses still allow the
+	// origin that asked. The cloud helper echoes the request Origin; the
+	// legacy helper returns the single ALLOWED_ORIGIN.
+	const cors = isCloudPath(url.pathname)
+		? cloudCorsHeaders(env, request)
+		: corsHeaders(env);
+	return Promise.resolve(
+		new Response(JSON.stringify({ error: "Not found" }), {
+			status: 404,
+			headers: { "Content-Type": "application/json", ...cors },
+		}),
+	);
+}
 
 export default {
 	async fetch(
 		request: Request,
 		env: Env,
+		_ctx: ExecutionContext,
 	): Promise<Response> {
-		const url = new URL(request.url);
-		const method = request.method;
+		return runWithLogContext(request, async () => {
+			const url = new URL(request.url);
+			let response: Response;
 
-		// CORS preflight: pick the right helper based on path. Cloud routes
-		// (/v1/auth, /v1/games, /v1/users) need credentialed CORS (echoes
-		// Origin); legacy /v1/share uses the single-origin variant.
-		const isCloudPath =
-			url.pathname.startsWith("/v1/auth/") ||
-			url.pathname === "/v1/games" ||
-			url.pathname.startsWith("/v1/games/") ||
-			url.pathname === "/v1/collections" ||
-			url.pathname.startsWith("/v1/users/") ||
-			url.pathname === "/v1/stats";
-		if (method === "OPTIONS") {
-			const headers = isCloudPath
-				? cloudCorsHeaders(env, request)
-				: corsHeaders(env);
-			return new Response(null, { status: 204, headers });
-		}
+			try {
+				if (request.method === "OPTIONS") {
+					const headers = isCloudPath(url.pathname)
+						? cloudCorsHeaders(env, request)
+						: corsHeaders(env);
+					response = new Response(null, { status: 204, headers });
+				} else {
+					response = await dispatch(request, env);
+				}
+			} catch (err) {
+				// Top-level safety net. Any uncaught throw becomes a 500 with
+				// the request_id in the body so the caller can include it in
+				// a bug report. Error class is captured for the access log.
+				logError("unhandled_handler_error", err);
+				const requestId = getRequestId();
+				const cors = isCloudPath(url.pathname)
+					? cloudCorsHeaders(env, request)
+					: corsHeaders(env);
+				response = new Response(
+					JSON.stringify({
+						error: "Internal server error",
+						request_id: requestId,
+					}),
+					{
+						status: 500,
+						headers: { "Content-Type": "application/json", ...cors },
+					},
+				);
+			}
 
-		// === Cloud rewrite: /v1/auth/* ===
-		if (method === "POST" && url.pathname === "/v1/auth/discord/start") {
-			return handleDiscordStart(request, env);
-		}
-		if (method === "POST" && url.pathname === "/v1/auth/discord/callback") {
-			return handleDiscordCallback(request, env);
-		}
-		if (method === "GET" && url.pathname === "/v1/auth/me") {
-			return handleMe(request, env);
-		}
-		if (method === "POST" && url.pathname === "/v1/auth/logout") {
-			return handleLogout(request, env);
-		}
-
-		// === Cloud rewrite: /v1/games/* ===
-		if (method === "POST" && url.pathname === "/v1/games") {
-			return handleGameUpload(request, env);
-		}
-		if (method === "GET" && url.pathname === "/v1/games") {
-			return handleGameList(request, env);
-		}
-		const gameMatch = url.pathname.match(/^\/v1\/games\/([A-Za-z0-9_-]{21})$/);
-		if (gameMatch) {
-			if (method === "GET") return handleGameDetail(gameMatch[1], request, env);
-			if (method === "PATCH") return handleGamePatch(gameMatch[1], request, env);
-			if (method === "DELETE") return handleGameDelete(gameMatch[1], request, env);
-		}
-		const downloadMatch = url.pathname.match(
-			/^\/v1\/games\/([A-Za-z0-9_-]{21})\/download$/,
-		);
-		if (method === "GET" && downloadMatch) {
-			return handleGameDownload(downloadMatch[1], request, env);
-		}
-
-		// === Cloud rewrite: /v1/collections ===
-		if (method === "GET" && url.pathname === "/v1/collections") {
-			return handleCollectionsList(request, env);
-		}
-		if (method === "POST" && url.pathname === "/v1/collections") {
-			return handleCollectionCreate(request, env);
-		}
-
-		// === Cloud rewrite: /v1/users/* ===
-		if (method === "GET" && url.pathname === "/v1/users/me/online-ids") {
-			return handleListOnlineIds(request, env);
-		}
-		const onlineIdMatch = url.pathname.match(
-			/^\/v1\/users\/me\/online-ids\/(.+)$/,
-		);
-		if (method === "DELETE" && onlineIdMatch) {
-			return handleRemoveOnlineId(decodeURIComponent(onlineIdMatch[1]), request, env);
-		}
-
-		// === Cloud rewrite: /v1/stats ===
-		if (method === "GET" && url.pathname === "/v1/stats") {
-			return handleStats(request, env);
-		}
-
-		// === Legacy: /v1/share/* ===
-		if (method === "POST" && url.pathname === "/v1/share") {
-			return handleUpload(request, env);
-		}
-
-		const getMatch = url.pathname.match(/^\/v1\/share\/([A-Za-z0-9_-]{21})$/);
-		if (method === "GET" && getMatch) {
-			return handleDownload(getMatch[1], request, env);
-		}
-
-		const deleteMatch = url.pathname.match(
-			/^\/v1\/share\/([A-Za-z0-9_-]{21})$/,
-		);
-		if (method === "DELETE" && deleteMatch) {
-			return handleDelete(deleteMatch[1], request, env);
-		}
-
-		return errorResponse("Not found", 404, env);
+			// Surface request_id to the client. Re-wrap so headers are mutable
+			// even when the handler returned a Response with frozen headers
+			// (e.g. R2 streams).
+			response = new Response(response.body, response);
+			response.headers.set("X-Request-Id", getRequestId() ?? "");
+			emitAccessLog(response);
+			return response;
+		});
 	},
 } satisfies ExportedHandler<Env>;

@@ -1,6 +1,12 @@
 name = "per-ankh-share-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
+# AsyncLocalStorage from node:async_hooks. Backs the request-scoped log
+# context in cloud/src/log.ts so handlers can attach fields to the access
+# log without threading a context argument through every signature.
+# `nodejs_als` is the lightweight flag — full `nodejs_compat` would pull
+# in a large compatibility shim we don't need.
+compatibility_flags = ["nodejs_als"]
 
 # Custom domain: api.per-ankh.app
 # Wrangler creates the DNS record automatically

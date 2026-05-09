@@ -30,6 +30,7 @@ import {
 import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 import { captureOnlineIds } from "./online-ids";
+import { logError, logWarn } from "./log";
 import {
 	buildSummaryGameContext,
 	derivePlayerSummary,
@@ -654,7 +655,9 @@ export async function handleGameUpload(
 	try {
 		form = await request.formData();
 	} catch (err) {
-		console.error("Multipart parse failed:", err);
+		logWarn("multipart_parse_failed", {
+			message: err instanceof Error ? err.message : "unknown",
+		});
 		return errorResponse("Invalid multipart body", 400, cors, "INVALID_FORM");
 	}
 
@@ -699,7 +702,9 @@ export async function handleGameUpload(
 	try {
 		decompressed = await decompressWithLimit(compressedData, MAX_BLOB_DECOMPRESSED);
 	} catch (e) {
-		console.error("Blob decompression rejected:", e instanceof Error ? e.message : "");
+		logWarn("blob_decompress_failed", {
+			message: e instanceof Error ? e.message : "unknown",
+		});
 		return errorResponse("Decompressed payload too large", 413, cors, "DECOMPRESSED_TOO_LARGE");
 	}
 	let parsed: unknown;
@@ -712,7 +717,10 @@ export async function handleGameUpload(
 	const validation = v.safeParse(FullGameDataSchema, parsed);
 	if (!validation.success) {
 		const issue = validation.issues[0];
-		console.error("Blob validation failed:", issue?.message, issue?.path);
+		logWarn("blob_validation_failed", {
+			message: issue?.message,
+			path: issue?.path?.map((p) => String(p.key)).join(".") ?? null,
+		});
 		return errorResponse(
 			`Blob validation: ${issue?.message ?? "unknown"}`,
 			400, cors, "INVALID_BLOB",
@@ -846,7 +854,7 @@ export async function handleGameUpload(
 			}),
 		]);
 	} catch (e) {
-		console.error("R2 put failed:", e);
+		logError("r2_put_failed", e, { game_id: gameId });
 		return errorResponse("Storage write failed", 500, cors, "R2_FAILED");
 	}
 
@@ -881,10 +889,10 @@ export async function handleGameUpload(
 	try {
 		await env.SHARE_DB.batch(allStatements);
 	} catch (e) {
-		console.error(
-			`D1_INSERT_FAILED: ${isReimport ? "preserving" : "cleaning up"} R2 game_id=${gameId}`,
-			e,
-		);
+		logError("d1_insert_failed", e, {
+			game_id: gameId,
+			is_reimport: isReimport,
+		});
 		// On first-upload failure: D1 has nothing pointing at the R2 blobs
 		// we just wrote, so delete them to avoid orphans.
 		// On re-import failure: D1 still references the R2 blobs (the
@@ -900,7 +908,7 @@ export async function handleGameUpload(
 					env.SHARE_BUCKET.delete(zipKey),
 				]);
 			} catch (cleanupErr) {
-				console.error(`ORPHANED_BLOB: R2 cleanup failed game_id=${gameId}`, cleanupErr);
+				logError("orphaned_blob", cleanupErr, { game_id: gameId });
 			}
 		}
 		return errorResponse("Database write failed", 500, cors, "D1_FAILED");
@@ -915,7 +923,7 @@ export async function handleGameUpload(
 				await captureOnlineIds(env, userId, [pickedOnlineId]);
 			} catch (e) {
 				// Non-fatal — uploads still succeed even if linking fails.
-				console.error("captureOnlineIds failed:", e);
+				logError("capture_online_ids_failed", e, { game_id: gameId });
 			}
 		}
 	}
@@ -948,7 +956,10 @@ export async function handleGameUpload(
 			)
 			.run();
 	} catch (e) {
-		console.error("Failed to log upload event:", e);
+		logError("audit_event_log_failed", e, {
+			event_type: isReimport ? "reimport" : "upload",
+			game_id: gameId,
+		});
 	}
 
 	if (isReimport) {
@@ -1090,7 +1101,10 @@ export async function handleGameDetail(
 				.bind(gameId, ip)
 				.run()
 				.catch((e: unknown) => {
-					console.error("Failed to log anon_read event:", e);
+					logError("audit_event_log_failed", e, {
+						event_type: "anon_read",
+						game_id: gameId,
+					});
 				});
 		}
 	}
@@ -1236,7 +1250,10 @@ export async function handleGamePatch(
 				.bind(gameId, userId, ip, JSON.stringify({ is_public }))
 				.run();
 		} catch (e) {
-			console.error("Failed to log visibility_change event:", e);
+			logError("audit_event_log_failed", e, {
+				event_type: "visibility_change",
+				game_id: gameId,
+			});
 		}
 	}
 
@@ -1254,7 +1271,10 @@ export async function handleGamePatch(
 				.bind(gameId, userId, ip, JSON.stringify({ collection_id }))
 				.run();
 		} catch (e) {
-			console.error("Failed to log collection_change event:", e);
+			logError("audit_event_log_failed", e, {
+				event_type: "collection_change",
+				game_id: gameId,
+			});
 		}
 	}
 
@@ -1297,7 +1317,7 @@ export async function handleGameDelete(
 			env.SHARE_BUCKET.delete(`saves/${gameId}.zip`),
 		]);
 	} catch (e) {
-		console.error("R2 delete failed (continuing to D1):", e);
+		logError("r2_delete_failed", e, { game_id: gameId });
 	}
 
 	await env.SHARE_DB.prepare("DELETE FROM games WHERE game_id = ?")
@@ -1313,7 +1333,10 @@ export async function handleGameDelete(
 			.bind(gameId, userId, ip)
 			.run();
 	} catch (e) {
-		console.error("Failed to log delete event:", e);
+		logError("audit_event_log_failed", e, {
+			event_type: "delete",
+			game_id: gameId,
+		});
 	}
 
 	return new Response(null, { status: 204, headers: cors });
@@ -1394,7 +1417,10 @@ export async function handleGameDownload(
 		.bind(gameId, userId, ip, JSON.stringify({ size: obj.size }))
 		.run()
 		.catch((e: unknown) => {
-			console.error("Failed to log download event:", e);
+			logError("audit_event_log_failed", e, {
+				event_type: "download",
+				game_id: gameId,
+			});
 		});
 
 	// Stream R2 body straight through. obj.body is a ReadableStream — no

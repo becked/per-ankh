@@ -1,6 +1,8 @@
 // Shared helpers used by both legacy share endpoints and the new cloud
 // auth/games endpoints.
 
+import { logWarn, setErrorCode } from "./log";
+
 export interface CommonEnv {
 	ALLOWED_ORIGIN: string;
 	ALLOWED_ORIGINS: string;
@@ -85,6 +87,10 @@ export function errorResponse(
 	cors: Record<string, string>,
 	code?: string,
 ): Response {
+	// Surface the error code on the request-scoped log context so the
+	// access-log envelope picks it up automatically — handlers don't have
+	// to log error_code themselves.
+	if (code) setErrorCode(code);
 	const body: Record<string, unknown> = { error: message };
 	if (code) body.code = code;
 	return jsonResponse(body, status, cors);
@@ -105,7 +111,7 @@ export function isSecureRequest(request: Request): boolean {
 // as a misconfiguration signal.
 export function getClientIp(request: Request): string | null {
 	if (!request.headers.get("CF-RAY")) {
-		console.warn("getClientIp: CF-RAY missing — request not via CF edge");
+		logWarn("cf_ray_missing");
 		return null;
 	}
 	return request.headers.get("CF-Connecting-IP");

@@ -10,6 +10,7 @@
 // security model via Tauri's CSP config in tauri.conf.json.
 
 import type { Handle } from "@sveltejs/kit";
+import { dev } from "$app/environment";
 
 // Headers from server-side fetches in load() that we need to read in
 // our API client. By default SvelteKit filters all response headers from
@@ -22,6 +23,22 @@ const ALLOWED_RESPONSE_HEADERS = new Set([
 	"cache-control",
 	"content-disposition",
 ]);
+
+// Reporting API endpoint group declaration. The CSP `report-to`
+// directive (svelte.config.js) names this group; the directive alone
+// doesn't tell the browser where to send reports — this header does.
+// Same destination as `report-uri` for legacy fallback.
+const reportToHeader = JSON.stringify({
+	group: "csp-endpoint",
+	max_age: 10886400,
+	endpoints: [
+		{
+			url: dev
+				? "http://localhost:8787/v1/csp-report"
+				: "https://api.per-ankh.app/v1/csp-report",
+		},
+	],
+});
 
 export const handle: Handle = async ({ event, resolve }) => {
 	const response = await resolve(event, {
@@ -40,6 +57,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 		"Permissions-Policy",
 		"camera=(), microphone=(), geolocation=()",
 	);
+	response.headers.set("Report-To", reportToHeader);
 
 	return response;
 };
