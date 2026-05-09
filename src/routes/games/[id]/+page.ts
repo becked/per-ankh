@@ -53,23 +53,26 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 
 	const isOwner = "is_public" in game;
 
-	// Sidebar data — only meaningful for signed-in users. Anonymous
-	// viewers of a public game render the page without a sidebar; their
-	// listGames call returns 401 which we swallow here. Other errors
-	// propagate so real outages aren't masked.
+	// Sidebar data — only meaningful when the viewer owns this game.
+	// Non-owners (anonymous or signed-in guests on a public game) don't
+	// see the sidebar, so skip the fetches. Anonymous owners can't exist
+	// (ownership requires a session), so the listGames 401 path is gone.
+	// Other errors propagate so real outages aren't masked.
 	let games: GameListItem[] | undefined;
 	let collections: CollectionInfo[] | undefined;
 	let publicCount = 0;
-	try {
-		const [gamesRes, collectionsRes] = await Promise.all([
-			cloudApi.listGames({ fetch }),
-			cloudApi.listCollections({ fetch }),
-		]);
-		games = gamesRes.games;
-		collections = collectionsRes.collections;
-		publicCount = collectionsRes.public_count;
-	} catch (err) {
-		if (!(err instanceof UnauthorizedError)) throw err;
+	if (isOwner) {
+		try {
+			const [gamesRes, collectionsRes] = await Promise.all([
+				cloudApi.listGames({ fetch }),
+				cloudApi.listCollections({ fetch }),
+			]);
+			games = gamesRes.games;
+			collections = collectionsRes.collections;
+			publicCount = collectionsRes.public_count;
+		} catch (err) {
+			if (!(err instanceof UnauthorizedError)) throw err;
+		}
 	}
 
 	return { game, isOwner, games, collections, publicCount };

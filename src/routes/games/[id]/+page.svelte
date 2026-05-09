@@ -147,7 +147,7 @@
 		</div>
 	</main>
 
-	{#if data.games}
+	{#if isOwner && data.games}
 		<CloudGameSidebar
 			games={data.games}
 			collections={data.collections ?? []}

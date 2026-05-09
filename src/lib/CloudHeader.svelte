@@ -17,13 +17,16 @@
 	let isAboutModalOpen = $state(false);
 	let signingOut = $state(false);
 
-	// Search box has somewhere to act on /dashboard and /games/* (the only
-	// routes mounting the games sidebar). Keep it mounted everywhere so
-	// the store value survives navigation; just hide the input visually
-	// when the current route can't react to it.
+	// Search box has somewhere to act on /dashboard and /games/* — but only
+	// when the games sidebar is mounted. On /games/[id] the sidebar is
+	// hidden for non-owners, so the search input has nothing to filter.
+	// Keep it mounted everywhere so the store value survives navigation;
+	// just hide the input visually when the current route can't react.
 	const searchVisible = $derived(
 		page.url.pathname === "/dashboard" ||
-			page.url.pathname.startsWith("/games"),
+			page.url.pathname === "/games" ||
+			(page.url.pathname.startsWith("/games/") &&
+				page.data.isOwner === true),
 	);
 
 	function toggleMenu() {
