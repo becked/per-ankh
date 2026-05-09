@@ -14,6 +14,7 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import { isNewer } from "$lib/utils/semver";
 	import { PARSER_VERSION } from "$lib/parser/types";
+	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import VisibilityToggle from "$lib/VisibilityToggle.svelte";
 	import ReimportButton from "$lib/ReimportButton.svelte";
 
@@ -201,7 +202,7 @@
 			<ReimportButton {gameId} />
 		</div>
 	{/if}
-	<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+	<div class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4" use:autohideScroll>
 		<GameDetailView
 			gameDetails={game.game_details}
 			playerHistory={game.player_history}

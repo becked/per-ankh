@@ -3,6 +3,7 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { cloudApi } from "$lib/api-cloud";
+	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import BulkUploadModal from "$lib/BulkUploadModal.svelte";
 
 	let ready = $state(false);
@@ -21,7 +22,7 @@
 	<title>Upload — Per-Ankh</title>
 </svelte:head>
 
-<main class="flex-1 overflow-y-auto px-4 py-8">
+<main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<div class="mx-auto max-w-xl">
 		<h1 class="mb-4 font-serif text-2xl text-tan">Upload a save</h1>
 		{#if ready}

@@ -2,6 +2,7 @@
 	import type { EChartsOption } from "echarts";
 	import Chart from "$lib/Chart.svelte";
 	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
+	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
 		CHART_THEME,
@@ -209,7 +210,7 @@
 -->
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+		<div class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4" use:autohideScroll>
 			<h1 class="mb-8 text-3xl font-bold text-gray-200">Overview</h1>
 
 			<div

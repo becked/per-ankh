@@ -20,6 +20,13 @@
 		type CollectionInfo,
 		type GameListItem,
 	} from "$lib/api-cloud";
+	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import {
+		sidebarWidth,
+		setSidebarWidth,
+		MIN_WIDTH,
+		MAX_WIDTH,
+	} from "$lib/stores/sidebarWidth";
 	import {
 		formatGameTitle,
 		formatDate,
@@ -34,6 +41,28 @@
 	}
 
 	let { games, collections, publicCount, currentGameId }: Props = $props();
+
+	let width = $derived($sidebarWidth);
+	let dragging = $state(false);
+
+	function startDrag(e: MouseEvent): void {
+		e.preventDefault();
+		dragging = true;
+		// Keep the col-resize cursor when the mouse leaves the handle mid-drag.
+		document.body.style.cursor = "col-resize";
+		document.addEventListener("mousemove", onDrag);
+		document.addEventListener("mouseup", endDrag, { once: true });
+	}
+
+	function onDrag(e: MouseEvent): void {
+		setSidebarWidth(window.innerWidth - e.clientX);
+	}
+
+	function endDrag(): void {
+		dragging = false;
+		document.body.style.cursor = "";
+		document.removeEventListener("mousemove", onDrag);
+	}
 
 	// "all" | "public" | <collection_id>
 	let activeFilter = $state<"all" | "public" | number>("all");
@@ -61,9 +90,9 @@
 		// Mirror desktop placement: menu appears to the left of the sidebar.
 		const menuWidth = 180;
 		const menuHeight = 250;
-		const sidebarWidth = 175;
+		const sidebarPx = width;
 
-		let x = window.innerWidth - sidebarWidth - menuWidth - 8;
+		let x = window.innerWidth - sidebarPx - menuWidth - 8;
 		let y = e.clientY;
 
 		if (y + menuHeight > window.innerHeight) {
@@ -200,8 +229,29 @@
 </script>
 
 <aside
-	class="flex h-full w-[175px] flex-col overflow-hidden border-l-2 border-black bg-blue-gray"
+	class="sidebar-aside flex h-full flex-col overflow-hidden border-l-2 border-black bg-blue-gray"
+	class:dragging
+	style="width: {width}px;"
 >
+	<!--
+		Resize handle: ~6px-wide hit zone straddling the aside's left border.
+		Drag to resize the dashboard/sidebar partition. Width persists via the
+		sidebarWidth store. role="separator" + aria-valuenow makes it
+		discoverable to screen readers; pointer drag is the only interaction
+		(no keyboard handler — desktop UI, mouse-only).
+	-->
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<div
+		class="resize-handle"
+		onmousedown={startDrag}
+		role="separator"
+		aria-orientation="vertical"
+		aria-valuemin={MIN_WIDTH}
+		aria-valuemax={MAX_WIDTH}
+		aria-valuenow={width}
+		aria-label="Resize games sidebar"
+	></div>
+
 	<!-- Search -->
 	<div class="border-b border-black px-2 pb-1 pt-2">
 		<input
@@ -231,7 +281,10 @@
 		</select>
 	</div>
 
-	<div class="sidebar-content flex-1 overflow-y-auto px-2 pb-2 pt-2">
+	<div
+		class="sidebar-content cloud-scroll flex-1 overflow-y-auto px-2 pb-2 pt-2"
+		use:autohideScroll
+	>
 		{#if filteredGames.length === 0}
 			<div class="p-4 text-center text-tan">
 				{searchInput ? "No games match your search" : "No games found"}
@@ -381,6 +434,37 @@
 {/if}
 
 <style>
+	.sidebar-aside {
+		position: relative;
+	}
+
+	.sidebar-aside.dragging {
+		user-select: none;
+		cursor: col-resize;
+	}
+
+	/*
+	 * Hit zone straddles the aside's 2px left border. 6px wide so the
+	 * cursor catches it without a precise aim. Visually subtle on hover so
+	 * the affordance is discoverable without being noisy.
+	 */
+	.resize-handle {
+		position: absolute;
+		left: -3px;
+		top: 0;
+		bottom: 0;
+		width: 6px;
+		cursor: col-resize;
+		z-index: 10;
+		background-color: transparent;
+		transition: background-color 150ms ease;
+	}
+
+	.resize-handle:hover,
+	.sidebar-aside.dragging .resize-handle {
+		background-color: rgba(255, 165, 0, 0.35);
+	}
+
 	.game-list-item {
 		background-color: #c1872f;
 		padding-bottom: 18px;
