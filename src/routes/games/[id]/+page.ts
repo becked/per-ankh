@@ -1,5 +1,11 @@
 import { error, redirect } from "@sveltejs/kit";
-import { cloudApi, ApiError, UnauthorizedError } from "$lib/api-cloud";
+import {
+	cloudApi,
+	ApiError,
+	UnauthorizedError,
+	type CollectionInfo,
+	type GameListItem,
+} from "$lib/api-cloud";
 import type { PageLoad } from "./$types";
 
 // Translate the API's `ApiError` into the right SvelteKit response —
@@ -32,10 +38,9 @@ function mapApiErrorToPage(err: unknown): never {
 // (or signed-in non-owner of a private game gets 403, handled separately
 // — anonymous+private is the only 401 case the load needs to redirect on).
 export const load: PageLoad = async ({ params, fetch, url }) => {
+	let game;
 	try {
-		const game = await cloudApi.getGame(params.id, { fetch });
-		const isOwner = "is_public" in game;
-		return { game, isOwner };
+		game = await cloudApi.getGame(params.id, { fetch });
 	} catch (err) {
 		if (err instanceof UnauthorizedError) {
 			throw redirect(
@@ -45,4 +50,27 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		}
 		return mapApiErrorToPage(err);
 	}
+
+	const isOwner = "is_public" in game;
+
+	// Sidebar data — only meaningful for signed-in users. Anonymous
+	// viewers of a public game render the page without a sidebar; their
+	// listGames call returns 401 which we swallow here. Other errors
+	// propagate so real outages aren't masked.
+	let games: GameListItem[] | undefined;
+	let collections: CollectionInfo[] | undefined;
+	let publicCount = 0;
+	try {
+		const [gamesRes, collectionsRes] = await Promise.all([
+			cloudApi.listGames({ fetch }),
+			cloudApi.listCollections({ fetch }),
+		]);
+		games = gamesRes.games;
+		collections = collectionsRes.collections;
+		publicCount = collectionsRes.public_count;
+	} catch (err) {
+		if (!(err instanceof UnauthorizedError)) throw err;
+	}
+
+	return { game, isOwner, games, collections, publicCount };
 };

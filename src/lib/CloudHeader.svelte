@@ -1,75 +1,212 @@
 <script lang="ts">
-	// Persistent top-of-page navigation for cloud routes. Rendered from the
-	// root +layout.svelte for routes that aren't /login or /auth/*.
-	//
-	// Auth-aware: when `user` is null (signed out) the right side shows a
-	// Sign in link. The middle nav links stay visible regardless — they
-	// each trigger their own auth redirect on click via the page's load
-	// guard, so showing them when signed out is harmless and keeps the
-	// chrome stable as the user signs in/out.
+	// Persistent app chrome for cloud routes. Three-zone layout mirrors
+	// the deleted desktop Header.svelte: hamburger menu left, centered
+	// hieroglyph wordmark, search right. Auth-aware via the `user` prop.
 
-	import { page } from "$app/state";
+	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
-	import type { UserMe } from "$lib/api-cloud";
+	import { page } from "$app/state";
+	import SearchInput from "$lib/SearchInput.svelte";
+	import AboutModal from "$lib/AboutModal.svelte";
+	import { cloudApi, type UserMe } from "$lib/api-cloud";
+	import { searchQuery } from "$lib/stores/search";
 
 	let { user }: { user: UserMe | null } = $props();
 
-	const navItems = [
-		{ href: "/dashboard", label: "Dashboard" },
-		{ href: "/upload", label: "Upload" },
-	] as const;
+	let isMenuOpen = $state(false);
+	let isAboutModalOpen = $state(false);
+	let signingOut = $state(false);
 
-	function isActive(href: string): boolean {
-		const path = page.url.pathname;
-		return path === href || path.startsWith(href + "/");
+	// Search box has somewhere to act on /dashboard and /games/* (the only
+	// routes mounting the games sidebar). Keep it mounted everywhere so
+	// the store value survives navigation; just hide the input visually
+	// when the current route can't react to it.
+	const searchVisible = $derived(
+		page.url.pathname === "/dashboard" ||
+			page.url.pathname.startsWith("/games"),
+	);
+
+	function toggleMenu() {
+		isMenuOpen = !isMenuOpen;
+	}
+
+	function closeMenu() {
+		isMenuOpen = false;
+	}
+
+	function openAbout() {
+		closeMenu();
+		isAboutModalOpen = true;
+	}
+
+	async function handleSignOut() {
+		closeMenu();
+		signingOut = true;
+		try {
+			await cloudApi.logout();
+		} catch (err) {
+			// Worst case the cookie is still valid server-side; next
+			// request will surface that. Don't strand the user.
+			console.warn("Logout request failed:", err);
+		}
+		await invalidateAll();
+		await goto(resolve("/"), { replaceState: true });
+	}
+
+	function handleClickOutside(event: MouseEvent) {
+		if (!isMenuOpen) return;
+		const target = event.target as HTMLElement;
+		if (!target.closest(".menu-container")) closeMenu();
+	}
+
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === "Escape" && isMenuOpen) closeMenu();
 	}
 </script>
 
+<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+
 <header
-	class="flex shrink-0 flex-wrap items-center gap-3 border-b border-brown bg-[#2a2622] px-4 py-2"
+	class="relative flex w-full shrink-0 items-center justify-between border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
 >
-	<a href={resolve("/dashboard")} class="text-sm font-bold text-tan hover:text-orange">
-		Per-Ankh
-	</a>
-
-	<nav class="flex items-center gap-1">
-		{#each navItems as item (item.href)}
-			<a
-				href={resolve(item.href)}
-				class="rounded px-2 py-1 text-xs hover:bg-brown/40 hover:text-orange {isActive(
-					item.href,
-				)
-					? 'text-orange'
-					: 'text-tan'}"
+	<!-- Left: hamburger + dropdown -->
+	<div class="menu-container flex-shrink-0">
+		<button
+			class="py-2 pr-2 text-orange transition-colors hover:text-tan"
+			type="button"
+			onclick={toggleMenu}
+			aria-label={user
+				? `Menu — signed in as ${user.display_name}`
+				: "Menu"}
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-6 w-6"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
 			>
-				{item.label}
-			</a>
-		{/each}
-	</nav>
-
-	<div class="ml-auto flex items-center gap-2">
-		{#if user}
-			<a
-				href={resolve("/account")}
-				class="flex items-center gap-2 rounded px-2 py-1 hover:bg-brown/40"
-				title="Account settings"
-			>
-				<img
-					src={user.avatar_url}
-					alt=""
-					class="h-6 w-6 rounded-full"
-					width="24"
-					height="24"
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					stroke-width="2"
+					d="M4 6h16M4 12h16M4 18h16"
 				/>
-				<span class="text-xs text-tan">{user.display_name}</span>
-			</a>
-		{:else}
-			<a
-				href={resolve("/login")}
-				class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80"
+			</svg>
+		</button>
+
+		{#if isMenuOpen}
+			<div
+				class="absolute left-0 z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray shadow-lg"
 			>
-				Sign in
-			</a>
+				{#if user}
+					<div class="flex items-center gap-2 border-b border-black px-3 py-2">
+						<img
+							src={user.avatar_url}
+							alt=""
+							class="h-6 w-6 rounded-full"
+							width="24"
+							height="24"
+						/>
+						<span class="truncate text-xs text-tan">{user.display_name}</span>
+					</div>
+					<a
+						href={resolve("/dashboard")}
+						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						onclick={closeMenu}
+					>
+						Dashboard
+					</a>
+					<a
+						href={resolve("/upload")}
+						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						onclick={closeMenu}
+					>
+						Upload
+					</a>
+					<a
+						href={resolve("/account")}
+						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						onclick={closeMenu}
+					>
+						Account
+					</a>
+					<button
+						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						type="button"
+						onclick={openAbout}
+					>
+						About
+					</button>
+					<div class="border-t border-black"></div>
+					<button
+						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50"
+						type="button"
+						onclick={handleSignOut}
+						disabled={signingOut}
+					>
+						{signingOut ? "Signing out…" : "Sign out"}
+					</button>
+				{:else}
+					<button
+						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						type="button"
+						onclick={openAbout}
+					>
+						About
+					</button>
+					<div class="border-t border-black"></div>
+					<a
+						href={resolve("/login")}
+						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						onclick={closeMenu}
+					>
+						Sign in
+					</a>
+				{/if}
+			</div>
 		{/if}
 	</div>
+
+	<!--
+		Center: hieroglyph wordmark. Absolute-positioned so it stays visually
+		centered regardless of the side zones. pointer-events-none on the
+		wrapper so the layer doesn't capture clicks meant for the hamburger
+		when the two overlap at narrow widths; pointer-events-auto on the
+		anchor itself so the wordmark stays clickable.
+	-->
+	<div
+		class="pointer-events-none absolute left-1/2 -translate-x-1/2"
+	>
+		<a
+			href={resolve("/dashboard")}
+			class="pointer-events-auto block cursor-pointer transition-opacity hover:opacity-80"
+			aria-label="Per Ankh — go to dashboard"
+		>
+			<div class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200">
+				𓉑 Per Ankh
+			</div>
+		</a>
+	</div>
+
+	<!--
+		Right: search input bound to the global searchQuery store. Visible
+		only on routes where the games sidebar is mounted; kept in the DOM
+		when hidden so the bound value survives navigation.
+	-->
+	<SearchInput
+		bind:value={$searchQuery}
+		variant="dark"
+		placeholder="Search games"
+		class="-mr-4 w-[171px] flex-shrink-0 pl-1 pr-2 {searchVisible
+			? ''
+			: 'invisible'}"
+	/>
 </header>
+
+<AboutModal
+	bind:isOpen={isAboutModalOpen}
+	onClose={() => {
+		isAboutModalOpen = false;
+	}}
+/>

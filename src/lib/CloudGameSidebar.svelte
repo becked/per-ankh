@@ -22,6 +22,7 @@
 		MIN_WIDTH,
 		MAX_WIDTH,
 	} from "$lib/stores/sidebarWidth";
+	import { searchQuery } from "$lib/stores/search";
 	import {
 		formatGameTitle,
 		formatDate,
@@ -61,7 +62,6 @@
 
 	// "all" | "public" | <collection_id>
 	let activeFilter = $state<"all" | "public" | number>("all");
-	let searchInput = $state("");
 
 	// Context menu state.
 	let contextMenu = $state<{ x: number; y: number; game: GameListItem } | null>(
@@ -179,7 +179,7 @@
 			result = result.filter((g) => g.collection_id === activeFilter);
 		}
 
-		const query = searchInput.trim().toLowerCase();
+		const query = $searchQuery.trim().toLowerCase();
 		if (!query) return result;
 
 		return result.filter((game) => {
@@ -246,16 +246,6 @@
 		aria-label="Resize games sidebar"
 	></div>
 
-	<!-- Search -->
-	<div class="border-b border-black px-2 pb-1 pt-2">
-		<input
-			type="search"
-			bind:value={searchInput}
-			placeholder="Search games"
-			class="w-full rounded border border-black bg-[#35302b] p-1.5 text-xs text-tan placeholder:text-[#9a8a6c] focus:outline-none focus:ring-1 focus:ring-orange"
-		/>
-	</div>
-
 	<!-- Collection filter dropdown -->
 	<div class="border-b border-black px-2 pb-1 pt-2">
 		<select
@@ -281,10 +271,10 @@
 	>
 		{#if filteredGames.length === 0}
 			<div class="p-4 text-center text-tan">
-				{searchInput ? "No games match your search" : "No games found"}
+				{$searchQuery ? "No games match your search" : "No games found"}
 			</div>
 		{:else}
-			{#key searchInput}
+			{#key $searchQuery}
 				{#each groupedGames as group (group.monthKey)}
 					<div class="month-separator my-2 flex items-center gap-1.5 px-1">
 						<div class="separator-line h-px flex-1 bg-tan opacity-50"></div>
