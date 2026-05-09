@@ -370,6 +370,16 @@ export async function handleDiscordCallback(
 		return errorResponse("User upsert returned no row", 500, cors, "UPSERT_FAILED");
 	}
 
+	// Idempotent Personal-collection seed. First login inserts; subsequent
+	// logins are no-ops via the (user_id, name) UNIQUE constraint. Done
+	// before createSession so any page rendered post-login already has the
+	// default collection available.
+	await env.SHARE_DB.prepare(
+		`INSERT OR IGNORE INTO collections (user_id, name, is_default) VALUES (?, 'Personal', 1)`,
+	)
+		.bind(upsert.user_id)
+		.run();
+
 	const sessionToken = await createSession(env, upsert.user_id);
 
 	const headers = new Headers({

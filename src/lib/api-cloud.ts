@@ -30,8 +30,21 @@ export interface GameListItem {
 	victory_type: string | null;
 	map_size: string | null;
 	is_public: boolean;
+	collection_id: number | null;
 	created_at: string;
 	parser_version: string;
+}
+
+export interface CollectionInfo {
+	collection_id: number;
+	name: string;
+	is_default: boolean;
+	game_count: number;
+}
+
+export interface CollectionsListResponse {
+	collections: CollectionInfo[];
+	public_count: number;
 }
 
 export interface GameListResponse {
@@ -310,5 +323,37 @@ export const cloudApi = {
 	getStats: async (opts?: CallOpts): Promise<StatsResponse> => {
 		const res = await request("/stats", opts);
 		return res.json() as Promise<StatsResponse>;
+	},
+
+	// --- Collections ---
+	listCollections: async (opts?: CallOpts): Promise<CollectionsListResponse> => {
+		const res = await request("/collections", opts);
+		return res.json() as Promise<CollectionsListResponse>;
+	},
+
+	createCollection: async (
+		name: string,
+		opts?: CallOpts,
+	): Promise<CollectionInfo> => {
+		const res = await request("/collections", {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ name }),
+		});
+		return res.json() as Promise<CollectionInfo>;
+	},
+
+	moveGameToCollection: async (
+		gameId: string,
+		collectionId: number,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/games/${gameId}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ collection_id: collectionId }),
+		});
 	},
 } as const;

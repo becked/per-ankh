@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { EChartsOption } from "echarts";
 	import Chart from "$lib/Chart.svelte";
+	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
 		CHART_THEME,
@@ -203,41 +204,52 @@
 	support the desktop Tauri shell, which scrolls internally. Cloud routes
 	therefore need their own scroll container; mirroring the pattern from
 	src/routes/games/[id]/+page.svelte:50.
+
+	Layout mirrors desktop: stats main pane, game sidebar pinned right.
 -->
-<main class="isolate flex flex-1 flex-col overflow-hidden">
-	<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
-		<h1 class="mb-8 text-3xl font-bold text-gray-200">Overview</h1>
+<div class="flex flex-1 overflow-hidden">
+	<main class="isolate flex flex-1 flex-col overflow-hidden">
+		<div class="flex-1 overflow-y-auto px-4 pb-8 pt-4">
+			<h1 class="mb-8 text-3xl font-bold text-gray-200">Overview</h1>
 
-		<div
-			class="mb-8 rounded-lg border-2 border-black p-2"
-			style="background-color: #36302a;"
-		>
-			<div class="flex items-center justify-center gap-2">
-				<span class="text-sm font-bold uppercase tracking-wide text-brown"
-					>Games Played:</span
-				>
-				<span class="text-2xl font-bold" style="color: #EEEEEE;"
-					>{stats.total_games}</span
-				>
+			<div
+				class="mb-8 rounded-lg border-2 border-black p-2"
+				style="background-color: #36302a;"
+			>
+				<div class="flex items-center justify-center gap-2">
+					<span class="text-sm font-bold uppercase tracking-wide text-brown"
+						>Games Played:</span
+					>
+					<span class="text-2xl font-bold" style="color: #EEEEEE;"
+						>{stats.total_games}</span
+					>
+				</div>
 			</div>
+
+			{#if stats.nations.length > 0}
+				<div
+					class="mb-8 rounded-lg border-2 border-black p-1"
+					style="background-color: var(--color-chart-frame)"
+				>
+					<Chart option={chartOption} height="400px" />
+				</div>
+			{/if}
+
+			{#if calendarChartOption}
+				<div
+					class="mb-8 rounded-lg border-2 border-black p-1"
+					style="background-color: var(--color-chart-frame)"
+				>
+					<Chart option={calendarChartOption} height="250px" />
+				</div>
+			{/if}
 		</div>
+	</main>
 
-		{#if stats.nations.length > 0}
-			<div
-				class="mb-8 rounded-lg border-2 border-black p-1"
-				style="background-color: var(--color-chart-frame)"
-			>
-				<Chart option={chartOption} height="400px" />
-			</div>
-		{/if}
-
-		{#if calendarChartOption}
-			<div
-				class="mb-8 rounded-lg border-2 border-black p-1"
-				style="background-color: var(--color-chart-frame)"
-			>
-				<Chart option={calendarChartOption} height="250px" />
-			</div>
-		{/if}
-	</div>
-</main>
+	<CloudGameSidebar
+		games={data.games}
+		collections={data.collections}
+		publicCount={data.publicCount}
+		currentGameId={null}
+	/>
+</div>

@@ -302,7 +302,7 @@
 	}
 
 	function navigateDone() {
-		void goto(resolve("/games"));
+		void goto(resolve("/dashboard"));
 	}
 </script>
 

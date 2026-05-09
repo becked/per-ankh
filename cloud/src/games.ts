@@ -266,6 +266,10 @@ interface GameRowInputs {
 	fileHash: string;
 	blobSize: number;
 	uploaderIndex: number | null;
+	// On first upload, the user's Personal (is_default=1) collection_id
+	// resolved by the caller. On re-import, the existing row's collection_id
+	// (preserved across the REPLACE so manual moves aren't clobbered).
+	collectionId: number | null;
 	// Re-import overrides — preserve the existing row's URL-stable fields
 	// instead of resetting them from defaults.
 	createdAtOverride?: string;
@@ -278,6 +282,7 @@ function buildGameRow(inp: GameRowInputs): {
 } {
 	const {
 		gameId, userId, blob, fileHash, blobSize, uploaderIndex,
+		collectionId,
 		createdAtOverride, isPublicOverride,
 	} = inp;
 	const md = blob.match_metadata;
@@ -302,8 +307,9 @@ function buildGameRow(inp: GameRowInputs): {
 	const isPublic = isPublicOverride === undefined ? 0 : isPublicOverride ? 1 : 0;
 
 	// On re-import, REPLACE the games row (cascades child deletes), preserve
-	// created_at and is_public, and bump updated_at to now. On first upload,
-	// rely on column defaults for created_at/updated_at and is_public=FALSE.
+	// created_at, is_public, and collection_id, and bump updated_at to now.
+	// On first upload, rely on column defaults for created_at/updated_at and
+	// is_public=FALSE; collection_id is the user's Personal default.
 	if (createdAtOverride !== undefined) {
 		return {
 			sql: `INSERT OR REPLACE INTO games (
@@ -314,8 +320,9 @@ function buildGameRow(inp: GameRowInputs): {
 				user_nation, user_won,
 				is_public,
 				blob_version, blob_size_bytes, parser_version,
+				collection_id,
 				created_at, updated_at
-			) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?, datetime('now'))`,
+			) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?, ?, datetime('now'))`,
 			bindings: [
 				gameId, userId, md.xml_game_id, md.total_turns, fileHash,
 				md.game_name, md.save_date, md.map_size, md.map_class, md.game_mode,
@@ -324,6 +331,7 @@ function buildGameRow(inp: GameRowInputs): {
 				userNation, userWon === null ? null : userWon ? 1 : 0,
 				isPublic,
 				blob.version, blobSize, blob.parser_version,
+				collectionId,
 				createdAtOverride,
 			],
 		};
@@ -337,8 +345,9 @@ function buildGameRow(inp: GameRowInputs): {
 			winner_nation, winner_name, victory_type,
 			user_nation, user_won,
 			is_public,
-			blob_version, blob_size_bytes, parser_version
-		) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?)`,
+			blob_version, blob_size_bytes, parser_version,
+			collection_id
+		) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?)`,
 		bindings: [
 			gameId, userId, md.xml_game_id, md.total_turns, fileHash,
 			md.game_name, md.save_date, md.map_size, md.map_class, md.game_mode,
@@ -347,6 +356,7 @@ function buildGameRow(inp: GameRowInputs): {
 			userNation, userWon === null ? null : userWon ? 1 : 0,
 			isPublic,
 			blob.version, blobSize, blob.parser_version,
+			collectionId,
 		],
 	};
 }
@@ -605,7 +615,7 @@ function coerceD1Bool(v: unknown): boolean | null {
 
 // Normalize a /v1/games row to the wire types declared in
 // src/lib/api-cloud.ts `GameListItem`. Boolean columns: `user_won`,
-// `is_public`. Other fields pass through unchanged.
+// `is_public`. collection_id passes through (already number | null in D1).
 function normalizeGameListRow(row: Record<string, unknown>): Record<string, unknown> {
 	return {
 		...row,
@@ -768,7 +778,7 @@ export async function handleGameUpload(
 	//     overwrite the R2 blob with the new gzipped JSON. ZIP bytes match
 	//     by hash so the ZIP put is idempotent.
 	const existing = await env.SHARE_DB.prepare(
-		`SELECT game_id, parser_version, created_at, is_public
+		`SELECT game_id, parser_version, created_at, is_public, collection_id
 		 FROM games WHERE user_id = ? AND file_hash = ?`,
 	)
 		.bind(userId, fileHash)
@@ -777,12 +787,14 @@ export async function handleGameUpload(
 			parser_version: string;
 			created_at: string;
 			is_public: number;
+			collection_id: number | null;
 		}>();
 
 	let isReimport = false;
 	let existingCreatedAt: string | undefined;
 	let existingIsPublic: boolean | undefined;
 	let existingParserVersion: string | undefined;
+	let collectionId: number | null;
 	let gameId: string;
 	if (existing) {
 		const cmp = compareSemver(blob.parser_version, existing.parser_version);
@@ -798,8 +810,20 @@ export async function handleGameUpload(
 		existingCreatedAt = existing.created_at;
 		existingIsPublic = existing.is_public === 1;
 		existingParserVersion = existing.parser_version;
+		// Preserve the user's manual collection placement across re-imports.
+		// Without this the INSERT OR REPLACE would null collection_id.
+		collectionId = existing.collection_id;
 	} else {
 		gameId = nanoid(21);
+		// First upload: land in the user's Personal (is_default=1) collection.
+		// Seeded in handleDiscordCallback so this lookup always returns a row
+		// for an authenticated user.
+		const def = await env.SHARE_DB.prepare(
+			"SELECT collection_id FROM collections WHERE user_id = ? AND is_default = 1",
+		)
+			.bind(userId)
+			.first<{ collection_id: number }>();
+		collectionId = def?.collection_id ?? null;
 	}
 
 	// R2 keys
@@ -835,6 +859,7 @@ export async function handleGameUpload(
 	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
 	const gameRow = buildGameRow({
 		gameId, userId, blob, fileHash, blobSize: dataBlob.size, uploaderIndex,
+		collectionId,
 		createdAtOverride: existingCreatedAt,
 		isPublicOverride: existingIsPublic,
 	});
@@ -960,19 +985,43 @@ export async function handleGameList(
 	const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
 	const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0", 10) || 0, 0);
 
+	// Optional filters. ?filter=public takes precedence over ?collection_id
+	// when both are passed; the dashboard sidebar only ever sends one at a
+	// time, so resolution order is mostly defensive.
+	const filter = url.searchParams.get("filter");
+	const collectionIdParam = url.searchParams.get("collection_id");
+	const collectionId =
+		collectionIdParam !== null && /^\d+$/.test(collectionIdParam)
+			? parseInt(collectionIdParam, 10)
+			: null;
+
+	let where = "user_id = ?";
+	const bindings: (string | number)[] = [userId];
+	if (filter === "public") {
+		where += " AND is_public = 1";
+	} else if (collectionId !== null) {
+		where += " AND collection_id = ?";
+		bindings.push(collectionId);
+	}
+
+	// Sort by save_date (in-game date) so the sidebar's month-grouped
+	// rendering produces contiguous month buckets. Without this the desktop
+	// CloudGameSidebar groups break when games are uploaded out of save-date
+	// order. created_at is the tiebreak for games sharing a save_date.
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT game_id, game_name, save_date, total_turns,
 		        user_nation, user_won, winner_nation, victory_type,
-		        map_size, is_public, created_at, parser_version
-		 FROM games WHERE user_id = ?
-		 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+		        map_size, is_public, collection_id, created_at, parser_version
+		 FROM games WHERE ${where}
+		 ORDER BY save_date DESC NULLS LAST, created_at DESC
+		 LIMIT ? OFFSET ?`,
 	)
-		.bind(userId, limit, offset)
+		.bind(...bindings, limit, offset)
 		.all();
 	const total = await env.SHARE_DB.prepare(
-		"SELECT COUNT(*) AS count FROM games WHERE user_id = ?",
+		`SELECT COUNT(*) AS count FROM games WHERE ${where}`,
 	)
-		.bind(userId)
+		.bind(...bindings)
 		.first<{ count: number }>();
 
 	const games = (rows.results ?? []).map((r) =>
@@ -1098,10 +1147,12 @@ export async function handleGameDetail(
 // CSRF token is needed under that stance — if we ever loosen CORS or accept
 // POST mutations, revisit and add an `X-CSRF-Token` requirement.
 //
-// PATCH /v1/games/:id — toggle visibility (owner-only). Body shape:
-//   { is_public: boolean }
-// Returns the updated row subset. Per-user 60/hr rate limit on toggles
-// (event_type='visibility_change' in audit log).
+// PATCH /v1/games/:id — owner-only mutation of two optional fields:
+//   { is_public?: boolean, collection_id?: number | null }
+// At least one must be present. is_public toggles share visibility and is
+// rate-limited 60/hr/user via the 'visibility_change' audit event.
+// collection_id moves the game between collections owned by the same user;
+// not rate-limited (routine UX), audited as 'collection_change'.
 export async function handleGamePatch(
 	gameId: string,
 	request: Request,
@@ -1123,15 +1174,6 @@ export async function handleGamePatch(
 		return errorResponse("Not found", 404, cors, "NOT_FOUND");
 	}
 
-	if ((await countEventsSince(env.SHARE_DB, "visibility_change", "user_id", userId)) >= PER_USER_PATCH_PER_HOUR) {
-		return errorResponse(
-			"Per-user toggle limit exceeded",
-			429,
-			cors,
-			"RATE_LIMIT_USER",
-		);
-	}
-
 	let parsed: unknown;
 	try {
 		parsed = await request.json();
@@ -1147,27 +1189,84 @@ export async function handleGamePatch(
 			"INVALID_BODY",
 		);
 	}
-	const { is_public } = validation.output;
+	const { is_public, collection_id } = validation.output;
 
-	await env.SHARE_DB.prepare(
-		"UPDATE games SET is_public = ?, updated_at = datetime('now') WHERE game_id = ?",
-	)
-		.bind(is_public ? 1 : 0, gameId)
-		.run();
-
-	const ip = request.headers.get("CF-Connecting-IP");
-	try {
-		await env.SHARE_DB.prepare(
-			`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
-			 VALUES ('visibility_change', ?, ?, ?, ?)`,
-		)
-			.bind(gameId, userId, ip, JSON.stringify({ is_public }))
-			.run();
-	} catch (e) {
-		console.error("Failed to log visibility_change event:", e);
+	// Rate-limit only when is_public is being changed. A pure collection
+	// move shouldn't burn the user's hourly toggle budget.
+	if (is_public !== undefined) {
+		if (
+			(await countEventsSince(env.SHARE_DB, "visibility_change", "user_id", userId)) >=
+			PER_USER_PATCH_PER_HOUR
+		) {
+			return errorResponse(
+				"Per-user toggle limit exceeded",
+				429,
+				cors,
+				"RATE_LIMIT_USER",
+			);
+		}
 	}
 
-	return jsonResponse({ game_id: gameId, is_public }, 200, cors);
+	// Ownership check on collection_id: prevent moving a game into another
+	// user's collection. 404 (not 403) so we don't reveal which IDs exist.
+	if (collection_id !== undefined && collection_id !== null) {
+		const owns = await env.SHARE_DB.prepare(
+			"SELECT 1 FROM collections WHERE collection_id = ? AND user_id = ?",
+		)
+			.bind(collection_id, userId)
+			.first<{ 1: number }>();
+		if (!owns) {
+			return errorResponse("Not found", 404, cors, "NOT_FOUND");
+		}
+	}
+
+	const ip = request.headers.get("CF-Connecting-IP");
+
+	if (is_public !== undefined) {
+		await env.SHARE_DB.prepare(
+			"UPDATE games SET is_public = ?, updated_at = datetime('now') WHERE game_id = ?",
+		)
+			.bind(is_public ? 1 : 0, gameId)
+			.run();
+		try {
+			await env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+				 VALUES ('visibility_change', ?, ?, ?, ?)`,
+			)
+				.bind(gameId, userId, ip, JSON.stringify({ is_public }))
+				.run();
+		} catch (e) {
+			console.error("Failed to log visibility_change event:", e);
+		}
+	}
+
+	if (collection_id !== undefined) {
+		await env.SHARE_DB.prepare(
+			"UPDATE games SET collection_id = ?, updated_at = datetime('now') WHERE game_id = ?",
+		)
+			.bind(collection_id, gameId)
+			.run();
+		try {
+			await env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+				 VALUES ('collection_change', ?, ?, ?, ?)`,
+			)
+				.bind(gameId, userId, ip, JSON.stringify({ collection_id }))
+				.run();
+		} catch (e) {
+			console.error("Failed to log collection_change event:", e);
+		}
+	}
+
+	return jsonResponse(
+		{
+			game_id: gameId,
+			...(is_public !== undefined ? { is_public } : {}),
+			...(collection_id !== undefined ? { collection_id } : {}),
+		},
+		200,
+		cors,
+	);
 }
 
 export async function handleGameDelete(

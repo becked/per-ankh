@@ -203,9 +203,24 @@ export const UploaderPlayerIndexSchema = v.nullable(
 export type UploaderPlayerIndex = v.InferOutput<typeof UploaderPlayerIndexSchema>;
 
 // ----- PATCH /v1/games/:id body -----
+//
+// Both fields are optional but at least one is required. is_public toggles
+// the public-share flag (rate-limited 60/hr/user via the visibility_change
+// audit event). collection_id moves the game between user-owned collections
+// (or null to leave it uncategorized — currently unused by the UI but the
+// shape is permissive for forward-compat).
 
-export const GamePatchSchema = v.object({
-	is_public: v.boolean(),
-});
+export const GamePatchSchema = v.pipe(
+	v.object({
+		is_public: v.optional(v.boolean()),
+		collection_id: v.optional(
+			v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
+		),
+	}),
+	v.check(
+		(o) => o.is_public !== undefined || o.collection_id !== undefined,
+		"At least one of is_public, collection_id required",
+	),
+);
 
 export type GamePatch = v.InferOutput<typeof GamePatchSchema>;

@@ -38,12 +38,17 @@ import {
 	handleGameUpload,
 } from "./games";
 import type { GamesEnv } from "./games";
+import {
+	handleCollectionCreate,
+	handleCollectionsList,
+} from "./collections";
+import type { CollectionsEnv } from "./collections";
 import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
 import type { OnlineIdsEnv } from "./online-ids";
 import { handleStats } from "./stats";
 import type { StatsEnv } from "./stats";
 
-interface Env extends AuthEnv, GamesEnv, OnlineIdsEnv, StatsEnv {
+interface Env extends AuthEnv, GamesEnv, CollectionsEnv, OnlineIdsEnv, StatsEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
 	SESSIONS_KV: KVNamespace;
@@ -509,6 +514,7 @@ export default {
 			url.pathname.startsWith("/v1/auth/") ||
 			url.pathname === "/v1/games" ||
 			url.pathname.startsWith("/v1/games/") ||
+			url.pathname === "/v1/collections" ||
 			url.pathname.startsWith("/v1/users/") ||
 			url.pathname === "/v1/stats";
 		if (method === "OPTIONS") {
@@ -550,6 +556,14 @@ export default {
 		);
 		if (method === "GET" && downloadMatch) {
 			return handleGameDownload(downloadMatch[1], request, env);
+		}
+
+		// === Cloud rewrite: /v1/collections ===
+		if (method === "GET" && url.pathname === "/v1/collections") {
+			return handleCollectionsList(request, env);
+		}
+		if (method === "POST" && url.pathname === "/v1/collections") {
+			return handleCollectionCreate(request, env);
 		}
 
 		// === Cloud rewrite: /v1/users/* ===

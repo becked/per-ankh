@@ -16,7 +16,6 @@
 
 	const navItems = [
 		{ href: "/dashboard", label: "Dashboard" },
-		{ href: "/games", label: "Games" },
 		{ href: "/upload", label: "Upload" },
 	] as const;
 
