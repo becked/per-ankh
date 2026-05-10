@@ -66,14 +66,19 @@
 	const PARADE_DURATION_MS = 20000;
 	const SPAWN_INTERVAL_MS = 600;
 
-	// Border glyph cell width = font-size 0.5rem * (1 + letter-spacing 0.15em)
-	// ≈ 0.575rem ≈ 9.2px at root font-size 16px.
-	const BORDER_GLYPH_PX = 9.2;
+	// Static border = a long string of one glyph clipped to band width by
+	// overflow:hidden. Fixed length covers any host up to ~3000px without a
+	// bare zone on the right; cheaper and more reliable than measuring the
+	// actual rendered glyph width (which varies by font/zoom/DPI).
 	const BORDER_GLYPH_CHAR = "\u{13129}";
+	const BORDER_GLYPHS = BORDER_GLYPH_CHAR.repeat(500);
 
-	// Distance between static glyphs when the parade is paused. Loose enough
-	// that 1.2rem glyphs don't visually crowd, tight enough to fill the band.
+	// Static glyphs in the parade row when paused. Count scales with band
+	// width but the items are positioned by flex justify-content rather than
+	// pixel offsets, so they always span the full band even if the measured
+	// width and the actual render disagree.
 	const STATIC_SPACING_PX = 28;
+	const STATIC_MIN_COUNT = 8;
 
 	interface ParadeItem {
 		id: number;
@@ -85,7 +90,6 @@
 	interface StaticItem {
 		id: number;
 		char: string;
-		xPx: number;
 	}
 
 	let items = $state<ParadeItem[]>([]);
@@ -96,10 +100,6 @@
 	let nextSpawnTime = 0;
 	let isRunning = false;
 	const removalTimeouts: Array<ReturnType<typeof setTimeout>> = [];
-
-	const borderGlyphs = $derived(
-		BORDER_GLYPH_CHAR.repeat(Math.ceil(bandWidth / BORDER_GLYPH_PX) + 8),
-	);
 
 	function prefersReducedMotion(): boolean {
 		return (
@@ -187,17 +187,15 @@
 	}
 
 	function regenerateStaticItems() {
-		if (bandWidth === 0) {
-			staticItems = [];
-			return;
-		}
-		const count = Math.floor(bandWidth / STATIC_SPACING_PX);
+		const count = Math.max(
+			STATIC_MIN_COUNT,
+			Math.floor((bandWidth || 0) / STATIC_SPACING_PX),
+		);
 		const next: StaticItem[] = [];
 		for (let i = 0; i < count; i++) {
 			next.push({
 				id: i,
 				char: HIEROGLYPHS[Math.floor(Math.random() * HIEROGLYPHS.length)],
-				xPx: (i + 0.5) * STATIC_SPACING_PX,
 			});
 		}
 		staticItems = next;
@@ -226,10 +224,10 @@
 </script>
 
 <div class="parade-band" bind:clientWidth={bandWidth}>
-	<div class="hieroglyph-border hieroglyph-border-top">{borderGlyphs}</div>
+	<div class="hieroglyph-border hieroglyph-border-top">{BORDER_GLYPHS}</div>
 
-	<div class="parade-container">
-		{#if active}
+	{#if active}
+		<div class="parade-container">
 			{#each items as item (item.id)}
 				<span
 					class="parade-item"
@@ -238,16 +236,16 @@
 					{item.char}
 				</span>
 			{/each}
-		{:else}
+		</div>
+	{:else}
+		<div class="parade-static">
 			{#each staticItems as item (item.id)}
-				<span class="parade-item static" style="left: {item.xPx}px">
-					{item.char}
-				</span>
+				<span class="parade-item static">{item.char}</span>
 			{/each}
-		{/if}
-	</div>
+		</div>
+	{/if}
 
-	<div class="hieroglyph-border hieroglyph-border-bottom">{borderGlyphs}</div>
+	<div class="hieroglyph-border hieroglyph-border-bottom">{BORDER_GLYPHS}</div>
 </div>
 
 <style>
@@ -298,10 +296,21 @@
 		line-height: 1;
 	}
 
+	.parade-static {
+		position: absolute;
+		top: 0.6rem;
+		left: 0;
+		right: 0;
+		height: 2.4rem;
+		display: flex;
+		align-items: center;
+		justify-content: space-evenly;
+		pointer-events: none;
+	}
+
 	.parade-item.static {
+		position: static;
 		animation: none;
-		right: auto;
-		transform: translateX(-50%);
 	}
 
 	@keyframes parade-march {
