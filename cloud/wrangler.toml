@@ -58,6 +58,19 @@ GLOBAL_UPLOAD_LIMIT_PER_HOUR = "200"
 # Kill switch: set to "false" via `wrangler secret put` to disable uploads without redeploying
 UPLOADS_ENABLED = "true"
 
+# === Cloud rewrite upload limits ===
+# Apply to uploads + reimports together (same R2/D1 work). Set generous —
+# reimports are forced by parser-version bumps (BulkReparseModal), so
+# anything tight breaks legitimate workflows. Tighten reactively if abuse
+# signal appears.
+PER_USER_UPLOADS_PER_HOUR = "100"
+# 2x PER_USER gives real headroom for shared IPs (households, offices, NAT)
+# while still catching single-IP abuse rotating across accounts.
+PER_IP_UPLOADS_PER_HOUR = "200"
+# Global circuit breaker. Saturates around 50 concurrently-active users —
+# a real "something is wrong" threshold, not a normal-growth ceiling.
+GLOBAL_UPLOADS_PER_HOUR = "5000"
+
 # === Cloud rewrite (/v1/auth/*, /v1/games/*) ===
 # CORS allowlist for new routes — comma-separated origins. Cookie-based
 # auth requires Access-Control-Allow-Credentials: true, which forbids the
