@@ -100,7 +100,7 @@
 
 		{#if isMenuOpen}
 			<div
-				class="absolute left-0 z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray shadow-lg"
+				class="absolute left-0 z-50 mt-2 w-40 rounded border-2 border-black bg-blue-gray shadow-lg"
 			>
 				{#if user}
 					<div class="flex items-center gap-2 border-b border-black px-3 py-2">
@@ -125,7 +125,7 @@
 						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
 						onclick={closeMenu}
 					>
-						Upload
+						Upload saves
 					</a>
 					<a
 						href={resolve("/account")}
