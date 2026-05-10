@@ -18,6 +18,8 @@
 		"bake:resources": "tsx scripts/bake-resources.ts",
 		"bake:crests": "tsx scripts/bake-crests.ts",
 		"bake:sprites": "tsx scripts/bake-sprites.ts",
+		"bake:favicon": "node scripts/bake-favicon.mjs .",
+		"bake:og": "node scripts/make-og-default.mjs .",
 		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:crests"
 	},
 	"license": "MIT",
@@ -43,6 +45,8 @@
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-svelte": "^3.14.0",
 		"globals": "^17.3.0",
+		"playwright": "^1.55.0",
+		"png-to-ico": "^2.1.8",
 		"postcss": "^8.5.6",
 		"prettier": "^3.8.1",
 		"prettier-plugin-svelte": "^3.4.1",

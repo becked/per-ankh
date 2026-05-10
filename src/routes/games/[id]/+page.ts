@@ -6,7 +6,37 @@ import {
 	type CollectionInfo,
 	type GameListItem,
 } from "$lib/api-cloud";
+import type { PageMeta } from "$lib/page-meta";
+import { formatEnum } from "$lib/utils/formatting";
 import type { PageLoad } from "./$types";
+
+// Build the OG/Twitter description from match metadata. Same shape that
+// used to live inline in +page.svelte's <svelte:head>; moved here so
+// social-link unfurls work without the page mounting.
+function buildMeta(game: { game_details: Record<string, unknown> }): PageMeta {
+	const gd = game.game_details as {
+		game_name?: string | null;
+		winner_civilization?: string | null;
+		winner_name?: string | null;
+		winner_victory_type?: string | null;
+		total_turns?: number;
+	};
+	const parts: string[] = [];
+	if (gd.winner_civilization) {
+		parts.push(formatEnum(gd.winner_civilization, "NATION_"));
+	} else if (gd.winner_name) {
+		parts.push(gd.winner_name);
+	}
+	if (gd.winner_victory_type) {
+		const v = formatEnum(gd.winner_victory_type, "VICTORY_");
+		parts.push(`won by ${v}`);
+	}
+	if (gd.total_turns != null) parts.push(`turn ${gd.total_turns}`);
+	const description =
+		parts.length > 0 ? parts.join(", ") : "An Old World save game on Per-Ankh.";
+	const gameName = gd.game_name ?? "Old World game";
+	return { title: `${gameName} — Per-Ankh`, description };
+}
 
 // Translate the API's `ApiError` into the right SvelteKit response —
 // either a typed `error()` page or a re-thrown unhandled.
@@ -75,5 +105,5 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		}
 	}
 
-	return { game, isOwner, games, collections, publicCount };
+	return { game, isOwner, games, collections, publicCount, meta: buildMeta(game) };
 };

@@ -3,6 +3,7 @@
 	import type { Snippet } from "svelte";
 	import { page } from "$app/state";
 	import CloudHeader from "$lib/CloudHeader.svelte";
+	import { PUBLIC_ORIGIN } from "$lib/page-meta";
 	import type { LayoutData } from "./$types";
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
@@ -15,7 +16,30 @@
 			page.url.pathname !== "/login" &&
 			!page.url.pathname.startsWith("/auth/"),
 	);
+
+	// Single source of truth for OG / Twitter metadata. Pages override by
+	// returning `{ meta: PageMeta }` from their +page.ts load; otherwise
+	// they inherit DEFAULT_META from +layout.ts. Rendering once here
+	// avoids duplicate <meta> tags that crawlers handle inconsistently.
+	const meta = $derived(data.meta);
+	const ogImage = $derived(meta.image ?? `${PUBLIC_ORIGIN}/og-default.png`);
+	const ogUrl = $derived(`${PUBLIC_ORIGIN}${page.url.pathname}`);
 </script>
+
+<svelte:head>
+	<title>{meta.title}</title>
+	<meta name="description" content={meta.description} />
+	<meta property="og:title" content={meta.title} />
+	<meta property="og:description" content={meta.description} />
+	<meta property="og:image" content={ogImage} />
+	<meta property="og:url" content={ogUrl} />
+	<meta property="og:type" content="website" />
+	<meta property="og:site_name" content="Per-Ankh" />
+	<meta name="twitter:card" content="summary_large_image" />
+	<meta name="twitter:title" content={meta.title} />
+	<meta name="twitter:description" content={meta.description} />
+	<meta name="twitter:image" content={ogImage} />
+</svelte:head>
 
 {#if showCloudHeader}
 	<!--

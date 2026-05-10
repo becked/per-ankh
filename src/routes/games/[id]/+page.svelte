@@ -5,7 +5,6 @@
 	import type { MapTile } from "$lib/types/MapTile";
 	import { GameDetailView } from "$lib/game-detail";
 	import { reconstructMapTiles } from "$lib/game-detail/reconstruct-map-tiles";
-	import { formatEnum } from "$lib/utils/formatting";
 	import { isNewer } from "$lib/utils/semver";
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
@@ -19,35 +18,6 @@
 	// Cloud game id from URL — distinct from the in-game `xml_game_id`
 	// which is the GameId attribute on the save's <Root> element.
 	const gameId = $derived(page.params.id ?? "");
-
-	// OG tags for Discord/Slack/Twitter unfurls. Composed from server-known
-	// match metadata only — no PII concerns; same data anonymous viewers
-	// already see in the page body.
-	const PUBLIC_ORIGIN = (
-		import.meta.env.VITE_PUBLIC_ORIGIN ?? "https://per-ankh.app"
-	) as string;
-	const ogTitle = $derived(game.game_details.game_name ?? "Old World game");
-	const ogDescription = $derived(
-		(() => {
-			const gd = game.game_details;
-			const parts: string[] = [];
-			if (gd.winner_civilization) {
-				parts.push(formatEnum(gd.winner_civilization, "NATION_"));
-			} else if (gd.winner_name) {
-				parts.push(gd.winner_name);
-			}
-			if (gd.winner_victory_type) {
-				const v = formatEnum(gd.winner_victory_type, "VICTORY_");
-				parts.push(`won by ${v}`);
-			}
-			parts.push(`turn ${gd.total_turns}`);
-			return parts.length > 0
-				? parts.join(", ")
-				: "An Old World save game on Per-Ankh.";
-		})(),
-	);
-	const ogUrl = $derived(`${PUBLIC_ORIGIN}/games/${gameId}`);
-	const ogImage = $derived(`${PUBLIC_ORIGIN}/og-default.png`);
 
 	let selectedMapTurn = $state<number | null>(null);
 	let mapTiles = $state<MapTile[]>([]);
@@ -90,21 +60,6 @@
 		mapTiles = reconstructMapTiles(game, turn);
 	}
 </script>
-
-<svelte:head>
-	<title>{ogTitle} — Per-Ankh</title>
-	<meta property="og:title" content={ogTitle} />
-	<meta property="og:description" content={ogDescription} />
-	<meta property="og:url" content={ogUrl} />
-	<meta property="og:image" content={ogImage} />
-	<meta property="og:type" content="website" />
-	<meta property="og:site_name" content="Per-Ankh" />
-	<meta name="twitter:card" content="summary_large_image" />
-	<meta name="twitter:title" content={ogTitle} />
-	<meta name="twitter:description" content={ogDescription} />
-	<meta name="twitter:image" content={ogImage} />
-	<meta name="description" content={ogDescription} />
-</svelte:head>
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
