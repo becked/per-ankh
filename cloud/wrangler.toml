@@ -36,8 +36,8 @@ database_id = "e57449fd-6c9f-4b16-a013-322f9669182b"
 # Then paste the returned IDs below.
 [[kv_namespaces]]
 binding = "SESSIONS_KV"
-id = "REPLACE_WITH_PROD_KV_ID"
-preview_id = "REPLACE_WITH_PREVIEW_KV_ID"
+id = "b7029ad65b8f410b84b4b55623b25e56"
+preview_id = "e4725d2a3a324ec98580f6d6cae1f209"
 
 [vars]
 # === Legacy share endpoints ===
