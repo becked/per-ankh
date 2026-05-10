@@ -3,7 +3,7 @@
 	import type { Snippet } from "svelte";
 	import { page } from "$app/state";
 	import CloudHeader from "$lib/CloudHeader.svelte";
-	import { PUBLIC_ORIGIN } from "$lib/page-meta";
+	import { PUBLIC_ORIGIN, type PageMeta } from "$lib/page-meta";
 	import type { LayoutData } from "./$types";
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
@@ -21,7 +21,11 @@
 	// returning `{ meta: PageMeta }` from their +page.ts load; otherwise
 	// they inherit DEFAULT_META from +layout.ts. Rendering once here
 	// avoids duplicate <meta> tags that crawlers handle inconsistently.
-	const meta = $derived(data.meta);
+	//
+	// Read from `page.data` (merged parent+child, child wins), not from
+	// the layout's own `data` prop (which is only LayoutData and would
+	// always be DEFAULT_META, losing per-page overrides).
+	const meta = $derived(page.data.meta as PageMeta);
 	const ogImage = $derived(meta.image ?? `${PUBLIC_ORIGIN}/og-default.png`);
 	const ogUrl = $derived(`${PUBLIC_ORIGIN}${page.url.pathname}`);
 </script>
