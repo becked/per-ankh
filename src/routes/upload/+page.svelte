@@ -24,11 +24,11 @@
 
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<div class="mx-auto max-w-xl">
-		<h1 class="mb-4 font-serif text-2xl text-tan">Upload a save</h1>
+		<h1 class="mb-8 text-3xl font-bold text-gray-200">Upload</h1>
 		{#if ready}
 			<BulkUploadModal />
 		{:else}
-			<p class="text-sm text-brown">Loading…</p>
+			<p class="text-sm text-gray-400">Loading…</p>
 		{/if}
 	</div>
 </main>

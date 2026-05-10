@@ -30,6 +30,7 @@
 		ParseFailure,
 	} from "$lib/parser/upload-helpers";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
+	import { formatEnum } from "$lib/utils/formatting";
 
 	const MAX_FILES = 25;
 	const UPLOAD_CONCURRENCY = 3;
@@ -306,26 +307,28 @@
 	}
 </script>
 
-<div class="rounded border-2 border-brown bg-[#2a2622] p-6">
+<div class="rounded-lg p-4" style="background-color: #2a2622;">
 	{#if rows.length === 0}
-		<label class="block">
-			<span class="mb-2 block text-sm font-bold text-tan">
-				Pick up to {MAX_FILES} save zips
-			</span>
-			<input
-				type="file"
-				accept=".zip"
-				multiple
-				onchange={onPick}
-				class="block w-full text-sm text-tan file:mr-4 file:rounded file:border-0 file:bg-brown file:px-4 file:py-2 file:text-sm file:font-bold file:text-tan hover:file:bg-orange"
-			/>
-		</label>
-		{#if pickError}
-			<p class="mt-3 text-sm text-orange">{pickError}</p>
-		{/if}
+		<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<label
+				class="inline-block cursor-pointer rounded bg-brown px-4 py-2 text-sm font-bold text-tan hover:bg-orange"
+			>
+				Choose files
+				<input
+					type="file"
+					accept=".zip"
+					multiple
+					onchange={onPick}
+					class="sr-only"
+				/>
+			</label>
+			{#if pickError}
+				<p class="mt-3 text-sm text-orange">{pickError}</p>
+			{/if}
+		</div>
 	{:else}
 		<div class="mb-3 flex items-center justify-between">
-			<p class="text-sm text-tan">
+			<p class="text-sm" style="color: #DBDEE3;">
 				{rows.length}
 				{rows.length === 1 ? "save" : "saves"}
 				{#if phase === "picking" && !allParsed}
@@ -341,12 +344,12 @@
 
 		<ul class="mb-4 max-h-[60vh] space-y-2 overflow-y-auto">
 			{#each rows as row (row.id)}
-				<li class="bg-black/20 rounded border border-brown p-3">
+				<li class="rounded-lg p-3" style="background-color: #35302B;">
 					<div class="mb-2 flex items-start justify-between gap-3">
-						<span class="truncate text-sm font-bold text-tan">
+						<span class="truncate text-sm font-bold" style="color: #DBDEE3;">
 							{row.fileName}
 						</span>
-						<span class="shrink-0 text-xs uppercase tracking-wide text-brown">
+						<span class="shrink-0 text-xs uppercase tracking-wide text-gray-400">
 							{#if row.status.kind === "queued"}
 								Queued
 							{:else if row.status.kind === "parsing"}
@@ -360,7 +363,7 @@
 									{row.status.reimported ? "Updated" : "Uploaded"}
 								</span>
 							{:else if row.status.kind === "duplicate"}
-								<span class="text-brown">Duplicate</span>
+								Duplicate
 							{:else}
 								<span class="text-orange">Failed</span>
 							{/if}
@@ -368,14 +371,16 @@
 					</div>
 
 					{#if row.status.kind === "parsing"}
-						<p class="mb-1 text-xs text-brown">
+						<p class="mb-1 text-xs text-gray-400">
 							{row.status.phase} — {row.status.percent}%
 						</p>
 						<progress value={row.status.percent} max={100} class="w-full"
 						></progress>
 					{:else if row.status.kind === "ready"}
 						{@const ready = row.status}
-						<p class="mb-2 text-xs text-brown">Which player is you?</p>
+						<p class="mb-2 text-xs font-bold text-gray-400">
+							Choose player
+						</p>
 						<ul class="space-y-1">
 							{#each ready.humans as human (human.player_index)}
 								<li>
@@ -389,10 +394,16 @@
 											checked={ready.selected === human.player_index}
 											onchange={() => selectFor(row, human.player_index)}
 										/>
-										<span class="font-bold">{human.player_name}</span>
-										<span class="text-xs text-brown">
-											{human.nation ?? "—"}
+										<span class="font-bold">
+											{human.player_name ||
+												formatEnum(human.nation, "NATION_") ||
+												"—"}
 										</span>
+										{#if human.player_name}
+											<span class="text-xs text-gray-400">
+												{formatEnum(human.nation, "NATION_") ?? "—"}
+											</span>
+										{/if}
 									</label>
 								</li>
 							{/each}
@@ -407,7 +418,7 @@
 										checked={ready.selected === null}
 										onchange={() => selectFor(row, null)}
 									/>
-									<span>None — observer</span>
+									<span class="font-bold">Observer</span>
 								</label>
 							</li>
 						</ul>
@@ -419,7 +430,7 @@
 							Open game →
 						</a>
 					{:else if row.status.kind === "duplicate"}
-						<p class="text-xs text-tan">
+						<p class="text-xs" style="color: #DBDEE3;">
 							Already uploaded.
 							<a
 								class="text-orange underline"
@@ -479,7 +490,9 @@
 				</button>
 			</div>
 		{:else if phase === "uploading"}
-			<p class="text-sm text-tan">Uploading… please don't close this tab.</p>
+			<p class="text-sm" style="color: #DBDEE3;">
+				Uploading… please don't close this tab.
+			</p>
 		{:else if phase === "done"}
 			<div class="flex justify-end">
 				<button

@@ -28,6 +28,7 @@
 		ApiError,
 		DuplicateUploadError,
 	} from "$lib/api-cloud";
+	import { formatEnum } from "$lib/utils/formatting";
 
 	// Pre-filled mode is the entry point for re-import. The owner's already
 	// fetched the raw ZIP from R2 (see ReimportButton.svelte) — we skip the
@@ -178,7 +179,10 @@
 		const human = picker.humans.find(
 			(h) => h.player_index === picker.selected,
 		);
-		return human ? `Upload as ${human.player_name}` : "Upload";
+		if (!human) return "Upload";
+		const label =
+			human.player_name || formatEnum(human.nation, "NATION_") || "player";
+		return `Upload as ${label}`;
 	});
 
 	async function submitPicker() {
@@ -236,38 +240,40 @@
 	}
 </script>
 
-<div class="rounded border-2 border-brown bg-[#2a2622] p-6">
+<div class="rounded-lg p-4" style="background-color: #2a2622;">
 	{#if isReimportMode && prefilled}
-		<p class="mb-3 text-xs uppercase tracking-wide text-brown">
+		<p class="mb-3 text-xs uppercase tracking-wide text-gray-400">
 			Re-importing {prefilled.fileName}
 		</p>
 	{/if}
 	{#if status.kind === "idle"}
 		{#if !isReimportMode}
-			<label class="block">
-				<span class="mb-2 block text-sm font-bold text-tan">
-					Pick a save zip
-				</span>
-				<input
-					type="file"
-					accept=".zip"
-					onchange={onPick}
-					class="block w-full text-sm text-tan file:mr-4 file:rounded file:border-0 file:bg-brown file:px-4 file:py-2 file:text-sm file:font-bold file:text-tan hover:file:bg-orange"
-				/>
-			</label>
+			<div class="rounded-lg p-3" style="background-color: #35302B;">
+				<label class="block">
+					<span class="mb-2 block text-xs font-bold text-gray-400">
+						Pick a save zip
+					</span>
+					<input
+						type="file"
+						accept=".zip"
+						onchange={onPick}
+						class="block w-full text-sm text-tan file:mr-4 file:rounded file:border-0 file:bg-brown file:px-4 file:py-2 file:text-sm file:font-bold file:text-tan hover:file:bg-orange"
+					/>
+				</label>
+			</div>
 		{:else}
-			<p class="text-sm text-tan">Starting…</p>
+			<p class="text-sm" style="color: #DBDEE3;">Starting…</p>
 		{/if}
 	{:else if status.kind === "parsing"}
-		<p class="mb-2 text-sm text-tan">
+		<p class="mb-2 text-sm" style="color: #DBDEE3;">
 			{status.phase} — {status.percent}%
 		</p>
 		<progress value={status.percent} max={100} class="w-full"></progress>
 	{:else if status.kind === "picker"}
-		<h2 class="mb-1 text-lg font-bold text-tan">
+		<h2 class="mb-1 text-lg font-bold" style="color: #DBDEE3;">
 			{isReimportMode ? "Confirm your player" : "Which player is you?"}
 		</h2>
-		<p class="mb-4 text-xs text-brown">
+		<p class="mb-4 text-xs text-gray-400">
 			{#if isReimportMode}
 				Re-imports refresh the parsed data — confirm the same player
 				you originally picked, or change it if you got it wrong.
@@ -280,7 +286,10 @@
 		<ul class="mb-4 space-y-2">
 			{#each status.humans as human (human.player_index)}
 				<li>
-					<label class="flex cursor-pointer items-center gap-3 rounded border border-brown p-2 hover:bg-brown/30">
+					<label
+						class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
+						style="background-color: #35302B;"
+					>
 						<input
 							type="radio"
 							name="uploader-pick"
@@ -288,21 +297,34 @@
 							onchange={() => selectPlayer(human.player_index)}
 						/>
 						<div class="flex-1 text-sm text-tan">
-							<div class="font-bold">{human.player_name}</div>
-							<div class="text-xs text-brown">
-								{human.nation ?? "—"}
-								{#if human.online_id}
-									<span class="ml-2 font-mono">
-										id:{human.online_id.slice(0, 8)}…
-									</span>
-								{/if}
+							<div class="font-bold" style="color: #DBDEE3;">
+								{human.player_name ||
+									formatEnum(human.nation, "NATION_") ||
+									"—"}
 							</div>
+							{#if human.player_name}
+								<div class="text-xs text-gray-400">
+									{formatEnum(human.nation, "NATION_") ?? "—"}
+									{#if human.online_id}
+										<span class="ml-2 font-mono">
+											id:{human.online_id.slice(0, 8)}…
+										</span>
+									{/if}
+								</div>
+							{:else if human.online_id}
+								<div class="font-mono text-xs text-gray-400">
+									id:{human.online_id.slice(0, 8)}…
+								</div>
+							{/if}
 						</div>
 					</label>
 				</li>
 			{/each}
 			<li>
-				<label class="flex cursor-pointer items-center gap-3 rounded border border-dashed border-brown p-2 hover:bg-brown/30">
+				<label
+					class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
+					style="background-color: #35302B;"
+				>
 					<input
 						type="radio"
 						name="uploader-pick"
@@ -310,11 +332,7 @@
 						onchange={() => selectPlayer(null)}
 					/>
 					<div class="flex-1 text-sm text-tan">
-						<div class="font-bold">None — I'm just uploading this</div>
-						<div class="text-xs text-brown">
-							No player attribution. Game appears in your library
-							as "Observed".
-						</div>
+						<div class="font-bold" style="color: #DBDEE3;">Observer</div>
 					</div>
 				</label>
 			</li>
@@ -336,11 +354,11 @@
 			</button>
 		</div>
 	{:else if status.kind === "uploading"}
-		<p class="text-sm text-tan">
+		<p class="text-sm" style="color: #DBDEE3;">
 			{isReimportMode ? "Updating" : "Uploading"} {status.fileName}…
 		</p>
 	{:else if status.kind === "duplicate"}
-		<p class="mb-3 text-sm text-tan">
+		<p class="mb-3 text-sm" style="color: #DBDEE3;">
 			{#if isReimportMode}
 				This save is already at the current parser version — nothing
 				to refresh.
@@ -366,12 +384,14 @@
 			</div>
 		{/if}
 	{:else if status.kind === "done"}
-		<p class="text-sm text-tan">
+		<p class="text-sm" style="color: #DBDEE3;">
 			{status.reimported ? "Updated" : "Uploaded"}. Redirecting…
 		</p>
 	{:else}
 		<p class="mb-2 font-bold text-orange">Upload failed</p>
-		<p class="mb-4 break-words text-sm text-tan">{status.message}</p>
+		<p class="mb-4 break-words text-sm" style="color: #DBDEE3;">
+			{status.message}
+		</p>
 		<button
 			type="button"
 			onclick={reset}
