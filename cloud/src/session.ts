@@ -16,6 +16,11 @@ export interface SessionEnv {
 
 export interface SessionData {
 	user_id: string;
+	// Snapshot of the user's Discord username at login (lowercased). Used by
+	// /me to re-check membership in `ALLOWED_DISCORD_USERNAMES` on every
+	// request, so revoking access takes effect within the session's KV TTL
+	// without requiring a D1 schema change.
+	discord_username: string;
 }
 
 const SESSION_COOKIE = "session";
@@ -25,9 +30,13 @@ function sessionKey(token: string): string {
 	return `session:${token}`;
 }
 
-export async function createSession(env: SessionEnv, userId: string): Promise<string> {
+export async function createSession(
+	env: SessionEnv,
+	userId: string,
+	discordUsername: string,
+): Promise<string> {
 	const token = nanoid(32);
-	const data: SessionData = { user_id: userId };
+	const data: SessionData = { user_id: userId, discord_username: discordUsername };
 	await env.SESSIONS_KV.put(sessionKey(token), JSON.stringify(data), {
 		expirationTtl: SESSION_TTL_SECONDS,
 	});
@@ -45,10 +54,14 @@ export async function readSession(
 		if (
 			typeof parsed === "object" &&
 			parsed !== null &&
-			typeof (parsed as Record<string, unknown>).user_id === "string"
+			typeof (parsed as Record<string, unknown>).user_id === "string" &&
+			typeof (parsed as Record<string, unknown>).discord_username === "string"
 		) {
 			return parsed as SessionData;
 		}
+		// Pre-username-allowlist sessions lack `discord_username`. Treating
+		// them as missing forces a re-login, which is the right behavior
+		// when the gate changes.
 		return null;
 	} catch {
 		return null;

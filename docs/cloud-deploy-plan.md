@@ -10,9 +10,12 @@ the old doc stays as historical context.
 - Tauri is gone. v0.2.0 GitHub Release is the desktop-final artifact.
 - Cloud Worker is feature-complete (auth, upload, games, dashboard, sharing,
   reparse, downloads, observability, audit log, CSP reporting).
-- Initial release ships gated to a single Discord ID via `ALLOWED_DISCORD_ID`
-  (fail-closed if unset). Allowlist expands when test users join the next
-  feature.
+- Initial release ships gated to a Discord username allowlist via
+  `ALLOWED_DISCORD_USERNAMES` (comma-separated, lowercase, fail-closed if
+  unset). Usernames chosen over snowflake IDs because testers can read
+  theirs off Settings → My Account; snowflakes require Developer Mode plus
+  a right-click. List expands by `wrangler secret put`-ing a new
+  comma-separated value as test users join the next feature.
 - Legacy `/v1/share/*` endpoints stay live on the API Worker. The legacy
   share viewer (`web/`) currently owns `per-ankh.app` via a Cloudflare
   Pages custom domain attachment; deploy moves `per-ankh.app` to the new
@@ -48,12 +51,14 @@ Paste the returned `id` and `preview_id` into `cloud/wrangler.toml`.
 
 ```bash
 cd cloud
-npx wrangler secret put DISCORD_CLIENT_SECRET   # from Discord developer portal
-npx wrangler secret put ALLOWED_DISCORD_ID      # your Discord user ID
+npx wrangler secret put DISCORD_CLIENT_SECRET       # from Discord developer portal
+npx wrangler secret put ALLOWED_DISCORD_USERNAMES   # comma-separated, e.g. ".becked,alice,bob"
 ```
 
-The auth handler is fail-closed if `ALLOWED_DISCORD_ID` is unset, so don't
-skip it — login will hard-fail with no helpful diagnostic until it's set.
+Lowercase the values; the auth handler normalizes `discordUser.username`
+to lowercase before testing membership in the parsed list. The handler is
+fail-closed if `ALLOWED_DISCORD_USERNAMES` is unset, so don't skip it —
+login will hard-fail with no helpful diagnostic until it's set.
 
 ### 3.3. Discord OAuth app
 
@@ -369,4 +374,3 @@ Ship after deploy when there's a reason to. None block launch.
 | Mobile-width header layout               | `/games/[id]` may need a collapse menu on narrow screens.                                                                                                                                                                                              |
 | Prune `anon_read` rows from `events`     | Scheduled Worker cron: `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily. Other event types stay (audit log).                                                                                     |
 | `_routes.json` tuning                    | adapter-cloudflare warns about dropped exclude rules; static asset paths invoke the SSR Worker unnecessarily.                                                                                                                                          |
-| Allowlist expansion                      | When inviting test users, swap `ALLOWED_DISCORD_ID` from a single ID to a comma-separated list + `Set<string>` membership check in `cloud/src/auth.ts` (`handleDiscordCallback` + `handleMe`). `wrangler secret put` the new value.                    |

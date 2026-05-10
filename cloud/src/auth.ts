@@ -38,7 +38,10 @@ export interface AuthEnv extends SessionEnv {
 	ALLOWED_ORIGINS: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
-	ALLOWED_DISCORD_ID: string;
+	// Comma-separated Discord usernames (the new globally-unique handle, not
+	// the display name). Whitespace-trimmed, case-insensitive. Empty / unset
+	// fails closed — every login is rejected.
+	ALLOWED_DISCORD_USERNAMES: string;
 }
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
@@ -106,6 +109,20 @@ interface UserRow {
 
 function oauthKey(id: string): string {
 	return `oauth:${id}`;
+}
+
+// Parse `ALLOWED_DISCORD_USERNAMES` into a Set of trimmed lowercase entries.
+// Returns an empty set when the env var is missing or empty, which makes
+// every membership check fail (fail-closed).
+function parseAllowedUsernames(env: AuthEnv): Set<string> {
+	const raw = env.ALLOWED_DISCORD_USERNAMES;
+	if (!raw) return new Set();
+	return new Set(
+		raw
+			.split(",")
+			.map((u) => u.trim().toLowerCase())
+			.filter((u) => u.length > 0),
+	);
 }
 
 // Build the public avatar URL from the stored hash. Default avatar
@@ -338,11 +355,13 @@ export async function handleDiscordCallback(
 		return errorResponse("Discord returned no user id", 502, cors, "NO_USER_ID");
 	}
 
-	if (!timingSafeEqual(discordUser.id, env.ALLOWED_DISCORD_ID)) {
-		// Audit trail captures the rejected discord_id for moderation.
-		// The events table is internal D1 — discord_id stored here is NOT
-		// shipped to Logpush. Structured logs scrub via the PII deny-list
-		// (logWarn below carries no discord_id field).
+	const allowedUsernames = parseAllowedUsernames(env);
+	const discordUsername = discordUser.username.toLowerCase();
+	if (!allowedUsernames.has(discordUsername)) {
+		// Audit trail captures the rejected discord_id + username for
+		// moderation. The events table is internal D1 — these fields stored
+		// here are NOT shipped to Logpush. Structured logs scrub via the PII
+		// deny-list (logWarn below carries no identifying field).
 		try {
 			await env.SHARE_DB.prepare(
 				`INSERT INTO events (event_type, ip_address, metadata)
@@ -350,7 +369,10 @@ export async function handleDiscordCallback(
 			)
 				.bind(
 					getClientIp(request),
-					JSON.stringify({ discord_id: discordUser.id }),
+					JSON.stringify({
+						discord_id: discordUser.id,
+						discord_username: discordUser.username,
+					}),
 				)
 				.run();
 		} catch (e) {
@@ -407,7 +429,7 @@ export async function handleDiscordCallback(
 		.bind(upsert.user_id)
 		.run();
 
-	const sessionToken = await createSession(env, upsert.user_id);
+	const sessionToken = await createSession(env, upsert.user_id, discordUsername);
 
 	// Audit log. Fire-and-forget — a logging hiccup mustn't fail an
 	// otherwise successful login. First-vs-returning is derivable
@@ -480,8 +502,13 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
 	// Defensive: revoke sessions for users who were provisioned before the
 	// initial-release allowlist was deployed (or whose access was revoked
 	// post-login). The callback gate prevents new mismatches from being
-	// created; this catches any stale entry already in KV.
-	if (!timingSafeEqual(row.discord_id, env.ALLOWED_DISCORD_ID)) {
+	// created; this catches any stale entry already in KV. The username on
+	// the session is the snapshot at login time — if a user later renames
+	// themselves out of the allowlist we won't catch that until they
+	// re-authenticate, but Discord usernames are stable enough in practice
+	// that this is acceptable.
+	const allowedUsernames = parseAllowedUsernames(env);
+	if (!allowedUsernames.has(session.data.discord_username)) {
 		await deleteSession(env, session.token);
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
