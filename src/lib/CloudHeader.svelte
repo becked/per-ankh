@@ -175,11 +175,18 @@
 		when the two overlap at narrow widths; pointer-events-auto on the
 		anchor itself so the wordmark stays clickable.
 	-->
+	<!--
+		Logged-out viewers (anonymous on a public game share) get the
+		marketing landing; logged-in users get their dashboard. Sending
+		anon users to /dashboard would trigger SvelteKit's hover-preload
+		of its load function, hitting /v1/stats, /v1/games, /v1/collections
+		and producing 401s in the console — visible noise with no UX win.
+	-->
 	<div class="pointer-events-none absolute left-1/2 -translate-x-1/2">
 		<a
-			href={resolve("/dashboard")}
+			href={resolve(user ? "/dashboard" : "/")}
 			class="pointer-events-auto block cursor-pointer transition-opacity hover:opacity-80"
-			aria-label="Per Ankh — go to dashboard"
+			aria-label={user ? "Per Ankh — go to dashboard" : "Per Ankh — home"}
 		>
 			<div
 				class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"
