@@ -9,8 +9,9 @@
 	// closes the first.
 	//
 	//   - Public/Private lock: owner-only.
-	//   - Download: always rendered (anonymous viewers of public games
-	//     get bounced to /login on 401).
+	//   - Download: any signed-in user (owner or not). Hidden for anonymous
+	//     viewers — the API rejects unauthenticated downloads anyway, and
+	//     surfacing a button that immediately bounces to /login is noise.
 	//   - Delete: owner-only.
 
 	import { goto } from "$app/navigation";
@@ -208,6 +209,7 @@
 		</div>
 	{/if}
 
+	{#if page.data.user}
 	<div class="relative">
 		<button
 			type="button"
@@ -284,6 +286,7 @@
 			</div>
 		{/if}
 	</div>
+	{/if}
 
 	{#if isOwner}
 		<div class="relative">
