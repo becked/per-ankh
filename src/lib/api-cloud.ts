@@ -6,7 +6,7 @@
 
 import type { FullGameData } from "$lib/parser/types";
 
-const DEFAULT_API_BASE = "http://localhost:8787/v1";
+const DEFAULT_API_BASE = "https://api.per-ankh.app/v1";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE) as string;
 
 export interface UserMe {

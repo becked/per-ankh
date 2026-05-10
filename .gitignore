@@ -39,6 +39,7 @@ vite.config.ts.timestamp-*
 # Environment Variables
 .env
 .env.*
+!.env.development
 !.env.example
 
 # Bake outputs — derived from a local pinacotheca checkout via `npm run bake:all`.

@@ -203,27 +203,24 @@ uploaded as static assets — nothing to configure for that.
 
 ### 3.6. Build-time env vars
 
-`.env.example` already lists what's needed. For the production build:
+Nothing to do at deploy time. The env-var layout has two layers:
 
-```
-VITE_API_URL=https://api.per-ankh.app/v1
-VITE_PUBLIC_ORIGIN=https://per-ankh.app
-```
+- **Code defaults** in `src/lib/api-cloud.ts` and `src/lib/page-meta.ts`
+  point at production (`https://api.per-ankh.app/v1`,
+  `https://per-ankh.app`). These apply when no env var is set.
+- **`.env.development`** (committed, repo root) overrides them with
+  localhost values for `vite dev`. Vite loads this file *only* in
+  development mode, never during `vite build`, so the overrides cannot
+  leak into a production bundle.
 
-§4 step 6 runs `npm run build && npx wrangler deploy` locally, so Vite
-reads `import.meta.env.*` from the local shell at build time. Set them
-in the environment immediately before the build:
+A bare `npm run build` therefore produces a correct prod build with no
+env-var ceremony. Verified by `curl -I https://per-ankh.app/_app/...`
+after deploy: bundled JS should reference the prod API URL, not
+localhost.
 
-```bash
-VITE_API_URL=https://api.per-ankh.app/v1 \
-VITE_PUBLIC_ORIGIN=https://per-ankh.app \
-npm run build
-```
-
-Cloudflare's dashboard "Build configuration" settings do **not** apply
-here — those only take effect for the Git-integration auto-deploy flow,
-which this plan doesn't use. If we ever switch to push-to-deploy, move
-the vars to the dashboard then.
+If we ever switch to a Cloudflare Git-integration auto-deploy flow, the
+same code defaults still apply — nothing to migrate to the dashboard
+unless we need to override them per-environment.
 
 ### 3.7. Cloudflare alerts
 
