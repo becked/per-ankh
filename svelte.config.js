@@ -13,8 +13,19 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // http://localhost:8787 and the frontend on http://localhost:1420 — two
 // different origins, so client-side fetches need it whitelisted in
 // connect-src. Production CSP stays tight (only api.per-ankh.app).
+//
+// `cloudflareinsights.com` is the POST target for the Cloudflare Web
+// Analytics beacon (the script itself loads from
+// `static.cloudflareinsights.com`, allowed in script-src below).
+// Cloudflare auto-injects the beacon when Web Analytics is enabled on
+// the Worker; without both directives the script loads-and-blocks and
+// the beacon submission fails.
 const isDev = process.env.NODE_ENV !== "production";
-const connectSrc = ["self", "https://api.per-ankh.app"];
+const connectSrc = [
+	"self",
+	"https://api.per-ankh.app",
+	"https://cloudflareinsights.com",
+];
 if (isDev) connectSrc.push("http://localhost:8787");
 
 // Violation reports go to the API Worker. Sending to both the legacy
@@ -35,7 +46,7 @@ const config = {
 			mode: "hash",
 			directives: {
 				"default-src": ["self"],
-				"script-src": ["self"],
+				"script-src": ["self", "https://static.cloudflareinsights.com"],
 				"style-src": ["self", "unsafe-inline"],
 				"img-src": ["self", "data:", "https://cdn.discordapp.com"],
 				"connect-src": connectSrc,

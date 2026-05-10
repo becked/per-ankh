@@ -83,6 +83,24 @@ async function getSharedData(shareId: string): Promise<SharedGameData> {
 		throw "CORRUPT_DATA" as ShareError;
 	}
 
+	// Backward-compat: older desktop versions (pre-v0.2.0) didn't write
+	// every array field. The render gate in +page.svelte requires all 14
+	// fields truthy, so a missing field would leave the page blank with
+	// no error. Default missing arrays to [] — every consuming component
+	// handles empty arrays. We only default arrays; objects and required
+	// fields (game_details, version) are validated above.
+	data.player_history ??= [];
+	data.yield_history ??= [];
+	data.event_logs ??= [];
+	data.law_adoption_history ??= [];
+	data.current_laws ??= [];
+	data.tech_discovery_history ??= [];
+	data.completed_techs ??= [];
+	data.units_produced ??= [];
+	data.game_religions ??= [];
+	data.player_wonders ??= [];
+	data.map_tiles ??= [];
+
 	cache.set(shareId, data);
 	return data;
 }

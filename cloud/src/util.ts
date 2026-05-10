@@ -36,6 +36,13 @@ export function parseCookies(
 }
 
 // CORS for legacy /v1/share/* — single allowed origin, no credentials.
+//
+// Vary: Origin is needed because /v1/share/:id is publicly cached
+// (Cache-Control: public, max-age=3600). Without it, the CDN and
+// browser disk cache key by URL alone and serve one response across
+// all origins — so a CORS-config change can leave the wrong ACL
+// header cached for up to an hour. Same value works as a shield for
+// OPTIONS preflight responses too.
 export function legacyCorsHeaders(
 	env: Pick<CommonEnv, "ALLOWED_ORIGIN">,
 ): Record<string, string> {
@@ -44,6 +51,7 @@ export function legacyCorsHeaders(
 		"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
 		"Access-Control-Allow-Headers": "Content-Type, X-App-Key, X-Delete-Token",
 		"Access-Control-Max-Age": "86400",
+		Vary: "Origin",
 	};
 }
 

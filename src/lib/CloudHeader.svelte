@@ -3,7 +3,6 @@
 	// the deleted desktop Header.svelte: hamburger menu left, centered
 	// hieroglyph wordmark, search right. Auth-aware via the `user` prop.
 
-	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import SearchInput from "$lib/SearchInput.svelte";
@@ -47,12 +46,19 @@
 		try {
 			await cloudApi.logout();
 		} catch (err) {
-			// Worst case the cookie is still valid server-side; next
+			// Worst case the cookie is still valid server-side; the next
 			// request will surface that. Don't strand the user.
 			console.warn("Logout request failed:", err);
 		}
-		await invalidateAll();
-		await goto(resolve("/"), { replaceState: true });
+		// Full page reload, not invalidateAll + goto. Reasons:
+		//   1. CloudHeader lives in the layout and stays mounted across
+		//      same-app navigations, so `signingOut` would never reset.
+		//   2. `/+page.ts` redirects authenticated users to /dashboard,
+		//      so a soft navigation to / can bounce right back if the
+		//      cookie clear hasn't fully propagated to the next fetch.
+		// A hard reload re-runs SSR from scratch with whatever cookies
+		// the browser jar actually contains, destroying this component.
+		window.location.assign(resolve("/"));
 	}
 
 	function handleClickOutside(event: MouseEvent) {
@@ -175,11 +181,18 @@
 		when the two overlap at narrow widths; pointer-events-auto on the
 		anchor itself so the wordmark stays clickable.
 	-->
+	<!--
+		Logged-out viewers (anonymous on a public game share) get the
+		marketing landing; logged-in users get their dashboard. Sending
+		anon users to /dashboard would trigger SvelteKit's hover-preload
+		of its load function, hitting /v1/stats, /v1/games, /v1/collections
+		and producing 401s in the console — visible noise with no UX win.
+	-->
 	<div class="pointer-events-none absolute left-1/2 -translate-x-1/2">
 		<a
-			href={resolve("/dashboard")}
+			href={resolve(user ? "/dashboard" : "/")}
 			class="pointer-events-auto block cursor-pointer transition-opacity hover:opacity-80"
-			aria-label="Per Ankh — go to dashboard"
+			aria-label={user ? "Per Ankh — go to dashboard" : "Per Ankh — home"}
 		>
 			<div
 				class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"

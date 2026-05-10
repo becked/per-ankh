@@ -40,15 +40,18 @@ export interface GamesEnv extends SessionEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
 	ALLOWED_ORIGINS: string;
+	// Upload-bucket rate limits (apply to uploads + reimports together).
+	// Strings because wrangler.toml `[vars]` are always strings at runtime;
+	// parsed with parseInt at the call site.
+	PER_USER_UPLOADS_PER_HOUR: string;
+	PER_IP_UPLOADS_PER_HOUR: string;
+	GLOBAL_UPLOADS_PER_HOUR: string;
 }
 
-// Size + rate limits (spec §4)
+// Size limits (spec §4)
 const MAX_BLOB_COMPRESSED = 10 * 1024 * 1024; // 10 MB
 const MAX_BLOB_DECOMPRESSED = 50 * 1024 * 1024; // 50 MB
 const MAX_ZIP_BYTES = 50 * 1024 * 1024; // 50 MB
-const PER_USER_UPLOADS_PER_HOUR = 20;
-const PER_IP_UPLOADS_PER_HOUR = 30;
-const GLOBAL_UPLOADS_PER_HOUR = 500;
 
 // Anonymous public-game read limit (per-IP, global via D1 `events` table).
 const ANON_READS_PER_HOUR = 200;
@@ -707,7 +710,7 @@ export async function handleGameUpload(
 			UPLOAD_EVENT_TYPES,
 			"user_id",
 			userId,
-		)) >= PER_USER_UPLOADS_PER_HOUR
+		)) >= parseInt(env.PER_USER_UPLOADS_PER_HOUR)
 	) {
 		return errorResponse(
 			"Per-user upload limit exceeded",
@@ -723,7 +726,7 @@ export async function handleGameUpload(
 			UPLOAD_EVENT_TYPES,
 			"ip_address",
 			ip,
-		)) >= PER_IP_UPLOADS_PER_HOUR
+		)) >= parseInt(env.PER_IP_UPLOADS_PER_HOUR)
 	) {
 		return errorResponse(
 			"Per-IP upload limit exceeded",
@@ -734,7 +737,7 @@ export async function handleGameUpload(
 	}
 	if (
 		(await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, null, null)) >=
-		GLOBAL_UPLOADS_PER_HOUR
+		parseInt(env.GLOBAL_UPLOADS_PER_HOUR)
 	) {
 		return errorResponse(
 			"Global upload limit exceeded",

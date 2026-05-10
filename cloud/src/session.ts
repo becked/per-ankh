@@ -98,6 +98,26 @@ export async function sessionFromRequest(
 	return { token, data };
 }
 
+// Pick the cookie Domain attribute for the session cookie.
+//
+// In prod the API runs on api.per-ankh.app but the SSR frontend runs on
+// per-ankh.app. Without an explicit Domain, the cookie is scoped to
+// api.per-ankh.app only, which means the browser never sends it to
+// per-ankh.app — so SSR loads of authenticated pages see no auth and
+// have to redirect to /login on every hard refresh.
+//
+// Setting Domain=per-ankh.app shares the cookie across both subdomains.
+// The SSR Worker can then read it on hard refresh and forward it to the
+// API via the handleFetch hook in src/hooks.server.ts.
+//
+// Returns null in dev (localhost) where ports differ but host is shared,
+// so no Domain attribute is needed.
+function sessionCookieDomain(request: Request): string | null {
+	const host = new URL(request.url).host;
+	if (host.endsWith("per-ankh.app")) return "per-ankh.app";
+	return null;
+}
+
 // Build a Set-Cookie value for the session token. Secure flag conditional
 // on the request being HTTPS so localhost dev (HTTP) works.
 export function sessionCookie(token: string, request: Request): string {
@@ -108,10 +128,14 @@ export function sessionCookie(token: string, request: Request): string {
 		"Path=/",
 		`Max-Age=${SESSION_TTL_SECONDS}`,
 	];
+	const domain = sessionCookieDomain(request);
+	if (domain) parts.push(`Domain=${domain}`);
 	if (isSecureRequest(request)) parts.push("Secure");
 	return parts.join("; ");
 }
 
+// Domain must match the original Set-Cookie or the browser treats this
+// as a different cookie and won't clear the real one.
 export function clearSessionCookie(request: Request): string {
 	const parts = [
 		`${SESSION_COOKIE}=`,
@@ -120,6 +144,8 @@ export function clearSessionCookie(request: Request): string {
 		"Path=/",
 		"Max-Age=0",
 	];
+	const domain = sessionCookieDomain(request);
+	if (domain) parts.push(`Domain=${domain}`);
 	if (isSecureRequest(request)) parts.push("Secure");
 	return parts.join("; ");
 }
