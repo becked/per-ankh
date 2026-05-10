@@ -3,7 +3,6 @@
 	// the deleted desktop Header.svelte: hamburger menu left, centered
 	// hieroglyph wordmark, search right. Auth-aware via the `user` prop.
 
-	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import SearchInput from "$lib/SearchInput.svelte";
@@ -47,12 +46,19 @@
 		try {
 			await cloudApi.logout();
 		} catch (err) {
-			// Worst case the cookie is still valid server-side; next
+			// Worst case the cookie is still valid server-side; the next
 			// request will surface that. Don't strand the user.
 			console.warn("Logout request failed:", err);
 		}
-		await invalidateAll();
-		await goto(resolve("/"), { replaceState: true });
+		// Full page reload, not invalidateAll + goto. Reasons:
+		//   1. CloudHeader lives in the layout and stays mounted across
+		//      same-app navigations, so `signingOut` would never reset.
+		//   2. `/+page.ts` redirects authenticated users to /dashboard,
+		//      so a soft navigation to / can bounce right back if the
+		//      cookie clear hasn't fully propagated to the next fetch.
+		// A hard reload re-runs SSR from scratch with whatever cookies
+		// the browser jar actually contains, destroying this component.
+		window.location.assign(resolve("/"));
 	}
 
 	function handleClickOutside(event: MouseEvent) {
