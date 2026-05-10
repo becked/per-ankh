@@ -67,6 +67,9 @@ export interface StatsResponse {
 	total_games: number;
 	nations: Array<{ nation: string; games_played: number }>;
 	save_dates: Array<{ date: string; nation: string | null }>;
+	win_rate: number | null;
+	games_with_outcome: number;
+	favorite_day_of_week: number | null; // 0=Sunday..6=Saturday
 }
 
 export class ApiError extends Error {

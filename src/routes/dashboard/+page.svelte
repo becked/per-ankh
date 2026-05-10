@@ -1,7 +1,8 @@
 <script lang="ts">
 	import type { ECElementEvent, EChartsOption } from "echarts";
-	import Chart from "$lib/Chart.svelte";
+	import ChartContainer from "$lib/ChartContainer.svelte";
 	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
@@ -14,6 +15,27 @@
 
 	let { data }: { data: PageData } = $props();
 	const stats = $derived(data.stats);
+
+	// 0=Sunday..6=Saturday, matching SQLite strftime('%w').
+	const DAY_NAMES = [
+		"Sunday",
+		"Monday",
+		"Tuesday",
+		"Wednesday",
+		"Thursday",
+		"Friday",
+		"Saturday",
+	];
+
+	const favoriteNation = $derived(stats.nations[0]?.nation ?? null);
+	const favoriteDay = $derived(
+		stats.favorite_day_of_week != null
+			? DAY_NAMES[stats.favorite_day_of_week]
+			: null,
+	);
+	const winRatePct = $derived(
+		stats.win_rate != null ? Math.round(stats.win_rate * 100) : null,
+	);
 
 	// Cross-filter state for the sidebar. Clicking a nation bar or calendar
 	// day toggles the corresponding filter; clicking the same value again
@@ -39,10 +61,6 @@
 
 	const chartOption = $derived<EChartsOption>({
 		...CHART_THEME,
-		title: {
-			...CHART_THEME.title,
-			text: "Games by Nation",
-		},
 		tooltip: {
 			...CHART_THEME.tooltip,
 			axisPointer: { type: "shadow" },
@@ -74,7 +92,7 @@
 			},
 		],
 		grid: {
-			bottom: 100,
+			bottom: 60,
 		},
 	});
 
@@ -117,10 +135,6 @@
 
 		return {
 			...CHART_THEME,
-			title: {
-				...CHART_THEME.title,
-				text: "Calendar",
-			},
 			tooltip: {
 				trigger: "item",
 				formatter: (params: unknown) => {
@@ -235,43 +249,78 @@
 		<div class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4" use:autohideScroll>
 			<h1 class="mb-8 text-3xl font-bold text-gray-200">Overview</h1>
 
-			<div
-				class="mb-8 rounded-lg border-2 border-black p-2"
-				style="background-color: #36302a;"
-			>
-				<div class="flex items-center justify-center gap-2">
-					<span class="text-sm font-bold uppercase tracking-wide text-brown"
-						>Games Played:</span
-					>
-					<span class="text-2xl font-bold" style="color: #EEEEEE;"
-						>{stats.total_games}</span
-					>
+			<div class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
+				<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+					<div class="rounded-lg p-3" style="background-color: #35302B;">
+						<p class="mb-1 text-xs font-bold text-gray-400">Saves Uploaded</p>
+						<p class="text-lg font-bold" style="color: #DBDEE3;">
+							{stats.total_games}
+						</p>
+					</div>
+
+					<div class="rounded-lg p-3" style="background-color: #35302B;">
+						<p class="mb-1 text-xs font-bold text-gray-400">Win Rate</p>
+						<p class="text-lg font-bold" style="color: #DBDEE3;">
+							{#if winRatePct != null}
+								{winRatePct}%
+							{:else}
+								—
+							{/if}
+						</p>
+					</div>
+
+					<div class="rounded-lg p-3" style="background-color: #35302B;">
+						<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+							{#if favoriteNation}
+								<SpriteIcon
+									category="crests"
+									value={favoriteNation}
+									size={14}
+									alt={formatEnum(favoriteNation, "NATION_")}
+								/>
+							{/if}
+							Favorite Nation
+						</p>
+						<p class="text-lg font-bold" style="color: #DBDEE3;">
+							{#if favoriteNation}
+								{formatEnum(favoriteNation, "NATION_")}
+							{:else}
+								—
+							{/if}
+						</p>
+					</div>
+
+					<div class="rounded-lg p-3" style="background-color: #35302B;">
+						<p class="mb-1 text-xs font-bold text-gray-400">Favorite Day</p>
+						<p class="text-lg font-bold" style="color: #DBDEE3;">
+							{favoriteDay ?? "—"}
+						</p>
+					</div>
 				</div>
 			</div>
 
-			{#if stats.nations.length > 0}
+			{#if stats.nations.length > 0 || calendarChartOption}
 				<div
-					class="mb-8 rounded-lg border-2 border-black p-1"
-					style="background-color: var(--color-chart-frame)"
+					class="rounded-lg px-8 pb-2 pt-8"
+					style="background-color: #35302B;"
 				>
-					<Chart
-						option={chartOption}
-						height="400px"
-						onItemClick={handleNationClick}
-					/>
-				</div>
-			{/if}
+					{#if calendarChartOption}
+						<ChartContainer
+							option={calendarChartOption}
+							height="250px"
+							title="Calendar"
+							onItemClick={handleCalendarClick}
+						/>
+					{/if}
 
-			{#if calendarChartOption}
-				<div
-					class="mb-8 rounded-lg border-2 border-black p-1"
-					style="background-color: var(--color-chart-frame)"
-				>
-					<Chart
-						option={calendarChartOption}
-						height="250px"
-						onItemClick={handleCalendarClick}
-					/>
+					{#if stats.nations.length > 0}
+						<ChartContainer
+							option={chartOption}
+							height="320px"
+							title="Games by Nation"
+							onItemClick={handleNationClick}
+						/>
+					{/if}
 				</div>
 			{/if}
 		</div>

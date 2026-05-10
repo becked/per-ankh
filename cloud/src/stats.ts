@@ -32,9 +32,9 @@ export async function handleStats(
 	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	const userId = session.data.user_id;
 
-	// All three queries are cheap aggregations on the games table; run in
+	// All queries are cheap aggregations on the games table; run in
 	// parallel since D1 prepared statements don't share state.
-	const [totalRow, nationsResult, datesResult] = await Promise.all([
+	const [totalRow, nationsResult, datesResult, winRateRow, dayRow] = await Promise.all([
 		env.SHARE_DB
 			.prepare("SELECT COUNT(*) AS total FROM games WHERE user_id = ?")
 			.bind(userId)
@@ -62,6 +62,33 @@ export async function handleStats(
 			)
 			.bind(userId)
 			.all<{ date: string; nation: string | null }>(),
+		// Win rate over games with a known outcome. Observer-mode uploads
+		// store user_won as NULL and are excluded. Returns NULL if no games
+		// have an outcome (SQLite division by zero yields NULL, no error).
+		env.SHARE_DB
+			.prepare(
+				`SELECT CAST(SUM(CASE WHEN user_won = TRUE THEN 1 ELSE 0 END) AS REAL)
+				          / COUNT(*) AS rate,
+				        COUNT(*) AS games_with_outcome
+				 FROM games
+				 WHERE user_id = ? AND user_won IS NOT NULL`,
+			)
+			.bind(userId)
+			.first<{ rate: number | null; games_with_outcome: number }>(),
+		// Most-frequent weekday among save dates. strftime('%w') returns
+		// 0=Sunday..6=Saturday. Tiebreak by weekday ASC so the result is
+		// stable when counts are equal.
+		env.SHARE_DB
+			.prepare(
+				`SELECT CAST(strftime('%w', save_date) AS INTEGER) AS weekday
+				 FROM games
+				 WHERE user_id = ? AND save_date IS NOT NULL
+				 GROUP BY weekday
+				 ORDER BY COUNT(*) DESC, weekday ASC
+				 LIMIT 1`,
+			)
+			.bind(userId)
+			.first<{ weekday: number | null }>(),
 	]);
 
 	return jsonResponse(
@@ -69,6 +96,9 @@ export async function handleStats(
 			total_games: totalRow?.total ?? 0,
 			nations: nationsResult.results ?? [],
 			save_dates: datesResult.results ?? [],
+			win_rate: winRateRow?.rate ?? null,
+			games_with_outcome: winRateRow?.games_with_outcome ?? 0,
+			favorite_day_of_week: dayRow?.weekday ?? null,
 		},
 		200,
 		cors,
