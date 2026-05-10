@@ -2,6 +2,21 @@
 @tailwind components;
 @tailwind utilities;
 
+/*
+ * Self-hosted Noto Sans Egyptian Hieroglyphs (OFL). Scoped via unicode-range
+ * so the font only downloads on pages that actually render U+13000-U+143FA
+ * (the HieroglyphParade band on /upload, BulkReparseModal, ReimportButton).
+ * License: static/fonts/NotoSansEgyptianHieroglyphs-OFL.txt.
+ */
+@font-face {
+	font-family: "Noto Sans Egyptian Hieroglyphs";
+	src: url("/fonts/NotoSansEgyptianHieroglyphs-Regular.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+	unicode-range: U+13000-13455, U+13460-143FA;
+}
+
 /* Global CSS Variables and Base Styles */
 :root {
 	--color-black: #000000;

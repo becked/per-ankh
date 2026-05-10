@@ -23,11 +23,7 @@
 	import ParserWorker from "$lib/parser/worker?worker";
 	import type { FullGameData, PlayerRosterEntry } from "$lib/parser/types";
 	import type { WorkerMessage } from "$lib/parser/worker";
-	import {
-		cloudApi,
-		ApiError,
-		DuplicateUploadError,
-	} from "$lib/api-cloud";
+	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import { formatEnum } from "$lib/utils/formatting";
 
 	// Pre-filled mode is the entry point for re-import. The owner's already
@@ -39,14 +35,24 @@
 	let {
 		prefilled,
 		onDone,
+		onBusyChange,
 	}: {
 		prefilled?: { rawZip: ArrayBuffer; fileName: string };
 		// Callback fired after a successful upload OR re-import. Lets the
 		// caller decide whether to navigate (first upload) or just refresh
 		// the current page (re-import). When omitted, default behavior is
 		// to navigate to /games/{id}.
+		/* eslint-disable no-unused-vars -- Callback type signature */
+		onDone?: (
+			gameId: string,
+			info: { reimported: boolean },
+		) => void | Promise<void>;
+		/* eslint-enable no-unused-vars */
+		// Fires whenever the modal transitions into or out of an active
+		// parse/upload phase. Hosts use this to drive the HieroglyphParade
+		// animation: marching while busy, static borders otherwise.
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
-		onDone?: (gameId: string, info: { reimported: boolean }) => void | Promise<void>;
+		onBusyChange?: (busy: boolean) => void;
 	} = $props();
 
 	const OBSERVER: null = null;
@@ -95,6 +101,15 @@
 
 	$effect(() => {
 		refreshKnownOnlineIds();
+	});
+
+	// Tell the host when we're actively parsing or uploading so the parade
+	// animates only during work, not during file/player selection.
+	const isBusy = $derived(
+		status.kind === "parsing" || status.kind === "uploading",
+	);
+	$effect(() => {
+		onBusyChange?.(isBusy);
 	});
 
 	function startParse(buffer: ArrayBuffer, fileName: string) {
@@ -176,9 +191,7 @@
 		// Local copy so the .find() closure keeps the narrowed type.
 		const picker = status;
 		if (picker.selected === OBSERVER) return "Upload as observer";
-		const human = picker.humans.find(
-			(h) => h.player_index === picker.selected,
-		);
+		const human = picker.humans.find((h) => h.player_index === picker.selected);
 		if (!human) return "Upload";
 		const label =
 			human.player_name || formatEnum(human.nation, "NATION_") || "player";
@@ -187,7 +200,12 @@
 
 	async function submitPicker() {
 		if (status.kind !== "picker") return;
-		await doUpload(status.data, status.rawZip, status.fileName, status.selected);
+		await doUpload(
+			status.data,
+			status.rawZip,
+			status.fileName,
+			status.selected,
+		);
 	}
 
 	async function gzipJson(obj: unknown): Promise<Blob> {
@@ -209,7 +227,11 @@
 		const blobGz = await gzipJson(data);
 		const form = new FormData();
 		form.append("data", blobGz, "game.json.gz");
-		form.append("save", new Blob([rawZip], { type: "application/zip" }), fileName);
+		form.append(
+			"save",
+			new Blob([rawZip], { type: "application/zip" }),
+			fileName,
+		);
 		form.append("uploader_player_index", JSON.stringify(uploaderIndex));
 
 		try {
@@ -275,12 +297,12 @@
 		</h2>
 		<p class="mb-4 text-xs text-gray-400">
 			{#if isReimportMode}
-				Re-imports refresh the parsed data — confirm the same player
-				you originally picked, or change it if you got it wrong.
+				Re-imports refresh the parsed data — confirm the same player you
+				originally picked, or change it if you got it wrong.
 			{:else}
-				Pick the player that belongs to your account, or "None" if
-				you're uploading on someone else's behalf (e.g. archiving a
-				tournament match or a friend's game).
+				Pick the player that belongs to your account, or "None" if you're
+				uploading on someone else's behalf (e.g. archiving a tournament match or
+				a friend's game).
 			{/if}
 		</p>
 		<ul class="mb-4 space-y-2">
@@ -341,27 +363,27 @@
 			<button
 				type="button"
 				onclick={reset}
-				class="rounded bg-brown/40 px-3 py-1 text-sm text-tan hover:bg-brown"
+				class="bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown"
 			>
 				Cancel
 			</button>
 			<button
 				type="button"
 				onclick={submitPicker}
-				class="rounded bg-orange px-4 py-1 text-sm font-bold text-white hover:bg-orange/80"
+				class="hover:bg-orange/80 rounded bg-orange px-4 py-1 text-sm font-bold text-white"
 			>
 				{submitLabel}
 			</button>
 		</div>
 	{:else if status.kind === "uploading"}
 		<p class="text-sm" style="color: #DBDEE3;">
-			{isReimportMode ? "Updating" : "Uploading"} {status.fileName}…
+			{isReimportMode ? "Updating" : "Uploading"}
+			{status.fileName}…
 		</p>
 	{:else if status.kind === "duplicate"}
 		<p class="mb-3 text-sm" style="color: #DBDEE3;">
 			{#if isReimportMode}
-				This save is already at the current parser version — nothing
-				to refresh.
+				This save is already at the current parser version — nothing to refresh.
 			{:else}
 				You've already uploaded this save.
 			{/if}
@@ -377,7 +399,7 @@
 				<button
 					type="button"
 					onclick={reset}
-					class="rounded bg-brown/40 px-3 py-1 text-sm text-tan hover:bg-brown"
+					class="bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown"
 				>
 					Pick another file
 				</button>

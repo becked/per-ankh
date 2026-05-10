@@ -70,6 +70,16 @@
 
 	type Phase = "picking" | "uploading" | "done";
 
+	let {
+		onBusyChange,
+	}: {
+		// Fires when the modal enters or leaves an active parse/upload phase.
+		// Hosts use this to drive the HieroglyphParade — marching while busy,
+		// static borders otherwise.
+		// eslint-disable-next-line no-unused-vars -- Callback type signature
+		onBusyChange?: (busy: boolean) => void;
+	} = $props();
+
 	let rows = $state<Row[]>([]);
 	let phase = $state<Phase>("picking");
 	let pickError = $state<string | null>(null);
@@ -83,6 +93,13 @@
 			worker?.terminate();
 			worker = null;
 		};
+	});
+
+	const isBusy = $derived(
+		phase === "uploading" || rows.some((r) => r.status.kind === "parsing"),
+	);
+	$effect(() => {
+		onBusyChange?.(isBusy);
 	});
 
 	async function refreshKnownOnlineIds() {
@@ -349,7 +366,9 @@
 						<span class="truncate text-sm font-bold" style="color: #DBDEE3;">
 							{row.fileName}
 						</span>
-						<span class="shrink-0 text-xs uppercase tracking-wide text-gray-400">
+						<span
+							class="shrink-0 text-xs uppercase tracking-wide text-gray-400"
+						>
 							{#if row.status.kind === "queued"}
 								Queued
 							{:else if row.status.kind === "parsing"}
@@ -378,9 +397,7 @@
 						></progress>
 					{:else if row.status.kind === "ready"}
 						{@const ready = row.status}
-						<p class="mb-2 text-xs font-bold text-gray-400">
-							Choose player
-						</p>
+						<p class="mb-2 text-xs font-bold text-gray-400">Choose player</p>
 						<ul class="space-y-1">
 							{#each ready.humans as human (human.player_index)}
 								<li>

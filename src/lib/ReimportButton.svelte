@@ -10,6 +10,7 @@
 
 	import { invalidateAll } from "$app/navigation";
 	import UploadModal from "$lib/UploadModal.svelte";
+	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
 	import { cloudApi, ApiError, UnauthorizedError } from "$lib/api-cloud";
 
 	let { gameId }: { gameId: string } = $props();
@@ -21,6 +22,7 @@
 		| { kind: "error"; message: string };
 
 	let state = $state<State>({ kind: "idle" });
+	let paradeActive = $state(false);
 
 	async function startReimport() {
 		state = { kind: "downloading" };
@@ -70,7 +72,7 @@
 	<button
 		type="button"
 		onclick={startReimport}
-		class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80"
+		class="hover:bg-orange/80 rounded bg-orange px-3 py-1 text-xs font-bold text-white"
 	>
 		Reparse
 	</button>
@@ -97,15 +99,17 @@
 
 {#if state.kind === "modal"}
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+		class="bg-black/70 fixed inset-0 z-50 flex items-center justify-center p-4"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Re-import game"
 	>
 		<div class="w-full max-w-lg">
+			<HieroglyphParade active={paradeActive} />
 			<UploadModal
 				prefilled={{ rawZip: state.rawZip, fileName: state.fileName }}
 				onDone={onModalDone}
+				onBusyChange={(busy) => (paradeActive = busy)}
 			/>
 			<div class="mt-2 text-right">
 				<button

@@ -27,6 +27,7 @@
 		DuplicateUploadError,
 		type GameListItem,
 	} from "$lib/api-cloud";
+	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
 
 	type RowStatus =
 		| { kind: "queued" }
@@ -218,14 +219,17 @@
 </script>
 
 <div
-	class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+	class="bg-black/70 fixed inset-0 z-50 flex items-center justify-center p-4"
 	role="dialog"
 	aria-modal="true"
 	aria-label="Reparse all games"
 >
 	<div class="w-full max-w-2xl rounded border-2 border-brown bg-[#2a2622] p-6">
-		<div class="mb-4 flex items-center justify-between">
-			<h2 class="font-serif text-xl text-tan">Reparse {rows.length} game{rows.length === 1 ? "" : "s"}</h2>
+		<HieroglyphParade active={phase === "running"} />
+		<div class="mb-4 mt-4 flex items-center justify-between">
+			<h2 class="font-serif text-xl text-tan">
+				Reparse {rows.length} game{rows.length === 1 ? "" : "s"}
+			</h2>
 			{#if phase === "idle"}
 				<button
 					type="button"
@@ -239,15 +243,15 @@
 
 		{#if phase === "idle"}
 			<p class="mb-4 text-sm text-tan">
-				The parser was upgraded. Re-importing will pull each save's raw
-				ZIP from cloud storage, parse it again, and update the stored
-				data. Game IDs and visibility settings are preserved.
+				The parser was upgraded. Re-importing will pull each save's raw ZIP from
+				cloud storage, parse it again, and update the stored data. Game IDs and
+				visibility settings are preserved.
 			</p>
 			<div class="flex gap-2">
 				<button
 					type="button"
 					onclick={start}
-					class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
+					class="hover:bg-orange/80 rounded bg-orange px-4 py-2 text-sm font-bold text-white"
 				>
 					Start reparsing
 				</button>
@@ -265,7 +269,9 @@
 			</div>
 			<ul class="max-h-96 space-y-1 overflow-y-auto pr-2">
 				{#each rows as row (row.gameId)}
-					<li class="flex items-center gap-2 rounded bg-[#1f1c19] px-2 py-1 text-xs">
+					<li
+						class="flex items-center gap-2 rounded bg-[#1f1c19] px-2 py-1 text-xs"
+					>
 						<span class="flex-1 truncate text-tan">{row.gameName}</span>
 						<span class="text-right">
 							{#if row.status.kind === "queued"}
@@ -306,7 +312,7 @@
 					<button
 						type="button"
 						onclick={close}
-						class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
+						class="hover:bg-orange/80 rounded bg-orange px-4 py-2 text-sm font-bold text-white"
 					>
 						Close
 					</button>
