@@ -1,0 +1,2661 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Per-Ankh — Design Language Audit</title>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							black: "var(--color-black)",
+							brown: "var(--color-brown)",
+							"dark-brown": "var(--color-dark-brown)",
+							orange: "var(--color-orange)",
+							tan: "var(--color-tan)",
+							"tan-hover": "var(--color-tan-hover)",
+							white: "var(--color-white)",
+							yellow: "var(--color-yellow)",
+							"blue-gray": "var(--color-blue-gray)",
+							"border-gray": "var(--color-border-gray)",
+							gray: { 200: "var(--color-gray-200)" },
+						},
+					},
+				},
+			};
+		</script>
+		<script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+
+		<style>
+			:root {
+				--color-black: #000000;
+				--color-brown: #a52a2a;
+				--color-dark-brown: #79261d;
+				--color-orange: #ffa500;
+				--color-tan: #d2b48c;
+				--color-tan-hover: #d2b48c;
+				--color-white: #ffffff;
+				--color-yellow: #ffff00;
+				--color-blue-gray: #211a12;
+				--color-border-gray: #1c160f;
+				--color-gray-200: #eeeeee;
+			}
+
+			html,
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				background-color: var(--color-blue-gray);
+				color: var(--color-white);
+				margin: 0;
+				padding: 0;
+			}
+
+			.audit-shell {
+				display: grid;
+				grid-template-columns: 240px 1fr;
+				min-height: 100vh;
+			}
+			.audit-toc {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				height: 100vh;
+				overflow-y: auto;
+				border-right: 1px solid #000;
+				padding: 1.5rem 1rem;
+				background-color: #1a1410;
+			}
+			.audit-toc h1 {
+				font-size: 0.875rem;
+				font-weight: bold;
+				color: var(--color-orange);
+				margin-bottom: 1rem;
+				border-bottom: 1px solid #000;
+				padding-bottom: 0.5rem;
+			}
+			.audit-toc ol {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				font-size: 0.75rem;
+			}
+			.audit-toc ol li {
+				margin-bottom: 0.25rem;
+			}
+			.audit-toc a {
+				color: var(--color-tan);
+				text-decoration: none;
+				display: block;
+				padding: 0.25rem 0.5rem;
+				border-radius: 3px;
+			}
+			.audit-toc a:hover {
+				background: #35302b;
+				color: var(--color-orange);
+			}
+			.audit-toc .toc-sub {
+				padding-left: 0.75rem;
+				color: #999;
+				font-size: 0.7rem;
+			}
+
+			.audit-main {
+				padding: 2rem 2.5rem;
+				max-width: 1200px;
+			}
+			.audit-main h2 {
+				font-size: 1.75rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				border-bottom: 2px solid var(--color-orange);
+				padding-bottom: 0.5rem;
+				margin-top: 3rem;
+				margin-bottom: 1rem;
+			}
+			.audit-main h2:first-child {
+				margin-top: 0;
+			}
+			.audit-main h3 {
+				font-size: 1.125rem;
+				font-weight: bold;
+				color: var(--color-tan);
+				margin-top: 2rem;
+				margin-bottom: 0.5rem;
+			}
+			.audit-main p.section-intro {
+				color: #c5c3c2;
+				font-size: 0.875rem;
+				margin-bottom: 1.5rem;
+				line-height: 1.5;
+			}
+
+			.pattern-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1rem;
+				margin-bottom: 1rem;
+			}
+			.pattern-row {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 1rem;
+				margin-bottom: 1rem;
+			}
+			.pattern-row.three-up {
+				grid-template-columns: repeat(3, 1fr);
+			}
+			.pattern-name {
+				font-weight: bold;
+				color: var(--color-gray-200);
+				font-size: 0.875rem;
+				margin-bottom: 0.25rem;
+			}
+			.pattern-cite {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.7rem;
+				color: #888;
+				margin-bottom: 0.75rem;
+				word-break: break-all;
+			}
+			.pattern-cite a {
+				color: inherit;
+			}
+			.pattern-demo {
+				margin-bottom: 0.75rem;
+				padding: 1rem;
+				background: var(--color-blue-gray);
+				border-radius: 4px;
+				border: 1px dashed #2a2622;
+			}
+			.pattern-class {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.7rem;
+				color: var(--color-tan);
+				background: #0e0a07;
+				padding: 0.5rem 0.75rem;
+				border-radius: 3px;
+				white-space: pre-wrap;
+				word-break: break-all;
+				display: block;
+			}
+			.pattern-note {
+				color: var(--color-orange);
+				font-size: 0.75rem;
+				font-style: italic;
+				margin-top: 0.5rem;
+				line-height: 1.4;
+			}
+
+			.swatch-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+				gap: 0.5rem;
+			}
+			.swatch {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 4px;
+				overflow: hidden;
+				font-size: 0.75rem;
+			}
+			.swatch-color {
+				height: 60px;
+			}
+			.swatch-meta {
+				padding: 0.4rem 0.5rem;
+			}
+			.swatch-name {
+				font-weight: bold;
+				color: var(--color-gray-200);
+				display: block;
+			}
+			.swatch-hex {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				color: #888;
+				font-size: 0.7rem;
+				display: block;
+			}
+			.swatch-cite {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				color: #666;
+				font-size: 0.65rem;
+				margin-top: 0.25rem;
+			}
+			.swatch-flag {
+				font-size: 0.65rem;
+				color: var(--color-orange);
+				font-style: italic;
+				margin-top: 0.25rem;
+			}
+
+			.audit-summary li {
+				margin-bottom: 0.5rem;
+				color: var(--color-tan);
+				font-size: 0.875rem;
+				line-height: 1.5;
+			}
+			.audit-summary code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.8rem;
+				background: #0e0a07;
+				padding: 0.1rem 0.3rem;
+				border-radius: 2px;
+				color: var(--color-orange);
+			}
+
+			.chart-frame {
+				width: 100%;
+				height: 320px;
+				background: #211a12;
+				border-radius: 6px;
+			}
+
+			pre.config-block {
+				background: #0e0a07;
+				color: var(--color-tan);
+				padding: 1rem;
+				border-radius: 4px;
+				font-size: 0.75rem;
+				overflow-x: auto;
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+			}
+
+			/* App-specific replicas */
+			.replica-game-list-item {
+				background-color: #c1872f;
+				padding-bottom: 18px;
+			}
+			.replica-game-list-item.active,
+			.replica-game-list-item:hover {
+				background-color: #f2a93b;
+			}
+			.replica-game-list-item.active {
+				border-color: #f2a93b;
+			}
+
+			.replica-filter-chip {
+				display: inline-flex;
+				align-items: center;
+				gap: 4px;
+				padding: 2px 6px;
+				border-radius: 9999px;
+				border: 1px solid #000;
+				background-color: #c1872f;
+				color: #000;
+				font-size: 10px;
+				font-weight: 600;
+				line-height: 1;
+				cursor: pointer;
+			}
+			.replica-filter-chip:hover {
+				background-color: #f2a93b;
+			}
+
+			.replica-map-tooltip {
+				background: rgba(26, 21, 16, 0.97);
+				border: 2px solid var(--color-black);
+				border-radius: 6px;
+				padding: 8px 10px;
+				color: var(--color-tan);
+				font-size: 11px;
+				line-height: 1.4;
+				min-width: 160px;
+				max-width: 240px;
+				box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+				display: inline-block;
+			}
+			.replica-map-tooltip.pinned {
+				border-color: var(--color-tan);
+				box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+			}
+			.replica-map-tooltip .rows {
+				display: grid;
+				grid-template-columns: auto 1fr;
+				gap: 2px 12px;
+				margin-top: 4px;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="audit-shell">
+			<nav class="audit-toc">
+				<h1>Per-Ankh Design Audit</h1>
+				<ol>
+					<li><a href="#colors">1. Color palette</a></li>
+					<li class="toc-sub"><a href="#colors-tokens">Tokens</a></li>
+					<li class="toc-sub"><a href="#colors-inline">Inline hex</a></li>
+					<li><a href="#typography">2. Typography</a></li>
+					<li class="toc-sub"><a href="#type-headings">Headings</a></li>
+					<li class="toc-sub"><a href="#type-body">Body & labels</a></li>
+					<li class="toc-sub"><a href="#type-tables">Tables</a></li>
+					<li class="toc-sub"><a href="#type-empty">Empty / mono</a></li>
+					<li><a href="#cards">3. Cards & containers</a></li>
+					<li><a href="#buttons">4. Buttons & links</a></li>
+					<li><a href="#forms">5. Forms & inputs</a></li>
+					<li><a href="#popups">6. Popups, menus, dialogs</a></li>
+					<li class="toc-sub"><a href="#popups-modals">Modals</a></li>
+					<li class="toc-sub"><a href="#popups-popovers">Popovers / context</a></li>
+					<li class="toc-sub"><a href="#popups-dropdowns">Dropdowns</a></li>
+					<li class="toc-sub"><a href="#popups-tabs">Tabs / toggles</a></li>
+					<li class="toc-sub"><a href="#popups-tooltips">Tooltips</a></li>
+					<li class="toc-sub"><a href="#popups-banners">Banners / alerts</a></li>
+					<li><a href="#charts">7. Charts & data viz</a></li>
+					<li><a href="#layout">8. Layout patterns</a></li>
+					<li><a href="#audit-summary">9. Audit summary</a></li>
+				</ol>
+			</nav>
+
+			<main class="audit-main">
+				<header style="margin-bottom: 2rem">
+					<h2 style="margin-top: 0; border-bottom: 3px solid var(--color-orange)">
+						Design Language Audit
+					</h2>
+					<p class="section-intro">
+						A static reference + audit of every distinct visual pattern found
+						in the Per-Ankh cloud app (<code style="color: var(--color-orange)"
+							>src/</code
+						>). Each pattern is rendered live alongside its <code>file:line</code>
+						citations and class string. Where two usages differ in some specific
+						way, variants are stacked side-by-side. The
+						<a href="#audit-summary" style="color: var(--color-orange)"
+							>audit summary</a
+						>
+						at the bottom collects the divergences worth consolidating.
+					</p>
+					<p class="section-intro" style="font-size: 0.75rem; color: #888">
+						<strong>Method:</strong> Tailwind Play CDN configured to mirror
+						<code>tailwind.config.js</code>. Custom tokens
+						(<code>brown</code>, <code>tan</code>, <code>orange</code>,
+						<code>blue-gray</code>, <code>gray-200</code>, etc.) come from
+						<code>src/app.css</code> :root. ECharts via CDN renders the chart
+						section using the verbatim <code>CHART_THEME</code> from
+						<code>src/lib/config/charts.ts</code>.
+					</p>
+				</header>
+
+				<!-- ============ 1. COLORS ============ -->
+				<h2 id="colors">1. Color palette</h2>
+				<p class="section-intro">
+					The app declares 11 CSS variables in
+					<code>src/app.css:6-18</code>; the Tailwind config exposes 9 of these
+					as named tokens (<code>dark-brown</code> and <code>border-gray</code>
+					are CSS-only). Beyond the tokens, 15+ raw hex values appear inline —
+					most repeatedly. Tokens come first; inline hex follows with a usage
+					count.
+				</p>
+
+				<h3 id="colors-tokens">Tokens (defined in <code>src/app.css</code>)</h3>
+				<div class="swatch-grid">
+					<div class="swatch">
+						<div class="swatch-color" style="background: #000"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">black</span>
+							<span class="swatch-hex">#000000</span>
+							<span class="swatch-cite">--color-black</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #a52a2a"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">brown</span>
+							<span class="swatch-hex">#a52a2a</span>
+							<span class="swatch-cite">--color-brown</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #79261d"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">dark-brown</span>
+							<span class="swatch-hex">#79261d</span>
+							<span class="swatch-cite">CSS only — not a Tailwind token</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #ffa500"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">orange</span>
+							<span class="swatch-hex">#ffa500</span>
+							<span class="swatch-cite">--color-orange</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #d2b48c"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">tan</span>
+							<span class="swatch-hex">#d2b48c</span>
+							<span class="swatch-cite">--color-tan</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #d2b48c"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">tan-hover</span>
+							<span class="swatch-hex">#d2b48c</span>
+							<span class="swatch-cite">--color-tan-hover</span>
+							<span class="swatch-flag"
+								>⚠ Identical to <code>tan</code>; hover is a no-op</span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #fff"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #fff"
+								>white</span
+							>
+							<span class="swatch-hex">#ffffff</span>
+							<span class="swatch-cite">--color-white</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #ffff00"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">yellow</span>
+							<span class="swatch-hex">#ffff00</span>
+							<span class="swatch-cite">--color-yellow</span>
+							<span class="swatch-flag">⚠ Defined but not used in src/</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #211a12"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">blue-gray</span>
+							<span class="swatch-hex">#211a12</span>
+							<span class="swatch-cite">--color-blue-gray (page bg)</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #1c160f"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">border-gray</span>
+							<span class="swatch-hex">#1c160f</span>
+							<span class="swatch-cite">CSS only — not a Tailwind token</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #eeeeee"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #eee"
+								>gray-200</span
+							>
+							<span class="swatch-hex">#eeeeee</span>
+							<span class="swatch-cite">--color-gray-200</span>
+						</div>
+					</div>
+				</div>
+
+				<h3 id="colors-inline">Inline hex values (not in design system)</h3>
+				<p class="section-intro">
+					These hex values appear inline (<code>style="..."</code> or Tailwind
+					arbitrary values like <code>bg-[#35302b]</code>) and are not exposed
+					as Tailwind tokens. Annotated with usage frequency from the audit.
+				</p>
+				<div class="swatch-grid">
+					<div class="swatch">
+						<div class="swatch-color" style="background: #2a2622"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">outer card bg</span>
+							<span class="swatch-hex">#2a2622</span>
+							<span class="swatch-flag"
+								>⚠ Used 7+ times. Suggested token:
+								<code>--color-card-bg</code></span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #35302b"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">inner card bg</span>
+							<span class="swatch-hex">#35302B</span>
+							<span class="swatch-flag"
+								>⚠ Used 15+ times. Suggested token:
+								<code>--color-card-inner</code></span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #dbdee3"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #dbdee3"
+								>light gray text</span
+							>
+							<span class="swatch-hex">#DBDEE3</span>
+							<span class="swatch-flag"
+								>⚠ Used 20+ times in inline <code>color:</code>. Suggested
+								token: <code>--color-light-gray</code></span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #36302a"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">skeleton bg</span>
+							<span class="swatch-hex">#36302a</span>
+							<span class="swatch-flag"
+								>⚠ Likely typo of <code>#35302B</code>;
+								<code>GamePageSkeleton.svelte:14</code></span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #1f1c19"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">very-dark bg</span>
+							<span class="swatch-hex">#1f1c19</span>
+							<span class="swatch-cite"
+								>BulkReparseModal.svelte:268 — single use</span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #1a1714"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">footer bg</span>
+							<span class="swatch-hex">#1a1714</span>
+							<span class="swatch-cite">routes/+page.svelte:39</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #403a33"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">search dark</span>
+							<span class="swatch-hex">#403A33</span>
+							<span class="swatch-cite">SearchInput.svelte (dark variant)</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #201a13"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">search field</span>
+							<span class="swatch-hex">#201a13</span>
+							<span class="swatch-cite"
+								>SearchInput.svelte (field variant)</span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #c1872f"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">game list bg</span>
+							<span class="swatch-hex">#c1872f</span>
+							<span class="swatch-cite">CloudGameSidebar.svelte:507</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #f2a93b"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">game list active</span>
+							<span class="swatch-hex">#f2a93b</span>
+							<span class="swatch-cite"
+								>CloudGameSidebar — hover/active state</span
+							>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #ab9978"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #ab9978"
+								>create btn</span
+							>
+							<span class="swatch-hex">#ab9978</span>
+							<span class="swatch-cite">CloudGameSidebar.svelte:452</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #9a8a6c"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #9a8a6c"
+								>create btn hover</span
+							>
+							<span class="swatch-hex">#9a8a6c</span>
+							<span class="swatch-cite">CloudGameSidebar.svelte:452</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #4a433b"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">input border</span>
+							<span class="swatch-hex">#4a433b</span>
+							<span class="swatch-cite">CloudGameSidebar.svelte:425</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #5a524a"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">input focus border</span>
+							<span class="swatch-hex">#5a524a</span>
+							<span class="swatch-cite">CloudGameSidebar.svelte:425</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #5865f2"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">discord brand</span>
+							<span class="swatch-hex">#5865F2</span>
+							<span class="swatch-cite">login/+page.svelte:54</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #4752c4"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">discord hover</span>
+							<span class="swatch-hex">#4752c4</span>
+							<span class="swatch-cite">login/+page.svelte:54</span>
+						</div>
+					</div>
+				</div>
+
+				<!-- ============ 2. TYPOGRAPHY ============ -->
+				<h2 id="typography">2. Typography</h2>
+				<p class="section-intro">
+					Global font stack:
+					<code
+						>-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica
+						Neue", Arial, sans-serif</code
+					>
+					(<code>app.css:28-30</code>). One serif outlier in
+					<code>BulkReparseModal.svelte:228</code>.
+				</p>
+
+				<h3 id="type-headings">Headings (h1 / h2 / h3)</h3>
+
+				<div class="pattern-card">
+					<div class="pattern-name">h1 — primary page title (Dashboard / Upload)</div>
+					<div class="pattern-cite">
+						routes/dashboard/+page.svelte:250 · routes/upload/+page.svelte:27
+					</div>
+					<div class="pattern-demo">
+						<h1 class="mb-8 text-3xl font-bold text-gray-200">Overview</h1>
+					</div>
+					<code class="pattern-class"
+						>mb-8 text-3xl font-bold text-gray-200</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">
+						h1 — game detail title (no margin, used in flex row)
+					</div>
+					<div class="pattern-cite">
+						lib/game-detail/GameDetailView.svelte:165
+					</div>
+					<div class="pattern-demo">
+						<h1 class="text-3xl font-bold text-gray-200">My Egypt run</h1>
+					</div>
+					<code class="pattern-class">text-3xl font-bold text-gray-200</code>
+					<div class="pattern-note">
+						Same as primary page title minus <code>mb-8</code>. Two
+						<code>h1</code> rules covering the same role.
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">
+						Logo wordmark (used as h1 on landing/login/header)
+					</div>
+					<div class="pattern-cite">
+						routes/+page.svelte:14 · lib/CloudHeader.svelte:189 ·
+						routes/login/+page.svelte:41
+					</div>
+					<div class="pattern-demo" style="background-color: #211a12">
+						<div
+							class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"
+							style="display: inline-block"
+						>
+							𓉑 Per Ankh
+						</div>
+					</div>
+					<code class="pattern-class"
+						>border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">h2 — modal title</div>
+					<div class="pattern-cite">lib/AboutModal.svelte:20</div>
+					<div class="pattern-demo">
+						<h2
+							class="mb-4 border-b-2 border-orange pb-2 text-2xl font-bold text-tan"
+						>
+							About
+						</h2>
+					</div>
+					<code class="pattern-class"
+						>mb-4 border-b-2 border-orange pb-2 text-2xl font-bold text-tan</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">h2 — settings section title</div>
+					<div class="pattern-cite">lib/game-detail/SettingsTab.svelte:22</div>
+					<div class="pattern-demo">
+						<h2 class="mb-4 mt-0 font-bold text-tan">Game Settings</h2>
+					</div>
+					<code class="pattern-class">mb-4 mt-0 font-bold text-tan</code>
+					<div class="pattern-note">
+						No size class — inherits <code>2em</code>. Compare to
+						<code>text-2xl</code> on modal title.
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">h2 — modal subtitle (inline color)</div>
+					<div class="pattern-cite">lib/UploadModal.svelte:273</div>
+					<div class="pattern-demo">
+						<h2
+							class="mb-1 text-lg font-bold"
+							style="color: #dbdee3"
+						>
+							Which player is you?
+						</h2>
+					</div>
+					<code class="pattern-class">mb-1 text-lg font-bold</code>
+					<div class="pattern-note">
+						Uses inline <code>style="color: #DBDEE3"</code> instead of
+						<code>text-gray-200</code> (<code>#eeeeee</code>) — visually
+						similar, two different sources of truth.
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">h3 — subsection (Players)</div>
+					<div class="pattern-cite">lib/game-detail/SettingsTab.svelte:85</div>
+					<div class="pattern-demo">
+						<h3 class="mb-4 mt-0 text-xl font-bold text-tan">Players</h3>
+					</div>
+					<code class="pattern-class">mb-4 mt-0 text-xl font-bold text-tan</code>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">h3 — account/login section</div>
+					<div class="pattern-cite">
+						routes/account/+page.svelte:33 · routes/login/+page.svelte:48 ·
+						routes/+page.svelte:21
+					</div>
+					<div class="pattern-demo">
+						<h3 class="mb-3 text-base font-bold text-tan">Account</h3>
+					</div>
+					<code class="pattern-class">mb-3 text-base font-bold text-tan</code>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">⚠ Outlier — serif heading (one-off)</div>
+					<div class="pattern-cite">lib/BulkReparseModal.svelte:228</div>
+					<div class="pattern-demo">
+						<h2 class="font-serif text-xl text-tan">Reparse all games?</h2>
+					</div>
+					<code class="pattern-class">font-serif text-xl text-tan</code>
+					<div class="pattern-note">
+						Only place in the app using <code>font-serif</code>. Likely a
+						stylistic accident — drop in favor of
+						<code>text-xl font-bold text-tan</code>.
+					</div>
+				</div>
+
+				<h3 id="type-body">Body, labels & helper text</h3>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Body — small tan</div>
+						<div class="pattern-cite">lib/AboutDisclaimer.svelte:1</div>
+						<div class="pattern-demo">
+							<p class="text-sm leading-relaxed text-tan">
+								Per Ankh is an unofficial fan tool for Old World save files.
+							</p>
+						</div>
+						<code class="pattern-class">text-sm leading-relaxed text-tan</code>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Body — base tan</div>
+						<div class="pattern-cite">
+							lib/game-detail/SettingsTab.svelte:29
+						</div>
+						<div class="pattern-demo">
+							<span class="text-base text-tan">The Old Empire</span>
+						</div>
+						<code class="pattern-class">text-base text-tan</code>
+					</div>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Field label — bold brown</div>
+						<div class="pattern-cite">
+							lib/game-detail/SettingsTab.svelte:28
+						</div>
+						<div class="pattern-demo">
+							<span class="text-sm font-bold text-brown">Map Size:</span>
+						</div>
+						<code class="pattern-class">text-sm font-bold text-brown</code>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Metadata label — bold gray-400</div>
+						<div class="pattern-cite">
+							lib/game-detail/GameDetailView.svelte:184
+						</div>
+						<div class="pattern-demo">
+							<p class="text-xs font-bold text-gray-400">Turn 142 · Year 1280 BC</p>
+						</div>
+						<code class="pattern-class">text-xs font-bold text-gray-400</code>
+					</div>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Section label — uppercase tracking</div>
+						<div class="pattern-cite">
+							lib/UploadModal.svelte:245 · lib/BulkUploadModal.svelte:352
+						</div>
+						<div class="pattern-demo">
+							<span class="text-xs uppercase tracking-wide text-gray-400"
+								>Uploading</span
+							>
+						</div>
+						<code class="pattern-class"
+							>text-xs uppercase tracking-wide text-gray-400</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">File label — block helper text</div>
+						<div class="pattern-cite">lib/UploadModal.svelte:253</div>
+						<div class="pattern-demo">
+							<span class="block text-xs font-bold text-gray-400">
+								Choose save file
+							</span>
+						</div>
+						<code class="pattern-class"
+							>block text-xs font-bold text-gray-400</code
+						>
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Inline-styled body — <code>#DBDEE3</code></div>
+					<div class="pattern-cite">
+						lib/UploadModal.svelte:265,335,357 · lib/BulkUploadModal.svelte:331,433,493
+					</div>
+					<div class="pattern-demo">
+						<p class="text-sm" style="color: #dbdee3">
+							3 saves selected — parsing…
+						</p>
+					</div>
+					<code class="pattern-class">text-sm  + style="color: #DBDEE3"</code>
+					<div class="pattern-note">
+						This near-white appears in 20+ places via inline style. Should
+						become a token (e.g. <code>text-light-gray</code>) or fall back to
+						<code>text-gray-200</code> (<code>#eeeeee</code>) which is already
+						defined.
+					</div>
+				</div>
+
+				<h3 id="type-tables">Table cells</h3>
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Table header cell (Settings)</div>
+						<div class="pattern-cite">
+							lib/game-detail/SettingsTab.svelte:90-110
+						</div>
+						<div class="pattern-demo">
+							<table>
+								<thead>
+									<tr>
+										<th
+											class="border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown"
+										>
+											Player
+										</th>
+									</tr>
+								</thead>
+							</table>
+						</div>
+						<code class="pattern-class"
+							>border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Table header (Laws/Tech) — uppercase</div>
+						<div class="pattern-cite">
+							lib/game-detail/LawsTab.svelte:253
+						</div>
+						<div class="pattern-demo">
+							<table>
+								<thead>
+									<tr>
+										<th
+											class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
+										>
+											Turn
+										</th>
+									</tr>
+								</thead>
+							</table>
+						</div>
+						<code class="pattern-class"
+							>border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown</code
+						>
+						<div class="pattern-note">
+							Two table-header conventions in same product:
+							<code>border-b-2</code> + base size vs <code>border-b</code> +
+							uppercase. Pick one.
+						</div>
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Table data row (sticky header table)</div>
+					<div class="pattern-cite">
+						lib/game-detail/SettingsTab.svelte:115-128
+					</div>
+					<div class="pattern-demo">
+						<table style="border-collapse: collapse">
+							<tbody>
+								<tr class="hover:bg-brown/20 transition-colors duration-200">
+									<td class="border-b border-[#2a2622] p-3 text-left text-tan">
+										Egypt
+									</td>
+									<td class="border-b border-[#2a2622] p-3 text-left text-tan">
+										Cleopatra
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+					<code class="pattern-class"
+						>tr → hover:bg-brown/20 transition-colors duration-200 · td → border-b border-[#2a2622] p-3 text-left text-tan</code
+					>
+				</div>
+
+				<h3 id="type-empty">Empty states & monospace</h3>
+				<div class="pattern-row three-up">
+					<div class="pattern-card">
+						<div class="pattern-name">Empty state — italic brown</div>
+						<div class="pattern-cite">
+							lib/game-detail/MapTab.svelte:31 · CitiesTab.svelte:118 ·
+							YieldsTab.svelte:42-43 · TechsTab.svelte:189 · LawsTab.svelte:202
+						</div>
+						<div class="pattern-demo">
+							<p class="p-8 text-center italic text-brown">
+								No yield data available
+							</p>
+						</div>
+						<code class="pattern-class"
+							>p-8 text-center italic text-brown</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Empty state — gray (one-off)</div>
+						<div class="pattern-cite">
+							lib/game-detail/TimelineTab.svelte:400
+						</div>
+						<div class="pattern-demo">
+							<p class="py-8 text-center text-gray-400">
+								No events for this turn
+							</p>
+						</div>
+						<code class="pattern-class">py-8 text-center text-gray-400</code>
+						<div class="pattern-note">
+							Different color and padding from the standard empty state.
+						</div>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Monospace — game id</div>
+						<div class="pattern-cite">
+							lib/UploadModal.svelte:315 · routes/account/+page.svelte:57
+						</div>
+						<div class="pattern-demo">
+							<span class="font-mono text-xs text-gray-400"
+								>g_aB3xYz9-f8K2qP</span
+							>
+						</div>
+						<code class="pattern-class">font-mono text-xs text-gray-400</code>
+					</div>
+				</div>
+
+				<!-- ============ 3. CARDS ============ -->
+				<h2 id="cards">3. Cards & containers</h2>
+				<p class="section-intro">
+					The dominant pattern is two nested cards: an outer wrapper at
+					<code>#2a2622</code> with <code>p-4</code>, and inner cards at
+					<code>#35302B</code> with <code>p-3</code>. Both backgrounds are
+					inline styles (not Tailwind classes), and padding varies by location.
+				</p>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Outer card — primary container</div>
+					<div class="pattern-cite">
+						routes/dashboard/+page.svelte:252 ·
+						lib/game-detail/GameDetailView.svelte:180 ·
+						lib/UploadModal.svelte:243 · lib/BulkUploadModal.svelte:310 ·
+						routes/account/+page.svelte:32 · routes/+page.svelte:20
+					</div>
+					<div class="pattern-demo">
+						<div class="rounded-lg p-4" style="background-color: #2a2622">
+							<p class="text-sm text-tan">
+								This is the outer card wrapper. Padding <code>p-4</code>.
+							</p>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>rounded-lg p-4 + style="background-color: #2a2622"</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Inner card — nested stat / info</div>
+					<div class="pattern-cite">
+						routes/dashboard/+page.svelte:254 · lib/UploadModal.svelte:251 ·
+						lib/BulkUploadModal.svelte:312 · routes/account/+page.svelte:34 ·
+						routes/+page.svelte:24 · routes/login/+page.svelte:49
+					</div>
+					<div class="pattern-demo">
+						<div class="rounded-lg p-4" style="background-color: #2a2622">
+							<div class="rounded-lg p-3" style="background-color: #35302b">
+								<p class="mb-1 text-xs font-bold text-gray-400">Total games</p>
+								<p class="text-lg font-bold" style="color: #dbdee3">42</p>
+							</div>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>rounded-lg p-3 + style="background-color: #35302B"</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Settings item — gap-1 vs gap-3 variants</div>
+					<div class="pattern-cite">
+						lib/game-detail/SettingsTab.svelte:27,33,49,59,69
+					</div>
+					<div class="pattern-demo" style="display: flex; gap: 1rem">
+						<div
+							class="flex flex-col gap-1 rounded-lg p-3"
+							style="background-color: #35302b; flex: 1"
+						>
+							<span class="text-sm font-bold text-brown">Map Size:</span>
+							<span class="text-base text-tan">Standard</span>
+						</div>
+						<div
+							class="flex flex-col gap-3 rounded-lg p-3"
+							style="background-color: #35302b; flex: 1"
+						>
+							<span class="text-sm font-bold text-brown">Victory:</span>
+							<span class="text-base text-tan">Score, Ambition</span>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>flex flex-col gap-1 rounded-lg p-3 (left)  ·  flex flex-col gap-3
+						rounded-lg p-3 (right)</code
+					>
+					<div class="pattern-note">
+						<code>gap-1</code> for single-field, <code>gap-3</code> for
+						multi-field. Inconsistent if the rule isn't documented.
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Modal wrapper — bordered</div>
+					<div class="pattern-cite">lib/AboutModal.svelte:17</div>
+					<div class="pattern-demo">
+						<div
+							class="mx-4 w-full max-w-lg rounded-lg border-2 border-black bg-blue-gray p-6 shadow-lg"
+						>
+							<p class="text-tan">
+								Modal content here — distinct from in-page cards: 2px black
+								border, <code>shadow-lg</code>.
+							</p>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>mx-4 w-full max-w-lg rounded-lg border-2 border-black bg-blue-gray
+						p-6 shadow-lg</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Action popover — w-64 vs w-56 variants</div>
+					<div class="pattern-cite">
+						lib/GameActions.svelte:180,268,351
+					</div>
+					<div class="pattern-demo" style="display: flex; gap: 1rem">
+						<div
+							class="rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+							style="width: 16rem"
+						>
+							<p class="mb-3 text-xs text-tan">
+								Make this game public? It will appear in others' lists.
+							</p>
+							<div class="flex justify-end gap-2">
+								<button
+									class="rounded border border-tan px-2 py-1 text-xs text-tan"
+								>
+									Cancel
+								</button>
+								<button
+									class="rounded border border-orange px-2 py-1 text-xs text-orange"
+								>
+									Make public
+								</button>
+							</div>
+						</div>
+						<div
+							class="rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+							style="width: 14rem"
+						>
+							<p class="mb-3 text-xs text-tan">Download save file?</p>
+							<div class="flex justify-end gap-2">
+								<button
+									class="rounded border border-tan px-2 py-1 text-xs text-tan"
+								>
+									Cancel
+								</button>
+								<button
+									class="rounded border border-orange px-2 py-1 text-xs text-orange"
+								>
+									Download
+								</button>
+							</div>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>absolute right-0 top-full z-50 mt-2 w-64|w-56 rounded border-2
+						border-black bg-blue-gray p-3 shadow-lg</code
+					>
+					<div class="pattern-note">
+						Lock popover is <code>w-64</code>, download / delete are
+						<code>w-56</code>. Probably should pick one.
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Tab content pane</div>
+					<div class="pattern-cite">
+						lib/game-detail/GameDetailView.svelte:342
+					</div>
+					<div class="pattern-demo">
+						<div
+							class="min-h-[100px] rounded-b-lg border-2 border-t-0 border-black p-8"
+							style="background-color: #35302b"
+						>
+							<p class="text-tan">Tab pane content area.</p>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0
+						border-black p-8 + style="background-color: #35302B"</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Game list item (sidebar) — CSS-only</div>
+					<div class="pattern-cite">lib/CloudGameSidebar.svelte:507</div>
+					<div class="pattern-demo">
+						<button
+							class="replica-game-list-item active mb-0.5 w-full cursor-pointer rounded-lg border-2 p-1.5 text-left transition-all duration-200"
+							style="position: relative"
+						>
+							<span class="text-xs font-bold" style="color: #000">
+								Egypt — Turn 142
+							</span>
+						</button>
+					</div>
+					<code class="pattern-class"
+						>.game-list-item { background-color: #c1872f; padding-bottom: 18px;
+						} :hover, .active { background-color: #f2a93b; }</code
+					>
+					<div class="pattern-note">
+						Custom CSS, not Tailwind. Two hardcoded oranges
+						(<code>#c1872f</code>, <code>#f2a93b</code>) that don't match the
+						<code>orange</code> token (<code>#ffa500</code>).
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Reparse alert banner (inline)</div>
+					<div class="pattern-cite">routes/games/[id]/+page.svelte:91</div>
+					<div class="pattern-demo">
+						<div
+							class="mb-4 flex items-center justify-between rounded border border-orange bg-orange/10 px-4 py-2"
+						>
+							<p class="text-xs text-tan">
+								This game was parsed with an older version. Click Reparse for
+								the latest.
+							</p>
+							<button
+								class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80"
+							>
+								Reparse
+							</button>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>mb-4 flex items-center justify-between rounded border
+						border-orange bg-orange/10 px-4 py-2</code
+					>
+				</div>
+
+				<!-- ============ 4. BUTTONS ============ -->
+				<h2 id="buttons">4. Buttons & links</h2>
+				<p class="section-intro">
+					18+ distinct button patterns. Sizes range from
+					<code>text-xs px-2 py-1</code> to <code>text-sm px-4 py-2</code> with
+					no clear grouping by role; padding/font-size combinations are mixed
+					across the same button function (e.g. "Cancel" appears in three
+					different sizes).
+				</p>
+
+				<div class="pattern-row three-up">
+					<div class="pattern-card">
+						<div class="pattern-name">Primary — orange</div>
+						<div class="pattern-cite">
+							lib/UploadModal.svelte:351 · ReimportButton.svelte:73
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded bg-orange px-4 py-1 text-sm font-bold text-white hover:bg-orange/80"
+							>
+								Upload
+							</button>
+						</div>
+						<code class="pattern-class"
+							>rounded bg-orange px-4 py-1 text-sm font-bold text-white
+							hover:bg-orange/80</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Secondary — solid brown</div>
+						<div class="pattern-cite">
+							lib/UploadModal.svelte:343 · routes/account/+page.svelte:67
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded bg-brown px-3 py-1 text-sm text-tan hover:bg-orange"
+							>
+								Cancel
+							</button>
+						</div>
+						<code class="pattern-class"
+							>rounded bg-brown px-3 py-1 text-sm text-tan hover:bg-orange</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Subtle — brown/40</div>
+						<div class="pattern-cite">
+							lib/BulkUploadModal.svelte:450
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown"
+							>
+								Retry upload
+							</button>
+						</div>
+						<code class="pattern-class"
+							>bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown</code
+						>
+					</div>
+				</div>
+
+				<div class="pattern-row three-up">
+					<div class="pattern-card">
+						<div class="pattern-name">Outline — neutral</div>
+						<div class="pattern-cite">
+							lib/GameActions.svelte:198
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded border border-tan px-2 py-1 text-xs text-tan hover:border-orange hover:text-orange"
+							>
+								Cancel
+							</button>
+						</div>
+						<code class="pattern-class"
+							>rounded border border-tan px-2 py-1 text-xs text-tan
+							hover:border-orange hover:text-orange</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Outline — confirm orange</div>
+						<div class="pattern-cite">
+							lib/GameActions.svelte:205
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded border border-orange px-2 py-1 text-xs text-orange hover:bg-orange/10"
+							>
+								Confirm
+							</button>
+						</div>
+						<code class="pattern-class"
+							>rounded border border-orange px-2 py-1 text-xs text-orange
+							hover:bg-orange/10</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Outline — destructive red</div>
+						<div class="pattern-cite">
+							lib/GameActions.svelte:369
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded border border-red-400 px-2 py-1 text-xs text-red-400 hover:bg-red-400/10"
+							>
+								Delete
+							</button>
+						</div>
+						<code class="pattern-class"
+							>rounded border border-red-400 px-2 py-1 text-xs text-red-400
+							hover:bg-red-400/10</code
+						>
+					</div>
+				</div>
+
+				<div class="pattern-row three-up">
+					<div class="pattern-card">
+						<div class="pattern-name">Icon-only — neutral</div>
+						<div class="pattern-cite">
+							lib/GameActions.svelte:141,223
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									viewBox="0 0 24 24"
+								>
+									<path d="M5 3l14 9-14 9V3z" />
+								</svg>
+							</button>
+						</div>
+						<code class="pattern-class"
+							>rounded border border-tan p-1 text-tan transition-colors
+							hover:border-orange hover:text-orange</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Icon-only — destructive</div>
+						<div class="pattern-cite">
+							lib/GameActions.svelte:303
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded border border-tan p-1 text-tan transition-colors hover:border-red-400 hover:text-red-400"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="16"
+									height="16"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									viewBox="0 0 24 24"
+								>
+									<path d="M3 6h18M8 6V4h8v2m-9 0v14h11V6" />
+								</svg>
+							</button>
+						</div>
+						<code class="pattern-class"
+							>rounded border p-1 transition-colors border-tan text-tan
+							hover:border-red-400 hover:text-red-400</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Icon-only — overlay (chart)</div>
+						<div class="pattern-cite">lib/ChartContainer.svelte:74</div>
+						<div class="pattern-demo" style="background: #35302b; padding: 1rem">
+							<button
+								class="bg-black/20 hover:bg-black/40 rounded p-1.5 transition-colors focus:outline-none"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="14"
+									height="14"
+									fill="none"
+									stroke="white"
+									stroke-width="2"
+									viewBox="0 0 24 24"
+								>
+									<path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" />
+								</svg>
+							</button>
+						</div>
+						<code class="pattern-class"
+							>bg-black/20 hover:bg-black/40 rounded p-1.5 transition-colors
+							focus:outline-none</code
+						>
+					</div>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Inline link — orange underline</div>
+						<div class="pattern-cite">
+							lib/UploadModal.svelte:371 · BulkUploadModal.svelte:427
+						</div>
+						<div class="pattern-demo">
+							<a
+								href="#"
+								class="text-sm font-bold text-orange underline"
+								>Open the existing game →</a
+							>
+						</div>
+						<code class="pattern-class"
+							>text-sm font-bold text-orange underline</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Tertiary link — text-xs</div>
+						<div class="pattern-cite">
+							lib/BulkUploadModal.svelte:462 · ReimportButton.svelte:114
+						</div>
+						<div class="pattern-demo">
+							<button class="text-xs text-tan underline hover:text-orange">
+								Cancel
+							</button>
+							<span style="margin: 0 0.5rem; color: #888">·</span>
+							<button class="text-xs text-brown underline hover:text-orange">
+								Remove
+							</button>
+						</div>
+						<code class="pattern-class"
+							>text-xs text-tan|text-brown underline hover:text-orange</code
+						>
+					</div>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Block link — sidebar/login</div>
+						<div class="pattern-cite">routes/+page.svelte:28</div>
+						<div class="pattern-demo">
+							<a
+								href="#"
+								class="block w-full rounded bg-brown px-3 py-1.5 text-center text-xs text-tan hover:bg-orange"
+								>Login</a
+							>
+						</div>
+						<code class="pattern-class"
+							>block w-full rounded bg-brown px-3 py-1.5 text-center text-xs
+							text-tan hover:bg-orange</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Discord login (brand)</div>
+						<div class="pattern-cite">routes/login/+page.svelte:54</div>
+						<div class="pattern-demo">
+							<button
+								class="w-full rounded px-3 py-1.5 text-xs font-semibold text-white"
+								style="background: #5865f2"
+							>
+								Login with Discord
+							</button>
+						</div>
+						<code class="pattern-class"
+							>w-full rounded bg-[#5865F2] px-3 py-1.5 text-xs font-semibold
+							text-white hover:bg-[#4752c4]</code
+						>
+					</div>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Sidebar context — cancel</div>
+						<div class="pattern-cite">
+							lib/CloudGameSidebar.svelte:440
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded px-2 py-1 text-xs text-tan"
+								style="background: #35302b"
+							>
+								Cancel
+							</button>
+						</div>
+						<code class="pattern-class"
+							>flex-1 rounded bg-[#35302b] px-2 py-1 text-xs text-tan
+							hover:bg-[#453e37]</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Sidebar context — create</div>
+						<div class="pattern-cite">
+							lib/CloudGameSidebar.svelte:452
+						</div>
+						<div class="pattern-demo" style="text-align: center">
+							<button
+								class="rounded px-2 py-1 text-xs text-black"
+								style="background: #ab9978"
+							>
+								Create
+							</button>
+						</div>
+						<code class="pattern-class"
+							>flex-1 rounded bg-[#ab9978] px-2 py-1 text-xs text-black
+							hover:bg-[#9a8a6c]</code
+						>
+						<div class="pattern-note">
+							Yet another tan-ish button color (<code>#ab9978</code>) different
+							from <code>tan</code> (<code>#d2b48c</code>). Could use
+							<code>bg-tan</code> instead.
+						</div>
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">File-input button (file: pseudo)</div>
+					<div class="pattern-cite">lib/UploadModal.svelte:260</div>
+					<div class="pattern-demo">
+						<input
+							type="file"
+							class="block w-full text-sm text-tan file:mr-4 file:rounded file:border-0 file:bg-brown file:px-4 file:py-2 file:text-sm file:font-bold file:text-tan hover:file:bg-orange"
+						/>
+					</div>
+					<code class="pattern-class"
+						>block w-full text-sm text-tan file:mr-4 file:rounded file:border-0
+						file:bg-brown file:px-4 file:py-2 file:text-sm file:font-bold
+						file:text-tan hover:file:bg-orange</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Label-as-button (file picker)</div>
+					<div class="pattern-cite">lib/BulkUploadModal.svelte:314</div>
+					<div class="pattern-demo">
+						<label
+							class="inline-block cursor-pointer rounded bg-brown px-4 py-2 text-sm font-bold text-tan hover:bg-orange"
+						>
+							Choose files
+							<input type="file" class="sr-only" />
+						</label>
+					</div>
+					<code class="pattern-class"
+						>inline-block cursor-pointer rounded bg-brown px-4 py-2 text-sm
+						font-bold text-tan hover:bg-orange</code
+					>
+					<div class="pattern-note">
+						Same role as Discord/login button but
+						<code>px-4 py-2</code> vs <code>px-3 py-1.5</code>. Consolidate.
+					</div>
+				</div>
+
+				<!-- ============ 5. FORMS ============ -->
+				<h2 id="forms">5. Forms & inputs</h2>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Search input — three variants in one component</div>
+					<div class="pattern-cite">lib/SearchInput.svelte:17-30</div>
+					<div class="pattern-demo">
+						<div style="display: grid; gap: 0.5rem">
+							<div style="background: #211a12; padding: 0.5rem">
+								<div class="relative">
+									<span
+										style="position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%); pointer-events: none; color: #d2b48c; opacity: 0.6"
+										>🔍</span
+									>
+									<input
+										type="text"
+										placeholder="Search (dark)"
+										class="w-full rounded-full border-none py-1 pl-9 pr-3 text-sm font-normal text-tan placeholder-tan placeholder:opacity-50"
+										style="background-color: #403a33"
+									/>
+								</div>
+							</div>
+							<div style="background: #fff; padding: 0.5rem">
+								<input
+									type="text"
+									placeholder="Search (light)"
+									class="w-full rounded border-2 border-black py-2 pl-9 pr-3 text-sm text-black"
+									style="background: #fff"
+								/>
+							</div>
+							<div style="background: #211a12; padding: 0.5rem">
+								<input
+									type="text"
+									placeholder="Search (field)"
+									class="placeholder-brown w-full rounded py-2 pl-9 pr-3 text-sm text-tan placeholder:opacity-70"
+									style="background-color: #201a13"
+								/>
+							</div>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>variant=dark    → bg #403A33 · rounded-full · py-1 · placeholder
+						tan/50 variant=light   → bg-white · border-2 border-black · py-2
+						variant=field   → bg #201a13 · rounded · py-2 · placeholder
+						brown/70</code
+					>
+					<div class="pattern-note">
+						Three different bg colors, two different paddings, two different
+						radii, two different placeholder colors — all in one component
+						file. Field & dark are nearly identical but pick one.
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Radio-as-card (uploader picker)</div>
+					<div class="pattern-cite">
+						lib/UploadModal.svelte:289-320 · BulkUploadModal.svelte:385-424
+					</div>
+					<div class="pattern-demo">
+						<ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem">
+							<li>
+								<label
+									class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
+									style="background-color: #35302b"
+								>
+									<input type="radio" name="demo-uploader" />
+									<div class="flex-1 text-sm text-tan">
+										<div class="font-bold" style="color: #dbdee3">Cleopatra</div>
+										<div class="text-xs text-gray-400">Egypt · steam:76561...</div>
+									</div>
+								</label>
+							</li>
+							<li>
+								<label
+									class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
+									style="background-color: #35302b"
+								>
+									<input type="radio" name="demo-uploader" checked />
+									<div class="flex-1 text-sm text-tan">
+										<div class="font-bold" style="color: #dbdee3">Hammurabi</div>
+										<div class="text-xs text-gray-400">Babylonia · steam:76561...</div>
+									</div>
+								</label>
+							</li>
+						</ul>
+					</div>
+					<code class="pattern-class"
+						>flex cursor-pointer items-center gap-3 rounded-lg p-3 +
+						style="background-color: #35302B"</code
+					>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Select — sidebar collection filter</div>
+						<div class="pattern-cite">
+							lib/CloudGameSidebar.svelte:280
+						</div>
+						<div class="pattern-demo">
+							<select
+								class="w-full cursor-pointer rounded border border-black p-1.5 text-xs text-tan"
+								style="background: #35302b"
+							>
+								<option>All Collections</option>
+								<option>Public (5)</option>
+							</select>
+						</div>
+						<code class="pattern-class"
+							>w-full cursor-pointer rounded border border-black bg-[#35302b]
+							p-1.5 text-xs text-tan</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Text input — new collection</div>
+						<div class="pattern-cite">
+							lib/CloudGameSidebar.svelte:425
+						</div>
+						<div class="pattern-demo">
+							<input
+								type="text"
+								placeholder="Collection name"
+								class="w-full rounded border px-2 py-1 text-sm text-tan placeholder:text-[#c5c3c2] focus:outline-none"
+								style="background: #35302b; border-color: #4a433b"
+							/>
+						</div>
+						<code class="pattern-class"
+							>w-full rounded border border-[#4a433b] bg-[#35302b] px-2 py-1
+							text-sm text-tan placeholder:text-[#c5c3c2]
+							focus:border-[#5a524a] focus:outline-none</code
+						>
+					</div>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Filter chip (dismissable)</div>
+						<div class="pattern-cite">
+							lib/CloudGameSidebar.svelte:296,556
+						</div>
+						<div class="pattern-demo">
+							<button class="replica-filter-chip">
+								Egypt <span aria-hidden="true">×</span>
+							</button>
+							<button class="replica-filter-chip" style="margin-left: 0.25rem">
+								2026-04 <span aria-hidden="true">×</span>
+							</button>
+						</div>
+						<code class="pattern-class"
+							>.filter-chip { padding: 2px 6px; border-radius: 9999px; border:
+							1px solid #000; background: #c1872f; color: #000; font-size:
+							10px; font-weight: 600; }</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Native progress</div>
+						<div class="pattern-cite">
+							lib/UploadModal.svelte:271 · BulkUploadModal.svelte:377
+						</div>
+						<div class="pattern-demo">
+							<progress value="55" max="100" class="w-full"></progress>
+						</div>
+						<code class="pattern-class">w-full (no further styling)</code>
+						<div class="pattern-note">
+							Browser-default progress styling. May want to theme to match.
+						</div>
+					</div>
+				</div>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Error text — orange</div>
+						<div class="pattern-cite">
+							routes/login/+page.svelte:60 · BulkUploadModal.svelte:445
+						</div>
+						<div class="pattern-demo">
+							<p class="text-xs text-orange">Login failed — try again</p>
+						</div>
+						<code class="pattern-class">text-xs text-orange</code>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Error text — red-400</div>
+						<div class="pattern-cite">
+							lib/GameActions.svelte (delete confirm)
+						</div>
+						<div class="pattern-demo">
+							<p class="text-xs text-red-400">This action is permanent</p>
+						</div>
+						<code class="pattern-class">text-xs text-red-400</code>
+						<div class="pattern-note">
+							Two error color conventions in the same app. Pick one.
+						</div>
+					</div>
+				</div>
+
+				<!-- ============ 6. POPUPS ============ -->
+				<h2 id="popups">6. Popups, menus, dialogs</h2>
+
+				<h3 id="popups-modals">Modal backdrops & containers</h3>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Backdrop — bg-black/50 (semantic)</div>
+						<div class="pattern-cite">lib/AboutModal.svelte:13</div>
+						<div
+							class="pattern-demo"
+							style="position: relative; height: 120px; padding: 0; overflow: hidden"
+						>
+							<div
+								class="flex items-center justify-center bg-black bg-opacity-50"
+								style="position: absolute; inset: 0"
+							>
+								<span class="text-tan">bg-black bg-opacity-50</span>
+							</div>
+						</div>
+						<code class="pattern-class"
+							>fixed inset-0 z-50 flex items-center justify-center bg-black
+							bg-opacity-50</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Backdrop — bg-black/70</div>
+						<div class="pattern-cite">lib/ReimportButton.svelte:99</div>
+						<div
+							class="pattern-demo"
+							style="position: relative; height: 120px; padding: 0; overflow: hidden"
+						>
+							<div
+								class="flex items-center justify-center bg-black/70"
+								style="position: absolute; inset: 0"
+							>
+								<span class="text-tan">bg-black/70</span>
+							</div>
+						</div>
+						<code class="pattern-class"
+							>fixed inset-0 z-50 flex items-center justify-center bg-black/70
+							p-4</code
+						>
+						<div class="pattern-note">
+							Two opacity values for the same role. Reparse modal is darker
+							than About modal.
+						</div>
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">About modal (full structure)</div>
+					<div class="pattern-cite">lib/AboutModal.svelte:13-37</div>
+					<div class="pattern-demo">
+						<div
+							class="mx-4 w-full max-w-lg rounded-lg border-2 border-black bg-blue-gray p-6 shadow-lg"
+						>
+							<h2
+								class="mb-4 border-b-2 border-orange pb-2 text-2xl font-bold text-tan"
+							>
+								About
+							</h2>
+							<p class="space-y-3 text-sm leading-relaxed text-tan">
+								Per Ankh is an unofficial fan tool for Old World save files.
+							</p>
+							<div class="mt-6 flex justify-end">
+								<button
+									class="rounded border border-brown px-4 py-2 text-sm text-tan hover:bg-brown"
+								>
+									Close
+								</button>
+							</div>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>border-2 border-black bg-blue-gray p-6 shadow-lg, h2 border-b-2
+						border-orange, close = border-brown px-4 py-2</code
+					>
+				</div>
+
+				<h3 id="popups-popovers">Action popovers & context menu</h3>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Sidebar context menu — Move to Collection</div>
+					<div class="pattern-cite">
+						lib/CloudGameSidebar.svelte:374-472
+					</div>
+					<div class="pattern-demo">
+						<div
+							class="rounded border-2 border-black bg-blue-gray shadow-lg"
+							style="display: inline-block; min-width: 200px"
+						>
+							<div class="border-b border-black px-3 py-2 text-sm text-white">
+								Move to Collection
+							</div>
+							<button
+								class="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+							>
+								<span>Default</span>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="14"
+									height="14"
+									fill="none"
+									stroke="#ffa500"
+									stroke-width="3"
+									viewBox="0 0 24 24"
+								>
+									<path d="M5 13l4 4L19 7" />
+								</svg>
+							</button>
+							<button
+								class="flex w-full items-center justify-between px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+							>
+								<span>Tournament 2026</span>
+							</button>
+							<div class="border-t border-black">
+								<button
+									class="w-full px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+								>
+									+ New Collection…
+								</button>
+							</div>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>fixed z-50 min-w-[160px] rounded border-2 border-black bg-blue-gray
+						shadow-lg ; items: flex w-full items-center justify-between px-3
+						py-1.5 text-left text-xs text-tan hover:bg-[#35302b]</code
+					>
+				</div>
+
+				<h3 id="popups-dropdowns">Dropdowns & hamburger menu</h3>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Hamburger dropdown (header)</div>
+					<div class="pattern-cite">lib/CloudHeader.svelte:101-171</div>
+					<div class="pattern-demo">
+						<div
+							class="rounded border-2 border-black bg-blue-gray shadow-lg"
+							style="display: inline-block; width: 14rem"
+						>
+							<div
+								class="flex items-center gap-2 border-b border-black px-3 py-2"
+							>
+								<div
+									style="width:24px;height:24px;border-radius:9999px;background:#5865f2"
+								></div>
+								<div>
+									<div class="text-xs font-bold text-tan">becked</div>
+									<div class="truncate text-[10px] text-tan">Discord</div>
+								</div>
+							</div>
+							<a
+								href="#"
+								class="block w-full px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+								>Dashboard</a
+							>
+							<a
+								href="#"
+								class="block w-full px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+								>Upload</a
+							>
+							<a
+								href="#"
+								class="block w-full px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+								>Account</a
+							>
+							<button
+								class="block w-full px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+							>
+								About
+							</button>
+							<div class="border-t border-black"></div>
+							<button
+								class="block w-full px-3 py-1.5 text-left text-xs text-tan hover:bg-[#35302b]"
+							>
+								Log out
+							</button>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>absolute left-0 z-50 mt-2 w-56 rounded border-2 border-black
+						bg-blue-gray shadow-lg ; items: block w-full px-3 py-1.5 text-left
+						text-xs text-tan hover:bg-[#35302b]</code
+					>
+				</div>
+
+				<h3 id="popups-tabs">Tabs & toggle groups</h3>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Tab list (game detail)</div>
+					<div class="pattern-cite">
+						lib/game-detail/GameDetailView.svelte:257-338
+					</div>
+					<div class="pattern-demo">
+						<div class="flex">
+							<button
+								class="cursor-pointer rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
+								style="background-color: #35302b"
+							>
+								Overview
+							</button>
+							<button
+								class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan hover:bg-tan-hover"
+								style="background-color: #2a2622"
+							>
+								Events
+							</button>
+							<button
+								class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan hover:bg-tan-hover"
+								style="background-color: #2a2622"
+							>
+								Yields
+							</button>
+							<button
+								class="cursor-pointer rounded-tr-lg border-2 border-b-0 border-black px-3 py-2 text-sm font-bold text-tan hover:bg-tan-hover"
+								style="background-color: #2a2622"
+							>
+								Settings
+							</button>
+						</div>
+						<div
+							class="min-h-[80px] rounded-b-lg border-2 border-t-0 border-black p-4"
+							style="background-color: #35302b"
+						>
+							<p class="text-tan">Tab content...</p>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>cursor-pointer rounded-tl-lg border-2 border-b-0 border-r-0
+						border-black px-3 py-2 text-sm font-bold transition-all duration-200
+						hover:bg-tan-hover data-[state=active]:bg-[#35302B]
+						data-[state=inactive]:bg-[#2a2622] text-tan</code
+					>
+					<div class="pattern-note">
+						<code>hover:bg-tan-hover</code> is a no-op since
+						<code>tan-hover</code> equals <code>tan</code> (<code>#d2b48c</code>) — confirmed
+						against <code>app.css:11-12</code>.
+					</div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">ToggleGroup (Yields rate/cumulative)</div>
+					<div class="pattern-cite">
+						lib/game-detail/YieldsTab.svelte:25-39
+					</div>
+					<div class="pattern-demo">
+						<div class="flex rounded border border-tan" style="display: inline-flex">
+							<button
+								class="rounded-l px-2.5 py-1 text-xs text-tan"
+								style="background-color: #35302b"
+							>
+								Per Turn
+							</button>
+							<button
+								class="rounded-r border-l border-tan px-2.5 py-1 text-xs text-tan"
+								style="background-color: #2a2622"
+							>
+								Cumulative
+							</button>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>flex rounded border border-tan ; item: rounded-l|r px-2.5 py-1
+						text-xs text-tan data-[state=on]:bg-[#35302B]
+						data-[state=off]:bg-[#2a2622]</code
+					>
+				</div>
+
+				<h3 id="popups-tooltips">Tooltips</h3>
+
+				<div class="pattern-row">
+					<div class="pattern-card">
+						<div class="pattern-name">Map tooltip — default (hover)</div>
+						<div class="pattern-cite">lib/MapTooltip.svelte:96-185</div>
+						<div class="pattern-demo">
+							<div class="replica-map-tooltip">
+								<div style="font-weight: bold; color: #bc6304">
+									Memphis ★
+								</div>
+								<div class="rows">
+									<span style="color: var(--color-tan)">Tile:</span>
+									<span>23, 14</span>
+									<span style="color: var(--color-tan)">Terrain:</span>
+									<span>Plains</span>
+									<span style="color: var(--color-tan)">Improvement:</span>
+									<span>Farm</span>
+								</div>
+							</div>
+						</div>
+						<code class="pattern-class"
+							>position: absolute ; bg rgba(26,21,16,0.97) ; border 2px solid
+							black ; border-radius 6px ; padding 8px 10px ; font-size 11px ;
+							pointer-events: none</code
+						>
+					</div>
+
+					<div class="pattern-card">
+						<div class="pattern-name">Map tooltip — pinned</div>
+						<div class="pattern-cite">lib/MapTooltip.svelte:152-167</div>
+						<div class="pattern-demo">
+							<div class="replica-map-tooltip pinned">
+								<div style="display: flex; justify-content: space-between; align-items: center">
+									<span style="font-weight: bold; color: #bc6304"
+										>Memphis ★</span
+									>
+									<button style="background: none; border: none; color: var(--color-tan); cursor: pointer">
+										×
+									</button>
+								</div>
+								<div class="rows">
+									<span style="color: var(--color-tan)">Tile:</span>
+									<span>23, 14</span>
+								</div>
+							</div>
+						</div>
+						<code class="pattern-class"
+							>same as default + border-color: var(--color-tan) ; box-shadow: 0
+							4px 16px rgba(0,0,0,0.7) ; pointer-events: auto</code
+						>
+					</div>
+				</div>
+
+				<h3 id="popups-banners">Inline alerts & status</h3>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Filter chip group (active filters)</div>
+					<div class="pattern-cite">
+						lib/CloudGameSidebar.svelte:296-320
+					</div>
+					<div class="pattern-demo">
+						<div class="mt-1.5 flex flex-wrap gap-1">
+							<button class="replica-filter-chip">
+								<span>Egypt</span><span aria-hidden="true">×</span>
+							</button>
+							<button class="replica-filter-chip">
+								<span>2026-04</span><span aria-hidden="true">×</span>
+							</button>
+						</div>
+					</div>
+					<code class="pattern-class">CSS class .filter-chip (see Forms section)</code>
+				</div>
+
+				<!-- ============ 7. CHARTS ============ -->
+				<h2 id="charts">7. Charts & data viz</h2>
+				<p class="section-intro">
+					ECharts theme lives in <code>src/lib/config/charts.ts</code>;
+					nation/tribe colors in <code>src/lib/config/nations.ts</code>; unit
+					colors in <code>src/lib/game-detail/helpers.ts:424-430</code>. The
+					three live charts below use the verbatim <code>CHART_THEME</code>.
+				</p>
+
+				<h3>Chart palettes</h3>
+				<p class="section-intro" style="font-size: 0.8rem">CHART_COLORS — generic series cycle</p>
+				<div class="swatch-grid">
+					<div class="swatch"><div class="swatch-color" style="background: #C87941"></div><div class="swatch-meta"><span class="swatch-name">Copper</span><span class="swatch-hex">#C87941</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #8B4513"></div><div class="swatch-meta"><span class="swatch-name">Saddle Brown</span><span class="swatch-hex">#8B4513</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #CD853F"></div><div class="swatch-meta"><span class="swatch-name">Peru</span><span class="swatch-hex">#CD853F</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #A0522D"></div><div class="swatch-meta"><span class="swatch-name">Sienna</span><span class="swatch-hex">#A0522D</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #D2691E"></div><div class="swatch-meta"><span class="swatch-name">Chocolate</span><span class="swatch-hex">#D2691E</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #B8860B"></div><div class="swatch-meta"><span class="swatch-name">Dark Goldenrod</span><span class="swatch-hex">#B8860B</span></div></div>
+				</div>
+
+				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">NATION_COLORS</p>
+				<div class="swatch-grid">
+					<div class="swatch"><div class="swatch-color" style="background: #F8A3B4"></div><div class="swatch-meta"><span class="swatch-name">Aksum</span><span class="swatch-hex">#F8A3B4</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #FADC3B"></div><div class="swatch-meta"><span class="swatch-name">Assyria</span><span class="swatch-hex">#FADC3B</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #82C83E"></div><div class="swatch-meta"><span class="swatch-name">Babylonia</span><span class="swatch-hex">#82C83E</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #F6EFE1"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#F6EFE1">Carthage</span><span class="swatch-hex">#F6EFE1</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #BC6304"></div><div class="swatch-meta"><span class="swatch-name">Egypt</span><span class="swatch-hex">#BC6304</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #2360BC"></div><div class="swatch-meta"><span class="swatch-name">Greece</span><span class="swatch-hex">#2360BC</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #80E3E8"></div><div class="swatch-meta"><span class="swatch-name">Hittite</span><span class="swatch-hex">#80E3E8</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #FFFFB6"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#FFFFB6">Kush</span><span class="swatch-hex">#FFFFB6</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #A749FF"></div><div class="swatch-meta"><span class="swatch-name">Maurya</span><span class="swatch-hex">#A749FF</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #C04E4A"></div><div class="swatch-meta"><span class="swatch-name">Persia</span><span class="swatch-hex">#C04E4A</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #880D56"></div><div class="swatch-meta"><span class="swatch-name">Rome</span><span class="swatch-hex">#880D56</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #00B281"></div><div class="swatch-meta"><span class="swatch-name">Tamil</span><span class="swatch-hex">#00B281</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #AD7E00"></div><div class="swatch-meta"><span class="swatch-name">Yuezhi</span><span class="swatch-hex">#AD7E00</span></div></div>
+				</div>
+
+				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">TRIBE_COLORS</p>
+				<div class="swatch-grid">
+					<div class="swatch"><div class="swatch-color" style="background: #87DB40"></div><div class="swatch-meta"><span class="swatch-name">Gauls</span><span class="swatch-hex">#87DB40</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #9C5DFF"></div><div class="swatch-meta"><span class="swatch-name">Vandals</span><span class="swatch-hex">#9C5DFF</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #3CCDC2"></div><div class="swatch-meta"><span class="swatch-name">Danes</span><span class="swatch-hex">#3CCDC2</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #D89A18"></div><div class="swatch-meta"><span class="swatch-name">Thracians</span><span class="swatch-hex">#D89A18</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #E6E1CA"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#E6E1CA">Scythians</span><span class="swatch-hex">#E6E1CA</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #FFDD67"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#FFDD67">Numidians</span><span class="swatch-hex">#FFDD67</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #AB3157"></div><div class="swatch-meta"><span class="swatch-name">Huns</span><span class="swatch-hex">#AB3157</span></div></div>
+				</div>
+
+				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">UNIT_CLASS_COLORS</p>
+				<div class="swatch-grid">
+					<div class="swatch"><div class="swatch-color" style="background: #C87941"></div><div class="swatch-meta"><span class="swatch-name">Infantry</span><span class="swatch-hex">#C87941</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #B8860B"></div><div class="swatch-meta"><span class="swatch-name">Ranged</span><span class="swatch-hex">#B8860B</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #CD853F"></div><div class="swatch-meta"><span class="swatch-name">Cavalry</span><span class="swatch-hex">#CD853F</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #A0522D"></div><div class="swatch-meta"><span class="swatch-name">Siege</span><span class="swatch-hex">#A0522D</span></div></div>
+					<div class="swatch"><div class="swatch-color" style="background: #8B4513"></div><div class="swatch-meta"><span class="swatch-name">Naval</span><span class="swatch-hex">#8B4513</span></div></div>
+				</div>
+
+				<h3>Live chart examples</h3>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Line chart — yields per turn (3 nations)</div>
+					<div class="pattern-cite">
+						lib/game-detail/YieldsTab.svelte · helpers.ts createYieldChartOption
+					</div>
+					<div id="chart-line" class="chart-frame"></div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Bar chart — games by nation (rotated labels)</div>
+					<div class="pattern-cite">
+						routes/dashboard/+page.svelte:62-97
+					</div>
+					<div id="chart-bar" class="chart-frame"></div>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Pie chart — army composition (UNIT_CLASS_COLORS)</div>
+					<div class="pattern-cite">
+						lib/game-detail/MilitaryTab.svelte
+					</div>
+					<div id="chart-pie" class="chart-frame"></div>
+				</div>
+
+				<h3>CHART_THEME (verbatim)</h3>
+				<pre class="config-block">
+export const CHART_THEME = {
+  colors: CHART_COLORS,
+  backgroundColor: "#211A12",
+  animation: false,
+  textStyle: {
+    fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+    color: "#FFFFFF",
+  },
+  title: {
+    left: "center",
+    textStyle: { color: "#FFFFFF", fontSize: 20 },
+  },
+  legend: { show: false },
+  tooltip: { trigger: "axis" },
+};</pre>
+
+				<!-- ============ 8. LAYOUT ============ -->
+				<h2 id="layout">8. Layout patterns</h2>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Two-pane layout — main + resizable sidebar</div>
+					<div class="pattern-cite">
+						routes/dashboard/+page.svelte:247 · routes/games/[id]/+page.svelte:64
+					</div>
+					<div class="pattern-demo">
+						<div
+							style="display: flex; height: 240px; border: 1px solid #2a2622; border-radius: 4px; overflow: hidden"
+						>
+							<main
+								style="flex: 1; padding: 1rem; background: #211a12; overflow: hidden"
+							>
+								<div class="rounded-lg p-3" style="background-color: #2a2622">
+									<p class="text-xs text-tan">Main scrollable content</p>
+								</div>
+							</main>
+							<aside
+								style="width: 200px; background: #211a12; border-left: 2px solid #000; padding: 0.5rem"
+							>
+								<p class="text-xs text-tan">Sidebar (resizable)</p>
+							</aside>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>flex flex-1 overflow-hidden ; main = isolate flex flex-1 flex-col
+						overflow-hidden ; aside = sidebar-aside flex h-full flex-col
+						overflow-hidden border-l-2 border-black bg-blue-gray</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Cloud header (logo center, hamburger left, search right)</div>
+					<div class="pattern-cite">lib/CloudHeader.svelte:72</div>
+					<div class="pattern-demo">
+						<header
+							class="relative flex w-full shrink-0 items-center justify-between border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+						>
+							<button class="py-2 pr-2 text-orange hover:text-tan">
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="20"
+									height="20"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									viewBox="0 0 24 24"
+								>
+									<path d="M3 6h18M3 12h18M3 18h18" />
+								</svg>
+							</button>
+							<div class="pointer-events-none absolute left-1/2 -translate-x-1/2">
+								<div
+									class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"
+								>
+									𓉑 Per Ankh
+								</div>
+							</div>
+							<div style="width: 171px">
+								<input
+									type="text"
+									placeholder="Search"
+									class="w-full rounded-full py-1 pl-3 pr-3 text-sm text-tan"
+									style="background: #403a33"
+								/>
+							</div>
+						</header>
+					</div>
+					<code class="pattern-class"
+						>relative flex w-full shrink-0 items-center justify-between
+						border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6</code
+					>
+				</div>
+
+				<div class="pattern-card">
+					<div class="pattern-name">Centered auth layout (landing / login)</div>
+					<div class="pattern-cite">routes/login/+page.svelte:32</div>
+					<div class="pattern-demo">
+						<div
+							style="display: flex; flex-direction: column; height: 240px; background: #211a12; border: 1px solid #2a2622; border-radius: 4px; overflow: hidden"
+						>
+							<header
+								class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+								style="flex: 0 0 auto"
+							>
+								<div
+									class="border-b-2 border-orange pb-1 text-2xl font-bold text-gray-200"
+								>
+									𓉑 Per Ankh
+								</div>
+							</header>
+							<main
+								class="flex flex-1 items-center justify-center p-4"
+								style="flex: 1 1 auto"
+							>
+								<div class="w-full max-w-sm">
+									<div
+										class="rounded-lg p-4"
+										style="background-color: #2a2622"
+									>
+										<div
+											class="rounded-lg p-3"
+											style="background-color: #35302b"
+										>
+											<h3 class="mb-3 text-base font-bold text-tan">Login</h3>
+											<button
+												class="w-full rounded px-3 py-1.5 text-xs font-semibold text-white"
+												style="background: #5865f2"
+											>
+												Login with Discord
+											</button>
+										</div>
+									</div>
+								</div>
+							</main>
+							<footer
+								class="border-t border-black px-4 py-2 text-center text-[11px] text-brown"
+								style="background: #1a1714; flex: 0 0 auto"
+							>
+								Per Ankh is an unofficial fan tool.
+							</footer>
+						</div>
+					</div>
+					<code class="pattern-class"
+						>flex min-h-screen flex-col bg-blue-gray ; main = flex flex-1
+						items-center justify-center p-4 ; footer = border-t border-black
+						bg-[#1a1714] px-4 py-2 text-center text-[11px] text-brown</code
+					>
+				</div>
+
+				<!-- ============ 9. AUDIT SUMMARY ============ -->
+				<h2 id="audit-summary">9. Audit summary — divergences to consolidate</h2>
+				<p class="section-intro">
+					Sorted roughly by impact (frequency × inconsistency cost). Pick a
+					winner per row and we can do a follow-up sweep.
+				</p>
+				<ol class="audit-summary">
+					<li>
+						<strong>Inline hex values that should be tokens.</strong>
+						<code>#35302B</code> (15+ uses) and <code>#2a2622</code> (7+ uses)
+						are the two card backgrounds — adding
+						<code>--color-card-inner</code> and <code>--color-card-bg</code> to
+						<code>app.css:6-18</code> would let every <code>style="..."</code>
+						become a Tailwind class.
+					</li>
+					<li>
+						<strong>Inline <code>#DBDEE3</code> for body text (20+ uses).</strong>
+						Visually equivalent to <code>--color-gray-200</code>
+						(<code>#eeeeee</code>). Either consolidate to
+						<code>text-gray-200</code> or add a
+						<code>--color-light-gray</code> token. Hot spots:
+						<code>UploadModal.svelte</code>, <code>BulkUploadModal.svelte</code>,
+						<code>GamePageSkeleton.svelte</code>.
+					</li>
+					<li>
+						<strong>Modal backdrop opacity differs.</strong>
+						<code>AboutModal.svelte:13</code> uses
+						<code>bg-black bg-opacity-50</code>;
+						<code>ReimportButton.svelte:99</code> uses <code>bg-black/70</code>;
+						<code>BulkReparseModal.svelte:221</code> uses
+						<code>bg-black/70</code>. Pick one.
+					</li>
+					<li>
+						<strong>Error-text color split.</strong>
+						<code>text-orange</code>
+						(<code>routes/login/+page.svelte:60</code>,
+						<code>BulkUploadModal.svelte:445</code>) vs
+						<code>text-red-400</code>
+						(<code>GameActions.svelte</code> delete confirm,
+						<code>border-red-400</code>). Recommend reserving red for
+						destructive confirm and orange for everything else, or unify.
+					</li>
+					<li>
+						<strong>Three SearchInput variants in one component.</strong>
+						<code>lib/SearchInput.svelte:17-30</code> — dark
+						(<code>#403A33</code> rounded-full py-1), light (white py-2 border-2
+						black), field (<code>#201a13</code> py-2). Dark and field look very
+						close; consolidate.
+					</li>
+					<li>
+						<strong>Action popover width inconsistency.</strong>
+						<code>GameActions.svelte:180</code> = <code>w-64</code>;
+						<code>:268</code> and <code>:351</code> = <code>w-56</code>. Same
+						visual role.
+					</li>
+					<li>
+						<strong>Card padding rule undocumented.</strong>
+						<code>p-3</code> vs <code>p-4</code> — outer card always
+						<code>p-4</code>, inner usually <code>p-3</code>, but tab pane uses
+						<code>p-8</code>, modal uses <code>p-6</code>. Worth writing down or
+						standardizing.
+					</li>
+					<li>
+						<strong>Settings item gap variants (gap-1 vs gap-3).</strong>
+						<code>SettingsTab.svelte:27,33,49,59,69</code> — single-field uses
+						<code>gap-1</code>, multi-field uses <code>gap-3</code>. Either
+						document the rule or use the same gap.
+					</li>
+					<li>
+						<strong>Table-header convention mismatch.</strong>
+						<code>SettingsTab.svelte</code> = <code>border-b-2</code> + base
+						font; <code>LawsTab.svelte:253</code> = <code>border-b</code> +
+						uppercase tracking-wide. Pick one.
+					</li>
+					<li>
+						<strong>One-off serif heading.</strong>
+						<code>BulkReparseModal.svelte:228</code> uses
+						<code>font-serif text-xl text-tan</code>. Nothing else in the app
+						uses serif — likely accidental.
+					</li>
+					<li>
+						<strong>"Tan-ish" colors that aren't <code>tan</code>.</strong>
+						Game list items use <code>#c1872f</code> /
+						<code>#f2a93b</code> (CSS), context-menu Create button uses
+						<code>#ab9978</code> / <code>#9a8a6c</code>. None of these match
+						<code>--color-tan</code> (<code>#d2b48c</code>).
+					</li>
+					<li>
+						<strong><code>tan-hover</code> token has no effect.</strong>
+						<code>app.css:11-12</code> defines
+						<code>--color-tan</code> and
+						<code>--color-tan-hover</code> as the same hex
+						(<code>#d2b48c</code>). Tab triggers reference
+						<code>hover:bg-tan-hover</code> — currently a no-op. Either pick a
+						real hover shade or drop the variable.
+					</li>
+					<li>
+						<strong>Unused tokens.</strong>
+						<code>--color-yellow</code> (<code>#ffff00</code>) is defined and
+						never referenced. <code>--color-dark-brown</code> and
+						<code>--color-border-gray</code> are CSS-only (not Tailwind tokens)
+						but referenced in <code>CloudGameSidebar.svelte</code> CSS.
+					</li>
+					<li>
+						<strong>Skeleton bg typo.</strong>
+						<code>GamePageSkeleton.svelte:14</code> uses
+						<code>#36302a</code> instead of <code>#35302B</code>. Almost
+						certainly a typo.
+					</li>
+				</ol>
+			</main>
+		</div>
+
+		<script>
+			const CHART_THEME = {
+				color: [
+					"#C87941",
+					"#8B4513",
+					"#CD853F",
+					"#A0522D",
+					"#D2691E",
+					"#B8860B",
+				],
+				backgroundColor: "#211A12",
+				animation: false,
+				textStyle: {
+					fontFamily:
+						'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+					color: "#FFFFFF",
+				},
+				title: {
+					left: "center",
+					textStyle: { color: "#FFFFFF", fontSize: 20 },
+				},
+				legend: { show: false },
+				tooltip: { trigger: "axis" },
+			};
+
+			const NATION_COLORS = {
+				EGYPT: "#BC6304",
+				GREECE: "#2360BC",
+				PERSIA: "#C04E4A",
+			};
+
+			const UNIT_CLASS_COLORS = {
+				Infantry: "#C87941",
+				Ranged: "#B8860B",
+				Cavalry: "#CD853F",
+				Siege: "#A0522D",
+				Naval: "#8B4513",
+			};
+
+			// Line chart
+			const lineEl = document.getElementById("chart-line");
+			if (lineEl) {
+				const c = echarts.init(lineEl);
+				c.setOption({
+					...CHART_THEME,
+					title: { ...CHART_THEME.title, text: "Science per Turn" },
+					grid: { left: 60, right: 40, top: 80, bottom: 60 },
+					xAxis: {
+						type: "category",
+						name: "Turn",
+						nameLocation: "middle",
+						nameGap: 30,
+						data: Array.from({ length: 12 }, (_, i) => (i + 1) * 10),
+					},
+					yAxis: {
+						type: "value",
+						name: "Science",
+						nameLocation: "middle",
+						nameGap: 40,
+					},
+					series: [
+						{
+							name: "Egypt",
+							type: "line",
+							itemStyle: { color: NATION_COLORS.EGYPT },
+							data: [4, 6, 9, 11, 14, 18, 22, 27, 31, 35, 40, 47],
+						},
+						{
+							name: "Greece",
+							type: "line",
+							itemStyle: { color: NATION_COLORS.GREECE },
+							data: [3, 5, 7, 10, 13, 17, 20, 25, 28, 32, 38, 43],
+						},
+						{
+							name: "Persia",
+							type: "line",
+							itemStyle: { color: NATION_COLORS.PERSIA },
+							data: [5, 7, 8, 9, 12, 14, 19, 23, 26, 30, 36, 41],
+						},
+					],
+				});
+				window.addEventListener("resize", () => c.resize());
+			}
+
+			// Bar chart
+			const barEl = document.getElementById("chart-bar");
+			if (barEl) {
+				const c = echarts.init(barEl);
+				const nations = [
+					"Egypt",
+					"Greece",
+					"Persia",
+					"Babylonia",
+					"Rome",
+					"Carthage",
+				];
+				const colors = ["#BC6304", "#2360BC", "#C04E4A", "#82C83E", "#880D56", "#F6EFE1"];
+				c.setOption({
+					...CHART_THEME,
+					title: { ...CHART_THEME.title, text: "Games by Nation" },
+					tooltip: { trigger: "axis", axisPointer: { type: "shadow" } },
+					grid: { left: 60, right: 40, top: 80, bottom: 60 },
+					xAxis: {
+						type: "category",
+						data: nations,
+						axisLabel: { rotate: 45, interval: 0 },
+					},
+					yAxis: { type: "value", name: "Games Played" },
+					series: [
+						{
+							type: "bar",
+							data: nations.map((n, i) => ({
+								value: 12 - i,
+								itemStyle: { color: colors[i] },
+							})),
+						},
+					],
+				});
+				window.addEventListener("resize", () => c.resize());
+			}
+
+			// Pie chart
+			const pieEl = document.getElementById("chart-pie");
+			if (pieEl) {
+				const c = echarts.init(pieEl);
+				c.setOption({
+					...CHART_THEME,
+					title: {
+						text: "Egypt — Army Composition",
+						left: 8,
+						top: 8,
+						textStyle: { color: NATION_COLORS.EGYPT, fontSize: 14 },
+					},
+					tooltip: { trigger: "item" },
+					series: [
+						{
+							type: "pie",
+							radius: ["30%", "65%"],
+							data: [
+								{
+									name: "Infantry",
+									value: 24,
+									itemStyle: { color: UNIT_CLASS_COLORS.Infantry },
+								},
+								{
+									name: "Ranged",
+									value: 12,
+									itemStyle: { color: UNIT_CLASS_COLORS.Ranged },
+								},
+								{
+									name: "Cavalry",
+									value: 18,
+									itemStyle: { color: UNIT_CLASS_COLORS.Cavalry },
+								},
+								{
+									name: "Siege",
+									value: 6,
+									itemStyle: { color: UNIT_CLASS_COLORS.Siege },
+								},
+							],
+						},
+					],
+				});
+				window.addEventListener("resize", () => c.resize());
+			}
+		</script>
+	</body>
+</html>
