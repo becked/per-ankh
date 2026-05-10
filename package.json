@@ -16,11 +16,11 @@
 		"bake:terrain-3d": "tsx scripts/bake-terrain-3d.ts",
 		"bake:improvements": "tsx scripts/bake-improvements.ts",
 		"bake:resources": "tsx scripts/bake-resources.ts",
-		"bake:crests": "tsx scripts/bake-crests.ts",
 		"bake:sprites": "tsx scripts/bake-sprites.ts",
+		"bake:finalize": "tsx scripts/build-manifests.ts",
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:crests"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:finalize"
 	},
 	"license": "MIT",
 	"dependencies": {

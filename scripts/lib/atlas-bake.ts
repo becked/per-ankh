@@ -5,8 +5,20 @@
 // the same packing geometry, hex mask, and manifest schema.
 
 import sharp from "sharp";
-import { readFile, writeFile } from "node:fs/promises";
-import { resolve } from "node:path";
+import { createHash } from "node:crypto";
+import {
+	mkdir,
+	readdir,
+	readFile,
+	rename,
+	unlink,
+	writeFile,
+} from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, "..", "..");
 
 // Hex geometry — cell size matches the runtime SpriteMap.svelte hex spacing
 // constants. Don't change one without the other.
@@ -49,7 +61,9 @@ export interface SpriteRect {
 }
 
 export interface AtlasManifest {
-	atlas: string;
+	// Hashed filename of the paired .webp. Set by writeAtlas() during the bake;
+	// callers leave it unset.
+	atlas?: string;
 	cellWidth: number;
 	cellHeight: number;
 	bakedAt: string;
@@ -221,7 +235,7 @@ export function placeCellGrid(numCells: number): CellGrid {
 }
 
 export interface AtlasOutput {
-	name: string; // e.g. "improvements-base", written as ${name}.{webp,json}
+	name: string; // e.g. "improvements-base"; outputs are content-hashed as ${name}.${hash}.{webp,json}
 	manifest: AtlasManifest;
 	composites: sharp.OverlayOptions[];
 	width: number;
@@ -230,9 +244,108 @@ export interface AtlasOutput {
 	outputDir: string;
 }
 
+// ─── Content hashing + sidecar manifests ────────────────────────────
+//
+// Atlas outputs are content-hashed: the webp/json filename embeds the first
+// 8 hex chars of sha256(webpBuffer). Each bake registers its outputs in a
+// JSON sidecar at .bake/<asset-class>-manifest.json. A separate finalize
+// step (scripts/build-manifests.ts) reads the sidecars to emit the runtime
+// TypeScript modules at src/lib/generated/{atlas,sprite}-manifest.ts and to
+// reconcile orphan files. Sidecars are gitignored (.bake/); the TS modules
+// they generate are committed.
+
+export interface AtlasManifestEntry {
+	webp?: string; // public URL — paired .webp for atlases, omitted for json-only assets
+	json: string; // public URL — paired .json for atlases, standalone for assets like nation-asset-aliases
+}
+export type AtlasSidecar = Record<string, AtlasManifestEntry>;
+export type SpriteSidecar = Record<string, string>; // "<category>/<basename>" → public URL
+
+const ATLAS_SIDECAR_PATH = resolve(REPO_ROOT, ".bake/atlas-manifest.json");
+const SPRITE_SIDECAR_PATH = resolve(REPO_ROOT, ".bake/sprite-manifest.json");
+
+function contentHash(buf: Buffer): string {
+	return createHash("sha256").update(buf).digest("hex").slice(0, 8);
+}
+
+async function readSidecar<T extends object>(path: string): Promise<T> {
+	try {
+		const text = await readFile(path, "utf-8");
+		return JSON.parse(text) as T;
+	} catch (err: unknown) {
+		if ((err as NodeJS.ErrnoException)?.code === "ENOENT") return {} as T;
+		throw err;
+	}
+}
+
+// Atomic temp-file + rename. Bakes run serially under bake:all, so atomic
+// write is sufficient — no file lock needed. The temp suffix includes the
+// pid so concurrent ad-hoc invocations don't collide.
+async function writeSidecar(path: string, data: unknown): Promise<void> {
+	const text = JSON.stringify(data, null, 2) + "\n";
+	await mkdir(dirname(path), { recursive: true });
+	const tmp = `${path}.tmp.${process.pid}`;
+	await writeFile(tmp, text);
+	await rename(tmp, path);
+}
+
+export async function readAtlasSidecar(): Promise<AtlasSidecar> {
+	return readSidecar<AtlasSidecar>(ATLAS_SIDECAR_PATH);
+}
+
+export async function readSpriteSidecar(): Promise<SpriteSidecar> {
+	return readSidecar<SpriteSidecar>(SPRITE_SIDECAR_PATH);
+}
+
+export async function writeSpriteSidecar(data: SpriteSidecar): Promise<void> {
+	await writeSidecar(SPRITE_SIDECAR_PATH, data);
+}
+
+// Read-merge-write a single atlas-sidecar entry. Atlas bakes call this once
+// per atlas (≈14 calls per bake:all), so the per-call read+write overhead
+// is fine. Sprite bakes update ~360 entries; bake-sprites builds the sidecar
+// in memory and writes once via writeSpriteSidecar() instead.
+export async function updateAtlasSidecar(
+	name: string,
+	entry: AtlasManifestEntry,
+): Promise<void> {
+	const data = await readAtlasSidecar();
+	data[name] = entry;
+	await writeSidecar(ATLAS_SIDECAR_PATH, data);
+}
+
+// Remove stale hashed outputs for `name` in the given dirs. The anchored
+// regex `^${name}\.[0-9a-f]{8}\.<ext>$` deliberately doesn't accept other
+// hash lengths or hyphenated extensions — it only matches outputs this
+// helper itself produced. Avoids cross-name collisions like "improvements"
+// matching "improvements-base".
+async function wipeStaleHashedFiles(
+	dirs: readonly string[],
+	name: string,
+	exts: readonly string[],
+): Promise<void> {
+	const extPattern = exts.join("|");
+	const pattern = new RegExp(`^${name}\\.[0-9a-f]{8}\\.(${extPattern})$`);
+	for (const dir of dirs) {
+		let entries: string[];
+		try {
+			entries = await readdir(dir);
+		} catch {
+			continue; // dir doesn't exist yet on a fresh checkout
+		}
+		await Promise.all(
+			entries
+				.filter((e) => pattern.test(e))
+				.map((e) => unlink(resolve(dir, e))),
+		);
+	}
+}
+
 // Writes the atlas WebP + manifest JSON to BOTH source dir (versioned with
 // the repo so the bake is reproducible without re-running pinacotheca) and
-// output dir (served at runtime). Both copies are byte-identical.
+// output dir (served at runtime). Both copies are byte-identical and content-
+// hashed. Stale outputs for the same logical name are pruned before writing
+// so the dir never accumulates old hashes.
 export async function writeAtlas(out: AtlasOutput): Promise<void> {
 	const buffer = await sharp({
 		create: {
@@ -245,12 +358,53 @@ export async function writeAtlas(out: AtlasOutput): Promise<void> {
 		.composite(out.composites)
 		.webp({ lossless: true })
 		.toBuffer();
+
+	const hash = contentHash(buffer);
+	const webpFilename = `${out.name}.${hash}.webp`;
+	const jsonFilename = `${out.name}.${hash}.json`;
+
+	// Single owner of the hashed filename in the manifest's self-reference
+	// field — callers can leave manifest.atlas unset.
+	out.manifest.atlas = webpFilename;
 	const manifestText = JSON.stringify(out.manifest, null, 2) + "\n";
 
-	await writeFile(resolve(out.sourceDir, `${out.name}.webp`), buffer);
-	await writeFile(resolve(out.sourceDir, `${out.name}.json`), manifestText);
-	await writeFile(resolve(out.outputDir, `${out.name}.webp`), buffer);
-	await writeFile(resolve(out.outputDir, `${out.name}.json`), manifestText);
+	await wipeStaleHashedFiles(
+		[out.sourceDir, out.outputDir],
+		out.name,
+		["webp", "json"],
+	);
+
+	await writeFile(resolve(out.sourceDir, webpFilename), buffer);
+	await writeFile(resolve(out.sourceDir, jsonFilename), manifestText);
+	await writeFile(resolve(out.outputDir, webpFilename), buffer);
+	await writeFile(resolve(out.outputDir, jsonFilename), manifestText);
+
+	await updateAtlasSidecar(out.name, {
+		webp: `/atlases/${webpFilename}`,
+		json: `/atlases/${jsonFilename}`,
+	});
+}
+
+// Hashed write for standalone JSON assets that live alongside atlases but
+// aren't atlases themselves (e.g. nation-asset-aliases.json). Same dual-dir,
+// same hash-and-rename, registered in the same sidecar with `webp` omitted.
+export async function writeJsonAsset(
+	name: string,
+	payload: unknown,
+	sourceDir: string,
+	outputDir: string,
+): Promise<void> {
+	const text = JSON.stringify(payload, null, 2) + "\n";
+	const buffer = Buffer.from(text, "utf-8");
+	const hash = contentHash(buffer);
+	const filename = `${name}.${hash}.json`;
+
+	await wipeStaleHashedFiles([sourceDir, outputDir], name, ["json"]);
+
+	await writeFile(resolve(sourceDir, filename), buffer);
+	await writeFile(resolve(outputDir, filename), buffer);
+
+	await updateAtlasSidecar(name, { json: `/atlases/${filename}` });
 }
 
 // Read pinacotheca's pyproject.toml to stamp its version into manifests.

@@ -221,7 +221,6 @@ async function main(): Promise<void> {
 	}
 
 	const manifest: AtlasManifest = {
-		atlas: "terrain-3d.webp",
 		cellWidth: CELL_W,
 		cellHeight: CELL_H,
 		bakedAt,

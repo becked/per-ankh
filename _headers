@@ -1,0 +1,14 @@
+# Atlas + sprite assets are content-hashed at bake time (see
+# scripts/build-manifests.ts). The filename is the version key, so it's safe
+# to tell browsers to cache forever and never revalidate. New bakes produce
+# new filenames; old hashed copies sit idle in returning visitors' caches
+# until evicted.
+#
+# Adapter-cloudflare appends its own /_app/immutable/* rule below this file
+# at build time (see node_modules/@sveltejs/adapter-cloudflare/index.js).
+
+/atlases/*
+  Cache-Control: public, max-age=31536000, immutable
+
+/sprites/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -48,6 +48,11 @@ static/atlases/
 static/sprites/
 assets/atlas-sources/
 
+# Bake-pipeline JSON sidecars. Each individual bake registers its hashed
+# outputs here; scripts/build-manifests.ts reads them to emit the committed
+# TS modules at src/lib/generated/{atlas,sprite}-manifest.ts.
+/.bake/
+
 # DuckDB Database Files
 *.db
 *.db.wal

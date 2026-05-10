@@ -41,14 +41,7 @@
 // Run: npm run bake:improvements
 
 import sharp from "sharp";
-import {
-	readFile,
-	writeFile,
-	mkdir,
-	readdir,
-	access,
-	rm,
-} from "node:fs/promises";
+import { readFile, mkdir, readdir, access } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
@@ -63,6 +56,7 @@ import {
 	placeCellGrid,
 	readPinacothecaVersion,
 	writeAtlas,
+	writeJsonAsset,
 } from "./lib/atlas-bake.js";
 import { resolvePinacotheca, resolveReferenceXml } from "./lib/paths.js";
 
@@ -84,11 +78,6 @@ const OUTPUT_DIR = resolve(REPO_ROOT, "static/atlases");
 // focal building reads clearly. Composites are NOT tweaked — pinacotheca
 // already balances the lighting in its per-(improvement, nation) renders.
 const IMPROVEMENT_BRIGHTEN_TWEAK = { brightness: 1.5 };
-
-// Filenames removed from both static/atlases/ and assets/atlas-sources/ at
-// the start of every bake. Catches the prior single-atlas layout
-// (improvements.webp/json) so it doesn't ship alongside the new split atlases.
-const STALE_OUTPUTS = ["improvements.webp", "improvements.json"];
 
 interface NationAliasEntry {
 	urban: string;
@@ -318,19 +307,6 @@ async function classifyPinacothecaPngs(
 	return { composites, standaloneUrban, standaloneCapital, singles };
 }
 
-async function removeStaleOutputs(): Promise<void> {
-	for (const dir of [SOURCE_DIR, OUTPUT_DIR]) {
-		for (const name of STALE_OUTPUTS) {
-			const path = resolve(dir, name);
-			try {
-				await rm(path, { force: true });
-			} catch {
-				// Already gone.
-			}
-		}
-	}
-}
-
 interface BakeContext {
 	hexMask: Buffer;
 	bakedAt: string;
@@ -481,7 +457,6 @@ async function bakeBaseAtlas(
 	}
 
 	const manifest: AtlasManifest = {
-		atlas: "improvements-base.webp",
 		cellWidth: CELL_W,
 		cellHeight: CELL_H,
 		bakedAt: ctx.bakedAt,
@@ -543,7 +518,6 @@ async function bakeFamilyAtlas(
 
 	const name = `improvements-urban-${family}`;
 	const manifest: AtlasManifest = {
-		atlas: `${name}.webp`,
 		cellWidth: CELL_W,
 		cellHeight: CELL_H,
 		bakedAt: ctx.bakedAt,
@@ -566,30 +540,30 @@ async function bakeFamilyAtlas(
 
 async function writeNationAliases(
 	aliases: Map<string, NationAliasEntry>,
-	bakedAt: string,
 ): Promise<void> {
 	const sortedNations = Array.from(aliases.keys()).sort();
 	const obj: Record<string, NationAliasEntry> = {};
 	for (const nation of sortedNations) {
 		obj[nation] = aliases.get(nation)!;
 	}
-	const payload = {
-		bakedAt,
-		// Each entry is { urban: <family>, capital: <family> }, both required.
-		// Runtime treats this as the single source of truth for resolving
-		// owner_nation → which atlas / which sprite key.
-		aliases: obj,
-	};
-	const text = JSON.stringify(payload, null, 2) + "\n";
-	await writeFile(resolve(SOURCE_DIR, "nation-asset-aliases.json"), text);
-	await writeFile(resolve(OUTPUT_DIR, "nation-asset-aliases.json"), text);
+	// No bakedAt in the payload — content-hashing requires deterministic
+	// output, and the timestamp is already captured per-bake in the script's
+	// console output. Each entry is { urban, capital }, both required;
+	// runtime treats this as the single source of truth for resolving
+	// owner_nation → which atlas / which sprite key.
+	const payload = { aliases: obj };
+	await writeJsonAsset(
+		"nation-asset-aliases",
+		payload,
+		SOURCE_DIR,
+		OUTPUT_DIR,
+	);
 	console.log(`[nation-aliases] wrote ${sortedNations.length} nation aliases`);
 }
 
 async function main(): Promise<void> {
 	await mkdir(SOURCE_DIR, { recursive: true });
 	await mkdir(OUTPUT_DIR, { recursive: true });
-	await removeStaleOutputs();
 
 	const pinacothecaVersion = await readPinacothecaVersion(
 		PINACOTHECA_PYPROJECT,
@@ -614,7 +588,7 @@ async function main(): Promise<void> {
 	console.log(
 		`[improvements] discovered ${aliases.size} nations across ${urbanFamilies.size} urban families and ${capitalFamilies.size} capital families`,
 	);
-	await writeNationAliases(aliases, bakedAt);
+	await writeNationAliases(aliases);
 
 	const zTypeMap = await buildZTypeMap();
 	console.log(

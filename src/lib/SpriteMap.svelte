@@ -5,7 +5,11 @@
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityInfo } from "$lib/types/CityInfo";
 	import { getCivilizationColor } from "$lib/config";
-	import { FAMILY_CRESTS, NATION_CRESTS } from "$lib/generated/crests";
+	import {
+		ATLAS_MANIFEST,
+		NATION_ALIASES_URL,
+	} from "$lib/generated/atlas-manifest";
+	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import MapTooltip from "$lib/MapTooltip.svelte";
 
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
@@ -27,15 +31,15 @@
 	const HEX_RADIUS_X = HEX_H_SPACING / Math.sqrt(3);
 	const HEX_RADIUS_Y = HEX_V_SPACING / 1.5;
 
-	// Atlas paths. Served from static/atlases/ via SvelteKit. A future change
-	// can swap in a versioned R2 URL prefix here without touching the runtime
-	// (see docs/cloud-rewrite-spec.md "Map Assets").
-	const ATLAS_BASE = "/atlases";
-	const TERRAIN_3D_ATLAS_URL = `${ATLAS_BASE}/terrain-3d.webp`;
-	const IMPROVEMENTS_BASE_ATLAS_URL = `${ATLAS_BASE}/improvements-base.webp`;
-	const RESOURCES_ATLAS_URL = `${ATLAS_BASE}/resources.webp`;
+	// Atlas paths come from the bake-pipeline manifest. URLs are content-
+	// hashed (e.g. /atlases/terrain-3d.a1b2c3d4.webp), so they're safe to
+	// serve with Cache-Control: immutable, max-age=1y. See
+	// docs/section-3.4-content-hashing.html.
+	const TERRAIN_3D_ATLAS_URL = ATLAS_MANIFEST["terrain-3d"].webp;
+	const IMPROVEMENTS_BASE_ATLAS_URL = ATLAS_MANIFEST["improvements-base"].webp;
+	const RESOURCES_ATLAS_URL = ATLAS_MANIFEST["resources"].webp;
 	const familyAtlasUrl = (family: string): string =>
-		`${ATLAS_BASE}/improvements-urban-${family}.webp`;
+		ATLAS_MANIFEST[`improvements-urban-${family}`]?.webp ?? "";
 
 	interface NationAliasEntry {
 		urban: string;
@@ -249,14 +253,17 @@
 	// art; otherwise falls back to the family-class archetype crest, which
 	// always exists for non-null family_class values. Recomputed when the
 	// cities prop changes; tile lookups stay O(1) inside the tooltip resolver.
-	// FAMILY_CRESTS membership comes from $lib/generated/crests, baked from
+	// Existence is checked against the SPRITE_MANIFEST baked from
 	// static/sprites/crests/CREST_FAMILY_*.png.
 	const cityFamilyCrestByName = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const map = new Map<string, string | null>();
 		for (const c of cities) {
 			let key: string | null = null;
-			if (c.family && FAMILY_CRESTS.has(c.family)) {
+			if (
+				c.family &&
+				SPRITE_MANIFEST[`crests/CREST_FAMILY_${c.family}`] != null
+			) {
 				key = c.family;
 			} else if (c.family_class) {
 				// FAMILYCLASS_CHAMPIONS → ARCHETYPE_CHAMPIONS
@@ -380,14 +387,19 @@
 	//      nations like NATION_AMUN/ATHENS/PTOLEMY that have no own crest).
 	//   3. CREST_TRIBE_GENERIC as a last resort (e.g. INDIA family — no
 	//      CREST_NATION_INDIA exists in the game).
-	// NATION_CRESTS membership comes from $lib/generated/crests, baked from
+	// Existence is checked against the SPRITE_MANIFEST baked from
 	// static/sprites/crests/CREST_NATION_*.png.
 	function resolveNationCrestKey(ownerNation: string | null): string | null {
 		if (!ownerNation) return null;
 		const stem = ownerNation.replace(/^NATION_/, "");
-		if (NATION_CRESTS.has(stem)) return `NATION_${stem}`;
+		if (SPRITE_MANIFEST[`crests/CREST_NATION_${stem}`] != null) {
+			return `NATION_${stem}`;
+		}
 		const alias = nationAliases.get(ownerNation);
-		if (alias?.urban && NATION_CRESTS.has(alias.urban)) {
+		if (
+			alias?.urban &&
+			SPRITE_MANIFEST[`crests/CREST_NATION_${alias.urban}`] != null
+		) {
 			return `NATION_${alias.urban}`;
 		}
 		return "TRIBE_GENERIC";
@@ -531,7 +543,9 @@
 	}
 
 	async function loadManifest(name: string): Promise<AtlasManifest> {
-		const response = await fetch(`/atlases/${name}.json`);
+		const entry = ATLAS_MANIFEST[name];
+		if (!entry) throw new Error(`unknown atlas: ${name}`);
+		const response = await fetch(entry.json);
 		return (await response.json()) as AtlasManifest;
 	}
 
@@ -1585,7 +1599,7 @@
 	});
 
 	async function loadNationAliases(): Promise<Map<string, NationAliasEntry>> {
-		const response = await fetch(`${ATLAS_BASE}/nation-asset-aliases.json`);
+		const response = await fetch(NATION_ALIASES_URL);
 		const payload = (await response.json()) as NationAliasPayload;
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- assigned to $state Map below
 		const map = new Map<string, NationAliasEntry>();

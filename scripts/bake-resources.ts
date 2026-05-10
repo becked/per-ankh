@@ -161,7 +161,6 @@ async function main(): Promise<void> {
 	}
 
 	const manifest: AtlasManifest = {
-		atlas: "resources.webp",
 		cellWidth: CELL_W,
 		cellHeight: CELL_H,
 		bakedAt,
