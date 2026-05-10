@@ -37,6 +37,18 @@ const reportToHeader = JSON.stringify({
 });
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Legacy share URLs (minted by desktop v0.2.0 as
+	// `https://per-ankh.app/share/[id]`) are served by the frozen `web/`
+	// SPA, which now lives on `legacy.per-ankh.app`. 302 so we can fold
+	// /share/* back into this app later without fighting cached 301s.
+	if (event.url.pathname.startsWith("/share/")) {
+		const id = event.url.pathname.slice("/share/".length);
+		return Response.redirect(
+			`https://legacy.per-ankh.app/share/${id}`,
+			302,
+		);
+	}
+
 	const response = await resolve(event, {
 		filterSerializedResponseHeaders: (name) =>
 			ALLOWED_RESPONSE_HEADERS.has(name.toLowerCase()),

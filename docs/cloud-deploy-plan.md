@@ -16,11 +16,13 @@ the old doc stays as historical context.
   theirs off Settings → My Account; snowflakes require Developer Mode plus
   a right-click. List expands by `wrangler secret put`-ing a new
   comma-separated value as test users join the next feature.
-- Legacy `/v1/share/*` endpoints stay live on the API Worker. The legacy
-  share viewer (`web/`) currently owns `per-ankh.app` via a Cloudflare
-  Pages custom domain attachment; deploy moves `per-ankh.app` to the new
-  SSR Worker and adds a `/share/*` redirect to keep old share URLs
-  resolving (see §3.8 + §4 step 5).
+- Legacy `/v1/share/*` endpoints stay live on the API Worker (desktop
+  v0.2.0 still mints share URLs against it). The legacy share viewer
+  (`web/`) currently owns `per-ankh.app` via a Cloudflare Pages custom
+  domain attachment; deploy moves `per-ankh.app` to the new SSR Worker,
+  reattaches the legacy SPA to `legacy.per-ankh.app`, and adds a
+  `/share/*` 302 from `per-ankh.app` to `legacy.per-ankh.app` to keep old
+  share URLs resolving (see §3.8 + §4 step 5).
 
 Real test users will arrive with the next feature, providing live feedback;
 that's why this plan deliberately skips formal bake stages.
@@ -255,8 +257,22 @@ regardless of the custom domain.
 
 A single Cloudflare hostname can be either a Pages custom domain or a
 Worker custom domain — not both. Cutover swaps `per-ankh.app` from Pages
-to the new SSR Worker, and the SSR Worker handles `/share/*` by
-301-redirecting to the Pages-native hostname.
+to the new SSR Worker. The legacy SPA stays alive on a dedicated
+subdomain `legacy.per-ankh.app`, and the SSR Worker 302-redirects
+`/share/*` there so old share URLs keep resolving.
+
+302 (not 301) because the plan is to eventually fold `/share/*` back into
+the new app. Browsers cache 301s aggressively — sometimes indefinitely —
+so a 301 would force users to clear cache once the new in-app handler
+lands. A 302 keeps that path open at no cost (these URLs aren't crawled,
+so there's no SEO upside to 301 either way).
+
+**Attach `legacy.per-ankh.app` to the Pages project.** Cloudflare
+dashboard → Workers & Pages → Pages project `per-ankh` → Custom domains
+→ add `legacy.per-ankh.app`. The `per-ankh.app` zone is already on
+Cloudflare, so DNS is provisioned automatically. Do this well before
+cutover (gives DNS time to propagate) and verify with
+`curl -I https://legacy.per-ankh.app/` that it serves the legacy SPA.
 
 **Code change (lands in the SSR Worker before deploy).** Add a `/share/*`
 handler high in `src/hooks.server.ts` so it short-circuits before any
@@ -266,25 +282,32 @@ SvelteKit routing:
 // In src/hooks.server.ts handle()
 if (event.url.pathname.startsWith("/share/")) {
 	const id = event.url.pathname.slice("/share/".length);
-	return Response.redirect(`https://per-ankh-web.pages.dev/share/${id}`, 301);
+	return Response.redirect(`https://legacy.per-ankh.app/share/${id}`, 302);
 }
 ```
 
 Verify with `curl -I https://per-ankh.app/share/test` after deploy: expect
-`HTTP/2 301` with `location: https://per-ankh-web.pages.dev/share/test`.
+`HTTP/2 302` with `location: https://legacy.per-ankh.app/share/test`.
 
-The actual domain detach + reattach is a §4 step (it has to happen at
-cutover, between Pages serving the old SPA and the new Worker serving the
-new app).
+The actual `per-ankh.app` domain detach + reattach is a §4 step (it has
+to happen at cutover, between Pages serving the old SPA and the new
+Worker serving the new app).
 
 **Why redirect instead of bundling web/ into the new Worker.** web/'s
 adapter-static SPA assumes it's mounted at the root (`_app/immutable/...`
 paths are absolute). Path-prefixing the SPA into a subdirectory would
 need either a base-path config in `web/svelte.config.js` and a re-deploy,
 or asset-tree restructuring at copy time. Both are more work than a
-one-liner redirect, and the redirect cost on legacy share URLs is
-negligible (no new ones can be created — the desktop app that produced
-them is gone).
+302 redirect, and we want to fold `/share/*` into the new app properly
+anyway — the redirect is a temporary bridge, not a permanent home.
+
+**Legacy share creation stays enabled.** Desktop users on v0.2.0 still
+POST to `/v1/share/*` on the API Worker to mint new share IDs. The
+desktop app writes those URLs as `https://per-ankh.app/share/[id]`, so
+post-cutover they hit the new SSR Worker, get 302'd to
+`legacy.per-ankh.app`, and resolve normally. No changes to `/v1/share/*`
+on the API Worker — endpoints stay live until the desktop installed base
+has migrated.
 
 ## 4. Deploy
 
@@ -312,11 +335,12 @@ In order:
    ```
 5. **Detach `per-ankh.app` from the Pages project.** Cloudflare dashboard
    → Workers & Pages → Pages project `per-ankh` → Custom domains → remove
-   `per-ankh.app`. The Pages project keeps serving at
-   `per-ankh-web.pages.dev` — that's what the §3.8 redirect targets, so
-   don't delete the Pages project itself. Brief window between this step
-   and step 6 where `per-ankh.app` returns a Cloudflare error; acceptable
-   for a pre-announce cutover.
+   `per-ankh.app`. Leave `legacy.per-ankh.app` (attached in §3.8) and the
+   auto-assigned `per-ankh-web.pages.dev` in place — both keep the legacy
+   SPA reachable, and `legacy.per-ankh.app` is what the §3.8 redirect
+   targets. Do not delete the Pages project itself. Brief window between
+   this step and step 6 where `per-ankh.app` returns a Cloudflare error;
+   acceptable for a pre-announce cutover.
 6. **Deploy the frontend Worker.** From the repo root:
    ```bash
    npm run build
@@ -330,8 +354,9 @@ In order:
    should return the new SSR Worker's response (look for SvelteKit-style
    `link: </_app/...>` modulepreload headers from the new build, distinct
    from the current Pages headers). `curl -I https://per-ankh.app/share/test`
-   should return `301` with `location: https://per-ankh-web.pages.dev/share/test`.
-   `curl -I https://api.per-ankh.app/v1/stats` should return `200`.
+   should return `302` with `location: https://legacy.per-ankh.app/share/test`.
+   `curl -I https://legacy.per-ankh.app/` should still serve the legacy
+   SPA. `curl -I https://api.per-ankh.app/v1/stats` should return `200`.
 8. **Run §5 smoke test against prod.** Do not announce until it passes.
 
 ## 5. Smoke test
@@ -353,10 +378,10 @@ Against the live `https://per-ankh.app`. Run in this order:
    The bulk equivalent is the dashboard's `BulkReparseModal`.
 7. Delete the test game.
 8. Load an old `https://per-ankh.app/share/[id]` URL in a browser —
-   confirms the SSR Worker 301-redirects to `per-ankh-web.pages.dev/share/[id]`
+   confirms the SSR Worker 302-redirects to `legacy.per-ankh.app/share/[id]`
    and the Pages deployment still serves the page. Also confirms
    `/v1/share/*` legacy API endpoints (which the page calls under the
-   hood) still work.
+   hood) still work — these stay live for desktop v0.2.0 users.
 
 If any step fails, do not announce. Fix and re-deploy.
 
