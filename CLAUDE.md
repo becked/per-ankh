@@ -27,10 +27,9 @@ per-ankh/
 ├── cloud/                    # Cloudflare Worker (API)
 │   ├── src/                  # Handlers, validation, util
 │   ├── migrations/           # D1 migrations (numbered, forward-only)
-│   ├── wrangler.toml         # Worker config
-│   └── admin.sh              # CLI for D1/R2 admin
+│   └── wrangler.toml         # Worker config
 ├── web/                      # Legacy share viewer (static SvelteKit, frozen)
-├── scripts/                  # Asset bake scripts + ./per-ankh CLI
+├── scripts/                  # Asset bake scripts + ./per-ankh CLI (incl. admin/)
 ├── static/                   # Static assets, including baked atlases/sprites
 └── docs/                     # Spec, productionization plan, ADRs
 ```
@@ -181,18 +180,21 @@ Lives under `cloud/`. Handlers in `cloud/src/`, validation via Valibot in `cloud
 
 ### Cloud Admin CLI
 
-`cloud/admin.sh` manages D1 records and R2 blobs via `wrangler` (no API key — relies on Wrangler auth). Requires `jq`. Run `./cloud/admin.sh help` for commands. Common usage:
+`./per-ankh admin` is the operator CLI for the live app — covers both the cloud-rewrite world (users, games, events) and the frozen legacy share world. Implementation lives under `scripts/admin/`. Calls `wrangler` directly (no API key — relies on `wrangler login`). Run `./per-ankh admin --help` for the full list. Common usage:
 
 ```bash
-./cloud/admin.sh stats              # Summary
-./cloud/admin.sh list [--limit N]   # Recent shares
-./cloud/admin.sh info <share_id>    # Full details
-./cloud/admin.sh delete <id>        # Delete (D1 + R2)
-./cloud/admin.sh block-key <key>    # Block an app key
-./cloud/admin.sh nuke-key <key>     # Block + delete all shares (typing "nuke" required)
+./per-ankh admin stats                       # Global counts + recent activity
+./per-ankh admin users [--sort recent|uploads|created]
+./per-ankh admin user <user_id>              # Detail (games, collections, online_ids)
+./per-ankh admin games [--limit N] [--user U]
+./per-ankh admin events [--type T] [--user U]
+./per-ankh admin shares list [--limit N]     # Legacy shares
+./per-ankh admin block-key <key> [reason]
+./per-ankh admin nuke-key <key>              # Block + delete all legacy shares (type "nuke")
+./per-ankh admin nuke-user <user_id>         # Delete cloud user + games + R2 blobs (type "nuke")
 ```
 
-The `./cloud/admin.sh` script never exposes `delete_token` in output.
+Add `--json` to any read command for pipeable output; add `--yes` to skip confirmation on destructive ops.
 
 ## Asset Bake Pipeline
 

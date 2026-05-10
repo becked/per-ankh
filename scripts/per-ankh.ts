@@ -1,12 +1,12 @@
 // Central CLI for the per-ankh cloud app (Worker + SvelteKit).
 // Invoked via the `per-ankh` bash shim at repo root: `./per-ankh <command>`.
-//
-// `cloud/admin.sh` (CF admin) is to be folded into `./per-ankh admin` over time.
 
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+
+import { main as adminMain } from "./admin/index";
 
 // scripts/per-ankh.ts → repo root is one level up.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -156,8 +156,9 @@ function printHelp(): void {
 			"  ./per-ankh <command>",
 			"",
 			"Commands:",
-			"  dev        Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
-			"  --help,-h  Show this help.",
+			"  dev               Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
+			"  admin <sub>...    Cloud admin & monitoring (see `./per-ankh admin --help`).",
+			"  --help,-h         Show this help.",
 			"",
 			"Preconditions for `dev`:",
 			"  - npm install run in repo root and cloud/",
@@ -165,24 +166,34 @@ function printHelp(): void {
 			"  - cloud/.dev.vars has DISCORD_CLIENT_SECRET",
 			"  - D1 migrations applied: (cd cloud && npm run migrate:local)",
 			"",
-			"Coexists with cloud/admin.sh (CF admin).",
-			"",
 		].join("\n"),
 	);
 }
 
-const cmd = process.argv[2];
-switch (cmd) {
-	case "dev":
-		cmdDev();
-		break;
-	case "--help":
-	case "-h":
-	case undefined:
-		printHelp();
-		process.exit(cmd === undefined ? 1 : 0);
-	default:
-		process.stderr.write(`Unknown command: ${cmd}\n\n`);
-		printHelp();
-		process.exit(1);
+async function main(): Promise<void> {
+	const cmd = process.argv[2];
+	switch (cmd) {
+		case "dev":
+			cmdDev();
+			return;
+		case "admin":
+			await adminMain(process.argv.slice(3));
+			return;
+		case "--help":
+		case "-h":
+		case undefined:
+			printHelp();
+			process.exit(cmd === undefined ? 1 : 0);
+		// eslint-disable-next-line no-fallthrough
+		default:
+			process.stderr.write(`Unknown command: ${cmd}\n\n`);
+			printHelp();
+			process.exit(1);
+	}
 }
+
+main().catch((e: unknown) => {
+	const msg = e instanceof Error ? e.message : String(e);
+	process.stderr.write(`\n${msg}\n`);
+	process.exit(1);
+});

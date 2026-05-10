@@ -83,7 +83,7 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 
 **For super-admins (CLI only, MVP):**
 
-- Create tournaments via `cloud/admin.sh tournament create`
+- Create tournaments via `./per-ankh admin tournament create`
 - Grant the per-tournament admin role to a user
 - Audit tournament-related events via the existing events table
 
@@ -289,13 +289,13 @@ Each flow lists the actor, the API endpoint(s), and the state changes.
 Admin operator (out-of-band)
   │
   ▼
-cloud/admin.sh tournament create --name "OW Open 2026" --slug ow-open-2026
+./per-ankh admin tournament create --name "OW Open 2026" --slug ow-open-2026
   │
   ▼
 INSERT INTO tournaments (tournament_id, slug, name, status='signups', ...)
   │
   ▼
-cloud/admin.sh tournament admin add <tournament_id> <user_id>
+./per-ankh admin tournament admin add <tournament_id> <user_id>
   │
   ▼
 INSERT INTO tournament_admins (tournament_id, user_id)

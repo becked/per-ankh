@@ -2,8 +2,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- Cloud admin CLI rewritten in TypeScript and folded into the central CLI as `./per-ankh admin` (was `cloud/admin.sh`). Adds rewrite-aware commands for the cloud `users`/`games`/`events` tables that the bash version was blind to (`stats`, `users`, `user <id>`, `games`, `game <id>`, `events`, `nuke-user`). Legacy share commands are still available under `./per-ankh admin shares`. `--json` and `--yes` flags are new.
+
 ### Removed
 
+- `cloud/admin.sh` — superseded by `./per-ankh admin`.
 - Tauri desktop runtime. Per-Ankh is now a web app at <https://per-ankh.app>. The final desktop release remains available as GitHub Release [v0.2.0](https://github.com/becked/per-ankh/releases/tag/v0.2.0); it receives no further updates. Local DuckDB data stays on user machines — re-upload via `/upload` to use the cloud app.
 - Rust crate (`src-tauri/`), parity test harness (`scripts/parity/`), `dev.sh`, `tauri.sh`, the Tauri-only release workflow (`.github/workflows/release.yml`), and all `__BUILD_TARGET__` dual-build switching.
 - Desktop-bound frontend: `Header`, `GameSidebar`, `UpdateModal`, `ShareControl`, `SettingsModal`, `CollectionsModal`, `ImportModal`, `desktop/HomeDashboard`, `utils/dialogs`, `utils/updater`, `stores/update`, `api.ts`, `types.ts` re-exporter, plus the `/game/[id]`, `/event-test`, `/debug-nations` routes.

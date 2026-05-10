@@ -97,4 +97,4 @@ npm run format       # prettier --write .
 
 ### Cloud Admin CLI
 
-Manage data on Cloudflare (D1 + R2) using `cloud/admin.sh`. Requires `wrangler` auth (`wrangler login`) and `jq`. Run `./cloud/admin.sh help` for commands.
+Manage live data on Cloudflare (D1 + R2) with `./per-ankh admin`. Requires `wrangler` auth (`wrangler login`). Run `./per-ankh admin --help` for the full command list.

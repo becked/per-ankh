@@ -1066,7 +1066,7 @@ export async function handleGameUpload(
 	}
 
 	// Audit log — distinct event_type for re-imports so admin tooling
-	// (cloud/admin.sh events --type reimport) can filter cleanly. Both
+	// (./per-ankh admin events --type reimport) can filter cleanly. Both
 	// types count toward upload rate limits (UPLOAD_EVENT_TYPES).
 	try {
 		await env.SHARE_DB.prepare(
