@@ -9,10 +9,7 @@
 import type { EventLog as ParsedEventLog } from "../parsers/events.js";
 import type { Law } from "../parsers/player-data.js";
 import type { Player } from "../parsers/players.js";
-import type {
-	LawAdoptionDataPoint,
-	LawAdoptionHistory,
-} from "../types.js";
+import type { LawAdoptionDataPoint, LawAdoptionHistory } from "../types.js";
 import { extractLawName, playersOrderedByName } from "./_helpers.js";
 
 export function deriveLawAdoptionHistory(

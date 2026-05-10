@@ -75,7 +75,12 @@ const GameDetailsSchema = v.object({
 	match_id: v.number(),
 	game_name: v.nullable(v.string()),
 	save_date: v.nullable(v.string()),
-	total_turns: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(MAX_TOTAL_TURNS)),
+	total_turns: v.pipe(
+		v.number(),
+		v.integer(),
+		v.minValue(0),
+		v.maxValue(MAX_TOTAL_TURNS),
+	),
 	map_size: v.nullable(v.string()),
 	map_class: v.nullable(v.string()),
 	game_mode: v.nullable(v.string()),
@@ -136,10 +141,7 @@ export const FullGameDataSchema = v.looseObject({
 	version: v.literal(2),
 	parser_version: v.pipe(
 		v.string(),
-		v.check(
-			(s) => KNOWN_PARSER_VERSIONS.has(s),
-			"Unknown parser_version",
-		),
+		v.check((s) => KNOWN_PARSER_VERSIONS.has(s), "Unknown parser_version"),
 	),
 	created_at: v.string(),
 	match_metadata: MatchMetadataSchema,
@@ -200,7 +202,9 @@ export const UploaderPlayerIndexSchema = v.nullable(
 	v.pipe(v.number(), v.integer(), v.minValue(0)),
 );
 
-export type UploaderPlayerIndex = v.InferOutput<typeof UploaderPlayerIndexSchema>;
+export type UploaderPlayerIndex = v.InferOutput<
+	typeof UploaderPlayerIndexSchema
+>;
 
 // ----- PATCH /v1/games/:id body -----
 //

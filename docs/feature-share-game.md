@@ -98,24 +98,24 @@ The export bundles the output of all 12 API calls made by the game detail page i
 
 ```typescript
 interface SharedGameData {
-  // Metadata
-  version: 1;                                      // Schema version for forward compat
-  created_at: string;                              // ISO 8601 timestamp
-  app_version: string;                             // Per-Ankh version that created this
+	// Metadata
+	version: 1; // Schema version for forward compat
+	created_at: string; // ISO 8601 timestamp
+	app_version: string; // Per-Ankh version that created this
 
-  // Game data (mirrors the 12 parallel API calls on the game detail page)
-  game_details: GameDetails;                       // ~2 KB
-  player_history: PlayerHistory[];                 // 40-80 KB
-  yield_history: YieldHistory[];                   // 100-200 KB
-  event_logs: EventLog[];                          // 50-150 KB
-  law_adoption_history: LawAdoptionHistory[];      // 20-40 KB
-  current_laws: PlayerLaw[];                       // 5-10 KB
-  tech_discovery_history: TechDiscoveryHistory[];  // 20-40 KB
-  completed_techs: PlayerTech[];                   // 15-30 KB
-  units_produced: PlayerUnitProduced[];            // 5-10 KB
-  city_statistics: CityStatistics;                 // 15-30 KB
-  improvement_data: ImprovementData;               // 70-155 KB
-  map_tiles: MapTile[];                            // 200-600 KB (final turn only)
+	// Game data (mirrors the 12 parallel API calls on the game detail page)
+	game_details: GameDetails; // ~2 KB
+	player_history: PlayerHistory[]; // 40-80 KB
+	yield_history: YieldHistory[]; // 100-200 KB
+	event_logs: EventLog[]; // 50-150 KB
+	law_adoption_history: LawAdoptionHistory[]; // 20-40 KB
+	current_laws: PlayerLaw[]; // 5-10 KB
+	tech_discovery_history: TechDiscoveryHistory[]; // 20-40 KB
+	completed_techs: PlayerTech[]; // 15-30 KB
+	units_produced: PlayerUnitProduced[]; // 5-10 KB
+	city_statistics: CityStatistics; // 15-30 KB
+	improvement_data: ImprovementData; // 70-155 KB
+	map_tiles: MapTile[]; // 200-600 KB (final turn only)
 }
 ```
 
@@ -125,17 +125,17 @@ All TypeScript types already exist in `src/lib/types/` (auto-generated from Rust
 
 Estimates are for a typical game (~200 turns, 4-8 players):
 
-| Component | Uncompressed | Notes |
-|-----------|-------------|-------|
-| game_details | 1-2 KB | Match metadata + player info |
-| player_history | 40-80 KB | ~200 turns × 4-8 players × 3 metrics |
-| yield_history | 100-200 KB | ~200 turns × 4-8 players × 10+ yield types |
-| event_logs | 50-150 KB | Variable; string descriptions are bulky |
-| law/tech history | 60-120 KB | Step functions, sparser than per-turn |
-| units/cities/improvements | 90-185 KB | City count varies; improvements can be dense |
-| map_tiles (final turn) | 200-600 KB | Map-size dependent; each tile has ~15 fields |
-| **Total** | **~600 KB - 1.5 MB** | |
-| **Gzipped** | **~100 - 300 KB** | JSON compresses ~80% (repetitive field names, forward-filled data) |
+| Component                 | Uncompressed         | Notes                                                              |
+| ------------------------- | -------------------- | ------------------------------------------------------------------ |
+| game_details              | 1-2 KB               | Match metadata + player info                                       |
+| player_history            | 40-80 KB             | ~200 turns × 4-8 players × 3 metrics                               |
+| yield_history             | 100-200 KB           | ~200 turns × 4-8 players × 10+ yield types                         |
+| event_logs                | 50-150 KB            | Variable; string descriptions are bulky                            |
+| law/tech history          | 60-120 KB            | Step functions, sparser than per-turn                              |
+| units/cities/improvements | 90-185 KB            | City count varies; improvements can be dense                       |
+| map_tiles (final turn)    | 200-600 KB           | Map-size dependent; each tile has ~15 fields                       |
+| **Total**                 | **~600 KB - 1.5 MB** |                                                                    |
+| **Gzipped**               | **~100 - 300 KB**    | JSON compresses ~80% (repetitive field names, forward-filled data) |
 
 ### 4.3 Share ID Format
 
@@ -156,14 +156,14 @@ Example: per-ankh.pages.dev/share/V1StGXR8_Z5jdHi6B-myT
 
 ### 5.2 Free Tier Limits
 
-| Resource | Free Allowance | Per-Ankh Usage |
-|----------|---------------|----------------|
-| R2 storage | 10 GB/month | ~300 KB/game → **~33,000 games** |
-| R2 writes (PUT) | 1M/month | 1 per share |
-| R2 reads (GET) | 10M/month | 1 per view |
-| Workers requests | 100K/day | Upload + download combined |
-| Pages bandwidth | Unlimited | Static site hosting |
-| Egress | Free (no bandwidth charges) | — |
+| Resource         | Free Allowance              | Per-Ankh Usage                   |
+| ---------------- | --------------------------- | -------------------------------- |
+| R2 storage       | 10 GB/month                 | ~300 KB/game → **~33,000 games** |
+| R2 writes (PUT)  | 1M/month                    | 1 per share                      |
+| R2 reads (GET)   | 10M/month                   | 1 per view                       |
+| Workers requests | 100K/day                    | Upload + download combined       |
+| Pages bandwidth  | Unlimited                   | Static site hosting              |
+| Egress           | Free (no bandwidth charges) | —                                |
 
 ### 5.3 Performance
 
@@ -317,23 +317,23 @@ In `src/routes/game/[id]/+page.svelte`:
 
 **Reused directly (zero changes):**
 
-| Category | Files |
-|----------|-------|
-| Types | `src/lib/types/*.ts` (all 35 files) |
-| Config | `src/lib/config/charts.ts`, `nations.ts`, `terrain.ts`, `index.ts` |
-| Utils | `src/lib/utils/formatting.ts` |
-| Charts | `Chart.svelte`, `ChartContainer.svelte`, `ChartSeriesFilter.svelte` |
-| Map | `HexMap.svelte` |
-| UI | `SearchInput.svelte`, `GamePageSkeleton.svelte` |
-| Styles | `app.css`, `tailwind.config.js` |
+| Category | Files                                                               |
+| -------- | ------------------------------------------------------------------- |
+| Types    | `src/lib/types/*.ts` (all 35 files)                                 |
+| Config   | `src/lib/config/charts.ts`, `nations.ts`, `terrain.ts`, `index.ts`  |
+| Utils    | `src/lib/utils/formatting.ts`                                       |
+| Charts   | `Chart.svelte`, `ChartContainer.svelte`, `ChartSeriesFilter.svelte` |
+| Map      | `HexMap.svelte`                                                     |
+| UI       | `SearchInput.svelte`, `GamePageSkeleton.svelte`                     |
+| Styles   | `app.css`, `tailwind.config.js`                                     |
 
 **Replaced with web-specific versions:**
 
-| Desktop File | Web Replacement | Reason |
-|-------------|----------------|--------|
-| `src/lib/api.ts` | `api-web.ts` | `fetch()` instead of `invoke()` |
-| `src/lib/utils/dialogs.ts` | Remove or no-op | No native dialogs in browser |
-| `src/routes/+layout.svelte` | Simplified layout | No Header, Sidebar, modals |
+| Desktop File                        | Web Replacement           | Reason                                |
+| ----------------------------------- | ------------------------- | ------------------------------------- |
+| `src/lib/api.ts`                    | `api-web.ts`              | `fetch()` instead of `invoke()`       |
+| `src/lib/utils/dialogs.ts`          | Remove or no-op           | No native dialogs in browser          |
+| `src/routes/+layout.svelte`         | Simplified layout         | No Header, Sidebar, modals            |
 | `src/routes/game/[id]/+page.svelte` | `share/[id]/+page.svelte` | Same rendering, different data source |
 
 **Removed entirely:**
@@ -352,22 +352,22 @@ The web viewer fetches the entire shared JSON blob once, then serves slices of i
 let cachedData: SharedGameData | null = null;
 
 async function getSharedData(shareId: string): Promise<SharedGameData> {
-  if (cachedData) return cachedData;
-  const res = await fetch(`https://share-api.per-ankh.pages.dev/${shareId}`);
-  cachedData = await res.json();  // Browser handles gzip decompression
-  return cachedData;
+	if (cachedData) return cachedData;
+	const res = await fetch(`https://share-api.per-ankh.pages.dev/${shareId}`);
+	cachedData = await res.json(); // Browser handles gzip decompression
+	return cachedData;
 }
 
 export const api = {
-  getGameDetails: async (shareId: string) => {
-    const data = await getSharedData(shareId);
-    return data.game_details;
-  },
-  getPlayerHistory: async (shareId: string) => {
-    const data = await getSharedData(shareId);
-    return data.player_history;
-  },
-  // ... etc for all 12 endpoints
+	getGameDetails: async (shareId: string) => {
+		const data = await getSharedData(shareId);
+		return data.game_details;
+	},
+	getPlayerHistory: async (shareId: string) => {
+		const data = await getSharedData(shareId);
+		return data.player_history;
+	},
+	// ... etc for all 12 endpoints
 };
 ```
 
@@ -489,16 +489,16 @@ Including ownership history for every turn would enable the historical map slide
 
 ```typescript
 interface SharedGameData {
-  // ... existing fields ...
-  map_tiles: MapTile[];                      // Final turn state (base)
-  map_ownership_changes?: OwnershipChange[]; // Delta log for historical playback
+	// ... existing fields ...
+	map_tiles: MapTile[]; // Final turn state (base)
+	map_ownership_changes?: OwnershipChange[]; // Delta log for historical playback
 }
 
 interface OwnershipChange {
-  x: number;
-  y: number;
-  turn: number;
-  owner_nation: string | null;
+	x: number;
+	y: number;
+	turn: number;
+	owner_nation: string | null;
 }
 ```
 

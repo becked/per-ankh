@@ -44,14 +44,16 @@
 	let selectedDate = $state<string | null>(null);
 
 	function handleNationClick(params: ECElementEvent) {
-		if (params.componentType !== "series" || params.seriesType !== "bar") return;
+		if (params.componentType !== "series" || params.seriesType !== "bar")
+			return;
 		const nation = stats.nations[params.dataIndex]?.nation;
 		if (!nation) return;
 		selectedNation = selectedNation === nation ? null : nation;
 	}
 
 	function handleCalendarClick(params: ECElementEvent) {
-		if (params.componentType !== "series" || params.seriesType !== "custom") return;
+		if (params.componentType !== "series" || params.seriesType !== "custom")
+			return;
 		// Custom-series value tuple: [date, nationsJson, colorsJson]
 		const value = params.value as [string, string, string] | undefined;
 		const date = value?.[0];
@@ -185,7 +187,7 @@
 							value: (idx: number) => string;
 							coord: (date: string) => [number, number];
 						},
-					/* eslint-enable no-unused-vars */
+						/* eslint-enable no-unused-vars */
 					) => {
 						const date = api.value(0);
 						const cellPoint = api.coord(date);
@@ -233,7 +235,9 @@
 		} as EChartsOption;
 	}
 
-	const calendarChartOption = $derived(buildCalendarChartOption(stats.save_dates));
+	const calendarChartOption = $derived(
+		buildCalendarChartOption(stats.save_dates),
+	);
 </script>
 
 <!--
@@ -246,7 +250,10 @@
 -->
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4" use:autohideScroll>
+		<div
+			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
+			use:autohideScroll
+		>
 			<h1 class="mb-8 text-3xl font-bold text-gray-200">Overview</h1>
 
 			<div class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
@@ -270,7 +277,9 @@
 					</div>
 
 					<div class="rounded-lg p-3" style="background-color: #35302B;">
-						<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+						<p
+							class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400"
+						>
 							{#if favoriteNation}
 								<SpriteIcon
 									category="crests"

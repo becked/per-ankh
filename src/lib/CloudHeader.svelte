@@ -25,8 +25,7 @@
 	const searchVisible = $derived(
 		page.url.pathname === "/dashboard" ||
 			page.url.pathname === "/games" ||
-			(page.url.pathname.startsWith("/games/") &&
-				page.data.isOwner === true),
+			(page.url.pathname.startsWith("/games/") && page.data.isOwner === true),
 	);
 
 	function toggleMenu() {
@@ -78,9 +77,7 @@
 			class="py-2 pr-2 text-orange transition-colors hover:text-tan"
 			type="button"
 			onclick={toggleMenu}
-			aria-label={user
-				? `Menu — signed in as ${user.display_name}`
-				: "Menu"}
+			aria-label={user ? `Menu — signed in as ${user.display_name}` : "Menu"}
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -178,15 +175,15 @@
 		when the two overlap at narrow widths; pointer-events-auto on the
 		anchor itself so the wordmark stays clickable.
 	-->
-	<div
-		class="pointer-events-none absolute left-1/2 -translate-x-1/2"
-	>
+	<div class="pointer-events-none absolute left-1/2 -translate-x-1/2">
 		<a
 			href={resolve("/dashboard")}
 			class="pointer-events-auto block cursor-pointer transition-opacity hover:opacity-80"
 			aria-label="Per Ankh — go to dashboard"
 		>
-			<div class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200">
+			<div
+				class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"
+			>
 				𓉑 Per Ankh
 			</div>
 		</a>

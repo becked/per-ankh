@@ -66,7 +66,9 @@ const rendered = await page.screenshot({ omitBackground: true });
 await browser.close();
 
 // Trim alpha bbox of glyph render.
-const trimmedMeta = await sharp(rendered).trim({ threshold: 1 }).toBuffer({ resolveWithObject: true });
+const trimmedMeta = await sharp(rendered)
+	.trim({ threshold: 1 })
+	.toBuffer({ resolveWithObject: true });
 const trimmed = trimmedMeta.data;
 const { width: tw, height: th } = trimmedMeta.info;
 
@@ -76,7 +78,10 @@ const glyphFit = Math.round(ICON_SIZE * 0.7);
 const scale = glyphFit / Math.max(tw, th);
 const scaledW = Math.round(tw * scale);
 const scaledH = Math.round(th * scale);
-const scaledGlyph = await sharp(trimmed).resize(scaledW, scaledH, { kernel: "lanczos3" }).png().toBuffer();
+const scaledGlyph = await sharp(trimmed)
+	.resize(scaledW, scaledH, { kernel: "lanczos3" })
+	.png()
+	.toBuffer();
 
 const roundedTile = await sharp({
 	create: {

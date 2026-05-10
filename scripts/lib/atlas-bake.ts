@@ -65,8 +65,6 @@ export interface BakeCellOptions {
 	opacity?: number;
 }
 
-
-
 // Build a hex-clip alpha mask as a binary-alpha PNG buffer (each pixel is
 // either fully opaque or fully transparent — no antialiased gradient at the
 // inscribed hex boundary). Why binary: an antialiased SVG-rasterized mask
@@ -107,8 +105,7 @@ export async function buildHexMask(
 			const [xi, yi] = vertices[i];
 			const [xj, yj] = vertices[j];
 			const crosses =
-				yi > py !== yj > py &&
-				px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
+				yi > py !== yj > py && px < ((xj - xi) * (py - yi)) / (yj - yi) + xi;
 			if (crosses) inside = !inside;
 		}
 		return inside;

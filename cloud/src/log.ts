@@ -156,10 +156,7 @@ export function logEvent(
 	});
 }
 
-export function logWarn(
-	event: string,
-	fields?: Record<string, unknown>,
-): void {
+export function logWarn(event: string, fields?: Record<string, unknown>): void {
 	logEvent("warn", event, fields);
 }
 

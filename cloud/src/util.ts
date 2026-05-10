@@ -20,7 +20,9 @@ export function timingSafeEqual(a: string, b: string): boolean {
 
 // Parse a Cookie header value into a flat name → value map.
 // Returns an empty object if the header is missing or malformed.
-export function parseCookies(headerValue: string | null): Record<string, string> {
+export function parseCookies(
+	headerValue: string | null,
+): Record<string, string> {
 	const out: Record<string, string> = {};
 	if (!headerValue) return out;
 	for (const part of headerValue.split(";")) {
@@ -34,7 +36,9 @@ export function parseCookies(headerValue: string | null): Record<string, string>
 }
 
 // CORS for legacy /v1/share/* — single allowed origin, no credentials.
-export function legacyCorsHeaders(env: Pick<CommonEnv, "ALLOWED_ORIGIN">): Record<string, string> {
+export function legacyCorsHeaders(
+	env: Pick<CommonEnv, "ALLOWED_ORIGIN">,
+): Record<string, string> {
 	return {
 		"Access-Control-Allow-Origin": env.ALLOWED_ORIGIN,
 		"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
@@ -52,7 +56,9 @@ export function cloudCorsHeaders(
 	request: Request,
 ): Record<string, string> {
 	const origin = request.headers.get("Origin");
-	const allowed = env.ALLOWED_ORIGINS.split(",").map((o) => o.trim()).filter(Boolean);
+	const allowed = env.ALLOWED_ORIGINS.split(",")
+		.map((o) => o.trim())
+		.filter(Boolean);
 	const allowedOrigin = origin && allowed.includes(origin) ? origin : "";
 	const headers: Record<string, string> = {
 		"Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",
@@ -122,7 +128,10 @@ export function base64UrlEncode(buffer: ArrayBuffer | Uint8Array): string {
 	const bytes = buffer instanceof Uint8Array ? buffer : new Uint8Array(buffer);
 	let binary = "";
 	for (const b of bytes) binary += String.fromCharCode(b);
-	return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+	return btoa(binary)
+		.replace(/\+/g, "-")
+		.replace(/\//g, "_")
+		.replace(/=+$/, "");
 }
 
 // Decompress gzipped data with a size limit to prevent gzip bombs. Used by

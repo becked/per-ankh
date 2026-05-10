@@ -227,9 +227,7 @@ export function parseLaws(root: Record<string, unknown>): Law[] {
 
 // ---------- Player goals (player_data.rs:351–457) ----------
 
-export function parsePlayerGoals(
-	root: Record<string, unknown>,
-): PlayerGoal[] {
+export function parsePlayerGoals(root: Record<string, unknown>): PlayerGoal[] {
 	const out: PlayerGoal[] = [];
 	for (const [playerXmlId, node] of eachPlayer(root)) {
 		const goalListNode = node.GoalList;
@@ -366,9 +364,7 @@ export function technologyStateToRow(
 	};
 }
 
-export function playerCouncilToRow(
-	c: PlayerCouncil,
-): Record<string, unknown> {
+export function playerCouncilToRow(c: PlayerCouncil): Record<string, unknown> {
 	return {
 		player_xml_id: c.playerXmlId,
 		position: c.position,

@@ -247,9 +247,7 @@ export function parseCityProjectCounts(
 
 		// Rust filters count > 0, so unparseable / zero-count entries are
 		// dropped. parseNameKeyedIntMap already drops unparseable.
-		for (const [projectType, count] of parseNameKeyedIntMap(
-			projectCountNode,
-		)) {
+		for (const [projectType, count] of parseNameKeyedIntMap(projectCountNode)) {
 			if (count > 0) {
 				out.push({ cityXmlId, projectType, count });
 			}
@@ -293,18 +291,14 @@ export function parseCityEnemyAgents(
 
 // ---------- Luxuries (city_data.rs:339–364) ----------
 
-export function parseCityLuxuries(
-	root: Record<string, unknown>,
-): CityLuxury[] {
+export function parseCityLuxuries(root: Record<string, unknown>): CityLuxury[] {
 	const out: CityLuxury[] = [];
 
 	for (const [cityXmlId, node] of eachCity(root)) {
 		const luxuryNode = node.LuxuryTurn;
 		if (!isElement(luxuryNode)) continue;
 
-		for (const [resource, importedTurn] of parseNameKeyedIntMap(
-			luxuryNode,
-		)) {
+		for (const [resource, importedTurn] of parseNameKeyedIntMap(luxuryNode)) {
 			out.push({ cityXmlId, resource, importedTurn });
 		}
 	}
@@ -351,9 +345,7 @@ export function parseCityReligions(
 
 // ---------- Culture (city_data.rs:185–250) ----------
 
-export function parseCityCulture(
-	root: Record<string, unknown>,
-): CityCulture[] {
+export function parseCityCulture(root: Record<string, unknown>): CityCulture[] {
 	const out: CityCulture[] = [];
 
 	for (const [cityXmlId, node] of eachCity(root)) {

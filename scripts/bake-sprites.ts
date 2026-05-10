@@ -115,16 +115,15 @@ async function copyIcons(): Promise<number> {
 	const dst = resolve(SPRITES_OUT, "icons");
 	await wipeAndRecreate(dst);
 	for (const { source, target } of ICON_MAPPINGS) {
-		await copyFile(
-			resolve(PINACOTHECA_SPRITES, source),
-			resolve(dst, target),
-		);
+		await copyFile(resolve(PINACOTHECA_SPRITES, source), resolve(dst, target));
 	}
 	return ICON_MAPPINGS.length;
 }
 
 async function main(): Promise<void> {
-	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
+	const pinacothecaVersion = await readPinacothecaVersion(
+		PINACOTHECA_PYPROJECT,
+	);
 	const bakedAt = new Date().toISOString();
 	console.log(
 		`[sprites] pinacotheca ${pinacothecaVersion}, baked at ${bakedAt}`,

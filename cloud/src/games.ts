@@ -126,7 +126,9 @@ async function countEventsSince(
 	const where = column
 		? `${column} = ? AND event_type IN (${placeholders}) AND created_at > datetime('now', '-1 hour')`
 		: `event_type IN (${placeholders}) AND created_at > datetime('now', '-1 hour')`;
-	const stmt = db.prepare(`SELECT COUNT(*) as count FROM events WHERE ${where}`);
+	const stmt = db.prepare(
+		`SELECT COUNT(*) as count FROM events WHERE ${where}`,
+	);
 	const result = await (column && value !== null
 		? stmt.bind(value, ...types).first<{ count: number }>()
 		: stmt.bind(...types).first<{ count: number }>());
@@ -282,9 +284,15 @@ function buildGameRow(inp: GameRowInputs): {
 	bindings: unknown[];
 } {
 	const {
-		gameId, userId, blob, fileHash, blobSize, uploaderIndex,
+		gameId,
+		userId,
+		blob,
+		fileHash,
+		blobSize,
+		uploaderIndex,
 		collectionId,
-		createdAtOverride, isPublicOverride,
+		createdAtOverride,
+		isPublicOverride,
 	} = inp;
 	const md = blob.match_metadata;
 	const gd = blob.game_details as {
@@ -305,7 +313,8 @@ function buildGameRow(inp: GameRowInputs): {
 		userWon = winner ? winner.winner_player_xml_id === uploaderIndex : null;
 	}
 
-	const isPublic = isPublicOverride === undefined ? 0 : isPublicOverride ? 1 : 0;
+	const isPublic =
+		isPublicOverride === undefined ? 0 : isPublicOverride ? 1 : 0;
 
 	// On re-import, REPLACE the games row (cascades child deletes), preserve
 	// created_at, is_public, and collection_id, and bump updated_at to now.
@@ -325,13 +334,27 @@ function buildGameRow(inp: GameRowInputs): {
 				created_at, updated_at
 			) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?, ?, datetime('now'))`,
 			bindings: [
-				gameId, userId, md.xml_game_id, md.total_turns, fileHash,
-				md.game_name, md.save_date, md.map_size, md.map_class, md.game_mode,
-				md.difficulty, md.opponent_level,
-				gd.winner_civilization, gd.winner_name, victoryType,
-				userNation, userWon === null ? null : userWon ? 1 : 0,
+				gameId,
+				userId,
+				md.xml_game_id,
+				md.total_turns,
+				fileHash,
+				md.game_name,
+				md.save_date,
+				md.map_size,
+				md.map_class,
+				md.game_mode,
+				md.difficulty,
+				md.opponent_level,
+				gd.winner_civilization,
+				gd.winner_name,
+				victoryType,
+				userNation,
+				userWon === null ? null : userWon ? 1 : 0,
 				isPublic,
-				blob.version, blobSize, blob.parser_version,
+				blob.version,
+				blobSize,
+				blob.parser_version,
 				collectionId,
 				createdAtOverride,
 			],
@@ -350,13 +373,27 @@ function buildGameRow(inp: GameRowInputs): {
 			collection_id
 		) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?)`,
 		bindings: [
-			gameId, userId, md.xml_game_id, md.total_turns, fileHash,
-			md.game_name, md.save_date, md.map_size, md.map_class, md.game_mode,
-			md.difficulty, md.opponent_level,
-			gd.winner_civilization, gd.winner_name, victoryType,
-			userNation, userWon === null ? null : userWon ? 1 : 0,
+			gameId,
+			userId,
+			md.xml_game_id,
+			md.total_turns,
+			fileHash,
+			md.game_name,
+			md.save_date,
+			md.map_size,
+			md.map_class,
+			md.game_mode,
+			md.difficulty,
+			md.opponent_level,
+			gd.winner_civilization,
+			gd.winner_name,
+			victoryType,
+			userNation,
+			userWon === null ? null : userWon ? 1 : 0,
 			isPublic,
-			blob.version, blobSize, blob.parser_version,
+			blob.version,
+			blobSize,
+			blob.parser_version,
 			collectionId,
 		],
 	};
@@ -460,7 +497,11 @@ function buildGamePlayerTurnStatements(
 	const yieldHistory = blob.yield_history as Array<{
 		player_id: number;
 		yield_type: string;
-		data: Array<{ turn: number; rate: number | null; cumulative: number | null }>;
+		data: Array<{
+			turn: number;
+			rate: number | null;
+			cumulative: number | null;
+		}>;
 	}>;
 
 	for (const entry of yieldHistory) {
@@ -486,7 +527,8 @@ function buildGamePlayerTurnStatements(
 	for (const entry of playerHistory) {
 		for (const point of entry.history) {
 			const row = ensureRow(entry.player_id, point.turn);
-			if (point.military_power !== null) row.military_power = point.military_power;
+			if (point.military_power !== null)
+				row.military_power = point.military_power;
 			if (point.legitimacy !== null) row.legitimacy = point.legitimacy;
 		}
 	}
@@ -495,22 +537,39 @@ function buildGamePlayerTurnStatements(
 
 	// Stable column order matches table definition.
 	const columns = [
-		"game_id", "player_index", "turn",
-		"food_per_turn", "food_cumulative",
-		"growth_per_turn", "growth_cumulative",
-		"science_per_turn", "science_cumulative",
-		"culture_per_turn", "culture_cumulative",
-		"civics_per_turn", "civics_cumulative",
-		"training_per_turn", "training_cumulative",
-		"money_per_turn", "money_cumulative",
-		"orders_per_turn", "orders_cumulative",
-		"happiness_per_turn", "happiness_cumulative",
-		"discontent_per_turn", "discontent_cumulative",
-		"iron_per_turn", "iron_cumulative",
-		"stone_per_turn", "stone_cumulative",
-		"wood_per_turn", "wood_cumulative",
-		"maintenance_per_turn", "maintenance_cumulative",
-		"military_power", "legitimacy",
+		"game_id",
+		"player_index",
+		"turn",
+		"food_per_turn",
+		"food_cumulative",
+		"growth_per_turn",
+		"growth_cumulative",
+		"science_per_turn",
+		"science_cumulative",
+		"culture_per_turn",
+		"culture_cumulative",
+		"civics_per_turn",
+		"civics_cumulative",
+		"training_per_turn",
+		"training_cumulative",
+		"money_per_turn",
+		"money_cumulative",
+		"orders_per_turn",
+		"orders_cumulative",
+		"happiness_per_turn",
+		"happiness_cumulative",
+		"discontent_per_turn",
+		"discontent_cumulative",
+		"iron_per_turn",
+		"iron_cumulative",
+		"stone_per_turn",
+		"stone_cumulative",
+		"wood_per_turn",
+		"wood_cumulative",
+		"maintenance_per_turn",
+		"maintenance_cumulative",
+		"military_power",
+		"legitimacy",
 	];
 
 	const allRows = Array.from(rowsByKey.values());
@@ -617,7 +676,9 @@ function coerceD1Bool(v: unknown): boolean | null {
 // Normalize a /v1/games row to the wire types declared in
 // src/lib/api-cloud.ts `GameListItem`. Boolean columns: `user_won`,
 // `is_public`. collection_id passes through (already number | null in D1).
-function normalizeGameListRow(row: Record<string, unknown>): Record<string, unknown> {
+function normalizeGameListRow(
+	row: Record<string, unknown>,
+): Record<string, unknown> {
 	return {
 		...row,
 		user_won: coerceD1Bool(row.user_won),
@@ -640,14 +701,47 @@ export async function handleGameUpload(
 
 	// Rate limits (per-user, per-IP, global). Counts uploads + re-imports
 	// together — re-imports are the same R2/D1 work as a fresh upload.
-	if ((await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, "user_id", userId)) >= PER_USER_UPLOADS_PER_HOUR) {
-		return errorResponse("Per-user upload limit exceeded", 429, cors, "RATE_LIMIT_USER");
+	if (
+		(await countEventsSince(
+			env.SHARE_DB,
+			UPLOAD_EVENT_TYPES,
+			"user_id",
+			userId,
+		)) >= PER_USER_UPLOADS_PER_HOUR
+	) {
+		return errorResponse(
+			"Per-user upload limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_USER",
+		);
 	}
-	if (ip && (await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, "ip_address", ip)) >= PER_IP_UPLOADS_PER_HOUR) {
-		return errorResponse("Per-IP upload limit exceeded", 429, cors, "RATE_LIMIT_IP");
+	if (
+		ip &&
+		(await countEventsSince(
+			env.SHARE_DB,
+			UPLOAD_EVENT_TYPES,
+			"ip_address",
+			ip,
+		)) >= PER_IP_UPLOADS_PER_HOUR
+	) {
+		return errorResponse(
+			"Per-IP upload limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_IP",
+		);
 	}
-	if ((await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, null, null)) >= GLOBAL_UPLOADS_PER_HOUR) {
-		return errorResponse("Global upload limit exceeded", 429, cors, "RATE_LIMIT_GLOBAL");
+	if (
+		(await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, null, null)) >=
+		GLOBAL_UPLOADS_PER_HOUR
+	) {
+		return errorResponse(
+			"Global upload limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_GLOBAL",
+		);
 	}
 
 	// Parse multipart
@@ -669,7 +763,9 @@ export async function handleGameUpload(
 	const savePart = form.get("save");
 	const indexRaw = form.get("uploader_player_index");
 	const isBlobLike = (v: unknown): v is Blob =>
-		!!v && typeof v === "object" && typeof (v as { arrayBuffer?: unknown }).arrayBuffer === "function";
+		!!v &&
+		typeof v === "object" &&
+		typeof (v as { arrayBuffer?: unknown }).arrayBuffer === "function";
 
 	if (!isBlobLike(dataPart)) {
 		return errorResponse("Missing 'data' part", 400, cors, "MISSING_DATA");
@@ -680,7 +776,9 @@ export async function handleGameUpload(
 	if (typeof indexRaw !== "string") {
 		return errorResponse(
 			"Missing 'uploader_player_index' field",
-			400, cors, "MISSING_INDEX",
+			400,
+			cors,
+			"MISSING_INDEX",
 		);
 	}
 	const dataBlob = dataPart;
@@ -700,12 +798,20 @@ export async function handleGameUpload(
 	const compressedData = await dataBlob.arrayBuffer();
 	let decompressed: Uint8Array;
 	try {
-		decompressed = await decompressWithLimit(compressedData, MAX_BLOB_DECOMPRESSED);
+		decompressed = await decompressWithLimit(
+			compressedData,
+			MAX_BLOB_DECOMPRESSED,
+		);
 	} catch (e) {
 		logWarn("blob_decompress_failed", {
 			message: e instanceof Error ? e.message : "unknown",
 		});
-		return errorResponse("Decompressed payload too large", 413, cors, "DECOMPRESSED_TOO_LARGE");
+		return errorResponse(
+			"Decompressed payload too large",
+			413,
+			cors,
+			"DECOMPRESSED_TOO_LARGE",
+		);
 	}
 	let parsed: unknown;
 	try {
@@ -723,7 +829,9 @@ export async function handleGameUpload(
 		});
 		return errorResponse(
 			`Blob validation: ${issue?.message ?? "unknown"}`,
-			400, cors, "INVALID_BLOB",
+			400,
+			cors,
+			"INVALID_BLOB",
 		);
 	}
 	const blob = validation.output;
@@ -737,7 +845,9 @@ export async function handleGameUpload(
 	if (blob.match_metadata.game_over !== true) {
 		return errorResponse(
 			"Save is not a completed game — only completed games can be uploaded.",
-			400, cors, "NOT_COMPLETED",
+			400,
+			cors,
+			"NOT_COMPLETED",
 		);
 	}
 
@@ -749,14 +859,18 @@ export async function handleGameUpload(
 	} catch {
 		return errorResponse(
 			"uploader_player_index is not valid JSON",
-			400, cors, "INVALID_INDEX_JSON",
+			400,
+			cors,
+			"INVALID_INDEX_JSON",
 		);
 	}
 	const indexValidation = v.safeParse(UploaderPlayerIndexSchema, indexParsed);
 	if (!indexValidation.success) {
 		return errorResponse(
 			`uploader_player_index: ${indexValidation.issues[0]?.message ?? "invalid"}`,
-			400, cors, "INVALID_INDEX",
+			400,
+			cors,
+			"INVALID_INDEX",
 		);
 	}
 
@@ -770,7 +884,9 @@ export async function handleGameUpload(
 	if (uploaderIndex !== null && !humansByIndex.has(uploaderIndex)) {
 		return errorResponse(
 			`Player index ${uploaderIndex} not found among humans`,
-			400, cors, "UNKNOWN_PLAYER_INDEX",
+			400,
+			cors,
+			"UNKNOWN_PLAYER_INDEX",
 		);
 	}
 
@@ -808,7 +924,11 @@ export async function handleGameUpload(
 		const cmp = compareSemver(blob.parser_version, existing.parser_version);
 		if (cmp <= 0) {
 			return jsonResponse(
-				{ error: "Duplicate", code: "DUPLICATE", existing_game_id: existing.game_id },
+				{
+					error: "Duplicate",
+					code: "DUPLICATE",
+					existing_game_id: existing.game_id,
+				},
 				409,
 				cors,
 			);
@@ -846,11 +966,17 @@ export async function handleGameUpload(
 					contentType: "application/json",
 					contentEncoding: "gzip",
 				},
-				customMetadata: { user_id: userId, created_at: new Date().toISOString() },
+				customMetadata: {
+					user_id: userId,
+					created_at: new Date().toISOString(),
+				},
 			}),
 			env.SHARE_BUCKET.put(zipKey, rawZip, {
 				httpMetadata: { contentType: "application/zip" },
-				customMetadata: { user_id: userId, created_at: new Date().toISOString() },
+				customMetadata: {
+					user_id: userId,
+					created_at: new Date().toISOString(),
+				},
 			}),
 		]);
 	} catch (e) {
@@ -866,13 +992,21 @@ export async function handleGameUpload(
 	// existing row.
 	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
 	const gameRow = buildGameRow({
-		gameId, userId, blob, fileHash, blobSize: dataBlob.size, uploaderIndex,
+		gameId,
+		userId,
+		blob,
+		fileHash,
+		blobSize: dataBlob.size,
+		uploaderIndex,
 		collectionId,
 		createdAtOverride: existingCreatedAt,
 		isPublicOverride: existingIsPublic,
 	});
 	const summaryStmts = buildSummaryStatements(env.SHARE_DB, {
-		gameId, blob, uploaderIndex, winnerIndex,
+		gameId,
+		blob,
+		uploaderIndex,
+		winnerIndex,
 	});
 	const gptStmts = buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob);
 	const techStmts = buildTechEventStatements(env.SHARE_DB, gameId, blob);
@@ -948,9 +1082,9 @@ export async function handleGameUpload(
 					uploader_index: uploaderIndex,
 					...(isReimport
 						? {
-							from_version: existingParserVersion,
-							to_version: blob.parser_version,
-						}
+								from_version: existingParserVersion,
+								to_version: blob.parser_version,
+							}
 						: {}),
 				}),
 			)
@@ -975,11 +1109,7 @@ export async function handleGameUpload(
 			cors,
 		);
 	}
-	return jsonResponse(
-		{ game_id: gameId, url: `/games/${gameId}` },
-		201,
-		cors,
-	);
+	return jsonResponse({ game_id: gameId, url: `/games/${gameId}` }, 201, cors);
 }
 
 export async function handleGameList(
@@ -993,8 +1123,14 @@ export async function handleGameList(
 	const userId = session.data.user_id;
 
 	const url = new URL(request.url);
-	const limit = Math.min(parseInt(url.searchParams.get("limit") ?? "50", 10) || 50, 200);
-	const offset = Math.max(parseInt(url.searchParams.get("offset") ?? "0", 10) || 0, 0);
+	const limit = Math.min(
+		parseInt(url.searchParams.get("limit") ?? "50", 10) || 50,
+		200,
+	);
+	const offset = Math.max(
+		parseInt(url.searchParams.get("offset") ?? "0", 10) || 0,
+		0,
+	);
 
 	// Optional filters. ?filter=public takes precedence over ?collection_id
 	// when both are passed; the dashboard sidebar only ever sends one at a
@@ -1038,11 +1174,7 @@ export async function handleGameList(
 	const games = (rows.results ?? []).map((r) =>
 		normalizeGameListRow(r as Record<string, unknown>),
 	);
-	return jsonResponse(
-		{ games, total: total?.count ?? 0 },
-		200,
-		cors,
-	);
+	return jsonResponse({ games, total: total?.count ?? 0 }, 200, cors);
 }
 
 export async function handleGameDetail(
@@ -1082,7 +1214,10 @@ export async function handleGameDetail(
 		const ua = request.headers.get("User-Agent");
 		if (!isScraperUA(ua)) {
 			const count = await countEventsSince(
-				env.SHARE_DB, "anon_read", "ip_address", ip,
+				env.SHARE_DB,
+				"anon_read",
+				"ip_address",
+				ip,
 			);
 			if (count >= ANON_READS_PER_HOUR) {
 				return errorResponse(
@@ -1117,7 +1252,10 @@ export async function handleGameDetail(
 	// Decompress in Worker — Cloudflare strips Content-Encoding from Worker
 	// responses, so we can't pass the compressed body through directly.
 	const compressed = await obj.arrayBuffer();
-	const decompressed = await decompressWithLimit(compressed, MAX_BLOB_DECOMPRESSED);
+	const decompressed = await decompressWithLimit(
+		compressed,
+		MAX_BLOB_DECOMPRESSED,
+	);
 
 	// Parse, transform, re-serialize. Owner gets an `is_public` flag
 	// injected for the visibility toggle's initial state; anonymous viewers
@@ -1209,8 +1347,12 @@ export async function handleGamePatch(
 	// move shouldn't burn the user's hourly toggle budget.
 	if (is_public !== undefined) {
 		if (
-			(await countEventsSince(env.SHARE_DB, "visibility_change", "user_id", userId)) >=
-			PER_USER_PATCH_PER_HOUR
+			(await countEventsSince(
+				env.SHARE_DB,
+				"visibility_change",
+				"user_id",
+				userId,
+			)) >= PER_USER_PATCH_PER_HOUR
 		) {
 			return errorResponse(
 				"Per-user toggle limit exceeded",
@@ -1388,7 +1530,9 @@ export async function handleGameDownload(
 	) {
 		return errorResponse(
 			"Per-user download limit exceeded",
-			429, cors, "RATE_LIMIT_USER",
+			429,
+			cors,
+			"RATE_LIMIT_USER",
 		);
 	}
 	const ip = getClientIp(request);
@@ -1399,7 +1543,9 @@ export async function handleGameDownload(
 	) {
 		return errorResponse(
 			"Per-IP download limit exceeded",
-			429, cors, "RATE_LIMIT_IP",
+			429,
+			cors,
+			"RATE_LIMIT_IP",
 		);
 	}
 

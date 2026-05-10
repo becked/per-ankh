@@ -127,7 +127,10 @@
 	async function moveToCollection(collectionId: number) {
 		if (!contextMenu) return;
 		try {
-			await cloudApi.moveGameToCollection(contextMenu.game.game_id, collectionId);
+			await cloudApi.moveGameToCollection(
+				contextMenu.game.game_id,
+				collectionId,
+			);
 			await invalidateAll();
 		} catch (err) {
 			console.error("Failed to move game:", err);
@@ -140,7 +143,10 @@
 		createError = null;
 		try {
 			const created = await cloudApi.createCollection(newCollectionName.trim());
-			await cloudApi.moveGameToCollection(contextMenu.game.game_id, created.collection_id);
+			await cloudApi.moveGameToCollection(
+				contextMenu.game.game_id,
+				created.collection_id,
+			);
 			await invalidateAll();
 			closeContextMenu();
 		} catch (err) {
@@ -203,7 +209,8 @@
 			// stats.save_dates uses YYYY-MM-DD; GameListItem.save_date is full
 			// ISO 8601, so compare against the leading day component.
 			result = result.filter(
-				(g) => g.save_date != null && g.save_date.substring(0, 10) === selectedDate,
+				(g) =>
+					g.save_date != null && g.save_date.substring(0, 10) === selectedDate,
 			);
 		}
 
@@ -216,7 +223,9 @@
 				? formatEnum(game.user_nation, "NATION_").toLowerCase()
 				: "";
 			const date = formatGameSubtitle(game).toLowerCase();
-			return title.includes(query) || nation.includes(query) || date.includes(query);
+			return (
+				title.includes(query) || nation.includes(query) || date.includes(query)
+			);
 		});
 	});
 
@@ -231,7 +240,10 @@
 		if (monthKey === "unknown") return "Unknown Date";
 		const [year, month] = monthKey.split("-");
 		const date = new Date(Number(year), Number(month) - 1);
-		return date.toLocaleDateString("en-US", { month: "short", year: "numeric" });
+		return date.toLocaleDateString("en-US", {
+			month: "short",
+			year: "numeric",
+		});
 	}
 
 	type GameGroup = { monthKey: string; label: string; games: GameListItem[] };
@@ -333,7 +345,9 @@
 				{#each groupedGames as group (group.monthKey)}
 					<div class="month-separator my-2 flex items-center gap-1.5 px-1">
 						<div class="separator-line h-px flex-1 bg-tan opacity-50"></div>
-						<span class="whitespace-nowrap text-[9px] text-tan">{group.label}</span>
+						<span class="whitespace-nowrap text-[9px] text-tan"
+							>{group.label}</span
+						>
 						<div class="separator-line h-px flex-1 bg-tan opacity-50"></div>
 					</div>
 
@@ -377,7 +391,7 @@
 		style="left: {contextMenu.x}px; top: {contextMenu.y}px;"
 		onclick={(e) => e.stopPropagation()}
 		onkeydown={(e) => {
-			if (e.key === 'Escape') contextMenu = null;
+			if (e.key === "Escape") contextMenu = null;
 		}}
 		role="menu"
 		tabindex="-1"

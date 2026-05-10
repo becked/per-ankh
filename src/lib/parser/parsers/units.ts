@@ -103,10 +103,7 @@ function parseStrictUnitCounts(
 	if (!isElement(node)) return out;
 	for (const [unitType, value] of getElementChildren(node)) {
 		if (typeof value !== "string" || value === "") {
-			throw new ParseError(
-				`${parentLabel}/${unitType} text`,
-				"MISSING_FIELD",
-			);
+			throw new ParseError(`${parentLabel}/${unitType} text`, "MISSING_FIELD");
 		}
 		const count = parseInt(value, 10);
 		if (Number.isNaN(count)) {
@@ -130,8 +127,7 @@ export function parseUnits(root: Record<string, unknown>): Unit[] {
 
 		// Player attribute, sentinel-filtered (-1 → null).
 		const playerRaw = optInt(node["@_Player"]);
-		const playerXmlId =
-			playerRaw === null || playerRaw < 0 ? null : playerRaw;
+		const playerXmlId = playerRaw === null || playerRaw < 0 ? null : playerRaw;
 
 		// OriginalPlayer is a child element, NOT an attribute.
 		const originalPlayerRaw = optInt(node.OriginalPlayer);
@@ -193,9 +189,7 @@ export function parseUnitPromotions(
 
 // ---------- Unit effects (units.rs:108–123) ----------
 
-export function parseUnitEffects(
-	root: Record<string, unknown>,
-): UnitEffect[] {
+export function parseUnitEffects(root: Record<string, unknown>): UnitEffect[] {
 	const out: UnitEffect[] = [];
 
 	for (const [unitXmlId, , node] of eachUnit(root)) {
@@ -214,9 +208,7 @@ export function parseUnitEffects(
 
 // ---------- Unit families (units.rs:126–145) ----------
 
-export function parseUnitFamilies(
-	root: Record<string, unknown>,
-): UnitFamily[] {
+export function parseUnitFamilies(root: Record<string, unknown>): UnitFamily[] {
 	const out: UnitFamily[] = [];
 
 	for (const [unitXmlId, , node] of eachUnit(root)) {

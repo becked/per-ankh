@@ -6,10 +6,7 @@
 
 import type { EventLog as ParsedEventLog } from "../parsers/events.js";
 import type { Player } from "../parsers/players.js";
-import type {
-	TechDiscoveryDataPoint,
-	TechDiscoveryHistory,
-} from "../types.js";
+import type { TechDiscoveryDataPoint, TechDiscoveryHistory } from "../types.js";
 import { playersOrderedByName } from "./_helpers.js";
 
 export function deriveTechDiscoveryHistory(

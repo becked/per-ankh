@@ -12,11 +12,11 @@
 		with their respective owners.
 	</p>
 	<p>
-		Any artwork, images, or other game assets used in this tool are the
-		property of Mohawk Games and are reproduced here solely to support the Old
-		World player community. No ownership of these assets is claimed by the
-		creators of this tool. This project is provided free of charge and is
-		non-commercial in nature.
+		Any artwork, images, or other game assets used in this tool are the property
+		of Mohawk Games and are reproduced here solely to support the Old World
+		player community. No ownership of these assets is claimed by the creators of
+		this tool. This project is provided free of charge and is non-commercial in
+		nature.
 	</p>
 	<p>
 		If you are a rights holder and would like any content removed or modified,

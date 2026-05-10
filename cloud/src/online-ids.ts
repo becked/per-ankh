@@ -2,7 +2,12 @@
 // selections (see games.ts handleGameUpload step "Auto-link OnlineIDs").
 // Read by the picker before each upload to pre-check matching humans.
 
-import { cloudCorsHeaders, errorResponse, getClientIp, jsonResponse } from "./util";
+import {
+	cloudCorsHeaders,
+	errorResponse,
+	getClientIp,
+	jsonResponse,
+} from "./util";
 import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 import { logError } from "./log";

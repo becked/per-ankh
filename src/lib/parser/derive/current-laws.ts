@@ -34,8 +34,7 @@ export function deriveCurrentLaws(
 	for (const l of laws) {
 		const player = playerMap.get(l.playerXmlId);
 		if (!player) continue;
-		const adoptedFromEvents =
-			latestByKey.get(`${l.playerXmlId}:${l.law}`) ?? 0;
+		const adoptedFromEvents = latestByKey.get(`${l.playerXmlId}:${l.law}`) ?? 0;
 		out.push({
 			player_id: l.playerXmlId,
 			player_name: player.playerName,

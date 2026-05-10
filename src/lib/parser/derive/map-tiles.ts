@@ -64,8 +64,10 @@ export function deriveMapTiles(
 				? (playerMap.get(city.playerXmlId)?.stateReligion ?? null)
 				: null;
 		list.sort((a, b) => {
-			const aIsState = stateReligion !== null && a.religion_name === stateReligion ? 0 : 1;
-			const bIsState = stateReligion !== null && b.religion_name === stateReligion ? 0 : 1;
+			const aIsState =
+				stateReligion !== null && a.religion_name === stateReligion ? 0 : 1;
+			const bIsState =
+				stateReligion !== null && b.religion_name === stateReligion ? 0 : 1;
 			return aIsState - bIsState || strCmp(a.religion_name, b.religion_name);
 		});
 	}

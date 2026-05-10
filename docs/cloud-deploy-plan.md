@@ -115,6 +115,7 @@ move to manifest lookups:
 
 1. `src/lib/SpriteMap.svelte:33-38` — atlas `.webp` URLs built from
    `ATLAS_BASE` + hardcoded names:
+
    ```typescript
    import { ATLAS_MANIFEST } from "$lib/generated/atlas-manifest";
 
@@ -124,8 +125,9 @@ move to manifest lookups:
    const urbanAtlasUrl = (family: string) =>
    	ATLAS_MANIFEST[`improvements-urban-${family}.webp`];
    ```
-2. `src/lib/SpriteMap.svelte:534` — `fetch(\`/atlases/${name}.json\`)` for
-   per-atlas cell-coordinate sidecars. The `.json` and `.webp` for the same
+
+2. `src/lib/SpriteMap.svelte:534` — `fetch(\`/atlases/${name}.json\`)`for
+per-atlas cell-coordinate sidecars. The`.json`and`.webp` for the same
    atlas must share a hash so the pair stays in sync; the bake script
    should derive one hash per logical atlas (e.g. from the source PNG) and
    apply it to both files.
@@ -224,10 +226,7 @@ SvelteKit routing:
 // In src/hooks.server.ts handle()
 if (event.url.pathname.startsWith("/share/")) {
 	const id = event.url.pathname.slice("/share/".length);
-	return Response.redirect(
-		`https://per-ankh-web.pages.dev/share/${id}`,
-		301,
-	);
+	return Response.redirect(`https://per-ankh-web.pages.dev/share/${id}`, 301);
 }
 ```
 
@@ -366,11 +365,11 @@ So future-Claude doesn't try to reintroduce these.
 
 Ship after deploy when there's a reason to. None block launch.
 
-| Item                                     | Notes                                                                                                                                                                                                                                                  |
-| ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Account-deletion path                    | Privacy compliance. No UI today to delete user record + cascade to games + R2.                                                                                                                                                                         |
-| Unlink-Discord                           | Intentionally not offered — Discord is the only auth provider. Add when a second provider exists.                                                                                                                                                      |
-| Dynamic per-game OG image                | satori + resvg-wasm Worker route. Replaces static `og-default.png`.                                                                                                                                                                                    |
-| Mobile-width header layout               | `/games/[id]` may need a collapse menu on narrow screens.                                                                                                                                                                                              |
-| Prune `anon_read` rows from `events`     | Scheduled Worker cron: `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily. Other event types stay (audit log).                                                                                     |
-| `_routes.json` tuning                    | adapter-cloudflare warns about dropped exclude rules; static asset paths invoke the SSR Worker unnecessarily.                                                                                                                                          |
+| Item                                 | Notes                                                                                                                                                              |
+| ------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| Account-deletion path                | Privacy compliance. No UI today to delete user record + cascade to games + R2.                                                                                     |
+| Unlink-Discord                       | Intentionally not offered — Discord is the only auth provider. Add when a second provider exists.                                                                  |
+| Dynamic per-game OG image            | satori + resvg-wasm Worker route. Replaces static `og-default.png`.                                                                                                |
+| Mobile-width header layout           | `/games/[id]` may need a collapse menu on narrow screens.                                                                                                          |
+| Prune `anon_read` rows from `events` | Scheduled Worker cron: `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily. Other event types stay (audit log). |
+| `_routes.json` tuning                | adapter-cloudflare warns about dropped exclude rules; static asset paths invoke the SSR Worker unnecessarily.                                                      |

@@ -36,7 +36,10 @@ export async function createSession(
 	discordUsername: string,
 ): Promise<string> {
 	const token = nanoid(32);
-	const data: SessionData = { user_id: userId, discord_username: discordUsername };
+	const data: SessionData = {
+		user_id: userId,
+		discord_username: discordUsername,
+	};
 	await env.SESSIONS_KV.put(sessionKey(token), JSON.stringify(data), {
 		expirationTtl: SESSION_TTL_SECONDS,
 	});
@@ -68,7 +71,10 @@ export async function readSession(
 	}
 }
 
-export async function deleteSession(env: SessionEnv, token: string): Promise<void> {
+export async function deleteSession(
+	env: SessionEnv,
+	token: string,
+): Promise<void> {
 	await env.SESSIONS_KV.delete(sessionKey(token));
 }
 

@@ -39,10 +39,7 @@ export function parseDiplomacyRelations(
  * Mirrors `rsplitn(2, '.')` on the Rust side via lastIndexOf — splits on the
  * RIGHTMOST dot only.
  */
-function parseTribeDiplomacy(
-	node: unknown,
-	out: DiplomacyRelation[],
-): void {
+function parseTribeDiplomacy(node: unknown, out: DiplomacyRelation[]): void {
 	if (!isElement(node)) return;
 
 	for (const [key, value] of getElementChildren(node)) {
@@ -81,10 +78,7 @@ function parseTribeDiplomacy(
  * to match the Rust source; the source-element name is `TeamDiplomacy` but
  * the modeled entities are players.
  */
-function parseTeamDiplomacy(
-	node: unknown,
-	out: DiplomacyRelation[],
-): void {
+function parseTeamDiplomacy(node: unknown, out: DiplomacyRelation[]): void {
 	if (!isElement(node)) return;
 
 	for (const [key, value] of getElementChildren(node)) {

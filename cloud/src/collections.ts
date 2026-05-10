@@ -8,11 +8,7 @@
 
 import * as v from "valibot";
 import { CreateCollectionSchema } from "./schemas/collection";
-import {
-	cloudCorsHeaders,
-	errorResponse,
-	jsonResponse,
-} from "./util";
+import { cloudCorsHeaders, errorResponse, jsonResponse } from "./util";
 import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 

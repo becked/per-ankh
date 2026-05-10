@@ -53,8 +53,7 @@ export function parseCharacters(root: Record<string, unknown>): Character[] {
 
 		// Player="-1" means tribal/unowned; preserve null for those.
 		const playerRaw = optInt(node["@_Player"]);
-		const playerXmlId =
-			playerRaw === null || playerRaw < 0 ? null : playerRaw;
+		const playerXmlId = playerRaw === null || playerRaw < 0 ? null : playerRaw;
 
 		characters.push({
 			xmlId,

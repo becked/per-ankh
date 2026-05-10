@@ -133,7 +133,11 @@ async function request(
 		try {
 			payload = await res.json();
 			if (payload && typeof payload === "object") {
-				const body = payload as { code?: string; error?: string; message?: string };
+				const body = payload as {
+					code?: string;
+					error?: string;
+					message?: string;
+				};
 				if (typeof body.code === "string") code = body.code;
 				if (typeof body.error === "string") message = body.error;
 				if (typeof body.message === "string") message = body.message;
@@ -186,7 +190,12 @@ export const cloudApi = {
 			opts,
 		),
 
-	discordCallback: (code: string, state: string, redirectUri: string, opts?: CallOpts) =>
+	discordCallback: (
+		code: string,
+		state: string,
+		redirectUri: string,
+		opts?: CallOpts,
+	) =>
 		postJson<CallbackResponse>(
 			"/auth/discord/callback",
 			{ code, state, redirect_uri: redirectUri },
@@ -326,7 +335,9 @@ export const cloudApi = {
 	},
 
 	// --- Collections ---
-	listCollections: async (opts?: CallOpts): Promise<CollectionsListResponse> => {
+	listCollections: async (
+		opts?: CallOpts,
+	): Promise<CollectionsListResponse> => {
 		const res = await request("/collections", opts);
 		return res.json() as Promise<CollectionsListResponse>;
 	},

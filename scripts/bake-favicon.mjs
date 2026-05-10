@@ -65,7 +65,9 @@ await browser.close();
 
 // Trim alpha bbox, then pad onto a square dark-brown canvas with ~16%
 // breathing room so the glyph doesn't kiss the edges at 16/32 px.
-const trimmedMeta = await sharp(rendered).trim({ threshold: 1 }).toBuffer({ resolveWithObject: true });
+const trimmedMeta = await sharp(rendered)
+	.trim({ threshold: 1 })
+	.toBuffer({ resolveWithObject: true });
 const trimmed = trimmedMeta.data;
 const { width: tw, height: th } = trimmedMeta.info;
 
@@ -93,7 +95,10 @@ const masterPng = await sharp({
 
 // Resize once per output size from the master.
 async function resize(target) {
-	return sharp(masterPng).resize(target, target, { kernel: "lanczos3" }).png().toBuffer();
+	return sharp(masterPng)
+		.resize(target, target, { kernel: "lanczos3" })
+		.png()
+		.toBuffer();
 }
 
 const png16 = await resize(16);
@@ -105,10 +110,7 @@ const png512 = await resize(512);
 // Multi-resolution ICO from raw PNG buffers.
 const ico = await pngToIco([png16, png32, png48]);
 
-const targets = [
-	path.join(root, "static"),
-	path.join(root, "web", "static"),
-];
+const targets = [path.join(root, "static"), path.join(root, "web", "static")];
 
 for (const dir of targets) {
 	await writeFile(path.join(dir, "favicon.ico"), ico);

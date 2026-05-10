@@ -245,9 +245,7 @@ export function militaryPowerHistoryToRow(
 	};
 }
 
-export function pointsHistoryToRow(
-	h: PointsHistory,
-): Record<string, unknown> {
+export function pointsHistoryToRow(h: PointsHistory): Record<string, unknown> {
 	return {
 		player_xml_id: h.playerXmlId,
 		turn: h.turn,

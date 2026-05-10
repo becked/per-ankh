@@ -80,9 +80,7 @@ function logDataField(val: unknown): string | null {
 
 // ---------- Event stories (events.rs:65–159) ----------
 
-export function parseEventStories(
-	root: Record<string, unknown>,
-): EventStory[] {
+export function parseEventStories(root: Record<string, unknown>): EventStory[] {
 	const out: EventStory[] = [];
 
 	// 1. Player-level: walk 5 event-story containers per player in fixed
@@ -182,9 +180,7 @@ export function parseEventLogs(root: Record<string, unknown>): EventLog[] {
 
 // ---------- Memory data (events.rs:224–323) ----------
 
-export function parseMemoryData(
-	root: Record<string, unknown>,
-): MemoryData[] {
+export function parseMemoryData(root: Record<string, unknown>): MemoryData[] {
 	const out: MemoryData[] = [];
 
 	for (const playerNode of asArray(root.Player) as unknown[]) {

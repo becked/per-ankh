@@ -65,7 +65,7 @@
 		</div>
 	{/if}
 	<div
-		class="relative rounded-lg overflow-hidden"
+		class="relative overflow-hidden rounded-lg"
 		style="background-color: #35302B;"
 	>
 		<!-- Expand button -->

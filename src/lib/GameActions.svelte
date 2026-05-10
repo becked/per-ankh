@@ -16,11 +16,7 @@
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
-	import {
-		cloudApi,
-		ApiError,
-		UnauthorizedError,
-	} from "$lib/api-cloud";
+	import { cloudApi, ApiError, UnauthorizedError } from "$lib/api-cloud";
 
 	interface Props {
 		gameId: string;
@@ -182,13 +178,13 @@
 				>
 					{#if isPublic}
 						<p class="mb-3 text-xs text-tan">
-							Make this game private? The shared link will stop working
-							until you make it public again.
+							Make this game private? The shared link will stop working until
+							you make it public again.
 						</p>
 					{:else}
 						<p class="mb-3 text-xs text-tan">
-							Make this game public? Anyone with the link will be able to
-							view it.
+							Make this game public? Anyone with the link will be able to view
+							it.
 						</p>
 					{/if}
 					<div class="flex justify-end gap-2">
@@ -202,7 +198,7 @@
 						<button
 							type="button"
 							onclick={confirmToggleVisibility}
-							class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
+							class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors"
 						>
 							{isPublic ? "Make private" : "Make public"}
 						</button>
@@ -268,9 +264,7 @@
 				class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
 				role="dialog"
 			>
-				<p class="mb-3 text-xs text-tan">
-					Download the original save file?
-				</p>
+				<p class="mb-3 text-xs text-tan">Download the original save file?</p>
 				<div class="flex justify-end gap-2">
 					<button
 						type="button"
@@ -282,7 +276,7 @@
 					<button
 						type="button"
 						onclick={confirmDownload}
-						class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
+						class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors"
 					>
 						Download
 					</button>
@@ -351,9 +345,7 @@
 					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
 					role="dialog"
 				>
-					<p class="mb-3 text-xs text-tan">
-						Delete this game permanently?
-					</p>
+					<p class="mb-3 text-xs text-tan">Delete this game permanently?</p>
 					<div class="flex justify-end gap-2">
 						<button
 							type="button"

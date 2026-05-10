@@ -53,6 +53,7 @@ A tournament in Per-Ankh is a static placeholder that references uploaded saves,
 A product-level view of what the tournament layer adds on top of the cloud rewrite.
 
 **For any visitor (no account):**
+
 - Tournament list page — all tournaments with status badges
 - Tournament home page — description, signup info, current standings, bracket, recent matches
 - Match detail pages — view the linked save (forced public) for any tournament match
@@ -60,6 +61,7 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 - Championship bracket visualization — single-elimination viz
 
 **For logged-in users:**
+
 - Register for a tournament with a division preference (Western / Eastern)
 - Withdraw before the signup deadline
 - View your matches across active and past tournaments
@@ -67,6 +69,7 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 - Saves uploaded for a tournament auto-group into a `Tournament: <name>` collection in your library
 
 **For tournament admins (per-tournament role):**
+
 - Assign players to divisions in batch
 - Set Round 1 pairings manually (slot vs. slot, with map script and pick-order winner)
 - Auto-generate Swiss pairings for rounds 2–5 (algorithm proposes; admin reviews/confirms)
@@ -79,6 +82,7 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 - Upload saves on behalf of players (lands in admin's library, force-public, auto-grouped)
 
 **For super-admins (CLI only, MVP):**
+
 - Create tournaments via `cloud/admin.sh tournament create`
 - Grant the per-tournament admin role to a user
 - Audit tournament-related events via the existing events table
@@ -112,6 +116,7 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 The single most important design decision: **matches reference slots, not users**. A slot is a stable bracket position that holds W-L history. When a player drops mid-tournament and an admin finds a replacement, only the slot's `current_user_id` changes — the slot's match record and standing persist. The replacement walks into whatever situation the slot has accumulated.
 
 Slot consequences:
+
 - A slot eliminated at 3 Swiss losses stays eliminated; admins do not replace eliminated slots.
 - A slot's history of occupants is recorded in `tournament_slot_history` for audit purposes.
 - The same `user_id` cannot be assigned to two active slots in the same tournament (enforced at substitution time).
@@ -501,29 +506,29 @@ All values are computed on demand from `tournament_matches` + `tournament_slots`
 
 ```ts
 function compareSlots(
-  a: TournamentSlot,
-  b: TournamentSlot,
-  ctx: { matches: TournamentMatch[]; slots: Map<string, TournamentSlot> },
+	a: TournamentSlot,
+	b: TournamentSlot,
+	ctx: { matches: TournamentMatch[]; slots: Map<string, TournamentSlot> },
 ): number {
-  // 1. Wins (descending)
-  if (a.swiss_wins !== b.swiss_wins) return b.swiss_wins - a.swiss_wins;
+	// 1. Wins (descending)
+	if (a.swiss_wins !== b.swiss_wins) return b.swiss_wins - a.swiss_wins;
 
-  // 2. Median-Buchholz (descending)
-  const mbA = computeMedianBuchholz(a.slot_id, ctx);
-  const mbB = computeMedianBuchholz(b.slot_id, ctx);
-  if (mbA !== mbB) return mbB - mbA;
+	// 2. Median-Buchholz (descending)
+	const mbA = computeMedianBuchholz(a.slot_id, ctx);
+	const mbB = computeMedianBuchholz(b.slot_id, ctx);
+	if (mbA !== mbB) return mbB - mbA;
 
-  // 3. Solkoff / Full Buchholz (descending)
-  const sA = computeSolkoff(a.slot_id, ctx);
-  const sB = computeSolkoff(b.slot_id, ctx);
-  if (sA !== sB) return sB - sA;
+	// 3. Solkoff / Full Buchholz (descending)
+	const sA = computeSolkoff(a.slot_id, ctx);
+	const sB = computeSolkoff(b.slot_id, ctx);
+	if (sA !== sB) return sB - sA;
 
-  // 4. Head-to-head: winner ranks first
-  const h2h = headToHead(a.slot_id, b.slot_id, ctx.matches);
-  if (h2h !== 0) return h2h;
+	// 4. Head-to-head: winner ranks first
+	const h2h = headToHead(a.slot_id, b.slot_id, ctx.matches);
+	if (h2h !== 0) return h2h;
 
-  // 5. Comparator returns 0 (still tied); caller resolves manually
-  return 0;
+	// 5. Comparator returns 0 (still tied); caller resolves manually
+	return 0;
 }
 ```
 
@@ -531,33 +536,37 @@ function compareSlots(
 
 ```ts
 function computeMedianBuchholz(slotId: string, ctx: Ctx): number {
-  const opponentWins = collectOpponentWins(slotId, ctx).sort((a, b) => a - b);
-  if (opponentWins.length <= 2) return opponentWins.reduce((a, b) => a + b, 0);
-  return opponentWins.slice(1, -1).reduce((a, b) => a + b, 0);
+	const opponentWins = collectOpponentWins(slotId, ctx).sort((a, b) => a - b);
+	if (opponentWins.length <= 2) return opponentWins.reduce((a, b) => a + b, 0);
+	return opponentWins.slice(1, -1).reduce((a, b) => a + b, 0);
 }
 
 function computeSolkoff(slotId: string, ctx: Ctx): number {
-  return collectOpponentWins(slotId, ctx).reduce((a, b) => a + b, 0);
+	return collectOpponentWins(slotId, ctx).reduce((a, b) => a + b, 0);
 }
 
 function collectOpponentWins(slotId: string, ctx: Ctx): number[] {
-  const opponentIds: string[] = [];
-  for (const m of ctx.matches) {
-    if (m.slot_a_id === slotId && m.slot_b_id) opponentIds.push(m.slot_b_id);
-    else if (m.slot_b_id === slotId) opponentIds.push(m.slot_a_id);
-  }
-  return opponentIds.map(id => ctx.slots.get(id)?.swiss_wins ?? 0);
+	const opponentIds: string[] = [];
+	for (const m of ctx.matches) {
+		if (m.slot_a_id === slotId && m.slot_b_id) opponentIds.push(m.slot_b_id);
+		else if (m.slot_b_id === slotId) opponentIds.push(m.slot_a_id);
+	}
+	return opponentIds.map((id) => ctx.slots.get(id)?.swiss_wins ?? 0);
 }
 
-function headToHead(slotA: string, slotB: string, matches: TournamentMatch[]): number {
-  for (const m of matches) {
-    const isAB = m.slot_a_id === slotA && m.slot_b_id === slotB;
-    const isBA = m.slot_a_id === slotB && m.slot_b_id === slotA;
-    if (!isAB && !isBA) continue;
-    if (m.winner_slot_id === slotA) return -1;  // a ranks first
-    if (m.winner_slot_id === slotB) return 1;
-  }
-  return 0;  // didn't play, or no winner recorded
+function headToHead(
+	slotA: string,
+	slotB: string,
+	matches: TournamentMatch[],
+): number {
+	for (const m of matches) {
+		const isAB = m.slot_a_id === slotA && m.slot_b_id === slotB;
+		const isBA = m.slot_a_id === slotB && m.slot_b_id === slotA;
+		if (!isAB && !isBA) continue;
+		if (m.winner_slot_id === slotA) return -1; // a ranks first
+		if (m.winner_slot_id === slotB) return 1;
+	}
+	return 0; // didn't play, or no winner recorded
 }
 ```
 
@@ -571,13 +580,13 @@ Used during the Swiss → championship transition (§5.9) only when more slots r
 
 ```ts
 {
-  slot_id: string;
-  current_user_id: string | null;
-  swiss_wins: number;
-  swiss_losses: number;
-  median_buchholz: number;
-  solkoff: number;
-  swiss_status: 'active' | 'advanced' | 'eliminated';
+	slot_id: string;
+	current_user_id: string | null;
+	swiss_wins: number;
+	swiss_losses: number;
+	median_buchholz: number;
+	solkoff: number;
+	swiss_status: "active" | "advanced" | "eliminated";
 }
 ```
 
@@ -587,21 +596,21 @@ Head-to-head is not returned (it's pairwise, not a per-slot scalar) but the matc
 
 ## 7. Authorization Model
 
-| Action | Anonymous | Logged-in user | Tournament admin (this tournament) | Tournament admin (other tournament) |
-|---|---|---|---|---|
-| View tournament page | ✓ | ✓ | ✓ | ✓ |
-| View match save (game blob) | ✓ (forced public) | ✓ | ✓ | ✓ |
-| Register | ✗ | ✓ (during signups) | ✓ | ✓ |
-| Report own match result | ✗ | ✓ (if in match) | ✓ | ✗ (but ✓ if in match as a participant) |
-| Report any match result | ✗ | ✗ | ✓ | ✗ |
-| Substitute player | ✗ | ✗ | ✓ | ✗ |
-| Set Round 1 pairings | ✗ | ✗ | ✓ | ✗ |
-| Generate pairings | ✗ | ✗ | ✓ | ✗ |
-| Advance round | ✗ | ✗ | ✓ | ✗ |
-| Retro-edit match | ✗ | ✗ | ✓ | ✗ |
-| Transition to championship | ✗ | ✗ | ✓ | ✗ |
-| Mark complete | ✗ | ✗ | ✓ | ✗ |
-| Create tournament | ✗ | ✗ | ✗ | ✗ (CLI/script only) |
+| Action                      | Anonymous         | Logged-in user     | Tournament admin (this tournament) | Tournament admin (other tournament)    |
+| --------------------------- | ----------------- | ------------------ | ---------------------------------- | -------------------------------------- |
+| View tournament page        | ✓                 | ✓                  | ✓                                  | ✓                                      |
+| View match save (game blob) | ✓ (forced public) | ✓                  | ✓                                  | ✓                                      |
+| Register                    | ✗                 | ✓ (during signups) | ✓                                  | ✓                                      |
+| Report own match result     | ✗                 | ✓ (if in match)    | ✓                                  | ✗ (but ✓ if in match as a participant) |
+| Report any match result     | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Substitute player           | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Set Round 1 pairings        | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Generate pairings           | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Advance round               | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Retro-edit match            | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Transition to championship  | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Mark complete               | ✗                 | ✗                  | ✓                                  | ✗                                      |
+| Create tournament           | ✗                 | ✗                  | ✗                                  | ✗ (CLI/script only)                    |
 
 ### Implementation
 
@@ -609,22 +618,24 @@ A middleware function resolves `tournament_id` (from path slug or `:id` paramete
 
 ```ts
 async function requireTournamentAdmin(
-  env: Env,
-  session: Session,
-  tournamentId: string,
+	env: Env,
+	session: Session,
+	tournamentId: string,
 ): Promise<void> {
-  const row = await env.DB.prepare(
-    "SELECT 1 FROM tournament_admins WHERE tournament_id = ? AND user_id = ?"
-  ).bind(tournamentId, session.user_id).first();
-  if (!row) throw new HttpError(403, "Not a tournament admin");
+	const row = await env.DB.prepare(
+		"SELECT 1 FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
+	)
+		.bind(tournamentId, session.user_id)
+		.first();
+	if (!row) throw new HttpError(403, "Not a tournament admin");
 }
 
 async function requireMatchParticipantOrAdmin(
-  env: Env,
-  session: Session,
-  matchId: string,
+	env: Env,
+	session: Session,
+	matchId: string,
 ): Promise<{ tournamentId: string; isAdmin: boolean }> {
-  // Resolves tournament + slot occupancy in one query; throws 403 if neither.
+	// Resolves tournament + slot occupancy in one query; throws 403 if neither.
 }
 ```
 
@@ -638,48 +649,48 @@ Base URL: `https://api.per-ankh.app/v1` (same as cloud-rewrite-spec.md §4). All
 
 ### Public reads
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/tournaments` | None | List tournaments (filters: `status`, `limit`, `offset`) |
-| `GET` | `/tournaments/:slug` | None | Tournament detail (metadata, standings summary, participating users) |
-| `GET` | `/tournaments/:id/standings` | None | Per-slot W-L + Median-Buchholz + Solkoff, grouped by division/phase |
-| `GET` | `/tournaments/:id/bracket` | None | Championship bracket structure |
-| `GET` | `/tournaments/:id/matches` | None | All matches; query params: `round_id`, `phase`, `division`, `slot_id` |
-| `GET` | `/tournaments/:id/matches/:match_id` | None | Match detail, including linked `game_id` |
+| Method | Path                                 | Auth | Description                                                           |
+| ------ | ------------------------------------ | ---- | --------------------------------------------------------------------- |
+| `GET`  | `/tournaments`                       | None | List tournaments (filters: `status`, `limit`, `offset`)               |
+| `GET`  | `/tournaments/:slug`                 | None | Tournament detail (metadata, standings summary, participating users)  |
+| `GET`  | `/tournaments/:id/standings`         | None | Per-slot W-L + Median-Buchholz + Solkoff, grouped by division/phase   |
+| `GET`  | `/tournaments/:id/bracket`           | None | Championship bracket structure                                        |
+| `GET`  | `/tournaments/:id/matches`           | None | All matches; query params: `round_id`, `phase`, `division`, `slot_id` |
+| `GET`  | `/tournaments/:id/matches/:match_id` | None | Match detail, including linked `game_id`                              |
 
 ### Player actions
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/tournaments/:id/register` | Session | Body: `{ division_pref?: 'WEST' \| 'EAST' }` |
-| `DELETE` | `/tournaments/:id/register` | Session | Withdraw before signup deadline |
-| `POST` | `/tournaments/:id/matches/:match_id/report` | Session | Body: `{ winner_slot_id, game_id?, status }`. Caller must be participant or admin. |
+| Method   | Path                                        | Auth    | Description                                                                        |
+| -------- | ------------------------------------------- | ------- | ---------------------------------------------------------------------------------- |
+| `POST`   | `/tournaments/:id/register`                 | Session | Body: `{ division_pref?: 'WEST' \| 'EAST' }`                                       |
+| `DELETE` | `/tournaments/:id/register`                 | Session | Withdraw before signup deadline                                                    |
+| `POST`   | `/tournaments/:id/matches/:match_id/report` | Session | Body: `{ winner_slot_id, game_id?, status }`. Caller must be participant or admin. |
 
 ### Admin actions (require `tournament_admins` membership)
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `PATCH` | `/tournaments/:id` | Edit tournament metadata (name, description, deadlines, status) |
-| `POST` | `/tournaments/:id/divisions/assign` | Body: `[{ user_id, division }, ...]`. Creates Swiss slots. |
-| `POST` | `/tournaments/:id/rounds` | Body: `{ phase, division?, round_number }`. Creates an empty round. |
-| `POST` | `/tournaments/:id/rounds/:round_id/generate-pairings` | Returns proposed pairings (no DB writes). |
-| `POST` | `/tournaments/:id/rounds/:round_id/pairings` | Body: `[{ slot_a_id, slot_b_id?, map_script, pick_order_winner_slot_id }, ...]`. Persists matches. |
-| `POST` | `/tournaments/:id/rounds/:round_id/advance` | Closes the round; updates slot W-L. |
-| `POST` | `/tournaments/:id/slots/:slot_id/substitute` | Body: `{ replacement_user_id, reason }`. |
-| `POST` | `/tournaments/:id/transition-championship` | Builds championship bracket from Swiss results. Returns 409 if the cascade leaves slots tied at the cutoff. |
-| `POST` | `/tournaments/:id/resolve-tie` | Body: `{ slot_ids: string[], ranked_order: string[] }`. Records admin-chosen ordering for slots the cascade couldn't separate. |
-| `PATCH` | `/tournaments/:id/matches/:match_id` | Retro-edit. Body: any subset of `{ winner_slot_id, status, game_id, notes }`. |
-| `POST` | `/tournaments/:id/complete` | Finalizes tournament. |
+| Method  | Path                                                  | Description                                                                                                                    |
+| ------- | ----------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `PATCH` | `/tournaments/:id`                                    | Edit tournament metadata (name, description, deadlines, status)                                                                |
+| `POST`  | `/tournaments/:id/divisions/assign`                   | Body: `[{ user_id, division }, ...]`. Creates Swiss slots.                                                                     |
+| `POST`  | `/tournaments/:id/rounds`                             | Body: `{ phase, division?, round_number }`. Creates an empty round.                                                            |
+| `POST`  | `/tournaments/:id/rounds/:round_id/generate-pairings` | Returns proposed pairings (no DB writes).                                                                                      |
+| `POST`  | `/tournaments/:id/rounds/:round_id/pairings`          | Body: `[{ slot_a_id, slot_b_id?, map_script, pick_order_winner_slot_id }, ...]`. Persists matches.                             |
+| `POST`  | `/tournaments/:id/rounds/:round_id/advance`           | Closes the round; updates slot W-L.                                                                                            |
+| `POST`  | `/tournaments/:id/slots/:slot_id/substitute`          | Body: `{ replacement_user_id, reason }`.                                                                                       |
+| `POST`  | `/tournaments/:id/transition-championship`            | Builds championship bracket from Swiss results. Returns 409 if the cascade leaves slots tied at the cutoff.                    |
+| `POST`  | `/tournaments/:id/resolve-tie`                        | Body: `{ slot_ids: string[], ranked_order: string[] }`. Records admin-chosen ordering for slots the cascade couldn't separate. |
+| `PATCH` | `/tournaments/:id/matches/:match_id`                  | Retro-edit. Body: any subset of `{ winner_slot_id, status, game_id, notes }`.                                                  |
+| `POST`  | `/tournaments/:id/complete`                           | Finalizes tournament.                                                                                                          |
 
 ### Collections
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/collections` | Session | List the caller's collections with game counts |
-| `POST` | `/collections` | Session | Body: `{ name }`. Create a collection. |
-| `PATCH` | `/collections/:id` | Session | Body: `{ name?, is_default? }`. |
-| `DELETE` | `/collections/:id` | Session | Delete; games move to user's default collection. |
-| `POST` | `/collections/:id/move-games` | Session | Body: `{ game_ids: string[] }`. Bulk reassign. |
+| Method   | Path                          | Auth    | Description                                      |
+| -------- | ----------------------------- | ------- | ------------------------------------------------ |
+| `GET`    | `/collections`                | Session | List the caller's collections with game counts   |
+| `POST`   | `/collections`                | Session | Body: `{ name }`. Create a collection.           |
+| `PATCH`  | `/collections/:id`            | Session | Body: `{ name?, is_default? }`.                  |
+| `DELETE` | `/collections/:id`            | Session | Delete; games move to user's default collection. |
+| `POST`   | `/collections/:id/move-games` | Session | Body: `{ game_ids: string[] }`. Bulk reassign.   |
 
 ### Upload integration
 
@@ -717,15 +728,15 @@ src/routes/
 
 ### Components
 
-| Component | Purpose |
-|-----------|---------|
-| `TournamentCard.svelte` | List item with name, status, player count |
-| `SwissStandings.svelte` | Per-division table: rank, slot label (current player name), W-L, Median-Buchholz |
-| `BracketView.svelte` | Championship single-elimination viz |
-| `MatchCard.svelte` | Slot vs. slot, status, save link, report button |
+| Component                 | Purpose                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `TournamentCard.svelte`   | List item with name, status, player count                                                              |
+| `SwissStandings.svelte`   | Per-division table: rank, slot label (current player name), W-L, Median-Buchholz                       |
+| `BracketView.svelte`      | Championship single-elimination viz                                                                    |
+| `MatchCard.svelte`        | Slot vs. slot, status, save link, report button                                                        |
 | `ReportMatchModal.svelte` | Pick winner, attach uploaded save (dropdown of caller's recent uploads or upload-and-link in one flow) |
-| `AdminPanel.svelte` | Pairing generator, substitution form, retro-edit form, round advance, transition button |
-| `RegistrationForm.svelte` | Division preference selector + submit |
+| `AdminPanel.svelte`       | Pairing generator, substitution form, retro-edit form, round advance, transition button                |
+| `RegistrationForm.svelte` | Division preference selector + submit                                                                  |
 
 `MatchCard` and the match detail page link to the existing `GameDetailView.svelte` (`src/lib/game-detail/`) for the uploaded save's content — no new game-detail surface.
 
@@ -750,11 +761,11 @@ The single-save-per-match decision means the same save uploaded by both players 
 
 Reuse the events-table pattern from `cloud/src/index.ts`. Add the following event types and limits to the existing `RATE_LIMIT_PER_HOUR` family:
 
-| Event type | Scope | Limit | Notes |
-|-----------|-------|-------|-------|
-| `match_report` | Per user | 60/hour | Lenient: players may re-report after typos |
-| `tournament_admin` | Per tournament | 30/hour | Admin actions cap per tournament; pairing generation is the bottleneck |
-| `tournament_register` | Per IP | 10/hour | Anti-spam during open signups |
+| Event type            | Scope          | Limit   | Notes                                                                  |
+| --------------------- | -------------- | ------- | ---------------------------------------------------------------------- |
+| `match_report`        | Per user       | 60/hour | Lenient: players may re-report after typos                             |
+| `tournament_admin`    | Per tournament | 30/hour | Admin actions cap per tournament; pairing generation is the bottleneck |
+| `tournament_register` | Per IP         | 10/hour | Anti-spam during open signups                                          |
 
 Limits are advisory and can be tuned via `wrangler.toml` env vars following the existing pattern (e.g. `MATCH_REPORT_LIMIT_PER_HOUR`).
 

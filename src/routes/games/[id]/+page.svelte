@@ -63,7 +63,10 @@
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4" use:autohideScroll>
+		<div
+			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
+			use:autohideScroll
+		>
 			<GameDetailView
 				gameDetails={game.game_details}
 				playerHistory={game.player_history}
@@ -88,7 +91,7 @@
 				{#snippet preTabs()}
 					{#if isReimportAvailable}
 						<div
-							class="mb-4 flex items-center justify-between rounded border border-orange bg-orange/10 px-4 py-2"
+							class="bg-orange/10 mb-4 flex items-center justify-between rounded border border-orange px-4 py-2"
 						>
 							<p class="text-xs text-tan">
 								This game was parsed with an older version ({game.parser_version}).

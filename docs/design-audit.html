@@ -340,11 +340,15 @@
 					<li><a href="#forms">5. Forms & inputs</a></li>
 					<li><a href="#popups">6. Popups, menus, dialogs</a></li>
 					<li class="toc-sub"><a href="#popups-modals">Modals</a></li>
-					<li class="toc-sub"><a href="#popups-popovers">Popovers / context</a></li>
+					<li class="toc-sub">
+						<a href="#popups-popovers">Popovers / context</a>
+					</li>
 					<li class="toc-sub"><a href="#popups-dropdowns">Dropdowns</a></li>
 					<li class="toc-sub"><a href="#popups-tabs">Tabs / toggles</a></li>
 					<li class="toc-sub"><a href="#popups-tooltips">Tooltips</a></li>
-					<li class="toc-sub"><a href="#popups-banners">Banners / alerts</a></li>
+					<li class="toc-sub">
+						<a href="#popups-banners">Banners / alerts</a>
+					</li>
 					<li><a href="#charts">7. Charts & data viz</a></li>
 					<li><a href="#layout">8. Layout patterns</a></li>
 					<li><a href="#audit-summary">9. Audit summary</a></li>
@@ -353,14 +357,17 @@
 
 			<main class="audit-main">
 				<header style="margin-bottom: 2rem">
-					<h2 style="margin-top: 0; border-bottom: 3px solid var(--color-orange)">
+					<h2
+						style="margin-top: 0; border-bottom: 3px solid var(--color-orange)"
+					>
 						Design Language Audit
 					</h2>
 					<p class="section-intro">
-						A static reference + audit of every distinct visual pattern found
-						in the Per-Ankh cloud app (<code style="color: var(--color-orange)"
+						A static reference + audit of every distinct visual pattern found in
+						the Per-Ankh cloud app (<code style="color: var(--color-orange)"
 							>src/</code
-						>). Each pattern is rendered live alongside its <code>file:line</code>
+						>). Each pattern is rendered live alongside its
+						<code>file:line</code>
 						citations and class string. Where two usages differ in some specific
 						way, variants are stacked side-by-side. The
 						<a href="#audit-summary" style="color: var(--color-orange)"
@@ -370,9 +377,9 @@
 					</p>
 					<p class="section-intro" style="font-size: 0.75rem; color: #888">
 						<strong>Method:</strong> Tailwind Play CDN configured to mirror
-						<code>tailwind.config.js</code>. Custom tokens
-						(<code>brown</code>, <code>tan</code>, <code>orange</code>,
-						<code>blue-gray</code>, <code>gray-200</code>, etc.) come from
+						<code>tailwind.config.js</code>. Custom tokens (<code>brown</code>,
+						<code>tan</code>, <code>orange</code>, <code>blue-gray</code>,
+						<code>gray-200</code>, etc.) come from
 						<code>src/app.css</code> :root. ECharts via CDN renders the chart
 						section using the verbatim <code>CHART_THEME</code> from
 						<code>src/lib/config/charts.ts</code>.
@@ -666,7 +673,9 @@
 				<h3 id="type-headings">Headings (h1 / h2 / h3)</h3>
 
 				<div class="pattern-card">
-					<div class="pattern-name">h1 — primary page title (Dashboard / Upload)</div>
+					<div class="pattern-name">
+						h1 — primary page title (Dashboard / Upload)
+					</div>
 					<div class="pattern-cite">
 						routes/dashboard/+page.svelte:250 · routes/upload/+page.svelte:27
 					</div>
@@ -712,7 +721,8 @@
 						</div>
 					</div>
 					<code class="pattern-class"
-						>border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200</code
+						>border-b-2 border-orange pb-1 text-3xl font-bold
+						text-gray-200</code
 					>
 				</div>
 
@@ -727,7 +737,8 @@
 						</h2>
 					</div>
 					<code class="pattern-class"
-						>mb-4 border-b-2 border-orange pb-2 text-2xl font-bold text-tan</code
+						>mb-4 border-b-2 border-orange pb-2 text-2xl font-bold
+						text-tan</code
 					>
 				</div>
 
@@ -748,10 +759,7 @@
 					<div class="pattern-name">h2 — modal subtitle (inline color)</div>
 					<div class="pattern-cite">lib/UploadModal.svelte:273</div>
 					<div class="pattern-demo">
-						<h2
-							class="mb-1 text-lg font-bold"
-							style="color: #dbdee3"
-						>
+						<h2 class="mb-1 text-lg font-bold" style="color: #dbdee3">
 							Which player is you?
 						</h2>
 					</div>
@@ -769,7 +777,9 @@
 					<div class="pattern-demo">
 						<h3 class="mb-4 mt-0 text-xl font-bold text-tan">Players</h3>
 					</div>
-					<code class="pattern-class">mb-4 mt-0 text-xl font-bold text-tan</code>
+					<code class="pattern-class"
+						>mb-4 mt-0 text-xl font-bold text-tan</code
+					>
 				</div>
 
 				<div class="pattern-card">
@@ -842,7 +852,9 @@
 							lib/game-detail/GameDetailView.svelte:184
 						</div>
 						<div class="pattern-demo">
-							<p class="text-xs font-bold text-gray-400">Turn 142 · Year 1280 BC</p>
+							<p class="text-xs font-bold text-gray-400">
+								Turn 142 · Year 1280 BC
+							</p>
 						</div>
 						<code class="pattern-class">text-xs font-bold text-gray-400</code>
 					</div>
@@ -879,16 +891,19 @@
 				</div>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Inline-styled body — <code>#DBDEE3</code></div>
+					<div class="pattern-name">
+						Inline-styled body — <code>#DBDEE3</code>
+					</div>
 					<div class="pattern-cite">
-						lib/UploadModal.svelte:265,335,357 · lib/BulkUploadModal.svelte:331,433,493
+						lib/UploadModal.svelte:265,335,357 ·
+						lib/BulkUploadModal.svelte:331,433,493
 					</div>
 					<div class="pattern-demo">
 						<p class="text-sm" style="color: #dbdee3">
 							3 saves selected — parsing…
 						</p>
 					</div>
-					<code class="pattern-class">text-sm  + style="color: #DBDEE3"</code>
+					<code class="pattern-class">text-sm + style="color: #DBDEE3"</code>
 					<div class="pattern-note">
 						This near-white appears in 20+ places via inline style. Should
 						become a token (e.g. <code>text-light-gray</code>) or fall back to
@@ -918,15 +933,14 @@
 							</table>
 						</div>
 						<code class="pattern-class"
-							>border-b-2 border-[#2a2622] p-3 text-left font-bold text-brown</code
+							>border-b-2 border-[#2a2622] p-3 text-left font-bold
+							text-brown</code
 						>
 					</div>
 
 					<div class="pattern-card">
 						<div class="pattern-name">Table header (Laws/Tech) — uppercase</div>
-						<div class="pattern-cite">
-							lib/game-detail/LawsTab.svelte:253
-						</div>
+						<div class="pattern-cite">lib/game-detail/LawsTab.svelte:253</div>
 						<div class="pattern-demo">
 							<table>
 								<thead>
@@ -941,7 +955,8 @@
 							</table>
 						</div>
 						<code class="pattern-class"
-							>border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown</code
+							>border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase
+							tracking-wide text-brown</code
 						>
 						<div class="pattern-note">
 							Two table-header conventions in same product:
@@ -971,7 +986,8 @@
 						</table>
 					</div>
 					<code class="pattern-class"
-						>tr → hover:bg-brown/20 transition-colors duration-200 · td → border-b border-[#2a2622] p-3 text-left text-tan</code
+						>tr → hover:bg-brown/20 transition-colors duration-200 · td →
+						border-b border-[#2a2622] p-3 text-left text-tan</code
 					>
 				</div>
 
@@ -988,9 +1004,7 @@
 								No yield data available
 							</p>
 						</div>
-						<code class="pattern-class"
-							>p-8 text-center italic text-brown</code
-						>
+						<code class="pattern-class">p-8 text-center italic text-brown</code>
 					</div>
 
 					<div class="pattern-card">
@@ -1073,7 +1087,9 @@
 				</div>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Settings item — gap-1 vs gap-3 variants</div>
+					<div class="pattern-name">
+						Settings item — gap-1 vs gap-3 variants
+					</div>
 					<div class="pattern-cite">
 						lib/game-detail/SettingsTab.svelte:27,33,49,59,69
 					</div>
@@ -1094,7 +1110,7 @@
 						</div>
 					</div>
 					<code class="pattern-class"
-						>flex flex-col gap-1 rounded-lg p-3 (left)  ·  flex flex-col gap-3
+						>flex flex-col gap-1 rounded-lg p-3 (left) · flex flex-col gap-3
 						rounded-lg p-3 (right)</code
 					>
 					<div class="pattern-note">
@@ -1124,9 +1140,7 @@
 
 				<div class="pattern-card">
 					<div class="pattern-name">Action popover — w-64 vs w-56 variants</div>
-					<div class="pattern-cite">
-						lib/GameActions.svelte:180,268,351
-					</div>
+					<div class="pattern-cite">lib/GameActions.svelte:180,268,351</div>
 					<div class="pattern-demo" style="display: flex; gap: 1rem">
 						<div
 							class="rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
@@ -1225,22 +1239,22 @@
 					<div class="pattern-cite">routes/games/[id]/+page.svelte:91</div>
 					<div class="pattern-demo">
 						<div
-							class="mb-4 flex items-center justify-between rounded border border-orange bg-orange/10 px-4 py-2"
+							class="bg-orange/10 mb-4 flex items-center justify-between rounded border border-orange px-4 py-2"
 						>
 							<p class="text-xs text-tan">
 								This game was parsed with an older version. Click Reparse for
 								the latest.
 							</p>
 							<button
-								class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80"
+								class="hover:bg-orange/80 rounded bg-orange px-3 py-1 text-xs font-bold text-white"
 							>
 								Reparse
 							</button>
 						</div>
 					</div>
 					<code class="pattern-class"
-						>mb-4 flex items-center justify-between rounded border
-						border-orange bg-orange/10 px-4 py-2</code
+						>mb-4 flex items-center justify-between rounded border border-orange
+						bg-orange/10 px-4 py-2</code
 					>
 				</div>
 
@@ -1262,7 +1276,7 @@
 						</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
-								class="rounded bg-orange px-4 py-1 text-sm font-bold text-white hover:bg-orange/80"
+								class="hover:bg-orange/80 rounded bg-orange px-4 py-1 text-sm font-bold text-white"
 							>
 								Upload
 							</button>
@@ -1292,9 +1306,7 @@
 
 					<div class="pattern-card">
 						<div class="pattern-name">Subtle — brown/40</div>
-						<div class="pattern-cite">
-							lib/BulkUploadModal.svelte:450
-						</div>
+						<div class="pattern-cite">lib/BulkUploadModal.svelte:450</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
 								class="bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown"
@@ -1303,7 +1315,8 @@
 							</button>
 						</div>
 						<code class="pattern-class"
-							>bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown</code
+							>bg-brown/40 rounded px-3 py-1 text-sm text-tan
+							hover:bg-brown</code
 						>
 					</div>
 				</div>
@@ -1311,9 +1324,7 @@
 				<div class="pattern-row three-up">
 					<div class="pattern-card">
 						<div class="pattern-name">Outline — neutral</div>
-						<div class="pattern-cite">
-							lib/GameActions.svelte:198
-						</div>
+						<div class="pattern-cite">lib/GameActions.svelte:198</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
 								class="rounded border border-tan px-2 py-1 text-xs text-tan hover:border-orange hover:text-orange"
@@ -1329,12 +1340,10 @@
 
 					<div class="pattern-card">
 						<div class="pattern-name">Outline — confirm orange</div>
-						<div class="pattern-cite">
-							lib/GameActions.svelte:205
-						</div>
+						<div class="pattern-cite">lib/GameActions.svelte:205</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
-								class="rounded border border-orange px-2 py-1 text-xs text-orange hover:bg-orange/10"
+								class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange"
 							>
 								Confirm
 							</button>
@@ -1347,9 +1356,7 @@
 
 					<div class="pattern-card">
 						<div class="pattern-name">Outline — destructive red</div>
-						<div class="pattern-cite">
-							lib/GameActions.svelte:369
-						</div>
+						<div class="pattern-cite">lib/GameActions.svelte:369</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
 								class="rounded border border-red-400 px-2 py-1 text-xs text-red-400 hover:bg-red-400/10"
@@ -1367,9 +1374,7 @@
 				<div class="pattern-row three-up">
 					<div class="pattern-card">
 						<div class="pattern-name">Icon-only — neutral</div>
-						<div class="pattern-cite">
-							lib/GameActions.svelte:141,223
-						</div>
+						<div class="pattern-cite">lib/GameActions.svelte:141,223</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
 								class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange"
@@ -1395,9 +1400,7 @@
 
 					<div class="pattern-card">
 						<div class="pattern-name">Icon-only — destructive</div>
-						<div class="pattern-cite">
-							lib/GameActions.svelte:303
-						</div>
+						<div class="pattern-cite">lib/GameActions.svelte:303</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
 								class="rounded border border-tan p-1 text-tan transition-colors hover:border-red-400 hover:text-red-400"
@@ -1424,7 +1427,10 @@
 					<div class="pattern-card">
 						<div class="pattern-name">Icon-only — overlay (chart)</div>
 						<div class="pattern-cite">lib/ChartContainer.svelte:74</div>
-						<div class="pattern-demo" style="background: #35302b; padding: 1rem">
+						<div
+							class="pattern-demo"
+							style="background: #35302b; padding: 1rem"
+						>
 							<button
 								class="bg-black/20 hover:bg-black/40 rounded p-1.5 transition-colors focus:outline-none"
 							>
@@ -1455,9 +1461,7 @@
 							lib/UploadModal.svelte:371 · BulkUploadModal.svelte:427
 						</div>
 						<div class="pattern-demo">
-							<a
-								href="#"
-								class="text-sm font-bold text-orange underline"
+							<a href="#" class="text-sm font-bold text-orange underline"
 								>Open the existing game →</a
 							>
 						</div>
@@ -1524,9 +1528,7 @@
 				<div class="pattern-row">
 					<div class="pattern-card">
 						<div class="pattern-name">Sidebar context — cancel</div>
-						<div class="pattern-cite">
-							lib/CloudGameSidebar.svelte:440
-						</div>
+						<div class="pattern-cite">lib/CloudGameSidebar.svelte:440</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
 								class="rounded px-2 py-1 text-xs text-tan"
@@ -1543,9 +1545,7 @@
 
 					<div class="pattern-card">
 						<div class="pattern-name">Sidebar context — create</div>
-						<div class="pattern-cite">
-							lib/CloudGameSidebar.svelte:452
-						</div>
+						<div class="pattern-cite">lib/CloudGameSidebar.svelte:452</div>
 						<div class="pattern-demo" style="text-align: center">
 							<button
 								class="rounded px-2 py-1 text-xs text-black"
@@ -1607,14 +1607,24 @@
 				<h2 id="forms">5. Forms & inputs</h2>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Search input — three variants in one component</div>
+					<div class="pattern-name">
+						Search input — three variants in one component
+					</div>
 					<div class="pattern-cite">lib/SearchInput.svelte:17-30</div>
 					<div class="pattern-demo">
 						<div style="display: grid; gap: 0.5rem">
 							<div style="background: #211a12; padding: 0.5rem">
 								<div class="relative">
 									<span
-										style="position: absolute; left: 0.6rem; top: 50%; transform: translateY(-50%); pointer-events: none; color: #d2b48c; opacity: 0.6"
+										style="
+											position: absolute;
+											left: 0.6rem;
+											top: 50%;
+											transform: translateY(-50%);
+											pointer-events: none;
+											color: #d2b48c;
+											opacity: 0.6;
+										"
 										>🔍</span
 									>
 									<input
@@ -1637,22 +1647,22 @@
 								<input
 									type="text"
 									placeholder="Search (field)"
-									class="placeholder-brown w-full rounded py-2 pl-9 pr-3 text-sm text-tan placeholder:opacity-70"
+									class="w-full rounded py-2 pl-9 pr-3 text-sm text-tan placeholder-brown placeholder:opacity-70"
 									style="background-color: #201a13"
 								/>
 							</div>
 						</div>
 					</div>
 					<code class="pattern-class"
-						>variant=dark    → bg #403A33 · rounded-full · py-1 · placeholder
-						tan/50 variant=light   → bg-white · border-2 border-black · py-2
-						variant=field   → bg #201a13 · rounded · py-2 · placeholder
+						>variant=dark → bg #403A33 · rounded-full · py-1 · placeholder
+						tan/50 variant=light → bg-white · border-2 border-black · py-2
+						variant=field → bg #201a13 · rounded · py-2 · placeholder
 						brown/70</code
 					>
 					<div class="pattern-note">
 						Three different bg colors, two different paddings, two different
-						radii, two different placeholder colors — all in one component
-						file. Field & dark are nearly identical but pick one.
+						radii, two different placeholder colors — all in one component file.
+						Field & dark are nearly identical but pick one.
 					</div>
 				</div>
 
@@ -1662,7 +1672,15 @@
 						lib/UploadModal.svelte:289-320 · BulkUploadModal.svelte:385-424
 					</div>
 					<div class="pattern-demo">
-						<ul style="list-style: none; padding: 0; margin: 0; display: grid; gap: 0.5rem">
+						<ul
+							style="
+								list-style: none;
+								padding: 0;
+								margin: 0;
+								display: grid;
+								gap: 0.5rem;
+							"
+						>
 							<li>
 								<label
 									class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
@@ -1670,8 +1688,12 @@
 								>
 									<input type="radio" name="demo-uploader" />
 									<div class="flex-1 text-sm text-tan">
-										<div class="font-bold" style="color: #dbdee3">Cleopatra</div>
-										<div class="text-xs text-gray-400">Egypt · steam:76561...</div>
+										<div class="font-bold" style="color: #dbdee3">
+											Cleopatra
+										</div>
+										<div class="text-xs text-gray-400">
+											Egypt · steam:76561...
+										</div>
 									</div>
 								</label>
 							</li>
@@ -1682,8 +1704,12 @@
 								>
 									<input type="radio" name="demo-uploader" checked />
 									<div class="flex-1 text-sm text-tan">
-										<div class="font-bold" style="color: #dbdee3">Hammurabi</div>
-										<div class="text-xs text-gray-400">Babylonia · steam:76561...</div>
+										<div class="font-bold" style="color: #dbdee3">
+											Hammurabi
+										</div>
+										<div class="text-xs text-gray-400">
+											Babylonia · steam:76561...
+										</div>
 									</div>
 								</label>
 							</li>
@@ -1698,9 +1724,7 @@
 				<div class="pattern-row">
 					<div class="pattern-card">
 						<div class="pattern-name">Select — sidebar collection filter</div>
-						<div class="pattern-cite">
-							lib/CloudGameSidebar.svelte:280
-						</div>
+						<div class="pattern-cite">lib/CloudGameSidebar.svelte:280</div>
 						<div class="pattern-demo">
 							<select
 								class="w-full cursor-pointer rounded border border-black p-1.5 text-xs text-tan"
@@ -1718,9 +1742,7 @@
 
 					<div class="pattern-card">
 						<div class="pattern-name">Text input — new collection</div>
-						<div class="pattern-cite">
-							lib/CloudGameSidebar.svelte:425
-						</div>
+						<div class="pattern-cite">lib/CloudGameSidebar.svelte:425</div>
 						<div class="pattern-demo">
 							<input
 								type="text"
@@ -1731,8 +1753,8 @@
 						</div>
 						<code class="pattern-class"
 							>w-full rounded border border-[#4a433b] bg-[#35302b] px-2 py-1
-							text-sm text-tan placeholder:text-[#c5c3c2]
-							focus:border-[#5a524a] focus:outline-none</code
+							text-sm text-tan placeholder:text-[#c5c3c2] focus:border-[#5a524a]
+							focus:outline-none</code
 						>
 					</div>
 				</div>
@@ -1740,9 +1762,7 @@
 				<div class="pattern-row">
 					<div class="pattern-card">
 						<div class="pattern-name">Filter chip (dismissable)</div>
-						<div class="pattern-cite">
-							lib/CloudGameSidebar.svelte:296,556
-						</div>
+						<div class="pattern-cite">lib/CloudGameSidebar.svelte:296,556</div>
 						<div class="pattern-demo">
 							<button class="replica-filter-chip">
 								Egypt <span aria-hidden="true">×</span>
@@ -1753,8 +1773,8 @@
 						</div>
 						<code class="pattern-class"
 							>.filter-chip { padding: 2px 6px; border-radius: 9999px; border:
-							1px solid #000; background: #c1872f; color: #000; font-size:
-							10px; font-weight: 600; }</code
+							1px solid #000; background: #c1872f; color: #000; font-size: 10px;
+							font-weight: 600; }</code
 						>
 					</div>
 
@@ -1811,7 +1831,12 @@
 						<div class="pattern-cite">lib/AboutModal.svelte:13</div>
 						<div
 							class="pattern-demo"
-							style="position: relative; height: 120px; padding: 0; overflow: hidden"
+							style="
+								position: relative;
+								height: 120px;
+								padding: 0;
+								overflow: hidden;
+							"
 						>
 							<div
 								class="flex items-center justify-center bg-black bg-opacity-50"
@@ -1831,10 +1856,15 @@
 						<div class="pattern-cite">lib/ReimportButton.svelte:99</div>
 						<div
 							class="pattern-demo"
-							style="position: relative; height: 120px; padding: 0; overflow: hidden"
+							style="
+								position: relative;
+								height: 120px;
+								padding: 0;
+								overflow: hidden;
+							"
 						>
 							<div
-								class="flex items-center justify-center bg-black/70"
+								class="bg-black/70 flex items-center justify-center"
 								style="position: absolute; inset: 0"
 							>
 								<span class="text-tan">bg-black/70</span>
@@ -1845,8 +1875,8 @@
 							p-4</code
 						>
 						<div class="pattern-note">
-							Two opacity values for the same role. Reparse modal is darker
-							than About modal.
+							Two opacity values for the same role. Reparse modal is darker than
+							About modal.
 						</div>
 					</div>
 				</div>
@@ -1884,10 +1914,10 @@
 				<h3 id="popups-popovers">Action popovers & context menu</h3>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Sidebar context menu — Move to Collection</div>
-					<div class="pattern-cite">
-						lib/CloudGameSidebar.svelte:374-472
+					<div class="pattern-name">
+						Sidebar context menu — Move to Collection
 					</div>
+					<div class="pattern-cite">lib/CloudGameSidebar.svelte:374-472</div>
 					<div class="pattern-demo">
 						<div
 							class="rounded border-2 border-black bg-blue-gray shadow-lg"
@@ -1947,7 +1977,12 @@
 								class="flex items-center gap-2 border-b border-black px-3 py-2"
 							>
 								<div
-									style="width:24px;height:24px;border-radius:9999px;background:#5865f2"
+									style="
+										width: 24px;
+										height: 24px;
+										border-radius: 9999px;
+										background: #5865f2;
+									"
 								></div>
 								<div>
 									<div class="text-xs font-bold text-tan">becked</div>
@@ -2038,18 +2073,20 @@
 					>
 					<div class="pattern-note">
 						<code>hover:bg-tan-hover</code> is a no-op since
-						<code>tan-hover</code> equals <code>tan</code> (<code>#d2b48c</code>) — confirmed
-						against <code>app.css:11-12</code>.
+						<code>tan-hover</code> equals
+						<code>tan</code> (<code>#d2b48c</code>) — confirmed against
+						<code>app.css:11-12</code>.
 					</div>
 				</div>
 
 				<div class="pattern-card">
 					<div class="pattern-name">ToggleGroup (Yields rate/cumulative)</div>
-					<div class="pattern-cite">
-						lib/game-detail/YieldsTab.svelte:25-39
-					</div>
+					<div class="pattern-cite">lib/game-detail/YieldsTab.svelte:25-39</div>
 					<div class="pattern-demo">
-						<div class="flex rounded border border-tan" style="display: inline-flex">
+						<div
+							class="flex rounded border border-tan"
+							style="display: inline-flex"
+						>
 							<button
 								class="rounded-l px-2.5 py-1 text-xs text-tan"
 								style="background-color: #35302b"
@@ -2079,9 +2116,7 @@
 						<div class="pattern-cite">lib/MapTooltip.svelte:96-185</div>
 						<div class="pattern-demo">
 							<div class="replica-map-tooltip">
-								<div style="font-weight: bold; color: #bc6304">
-									Memphis ★
-								</div>
+								<div style="font-weight: bold; color: #bc6304">Memphis ★</div>
 								<div class="rows">
 									<span style="color: var(--color-tan)">Tile:</span>
 									<span>23, 14</span>
@@ -2104,11 +2139,24 @@
 						<div class="pattern-cite">lib/MapTooltip.svelte:152-167</div>
 						<div class="pattern-demo">
 							<div class="replica-map-tooltip pinned">
-								<div style="display: flex; justify-content: space-between; align-items: center">
+								<div
+									style="
+										display: flex;
+										justify-content: space-between;
+										align-items: center;
+									"
+								>
 									<span style="font-weight: bold; color: #bc6304"
 										>Memphis ★</span
 									>
-									<button style="background: none; border: none; color: var(--color-tan); cursor: pointer">
+									<button
+										style="
+											background: none;
+											border: none;
+											color: var(--color-tan);
+											cursor: pointer;
+										"
+									>
 										×
 									</button>
 								</div>
@@ -2129,9 +2177,7 @@
 
 				<div class="pattern-card">
 					<div class="pattern-name">Filter chip group (active filters)</div>
-					<div class="pattern-cite">
-						lib/CloudGameSidebar.svelte:296-320
-					</div>
+					<div class="pattern-cite">lib/CloudGameSidebar.svelte:296-320</div>
 					<div class="pattern-demo">
 						<div class="mt-1.5 flex flex-wrap gap-1">
 							<button class="replica-filter-chip">
@@ -2142,7 +2188,9 @@
 							</button>
 						</div>
 					</div>
-					<code class="pattern-class">CSS class .filter-chip (see Forms section)</code>
+					<code class="pattern-class"
+						>CSS class .filter-chip (see Forms section)</code
+					>
 				</div>
 
 				<!-- ============ 7. CHARTS ============ -->
@@ -2155,57 +2203,257 @@
 				</p>
 
 				<h3>Chart palettes</h3>
-				<p class="section-intro" style="font-size: 0.8rem">CHART_COLORS — generic series cycle</p>
+				<p class="section-intro" style="font-size: 0.8rem">
+					CHART_COLORS — generic series cycle
+				</p>
 				<div class="swatch-grid">
-					<div class="swatch"><div class="swatch-color" style="background: #C87941"></div><div class="swatch-meta"><span class="swatch-name">Copper</span><span class="swatch-hex">#C87941</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #8B4513"></div><div class="swatch-meta"><span class="swatch-name">Saddle Brown</span><span class="swatch-hex">#8B4513</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #CD853F"></div><div class="swatch-meta"><span class="swatch-name">Peru</span><span class="swatch-hex">#CD853F</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #A0522D"></div><div class="swatch-meta"><span class="swatch-name">Sienna</span><span class="swatch-hex">#A0522D</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #D2691E"></div><div class="swatch-meta"><span class="swatch-name">Chocolate</span><span class="swatch-hex">#D2691E</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #B8860B"></div><div class="swatch-meta"><span class="swatch-name">Dark Goldenrod</span><span class="swatch-hex">#B8860B</span></div></div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #c87941"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Copper</span
+							><span class="swatch-hex">#C87941</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #8b4513"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Saddle Brown</span
+							><span class="swatch-hex">#8B4513</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #cd853f"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Peru</span
+							><span class="swatch-hex">#CD853F</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #a0522d"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Sienna</span
+							><span class="swatch-hex">#A0522D</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #d2691e"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Chocolate</span
+							><span class="swatch-hex">#D2691E</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #b8860b"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Dark Goldenrod</span
+							><span class="swatch-hex">#B8860B</span>
+						</div>
+					</div>
 				</div>
 
-				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">NATION_COLORS</p>
+				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">
+					NATION_COLORS
+				</p>
 				<div class="swatch-grid">
-					<div class="swatch"><div class="swatch-color" style="background: #F8A3B4"></div><div class="swatch-meta"><span class="swatch-name">Aksum</span><span class="swatch-hex">#F8A3B4</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #FADC3B"></div><div class="swatch-meta"><span class="swatch-name">Assyria</span><span class="swatch-hex">#FADC3B</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #82C83E"></div><div class="swatch-meta"><span class="swatch-name">Babylonia</span><span class="swatch-hex">#82C83E</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #F6EFE1"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#F6EFE1">Carthage</span><span class="swatch-hex">#F6EFE1</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #BC6304"></div><div class="swatch-meta"><span class="swatch-name">Egypt</span><span class="swatch-hex">#BC6304</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #2360BC"></div><div class="swatch-meta"><span class="swatch-name">Greece</span><span class="swatch-hex">#2360BC</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #80E3E8"></div><div class="swatch-meta"><span class="swatch-name">Hittite</span><span class="swatch-hex">#80E3E8</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #FFFFB6"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#FFFFB6">Kush</span><span class="swatch-hex">#FFFFB6</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #A749FF"></div><div class="swatch-meta"><span class="swatch-name">Maurya</span><span class="swatch-hex">#A749FF</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #C04E4A"></div><div class="swatch-meta"><span class="swatch-name">Persia</span><span class="swatch-hex">#C04E4A</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #880D56"></div><div class="swatch-meta"><span class="swatch-name">Rome</span><span class="swatch-hex">#880D56</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #00B281"></div><div class="swatch-meta"><span class="swatch-name">Tamil</span><span class="swatch-hex">#00B281</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #AD7E00"></div><div class="swatch-meta"><span class="swatch-name">Yuezhi</span><span class="swatch-hex">#AD7E00</span></div></div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #f8a3b4"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Aksum</span
+							><span class="swatch-hex">#F8A3B4</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #fadc3b"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Assyria</span
+							><span class="swatch-hex">#FADC3B</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #82c83e"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Babylonia</span
+							><span class="swatch-hex">#82C83E</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #f6efe1"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #f6efe1"
+								>Carthage</span
+							><span class="swatch-hex">#F6EFE1</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #bc6304"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Egypt</span
+							><span class="swatch-hex">#BC6304</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #2360bc"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Greece</span
+							><span class="swatch-hex">#2360BC</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #80e3e8"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Hittite</span
+							><span class="swatch-hex">#80E3E8</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #ffffb6"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #ffffb6"
+								>Kush</span
+							><span class="swatch-hex">#FFFFB6</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #a749ff"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Maurya</span
+							><span class="swatch-hex">#A749FF</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #c04e4a"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Persia</span
+							><span class="swatch-hex">#C04E4A</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #880d56"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Rome</span
+							><span class="swatch-hex">#880D56</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #00b281"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Tamil</span
+							><span class="swatch-hex">#00B281</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #ad7e00"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Yuezhi</span
+							><span class="swatch-hex">#AD7E00</span>
+						</div>
+					</div>
 				</div>
 
-				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">TRIBE_COLORS</p>
+				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">
+					TRIBE_COLORS
+				</p>
 				<div class="swatch-grid">
-					<div class="swatch"><div class="swatch-color" style="background: #87DB40"></div><div class="swatch-meta"><span class="swatch-name">Gauls</span><span class="swatch-hex">#87DB40</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #9C5DFF"></div><div class="swatch-meta"><span class="swatch-name">Vandals</span><span class="swatch-hex">#9C5DFF</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #3CCDC2"></div><div class="swatch-meta"><span class="swatch-name">Danes</span><span class="swatch-hex">#3CCDC2</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #D89A18"></div><div class="swatch-meta"><span class="swatch-name">Thracians</span><span class="swatch-hex">#D89A18</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #E6E1CA"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#E6E1CA">Scythians</span><span class="swatch-hex">#E6E1CA</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #FFDD67"></div><div class="swatch-meta"><span class="swatch-name" style="color:#000;background:#FFDD67">Numidians</span><span class="swatch-hex">#FFDD67</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #AB3157"></div><div class="swatch-meta"><span class="swatch-name">Huns</span><span class="swatch-hex">#AB3157</span></div></div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #87db40"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Gauls</span
+							><span class="swatch-hex">#87DB40</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #9c5dff"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Vandals</span
+							><span class="swatch-hex">#9C5DFF</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #3ccdc2"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Danes</span
+							><span class="swatch-hex">#3CCDC2</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #d89a18"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Thracians</span
+							><span class="swatch-hex">#D89A18</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #e6e1ca"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #e6e1ca"
+								>Scythians</span
+							><span class="swatch-hex">#E6E1CA</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #ffdd67"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name" style="color: #000; background: #ffdd67"
+								>Numidians</span
+							><span class="swatch-hex">#FFDD67</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #ab3157"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Huns</span
+							><span class="swatch-hex">#AB3157</span>
+						</div>
+					</div>
 				</div>
 
-				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">UNIT_CLASS_COLORS</p>
+				<p class="section-intro" style="font-size: 0.8rem; margin-top: 1.5rem">
+					UNIT_CLASS_COLORS
+				</p>
 				<div class="swatch-grid">
-					<div class="swatch"><div class="swatch-color" style="background: #C87941"></div><div class="swatch-meta"><span class="swatch-name">Infantry</span><span class="swatch-hex">#C87941</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #B8860B"></div><div class="swatch-meta"><span class="swatch-name">Ranged</span><span class="swatch-hex">#B8860B</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #CD853F"></div><div class="swatch-meta"><span class="swatch-name">Cavalry</span><span class="swatch-hex">#CD853F</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #A0522D"></div><div class="swatch-meta"><span class="swatch-name">Siege</span><span class="swatch-hex">#A0522D</span></div></div>
-					<div class="swatch"><div class="swatch-color" style="background: #8B4513"></div><div class="swatch-meta"><span class="swatch-name">Naval</span><span class="swatch-hex">#8B4513</span></div></div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #c87941"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Infantry</span
+							><span class="swatch-hex">#C87941</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #b8860b"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Ranged</span
+							><span class="swatch-hex">#B8860B</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #cd853f"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Cavalry</span
+							><span class="swatch-hex">#CD853F</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #a0522d"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Siege</span
+							><span class="swatch-hex">#A0522D</span>
+						</div>
+					</div>
+					<div class="swatch">
+						<div class="swatch-color" style="background: #8b4513"></div>
+						<div class="swatch-meta">
+							<span class="swatch-name">Naval</span
+							><span class="swatch-hex">#8B4513</span>
+						</div>
+					</div>
 				</div>
 
 				<h3>Live chart examples</h3>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Line chart — yields per turn (3 nations)</div>
+					<div class="pattern-name">
+						Line chart — yields per turn (3 nations)
+					</div>
 					<div class="pattern-cite">
 						lib/game-detail/YieldsTab.svelte · helpers.ts createYieldChartOption
 					</div>
@@ -2213,18 +2461,18 @@
 				</div>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Bar chart — games by nation (rotated labels)</div>
-					<div class="pattern-cite">
-						routes/dashboard/+page.svelte:62-97
+					<div class="pattern-name">
+						Bar chart — games by nation (rotated labels)
 					</div>
+					<div class="pattern-cite">routes/dashboard/+page.svelte:62-97</div>
 					<div id="chart-bar" class="chart-frame"></div>
 				</div>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Pie chart — army composition (UNIT_CLASS_COLORS)</div>
-					<div class="pattern-cite">
-						lib/game-detail/MilitaryTab.svelte
+					<div class="pattern-name">
+						Pie chart — army composition (UNIT_CLASS_COLORS)
 					</div>
+					<div class="pattern-cite">lib/game-detail/MilitaryTab.svelte</div>
 					<div id="chart-pie" class="chart-frame"></div>
 				</div>
 
@@ -2244,29 +2492,49 @@ export const CHART_THEME = {
   },
   legend: { show: false },
   tooltip: { trigger: "axis" },
-};</pre>
+};</pre
+				>
 
 				<!-- ============ 8. LAYOUT ============ -->
 				<h2 id="layout">8. Layout patterns</h2>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Two-pane layout — main + resizable sidebar</div>
+					<div class="pattern-name">
+						Two-pane layout — main + resizable sidebar
+					</div>
 					<div class="pattern-cite">
-						routes/dashboard/+page.svelte:247 · routes/games/[id]/+page.svelte:64
+						routes/dashboard/+page.svelte:247 ·
+						routes/games/[id]/+page.svelte:64
 					</div>
 					<div class="pattern-demo">
 						<div
-							style="display: flex; height: 240px; border: 1px solid #2a2622; border-radius: 4px; overflow: hidden"
+							style="
+								display: flex;
+								height: 240px;
+								border: 1px solid #2a2622;
+								border-radius: 4px;
+								overflow: hidden;
+							"
 						>
 							<main
-								style="flex: 1; padding: 1rem; background: #211a12; overflow: hidden"
+								style="
+									flex: 1;
+									padding: 1rem;
+									background: #211a12;
+									overflow: hidden;
+								"
 							>
 								<div class="rounded-lg p-3" style="background-color: #2a2622">
 									<p class="text-xs text-tan">Main scrollable content</p>
 								</div>
 							</main>
 							<aside
-								style="width: 200px; background: #211a12; border-left: 2px solid #000; padding: 0.5rem"
+								style="
+									width: 200px;
+									background: #211a12;
+									border-left: 2px solid #000;
+									padding: 0.5rem;
+								"
 							>
 								<p class="text-xs text-tan">Sidebar (resizable)</p>
 							</aside>
@@ -2280,7 +2548,9 @@ export const CHART_THEME = {
 				</div>
 
 				<div class="pattern-card">
-					<div class="pattern-name">Cloud header (logo center, hamburger left, search right)</div>
+					<div class="pattern-name">
+						Cloud header (logo center, hamburger left, search right)
+					</div>
 					<div class="pattern-cite">lib/CloudHeader.svelte:72</div>
 					<div class="pattern-demo">
 						<header
@@ -2299,7 +2569,9 @@ export const CHART_THEME = {
 									<path d="M3 6h18M3 12h18M3 18h18" />
 								</svg>
 							</button>
-							<div class="pointer-events-none absolute left-1/2 -translate-x-1/2">
+							<div
+								class="pointer-events-none absolute left-1/2 -translate-x-1/2"
+							>
 								<div
 									class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"
 								>
@@ -2327,7 +2599,15 @@ export const CHART_THEME = {
 					<div class="pattern-cite">routes/login/+page.svelte:32</div>
 					<div class="pattern-demo">
 						<div
-							style="display: flex; flex-direction: column; height: 240px; background: #211a12; border: 1px solid #2a2622; border-radius: 4px; overflow: hidden"
+							style="
+								display: flex;
+								flex-direction: column;
+								height: 240px;
+								background: #211a12;
+								border: 1px solid #2a2622;
+								border-radius: 4px;
+								overflow: hidden;
+							"
 						>
 							<header
 								class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
@@ -2344,10 +2624,7 @@ export const CHART_THEME = {
 								style="flex: 1 1 auto"
 							>
 								<div class="w-full max-w-sm">
-									<div
-										class="rounded-lg p-4"
-										style="background-color: #2a2622"
-									>
+									<div class="rounded-lg p-4" style="background-color: #2a2622">
 										<div
 											class="rounded-lg p-3"
 											style="background-color: #35302b"
@@ -2379,7 +2656,9 @@ export const CHART_THEME = {
 				</div>
 
 				<!-- ============ 9. AUDIT SUMMARY ============ -->
-				<h2 id="audit-summary">9. Audit summary — divergences to consolidate</h2>
+				<h2 id="audit-summary">
+					9. Audit summary — divergences to consolidate
+				</h2>
 				<p class="section-intro">
 					Sorted roughly by impact (frequency × inconsistency cost). Pick a
 					winner per row and we can do a follow-up sweep.
@@ -2394,12 +2673,15 @@ export const CHART_THEME = {
 						become a Tailwind class.
 					</li>
 					<li>
-						<strong>Inline <code>#DBDEE3</code> for body text (20+ uses).</strong>
+						<strong
+							>Inline <code>#DBDEE3</code> for body text (20+ uses).</strong
+						>
 						Visually equivalent to <code>--color-gray-200</code>
 						(<code>#eeeeee</code>). Either consolidate to
 						<code>text-gray-200</code> or add a
 						<code>--color-light-gray</code> token. Hot spots:
-						<code>UploadModal.svelte</code>, <code>BulkUploadModal.svelte</code>,
+						<code>UploadModal.svelte</code>,
+						<code>BulkUploadModal.svelte</code>,
 						<code>GamePageSkeleton.svelte</code>.
 					</li>
 					<li>
@@ -2422,10 +2704,13 @@ export const CHART_THEME = {
 					</li>
 					<li>
 						<strong>Three SearchInput variants in one component.</strong>
-						<code>lib/SearchInput.svelte:17-30</code> — dark
-						(<code>#403A33</code> rounded-full py-1), light (white py-2 border-2
-						black), field (<code>#201a13</code> py-2). Dark and field look very
-						close; consolidate.
+						<code>lib/SearchInput.svelte:17-30</code> — dark (<code
+							>#403A33</code
+						>
+						rounded-full py-1), light (white py-2 border-2 black), field (<code
+							>#201a13</code
+						>
+						py-2). Dark and field look very close; consolidate.
 					</li>
 					<li>
 						<strong>Action popover width inconsistency.</strong>
@@ -2467,8 +2752,7 @@ export const CHART_THEME = {
 					</li>
 					<li>
 						<strong><code>tan-hover</code> token has no effect.</strong>
-						<code>app.css:11-12</code> defines
-						<code>--color-tan</code> and
+						<code>app.css:11-12</code> defines <code>--color-tan</code> and
 						<code>--color-tan-hover</code> as the same hex
 						(<code>#d2b48c</code>). Tab triggers reference
 						<code>hover:bg-tan-hover</code> — currently a no-op. Either pick a
@@ -2587,7 +2871,14 @@ export const CHART_THEME = {
 					"Rome",
 					"Carthage",
 				];
-				const colors = ["#BC6304", "#2360BC", "#C04E4A", "#82C83E", "#880D56", "#F6EFE1"];
+				const colors = [
+					"#BC6304",
+					"#2360BC",
+					"#C04E4A",
+					"#82C83E",
+					"#880D56",
+					"#F6EFE1",
+				];
 				c.setOption({
 					...CHART_THEME,
 					title: { ...CHART_THEME.title, text: "Games by Nation" },

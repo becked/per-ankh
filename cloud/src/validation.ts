@@ -191,12 +191,9 @@ export function extractMetadata(data: Record<string, unknown>): {
 	}
 
 	return {
-		game_name:
-			typeof gd.game_name === "string" ? gd.game_name : null,
-		total_turns:
-			typeof gd.total_turns === "number" ? gd.total_turns : null,
+		game_name: typeof gd.game_name === "string" ? gd.game_name : null,
+		total_turns: typeof gd.total_turns === "number" ? gd.total_turns : null,
 		player_nation: playerNation,
-		map_size:
-			typeof gd.map_size === "string" ? gd.map_size : null,
+		map_size: typeof gd.map_size === "string" ? gd.map_size : null,
 	};
 }

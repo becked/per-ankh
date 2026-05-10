@@ -142,11 +142,17 @@ function buildAvatarUrl(discordId: string, avatarHash: string | null): string {
 
 // Generate a PKCE pair: a high-entropy random verifier and its
 // SHA-256 challenge, both base64url with no padding (RFC 7636).
-async function generatePkce(): Promise<{ verifier: string; challenge: string }> {
+async function generatePkce(): Promise<{
+	verifier: string;
+	challenge: string;
+}> {
 	const verifierBytes = new Uint8Array(32);
 	crypto.getRandomValues(verifierBytes);
 	const verifier = base64UrlEncode(verifierBytes);
-	const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier));
+	const digest = await crypto.subtle.digest(
+		"SHA-256",
+		new TextEncoder().encode(verifier),
+	);
 	const challenge = base64UrlEncode(digest);
 	return { verifier, challenge };
 }
@@ -173,14 +179,21 @@ export async function handleDiscordStart(
 
 	let body: { redirect_uri?: string; next?: string };
 	try {
-		body = await readJsonBody<{ redirect_uri?: string; next?: string }>(request);
+		body = await readJsonBody<{ redirect_uri?: string; next?: string }>(
+			request,
+		);
 	} catch {
 		return errorResponse("Invalid JSON body", 400, cors, "INVALID_BODY");
 	}
 
 	const redirectUri = body.redirect_uri;
 	if (!redirectUri || typeof redirectUri !== "string") {
-		return errorResponse("redirect_uri required", 400, cors, "MISSING_REDIRECT_URI");
+		return errorResponse(
+			"redirect_uri required",
+			400,
+			cors,
+			"MISSING_REDIRECT_URI",
+		);
 	}
 	const next = safeNext(body.next);
 
@@ -221,14 +234,17 @@ export async function handleDiscordStart(
 	];
 	if (isHttps) cookieParts.push("Secure");
 
-	return new Response(JSON.stringify({ authorize_url: authorizeUrl.toString() }), {
-		status: 200,
-		headers: {
-			"Content-Type": "application/json",
-			"Set-Cookie": cookieParts.join("; "),
-			...cors,
+	return new Response(
+		JSON.stringify({ authorize_url: authorizeUrl.toString() }),
+		{
+			status: 200,
+			headers: {
+				"Content-Type": "application/json",
+				"Set-Cookie": cookieParts.join("; "),
+				...cors,
+			},
 		},
-	});
+	);
 }
 
 export async function handleDiscordCallback(
@@ -348,11 +364,21 @@ export async function handleDiscordCallback(
 			discord_status: userRes.status,
 			discord_detail: detail.slice(0, 500),
 		});
-		return errorResponse("Discord user fetch failed", 502, cors, "USER_FETCH_FAILED");
+		return errorResponse(
+			"Discord user fetch failed",
+			502,
+			cors,
+			"USER_FETCH_FAILED",
+		);
 	}
 	const discordUser = (await userRes.json()) as DiscordUser;
 	if (!discordUser.id) {
-		return errorResponse("Discord returned no user id", 502, cors, "NO_USER_ID");
+		return errorResponse(
+			"Discord returned no user id",
+			502,
+			cors,
+			"NO_USER_ID",
+		);
 	}
 
 	const allowedUsernames = parseAllowedUsernames(env);
@@ -416,7 +442,12 @@ export async function handleDiscordCallback(
 		.first<UserRow>();
 
 	if (!upsert) {
-		return errorResponse("User upsert returned no row", 500, cors, "UPSERT_FAILED");
+		return errorResponse(
+			"User upsert returned no row",
+			500,
+			cors,
+			"UPSERT_FAILED",
+		);
 	}
 
 	// Idempotent Personal-collection seed. First login inserts; subsequent
@@ -429,7 +460,11 @@ export async function handleDiscordCallback(
 		.bind(upsert.user_id)
 		.run();
 
-	const sessionToken = await createSession(env, upsert.user_id, discordUsername);
+	const sessionToken = await createSession(
+		env,
+		upsert.user_id,
+		discordUsername,
+	);
 
 	// Audit log. Fire-and-forget — a logging hiccup mustn't fail an
 	// otherwise successful login. First-vs-returning is derivable
@@ -479,7 +514,10 @@ export async function handleDiscordCallback(
 	);
 }
 
-export async function handleMe(request: Request, env: AuthEnv): Promise<Response> {
+export async function handleMe(
+	request: Request,
+	env: AuthEnv,
+): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 
 	const session = await sessionFromRequest(env, request);
@@ -525,7 +563,10 @@ export async function handleMe(request: Request, env: AuthEnv): Promise<Response
 	);
 }
 
-export async function handleLogout(request: Request, env: AuthEnv): Promise<Response> {
+export async function handleLogout(
+	request: Request,
+	env: AuthEnv,
+): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 
 	const session = await sessionFromRequest(env, request);

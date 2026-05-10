@@ -47,9 +47,8 @@ export function derivePlayerWonders(
 	const out: PlayerWonder[] = [];
 	for (const [wonder, completedTurn] of wonderTurns) {
 		const builderXmlId = builderByImprovement.get(wonder);
-		const builder = builderXmlId !== undefined
-			? playerMap.get(builderXmlId)
-			: undefined;
+		const builder =
+			builderXmlId !== undefined ? playerMap.get(builderXmlId) : undefined;
 		out.push({
 			player_id: builder?.xmlId ?? 0,
 			player_name: builder?.playerName ?? "Unknown",

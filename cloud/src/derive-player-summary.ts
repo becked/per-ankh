@@ -78,7 +78,9 @@ export interface SummaryGameContext {
 	totalTurns: number;
 }
 
-export function buildSummaryGameContext(blob: FullGameData): SummaryGameContext {
+export function buildSummaryGameContext(
+	blob: FullGameData,
+): SummaryGameContext {
 	const finalPointsByIndex = new Map<number, number>();
 	const playerHistory = blob.player_history as PlayerHistoryEntry[];
 	for (const ph of playerHistory) {
@@ -103,9 +105,9 @@ export function buildSummaryGameContext(blob: FullGameData): SummaryGameContext 
 // ---------- Per-player derivation ----------
 
 export interface DerivedSummary {
-	family_classes: string | null;          // JSON array
+	family_classes: string | null; // JSON array
 	starting_ruler_archetype: string | null;
-	starting_ruler_traits: string | null;   // JSON array
+	starting_ruler_traits: string | null; // JSON array
 	starting_ruler_reign_turns: number | null;
 	succession_count: number;
 	final_points: number | null;
@@ -138,9 +140,8 @@ export function derivePlayerSummary(
 			familyClassSet.add(f.family_class);
 		}
 	}
-	const family_classes = familyClassSet.size > 0
-		? JSON.stringify([...familyClassSet])
-		: null;
+	const family_classes =
+		familyClassSet.size > 0 ? JSON.stringify([...familyClassSet]) : null;
 
 	// Starting ruler — earliest is_royal character whose became_leader_turn
 	// is non-null for this player. Pinacotheca's clarification: a "starting
@@ -155,7 +156,7 @@ export function derivePlayerSummary(
 		if (
 			startingRuler === null ||
 			(c.became_leader_turn ?? Infinity) <
-			(startingRuler.became_leader_turn ?? Infinity)
+				(startingRuler.became_leader_turn ?? Infinity)
 		) {
 			startingRuler = c;
 		}
@@ -171,9 +172,8 @@ export function derivePlayerSummary(
 				startTraits.push(t.trait_name);
 			}
 		}
-		starting_ruler_traits = startTraits.length > 0
-			? JSON.stringify(startTraits)
-			: null;
+		starting_ruler_traits =
+			startTraits.length > 0 ? JSON.stringify(startTraits) : null;
 
 		// Reign length: from became_leader_turn until death (or end of game).
 		// abdicated_turn isn't yet populated by the parser (always null);

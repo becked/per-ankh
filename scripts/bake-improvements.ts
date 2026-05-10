@@ -194,22 +194,19 @@ function extractCapitalFamily(asset: string): string | null {
 // resolved family aliases into `map`. Last definition wins so DLC nation-add
 // entries override the base; nation-change entries that only tweak gameplay
 // fields without touching asset tags don't disturb the alias resolution.
-function parseNationXml(
-	xml: string,
-	map: Map<string, NationAliasEntry>,
-): void {
+function parseNationXml(xml: string, map: Map<string, NationAliasEntry>): void {
 	const entryRe = /<Entry>([\s\S]*?)<\/Entry>/g;
 	let entryMatch: RegExpExecArray | null;
 	while ((entryMatch = entryRe.exec(xml)) !== null) {
 		const body = entryMatch[1];
 		const zType = /<zType>([^<]+)<\/zType>/.exec(body)?.[1];
 		const urbanAsset = /<UrbanAsset>([^<]+)<\/UrbanAsset>/.exec(body)?.[1];
-		const capitalAsset = /<CapitalAsset>([^<]+)<\/CapitalAsset>/.exec(body)?.[1];
+		const capitalAsset = /<CapitalAsset>([^<]+)<\/CapitalAsset>/.exec(
+			body,
+		)?.[1];
 		if (!zType) continue;
 		const urban = urbanAsset ? extractUrbanFamily(urbanAsset) : null;
-		const capital = capitalAsset
-			? extractCapitalFamily(capitalAsset)
-			: null;
+		const capital = capitalAsset ? extractCapitalFamily(capitalAsset) : null;
 		// nation-change.xml entries often omit asset fields entirely (only
 		// adjust gameplay traits). Don't replace an existing alias with nulls.
 		const existing = map.get(zType);
@@ -439,7 +436,9 @@ async function bakeBaseAtlas(
 			zTypes: iconToZTypes.get(zIconName) ?? [],
 		});
 	}
-	for (const family of Array.from(classification.standaloneUrban.keys()).sort()) {
+	for (const family of Array.from(
+		classification.standaloneUrban.keys(),
+	).sort()) {
 		cells.push({
 			key: `URBAN_${family}`,
 			path: classification.standaloneUrban.get(family)!,
@@ -584,9 +583,7 @@ async function writeNationAliases(
 	const text = JSON.stringify(payload, null, 2) + "\n";
 	await writeFile(resolve(SOURCE_DIR, "nation-asset-aliases.json"), text);
 	await writeFile(resolve(OUTPUT_DIR, "nation-asset-aliases.json"), text);
-	console.log(
-		`[nation-aliases] wrote ${sortedNations.length} nation aliases`,
-	);
+	console.log(`[nation-aliases] wrote ${sortedNations.length} nation aliases`);
 }
 
 async function main(): Promise<void> {
@@ -594,7 +591,9 @@ async function main(): Promise<void> {
 	await mkdir(OUTPUT_DIR, { recursive: true });
 	await removeStaleOutputs();
 
-	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
+	const pinacothecaVersion = await readPinacothecaVersion(
+		PINACOTHECA_PYPROJECT,
+	);
 	const bakedAt = new Date().toISOString();
 	const ctx: BakeContext = {
 		hexMask: await buildHexMask(CELL_W, CELL_H),

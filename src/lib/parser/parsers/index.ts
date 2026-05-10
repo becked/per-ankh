@@ -17,11 +17,7 @@ import {
 	characterTraitToRow,
 } from "./character-data.js";
 import { parseCharacters, characterToRow } from "./characters.js";
-import {
-	parseCities,
-	parseCityCulture,
-	parseCityReligions,
-} from "./cities.js";
+import { parseCities, parseCityCulture, parseCityReligions } from "./cities.js";
 import {
 	parseDiplomacyRelations,
 	diplomacyRelationToRow,
@@ -190,10 +186,21 @@ export function extractAllGameData(
 		players,
 	);
 	const improvementData = deriveImprovementData(tiles, cities, players);
-	const mapTiles = deriveMapTiles(tiles, cities, cityReligions, religions, players);
+	const mapTiles = deriveMapTiles(
+		tiles,
+		cities,
+		cityReligions,
+		religions,
+		players,
+	);
 	const gameReligions = deriveGameReligions(religions, players);
 	const playerWonders = derivePlayerWonders(eventLogs, tiles, players);
-	const storyEvents = deriveStoryEvents(eventStories, players, characters, cities);
+	const storyEvents = deriveStoryEvents(
+		eventStories,
+		players,
+		characters,
+		cities,
+	);
 
 	// 4. Snake-case projections of the new cloud-only entity fields.
 	const charactersWire: CharacterInfo[] = characters.map(
@@ -207,9 +214,10 @@ export function extractAllGameData(
 			(r) =>
 				characterRelationshipToRow(r) as unknown as CharacterRelationshipInfo,
 		);
-	const characterMarriagesWire: CharacterMarriageInfo[] = characterMarriages.map(
-		(m) => characterMarriageToRow(m) as unknown as CharacterMarriageInfo,
-	);
+	const characterMarriagesWire: CharacterMarriageInfo[] =
+		characterMarriages.map(
+			(m) => characterMarriageToRow(m) as unknown as CharacterMarriageInfo,
+		);
 	const familiesWire: FamilyInfo[] = families.map(
 		(f) => familyToRow(f) as unknown as FamilyInfo,
 	);
@@ -218,8 +226,7 @@ export function extractAllGameData(
 	);
 	const religionOpinionWire: ReligionOpinionEntry[] =
 		religionOpinionHistory.map(
-			(h) =>
-				religionOpinionHistoryToRow(h) as unknown as ReligionOpinionEntry,
+			(h) => religionOpinionHistoryToRow(h) as unknown as ReligionOpinionEntry,
 		);
 	const diplomacyWire: DiplomacyRelation[] = diplomacy.map(
 		(d) => diplomacyRelationToRow(d) as unknown as DiplomacyRelation,

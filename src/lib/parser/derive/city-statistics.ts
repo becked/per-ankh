@@ -59,11 +59,8 @@ export function deriveCityStatistics(
 				? cultureByKey.get(cultureKey(c.xmlId, teamForCulture))
 				: undefined;
 		const governor =
-			c.governorXmlId !== null
-				? characterMap.get(c.governorXmlId)
-				: undefined;
-		const family =
-			c.family !== null ? familyByName.get(c.family) : undefined;
+			c.governorXmlId !== null ? characterMap.get(c.governorXmlId) : undefined;
+		const family = c.family !== null ? familyByName.get(c.family) : undefined;
 
 		return {
 			city_id: c.xmlId,

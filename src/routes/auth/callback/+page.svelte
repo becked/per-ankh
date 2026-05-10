@@ -24,7 +24,10 @@
 			return;
 		}
 		if (!code || !state) {
-			status = { kind: "error", message: "Missing code or state in callback URL" };
+			status = {
+				kind: "error",
+				message: "Missing code or state in callback URL",
+			};
 			return;
 		}
 
@@ -65,7 +68,10 @@
 	</header>
 
 	<div class="flex flex-1 items-center justify-center p-4">
-		<div class="w-full max-w-sm rounded-lg p-4" style="background-color: #2a2622;">
+		<div
+			class="w-full max-w-sm rounded-lg p-4"
+			style="background-color: #2a2622;"
+		>
 			<h3 class="mb-3 text-base font-bold text-tan">Login</h3>
 			<div class="rounded-lg p-3" style="background-color: #35302B;">
 				{#if status.kind === "loading"}

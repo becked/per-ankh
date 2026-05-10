@@ -3,7 +3,13 @@
 //
 // Tribes use string IDs (e.g. "TRIBE_REBELS"), not numeric XML IDs.
 
-import { asArray, isElement, optInt, optStr, requireStr } from "../parse-xml.js";
+import {
+	asArray,
+	isElement,
+	optInt,
+	optStr,
+	requireStr,
+} from "../parse-xml.js";
 
 export interface Tribe {
 	tribeId: string;

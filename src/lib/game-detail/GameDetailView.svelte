@@ -218,12 +218,7 @@
 		<!-- Turns -->
 		<div class="rounded-lg p-3" style="background-color: #35302B;">
 			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
-				<SpriteIcon
-					category="icons"
-					value="TURN"
-					size={14}
-					alt="Turns"
-				/>
+				<SpriteIcon category="icons" value="TURN" size={14} alt="Turns" />
 				Turns
 			</p>
 			<p class="text-lg font-bold" style="color: #DBDEE3;">
@@ -430,10 +425,7 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<YieldsTab
-			{allYields}
-			bind:chartFilters
-		/>
+		<YieldsTab {allYields} bind:chartFilters />
 	</Tabs.Content>
 
 	<!-- Tab Content: Military -->
@@ -470,10 +462,7 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<ImprovementsTab
-			{improvementData}
-			bind:tableState={tables.improvements}
-		/>
+		<ImprovementsTab {improvementData} bind:tableState={tables.improvements} />
 	</Tabs.Content>
 
 	<!-- Tab Content: Map -->
@@ -498,12 +487,7 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<SettingsTab
-			{gameDetails}
-			{victoryConditions}
-			{dlcList}
-			{modsList}
-		/>
+		<SettingsTab {gameDetails} {victoryConditions} {dlcList} {modsList} />
 	</Tabs.Content>
 </Tabs.Root>
 

@@ -257,9 +257,7 @@ export function parseTileOwnershipHistory(
 
 // ---------- Tile changes (tile_data.rs:99–179) ----------
 
-export function parseTileChanges(
-	root: Record<string, unknown>,
-): TileChange[] {
+export function parseTileChanges(root: Record<string, unknown>): TileChange[] {
 	const out: TileChange[] = [];
 
 	for (const [tileXmlId, node] of eachTile(root)) {

@@ -47,8 +47,7 @@ export function deriveStoryEvents(
 	}
 
 	out.sort(
-		(a, b) =>
-			b.occurred_turn - a.occurred_turn || b.event_id - a.event_id,
+		(a, b) => b.occurred_turn - a.occurred_turn || b.event_id - a.event_id,
 	);
 
 	return out.slice(0, STORY_EVENT_LIMIT);

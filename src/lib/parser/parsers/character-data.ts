@@ -123,10 +123,7 @@ export function parseCharacterRelationships(
 			// Type is required; missing/empty → error.
 			const relationshipType = optStr(rel.Type);
 			if (relationshipType === null) {
-				throw new ParseError(
-					"RelationshipData.Type",
-					"MISSING_FIELD",
-				);
+				throw new ParseError("RelationshipData.Type", "MISSING_FIELD");
 			}
 
 			// CharacterID has hybrid semantics: missing → silent skip of the
@@ -181,10 +178,7 @@ export function parseCharacterMarriages(
 			}
 			const spouseXmlId = parseInt(idVal, 10);
 			if (Number.isNaN(spouseXmlId)) {
-				throw new ParseError(
-					`Invalid spouse ID: ${idVal}`,
-					"INVALID_FORMAT",
-				);
+				throw new ParseError(`Invalid spouse ID: ${idVal}`, "INVALID_FORMAT");
 			}
 			out.push({
 				characterXmlId,

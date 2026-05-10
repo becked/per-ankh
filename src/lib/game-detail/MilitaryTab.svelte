@@ -9,7 +9,14 @@
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
-	import { type TableState, type UnitClass, getPlayerColor, toggleSort, classifyUnit, UNIT_CLASS_COLORS } from "./helpers";
+	import {
+		type TableState,
+		type UnitClass,
+		getPlayerColor,
+		toggleSort,
+		classifyUnit,
+		UNIT_CLASS_COLORS,
+	} from "./helpers";
 
 	let {
 		gameDetails,
@@ -98,32 +105,35 @@
 					},
 					tooltip: {
 						trigger: "item",
-						formatter: (params: any) => `${params.name}: ${params.value} (${params.percent}%)`,
+						formatter: (params: any) =>
+							`${params.name}: ${params.value} (${params.percent}%)`,
 					},
-					series: [{
-						type: "pie",
-						radius: ["30%", "60%"],
-						center: ["50%", "55%"],
-						avoidLabelOverlap: false,
-						label: {
-							show: true,
-							position: "outside",
-							formatter: "{b} {d}%",
-							fontSize: 10,
-							color: "#D2B48C",
+					series: [
+						{
+							type: "pie",
+							radius: ["30%", "60%"],
+							center: ["50%", "55%"],
+							avoidLabelOverlap: false,
+							label: {
+								show: true,
+								position: "outside",
+								formatter: "{b} {d}%",
+								fontSize: 10,
+								color: "#D2B48C",
+							},
+							labelLine: {
+								show: true,
+								length: 8,
+								length2: 6,
+								lineStyle: { color: "#666" },
+							},
+							data: slices.map(([unitClass, count]) => ({
+								name: unitClass,
+								value: count,
+								itemStyle: { color: UNIT_CLASS_COLORS[unitClass] },
+							})),
 						},
-						labelLine: {
-							show: true,
-							length: 8,
-							length2: 6,
-							lineStyle: { color: "#666" },
-						},
-						data: slices.map(([unitClass, count]) => ({
-							name: unitClass,
-							value: count,
-							itemStyle: { color: UNIT_CLASS_COLORS[unitClass] },
-						})),
-					}],
+					],
 				};
 
 				return {
@@ -213,7 +223,6 @@
 
 		return rows;
 	});
-
 </script>
 
 <!-- Military Power Chart -->
@@ -241,10 +250,7 @@
 
 <!-- Units Produced Table -->
 {#if unitsProduced.length > 0}
-	<div
-		class="mt-6 rounded-lg p-4"
-		style="background-color: #2a2622;"
-	>
+	<div class="mt-6 rounded-lg p-4" style="background-color: #2a2622;">
 		<h3 class="mb-4 font-bold text-tan">Units Produced</h3>
 
 		<!-- Controls row -->
@@ -335,10 +341,7 @@
 		</div>
 
 		<!-- Units Pivot Table -->
-		<div
-			class="rounded-lg"
-			style="background-color: #35302B;"
-		>
+		<div class="rounded-lg" style="background-color: #35302B;">
 			<table class="w-full">
 				<thead>
 					<tr>
@@ -360,9 +363,7 @@
 								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-right font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
 								onclick={() => toggleSort(tableState, `nation:${nation}`)}
 							>
-								<span
-									class="inline-flex items-center justify-end gap-1"
-								>
+								<span class="inline-flex items-center justify-end gap-1">
 									{formatEnum(nation, "NATION_")}
 									{#if tableState.sortColumn === `nation:${nation}`}
 										<span class="text-orange">
@@ -377,9 +378,7 @@
 								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-right font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
 								onclick={() => toggleSort(tableState, "total")}
 							>
-								<span
-									class="inline-flex items-center justify-end gap-1"
-								>
+								<span class="inline-flex items-center justify-end gap-1">
 									Total
 									{#if tableState.sortColumn === "total"}
 										<span class="text-orange">

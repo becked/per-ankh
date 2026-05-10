@@ -189,7 +189,6 @@
 
 		return rows;
 	});
-
 </script>
 
 {#if lawAdoptionChartOption}
@@ -207,9 +206,7 @@
 <!-- Current Laws Table -->
 {#if currentLaws.length === 0}
 	<div class="mt-8">
-		<p class="p-8 text-center italic text-brown">
-			No laws data available
-		</p>
+		<p class="p-8 text-center italic text-brown">No laws data available</p>
 	</div>
 {:else}
 	<div class="mt-4 rounded-lg p-4" style="background-color: #2a2622;">
@@ -301,10 +298,7 @@
 		</div>
 
 		<!-- Laws pivot table -->
-		<div
-			class="rounded-lg"
-			style="background-color: #35302B;"
-		>
+		<div class="rounded-lg" style="background-color: #35302B;">
 			<table class="w-full">
 				<thead>
 					<tr>
@@ -326,9 +320,7 @@
 								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-center font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
 								onclick={() => toggleSort(tableState, `nation:${nation}`)}
 							>
-								<span
-									class="inline-flex items-center justify-center gap-1"
-								>
+								<span class="inline-flex items-center justify-center gap-1">
 									{formatEnum(nation, "NATION_")}
 									{#if tableState.sortColumn === `nation:${nation}`}
 										<span class="text-orange">

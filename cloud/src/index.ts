@@ -46,10 +46,7 @@ import {
 	handleGameUpload,
 } from "./games";
 import type { GamesEnv } from "./games";
-import {
-	handleCollectionCreate,
-	handleCollectionsList,
-} from "./collections";
+import { handleCollectionCreate, handleCollectionsList } from "./collections";
 import type { CollectionsEnv } from "./collections";
 import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
 import type { OnlineIdsEnv } from "./online-ids";
@@ -57,7 +54,8 @@ import { handleStats } from "./stats";
 import type { StatsEnv } from "./stats";
 import { handleCspReport } from "./csp";
 
-interface Env extends AuthEnv, GamesEnv, CollectionsEnv, OnlineIdsEnv, StatsEnv {
+interface Env
+	extends AuthEnv, GamesEnv, CollectionsEnv, OnlineIdsEnv, StatsEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
 	SESSIONS_KV: KVNamespace;
@@ -241,10 +239,7 @@ async function checkBlocklists(
 
 // === Endpoint Handlers ===
 
-async function handleUpload(
-	request: Request,
-	env: Env,
-): Promise<Response> {
+async function handleUpload(request: Request, env: Env): Promise<Response> {
 	// 1. Kill switch
 	if (env.UPLOADS_ENABLED !== "true") {
 		return errorResponse("Uploads temporarily disabled", 503, env);
@@ -253,11 +248,7 @@ async function handleUpload(
 	// 2. Require X-App-Key header
 	const appKey = request.headers.get("X-App-Key");
 	if (!appKey || !UUID_REGEX.test(appKey)) {
-		return errorResponse(
-			"Missing or invalid X-App-Key header",
-			400,
-			env,
-		);
+		return errorResponse("Missing or invalid X-App-Key header", 400, env);
 	}
 
 	// 3. Extract IP early for rate limiting and blocklist checks
@@ -271,21 +262,32 @@ async function handleUpload(
 
 	// 5. Rate limits: per-key, per-IP, global (before body buffering)
 	const maxPerHour = parseInt(env.RATE_LIMIT_PER_HOUR);
-	const withinKeyLimit = await checkKeyRateLimit(env.SHARE_DB, appKey, maxPerHour);
+	const withinKeyLimit = await checkKeyRateLimit(
+		env.SHARE_DB,
+		appKey,
+		maxPerHour,
+	);
 	if (!withinKeyLimit) {
 		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
 	}
 
 	if (ip) {
 		const ipMaxPerHour = parseInt(env.IP_RATE_LIMIT_PER_HOUR);
-		const withinIpLimit = await checkIpRateLimit(env.SHARE_DB, ip, ipMaxPerHour);
+		const withinIpLimit = await checkIpRateLimit(
+			env.SHARE_DB,
+			ip,
+			ipMaxPerHour,
+		);
 		if (!withinIpLimit) {
 			return errorResponse("Rate limit exceeded. Try again later.", 429, env);
 		}
 	}
 
 	const globalMax = parseInt(env.GLOBAL_UPLOAD_LIMIT_PER_HOUR);
-	const withinGlobalLimit = await checkGlobalUploadLimit(env.SHARE_DB, globalMax);
+	const withinGlobalLimit = await checkGlobalUploadLimit(
+		env.SHARE_DB,
+		globalMax,
+	);
 	if (!withinGlobalLimit) {
 		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
 	}
@@ -493,7 +495,10 @@ async function handleDelete(
 		return errorResponse("Share not found", 404, env);
 	}
 
-	if (!timingSafeEqual(share.delete_token, deleteToken) || !timingSafeEqual(share.app_key, appKey)) {
+	if (
+		!timingSafeEqual(share.delete_token, deleteToken) ||
+		!timingSafeEqual(share.app_key, appKey)
+	) {
 		return errorResponse("Invalid delete credentials", 403, env);
 	}
 
@@ -542,83 +547,136 @@ interface RouteSpec {
 
 const ROUTES: RouteSpec[] = [
 	// Cloud rewrite: /v1/auth/*
-	{ method: "POST", match: { kind: "path", path: "/v1/auth/discord/start" },
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/discord/start" },
 		route: "POST /v1/auth/discord/start",
-		handler: (r, e) => handleDiscordStart(r, e) },
-	{ method: "POST", match: { kind: "path", path: "/v1/auth/discord/callback" },
+		handler: (r, e) => handleDiscordStart(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/discord/callback" },
 		route: "POST /v1/auth/discord/callback",
-		handler: (r, e) => handleDiscordCallback(r, e) },
-	{ method: "GET", match: { kind: "path", path: "/v1/auth/me" },
+		handler: (r, e) => handleDiscordCallback(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/auth/me" },
 		route: "GET /v1/auth/me",
-		handler: (r, e) => handleMe(r, e) },
-	{ method: "POST", match: { kind: "path", path: "/v1/auth/logout" },
+		handler: (r, e) => handleMe(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/logout" },
 		route: "POST /v1/auth/logout",
-		handler: (r, e) => handleLogout(r, e) },
+		handler: (r, e) => handleLogout(r, e),
+	},
 
 	// Cloud rewrite: /v1/games/*
-	{ method: "POST", match: { kind: "path", path: "/v1/games" },
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/games" },
 		route: "POST /v1/games",
-		handler: (r, e) => handleGameUpload(r, e) },
-	{ method: "GET", match: { kind: "path", path: "/v1/games" },
+		handler: (r, e) => handleGameUpload(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/games" },
 		route: "GET /v1/games",
-		handler: (r, e) => handleGameList(r, e) },
-	{ method: "GET",
-		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/download$/ },
+		handler: (r, e) => handleGameList(r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/download$/,
+		},
 		route: "GET /v1/games/:id/download",
-		handler: (r, e, m) => handleGameDownload(m![1], r, e) },
-	{ method: "GET",
+		handler: (r, e, m) => handleGameDownload(m![1], r, e),
+	},
+	{
+		method: "GET",
 		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
 		route: "GET /v1/games/:id",
-		handler: (r, e, m) => handleGameDetail(m![1], r, e) },
-	{ method: "PATCH",
+		handler: (r, e, m) => handleGameDetail(m![1], r, e),
+	},
+	{
+		method: "PATCH",
 		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
 		route: "PATCH /v1/games/:id",
-		handler: (r, e, m) => handleGamePatch(m![1], r, e) },
-	{ method: "DELETE",
+		handler: (r, e, m) => handleGamePatch(m![1], r, e),
+	},
+	{
+		method: "DELETE",
 		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
 		route: "DELETE /v1/games/:id",
-		handler: (r, e, m) => handleGameDelete(m![1], r, e) },
+		handler: (r, e, m) => handleGameDelete(m![1], r, e),
+	},
 
 	// Cloud rewrite: /v1/collections
-	{ method: "GET", match: { kind: "path", path: "/v1/collections" },
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/collections" },
 		route: "GET /v1/collections",
-		handler: (r, e) => handleCollectionsList(r, e) },
-	{ method: "POST", match: { kind: "path", path: "/v1/collections" },
+		handler: (r, e) => handleCollectionsList(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/collections" },
 		route: "POST /v1/collections",
-		handler: (r, e) => handleCollectionCreate(r, e) },
+		handler: (r, e) => handleCollectionCreate(r, e),
+	},
 
 	// Cloud rewrite: /v1/users/me/online-ids
-	{ method: "GET", match: { kind: "path", path: "/v1/users/me/online-ids" },
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/users/me/online-ids" },
 		route: "GET /v1/users/me/online-ids",
-		handler: (r, e) => handleListOnlineIds(r, e) },
-	{ method: "DELETE",
+		handler: (r, e) => handleListOnlineIds(r, e),
+	},
+	{
+		method: "DELETE",
 		match: { kind: "regex", regex: /^\/v1\/users\/me\/online-ids\/(.+)$/ },
 		route: "DELETE /v1/users/me/online-ids/:id",
-		handler: (r, e, m) => handleRemoveOnlineId(decodeURIComponent(m![1]), r, e) },
+		handler: (r, e, m) => handleRemoveOnlineId(decodeURIComponent(m![1]), r, e),
+	},
 
 	// Cloud rewrite: /v1/stats
-	{ method: "GET", match: { kind: "path", path: "/v1/stats" },
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/stats" },
 		route: "GET /v1/stats",
-		handler: (r, e) => handleStats(r, e) },
+		handler: (r, e) => handleStats(r, e),
+	},
 
 	// CSP violation reports — unauthenticated; the browser POSTs here
 	// directly when the page's CSP triggers. See cloud/src/csp.ts.
-	{ method: "POST", match: { kind: "path", path: "/v1/csp-report" },
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/csp-report" },
 		route: "POST /v1/csp-report",
-		handler: (r) => handleCspReport(r) },
+		handler: (r) => handleCspReport(r),
+	},
 
 	// Legacy: /v1/share/*
-	{ method: "POST", match: { kind: "path", path: "/v1/share" },
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/share" },
 		route: "POST /v1/share",
-		handler: (r, e) => handleUpload(r, e) },
-	{ method: "GET",
+		handler: (r, e) => handleUpload(r, e),
+	},
+	{
+		method: "GET",
 		match: { kind: "regex", regex: /^\/v1\/share\/([A-Za-z0-9_-]{21})$/ },
 		route: "GET /v1/share/:id",
-		handler: (r, e, m) => handleDownload(m![1], r, e) },
-	{ method: "DELETE",
+		handler: (r, e, m) => handleDownload(m![1], r, e),
+	},
+	{
+		method: "DELETE",
 		match: { kind: "regex", regex: /^\/v1\/share\/([A-Za-z0-9_-]{21})$/ },
 		route: "DELETE /v1/share/:id",
-		handler: (r, e, m) => handleDelete(m![1], r, e) },
+		handler: (r, e, m) => handleDelete(m![1], r, e),
+	},
 ];
 
 // Cloud paths use credentialed (echo-Origin) CORS so cookies traverse

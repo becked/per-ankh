@@ -94,7 +94,10 @@ export function requireStr(val: unknown, path: string): string {
 export function requireInt(val: unknown, path: string): number {
 	const n = parseInt(String(val), 10);
 	if (Number.isNaN(n)) {
-		throw new ParseError(`Invalid integer at ${path}: ${String(val)}`, "INVALID_FORMAT");
+		throw new ParseError(
+			`Invalid integer at ${path}: ${String(val)}`,
+			"INVALID_FORMAT",
+		);
 	}
 	return n;
 }
@@ -220,10 +223,7 @@ export function collectStrictNamedInts(
 	if (!isElement(node)) return out;
 	for (const [name, value] of getElementChildren(node)) {
 		if (typeof value !== "string" || value === "") {
-			throw new ParseError(
-				`${parentLabel}.${name} value`,
-				"MISSING_FIELD",
-			);
+			throw new ParseError(`${parentLabel}.${name} value`, "MISSING_FIELD");
 		}
 		const n = parseInt(value, 10);
 		if (Number.isNaN(n)) {
@@ -263,10 +263,7 @@ export function parseSparseHistory(
 			throw new ParseError(`Invalid turn tag: ${tag}`, "INVALID_FORMAT");
 		}
 		if (typeof value !== "string" || value === "") {
-			throw new ParseError(
-				`${parentLabel}.<${tag}>`,
-				"MISSING_FIELD",
-			);
+			throw new ParseError(`${parentLabel}.<${tag}>`, "MISSING_FIELD");
 		}
 		const n = parseInt(value, 10);
 		if (Number.isNaN(n)) {

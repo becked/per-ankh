@@ -17,11 +17,7 @@ import {
 	optStr,
 	requireStr,
 } from "../parse-xml.js";
-import type {
-	MatchMetadata,
-	RawWinnerInfo,
-	WinnerInfo,
-} from "../types.js";
+import type { MatchMetadata, RawWinnerInfo, WinnerInfo } from "../types.js";
 import type { Player } from "./players.js";
 
 export function parseMatchMetadata(
@@ -53,13 +49,11 @@ export function parseMatchMetadata(
 	// map and reuses MapWidth. Keep the same convention.
 	const mapHeight = mapWidth;
 
-	const gameName =
-		optAttrStr(root["@_GameName"]) ?? optStr(root.GameName);
+	const gameName = optAttrStr(root["@_GameName"]) ?? optStr(root.GameName);
 
 	const victoryEnabled = parseVictoryEnabledList(root);
-	const victoryConditions = victoryEnabled.length > 0
-		? victoryEnabled.join("+")
-		: null;
+	const victoryConditions =
+		victoryEnabled.length > 0 ? victoryEnabled.join("+") : null;
 	const teamAssignments = parseTeamAssignments(root);
 
 	const gameOver = "GameOver" in gameNode;
@@ -98,9 +92,7 @@ export function parseMatchMetadata(
  * Returns `[version_number, joined_mod_names]`. Mirrors
  * `parse_version_string` in import.rs:889–913.
  */
-function parseVersionString(
-	version: string,
-): [string | null, string | null] {
+function parseVersionString(version: string): [string | null, string | null] {
 	const parts = version.split("+");
 	if (parts.length === 0) return [null, null];
 
@@ -178,9 +170,7 @@ function parseSaveDate(dateStr: string): string | null {
  *      legacy winner format (older save versions). The integer is a runtime
  *      info-list index; this list is the per-save snapshot of that order.
  */
-function parseVictoryEnabledList(
-	root: Record<string, unknown>,
-): string[] {
+function parseVictoryEnabledList(root: Record<string, unknown>): string[] {
 	const ve = root.VictoryEnabled;
 	if (!isElement(ve)) return [];
 

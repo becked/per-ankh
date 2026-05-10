@@ -10,7 +10,14 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { type PlayerSummary, type SpriteCategory, type UnitClass, getPlayerColor, classifyUnit, UNIT_CLASS_COLORS } from "./helpers";
+	import {
+		type PlayerSummary,
+		type SpriteCategory,
+		type UnitClass,
+		getPlayerColor,
+		classifyUnit,
+		UNIT_CLASS_COLORS,
+	} from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
 	let {
@@ -61,70 +68,70 @@
 	};
 
 	const playerOverviews = $derived<PlayerOverview[]>(
-		gameDetails.players.map((p) => {
-			const ph = playerHistory.find((h) => h.nation === p.nation);
-			const lastPoint = ph?.history.at(-1);
+		gameDetails.players
+			.map((p) => {
+				const ph = playerHistory.find((h) => h.nation === p.nation);
+				const lastPoint = ph?.history.at(-1);
 
-			const playerUnits = unitsProduced.filter(
-				(u) => u.nation === p.nation,
-			);
-			const classCounts: Partial<Record<UnitClass, number>> = {};
-			let totalUnits = 0;
-			for (const u of playerUnits) {
-				const cls = classifyUnit(u.unit_type);
-				if (cls == null) continue;
-				classCounts[cls] = (classCounts[cls] ?? 0) + u.count;
-				totalUnits += u.count;
-			}
-			const army: ArmySlice[] = (
-				Object.entries(classCounts) as [UnitClass, number][]
-			)
-				.filter(([, count]) => count > 0)
-				.map(([unitClass, count]) => ({
-					unitClass,
-					count,
-					pct: totalUnits > 0 ? Math.round((count / totalUnits) * 100) : 0,
-				}))
-				.sort((a, b) => b.count - a.count);
+				const playerUnits = unitsProduced.filter((u) => u.nation === p.nation);
+				const classCounts: Partial<Record<UnitClass, number>> = {};
+				let totalUnits = 0;
+				for (const u of playerUnits) {
+					const cls = classifyUnit(u.unit_type);
+					if (cls == null) continue;
+					classCounts[cls] = (classCounts[cls] ?? 0) + u.count;
+					totalUnits += u.count;
+				}
+				const army: ArmySlice[] = (
+					Object.entries(classCounts) as [UnitClass, number][]
+				)
+					.filter(([, count]) => count > 0)
+					.map(([unitClass, count]) => ({
+						unitClass,
+						count,
+						pct: totalUnits > 0 ? Math.round((count / totalUnits) * 100) : 0,
+					}))
+					.sort((a, b) => b.count - a.count);
 
-			const religions: PlayerReligion[] = gameReligions
-				.filter((r) => r.founder_nation === p.nation)
-				.map((r) => ({ religion_name: r.religion_name, founded_turn: r.founded_turn }));
+				const religions: PlayerReligion[] = gameReligions
+					.filter((r) => r.founder_nation === p.nation)
+					.map((r) => ({
+						religion_name: r.religion_name,
+						founded_turn: r.founded_turn,
+					}));
 
-			const wonders: PlayerWonderEntry[] = playerWonders
-				.filter((w) => w.nation === p.nation)
-				.map((w) => ({ wonder: w.wonder, completed_turn: w.completed_turn }));
+				const wonders: PlayerWonderEntry[] = playerWonders
+					.filter((w) => w.nation === p.nation)
+					.map((w) => ({ wonder: w.wonder, completed_turn: w.completed_turn }));
 
-			return {
-				playerName: p.player_name,
-				nation: p.nation,
-				isHuman: p.is_human,
-				isSaveOwner: p === gameDetails.players.find((pl) => pl.is_human),
-				isWinner: p.nation === gameDetails.winner_civilization,
-				finalVP: lastPoint?.points ?? null,
-				finalMilitary: lastPoint?.military_power ?? null,
-				cityCount: cityStatistics.cities.filter(
-					(c) => c.owner_nation === p.nation,
-				).length,
-				techCount: completedTechs.filter(
-					(t) => t.nation === p.nation,
-				).length,
-				lawCount: currentLaws.filter((l) => l.nation === p.nation)
-					.length,
-				unitsTotal: totalUnits,
-				religion: p.state_religion,
-				religions,
-				wonders,
-				army,
-			};
-		}).sort((a, b) => {
-			// Save owner first, then other humans alphabetically, then AI alphabetically
-			if (a.isSaveOwner !== b.isSaveOwner) return a.isSaveOwner ? -1 : 1;
-			if (a.isHuman !== b.isHuman) return a.isHuman ? -1 : 1;
-			const aNation = formatEnum(a.nation, "NATION_");
-			const bNation = formatEnum(b.nation, "NATION_");
-			return aNation.localeCompare(bNation);
-		}),
+				return {
+					playerName: p.player_name,
+					nation: p.nation,
+					isHuman: p.is_human,
+					isSaveOwner: p === gameDetails.players.find((pl) => pl.is_human),
+					isWinner: p.nation === gameDetails.winner_civilization,
+					finalVP: lastPoint?.points ?? null,
+					finalMilitary: lastPoint?.military_power ?? null,
+					cityCount: cityStatistics.cities.filter(
+						(c) => c.owner_nation === p.nation,
+					).length,
+					techCount: completedTechs.filter((t) => t.nation === p.nation).length,
+					lawCount: currentLaws.filter((l) => l.nation === p.nation).length,
+					unitsTotal: totalUnits,
+					religion: p.state_religion,
+					religions,
+					wonders,
+					army,
+				};
+			})
+			.sort((a, b) => {
+				// Save owner first, then other humans alphabetically, then AI alphabetically
+				if (a.isSaveOwner !== b.isSaveOwner) return a.isSaveOwner ? -1 : 1;
+				if (a.isHuman !== b.isHuman) return a.isHuman ? -1 : 1;
+				const aNation = formatEnum(a.nation, "NATION_");
+				const bNation = formatEnum(b.nation, "NATION_");
+				return aNation.localeCompare(bNation);
+			}),
 	);
 
 	// ─── Key metrics: yield comparison bars ──────────────────────────
@@ -143,34 +150,57 @@
 		sprite: MetricSprite | null = null,
 	): MetricBar {
 		const colorOf = (nation: string | null) =>
-			getPlayerColor(nation, gameDetails.players.findIndex((gp) => gp.nation === nation));
+			getPlayerColor(
+				nation,
+				gameDetails.players.findIndex((gp) => gp.nation === nation),
+			);
 		const players = gameDetails.players
-			.map((p) => ({ nation: p.nation, value: getValue(p.nation), color: colorOf(p.nation) }))
+			.map((p) => ({
+				nation: p.nation,
+				value: getValue(p.nation),
+				color: colorOf(p.nation),
+			}))
 			.sort((a, b) => b.value - a.value);
 		const maxVal = Math.max(...players.map((p) => p.value), 1);
 		return { label, sprite, players, maxValue: maxVal };
 	}
 
 	function yieldMetric(yieldType: string, label: string): MetricBar {
-		return buildMetric(label, (nation) => {
-			const yieldData = allYields.find((y) => y.nation === nation && y.yield_type === yieldType);
-			return Math.round(yieldData?.data.at(-1)?.rate ?? 0);
-		}, { category: "yields", value: yieldType });
+		return buildMetric(
+			label,
+			(nation) => {
+				const yieldData = allYields.find(
+					(y) => y.nation === nation && y.yield_type === yieldType,
+				);
+				return Math.round(yieldData?.data.at(-1)?.rate ?? 0);
+			},
+			{ category: "yields", value: yieldType },
+		);
 	}
 
 	// Column 1: Victory Points, Orders, Military, Training
 	const metricsCol1 = $derived<MetricBar[]>([
 		...(victoryPointsEnabled
-			? [buildMetric("Victory Points", (nation) => {
-					const ph = playerHistory.find((h) => h.nation === nation);
-					return ph?.history.at(-1)?.points ?? 0;
-				}, { category: "icons", value: "VICTORY_NORMAL" })]
+			? [
+					buildMetric(
+						"Victory Points",
+						(nation) => {
+							const ph = playerHistory.find((h) => h.nation === nation);
+							return ph?.history.at(-1)?.points ?? 0;
+						},
+						{ category: "icons", value: "VICTORY_NORMAL" },
+					),
+				]
 			: []),
 		yieldMetric("YIELD_ORDERS", "Orders"),
-		buildMetric("Military", (nation) => {
-			const ph = playerHistory.find((h) => h.nation === nation);
-			return ph?.history.at(-1)?.military_power ?? 0;
-		}, { category: "icons", value: "MILITARY" }),
+		buildMetric(
+			"Military",
+			(nation) => {
+				const ph = playerHistory.find((h) => h.nation === nation);
+				return ph?.history.at(-1)?.military_power ?? 0;
+			},
+			{ category: "icons", value: "MILITARY" },
+		),
 		yieldMetric("YIELD_TRAINING", "Training"),
 	]);
 
@@ -179,8 +209,11 @@
 		yieldMetric("YIELD_SCIENCE", "Science"),
 		yieldMetric("YIELD_CIVICS", "Civics"),
 		yieldMetric("YIELD_MONEY", "Money"),
-		buildMetric("Improvements", (nation) =>
-			improvementData.improvements.filter((imp) => imp.nation === nation).length,
+		buildMetric(
+			"Improvements",
+			(nation) =>
+				improvementData.improvements.filter((imp) => imp.nation === nation)
+					.length,
 			{ category: "icons", value: "IMPROVEMENT_FINISHED" },
 		),
 	]);
@@ -192,18 +225,12 @@
 </script>
 
 <!-- Nation cards -->
-<div
-	class="mb-4 rounded-lg p-4"
-	style="background-color: #2a2622;"
->
+<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
 	<h3 class="mb-3 text-base font-bold text-tan">Nations</h3>
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-	{#each playerOverviews as player, i (player.nation ?? i)}
+		{#each playerOverviews as player, i (player.nation ?? i)}
 			{@const borderColor = getPlayerColor(player.nation, i)}
-			<div
-				class="relative rounded-lg p-3"
-				style="background-color: #35302B;"
-			>
+			<div class="relative rounded-lg p-3" style="background-color: #35302B;">
 				{#if player.isWinner}
 					<span
 						class="absolute right-3 top-3 rounded bg-amber-700/40 px-1.5 py-0.5 text-xs text-amber-300"
@@ -223,20 +250,14 @@
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-2">
 							{#if player.playerName}
-								<span
-									class="text-lg font-bold"
-									style="color: {borderColor};"
-								>
+								<span class="text-lg font-bold" style="color: {borderColor};">
 									{player.playerName}
 								</span>
 								<span class="text-sm text-gray-400">
 									({formatEnum(player.nation, "NATION_")})
 								</span>
 							{:else}
-								<span
-									class="text-lg font-bold"
-									style="color: {borderColor};"
-								>
+								<span class="text-lg font-bold" style="color: {borderColor};">
 									{formatEnum(player.nation, "NATION_")}
 								</span>
 								{#if player.isHuman}
@@ -253,7 +274,10 @@
 							{#if slice.pct > 0}
 								<div
 									class="flex items-center justify-center overflow-hidden whitespace-nowrap px-1 text-[10px] font-medium text-white"
-									style="width: {Math.max(slice.pct, 3)}%; background-color: {UNIT_CLASS_COLORS[slice.unitClass]};"
+									style="width: {Math.max(
+										slice.pct,
+										3,
+									)}%; background-color: {UNIT_CLASS_COLORS[slice.unitClass]};"
 									title="{slice.unitClass}: {slice.count} ({slice.pct}%)"
 								>
 									{#if slice.pct >= 30}
@@ -270,27 +294,21 @@
 				{/if}
 
 				<!-- Stats grid -->
-				<div
-					class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs"
-				>
+				<div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
 					<span class="font-bold text-gray-400">Cities</span>
-					<span class="font-medium text-[#DBDEE3]"
-						>{player.cityCount}</span
-					>
+					<span class="font-medium text-[#DBDEE3]">{player.cityCount}</span>
 
 					<span class="font-bold text-gray-400">Techs</span>
-					<span class="font-medium text-[#DBDEE3]"
-						>{player.techCount}</span
-					>
+					<span class="font-medium text-[#DBDEE3]">{player.techCount}</span>
 
 					<span class="font-bold text-gray-400">Laws</span>
-					<span class="font-medium text-[#DBDEE3]"
-						>{player.lawCount}</span
-					>
+					<span class="font-medium text-[#DBDEE3]">{player.lawCount}</span>
 
 					{#if player.religions.length > 0}
 						<span class="font-bold text-gray-400">Religions</span>
-						<span class="flex flex-wrap items-center gap-y-0.5 font-medium text-[#DBDEE3]">
+						<span
+							class="flex flex-wrap items-center gap-y-0.5 font-medium text-[#DBDEE3]"
+						>
 							{#each player.religions as rel, i (rel.religion_name)}
 								<span class="flex items-center gap-0.5">
 									<SpriteIcon
@@ -299,15 +317,16 @@
 										size={12}
 										alt={formatEnum(rel.religion_name, "RELIGION_")}
 									/>
-									{formatEnum(rel.religion_name, "RELIGION_")}{#if i < player.religions.length - 1},&nbsp;{/if}
+									{formatEnum(
+										rel.religion_name,
+										"RELIGION_",
+									)}{#if i < player.religions.length - 1},&nbsp;{/if}
 								</span>
 							{/each}
 						</span>
 					{:else if player.religion}
 						<span class="font-bold text-gray-400">Religion</span>
-						<span
-							class="flex items-center gap-0.5 font-medium text-[#DBDEE3]"
-						>
+						<span class="flex items-center gap-0.5 font-medium text-[#DBDEE3]">
 							<SpriteIcon
 								category="religions"
 								value={player.religion}
@@ -321,30 +340,28 @@
 					{#if player.wonders.length > 0}
 						<span class="font-bold text-gray-400">Wonders</span>
 						<span class="font-medium text-[#DBDEE3]">
-							{player.wonders.map((w) => formatEnum(w.wonder, "IMPROVEMENT_")).join(", ")}
+							{player.wonders
+								.map((w) => formatEnum(w.wonder, "IMPROVEMENT_"))
+								.join(", ")}
 						</span>
 					{/if}
 				</div>
 			</div>
-	{/each}
+		{/each}
 	</div>
 </div>
 
 <!-- Key Metrics -->
-<div
-	class="rounded-lg p-4"
-	style="background-color: #2a2622;"
->
+<div class="rounded-lg p-4" style="background-color: #2a2622;">
 	<h3 class="mb-3 text-base font-bold text-tan">Key Metrics</h3>
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
 		<!-- Column 1 -->
 		<div class="space-y-3">
 			{#each metricsCol1 as metric (metric.label)}
-				<div
-					class="rounded-lg p-3"
-					style="background-color: #35302B;"
-				>
-					<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				<div class="rounded-lg p-3" style="background-color: #35302B;">
+					<p
+						class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400"
+					>
 						{#if metric.sprite}
 							<SpriteIcon
 								category={metric.sprite.category}
@@ -358,16 +375,19 @@
 					<div class="space-y-1">
 						{#each metric.players as player (player.nation)}
 							<div class="flex items-center gap-2">
-								<div
-									class="relative h-2.5 flex-1 overflow-hidden rounded"
-								>
+								<div class="relative h-2.5 flex-1 overflow-hidden rounded">
 									<div
 										class="h-full rounded"
-										style="width: {(player.value / metric.maxValue) * 100}%; background-color: {player.color};"
-										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(player.value)}"
+										style="width: {(player.value / metric.maxValue) *
+											100}%; background-color: {player.color};"
+										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(
+											player.value,
+										)}"
 									></div>
 								</div>
-								<span class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]">
+								<span
+									class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]"
+								>
 									{formatValue(player.value)}
 								</span>
 							</div>
@@ -379,11 +399,10 @@
 		<!-- Column 2 -->
 		<div class="space-y-3">
 			{#each metricsCol2 as metric (metric.label)}
-				<div
-					class="rounded-lg p-3"
-					style="background-color: #35302B;"
-				>
-					<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				<div class="rounded-lg p-3" style="background-color: #35302B;">
+					<p
+						class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400"
+					>
 						{#if metric.sprite}
 							<SpriteIcon
 								category={metric.sprite.category}
@@ -397,16 +416,19 @@
 					<div class="space-y-1">
 						{#each metric.players as player (player.nation)}
 							<div class="flex items-center gap-2">
-								<div
-									class="relative h-2.5 flex-1 overflow-hidden rounded"
-								>
+								<div class="relative h-2.5 flex-1 overflow-hidden rounded">
 									<div
 										class="h-full rounded"
-										style="width: {(player.value / metric.maxValue) * 100}%; background-color: {player.color};"
-										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(player.value)}"
+										style="width: {(player.value / metric.maxValue) *
+											100}%; background-color: {player.color};"
+										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(
+											player.value,
+										)}"
 									></div>
 								</div>
-								<span class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]">
+								<span
+									class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]"
+								>
 									{formatValue(player.value)}
 								</span>
 							</div>

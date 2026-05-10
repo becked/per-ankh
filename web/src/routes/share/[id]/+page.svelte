@@ -46,7 +46,9 @@
 			!gameDetails.game_name.match(/^Game\d+$/);
 		if (isRealName) return `${gameDetails.game_name} — Per Ankh`;
 		const humanPlayer = gameDetails.players.find((p) => p.is_human);
-		const nation = humanPlayer?.nation ? formatEnum(humanPlayer.nation, "NATION_") : null;
+		const nation = humanPlayer?.nation
+			? formatEnum(humanPlayer.nation, "NATION_")
+			: null;
 		if (nation) return `${nation} T${gameDetails.total_turns} — Per Ankh`;
 		return `Shared Game — Per Ankh`;
 	});
@@ -110,7 +112,11 @@
 			)
 			.catch((err) => {
 				const errStr = String(err);
-				if (errStr === "SHARE_NOT_FOUND" || errStr === "NETWORK_ERROR" || errStr === "CORRUPT_DATA") {
+				if (
+					errStr === "SHARE_NOT_FOUND" ||
+					errStr === "NETWORK_ERROR" ||
+					errStr === "CORRUPT_DATA"
+				) {
 					shareError = errStr as ShareError;
 				} else {
 					error = errStr;
@@ -129,20 +135,32 @@
 {#if loading}
 	<GamePageSkeleton />
 {:else if shareError === "SHARE_NOT_FOUND"}
-	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+	<main
+		class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4"
+	>
 		<h1 class="mb-4 text-3xl font-bold text-gray-200">Share Not Found</h1>
-		<p class="text-brown">This shared game does not exist or has been deleted.</p>
+		<p class="text-brown">
+			This shared game does not exist or has been deleted.
+		</p>
 		<p class="mt-2 text-sm text-brown">Shared links expire after 2 years.</p>
 	</main>
 {:else if shareError === "NETWORK_ERROR"}
-	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+	<main
+		class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4"
+	>
 		<h1 class="mb-4 text-3xl font-bold text-gray-200">Connection Error</h1>
-		<p class="text-brown">Could not reach the server. Please check your connection and try again.</p>
+		<p class="text-brown">
+			Could not reach the server. Please check your connection and try again.
+		</p>
 	</main>
 {:else if shareError === "CORRUPT_DATA"}
-	<main class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4">
+	<main
+		class="isolate flex flex-1 flex-col items-center justify-center bg-blue-gray px-4"
+	>
 		<h1 class="mb-4 text-3xl font-bold text-gray-200">Data Error</h1>
-		<p class="text-brown">The shared game data could not be loaded. It may be corrupted.</p>
+		<p class="text-brown">
+			The shared game data could not be loaded. It may be corrupted.
+		</p>
 	</main>
 {:else if error}
 	<main class="isolate flex-1 overflow-y-auto bg-blue-gray px-4 pb-8 pt-4">
@@ -169,7 +187,9 @@
 			{mapTiles}
 		>
 			{#snippet preTabs()}
-				<div class="mb-4 rounded bg-[#2a2622] px-4 py-2 text-center text-xs text-brown">
+				<div
+					class="mb-4 rounded bg-[#2a2622] px-4 py-2 text-center text-xs text-brown"
+				>
 					Shared game
 				</div>
 			{/snippet}
