@@ -5,7 +5,7 @@
 // hardening — XFO, Referrer-Policy, Permissions-Policy, X-Content-Type-
 // Options — applies regardless of the request type.
 
-import type { Handle } from "@sveltejs/kit";
+import type { Handle, HandleFetch } from "@sveltejs/kit";
 import { dev } from "$app/environment";
 
 // Headers from server-side fetches in load() that we need to read in
@@ -35,6 +35,28 @@ const reportToHeader = JSON.stringify({
 		},
 	],
 });
+
+// Cross-origin SSR fetch to the API needs the incoming request's Cookie
+// header forwarded by hand — SvelteKit's `event.fetch` does not forward
+// cookies cross-origin (browser-like security). Without this, hard
+// refreshes of authenticated pages (e.g. /games/[id], /dashboard) call
+// the API server-side with no auth and get 401, redirecting to /login
+// despite the user having a valid session cookie.
+//
+// Pairs with cloud/src/session.ts setting Domain=per-ankh.app on the
+// session cookie — that's what makes the cookie visible on per-ankh.app
+// (where SSR reads it) in the first place.
+export const handleFetch: HandleFetch = ({ event, request, fetch }) => {
+	const target = new URL(request.url);
+	const isApi =
+		target.hostname === "api.per-ankh.app" ||
+		(dev && target.hostname === "localhost" && target.port === "8787");
+	if (isApi) {
+		const cookie = event.request.headers.get("cookie");
+		if (cookie) request.headers.set("cookie", cookie);
+	}
+	return fetch(request);
+};
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// Legacy share URLs (minted by desktop v0.2.0 as
