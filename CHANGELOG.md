@@ -1,5 +1,17 @@
 # Changelog
 
+## [Unreleased]
+
+### Removed
+
+- Tauri desktop runtime. Per-Ankh is now a web app at <https://per-ankh.app>. The final desktop release remains available as GitHub Release [v0.2.0](https://github.com/becked/per-ankh/releases/tag/v0.2.0); it receives no further updates. Local DuckDB data stays on user machines — re-upload via `/upload` to use the cloud app.
+- Rust crate (`src-tauri/`), parity test harness (`scripts/parity/`), `dev.sh`, `tauri.sh`, the Tauri-only release workflow (`.github/workflows/release.yml`), and all `__BUILD_TARGET__` dual-build switching.
+- Desktop-bound frontend: `Header`, `GameSidebar`, `UpdateModal`, `ShareControl`, `SettingsModal`, `CollectionsModal`, `ImportModal`, `desktop/HomeDashboard`, `utils/dialogs`, `utils/updater`, `stores/update`, `api.ts`, `types.ts` re-exporter, plus the `/game/[id]`, `/event-test`, `/debug-nations` routes.
+
+### Unchanged
+
+- The legacy share endpoints (`/v1/share/*` on the API Worker) and the static viewer at `web/` remain in place. Existing `per-ankh.app/share/[id]` links still work.
+
 ## [0.3.0] - 2026-05-01
 
 ### Added

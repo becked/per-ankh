@@ -41,7 +41,8 @@ export const CHART_THEME = {
 	backgroundColor: "#211A12", // Blue-gray background matches main UI
 	animation: false, // Disable initial animation for smoother page transitions
 	textStyle: {
-		fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+		fontFamily:
+			'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 		color: "#FFFFFF", // White text for dark background
 	},
 	title: {

@@ -1,7 +1,7 @@
 // Bake the loose 2D sprite PNGs that the runtime serves directly from
-// /sprites/<category>/<name>.png. These don't get packed into atlases — they
-// ship as individual files under static/sprites/, fetched on demand by
-// SpriteIcon.svelte and SpriteMap.svelte.
+// /sprites/<category>/<name>.<hash>.png. These don't get packed into atlases
+// — they ship as individual files under static/sprites/, content-hashed by
+// their own bytes for safe long-cache HTTP serving.
 //
 // SOURCES (all under <pinacotheca>/extracted/sprites/):
 //   crests/, techs/, laws/, religions/, yields/  → 1:1 copy by category dir
@@ -9,21 +9,30 @@
 //   improvements/IMPROVEMENT_FINISHED.png        → icons/IMPROVEMENT_FINISHED.png
 //   other/Cycle_Military_Normal.png              → icons/MILITARY.png
 //   other/VICTORY_Normal.png                     → icons/VICTORY_NORMAL.png
+//   other/MAP_OVERVIEW_Normal.png                → icons/MAP_OVERVIEW.png
+//   other/Cycle_Normal_EndTurn.png               → icons/TURN.png
 //
 // OUTPUT:
-//   static/sprites/<category>/*.png
+//   static/sprites/<category>/<basename>.<hash>.png
 //   static/sprites/.bake-info.json   (pinacotheca version + bakedAt stamp)
+//   .bake/sprite-manifest.json       (registered for build-manifests.ts)
 //
 // Each target category dir is wiped and repopulated per run, so this is
-// idempotent — running it twice produces the same tree.
+// idempotent — running it twice produces identical bytes (and identical
+// hashes, so the generated TS module is byte-stable).
 //
 // Run: npm run bake:sprites
 
-import { copyFile, mkdir, readdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 
-import { readPinacothecaVersion } from "./lib/atlas-bake.js";
+import {
+	readPinacothecaVersion,
+	writeSpriteSidecar,
+	type SpriteSidecar,
+} from "./lib/atlas-bake.js";
 import { resolvePinacotheca } from "./lib/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,7 +61,7 @@ const UNITS_CATEGORY = "units";
 // the runtime expects a different name than Pinacotheca emits.
 interface IconMapping {
 	readonly source: string; // relative to extracted/sprites/
-	readonly target: string; // filename under static/sprites/icons/
+	readonly target: string; // filename under static/sprites/icons/ (with .png suffix)
 }
 const ICON_MAPPINGS: readonly IconMapping[] = [
 	{
@@ -67,26 +76,60 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 		source: "other/VICTORY_Normal.png",
 		target: "VICTORY_NORMAL.png",
 	},
+	{
+		source: "other/MAP_OVERVIEW_Normal.png",
+		target: "MAP_OVERVIEW.png",
+	},
+	{
+		source: "other/Cycle_Normal_EndTurn.png",
+		target: "TURN.png",
+	},
 ];
+
+function contentHash(buf: Buffer): string {
+	return createHash("sha256").update(buf).digest("hex").slice(0, 8);
+}
 
 async function wipeAndRecreate(dir: string): Promise<void> {
 	await rm(dir, { recursive: true, force: true });
 	await mkdir(dir, { recursive: true });
 }
 
-async function copyMirrorCategory(category: string): Promise<number> {
+// Read source PNG, write a content-hashed copy to dst, register in the
+// sidecar under "<category>/<basename>" → public URL. `basename` is the
+// stem without .png (e.g., "CREST_NATION_EGYPT") so manifest keys mirror
+// what callers in helpers.ts construct.
+async function bakeOne(
+	srcPath: string,
+	dstDir: string,
+	category: string,
+	basename: string,
+	sidecar: SpriteSidecar,
+): Promise<void> {
+	const buf = await readFile(srcPath);
+	const hash = contentHash(buf);
+	const filename = `${basename}.${hash}.png`;
+	await writeFile(resolve(dstDir, filename), buf);
+	sidecar[`${category}/${basename}`] = `/sprites/${category}/${filename}`;
+}
+
+async function copyMirrorCategory(
+	category: string,
+	sidecar: SpriteSidecar,
+): Promise<number> {
 	const src = resolve(PINACOTHECA_SPRITES, category);
 	const dst = resolve(SPRITES_OUT, category);
 	await wipeAndRecreate(dst);
 	const entries = await readdir(src);
 	const pngs = entries.filter((f) => f.endsWith(".png"));
 	for (const filename of pngs) {
-		await copyFile(resolve(src, filename), resolve(dst, filename));
+		const basename = filename.slice(0, -".png".length);
+		await bakeOne(resolve(src, filename), dst, category, basename, sidecar);
 	}
 	return pngs.length;
 }
 
-async function copyUnits(): Promise<number> {
+async function copyUnits(sidecar: SpriteSidecar): Promise<number> {
 	const src = resolve(PINACOTHECA_SPRITES, "units");
 	const dst = resolve(SPRITES_OUT, UNITS_CATEGORY);
 	await wipeAndRecreate(dst);
@@ -96,25 +139,38 @@ async function copyUnits(): Promise<number> {
 			f.startsWith("UNIT_") && f.endsWith(".png") && !f.startsWith("UNIT_3D_"),
 	);
 	for (const filename of pngs) {
-		await copyFile(resolve(src, filename), resolve(dst, filename));
+		const basename = filename.slice(0, -".png".length);
+		await bakeOne(
+			resolve(src, filename),
+			dst,
+			UNITS_CATEGORY,
+			basename,
+			sidecar,
+		);
 	}
 	return pngs.length;
 }
 
-async function copyIcons(): Promise<number> {
+async function copyIcons(sidecar: SpriteSidecar): Promise<number> {
 	const dst = resolve(SPRITES_OUT, "icons");
 	await wipeAndRecreate(dst);
 	for (const { source, target } of ICON_MAPPINGS) {
-		await copyFile(
+		const basename = target.slice(0, -".png".length);
+		await bakeOne(
 			resolve(PINACOTHECA_SPRITES, source),
-			resolve(dst, target),
+			dst,
+			"icons",
+			basename,
+			sidecar,
 		);
 	}
 	return ICON_MAPPINGS.length;
 }
 
 async function main(): Promise<void> {
-	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
+	const pinacothecaVersion = await readPinacothecaVersion(
+		PINACOTHECA_PYPROJECT,
+	);
 	const bakedAt = new Date().toISOString();
 	console.log(
 		`[sprites] pinacotheca ${pinacothecaVersion}, baked at ${bakedAt}`,
@@ -122,12 +178,25 @@ async function main(): Promise<void> {
 
 	await mkdir(SPRITES_OUT, { recursive: true });
 
+	// All sprite-bake outputs are owned by this script, so the sidecar is
+	// rewritten wholesale rather than read-merged. (Atlas bakes use
+	// updateAtlasSidecar() because multiple scripts contribute to the atlas
+	// sidecar.)
+	const sidecar: SpriteSidecar = {};
 	const counts: Record<string, number> = {};
+
 	for (const cat of MIRROR_CATEGORIES) {
-		counts[cat] = await copyMirrorCategory(cat);
+		counts[cat] = await copyMirrorCategory(cat, sidecar);
 	}
-	counts[UNITS_CATEGORY] = await copyUnits();
-	counts.icons = await copyIcons();
+	counts[UNITS_CATEGORY] = await copyUnits(sidecar);
+	counts.icons = await copyIcons(sidecar);
+
+	// Sort keys so the resulting JSON is deterministic across runs.
+	const sortedSidecar: SpriteSidecar = {};
+	for (const key of Object.keys(sidecar).sort()) {
+		sortedSidecar[key] = sidecar[key];
+	}
+	await writeSpriteSidecar(sortedSidecar);
 
 	await writeFile(
 		resolve(SPRITES_OUT, ".bake-info.json"),

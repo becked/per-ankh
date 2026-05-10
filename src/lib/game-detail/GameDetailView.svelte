@@ -21,7 +21,6 @@
 		formatGameTitle,
 		formatMapClass,
 	} from "$lib/utils/formatting";
-	import { getCivilizationColor } from "$lib/config";
 	import {
 		PLAYER_CHART_KEYS,
 		createDefaultChartFilters,
@@ -31,6 +30,8 @@
 	} from "./helpers";
 	import type { TimelineCategory } from "./helpers";
 	import OverviewTab from "./OverviewTab.svelte";
+	import SpriteIcon from "./SpriteIcon.svelte";
+	// eslint-disable-next-line no-unused-vars -- TimelineTab pending redesign, see commented block below
 	import TimelineTab from "./TimelineTab.svelte";
 	import EventsTab from "./EventsTab.svelte";
 	import LawsTab from "./LawsTab.svelte";
@@ -90,6 +91,7 @@
 	let chartFilters = $state(createDefaultChartFilters());
 	let tables = $state(createDefaultTableStates());
 	let cityVisibleColumns = $state(createDefaultCityVisibleColumns());
+	// eslint-disable-next-line no-unused-vars -- TimelineTab pending redesign, see commented block below
 	let timelineFilters = $state<Record<TimelineCategory, boolean>>({
 		tech: true,
 		law: true,
@@ -135,11 +137,6 @@
 		}),
 	);
 
-	const winnerColor = $derived.by(() => {
-		if (!gameDetails.winner_civilization) return undefined;
-		return getCivilizationColor(gameDetails.winner_civilization);
-	});
-
 	const victoryConditions = $derived(
 		gameDetails.victory_conditions
 			?.split("+")
@@ -180,87 +177,73 @@
 {/if}
 
 <!-- Summary Section -->
-<div
-	class="mb-6 rounded-lg border-2 border-black p-2"
-	style="background-color: #36302a;"
->
-	<div class="flex justify-evenly">
-		<!-- Left Column: Player, Winner & Victory Type -->
-		<div
-			class="grid grid-cols-[auto_minmax(180px,1fr)] items-center gap-x-2 gap-y-2"
-		>
-			<span
-				class="text-right text-xs font-bold uppercase tracking-wide text-brown"
-				>Player:</span
-			>
-			<span class="text-xl font-bold" style="color: #EEEEEE;"
-				>{formatEnum(humanNation, "NATION_")}</span
-			>
-
-			<span
-				class="text-right text-xs font-bold uppercase tracking-wide text-brown"
-				>Winner:</span
-			>
-			<span
-				class="text-xl font-bold"
-				style:color={winnerColor ?? "#EEEEEE"}
-			>
-				{#if gameDetails.winner_player_id}
-					{#if gameDetails.winner_name}
-						{gameDetails.winner_name} - {formatEnum(
-							gameDetails.winner_civilization,
-							"NATION_",
-						)}
-					{:else}
-						{formatEnum(gameDetails.winner_civilization, "NATION_")}
-					{/if}
-				{:else}
-					In Progress
+<div class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
+	<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+		<!-- Player -->
+		<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				{#if humanNation}
+					<SpriteIcon
+						category="crests"
+						value={humanNation}
+						size={14}
+						alt={formatEnum(humanNation, "NATION_")}
+					/>
 				{/if}
-			</span>
+				Player
+			</p>
+			<p class="text-lg font-bold" style="color: #DBDEE3;">
+				{formatEnum(humanNation, "NATION_")}
+			</p>
+		</div>
 
-			<span
-				class="text-right text-xs font-bold uppercase tracking-wide text-brown"
-				>Victory Type:</span
-			>
-			<span class="text-xl font-bold" style="color: #EEEEEE;">
+		<!-- Map -->
+		{#if gameDetails.map_class}
+			<div class="rounded-lg p-3" style="background-color: #35302B;">
+				<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+					<SpriteIcon
+						category="icons"
+						value="MAP_OVERVIEW"
+						size={14}
+						alt="Map"
+					/>
+					Map
+				</p>
+				<p class="text-lg font-bold" style="color: #DBDEE3;">
+					{formatMapClass(gameDetails.map_class)}
+				</p>
+			</div>
+		{/if}
+
+		<!-- Turns -->
+		<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				<SpriteIcon category="icons" value="TURN" size={14} alt="Turns" />
+				Turns
+			</p>
+			<p class="text-lg font-bold" style="color: #DBDEE3;">
+				{gameDetails.total_turns}
+			</p>
+		</div>
+
+		<!-- Victory Type -->
+		<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				<SpriteIcon
+					category="icons"
+					value="VICTORY_NORMAL"
+					size={14}
+					alt="Victory Type"
+				/>
+				Victory Type
+			</p>
+			<p class="text-lg font-bold" style="color: #DBDEE3;">
 				{#if gameDetails.winner_victory_type}
 					{formatEnum(gameDetails.winner_victory_type, "VICTORY_")}
 				{:else}
 					-
 				{/if}
-			</span>
-		</div>
-
-		<!-- Right Column: Map, Turns & Nations -->
-		<div
-			class="grid grid-cols-[auto_minmax(100px,1fr)] items-center gap-x-2 gap-y-2"
-		>
-			{#if gameDetails.map_class}
-				<span
-					class="text-right text-xs font-bold uppercase tracking-wide text-brown"
-					>Map:</span
-				>
-				<span class="text-xl font-bold" style="color: #EEEEEE;"
-					>{formatMapClass(gameDetails.map_class)}</span
-				>
-			{/if}
-
-			<span
-				class="text-right text-xs font-bold uppercase tracking-wide text-brown"
-				>Turns:</span
-			>
-			<span class="text-xl font-bold" style="color: #EEEEEE;"
-				>{gameDetails.total_turns}</span
-			>
-
-			<span
-				class="text-right text-xs font-bold uppercase tracking-wide text-brown"
-				>Nations:</span
-			>
-			<span class="text-xl font-bold" style="color: #EEEEEE;"
-				>{gameDetails.players.length}</span
-			>
+			</p>
 		</div>
 	</div>
 </div>
@@ -402,7 +385,6 @@
 			{playerHistory}
 			{gameDetails}
 			{victoryPointsEnabled}
-			{victoryConditions}
 			bind:chartFilter={chartFilters.points}
 			bind:legitimacyChartFilter={chartFilters.legitimacy}
 			bind:tableState={tables.events}
@@ -443,10 +425,7 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<YieldsTab
-			{allYields}
-			bind:chartFilters
-		/>
+		<YieldsTab {allYields} bind:chartFilters />
 	</Tabs.Content>
 
 	<!-- Tab Content: Military -->
@@ -483,10 +462,7 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<ImprovementsTab
-			{improvementData}
-			bind:tableState={tables.improvements}
-		/>
+		<ImprovementsTab {improvementData} bind:tableState={tables.improvements} />
 	</Tabs.Content>
 
 	<!-- Tab Content: Map -->
@@ -511,12 +487,7 @@
 		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
 		style="background-color: #35302B;"
 	>
-		<SettingsTab
-			{gameDetails}
-			{victoryConditions}
-			{dlcList}
-			{modsList}
-		/>
+		<SettingsTab {gameDetails} {victoryConditions} {dlcList} {modsList} />
 	</Tabs.Content>
 </Tabs.Root>
 

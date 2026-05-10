@@ -1,28 +1,51 @@
 name = "per-ankh-share-api"
 main = "src/index.ts"
 compatibility_date = "2024-12-01"
+# AsyncLocalStorage from node:async_hooks. Backs the request-scoped log
+# context in cloud/src/log.ts so handlers can attach fields to the access
+# log without threading a context argument through every signature.
+# `nodejs_als` is the lightweight flag — full `nodejs_compat` would pull
+# in a large compatibility shim we don't need.
+compatibility_flags = ["nodejs_als"]
 
 # Custom domain: api.per-ankh.app
 # Wrangler creates the DNS record automatically
 routes = [{ pattern = "api.per-ankh.app", custom_domain = true }]
+
+# D1 migrations live in cloud/migrations/ (wrangler's default location),
+# applied via:
+#   npm run migrate:local    (local sqlite under .wrangler/)
+#   npm run migrate:remote   (production D1)
 
 # R2 blob storage for shared game data
 [[r2_buckets]]
 binding = "SHARE_BUCKET"
 bucket_name = "per-ankh-shares"
 
-# D1 database for share index and event logging
+# D1 database for share index, cloud users/games, and event logging
 [[d1_databases]]
 binding = "SHARE_DB"
 database_name = "per-ankh-share-index"
 database_id = "e57449fd-6c9f-4b16-a013-322f9669182b"
 
+# KV namespace for OAuth pending state (5min TTL) and sessions (30d TTL).
+# Keys are prefixed `oauth:<id>` and `session:<token>` respectively.
+# Run once to create:
+#   npx wrangler kv namespace create SESSIONS_KV
+#   npx wrangler kv namespace create SESSIONS_KV --preview
+# Then paste the returned IDs below.
+[[kv_namespaces]]
+binding = "SESSIONS_KV"
+id = "b7029ad65b8f410b84b4b55623b25e56"
+preview_id = "e4725d2a3a324ec98580f6d6cae1f209"
+
 [vars]
+# === Legacy share endpoints ===
 # Max compressed payload size (5 MB)
 MAX_COMPRESSED_SIZE = "5242880"
 # Max decompressed payload size (20 MB) — gzip bomb protection
 MAX_DECOMPRESSED_SIZE = "20971520"
-# CORS: only allow requests from the web viewer domain
+# CORS for legacy /v1/share/*: single origin only
 ALLOWED_ORIGIN = "https://per-ankh.app"
 # Rate limit: max uploads per app key per hour
 RATE_LIMIT_PER_HOUR = "10"
@@ -34,3 +57,21 @@ IP_RATE_LIMIT_PER_HOUR = "20"
 GLOBAL_UPLOAD_LIMIT_PER_HOUR = "200"
 # Kill switch: set to "false" via `wrangler secret put` to disable uploads without redeploying
 UPLOADS_ENABLED = "true"
+
+# === Cloud rewrite (/v1/auth/*, /v1/games/*) ===
+# CORS allowlist for new routes — comma-separated origins. Cookie-based
+# auth requires Access-Control-Allow-Credentials: true, which forbids the
+# wildcard origin, so we echo the request Origin if it's in this list.
+ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
+# Discord OAuth client ID. Public per spec §5; kept here for parity with secret.
+# Replace with the value from https://discord.com/developers/applications.
+DISCORD_CLIENT_ID = "1500901451034263604"
+# DISCORD_CLIENT_SECRET is set out-of-band:
+#   npx wrangler secret put DISCORD_CLIENT_SECRET
+# ALLOWED_DISCORD_USERNAMES is the initial-release allowlist
+# (comma-separated Discord usernames, lowercase). Set out-of-band so
+# tester handles aren't checked into git:
+#   npx wrangler secret put ALLOWED_DISCORD_USERNAMES
+# Empty / unset fails closed — every login is rejected.
+# For local `wrangler dev`, put it in cloud/.dev.vars (gitignored).
+# /v1/share/* is not session-gated and is unaffected by this gate.

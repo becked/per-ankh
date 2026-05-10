@@ -174,7 +174,9 @@ async function main(): Promise<void> {
 	await mkdir(SOURCE_DIR, { recursive: true });
 	await mkdir(OUTPUT_DIR, { recursive: true });
 
-	const pinacothecaVersion = await readPinacothecaVersion(PINACOTHECA_PYPROJECT);
+	const pinacothecaVersion = await readPinacothecaVersion(
+		PINACOTHECA_PYPROJECT,
+	);
 	const bakedAt = new Date().toISOString();
 	console.log(
 		`[terrain-3d] pinacotheca ${pinacothecaVersion}, baked at ${bakedAt}`,
@@ -219,7 +221,6 @@ async function main(): Promise<void> {
 	}
 
 	const manifest: AtlasManifest = {
-		atlas: "terrain-3d.webp",
 		cellWidth: CELL_W,
 		cellHeight: CELL_H,
 		bakedAt,

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { type Snippet } from "svelte";
-	import type { EChartsOption } from "echarts";
+	import type { ECElementEvent, EChartsOption } from "echarts";
 	import Chart from "$lib/Chart.svelte";
 
 	let {
@@ -8,11 +8,14 @@
 		height = "400px",
 		title = "Chart",
 		controls,
+		onItemClick,
 	}: {
 		option: EChartsOption;
 		height?: string;
 		title?: string;
 		controls?: Snippet;
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onItemClick?: (params: ECElementEvent) => void;
 	} = $props();
 
 	let dialogRef: HTMLDialogElement | null = $state(null);
@@ -62,7 +65,7 @@
 		</div>
 	{/if}
 	<div
-		class="relative rounded-lg overflow-hidden"
+		class="relative overflow-hidden rounded-lg"
 		style="background-color: #35302B;"
 	>
 		<!-- Expand button -->
@@ -88,7 +91,7 @@
 			</svg>
 		</button>
 
-		<Chart {option} {height} />
+		<Chart {option} {height} {onItemClick} />
 	</div>
 </div>
 
@@ -131,7 +134,7 @@
 					/>
 				</svg>
 			</button>
-			<Chart {option} height="100%" />
+			<Chart {option} height="100%" {onItemClick} />
 		</div>
 	</div>
 </dialog>

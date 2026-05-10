@@ -59,12 +59,12 @@ cloud/
 
 ### Endpoints
 
-| Method | Path | Purpose |
-|--------|------|---------|
-| `POST` | `/v1/share` | Upload a shared game blob |
-| `GET` | `/v1/share/{id}` | Download a shared game blob |
-| `DELETE` | `/v1/share/{id}` | Delete a shared game (authenticated) |
-| `OPTIONS` | `*` | CORS preflight |
+| Method    | Path             | Purpose                              |
+| --------- | ---------------- | ------------------------------------ |
+| `POST`    | `/v1/share`      | Upload a shared game blob            |
+| `GET`     | `/v1/share/{id}` | Download a shared game blob          |
+| `DELETE`  | `/v1/share/{id}` | Delete a shared game (authenticated) |
+| `OPTIONS` | `*`              | CORS preflight                       |
 
 The share ID in URLs is a 21-character nanoid (`[A-Za-z0-9_-]{21}`, ~126 bits of entropy).
 
@@ -109,16 +109,17 @@ Returns `201` with `{ share_id, url, delete_token }`.
 
 **Rate limiting** (three independent layers):
 
-| Layer | Scope | Limit | Storage |
-|-------|-------|-------|---------|
-| Per-key | Single app installation | 10 uploads/hour | D1 events table |
-| Per-IP | Single IP address | 20 uploads/hour | D1 events table |
-| Global | All uploads combined | 200 uploads/hour | D1 events table |
-| Download | Single IP address | 200 downloads/hour | Cache API (per-POP) |
+| Layer    | Scope                   | Limit              | Storage             |
+| -------- | ----------------------- | ------------------ | ------------------- |
+| Per-key  | Single app installation | 10 uploads/hour    | D1 events table     |
+| Per-IP   | Single IP address       | 20 uploads/hour    | D1 events table     |
+| Global   | All uploads combined    | 200 uploads/hour   | D1 events table     |
+| Download | Single IP address       | 200 downloads/hour | Cache API (per-POP) |
 
 **Blocklists**: Admin-managed `blocked_keys` and `blocked_ips` tables in D1. Checked before any expensive operation (body buffering, decompression).
 
 **Payload validation** (`validation.ts`):
+
 - Schema version check (currently only version 1)
 - 15 required top-level fields
 - Array length bounds (e.g., max 20 players, max 50K event logs, max 50K improvements)
@@ -133,6 +134,7 @@ Returns `201` with `{ share_id, url, delete_token }`.
 ### Tables
 
 **`shares`** — one row per shared game:
+
 - `share_id` (PK) — 21-char nanoid
 - `app_key` — UUID from the desktop app installation
 - `created_at` — ISO 8601 timestamp
@@ -142,6 +144,7 @@ Returns `201` with `{ share_id, url, delete_token }`.
 - `delete_token` — 32-char nanoid for authenticated deletion
 
 **`events`** — upload/delete audit log:
+
 - `event_type` — `'upload'` or `'delete'`
 - `share_id`, `app_key`, `ip_address`
 - `created_at` — auto-defaults to `datetime('now')`
@@ -217,6 +220,7 @@ web/
 The web viewer reuses ~90% of the desktop app's frontend code via filesystem symlinks. Shared components, types, chart configs, and the game detail view are all symlinked from `src/lib/` into `web/src/lib/`.
 
 The key substitution is `api-web.ts`, which replaces the desktop `api.ts`:
+
 - Desktop: `invoke()` calls to Rust backend via Tauri IPC
 - Web: single `fetch()` to `https://api.per-ankh.app/v1/share/{id}`, then serves cached slices
 
@@ -274,6 +278,7 @@ All `CREATE TABLE` and `CREATE INDEX` statements use `IF NOT EXISTS`, making the
 Deployed via Cloudflare's GitHub integration — **automatic on push**. The Pages project is connected to the GitHub repository and auto-builds from the `web/` directory. No GitHub Actions workflow is needed for this.
 
 Build command (configured in Cloudflare dashboard):
+
 ```
 cd web && npm install && npm run build
 ```
@@ -323,16 +328,16 @@ The release workflow builds and publishes desktop app binaries. It is independen
 
 ### Worker Environment Variables (`cloud/wrangler.toml`)
 
-| Variable | Value | Purpose |
-|----------|-------|---------|
-| `MAX_COMPRESSED_SIZE` | `5242880` (5 MB) | Max upload size |
-| `MAX_DECOMPRESSED_SIZE` | `20971520` (20 MB) | Gzip bomb protection limit |
-| `ALLOWED_ORIGIN` | `https://per-ankh.app` | CORS allowed origin |
-| `RATE_LIMIT_PER_HOUR` | `10` | Max uploads per app key per hour |
-| `IP_RATE_LIMIT_PER_HOUR` | `20` | Max uploads per IP per hour |
-| `DOWNLOAD_RATE_LIMIT_PER_HOUR` | `200` | Max downloads per IP per hour |
-| `GLOBAL_UPLOAD_LIMIT_PER_HOUR` | `200` | Circuit breaker for all uploads |
-| `UPLOADS_ENABLED` | `true` | Kill switch (override via `wrangler secret put`) |
+| Variable                       | Value                  | Purpose                                          |
+| ------------------------------ | ---------------------- | ------------------------------------------------ |
+| `MAX_COMPRESSED_SIZE`          | `5242880` (5 MB)       | Max upload size                                  |
+| `MAX_DECOMPRESSED_SIZE`        | `20971520` (20 MB)     | Gzip bomb protection limit                       |
+| `ALLOWED_ORIGIN`               | `https://per-ankh.app` | CORS allowed origin                              |
+| `RATE_LIMIT_PER_HOUR`          | `10`                   | Max uploads per app key per hour                 |
+| `IP_RATE_LIMIT_PER_HOUR`       | `20`                   | Max uploads per IP per hour                      |
+| `DOWNLOAD_RATE_LIMIT_PER_HOUR` | `200`                  | Max downloads per IP per hour                    |
+| `GLOBAL_UPLOAD_LIMIT_PER_HOUR` | `200`                  | Circuit breaker for all uploads                  |
+| `UPLOADS_ENABLED`              | `true`                 | Kill switch (override via `wrangler secret put`) |
 
 ### Kill Switch Pattern
 
@@ -413,20 +418,20 @@ Desktop App
 
 ## Domains
 
-| Domain | Service | Purpose |
-|--------|---------|---------|
-| `per-ankh.app` | Cloudflare Pages | Web viewer (static site) |
+| Domain             | Service           | Purpose                            |
+| ------------------ | ----------------- | ---------------------------------- |
+| `per-ankh.app`     | Cloudflare Pages  | Web viewer (static site)           |
 | `api.per-ankh.app` | Cloudflare Worker | Share API (upload/download/delete) |
 
 ## Free Tier Capacity
 
-| Resource | Free Allowance | Estimated Usage |
-|----------|---------------|-----------------|
-| R2 storage | 10 GB/month | ~300 KB/game = ~33,000 games |
-| R2 writes | 1M/month | 1 per share upload |
-| R2 reads | 10M/month | 1 per view (cached by CDN for 1 hour) |
-| Workers requests | 100K/day | Upload + download combined |
-| D1 reads | 5M/day | Rate limit checks per request |
-| D1 writes | 100K/day | Share records + event logs |
-| Pages bandwidth | Unlimited | Static site hosting |
-| Egress | Free | No bandwidth charges on any service |
+| Resource         | Free Allowance | Estimated Usage                       |
+| ---------------- | -------------- | ------------------------------------- |
+| R2 storage       | 10 GB/month    | ~300 KB/game = ~33,000 games          |
+| R2 writes        | 1M/month       | 1 per share upload                    |
+| R2 reads         | 10M/month      | 1 per view (cached by CDN for 1 hour) |
+| Workers requests | 100K/day       | Upload + download combined            |
+| D1 reads         | 5M/day         | Rate limit checks per request         |
+| D1 writes        | 100K/day       | Share records + event logs            |
+| Pages bandwidth  | Unlimited      | Static site hosting                   |
+| Egress           | Free           | No bandwidth charges on any service   |

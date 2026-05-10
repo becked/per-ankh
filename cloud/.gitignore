@@ -1,2 +1,5 @@
 .wrangler/
 node_modules/
+# Worker dev secrets read by `wrangler dev` (e.g. DISCORD_CLIENT_SECRET).
+# Production secrets live in `wrangler secret put`, never on disk.
+.dev.vars

@@ -104,13 +104,17 @@ export const webApi = {
 	getEventLogs: async (shareId: string): Promise<EventLog[]> =>
 		(await getSharedData(shareId)).event_logs,
 
-	getLawAdoptionHistory: async (shareId: string): Promise<LawAdoptionHistory[]> =>
+	getLawAdoptionHistory: async (
+		shareId: string,
+	): Promise<LawAdoptionHistory[]> =>
 		(await getSharedData(shareId)).law_adoption_history,
 
 	getCurrentLaws: async (shareId: string): Promise<PlayerLaw[]> =>
 		(await getSharedData(shareId)).current_laws,
 
-	getTechDiscoveryHistory: async (shareId: string): Promise<TechDiscoveryHistory[]> =>
+	getTechDiscoveryHistory: async (
+		shareId: string,
+	): Promise<TechDiscoveryHistory[]> =>
 		(await getSharedData(shareId)).tech_discovery_history,
 
 	getCompletedTechs: async (shareId: string): Promise<PlayerTech[]> =>

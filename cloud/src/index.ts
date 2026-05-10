@@ -1,39 +1,87 @@
-// Per-Ankh Share API — Cloudflare Worker
+// Per-Ankh Worker — legacy share endpoints + cloud rewrite endpoints.
 //
-// Endpoints:
+// Legacy (desktop, being decommissioned):
 //   POST   /v1/share       — Upload a shared game blob
 //   GET    /v1/share/{id}  — Download a shared game blob
 //   DELETE /v1/share/{id}  — Delete a shared game blob
 //
-// Storage: R2 for blobs, D1 for share index and event logging.
+// Cloud rewrite (browser-first):
+//   POST   /v1/auth/discord/start
+//   POST   /v1/auth/discord/callback
+//   GET    /v1/auth/me
+//   POST   /v1/auth/logout
+//
+// Storage: R2 for blobs, D1 for indices/users, KV for sessions+OAuth state.
 
 import { nanoid } from "nanoid";
 import { validateSharePayload, extractMetadata } from "./validation";
+import {
+	cloudCorsHeaders,
+	decompressWithLimit,
+	getClientIp,
+	legacyCorsHeaders,
+	timingSafeEqual,
+} from "./util";
+import {
+	emitAccessLog,
+	getRequestId,
+	logError,
+	logWarn,
+	runWithLogContext,
+	setRoute,
+} from "./log";
+import {
+	handleDiscordCallback,
+	handleDiscordStart,
+	handleLogout,
+	handleMe,
+} from "./auth";
+import type { AuthEnv } from "./auth";
+import {
+	handleGameDelete,
+	handleGameDetail,
+	handleGameDownload,
+	handleGameList,
+	handleGamePatch,
+	handleGameUpload,
+} from "./games";
+import type { GamesEnv } from "./games";
+import { handleCollectionCreate, handleCollectionsList } from "./collections";
+import type { CollectionsEnv } from "./collections";
+import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
+import type { OnlineIdsEnv } from "./online-ids";
+import { handleStats } from "./stats";
+import type { StatsEnv } from "./stats";
+import { handleCspReport } from "./csp";
 
-interface Env {
+interface Env
+	extends AuthEnv, GamesEnv, CollectionsEnv, OnlineIdsEnv, StatsEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
+	SESSIONS_KV: KVNamespace;
 	MAX_COMPRESSED_SIZE: string;
 	MAX_DECOMPRESSED_SIZE: string;
 	ALLOWED_ORIGIN: string;
+	ALLOWED_ORIGINS: string;
 	RATE_LIMIT_PER_HOUR: string;
 	DOWNLOAD_RATE_LIMIT_PER_HOUR: string;
 	IP_RATE_LIMIT_PER_HOUR: string;
 	GLOBAL_UPLOAD_LIMIT_PER_HOUR: string;
 	UPLOADS_ENABLED: string;
+	DISCORD_CLIENT_ID: string;
+	DISCORD_CLIENT_SECRET: string;
+	ALLOWED_DISCORD_USERNAMES: string;
 }
 
 // UUID v4 format: 8-4-4-4-12 hex chars
 const UUID_REGEX =
 	/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
+// Legacy /v1/share/* uses the single-origin CORS helper. New /v1/auth/*
+// endpoints use the multi-origin helper (cookie-credentialed) defined in
+// util.ts.
 function corsHeaders(env: Env): Record<string, string> {
-	return {
-		"Access-Control-Allow-Origin": env.ALLOWED_ORIGIN,
-		"Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-		"Access-Control-Allow-Headers": "Content-Type, X-App-Key, X-Delete-Token",
-		"Access-Control-Max-Age": "86400",
-	};
+	return legacyCorsHeaders(env);
 }
 
 function jsonResponse(
@@ -54,54 +102,6 @@ function errorResponse(error: string, status: number, env: Env): Response {
 	return jsonResponse({ error }, status, env);
 }
 
-// Constant-time string comparison to prevent timing attacks on secret tokens
-function timingSafeEqual(a: string, b: string): boolean {
-	const encoder = new TextEncoder();
-	const bufA = encoder.encode(a);
-	const bufB = encoder.encode(b);
-	if (bufA.byteLength !== bufB.byteLength) return false;
-	return crypto.subtle.timingSafeEqual(bufA, bufB);
-}
-
-// Decompress gzipped data with a size limit to prevent gzip bombs
-async function decompressWithLimit(
-	compressed: ArrayBuffer,
-	maxBytes: number,
-): Promise<Uint8Array> {
-	const ds = new DecompressionStream("gzip");
-	const writer = ds.writable.getWriter();
-	const reader = ds.readable.getReader();
-
-	// Write compressed data
-	writer.write(compressed);
-	writer.close();
-
-	// Read decompressed data with size tracking
-	const chunks: Uint8Array[] = [];
-	let totalSize = 0;
-
-	while (true) {
-		const { done, value } = await reader.read();
-		if (done) break;
-
-		totalSize += value.byteLength;
-		if (totalSize > maxBytes) {
-			reader.cancel();
-			throw new Error("Decompressed payload too large");
-		}
-		chunks.push(value);
-	}
-
-	// Concatenate chunks
-	const result = new Uint8Array(totalSize);
-	let offset = 0;
-	for (const chunk of chunks) {
-		result.set(chunk, offset);
-		offset += chunk.byteLength;
-	}
-	return result;
-}
-
 // Probabilistic cleanup of old events (runs ~2% of the time)
 async function maybeCleanupEvents(db: D1Database): Promise<void> {
 	if (Math.random() > 0.02) return;
@@ -113,7 +113,7 @@ async function maybeCleanupEvents(db: D1Database): Promise<void> {
 			)
 			.run();
 	} catch (e) {
-		console.error("Event cleanup failed:", e);
+		logError("event_cleanup_failed", e);
 	}
 }
 
@@ -142,7 +142,7 @@ async function logEvent(
 		await maybeCleanupEvents(db);
 	} catch (e) {
 		// Log failure is non-critical — don't fail the request
-		console.error("Failed to log event:", e);
+		logError("audit_event_log_failed", e, { event_type: eventType });
 	}
 }
 
@@ -239,10 +239,7 @@ async function checkBlocklists(
 
 // === Endpoint Handlers ===
 
-async function handleUpload(
-	request: Request,
-	env: Env,
-): Promise<Response> {
+async function handleUpload(request: Request, env: Env): Promise<Response> {
 	// 1. Kill switch
 	if (env.UPLOADS_ENABLED !== "true") {
 		return errorResponse("Uploads temporarily disabled", 503, env);
@@ -251,15 +248,11 @@ async function handleUpload(
 	// 2. Require X-App-Key header
 	const appKey = request.headers.get("X-App-Key");
 	if (!appKey || !UUID_REGEX.test(appKey)) {
-		return errorResponse(
-			"Missing or invalid X-App-Key header",
-			400,
-			env,
-		);
+		return errorResponse("Missing or invalid X-App-Key header", 400, env);
 	}
 
 	// 3. Extract IP early for rate limiting and blocklist checks
-	const ip = request.headers.get("CF-Connecting-IP");
+	const ip = getClientIp(request);
 
 	// 4. Check blocklists before doing any expensive work
 	const blocked = await checkBlocklists(env.SHARE_DB, appKey, ip);
@@ -269,21 +262,32 @@ async function handleUpload(
 
 	// 5. Rate limits: per-key, per-IP, global (before body buffering)
 	const maxPerHour = parseInt(env.RATE_LIMIT_PER_HOUR);
-	const withinKeyLimit = await checkKeyRateLimit(env.SHARE_DB, appKey, maxPerHour);
+	const withinKeyLimit = await checkKeyRateLimit(
+		env.SHARE_DB,
+		appKey,
+		maxPerHour,
+	);
 	if (!withinKeyLimit) {
 		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
 	}
 
 	if (ip) {
 		const ipMaxPerHour = parseInt(env.IP_RATE_LIMIT_PER_HOUR);
-		const withinIpLimit = await checkIpRateLimit(env.SHARE_DB, ip, ipMaxPerHour);
+		const withinIpLimit = await checkIpRateLimit(
+			env.SHARE_DB,
+			ip,
+			ipMaxPerHour,
+		);
 		if (!withinIpLimit) {
 			return errorResponse("Rate limit exceeded. Try again later.", 429, env);
 		}
 	}
 
 	const globalMax = parseInt(env.GLOBAL_UPLOAD_LIMIT_PER_HOUR);
-	const withinGlobalLimit = await checkGlobalUploadLimit(env.SHARE_DB, globalMax);
+	const withinGlobalLimit = await checkGlobalUploadLimit(
+		env.SHARE_DB,
+		globalMax,
+	);
 	if (!withinGlobalLimit) {
 		return errorResponse("Rate limit exceeded. Try again later.", 429, env);
 	}
@@ -307,7 +311,10 @@ async function handleUpload(
 	// 8. Read and check actual compressed body size
 	const body = await request.arrayBuffer();
 	if (body.byteLength > maxCompressed) {
-		console.error(`Rejected upload: ${body.byteLength} bytes > ${maxCompressed} limit`);
+		logWarn("legacy_upload_oversized", {
+			size: body.byteLength,
+			limit: maxCompressed,
+		});
 		return errorResponse("Payload too large", 413, env);
 	}
 	if (body.byteLength === 0) {
@@ -320,7 +327,9 @@ async function handleUpload(
 	try {
 		decompressed = await decompressWithLimit(body, maxDecompressed);
 	} catch (e) {
-		console.error(`Decompression rejected: ${e instanceof Error ? e.message : "unknown"}`);
+		logWarn("legacy_decompress_failed", {
+			message: e instanceof Error ? e.message : "unknown",
+		});
 		return errorResponse("Decompressed payload too large", 413, env);
 	}
 
@@ -336,7 +345,12 @@ async function handleUpload(
 	// 11. Validate schema
 	const validation = validateSharePayload(parsed);
 	if (!validation.valid) {
-		console.error(`Validation failed for app_key=${appKey}: ${validation.error}`);
+		// app_key is on the PII deny-list — passing it surfaces as
+		// [REDACTED] in the log line.
+		logWarn("legacy_validation_failed", {
+			app_key: appKey,
+			error: validation.error,
+		});
 		return errorResponse("Invalid payload", 400, env);
 	}
 
@@ -382,14 +396,14 @@ async function handleUpload(
 			)
 			.run();
 	} catch (e) {
-		console.error(
-			`D1_INSERT_FAILED: Cleaning up R2 key=${r2Key}. share_id=${shareId}`,
-			e,
-		);
+		logError("d1_insert_failed", e, { share_id: shareId, r2_key: r2Key });
 		try {
 			await env.SHARE_BUCKET.delete(r2Key);
 		} catch (cleanupErr) {
-			console.error(`ORPHANED_BLOB: R2 cleanup failed for key=${r2Key}`, cleanupErr);
+			logError("orphaned_blob", cleanupErr, {
+				share_id: shareId,
+				r2_key: r2Key,
+			});
 		}
 		return errorResponse("Failed to create share", 500, env);
 	}
@@ -418,8 +432,9 @@ async function handleDownload(
 	request: Request,
 	env: Env,
 ): Promise<Response> {
-	// Rate limit downloads per IP via Cache API
-	const ip = request.headers.get("CF-Connecting-IP") ?? "unknown";
+	// Rate limit downloads per IP via Cache API. Untrusted IP (CF-RAY missing)
+	// → use a single shared "untrusted" bucket rather than skipping the limit.
+	const ip = getClientIp(request) ?? "untrusted";
 	const maxDownloads = parseInt(env.DOWNLOAD_RATE_LIMIT_PER_HOUR);
 	const withinLimit = await checkDownloadRateLimit(ip, maxDownloads);
 	if (!withinLimit) {
@@ -480,7 +495,10 @@ async function handleDelete(
 		return errorResponse("Share not found", 404, env);
 	}
 
-	if (!timingSafeEqual(share.delete_token, deleteToken) || !timingSafeEqual(share.app_key, appKey)) {
+	if (
+		!timingSafeEqual(share.delete_token, deleteToken) ||
+		!timingSafeEqual(share.app_key, appKey)
+	) {
 		return errorResponse("Invalid delete credentials", 403, env);
 	}
 
@@ -504,42 +522,255 @@ async function handleDelete(
 }
 
 // === Router ===
+//
+// Routes are declared as a typed table so the dispatch loop can:
+//   (a) match by exact path or regex,
+//   (b) set the route pattern (e.g. "GET /v1/games/:id") on the log
+//       context for stable per-route grouping in Logpush,
+//   (c) keep route additions to a single self-describing edit.
+//
+// More-specific patterns (e.g. /v1/games/:id/download) MUST appear before
+// more-generic ones (/v1/games/:id) — first match wins.
+
+type RouteHandler = (
+	request: Request,
+	env: Env,
+	match: RegExpMatchArray | null,
+) => Promise<Response>;
+
+interface RouteSpec {
+	method: string;
+	match: { kind: "path"; path: string } | { kind: "regex"; regex: RegExp };
+	route: string;
+	handler: RouteHandler;
+}
+
+const ROUTES: RouteSpec[] = [
+	// Cloud rewrite: /v1/auth/*
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/discord/start" },
+		route: "POST /v1/auth/discord/start",
+		handler: (r, e) => handleDiscordStart(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/discord/callback" },
+		route: "POST /v1/auth/discord/callback",
+		handler: (r, e) => handleDiscordCallback(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/auth/me" },
+		route: "GET /v1/auth/me",
+		handler: (r, e) => handleMe(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/logout" },
+		route: "POST /v1/auth/logout",
+		handler: (r, e) => handleLogout(r, e),
+	},
+
+	// Cloud rewrite: /v1/games/*
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/games" },
+		route: "POST /v1/games",
+		handler: (r, e) => handleGameUpload(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/games" },
+		route: "GET /v1/games",
+		handler: (r, e) => handleGameList(r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/download$/,
+		},
+		route: "GET /v1/games/:id/download",
+		handler: (r, e, m) => handleGameDownload(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
+		route: "GET /v1/games/:id",
+		handler: (r, e, m) => handleGameDetail(m![1], r, e),
+	},
+	{
+		method: "PATCH",
+		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
+		route: "PATCH /v1/games/:id",
+		handler: (r, e, m) => handleGamePatch(m![1], r, e),
+	},
+	{
+		method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
+		route: "DELETE /v1/games/:id",
+		handler: (r, e, m) => handleGameDelete(m![1], r, e),
+	},
+
+	// Cloud rewrite: /v1/collections
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/collections" },
+		route: "GET /v1/collections",
+		handler: (r, e) => handleCollectionsList(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/collections" },
+		route: "POST /v1/collections",
+		handler: (r, e) => handleCollectionCreate(r, e),
+	},
+
+	// Cloud rewrite: /v1/users/me/online-ids
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/users/me/online-ids" },
+		route: "GET /v1/users/me/online-ids",
+		handler: (r, e) => handleListOnlineIds(r, e),
+	},
+	{
+		method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/users\/me\/online-ids\/(.+)$/ },
+		route: "DELETE /v1/users/me/online-ids/:id",
+		handler: (r, e, m) => handleRemoveOnlineId(decodeURIComponent(m![1]), r, e),
+	},
+
+	// Cloud rewrite: /v1/stats
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/stats" },
+		route: "GET /v1/stats",
+		handler: (r, e) => handleStats(r, e),
+	},
+
+	// CSP violation reports — unauthenticated; the browser POSTs here
+	// directly when the page's CSP triggers. See cloud/src/csp.ts.
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/csp-report" },
+		route: "POST /v1/csp-report",
+		handler: (r) => handleCspReport(r),
+	},
+
+	// Legacy: /v1/share/*
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/share" },
+		route: "POST /v1/share",
+		handler: (r, e) => handleUpload(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/share\/([A-Za-z0-9_-]{21})$/ },
+		route: "GET /v1/share/:id",
+		handler: (r, e, m) => handleDownload(m![1], r, e),
+	},
+	{
+		method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/share\/([A-Za-z0-9_-]{21})$/ },
+		route: "DELETE /v1/share/:id",
+		handler: (r, e, m) => handleDelete(m![1], r, e),
+	},
+];
+
+// Cloud paths use credentialed (echo-Origin) CORS so cookies traverse
+// per-ankh.app ↔ api.per-ankh.app. Legacy /v1/share uses single-origin.
+// /v1/csp-report rides cloud-CORS too — browsers don't preflight CSP
+// reports, but listing it here keeps OPTIONS responses correct for any
+// tooling that does.
+function isCloudPath(pathname: string): boolean {
+	return (
+		pathname.startsWith("/v1/auth/") ||
+		pathname === "/v1/games" ||
+		pathname.startsWith("/v1/games/") ||
+		pathname === "/v1/collections" ||
+		pathname.startsWith("/v1/users/") ||
+		pathname === "/v1/stats" ||
+		pathname === "/v1/csp-report"
+	);
+}
+
+function dispatch(request: Request, env: Env): Promise<Response> {
+	const url = new URL(request.url);
+	for (const r of ROUTES) {
+		if (r.method !== request.method) continue;
+		if (r.match.kind === "path") {
+			if (r.match.path !== url.pathname) continue;
+			setRoute(r.route);
+			return r.handler(request, env, null);
+		}
+		const m = url.pathname.match(r.match.regex);
+		if (!m) continue;
+		setRoute(r.route);
+		return r.handler(request, env, m);
+	}
+	// 404 — pick CORS based on path so error responses still allow the
+	// origin that asked. The cloud helper echoes the request Origin; the
+	// legacy helper returns the single ALLOWED_ORIGIN.
+	const cors = isCloudPath(url.pathname)
+		? cloudCorsHeaders(env, request)
+		: corsHeaders(env);
+	return Promise.resolve(
+		new Response(JSON.stringify({ error: "Not found" }), {
+			status: 404,
+			headers: { "Content-Type": "application/json", ...cors },
+		}),
+	);
+}
 
 export default {
 	async fetch(
 		request: Request,
 		env: Env,
+		_ctx: ExecutionContext,
 	): Promise<Response> {
-		const url = new URL(request.url);
-		const method = request.method;
+		return runWithLogContext(request, async () => {
+			const url = new URL(request.url);
+			let response: Response;
 
-		// Handle CORS preflight
-		if (method === "OPTIONS") {
-			return new Response(null, {
-				status: 204,
-				headers: corsHeaders(env),
-			});
-		}
+			try {
+				if (request.method === "OPTIONS") {
+					const headers = isCloudPath(url.pathname)
+						? cloudCorsHeaders(env, request)
+						: corsHeaders(env);
+					response = new Response(null, { status: 204, headers });
+				} else {
+					response = await dispatch(request, env);
+				}
+			} catch (err) {
+				// Top-level safety net. Any uncaught throw becomes a 500 with
+				// the request_id in the body so the caller can include it in
+				// a bug report. Error class is captured for the access log.
+				logError("unhandled_handler_error", err);
+				const requestId = getRequestId();
+				const cors = isCloudPath(url.pathname)
+					? cloudCorsHeaders(env, request)
+					: corsHeaders(env);
+				response = new Response(
+					JSON.stringify({
+						error: "Internal server error",
+						request_id: requestId,
+					}),
+					{
+						status: 500,
+						headers: { "Content-Type": "application/json", ...cors },
+					},
+				);
+			}
 
-		// Route: POST /v1/share
-		if (method === "POST" && url.pathname === "/v1/share") {
-			return handleUpload(request, env);
-		}
-
-		// Route: GET /v1/share/{id}
-		const getMatch = url.pathname.match(/^\/v1\/share\/([A-Za-z0-9_-]{21})$/);
-		if (method === "GET" && getMatch) {
-			return handleDownload(getMatch[1], request, env);
-		}
-
-		// Route: DELETE /v1/share/{id}
-		const deleteMatch = url.pathname.match(
-			/^\/v1\/share\/([A-Za-z0-9_-]{21})$/,
-		);
-		if (method === "DELETE" && deleteMatch) {
-			return handleDelete(deleteMatch[1], request, env);
-		}
-
-		return errorResponse("Not found", 404, env);
+			// Surface request_id to the client. Re-wrap so headers are mutable
+			// even when the handler returned a Response with frozen headers
+			// (e.g. R2 streams).
+			response = new Response(response.body, response);
+			response.headers.set("X-Request-Id", getRequestId() ?? "");
+			emitAccessLog(response);
+			return response;
+		});
 	},
 } satisfies ExportedHandler<Env>;

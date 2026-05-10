@@ -2,14 +2,9 @@ import type { CityInfo } from "$lib/types/CityInfo";
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { EChartsOption } from "echarts";
-import {
-	formatEnum,
-} from "$lib/utils/formatting";
-import {
-	CHART_THEME,
-	getChartColor,
-	getCivilizationColor,
-} from "$lib/config";
+import { formatEnum } from "$lib/utils/formatting";
+import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
+import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -55,10 +50,7 @@ export type CityColumn = {
 	label: string;
 	defaultVisible: boolean;
 	getValue: (city: CityInfo) => string | number | boolean | null;
-	format?: (
-		value: string | number | boolean | null,
-		city: CityInfo,
-	) => string;
+	format?: (value: string | number | boolean | null, city: CityInfo) => string;
 	sortValue?: (city: CityInfo) => string | number;
 };
 
@@ -111,20 +103,90 @@ export const PLAYER_CHART_KEYS: ChartFilterKey[] = [
 ];
 
 export const YIELD_CHART_CONFIG: YieldChartConfig[] = [
-	{ yieldType: "YIELD_SCIENCE", title: "Science", yAxisLabel: "Science", filterKey: "science" },
-	{ yieldType: "YIELD_CIVICS", title: "Civics", yAxisLabel: "Civics", filterKey: "civics" },
-	{ yieldType: "YIELD_TRAINING", title: "Training", yAxisLabel: "Training", filterKey: "training" },
-	{ yieldType: "YIELD_GROWTH", title: "Growth", yAxisLabel: "Growth", filterKey: "growth" },
-	{ yieldType: "YIELD_CULTURE", title: "Culture", yAxisLabel: "Culture", filterKey: "culture" },
-	{ yieldType: "YIELD_HAPPINESS", title: "Happiness", yAxisLabel: "Happiness", filterKey: "happiness" },
-	{ yieldType: "YIELD_ORDERS", title: "Orders", yAxisLabel: "Orders", filterKey: "orders" },
-	{ yieldType: "YIELD_FOOD", title: "Food", yAxisLabel: "Food", filterKey: "food" },
-	{ yieldType: "YIELD_MONEY", title: "Money", yAxisLabel: "Gold", filterKey: "money" },
-	{ yieldType: "YIELD_DISCONTENT", title: "Discontent", yAxisLabel: "Discontent", filterKey: "discontent" },
-	{ yieldType: "YIELD_IRON", title: "Iron", yAxisLabel: "Iron", filterKey: "iron" },
-	{ yieldType: "YIELD_STONE", title: "Stone", yAxisLabel: "Stone", filterKey: "stone" },
-	{ yieldType: "YIELD_WOOD", title: "Wood", yAxisLabel: "Wood", filterKey: "wood" },
-	{ yieldType: "YIELD_MAINTENANCE", title: "Maintenance", yAxisLabel: "Maintenance", filterKey: "maintenance" },
+	{
+		yieldType: "YIELD_SCIENCE",
+		title: "Science",
+		yAxisLabel: "Science",
+		filterKey: "science",
+	},
+	{
+		yieldType: "YIELD_CIVICS",
+		title: "Civics",
+		yAxisLabel: "Civics",
+		filterKey: "civics",
+	},
+	{
+		yieldType: "YIELD_TRAINING",
+		title: "Training",
+		yAxisLabel: "Training",
+		filterKey: "training",
+	},
+	{
+		yieldType: "YIELD_GROWTH",
+		title: "Growth",
+		yAxisLabel: "Growth",
+		filterKey: "growth",
+	},
+	{
+		yieldType: "YIELD_CULTURE",
+		title: "Culture",
+		yAxisLabel: "Culture",
+		filterKey: "culture",
+	},
+	{
+		yieldType: "YIELD_HAPPINESS",
+		title: "Happiness",
+		yAxisLabel: "Happiness",
+		filterKey: "happiness",
+	},
+	{
+		yieldType: "YIELD_ORDERS",
+		title: "Orders",
+		yAxisLabel: "Orders",
+		filterKey: "orders",
+	},
+	{
+		yieldType: "YIELD_FOOD",
+		title: "Food",
+		yAxisLabel: "Food",
+		filterKey: "food",
+	},
+	{
+		yieldType: "YIELD_MONEY",
+		title: "Money",
+		yAxisLabel: "Gold",
+		filterKey: "money",
+	},
+	{
+		yieldType: "YIELD_DISCONTENT",
+		title: "Discontent",
+		yAxisLabel: "Discontent",
+		filterKey: "discontent",
+	},
+	{
+		yieldType: "YIELD_IRON",
+		title: "Iron",
+		yAxisLabel: "Iron",
+		filterKey: "iron",
+	},
+	{
+		yieldType: "YIELD_STONE",
+		title: "Stone",
+		yAxisLabel: "Stone",
+		filterKey: "stone",
+	},
+	{
+		yieldType: "YIELD_WOOD",
+		title: "Wood",
+		yAxisLabel: "Wood",
+		filterKey: "wood",
+	},
+	{
+		yieldType: "YIELD_MAINTENANCE",
+		title: "Maintenance",
+		yAxisLabel: "Maintenance",
+		filterKey: "maintenance",
+	},
 ];
 
 // Column order: Nation, Name, Family, Founded, Culture, Specialists, Growth, Population, Tiles Bought
@@ -233,7 +295,10 @@ export const CITY_COLUMNS: CityColumn[] = [
 
 // ─── Factory Functions ───────────────────────────────────────────────
 
-export function createDefaultChartFilters(): Record<ChartFilterKey, Record<string, boolean>> {
+export function createDefaultChartFilters(): Record<
+	ChartFilterKey,
+	Record<string, boolean>
+> {
 	return {
 		points: {},
 		military: {},
@@ -306,82 +371,55 @@ export function createDefaultCityVisibleColumns(): Record<string, boolean> {
 
 // ─── Sprite Helpers ─────────────────────────────────────────────────
 
-export type SpriteCategory = "crests" | "techs" | "laws" | "yields" | "religions" | "icons" | "units";
+export type SpriteCategory =
+	| "crests"
+	| "techs"
+	| "laws"
+	| "yields"
+	| "religions"
+	| "icons"
+	| "units";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
 	TECH_SOVEREIGNITY: "TECH_SOVEREIGNTY",
 };
 
-// All tech sprites that actually exist — prevents 404s for DLC/mod/unit-specific techs
-const KNOWN_TECH_SPRITES = new Set([
-	"TECH_ADMINISTRATION", "TECH_ARCHITECTURE", "TECH_ARISTOCRACY", "TECH_BALLISTICS",
-	"TECH_BARDING", "TECH_BATTLELINE", "TECH_BODKIN_ARROW", "TECH_CAMEL_LANCER",
-	"TECH_CAMEL_RIDER", "TECH_CARTOGRAPHY", "TECH_CHAIN_DRIVE", "TECH_CITIZENSHIP",
-	"TECH_COHORTS", "TECH_COINAGE", "TECH_COMPOSITE_BOW", "TECH_DIVINATION",
-	"TECH_DOCTRINE", "TECH_DRAMA", "TECH_EBONY", "TECH_ECONOMIC_REFORM",
-	"TECH_EXOTIC_FUR", "TECH_FISCAL_POLICY", "TECH_FORESTRY", "TECH_HUSBANDRY",
-	"TECH_HYDRAULICS", "TECH_INDUSTRIAL_PROGRESS", "TECH_INFANTRY_SQUARE",
-	"TECH_IRONWORKING", "TECH_JURISPRUDENCE", "TECH_LABOR_FORCE",
-	"TECH_LAND_CONSOLIDATION", "TECH_LATEEN_SAIL", "TECH_MACHINERY", "TECH_MANOR",
-	"TECH_MARTIAL_CODE", "TECH_METAPHYSICS", "TECH_MILITARY_DRILL",
-	"TECH_MILITARY_PRESTIGE", "TECH_MONASTICISM", "TECH_MOUNTED_ARCHERY",
-	"TECH_NAVIGATION", "TECH_PERFUME", "TECH_PHALANX", "TECH_POLIS", "TECH_PORCELAIN",
-	"TECH_PORTCULLIS", "TECH_RAMPARTS", "TECH_RHETORIC", "TECH_SCHOLARSHIP",
-	"TECH_SIEGECRAFT", "TECH_SILK", "TECH_SOVEREIGNTY", "TECH_SPOKED_WHEEL",
-	"TECH_STEEL", "TECH_STIRRUPS", "TECH_STONECUTTING", "TECH_STRATEGY",
-	"TECH_TORSION", "TECH_TRAPPING", "TECH_VAULTING", "TECH_WINDLASS",
-]);
-
-// Unit sprites available as fallback for unit-unlock techs
-const KNOWN_UNIT_SPRITES = new Set([
-	"UNIT_AFRICAN_ELEPHANT", "UNIT_AKKADIAN_ARCHER", "UNIT_AMAZON_CAVALRY",
-	"UNIT_AMUN_PRIEST", "UNIT_ARCHER", "UNIT_ATENISM_DISCIPLE", "UNIT_ATENISM_PRIEST",
-	"UNIT_AXEMAN", "UNIT_BALLISTA", "UNIT_BATTERING_RAM", "UNIT_BIREME",
-	"UNIT_CAMEL_ARCHER", "UNIT_CAMEL_LANCER", "UNIT_CAMEL_RIDER", "UNIT_CARAVAN",
-	"UNIT_CATAPHRACT", "UNIT_CATAPHRACT_ARCHER", "UNIT_CHARIOT",
-	"UNIT_CHRISTIANITY_DISCIPLE", "UNIT_CIMMERIAN_ARCHER", "UNIT_CLUBTHROWER",
-	"UNIT_CONSCRIPT", "UNIT_CROSSBOWMAN", "UNIT_DMT_WARRIOR", "UNIT_DROMON",
-	"UNIT_ELITE_AMAZON_CAVALRY", "UNIT_ELITE_CLUBTHROWER", "UNIT_ELITE_GAESATA",
-	"UNIT_ELITE_HUSCARL", "UNIT_ELITE_JAVELINEER", "UNIT_ELITE_LIBYAN_CAVALRY",
-	"UNIT_ELITE_MARAUDER", "UNIT_ELITE_NOMAD_MARAUDER", "UNIT_ELITE_NOMAD_SKIRMISHER",
-	"UNIT_ELITE_NOMAD_WARLORD", "UNIT_ELITE_PELTAST", "UNIT_ELITE_SKIRMISHER",
-	"UNIT_ELITE_WARLORD", "UNIT_FEMALE_ARCHER", "UNIT_FEMALE_SCOUT",
-	"UNIT_FEMALE_WORKER", "UNIT_GAESATA", "UNIT_GALLEY", "UNIT_HASTATUS",
-	"UNIT_HEAVY_CHARIOT", "UNIT_HOPLITE", "UNIT_HORSE_ARCHER", "UNIT_HORSEMAN",
-	"UNIT_HUSCARL", "UNIT_JAVELINEER", "UNIT_JUDAISM_DISCIPLE",
-	"UNIT_KUSHITE_CAVALRY", "UNIT_LEGIONARY", "UNIT_LEVY", "UNIT_LIBYAN_CAVALRY",
-	"UNIT_LIGHT_CHARIOT", "UNIT_LONGBOWMAN", "UNIT_MACEMAN", "UNIT_MANGONEL",
-	"UNIT_MANICHAEISM_DISCIPLE", "UNIT_MARAUDER", "UNIT_MEROITIC_ARCHER",
-	"UNIT_MILITIA", "UNIT_NAPATAN_ARCHER", "UNIT_NOMAD_MARAUDER",
-	"UNIT_NOMAD_SKIRMISHER", "UNIT_NOMAD_WARLORD", "UNIT_ONAGER",
-	"UNIT_PALTON_CAVALRY", "UNIT_PELTAST", "UNIT_PHALANGITE", "UNIT_PIKEMAN",
-	"UNIT_POLYBOLOS", "UNIT_SCOUT", "UNIT_SETTLER", "UNIT_SHOTELAI",
-	"UNIT_SIEGE_TOWER", "UNIT_SKIRMISHER", "UNIT_SLINGER", "UNIT_SPEARMAN",
-	"UNIT_SWORDSMAN", "UNIT_THREE_MEN_CHARIOT", "UNIT_TRIREME",
-	"UNIT_TURRETED_ELEPHANT", "UNIT_WAR_ELEPHANT", "UNIT_WARLORD", "UNIT_WARRIOR",
-	"UNIT_WORKER", "UNIT_ZOROASTRIANISM_DISCIPLE",
-]);
-
-/** Resolve a tech enum value to its sprite path, or null if no sprite exists. */
-function resolveTechSprite(enumValue: string): { category: string; filename: string } | null {
+/**
+ * Resolve a tech enum value to its (category, filename) in the sprite
+ * manifest, or null if no sprite ships. Handles game-data corner cases:
+ * bonus-suffix techs, the RESOURCE_ prefix, the known TECH_SOVEREIGNITY
+ * misspelling, and the unit-icon fallback for unit-unlock techs.
+ */
+function resolveTechSprite(
+	enumValue: string,
+): { category: string; filename: string } | null {
 	// Strip bonus suffixes: TECH_STONECUTTING_BONUS_STONE -> TECH_STONECUTTING
 	let tech = enumValue.replace(/_BONUS.*$/, "");
 	// Strip RESOURCE_ prefix: TECH_RESOURCE_EBONY -> TECH_EBONY
 	tech = tech.replace(/^TECH_RESOURCE_/, "TECH_");
 	// Apply known corrections (game data typos)
 	tech = TECH_SPRITE_FIXES[tech] ?? tech;
-	if (KNOWN_TECH_SPRITES.has(tech)) return { category: "techs", filename: tech };
+	if (SPRITE_MANIFEST[`techs/${tech}`] != null) {
+		return { category: "techs", filename: tech };
+	}
 	// Fallback: try unit sprite (TECH_HASTATUS -> UNIT_HASTATUS)
 	const unitName = tech.replace(/^TECH_/, "UNIT_");
-	if (KNOWN_UNIT_SPRITES.has(unitName)) return { category: "units", filename: unitName };
+	if (SPRITE_MANIFEST[`units/${unitName}`] != null) {
+		return { category: "units", filename: unitName };
+	}
 	// Also try stripping nation prefixes: TECH_HITTITE_CHARIOT_1 -> UNIT_CHARIOT
 	const withoutNation = tech
-		.replace(/^TECH_(AKSUM|ASSYRIA|BABYLONIA|CARTHAGE|EGYPT|GREECE|HITTITE|KUSH|PERSIA|ROME)_/, "TECH_")
+		.replace(
+			/^TECH_(AKSUM|ASSYRIA|BABYLONIA|CARTHAGE|EGYPT|GREECE|HITTITE|KUSH|PERSIA|ROME)_/,
+			"TECH_",
+		)
 		.replace(/_\d+$/, ""); // strip trailing numbers
 	if (withoutNation !== tech) {
 		const unitFallback = withoutNation.replace(/^TECH_/, "UNIT_");
-		if (KNOWN_UNIT_SPRITES.has(unitFallback)) return { category: "units", filename: unitFallback };
+		if (SPRITE_MANIFEST[`units/${unitFallback}`] != null) {
+			return { category: "units", filename: unitFallback };
+		}
 	}
 	return null;
 }
@@ -391,23 +429,72 @@ export function getSpritePath(
 	enumValue: string,
 ): string | null {
 	if (category === "crests") {
-		return `/sprites/crests/CREST_${enumValue}.png`;
+		return SPRITE_MANIFEST[`crests/CREST_${enumValue}`] ?? null;
 	}
 	if (category === "techs") {
 		const resolved = resolveTechSprite(enumValue);
 		if (resolved == null) return null;
-		return `/sprites/${resolved.category}/${resolved.filename}.png`;
+		return SPRITE_MANIFEST[`${resolved.category}/${resolved.filename}`] ?? null;
 	}
-	return `/sprites/${category}/${enumValue}.png`;
+	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }
 
 // ─── Unit Classification ────────────────────────────────────────────
 
-const RANGED_KEYWORDS = ["ARCHER", "BOWMAN", "CROSSBOW", "SLINGER", "SKIRMISHER", "JAVELINEER", "CLUB_THROWER"];
-const CAVALRY_KEYWORDS = ["CAVALRY", "CHARIOT", "CATAPHRACT", "HORSEMAN", "RIDER", "LANCER", "MOUNTED", "ELEPHANT", "CAMEL"];
-const SIEGE_KEYWORDS = ["BALLISTA", "ONAGER", "SIEGE", "CATAPULT", "RAM", "TORSION"];
-const NAVAL_KEYWORDS = ["BIREME", "TRIREME", "DROMON", "QUINQUEREME", "PENTECONTER", "GALLEY", "SHIP", "LONGBOAT"];
-const SUPPORT_KEYWORDS = ["WORKER", "MILITIA", "SETTLER", "SCOUT", "CARAVAN", "DISCIPLE", "DIPLOMAT", "MISSIONARY", "SPY", "MONK", "CLERIC", "PROPHET", "ENVOY", "TRADER"];
+const RANGED_KEYWORDS = [
+	"ARCHER",
+	"BOWMAN",
+	"CROSSBOW",
+	"SLINGER",
+	"SKIRMISHER",
+	"JAVELINEER",
+	"CLUB_THROWER",
+];
+const CAVALRY_KEYWORDS = [
+	"CAVALRY",
+	"CHARIOT",
+	"CATAPHRACT",
+	"HORSEMAN",
+	"RIDER",
+	"LANCER",
+	"MOUNTED",
+	"ELEPHANT",
+	"CAMEL",
+];
+const SIEGE_KEYWORDS = [
+	"BALLISTA",
+	"ONAGER",
+	"SIEGE",
+	"CATAPULT",
+	"RAM",
+	"TORSION",
+];
+const NAVAL_KEYWORDS = [
+	"BIREME",
+	"TRIREME",
+	"DROMON",
+	"QUINQUEREME",
+	"PENTECONTER",
+	"GALLEY",
+	"SHIP",
+	"LONGBOAT",
+];
+const SUPPORT_KEYWORDS = [
+	"WORKER",
+	"MILITIA",
+	"SETTLER",
+	"SCOUT",
+	"CARAVAN",
+	"DISCIPLE",
+	"DIPLOMAT",
+	"MISSIONARY",
+	"SPY",
+	"MONK",
+	"CLERIC",
+	"PROPHET",
+	"ENVOY",
+	"TRADER",
+];
 
 export type UnitClass = "Infantry" | "Ranged" | "Cavalry" | "Siege" | "Naval";
 
@@ -519,8 +606,10 @@ export function createYieldChartOption(
 	const yieldData = allYields.filter((y) => y.yield_type === yieldType);
 	if (yieldData.length === 0) return null;
 
-	const fullTitle = mode === "rate" ? `${title} per Turn` : `Cumulative ${title}`;
-	const fullYAxisLabel = mode === "rate" ? `${yAxisLabel} per Turn` : `Total ${yAxisLabel}`;
+	const fullTitle =
+		mode === "rate" ? `${title} per Turn` : `Cumulative ${title}`;
+	const fullYAxisLabel =
+		mode === "rate" ? `${yAxisLabel} per Turn` : `Total ${yAxisLabel}`;
 
 	return {
 		...CHART_THEME,

@@ -1,6 +1,6 @@
 # Per-Ankh Cloud Rewrite: Technical Specification
 
-This document specifies the architecture and implementation details for rewriting Per-Ankh from a Tauri desktop application (Rust + DuckDB) to a cloud-first web application (TypeScript + Cloudflare D1/R2).
+> **Historical context:** This document captured the design for moving Per-Ankh from a Tauri desktop app (Rust + DuckDB) to a Cloudflare-hosted web app (TypeScript + D1/R2). The desktop runtime has since been removed (see [`tauri-removal-plan.md`](./tauri-removal-plan.md)). Sections describing how the cloud build works are still accurate. Sections about parity with the Rust parser and the dual-build switch are historical — see §2's parity-harness note.
 
 ## Table of Contents
 
@@ -45,21 +45,20 @@ This document specifies the architecture and implementation details for rewritin
 
 ### Component Responsibilities
 
-| Component | Role |
-|-----------|------|
-| **Browser** | File selection, save parsing (Web Worker), game rendering, auth flow |
-| **Web Worker** | ZIP extraction, XML parsing, game data extraction. No server-side parsing ever. |
-| **Cloudflare Worker** | API router: auth, upload validation, storage, queries, rate limiting |
-| **D1 (SQLite)** | User accounts, game metadata, player summaries for cross-game stats |
-| **R2 (Objects)** | Full parsed game JSON blobs (gzipped) + raw save ZIPs |
-| **KV** | Session tokens with TTL |
+| Component             | Role                                                                            |
+| --------------------- | ------------------------------------------------------------------------------- |
+| **Browser**           | File selection, save parsing (Web Worker), game rendering, auth flow            |
+| **Web Worker**        | ZIP extraction, XML parsing, game data extraction. No server-side parsing ever. |
+| **Cloudflare Worker** | API router: auth, upload validation, storage, queries, rate limiting            |
+| **D1 (SQLite)**       | User accounts, game metadata, player summaries for cross-game stats             |
+| **R2 (Objects)**      | Full parsed game JSON blobs (gzipped) + raw save ZIPs                           |
+| **KV**                | Session tokens with TTL                                                         |
 
 ### Design Principles
 
 - **Browser-first computation.** All save file parsing happens client-side. The server never parses save files. Server costs stay minimal.
 - **Two-tier storage.** D1 holds small queryable rows (cross-game stats). R2 holds large blobs (full game data). This keeps D1 small and R2 cheap.
 - **Progressive sharing.** Games are private by default. Sharing is a visibility toggle, not a separate upload step.
-- **Fault-tolerant.** If the backend is down, users can still parse and view saves locally (future enhancement). The core parser runs entirely in the browser.
 
 ---
 
@@ -67,10 +66,23 @@ This document specifies the architecture and implementation details for rewritin
 
 The Rust parser (~5,300 LOC across 17 modules) is rewritten in TypeScript. The inserter layer (~2,700 LOC) is eliminated — the parser returns structured data directly, no database writes on the client.
 
+### Why TypeScript, not WASM
+
+We considered porting the existing Rust parser to WASM via `wasm-bindgen` to avoid rewriting working code. Rejected for v1:
+
+- **Save sizes don't justify it.** Across the recent corpus (140 single-player saves from 2025–2026 plus 60 tournament saves), uncompressed XML runs ~3–7 MB typical with a measured max of ~12 MB. Pure-JS parsing handles that in roughly 60–120 MB heap, which is fine on any laptop. (Mobile is moot — the game doesn't run there, so saves never originate from a phone.)
+- **Bundle cost.** WASM build of the parser would add ~500 KB–1 MB to every page load. TS port is ~60 KB (`fast-xml-parser` + `fflate`).
+- **Build and iteration complexity.** Cargo workspace alongside Vite, slower compile cycle, harder debugging across the WASM/JS boundary.
+- **Two-language maintenance after Tauri deprecation.** With desktop going away, keeping Rust solely for the WASM parser means maintaining a Cargo workspace and Rust knowledge for one purpose. Higher contributor barrier; no other reason to keep Rust.
+- **The "free reuse" isn't free.** The Rust parser is currently entangled with DuckDB types and the inserter layer. Extracting just the pure parsing code would be ~2–3 days of cleanup before it could be wrapped for WASM.
+
+The TS port is a clean break aligned with deprecating Tauri.
+
 ### Web Worker Setup
 
 ```typescript
 // src/lib/parser/worker.ts
+/// <reference lib="webworker" />
 
 type ParseRequest = { type: "parse"; file: ArrayBuffer; fileName: string };
 type ParseProgress = { type: "progress"; phase: string; percent: number };
@@ -78,22 +90,44 @@ type ParseResult = { type: "result"; data: GameData; rawZip: ArrayBuffer };
 type ParseError = { type: "error"; message: string; code: string };
 
 self.onmessage = async (e: MessageEvent<ParseRequest>) => {
-  try {
-    postMessage({ type: "progress", phase: "Extracting ZIP", percent: 0 });
-    const xml = extractXmlFromZip(e.data.file);
+	try {
+		postMessage({ type: "progress", phase: "Extracting ZIP", percent: 0 });
+		const xml = extractXmlFromZip(e.data.file);
 
-    postMessage({ type: "progress", phase: "Parsing XML", percent: 15 });
-    const doc = parseXml(xml);
+		postMessage({ type: "progress", phase: "Parsing XML", percent: 15 });
+		const doc = parseXml(xml);
 
-    postMessage({ type: "progress", phase: "Extracting game data", percent: 30 });
-    const gameData = extractAllGameData(doc);
+		postMessage({
+			type: "progress",
+			phase: "Extracting game data",
+			percent: 30,
+		});
+		const gameData = extractAllGameData(doc);
 
-    postMessage({ type: "result", data: gameData, rawZip: e.data.file });
-  } catch (err) {
-    postMessage({ type: "error", message: err.message, code: err.code ?? "PARSE_ERROR" });
-  }
+		// Transfer rawZip ArrayBuffer (zero-copy). gameData is structured-cloned
+		// (4-18 MB copy) — acceptable for a one-shot post on parse completion.
+		// Caveat: by this point the parser must not retain Uint8Array views into
+		// e.data.file. Transferring detaches the buffer; any retained view would
+		// throw on first access on the main thread.
+		postMessage({ type: "result", data: gameData, rawZip: e.data.file }, [
+			e.data.file,
+		]);
+	} catch (err) {
+		const message = err instanceof Error ? err.message : String(err);
+		const code = err instanceof ParseError ? err.code : "PARSE_ERROR";
+		postMessage({ type: "error", message, code });
+	}
 };
 ```
+
+**Instantiation (Vite).** The main thread imports the worker module via Vite's `?worker` query so the build pipeline emits a separate chunk and the runtime gets a typed constructor:
+
+```typescript
+import ParserWorker from "$lib/parser/worker?worker";
+const worker = new ParserWorker();
+```
+
+**Cancellation.** v1 single-file upload doesn't need cancellation — the user closes the modal and we ignore late `result` messages. The §8 batch-upload future scope will need it; the most ergonomic shape is one `MessageChannel` per parse request (request/response correlation + `port.close()` on abort) layered on top of the union-type protocol above. Comlink is an option if the protocol grows further; not pulled in for v1.
 
 ### ZIP Extraction
 
@@ -102,30 +136,34 @@ Replaces `src-tauri/src/parser/save_file.rs`. Uses `fflate` (~5KB gzipped).
 ```typescript
 import { unzipSync, strFromU8 } from "fflate";
 
-const MAX_COMPRESSED = 50 * 1024 * 1024;   // 50 MB
+const MAX_COMPRESSED = 50 * 1024 * 1024; // 50 MB
 const MAX_UNCOMPRESSED = 100 * 1024 * 1024; // 100 MB
 const MAX_ENTRIES = 10;
-const MAX_RATIO = 100;                       // zip bomb threshold
+const MAX_RATIO = 100; // zip bomb threshold
 
 function extractXmlFromZip(buffer: ArrayBuffer): string {
-  if (buffer.byteLength > MAX_COMPRESSED) throw new ParseError("File too large", "FILE_TOO_LARGE");
-  if (buffer.byteLength === 0) throw new ParseError("Empty file", "EMPTY_FILE");
+	if (buffer.byteLength > MAX_COMPRESSED)
+		throw new ParseError("File too large", "FILE_TOO_LARGE");
+	if (buffer.byteLength === 0) throw new ParseError("Empty file", "EMPTY_FILE");
 
-  const files = unzipSync(new Uint8Array(buffer));
-  const entries = Object.keys(files);
+	const files = unzipSync(new Uint8Array(buffer));
+	const entries = Object.keys(files);
 
-  if (entries.length > MAX_ENTRIES) throw new ParseError("Too many entries", "INVALID_ARCHIVE");
+	if (entries.length > MAX_ENTRIES)
+		throw new ParseError("Too many entries", "INVALID_ARCHIVE");
 
-  const xmlEntry = entries.find(name => name.toLowerCase().endsWith(".xml"));
-  if (!xmlEntry) throw new ParseError("No XML file found", "NO_XML");
+	const xmlEntry = entries.find((name) => name.toLowerCase().endsWith(".xml"));
+	if (!xmlEntry) throw new ParseError("No XML file found", "NO_XML");
 
-  const raw = files[xmlEntry];
-  if (raw.byteLength > MAX_UNCOMPRESSED) throw new ParseError("Uncompressed too large", "FILE_TOO_LARGE");
+	const raw = files[xmlEntry];
+	if (raw.byteLength > MAX_UNCOMPRESSED)
+		throw new ParseError("Uncompressed too large", "FILE_TOO_LARGE");
 
-  const ratio = raw.byteLength / buffer.byteLength;
-  if (ratio > MAX_RATIO) throw new ParseError("Suspicious compression ratio", "ZIP_BOMB");
+	const ratio = raw.byteLength / buffer.byteLength;
+	if (ratio > MAX_RATIO)
+		throw new ParseError("Suspicious compression ratio", "ZIP_BOMB");
 
-  return strFromU8(raw);
+	return strFromU8(raw);
 }
 ```
 
@@ -139,22 +177,42 @@ Replaces `src-tauri/src/parser/xml_loader.rs`. Uses `fast-xml-parser`.
 import { XMLParser } from "fast-xml-parser";
 
 const parser = new XMLParser({
-  ignoreAttributes: false,
-  attributeNamePrefix: "@_",
-  allowBooleanAttributes: true,
-  parseAttributeValue: false,     // Keep as strings, parse manually
-  parseTagValue: false,           // Keep text content as strings
-  isArray: (name) => ALWAYS_ARRAY_TAGS.has(name),
+	ignoreAttributes: false,
+	attributeNamePrefix: "@_",
+	allowBooleanAttributes: true,
+	parseAttributeValue: false, // Keep as strings, parse manually
+	parseTagValue: false, // Keep text content as strings
+	isArray: (name) => ALWAYS_ARRAY_TAGS.has(name),
 });
 
 // Elements that can repeat and must always be arrays
 const ALWAYS_ARRAY_TAGS = new Set([
-  "Player", "Character", "Tile", "City", "Family", "Religion", "Tribe",
-  "Unit", "LogData", "GoalData", "DiplomacyRelation",
-  "TraitTurn", "RelationshipData", "SpouseData", "CompletedBuild",
-  "BuildQueueEntry", "ProjectCount", "AgentData", "LuxuryData",
-  "CityReligion", "TeamCulture", "TileChange", "TileVisibility",
-  "UnitPromotion", "UnitEffect", "UnitFamily",
+	"Player",
+	"Character",
+	"Tile",
+	"City",
+	"Family",
+	"Religion",
+	"Tribe",
+	"Unit",
+	"LogData",
+	"GoalData",
+	"DiplomacyRelation",
+	"TraitTurn",
+	"RelationshipData",
+	"SpouseData",
+	"CompletedBuild",
+	"BuildQueueEntry",
+	"ProjectCount",
+	"AgentData",
+	"LuxuryData",
+	"CityReligion",
+	"TeamCulture",
+	"TileChange",
+	"TileVisibility",
+	"UnitPromotion",
+	"UnitEffect",
+	"UnitFamily",
 ]);
 ```
 
@@ -176,10 +234,10 @@ for player_node in root.children().filter(|n| n.has_tag_name("Player")) {
 // TypeScript (new)
 const players = asArray(root.Player);
 for (const p of players) {
-  const xmlId = requireInt(p["@_ID"], "Player.ID");
-  const name = requireStr(p["@_Name"], "Player.Name");
-  const nation = optStr(p["@_Nation"]);
-  const legitimacy = optInt(p.Legitimacy);
+	const xmlId = requireInt(p["@_ID"], "Player.ID");
+	const name = requireStr(p["@_Name"], "Player.Name");
+	const nation = optStr(p["@_Nation"]);
+	const legitimacy = optInt(p.Legitimacy);
 }
 ```
 
@@ -187,96 +245,176 @@ Helper functions:
 
 ```typescript
 function asArray<T>(val: T | T[] | undefined): T[] {
-  if (val === undefined) return [];
-  return Array.isArray(val) ? val : [val];
+	if (val === undefined) return [];
+	return Array.isArray(val) ? val : [val];
 }
 
 function requireStr(val: unknown, path: string): string {
-  if (typeof val !== "string" || val === "")
-    throw new ParseError(`Missing required field: ${path}`, "MISSING_FIELD");
-  return val;
+	if (typeof val !== "string" || val === "")
+		throw new ParseError(`Missing required field: ${path}`, "MISSING_FIELD");
+	return val;
 }
 
 function requireInt(val: unknown, path: string): number {
-  const n = parseInt(String(val), 10);
-  if (Number.isNaN(n)) throw new ParseError(`Invalid integer: ${path}`, "INVALID_FORMAT");
-  return n;
+	const n = parseInt(String(val), 10);
+	if (Number.isNaN(n))
+		throw new ParseError(`Invalid integer: ${path}`, "INVALID_FORMAT");
+	return n;
 }
 
 function optStr(val: unknown): string | null {
-  return typeof val === "string" && val !== "" ? val : null;
+	return typeof val === "string" && val !== "" ? val : null;
 }
 
 function optInt(val: unknown): number | null {
-  if (val === undefined || val === null || val === "") return null;
-  const n = parseInt(String(val), 10);
-  return Number.isNaN(n) ? null : n;
+	if (val === undefined || val === null || val === "") return null;
+	const n = parseInt(String(val), 10);
+	return Number.isNaN(n) ? null : n;
 }
 ```
+
+`parseInt(String(val), 10)` is intentionally lenient: `"12.7"` → `12`, `"12abc"` → `12`. The parity harness (Rust dump vs. TS dump diff) catches any drift if upstream XML changes shape — strict numeric parsing here would just push errors out of `optInt` into ad-hoc try/catch at every call site, with the same coverage.
 
 ### Sparse Timeseries Pattern
 
 Old World encodes turn-by-turn data as `<T2>40</T2><T5>55</T5>` child elements (sparse — only turns with data are present):
 
 ```typescript
+const TURN_KEY = /^T(\d+)$/;
+
 function parseSparseHistory(
-  parent: Record<string, unknown>
+	parent: Record<string, unknown>,
 ): Array<{ turn: number; value: number }> {
-  const result: Array<{ turn: number; value: number }> = [];
-  for (const [key, val] of Object.entries(parent)) {
-    if (!key.startsWith("T")) continue;
-    const turn = parseInt(key.slice(1), 10);
-    const value = parseInt(String(val), 10);
-    if (!Number.isNaN(turn) && !Number.isNaN(value)) {
-      result.push({ turn, value });
-    }
-  }
-  return result;
+	const result: Array<{ turn: number; value: number }> = [];
+	for (const [key, val] of Object.entries(parent)) {
+		const match = TURN_KEY.exec(key);
+		if (!match) continue; // skips siblings like "Type", "TileX"
+		const turn = parseInt(match[1], 10);
+		const value = parseInt(String(val), 10);
+		if (!Number.isNaN(value)) {
+			result.push({ turn, value });
+		}
+	}
+	return result;
 }
 ```
+
+`startsWith("T")` would match siblings like `Type` or `TileX`; the regex anchors to "T followed only by digits" so the filter is intentional rather than coincidental on `parseInt` returning NaN.
 
 ### Sentinel Value Handling
 
-Replaces `src-tauri/src/parser/xml_loader.rs` sentinel module. Old World XML uses `-1` for "not set":
+Replaces `src-tauri/src/parser/xml_loader.rs` sentinel module. Old World XML uses `-1` for "not set" on IDs/turns/counts and the empty string `""` for absent string values:
 
 ```typescript
 // src/lib/parser/sentinels.ts
+export const ID_NONE = -1;
+export const TURN_INVALID = -1;
+export const COUNT_NONE = -1;
+
 export function normalizeId(id: number): number | null {
-  return id === -1 ? null : id;
+	return id === ID_NONE ? null : id;
 }
 
 export function normalizeTurn(turn: number): number | null {
-  return turn < 0 ? null : turn;
+	return turn === TURN_INVALID || turn < 0 ? null : turn;
+}
+
+export function normalizeCount(count: number): number | null {
+	return count === COUNT_NONE ? null : count;
+}
+
+export function normalizeString(s: string): string | null {
+	return s === "" ? null : s;
+}
+
+// Strict-mode validators (parity with Rust validate_turn / validate_count)
+export function validateTurn(turn: number, maxExpected: number): boolean {
+	return turn >= 0 && turn <= maxExpected;
+}
+
+export function validateCount(count: number): boolean {
+	return count >= 0;
 }
 ```
+
+### XML Quirks to Pin
+
+A few Old World XML conventions don't fall out of the helpers above and need to be explicit in the TS port. Each is currently handled correctly in `src-tauri/src/parser/parsers/`; verify with that source if a parity diff disagrees.
+
+**`Player ID="0"` is a valid player.** Old World uses 0-based IDs across every entity type. Never gate on falsiness:
+
+```typescript
+// ❌ skips player 0
+if (xmlId) { ... }
+
+// ✅
+if (xmlId != null) { ... }
+```
+
+**`Player="-1"` on an entity reference means "no owning player".** Distinct from the `-1` ID sentinel (which means "unset"); on a reference field it means the entity is unowned (barbarians, dead characters, neutral tiles). Both normalize to `null` via `normalizeId`, which is the right output — just don't conflate them in error messages.
+
+**`is_human` derivation.** From `parsers/players.rs:51-54`:
+
+```typescript
+const hasOnlineId = optStr(p["@_OnlineID"]) != null;
+const aiControlledToTurn = optInt(p["@_AIControlledToTurn"]);
+// In multiplayer, only the active player has AIControlledToTurn=0 — the
+// other humans have AIControlledToTurn>0 because they're not the active
+// player. Without the OnlineID branch they'd be mis-flagged as AI.
+const isHuman = hasOnlineId || aiControlledToTurn === 0;
+// Default if neither attribute is set: AI (false).
+```
+
+The `OnlineID` branch is the load-bearing part. Reference docs that show only the `AIControlledToTurn === 0` rule are outdated.
+
+**No multi-pass for cross-references.** The Rust import has Pass 2a/2b/2c/2d for character parents, tile city ownership, tile ownership history, and character birth cities. Those passes exist purely because DuckDB FKs require referenced rows to be inserted first — the underlying XML data (e.g. `<Tile><CityTerritory>X</CityTerritory>`) is right there in a single traversal. The TS port extracts every cross-reference inline (one more field on the relevant struct), keyed by the XML ID. No FK constraints, no second passes.
+
+**No deduplication.** The Rust inserters call `deduplicate_rows_last_wins` on tiles, units, visibility, and production. Two distinct reasons, neither of which applies to the TS port:
+
+1. **Tiles/units dedup is defensive** against a historical Rust parser bug (the call site has a comment about "pre-existing duplicates from previous buggy optimization attempts"). Real saves don't have duplicate XML element IDs — verified across single-player + tournament corpus.
+2. **Visibility/production dedup is collapsing time-series into latest-state for DB storage.** The cloud blob keeps the full history, so there's nothing to collapse.
+
+If a duplicate ID ever appears in a save, the TS parser should surface it as a parse error rather than silently dedup.
 
 ### Winner Detection
 
 From `src-tauri/src/parser/import.rs` `update_winner()`. A game is complete only if a winner can be determined:
 
 ```typescript
-function detectWinner(gameElement: XmlNode): WinnerInfo | null {
-  // Primary: TeamVictories element
-  const teamVictories = gameElement.TeamVictories;
-  if (teamVictories) {
-    const teamEntry = asArray(teamVictories.Team).find(t => t["@_Victory"]);
-    if (teamEntry) {
-      return {
-        winningTeamId: parseInt(String(teamEntry["#text"]), 10),
-        victoryType: String(teamEntry["@_Victory"]),
-      };
-    }
-  }
-  // Fallback: Victory element
-  if (gameElement.Victory) {
-    return {
-      winningTeamId: null,
-      victoryType: String(gameElement.Victory["@_type"] ?? gameElement.Victory),
-    };
-  }
-  return null;
+function detectWinner(gameElement: Record<string, unknown>): WinnerInfo | null {
+	// Primary: TeamVictories element
+	const teamVictories = gameElement.TeamVictories as
+		| Record<string, unknown>
+		| undefined;
+	if (teamVictories) {
+		const teams = asArray(teamVictories.Team) as Array<Record<string, unknown>>;
+		const teamEntry = teams.find((t) => t["@_Victory"]);
+		if (teamEntry) {
+			return {
+				winningTeamId: parseInt(String(teamEntry["#text"]), 10),
+				victoryType: String(teamEntry["@_Victory"]),
+			};
+		}
+	}
+	// Fallback: Victory element. fast-xml-parser yields a string when the
+	// element has only text content and an object when it carries attributes;
+	// branch on shape rather than coercing — String({}) is "[object Object]".
+	const victory = gameElement.Victory;
+	if (typeof victory === "string" && victory !== "") {
+		return { winningTeamId: null, victoryType: victory };
+	}
+	if (victory && typeof victory === "object") {
+		const v = victory as Record<string, unknown>;
+		const type = v["@_type"] ?? v["#text"];
+		if (typeof type === "string" && type !== "") {
+			return { winningTeamId: null, victoryType: type };
+		}
+	}
+	return null;
 }
 ```
+
+Reference parity: `src-tauri/src/parser/parsers/match_metadata.rs` `update_winner()`.
 
 The winning team ID is then mapped to a player via the `<Team><PlayerTeam>` elements.
 
@@ -310,6 +448,14 @@ src/lib/parser/
     events.ts            — From parsers/events.rs
     match-metadata.ts    — Root attributes, Game element, winner detection
     index.ts             — Orchestrator: calls all parsers, returns GameData
+
+> **Note on Rust source layout.** `src-tauri/src/parser/` contains three sibling
+> directories: `parsers/` (pure XML→struct, no DB — the TS port target),
+> `inserters/` (takes parsed structs and writes to DuckDB), and `entities/`
+> (legacy combined parse+insert path; superseded except for tile ownership
+> history). The TS port mirrors `parsers/` only; `inserters/` is replaced by
+> direct JSON construction in the Worker, and `entities/` logic is folded into
+> the equivalent `parsers/` files where still relevant.
 ```
 
 Estimated total: **~2,700 LOC TypeScript** vs ~5,300 LOC Rust parsers + ~2,700 LOC inserters. The reduction comes from eliminating the inserter layer, TS being more concise for optional chaining and object construction, and `fast-xml-parser` returning JS objects directly.
@@ -318,14 +464,31 @@ Estimated total: **~2,700 LOC TypeScript** vs ~5,300 LOC Rust parsers + ~2,700 L
 
 ```typescript
 class ParseError extends Error {
-  constructor(message: string, public code: string) {
-    super(message);
-    this.name = "ParseError";
-  }
+	constructor(
+		message: string,
+		public code: string,
+	) {
+		super(message);
+		this.name = "ParseError";
+	}
 }
 ```
 
 Error codes: `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_ARCHIVE`, `NO_XML`, `ZIP_BOMB`, `MISSING_FIELD`, `INVALID_FORMAT`, `INCOMPLETE_GAME`, `NO_GAME_ID`, `NO_PLAYERS`.
+
+### Test Corpus
+
+Three sources of save files for parser development and parity testing:
+
+- `test-data/saves/` — checked into the repo for unit tests. Empty in fresh clones; populate locally with a representative subset before running tests.
+- `~/Library/Application Support/OldWorld/Saves/Completed/` — the developer's personal completed-saves library on macOS, containing hundreds of real games across all nations and many game versions. Realistic single-player corpus. Path differs on Windows / Linux; macOS path is the relevant one for the primary developer.
+- `~/Projects/Old World/prospector/saves/` — the multiplayer save files from the last tournament (~60 saves, two-human-player matches). The realistic two-player tournament corpus, which exercises code paths that single-player saves don't (e.g., multiple human players, online IDs, distinct shapes of `is_human` distribution).
+
+### Parity Test Harness (historical)
+
+During the rewrite, a parity harness compared the TS parser's output against the Rust parser's output entity-by-entity until each entity passed cleanly across the full corpus. The harness CLI lived in `scripts/parity/` and consumed a Rust `dump_parsed` binary plus a TS `dump.ts` to JSON-diff their outputs.
+
+The harness, the Rust binary, and the comparison plumbing were removed alongside the desktop runtime. The TS parser is now authoritative; correctness regressions surface through user-facing test fixtures and ad-hoc diffs against known-good blobs.
 
 ---
 
@@ -333,10 +496,14 @@ Error codes: `FILE_TOO_LARGE`, `EMPTY_FILE`, `INVALID_ARCHIVE`, `NO_XML`, `ZIP_B
 
 ### Design: Two-Tier Storage
 
-| Tier | Storage | Contents | Purpose |
-|------|---------|----------|---------|
-| Queryable | D1 | User accounts, game metadata, player summaries | Cross-game stats, game listing, filtering |
-| Blob | R2 | Full parsed game JSON + raw save ZIPs | Game detail view rendering |
+D1 holds anything we aggregate across games. R2 holds full per-game data for single-game detail rendering.
+
+| Tier      | Storage | Contents                                                                                                                    | Purpose                                                                                 |
+| --------- | ------- | --------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------- |
+| Queryable | D1      | Users, game metadata, end-of-game player summaries, per-turn yield/military/legitimacy series, tech and law adoption events | Cross-game aggregates, game listing, filtering, dashboards, future tournament analytics |
+| Blob      | R2      | Full parsed game JSON + raw save ZIPs                                                                                       | Single-game detail rendering (events, characters, tile history, family opinion, etc.)   |
+
+Anything we view one game at a time stays in the R2 blob. Anything we ever want to compute across many games at once goes in D1.
 
 ### D1 Schema
 
@@ -349,7 +516,9 @@ CREATE TABLE users (
   user_id TEXT PRIMARY KEY,               -- nanoid(21)
   discord_id TEXT NOT NULL UNIQUE,        -- Discord snowflake ID
   display_name TEXT NOT NULL,             -- Discord global_name (or username fallback)
-  avatar_url TEXT,                        -- Discord CDN avatar URL
+  avatar_hash TEXT,                       -- Discord avatar hash; URL built at read time.
+                                          --   NULL → fall back to default-avatar URL
+                                          --   computed from (discord_id >> 22) % 6
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_login_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -362,10 +531,10 @@ CREATE TABLE games (
   game_id TEXT PRIMARY KEY,               -- nanoid(21), used in URLs
   user_id TEXT NOT NULL REFERENCES users(user_id),
 
-  -- Identity (dedup key)
+  -- Identity
   xml_game_id TEXT NOT NULL,              -- GameId from <Root GameId="...">
   total_turns INTEGER NOT NULL,           -- From <Game><Turn>
-  file_hash TEXT NOT NULL,                -- SHA-256 of raw ZIP
+  file_hash TEXT NOT NULL,                -- SHA-256 of raw ZIP (dedup key)
 
   -- Display
   game_name TEXT,
@@ -399,15 +568,16 @@ CREATE TABLE games (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now')),
 
-  UNIQUE (user_id, xml_game_id, total_turns)
+  UNIQUE (user_id, file_hash)
 );
 
 CREATE INDEX idx_games_user ON games(user_id);
 CREATE INDEX idx_games_public ON games(is_public) WHERE is_public = TRUE;
 
 -- ============================================================
--- PLAYER SUMMARIES (for cross-game statistics)
--- One row per player per game. Denormalized for query speed.
+-- PLAYER SUMMARIES (end-of-game per-player state)
+-- One row per player per game. Drives Nations, Families, Rulers,
+-- Cities (via milestones), and skill-rating dashboards.
 -- ============================================================
 
 CREATE TABLE player_summaries (
@@ -417,27 +587,115 @@ CREATE TABLE player_summaries (
   -- Identity
   player_name TEXT NOT NULL,
   nation TEXT,
+  family_classes TEXT,                    -- JSON array of family classes picked, in order
+  pick_order INTEGER,                     -- 0-based pick slot
   is_human BOOLEAN NOT NULL,
-  is_uploader BOOLEAN NOT NULL,           -- Is this the uploading user's player?
+  is_uploader BOOLEAN NOT NULL,           -- Player(s) selected by the uploader at upload time
+                                          --   (see §8 "Uploader's Player Selection").
+                                          --   Multiple TRUE rows allowed for admin/tournament uploads
+                                          --   covering several human players in the same save.
+
+  -- Starting ruler attributes
+  starting_ruler_archetype TEXT,
+  starting_ruler_traits TEXT,             -- JSON array
+  starting_ruler_reign_turns INTEGER,
+  succession_count INTEGER,
 
   -- Final state
   final_points INTEGER,
   final_military_power INTEGER,
   final_legitimacy INTEGER,
-
-  -- Counts
-  cities_count INTEGER,
+  cities_total INTEGER,
+  cities_founded INTEGER,
   techs_completed INTEGER,
   laws_count INTEGER,
-  units_produced_total INTEGER,
+
+  -- Milestones (per-player; cross-match "first to N" comparisons happen in queries)
+  fifth_city_turn INTEGER,                -- turn this player founded their 5th city; NULL if never
+  tenth_city_turn INTEGER,
+  fourth_law_turn INTEGER,
+  seventh_law_turn INTEGER,
 
   -- Result
   is_winner BOOLEAN NOT NULL DEFAULT FALSE,
+  vp_margin INTEGER,                      -- this player's VP minus 2nd place; can be negative
 
   PRIMARY KEY (game_id, player_index)
 );
 
 CREATE INDEX idx_summaries_nation ON player_summaries(nation);
+CREATE INDEX idx_summaries_archetype ON player_summaries(starting_ruler_archetype);
+
+-- ============================================================
+-- GAME PLAYER TURN (per-turn numeric series, wide format)
+-- One row per (game, player, turn). Drives all Yields-tab charts,
+-- military/legitimacy progression, science vs. win-rate correlation.
+-- Wide format chosen over long-format (game,player,turn,metric,value)
+-- to keep row counts manageable: 200 turns × 8 players = 1,600 rows
+-- per game vs. 48,000 in long format.
+-- ============================================================
+
+CREATE TABLE game_player_turn (
+  game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+  player_index INTEGER NOT NULL,
+  turn INTEGER NOT NULL,
+
+  -- 14 yields × (per-turn rate + cumulative)
+  food_per_turn INTEGER,           food_cumulative INTEGER,
+  growth_per_turn INTEGER,         growth_cumulative INTEGER,
+  science_per_turn INTEGER,        science_cumulative INTEGER,
+  culture_per_turn INTEGER,        culture_cumulative INTEGER,
+  civics_per_turn INTEGER,         civics_cumulative INTEGER,
+  training_per_turn INTEGER,       training_cumulative INTEGER,
+  money_per_turn INTEGER,          money_cumulative INTEGER,
+  orders_per_turn INTEGER,         orders_cumulative INTEGER,
+  happiness_per_turn INTEGER,      happiness_cumulative INTEGER,
+  discontent_per_turn INTEGER,     discontent_cumulative INTEGER,
+  iron_per_turn INTEGER,           iron_cumulative INTEGER,
+  stone_per_turn INTEGER,          stone_cumulative INTEGER,
+  wood_per_turn INTEGER,           wood_cumulative INTEGER,
+  maintenance_per_turn INTEGER,    maintenance_cumulative INTEGER,
+
+  -- Other per-turn metrics
+  military_power INTEGER,
+  legitimacy INTEGER,
+
+  PRIMARY KEY (game_id, player_index, turn)
+);
+
+CREATE INDEX idx_gpt_game ON game_player_turn(game_id);
+
+-- ============================================================
+-- TECH EVENTS (when each tech was researched)
+-- Drives tech timing heatmap, tech popularity, winner-vs-loser advantage.
+-- ============================================================
+
+CREATE TABLE tech_events (
+  game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+  player_index INTEGER NOT NULL,
+  tech TEXT NOT NULL,                     -- e.g. 'TECH_MASONRY'
+  turn INTEGER NOT NULL,
+  PRIMARY KEY (game_id, player_index, tech)
+);
+
+CREATE INDEX idx_tech_events_tech ON tech_events(tech);
+
+-- ============================================================
+-- LAW EVENTS (when each law was adopted)
+-- Drives law timing distribution, time-to-4th/7th law charts.
+-- A law may appear multiple times if swapped in and out, hence
+-- (game_id, player_index, law, turn) PK rather than unique on law.
+-- ============================================================
+
+CREATE TABLE law_events (
+  game_id TEXT NOT NULL REFERENCES games(game_id) ON DELETE CASCADE,
+  player_index INTEGER NOT NULL,
+  law TEXT NOT NULL,
+  turn INTEGER NOT NULL,
+  PRIMARY KEY (game_id, player_index, law, turn)
+);
+
+CREATE INDEX idx_law_events_law ON law_events(law);
 
 -- ============================================================
 -- EVENTS (audit log + rate limiting)
@@ -467,102 +725,100 @@ CREATE TABLE blocked_ips (
 
 Each game produces two R2 objects:
 
-| Key | Content | Size |
-|-----|---------|------|
-| `games/{game_id}.json.gz` | Full parsed game data (gzipped JSON) | 0.8-4 MB |
-| `saves/{game_id}.zip` | Raw save file ZIP | 0.25-10 MB |
+| Key                       | Content                              | Size       |
+| ------------------------- | ------------------------------------ | ---------- |
+| `games/{game_id}.json.gz` | Full parsed game data (gzipped JSON) | 0.8-4 MB   |
+| `saves/{game_id}.zip`     | Raw save file ZIP                    | 0.25-10 MB |
 
 ### R2 Blob Schema: `FullGameData`
 
 ```typescript
 interface FullGameData {
-  // Metadata
-  version: number;                        // Blob schema version, starting at 2
-  parser_version: string;
-  created_at: string;                     // ISO 8601
+	// Metadata
+	version: number; // Blob schema version, starting at 2
+	parser_version: string;
+	created_at: string; // ISO 8601
 
-  // Match metadata
-  match_metadata: MatchMetadata;
+	// Match metadata
+	match_metadata: MatchMetadata;
 
-  // --- Currently in SharedGameData (reused) ---
-  game_details: GameDetails;
-  player_history: PlayerHistory[];
-  yield_history: YieldHistory[];
-  event_logs: EventLog[];
-  law_adoption_history: LawAdoptionHistory[];
-  current_laws: PlayerLaw[];
-  tech_discovery_history: TechDiscoveryHistory[];
-  completed_techs: PlayerTech[];
-  units_produced: PlayerUnitProduced[];
-  city_statistics: CityStatistics;
-  improvement_data: ImprovementData;
-  map_tiles: MapTile[];
-  game_religions: GameReligion[];
-  player_wonders: PlayerWonder[];
+	// --- Currently in SharedGameData (reused) ---
+	game_details: GameDetails;
+	player_history: PlayerHistory[];
+	yield_history: YieldHistory[];
+	event_logs: EventLog[];
+	law_adoption_history: LawAdoptionHistory[];
+	current_laws: PlayerLaw[];
+	tech_discovery_history: TechDiscoveryHistory[];
+	completed_techs: PlayerTech[];
+	units_produced: PlayerUnitProduced[];
+	city_statistics: CityStatistics;
+	improvement_data: ImprovementData;
+	map_tiles: MapTile[];
+	game_religions: GameReligion[];
+	player_wonders: PlayerWonder[];
 
-  // --- New: not in current SharedGameData ---
-  tile_ownership_history: TileOwnershipEntry[];   // Map replay
-  characters: CharacterInfo[];
-  character_traits: CharacterTraitInfo[];
-  character_relationships: CharacterRelationshipInfo[];
-  character_marriages: CharacterMarriageInfo[];
-  families: FamilyInfo[];
-  family_opinion_history: FamilyOpinionEntry[];
-  religion_opinion_history: ReligionOpinionEntry[];
-  diplomacy: DiplomacyRelation[];
-  units: UnitInfo[];
-  unit_promotions: UnitPromotionInfo[];
-  player_resources: PlayerResourceInfo[];
-  player_goals: PlayerGoalInfo[];
-  story_events: StoryEvent[];
-  memory_data: MemoryInfo[];
-  yield_price_history: YieldPriceEntry[];
-  tile_visibility: TileVisibilityInfo[];
+	// --- New: not in current SharedGameData ---
+	tile_ownership_history: TileOwnershipEntry[]; // Map replay
+	characters: CharacterInfo[];
+	character_traits: CharacterTraitInfo[];
+	character_relationships: CharacterRelationshipInfo[];
+	character_marriages: CharacterMarriageInfo[];
+	families: FamilyInfo[];
+	family_opinion_history: FamilyOpinionEntry[];
+	religion_opinion_history: ReligionOpinionEntry[];
+	diplomacy: DiplomacyRelation[];
+	units: UnitInfo[];
+	unit_promotions: UnitPromotionInfo[];
+	player_resources: PlayerResourceInfo[];
+	player_goals: PlayerGoalInfo[];
+	story_events: StoryEvent[];
+	memory_data: MemoryInfo[];
+	yield_price_history: YieldPriceEntry[];
+	tile_visibility: TileVisibilityInfo[];
 }
 
 interface MatchMetadata {
-  xml_game_id: string;
-  total_turns: number;
-  game_name: string | null;
-  save_date: string | null;
-  game_version: string | null;
-  map_width: number | null;
-  map_height: number | null;
-  map_size: string | null;
-  map_class: string | null;
-  game_mode: string | null;
-  difficulty: string | null;
-  opponent_level: string | null;
-  victory_conditions: string | null;
-  enabled_mods: string | null;
-  enabled_dlc: string | null;
-  winner: WinnerInfo | null;
+	xml_game_id: string;
+	total_turns: number;
+	game_name: string | null;
+	save_date: string | null;
+	game_version: string | null;
+	map_width: number | null;
+	map_height: number | null;
+	map_size: string | null;
+	map_class: string | null;
+	game_mode: string | null;
+	difficulty: string | null;
+	opponent_level: string | null;
+	victory_conditions: string | null;
+	enabled_mods: string | null;
+	enabled_dlc: string | null;
+	winner: WinnerInfo | null;
 }
 
 interface WinnerInfo {
-  winningTeamId: number | null;
-  victoryType: string;
+	winningTeamId: number | null;
+	victoryType: string;
 }
 ```
 
 ### Blob Size Estimates
 
-| Component | Est. Uncompressed | Notes |
-|-----------|-------------------|-------|
-| Current SharedGameData fields | 2-8 MB | Already measured in production |
-| tile_ownership_history | 1-5 MB | Sparse: only ownership changes |
-| characters + traits + relationships | 0.5-3 MB | ~1,000 chars per game |
-| units + promotions | 0.2-1 MB | 100-500 units |
-| diplomacy, goals, story_events | 0.1-0.5 MB | Varies by game length |
-| **Total uncompressed** | **4-18 MB** | |
-| **Gzipped (~5:1)** | **0.8-4 MB** | |
+| Component                           | Est. Uncompressed | Notes                          |
+| ----------------------------------- | ----------------- | ------------------------------ |
+| Current SharedGameData fields       | 2-8 MB            | Already measured in production |
+| tile_ownership_history              | 1-5 MB            | Sparse: only ownership changes |
+| characters + traits + relationships | 0.5-3 MB          | ~1,000 chars per game          |
+| units + promotions                  | 0.2-1 MB          | 100-500 units                  |
+| diplomacy, goals, story_events      | 0.1-0.5 MB        | Varies by game length          |
+| **Total uncompressed**              | **4-18 MB**       |                                |
+| **Gzipped (~5:1)**                  | **0.8-4 MB**      |                                |
 
 ### Cross-Game Query Examples
 
-All powered by D1 `games` + `player_summaries` tables:
-
 ```sql
--- Win rate by nation
+-- Win rate by nation (player_summaries)
 SELECT ps.nation,
        COUNT(*) AS games,
        SUM(CASE WHEN ps.is_winner THEN 1 ELSE 0 END) AS wins
@@ -571,14 +827,36 @@ JOIN games g ON ps.game_id = g.game_id
 WHERE g.user_id = ? AND ps.is_uploader = TRUE
 GROUP BY ps.nation;
 
--- Overall stats
-SELECT COUNT(*) AS total_games,
-       SUM(CASE WHEN g.user_won THEN 1 ELSE 0 END) AS total_wins,
-       AVG(g.total_turns) AS avg_game_length
-FROM games g
-WHERE g.user_id = ?;
+-- Average science per turn at turn 50, winners vs. losers (game_player_turn)
+SELECT ps.is_winner,
+       AVG(gpt.science_per_turn) AS avg_science
+FROM game_player_turn gpt
+JOIN player_summaries ps
+  ON gpt.game_id = ps.game_id AND gpt.player_index = ps.player_index
+WHERE gpt.turn = 50
+GROUP BY ps.is_winner;
 
--- Recent games
+-- Tech timing heatmap: average research turn per tech (tech_events)
+SELECT tech,
+       AVG(turn) AS avg_turn,
+       COUNT(*) AS times_researched
+FROM tech_events
+GROUP BY tech;
+
+-- Time-to-4th-law distribution (player_summaries milestone)
+SELECT fourth_law_turn
+FROM player_summaries
+WHERE fourth_law_turn IS NOT NULL;
+
+-- Ruler archetype win rate (player_summaries)
+SELECT starting_ruler_archetype,
+       COUNT(*) AS games,
+       SUM(CASE WHEN is_winner THEN 1 ELSE 0 END) AS wins
+FROM player_summaries
+WHERE starting_ruler_archetype IS NOT NULL
+GROUP BY starting_ruler_archetype;
+
+-- Recent games for a user
 SELECT game_id, game_name, user_nation, total_turns, victory_type,
        user_won, created_at
 FROM games
@@ -587,6 +865,31 @@ ORDER BY created_at DESC
 LIMIT 10;
 ```
 
+### Storage Estimates
+
+For a 200-turn, 8-player game:
+
+| Table              | Rows/game | At 10K games | Approx. storage |
+| ------------------ | --------- | ------------ | --------------- |
+| `game_player_turn` | 1,600     | 16M          | ~3.2 GB         |
+| `tech_events`      | ~400      | 4M           | ~250 MB         |
+| `law_events`       | ~160      | 1.6M         | ~100 MB         |
+| `player_summaries` | 8         | 80K          | ~20 MB          |
+| `games`            | 1         | 10K          | ~3 MB           |
+
+Total at 10K games: ~3.6 GB → comfortable in D1's 10 GB limit. At 30K games we approach the limit; mitigations available include bucketing `game_player_turn` by 5-turn windows (5× row reduction, minimal information loss for trend charts).
+
+### Deferred to Later Migrations
+
+Data we'd want for additional dashboards but isn't in v1:
+
+- **Family opinion over time** — heaviest time-series (~9,600 rows/game). Add when a family-opinion-cross-match dashboard ships.
+- **Event category timeline per turn** — events bucketed by category and turn. Single-game version computes from the R2 blob.
+- **Starting ruler survival per turn** — needs character per-turn data.
+- **City founding events** — beyond `fifth_city_turn`/`tenth_city_turn` milestones.
+
+Adding these later is a non-breaking migration: new tables only, no changes to v1 tables.
+
 ---
 
 ## 4. API Design
@@ -594,6 +897,7 @@ LIMIT 10;
 Base URL: `https://api.per-ankh.app/v1`
 
 All authenticated endpoints require session cookie:
+
 ```
 Cookie: session=<token>
 ```
@@ -602,16 +906,25 @@ Cookie: session=<token>
 
 #### Auth
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/auth/discord/callback` | No | Exchange Discord OAuth code for session |
-| `POST` | `/auth/logout` | Yes | Clear session |
-| `GET` | `/auth/me` | Yes | Return current user info |
+| Method | Path                     | Auth | Description                                                           |
+| ------ | ------------------------ | ---- | --------------------------------------------------------------------- |
+| `POST` | `/auth/discord/start`    | No   | Begin OAuth: generates `state` + PKCE verifier, returns authorize URL |
+| `POST` | `/auth/discord/callback` | No   | Validate `state`, exchange code for session                           |
+| `POST` | `/auth/logout`           | Yes  | Clear session                                                         |
+| `GET`  | `/auth/me`               | Yes  | Return current user info                                              |
+
+**`POST /auth/discord/start`**
+
+Request: `{}`
+Response: `200 { authorize_url: string }` + `Set-Cookie: oauth_pending=...; Max-Age=300; HttpOnly; Secure; SameSite=Lax`
+
+Generates `state` + PKCE verifier, stores them in KV under a short-lived key referenced by the `oauth_pending` cookie. See §5 for the full flow.
 
 **`POST /auth/discord/callback`**
 
-Request: `{ code: string, redirect_uri: string }`
-Response: `200 { user_id, display_name, avatar_url }` + `Set-Cookie: session=...`
+Request: `{ code: string, state: string, redirect_uri: string }` (also reads `oauth_pending` cookie)
+Response: `200 { user_id, display_name, avatar_url }` + `Set-Cookie: session=...; Set-Cookie: oauth_pending=; Max-Age=0` (clears pending cookie)
+Errors: `400` on missing/mismatched `state` or expired pending cookie.
 
 **`GET /auth/me`**
 
@@ -619,35 +932,40 @@ Response: `200 { user_id, display_name, avatar_url, discord_id }` or `401`
 
 #### Games
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `POST` | `/games` | Yes | Upload a parsed game |
-| `GET` | `/games` | Yes | List user's games |
-| `GET` | `/games/:id` | Conditional | Fetch full game blob |
-| `PATCH` | `/games/:id` | Yes | Update visibility |
-| `DELETE` | `/games/:id` | Yes | Delete game + all storage |
-| `GET` | `/games/:id/download` | Yes | Download raw save ZIP |
+| Method   | Path                  | Auth        | Description               |
+| -------- | --------------------- | ----------- | ------------------------- |
+| `POST`   | `/games`              | Yes         | Upload a parsed game      |
+| `GET`    | `/games`              | Yes         | List user's games         |
+| `GET`    | `/games/:id`          | Conditional | Fetch full game blob      |
+| `PATCH`  | `/games/:id`          | Yes         | Update visibility         |
+| `DELETE` | `/games/:id`          | Yes         | Delete game + all storage |
+| `GET`    | `/games/:id/download` | Yes         | Download raw save ZIP     |
 
 **`POST /games`** — Upload
 
 Request (multipart/form-data):
+
 - Part `data`: gzipped JSON blob (`FullGameData`, `Content-Type: application/gzip`)
 - Part `save`: raw ZIP file (`Content-Type: application/zip`)
 
 Validation:
+
 1. Authenticated
 2. Rate limited (per-user: 20/hour)
 3. Decompress and validate blob (schema, array bounds, required fields)
 4. `match_metadata.winner` must exist (completed game only)
-5. Duplicate check: `UNIQUE (user_id, xml_game_id, total_turns)`
+5. Duplicate check: `UNIQUE (user_id, file_hash)` on raw ZIP bytes. Re-uploading the same physical file → 409 with existing `game_id`. Two different saves of the "same" game (e.g. replayed from earlier autosave) are both stored.
 6. Size limits: 10 MB compressed blob, 50 MB raw ZIP
 
 Processing:
+
 1. Write `games/{game_id}.json.gz` to R2
 2. Write `saves/{game_id}.zip` to R2
 3. Insert into D1 `games` (metadata extracted from blob)
 4. Insert into D1 `player_summaries` (one row per player, extracted from blob)
-5. Log upload event
+5. Insert into D1 `game_player_turn` (one row per player per turn, ~1,600 rows/game)
+6. Insert into D1 `tech_events` and `law_events` (sparse rows, ~400 + ~160/game)
+7. Log upload event
 
 Response: `201 { game_id, url }` | `400` | `409 { existing_game_id }` | `413` | `429`
 
@@ -656,22 +974,25 @@ Response: `201 { game_id, url }` | `400` | `409 { existing_game_id }` | `413` | 
 Query params: `sort` (date_desc|date_asc|name|turns), `nation`, `won` (true|false), `limit` (default 50, max 200), `offset`
 
 Response:
+
 ```json
 {
-  "games": [{
-    "game_id": "abc123",
-    "game_name": "My Game",
-    "save_date": "2025-01-15T12:00:00Z",
-    "total_turns": 200,
-    "user_nation": "NATION_ROME",
-    "user_won": true,
-    "winner_nation": "NATION_ROME",
-    "victory_type": "VICTORY_POINTS",
-    "map_size": "MAPSIZE_LARGE",
-    "is_public": false,
-    "created_at": "2025-06-01T12:00:00Z"
-  }],
-  "total": 47
+	"games": [
+		{
+			"game_id": "abc123",
+			"game_name": "My Game",
+			"save_date": "2025-01-15T12:00:00Z",
+			"total_turns": 200,
+			"user_nation": "NATION_ROME",
+			"user_won": true,
+			"winner_nation": "NATION_ROME",
+			"victory_type": "VICTORY_POINTS",
+			"map_size": "MAPSIZE_LARGE",
+			"is_public": false,
+			"created_at": "2025-06-01T12:00:00Z"
+		}
+	],
+	"total": 47
 }
 ```
 
@@ -690,7 +1011,7 @@ Response: `200 { game_id, is_public }`
 
 **`DELETE /games/:id`** — Delete game
 
-Removes: D1 `games` row (cascades to `player_summaries`), R2 blob, R2 ZIP.
+Removes: D1 `games` row (cascades to `player_summaries`, `game_player_turn`, `tech_events`, `law_events`), R2 blob, R2 ZIP.
 
 Response: `204`
 
@@ -700,24 +1021,21 @@ Response: Streamed ZIP from R2 with `Content-Type: application/zip`.
 
 #### Stats
 
-| Method | Path | Auth | Description |
-|--------|------|------|-------------|
-| `GET` | `/stats` | Yes | Cross-game aggregate statistics |
+| Method | Path     | Auth | Description                     |
+| ------ | -------- | ---- | ------------------------------- |
+| `GET`  | `/stats` | Yes  | Cross-game aggregate statistics |
 
 Response:
+
 ```json
 {
-  "total_games": 47,
-  "total_wins": 32,
-  "win_rate": 0.68,
-  "avg_game_length": 185,
-  "nations": [
-    { "nation": "NATION_ROME", "games": 12, "wins": 9 }
-  ],
-  "victory_types": [
-    { "type": "VICTORY_POINTS", "count": 20 }
-  ],
-  "recent_games": [{ "game_id": "...", "game_name": "...", "user_won": true }]
+	"total_games": 47,
+	"total_wins": 32,
+	"win_rate": 0.68,
+	"avg_game_length": 185,
+	"nations": [{ "nation": "NATION_ROME", "games": 12, "wins": 9 }],
+	"victory_types": [{ "type": "VICTORY_POINTS", "count": 20 }],
+	"recent_games": [{ "game_id": "...", "game_name": "...", "user_won": true }]
 }
 ```
 
@@ -725,12 +1043,12 @@ Response:
 
 Carried forward from existing share Worker patterns:
 
-| Scope | Limit | Key |
-|-------|-------|-----|
-| Per-user uploads | 20/hour | `user_id` |
-| Per-IP uploads | 30/hour | `CF-Connecting-IP` |
-| Global uploads | 500/hour | — |
-| Downloads | 200/hour per IP | `CF-Connecting-IP` |
+| Scope            | Limit           | Key                |
+| ---------------- | --------------- | ------------------ |
+| Per-user uploads | 20/hour         | `user_id`          |
+| Per-IP uploads   | 30/hour         | `CF-Connecting-IP` |
+| Global uploads   | 500/hour        | —                  |
+| Downloads        | 200/hour per IP | `CF-Connecting-IP` |
 
 Rate limit checks query `events` table (same pattern as `cloud/src/index.ts`).
 
@@ -743,72 +1061,92 @@ Rate limit checks query `events` table (same pattern as `cloud/src/index.ts`).
 Standard authorization-code OAuth 2.0. Discord is the right primary for Per-Ankh: the Old World community already organizes there, and a single token exchange returns username + avatar (no second profile fetch needed, unlike Steam's OpenID + Web API two-step).
 
 ```
-1. User clicks "Sign in with Discord"
+1. User clicks "Sign in with Discord". Frontend calls
+   POST /v1/auth/discord/start (no auth required).
 
-2. Frontend redirects to Discord:
+2. Worker generates a 32-byte random `state`, a PKCE `code_verifier`, and
+   derives `code_challenge = BASE64URL(SHA-256(code_verifier))`. It writes
+   { state, code_verifier } to KV under a short-lived key (5 min TTL) and
+   returns the authorize URL plus a HttpOnly, Secure, SameSite=Lax cookie
+   `oauth_pending=<kv_key>; Max-Age=300`.
+
+3. Frontend follows the URL:
    https://discord.com/api/oauth2/authorize?
      client_id=<DISCORD_CLIENT_ID>
      &redirect_uri=https://per-ankh.app/auth/callback
      &response_type=code
      &scope=identify
+     &state=<STATE>
+     &code_challenge=<CODE_CHALLENGE>
+     &code_challenge_method=S256
 
-3. User authorizes on discord.com
+4. User authorizes on discord.com.
 
-4. Discord redirects to:
-   https://per-ankh.app/auth/callback?code=<AUTH_CODE>
+5. Discord redirects to:
+   https://per-ankh.app/auth/callback?code=<AUTH_CODE>&state=<STATE>
 
-5. SvelteKit callback page sends code to API:
+6. SvelteKit callback page sends code + state to API (cookie carries the
+   pending key):
    POST /v1/auth/discord/callback
-     { code: <AUTH_CODE>, redirect_uri: "https://per-ankh.app/auth/callback" }
+     { code: <AUTH_CODE>, state: <STATE>, redirect_uri: "https://per-ankh.app/auth/callback" }
 
-6. Worker exchanges code for access token:
+7. Worker reads `oauth_pending` cookie → KV entry. Validates the request
+   `state` matches the stored `state` (constant-time compare). Deletes the
+   KV entry (single-use). On mismatch or missing entry: 400 + clear cookie.
+
+8. Worker exchanges code for access token, sending the PKCE verifier:
    POST https://discord.com/api/oauth2/token
      grant_type=authorization_code
      &code=<AUTH_CODE>
      &redirect_uri=...
      &client_id=<DISCORD_CLIENT_ID>
      &client_secret=<DISCORD_CLIENT_SECRET>
+     &code_verifier=<CODE_VERIFIER>
 
-7. Discord responds: { access_token, token_type, expires_in, ... }
+9. Discord responds: { access_token, token_type, expires_in, ... }
 
-8. Worker fetches user profile:
-   GET https://discord.com/api/users/@me
-     Authorization: Bearer <access_token>
+10. Worker fetches user profile:
+    GET https://discord.com/api/users/@me
+      Authorization: Bearer <access_token>
 
-9. Discord responds:
-   {
-     id: "1234567890",                    // snowflake → discord_id
-     username: "playername",
-     global_name: "Player Name",          // preferred display name
-     avatar: "a1b2c3...",                 // hash, may be null
-     ...
-   }
+11. Discord responds:
+    {
+      id: "1234567890",                   // snowflake → discord_id
+      username: "playername",
+      global_name: "Player Name",         // preferred display name
+      avatar: "a1b2c3...",                // hash, may be null
+      ...
+    }
 
-10. Worker computes avatar URL:
-    https://cdn.discordapp.com/avatars/<id>/<avatar>.png  (or default)
+12. Worker stores the avatar hash in D1 (URL is constructed at read time).
+    Display URL form:
+      https://cdn.discordapp.com/avatars/<id>/<avatar>.png         // custom
+      https://cdn.discordapp.com/embed/avatars/<(id >> 22) % 6>.png // default
+    Storing the hash rather than a fully-formed URL keeps avatars fresh
+    across Discord-side changes without re-running OAuth.
 
-11. Creates/updates user in D1 (display_name = global_name ?? username)
-12. Creates session in KV (30-day TTL)
-13. Returns Set-Cookie
+13. Creates/updates user in D1 (display_name = global_name ?? username).
+14. Creates session in KV (30-day TTL).
+15. Clears the oauth_pending cookie and returns Set-Cookie: session=...
 ```
 
-The access token is discarded after step 11 — Per-Ankh only needs identity, not ongoing Discord API access. Session lifetime is independent of Discord's token expiry.
+The access token is discarded after step 13 — Per-Ankh only needs identity, not ongoing Discord API access. Session lifetime is independent of Discord's token expiry.
 
 ### Session Management
 
 ```typescript
 // KV key format: session:{token}
 interface SessionData {
-  user_id: string;
-  discord_id: string;
-  display_name: string;
-  avatar_url: string | null;
-  created_at: string;
+	user_id: string;
 }
 
 // Cookie settings
 // session=<nanoid(32)>; HttpOnly; Secure; SameSite=Lax; Max-Age=2592000; Path=/
 ```
+
+`Domain=` is intentionally omitted. The Worker sets the cookie host-only on `api.per-ankh.app`. The SvelteKit frontend at `per-ankh.app` shares the same registrable domain (`per-ankh.app`), so requests from frontend → API are _same-site_ even though they're cross-origin — `credentials: "include"` fetches send the cookie. Conversely, an attacker site at `evil.example` cannot trigger SameSite=Lax cookies on cross-site POST/DELETE/PATCH (Lax only sends cookies on top-level GET navigations across sites), so authenticated mutations are CSRF-protected without needing tokens. If the API ever moved to a foreign domain (e.g. `per-ankh-api.workers.dev`), this story breaks and CSRF tokens would be required — keep the same-eTLD+1 invariant in mind when changing infra.
+
+The session payload is intentionally minimal. Display name, avatar, and Discord ID are looked up from D1 when needed (e.g., for `/auth/me` or rendering the user menu). KV would let us cache more, but doing so means changes to user data lag behind active sessions until they expire — and our scale doesn't make the extra D1 read painful.
 
 ### Environment Secrets
 
@@ -820,6 +1158,7 @@ DISCORD_CLIENT_SECRET  — Discord application client secret (used in token exch
 ### Future Auth Providers
 
 To add Steam, GOG, Epic, or Google OAuth later:
+
 1. Add `steam_id TEXT UNIQUE`, `google_id TEXT UNIQUE`, etc. to `users` table
 2. Add corresponding callback endpoints (Steam uses OpenID 2.0; the others use OAuth 2.0)
 3. Account linking: same user can connect multiple providers
@@ -834,39 +1173,48 @@ A future Discord-guild gating layer (e.g. requiring membership in the Old World 
 
 These components and files transfer directly to the web app:
 
-| Path | Description |
-|------|-------------|
-| `src/lib/game-detail/*.svelte` | All 12 tab components + `GameDetailView.svelte` |
-| `src/lib/game-detail/helpers.ts` | Types, constants, `YIELD_CHART_CONFIG`, `CITY_COLUMNS`, pure functions |
-| `src/lib/game-detail/index.ts` | Re-exports |
-| `src/lib/Chart.svelte` | ECharts wrapper |
-| `src/lib/ChartContainer.svelte` | Chart layout container |
-| `src/lib/HexMap.svelte` | Map visualization |
-| `src/lib/SearchInput.svelte` | Reusable search input |
-| `src/lib/config/` | Chart colors, nation colors, terrain colors, theme |
-| `src/lib/utils/formatting.ts` | `formatEnum()`, `formatDate()`, `stripMarkup()`, etc. |
-| `src/lib/types/` | All TypeScript type definitions (now hand-maintained) |
-| `static/sprites/` | All sprite assets |
+| Path                             | Description                                                                                                                                                                                                                           |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/game-detail/*.svelte`   | All 12 tab components + `GameDetailView.svelte`                                                                                                                                                                                       |
+| `src/lib/game-detail/helpers.ts` | Types, constants, `YIELD_CHART_CONFIG`, `CITY_COLUMNS`, pure functions                                                                                                                                                                |
+| `src/lib/game-detail/index.ts`   | Re-exports                                                                                                                                                                                                                            |
+| `src/lib/Chart.svelte`           | ECharts wrapper                                                                                                                                                                                                                       |
+| `src/lib/ChartContainer.svelte`  | Chart layout container                                                                                                                                                                                                                |
+| `src/lib/HexMap.svelte`          | Map visualization                                                                                                                                                                                                                     |
+| `src/lib/SearchInput.svelte`     | Reusable search input                                                                                                                                                                                                                 |
+| `src/lib/config/`                | Chart colors, nation colors, terrain colors, theme                                                                                                                                                                                    |
+| `src/lib/utils/formatting.ts`    | `formatEnum()`, `formatDate()`, `stripMarkup()`, etc.                                                                                                                                                                                 |
+| `src/lib/types/`                 | TypeScript types — types in `src/lib/types/` keep their current shape during the transition; new cloud-side request/response types are inferred from Valibot schemas under `cloud/src/schemas/` (see "API Contract Validation" below) |
+| `static/sprites/`                | All sprite assets                                                                                                                                                                                                                     |
 
 ### Rewritten
 
-| Current | New | Change |
-|---------|-----|--------|
-| `src/lib/api.ts` (Tauri `invoke()`) | `src/lib/api.ts` (`fetch` to API) | All functions rewritten to use HTTP |
-| `src/routes/game/[id]/+page.svelte` | `src/routes/games/[id]/+page.svelte` | Fetch from API instead of Tauri |
-| `src/lib/ShareControl.svelte` | `src/lib/VisibilityToggle.svelte` | Public/private toggle |
-| `GameSidebar.svelte` | `GameSidebar.svelte` | Fetch game list from API |
+| Current                             | New                                  | Change                              |
+| ----------------------------------- | ------------------------------------ | ----------------------------------- |
+| `src/lib/api.ts` (Tauri `invoke()`) | `src/lib/api.ts` (`fetch` to API)    | All functions rewritten to use HTTP |
+| `src/routes/game/[id]/+page.svelte` | `src/routes/games/[id]/+page.svelte` | Fetch from API instead of Tauri     |
+| `src/lib/ShareControl.svelte`       | `src/lib/VisibilityToggle.svelte`    | Public/private toggle               |
+| `GameSidebar.svelte`                | `GameSidebar.svelte`                 | Fetch game list from API            |
 
 ### New Components
 
-| Component | Purpose |
-|-----------|---------|
-| `LoginButton.svelte` | Discord login, redirects to Discord OAuth authorize URL |
-| `UserMenu.svelte` | Logged-in user avatar + dropdown |
-| `UploadModal.svelte` | File selection, Web Worker progress, upload to API |
-| `Dashboard.svelte` | Cross-game stats (win rate, nations chart) |
-| `GameLibrary.svelte` | Sortable/filterable grid of games |
+| Component                               | Purpose                                                    |
+| --------------------------------------- | ---------------------------------------------------------- |
+| `LoginButton.svelte`                    | Discord login, redirects to Discord OAuth authorize URL    |
+| `UserMenu.svelte`                       | Logged-in user avatar + dropdown                           |
+| `UploadModal.svelte`                    | File selection, Web Worker progress, upload to API         |
+| `Dashboard.svelte`                      | Cross-game stats (win rate, nations chart)                 |
+| `GameLibrary.svelte`                    | Sortable/filterable grid of games                          |
 | `src/routes/auth/callback/+page.svelte` | Processes Discord redirect (extracts `code`, posts to API) |
+
+### Routing & Data Loading
+
+**Divergence from the legacy share viewer.** The existing `web/src/routes/share/[id]/+page.svelte` and the desktop `src/routes/game/[id]/+page.svelte` both fetch in `$effect` and read params via the legacy `import { page } from "$app/stores"` store. Cloud-rewrite routes deliberately diverge:
+
+- **Data fetching lives in `+page.ts` `load()` (universal) or `+page.server.ts` (server-only).** Public-game URLs become SSR-rendered, which is what makes Discord/Twitter/Slack OG-card unfurling work — the entire point of `is_public = TRUE` is sharing the URL into chat. `$effect`-fetched pages render an empty shell to scrapers. SvelteKit's `load()` also handles navigation race conditions automatically (the previous load is aborted via `signal`), which the `$effect` pattern doesn't.
+- **Reactive page state via `import { page } from "$app/state"`** (the rune-backed reactive), not the `$app/stores` store API. New code only.
+
+The legacy share viewer at `web/share/[id]` keeps its current pattern — it's served by the legacy share Worker (§7) and not part of v1 cloud-rewrite scope.
 
 ### API Layer
 
@@ -874,110 +1222,254 @@ These components and files transfer directly to the web app:
 // src/lib/api.ts
 const API_BASE = import.meta.env.VITE_API_URL;
 
-async function authFetch(path: string, init?: RequestInit): Promise<Response> {
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...init,
-    credentials: "include",
-  });
-  if (res.status === 401) {
-    goto("/login");
-    throw new Error("Unauthorized");
-  }
-  if (!res.ok) throw new Error(await res.text());
-  return res;
+export class ApiError extends Error {
+	constructor(
+		public status: number,
+		public code: string | null,
+		message: string,
+		public payload: unknown,
+	) {
+		super(message);
+		this.name = "ApiError";
+	}
 }
 
+export class UnauthorizedError extends ApiError {
+	constructor(payload: unknown) {
+		super(401, "UNAUTHORIZED", "Unauthorized", payload);
+		this.name = "UnauthorizedError";
+	}
+}
+
+type FetchLike = typeof fetch;
+
+async function authFetch(
+	path: string,
+	init?: RequestInit & { fetch?: FetchLike },
+): Promise<Response> {
+	const f = init?.fetch ?? fetch;
+	const res = await f(`${API_BASE}${path}`, {
+		...init,
+		credentials: "include",
+	});
+
+	if (res.ok) return res;
+
+	// Try to parse a structured error body { code, message, ... }
+	let payload: unknown = null;
+	let code: string | null = null;
+	let message = res.statusText;
+	if (res.headers.get("content-type")?.includes("application/json")) {
+		try {
+			payload = await res.json();
+			if (payload && typeof payload === "object") {
+				const p = payload as Record<string, unknown>;
+				if (typeof p.code === "string") code = p.code;
+				if (typeof p.message === "string") message = p.message;
+			}
+		} catch {
+			/* fall through */
+		}
+	} else {
+		try {
+			message = await res.text();
+		} catch {
+			/* fall through */
+		}
+	}
+
+	if (res.status === 401) throw new UnauthorizedError(payload);
+	throw new ApiError(res.status, code, message, payload);
+}
+```
+
+The route layer (`+page.ts` `load`, `+layout.ts` `load`, `+error.svelte`) decides what to do with `UnauthorizedError`:
+
+```typescript
+// src/routes/games/+page.ts
+import { redirect } from "@sveltejs/kit";
+import { api } from "$lib/api";
+import { UnauthorizedError } from "$lib/api";
+import type { PageLoad } from "./$types";
+
+export const load: PageLoad = async ({ fetch, url }) => {
+	try {
+		return { games: await api.listGames({}, { fetch }) };
+	} catch (err) {
+		if (err instanceof UnauthorizedError) {
+			throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+		}
+		throw err;
+	}
+};
+```
+
+The `api` object passes the SvelteKit-injected `fetch` through so server-side `load`s benefit from request coalescing and cookie forwarding for same-eTLD+1 hosts:
+
+```typescript
+type CallOpts = { fetch?: FetchLike };
+
 export const api = {
-  // Auth
-  getMe: () => authFetch("/auth/me").then(r => r.json()),
-  discordCallback: (code: string, redirectUri: string) =>
-    fetch(`${API_BASE}/auth/discord/callback`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code, redirect_uri: redirectUri }),
-      credentials: "include",
-    }),
-  logout: () => authFetch("/auth/logout", { method: "POST" }),
+	// Auth
+	getMe: (opts?: CallOpts) => authFetch("/auth/me", opts).then((r) => r.json()),
+	discordCallback: (code: string, state: string, redirectUri: string) =>
+		fetch(`${API_BASE}/auth/discord/callback`, {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ code, state, redirect_uri: redirectUri }),
+			credentials: "include",
+		}),
+	logout: (opts?: CallOpts) =>
+		authFetch("/auth/logout", { ...opts, method: "POST" }),
 
-  // Games
-  listGames: (params?: Record<string, string>) =>
-    authFetch(`/games?${new URLSearchParams(params)}`).then(r => r.json()),
-  getGame: (gameId: string) =>
-    authFetch(`/games/${gameId}`).then(r => r.json()),
-  uploadGame: (formData: FormData) =>
-    authFetch("/games", { method: "POST", body: formData }),
-  deleteGame: (gameId: string) =>
-    authFetch(`/games/${gameId}`, { method: "DELETE" }),
-  toggleVisibility: (gameId: string, isPublic: boolean) =>
-    authFetch(`/games/${gameId}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ is_public: isPublic }),
-    }),
-  downloadSave: (gameId: string) =>
-    authFetch(`/games/${gameId}/download`),
+	// Games
+	listGames: (params: Record<string, string>, opts?: CallOpts) =>
+		authFetch(`/games?${new URLSearchParams(params)}`, opts).then((r) =>
+			r.json(),
+		),
+	getGame: (gameId: string, opts?: CallOpts) =>
+		authFetch(`/games/${gameId}`, opts).then((r) => r.json()),
+	uploadGame: (formData: FormData, opts?: CallOpts) =>
+		authFetch("/games", { ...opts, method: "POST", body: formData }),
+	deleteGame: (gameId: string, opts?: CallOpts) =>
+		authFetch(`/games/${gameId}`, { ...opts, method: "DELETE" }),
+	toggleVisibility: (gameId: string, isPublic: boolean, opts?: CallOpts) =>
+		authFetch(`/games/${gameId}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ is_public: isPublic }),
+		}),
+	downloadSave: (gameId: string, opts?: CallOpts) =>
+		authFetch(`/games/${gameId}/download`, opts),
 
-  // Stats
-  getStats: () => authFetch("/stats").then(r => r.json()),
+	// Stats
+	getStats: (opts?: CallOpts) =>
+		authFetch("/stats", opts).then((r) => r.json()),
 
-  // Public (no auth)
-  getPublicGame: (gameId: string) =>
-    fetch(`${API_BASE}/games/${gameId}`).then(r => r.json()),
+	// Public (no auth) — used in +page.ts loads for is_public games
+	getPublicGame: (gameId: string, opts?: CallOpts) => {
+		const f = opts?.fetch ?? fetch;
+		return f(`${API_BASE}/games/${gameId}`).then((r) => r.json());
+	},
 } as const;
 ```
+
+**Server-side cookie forwarding.** The frontend at `per-ankh.app` and the API at `api.per-ankh.app` share `per-ankh.app` as eTLD+1, so the SvelteKit-injected `fetch` automatically forwards the incoming request's `Cookie` header to the API during SSR `load`. If we ever moved the API off the same eTLD+1 (e.g. to `*.workers.dev`), `load`s would have to forward `Cookie` explicitly via `event.request.headers.get("cookie")`. Same invariant called out in §5 around CSRF.
+
+### API Contract Validation
+
+The API contract is defined once with [Valibot](https://valibot.dev/) schemas (preferred over Zod for bundle size — meaningful when shipped to the client) under `cloud/src/schemas/`:
+
+```typescript
+// cloud/src/schemas/game.ts
+import * as v from "valibot";
+
+export const GameListItemSchema = v.object({
+	game_id: v.string(),
+	game_name: v.nullable(v.string()),
+	save_date: v.nullable(v.string()),
+	total_turns: v.number(),
+	user_nation: v.nullable(v.string()),
+	user_won: v.nullable(v.boolean()),
+	// ...
+});
+
+export const GameListResponseSchema = v.object({
+	games: v.array(GameListItemSchema),
+	total: v.number(),
+});
+
+export type GameListItem = v.InferOutput<typeof GameListItemSchema>;
+export type GameListResponse = v.InferOutput<typeof GameListResponseSchema>;
+```
+
+The Worker validates request bodies and emits responses that conform to the same schemas; the frontend's `api.ts` parses each response with `v.parse(schema, json)` so a v3-Worker-vs-v2-frontend mismatch surfaces as a typed error at the boundary instead of an `undefined.foo` crash deep in a tab component. Inferred TS types replace the hand-maintained interfaces in §3 and the `FullGameData` interface in §10 — one schema source of truth, types fall out for free, and version-validation in §10 reuses the same parser.
+
+**Migration path.** Existing `cloud/src/validation.ts` (hand-rolled checks for the legacy share endpoints) keeps working unchanged; only the new `/v1/games`, `/v1/auth`, `/v1/stats` endpoints adopt Valibot. Legacy endpoints can migrate incrementally, no big-bang rewrite.
+
+### Snake_case interface fields
+
+`FullGameData` and the D1 row shapes use `snake_case` to match server JSON exactly — no `transformResponse` step, no naming drift between Worker and frontend. New fields stay snake_case; the convention is documented here so contributors don't reflexively camelCase. Component-local props (e.g. inside `GameDetailView`) remain camelCase as today.
 
 ### Route Structure
 
 ```
 src/routes/
   +layout.svelte                — Header with auth state, navigation
+  +layout.ts                    — Loads /auth/me; passes user (or null) to children
   +page.svelte                  — Dashboard (logged in) or landing page
+  +page.ts                      — Loads /stats when authenticated
   login/+page.svelte            — "Sign in with Discord" button
-  auth/callback/+page.svelte    — Processes Discord redirect
+  auth/callback/+page.svelte    — Processes Discord redirect (state + code)
   games/+page.svelte            — Game library
-  games/[id]/+page.svelte       — Game detail view
-  upload/+page.svelte           — Upload with Web Worker progress
+  games/+page.ts                — Loads /games list
+  games/[id]/+page.svelte       — Game detail view (renders data.game)
+  games/[id]/+page.ts           — Loads /games/:id (auth-aware: public or private)
+  upload/+page.svelte           — Upload with Web Worker progress (no load)
 ```
 
 ### Game Detail Page
 
-Structurally identical to the existing web share viewer (`web/src/routes/share/[id]/+page.svelte`), which already fetches a JSON blob and passes it to `GameDetailView`:
+Game detail is split into a `+page.ts` `load` and a thin `+page.svelte` consumer:
+
+```typescript
+// src/routes/games/[id]/+page.ts
+import { api, UnauthorizedError, ApiError } from "$lib/api";
+import { error, redirect } from "@sveltejs/kit";
+import type { PageLoad } from "./$types";
+
+export const load: PageLoad = async ({ params, fetch, url }) => {
+	try {
+		const game = await api.getGame(params.id, { fetch });
+		return { game };
+	} catch (err) {
+		if (err instanceof UnauthorizedError) {
+			// Could be a private game viewed signed-out — try the public path
+			try {
+				const game = await api.getPublicGame(params.id, { fetch });
+				return { game };
+			} catch {
+				throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+			}
+		}
+		if (err instanceof ApiError && err.status === 404) {
+			throw error(404, "Game not found");
+		}
+		throw err;
+	}
+};
+```
 
 ```svelte
+<!-- src/routes/games/[id]/+page.svelte -->
 <script lang="ts">
-  import { api } from "$lib/api";
-  import GameDetailView from "$lib/game-detail/GameDetailView.svelte";
-  import { page } from "$app/stores";
+	import GameDetailView from "$lib/game-detail/GameDetailView.svelte";
+	import type { PageData } from "./$types";
 
-  let data = $state<FullGameData | null>(null);
-  let error = $state<string | null>(null);
-
-  $effect(() => {
-    api.getGame($page.params.id)
-      .then(d => { data = d; })
-      .catch(e => { error = e.message; });
-  });
+	let { data }: { data: PageData } = $props();
+	const game = $derived(data.game);
 </script>
 
-{#if data}
-  <GameDetailView
-    gameDetails={data.game_details}
-    playerHistory={data.player_history}
-    allYields={data.yield_history}
-    eventLogs={data.event_logs}
-    lawAdoptionHistory={data.law_adoption_history}
-    currentLaws={data.current_laws}
-    techDiscoveryHistory={data.tech_discovery_history}
-    completedTechs={data.completed_techs}
-    unitsProduced={data.units_produced}
-    cityStatistics={data.city_statistics}
-    improvementData={data.improvement_data}
-    gameReligions={data.game_religions}
-    playerWonders={data.player_wonders}
-    mapTiles={data.map_tiles}
-  />
-{/if}
+<GameDetailView
+	gameDetails={game.game_details}
+	playerHistory={game.player_history}
+	allYields={game.yield_history}
+	eventLogs={game.event_logs}
+	lawAdoptionHistory={game.law_adoption_history}
+	currentLaws={game.current_laws}
+	techDiscoveryHistory={game.tech_discovery_history}
+	completedTechs={game.completed_techs}
+	unitsProduced={game.units_produced}
+	cityStatistics={game.city_statistics}
+	improvementData={game.improvement_data}
+	gameReligions={game.game_religions}
+	playerWonders={game.player_wonders}
+	mapTiles={game.map_tiles}
+/>
 ```
+
+Errors surface through a sibling `+error.svelte`. There's no `$effect`, no `error` state to manage, no loading flicker — the route is fully resolved before the component renders.
 
 ---
 
@@ -1039,35 +1531,65 @@ Web Worker: validateCompletedGame() — must have winner
 Browser: receives GameData + raw ZIP bytes
   │
   ▼
-Browser: gzip GameData JSON, build FormData (blob + zip)
+Browser: shows uploader's-player picker (humans only; see "Uploader's Player Selection")
+  │  → user selects one or more player_index values; default = sole human (auto-skip
+  │     picker entirely on single-player saves)
+  ▼
+Browser: gzip GameData JSON, hash raw ZIP, build FormData (blob + zip + file_hash + uploader_player_indexes)
   │
   ▼
-POST /v1/games (multipart: gzipped blob + raw ZIP)
+POST /v1/games (multipart: gzipped blob + raw ZIP, plus uploader_player_indexes form field)
   │
   ▼
 Worker: validate session → rate limit → decompress → schema check
   │
   ▼
-Worker: duplicate check (user_id, xml_game_id, total_turns)
+Worker: validate uploader_player_indexes (each refers to a human player in the blob)
   │
   ▼
-Worker: R2 put (blob + zip) → D1 insert (games + player_summaries)
+Worker: duplicate check on (user_id, file_hash)
   │
+  ▼
+Worker: R2 put (blob + zip)
+  │
+  ▼
+Worker: D1 insert (games + player_summaries + game_player_turn + tech_events + law_events)
+  │  → set is_uploader = TRUE on rows whose player_index ∈ uploader_player_indexes
   ▼
 Response: { game_id } → navigate to /games/{game_id}
 ```
 
+### Uploader's Player Selection
+
+For v1, the uploading user explicitly tells us which player(s) in the save belong to them. No auto-detection from save-file OnlineIDs.
+
+**Why explicit selection (not auto):**
+
+- Discord OAuth identity has no inherent link to Steam/GOG/Epic OnlineIDs in the save. Auto-detection would require a separate "link your platform IDs" account-settings flow, which isn't in v1 scope.
+- Admin and tournament uploads need to upload on behalf of others — a single tournament organizer should be able to upload all match saves and correctly attribute each to the players involved. Auto-detection from the organizer's identity is wrong by construction here.
+- Single-player saves (one human) are the common case; the picker is auto-skipped for those, so the friction is paid only when it's actually needed.
+
+**UI:** after parse completes, the upload modal shows a list of human players (`is_human = true`) with name, nation, and OnlineID, each with a checkbox. The uploading user is the default selection if exactly one human is present. For multi-human saves the uploader checks one or more boxes; tournament organizers typically check all human players.
+
+**Parser implication:** the parser must expose, for every human player: `xml_id`, `player_index`, `name`, `nation`, `online_id` (string, may be null for older saves). These are already extracted from XML — the change is just ensuring they survive into the picker-side data the upload UI sees, separately from the full `GameData` blob (which gets gzipped and uploaded as-is).
+
+**Wire format:** the upload `FormData` includes a `uploader_player_indexes` field — a JSON array of 0-based player indexes, e.g. `[0]` for single-player or `[1, 3]` for a tournament organizer marking two of the four humans in a match.
+
+**Future (out of scope for v1):** an account-settings page where users link their Steam/GOG/Epic OnlineIDs, and the upload UI pre-checks any boxes whose OnlineID matches. The picker stays as a fallback so admin uploads still work.
+
 ### Duplicate Detection
 
-The `games` table has `UNIQUE (user_id, xml_game_id, total_turns)`. The `xml_game_id` comes from the XML root attribute `<Root GameId="...">`. The `total_turns` comes from `<Game><Turn>...</Turn></Game>`.
+The `games` table has `UNIQUE (user_id, file_hash)` on the raw ZIP bytes' SHA-256.
 
-Same game at same turn number from same user = duplicate → `409 Conflict` with the existing `game_id`.
+- Re-uploading the same physical save file → `409 Conflict` with the existing `game_id`. The user gets a clear "you already have this" message.
+- Two different files (different ZIP bytes) are always treated as different games, even if they share `xml_game_id` and `total_turns`. This handles the legitimate case where a user replayed from an earlier autosave and ended a game differently — both records stored.
 
-Same game at different turn numbers = different records (but only completed games are accepted, so this would mean a different game end state — unlikely but valid, e.g., if the user replays from an earlier save).
+Earlier drafts keyed dedup on `(user_id, xml_game_id, total_turns)`, but that rejects valid distinct end-states. File-hash keying is more permissive and never errors on something the user can't fix.
 
 ### Batch Upload
 
 Initial version: single file at a time. Future enhancement:
+
 1. User selects multiple files via `<input multiple>`
 2. Files parsed sequentially in Web Worker
 3. Each uploaded individually with per-file progress/status
@@ -1075,20 +1597,15 @@ Initial version: single file at a time. Future enhancement:
 
 ### Reprocessing
 
-Raw ZIPs are kept in R2 at `saves/{game_id}.zip`. When the parser changes:
+Raw ZIPs are kept in R2 at `saves/{game_id}.zip`. When the parser changes materially (see §10 parser version rules), v1 uses **lazy client-side reprocess**:
 
-**Option A: Admin-triggered batch reprocess**
-1. Deploy new parser version
-2. Admin endpoint iterates games with `parser_version < current`
-3. For each: download ZIP from R2 → parse → overwrite blob → update D1
-4. Run as a Durable Object or external script for long-running work
+1. When a user views a game whose `parser_version` is below the current version, the frontend shows a "Re-import available" banner.
+2. User clicks "Re-import" → frontend downloads the ZIP from R2, re-parses in the Web Worker, uploads the new blob via the standard upload endpoint (which detects the duplicate file hash and updates the existing game in place rather than creating a new one).
+3. No server-side parsing. The Worker stays cheap.
 
-**Option B: Lazy client-side reprocess**
-1. When user views a game with outdated `parser_version`, frontend shows a banner
-2. User clicks "Re-import" → frontend downloads ZIP from R2, re-parses, uploads new blob
-3. No server-side parsing needed
+This aligns with the browser-first principle and avoids needing a Durable Object or batch job for v1. If we later need to reprocess en masse (e.g., after a MAJOR parser version bump), an admin batch path can be added — it's not in v1 scope.
 
-Both options are viable. Option B is simpler and aligns with browser-first parsing.
+The upload endpoint needs a small extension to handle re-imports: when a `(user_id, file_hash)` collision is detected and the incoming `parser_version` is newer than the existing row's, overwrite the blob and D1 rows in place rather than returning 409.
 
 ---
 
@@ -1100,31 +1617,31 @@ The free tier's 10ms CPU limit is too tight for gzip decompression of 1-5 MB blo
 
 ### D1
 
-| Limit | Value | Per-Ankh Impact |
-|-------|-------|----------------|
-| Database size | 10 GB | ~200 bytes/game + ~100 bytes/player summary. Supports millions of games. |
-| Rows read/query | 10M | Cross-game queries bounded by user's game count (<500). |
-| Rows written/query | 100K | Inserting ~8 player_summaries per upload. |
-| Free tier reads | 5M/day | Sufficient for early usage. |
-| Free tier writes | 100K/day | ~12,500 game uploads/day. |
+| Limit                     | Value | Per-Ankh Impact                                                                                                      |
+| ------------------------- | ----- | -------------------------------------------------------------------------------------------------------------------- |
+| Database size             | 10 GB | At ~360 KB/game (mostly `game_player_turn`), supports ~28K games before mitigation needed. See §3 storage estimates. |
+| Rows read/query           | 10M   | Cross-game aggregates well below this (e.g., 200 games × 1,600 rows = 320K).                                         |
+| Rows written/query        | 100K  | ~2,200 rows per upload (1 game + 8 summaries + 1,600 turn rows + ~400 tech + ~160 law). Well within.                 |
+| Workers Paid writes/month | 50M   | At 800 uploads/month × 2,200 rows = 1.76M writes. ~3.5% of quota.                                                    |
+| Workers Paid reads/month  | 25B   | Effectively unbounded for our scale.                                                                                 |
 
 ### R2
 
-| Limit | Value | Per-Ankh Impact |
-|-------|-------|----------------|
-| Object size | 5 GB | Game blobs 1-5 MB, ZIPs 0.25-10 MB. |
-| Free tier storage | 10 GB | ~2,000-5,000 games (blob + zip). |
-| Paid storage | $0.015/GB/month | 10,000 games * 8 MB avg = 80 GB = $1.20/month. |
-| Class B ops (reads) | Free: 10M/month | Each game view = 1 read. |
-| No egress fees | — | Key advantage over S3. |
+| Limit               | Value           | Per-Ankh Impact                                 |
+| ------------------- | --------------- | ----------------------------------------------- |
+| Object size         | 5 GB            | Game blobs 1-5 MB, ZIPs 0.25-10 MB.             |
+| Free tier storage   | 10 GB           | ~2,000-5,000 games (blob + zip).                |
+| Paid storage        | $0.015/GB/month | 10,000 games \* 8 MB avg = 80 GB = $1.20/month. |
+| Class B ops (reads) | Free: 10M/month | Each game view = 1 read.                        |
+| No egress fees      | —               | Key advantage over S3.                          |
 
 ### KV
 
-| Limit | Value | Per-Ankh Impact |
-|-------|-------|----------------|
-| Free reads | 100K/day | Session lookup on every auth'd API call. |
-| Free writes | 1K/day | 1 write per login. |
-| TTL | Configurable | 30-day sessions. |
+| Limit       | Value        | Per-Ankh Impact                          |
+| ----------- | ------------ | ---------------------------------------- |
+| Free reads  | 100K/day     | Session lookup on every auth'd API call. |
+| Free writes | 1K/day       | 1 write per login.                       |
+| TTL         | Configurable | 30-day sessions.                         |
 
 ### Request Size
 
@@ -1140,12 +1657,13 @@ The `version` field in `FullGameData` controls blob schema evolution:
 
 ```typescript
 interface FullGameData {
-  version: 2;  // Initial cloud version (v1 = legacy share system)
-  // ...
+	version: 2; // Initial cloud version (v1 = legacy share system)
+	// ...
 }
 ```
 
 **Adding fields (non-breaking):**
+
 1. Add field to `FullGameData` interface
 2. Update parser to populate it
 3. Update Worker validation to accept new version
@@ -1153,17 +1671,28 @@ interface FullGameData {
 5. Old blobs continue to work
 
 **Renaming or removing fields (breaking):**
+
 - Avoid. Use additive changes only.
 - If unavoidable, reprocess all blobs from raw ZIPs.
 
 ### Parser Version Tracking
 
-Each blob records `parser_version` (semver string). When the parser changes materially:
+Each blob records `parser_version` (semver string). When the parser changes:
 
-1. Bump parser version in frontend
+1. Bump parser version in frontend per the rules below
 2. Worker records `parser_version` in D1 `games` table
 3. Games with old parser versions show "Re-import available" badge
-4. User can trigger re-import (downloads ZIP from R2, re-parses, uploads)
+4. User can trigger re-import (downloads ZIP from R2, re-parses, uploads — see §8)
+
+#### Bump rules
+
+- **PATCH** — bug fix that changes the _value_ of a field for some games. Example: correcting a misread sentinel that was producing 0 instead of `null`. Old blobs render but show wrong data. UI shows the "Re-import available" badge on games whose `parser_version` is below the current PATCH; user can opt in to re-import.
+- **MINOR** — additive: new field added to `FullGameData`. Old blobs lack it; frontend handles missing fields with `?? null` / `?? []`. No re-import needed for old blobs to keep working. Optional badge if the new field unlocks a visible feature on the detail page.
+- **MAJOR** — breaking schema change (rename, removal, type change). Old blobs won't render correctly. Avoid. If unavoidable, requires an admin batch reprocess from raw ZIPs and a coordinated Worker + frontend deploy.
+
+Decision rule for whether to bump: _would a reasonable user expect the data shown to change after a re-import?_ If yes, bump PATCH or higher. Refactors and pure-perf changes do not bump version.
+
+The current parser version ships as a build-time constant in the frontend; the badge logic compares the D1 row's stored version against that constant.
 
 ### D1 Migrations
 
@@ -1214,14 +1743,14 @@ https://assets.per-ankh.app/v<N>/atlases/nation-asset-aliases.json
 
 Same set the Tauri build produces (12 WebP/JSON pairs + 1 alias JSON):
 
-| Atlas | Cells | Approx size (lossless WebP) | Loaded |
-|---|---|---|---|
-| `terrain.{webp,json}` | 9 | ~150 KB | always |
-| `height.{webp,json}` | 3 | ~85 KB | always |
-| `improvements-base.{webp,json}` | 58 | ~1.7 MB | always |
-| `resources.{webp,json}` | 20 | ~350 KB | always |
-| `improvements-urban-<FAMILY>.{webp,json}` × 10 | ~70-75 each | ~3.2-3.8 MB each | lazy by family |
-| `nation-asset-aliases.json` | — | ~2 KB | always |
+| Atlas                                          | Cells       | Approx size (lossless WebP) | Loaded         |
+| ---------------------------------------------- | ----------- | --------------------------- | -------------- |
+| `terrain.{webp,json}`                          | 9           | ~150 KB                     | always         |
+| `height.{webp,json}`                           | 3           | ~85 KB                      | always         |
+| `improvements-base.{webp,json}`                | 58          | ~1.7 MB                     | always         |
+| `resources.{webp,json}`                        | 20          | ~350 KB                     | always         |
+| `improvements-urban-<FAMILY>.{webp,json}` × 10 | ~70-75 each | ~3.2-3.8 MB each            | lazy by family |
+| `nation-asset-aliases.json`                    | —           | ~2 KB                       | always         |
 
 Always-loaded set: ~2.3 MB. Per-match family fetches: ~3-4 MB per nation present on the map. Worst case (10-nation match): ~37 MB total.
 
@@ -1257,8 +1786,14 @@ Old prefixes can be deleted from R2 once no client traffic is hitting them (CDN 
 
 ## Appendix A: File Organization
 
+The cloud rewrite is built **in-place** in the existing `per-ankh` repo, not in a separate `per-ankh-cloud/` repository. The Tauri desktop app remains in the tree during the transition window. When desktop is deprecated and removed, that's a separate mechanical diff.
+
+Rationale: shared code (`src/lib/game-detail/`, `src/lib/config/`, `src/lib/utils/`, `src/lib/types/`, sprite/atlas pipeline, scripts) is already in this repo. A separate cloud repo would require either symlinks (as `web/` does today) or copy-and-diverge. In-place avoids both. The cost is that desktop and cloud code coexist for a few months; mitigation is keeping cloud-only paths obvious (`src/routes/games/`, `src/routes/upload/`, `cloud/`).
+
+### What the cloud rewrite adds to the existing repo
+
 ```
-per-ankh-cloud/
+per-ankh/
 ├── src/
 │   ├── lib/
 │   │   ├── parser/                    # NEW: TypeScript parser
@@ -1284,55 +1819,71 @@ per-ankh-cloud/
 │   │   │       ├── events.ts
 │   │   │       ├── match-metadata.ts
 │   │   │       └── index.ts
-│   │   ├── api.ts                     # REWRITTEN: fetch-based
-│   │   ├── game-detail/               # REUSED from desktop
-│   │   ├── config/                    # REUSED
-│   │   ├── types/                     # REUSED (hand-maintained)
-│   │   ├── utils/                     # REUSED
-│   │   ├── UploadModal.svelte         # NEW
-│   │   ├── LoginButton.svelte         # NEW
-│   │   ├── UserMenu.svelte            # NEW
-│   │   ├── Dashboard.svelte           # NEW
-│   │   ├── GameLibrary.svelte         # NEW
-│   │   └── VisibilityToggle.svelte    # NEW (replaces ShareControl)
+│   │   ├── api.ts                     # MIGRATED: dual desktop/cloud during
+│   │   │                              #   transition; eventually fetch-only
+│   │   ├── UploadModal.svelte         # NEW (cloud-only)
+│   │   ├── LoginButton.svelte         # NEW (cloud-only)
+│   │   ├── UserMenu.svelte            # NEW (cloud-only)
+│   │   ├── Dashboard.svelte           # NEW (cloud-only)
+│   │   ├── GameLibrary.svelte         # NEW (cloud-only)
+│   │   └── VisibilityToggle.svelte    # NEW (cloud-only; replaces ShareControl)
 │   └── routes/
-│       ├── +layout.svelte             # Auth-aware header
-│       ├── +page.svelte               # Dashboard or landing
-│       ├── login/+page.svelte
-│       ├── auth/callback/+page.svelte
-│       ├── games/+page.svelte         # Game library
-│       ├── games/[id]/+page.svelte    # Game detail
-│       └── upload/+page.svelte
-├── cloud/
+│       ├── login/+page.svelte         # NEW
+│       ├── auth/callback/+page.svelte # NEW
+│       ├── games/+page.svelte         # NEW (cloud library)
+│       ├── games/[id]/+page.svelte    # NEW (cloud detail)
+│       └── upload/+page.svelte        # NEW
+├── cloud/                             # EXISTS (current share Worker)
 │   ├── src/
-│   │   ├── index.ts                   # API router
-│   │   ├── auth.ts                    # Discord OAuth
-│   │   ├── validation.ts              # Blob validation
-│   │   └── queries.ts                 # D1 query helpers
-│   ├── migrations/
-│   │   └── 0001_initial.sql
-│   └── wrangler.toml
-├── static/
-│   └── sprites/                       # REUSED
-└── package.json
+│   │   ├── index.ts                   # EXTENDED: add /v1/games, /v1/auth, etc.
+│   │   ├── auth.ts                    # NEW: Discord OAuth
+│   │   ├── validation.ts              # EXTENDED: new blob schema
+│   │   └── queries.ts                 # NEW: D1 helpers
+│   └── migrations/                    # NEW
+│       └── 0001_initial.sql
+└── ...
 ```
+
+### Reused as-is by the cloud rewrite
+
+| Path                                                                                   | Notes                                                                                                                            |
+| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| `src/lib/game-detail/`                                                                 | Direct imports — no symlinks needed (vs. how `web/` works today)                                                                 |
+| `src/lib/config/`                                                                      | Chart colors, nation/tribe colors, theme                                                                                         |
+| `src/lib/utils/`                                                                       | `formatEnum()`, `formatDate()`, `stripMarkup()`, etc.                                                                            |
+| `src/lib/types/`                                                                       | TypeScript types (kept in place during transition; new request/response types come from Valibot schemas in `cloud/src/schemas/`) |
+| `src/lib/Chart.svelte`, `ChartContainer.svelte`, `HexMap.svelte`, `SearchInput.svelte` | Shared UI                                                                                                                        |
+| `static/sprites/`, `static/atlases/`                                                   | Same assets; atlases additionally hosted on R2 per §11                                                                           |
+| `scripts/bake-*.ts`                                                                    | Atlas bake pipeline, augmented with R2 upload step (§11)                                                                         |
+
+### Stays for desktop only (until Tauri deprecation)
+
+`src-tauri/`, `src/routes/game/[id]/` (desktop's pre-existing route), `src/lib/ShareControl.svelte`, `src/lib/GameSidebar.svelte` (Tauri-specific version), and the Tauri `invoke()` paths in `api.ts`. These are deleted in the desktop-removal commit, separate from the cloud-rewrite work.
 
 ## Appendix B: Key Source Files for Parser Port
 
 These Rust files define the extraction logic to be ported to TypeScript, listed by size/complexity:
 
-| Rust File | LOC | TS Target | Notes |
-|-----------|-----|-----------|-------|
-| `src-tauri/src/parser/parsers/player_data.rs` | 706 | `parsers/player-data.ts` | Resources, tech, council, laws, goals |
-| `src-tauri/src/parser/parsers/city_data.rs` | 667 | `parsers/cities.ts` | City nested data (9 sub-entities) |
-| `src-tauri/src/parser/parsers/timeseries.rs` | ~400 | `parsers/timeseries.ts` | 8 time-series types |
-| `src-tauri/src/parser/parsers/events.rs` | ~350 | `parsers/events.ts` | Stories, logs, memories |
-| `src-tauri/src/parser/parsers/characters.rs` | ~300 | `parsers/characters.ts` | Character core data |
-| `src-tauri/src/parser/parsers/character_data.rs` | ~250 | `parsers/character-data.ts` | Stats, traits, relationships |
-| `src-tauri/src/parser/parsers/players.rs` | 256 | `parsers/players.ts` | Player core data |
-| `src-tauri/src/parser/parsers/tiles.rs` | ~250 | `parsers/tiles.ts` | Tiles + ownership history |
-| `src-tauri/src/parser/parsers/units.rs` | ~200 | `parsers/units.ts` | Units + promotions/effects |
-| `src-tauri/src/parser/parsers/diplomacy.rs` | ~150 | `parsers/diplomacy.ts` | Relations |
-| `src-tauri/src/parser/game_data.rs` | 668 | `parser/types.ts` | All entity type definitions |
+| Rust File                                         | LOC | TS Target                   | Notes                                 |
+| ------------------------------------------------- | --- | --------------------------- | ------------------------------------- |
+| `src-tauri/src/parser/parsers/player_data.rs`     | 706 | `parsers/player-data.ts`    | Resources, tech, council, laws, goals |
+| `src-tauri/src/parser/parsers/city_data.rs`       | 667 | `parsers/cities.ts`         | City nested data (9 sub-entities)     |
+| `src-tauri/src/parser/parsers/events.rs`          | 459 | `parsers/events.ts`         | Stories, logs, memories               |
+| `src-tauri/src/parser/parsers/timeseries.rs`      | 437 | `parsers/timeseries.ts`     | 8 time-series types                   |
+| `src-tauri/src/parser/parsers/character_data.rs`  | 395 | `parsers/character-data.ts` | Stats, traits, relationships          |
+| `src-tauri/src/parser/parsers/units.rs`           | 364 | `parsers/units.ts`          | Units + promotions/effects            |
+| `src-tauri/src/parser/parsers/cities.rs`          | 333 | `parsers/cities.ts`         | City core data                        |
+| `src-tauri/src/parser/parsers/tile_data.rs`       | 298 | `parsers/tiles.ts`          | Per-tile nested data                  |
+| `src-tauri/src/parser/parsers/players.rs`         | 256 | `parsers/players.ts`        | Player core data                      |
+| `src-tauri/src/parser/parsers/diplomacy.rs`       | 231 | `parsers/diplomacy.ts`      | Relations                             |
+| `src-tauri/src/parser/parsers/tiles.rs`           | 223 | `parsers/tiles.ts`          | Tile core + ownership history         |
+| `src-tauri/src/parser/parsers/characters.rs`      | 203 | `parsers/characters.ts`     | Character core data                   |
+| `src-tauri/src/parser/parsers/families.rs`        | 173 | `parsers/families.ts`       | Families                              |
+| `src-tauri/src/parser/parsers/religions.rs`       | 151 | `parsers/religions.ts`      | Religions                             |
+| `src-tauri/src/parser/parsers/unit_production.rs` | 134 | `parsers/units.ts` (merged) | Per-player/per-city unit production   |
+| `src-tauri/src/parser/parsers/tribes.rs`          | 74  | `parsers/tribes.ts`         | Tribes                                |
+| `src-tauri/src/parser/game_data.rs`               | 668 | `parser/types.ts`           | All entity type definitions           |
+
+The `parsers/` directory total is ~5,300 LOC. Both `inserters/` (~2,275 LOC, replaced by JSON construction in the Worker) and `entities/` (~5,300 LOC, the legacy combined parse+insert path) are out of scope for the port.
 
 The `GameData` struct in `game_data.rs` has 59 fields across entity types — each becomes a TypeScript interface.

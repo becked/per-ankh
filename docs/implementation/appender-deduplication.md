@@ -304,8 +304,8 @@ mod tests {
 
 ```bash
 # Run the import that previously failed
-./per-ankh.sh clean
-./per-ankh.sh import-all test-data/saves src-tauri/per-ankh.db "*2025-10*"
+./tauri.sh clean
+./tauri.sh import-all test-data/saves src-tauri/per-ankh.db "*2025-10*"
 
 # Should now import all 10 saves successfully
 # Verify count: SELECT COUNT(*) FROM matches; -- should be 10

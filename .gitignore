@@ -31,25 +31,15 @@ dist/
 vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
-# Rust / Cargo
-/src-tauri/target/
-**/target/
-**/*.rs.bk
-*.pdb
-/src-tauri/.cargo/config.toml
-
-# Tauri Build Outputs
-/src-tauri/target/
-/src-tauri/WixTools/
-/src-tauri/gen/
-
-# Tauri Signing Keys
-.tauri-signing-key
-.tauri-signing-key.pub
+# Wrangler local state — written when adapter-cloudflare's build/dev paths
+# invoke wrangler from the repo root. Cloud Worker state lives under
+# cloud/.wrangler (already ignored by cloud/.gitignore).
+.wrangler/
 
 # Environment Variables
 .env
 .env.*
+!.env.development
 !.env.example
 
 # Bake outputs — derived from a local pinacotheca checkout via `npm run bake:all`.
@@ -58,6 +48,11 @@ vite.config.ts.timestamp-*
 static/atlases/
 static/sprites/
 assets/atlas-sources/
+
+# Bake-pipeline JSON sidecars. Each individual bake registers its hashed
+# outputs here; scripts/build-manifests.ts reads them to emit the committed
+# TS modules at src/lib/generated/{atlas,sprite}-manifest.ts.
+/.bake/
 
 # DuckDB Database Files
 *.db

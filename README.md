@@ -1,25 +1,31 @@
 # Per-Ankh
 
-Old World save game analyzer and visualizer built with Tauri, Rust, SvelteKit, and DuckDB.
+Web analytics for [Old World](https://store.steampowered.com/app/597180/Old_World/) save files. Live at <https://per-ankh.app>.
 
-## Project Overview
+## Overview
 
-Per-Ankh imports Old World game save files and provides data visualizations and analytics. The application parses save files (ZIP archives containing XML), extracts game state into a DuckDB database, and presents interactive visualizations through a desktop UI.
+Per-Ankh ingests Old World save files in the browser, persists them to Cloudflare (D1 + R2), and presents data visualizations and analytics on a per-game basis. Save files are parsed client-side; only the structured per-game data is uploaded.
+
+## Final desktop release
+
+Per-Ankh started as a Tauri desktop app. The last desktop release is preserved as a GitHub Release at [`v0.2.0`](https://github.com/becked/per-ankh/releases/tag/v0.2.0). It receives no further updates, including no security patches. To use your saves on the web app, re-upload them at <https://per-ankh.app/upload>.
 
 ## Legal Notice
 
 Per-Ankh is an independent, unofficial fan project. It is not affiliated with, endorsed by, sponsored by, or connected to Mohawk Games, Hooded Horse, or any of their affiliates.
 
-"Old World" is a trademark of Mohawk Games. Mohawk Games holds the copyright in *Old World* and all of its visual assets, save file formats, and game data.
+"Old World" is a trademark of Mohawk Games. Mohawk Games holds the copyright in _Old World_ and all of its visual assets, save file formats, and game data.
 
-Per-Ankh's source code is licensed under the MIT License (see [LICENSE](LICENSE)). The visual assets bundled under `static/atlases/` and `static/sprites/` are derived from *Old World* and remain the property of Mohawk Games — they are **not** covered by the MIT License and are included solely as build artifacts to support analysis of save files from games the end user legally owns. See the "Third-Party Content" section of [LICENSE](LICENSE) for details.
-
-This application:
-
-- Analyzes save files from games you legally own
-- Is provided free and open-source for the benefit of the Old World community
+Per-Ankh's source code is licensed under the MIT License (see [LICENSE](LICENSE)). The visual assets bundled under `static/atlases/` and `static/sprites/` are derived from _Old World_ and remain the property of Mohawk Games — they are **not** covered by the MIT License and are included solely as build artifacts to support analysis of save files from games the end user legally owns. See the "Third-Party Content" section of [LICENSE](LICENSE) for details.
 
 This software is provided "as is" without warranty of any kind.
+
+## Architecture
+
+- **Frontend:** SvelteKit + TypeScript, deployed to Cloudflare via `@sveltejs/adapter-cloudflare`. Source under `src/`.
+- **API Worker:** Cloudflare Worker under `cloud/`. Talks to D1 (relational metadata), R2 (raw save ZIPs + parsed game blobs), and KV (sessions).
+- **Parser:** TypeScript port of the original Rust parser. Runs in a Web Worker on the upload page.
+- **Legacy share viewer:** static SvelteKit app under `web/`, serves `per-ankh.app/share/[id]` for share links created by the desktop app. Frozen, deployed alongside the main app.
 
 ## Development
 
@@ -27,27 +33,14 @@ This software is provided "as is" without warranty of any kind.
 
 After cloning:
 
-**1. Activate the repo's git hooks** (one-time, per clone):
-
-```bash
-git config core.hooksPath scripts/hooks
-```
-
-Wires up the pre-commit hook that regenerates TypeScript types from Rust
-structs and stages them alongside your commit. `.git/hooks/` isn't versioned,
-so this step is required on every clone (and every git worktree).
-
-**2. Install dependencies:**
+**1. Install dependencies (root + cloud Worker):**
 
 ```bash
 npm install
+(cd cloud && npm install)
 ```
 
-**3. Configure asset paths.** The visual assets under `static/atlases/` and
-`static/sprites/` are derived from *Old World* and are not committed to git
-(see the "Third-Party Content" section of [LICENSE](LICENSE)). They're
-regenerated locally from your own [pinacotheca](https://github.com/becked/pinacotheca)
-checkout and Old World install.
+**2. Configure asset paths.** The visual assets under `static/atlases/` and `static/sprites/` are derived from _Old World_ and are not committed to git (see [LICENSE](LICENSE) "Third-Party Content"). They're regenerated locally from your own [pinacotheca](https://github.com/becked/pinacotheca) checkout and Old World install.
 
 You'll need:
 
@@ -63,152 +56,45 @@ cp .env.example .env
 - `PINACOTHECA_DIR` — your pinacotheca checkout root.
 - `OLD_WORLD_REFERENCE_DIR` — directory containing an `XML/` subdir (typically your Old World install). Only required by `bake:improvements`.
 
-Both env vars fall back to relative-path candidates if unset (pinacotheca as a
-sibling of per-ankh; a `Reference/` directory or symlink at the repo root),
-but the env-var path is recommended on Windows since it sidesteps any
-symlink-permission concerns.
+Both env vars fall back to relative-path candidates if unset, but the env-var path is recommended on Windows since it sidesteps symlink-permission concerns.
 
-**4. Bake the assets:**
+**3. Bake the assets:**
 
 ```bash
 npm run bake:all
 ```
 
-This populates `static/atlases/` and `static/sprites/` from your pinacotheca
-checkout. Re-run any time pinacotheca refreshes its renders.
+This populates `static/atlases/` and `static/sprites/` from your pinacotheca checkout. Re-run any time pinacotheca refreshes its renders.
 
-### Upgrading from a previous local checkout
-
-If you cloned per-ankh before `static/atlases/` and `static/sprites/` were
-gitignored, those directories are removed from the working tree on pull. After
-pulling these changes, run:
+**4. Configure the cloud Worker:** see `cloud/wrangler.toml` and `cloud/.dev.vars` (D1 ids, KV ids, `DISCORD_CLIENT_SECRET`, etc.). Apply local D1 migrations:
 
 ```bash
-npm run bake:all
+(cd cloud && npm run migrate:local)
 ```
 
-to regenerate them locally. You'll need `PINACOTHECA_DIR` configured in `.env`
-(see step 3 above).
+### Running locally
 
-### Common Development Tasks
-
-Use the `per-ankh.sh` helper script for common operations:
+The repo's `./per-ankh` shim runs the SvelteKit dev server and the cloud Worker side by side:
 
 ```bash
-# Import a single save file
-./per-ankh.sh import test-data/saves/OW-Greece-Year74-2022-01-02-20-28-07.zip
-
-# Import all test saves
-./per-ankh.sh import-all
-
-# Import only Greece saves
-./per-ankh.sh import-all test-data/saves per-ankh.db "OW-Greece*.zip"
-
-# Clean database and reimport all saves
-./per-ankh.sh clean && ./per-ankh.sh import-all
-
-# Run the app in development mode
-./per-ankh.sh dev
-
-# Build for distribution
-./per-ankh.sh build
-
-# Run tests
-./per-ankh.sh test
-
-# Run specific test
-./per-ankh.sh test test_import_babylonia_save
-
-# Check code quality (cargo check, clippy, fmt)
-./per-ankh.sh check
-
-# Format code
-./per-ankh.sh format
-
-# Show database info
-./per-ankh.sh db-info
-
-# Analyze database contents (empty tables, empty columns)
-./per-ankh.sh db-analyze
-
-# Show all available commands
-./per-ankh.sh help
+./per-ankh dev
 ```
 
-#### Integration Tests
-
-Run the full integration test suite using the helper script:
+Or run them separately:
 
 ```bash
-# Run all tests
-./per-ankh.sh test-release
-
-# Test importing a single save file
-./per-ankh.sh test-release test_import_babylonia_save
-
-# Test importing multiple different saves
-./per-ankh.sh test-release test_import_multiple_saves
+npm run dev                      # SvelteKit dev server (port 1420)
+(cd cloud && npm run dev)        # Wrangler dev (port 8787)
 ```
 
-### Database Schema
-
-The schema is managed by a versioned migration system in `src-tauri/src/db/schema.rs`. A reference SQL snapshot is available in `docs/schema.sql` (may lag behind the Rust source).
-
-### Database Analysis
-
-Analyze the database to check table population and identify empty tables or columns:
+### Quality checks
 
 ```bash
-./per-ankh.sh db-analyze
+npm run check        # svelte-kit sync + svelte-check
+npm run lint         # eslint
+npm run format       # prettier --write .
 ```
-
-This command:
-
-- Shows row counts for all tables
-- Identifies completely empty tables
-- Identifies columns that are empty (all NULL) in populated tables
-- Calculates overall data completeness percentage
 
 ### Cloud Admin CLI
 
-Manage shared games on Cloudflare (D1 + R2) using `cloud/admin.sh`. Requires `wrangler` auth (`wrangler login`) and `jq`.
-
-```bash
-# Summary statistics
-./cloud/admin.sh stats
-
-# List recent shares
-./cloud/admin.sh list
-./cloud/admin.sh list --limit 10
-
-# Show full details for a share
-./cloud/admin.sh info <share_id>
-
-# List app keys with share counts
-./cloud/admin.sh keys
-
-# List shares from a specific app key
-./cloud/admin.sh by-key <app_key>
-
-# View recent events (uploads/deletes)
-./cloud/admin.sh events
-./cloud/admin.sh events --type upload --limit 20
-
-# Delete a share (prompts for confirmation)
-./cloud/admin.sh delete <share_id>
-
-# Block/unblock app keys and IPs
-./cloud/admin.sh block-key <key> "spam uploads"
-./cloud/admin.sh block-ip <ip> "abuse"
-./cloud/admin.sh unblock-key <key>
-./cloud/admin.sh unblock-ip <ip>
-./cloud/admin.sh blocked
-
-# Nuclear option: block key + delete all its shares
-./cloud/admin.sh nuke-key <app_key> "reason"
-
-# Show all commands
-./cloud/admin.sh help
-```
-
-When a share is deleted server-side, the desktop user's app continues to show "Shared" status (local state) until they either visit the link (sees "Share Not Found") or click "Delete share" (handled gracefully — 404 treated as success, local state cleaned up).
+Manage data on Cloudflare (D1 + R2) using `cloud/admin.sh`. Requires `wrangler` auth (`wrangler login`) and `jq`. Run `./cloud/admin.sh help` for commands.
