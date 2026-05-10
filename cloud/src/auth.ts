@@ -189,8 +189,10 @@ export async function handleDiscordStart(
 	authorizeUrl.searchParams.set("state", state);
 	authorizeUrl.searchParams.set("code_challenge", challenge);
 	authorizeUrl.searchParams.set("code_challenge_method", "S256");
-	// prompt=none would skip the consent screen on returning users; we keep
-	// the default behavior so the first authorization is explicit.
+	// Skip the consent screen for returning users who have already authorized
+	// the app. First-time users still see it; Discord ignores prompt=none when
+	// no prior grant exists.
+	authorizeUrl.searchParams.set("prompt", "none");
 
 	const isHttps = new URL(request.url).protocol === "https:";
 	const cookieParts = [
