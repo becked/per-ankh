@@ -224,14 +224,26 @@ unless we need to override them per-environment.
 
 ### 3.7. Cloudflare alerts
 
-Cloudflare dashboard → Notifications. Enable:
+Cloudflare's Notifications catalog is thinner than it sounds. Workers
+ships exactly two templates (*Weekly Summary* and *CPU Usage
+Notification* — fires at a hardcoded 25% above 7-day baseline, both
+auto-on for new accounts), and D1 ships zero. There is no native
+template for Worker error rate or D1 errors at any plan tier; that gap
+is what §6's Sentry/Baselime line covers.
 
-- Worker error rate (5xx > 1% over 5 min)
-- Worker CPU exceeded
-- D1 errors
+Cloudflare dashboard → Notifications. Confirm auto-on, then enable the
+free hygiene alerts:
 
-Free, 5-minute setup. No SLOs yet — the next feature's user feedback will
-shape what's worth measuring.
+- Verify *Workers Weekly Summary* and *Workers CPU Usage Notification*
+  are enabled (should be auto-on).
+- *Universal SSL Alert* — cert validation/issuance/renewal/expiry events.
+- *Cloudflare Status → Incident Alert* — Cloudflare-side incidents
+  affecting the account.
+- *Cloudflare Status → Maintenance Notification* — scheduled POP
+  maintenance.
+
+Real error-rate alerting (the thing this section originally reached for)
+is deferred to §6.
 
 ### 3.8. Pages → SSR Worker domain swap + `/share/*` redirect
 
