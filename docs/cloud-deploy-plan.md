@@ -167,20 +167,39 @@ the `Cache-Control` header round-trips.
 
 ### 3.5. Root `wrangler.toml` for the SvelteKit Worker
 
-`@sveltejs/adapter-cloudflare` outputs to `.svelte-kit/cloudflare/` and is
-deployed via `wrangler deploy` from the repo root. There's no root-level
-`wrangler.toml` today — add one, with:
+`@sveltejs/adapter-cloudflare` 7.x outputs to `.svelte-kit/cloudflare/`
+and is deployed via `wrangler deploy` from the repo root. There's no
+root-level `wrangler.toml` today — add one with:
 
-- `name = "per-ankh-frontend"` (or similar — distinct from the API Worker
-  name `per-ankh-share-api`)
-- `main = ".svelte-kit/cloudflare/_worker.js"` (verify the exact filename
-  after a `npm run build`)
-- `compatibility_date` matching the API Worker
-- `routes = [{ pattern = "per-ankh.app", custom_domain = true }]`
-- `assets` block pointing at `.svelte-kit/cloudflare/`
+- `name = "per-ankh-frontend"` — distinct from the API Worker
+  (`per-ankh-share-api`) and from the existing Pages project (`per-ankh`,
+  see §3.8).
+- `main = ".svelte-kit/cloudflare/_worker.js"` — verified against a
+  current `npm run build` output.
+- `compatibility_date = "2024-12-01"` to match the API Worker.
+- **No** `compatibility_flags = ["nodejs_als"]`. That flag is
+  API-Worker-specific (it backs `cloud/src/log.ts`'s AsyncLocalStorage).
+  The SSR Worker uses only Web APIs — verified by grep, no `node:`
+  imports in `src/`.
+- `routes = [{ pattern = "per-ankh.app", custom_domain = true }]`.
+- `[assets]` block with BOTH keys — the adapter's
+  `validate_worker_settings`
+  (`node_modules/@sveltejs/adapter-cloudflare/utils.js:22`) hard-requires
+  `binding` whenever `main` is set, and `directory` whenever either is set:
 
-Confirm against current adapter-cloudflare 7.x docs before committing —
-the exact `assets` shape evolves between adapter versions.
+  ```toml
+  [assets]
+  directory = ".svelte-kit/cloudflare"
+  binding = "ASSETS"
+  ```
+
+- Do **not** set `assets.not_found_handling`. The default (fall through
+  to the SSR Worker) is what we want; `404-page` /
+  `single-page-application` would short-circuit dynamic routes.
+
+The adapter auto-emits `.svelte-kit/cloudflare/.assetsignore` listing
+`_worker.js`, `_routes.json`, `_headers`, `_redirects` so they're not
+uploaded as static assets — nothing to configure for that.
 
 ### 3.6. Build-time env vars
 
@@ -191,8 +210,20 @@ VITE_API_URL=https://api.per-ankh.app/v1
 VITE_PUBLIC_ORIGIN=https://per-ankh.app
 ```
 
-Wire these in via Cloudflare Worker build settings (preferred) or set in
-the local environment when running `npm run build`.
+§4 step 6 runs `npm run build && npx wrangler deploy` locally, so Vite
+reads `import.meta.env.*` from the local shell at build time. Set them
+in the environment immediately before the build:
+
+```bash
+VITE_API_URL=https://api.per-ankh.app/v1 \
+VITE_PUBLIC_ORIGIN=https://per-ankh.app \
+npm run build
+```
+
+Cloudflare's dashboard "Build configuration" settings do **not** apply
+here — those only take effect for the Git-integration auto-deploy flow,
+which this plan doesn't use. If we ever switch to push-to-deploy, move
+the vars to the dashboard then.
 
 ### 3.7. Cloudflare alerts
 
