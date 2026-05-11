@@ -31,6 +31,8 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { existsSync } from "node:fs";
 
+import { format as prettierFormat, resolveConfig } from "prettier";
+
 import {
 	readAtlasSidecar,
 	readSpriteSidecar,
@@ -287,6 +289,15 @@ function emitSpriteManifestTs(sidecar: SpriteSidecar): string {
 	return lines.join("\n");
 }
 
+async function formatTs(path: string, content: string): Promise<string> {
+	const config = await resolveConfig(path);
+	return prettierFormat(content, {
+		...config,
+		parser: "typescript",
+		filepath: path,
+	});
+}
+
 async function writeIfChanged(path: string, content: string): Promise<boolean> {
 	await mkdir(dirname(path), { recursive: true });
 	if (existsSync(path)) {
@@ -318,8 +329,14 @@ async function main(): Promise<void> {
 	assertReferencedFilesExist(atlasSidecar, spriteSidecar);
 	await reconcile(atlasSidecar, spriteSidecar);
 
-	const atlasTs = emitAtlasManifestTs(atlasSidecar);
-	const spriteTs = emitSpriteManifestTs(spriteSidecar);
+	const atlasTs = await formatTs(
+		ATLAS_MANIFEST_TS,
+		emitAtlasManifestTs(atlasSidecar),
+	);
+	const spriteTs = await formatTs(
+		SPRITE_MANIFEST_TS,
+		emitSpriteManifestTs(spriteSidecar),
+	);
 	const atlasChanged = await writeIfChanged(ATLAS_MANIFEST_TS, atlasTs);
 	const spriteChanged = await writeIfChanged(SPRITE_MANIFEST_TS, spriteTs);
 
