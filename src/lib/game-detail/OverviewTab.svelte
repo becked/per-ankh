@@ -228,7 +228,7 @@
 <div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
 	<h3 class="mb-3 text-base font-bold text-tan">Nations</h3>
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-		{#each playerOverviews as player, i (player.nation ?? i)}
+		{#each playerOverviews as player, i (`${player.playerName}\x01${player.nation ?? ""}`)}
 			{@const borderColor = getPlayerColor(player.nation, i)}
 			<div class="relative rounded-lg p-3" style="background-color: #35302B;">
 				{#if player.isWinner}

@@ -456,7 +456,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each filteredEventLogs ?? [] as log, i (i)}
+					{#each filteredEventLogs ?? [] as log (log.log_id)}
 						<tr class="transition-colors duration-200">
 							<td class="border-b border-[#2a2622] p-3 text-left text-tan"
 								>{log.turn}</td
