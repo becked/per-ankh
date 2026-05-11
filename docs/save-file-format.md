@@ -1000,10 +1000,10 @@ From a sample 53-entry MemoryList:
 
 Two distinct city↔tile relationships:
 
-| Relationship      | Source                | Description                         |
-| ----------------- | --------------------- | ----------------------------------- |
-| **City location** | `City@TileID`         | The tile where the city center sits |
-| **City territory**| `<CityTerritory>` (inside City) | All tiles controlled by this city |
+| Relationship       | Source                          | Description                         |
+| ------------------ | ------------------------------- | ----------------------------------- |
+| **City location**  | `City@TileID`                   | The tile where the city center sits |
+| **City territory** | `<CityTerritory>` (inside City) | All tiles controlled by this city   |
 
 Improvements and specialists live on **tiles**, not cities. To enumerate
 a city's improvements/specialists, walk all tiles whose `owner_city_id`
@@ -1091,28 +1091,28 @@ Self-closing children list every religion with any presence in the city.
 Full reference (XML → conceptual field), including elements covered above
 and a handful not yet covered in the children listing.
 
-| Field                  | XML                       | Notes                                      |
-| ---------------------- | ------------------------- | ------------------------------------------ |
-| `xml_id`               | `ID` attr                 | 0-based                                    |
-| `tile_xml_id`          | `TileID` attr             | City center location                       |
-| `player_xml_id`        | `Player` attr             | NULL when city is in anarchy (`Player="-1"`) |
-| `family`               | `Family` attr             | e.g. `FAMILY_SAITE`                        |
-| `founded_turn`         | `Founded` attr            | Turn founded                               |
-| `city_name`            | `NameType` (or `Name`)    | e.g. `CITYNAME_WASET`                      |
-| `governor_xml_id`      | `GovernorID`              | Character ID                               |
-| `governor_turn`        | `GovernorTurn`            | Turn governor was assigned                 |
-| `citizens`             | `Citizens`                |                                             |
-| `growth_count`         | `GrowthCount`             | Total historical growth                    |
-| `specialist_count`     | `SpecialistProducedCount` | (not `SpecialistCount`)                    |
-| `unit_production_count`| `UnitProductionCount` OR sum of `UnitProductionCounts` children | Version-conditional |
-| `hurry_civics_count`   | `HurryCivicsCount`        |                                             |
-| `hurry_money_count`    | `HurryMoneyCount`         |                                             |
-| `hurry_training_count` | `HurryTrainingCount`      |                                             |
-| `hurry_population_count`| `HurryPopulationCount`   |                                             |
-| `buy_tile_count`       | `BuyTileCount`            |                                             |
-| `is_capital`           | `<Capital />`             | self-closing flag                          |
-| `first_owner_xml_id`   | `FirstPlayer`             | (not `FirstOwnerPlayerID`)                 |
-| `last_owner_xml_id`    | `LastPlayer`              |                                             |
+| Field                    | XML                                                             | Notes                                        |
+| ------------------------ | --------------------------------------------------------------- | -------------------------------------------- |
+| `xml_id`                 | `ID` attr                                                       | 0-based                                      |
+| `tile_xml_id`            | `TileID` attr                                                   | City center location                         |
+| `player_xml_id`          | `Player` attr                                                   | NULL when city is in anarchy (`Player="-1"`) |
+| `family`                 | `Family` attr                                                   | e.g. `FAMILY_SAITE`                          |
+| `founded_turn`           | `Founded` attr                                                  | Turn founded                                 |
+| `city_name`              | `NameType` (or `Name`)                                          | e.g. `CITYNAME_WASET`                        |
+| `governor_xml_id`        | `GovernorID`                                                    | Character ID                                 |
+| `governor_turn`          | `GovernorTurn`                                                  | Turn governor was assigned                   |
+| `citizens`               | `Citizens`                                                      |                                              |
+| `growth_count`           | `GrowthCount`                                                   | Total historical growth                      |
+| `specialist_count`       | `SpecialistProducedCount`                                       | (not `SpecialistCount`)                      |
+| `unit_production_count`  | `UnitProductionCount` OR sum of `UnitProductionCounts` children | Version-conditional                          |
+| `hurry_civics_count`     | `HurryCivicsCount`                                              |                                              |
+| `hurry_money_count`      | `HurryMoneyCount`                                               |                                              |
+| `hurry_training_count`   | `HurryTrainingCount`                                            |                                              |
+| `hurry_population_count` | `HurryPopulationCount`                                          |                                              |
+| `buy_tile_count`         | `BuyTileCount`                                                  |                                              |
+| `is_capital`             | `<Capital />`                                                   | self-closing flag                            |
+| `first_owner_xml_id`     | `FirstPlayer`                                                   | (not `FirstOwnerPlayerID`)                   |
+| `last_owner_xml_id`      | `LastPlayer`                                                    |                                              |
 
 Several plausible-looking fields **do not exist** in the XML and must
 not be parsed: `GrowthProgress`, `GeneralID`, top-level `Agent` (use
@@ -1134,10 +1134,10 @@ history, last-seen state, etc.
 
 ### Notable children
 
-- **`<OwnerHistory>`** — turn-keyed ownership trail. See *Format Quirks &
-  Parsing Gotchas → Tile ownership history* below.
+- **`<OwnerHistory>`** — turn-keyed ownership trail. See _Format Quirks &
+  Parsing Gotchas → Tile ownership history_ below.
 - **`<Unit>`** — zero or more unit instances actually on this tile. Full
-  schema in *Format Quirks → Individual units live inside `<Tile>`* below
+  schema in _Format Quirks → Individual units live inside `<Tile>`_ below
   and in the canonical parser at `src/lib/parser/parsers/units.ts`.
 - **`<LastSeenUnits>`** — fog-of-war snapshots of opposing units. Same
   shape as the top-level `<Unit>` block but represents a remembered
@@ -1361,7 +1361,7 @@ Tile ownership is sparse, turn-keyed, with `-1` for unowned:
 </Tile>
 ```
 
-Current owner = value at max turn. The owner's *city* is found via the
+Current owner = value at max turn. The owner's _city_ is found via the
 City element's `CityTerritory` child, **not** on the Tile — this is why
 tile-city linkage requires either a two-pass parse or a pre-resolved
 tile→city map.
@@ -1371,11 +1371,11 @@ tile→city map.
 The Hellenistic successor states are encoded as distinct nation values, not
 as `NATION_GREECE` + dynasty:
 
-| XML value          | Conceptually        |
-| ------------------ | ------------------- |
-| `NATION_SELEUCUS`  | Greece, Seleucid    |
-| `NATION_PTOLEMY`   | Egypt, Ptolemaic    |
-| `NATION_ANTIGONUS` | Greece, Antigonid   |
+| XML value          | Conceptually      |
+| ------------------ | ----------------- |
+| `NATION_SELEUCUS`  | Greece, Seleucid  |
+| `NATION_PTOLEMY`   | Egypt, Ptolemaic  |
+| `NATION_ANTIGONUS` | Greece, Antigonid |
 
 Format-stable across 266 saves spanning 3+ years; the game has not migrated
 to a `GREECE + DYNASTY_SELEUCID` shape. UI normalization (if desired)
@@ -1444,13 +1444,13 @@ A `Version`-string-only DLC parser will report zero DLCs on every save.
 
 `<CultureLevel>` stores a string constant, not an integer:
 
-| Value                  | Tier |
-| ---------------------- | ---- |
-| `CULTURE_WEAK`         | 0    |
-| `CULTURE_DEVELOPING`   | 1    |
-| `CULTURE_STRONG`       | 2    |
-| `CULTURE_ESTABLISHED`  | 3    |
-| `CULTURE_LEGENDARY`    | 4    |
+| Value                 | Tier |
+| --------------------- | ---- |
+| `CULTURE_WEAK`        | 0    |
+| `CULTURE_DEVELOPING`  | 1    |
+| `CULTURE_STRONG`      | 2    |
+| `CULTURE_ESTABLISHED` | 3    |
+| `CULTURE_LEGENDARY`   | 4    |
 
 Schema columns must be VARCHAR; integer parsing throws.
 
@@ -1598,7 +1598,7 @@ Useful as a budget when sizing memory and choosing batch granularity:
 ### Schema evolution archaeology
 
 The old DuckDB schema's migration log (`schema_migrations` table, v2.0–v2.13)
-records what was *learned* about the format incrementally — each version
+records what was _learned_ about the format incrementally — each version
 bump usually reflects a save-format surprise discovered the hard way:
 
 - **v2.4** — `enabled_dlc` was renamed `enabled_mods` once the
