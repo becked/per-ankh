@@ -2,9 +2,9 @@
 // All counts come from one SELECT with subqueries → one wrangler round-trip.
 
 import { d1Query } from "../wrangler";
-import { bold, formatBytes, info } from "../format";
-import type { CommandOpts } from "../cli";
-import { printJson } from "../cli";
+import { bold, formatBytes, info } from "../../lib/format";
+import type { CommandOpts } from "../../lib/cli";
+import { printJson } from "../../lib/cli";
 
 interface StatsRow {
 	users: number;

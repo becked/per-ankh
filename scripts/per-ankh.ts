@@ -7,6 +7,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { main as adminMain } from "./admin/index";
+import { main as prodMain } from "./prod/index";
 
 // scripts/per-ankh.ts → repo root is one level up.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -158,6 +159,7 @@ function printHelp(): void {
 			"Commands:",
 			"  dev               Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
 			"  admin <sub>...    Cloud admin & monitoring (see `./per-ankh admin --help`).",
+			"  prod <sub>...     Production deploy & preflight (see `./per-ankh prod --help`).",
 			"  --help,-h         Show this help.",
 			"",
 			"Preconditions for `dev`:",
@@ -178,6 +180,9 @@ async function main(): Promise<void> {
 			return;
 		case "admin":
 			await adminMain(process.argv.slice(3));
+			return;
+		case "prod":
+			await prodMain(process.argv.slice(3));
 			return;
 		case "--help":
 		case "-h":

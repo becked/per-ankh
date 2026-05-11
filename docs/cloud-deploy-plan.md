@@ -1,5 +1,13 @@
 # Per-Ankh Cloud Deploy Plan
 
+> **Automation note:** §4 steps 2, 3, 6 (and a 3-probe subset of §5) are now
+> automated by `./per-ankh prod deploy`. The preflight checks (`./per-ankh prod
+> preflight`) cover lint, typecheck, format, npm audit, secret-leak scanning,
+> `[vars]` vs `secrets` hygiene, and required-secret presence. This document
+> remains the source of truth for the manual parts: custom-domain attach, Pages
+> detach, Cloudflare dashboard config, and the functional smoke checklist
+> (OAuth, upload, share visibility) that requires a browser session.
+
 Forward-only checklist for getting the cloud rewrite (currently on
 `cloud-rewrite`) deployed to https://per-ankh.app. Replaces the active
 parts of [`cloud-productionization-plan.md`](./cloud-productionization-plan.md);

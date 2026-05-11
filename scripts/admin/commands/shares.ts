@@ -4,7 +4,7 @@
 // `{share_id}.json.gz`), not on the new cloud-rewrite games table.
 
 import { d1Exec, d1Query, r2Delete, sqlStr } from "../wrangler";
-import { confirmYesNo } from "../confirm";
+import { confirmYesNo } from "../../lib/confirm";
 import {
 	type Column,
 	emdash,
@@ -16,13 +16,13 @@ import {
 	printDetail,
 	printTable,
 	warn,
-} from "../format";
+} from "../../lib/format";
 import {
 	type CommandOpts,
 	flagInt,
 	parseFlags,
 	printJson,
-} from "../cli";
+} from "../../lib/cli";
 
 interface ShareListRow {
 	share_id: string;

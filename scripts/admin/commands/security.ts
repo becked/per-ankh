@@ -4,7 +4,7 @@
 //                          blobs, and the user record itself
 
 import { d1Exec, d1Query, r2DeleteMany, sqlStr } from "../wrangler";
-import { confirmNuke } from "../confirm";
+import { confirmNuke } from "../../lib/confirm";
 import {
 	type Column,
 	bold,
@@ -15,12 +15,12 @@ import {
 	ok,
 	printTable,
 	warn,
-} from "../format";
+} from "../../lib/format";
 import {
 	type CommandOpts,
 	parseFlags,
 	printJson,
-} from "../cli";
+} from "../../lib/cli";
 
 // ─── block / unblock keys ──────────────────────────────────────────────────
 

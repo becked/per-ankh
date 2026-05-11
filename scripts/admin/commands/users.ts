@@ -11,14 +11,14 @@ import {
 	printCount,
 	printDetail,
 	printTable,
-} from "../format";
+} from "../../lib/format";
 import {
 	type CommandOpts,
 	flagInt,
 	flagString,
 	parseFlags,
 	printJson,
-} from "../cli";
+} from "../../lib/cli";
 
 interface UserListRow {
 	user_id: string;

@@ -98,3 +98,7 @@ npm run format       # prettier --write .
 ### Cloud Admin CLI
 
 Manage live data on Cloudflare (D1 + R2) with `./per-ankh admin`. Requires `wrangler` auth (`wrangler login`). Run `./per-ankh admin --help` for the full command list.
+
+### Deploying
+
+`./per-ankh prod deploy` runs the full deploy pipeline (preflight checks → migrate → worker → frontend → smoke). `./per-ankh prod preflight` runs the safety checks without deploying. See `./per-ankh prod --help`.

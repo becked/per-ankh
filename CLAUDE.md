@@ -196,6 +196,21 @@ Lives under `cloud/`. Handlers in `cloud/src/`, validation via Valibot in `cloud
 
 Add `--json` to any read command for pipeable output; add `--yes` to skip confirmation on destructive ops.
 
+### Deploy CLI
+
+`./per-ankh prod` automates the deploy runbook (`docs/cloud-deploy-plan.md` §4). Implementation under `scripts/prod/`. Subcommands:
+
+```bash
+./per-ankh prod preflight   # All safety checks (git, lint, check, format, audit, secret leak scan,
+                            #   [vars] vs secrets hygiene, required-secret presence, pending migrations)
+./per-ankh prod deploy      # preflight → migrate → worker → frontend → smoke (with confirm)
+./per-ankh prod migrate     # Apply pending D1 migrations (with confirm + preview)
+./per-ankh prod smoke       # GET probes against per-ankh.app, api.per-ankh.app/v1/auth/me, legacy
+./per-ankh prod status      # Local git, deployed worker versions, secrets, pending migrations
+```
+
+Flags: `--dry-run`, `--yes`, `--allow-dirty`, `--allow-branch`, `--skip-checks`, `--skip-worker`, `--skip-frontend`, `--skip-smoke`, `--json`. Preflight blocks on uncommitted changes, off-main, behind origin, secret leaks, `[vars]` keys with secret-shaped names, missing prod secrets on the Worker, format/lint/typecheck/audit failures. Functional smoke (OAuth flow, upload, share visibility) stays manual — see deploy plan §5.
+
 ## Asset Bake Pipeline
 
 The sprite map's terrain, hex, resource, and improvement atlases are baked from a local [pinacotheca](https://github.com/becked/pinacotheca) checkout. Both source PNGs (`assets/atlas-sources/`) and outputs (`static/atlases/`, `static/sprites/`) are gitignored — bake locally on demand.

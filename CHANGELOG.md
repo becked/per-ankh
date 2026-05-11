@@ -2,9 +2,14 @@
 
 ## [Unreleased]
 
+### Added
+
+- `./per-ankh prod` deploy CLI. Subcommands: `preflight` (git state, lint, check, format, audit, secret-leak regex, `[vars]`/`secrets` hygiene, required-secret presence, pending migrations), `deploy` (preflight → migrate → worker → frontend → smoke, with confirm), `migrate`, `smoke` (HTTP probes vs prod URLs), `status`. Automates `docs/cloud-deploy-plan.md` §4 steps 2/3/6 and a 3-probe subset of §5. Functional smoke (OAuth, upload, share visibility) stays manual.
+
 ### Changed
 
 - Cloud admin CLI rewritten in TypeScript and folded into the central CLI as `./per-ankh admin` (was `cloud/admin.sh`). Adds rewrite-aware commands for the cloud `users`/`games`/`events` tables that the bash version was blind to (`stats`, `users`, `user <id>`, `games`, `game <id>`, `events`, `nuke-user`). Legacy share commands are still available under `./per-ankh admin shares`. `--json` and `--yes` flags are new.
+- Refactor: extracted shared CLI primitives (`cli.ts`, `confirm.ts`, `format.ts`) from `scripts/admin/` into `scripts/lib/` for use by both admin and prod tools. Added `scripts/lib/shell.ts` (live-streamed and captured spawn helpers).
 
 ### Removed
 

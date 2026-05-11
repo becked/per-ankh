@@ -10,14 +10,14 @@ import {
 	info,
 	printCount,
 	printTable,
-} from "../format";
+} from "../../lib/format";
 import {
 	type CommandOpts,
 	flagInt,
 	flagString,
 	parseFlags,
 	printJson,
-} from "../cli";
+} from "../../lib/cli";
 
 interface EventRow {
 	id: number;

@@ -30,6 +30,15 @@ export function bold(s: string): string {
 export function dim(s: string): string {
 	return wrap(ESC.dim, s, COLOR_OUT);
 }
+export function red(s: string): string {
+	return wrap(ESC.red, s, COLOR_OUT);
+}
+export function green(s: string): string {
+	return wrap(ESC.green, s, COLOR_OUT);
+}
+export function yellow(s: string): string {
+	return wrap(ESC.yellow, s, COLOR_OUT);
+}
 
 export function info(msg: string): void {
 	process.stderr.write(`${wrap(ESC.blue, "[INFO]", COLOR_ERR)} ${msg}\n`);

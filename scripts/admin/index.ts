@@ -2,8 +2,8 @@
 // --yes), dispatches to the right command module, prints errors and exits
 // non-zero on failure.
 
-import { err } from "./format";
-import type { CommandOpts } from "./cli";
+import { err } from "../lib/format";
+import type { CommandOpts } from "../lib/cli";
 
 import * as stats from "./commands/stats";
 import * as users from "./commands/users";
