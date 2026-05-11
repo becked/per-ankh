@@ -6,6 +6,7 @@
 	import SearchInput from "$lib/SearchInput.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { TECH_NAMES } from "$lib/generated/tech-names";
 	import { CHART_THEME } from "$lib/config";
 	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
 
@@ -63,7 +64,8 @@
 								if (!data) return "";
 								const [turn, count, techName] = data;
 								if (techName) {
-									const formattedTech = formatEnum(techName, "TECH_");
+									const formattedTech =
+										TECH_NAMES[techName] ?? formatEnum(techName, "TECH_");
 									return `Turn ${turn}: Discovered ${formattedTech}`;
 								}
 								return `Turn ${turn}: ${count} technologies`;
@@ -327,7 +329,7 @@
 							<td
 								class="whitespace-nowrap border-b border-[#2a2622] p-3 text-left text-tan"
 							>
-								{formatEnum(row.tech, "TECH_")}
+								{TECH_NAMES[row.tech] ?? formatEnum(row.tech, "TECH_")}
 							</td>
 							{#each displayedTechNations as nation (nation)}
 								<td

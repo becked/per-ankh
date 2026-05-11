@@ -9,6 +9,7 @@
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
+	import { TECH_NAMES } from "$lib/generated/tech-names";
 	import {
 		type TimelineEvent,
 		type TimelineCategory,
@@ -84,7 +85,8 @@
 						nation: player.nation,
 						playerName: player.player_name,
 						category: "tech",
-						label: formatEnum(dp.tech_name, "TECH_"),
+						label:
+							TECH_NAMES[dp.tech_name] ?? formatEnum(dp.tech_name, "TECH_"),
 						enumValue: dp.tech_name,
 						spriteCategory: "techs",
 					});

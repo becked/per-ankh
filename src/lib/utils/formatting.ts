@@ -115,8 +115,10 @@ export function stripMarkup(text: string | null | undefined): string {
 			.replace(/<[^>]*>/g, "")
 			// Remove icon(...) patterns entirely
 			.replace(/icon\([^)]*\)\s*/g, "")
-			// Replace link(CONCEPT_SOMETHING) with formatted "Something"
-			.replace(/link\(CONCEPT_([^)]+)\)/g, (_, concept) => {
+			// Replace link(CONCEPT_SOMETHING) with formatted "Something".
+			// OW also emits link(...,N) with a count/declension argument
+			// (e.g. link(UNIT_AKKADIAN_ARCHER,2)); discard that argument.
+			.replace(/link\(CONCEPT_([^),]+)(?:,[^)]*)?\)/g, (_, concept) => {
 				// Convert SOMETHING_LIKE_THIS to "Something Like This"
 				return concept
 					.toLowerCase()
@@ -125,7 +127,7 @@ export function stripMarkup(text: string | null | undefined): string {
 					.join(" ");
 			})
 			// Replace any remaining link(...) patterns with their content
-			.replace(/link\(([^)]+)\)/g, (_, content) => {
+			.replace(/link\(([^),]+)(?:,[^)]*)?\)/g, (_, content) => {
 				// Extract meaningful part after prefix (e.g., "TECH_IRONWORKING" -> "Ironworking")
 				const parts = content.split("_");
 				if (parts.length > 1) {
