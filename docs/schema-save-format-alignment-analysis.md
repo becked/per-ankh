@@ -1,5 +1,23 @@
 # Schema vs Save File Format Alignment Analysis
 
+> **Historical document — pre-rewrite (Tauri/Rust/DuckDB era).** Written
+> 2025-11-06, before the project was rewritten as a SvelteKit +
+> Cloudflare web app. The DuckDB schema and `src/parser/entities/...`
+> Rust paths discussed here no longer exist in tree.
+>
+> **One core finding has been verified wrong (2026-05-10):** the
+> "CRITICAL MISMATCH" / "actual save files contain NO Unit elements
+> whatsoever" claim. `<Unit>` elements DO exist in saves — nested
+> inside `<Tile>` elements (not at the XML root). The original analysis
+> only checked the root level. Every save from 2022 through 2026
+> contains 200–400+ per-unit instances with XP, promotions, family,
+> facing, etc. See `docs/unit-location-in-xml.md` for the verified
+> structure; see `docs/plans/unit-ingestion.md` and
+> `src/lib/parser/parsers/units.ts` for the shipped implementation.
+> The doc's other claims (character genealogy, city subsystems,
+> aggregate parsers, etc.) have **not** been re-verified for this
+> correction and may also be stale.
+
 **Analysis Date:** November 6, 2025
 **Analyst:** Claude
 **Save Files Examined:**
@@ -19,9 +37,9 @@
 
 This analysis reveals **significant misalignments** between the save file format documentation, the actual XML save file structure, and the database schema. Key findings:
 
-1. **❌ CRITICAL MISMATCH**: The save-file-format.md documentation describes Unit elements at the root level, but **actual save files contain NO Unit elements whatsoever** (tested in both 2024 and 2025 versions)
+1. ~~**❌ CRITICAL MISMATCH**: The save-file-format.md documentation describes Unit elements at the root level, but **actual save files contain NO Unit elements whatsoever** (tested in both 2024 and 2025 versions)~~ — **RETRACTED 2026-05-10.** Save-file-format.md was correct that Unit elements exist; this analysis missed them because they're nested inside `<Tile>`, not at the XML root. Verified across saves from 2022, 2024, 2025, and 2026 — every save contains 200–400+ `<Unit>` instances with full per-unit state. The shipped TypeScript parser at `src/lib/parser/parsers/units.ts` parses them.
 
-2. **✅ Schema Design**: The database schema is well-designed with 85% theoretical coverage, but **cannot store data that doesn't exist** in save files (specifically: individual unit tracking)
+2. ~~**✅ Schema Design**: The database schema is well-designed with 85% theoretical coverage, but **cannot store data that doesn't exist** in save files (specifically: individual unit tracking)~~ — The "individual unit tracking" parenthetical is wrong (see point 1). The `units`/`unit_promotions`/`unit_effects`/`unit_families` tables described in `docs/plans/unit-ingestion.md` ARE populatable from saves.
 
 3. **⚠️ Documentation Gap**: The save-file-format.md appears to be based on incomplete analysis or wishful thinking rather than actual XML inspection
 
@@ -57,13 +75,15 @@ This analysis reveals **significant misalignments** between the save file format
    [+ configuration elements]
 ```
 
-**CRITICAL FINDING**: NO `<Unit>` elements at root level in either version.
+**Original finding:** NO `<Unit>` elements at root level in either version.
+
+**Correction (2026-05-10):** the "at root level" qualifier is true — no `<Unit>` directly under `<Root>` — but the original conclusion drawn from it (that no per-unit data exists) was wrong. `<Unit>` elements are nested **inside** top-level `<Tile>` elements. Re-counted from the same `OW-Babylonia-Year123-2024-01-31-22-44-04.xml` referenced above: 272 `<Tile>/<Unit>` instances (plus 181 fog-of-war references inside `<LastSeenUnits>`).
 
 ### 2. Save File Format Documentation Accuracy
 
 | Element Type   | Documentation Claims                                 | Actual Reality     | Impact                                    |
 | -------------- | ---------------------------------------------------- | ------------------ | ----------------------------------------- |
-| **Units**      | "Variable (example: 221 units)" at `/Root/Unit[@ID]` | **Does not exist** | CRITICAL - schema has 3 empty unit tables |
+| **Units**      | "Variable (example: 221 units)" at `/Root/Unit[@ID]` | **Exists at `/Root/Tile/Unit`, not `/Root/Unit`** — docs got the XPath wrong, but the data is there (200–400+ per save) | Parser implemented at `src/lib/parser/parsers/units.ts` (2025-12-04) |
 | **Characters** | Correct location and structure                       | ✅ Verified        | Good                                      |
 | **Cities**     | Correct location and structure                       | ✅ Verified        | Good                                      |
 | **Tiles**      | Correct location and structure                       | ✅ Verified        | Good                                      |
@@ -106,13 +126,13 @@ This analysis reveals **significant misalignments** between the save file format
 
 | Schema Table      | Expected XML Source       | Reality                    | Recommendation                                   |
 | ----------------- | ------------------------- | -------------------------- | ------------------------------------------------ |
-| `units`           | `/Root/Unit[@ID]`         | **Does not exist**         | ⚠️ Consider removal or mark as "future/optional" |
-| `unit_promotions` | `/Root/Unit/Promotions/*` | **Parent element missing** | ⚠️ Consider removal                              |
+| `units`           | `/Root/Unit[@ID]`         | **Wrong XPath — actual source is `/Root/Tile/Unit[@ID]`** | ✅ Implemented (see `docs/plans/unit-ingestion.md`) |
+| `unit_promotions` | `/Root/Unit/Promotions/*` | **Wrong XPath — actual source is `/Root/Tile/Unit/Promotions/*` and `/Root/Tile/Unit/PromotionsAvailable/*`** | ✅ Implemented |
 | `unit_types`      | Reference data            | Could be static data       | ✅ Populate from game definitions                |
 
-#### ⚠️ Aggregate Data Alternative for Units
+#### ⚠️ Aggregate Data ~~Alternative~~ Complement for Units
 
-While individual units are not stored, **aggregate production statistics ARE available**:
+Both individual `<Tile>/<Unit>` instances **and** aggregate production statistics are stored:
 
 ```xml
 <!-- In Player element -->
@@ -171,7 +191,7 @@ characters (
 
 **Impact:** `character_lineage` view is non-functional, family tree analysis impossible.
 
-#### Issue 2: Unit Tracking (CRITICAL)
+#### Issue 2: Unit Tracking ~~(CRITICAL)~~ — RESOLVED 2025-12-04
 
 **Schema Design:**
 
@@ -185,22 +205,16 @@ units (
 ) -- Designed for individual unit tracking
 ```
 
-**XML Reality:**
+**XML Reality (corrected 2026-05-10):**
 
-- ❌ No `/Root/Unit` elements at all
-- ✅ Aggregate statistics only in `Player/UnitsProduced` and `City/UnitProductionCounts`
+- ✅ `<Unit>` elements ARE present, nested inside `<Tile>` (200–400+ per save, verified across saves from 2022, 2024, 2025, 2026).
+- ✅ Aggregate statistics also present in `Player/UnitsProduced` and `City/UnitProductionCounts`.
+- ❌ No `<Unit>` at the XML root — original analysis searched only there.
 
 **Impact:**
 
-- 0 rows in `units`, `unit_promotions`, `unit_types` tables
-- Military analysis limited to aggregate production counts only
-- **Schema is over-engineered for data that doesn't exist**
-
-**Recommendation:** Either:
-
-1. Accept that individual unit tracking is impossible from save files
-2. Remove/deprecate unit detail tables
-3. Mark as "future enhancement pending game format changes"
+- Schema is correctly designed; the gap was in the parser, not the data.
+- `docs/plans/unit-ingestion.md` (2025-12-04) supersedes this section with the actual XPaths, schema, and parser. Implementation lives at `src/lib/parser/parsers/units.ts`.
 
 #### Issue 3: City Subsystems (MEDIUM PRIORITY)
 
@@ -283,14 +297,14 @@ CREATE TABLE schema_coverage_notes (
 );
 ```
 
-2. **Mark unit tables as optional/future:**
+2. ~~**Mark unit tables as optional/future:**~~ — recommendation withdrawn. The unit tables ARE populatable from save files (XPath was wrong here, not the schema). See `docs/plans/unit-ingestion.md`.
 
-```sql
--- Add comments to unit tables
-COMMENT ON TABLE units IS 'AVAILABILITY: NO SOURCE DATA IN SAVE FILES (as of v1.0.80522). Individual unit state is not persisted. Only aggregate production counts available.';
-COMMENT ON TABLE unit_promotions IS 'AVAILABILITY: BLOCKED - parent table has no source data';
-COMMENT ON TABLE unit_types IS 'AVAILABILITY: STATIC - could be populated from game definitions';
-```
+~~```sql~~
+~~-- Add comments to unit tables~~
+~~COMMENT ON TABLE units IS 'AVAILABILITY: NO SOURCE DATA IN SAVE FILES (as of v1.0.80522). Individual unit state is not persisted. Only aggregate production counts available.';~~
+~~COMMENT ON TABLE unit_promotions IS 'AVAILABILITY: BLOCKED - parent table has no source data';~~
+~~COMMENT ON TABLE unit_types IS 'AVAILABILITY: STATIC - could be populated from game definitions';~~
+~~```~~
 
 3. **Fix character genealogy:** Investigate XML structure thoroughly or mark fields as unavailable
 
@@ -314,7 +328,7 @@ COMMENT ON TABLE unit_types IS 'AVAILABILITY: STATIC - could be populated from g
 | **Character Elements** | `/Root/Character[@ID]`                  | ✅ Confirmed            | ✅ `characters` table                  | Good                                     |
 | **City Elements**      | `/Root/City[@ID]`                       | ✅ Confirmed            | ✅ `cities` table                      | Good                                     |
 | **Tile Elements**      | `/Root/Tile`                            | ✅ Confirmed            | ✅ `tiles` table                       | Good                                     |
-| **Unit Elements**      | ❌ `/Root/Unit[@ID]` described          | ❌ **NOT FOUND**        | ❌ 3 empty tables                      | **CRITICAL MISMATCH**                    |
+| **Unit Elements**      | ❌ `/Root/Unit[@ID]` described — wrong XPath; actual is `/Root/Tile/Unit[@ID]` | ✅ Present (nested in `<Tile>`, not at root) | ✅ Schema correct; parser shipped 2025-12-04 | Original "CRITICAL MISMATCH" was wrong — see retraction at top |
 | **MemoryData**         | `/Root/Player/MemoryList/MemoryData`    | ✅ Confirmed            | ❓ Not mapped                          | Documentation correct, schema incomplete |
 | **LogData**            | `/Root/Player/PermanentLogList/LogData` | ✅ Confirmed            | ⚠️ `event_logs` table exists but empty | Documentation correct, parser missing    |
 | **Character Parents**  | Implied by fields                       | ❓ Not found in samples | ❌ Empty columns                       | Unknown if available                     |
@@ -335,8 +349,8 @@ COMMENT ON TABLE unit_types IS 'AVAILABILITY: STATIC - could be populated from g
 | **Cities (Culture)**           | ✅ Full               | ✅ Schema ready   | ❌ Not implemented    | **High-value parser target**          |
 | **Cities (Religions)**         | ✅ Full               | ✅ Schema ready   | ❌ Not implemented    | **High-value parser target**          |
 | **Tiles**                      | ✅ Full               | ✅ Full           | ⚠️ Mostly done        | Ownership fields empty                |
-| **Units (Individual)**         | ❌ **Does not exist** | ❌ Over-specified | ❌ Impossible         | **Schema should mark as unavailable** |
-| **Units (Aggregate)**          | ✅ Full               | ✅ Implemented    | ✅ Working            | Good alternative                      |
+| **Units (Individual)**         | ✅ Full (at `/Root/Tile/Unit`, not `/Root/Unit`) | ✅ Full | ✅ Implemented (`src/lib/parser/parsers/units.ts`, 2025-12-04) | Original "Does not exist" claim was wrong |
+| **Units (Aggregate)**          | ✅ Full               | ✅ Implemented    | ✅ Working            | Complement, not alternative           |
 | **Technologies**               | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
 | **Laws**                       | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
 | **Families**                   | ✅ Full               | ✅ Full           | ✅ Implemented        | Works well                            |
@@ -458,7 +472,7 @@ The **parser implementation has made good progress** (65.3% table population) bu
 
 **Priority actions:**
 
-1. ✅ Accept that individual unit tracking is impossible
+1. ~~Accept that individual unit tracking is impossible~~ — **wrong premise; retracted.** Individual unit tracking IS possible and was implemented 2025-12-04 (`docs/plans/unit-ingestion.md`).
 2. 🔍 Investigate character genealogy thoroughly
 3. 🎯 Implement city subsystem parsers (high-value, data available)
 4. 📝 Create accurate XML-to-schema mapping documentation
@@ -589,7 +603,46 @@ The path forward is clear: **focus on parsing data that actually exists** rather
 </UnitProductionCounts>
 ```
 
-**Notable:** This is the ONLY unit-related data in save files. No individual units tracked.
+**~~Notable:~~ Original "ONLY unit-related data" claim was wrong (corrected 2026-05-10).** See section F below for the per-unit `<Tile>/<Unit>` structure that the original analysis missed.
+
+### F. Individual Unit Data (Verified 2026)
+
+Nested inside `<Tile>` elements (NOT at the XML root). Sample from
+`OW-Maurya-Year111-2026-04-11-20-38-21.xml`, tile 489:
+
+```xml
+<Tile ID="489">
+  ...
+  <Unit
+    ID="365"
+    Type="UNIT_BIREME"
+    Player="0"
+    Tribe="NONE"
+    Seed="18046197664133222740">
+    <XP>30</XP>
+    <TurnsSinceLastMove>11</TurnsSinceLastMove>
+    <CreateTurn>90</CreateTurn>
+    <Facing>NE</Facing>
+    <OriginalPlayer>0</OriginalPlayer>
+    <RaidTurn />
+    <PlayerFamily>
+      <P.0>FAMILY_KOSALA</P.0>
+    </PlayerFamily>
+    <QueueList />
+    <PromotionsAvailable>
+      <PROMOTION_STRIKE1 />
+      <PROMOTION_TRACKER />
+      <PROMOTION_SEABORN />
+      <PROMOTION_LADING />
+    </PromotionsAvailable>
+    <AI />
+  </Unit>
+</Tile>
+```
+
+Counts across `test-data/saves/`: OW-Rome-2022 = 419 instances,
+OW-Babylonia-2024 = 272, OW-Aksum-2025 = 290, OW-Maurya-2026 = 223.
+See `docs/unit-location-in-xml.md` for the full element catalog.
 
 ---
 

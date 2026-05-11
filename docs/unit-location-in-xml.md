@@ -1,156 +1,170 @@
----
+# Unit Data Locations in XML
 
-Summary: Unit Data Locations in XML
+> **Corrected 2026-05-10.** A prior version of this doc claimed individual
+> unit instances are not present in save files. That was wrong — verified
+> against saves from 2022-09 through 2026-04, every save contains
+> hundreds of `<Unit>` elements nested inside `<Tile>` elements with full
+> per-unit state (XP, promotions, family, facing, etc.). The current
+> parser at `src/lib/parser/parsers/units.ts` handles them.
 
-1. Player-Level Unit Totals (<UnitsProduced>)
+## 1. Individual Unit Instances (`<Tile>/<Unit>`)
 
-Location: <Player>/<UnitsProduced>
+**Location:** nested directly inside each top-level `<Tile>` element.
 
-What it tracks: Total count of each unit type produced by the player
-throughout the entire game.
+**Counts (verified across `test-data/saves/`):**
 
-  <Player ID="0" OnlineID="...">
-    <UnitsProduced>
-      <UNIT_SETTLER>6</UNIT_SETTLER>
-      <UNIT_WORKER>7</UNIT_WORKER>
-      <UNIT_MILITIA>6</UNIT_MILITIA>
-      <UNIT_WARRIOR>5</UNIT_WARRIOR>
-      <UNIT_SPEARMAN>2</UNIT_SPEARMAN>
-      <UNIT_SLINGER>4</UNIT_SLINGER>
-      <UNIT_CHARIOT>5</UNIT_CHARIOT>
-    </UnitsProduced>
-  </Player>
+| Save (version year) | `<Tile>/<Unit>` instances |
+| ------------------- | ------------------------- |
+| OW-Rome (2022)      | 419                       |
+| OW-Babylonia (2024) | 272                       |
+| OW-Aksum (2025)     | 290                       |
+| OW-Maurya (2026)    | 223                       |
 
----
+**Example (OW-Maurya-Year111, Tile 489):**
 
-2. Player-Level Snapshot (<UnitsProducedTurn>)
+```xml
+<Tile ID="489">
+  ...
+  <Unit
+    ID="365"
+    Type="UNIT_BIREME"
+    Player="0"
+    Tribe="NONE"
+    Seed="18046197664133222740">
+    <XP>30</XP>
+    <TurnsSinceLastMove>11</TurnsSinceLastMove>
+    <CreateTurn>90</CreateTurn>
+    <Facing>NE</Facing>
+    <OriginalPlayer>0</OriginalPlayer>
+    <RaidTurn />
+    <PlayerFamily>
+      <P.0>FAMILY_KOSALA</P.0>
+    </PlayerFamily>
+    <QueueList />
+    <PromotionsAvailable>
+      <PROMOTION_STRIKE1 />
+      <PROMOTION_TRACKER />
+      <PROMOTION_SEABORN />
+      <PROMOTION_LADING />
+    </PromotionsAvailable>
+    <AI />
+  </Unit>
+</Tile>
+```
 
-Location: <Player>/<UnitsProducedTurn>
+**Attributes:** `ID`, `Type` (e.g. `UNIT_BIREME`), `Player` (`-1` for
+barbarians/tribal), `Tribe` (`NONE` or `TRIBE_*`), `Seed` (i64).
 
-What it tracks: Appears to be identical to <UnitsProduced>
-(end-of-game snapshot). Possibly historical reasons for duplication.
+**Common child elements:** `XP`, `Level`, `CreateTurn`, `Facing`,
+`OriginalPlayer`, `TurnsSinceLastMove`, `Gender` (workers),
+`Sleep` (self-closing), `CurrentFormation`, `Promotions` (acquired),
+`PromotionsAvailable`, `BonusEffectUnits` (e.g.
+`<EFFECTUNIT_STEADFAST>1</EFFECTUNIT_STEADFAST>`), `PlayerFamily`,
+`RaidTurn`, `QueueList`, `AI`.
 
-  <UnitsProducedTurn>
+**Note: `<Unit>` does NOT appear at the XML root.** Only nested inside
+`<Tile>`. (The original doc's confusion likely came from grepping the
+root level only.)
+
+## 2. Last-Seen Unit References (`<Player>/.../<LastSeenUnits>/<Unit>`)
+
+Separate from per-tile unit instances, players also have
+`<LastSeenUnits>` blocks recording fog-of-war: where the player last
+observed each known unit.
+
+```xml
+<LastSeenUnits>
+  <Unit TileID="1894">28</Unit>
+  <Unit TileID="2166">55</Unit>
+  ...
+</LastSeenUnits>
+```
+
+Text content is the referenced unit's `ID`; `TileID` is where it was
+last seen. These are references, not unit definitions.
+
+## 3. Player-Level Unit Totals (`<UnitsProduced>`)
+
+Location: `<Player>/<UnitsProduced>`. Total count of each unit type
+produced over the game.
+
+```xml
+<Player ID="0" OnlineID="...">
+  <UnitsProduced>
     <UNIT_SETTLER>6</UNIT_SETTLER>
     <UNIT_WORKER>7</UNIT_WORKER>
-    ...
-  </UnitsProducedTurn>
-
----
-
-3. City-Level Unit Production (<UnitProductionCounts>)
-
-Location: <CityList>/<City>/<UnitProductionCounts>
-
-What it tracks: Units produced by each specific city. Lets you
-analyze which cities were military factories vs. expansion engines.
-
-  <City ID="5" Name="Akkad" Player="0">
-    <UnitProductionCounts>
-      <UNIT_SETTLER>4</UNIT_SETTLER>
-      <UNIT_WORKER>1</UNIT_WORKER>
-    </UnitProductionCounts>
-  </City>
-
----
-
-What's NOT in the XML
-
-Individual unit instances - The XML does not appear to track:
-
-- Specific unit locations on the map
-- Unit health/experience
-- Unit names
-- Currently alive units
-
-The save only stores production counts (how many were built), not
-the units themselves.
-
----
-
-Use Cases
-
-| Data Source | Best For
-|
-|-----------------------|-------------------------------------------
-------------------------------|
-| player_units_produced | "Who built the most military?" "Settler
-spam strategy?" |
-| city_unit_production | "Which cities produced the most units?"
-"Capital vs. expansion cities?" |
-
-the codebase!
-
----
-
-Military Unit Data in XML
-
-1. Military Power by Turn (<MilitaryPowerHistory>) ✅ TRACKED
-
-Location: <Player>/<MilitaryPowerHistory>
-
-What it tracks: Total military strength score for each turn
-
-  <Player ID="0">
-    <MilitaryPowerHistory>
-      <T2>40</T2>
-      <T3>40</T3>
-      <T4>40</T4>
-      <T15>80</T15>
-      <T21>160</T21>
-    </MilitaryPowerHistory>
-  </Player>
-
----
-
-2. Military Units Produced (<UnitsProduced>)
-
-Location: <Player>/<UnitsProduced>
-
-What it tracks: Count of each military unit type produced
-
-  <UnitsProduced>
     <UNIT_MILITIA>6</UNIT_MILITIA>
     <UNIT_WARRIOR>5</UNIT_WARRIOR>
     <UNIT_SPEARMAN>2</UNIT_SPEARMAN>
+    <UNIT_SLINGER>4</UNIT_SLINGER>
     <UNIT_CHARIOT>5</UNIT_CHARIOT>
-    <UNIT_ARCHER>1</UNIT_ARCHER>
   </UnitsProduced>
+</Player>
+```
 
----
+## 4. Player-Level Snapshot (`<UnitsProducedTurn>`)
 
-3. Combat Statistics (<Stat>)
+Location: `<Player>/<UnitsProducedTurn>`. Appears identical to
+`<UnitsProduced>` at end-of-game — possibly a snapshot from when the
+turn ended, kept for historical reasons.
 
-Location: <Player>/<Stat>
+## 5. City-Level Unit Production (`<UnitProductionCounts>`)
 
-What it tracks: Combat performance metrics
+Location: `<City>/<UnitProductionCounts>`. Units produced per city.
 
-  <Stat>
-    <STAT_UNIT_MILITARY_KILLED>29</STAT_UNIT_MILITARY_KILLED>
-    <STAT_UNIT_MILITARY_KILLED_ANY_GENERAL>12</STAT_UNIT_MILITARY_KILL
-  ED_ANY_GENERAL>
-    <STAT_UNIT_MILITARY_KILLED_GENERAL>6</STAT_UNIT_MILITARY_KILLED_GE
-  NERAL>
-    <STAT_UNIT_LOST>11</STAT_UNIT_LOST>
-    <STAT_REGULAR_MILITARY_LOST>7</STAT_REGULAR_MILITARY_LOST>
-    <STAT_UNIT_PROMOTED>11</STAT_UNIT_PROMOTED>
-    <STAT_UNIT_HEALED>25</STAT_UNIT_HEALED>
-    <STAT_UNIT_TRAINED>37</STAT_UNIT_TRAINED>
-    <STAT_CITY_CAPTURED>1</STAT_CITY_CAPTURED>
-    <STAT_CITY_LOST>1</STAT_CITY_LOST>
-  </Stat>
+```xml
+<City ID="5" Name="Akkad" Player="0">
+  <UnitProductionCounts>
+    <UNIT_SETTLER>4</UNIT_SETTLER>
+    <UNIT_WORKER>1</UNIT_WORKER>
+  </UnitProductionCounts>
+</City>
+```
 
----
+## 6. Military Power History (`<MilitaryPowerHistory>`)
 
----
+Location: `<Player>/<MilitaryPowerHistory>`. Total military strength
+score per turn.
 
-Missing Combat Data
+```xml
+<MilitaryPowerHistory>
+  <T2>40</T2>
+  <T3>40</T3>
+  <T15>80</T15>
+  <T21>160</T21>
+</MilitaryPowerHistory>
+```
 
-The <Stat> element contains rich combat analytics that could be
-tracked
+## 7. Combat Statistics (`<Stat>`)
 
-- Kills: STAT_UNIT_MILITARY_KILLED,
-  STAT_UNIT_MILITARY_KILLED_GENERAL
-- Losses: STAT_UNIT_LOST, STAT_REGULAR_MILITARY_LOST
-- Combat support: STAT_UNIT_PROMOTED, STAT_UNIT_HEALED
-- Territorial: STAT_CITY_CAPTURED, STAT_CITY_LOST
+Location: `<Player>/<Stat>`. Combat performance metrics.
+
+```xml
+<Stat>
+  <STAT_UNIT_MILITARY_KILLED>29</STAT_UNIT_MILITARY_KILLED>
+  <STAT_UNIT_MILITARY_KILLED_ANY_GENERAL>12</STAT_UNIT_MILITARY_KILLED_ANY_GENERAL>
+  <STAT_UNIT_MILITARY_KILLED_GENERAL>6</STAT_UNIT_MILITARY_KILLED_GENERAL>
+  <STAT_UNIT_LOST>11</STAT_UNIT_LOST>
+  <STAT_REGULAR_MILITARY_LOST>7</STAT_REGULAR_MILITARY_LOST>
+  <STAT_UNIT_PROMOTED>11</STAT_UNIT_PROMOTED>
+  <STAT_UNIT_HEALED>25</STAT_UNIT_HEALED>
+  <STAT_UNIT_TRAINED>37</STAT_UNIT_TRAINED>
+  <STAT_CITY_CAPTURED>1</STAT_CITY_CAPTURED>
+  <STAT_CITY_LOST>1</STAT_CITY_LOST>
+</Stat>
+```
+
+Combat metrics include kills (`STAT_UNIT_MILITARY_KILLED`,
+`STAT_UNIT_MILITARY_KILLED_GENERAL`), losses (`STAT_UNIT_LOST`,
+`STAT_REGULAR_MILITARY_LOST`), support (`STAT_UNIT_PROMOTED`,
+`STAT_UNIT_HEALED`), and territorial (`STAT_CITY_CAPTURED`,
+`STAT_CITY_LOST`).
+
+## What's actually NOT in the XML
+
+- Unit display names (units are referenced only by `UNIT_*` type).
+- Current HP as a separate field (HP is implicit in `Level` + `XP`
+  alongside the unit type's max-HP rules).
+
+Everything else commonly assumed missing — positions, experience,
+promotions, family, facing — IS present. See section 1.

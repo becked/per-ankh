@@ -1,5 +1,16 @@
 # XML Parser Implementation Status
 
+> **Historical document — pre-rewrite (Tauri/Rust/DuckDB era).** This
+> file was written 2025-11-05, before the project was rewritten as a
+> SvelteKit + Cloudflare web app with the parser ported to TypeScript
+> under `src/lib/parser/`. The `src/parser/entities/...` Rust paths
+> referenced below no longer exist. One specific factual claim — that
+> "individual units do NOT exist in Old World save files" — has been
+> **verified wrong** (see corrected note under "Unit Production Parsers"
+> below, and `docs/unit-location-in-xml.md`). The current TypeScript
+> parser at `src/lib/parser/parsers/units.ts` parses per-unit data from
+> `<Tile>/<Unit>` and is shipped.
+
 **Last Updated**: 2025-11-05
 **Current Phase**: Milestone 2 (Core Entities) - 100% Complete ✅
 **Status**: All core entities and unit aggregate data implemented
@@ -178,17 +189,35 @@ Milestone 6: Edge Cases & Polish   ░░░░░░░░░░░░░░░
 #### Unit Production Parsers ✅
 
 - **File**: `src/parser/entities/unit_production.rs`
-- **Status**: Fully working
-- **Key Discovery**: **Individual units do NOT exist in Old World save files**
-  - No unit instances with position, health, experience, names, etc.
-  - Only aggregate production counts are stored
-- **What IS parsed**:
+- **Status**: Fully working (for aggregate counts)
+- **~~Key Discovery: Individual units do NOT exist in Old World save files~~ — RETRACTED 2026-05-10**
+
+  This claim was wrong. Individual `<Unit>` instances DO exist in save
+  files, nested inside `<Tile>` elements (not at the XML root). Every
+  save examined (2022 through 2026) contains 200–400+ unit instances
+  with per-unit `XP`, `Level`, `Facing`, `OriginalPlayer`,
+  `TurnsSinceLastMove`, `Gender`, `Sleep`, `CurrentFormation`,
+  `PlayerFamily`, `Promotions`, `PromotionsAvailable`,
+  `BonusEffectUnits`, and `Seed`. See `docs/unit-location-in-xml.md`
+  for the structure, and `docs/plans/unit-ingestion.md` for the
+  schema/parser design that was actually implemented.
+
+  The current TypeScript parser at
+  `src/lib/parser/parsers/units.ts` (`parseUnits`,
+  `parseUnitPromotions`, `parseUnitEffects`, `parseUnitFamilies`)
+  ports the unit-ingestion plan and is wired up via
+  `src/lib/parser/parsers/index.ts`. The original Rust parser at
+  `src-tauri/src/parser/parsers/units.rs` no longer exists in tree but
+  was the source of the TS port.
+
+- **What IS parsed (aggregate counts, unchanged):**
   - `player_units_produced` - Total units built per player (from `<Player>/<UnitsProduced>`)
   - `city_units_produced` - Units built per city (from `<City>/<UnitProductionCounts>`)
 - **Test Result**: Successfully parses 8 player records + 7 city records
-- **Schema Impact**: The detailed `units` table (schema.sql:574-613) **cannot be populated** from save files
-  - This table may need to be removed or marked as future/optional
-  - Aggregate tables provide valuable analytics: "Who built the most military?", "Which cities are military factories?"
+- **Schema Impact**: The `units` / `unit_promotions` / `unit_effects` /
+  `unit_families` tables (per `docs/plans/unit-ingestion.md`) ARE
+  populatable from save files — contrary to the original conclusion
+  here.
 
 ### Previous Blocker ✅ RESOLVED (2025-11-05)
 
@@ -383,7 +412,7 @@ Successfully imported match:
    - ~~Once blocker fixed, confirm cities parse successfully~~
 
 3. ~~**Implement Unit Production parsers**~~ ✅ COMPLETE (2025-11-05)
-   - ~~Discovered individual units don't exist in saves~~
+   - ~~Discovered individual units don't exist in saves~~ — **retracted; they do exist (`<Tile>/<Unit>`).** Full unit ingestion was implemented later (2025-12-04, commit `f96a75e`) per `docs/plans/unit-ingestion.md`.
    - ~~Created `src/parser/entities/unit_production.rs` for aggregate data~~
    - ~~Implemented `player_units_produced` and `city_units_produced` parsers~~
    - ~~Added to import orchestration~~
