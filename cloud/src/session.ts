@@ -110,12 +110,15 @@ export async function sessionFromRequest(
 // The SSR Worker can then read it on hard refresh and forward it to the
 // API via the handleFetch hook in src/hooks.server.ts.
 //
-// Returns null in dev (localhost) where ports differ but host is shared,
-// so no Domain attribute is needed.
+// Gate on HTTPS rather than the request URL's host: wrangler dev rewrites
+// inbound localhost:8787 requests to look like they arrived at the
+// production custom_domain (api.per-ankh.app, from wrangler.toml's
+// `routes`), so request.url's host is unreliable as a dev/prod signal —
+// it would silently apply Domain=per-ankh.app to a localhost response,
+// which the browser rejects. Prod is always HTTPS; dev is HTTP.
 function sessionCookieDomain(request: Request): string | null {
-	const host = new URL(request.url).host;
-	if (host.endsWith("per-ankh.app")) return "per-ankh.app";
-	return null;
+	if (!isSecureRequest(request)) return null;
+	return "per-ankh.app";
 }
 
 // Build a Set-Cookie value for the session token. Secure flag conditional
