@@ -310,7 +310,7 @@
 					target.closest() can no longer find the popover and it gets
 					closed unintentionally.
 				-->
-				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<div
 					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-2 shadow-lg"
 					role="dialog"
