@@ -15,37 +15,37 @@
 
 	let { gameId }: { gameId: string } = $props();
 
-	type State =
+	type Status =
 		| { kind: "idle" }
 		| { kind: "downloading" }
 		| { kind: "modal"; rawZip: ArrayBuffer; fileName: string }
 		| { kind: "error"; message: string };
 
-	let state = $state<State>({ kind: "idle" });
+	let status = $state<Status>({ kind: "idle" });
 	let paradeActive = $state(false);
 
 	async function startReimport() {
-		state = { kind: "downloading" };
+		status = { kind: "downloading" };
 		try {
 			const { blob, filename } = await cloudApi.downloadGame(gameId);
 			const rawZip = await blob.arrayBuffer();
-			state = { kind: "modal", rawZip, fileName: filename };
+			status = { kind: "modal", rawZip, fileName: filename };
 		} catch (err) {
 			if (err instanceof UnauthorizedError) {
-				state = {
+				status = {
 					kind: "error",
 					message: "Session expired — please log in again.",
 				};
 				return;
 			}
 			if (err instanceof ApiError && err.status === 429) {
-				state = {
+				status = {
 					kind: "error",
 					message: "Too many downloads. Try again in an hour.",
 				};
 				return;
 			}
-			state = {
+			status = {
 				kind: "error",
 				message: err instanceof Error ? err.message : String(err),
 			};
@@ -60,15 +60,15 @@
 		// load() but keeps the URL stable.
 		void info;
 		await invalidateAll();
-		state = { kind: "idle" };
+		status = { kind: "idle" };
 	}
 
 	function dismiss() {
-		state = { kind: "idle" };
+		status = { kind: "idle" };
 	}
 </script>
 
-{#if state.kind === "idle"}
+{#if status.kind === "idle"}
 	<button
 		type="button"
 		onclick={startReimport}
@@ -76,7 +76,7 @@
 	>
 		Reparse
 	</button>
-{:else if state.kind === "downloading"}
+{:else if status.kind === "downloading"}
 	<button
 		type="button"
 		disabled
@@ -84,9 +84,9 @@
 	>
 		Fetching save…
 	</button>
-{:else if state.kind === "error"}
+{:else if status.kind === "error"}
 	<div class="flex items-center gap-2">
-		<span class="text-xs text-orange">{state.message}</span>
+		<span class="text-xs text-orange">{status.message}</span>
 		<button
 			type="button"
 			onclick={dismiss}
@@ -97,7 +97,7 @@
 	</div>
 {/if}
 
-{#if state.kind === "modal"}
+{#if status.kind === "modal"}
 	<div
 		class="bg-black/70 fixed inset-0 z-50 flex items-center justify-center p-4"
 		role="dialog"
@@ -107,7 +107,7 @@
 		<div class="w-full max-w-lg">
 			<HieroglyphParade active={paradeActive} />
 			<UploadModal
-				prefilled={{ rawZip: state.rawZip, fileName: state.fileName }}
+				prefilled={{ rawZip: status.rawZip, fileName: status.fileName }}
 				onDone={onModalDone}
 				onBusyChange={(busy) => (paradeActive = busy)}
 			/>
