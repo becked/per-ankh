@@ -1,0 +1,1874 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Per-Ankh — Action Flow Security Walkthrough</title>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							black: "var(--color-black)",
+							brown: "var(--color-brown)",
+							"dark-brown": "var(--color-dark-brown)",
+							orange: "var(--color-orange)",
+							tan: "var(--color-tan)",
+							"tan-hover": "var(--color-tan-hover)",
+							white: "var(--color-white)",
+							yellow: "var(--color-yellow)",
+							"blue-gray": "var(--color-blue-gray)",
+							"border-gray": "var(--color-border-gray)",
+							gray: { 200: "var(--color-gray-200)" },
+						},
+					},
+				},
+			};
+		</script>
+
+		<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+		<script>
+			document.addEventListener("DOMContentLoaded", () => {
+				mermaid.initialize({
+					startOnLoad: true,
+					theme: "base",
+					themeVariables: {
+						background: "#1a1410",
+						primaryColor: "#35302b",
+						primaryTextColor: "#eeeeee",
+						primaryBorderColor: "#ffa500",
+						lineColor: "#d2b48c",
+						secondaryColor: "#211a12",
+						tertiaryColor: "#0e0a07",
+						actorBkg: "#35302b",
+						actorBorder: "#ffa500",
+						actorTextColor: "#eeeeee",
+						actorLineColor: "#d2b48c",
+						signalColor: "#d2b48c",
+						signalTextColor: "#eeeeee",
+						labelBoxBkgColor: "#1a1410",
+						labelBoxBorderColor: "#ffa500",
+						labelTextColor: "#eeeeee",
+						loopTextColor: "#d2b48c",
+						noteBkgColor: "#0e0a07",
+						noteBorderColor: "#ffa500",
+						noteTextColor: "#d2b48c",
+						activationBkgColor: "#c1872f",
+						activationBorderColor: "#ffa500",
+						sequenceNumberColor: "#1a1410",
+						altSectionBkgColor: "rgba(193,135,47,0.08)",
+					},
+					flowchart: {
+						curve: "basis",
+						htmlLabels: true,
+					},
+					sequence: {
+						actorMargin: 60,
+						boxMargin: 10,
+						messageMargin: 35,
+						noteMargin: 10,
+						wrap: true,
+					},
+				});
+			});
+		</script>
+
+		<style>
+			:root {
+				--color-black: #000000;
+				--color-brown: #a52a2a;
+				--color-dark-brown: #79261d;
+				--color-orange: #ffa500;
+				--color-tan: #d2b48c;
+				--color-tan-hover: #d2b48c;
+				--color-white: #ffffff;
+				--color-yellow: #ffff00;
+				--color-blue-gray: #211a12;
+				--color-border-gray: #1c160f;
+				--color-gray-200: #eeeeee;
+			}
+
+			html,
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				background-color: var(--color-blue-gray);
+				color: var(--color-white);
+				margin: 0;
+				padding: 0;
+			}
+
+			.flow-shell {
+				display: grid;
+				grid-template-columns: 260px 1fr;
+				min-height: 100vh;
+			}
+			.flow-toc {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				height: 100vh;
+				overflow-y: auto;
+				border-right: 1px solid #000;
+				padding: 1.5rem 1rem;
+				background-color: #1a1410;
+			}
+			.flow-toc h1 {
+				font-size: 0.875rem;
+				font-weight: bold;
+				color: var(--color-orange);
+				margin-bottom: 1rem;
+				border-bottom: 1px solid #000;
+				padding-bottom: 0.5rem;
+			}
+			.flow-toc ol {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				font-size: 0.75rem;
+			}
+			.flow-toc ol li {
+				margin-bottom: 0.2rem;
+			}
+			.flow-toc a {
+				color: var(--color-tan);
+				text-decoration: none;
+				display: block;
+				padding: 0.25rem 0.5rem;
+				border-radius: 3px;
+			}
+			.flow-toc a:hover {
+				background: #35302b;
+				color: var(--color-orange);
+			}
+			.flow-toc .toc-group {
+				font-size: 0.65rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				margin: 0.9rem 0.5rem 0.3rem;
+			}
+			.flow-toc .toc-sub {
+				padding-left: 0.5rem;
+				color: #999;
+			}
+			.flow-toc .toc-tag {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.6rem;
+				color: var(--color-orange);
+				margin-right: 0.35rem;
+			}
+
+			.flow-main {
+				padding: 2rem 2.5rem 4rem;
+				max-width: 1200px;
+			}
+			.flow-main h2 {
+				font-size: 1.75rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				border-bottom: 2px solid var(--color-orange);
+				padding-bottom: 0.5rem;
+				margin-top: 3rem;
+				margin-bottom: 1rem;
+			}
+			.flow-main h2:first-child {
+				margin-top: 0;
+			}
+			.flow-main h3 {
+				font-size: 1.125rem;
+				font-weight: bold;
+				color: var(--color-tan);
+				margin-top: 2rem;
+				margin-bottom: 0.5rem;
+			}
+			.flow-main h4 {
+				font-size: 0.75rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				margin: 1.25rem 0 0.4rem;
+			}
+			.flow-main p,
+			.flow-main li {
+				color: #c5c3c2;
+				font-size: 0.9rem;
+				line-height: 1.55;
+			}
+			.flow-main p a,
+			.flow-main li a {
+				color: var(--color-orange);
+			}
+			.flow-main p a:hover,
+			.flow-main li a:hover {
+				text-decoration: underline;
+			}
+			.flow-main p.section-intro {
+				margin-bottom: 1.5rem;
+			}
+			.flow-main ul,
+			.flow-main ol {
+				padding-left: 1.4rem;
+			}
+			.flow-main li {
+				margin-bottom: 0.35rem;
+			}
+			.flow-main code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.8rem;
+				background: #0e0a07;
+				padding: 0.1rem 0.3rem;
+				border-radius: 2px;
+				color: var(--color-orange);
+			}
+			.flow-main strong {
+				color: var(--color-gray-200);
+			}
+
+			.flow-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1.25rem 1.5rem 1.5rem;
+				margin-bottom: 1.5rem;
+			}
+			.flow-card-head {
+				display: flex;
+				align-items: baseline;
+				gap: 0.6rem;
+				margin-bottom: 0.5rem;
+				flex-wrap: wrap;
+			}
+			.flow-card-tag {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.7rem;
+				color: var(--color-orange);
+				font-weight: 700;
+				background: #0e0a07;
+				padding: 2px 8px;
+				border-radius: 999px;
+			}
+			.flow-card-title {
+				font-size: 1.1rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				line-height: 1.4;
+			}
+			.flow-card-meta {
+				display: grid;
+				grid-template-columns: 110px 1fr;
+				gap: 0.25rem 1rem;
+				font-size: 0.8rem;
+				margin: 0.5rem 0 0.8rem;
+			}
+			.flow-card-meta .k {
+				font-size: 0.7rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				padding-top: 2px;
+			}
+			.flow-card-meta .v {
+				color: var(--color-tan);
+			}
+			.flow-card-meta .v code {
+				font-size: 0.7rem;
+				color: var(--color-tan);
+				background: #0e0a07;
+			}
+
+			.mermaid-frame {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 4px;
+				padding: 1rem;
+				margin: 0.75rem 0 1rem;
+				overflow-x: auto;
+			}
+			.mermaid {
+				min-width: 100%;
+				display: flex;
+				justify-content: center;
+			}
+
+			.legend-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+				gap: 0.6rem;
+				margin: 0.75rem 0 1rem;
+			}
+			.legend-item {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-left: 3px solid var(--color-orange);
+				border-radius: 4px;
+				padding: 0.6rem 0.8rem;
+				font-size: 0.8rem;
+			}
+			.legend-item .label {
+				font-weight: bold;
+				color: var(--color-gray-200);
+				display: block;
+				margin-bottom: 0.25rem;
+				font-size: 0.85rem;
+			}
+			.legend-item .desc {
+				color: var(--color-tan);
+				line-height: 1.4;
+			}
+
+			.boundary-note {
+				background: rgba(255, 165, 0, 0.06);
+				border-left: 3px solid var(--color-orange);
+				padding: 0.6rem 0.9rem;
+				margin: 0.5rem 0 1rem;
+				border-radius: 4px;
+				font-size: 0.85rem;
+			}
+			.boundary-note strong {
+				color: var(--color-orange);
+			}
+
+			.fail-note {
+				background: rgba(177, 36, 29, 0.08);
+				border-left: 3px solid #b1241d;
+				padding: 0.6rem 0.9rem;
+				margin: 0.5rem 0 1rem;
+				border-radius: 4px;
+				font-size: 0.85rem;
+			}
+
+			.controls-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 0.8rem;
+				margin: 0.75rem 0;
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 4px;
+				overflow: hidden;
+			}
+			.controls-table th {
+				text-align: left;
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				background: #0e0a07;
+				color: var(--color-orange);
+				padding: 0.5rem 0.75rem;
+				border-bottom: 1px solid #2a2622;
+			}
+			.controls-table td {
+				padding: 0.55rem 0.75rem;
+				border-bottom: 1px solid #2a2622;
+				color: var(--color-tan);
+				vertical-align: top;
+			}
+			.controls-table tr:last-child td {
+				border-bottom: none;
+			}
+			.controls-table td code {
+				font-size: 0.7rem;
+				color: var(--color-tan);
+				background: #0e0a07;
+			}
+
+			.footer-note {
+				margin-top: 4rem;
+				padding-top: 1rem;
+				border-top: 1px solid #2a2622;
+				color: #888;
+				font-size: 0.75rem;
+				font-style: italic;
+			}
+		</style>
+	</head>
+
+	<body>
+		<div class="flow-shell">
+			<nav class="flow-toc">
+				<h1>Per-Ankh Flow Walkthrough</h1>
+				<ol>
+					<li><a href="#overview">System overview</a></li>
+					<li><a href="#trust">Trust boundaries</a></li>
+					<li><a href="#auth-model">Auth model</a></li>
+					<li><a href="#authz">Authorization</a></li>
+					<li><a href="#validation">Validation layers</a></li>
+					<li><a href="#storage">Storage &amp; secrets</a></li>
+					<li><a href="#legend">How to read a flow</a></li>
+				</ol>
+
+				<div class="toc-group">Auth lifecycle</div>
+				<ol>
+					<li>
+						<a href="#f1"><span class="toc-tag">F1</span>OAuth login</a>
+					</li>
+					<li>
+						<a href="#f2"><span class="toc-tag">F2</span>Session validation</a>
+					</li>
+					<li>
+						<a href="#f3"><span class="toc-tag">F3</span>Logout</a>
+					</li>
+				</ol>
+
+				<div class="toc-group">Anonymous flows</div>
+				<ol>
+					<li>
+						<a href="#f4"><span class="toc-tag">F4</span>Public game view</a>
+					</li>
+					<li>
+						<a href="#f5"><span class="toc-tag">F5</span>CSP report</a>
+					</li>
+				</ol>
+
+				<div class="toc-group">Authenticated reads</div>
+				<ol>
+					<li>
+						<a href="#f6"><span class="toc-tag">F6</span>Dashboard SSR load</a>
+					</li>
+					<li>
+						<a href="#f7"><span class="toc-tag">F7</span>Game detail</a>
+					</li>
+					<li>
+						<a href="#f8"><span class="toc-tag">F8</span>Save download</a>
+					</li>
+				</ol>
+
+				<div class="toc-group">Authenticated mutations</div>
+				<ol>
+					<li>
+						<a href="#f9"><span class="toc-tag">F9</span>Save upload</a>
+					</li>
+					<li>
+						<a href="#f10"><span class="toc-tag">F10</span>PATCH game</a>
+					</li>
+					<li>
+						<a href="#f11"><span class="toc-tag">F11</span>Delete game</a>
+					</li>
+				</ol>
+
+				<div class="toc-group">Legacy</div>
+				<ol>
+					<li>
+						<a href="#f12"><span class="toc-tag">F12</span>Legacy share</a>
+					</li>
+				</ol>
+			</nav>
+
+			<main class="flow-main">
+				<header style="margin-bottom: 2rem">
+					<h2 style="margin-top: 0; border-bottom: 3px solid var(--color-orange)">
+						Action Flow Security Walkthrough
+					</h2>
+					<p class="section-intro">
+						Twelve action flows through Per-Ankh's
+						<code>Browser → SSR Worker → API Worker → D1 / R2 / KV</code>
+						topology, each rendered as a sequence diagram with a step-by-step
+						security commentary. The first six sections frame the system as a
+						whole — boundaries, auth model, validation layers — so the per-flow
+						cards can be terse. Every concrete claim is cited with
+						<code>file:line</code> against the working tree at 2026-05-10.
+					</p>
+				</header>
+
+				<!-- ============ §1 OVERVIEW ============ -->
+				<h2 id="overview">1. System overview</h2>
+				<p class="section-intro">
+					Four runtime tiers and one external service. Two of the tiers (SSR
+					Worker, API Worker) are Cloudflare Workers; the storage tier is three
+					sibling bindings on the same Cloudflare account. Discord is the only
+					third-party in any production flow.
+				</p>
+
+				<div class="mermaid-frame">
+					<div class="mermaid">
+flowchart LR
+    subgraph CLIENT["Client tier"]
+        BA[Anonymous browser]
+        BU[Authenticated browser<br/>Cookie: session]
+    end
+
+    subgraph EDGE["Cloudflare edge"]
+        SSR["SSR Worker<br/>per-ankh.app<br/>SvelteKit + adapter-cloudflare"]
+        API["API Worker<br/>api.per-ankh.app<br/>hand-rolled router"]
+    end
+
+    subgraph STORE["Storage bindings"]
+        D1[("D1<br/>SHARE_DB<br/>users • games • events<br/>collections • online_ids")]
+        R2[("R2<br/>SHARE_BUCKET<br/>games/&lt;id&gt;.json.gz<br/>saves/&lt;id&gt;.zip")]
+        KV[("KV<br/>SESSIONS_KV<br/>oauth:* 5min<br/>session:* 30d")]
+    end
+
+    DISCORD{{Discord OAuth<br/>identify + email}}
+
+    BA -->|HTML, CSS, JS| SSR
+    BU -->|HTML, hydration<br/>Cookie forwarded| SSR
+    BA -.->|"public game JSON<br/>(PII-stripped)"| API
+    BU -->|"credentialed JSON<br/>Cookie: session"| API
+    SSR -->|"server-side fetch<br/>via handleFetch"| API
+    API <-->|"D1 prepare/bind"| D1
+    API <-->|"get / put / delete<br/>server-constructed keys"| R2
+    API <-->|"session: + oauth:"| KV
+    API -->|"token exchange<br/>user fetch"| DISCORD
+
+    style BA fill:#211a12,stroke:#d2b48c
+    style BU fill:#211a12,stroke:#ffa500
+    style SSR fill:#35302b,stroke:#ffa500
+    style API fill:#35302b,stroke:#ffa500
+    style D1 fill:#1a1410,stroke:#c1872f
+    style R2 fill:#1a1410,stroke:#c1872f
+    style KV fill:#1a1410,stroke:#c1872f
+    style DISCORD fill:#0e0a07,stroke:#d2b48c
+					</div>
+				</div>
+
+				<p>
+					The two Workers run in the same Cloudflare account but are deployed
+					as separate <code>wrangler.toml</code> bundles — one for the SvelteKit
+					app (root <code>wrangler.toml</code>) and one for the API
+					(<code>cloud/wrangler.toml</code>). Only the API Worker holds the
+					storage bindings and the Discord client secret.
+				</p>
+
+				<!-- ============ §2 TRUST ============ -->
+				<h2 id="trust">2. Trust boundaries</h2>
+				<p class="section-intro">
+					What's trusted at each tier, and what each tier is allowed to assume
+					about the layer above it.
+				</p>
+
+				<table class="controls-table">
+					<thead>
+						<tr>
+							<th>Tier</th>
+							<th>Trusted to do</th>
+							<th>Never trusted to do</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><strong>Browser</strong></td>
+							<td>Render UI, run the Web Worker parser for upload UX, hold the session cookie (HttpOnly).</td>
+							<td>Authoritatively answer "is this game public", "is this user the owner", "is this file already on the server" — every such question is re-asked of the API server-side.</td>
+						</tr>
+						<tr>
+							<td><strong>SSR Worker</strong><br/>(per-ankh.app)</td>
+							<td>Render HTML, apply security headers (XCTO, XFO=DENY, Referrer-Policy, Permissions-Policy, Report-To), forward the incoming Cookie header on cross-origin API fetches.</td>
+							<td>Make security decisions on behalf of the API — it has no D1/R2/KV bindings and no Discord secret. The SSR Worker is a renderer with extra plumbing, not a security boundary.</td>
+						</tr>
+						<tr>
+							<td><strong>API Worker</strong><br/>(api.per-ankh.app)</td>
+							<td>Validate every request (Valibot + bound-checks), enforce ownership against D1, run rate limits, decompress with caps, hash uploads server-side, mint sessions, strip PII for public reads, emit structured logs with PII deny-list.</td>
+							<td>Reject failure on the response path (audit-event inserts are fire-and-forget so a logging hiccup can't 500 a real request), or surface internal error details (stack traces, internal IDs) in error responses.</td>
+						</tr>
+						<tr>
+							<td><strong>D1 / R2 / KV</strong></td>
+							<td>Persist data exactly as the Worker stores it; enforce constraints (UNIQUE, FK, NOT NULL) the schema declares; honour TTLs on KV keys.</td>
+							<td>Be reached by anything other than the API Worker. No public-read R2 buckets, no D1 HTTP API exposed.</td>
+						</tr>
+						<tr>
+							<td><strong>Discord OAuth</strong></td>
+							<td>Authenticate the user, enforce its own <code>redirect_uri</code> allowlist, return signed identity claims, mint single-use authorization codes.</td>
+							<td>Be the only authorization gate — the Worker re-checks the username allowlist locally on every login and every <code>/v1/auth/me</code>.</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<div class="boundary-note">
+					<strong>The critical boundary is between the browser and the API Worker.</strong>
+					Everything in the SvelteKit app is client-controllable — CSP,
+					<code>safeNext()</code>, the Web Worker parser, even the SSR-rendered
+					HTML — and the API Worker is responsible for validating every
+					assertion that crosses it. The SSR Worker's job is presentation +
+					cookie forwarding; treating it as a security control would create a
+					gap.
+				</div>
+
+				<!-- ============ §3 AUTH MODEL ============ -->
+				<h2 id="auth-model">3. Authentication model</h2>
+				<p class="section-intro">
+					Discord OAuth 2.0 with PKCE, gated by a server-side username
+					allowlist, session token in KV with a 30-day TTL. Three properties
+					are load-bearing:
+				</p>
+				<ul>
+					<li>
+						<strong>State + PKCE bind the OAuth round-trip to the browser tab.</strong>
+						32-byte state and 32-byte verifier (CSPRNG) live in KV under a
+						5-minute key. The KV id is in an <code>oauth_pending</code> cookie
+						that the browser presents at the callback. The KV entry is
+						deleted unconditionally on the first callback read — a stolen
+						authorization code can't be replayed.
+					</li>
+					<li>
+						<strong>The username allowlist is re-checked every request,
+						not just at login.</strong> <code>handleMe</code> compares the
+						lowercased Discord username on the session against the current
+						<code>ALLOWED_DISCORD_USERNAMES</code> value. Revoking access is
+						a secret update + a session-TTL wait, not a database migration.
+					</li>
+					<li>
+						<strong>The session token is opaque and KV-backed.</strong>
+						32-byte nanoid, server-side revocable, no claims encoded
+						client-side. There is no JWT to forge.
+					</li>
+				</ul>
+
+				<h4>Cookie attributes</h4>
+				<table class="controls-table">
+					<thead>
+						<tr>
+							<th>Cookie</th>
+							<th>HttpOnly</th>
+							<th>SameSite</th>
+							<th>Secure</th>
+							<th>Domain</th>
+							<th>Max-Age</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>oauth_pending</code></td>
+							<td>✓</td>
+							<td>Lax</td>
+							<td>✓ (HTTPS)</td>
+							<td>host-only</td>
+							<td>300s</td>
+						</tr>
+						<tr>
+							<td><code>session</code></td>
+							<td>✓</td>
+							<td>Lax</td>
+							<td>✓ (HTTPS)</td>
+							<td><code>per-ankh.app</code></td>
+							<td>30d</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<!-- ============ §4 AUTHZ ============ -->
+				<h2 id="authz">4. Authorization &amp; ownership</h2>
+				<p class="section-intro">
+					Per-resource ownership is the only authorization primitive — no
+					roles, no admin layer in the request path (admin tooling sits behind
+					<code>wrangler</code> CLI access, not a web endpoint).
+				</p>
+				<ul>
+					<li>
+						<strong>Every authed handler resolves <code>session.user_id</code>
+						from KV once, then filters all D1 reads/writes on it.</strong>
+						Reads either include <code>WHERE user_id = ?</code> directly
+						(stats, games list, collections list) or do a row lookup followed
+						by an equality check (game detail, patch, delete).
+					</li>
+					<li>
+						<strong>Mutations on private resources collapse "doesn't exist"
+						and "isn't yours" into a single 404.</strong> See
+						<code>games.ts:1328-1330</code> (PATCH) and
+						<code>games.ts:1524-1527</code> (download). The
+						<code>handleDelete</code> for legacy share is the exception
+						and is tracked as F-17 / Info in the review.
+					</li>
+					<li>
+						<strong>Cross-resource ownership is re-checked.</strong> Moving a
+						game into a collection (PATCH <code>collection_id</code>) requires
+						the collection to also be owned by <code>session.user_id</code> —
+						see <code>games.ts:1371-1379</code>.
+					</li>
+					<li>
+						<strong>Public reads strip PII, never grant write.</strong>
+						<code>is_public = TRUE</code> is the only flag that ever opens a
+						resource to anonymous read; it never grants delete, download, or
+						patch. See <code>games.ts:1199-1208</code>.
+					</li>
+				</ul>
+
+				<!-- ============ §5 VALIDATION ============ -->
+				<h2 id="validation">5. Validation layers</h2>
+				<p class="section-intro">
+					Five validation layers in front of every write path. The pipeline is
+					strictly server-side: nothing the client tells the server is taken on
+					trust.
+				</p>
+				<table class="controls-table">
+					<thead>
+						<tr>
+							<th>Layer</th>
+							<th>What it checks</th>
+							<th>Where it lives</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td>Dispatch regex</td>
+							<td>Path params match <code>[A-Za-z0-9_-]{21}</code> (nanoid shape); UUID for legacy app keys.</td>
+							<td><code>cloud/src/index.ts:548-680</code></td>
+						</tr>
+						<tr>
+							<td>CORS + cookie</td>
+							<td>Origin in <code>ALLOWED_ORIGINS</code>; <code>SameSite=Lax</code> blocks cross-site cookie attachment on POST forms.</td>
+							<td><code>cloud/src/util.ts:62-82</code></td>
+						</tr>
+						<tr>
+							<td>Auth + ownership</td>
+							<td>Session resolves; resource <code>user_id</code> matches; cross-resource ownership re-checked.</td>
+							<td>Per-handler — see §4.</td>
+						</tr>
+						<tr>
+							<td>Size + decompression</td>
+							<td>Content-Length pre-check; compressed cap (10MB game blob, 50MB ZIP); streaming decompress cap (50MB); gzip-bomb defense.</td>
+							<td><code>cloud/src/util.ts:147-179</code>, <code>cloud/src/games.ts:790-817</code></td>
+						</tr>
+						<tr>
+							<td>Schema (Valibot)</td>
+							<td>Top-level shape, known parser_version, array length bounds, nested-object required fields, integer ranges. <code>looseObject</code> for forward-compat on the envelope only.</td>
+							<td><code>cloud/src/schemas/game.ts</code>, <code>cloud/src/schemas/collection.ts</code></td>
+						</tr>
+					</tbody>
+				</table>
+
+				<!-- ============ §6 STORAGE ============ -->
+				<h2 id="storage">6. Storage &amp; secrets</h2>
+				<p class="section-intro">
+					Three bindings, all server-constructed keys, no public-read flags.
+				</p>
+				<div class="legend-grid">
+					<div class="legend-item">
+						<span class="label">D1 — <code>SHARE_DB</code></span>
+						<span class="desc">
+							All queries via <code>db.prepare(sql).bind(...)</code>; no
+							string concatenation into SQL. <code>event_type</code> is
+							a fixed allowlist used as a literal (not a bind param) by
+							design — closes the only structural SQL injection vector.
+						</span>
+					</div>
+					<div class="legend-item">
+						<span class="label">R2 — <code>SHARE_BUCKET</code></span>
+						<span class="desc">
+							Keys are always
+							<code>games/&lt;nanoid&gt;.json.gz</code> or
+							<code>saves/&lt;nanoid&gt;.zip</code>. Content-Type +
+							Content-Encoding fixed server-side. No signed URLs;
+							all reads go through the API Worker (so it can apply auth,
+							PII strip, rate limit).
+						</span>
+					</div>
+					<div class="legend-item">
+						<span class="label">KV — <code>SESSIONS_KV</code></span>
+						<span class="desc">
+							<code>oauth:&lt;nanoid&gt;</code> (5min TTL),
+							<code>session:&lt;nanoid&gt;</code> (30d TTL). TTLs are the
+							sole expiry mechanism — no separate cleanup job.
+						</span>
+					</div>
+					<div class="legend-item">
+						<span class="label">Secrets</span>
+						<span class="desc">
+							<code>DISCORD_CLIENT_SECRET</code> and
+							<code>ALLOWED_DISCORD_USERNAMES</code> set via
+							<code>wrangler secret put</code> only. Never in
+							<code>wrangler.toml</code>, never in
+							<code>.env</code> committed to git.
+						</span>
+					</div>
+				</div>
+
+				<!-- ============ §7 LEGEND ============ -->
+				<h2 id="legend">7. How to read a flow card</h2>
+				<p class="section-intro">
+					Each card has the same shape: title, scope/route header, a Mermaid
+					sequence diagram, a numbered walkthrough keyed to the diagram's
+					autonumber, where the trust transitions happen, and what could go
+					wrong if a check were bypassed.
+				</p>
+				<div class="legend-grid">
+					<div class="legend-item">
+						<span class="label">Participants</span>
+						<span class="desc">
+							<code>B</code> = browser, <code>SSR</code> = SSR Worker,
+							<code>API</code> = API Worker, <code>D1</code> /
+							<code>R2</code> / <code>KV</code> = storage bindings,
+							<code>D</code> = Discord.
+						</span>
+					</div>
+					<div class="legend-item">
+						<span class="label">Numbered arrows</span>
+						<span class="desc">
+							Match the "Walkthrough" list one-for-one. Numbers in the
+							walkthrough refer to the diagram autonumber, not the bullet
+							ordinal.
+						</span>
+					</div>
+					<div class="legend-item">
+						<span class="label">Boundary notes (orange)</span>
+						<span class="desc">
+							Where data crosses a trust boundary and what's enforced at
+							the crossing.
+						</span>
+					</div>
+					<div class="legend-item">
+						<span class="label">Failure mode notes (red)</span>
+						<span class="desc">
+							What an attacker gains — or what observably breaks — if a
+							specific check is bypassed. Helps you weigh the
+							defense-in-depth value of each layer.
+						</span>
+					</div>
+				</div>
+
+				<!-- ════════════════════════════════════════════════════════ -->
+				<!-- ════════════════════════ FLOWS ═════════════════════════ -->
+				<!-- ════════════════════════════════════════════════════════ -->
+
+				<!-- ──────────── F1 — OAuth Login ──────────── -->
+				<article class="flow-card" id="f1">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F1</span>
+						<span class="flow-card-title">Discord OAuth login</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Routes</div>
+						<div class="v">
+							<code>POST /v1/auth/discord/start</code> &middot;
+							<code>POST /v1/auth/discord/callback</code>
+						</div>
+						<div class="k">Sources</div>
+						<div class="v">
+							<code>src/routes/login/+page.svelte</code> &middot;
+							<code>src/routes/auth/callback/+page.svelte</code> &middot;
+							<code>cloud/src/auth.ts:174-515</code>
+						</div>
+						<div class="k">Trigger</div>
+						<div class="v">User clicks "Login with Discord" on <code>/login</code>.</div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant API as API Worker
+    participant KV as KV
+    participant D as Discord
+    participant D1 as D1
+    B->>B: safeNext(URL.search.next)
+    B->>API: POST /v1/auth/discord/start<br/>{redirect_uri, next}
+    API->>API: state := 32B CSPRNG<br/>verifier := 32B CSPRNG<br/>challenge := SHA-256(verifier)
+    API->>KV: PUT oauth:kvId<br/>{state,verifier,redirect_uri,next}<br/>TTL 300s
+    API-->>B: 200 {authorize_url}<br/>Set-Cookie oauth_pending=kvId<br/>HttpOnly Lax Secure 300s
+    B->>D: GET authorize_url (top-level nav)
+    Note over D: validates redirect_uri<br/>against dashboard allowlist
+    D-->>B: 302 redirect_uri?code=...&state=...
+    B->>API: POST /v1/auth/discord/callback<br/>{code,state,redirect_uri}<br/>Cookie oauth_pending=kvId
+    API->>KV: GET oauth:kvId
+    API->>KV: DELETE oauth:kvId (single-use)
+    API->>API: timingSafeEqual(stored.state, callback.state)<br/>stored.redirect_uri === callback.redirect_uri
+    API->>D: POST /oauth2/token<br/>{code, code_verifier, client_secret}
+    D-->>API: 200 {access_token}
+    API->>D: GET /users/@me Bearer access_token
+    D-->>API: 200 {id, username, email}
+    API->>API: parseAllowedUsernames() fail-closed<br/>lowercase(username) in set?
+    alt rejected
+        API->>D1: INSERT events login_denied<br/>{discord_id, username}
+        API-->>B: 403 NOT_AUTHORIZED
+    else allowed
+        API->>D1: INSERT users ON CONFLICT(discord_id)<br/>RETURNING user_id
+        API->>D1: INSERT OR IGNORE collections (Personal)
+        API->>API: token := nanoid(32)
+        API->>KV: PUT session:token = {user_id, username}<br/>TTL 30d
+        API->>D1: INSERT events login
+        API-->>B: 200 {user_id, next}<br/>Set-Cookie session=token<br/>HttpOnly Lax Secure<br/>Domain=per-ankh.app 30d<br/>Clear oauth_pending
+        B->>B: safeNext(response.next)<br/>goto(target)
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-2.</strong> Frontend sanitizes <code>?next=</code> via <code>safeNext()</code> (rejects non-<code>/</code>, <code>//</code>, backslash) before sending — server re-validates on receipt, so this is purely UX.</li>
+						<li><strong>3-4.</strong> Worker mints state, PKCE verifier, KV id (nanoid). All randomness from <code>crypto.getRandomValues()</code>. KV write has a 5-minute TTL — no separate cleanup needed.</li>
+						<li><strong>5.</strong> <code>authorize_url</code> includes the SHA-256 PKCE challenge (S256), state, and <code>prompt=none</code> so returning users skip the consent screen. <code>oauth_pending</code> cookie carries only the KV id — the verifier and state never leave the server.</li>
+						<li><strong>6-8.</strong> Browser navigates to Discord. Discord enforces its own <code>redirect_uri</code> allowlist — see F-10 for the defense-in-depth gap (Worker doesn't re-check). Authorization code returned via redirect.</li>
+						<li><strong>9-11.</strong> Callback reads the KV entry and <strong>deletes it before doing anything else.</strong> A leaked code can't be replayed because the corresponding state has already evaporated.</li>
+						<li><strong>12.</strong> State comparison is timing-safe via <code>crypto.subtle.timingSafeEqual</code>. <code>redirect_uri</code> match is plain equality (not a secret).</li>
+						<li><strong>13-16.</strong> Token exchange uses the stored verifier — PKCE prevents code-interception even if the redirect chain were tampered with. Discord profile fetched with the access token; the token is never stored or returned to the client.</li>
+						<li><strong>17.</strong> Username allowlist re-checked here (and again at every <code>/v1/auth/me</code> — F2 step 5). Empty / unset secret fails closed.</li>
+						<li><strong>18-22.</strong> User row upserted (<code>ON CONFLICT(discord_id)</code> so the same Discord user always maps to the same <code>user_id</code>). Personal collection seeded once. Session token minted, KV write before the cookie response.</li>
+						<li><strong>23.</strong> Worker returns the server-validated <code>next</code>; client re-runs <code>safeNext()</code> as belt-and-suspenders in case an older <code>OAuthPending</code> shape lacks the field.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transitions:</strong>
+						(a) Browser → Worker at step 2 — Worker treats <code>redirect_uri</code> and <code>next</code> as untrusted strings, stores them only after <code>safeNext()</code> applies. (b) Worker → Discord at step 13 — Worker presents only public client_id + server-held client_secret + PKCE verifier; access token never round-trips to the client. (c) Discord → Worker at steps 14, 16 — Worker treats the profile as identity claims to be re-checked against the local allowlist before any session is minted.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the state check (step 12) is bypassed:</strong> an attacker can complete the OAuth callback for a victim using a code they obtained out-of-band, hijacking the session that gets minted. The KV delete-on-read makes this a single-shot attack; the timing-safe compare prevents oracle attacks.<br/>
+						<strong>If the allowlist check (step 17) is bypassed:</strong> any Discord user becomes an authenticated app user. The check is the entire beta gate.
+					</div>
+				</article>
+
+				<!-- ──────────── F2 — Session validation ──────────── -->
+				<article class="flow-card" id="f2">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F2</span>
+						<span class="flow-card-title">Session validation (per-request)</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Trigger</div>
+						<div class="v">Every authed endpoint, via <code>sessionFromRequest(env, request)</code>.</div>
+						<div class="k">Sources</div>
+						<div class="v"><code>cloud/src/session.ts:88-99</code> &middot; <code>cloud/src/auth.ts:517-563</code> (<code>/me</code> specifically)</div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant API as API Worker
+    participant KV as KV
+    participant D1 as D1
+    B->>API: GET /v1/auth/me<br/>Cookie session=token
+    API->>API: runWithLogContext()<br/>request_id := crypto.randomUUID()
+    API->>API: parseCookies(Cookie)<br/>token := cookies.session
+    alt token missing
+        API-->>B: 401 UNAUTHORIZED
+    else token present
+        API->>KV: GET session:token
+        alt KV miss / expired
+            API-->>B: 401 UNAUTHORIZED
+        else hit
+            API->>API: validate {user_id, discord_username}<br/>setUserId on log context
+            API->>D1: SELECT user_id, ..., avatar_hash FROM users<br/>WHERE user_id = ?
+            alt user deleted
+                API->>KV: DELETE session:token
+                API-->>B: 401 UNAUTHORIZED
+            else user present
+                API->>API: parseAllowedUsernames()<br/>username in set?
+                alt revoked
+                    API->>KV: DELETE session:token
+                    API-->>B: 401 UNAUTHORIZED
+                else still allowed
+                    API-->>B: 200 {user_id, display_name, ...}
+                end
+            end
+        end
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-2.</strong> Every request enters via <code>runWithLogContext</code> which sets up an AsyncLocalStorage frame with a fresh UUID request_id, the route pattern, and a place for the resolved user_id.</li>
+						<li><strong>3.</strong> Cookie parsed by a small helper that ignores malformed entries — no third-party cookie library on this hot path.</li>
+						<li><strong>4-7.</strong> KV miss is indistinguishable from "expired"; KV's own TTL handles cleanup. Pre-allowlist-migration sessions lack <code>discord_username</code> and are treated as missing — forces a clean re-login when the gate changes.</li>
+						<li><strong>8.</strong> <code>setUserId</code> annotates the request-scoped log context so the access log emitted at the end of the request carries the resolved user_id without any handler having to pass it through.</li>
+						<li><strong>9-12.</strong> <code>/v1/auth/me</code> specifically: re-checks against the current allowlist on every call. If the username has been removed from <code>ALLOWED_DISCORD_USERNAMES</code> since login, the session is destroyed here. Other authed endpoints don't repeat this check — they trust the allowlist verdict at login time within the session TTL window.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transition:</strong> the cookie crosses the
+						browser-to-Worker boundary in plaintext at the HTTPS layer.
+						<code>HttpOnly</code> prevents JS from reading it;
+						<code>SameSite=Lax</code> prevents cross-site sub-resource
+						attachment; <code>Secure</code> prevents plain-HTTP transmission.
+						The token itself is opaque (no claims), so capture is the only
+						attack — covered by the cookie attributes above plus rotation on
+						logout.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the KV lookup is bypassed:</strong> an attacker who has
+						guessed a session token gains the victim's identity. nanoid(32) =
+						~256 bits, so guessing is infeasible; capture is the only realistic
+						avenue. <strong>If the allowlist re-check is bypassed:</strong>
+						users whose access was revoked retain their session until KV
+						expires it (max 30 days).
+					</div>
+				</article>
+
+				<!-- ──────────── F3 — Logout ──────────── -->
+				<article class="flow-card" id="f3">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F3</span>
+						<span class="flow-card-title">Logout</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Route</div>
+						<div class="v"><code>POST /v1/auth/logout</code></div>
+						<div class="k">Sources</div>
+						<div class="v"><code>cloud/src/auth.ts:566-597</code> &middot; <code>src/routes/account/+page.svelte:12-23</code></div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant API as API Worker
+    participant KV as KV
+    participant D1 as D1
+    B->>API: POST /v1/auth/logout<br/>credentials include
+    API->>API: sessionFromRequest()
+    alt session present
+        API->>KV: DELETE session:token
+        API->>D1: INSERT events logout<br/>{user_id, ip}
+    else no session (CSRF probe / replay)
+        Note over API: idempotent — no action
+    end
+    API-->>B: 204<br/>Set-Cookie session=; Max-Age=0<br/>Domain=per-ankh.app
+    B->>B: window.location.assign('/')<br/>hard reload
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1.</strong> Client POSTs with <code>credentials: 'include'</code>; CORS preflight against allowlist + <code>SameSite=Lax</code> blocks cross-site cookie attachment on POST forms.</li>
+						<li><strong>2-4.</strong> KV entry deleted; audit row written only if a real session was torn down. Anonymous POSTs still return 204 — the endpoint is idempotent so retries from disconnected clients don't fail.</li>
+						<li><strong>5.</strong> Clear cookie must use the same <code>Domain</code> attribute or the browser treats it as a different cookie and won't actually clear the real one.</li>
+						<li><strong>6.</strong> Frontend does a <code>window.location.assign('/')</code> hard reload to flush any stale client-side state — see commit f295d20 ("hard-reload on logout to avoid stuck state").</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transition:</strong> the only state change is the
+						KV delete. R2 and D1 user data are not touched (those need F-01's
+						account-deletion endpoint). The audit-log insert is best-effort
+						via <code>try/catch</code> — a D1 hiccup must not prevent the
+						cookie from being cleared.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the KV delete fails silently:</strong> the cookie is
+						cleared but the session token remains valid in KV. If the user's
+						cookie was captured before logout, the attacker can continue using
+						it until the 30-day TTL expires. Today this is a tolerated
+						degraded state; a per-user session index would let future
+						revocation guarantee both sides.
+					</div>
+				</article>
+
+				<!-- ──────────── F4 — Anonymous public game view ──────────── -->
+				<article class="flow-card" id="f4">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F4</span>
+						<span class="flow-card-title">Anonymous public game view</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Routes</div>
+						<div class="v">
+							<code>GET /games/&lt;id&gt;</code> (SSR) &middot;
+							<code>GET /v1/games/:id</code> (API, anonymous branch)
+						</div>
+						<div class="k">Sources</div>
+						<div class="v">
+							<code>src/routes/games/[id]/+page.ts</code> &middot;
+							<code>cloud/src/games.ts:1183-1296</code>
+						</div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Anonymous browser
+    participant SSR as SSR Worker
+    participant API as API Worker
+    participant D1 as D1
+    participant R2 as R2
+    B->>SSR: GET /games/abc<br/>no Cookie
+    SSR->>SSR: load() calls cloudApi.getGame(id, {fetch})
+    Note over SSR: handleFetch: no Cookie<br/>→ no auth forwarded
+    SSR->>API: GET /v1/games/abc<br/>no Cookie<br/>Origin: per-ankh.app
+    API->>API: sessionFromRequest() → null
+    API->>D1: SELECT user_id, is_public<br/>FROM games WHERE game_id = ?
+    alt row missing
+        API-->>SSR: 404 NOT_FOUND
+        SSR-->>B: SvelteKit 404 page
+    else row.is_public = 0
+        API-->>SSR: 401 UNAUTHORIZED
+        SSR-->>B: 303 /login?next=/games/abc
+    else row.is_public = 1
+        API->>API: isScraperUA(UA)?
+        alt non-scraper
+            API->>D1: COUNT events anon_read<br/>WHERE ip = ? last hour
+            alt over 200/h
+                API-->>SSR: 429 RATE_LIMIT
+            end
+            API->>D1: INSERT events anon_read<br/>(fire-and-forget)
+        end
+        API->>R2: GET games/abc.json.gz
+        API->>API: decompressWithLimit(50MB)<br/>JSON.parse
+        API->>API: stripOnlineIds(blob)<br/>recursive walk
+        API-->>SSR: 200 JSON<br/>Cache-Control public, max-age=3600,<br/>s-maxage=60<br/>Vary: Cookie, Origin
+        SSR-->>B: SSR HTML with OG tags<br/>+ security headers
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-2.</strong> SSR route loads. <code>handleFetch</code> sees no Cookie header and doesn't forward anything.</li>
+						<li><strong>3.</strong> Cross-origin fetch from SSR (per-ankh.app) to API (api.per-ankh.app). Both are Cloudflare-internal but they're separate Workers — the request still goes through normal CORS gates.</li>
+						<li><strong>4-5.</strong> Worker resolves <code>session = null</code>. D1 lookup pulls the bare access-control flags (no blob yet — cheap if we're going to deny).</li>
+						<li><strong>6-7.</strong> Existence isn't disclosed for private games: anonymous + private returns 401 (frontend bounces to login), signed-in + private + non-owner returns 403 (covered in F7). Public path continues.</li>
+						<li><strong>8-9.</strong> Scraper UA exemption — Discord/Slack/Twitter etc. skip rate limiting <em>and</em> the audit log. F-03 in the security review flags both the spoofability and the audit-log gap.</li>
+						<li><strong>10.</strong> Rate-limit check via D1 events table — global per-IP (not per-POP), so a determined scraper can't shard across Cloudflare colos.</li>
+						<li><strong>11-13.</strong> R2 fetch, decompress with cap, JSON parse, recursive PII strip. The deep walk catches <code>online_id</code> wherever the schema may put it in the future, not just in <code>player_roster</code>.</li>
+						<li><strong>14.</strong> Cache-Control + Vary: anonymous (no Cookie) shares one edge cache entry, signed-in viewers get per-session cache keys, owners get <code>no-store</code>. PII-stripped blob is safe to cache publicly.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transitions:</strong> the only data crossing back
+						to the browser is the PII-stripped blob — every <code>online_id</code>
+						field is rewritten to <code>null</code> before the response is
+						stringified. The recursive walk is the only line of defense; a
+						future parser version that adds a new <code>online_id</code>
+						location is caught without any code change here.
+					</div>
+
+					<div class="fail-note">
+						<strong>If <code>stripOnlineIds</code> misses a field:</strong>
+						platform IDs (Steam/GOG/Epic) for opponents leak to anonymous
+						viewers — the same opponents who didn't choose to upload the save
+						are exposed. <strong>If the <code>is_public</code> gate is
+						bypassed:</strong> a private game's blob (including full PII)
+						becomes anonymously readable. The gate is a single integer column
+						comparison; rate-limit pressure cannot bypass it.
+					</div>
+				</article>
+
+				<!-- ──────────── F5 — CSP report ──────────── -->
+				<article class="flow-card" id="f5">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F5</span>
+						<span class="flow-card-title">CSP violation report</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Route</div>
+						<div class="v"><code>POST /v1/csp-report</code> (unauthenticated)</div>
+						<div class="k">Sources</div>
+						<div class="v"><code>cloud/src/csp.ts</code> &middot; <code>svelte.config.js:57-58</code> &middot; <code>src/hooks.server.ts:27-37</code></div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant API as API Worker
+    participant LP as Logpush sink
+    Note over B: page CSP violation<br/>(e.g. inline script blocked)
+    B->>API: POST /v1/csp-report<br/>Content-Type: application/csp-report<br/>or application/reports+json
+    API->>API: Content-Length &le; 64KB?
+    alt over cap
+        API-->>B: 413
+    else within cap
+        API->>API: body := request.text()
+        alt body.length &gt; 64KB
+            API-->>B: 413
+        else body.length = 0
+            API-->>B: 204
+        else
+            API->>API: JSON.parse
+            alt malformed JSON
+                API-->>B: 400
+            else
+                API->>API: try normalizeLegacy<br/>try normalizeReportingApi
+                alt no recognised shape
+                    API->>LP: logEvent warn<br/>csp_violation_unknown_format
+                    API-->>B: 204
+                else
+                    loop each violation
+                        API->>LP: logEvent warn<br/>csp_violation<br/>document_uri, blocked_uri,<br/>violated_directive, ...
+                    end
+                    API-->>B: 204
+                end
+            end
+        end
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-2.</strong> Browser sends violation report; the format depends on whether <code>report-uri</code> or <code>report-to</code> fired (both are configured to satisfy old + new browsers).</li>
+						<li><strong>3-6.</strong> 64KB Content-Length pre-check, then a second check after buffering — defense in depth in case a client lies about the header.</li>
+						<li><strong>7-9.</strong> JSON parse → normalize. Two shapes recognized; both flatten to the same <code>NormalizedViolation</code> object for consistent log shape.</li>
+						<li><strong>10-11.</strong> Each normalized violation becomes one Logpush log line. <strong>The endpoint is unauthenticated and unrated</strong> — see F-05 in the security review.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transition:</strong> the browser is reporting on
+						its own CSP enforcement; the payload itself is treated as untrusted
+						but bounded — 64KB ceiling, JSON parse cost is the only Worker
+						CPU expended per request. The URLs in the report
+						(<code>blocked_uri</code> etc.) are partially attacker-controllable
+						on a compromised page and are not in the PII deny-list — see F-06
+						in the security review.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the 64KB cap is bypassed:</strong> Worker memory
+						attack surface grows; defended by a second post-buffer length
+						check. <strong>Without rate limiting:</strong> attacker can
+						sustain Worker-rate POSTs of crafted violation arrays, each
+						emitting many Logpush lines. Cost amplification, no data
+						compromise — see F-05.
+					</div>
+				</article>
+
+				<!-- ──────────── F6 — Dashboard SSR ──────────── -->
+				<article class="flow-card" id="f6">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F6</span>
+						<span class="flow-card-title">Authenticated dashboard load (SSR + cookie forwarding)</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Routes</div>
+						<div class="v">
+							<code>GET /dashboard</code> (SSR) →
+							<code>GET /v1/stats</code> +
+							<code>GET /v1/games</code> +
+							<code>GET /v1/collections</code>
+						</div>
+						<div class="k">Sources</div>
+						<div class="v">
+							<code>src/routes/dashboard/+page.ts</code> &middot;
+							<code>src/hooks.server.ts</code> &middot;
+							<code>cloud/src/stats.ts</code> &middot;
+							<code>cloud/src/games.ts:1118-1181</code> &middot;
+							<code>cloud/src/collections.ts:27-67</code>
+						</div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Authed browser
+    participant SSR as SSR Worker
+    participant API as API Worker
+    participant KV as KV
+    participant D1 as D1
+    B->>SSR: GET /dashboard<br/>Cookie session=token<br/>(Domain=per-ankh.app)
+    SSR->>SSR: handle() applies security headers<br/>XCTO XFO Referrer-Policy
+    SSR->>SSR: +page.ts load() runs Promise.all
+    par /v1/stats
+        SSR->>API: GET /v1/stats<br/>handleFetch forwards Cookie
+        API->>KV: GET session:token
+        KV-->>API: {user_id}
+        API->>D1: 5 user-scoped aggregations<br/>SELECT ... WHERE user_id = ?
+        D1-->>API: rows
+        API-->>SSR: 200 stats JSON
+    and /v1/games
+        SSR->>API: GET /v1/games?limit=50
+        API->>KV: GET session:token (cached?)
+        API->>D1: SELECT games WHERE user_id = ?
+        D1-->>API: rows
+        API-->>SSR: 200 games JSON
+    and /v1/collections
+        SSR->>API: GET /v1/collections
+        API->>D1: SELECT collections WHERE user_id = ?
+        API-->>SSR: 200 collections JSON
+    end
+    SSR->>SSR: filterSerializedResponseHeaders<br/>allowlist: content-type,<br/>cache-control, content-disposition
+    SSR-->>B: HTML + serialized data<br/>+ security headers<br/>+ CSP (hash mode, no inline scripts)
+    B->>B: hydrate
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1.</strong> Cookie's <code>Domain=per-ankh.app</code> means the browser sends it to per-ankh.app on this navigation, even though the cookie was minted by api.per-ankh.app.</li>
+						<li><strong>2.</strong> <code>handle()</code> hook attaches security headers to every SSR response.</li>
+						<li><strong>3-4.</strong> <code>+page.ts</code> fires three parallel fetches via <code>cloudApi.*({fetch})</code>. <code>handleFetch</code> recognizes api.per-ankh.app (or localhost:8787 in dev) and copies the incoming Cookie header onto the outbound request — without this, hard refreshes of authed pages would always log out.</li>
+						<li><strong>5-13.</strong> Three parallel API calls, each independently authed via the same session token. Each handler filters D1 on <code>session.user_id</code>; no cross-user data fan-in is possible.</li>
+						<li><strong>14.</strong> <code>filterSerializedResponseHeaders</code> allowlists exactly three headers when SSR forwards response metadata to the client — most importantly, <code>Set-Cookie</code> and other sensitive headers from the API response can't leak through.</li>
+						<li><strong>15-16.</strong> SSR'd HTML is delivered with SvelteKit CSP in hash mode (no <code>unsafe-inline</code> for scripts). Browser hydrates with the serialized data already in the page.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transitions:</strong> three cookie crossings —
+						(a) browser → SSR Worker (same eTLD+1, cookie sent normally);
+						(b) SSR Worker → API Worker via the manual forward in
+						<code>handleFetch</code>; (c) API Worker → SSR Worker response
+						passes through the response-header allowlist before reaching
+						the browser. The allowlist is the only thing between an API
+						<code>Set-Cookie</code> and the client; treat it as security-critical.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the response-header allowlist is widened:</strong>
+						<code>Set-Cookie</code> from API responses could leak into the
+						SSR response and clobber the client's cookies (or in adverse
+						configurations, set cross-origin cookies). Current allowlist
+						is three specific headers — extend with care. <strong>If
+						<code>handleFetch</code> forwards Cookie to non-API URLs:</strong>
+						any same-page server-side fetch (analytics, third-party APIs)
+						would leak the session token to a third party. The check is
+						currently an exact-hostname match.
+					</div>
+				</article>
+
+				<!-- ──────────── F7 — Game detail ──────────── -->
+				<article class="flow-card" id="f7">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F7</span>
+						<span class="flow-card-title">Game detail load — owner vs non-owner branches</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Routes</div>
+						<div class="v"><code>GET /games/&lt;id&gt;</code> (SSR) → <code>GET /v1/games/:id</code></div>
+						<div class="k">Sources</div>
+						<div class="v">
+							<code>src/routes/games/[id]/+page.ts</code> &middot;
+							<code>src/routes/games/[id]/+page.svelte</code> &middot;
+							<code>cloud/src/games.ts:1183-1296</code>
+						</div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant API as API Worker
+    participant D1 as D1
+    participant R2 as R2
+    B->>API: GET /v1/games/abc<br/>(via SSR forward)
+    API->>API: sessionFromRequest()
+    API->>D1: SELECT user_id, is_public<br/>WHERE game_id = abc
+    alt row missing
+        API-->>B: 404 NOT_FOUND
+    else session.user_id = row.user_id
+        Note over API: OWNER PATH
+        API->>R2: GET games/abc.json.gz
+        API->>API: decompress + JSON.parse<br/>inject is_public flag
+        API-->>B: 200 {...blob, is_public}<br/>Cache-Control private, no-store<br/>Vary: Cookie, Origin
+    else !owner & !is_public
+        alt session present
+            API-->>B: 403 FORBIDDEN
+        else anonymous
+            API-->>B: 401 UNAUTHORIZED
+        end
+        Note over B: 401 → frontend redirects /login?next=
+    else !owner & is_public
+        Note over API: PUBLIC VIEWER PATH<br/>(F4 commentary applies)
+        API->>API: scraper UA check<br/>per-IP rate limit (anon)<br/>audit event anon_read
+        API->>R2: GET games/abc.json.gz
+        API->>API: stripOnlineIds(blob)<br/>recursive walk
+        API-->>B: 200 {...blob without online_id}<br/>Cache-Control public, max-age=3600,<br/>s-maxage=60<br/>Vary: Cookie, Origin
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-3.</strong> Same endpoint serves three distinct response shapes. The lookup is always the same minimal-cost D1 read first.</li>
+						<li><strong>4-7.</strong> Owner path: response includes a server-injected <code>is_public</code> flag (present iff isOwner). The frontend uses the field's presence — not a separate request — to know whether to render the visibility-toggle sidebar. <code>private, no-store</code> means any post-mutation reload sees fresh state without invalidation calls.</li>
+						<li><strong>8-12.</strong> Anonymous + private returns 401 (so the frontend can bounce to login); signed-in non-owner of a private game gets 403 (existence acknowledged, access denied — they presumably typed the URL deliberately).</li>
+						<li><strong>13-17.</strong> Public viewer path is the same logic as F4. The cache key varies on Cookie so signed-in non-owners get their own cache entries, separate from anonymous cache entries — protects against an anonymous response being served to a signed-in user (and vice versa).</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transitions:</strong> the only authorization
+						primitive is <code>row.user_id === session.user_id</code> from
+						the D1 lookup at step 3. Everything downstream — which blob
+						shape to serve, which cache headers to set, whether to PII-strip
+						— derives from those two integers. There is no audit-log-only or
+						deny-by-default branch elsewhere in the handler.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the ownership comparison is wrong:</strong> the
+						worst case is leaking a private blob with PII to a signed-in
+						non-owner. Currently a single <code>===</code>; future
+						refactoring should preserve the simplicity.
+						<strong>If the <code>is_public</code> field were injected for
+						non-owners:</strong> the frontend would render the toggle UI
+						and let them try to PATCH visibility — which would fail at the
+						PATCH ownership check (F10), so this is double-gated.
+					</div>
+				</article>
+
+				<!-- ──────────── F8 — Save download ──────────── -->
+				<article class="flow-card" id="f8">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F8</span>
+						<span class="flow-card-title">Save download (raw ZIP)</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Route</div>
+						<div class="v"><code>GET /v1/games/:id/download</code> (auth required)</div>
+						<div class="k">Sources</div>
+						<div class="v"><code>cloud/src/games.ts:1504-1592</code></div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Authed browser
+    participant API as API Worker
+    participant D1 as D1
+    participant R2 as R2
+    B->>API: GET /v1/games/abc/download<br/>Cookie session=token
+    API->>API: sessionFromRequest()
+    alt no session
+        API-->>B: 401
+    end
+    API->>D1: SELECT user_id, is_public, game_name<br/>WHERE game_id = abc
+    alt row missing
+        API-->>B: 404 NOT_FOUND
+    else !owner & !is_public
+        API-->>B: 404 NOT_FOUND
+        Note over API: existence hidden
+    else
+        API->>D1: COUNT events download<br/>WHERE user_id = ? last hour
+        alt over 50/h per user
+            API-->>B: 429 RATE_LIMIT_USER
+        end
+        API->>D1: COUNT events download<br/>WHERE ip = ? last hour
+        alt over 100/h per IP
+            API-->>B: 429 RATE_LIMIT_IP
+        end
+        API->>R2: GET saves/abc.zip<br/>(stream body)
+        API->>API: buildSaveFilename(game_name)<br/>strip control, path sep,<br/>quotes; clamp 120 chars
+        API->>API: buildContentDisposition<br/>ASCII fallback + RFC 5987 UTF-8
+        API->>D1: INSERT events download<br/>(fire-and-forget)
+        API-->>B: 200 stream<br/>Content-Type application/zip<br/>Content-Disposition attachment;<br/>filename + filename*=UTF-8''<br/>Cache-Control private, max-age=300<br/>Access-Control-Expose-Headers:<br/>Content-Disposition
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-3.</strong> Auth required even for download of public games — the raw ZIP contains the original OnlineIDs that the JSON path strips. Authed-only download gives a per-user audit trail.</li>
+						<li><strong>4-7.</strong> 404 for private non-owner — existence is not disclosed (matches F7 and F10 patterns).</li>
+						<li><strong>8-11.</strong> Two rate limits in series: per-user (50/h) is the meaningful one since auth is required; per-IP (100/h) catches one user spamming from one IP without bypassing the per-user limit.</li>
+						<li><strong>12-14.</strong> Filename sanitization is the only place user-supplied data (the game name) flows into a response header. Path separators, control chars, drive colons, quotes are all stripped. RFC 6266 + 5987 emit both an ASCII fallback and a UTF-8 form.</li>
+						<li><strong>15-16.</strong> R2 body streamed straight through — no buffering, memory-safe at the 50MB R2 ceiling. <code>Access-Control-Expose-Headers</code> lets cross-origin JS read the Content-Disposition so the browser uses the right filename.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transition:</strong> the <code>game_name</code>
+						string is the only user-controlled value that lands in a response
+						header. <code>buildContentDisposition</code> double-encodes —
+						ASCII for older clients (latin-1 only), URL-encoded UTF-8 for
+						modern ones. CR/LF and quote characters are stripped before the
+						ASCII form is emitted, so header injection via a crafted game
+						name is not possible.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the filename sanitizer misses CR/LF:</strong>
+						Content-Disposition header injection — attacker could split the
+						response into an arbitrary header set. Today the strip pattern
+						covers <code>[\x00-\x1f\x7f]</code>. <strong>If auth is
+						bypassed:</strong> raw ZIPs (with full PII) become anonymously
+						downloadable from any public game URL, undoing the
+						<code>stripOnlineIds</code> protection.
+					</div>
+				</article>
+
+				<!-- ──────────── F9 — Save upload ──────────── -->
+				<article class="flow-card" id="f9">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F9</span>
+						<span class="flow-card-title">Save upload (new or re-import)</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Route</div>
+						<div class="v"><code>POST /v1/games</code> (multipart/form-data)</div>
+						<div class="k">Sources</div>
+						<div class="v">
+							<code>src/lib/parser/worker.ts</code> &middot;
+							<code>src/lib/UploadModal.svelte</code> &middot;
+							<code>cloud/src/games.ts:694-1116</code> &middot;
+							<code>cloud/src/schemas/game.ts</code>
+						</div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant WW as Web Worker (parser)
+    participant API as API Worker
+    participant D1 as D1
+    participant R2 as R2
+    B->>B: file picker → ArrayBuffer
+    B->>WW: postMessage parse, file
+    WW->>WW: extractXmlFromZip<br/>caps 50MB / 100MB / 10 entries /<br/>100x ratio
+    WW->>WW: fast-xml-parser<br/>(no XXE, no eval)
+    WW->>WW: extractAllGameData<br/>validateCompletedGame
+    WW-->>B: result FullGameData + rawZip
+    B->>B: gzipJson(blob)<br/>build FormData
+    B->>API: POST /v1/games<br/>data + save + uploader_player_index<br/>Cookie session=token
+    API->>API: sessionFromRequest()
+    API->>D1: COUNT events upload+reimport<br/>per-user, per-IP, global
+    alt over any cap
+        API-->>B: 429 RATE_LIMIT_*
+    end
+    API->>API: parse FormData<br/>size checks: data &le; 10MB,<br/>save &le; 50MB
+    API->>API: decompressWithLimit(50MB)<br/>JSON.parse
+    API->>API: Valibot FullGameDataSchema<br/>known parser_version, array bounds,<br/>game_over === true
+    API->>API: validate uploader_player_index<br/>(null or human in roster)
+    API->>API: file_hash := SHA-256(raw_zip)<br/>(server-side authority)
+    API->>D1: SELECT WHERE user_id = ?<br/>AND file_hash = ?
+    alt existing & cmp ≤ 0
+        API-->>B: 409 DUPLICATE
+    else existing & newer
+        Note over API: re-import path:<br/>preserve game_id,<br/>created_at, is_public,<br/>collection_id
+    else new
+        Note over API: game_id := nanoid(21)<br/>collection_id := Personal default
+    end
+    par
+        API->>R2: PUT games/<id>.json.gz<br/>user_id, created_at metadata
+    and
+        API->>R2: PUT saves/<id>.zip<br/>user_id, created_at metadata
+    end
+    API->>D1: batch INSERT games<br/>+ player_summaries<br/>+ game_player_turn<br/>+ tech_events<br/>+ law_events
+    alt batch fails
+        alt new upload
+            API->>R2: DELETE both blobs<br/>(orphan cleanup)
+        end
+        API-->>B: 500 D1_FAILED
+    else success
+        opt uploader chose a human
+            API->>D1: INSERT user_online_ids<br/>ON CONFLICT DO UPDATE
+        end
+        API->>D1: INSERT events upload or reimport
+        API-->>B: 201 / 200 {game_id, url}
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-5.</strong> Browser-side parse runs in a Web Worker for UX (lets the main thread stay responsive). The parser enforces its own ZIP-bomb caps: 50MB compressed, 100MB uncompressed, 10 entries max, 100x compression ratio. <code>fast-xml-parser</code> is configured with <code>parseAttributeValue: false</code>, <code>parseTagValue: false</code>, <code>ignoreDeclaration: true</code> — no XXE surface.</li>
+						<li><strong>6-7.</strong> Client gzips the JSON; raw ZIP gets transferred (zero-copy) so it can be re-uploaded to the server. <strong>The client's parse is for UX only — the server validates everything fresh.</strong></li>
+						<li><strong>8.</strong> Multipart POST with three parts. <code>credentials: 'include'</code> attaches the session cookie.</li>
+						<li><strong>9-11.</strong> Three rate-limit checks in series (per-user, per-IP, global). Uploads and re-imports share the same budget — both do the same R2/D1 work.</li>
+						<li><strong>12-13.</strong> Server-side size caps re-checked even though the client claims to have respected them. The 50MB streaming decompression cap is enforced inside the decode loop, not after.</li>
+						<li><strong>14.</strong> Valibot schema validates the JSON shape: known parser_version, array length bounds (e.g. <code>player_history</code> ≤ 20, <code>event_logs</code> ≤ 50000, <code>map_tiles</code> ≤ 50000), <code>game_over: true</code>, integer ranges for turn counts. The envelope is <code>looseObject</code> for forward-compat — extra keys preserved without affecting prototype semantics (JSON.parse never sets [[Prototype]]).</li>
+						<li><strong>15.</strong> <code>uploader_player_index</code> validated separately: either <code>null</code> (observer mode) or a non-negative integer that resolves to a human player in the roster.</li>
+						<li><strong>16.</strong> File hash is computed server-side. The client's idea of the hash never enters the trust path — dedup is enforced on raw-ZIP bytes the server actually received.</li>
+						<li><strong>17-21.</strong> Dedup branches: identical-or-older parser_version → 409 (no point overwriting); newer parser_version → re-import (reuse game_id, REPLACE games row with FK cascade clearing children); new → fresh nanoid + Personal collection default.</li>
+						<li><strong>22-24.</strong> R2 puts in parallel. Content-Type and Content-Encoding are server-set; the user can't influence the stored MIME type. Custom metadata records user_id + created_at for ops/debug.</li>
+						<li><strong>25-29.</strong> D1 batch is a single transaction. On failure for a new upload (not re-import), the just-written R2 blobs are deleted — avoids orphans. Re-import failures leave R2 alone because the existing row's blob has already been overwritten with the new payload (degraded but acceptable: the row still resolves to fresher data with a stale parser_version badge).</li>
+						<li><strong>30-32.</strong> Online-ID capture is opt-in by virtue of the uploader's picker choice. Observer-mode uploads (uploaderIndex === null) skip this entirely — the uploader isn't claiming any player.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transitions:</strong> three places where untrusted
+						bytes cross the boundary — (a) the gzipped data blob (decompressed
+						with cap, JSON-parsed, schema-validated); (b) the raw ZIP
+						(SHA-256'd server-side, then handed to R2 as-is); (c) the
+						<code>uploader_player_index</code> integer (range + roster membership
+						checked). Nothing the client says about the file (claimed hash,
+						claimed parser_version, claimed player names) is taken on trust
+						without server re-derivation or schema validation.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the decompression cap is bypassed:</strong> a gzip
+						bomb could exhaust Worker memory. Defended at three layers —
+						client Web Worker, server <code>decompressWithLimit</code> (streaming
+						cap inside the decode loop), and the upstream
+						<code>MAX_BLOB_COMPRESSED</code> ceiling.<br/>
+						<strong>If the schema validator is bypassed:</strong> array-length
+						attacks (e.g. <code>event_logs: 10_000_000</code>) would force
+						unbounded D1 writes. Each array has an explicit
+						<code>v.maxLength</code>.<br/>
+						<strong>If the dedup check is bypassed:</strong> users can fill
+						their quota with duplicate uploads. Storage cost; no security
+						impact.<br/>
+						<strong>If the ownership of <code>game_id</code> is wrong on a
+						re-import:</strong> one user could overwrite another user's
+						game blob. The dedup query is scoped <code>WHERE user_id = ?</code>
+						so this is structurally prevented.
+					</div>
+				</article>
+
+				<!-- ──────────── F10 — PATCH game ──────────── -->
+				<article class="flow-card" id="f10">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F10</span>
+						<span class="flow-card-title">PATCH game — visibility toggle &amp; collection move</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Route</div>
+						<div class="v"><code>PATCH /v1/games/:id</code> body <code>{is_public?, collection_id?}</code></div>
+						<div class="k">Sources</div>
+						<div class="v"><code>cloud/src/games.ts:1311-1435</code> &middot; <code>cloud/src/schemas/game.ts:217-228</code></div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant API as API Worker
+    participant D1 as D1
+    Note over B,API: CORS preflight first<br/>(PATCH is non-simple)
+    B->>API: OPTIONS /v1/games/abc<br/>Origin per-ankh.app
+    API-->>B: 204 + ACAO ACAC ACAM
+    B->>API: PATCH /v1/games/abc<br/>Content-Type application/json<br/>{is_public: true}<br/>credentials include
+    API->>API: sessionFromRequest()
+    alt no session
+        API-->>B: 401 UNAUTHORIZED
+    end
+    API->>D1: SELECT user_id<br/>WHERE game_id = abc
+    alt row missing or user_id mismatch
+        API-->>B: 404 NOT_FOUND
+        Note over API: don't leak existence
+    end
+    API->>API: Valibot GamePatchSchema<br/>≥ 1 field, types ok
+    opt body.is_public is set
+        API->>D1: COUNT events visibility_change<br/>WHERE user_id = ? last hour
+        alt over 60/h
+            API-->>B: 429 RATE_LIMIT_USER
+        end
+    end
+    opt body.collection_id set & not null
+        API->>D1: SELECT 1 FROM collections<br/>WHERE collection_id = ? AND user_id = ?
+        alt not owned
+            API-->>B: 404 NOT_FOUND
+        end
+    end
+    opt is_public set
+        API->>D1: UPDATE games SET is_public = ?<br/>WHERE game_id = ?
+        API->>D1: INSERT events visibility_change<br/>(fire-and-forget)
+    end
+    opt collection_id set
+        API->>D1: UPDATE games SET collection_id = ?<br/>WHERE game_id = ?
+        API->>D1: INSERT events collection_change
+    end
+    API-->>B: 200 {game_id, is_public?, collection_id?}
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-2.</strong> PATCH is a non-simple method → mandatory CORS preflight. Origin must be in <code>ALLOWED_ORIGINS</code> or the browser blocks the actual PATCH.</li>
+						<li><strong>3.</strong> Session required; body is JSON.</li>
+						<li><strong>4-7.</strong> Ownership check first. 404 (not 403) is used deliberately — a signed-in user probing for someone else's game_id can't distinguish "doesn't exist" from "isn't yours."</li>
+						<li><strong>8.</strong> Schema requires at least one of the two fields. <code>collection_id</code> integer must be ≥ 1 (or null to uncategorize).</li>
+						<li><strong>9-11.</strong> Visibility-change rate limit only applies when <code>is_public</code> is actually in the body. A pure collection move doesn't burn the user's toggle budget.</li>
+						<li><strong>12-15.</strong> Cross-resource ownership check: the target collection must also belong to the same user. Without this, an attacker could move their game into another user's collection (effectively "publishing" into someone else's space).</li>
+						<li><strong>16-19.</strong> Two independent updates, each with its own audit event. The audit inserts are fire-and-forget — UPDATE success is the user-facing signal.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transitions:</strong> two ownership checks per
+						request when both fields are set — the game itself and the
+						target collection. Both are <code>WHERE … AND user_id = ?</code>
+						against <code>session.user_id</code>. The audit-event inserts
+						use parameterized binds for the metadata JSON, which is built
+						from server-known values (game_id, is_public/collection_id, ip).
+					</div>
+
+					<div class="fail-note">
+						<strong>If the cross-resource ownership check is bypassed:</strong>
+						users could move their games into other users' collections —
+						either a privacy issue (the target user sees content they didn't
+						invite) or a denial-of-service tool (filling another user's
+						collections with garbage). <strong>If 404 vs 403 disclosure
+						leaks:</strong> attacker enumerates valid game_ids by status
+						code. Currently both branches return identical 404 bodies.
+					</div>
+				</article>
+
+				<!-- ──────────── F11 — Delete game ──────────── -->
+				<article class="flow-card" id="f11">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F11</span>
+						<span class="flow-card-title">Game deletion</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Route</div>
+						<div class="v"><code>DELETE /v1/games/:id</code></div>
+						<div class="k">Sources</div>
+						<div class="v"><code>cloud/src/games.ts:1437-1488</code></div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant B as Browser
+    participant API as API Worker
+    participant D1 as D1
+    participant R2 as R2
+    Note over B,API: CORS preflight<br/>(DELETE is non-simple)
+    B->>API: DELETE /v1/games/abc<br/>credentials include
+    API->>API: sessionFromRequest()
+    alt no session
+        API-->>B: 401
+    end
+    API->>D1: SELECT user_id<br/>WHERE game_id = abc
+    alt row missing
+        API-->>B: 404 NOT_FOUND
+    else user_id ≠ session.user_id
+        API-->>B: 403 FORBIDDEN
+        Note over API: NB: not 404<br/>(F-17 in security review)
+    else
+        par
+            API->>R2: DELETE games/abc.json.gz
+        and
+            API->>R2: DELETE saves/abc.zip
+        end
+        Note over R2: R2 errors logged<br/>but don't fail request
+        API->>D1: DELETE FROM games<br/>WHERE game_id = abc<br/>(FK cascade fires)
+        API->>D1: INSERT events delete<br/>(fire-and-forget)
+        API-->>B: 204
+    end
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>1-3.</strong> Same auth + ownership shape as PATCH (F10).</li>
+						<li><strong>4-7.</strong> The 403 here (vs the 404 in PATCH/download) is the inconsistency flagged as F-17 in the security review — minor enumeration oracle, low impact because game_ids are 126-bit nanoids.</li>
+						<li><strong>8-10.</strong> R2 deleted first (parallel). Cleanup errors are logged but don't fail the request — the alternative would leave the D1 row in place with no blob to serve, which is worse UX. Today an R2 failure can orphan blob bytes; this is a tolerated degraded mode.</li>
+						<li><strong>11.</strong> D1 cascade deletes child rows in <code>player_summaries</code>, <code>game_player_turn</code>, <code>tech_events</code>, <code>law_events</code>. FK constraints declared in <code>0002_cloud_schema.sql</code>.</li>
+						<li><strong>12-13.</strong> Audit event fire-and-forget. 204 returned.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transition:</strong> the <code>user_id</code>
+						comparison at step 6 is the entire authorization gate. Once it
+						passes, deletion is destructive and irreversible. No "soft delete"
+						/ tombstone — the game_id is freed; if the user re-uploads the
+						same save, they get a fresh game_id.
+					</div>
+
+					<div class="fail-note">
+						<strong>If the ownership check is bypassed:</strong> any signed-in
+						user can delete any other user's game. The check is a single
+						<code>row.user_id !== userId</code> comparison.<br/>
+						<strong>If the R2 delete fails silently:</strong> orphan blob
+						bytes accumulate. Storage cost only; no privacy or correctness
+						impact, since the D1 row is gone so the blob is unreferenced and
+						unreachable via the Worker.
+					</div>
+				</article>
+
+				<!-- ──────────── F12 — Legacy share lifecycle ──────────── -->
+				<article class="flow-card" id="f12">
+					<div class="flow-card-head">
+						<span class="flow-card-tag">F12</span>
+						<span class="flow-card-title">Legacy share lifecycle (upload → view → delete)</span>
+					</div>
+					<div class="flow-card-meta">
+						<div class="k">Routes</div>
+						<div class="v">
+							<code>POST /v1/share</code> &middot;
+							<code>GET /v1/share/:id</code> &middot;
+							<code>DELETE /v1/share/:id</code>
+						</div>
+						<div class="k">Sources</div>
+						<div class="v"><code>cloud/src/index.ts:242-522</code></div>
+						<div class="k">Status</div>
+						<div class="v">Frozen — the desktop client that originated this surface is being decommissioned. Endpoints remain for the legacy share viewer at <code>legacy.per-ankh.app</code>.</div>
+					</div>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+sequenceDiagram
+    autonumber
+    participant DC as Desktop client
+    participant LV as Legacy viewer<br/>legacy.per-ankh.app
+    participant API as API Worker
+    participant D1 as D1
+    participant R2 as R2
+    Note over DC,API: UPLOAD
+    DC->>API: POST /v1/share<br/>X-App-Key: UUID<br/>Content-Type: application/gzip
+    API->>API: UPLOADS_ENABLED kill switch?
+    API->>API: UUID regex check on X-App-Key
+    API->>D1: SELECT FROM blocked_keys / blocked_ips
+    API->>D1: COUNT events upload<br/>(per-key, per-IP, global)<br/>each &le; cap
+    API->>API: Content-Length cap<br/>body size cap<br/>Content-Type === application/gzip
+    API->>API: decompressWithLimit(20MB)<br/>validateSharePayload (legacy schema)
+    API->>API: share_id := nanoid(21)<br/>delete_token := nanoid(32)
+    API->>R2: PUT <share_id>.json.gz<br/>customMetadata: appKey, createdAt
+    API->>D1: INSERT shares<br/>(share_id, app_key, ...,<br/>delete_token)
+    alt D1 fails
+        API->>R2: DELETE <share_id>.json.gz
+        API-->>DC: 500
+    else success
+        API->>D1: INSERT events upload
+        API-->>DC: 201 {share_id, url, delete_token}
+    end
+    Note over LV,API: VIEW (frozen SPA fetches the blob)
+    LV->>API: GET /v1/share/<id>
+    API->>API: per-IP rate limit<br/>(Cache API counter)
+    API->>R2: GET <id>.json.gz
+    API->>API: stream decompress<br/>(CDN strips Content-Encoding<br/>from Worker responses)
+    API-->>LV: 200 JSON<br/>Cache-Control public, max-age=3600<br/>single-origin CORS<br/>(legacy.per-ankh.app only)
+    Note over DC,API: DELETE
+    DC->>API: DELETE /v1/share/<id><br/>X-Delete-Token X-App-Key
+    API->>D1: SELECT delete_token, app_key<br/>WHERE share_id = ?
+    alt missing
+        API-->>DC: 404
+    end
+    API->>API: timingSafeEqual<br/>both tokens
+    alt mismatch
+        API-->>DC: 403<br/>(NB: F-17 enumeration oracle)
+    end
+    API->>R2: DELETE <id>.json.gz
+    API->>D1: DELETE FROM shares
+    API->>D1: INSERT events delete
+    API-->>DC: 204
+						</div>
+					</div>
+
+					<h4>Walkthrough</h4>
+					<ol>
+						<li><strong>UPLOAD (1-13).</strong> Capability-based: an X-App-Key UUID identifies the desktop installation, no user account exists. Three rate-limit tiers (per-key, per-IP, global). Body type pinned to <code>application/gzip</code>. The legacy <code>validateSharePayload</code> is a hand-rolled validator (predates the move to Valibot for the cloud rewrite). On upload success, the client gets back a delete_token (capability) that they must store to delete later.</li>
+						<li><strong>VIEW (14-18).</strong> Public read. Per-IP rate limit via Cache API (per-POP counter, lightweight). Worker streams the decompressed JSON because the Cloudflare edge strips Content-Encoding from Worker responses — gzipped wire bytes would not be useful to the browser at this layer. Single-origin CORS for <code>legacy.per-ankh.app</code> (the frozen SPA).</li>
+						<li><strong>DELETE (19-27).</strong> Two-token capability: caller must present both the delete_token they got at upload time and the original X-App-Key. Both are timing-safe compared; either mismatch returns 403. R2 then D1, with a final audit event.</li>
+					</ol>
+
+					<div class="boundary-note">
+						<strong>Trust transitions:</strong> the entire legacy surface is
+						capability-based — possession of the X-App-Key (for upload) or
+						both X-App-Key + X-Delete-Token (for delete) is the authorization
+						primitive. No session, no user model. R2 keys are
+						<code>&lt;share_id&gt;.json.gz</code> with the share_id matched
+						against a regex at the dispatch layer.
+					</div>
+
+					<div class="fail-note">
+						<strong>If timing-safe compare leaks:</strong> attacker could
+						extract a valid delete_token via timing oracle, given a target
+						share_id. Both compares use <code>crypto.subtle.timingSafeEqual</code>.
+						<strong>If the legacy upload validator misses an array bound:</strong>
+						the same payload-size attacks the cloud rewrite is hardened
+						against — addressed by <code>validation.ts</code>'s explicit
+						array-length caps.<br/>
+						<strong>F-17 specifically:</strong> the 404-vs-403 split in
+						delete enumerates valid share_ids; mitigated by 126-bit ID
+						entropy.
+					</div>
+				</article>
+
+				<div class="footer-note">
+					Per-Ankh action-flow security walkthrough — 2026-05-10. Diagram
+					citations track the working tree at review time; if a code path is
+					renamed or split, re-verify before relying on the cited line numbers.
+					Reads alongside <a href="security-review.html">security-review.html</a>.
+				</div>
+			</main>
+		</div>
+	</body>
+</html>

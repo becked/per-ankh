@@ -1,0 +1,1765 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Per-Ankh — Security Review</title>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							black: "var(--color-black)",
+							brown: "var(--color-brown)",
+							"dark-brown": "var(--color-dark-brown)",
+							orange: "var(--color-orange)",
+							tan: "var(--color-tan)",
+							"tan-hover": "var(--color-tan-hover)",
+							white: "var(--color-white)",
+							yellow: "var(--color-yellow)",
+							"blue-gray": "var(--color-blue-gray)",
+							"border-gray": "var(--color-border-gray)",
+							gray: { 200: "var(--color-gray-200)" },
+						},
+					},
+				},
+			};
+		</script>
+
+		<style>
+			:root {
+				--color-black: #000000;
+				--color-brown: #a52a2a;
+				--color-dark-brown: #79261d;
+				--color-orange: #ffa500;
+				--color-tan: #d2b48c;
+				--color-tan-hover: #d2b48c;
+				--color-white: #ffffff;
+				--color-yellow: #ffff00;
+				--color-blue-gray: #211a12;
+				--color-border-gray: #1c160f;
+				--color-gray-200: #eeeeee;
+
+				/* Severity palette — kept warm so it sits on the existing surface */
+				--sev-crit: #621118;
+				--sev-high: #b1241d;
+				--sev-med: #d97706;
+				--sev-low: #c1872f;
+				--sev-info: #6b6157;
+			}
+
+			html,
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				background-color: var(--color-blue-gray);
+				color: var(--color-white);
+				margin: 0;
+				padding: 0;
+			}
+
+			.review-shell {
+				display: grid;
+				grid-template-columns: 240px 1fr;
+				min-height: 100vh;
+			}
+			.review-toc {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				height: 100vh;
+				overflow-y: auto;
+				border-right: 1px solid #000;
+				padding: 1.5rem 1rem;
+				background-color: #1a1410;
+			}
+			.review-toc h1 {
+				font-size: 0.875rem;
+				font-weight: bold;
+				color: var(--color-orange);
+				margin-bottom: 1rem;
+				border-bottom: 1px solid #000;
+				padding-bottom: 0.5rem;
+			}
+			.review-toc ol {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				font-size: 0.75rem;
+			}
+			.review-toc ol li {
+				margin-bottom: 0.25rem;
+			}
+			.review-toc a {
+				color: var(--color-tan);
+				text-decoration: none;
+				display: block;
+				padding: 0.25rem 0.5rem;
+				border-radius: 3px;
+			}
+			.review-toc a:hover {
+				background: #35302b;
+				color: var(--color-orange);
+			}
+			.review-toc .toc-sub {
+				padding-left: 0.75rem;
+				color: #999;
+				font-size: 0.7rem;
+			}
+			.review-toc .toc-sub .toc-sev {
+				font-size: 0.6rem;
+				font-weight: 700;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				padding: 1px 5px;
+				border-radius: 999px;
+				margin-right: 0.4rem;
+				vertical-align: 1px;
+				color: #fff;
+			}
+			.toc-sev.crit { background: var(--sev-crit); }
+			.toc-sev.high { background: var(--sev-high); }
+			.toc-sev.med  { background: var(--sev-med);  color: #1a1410; }
+			.toc-sev.low  { background: var(--sev-low);  color: #1a1410; }
+			.toc-sev.info { background: var(--sev-info); }
+
+			.review-main {
+				padding: 2rem 2.5rem;
+				max-width: 1200px;
+			}
+			.review-main h2 {
+				font-size: 1.75rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				border-bottom: 2px solid var(--color-orange);
+				padding-bottom: 0.5rem;
+				margin-top: 3rem;
+				margin-bottom: 1rem;
+			}
+			.review-main h2:first-child { margin-top: 0; }
+			.review-main h3 {
+				font-size: 1.125rem;
+				font-weight: bold;
+				color: var(--color-tan);
+				margin-top: 2rem;
+				margin-bottom: 0.5rem;
+			}
+			.review-main h4 {
+				font-size: 0.75rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				margin: 1.25rem 0 0.4rem;
+			}
+			.review-main p { color: #c5c3c2; font-size: 0.9rem; line-height: 1.55; }
+			.review-main p.section-intro {
+				color: #c5c3c2;
+				font-size: 0.875rem;
+				margin-bottom: 1.5rem;
+				line-height: 1.5;
+			}
+			.review-main p a, .review-main li a { color: var(--color-orange); }
+			.review-main p a:hover, .review-main li a:hover { text-decoration: underline; }
+			.review-main ul, .review-main ol {
+				color: #c5c3c2;
+				font-size: 0.9rem;
+				line-height: 1.55;
+				padding-left: 1.4rem;
+			}
+			.review-main li { margin-bottom: 0.3rem; }
+			.review-main code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.8rem;
+				background: #0e0a07;
+				padding: 0.1rem 0.3rem;
+				border-radius: 2px;
+				color: var(--color-orange);
+			}
+			.review-main pre {
+				background: #0e0a07;
+				color: var(--color-tan);
+				padding: 1rem;
+				border-radius: 4px;
+				font-size: 0.75rem;
+				overflow-x: auto;
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				margin: 0.5rem 0;
+				line-height: 1.5;
+			}
+			.review-main pre code {
+				background: transparent;
+				padding: 0;
+				color: inherit;
+				font-size: inherit;
+			}
+			.review-main strong { color: var(--color-gray-200); }
+
+			/* Severity badge — inline */
+			.sev {
+				display: inline-block;
+				font-size: 0.65rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				padding: 2px 8px;
+				border-radius: 999px;
+				color: #fff;
+				vertical-align: 2px;
+			}
+			.sev.crit { background: var(--sev-crit); }
+			.sev.high { background: var(--sev-high); }
+			.sev.med  { background: var(--sev-med);  color: #1a1410; }
+			.sev.low  { background: var(--sev-low);  color: #1a1410; }
+			.sev.info { background: var(--sev-info); }
+
+			/* Finding card — same shape as design-audit's pattern-card */
+			.finding-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1.25rem 1.5rem;
+				margin-bottom: 1.25rem;
+			}
+			.finding-card.severity-med  { border-left: 4px solid var(--sev-med); }
+			.finding-card.severity-low  { border-left: 4px solid var(--sev-low); }
+			.finding-card.severity-info { border-left: 4px solid var(--sev-info); }
+			.finding-head {
+				display: flex;
+				align-items: baseline;
+				gap: 0.6rem;
+				margin-bottom: 0.4rem;
+				flex-wrap: wrap;
+			}
+			.finding-num {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.75rem;
+				color: #888;
+				font-weight: 700;
+			}
+			.finding-title {
+				font-size: 1rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				line-height: 1.4;
+			}
+			.finding-meta {
+				display: grid;
+				grid-template-columns: 110px 1fr;
+				gap: 0.25rem 1rem;
+				font-size: 0.8rem;
+				margin-bottom: 0.6rem;
+			}
+			.finding-meta .k {
+				font-size: 0.7rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				padding-top: 2px;
+			}
+			.finding-meta .v {
+				color: var(--color-tan);
+			}
+			.finding-meta .v code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.7rem;
+				color: #888;
+				background: #0e0a07;
+				padding: 0.05rem 0.3rem;
+			}
+
+			/* Summary tiles */
+			.severity-tiles {
+				display: grid;
+				grid-template-columns: repeat(5, 1fr);
+				gap: 0.6rem;
+				margin: 1rem 0 1.5rem;
+			}
+			.severity-tile {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 0.9rem 0.6rem;
+				text-align: center;
+			}
+			.severity-tile.tile-crit { border-top: 3px solid var(--sev-crit); }
+			.severity-tile.tile-high { border-top: 3px solid var(--sev-high); }
+			.severity-tile.tile-med  { border-top: 3px solid var(--sev-med);  }
+			.severity-tile.tile-low  { border-top: 3px solid var(--sev-low);  }
+			.severity-tile.tile-info { border-top: 3px solid var(--sev-info); }
+			.severity-tile .count {
+				font-size: 1.75rem;
+				font-weight: 700;
+				color: var(--color-gray-200);
+				line-height: 1;
+			}
+			.severity-tile .label {
+				font-size: 0.65rem;
+				font-weight: 700;
+				color: #888;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				margin-top: 0.35rem;
+			}
+
+			/* Scope/methodology meta block */
+			.meta-block {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1rem 1.25rem;
+				margin: 1rem 0;
+			}
+			.meta-block dl {
+				display: grid;
+				grid-template-columns: 130px 1fr;
+				gap: 0.5rem 1rem;
+				margin: 0;
+				font-size: 0.85rem;
+			}
+			.meta-block dt {
+				color: #888;
+				font-weight: 700;
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				padding-top: 2px;
+			}
+			.meta-block dd {
+				margin: 0;
+				color: var(--color-tan);
+				line-height: 1.5;
+			}
+
+			.footer-note {
+				margin-top: 4rem;
+				padding-top: 1rem;
+				border-top: 1px solid #2a2622;
+				color: #888;
+				font-size: 0.75rem;
+				font-style: italic;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="review-shell">
+			<nav class="review-toc">
+				<h1>Per-Ankh Security Review</h1>
+				<ol>
+					<li><a href="#exec">Executive summary</a></li>
+					<li><a href="#scope">Scope &amp; methodology</a></li>
+					<li><a href="#findings">Findings</a></li>
+					<li class="toc-sub">
+						<a href="#f01"><span class="toc-sev med">M</span>F-01 Account deletion</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f02"><span class="toc-sev low">L</span>F-02 CORS allowlist localhost</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f03"><span class="toc-sev low">L</span>F-03 Scraper-UA bypass</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f04"><span class="toc-sev low">L</span>F-04 Content-Type check</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f05"><span class="toc-sev low">L</span>F-05 CSP report unrated</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f06"><span class="toc-sev low">L</span>F-06 CSP report PII</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f07"><span class="toc-sev low">L</span>F-07 /share redirect</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f08"><span class="toc-sev low">L</span>F-08 fast-xml-builder</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f09"><span class="toc-sev low">L</span>F-09 cookie advisory</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f10"><span class="toc-sev low">L</span>F-10 redirect_uri allowlist</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f11"><span class="toc-sev low">L</span>F-11 Shallow PII scrub</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f12"><span class="toc-sev info">i</span>F-12 style-src inline</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f13"><span class="toc-sev info">i</span>F-13 HSTS/COOP/COEP</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f14"><span class="toc-sev info">i</span>F-14 Unused email</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f15"><span class="toc-sev info">i</span>F-15 login_denied PII</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f16"><span class="toc-sev info">i</span>F-16 Apex cookie</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f17"><span class="toc-sev info">i</span>F-17 Delete oracle</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f18"><span class="toc-sev info">i</span>F-18 Blob-missing leak</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f19"><span class="toc-sev info">i</span>F-19 tsconfig flag</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f20"><span class="toc-sev info">i</span>F-20 /stats unrated</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#f21"><span class="toc-sev info">i</span>F-21 Cookie name</a>
+					</li>
+					<li><a href="#out-of-scope">What was not reviewed</a></li>
+					<li><a href="#strengths">Strengths worth preserving</a></li>
+				</ol>
+			</nav>
+
+			<main class="review-main">
+				<header style="margin-bottom: 2rem">
+					<h2 style="margin-top: 0; border-bottom: 3px solid var(--color-orange)">
+						Security Review
+					</h2>
+					<p class="section-intro">
+						A security audit of the Per-Ankh cloud-rewrite stack — the
+						SvelteKit app under <code>src/</code> and the Cloudflare Worker
+						under <code>cloud/</code>. Each finding carries CVSS-style severity,
+						<code>file:line</code> evidence, and a concrete remediation.
+						Posture: principal-level Cloudflare review. Reviewed 2026-05-10.
+					</p>
+				</header>
+
+				<!-- ============ EXECUTIVE SUMMARY ============ -->
+				<h2 id="exec">Executive summary</h2>
+				<p class="section-intro">
+					Per-Ankh's security posture is, in aggregate, well above average for
+					an app of this size. The hot paths — auth, authorization, SQL, blob
+					storage, decompression — are uniformly careful: Discord OAuth with
+					PKCE and timing-safe state comparison, opaque session tokens in KV
+					with sensible cookie attributes, parameterized D1 queries throughout,
+					server-side file hashing, gzip-bomb caps at every decompression site,
+					deep PII strip for anonymous public reads, and a CSP that explicitly
+					avoids <code>script-src 'unsafe-inline'</code> via SvelteKit's hash
+					mode. No critical or high-severity exploitable issues were identified
+					during this review.
+				</p>
+				<p class="section-intro">
+					The findings below are predominantly defense-in-depth gaps and one
+					notable compliance-shaped issue: there is no account-deletion or
+					data-export endpoint despite the worker collecting Discord ID and
+					email at sign-in. The most consequential technical finding is a CORS
+					allowlist that includes <code>http://localhost:1420</code> in the
+					production worker — currently inert thanks to
+					<code>SameSite=Lax</code>, but it becomes immediately load-bearing
+					the day cookies are loosened or a per-environment config split is
+					missed.
+				</p>
+
+				<div class="severity-tiles">
+					<div class="severity-tile tile-crit">
+						<div class="count">0</div>
+						<div class="label">Critical</div>
+					</div>
+					<div class="severity-tile tile-high">
+						<div class="count">0</div>
+						<div class="label">High</div>
+					</div>
+					<div class="severity-tile tile-med">
+						<div class="count">1</div>
+						<div class="label">Medium</div>
+					</div>
+					<div class="severity-tile tile-low">
+						<div class="count">10</div>
+						<div class="label">Low</div>
+					</div>
+					<div class="severity-tile tile-info">
+						<div class="count">10</div>
+						<div class="label">Info</div>
+					</div>
+				</div>
+
+				<!-- ============ SCOPE & METHODOLOGY ============ -->
+				<h2 id="scope">Scope &amp; methodology</h2>
+				<div class="meta-block">
+					<dl>
+						<dt>In scope</dt>
+						<dd>
+							Cloud Worker under <code>cloud/</code> (~19 endpoints, D1/R2/KV);
+							SvelteKit app under <code>src/</code> (SSR, hooks, client API,
+							parser); both projects' <code>wrangler.toml</code>,
+							<code>svelte.config.js</code>, <code>_headers</code>, root
+							<code>tsconfig.json</code>, prod <code>package.json</code> +
+							lockfile audits.
+						</dd>
+						<dt>Out of scope</dt>
+						<dd>
+							Legacy <code>web/</code> share viewer (frozen); bake pipeline
+							(<code>scripts/</code>); historical git-log secret hunt;
+							Cloudflare dashboard configuration (WAF rules, Bot Fight Mode,
+							HSTS at edge, Web Analytics privacy); third-party services
+							(Discord OAuth dashboard config, R2 bucket ACLs).
+						</dd>
+						<dt>Method</dt>
+						<dd>
+							Three parallel exploration agents mapped the attack surface
+							(routing, auth, storage, CORS, rate-limiting, headers,
+							dependencies). The reviewer then read every cited file
+							end-to-end in the main context, drafted candidate findings with
+							file:line evidence, and ran a per-claim verification pass
+							against the actual code before any finding entered the report.
+							Dynamic checks: <code>npm audit</code> on both projects;
+							<code>fast-xml-builder</code> import-graph confirmation.
+						</dd>
+						<dt>Severity</dt>
+						<dd>
+							CVSS-style ladder (Critical / High / Medium / Low / Info).
+							Hypothetical or theoretical concerns are filed as Info unless a
+							concrete exploit path is described.
+						</dd>
+					</dl>
+				</div>
+
+				<!-- ============ FINDINGS ============ -->
+				<h2 id="findings">Findings</h2>
+
+				<!-- ─────────── F-01 ─────────── -->
+				<article class="finding-card severity-med" id="f01">
+					<div class="finding-head">
+						<span class="finding-num">F-01</span>
+						<span class="sev med">Medium</span>
+						<span class="finding-title">No account-deletion or data-export endpoint</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker / Frontend account page</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/auth.ts:419-441</code> (user upsert with email
+							storage) &middot;
+							<code>src/routes/account/+page.svelte</code> (read-only profile
+							+ logout) &middot; no <code>DELETE /v1/users/me</code> or
+							<code>GET /v1/users/me/export</code> route registered in
+							<code>cloud/src/index.ts:548-680</code>
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The Worker collects and persists <code>discord_id</code>,
+						<code>email</code>, <code>email_verified</code>,
+						<code>display_name</code>, and <code>avatar_hash</code> in the
+						<code>users</code> table on first login, and accumulates upload
+						metadata (game blobs in R2, player rosters in
+						<code>player_summaries</code>, audit rows in <code>events</code>)
+						on every subsequent action. The account page
+						(<code>/account</code>) lets a user sign out but provides no
+						mechanism to delete the account or export its data. No admin
+						runbook step (under <code>scripts/admin/</code>) exists for
+						self-service deletion either.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						This is principally a compliance and trust issue rather than a
+						vulnerability. GDPR Art. 17 (right to erasure) and CCPA give
+						in-scope users a statutory right to deletion that the app cannot
+						currently honor without operator intervention. Even setting aside
+						the legal frame, long-lived PII without a delete path is bad data
+						hygiene: a future breach of the D1 snapshot would expose every
+						Discord ID + email that has ever signed in, including testers who
+						only used the beta once.
+					</p>
+
+					<h4>Recommendation</h4>
+					<p>
+						Add a <code>DELETE /v1/users/me</code> endpoint that, in a single
+						D1 transaction:
+					</p>
+					<ol>
+						<li>
+							Deletes all R2 objects under
+							<code>games/{user's game_ids}.json.gz</code> and
+							<code>saves/{...}.zip</code>.
+						</li>
+						<li>
+							Deletes the <code>users</code> row (cascading deletes already
+							handle <code>games</code>, <code>player_summaries</code>,
+							<code>collections</code>, <code>user_online_ids</code> via FK
+							constraints).
+						</li>
+						<li>
+							Tombstones the <code>discord_id</code> in
+							<code>events.metadata</code> (overwrite to
+							<code>"[deleted]"</code>) so the audit trail keeps row count
+							integrity without retaining PII.
+						</li>
+						<li>
+							Deletes any active sessions for the user from KV (requires
+							either a per-user session index or a re-check of
+							<code>discord_username</code> in
+							<code>session.ts:88-99</code> — the existing allowlist re-check
+							at <code>auth.ts:548-552</code> already gives you the second
+							option for free).
+						</li>
+					</ol>
+					<p>
+						For data export, a <code>GET /v1/users/me/export</code> that
+						streams a ZIP of the user's blobs + a JSON summary is the standard
+						shape. Add the link to the account page UI.
+					</p>
+				</article>
+
+				<!-- ─────────── F-02 ─────────── -->
+				<article class="finding-card severity-low" id="f02">
+					<div class="finding-head">
+						<span class="finding-num">F-02</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">Production CORS allowlist includes <code>http://localhost:1420</code> with credentials</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker CORS</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/wrangler.toml:82</code>:
+							<code>ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"</code>
+							&middot; <code>cloud/src/util.ts:62-82</code> echoes the Origin
+							and emits <code>Access-Control-Allow-Credentials: true</code> when
+							matched
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The production worker's CORS allowlist explicitly trusts
+						<code>http://localhost:1420</code> in addition to the production
+						frontend origin. Any page running on that origin can send
+						credentialed cross-origin requests to
+						<code>api.per-ankh.app</code> and read responses.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						Today the issue is fully neutralized by
+						<code>SameSite=Lax</code> on the <code>session</code> cookie
+						(<code>cloud/src/session.ts:127</code>) — modern browsers will not
+						attach the cookie to a JS <code>fetch</code> from a different
+						eTLD+1, regardless of CORS posture. So an attacker page served
+						from <code>http://localhost:1420</code> on the victim's machine
+						can make the request but receives unauthenticated 401s. The risk
+						is two coupled scenarios where the mitigation erodes:
+					</p>
+					<ol>
+						<li>
+							A future change to <code>SameSite=None</code> (e.g. to support
+							an embedded third-party widget) makes the issue immediately
+							exploitable. There is no codified guardrail tying the CORS
+							allowlist to the cookie attributes.
+						</li>
+						<li>
+							A local attacker who controls a process bound to port 1420 on
+							the victim's loopback (malware, a compromised dev tool, a
+							co-tenant on shared infrastructure) is granted credentialed
+							CORS access. This is outside the standard browser threat model,
+							but the allowlist explicitly opts in to it.
+						</li>
+					</ol>
+
+					<h4>Recommendation</h4>
+					<p>
+						Split CORS config per Cloudflare environment. Use
+						<code>[env.production]</code> and <code>[env.dev]</code> sections
+						in <code>wrangler.toml</code> so the production worker never sees
+						<code>localhost</code> in its allowlist:
+					</p>
+					<pre><code>[env.production.vars]
+ALLOWED_ORIGINS = "https://per-ankh.app"
+
+[env.dev.vars]
+ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
+</code></pre>
+					<p>
+						Deploy production with <code>wrangler deploy --env production</code>.
+						Run local dev against <code>--env dev</code>. As a
+						belt-and-suspenders, assert at handler startup that no allowlist
+						entry uses an <code>http://</code> scheme when running under the
+						production binding (D1 ID is a convenient discriminator).
+					</p>
+				</article>
+
+				<!-- ─────────── F-03 ─────────── -->
+				<article class="finding-card severity-low" id="f03">
+					<div class="finding-head">
+						<span class="finding-num">F-03</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">Anonymous read rate-limit bypass via spoofed scraper User-Agent</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — <code>GET /v1/games/:id</code> anonymous path</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/games.ts:71-86</code> defines the scraper
+							allowlist; <code>games.ts:1215-1247</code> applies it before
+							the per-IP limit and audit log
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						Anonymous reads of public games are rate-limited at 200/hour per
+						IP via D1 audit events, but the limit is skipped entirely for
+						requests whose <code>User-Agent</code> begins with one of eight
+						scraper prefixes (<code>Discordbot/</code>,
+						<code>Slackbot/</code>, <code>Twitterbot/</code>,
+						<code>facebookexternalhit/</code>, etc.). The header is trivially
+						attacker-controlled; any client can send
+						<code>User-Agent: Discordbot/1.0</code> and bypass the limit.
+					</p>
+					<p>
+						The in-code comment (<code>games.ts:69-70</code>) acknowledges
+						this explicitly: "Trivially spoofable, but the data is public —
+						this is availability defense, not security."
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						Cost amplification more than data exposure. The PII-stripped blob
+						is already public, so an attacker scraping public games at high
+						rate gains no additional information. They do force Worker
+						decompression + re-serialization on every cache miss (cache TTL
+						is 60s edge, <code>games.ts:1291</code>), incurring Worker CPU +
+						R2 reads. With ~1000 public games rotated across, an attacker
+						could trigger ~60k origin hits/hour — within Workers paid-tier
+						limits but visible on the bill.
+					</p>
+					<p>
+						The exemption also defeats the audit trail:
+						<code>anon_read</code> events are not logged for UA-matched
+						requests (<code>games.ts:1218</code> gate), so post-incident
+						analysis of an abusive crawl is harder.
+					</p>
+
+					<h4>Recommendation</h4>
+					<p>Two layered improvements:</p>
+					<ol>
+						<li>
+							<strong>Keep the audit log unconditionally.</strong> Move the
+							<code>INSERT INTO events</code> call out of the
+							<code>isScraperUA</code> branch so every anonymous read is
+							recorded, even if it's exempt from the rate-limit decision.
+							The events table is internal D1 (already on the PII deny-list
+							for Logpush), so the volume cost is bounded.
+						</li>
+						<li>
+							<strong>Verify scraper identity via reverse DNS or signed fetch.</strong>
+							Discord's bot publishes its outbound IP ranges and the
+							Reporting API; Cloudflare's edge can apply a "Known Bots"
+							managed rule that runs reverse-DNS verification on
+							<code>User-Agent: Discordbot</code> before it reaches the
+							Worker. Move the exemption out of the app and into a
+							Cloudflare WAF rule that you can be confident about. Same for
+							Slackbot (publishes its IP range publicly) and Twitterbot.
+						</li>
+					</ol>
+				</article>
+
+				<!-- ─────────── F-04 ─────────── -->
+				<article class="finding-card severity-low" id="f04">
+					<div class="finding-head">
+						<span class="finding-num">F-04</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">State-changing endpoints don't validate request <code>Content-Type</code></span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							Cloud Worker — all <code>POST/PATCH/DELETE</code> handlers
+							under <code>/v1/auth/*</code>, <code>/v1/games/*</code>,
+							<code>/v1/collections</code>, <code>/v1/csp-report</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/auth.ts:174,250,566</code> &middot;
+							<code>cloud/src/games.ts:694,1311,1437</code> &middot;
+							<code>cloud/src/collections.ts:69</code> &middot;
+							<code>cloud/src/csp.ts:88</code> — all call
+							<code>request.json()</code> / <code>request.formData()</code> /
+							<code>request.text()</code> without first asserting
+							<code>request.headers.get("Content-Type")</code>
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The CSRF model the codebase relies on (correctly documented at
+						<code>games.ts:1298-1303</code>) is: <code>SameSite=Lax</code>
+						blocks cross-site cookie attachment on POST forms, and any
+						cross-origin JS fetch with a non-simple <code>Content-Type</code>
+						triggers a CORS preflight that the allowlist rejects. The model
+						holds, but it has one quiet seam: a cross-site
+						<code>&lt;form enctype="text/plain" method="POST"&gt;</code> can
+						submit JSON-shaped bodies as a CORS-simple request, skipping
+						preflight entirely.
+					</p>
+					<p>
+						Today that seam is closed because <code>SameSite=Lax</code> blocks
+						the cookie on cross-site POSTs (Chrome's "Lax+POST" 2-minute
+						exemption is being phased out, but historically existed). Once
+						SameSite is no longer load-bearing for some other reason — e.g.
+						embedded use cases, mobile webview semantics, third-party iframes
+						the team explores later — strict Content-Type validation is the
+						only remaining wall against a hand-crafted cross-site form
+						submission.
+					</p>
+
+					<h4>Impact</h4>
+					<p>Defense-in-depth only at present. Not currently exploitable.</p>
+
+					<h4>Recommendation</h4>
+					<p>
+						Add a one-liner gate near the top of each state-changing handler:
+					</p>
+					<pre><code>const ct = request.headers.get("Content-Type") ?? "";
+if (!ct.startsWith("application/json")) {
+  return errorResponse("Content-Type required", 415, cors, "UNSUPPORTED_MEDIA_TYPE");
+}
+</code></pre>
+					<p>
+						For <code>POST /v1/games</code> require
+						<code>multipart/form-data</code>; for
+						<code>POST /v1/auth/logout</code> keep it permissive (it's
+						idempotent and body-less). The CSP report endpoint can stay as-is
+						(it's intentionally promiscuous about input shape) but should
+						reject empty/unknown content types with 415 rather than logging
+						the odd payload — see also F-05.
+					</p>
+				</article>
+
+				<!-- ─────────── F-05 ─────────── -->
+				<article class="finding-card severity-low" id="f05">
+					<div class="finding-head">
+						<span class="finding-num">F-05</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title"><code>/v1/csp-report</code> is unauthenticated and unrated</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — <code>cloud/src/csp.ts</code></div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>csp.ts:88-141</code> accepts any POST with a 64 KB body
+							cap, parses JSON, emits one structured log line per violation.
+							No auth, no per-IP counter, no body-shape allowlist.
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						CSP violation reports are processed without authentication or rate
+						limiting. The endpoint is intentionally public — browsers POST
+						here directly when the page CSP triggers, with no cookies and no
+						preflight — but every request that survives the 64 KB body cap
+						turns into one or more Logpush event lines via
+						<code>logEvent("warn", "csp_violation", ...)</code>.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						Logpush cost amplification. An attacker can sustain ~1 Worker
+						request/sec from a single IP (Cloudflare's free-tier ceiling) with
+						a 64 KB body containing N synthetic violations. Each violation
+						yields one log line. The endpoint is global, so traffic from many
+						IPs fans out without a circuit breaker.
+					</p>
+					<p>
+						Reasonable real-world cost: with the Reporting API format, one
+						POST can contain an array of report objects;
+						<code>normalizeReportingApi</code> emits one log per entry. A 64
+						KB body of ~200-byte report objects yields ~300 log lines per
+						request. Sustained ~300 lines/sec is meaningful at Logpush ingest
+						rates.
+					</p>
+
+					<h4>Recommendation</h4>
+					<ol>
+						<li>
+							Add a per-IP rate limiter (Cache API counter, same pattern as
+							<code>checkDownloadRateLimit</code> in
+							<code>index.ts:198-214</code>). Reasonable budget: 60
+							reports/IP/hour. CSP reports are one-per-violation, not
+							high-frequency under normal use.
+						</li>
+						<li>
+							Cap the per-request violation count after normalization (e.g.
+							take the first 10 entries of any Reporting API array). The
+							first few are diagnostically useful; everything beyond that
+							is fan-out.
+						</li>
+						<li>
+							Reject bodies with an unknown <code>Content-Type</code> rather
+							than logging <code>csp_violation_unknown_format</code>
+							(csp.ts:131). Browsers always send one of the two known
+							content types; logging unknowns is asking for unbounded noise.
+						</li>
+					</ol>
+				</article>
+
+				<!-- ─────────── F-06 ─────────── -->
+				<article class="finding-card severity-low" id="f06">
+					<div class="finding-head">
+						<span class="finding-num">F-06</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">CSP-report URL fields not PII-scrubbed before Logpush</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker logging</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/csp.ts:138</code> emits the whole
+							<code>NormalizedViolation</code> object as log fields.
+							<code>log.ts:32-42</code>'s <code>PII_KEYS</code> deny-list
+							contains
+							<code>online_id, discord_id, username, email, access_token, code_verifier, session_token, app_key, body</code>
+							— but not <code>document_uri</code>, <code>blocked_uri</code>,
+							or <code>source_file</code>.
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The CSP violation logger surfaces <code>document_uri</code>,
+						<code>blocked_uri</code>, and <code>source_file</code> as
+						top-level log fields. These URLs are partly under the page
+						author's control (own-origin documents) but
+						<code>blocked_uri</code> in particular reflects whatever URL the
+						browser tried to load — which on a compromised page can be
+						attacker-controlled and can contain query parameters with PII
+						(<code>?email=...</code>, <code>?session_id=...</code>) the
+						attacker crafts specifically to land in your logs.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						Low-grade Logpush pollution / potential third-party PII at rest.
+						Not a vulnerability in Per-Ankh per se; more a "we are the
+						unwitting downstream of someone else's bad day."
+					</p>
+
+					<h4>Recommendation</h4>
+					<p>
+						Strip URL query strings and fragments before logging. The path +
+						origin are sufficient for diagnosing CSP issues:
+					</p>
+					<pre><code>function stripQuery(u: string | null): string | null {
+  if (!u) return null;
+  try {
+    const url = new URL(u);
+    return `${url.origin}${url.pathname}`;
+  } catch {
+    return u.split("?")[0].split("#")[0];
+  }
+}
+</code></pre>
+					<p>
+						Apply to <code>document_uri</code>, <code>blocked_uri</code>,
+						<code>source_file</code>, and the new
+						<code>documentURL</code>/<code>blockedURL</code> Reporting API
+						equivalents.
+					</p>
+				</article>
+
+				<!-- ─────────── F-07 ─────────── -->
+				<article class="finding-card severity-low" id="f07">
+					<div class="finding-head">
+						<span class="finding-num">F-07</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">SSR <code>/share/*</code> redirect does not validate id format</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">SvelteKit SSR hook</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>src/hooks.server.ts:66-72</code> —
+							<code>Response.redirect(`https://legacy.per-ankh.app/share/${id}`, 302)</code>
+							where <code>id = event.url.pathname.slice("/share/".length)</code>
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						Any request matching <code>/share/*</code> on the main frontend is
+						302-redirected to <code>legacy.per-ankh.app</code> with the
+						remainder of the path appended verbatim. The <code>id</code> is
+						not validated against the 21-character nanoid shape, so requests
+						like <code>/share/%2e%2e/admin</code> redirect to
+						<code>https://legacy.per-ankh.app/share/%2e%2e/admin</code>. When
+						the browser follows the redirect it decodes <code>%2e%2e</code>
+						and resolves the path to
+						<code>https://legacy.per-ankh.app/admin</code>.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						Minimal — the legacy share viewer at
+						<code>legacy.per-ankh.app</code> is a frozen static SvelteKit app
+						that has only <code>/share/[id]</code> routes; arbitrary paths
+						return a standard SvelteKit 404. There is no admin surface to land
+						on. The concern is mainly that the main app is propagating
+						attacker-controlled path bytes into a redirect to a different
+						origin — a habit worth not having, since the legacy host may grow
+						new routes later or be repurposed.
+					</p>
+
+					<h4>Recommendation</h4>
+					<pre><code>if (event.url.pathname.startsWith("/share/")) {
+  const id = event.url.pathname.slice("/share/".length);
+  if (!/^[A-Za-z0-9_-]{21}$/.test(id)) {
+    throw error(404, "Not found");
+  }
+  return Response.redirect(`https://legacy.per-ankh.app/share/${id}`, 302);
+}
+</code></pre>
+				</article>
+
+				<!-- ─────────── F-08 ─────────── -->
+				<article class="finding-card severity-low" id="f08">
+					<div class="finding-head">
+						<span class="finding-num">F-08</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">Transitive <code>fast-xml-builder</code> advisory (not invoked, but pinned)</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Frontend dependency tree</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>npm audit --omit=dev</code> on the root package reports
+							<code>fast-xml-builder &lt;= 1.1.6</code> with
+							GHSA-5wm8-gmm8-39j9 (high) and GHSA-45c6-75p6-83cc (moderate).
+							Source: transitive of <code>fast-xml-parser ^5.7.2</code>.
+							<code>grep</code> across <code>src/</code> + <code>cloud/</code>
+							confirms zero imports of <code>fast-xml-builder</code>,
+							<code>XMLBuilder</code>, or <code>j2xParser</code> — the app
+							uses only the parser side.
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The <code>fast-xml-parser</code> package ships
+						<code>fast-xml-builder</code> as a sibling package in the same
+						monorepo. The app uses only <code>XMLParser</code> (see
+						<code>src/lib/parser/parse-xml.ts:40</code>), so the vulnerable
+						builder code is not on any code path. The audit warning is real
+						but not exploitable in this app.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						None today. The risk is that a future code change adds an
+						XML-building path (e.g. to generate share OG previews as SVG, or
+						to render an XML sitemap) and inherits the vulnerable version
+						without anyone noticing the warning has become live.
+					</p>
+
+					<h4>Recommendation</h4>
+					<p>
+						Bump <code>fast-xml-parser</code> when its next minor release
+						pulls in a patched <code>fast-xml-builder</code>. In the meantime,
+						add a one-line lint or pre-commit grep that fails the build if any
+						source file imports <code>fast-xml-builder</code>, so the
+						advisory can't quietly become exploitable.
+					</p>
+				</article>
+
+				<!-- ─────────── F-09 ─────────── -->
+				<article class="finding-card severity-low" id="f09">
+					<div class="finding-head">
+						<span class="finding-num">F-09</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">Transitive <code>cookie</code> low-severity advisory</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Frontend dependency tree (SvelteKit)</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>npm audit</code> on the root package reports
+							<code>cookie &lt; 0.7.0</code> with GHSA-pxg6-pf52-xh8x (low)
+							— "accepts cookie name, path, and domain with out of bounds
+							characters." Pulled in transitively by
+							<code>@sveltejs/kit</code>.
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The Node <code>cookie</code> package, used by SvelteKit for cookie
+						serialization, does not validate the name / path / domain fields
+						of cookies it serializes. An attacker who could influence any of
+						those three fields could inject CR/LF bytes that split into a
+						separate header. Per-Ankh's SvelteKit code never sets a cookie
+						with an attacker-influenced name, path, or domain — all cookie
+						sites use hardcoded names — so the issue is not exploitable here.
+						The Worker (which sets the real session cookie) implements cookie
+						serialization inline (<code>cloud/src/session.ts:123-135</code>),
+						bypassing this package entirely.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						None today. Same forward-looking concern as F-08: future code that
+						takes a cookie name from user input would inherit the issue.
+					</p>
+
+					<h4>Recommendation</h4>
+					<p>
+						The advisory's fix is a major-version SvelteKit bump. If the team
+						is already on a recent enough <code>@sveltejs/kit</code> minor
+						that ships <code>cookie ^0.7.0</code>, an
+						<code>npm update</code> may suffice. Otherwise, add the bump to
+						the next dependency-sweep cycle.
+					</p>
+				</article>
+
+				<!-- ─────────── F-10 ─────────── -->
+				<article class="finding-card severity-low" id="f10">
+					<div class="finding-head">
+						<span class="finding-num">F-10</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">Discord <code>redirect_uri</code> not server-side allowlisted</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — OAuth start + callback</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/auth.ts:189-197</code> accepts any string for
+							<code>redirect_uri</code>; <code>auth.ts:311</code> only
+							checks that the callback's value matches what the start
+							request sent. There is no comparison against a fixed list of
+							acceptable values.
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The Worker trusts whatever <code>redirect_uri</code> the frontend
+						sends and forwards it to Discord's <code>/authorize</code>
+						endpoint. Discord's own dashboard allowlist is the only thing
+						preventing an attacker who controls a frontend call from setting
+						<code>redirect_uri=https://attacker.example/</code>. As long as
+						the Discord dashboard is configured correctly (with only
+						<code>https://per-ankh.app/auth/callback</code> registered) this
+						works — but it relies on a single point of failure outside the
+						codebase.
+					</p>
+
+					<h4>Impact</h4>
+					<p>
+						Defense-in-depth gap. Exploitable only if (a) the Discord
+						dashboard allowlist is misconfigured to permit additional redirect
+						URIs, or (b) an attacker independently controls a frontend already
+						permitted by CORS (which would already be game-over).
+					</p>
+
+					<h4>Recommendation</h4>
+					<p>
+						Maintain a server-side allowlist parallel to the Discord
+						dashboard's. The list is short (one prod URI, optionally one dev
+						URI) and rarely changes:
+					</p>
+					<pre><code>const ALLOWED_REDIRECT_URIS = new Set([
+  "https://per-ankh.app/auth/callback",
+  "http://localhost:1420/auth/callback",  // gate on env, see F-02
+]);
+
+if (!ALLOWED_REDIRECT_URIS.has(redirectUri)) {
+  return errorResponse("redirect_uri not allowed", 400, cors, "REDIRECT_URI_DENIED");
+}
+</code></pre>
+					<p>
+						Apply at both <code>handleDiscordStart</code> (auth.ts:189) and as
+						a second check at <code>handleDiscordCallback</code> after the
+						equality compare (auth.ts:311).
+					</p>
+				</article>
+
+				<!-- ─────────── F-11 ─────────── -->
+				<article class="finding-card severity-low" id="f11">
+					<div class="finding-head">
+						<span class="finding-num">F-11</span>
+						<span class="sev low">Low</span>
+						<span class="finding-title">PII deny-list scrubs only top-level log keys</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker logging</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/log.ts:113-128</code> —
+							<code>scrubPii</code> walks <code>Object.entries(fields)</code>
+							once; nested objects are passed through unchanged.
+						</div>
+					</div>
+
+					<h4>Description</h4>
+					<p>
+						The redaction layer correctly catches
+						<code>{ discord_id: "abc" }</code> at the top level, but a
+						hypothetical handler that wrote
+						<code>{ metadata: { discord_id: "abc" } }</code> would surface
+						that field verbatim into Logpush. Current handlers are disciplined
+						— every PII field is either at the top level (caught) or in a
+						<code>JSON.stringify(...)</code> blob going to D1 (intentional,
+						never to logs) — but the invariant is not enforced by code.
+					</p>
+
+					<h4>Impact</h4>
+					<p>Defense-in-depth. Nothing leaks today.</p>
+
+					<h4>Recommendation</h4>
+					<p>
+						Make <code>scrubPii</code> recursive. A shallow walk of arbitrary
+						objects is cheap (the fields object is bounded by handler
+						discipline already) and removes the need to remember which call
+						sites have a chance of containing nested PII:
+					</p>
+					<pre><code>function scrubPiiDeep(value: unknown): { out: unknown; redacted: boolean } {
+  if (Array.isArray(value)) { /* recurse, accumulate */ }
+  if (value && typeof value === "object") {
+    let redacted = false;
+    const out: Record&lt;string, unknown&gt; = {};
+    for (const [k, v] of Object.entries(value)) {
+      if (PII_KEYS.has(k) && v != null) { out[k] = "[REDACTED]"; redacted = true; }
+      else { const r = scrubPiiDeep(v); out[k] = r.out; redacted ||= r.redacted; }
+    }
+    return { out, redacted };
+  }
+  return { out: value, redacted: false };
+}
+</code></pre>
+				</article>
+
+				<!-- ─────────── F-12 ─────────── -->
+				<article class="finding-card severity-info" id="f12">
+					<div class="finding-head">
+						<span class="finding-num">F-12</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title">CSP <code>style-src 'unsafe-inline'</code></span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">SvelteKit CSP config</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>svelte.config.js:50</code> —
+							<code>"style-src": ["self", "unsafe-inline"]</code>; comment
+							at line 7-10 acknowledges as a known compromise pending
+							CSP-report data.
+						</div>
+					</div>
+					<p>
+						Inline styles are widespread in the codebase (e.g.
+						<code>src/lib/game-detail/GameDetailView.svelte:180,183,…</code>:
+						<code>style="background-color: #2a2622;"</code>), bits-ui injects
+						them via portals, and ECharts emits them dynamically. Moving to
+						hash mode for styles would be a multi-PR effort. The current
+						posture is the standard pragmatic compromise for a Svelte 5 +
+						ECharts app. <code>script-src</code> remains strict (hash mode
+						with no <code>unsafe-inline</code>), which is the meaningful win.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Keep the current setting. Use the
+						CSP-report endpoint (after F-05 is addressed) to enumerate the
+						actual inline-style hashes that ship and revisit tightening on a
+						one-time pass.
+					</p>
+				</article>
+
+				<!-- ─────────── F-13 ─────────── -->
+				<article class="finding-card severity-info" id="f13">
+					<div class="finding-head">
+						<span class="finding-num">F-13</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title">No HSTS / COOP / COEP set by the app</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">SvelteKit hooks + repo <code>_headers</code></div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							No <code>Strict-Transport-Security</code>,
+							<code>Cross-Origin-Opener-Policy</code>, or
+							<code>Cross-Origin-Embedder-Policy</code> set in
+							<code>src/hooks.server.ts:79-90</code> or <code>_headers</code>.
+						</div>
+					</div>
+					<p>
+						HSTS is typically delivered at the Cloudflare edge (dashboard →
+						SSL/TLS → Edge Certificates → HSTS); the codebase delegates that
+						responsibility. COOP/COEP are not required by current
+						functionality (no <code>SharedArrayBuffer</code> use, no popups
+						receiving auth callbacks).
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Verify HSTS is enabled at the
+						Cloudflare edge for <code>per-ankh.app</code> with at least a
+						6-month <code>max-age</code> and <code>includeSubDomains</code>.
+						Consider adding
+						<code>Cross-Origin-Opener-Policy: same-origin</code> in
+						<code>hooks.server.ts</code> for free XS-leak isolation; the OAuth
+						flow uses top-level redirects, not popups, so this is
+						non-breaking.
+					</p>
+				</article>
+
+				<!-- ─────────── F-14 ─────────── -->
+				<article class="finding-card severity-info" id="f14">
+					<div class="finding-head">
+						<span class="finding-num">F-14</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title">Email stored from Discord but never read by the app</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — user upsert</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/auth.ts:50</code> requests
+							<code>identify email</code> scope;
+							<code>auth.ts:417, 423-441</code> stores <code>email</code>
+							and <code>email_verified</code> in the <code>users</code>
+							table. No grep hit for any code that reads either column
+							outside the upsert.
+						</div>
+					</div>
+					<p>
+						Email is collected at sign-in and persisted in D1 but never used:
+						no notification pipeline, no account recovery flow, no admin
+						lookup tooling reads it. This is unnecessary PII at rest and a
+						wider <code>email</code> scope on the Discord OAuth consent screen
+						than the app actually needs.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Drop the <code>email</code> scope
+						from <code>OAUTH_SCOPE</code> (<code>auth.ts:50</code>) and remove
+						the column writes. If you later add email-based notifications,
+						opt-in re-collection is cleaner than holding long-lived emails
+						for a feature that doesn't exist yet. Tightens the consent
+						screen, which is a trust signal for new testers.
+					</p>
+				</article>
+
+				<!-- ─────────── F-15 ─────────── -->
+				<article class="finding-card severity-info" id="f15">
+					<div class="finding-head">
+						<span class="finding-num">F-15</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title"><code>login_denied</code> audit row stores Discord ID + username at rest</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — allowlist gate</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/auth.ts:392-403</code> writes
+							<code>{ discord_id, discord_username }</code> into
+							<code>events.metadata</code> JSON for every rejected login.
+						</div>
+					</div>
+					<p>
+						The intent (moderation trail of who tried to sign in but wasn't on
+						the allowlist) is sensible. The implementation persists Discord
+						PII in the same D1 instance as the rest of the app, indefinitely
+						(subject only to the 2%-per-request 90-day cleanup at
+						<code>index.ts:106-118</code>). The in-line comment correctly
+						notes these rows are not shipped to Logpush, but a future
+						analytics export could sweep them up.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Either (a) hash the
+						<code>discord_id</code> with a server-side pepper before storing
+						— same identity comparison if the same user retries, no reversible
+						PII at rest — or (b) shorten the retention for
+						<code>event_type = 'login_denied'</code> to 7 days specifically
+						(separate from the 90-day general cleanup).
+					</p>
+				</article>
+
+				<!-- ─────────── F-16 ─────────── -->
+				<article class="finding-card severity-info" id="f16">
+					<div class="finding-head">
+						<span class="finding-num">F-16</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title">Session cookie <code>Domain=per-ankh.app</code> implicitly trusts any future subdomain</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker session cookie</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/session.ts:115-119,131-132</code> sets
+							<code>Domain=per-ankh.app</code> on the session cookie in
+							production. The comment explains it's necessary for SSR at
+							<code>per-ankh.app</code> to read a cookie set by
+							<code>api.per-ankh.app</code>.
+						</div>
+					</div>
+					<p>
+						The design is correct for the current two-host topology (apex SSR
+						+ <code>api.</code> Worker). The side-effect is that any future
+						subdomain — <code>legacy.per-ankh.app</code> already exists for
+						the frozen viewer; a future <code>blog.</code>,
+						<code>docs.</code>, <code>preview.</code> would inherit the same
+						scope — receives the session cookie on every request. A
+						vulnerability on any such subdomain (XSS, host takeover) would
+						expose the cookie. Even though it's HttpOnly, the subdomain could
+						trivially make authenticated calls against
+						<code>api.per-ankh.app</code>.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Track this as a
+						known-and-accepted constraint. When introducing any new subdomain,
+						either move it to a separate eTLD+1 (e.g. a different apex), or
+						audit it as critical-impact alongside the main app. Document this
+						in a <code>SECURITY.md</code> or the architecture doc.
+					</p>
+				</article>
+
+				<!-- ─────────── F-17 ─────────── -->
+				<article class="finding-card severity-info" id="f17">
+					<div class="finding-head">
+						<span class="finding-num">F-17</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title">Legacy <code>handleDelete</code> 404 vs 403 enumeration oracle</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — <code>DELETE /v1/share/:id</code></div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/index.ts:494-503</code> returns 404 when the
+							share id is unknown and 403 when the id is known but
+							credentials are wrong.
+						</div>
+					</div>
+					<p>
+						The status-code split lets an attacker who has guessed a share_id
+						distinguish "doesn't exist" from "exists but I don't have the
+						delete token." The share id is a <code>nanoid(21)</code> (~126
+						bits of entropy), so brute-force enumeration is infeasible; the
+						oracle is observable only when the attacker has independently
+						obtained a candidate share_id (e.g. a leaked share URL).
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Collapse both branches to 404
+						with the same body. Same pattern is already followed correctly in
+						<code>handleGamePatch</code>
+						(<code>games.ts:1328-1330</code>) and
+						<code>handleGameDownload</code>
+						(<code>games.ts:1524-1527</code>). The legacy endpoint is being
+						decommissioned, so this can be deferred until that work
+						concludes — noting it here for completeness.
+					</p>
+				</article>
+
+				<!-- ─────────── F-18 ─────────── -->
+				<article class="finding-card severity-info" id="f18">
+					<div class="finding-head">
+						<span class="finding-num">F-18</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title"><code>handleGameDetail</code> "Blob missing" reveals D1/R2 inconsistency</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — <code>GET /v1/games/:id</code></div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/games.ts:1250-1253</code> &middot; same shape
+							at <code>games.ts:1555-1556</code> for the download path.
+						</div>
+					</div>
+					<p>
+						When a game_id row exists in D1 but the R2 blob is missing (e.g.
+						after a failed cleanup or a partial restore), the response body is
+						<code>{"error":"Blob missing","code":"BLOB_MISSING"}</code>. This
+						reveals to a non-owner public viewer that the game existed and
+						was uploaded — which is information the access-control branches
+						at lines 1202-1208 carefully avoid disclosing elsewhere. The
+						blob-missing case bypasses that hedging because it returns 404
+						with a distinct code/message.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Return the same 404 body as the
+						"row not found" branch
+						(<code>{"error":"Not found","code":"NOT_FOUND"}</code>). Keep the
+						structured log line (<code>logError("blob_missing", ...)</code>
+						would be useful for operators); just don't surface the
+						distinction over the wire.
+					</p>
+				</article>
+
+				<!-- ─────────── F-19 ─────────── -->
+				<article class="finding-card severity-info" id="f19">
+					<div class="finding-head">
+						<span class="finding-num">F-19</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title"><code>tsconfig</code> lacks <code>noUncheckedIndexedAccess</code></span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Both projects' TypeScript config</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>tsconfig.json</code> (root) and
+							<code>cloud/tsconfig.json</code> — <code>strict: true</code>
+							set; <code>noUncheckedIndexedAccess</code> not set.
+						</div>
+					</div>
+					<p>
+						Without this flag, <code>arr[i]</code> is typed <code>T</code>
+						instead of <code>T | undefined</code>. The codebase has several
+						places where indexed access is dereferenced without checking —
+						e.g. <code>auth.ts:160-164</code> <code>generateState</code>
+						writes into a fixed-size buffer (safe);
+						<code>games.ts:436</code> uses <code>roster.map(...)</code>
+						correctly. No exploitable issue was identified, but the compiler
+						is currently silent about a class of off-by-one / empty-array
+						bugs it could catch.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Turn the flag on in a focused PR;
+						expect a small fix-up pass to add explicit
+						<code>?? defaultValue</code> or guards. The Worker is the
+						higher-value target — the cloud Worker has more index-access
+						surface in the multipart / multi-row insert paths.
+					</p>
+				</article>
+
+				<!-- ─────────── F-20 ─────────── -->
+				<article class="finding-card severity-info" id="f20">
+					<div class="finding-head">
+						<span class="finding-num">F-20</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title"><code>/v1/stats</code> endpoint not rate-limited</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker — <code>cloud/src/stats.ts</code></div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							No <code>countEventsSince</code> / Cache-API counter checks in
+							<code>stats.ts:21-100</code>.
+						</div>
+					</div>
+					<p>
+						The endpoint runs five D1 aggregations per request, all
+						parallelized and all scoped to <code>session.user_id</code>.
+						There is no per-user rate limit. The endpoint is authenticated,
+						so an attacker would need a valid session; the only abuse path is
+						a legitimate user spamming their own dashboard with refreshes,
+						which costs D1 reads but no PII exposure.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Optional. If D1 read budget
+						becomes a concern, cache the response per-user for ~60s at the
+						worker layer (or add a per-user rate-limit of, say, 600/hour as a
+						quiet ceiling). Lower priority than F-05 which is
+						unauthenticated.
+					</p>
+				</article>
+
+				<!-- ─────────── F-21 ─────────── -->
+				<article class="finding-card severity-info" id="f21">
+					<div class="finding-head">
+						<span class="finding-num">F-21</span>
+						<span class="sev info">Info</span>
+						<span class="finding-title">Generic <code>session</code> cookie name</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">Cloud Worker session cookie</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/src/session.ts:26</code> —
+							<code>const SESSION_COOKIE = "session";</code>
+						</div>
+					</div>
+					<p>
+						Using the literal name <code>session</code> on a shared apex
+						domain (<code>Domain=per-ankh.app</code>) increases the odds of a
+						name collision if another service is ever deployed on a sibling
+						subdomain that also chose <code>session</code>. Browsers
+						concatenate same-named cookies from multiple sources; the server
+						then has to guess which one is theirs. This is more a robustness
+						consideration than a security one, but ties into F-16's subdomain
+						trust footprint.
+					</p>
+					<p>
+						<strong>Recommendation:</strong> Rename to
+						<code>__Host-pa-session</code> if you can drop the explicit
+						<code>Domain</code> attribute (the <code>__Host-</code> prefix
+						requires omitting Domain, requires Secure, requires Path=/, and
+						ties the cookie to one specific origin — strong defense against
+						subdomain mishaps). This conflicts with F-16's apex-cookie
+						requirement, so the trade is: pick subdomain-isolation
+						(<code>__Host-</code> on each host that needs a session, no
+						shared cookie) versus SSR-cross-origin-sharing (current state,
+						Domain=apex). The former is the stronger posture if your
+						topology allows it; in the current setup, even renaming to
+						<code>pa-session</code> reduces collision risk without changing
+						semantics.
+					</p>
+				</article>
+
+				<!-- ============ OUT OF SCOPE ============ -->
+				<h2 id="out-of-scope">What was not reviewed</h2>
+				<ul>
+					<li>
+						<strong>Legacy <code>web/</code> share viewer.</strong> Frozen
+						SPA serving <code>legacy.per-ankh.app/share/[id]</code> from the
+						legacy desktop app's outputs. The Worker's
+						<code>/v1/share/*</code> endpoints are in scope and reviewed —
+						the static viewer is not.
+					</li>
+					<li>
+						<strong>Bake pipeline (<code>scripts/</code>).</strong> The image
+						/ sprite / atlas baking tools run locally during development.
+						They write into <code>static/atlases/</code> and
+						<code>static/sprites/</code> only. The current admin CLI
+						(<code>scripts/admin/</code>), which replaced the
+						previously-flagged <code>cloud/admin.sh</code>, was spot-checked:
+						all D1 mutations route through a <code>sqlStr()</code> helper
+						that doubles single quotes and rejects null bytes
+						(<code>scripts/admin/wrangler.ts:136-141</code>). The previous
+						SQL-injection finding against <code>admin.sh</code> is closed.
+					</li>
+					<li>
+						<strong>Historical git-log secret hunt.</strong> Explicitly out
+						of scope per the reviewer's instructions.
+						<code>.env</code> is gitignored, <code>.env.example</code> and
+						<code>.env.development</code> are checked in with no secrets; the
+						cloud secrets path uses <code>wrangler secret put</code>
+						(out-of-band). A separate sweep with <code>git-secrets</code> or
+						<code>trufflehog</code> across the full history would close this
+						gap.
+					</li>
+					<li>
+						<strong>Cloudflare dashboard configuration.</strong> WAF managed
+						rules, Bot Fight Mode, Rate Limiting rules, HSTS at the edge,
+						Web Analytics privacy settings, R2 bucket public-read flags, D1
+						backup retention — all configured in the dashboard, not in code.
+						Verify each before considering this review complete.
+					</li>
+					<li>
+						<strong>Source-map exposure in production.</strong> Build output
+						(<code>.svelte-kit/cloudflare</code>) was not present at review
+						time, so the deployed asset directory could not be checked for
+						<code>*.map</code> files. Run
+						<code>npm run build &amp;&amp; find .svelte-kit/cloudflare -name '*.map'</code>
+						post-build to verify maps are not bundled; if they are, set
+						<code>build.sourcemap: false</code> in
+						<code>vite.config.js</code> for production builds.
+					</li>
+					<li>
+						<strong>Discord OAuth dashboard configuration.</strong> The
+						<code>redirect_uri</code> allowlist registered at
+						<code>discord.com/developers/applications</code> is the
+						load-bearing complement to F-10. Confirm it contains only
+						<code>https://per-ankh.app/auth/callback</code> (plus a separate
+						dev application's
+						<code>http://localhost:1420/auth/callback</code>).
+					</li>
+					<li>
+						<strong>Third-party dependency supply chain.</strong>
+						<code>npm audit</code> was run, but a deeper supply-chain audit
+						(typosquat detection, install-script review, maintainer-takeover
+						monitoring) is out of scope for a single-session review. The
+						project's prod dependency tree is small (root: 6 direct deps;
+						cloud: 2), which keeps the supply-chain surface tractable.
+					</li>
+				</ul>
+
+				<!-- ============ STRENGTHS ============ -->
+				<h2 id="strengths">Strengths worth preserving</h2>
+				<p class="section-intro">
+					These are not findings, but they are non-obvious good decisions the
+					team should resist regressing.
+				</p>
+				<ul>
+					<li>
+						<strong>SvelteKit CSP in hash mode</strong> — no
+						<code>script-src 'unsafe-inline'</code>. Avoids the single most
+						common XSS-amplification path in SSR apps.
+					</li>
+					<li>
+						<strong>Deep PII strip on anonymous public reads</strong>
+						(<code>games.ts:157-190</code>): the recursive walk catches
+						future schema changes that could put <code>online_id</code> in
+						new locations, not just where it currently lives.
+					</li>
+					<li>
+						<strong>Username allowlist re-checked on every <code>/v1/auth/me</code></strong>
+						(<code>auth.ts:548-552</code>): access revocation propagates
+						within the session TTL window without requiring a
+						session-invalidation pass.
+					</li>
+					<li>
+						<strong><code>nanoid(32)</code> session token with 30-day KV TTL</strong>:
+						opaque, high-entropy, server-side revocable.
+					</li>
+					<li>
+						<strong>PKCE + state validated with <code>crypto.subtle.timingSafeEqual</code></strong>
+						and KV entry deleted unconditionally on callback to make replay
+						impossible (<code>auth.ts:284-300</code>).
+					</li>
+					<li>
+						<strong>Single chokepoint cookie forwarding for SSR</strong>
+						with an explicit allowlist of response headers passed through
+						(<code>hooks.server.ts:17-21,49-59</code>).
+					</li>
+					<li>
+						<strong>Structured logging with AsyncLocalStorage</strong> + a
+						PII deny-list applied at emit time (<code>log.ts</code>) —
+						request_id correlation works without threading a context
+						argument through every signature.
+					</li>
+					<li>
+						<strong>Decompression with streaming size accumulator</strong>
+						— gzip-bomb defense that stops decoding as soon as the cap is
+						breached, rather than buffering and checking after
+						(<code>util.ts:147-179</code>).
+					</li>
+					<li>
+						<strong>D1 batched upload writes</strong> with
+						<code>INSERT OR REPLACE</code> + FK cascade for re-imports, with
+						documented degraded-state semantics on failure
+						(<code>games.ts:990-1051</code>).
+					</li>
+					<li>
+						<strong>Path-parameter regex validation at the dispatch layer</strong>
+						(<code>index.ts:548-680</code>) — every <code>:id</code> is
+						shape-checked before the handler runs.
+					</li>
+				</ul>
+
+				<div class="footer-note">
+					Per-Ankh security review — 2026-05-10. File paths cite the working
+					tree at review time; line numbers may drift with subsequent edits.
+					If a cited fact stops matching the code, re-verify before acting on
+					the finding.
+				</div>
+			</main>
+		</div>
+	</body>
+</html>
