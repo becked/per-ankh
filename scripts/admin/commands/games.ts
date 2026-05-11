@@ -177,10 +177,7 @@ export async function runDetail(
 		["Difficulty", emdash(game.difficulty)],
 		["Opponent level", emdash(game.opponent_level)],
 		["User nation", emdash(game.user_nation)],
-		[
-			"User won",
-			game.user_won == null ? "—" : game.user_won ? "yes" : "no",
-		],
+		["User won", game.user_won == null ? "—" : game.user_won ? "yes" : "no"],
 		["Winner", emdash(game.winner_name ?? game.winner_nation)],
 		["Victory type", emdash(game.victory_type)],
 		["Is public", game.is_public ? "yes" : "no"],

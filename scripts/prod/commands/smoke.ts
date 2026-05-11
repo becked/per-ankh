@@ -5,10 +5,7 @@ import type { ProdOpts } from "../types";
 import { bold, dim, green, info, red } from "../../lib/format";
 import { printJson } from "../../lib/cli";
 
-export async function run(
-	_argv: string[],
-	opts: ProdOpts,
-): Promise<void> {
+export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	info("Running smoke probes against prod...");
 	const results = await runSmokeProbes();
 
@@ -23,8 +20,7 @@ export async function run(
 		const label = `${r.probe.label.padEnd(10)} ${r.probe.url}`;
 		const status =
 			r.status === "pass" ? bold(green("PASS")) : bold(red("FAIL"));
-		const code =
-			r.actualStatus !== undefined ? ` ${r.actualStatus}` : "";
+		const code = r.actualStatus !== undefined ? ` ${r.actualStatus}` : "";
 		const ms = dim(`${r.durationMs}ms`);
 		process.stdout.write(`  ${label}  ${status}${code}  ${ms}\n`);
 		if (r.detail) {

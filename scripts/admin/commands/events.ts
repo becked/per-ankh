@@ -30,10 +30,7 @@ interface EventRow {
 	created_at: string;
 }
 
-export async function run(
-	argv: string[],
-	opts: CommandOpts,
-): Promise<void> {
+export async function run(argv: string[], opts: CommandOpts): Promise<void> {
 	const { flags } = parseFlags(argv);
 	const limit = flagInt(flags, "limit", 50);
 	const typeFilter = flagString(flags, "type");

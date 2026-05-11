@@ -13,10 +13,7 @@ import { printResults } from "../results";
 import { bold, dim, info, ok, warn } from "../../lib/format";
 import { confirmYesNo } from "../../lib/confirm";
 
-export async function run(
-	_argv: string[],
-	opts: ProdOpts,
-): Promise<void> {
+export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	// ─── 1. Preflight ────────────────────────────────────────────────────
 	if (!opts.skipChecks) {
 		const results = await runAllChecks(opts);
@@ -106,7 +103,9 @@ export async function run(
 		}
 		process.stdout.write("\n");
 		if (failed > 0) {
-			throw new Error(`${failed} smoke probe(s) failed. Investigate immediately.`);
+			throw new Error(
+				`${failed} smoke probe(s) failed. Investigate immediately.`,
+			);
 		}
 	}
 

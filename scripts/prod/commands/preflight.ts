@@ -30,10 +30,7 @@ export async function runAllChecks(opts: ProdOpts): Promise<CheckResult[]> {
 	return results;
 }
 
-export async function run(
-	_argv: string[],
-	opts: ProdOpts,
-): Promise<void> {
+export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	const results = await runAllChecks(opts);
 	if (opts.json) {
 		printJson(results);

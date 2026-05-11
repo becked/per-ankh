@@ -45,10 +45,7 @@ interface KeysRow {
 	last_upload: string;
 }
 
-export async function run(
-	argv: string[],
-	opts: CommandOpts,
-): Promise<void> {
+export async function run(argv: string[], opts: CommandOpts): Promise<void> {
 	const sub = argv[0];
 	const rest = argv.slice(1);
 	switch (sub) {

@@ -19,11 +19,7 @@ const COLORS: Record<Color, string> = {
 };
 const RESET = "\x1b[0m";
 
-function makePrefixer(
-	label: string,
-	color: Color,
-	stream: NodeJS.WriteStream,
-) {
+function makePrefixer(label: string, color: Color, stream: NodeJS.WriteStream) {
 	const useColor = stream.isTTY;
 	const prefix = useColor
 		? `${COLORS[color]}[${label}]${RESET} `
@@ -110,8 +106,6 @@ export function runCaptured(
 			stderr += c.toString("utf8");
 		});
 		child.on("error", rej);
-		child.on("close", (code) =>
-			res({ stdout, stderr, code: code ?? 0 }),
-		);
+		child.on("close", (code) => res({ stdout, stderr, code: code ?? 0 }));
 	});
 }

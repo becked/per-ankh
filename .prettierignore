@@ -5,3 +5,7 @@ dist/
 src/lib/types/
 src-tauri/target/
 *.db
+
+# Hand-authored HTML containing mermaid blocks with `<id>` placeholders
+# that prettier's HTML parser misreads as unclosed tags.
+docs/flow-security-walkthrough.html

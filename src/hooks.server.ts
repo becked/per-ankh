@@ -65,10 +65,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 	// /share/* back into this app later without fighting cached 301s.
 	if (event.url.pathname.startsWith("/share/")) {
 		const id = event.url.pathname.slice("/share/".length);
-		return Response.redirect(
-			`https://legacy.per-ankh.app/share/${id}`,
-			302,
-		);
+		return Response.redirect(`https://legacy.per-ankh.app/share/${id}`, 302);
 	}
 
 	const response = await resolve(event, {

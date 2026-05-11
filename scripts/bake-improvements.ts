@@ -552,12 +552,7 @@ async function writeNationAliases(
 	// runtime treats this as the single source of truth for resolving
 	// owner_nation → which atlas / which sprite key.
 	const payload = { aliases: obj };
-	await writeJsonAsset(
-		"nation-asset-aliases",
-		payload,
-		SOURCE_DIR,
-		OUTPUT_DIR,
-	);
+	await writeJsonAsset("nation-asset-aliases", payload, SOURCE_DIR, OUTPUT_DIR);
 	console.log(`[nation-aliases] wrote ${sortedNations.length} nation aliases`);
 }
 

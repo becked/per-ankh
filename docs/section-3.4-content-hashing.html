@@ -369,7 +369,9 @@
 					<li><a href="#proposal">The proposal</a></li>
 					<li><a href="#bake-changes">Bake-script changes</a></li>
 					<li><a href="#frontend-changes">Frontend changes</a></li>
-					<li><a href="#headers">The <code>_headers</code> file</a></li>
+					<li>
+						<a href="#headers">The <code>_headers</code> file</a>
+					</li>
 					<li><a href="#decisions">Decisions</a></li>
 					<li><a href="#verify">Verifying after deploy</a></li>
 				</ol>
@@ -391,15 +393,16 @@
 					first paint of <code>/games/[id]</code>, plus a long tail of small
 					sprite PNGs. We want browsers to cache these
 					<em>aggressively</em> &mdash; ideally forever &mdash; because they
-					don't change between page loads in a normal session, and re-downloading
-					on every navigation is painful.
+					don't change between page loads in a normal session, and
+					re-downloading on every navigation is painful.
 				</p>
 				<p>
 					But we also re-bake atlases regularly as the
 					<a href="https://github.com/becked/pinacotheca">Pinacotheca</a>
 					sprite-rendering pipeline iterates. So &quot;cache forever&quot; needs
-					to coexist with &quot;the file at this URL might change tomorrow.&quot;
-					Those two goals fight each other unless we restructure the URL.
+					to coexist with &quot;the file at this URL might change
+					tomorrow.&quot; Those two goals fight each other unless we restructure
+					the URL.
 				</p>
 
 				<div class="callout">
@@ -408,8 +411,8 @@
 					<code>terrain-3d.webp</code> changes, its URL changes. A returning
 					visitor whose browser cached the previous version still has it &mdash;
 					at the old URL, which nothing references anymore, so it sits idle
-					until the cache evicts it. The new HTML points at the new URL,
-					which is a clean cache miss and gets fetched fresh. There is no
+					until the cache evicts it. The new HTML points at the new URL, which
+					is a clean cache miss and gets fetched fresh. There is no
 					&quot;stale&quot; state that needs to be invalidated.
 				</div>
 
@@ -459,7 +462,9 @@
 				</dl>
 
 				<h3>The two cache-hit paths</h3>
-				<p>There are actually two ways a "cached" response avoids a download:</p>
+				<p>
+					There are actually two ways a "cached" response avoids a download:
+				</p>
 				<ol>
 					<li>
 						<strong>Fresh hit (free).</strong> The cached response is still
@@ -471,8 +476,8 @@
 						response is past <code>max-age</code>, but the browser has an
 						<code>ETag</code> or <code>Last-Modified</code> from the prior
 						response. It sends an <code>If-None-Match</code> request; the server
-						replies with a 304 Not Modified and no body. One round-trip, no
-						body bytes.
+						replies with a 304 Not Modified and no body. One round-trip, no body
+						bytes.
 					</li>
 				</ol>
 				<p>
@@ -480,12 +485,17 @@
 					round-trip; <code>immutable</code> says "don't even ask."
 				</p>
 
-				<h3>Why <code>immutable, max-age=1y</code> is dangerous on a stable URL</h3>
+				<h3>
+					Why <code>immutable, max-age=1y</code> is dangerous on a stable URL
+				</h3>
 				<p>
 					If you set <code>Cache-Control: immutable, max-age=31536000</code> on
 					<code>/atlases/terrain-3d.webp</code>, and then re-bake and replace
-					that file with new content, <strong>every browser that has ever loaded the
-					old version will keep serving the old version for up to one year.</strong>
+					that file with new content,
+					<strong
+						>every browser that has ever loaded the old version will keep
+						serving the old version for up to one year.</strong
+					>
 					Hard refresh works, but normal navigation doesn't &mdash; the browser
 					never asks. There is no server-side workaround.
 				</p>
@@ -506,13 +516,37 @@
 						<div class="diagram-title">In-place URL + immutable (broken)</div>
 						<svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
 							<style>
-								.lbl { font: 10px ui-monospace, monospace; fill: #c5c3c2; }
-								.lbl.b { fill: #ffa500; font-weight: bold; }
-								.lbl.bad { fill: #d97364; }
-								.lbl.good { fill: #6cc070; }
-								.box { fill: #0e0a07; stroke: #2a2622; }
-								.line { stroke: #888; stroke-width: 1; fill: none; }
-								.arrow { stroke: #888; stroke-width: 1; fill: none; marker-end: url(#a); }
+								.lbl {
+									font:
+										10px ui-monospace,
+										monospace;
+									fill: #c5c3c2;
+								}
+								.lbl.b {
+									fill: #ffa500;
+									font-weight: bold;
+								}
+								.lbl.bad {
+									fill: #d97364;
+								}
+								.lbl.good {
+									fill: #6cc070;
+								}
+								.box {
+									fill: #0e0a07;
+									stroke: #2a2622;
+								}
+								.line {
+									stroke: #888;
+									stroke-width: 1;
+									fill: none;
+								}
+								.arrow {
+									stroke: #888;
+									stroke-width: 1;
+									fill: none;
+									marker-end: url(#a);
+								}
 							</style>
 							<defs>
 								<marker
@@ -536,37 +570,90 @@
 
 							<!-- Bake v1 -->
 							<rect x="20" y="20" width="120" height="40" class="box" rx="3" />
-							<text x="80" y="38" class="lbl b" text-anchor="middle">bake v1</text>
-							<text x="80" y="54" class="lbl" text-anchor="middle">terrain-3d.webp</text>
+							<text x="80" y="38" class="lbl b" text-anchor="middle">
+								bake v1
+							</text>
+							<text x="80" y="54" class="lbl" text-anchor="middle">
+								terrain-3d.webp
+							</text>
 
 							<!-- User A loads page at t=0 -->
-							<line x1="80" y1="60" x2="80" y2="180" class="line" stroke-dasharray="2,2" />
-							<text x="80" y="78" class="lbl" text-anchor="middle">user A → fetches v1</text>
-							<text x="80" y="92" class="lbl good" text-anchor="middle">cached for 1y</text>
+							<line
+								x1="80"
+								y1="60"
+								x2="80"
+								y2="180"
+								class="line"
+								stroke-dasharray="2,2"
+							/>
+							<text x="80" y="78" class="lbl" text-anchor="middle">
+								user A → fetches v1
+							</text>
+							<text x="80" y="92" class="lbl good" text-anchor="middle">
+								cached for 1y
+							</text>
 
 							<!-- Bake v2 (in place) -->
 							<rect x="160" y="20" width="120" height="40" class="box" rx="3" />
-							<text x="220" y="38" class="lbl b" text-anchor="middle">bake v2</text>
-							<text x="220" y="54" class="lbl" text-anchor="middle">terrain-3d.webp</text>
+							<text x="220" y="38" class="lbl b" text-anchor="middle">
+								bake v2
+							</text>
+							<text x="220" y="54" class="lbl" text-anchor="middle">
+								terrain-3d.webp
+							</text>
 
 							<!-- User A revisits -->
-							<line x1="290" y1="60" x2="290" y2="180" class="line" stroke-dasharray="2,2" />
-							<text x="290" y="78" class="lbl" text-anchor="middle">user A revisits</text>
-							<text x="290" y="92" class="lbl bad" text-anchor="middle">serves v1 from cache</text>
-							<text x="290" y="106" class="lbl bad" text-anchor="middle">(stale, no fix)</text>
+							<line
+								x1="290"
+								y1="60"
+								x2="290"
+								y2="180"
+								class="line"
+								stroke-dasharray="2,2"
+							/>
+							<text x="290" y="78" class="lbl" text-anchor="middle">
+								user A revisits
+							</text>
+							<text x="290" y="92" class="lbl bad" text-anchor="middle">
+								serves v1 from cache
+							</text>
+							<text x="290" y="106" class="lbl bad" text-anchor="middle">
+								(stale, no fix)
+							</text>
 						</svg>
 					</div>
 
 					<div class="diagram">
-						<div class="diagram-title">Content-hashed URL + immutable (works)</div>
+						<div class="diagram-title">
+							Content-hashed URL + immutable (works)
+						</div>
 						<svg viewBox="0 0 360 220" xmlns="http://www.w3.org/2000/svg">
 							<style>
-								.lbl2 { font: 10px ui-monospace, monospace; fill: #c5c3c2; }
-								.lbl2.b { fill: #ffa500; font-weight: bold; }
-								.lbl2.bad { fill: #d97364; }
-								.lbl2.good { fill: #6cc070; }
-								.box2 { fill: #0e0a07; stroke: #2a2622; }
-								.line2 { stroke: #888; stroke-width: 1; fill: none; }
+								.lbl2 {
+									font:
+										10px ui-monospace,
+										monospace;
+									fill: #c5c3c2;
+								}
+								.lbl2.b {
+									fill: #ffa500;
+									font-weight: bold;
+								}
+								.lbl2.bad {
+									fill: #d97364;
+								}
+								.lbl2.good {
+									fill: #6cc070;
+								}
+								.box2 {
+									fill: #0e0a07;
+									stroke: #2a2622;
+								}
+								.line2 {
+									stroke: #888;
+									stroke-width: 1;
+									fill: none;
+								}
 							</style>
 							<line x1="20" y1="180" x2="340" y2="180" class="line2" />
 							<text x="20" y="200" class="lbl2">t = 0</text>
@@ -574,22 +661,63 @@
 							<text x="290" y="200" class="lbl2">+2 weeks</text>
 
 							<rect x="20" y="20" width="120" height="40" class="box2" rx="3" />
-							<text x="80" y="38" class="lbl2 b" text-anchor="middle">bake v1</text>
-							<text x="80" y="54" class="lbl2" text-anchor="middle">terrain-3d.abc123.webp</text>
+							<text x="80" y="38" class="lbl2 b" text-anchor="middle">
+								bake v1
+							</text>
+							<text x="80" y="54" class="lbl2" text-anchor="middle">
+								terrain-3d.abc123.webp
+							</text>
 
-							<line x1="80" y1="60" x2="80" y2="180" class="line2" stroke-dasharray="2,2" />
-							<text x="80" y="78" class="lbl2" text-anchor="middle">user A → fetches</text>
-							<text x="80" y="92" class="lbl2 good" text-anchor="middle">cached @ abc123</text>
+							<line
+								x1="80"
+								y1="60"
+								x2="80"
+								y2="180"
+								class="line2"
+								stroke-dasharray="2,2"
+							/>
+							<text x="80" y="78" class="lbl2" text-anchor="middle">
+								user A → fetches
+							</text>
+							<text x="80" y="92" class="lbl2 good" text-anchor="middle">
+								cached @ abc123
+							</text>
 
-							<rect x="160" y="20" width="120" height="40" class="box2" rx="3" />
-							<text x="220" y="38" class="lbl2 b" text-anchor="middle">bake v2</text>
-							<text x="220" y="54" class="lbl2" text-anchor="middle">terrain-3d.def456.webp</text>
+							<rect
+								x="160"
+								y="20"
+								width="120"
+								height="40"
+								class="box2"
+								rx="3"
+							/>
+							<text x="220" y="38" class="lbl2 b" text-anchor="middle">
+								bake v2
+							</text>
+							<text x="220" y="54" class="lbl2" text-anchor="middle">
+								terrain-3d.def456.webp
+							</text>
 
-							<line x1="290" y1="60" x2="290" y2="180" class="line2" stroke-dasharray="2,2" />
-							<text x="290" y="78" class="lbl2" text-anchor="middle">user A revisits</text>
-							<text x="290" y="92" class="lbl2" text-anchor="middle">HTML now references</text>
-							<text x="290" y="106" class="lbl2 good" text-anchor="middle">def456 → fresh fetch</text>
-							<text x="290" y="120" class="lbl2" text-anchor="middle">(abc123 still cached, idle)</text>
+							<line
+								x1="290"
+								y1="60"
+								x2="290"
+								y2="180"
+								class="line2"
+								stroke-dasharray="2,2"
+							/>
+							<text x="290" y="78" class="lbl2" text-anchor="middle">
+								user A revisits
+							</text>
+							<text x="290" y="92" class="lbl2" text-anchor="middle">
+								HTML now references
+							</text>
+							<text x="290" y="106" class="lbl2 good" text-anchor="middle">
+								def456 → fresh fetch
+							</text>
+							<text x="290" y="120" class="lbl2" text-anchor="middle">
+								(abc123 still cached, idle)
+							</text>
 						</svg>
 					</div>
 				</div>
@@ -604,8 +732,7 @@
 				<!-- ============================================================ -->
 				<h2 id="cf-context">4. On Cloudflare specifically</h2>
 				<p>
-					A few Cloudflare-specific bits worth knowing before we touch any
-					code.
+					A few Cloudflare-specific bits worth knowing before we touch any code.
 				</p>
 
 				<h3>Workers Static Assets</h3>
@@ -633,19 +760,60 @@
 					<div class="diagram-title">Request path on Cloudflare</div>
 					<svg viewBox="0 0 720 200" xmlns="http://www.w3.org/2000/svg">
 						<style>
-							.b { fill: #0e0a07; stroke: #2a2622; }
-							.bo { fill: #1a1410; stroke: #ffa500; }
-							.t { font: 11px ui-monospace, monospace; fill: #e6e3df; }
-							.t.s { font-size: 9px; fill: #c5c3c2; }
-							.t.l { fill: #ffa500; font-weight: bold; }
-							.l { stroke: #888; stroke-width: 1; fill: none; }
-							.lh { stroke: #6cc070; stroke-width: 2; fill: none; }
+							.b {
+								fill: #0e0a07;
+								stroke: #2a2622;
+							}
+							.bo {
+								fill: #1a1410;
+								stroke: #ffa500;
+							}
+							.t {
+								font:
+									11px ui-monospace,
+									monospace;
+								fill: #e6e3df;
+							}
+							.t.s {
+								font-size: 9px;
+								fill: #c5c3c2;
+							}
+							.t.l {
+								fill: #ffa500;
+								font-weight: bold;
+							}
+							.l {
+								stroke: #888;
+								stroke-width: 1;
+								fill: none;
+							}
+							.lh {
+								stroke: #6cc070;
+								stroke-width: 2;
+								fill: none;
+							}
 						</style>
 						<defs>
-							<marker id="ar" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+							<marker
+								id="ar"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="6"
+								markerHeight="6"
+								orient="auto"
+							>
 								<path d="M0,0 L10,5 L0,10 z" fill="#888" />
 							</marker>
-							<marker id="arh" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto">
+							<marker
+								id="arh"
+								viewBox="0 0 10 10"
+								refX="8"
+								refY="5"
+								markerWidth="6"
+								markerHeight="6"
+								orient="auto"
+							>
 								<path d="M0,0 L10,5 L0,10 z" fill="#6cc070" />
 							</marker>
 						</defs>
@@ -653,35 +821,83 @@
 						<!-- Browser -->
 						<rect x="20" y="60" width="100" height="50" class="b" rx="4" />
 						<text x="70" y="80" class="t l" text-anchor="middle">Browser</text>
-						<text x="70" y="98" class="t s" text-anchor="middle">GET /atlases/x.webp</text>
+						<text x="70" y="98" class="t s" text-anchor="middle">
+							GET /atlases/x.webp
+						</text>
 
 						<!-- CDN edge cache -->
 						<rect x="160" y="60" width="120" height="50" class="b" rx="4" />
-						<text x="220" y="80" class="t l" text-anchor="middle">CF edge cache</text>
-						<text x="220" y="98" class="t s" text-anchor="middle">hit? skip rest</text>
+						<text x="220" y="80" class="t l" text-anchor="middle">
+							CF edge cache
+						</text>
+						<text x="220" y="98" class="t s" text-anchor="middle">
+							hit? skip rest
+						</text>
 
 						<!-- Static asset handler -->
 						<rect x="320" y="20" width="160" height="50" class="bo" rx="4" />
-						<text x="400" y="40" class="t l" text-anchor="middle">Static Assets</text>
-						<text x="400" y="58" class="t s" text-anchor="middle">_headers applies here</text>
+						<text x="400" y="40" class="t l" text-anchor="middle">
+							Static Assets
+						</text>
+						<text x="400" y="58" class="t s" text-anchor="middle">
+							_headers applies here
+						</text>
 
 						<!-- SSR Worker -->
 						<rect x="320" y="100" width="160" height="50" class="b" rx="4" />
-						<text x="400" y="120" class="t l" text-anchor="middle">SSR Worker</text>
-						<text x="400" y="138" class="t s" text-anchor="middle">SvelteKit handle()</text>
+						<text x="400" y="120" class="t l" text-anchor="middle">
+							SSR Worker
+						</text>
+						<text x="400" y="138" class="t s" text-anchor="middle">
+							SvelteKit handle()
+						</text>
 
 						<!-- D1/R2/etc -->
 						<rect x="540" y="100" width="160" height="50" class="b" rx="4" />
-						<text x="620" y="120" class="t l" text-anchor="middle">D1 / R2 / KV</text>
-						<text x="620" y="138" class="t s" text-anchor="middle">via API Worker</text>
+						<text x="620" y="120" class="t l" text-anchor="middle">
+							D1 / R2 / KV
+						</text>
+						<text x="620" y="138" class="t s" text-anchor="middle">
+							via API Worker
+						</text>
 
 						<!-- arrows -->
-						<line x1="120" y1="85" x2="160" y2="85" class="l" marker-end="url(#ar)" />
-						<line x1="280" y1="80" x2="320" y2="45" class="lh" marker-end="url(#arh)" />
-						<line x1="280" y1="90" x2="320" y2="125" class="l" marker-end="url(#ar)" />
-						<line x1="480" y1="125" x2="540" y2="125" class="l" marker-end="url(#ar)" />
+						<line
+							x1="120"
+							y1="85"
+							x2="160"
+							y2="85"
+							class="l"
+							marker-end="url(#ar)"
+						/>
+						<line
+							x1="280"
+							y1="80"
+							x2="320"
+							y2="45"
+							class="lh"
+							marker-end="url(#arh)"
+						/>
+						<line
+							x1="280"
+							y1="90"
+							x2="320"
+							y2="125"
+							class="l"
+							marker-end="url(#ar)"
+						/>
+						<line
+							x1="480"
+							y1="125"
+							x2="540"
+							y2="125"
+							class="l"
+							marker-end="url(#ar)"
+						/>
 
-						<text x="295" y="58" class="t s" fill="#6cc070">/atlases/* /sprites/*</text>
+						<text x="295" y="58" class="t s" fill="#6cc070">
+							/atlases/* /sprites/*
+						</text>
 						<text x="295" y="160" class="t s">everything else</text>
 					</svg>
 				</div>
@@ -709,12 +925,12 @@
 
 				<h3>Cloudflare's edge cache vs. browser cache</h3>
 				<p>
-					<code>Cache-Control</code> applies to both. The CF edge will cache
-					per the same rules and serve subsequent requests without hitting your
+					<code>Cache-Control</code> applies to both. The CF edge will cache per
+					the same rules and serve subsequent requests without hitting your
 					Worker. Browsers will cache locally. With
-					<code>immutable, max-age=1y</code>, both layers cache for a year &mdash;
-					so cold-start overhead happens once globally on first deploy of a
-					hashed URL, then never.
+					<code>immutable, max-age=1y</code>, both layers cache for a year
+					&mdash; so cold-start overhead happens once globally on first deploy
+					of a hashed URL, then never.
 				</p>
 
 				<!-- ============================================================ -->
@@ -738,7 +954,8 @@
 							<td>~26 MB</td>
 							<td>High (Pinacotheca iteration)</td>
 							<td rowspan="3" style="vertical-align: middle">
-								<span class="tag">default</span> whatever Cloudflare's static-asset default is &mdash; revalidation each navigation
+								<span class="tag">default</span> whatever Cloudflare's
+								static-asset default is &mdash; revalidation each navigation
 							</td>
 						</tr>
 						<tr>
@@ -757,8 +974,10 @@
 				</table>
 
 				<h3>Where these are referenced in code</h3>
-				<p>Three sites in the runtime, all in shared code that
-					<code>web/</code> picks up via symlink:</p>
+				<p>
+					Three sites in the runtime, all in shared code that
+					<code>web/</code> picks up via symlink:
+				</p>
 				<dl class="kv">
 					<dt>SpriteMap.svelte:33-38</dt>
 					<dd>
@@ -783,8 +1002,9 @@
 					<dd>
 						Sprite URLs built by convention &mdash;
 						<code>/sprites/crests/CREST_$&#123;enumValue&#125;.png</code>,
-						<code>/sprites/$&#123;category&#125;/$&#123;filename&#125;.png</code>. No manifest, just string
-						concatenation gated by <code>KNOWN_TECH_SPRITES</code> /
+						<code>/sprites/$&#123;category&#125;/$&#123;filename&#125;.png</code
+						>. No manifest, just string concatenation gated by
+						<code>KNOWN_TECH_SPRITES</code> /
 						<code>KNOWN_UNIT_SPRITES</code> sets that hardcode "does this sprite
 						exist".
 					</dd>
@@ -793,9 +1013,9 @@
 				<h3>The <code>web/</code> symlink situation</h3>
 				<p>
 					The legacy share viewer at
-					<code>per-ankh-web.pages.dev/share/[id]</code> is a separate
-					SvelteKit app under <code>web/</code>. It shares assets and code with
-					the main app via filesystem symlinks:
+					<code>per-ankh-web.pages.dev/share/[id]</code> is a separate SvelteKit
+					app under <code>web/</code>. It shares assets and code with the main
+					app via filesystem symlinks:
 				</p>
 				<pre class="code"><span class="c"># web/static/</span>
 atlases -> ../../static/atlases
@@ -857,7 +1077,9 @@ generated        -> ../../../src/lib/generated
 					Two reasons, both about code quality rather than caching mechanics:
 				</p>
 
-				<h4 style="color: var(--tan); margin: 1rem 0 0.4rem 0; font-size: 0.95rem">
+				<h4
+					style="color: var(--tan); margin: 1rem 0 0.4rem 0; font-size: 0.95rem"
+				>
 					Consistency
 				</h4>
 				<p>
@@ -867,19 +1089,21 @@ generated        -> ../../../src/lib/generated
 					them. There is no principled basis for the line &mdash; sprites and
 					atlases are both pre-baked binary outputs of the
 					<code>scripts/bake-*</code> pipeline, both served as static assets,
-					both invalidated by Pinacotheca-side changes. Treating them the
-					same removes a category of decision (which class is this asset?
-					what cache policy applies?) that we'd otherwise have to revisit
-					every time a new asset class appears.
+					both invalidated by Pinacotheca-side changes. Treating them the same
+					removes a category of decision (which class is this asset? what cache
+					policy applies?) that we'd otherwise have to revisit every time a new
+					asset class appears.
 				</p>
 
-				<h4 style="color: var(--tan); margin: 1rem 0 0.4rem 0; font-size: 0.95rem">
+				<h4
+					style="color: var(--tan); margin: 1rem 0 0.4rem 0; font-size: 0.95rem"
+				>
 					Hand-maintained code shrinks
 				</h4>
 				<p>
-					Today, <code>src/lib/game-detail/helpers.ts</code> builds sprite
-					URLs by string concatenation and gates them behind hardcoded
-					existence sets:
+					Today, <code>src/lib/game-detail/helpers.ts</code> builds sprite URLs
+					by string concatenation and gates them behind hardcoded existence
+					sets:
 				</p>
 				<ul>
 					<li>
@@ -887,8 +1111,8 @@ generated        -> ../../../src/lib/generated
 						"which tech sprites exist" (lines 388&ndash;450)
 					</li>
 					<li>
-						<code>KNOWN_UNIT_SPRITES</code> &mdash; ~90 entries doing the
-						same for unit sprites (lines 453&ndash;543)
+						<code>KNOWN_UNIT_SPRITES</code> &mdash; ~90 entries doing the same
+						for unit sprites (lines 453&ndash;543)
 					</li>
 				</ul>
 				<p>
@@ -896,15 +1120,17 @@ generated        -> ../../../src/lib/generated
 					<code>TECH_FOO</code> and we don't ship art for it, we want to fall
 					through to a fallback rather than 404. With a sprite manifest, the
 					manifest <em>is</em> the existence check &mdash; both sets become
-					redundant and can be deleted. Net change to
-					<code>helpers.ts</code>: <strong>~150 lines of hand-maintained
-					hardcoded data go away</strong>, replaced by a generated module.
+					redundant and can be deleted. Net change to <code>helpers.ts</code>:
+					<strong>~150 lines of hand-maintained hardcoded data go away</strong>,
+					replaced by a generated module.
 				</p>
 				<p>
-					<code>getSpritePath()</code> simplifies to a manifest lookup with
-					the typo-fix and tech-falls-back-to-unit logic preserved:
+					<code>getSpritePath()</code> simplifies to a manifest lookup with the
+					typo-fix and tech-falls-back-to-unit logic preserved:
 				</p>
-				<pre class="code"><span class="k">function</span> <span class="n">getSpritePath</span>(category: <span class="t">SpriteCategory</span>, enumValue: <span class="t">string</span>): <span class="t">string</span> | <span class="k">null</span> {
+				<pre
+					class="code"
+				><span class="k">function</span> <span class="n">getSpritePath</span>(category: <span class="t">SpriteCategory</span>, enumValue: <span class="t">string</span>): <span class="t">string</span> | <span class="k">null</span> {
   <span class="k">if</span> (category === <span class="s">"techs"</span>) {
     <span class="k">const</span> fixed = TECH_SPRITE_FIXES[enumValue] ?? enumValue;
     <span class="k">return</span> SPRITE_MANIFEST[<span class="s">`techs/</span>${fixed}<span class="s">`</span>]
@@ -926,47 +1152,45 @@ generated        -> ../../../src/lib/generated
 					<li>
 						<code>src/lib/generated/crests.ts</code> exposes
 						<code>FAMILY_CRESTS</code> and <code>NATION_CRESTS</code> as
-						existence sets. These can be derived views over the sprite
-						manifest (<code>filter keys starting with crests/CREST_FAMILY_</code>),
-						or the existing callsites in <code>SpriteMap.svelte</code> can
-						hit the manifest directly.
+						existence sets. These can be derived views over the sprite manifest
+						(<code>filter keys starting with crests/CREST_FAMILY_</code>), or
+						the existing callsites in <code>SpriteMap.svelte</code> can hit the
+						manifest directly.
 					</li>
 					<li>
 						<code>scripts/bake-crests.ts</code> exists only to emit
-						<code>crests.ts</code>. If <code>crests.ts</code> goes, so does
-						its baker &mdash; <code>scripts/bake-sprites.ts</code> already
-						walks the same directory tree to build the sprite manifest.
+						<code>crests.ts</code>. If <code>crests.ts</code> goes, so does its
+						baker &mdash; <code>scripts/bake-sprites.ts</code> already walks the
+						same directory tree to build the sprite manifest.
 					</li>
 				</ul>
 				<p>
 					Not strictly part of §3.4, but worth doing in the same change since
 					the unification opens the door. We'd be left with one bake step
 					(<code>bake-sprites.ts</code>) and one manifest module covering
-					everything under <code>static/sprites/</code>, plus the parallel
-					atlas baker and atlas manifest.
+					everything under <code>static/sprites/</code>, plus the parallel atlas
+					baker and atlas manifest.
 				</p>
 
 				<h3>One honest trade-off</h3>
 				<div class="callout">
 					<strong>Tighter coupling to bake correctness</strong>
 					Today the <code>KNOWN_*_SPRITES</code> sets are a tripwire: if
-					Pinacotheca starts rendering a new tech but you forget to re-bake,
-					the runtime falls through cleanly because the hardcoded set says
-					"no sprite." With manifest-as-truth, the bake script is the only
-					safety check. A stale or partial bake produces a manifest with
-					missing entries, and the runtime tries to load whatever is there.
-					The fix is to make the bake fail loudly on missing sources rather
-					than silently producing a partial manifest &mdash; not a real
-					downside, but worth knowing.
+					Pinacotheca starts rendering a new tech but you forget to re-bake, the
+					runtime falls through cleanly because the hardcoded set says "no
+					sprite." With manifest-as-truth, the bake script is the only safety
+					check. A stale or partial bake produces a manifest with missing
+					entries, and the runtime tries to load whatever is there. The fix is
+					to make the bake fail loudly on missing sources rather than silently
+					producing a partial manifest &mdash; not a real downside, but worth
+					knowing.
 				</div>
 
 				<!-- ============================================================ -->
 				<h2 id="bake-changes">7. Bake-script changes</h2>
 
 				<h3>Two bakers, two manifests</h3>
-				<p>
-					Two parallel structures, same shape:
-				</p>
+				<p>Two parallel structures, same shape:</p>
 				<ul>
 					<li>
 						<strong>Atlas baker.</strong> The existing
@@ -979,8 +1203,8 @@ generated        -> ../../../src/lib/generated
 					</li>
 					<li>
 						<strong>Sprite baker.</strong>
-						<code>scripts/bake-sprites.ts</code>, which today copies PNGs
-						from Pinacotheca into <code>static/sprites/&lt;category&gt;/</code>.
+						<code>scripts/bake-sprites.ts</code>, which today copies PNGs from
+						Pinacotheca into <code>static/sprites/&lt;category&gt;/</code>.
 						Output: hashed <code>.png</code> files plus
 						<code>src/lib/generated/sprite-manifest.ts</code>. Subsumes the
 						existing <code>bake-crests.ts</code> (its directory scan over
@@ -991,26 +1215,26 @@ generated        -> ../../../src/lib/generated
 				<h3>What to hash</h3>
 				<p>
 					Hash the <em>output</em> file's bytes, not the source. For atlases:
-					<code>sha256(webpBuf).slice(0,8)</code>. For sprites: same
-					operation on the copied PNG buffer.
+					<code>sha256(webpBuf).slice(0,8)</code>. For sprites: same operation
+					on the copied PNG buffer.
 				</p>
 				<ul>
 					<li>
-						For atlases, the <code>.json</code> coordinates depend on bake
-						logic (cell geometry, packing) as well as source pixels. Hashing
-						the output catches changes to bake parameters automatically; a
+						For atlases, the <code>.json</code> coordinates depend on bake logic
+						(cell geometry, packing) as well as source pixels. Hashing the
+						output catches changes to bake parameters automatically; a
 						source-only hash would miss them.
 					</li>
 					<li>
 						<code>sharp</code>'s lossless WebP and PNG encoders are
-						deterministic, so identical input produces identical output
-						hashes &mdash; re-bakes that don't change anything reuse old
-						URLs (cache hit preserved).
+						deterministic, so identical input produces identical output hashes
+						&mdash; re-bakes that don't change anything reuse old URLs (cache
+						hit preserved).
 					</li>
 					<li>
 						For multi-source atlases like
-						<code>improvements-urban-EGYPT</code>, "the source" isn't a
-						single file anyway, so output-hashing is the only honest option.
+						<code>improvements-urban-EGYPT</code>, "the source" isn't a single
+						file anyway, so output-hashing is the only honest option.
 					</li>
 				</ul>
 
@@ -1054,10 +1278,12 @@ generated        -> ../../../src/lib/generated
 					<code>static/sprites/&lt;category&gt;/</code> and copies each PNG
 					through a hash-and-rename. Manifest keys are
 					<code>&lt;category&gt;/&lt;basename&gt;</code> (without
-					<code>.png</code>) so consumers in
-					<code>helpers.ts</code> can construct lookup keys directly:
+					<code>.png</code>) so consumers in <code>helpers.ts</code> can
+					construct lookup keys directly:
 				</p>
-				<pre class="code"><span class="c">// scripts/bake-sprites.ts (sketch)</span>
+				<pre
+					class="code"
+				><span class="c">// scripts/bake-sprites.ts (sketch)</span>
 <span class="k">async function</span> <span class="n">hashAndCopy</span>(
   src: <span class="t">string</span>,
   destDir: <span class="t">string</span>,
@@ -1083,12 +1309,14 @@ generated        -> ../../../src/lib/generated
 				<ol>
 					<li>
 						<strong>Per-bake wipe.</strong> Each bake script clears its own
-						output slice before writing. <code>bake-improvements.ts</code>
-						clears <code>improvements-*</code> files; <code>bake-sprites.ts</code>
-						clears <code>static/sprites/&lt;category&gt;/*.png</code> for each
-						category it processes. Keeps single-bake invocations clean during
-						development &mdash; running <code>npm run bake:improvements</code>
-						alone leaves the rest of <code>static/atlases/</code>
+						output slice before writing.
+						<code>bake-improvements.ts</code> clears
+						<code>improvements-*</code> files;
+						<code>bake-sprites.ts</code> clears
+						<code>static/sprites/&lt;category&gt;/*.png</code> for each category
+						it processes. Keeps single-bake invocations clean during development
+						&mdash; running <code>npm run bake:improvements</code> alone leaves
+						the rest of <code>static/atlases/</code>
 						untouched.
 					</li>
 					<li>
@@ -1104,10 +1332,10 @@ generated        -> ../../../src/lib/generated
 					</li>
 				</ol>
 				<p>
-					Belt-and-suspenders. (1) keeps the dev workflow ergonomic; (2)
-					keeps the deployed bundle clean and tolerant to bake-script
-					mistakes. The reconcile is roughly thirty lines: list files, list
-					manifest references, set-difference, <code>rm</code>.
+					Belt-and-suspenders. (1) keeps the dev workflow ergonomic; (2) keeps
+					the deployed bundle clean and tolerant to bake-script mistakes. The
+					reconcile is roughly thirty lines: list files, list manifest
+					references, set-difference, <code>rm</code>.
 				</p>
 
 				<h3>The manifest modules</h3>
@@ -1117,7 +1345,9 @@ generated        -> ../../../src/lib/generated
 					<code>$derived</code> blocks without a load-state guard.
 				</p>
 
-				<pre class="code"><span class="c">// src/lib/generated/atlas-manifest.ts (generated; do not edit)</span>
+				<pre
+					class="code"
+				><span class="c">// src/lib/generated/atlas-manifest.ts (generated; do not edit)</span>
 <span class="k">export const</span> ATLAS_MANIFEST = {
   <span class="s">"terrain-3d"</span>: {
     webp: <span class="s">"/atlases/terrain-3d.a1b2c3d4.webp"</span>,
@@ -1134,7 +1364,9 @@ generated        -> ../../../src/lib/generated
 
 <span class="k">export const</span> NATION_ALIASES_URL = <span class="s">"/atlases/nation-asset-aliases.9i0j1k2l.json"</span>;</pre>
 
-				<pre class="code"><span class="c">// src/lib/generated/sprite-manifest.ts (generated; do not edit)</span>
+				<pre
+					class="code"
+				><span class="c">// src/lib/generated/sprite-manifest.ts (generated; do not edit)</span>
 <span class="k">export const</span> SPRITE_MANIFEST: <span class="t">Readonly</span>&lt;<span class="t">Record</span>&lt;<span class="t">string</span>, <span class="t">string</span>&gt;&gt; = {
   <span class="s">"crests/CREST_NATION_EGYPT"</span>: <span class="s">"/sprites/crests/CREST_NATION_EGYPT.q1w2e3r4.png"</span>,
   <span class="s">"crests/CREST_FAMILY_PTOLEMY"</span>: <span class="s">"/sprites/crests/CREST_FAMILY_PTOLEMY.t5y6u7i8.png"</span>,
@@ -1146,8 +1378,8 @@ generated        -> ../../../src/lib/generated
 				<!-- ============================================================ -->
 				<h2 id="frontend-changes">8. Frontend changes</h2>
 				<p>
-					Two files change: <code>src/lib/SpriteMap.svelte</code> for atlas
-					and alias URLs (4 callsites), and
+					Two files change: <code>src/lib/SpriteMap.svelte</code> for atlas and
+					alias URLs (4 callsites), and
 					<code>src/lib/game-detail/helpers.ts</code> for sprite URLs (1
 					function plus deletion of two large constants).
 				</p>
@@ -1155,7 +1387,9 @@ generated        -> ../../../src/lib/generated
 				<h3 style="color: var(--orange)">In <code>SpriteMap.svelte</code></h3>
 
 				<h3>Atlas <code>.webp</code> URLs (lines 30-38)</h3>
-				<pre class="code"><span class="del"><span class="c">// Atlas paths. Served from static/atlases/ via SvelteKit. A future change</span>
+				<pre
+					class="code"
+				><span class="del"><span class="c">// Atlas paths. Served from static/atlases/ via SvelteKit. A future change</span>
 <span class="c">// can swap in a versioned R2 URL prefix here without touching the runtime</span>
 <span class="c">// (see docs/cloud-rewrite-spec.md "Map Assets").</span>
 <span class="k">const</span> ATLAS_BASE = <span class="s">"/atlases"</span>;
@@ -1173,7 +1407,9 @@ generated        -> ../../../src/lib/generated
   ATLAS_MANIFEST[<span class="s">`improvements-urban-</span>${family}<span class="s">`</span>]?.webp ?? <span class="s">""</span>;</span></pre>
 
 				<h3>Atlas <code>.json</code> sidecar (line 534)</h3>
-				<pre class="code"><span class="k">async function</span> <span class="n">loadManifest</span>(name: <span class="t">string</span>): <span class="t">Promise</span>&lt;<span class="t">AtlasManifest</span>&gt; {
+				<pre
+					class="code"
+				><span class="k">async function</span> <span class="n">loadManifest</span>(name: <span class="t">string</span>): <span class="t">Promise</span>&lt;<span class="t">AtlasManifest</span>&gt; {
 <span class="del">  <span class="k">const</span> response = <span class="k">await</span> fetch(<span class="s">`/atlases/</span>${name}<span class="s">.json`</span>);</span>
 <span class="add">  <span class="k">const</span> entry = ATLAS_MANIFEST[name <span class="k">as keyof typeof</span> ATLAS_MANIFEST];
   <span class="k">if</span> (!entry) <span class="k">throw new</span> Error(<span class="s">`unknown atlas: </span>${name}<span class="s">`</span>);
@@ -1182,7 +1418,9 @@ generated        -> ../../../src/lib/generated
 }</pre>
 
 				<h3>Nation aliases (line 1588)</h3>
-				<pre class="code"><span class="del"><span class="k">const</span> response = <span class="k">await</span> fetch(<span class="s">`</span>${ATLAS_BASE}<span class="s">/nation-asset-aliases.json`</span>);</span>
+				<pre
+					class="code"
+				><span class="del"><span class="k">const</span> response = <span class="k">await</span> fetch(<span class="s">`</span>${ATLAS_BASE}<span class="s">/nation-asset-aliases.json`</span>);</span>
 <span class="add"><span class="k">import</span> { NATION_ALIASES_URL } <span class="k">from</span> <span class="s">"$lib/generated/atlas-manifest"</span>;
 <span class="c">// ...</span>
 <span class="k">const</span> response = <span class="k">await</span> fetch(NATION_ALIASES_URL);</span></pre>
@@ -1193,18 +1431,22 @@ generated        -> ../../../src/lib/generated
 					that URLs come from the manifest, or just delete it.
 				</p>
 
-				<h3 style="color: var(--orange); margin-top: 2.5rem">In <code>helpers.ts</code></h3>
+				<h3 style="color: var(--orange); margin-top: 2.5rem">
+					In <code>helpers.ts</code>
+				</h3>
 
 				<h3>Delete the hardcoded existence sets (lines 388&ndash;543)</h3>
 				<p>
 					<code>KNOWN_TECH_SPRITES</code> and <code>KNOWN_UNIT_SPRITES</code>
 					&mdash; ~150 lines of hardcoded enum lists &mdash; are deleted
-					outright. The sprite manifest replaces them as the source of truth
-					for "does this sprite ship."
+					outright. The sprite manifest replaces them as the source of truth for
+					"does this sprite ship."
 				</p>
 
 				<h3>Rewrite <code>getSpritePath()</code> (lines 576&ndash;589)</h3>
-				<pre class="code"><span class="del"><span class="k">function</span> <span class="n">resolveTechSprite</span>(enumValue: <span class="t">string</span>): { category: <span class="t">string</span>; filename: <span class="t">string</span> } | <span class="k">null</span> {
+				<pre
+					class="code"
+				><span class="del"><span class="k">function</span> <span class="n">resolveTechSprite</span>(enumValue: <span class="t">string</span>): { category: <span class="t">string</span>; filename: <span class="t">string</span> } | <span class="k">null</span> {
   <span class="c">// strip bonus suffixes, apply TECH_SPRITE_FIXES, then check</span>
   <span class="c">// KNOWN_TECH_SPRITES → KNOWN_UNIT_SPRITES → null</span>
   <span class="c">// ...</span>
@@ -1249,7 +1491,9 @@ generated        -> ../../../src/lib/generated
 					else collapses into manifest lookups.
 				</p>
 
-				<h3 style="color: var(--orange); margin-top: 2.5rem">In <code>generated/crests.ts</code> and <code>bake-crests.ts</code></h3>
+				<h3 style="color: var(--orange); margin-top: 2.5rem">
+					In <code>generated/crests.ts</code> and <code>bake-crests.ts</code>
+				</h3>
 				<p>
 					Both are removed. Their sole consumers are
 					<code>FAMILY_CRESTS</code> and <code>NATION_CRESTS</code> existence
@@ -1257,14 +1501,16 @@ generated        -> ../../../src/lib/generated
 					and the <code>resolveNationCrestKey</code> helper). Those callsites
 					switch to manifest-derived membership checks:
 				</p>
-				<pre class="code"><span class="del"><span class="k">if</span> (c.family && FAMILY_CRESTS.has(c.family)) {</span>
+				<pre
+					class="code"
+				><span class="del"><span class="k">if</span> (c.family && FAMILY_CRESTS.has(c.family)) {</span>
 <span class="add"><span class="k">if</span> (c.family && SPRITE_MANIFEST[<span class="s">`crests/CREST_FAMILY_</span>${c.family}<span class="s">`</span>] != <span class="k">null</span>) {</span>
   key = c.family;
 }</pre>
 				<p>
-					Or, if you want to keep a typed set rather than ad-hoc lookups,
-					derive it once at module scope from the manifest. Same coverage,
-					one fewer generated file.
+					Or, if you want to keep a typed set rather than ad-hoc lookups, derive
+					it once at module scope from the manifest. Same coverage, one fewer
+					generated file.
 				</p>
 
 				<h3>What does <em>not</em> change</h3>
@@ -1298,7 +1544,9 @@ generated        -> ../../../src/lib/generated
 					Both classes are content-hashed and get the same rule. One
 					<code>_headers</code> rule, one mental model:
 				</p>
-				<pre class="code"><span class="c"># All baked binary assets are content-hashed → safe to cache forever.</span>
+				<pre
+					class="code"
+				><span class="c"># All baked binary assets are content-hashed → safe to cache forever.</span>
 <span class="n">/atlases/*</span>
   <span class="k">Cache-Control</span>: public, max-age=31536000, immutable
 
@@ -1322,28 +1570,25 @@ generated        -> ../../../src/lib/generated
   <span class="k">Cache-Control</span>: public, max-age=31536000, immutable</span></pre>
 				<p>
 					Without this, the legacy viewer at
-					<code>per-ankh-web.pages.dev</code> serves the new hashed assets
-					with whatever the Pages default is (typically not
-					<code>immutable</code>). The browser would re-validate on every
-					navigation &mdash; functionally fine but wastes the round-trip we just
-					engineered around.
+					<code>per-ankh-web.pages.dev</code> serves the new hashed assets with
+					whatever the Pages default is (typically not <code>immutable</code>).
+					The browser would re-validate on every navigation &mdash; functionally
+					fine but wastes the round-trip we just engineered around.
 				</p>
 
 				<!-- ============================================================ -->
 				<h2 id="decisions">10. Decisions</h2>
-				<p>
-					All five resolved &mdash; recorded here for the record.
-				</p>
+				<p>All five resolved &mdash; recorded here for the record.</p>
 
 				<div class="callout good">
 					<strong>D1. Hash scope &mdash; decided</strong>
-					Hash everything: atlases, the alias JSON, and all sprites. One
-					rule for static binary assets, one cache policy, one manifest
-					pattern. The <code>KNOWN_TECH_SPRITES</code> /
+					Hash everything: atlases, the alias JSON, and all sprites. One rule
+					for static binary assets, one cache policy, one manifest pattern. The
+					<code>KNOWN_TECH_SPRITES</code> /
 					<code>KNOWN_UNIT_SPRITES</code> hardcoded sets in
 					<code>helpers.ts</code> are deleted, and the
-					<code>generated/crests.ts</code> existence sets fold into the
-					sprite manifest. See §6 for rationale.
+					<code>generated/crests.ts</code> existence sets fold into the sprite
+					manifest. See §6 for rationale.
 				</div>
 
 				<div class="callout good">
@@ -1353,10 +1598,10 @@ generated        -> ../../../src/lib/generated
 					<code>sha256(pngBuf).slice(0,8)</code> for sprites. Output-hashing
 					catches bake-script changes (e.g., a tweak to
 					<code>SAFE_SCALE</code> in <code>atlas-bake.ts</code>) that a
-					source-hash would miss, and is the only honest option for
-					multi-source urban atlases. <code>sharp</code>'s lossless WebP and
-					PNG encoders are deterministic, so identical input produces
-					identical hashes &mdash; cache hits preserved on no-op re-bakes.
+					source-hash would miss, and is the only honest option for multi-source
+					urban atlases. <code>sharp</code>'s lossless WebP and PNG encoders are
+					deterministic, so identical input produces identical hashes &mdash;
+					cache hits preserved on no-op re-bakes.
 				</div>
 
 				<div class="callout good">
@@ -1364,10 +1609,9 @@ generated        -> ../../../src/lib/generated
 					Hybrid: per-bake wipe + final reconcile. Each bake clears its own
 					output slice before writing (keeps single-bake invocations clean
 					during dev), and a <code>scripts/reconcile-assets.ts</code> step at
-					the end of <code>npm run bake:all</code> diffs on-disk files
-					against both manifests and deletes orphans (catches bugs in
-					individual bake scripts and renamed-asset leftovers). See §7 for
-					details.
+					the end of <code>npm run bake:all</code> diffs on-disk files against
+					both manifests and deletes orphans (catches bugs in individual bake
+					scripts and renamed-asset leftovers). See §7 for details.
 				</div>
 
 				<div class="callout good">
@@ -1385,21 +1629,26 @@ generated        -> ../../../src/lib/generated
 				</div>
 
 				<div class="callout good">
-					<strong>D5. <code>web/static/_headers</code> parity &mdash; decided</strong>
+					<strong
+						>D5. <code>web/static/_headers</code> parity &mdash; decided</strong
+					>
 					Yes, add the matching cache rules to
-					<code>web/static/_headers</code>. The legacy viewer is dying but
-					not dead &mdash; deploy plan §3.8 redirects old
-					<code>/share/[id]</code> URLs to it indefinitely, and it consumes
-					the same atlases and sprites via symlink. Without parity, those
-					requests get Cloudflare Pages' default caching, which gives up the
-					"cache forever" property on shared assets. Four-line append; just
-					do it.
+					<code>web/static/_headers</code>. The legacy viewer is dying but not
+					dead &mdash; deploy plan §3.8 redirects old
+					<code>/share/[id]</code> URLs to it indefinitely, and it consumes the
+					same atlases and sprites via symlink. Without parity, those requests
+					get Cloudflare Pages' default caching, which gives up the "cache
+					forever" property on shared assets. Four-line append; just do it.
 				</div>
 
 				<!-- ============================================================ -->
 				<h2 id="verify">11. Verifying after deploy</h2>
-				<p>One <code>curl</code> per asset class to confirm the headers landed:</p>
-				<pre class="code"><span class="c"># Atlases — should return Cache-Control: public, max-age=31536000, immutable</span>
+				<p>
+					One <code>curl</code> per asset class to confirm the headers landed:
+				</p>
+				<pre
+					class="code"
+				><span class="c"># Atlases — should return Cache-Control: public, max-age=31536000, immutable</span>
 $ curl -sI https://per-ankh.app/atlases/terrain-3d.a1b2c3d4.webp | grep -i cache
 <span class="c">cache-control: public, max-age=31536000, immutable</span>
 
@@ -1411,12 +1660,14 @@ $ curl -sI https://per-ankh.app/sprites/crests/CREST_NATION_EGYPT.q1w2e3r4.png |
 $ curl -sI https://per-ankh-web.pages.dev/atlases/terrain-3d.a1b2c3d4.webp | grep -i cache
 $ curl -sI https://per-ankh-web.pages.dev/sprites/crests/CREST_NATION_EGYPT.q1w2e3r4.png | grep -i cache</pre>
 
-				<p>And one functional check: load <code>/games/[id]</code> in a fresh
-				browser, look at the Network tab, confirm the atlas requests show the
-				hashed paths and a <code>200</code> on first load. Reload the page; same
-				atlases should now be served from disk cache with status
-				<code>(memory cache)</code> or <code>(disk cache)</code> &mdash; no network
-				round-trip.</p>
+				<p>
+					And one functional check: load <code>/games/[id]</code> in a fresh
+					browser, look at the Network tab, confirm the atlas requests show the
+					hashed paths and a <code>200</code> on first load. Reload the page;
+					same atlases should now be served from disk cache with status
+					<code>(memory cache)</code> or <code>(disk cache)</code> &mdash; no
+					network round-trip.
+				</p>
 
 				<div class="callout">
 					<strong>One subtle thing</strong>

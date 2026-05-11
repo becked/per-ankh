@@ -6,14 +6,13 @@
 	</p>
 	<p>
 		&ldquo;Old World&rdquo; and its in-game content &mdash; including artwork,
-		text, audio and screenshots &mdash; are owned by Mohawk Games. They are
-		used here only to support the player community. Per Ankh is free and
+		text, audio and screenshots &mdash; are owned by Mohawk Games. They are used
+		here only to support the player community. Per Ankh is free and
 		noncommercial.
 	</p>
 	<p>
 		Any content will be promptly removed at the request of a rights holder.
-		Contact becked on the &ldquo;Old World&rdquo; Discord server, or by email
-		at
+		Contact becked on the &ldquo;Old World&rdquo; Discord server, or by email at
 		<a
 			href="mailto:perankh.x7k2@fastmail.com"
 			class="underline hover:text-orange"

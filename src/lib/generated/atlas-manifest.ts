@@ -48,7 +48,7 @@ export const ATLAS_MANIFEST: Readonly<
 		webp: "/atlases/improvements-urban-ROME.b3852760.webp",
 		json: "/atlases/improvements-urban-ROME.b3852760.json",
 	},
-	"resources": {
+	resources: {
 		webp: "/atlases/resources.da084c25.webp",
 		json: "/atlases/resources.da084c25.json",
 	},
@@ -58,4 +58,5 @@ export const ATLAS_MANIFEST: Readonly<
 	},
 };
 
-export const NATION_ALIASES_URL: string = "/atlases/nation-asset-aliases.754117ee.json";
+export const NATION_ALIASES_URL: string =
+	"/atlases/nation-asset-aliases.754117ee.json";

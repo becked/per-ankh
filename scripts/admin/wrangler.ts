@@ -6,11 +6,7 @@ import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
-const REPO_ROOT = resolve(
-	dirname(fileURLToPath(import.meta.url)),
-	"..",
-	"..",
-);
+const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CLOUD_DIR = resolve(REPO_ROOT, "cloud");
 const WRANGLER_BIN = resolve(CLOUD_DIR, "node_modules/.bin/wrangler");
 
@@ -43,9 +39,7 @@ function runWrangler(args: string[]): Promise<SpawnResult> {
 			stderr += c.toString("utf8");
 		});
 		child.on("error", rej);
-		child.on("close", (code) =>
-			res({ stdout, stderr, code: code ?? 0 }),
-		);
+		child.on("close", (code) => res({ stdout, stderr, code: code ?? 0 }));
 	});
 }
 

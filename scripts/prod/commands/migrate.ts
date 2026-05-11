@@ -8,10 +8,7 @@ import { bold, info, ok } from "../../lib/format";
 import { confirmYesNo } from "../../lib/confirm";
 import { printJson } from "../../lib/cli";
 
-export async function run(
-	_argv: string[],
-	opts: ProdOpts,
-): Promise<void> {
+export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	info("Listing pending migrations...");
 	const r = await listPendingMigrations();
 	if (r.error) {

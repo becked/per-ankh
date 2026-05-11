@@ -31,11 +31,9 @@ async function git(args: string[]) {
 }
 
 async function getLatestWorkerVersion(cwd: string): Promise<string | null> {
-	const r = await runCaptured(
-		"npx",
-		["wrangler", "deployments", "list"],
-		{ cwd },
-	);
+	const r = await runCaptured("npx", ["wrangler", "deployments", "list"], {
+		cwd,
+	});
 	if (r.code !== 0) return null;
 	// `wrangler deployments list` prints one block per deployment, newest at
 	// the bottom. Each block has a line like:
@@ -53,27 +51,18 @@ interface SecretRow {
 }
 
 async function listSecrets(cwd: string): Promise<string[] | null> {
-	const r = await runCaptured(
-		"npx",
-		["wrangler", "secret", "list"],
-		{ cwd },
-	);
+	const r = await runCaptured("npx", ["wrangler", "secret", "list"], { cwd });
 	if (r.code !== 0) return null;
 	const idx = r.stdout.indexOf("[");
 	if (idx < 0) return null;
 	try {
-		return (JSON.parse(r.stdout.slice(idx)) as SecretRow[]).map(
-			(s) => s.name,
-		);
+		return (JSON.parse(r.stdout.slice(idx)) as SecretRow[]).map((s) => s.name);
 	} catch {
 		return null;
 	}
 }
 
-export async function run(
-	_argv: string[],
-	opts: ProdOpts,
-): Promise<void> {
+export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	info("Gathering prod status...");
 	const [branch, sha, porcelain, workerVer, frontendVer, secrets, mig] =
 		await Promise.all([
@@ -122,9 +111,7 @@ export async function run(
 	if (mig.pending.length === 0) {
 		process.stdout.write(`  Migrations:       up to date\n`);
 	} else {
-		process.stdout.write(
-			`  Migrations:       ${mig.pending.length} pending\n`,
-		);
+		process.stdout.write(`  Migrations:       ${mig.pending.length} pending\n`);
 		for (const m of mig.pending) {
 			process.stdout.write(`                      ${m}\n`);
 		}

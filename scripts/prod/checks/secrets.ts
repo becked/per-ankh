@@ -22,10 +22,7 @@ const CLOUD_DIR = resolve(REPO_ROOT, "cloud");
 // Required production secrets on the Worker. If any are missing, OAuth
 // breaks and every login 500s. Keep this list in sync with the actual
 // wrangler.toml comments naming required secrets.
-const REQUIRED_SECRETS = [
-	"DISCORD_CLIENT_SECRET",
-	"ALLOWED_DISCORD_USERNAMES",
-];
+const REQUIRED_SECRETS = ["DISCORD_CLIENT_SECRET", "ALLOWED_DISCORD_USERNAMES"];
 
 interface SecretEntry {
 	name: string;
@@ -33,11 +30,9 @@ interface SecretEntry {
 }
 
 async function checkRequiredSecrets(): Promise<CheckResult> {
-	const r = await runCaptured(
-		"npx",
-		["wrangler", "secret", "list"],
-		{ cwd: CLOUD_DIR },
-	);
+	const r = await runCaptured("npx", ["wrangler", "secret", "list"], {
+		cwd: CLOUD_DIR,
+	});
 	if (r.code !== 0) {
 		return {
 			name: "secrets.required",
@@ -184,11 +179,7 @@ const BINARY_EXTS = new Set([
 ]);
 
 async function checkLeakScan(): Promise<CheckResult> {
-	const ls = await runCaptured(
-		"git",
-		["ls-files", "-z"],
-		{ cwd: REPO_ROOT },
-	);
+	const ls = await runCaptured("git", ["ls-files", "-z"], { cwd: REPO_ROOT });
 	if (ls.code !== 0) {
 		return {
 			name: "secrets.leak",
@@ -205,8 +196,7 @@ async function checkLeakScan(): Promise<CheckResult> {
 		// Skip our own scanner: the patterns themselves contain pattern fragments.
 		if (f === "scripts/prod/checks/secrets.ts") continue;
 		// Skip package-lock / similar generated noise.
-		if (f === "package-lock.json" || f.endsWith("/package-lock.json"))
-			continue;
+		if (f === "package-lock.json" || f.endsWith("/package-lock.json")) continue;
 		const full = resolve(REPO_ROOT, f);
 		let text: string;
 		try {

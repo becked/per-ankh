@@ -49,10 +49,7 @@ interface AuditReport {
 	vulnerabilities?: Record<string, AuditAdvisory>;
 }
 
-async function npmAudit(
-	cwd: string,
-	resultName: string,
-): Promise<CheckResult> {
+async function npmAudit(cwd: string, resultName: string): Promise<CheckResult> {
 	const start = Date.now();
 	// `npm audit --json` exits non-zero when vulnerabilities exist, but the
 	// JSON is still printed. We treat any high+critical as failure regardless
@@ -87,9 +84,8 @@ async function npmAudit(
 		};
 	}
 	const detail =
-		(critical.length > 0
-			? `Critical: ${critical.join(", ")}\n`
-			: "") + (high.length > 0 ? `High: ${high.join(", ")}` : "");
+		(critical.length > 0 ? `Critical: ${critical.join(", ")}\n` : "") +
+		(high.length > 0 ? `High: ${high.join(", ")}` : "");
 	return {
 		name: resultName,
 		status: "fail",

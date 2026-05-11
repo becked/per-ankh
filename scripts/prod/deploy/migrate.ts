@@ -18,14 +18,7 @@ const DB_NAME = "per-ankh-share-index";
 export async function applyRemoteMigrations(): Promise<void> {
 	const code = await runStreamed(
 		"npx",
-		[
-			"wrangler",
-			"d1",
-			"migrations",
-			"apply",
-			DB_NAME,
-			"--remote",
-		],
+		["wrangler", "d1", "migrations", "apply", DB_NAME, "--remote"],
 		{ cwd: CLOUD_DIR, label: "migrate", color: "yellow" },
 	);
 	if (code !== 0) {

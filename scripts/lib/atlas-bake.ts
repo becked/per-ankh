@@ -368,11 +368,10 @@ export async function writeAtlas(out: AtlasOutput): Promise<void> {
 	out.manifest.atlas = webpFilename;
 	const manifestText = JSON.stringify(out.manifest, null, 2) + "\n";
 
-	await wipeStaleHashedFiles(
-		[out.sourceDir, out.outputDir],
-		out.name,
-		["webp", "json"],
-	);
+	await wipeStaleHashedFiles([out.sourceDir, out.outputDir], out.name, [
+		"webp",
+		"json",
+	]);
 
 	await writeFile(resolve(out.sourceDir, webpFilename), buffer);
 	await writeFile(resolve(out.sourceDir, jsonFilename), manifestText);

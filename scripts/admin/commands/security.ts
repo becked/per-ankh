@@ -16,11 +16,7 @@ import {
 	printTable,
 	warn,
 } from "../../lib/format";
-import {
-	type CommandOpts,
-	parseFlags,
-	printJson,
-} from "../../lib/cli";
+import { type CommandOpts, parseFlags, printJson } from "../../lib/cli";
 
 // ─── block / unblock keys ──────────────────────────────────────────────────
 
@@ -32,9 +28,7 @@ export async function runBlockKey(
 	const key = positional[0];
 	const reason = positional[1] ?? "no reason given";
 	if (!key) {
-		throw new Error(
-			"Usage: ./per-ankh admin block-key <app_key> [reason]",
-		);
+		throw new Error("Usage: ./per-ankh admin block-key <app_key> [reason]");
 	}
 	await d1Exec(`
 		INSERT INTO blocked_keys (app_key, reason) VALUES (${sqlStr(key)}, ${sqlStr(reason)})
@@ -128,11 +122,7 @@ export async function runBlocked(
 		];
 		printTable(
 			cols,
-			keys.map((k) => [
-				k.app_key,
-				emdash(k.reason),
-				formatDate(k.blocked_at),
-			]),
+			keys.map((k) => [k.app_key, emdash(k.reason), formatDate(k.blocked_at)]),
 		);
 	}
 
@@ -224,9 +214,7 @@ export async function runNukeUser(
 	const userId = positional[0];
 	const reason = positional[1] ?? "nuked via admin CLI";
 	if (!userId) {
-		throw new Error(
-			"Usage: ./per-ankh admin nuke-user <user_id> [reason]",
-		);
+		throw new Error("Usage: ./per-ankh admin nuke-user <user_id> [reason]");
 	}
 
 	const userRows = await d1Query<{
@@ -291,7 +279,9 @@ export async function runNukeUser(
 		VALUES ('nuke_user', ${sqlStr(userId)}, ${sqlStr(metadata)})
 	`);
 
-	ok(`Nuked user ${user.display_name} (${userId}); ${gameCount} game(s) deleted.`);
+	ok(
+		`Nuked user ${user.display_name} (${userId}); ${gameCount} game(s) deleted.`,
+	);
 	// KV sessions are not enumerated; stale tokens hit a 401 on next API call,
 	// which is acceptable UX for the rare destructive-op case.
 }

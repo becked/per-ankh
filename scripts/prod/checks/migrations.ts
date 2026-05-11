@@ -30,14 +30,7 @@ export interface PendingMigrations {
 export async function listPendingMigrations(): Promise<PendingMigrations> {
 	const r = await runCaptured(
 		"npx",
-		[
-			"wrangler",
-			"d1",
-			"migrations",
-			"list",
-			DB_NAME,
-			"--remote",
-		],
+		["wrangler", "d1", "migrations", "list", DB_NAME, "--remote"],
 		{ cwd: CLOUD_DIR },
 	);
 	if (r.code !== 0) {
@@ -50,9 +43,9 @@ export async function listPendingMigrations(): Promise<PendingMigrations> {
 		return { pending: [] };
 	}
 	// Extract any .sql filenames from the output.
-	const names = Array.from(
-		r.stdout.matchAll(/(\b\d{4}_[\w-]+\.sql)\b/g),
-	).map((m) => m[1]);
+	const names = Array.from(r.stdout.matchAll(/(\b\d{4}_[\w-]+\.sql)\b/g)).map(
+		(m) => m[1],
+	);
 	const unique = Array.from(new Set(names));
 	return { pending: unique };
 }

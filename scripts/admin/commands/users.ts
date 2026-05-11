@@ -158,7 +158,14 @@ export async function runDetail(
 		 FROM events WHERE user_id = ${idStr} ORDER BY created_at DESC LIMIT 10`,
 		`SELECT COUNT(*) AS cnt FROM games WHERE user_id = ${idStr}`,
 	]);
-	const [userRows, collectionRows, onlineIdRows, gameRows, eventRows, gameCountRows] = [
+	const [
+		userRows,
+		collectionRows,
+		onlineIdRows,
+		gameRows,
+		eventRows,
+		gameCountRows,
+	] = [
 		batch[0] as UserRow[],
 		batch[1] as CollectionRow[],
 		batch[2] as OnlineIdRow[],

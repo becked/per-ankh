@@ -2,7 +2,7 @@
 
 > **Automation note:** §4 steps 2, 3, 6 (and a 3-probe subset of §5) are now
 > automated by `./per-ankh prod deploy`. The preflight checks (`./per-ankh prod
-> preflight`) cover lint, typecheck, format, npm audit, secret-leak scanning,
+preflight`) cover lint, typecheck, format, npm audit, secret-leak scanning,
 > `[vars]` vs `secrets` hygiene, and required-secret presence. This document
 > remains the source of truth for the manual parts: custom-domain attach, Pages
 > detach, Cloudflare dashboard config, and the functional smoke checklist
@@ -219,7 +219,7 @@ Nothing to do at deploy time. The env-var layout has two layers:
   point at production (`https://api.per-ankh.app/v1`,
   `https://per-ankh.app`). These apply when no env var is set.
 - **`.env.development`** (committed, repo root) overrides them with
-  localhost values for `vite dev`. Vite loads this file *only* in
+  localhost values for `vite dev`. Vite loads this file _only_ in
   development mode, never during `vite build`, so the overrides cannot
   leak into a production bundle.
 
@@ -235,8 +235,8 @@ unless we need to override them per-environment.
 ### 3.7. Cloudflare alerts
 
 Cloudflare's Notifications catalog is thinner than it sounds. Workers
-ships exactly two templates (*Weekly Summary* and *CPU Usage
-Notification* — fires at a hardcoded 25% above 7-day baseline, both
+ships exactly two templates (_Weekly Summary_ and _CPU Usage
+Notification_ — fires at a hardcoded 25% above 7-day baseline, both
 auto-on for new accounts), and D1 ships zero. There is no native
 template for Worker error rate or D1 errors at any plan tier; that gap
 is what §6's Sentry/Baselime line covers.
@@ -244,12 +244,12 @@ is what §6's Sentry/Baselime line covers.
 Cloudflare dashboard → Notifications. Confirm auto-on, then enable the
 free hygiene alerts:
 
-- Verify *Workers Weekly Summary* and *Workers CPU Usage Notification*
+- Verify _Workers Weekly Summary_ and _Workers CPU Usage Notification_
   are enabled (should be auto-on).
-- *Universal SSL Alert* — cert validation/issuance/renewal/expiry events.
-- *Cloudflare Status → Incident Alert* — Cloudflare-side incidents
+- _Universal SSL Alert_ — cert validation/issuance/renewal/expiry events.
+- _Cloudflare Status → Incident Alert_ — Cloudflare-side incidents
   affecting the account.
-- *Cloudflare Status → Maintenance Notification* — scheduled POP
+- _Cloudflare Status → Maintenance Notification_ — scheduled POP
   maintenance.
 
 Real error-rate alerting (the thing this section originally reached for)

@@ -210,82 +210,82 @@
 	{/if}
 
 	{#if page.data.user}
-	<div class="relative">
-		<button
-			type="button"
-			onclick={() => togglePopover("download")}
-			disabled={downloading}
-			aria-haspopup="dialog"
-			aria-expanded={openPopover === "download"}
-			title="Download"
-			class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-		>
-			{#if downloading}
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					class="h-3.5 w-3.5 animate-spin"
-					fill="none"
-					viewBox="0 0 24 24"
-					aria-hidden="true"
-				>
-					<circle
-						class="opacity-25"
-						cx="12"
-						cy="12"
-						r="10"
-						stroke="currentColor"
-						stroke-width="4"
-					></circle>
-					<path
-						class="opacity-75"
-						fill="currentColor"
-						d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
-					></path>
-				</svg>
-			{:else}
-				<svg
-					xmlns="http://www.w3.org/2000/svg"
-					class="h-3.5 w-3.5"
-					fill="none"
-					viewBox="0 0 24 24"
-					stroke="currentColor"
-					stroke-width="2"
-					aria-hidden="true"
-				>
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
-					/>
-				</svg>
-			{/if}
-		</button>
-
-		{#if openPopover === "download"}
-			<div
-				class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
-				role="dialog"
+		<div class="relative">
+			<button
+				type="button"
+				onclick={() => togglePopover("download")}
+				disabled={downloading}
+				aria-haspopup="dialog"
+				aria-expanded={openPopover === "download"}
+				title="Download"
+				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 			>
-				<p class="mb-3 text-xs text-tan">Download the original save file?</p>
-				<div class="flex justify-end gap-2">
-					<button
-						type="button"
-						onclick={closePopover}
-						class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+				{#if downloading}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-3.5 w-3.5 animate-spin"
+						fill="none"
+						viewBox="0 0 24 24"
+						aria-hidden="true"
 					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						onclick={confirmDownload}
-						class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors"
+						<circle
+							class="opacity-25"
+							cx="12"
+							cy="12"
+							r="10"
+							stroke="currentColor"
+							stroke-width="4"
+						></circle>
+						<path
+							class="opacity-75"
+							fill="currentColor"
+							d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+						></path>
+					</svg>
+				{:else}
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-3.5 w-3.5"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+						aria-hidden="true"
 					>
-						Download
-					</button>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+						/>
+					</svg>
+				{/if}
+			</button>
+
+			{#if openPopover === "download"}
+				<div
+					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+					role="dialog"
+				>
+					<p class="mb-3 text-xs text-tan">Download the original save file?</p>
+					<div class="flex justify-end gap-2">
+						<button
+							type="button"
+							onclick={closePopover}
+							class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							onclick={confirmDownload}
+							class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors"
+						>
+							Download
+						</button>
+					</div>
 				</div>
-			</div>
-		{/if}
-	</div>
+			{/if}
+		</div>
 	{/if}
 
 	{#if isOwner}

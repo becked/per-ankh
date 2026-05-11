@@ -13,11 +13,11 @@ const CLOUD_DIR = resolve(
 );
 
 export async function deployWorker(): Promise<void> {
-	const code = await runStreamed(
-		"npx",
-		["wrangler", "deploy"],
-		{ cwd: CLOUD_DIR, label: "worker", color: "cyan" },
-	);
+	const code = await runStreamed("npx", ["wrangler", "deploy"], {
+		cwd: CLOUD_DIR,
+		label: "worker",
+		color: "cyan",
+	});
 	if (code !== 0) {
 		throw new Error(`Worker deploy failed with exit code ${code}`);
 	}

@@ -51,9 +51,7 @@ export async function runGitChecks(ctx: CheckContext): Promise<CheckResult[]> {
 			blocking: !ctx.allowBranch,
 			details:
 				`Current branch is '${currentBranch}', expected 'main'` +
-				(ctx.allowBranch
-					? " (demoted to warn by --allow-branch)"
-					: ""),
+				(ctx.allowBranch ? " (demoted to warn by --allow-branch)" : ""),
 		});
 	} else {
 		results.push({ name: "git.branch", status: "pass", blocking: true });
@@ -69,16 +67,8 @@ export async function runGitChecks(ctx: CheckContext): Promise<CheckResult[]> {
 			details: `git fetch failed (offline?): ${fetched.stderr.trim()}`,
 		});
 	} else {
-		const ahead = await git([
-			"rev-list",
-			"--count",
-			"origin/main..HEAD",
-		]);
-		const behind = await git([
-			"rev-list",
-			"--count",
-			"HEAD..origin/main",
-		]);
+		const ahead = await git(["rev-list", "--count", "origin/main..HEAD"]);
+		const behind = await git(["rev-list", "--count", "HEAD..origin/main"]);
 		const aheadN = parseInt(ahead.stdout.trim(), 10) || 0;
 		const behindN = parseInt(behind.stdout.trim(), 10) || 0;
 		if (behindN > 0) {
