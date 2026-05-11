@@ -1,8 +1,8 @@
 // Structured JSON logging primitive for the API Worker.
 //
 // All output is emitted as one JSON object per console.log line so Logpush
-// can ship it to a sink unchanged once a destination is wired in Phase D
-// (see docs/cloud-productionization-plan.md §7). Two log shapes:
+// can ship it to a sink unchanged once a destination is wired (see
+// docs/cloud-deploy-plan.md §6). Two log shapes:
 //
 //   - Access log (type=access). One per request, emitted by the fetch
 //     envelope after dispatch returns. Fields: ts, level, request_id,

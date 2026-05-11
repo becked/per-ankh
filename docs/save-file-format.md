@@ -996,6 +996,129 @@ From a sample 53-entry MemoryList:
 - `Religion`: Religious state
 - `TeamCulture`: Cultural influence by team
 
+### City location vs territory
+
+Two distinct city↔tile relationships:
+
+| Relationship      | Source                | Description                         |
+| ----------------- | --------------------- | ----------------------------------- |
+| **City location** | `City@TileID`         | The tile where the city center sits |
+| **City territory**| `<CityTerritory>` (inside City) | All tiles controlled by this city |
+
+Improvements and specialists live on **tiles**, not cities. To enumerate
+a city's improvements/specialists, walk all tiles whose `owner_city_id`
+(derived from `<CityTerritory>`) matches the city.
+
+### Extended city sub-elements
+
+Each city carries a handful of structured child elements that decompose
+into rows. The TS parser exposes these as separate derivations.
+
+#### `<UnitProductionCounts>` — per-type units built
+
+```xml
+<UnitProductionCounts>
+  <UNIT_SETTLER>5</UNIT_SETTLER>
+  <UNIT_WORKER>1</UNIT_WORKER>
+</UnitProductionCounts>
+```
+
+Older saves expose only an aggregate `<UnitProductionCount>` element; newer
+saves expose only the per-type breakdown. Sum the children if the
+aggregate is absent.
+
+#### `<ProjectCount>` — completed projects, per type
+
+```xml
+<ProjectCount>
+  <PROJECT_TREASURY_1>1</PROJECT_TREASURY_1>
+  <PROJECT_LUXURIOUS_DELIGHTS>1</PROJECT_LUXURIOUS_DELIGHTS>
+</ProjectCount>
+```
+
+Distinct from `<CompletedBuild>` (a log of one-shot project completions).
+
+#### `<LuxuryTurn>` — luxury imports, per resource
+
+```xml
+<LuxuryTurn>
+  <RESOURCE_FUR>24</RESOURCE_FUR>
+  <RESOURCE_AMBER>61</RESOURCE_AMBER>
+</LuxuryTurn>
+```
+
+Text is the turn the luxury was imported.
+
+#### `<AgentTurn>` / `<AgentCharacterID>` / `<AgentTileID>` — enemy spies
+
+These three siblings each carry per-player children in the `<P.X>` form:
+
+```xml
+<AgentTurn><P.1>72</P.1></AgentTurn>
+<AgentCharacterID><P.1>568</P.1></AgentCharacterID>
+<AgentTileID><P.1>1745</P.1></AgentTileID>
+```
+
+Join across all three by `P.X` key to assemble one enemy-agent record per
+hostile player.
+
+#### `<TeamCulture>` and `<TeamHappinessLevel>` — per-team state
+
+Both use the `T.X` keyed form (team-level, not player-level):
+
+```xml
+<TeamCulture><T.0>CULTURE_LEGENDARY</T.0></TeamCulture>
+<TeamHappinessLevel><T.0>-8</T.0></TeamHappinessLevel>
+```
+
+Older saves (2022) expose `<TeamDiscontentLevel>` instead of
+`<TeamHappinessLevel>` — fall back to it when the newer name is missing.
+
+#### `<Religion>` — religions present in the city
+
+```xml
+<Religion>
+  <RELIGION_JUDAISM />
+  <RELIGION_CHRISTIANITY />
+  <RELIGION_PAGAN_EGYPT />
+</Religion>
+```
+
+Self-closing children list every religion with any presence in the city.
+
+### City attribute / child reference
+
+Full reference (XML → conceptual field), including elements covered above
+and a handful not yet covered in the children listing.
+
+| Field                  | XML                       | Notes                                      |
+| ---------------------- | ------------------------- | ------------------------------------------ |
+| `xml_id`               | `ID` attr                 | 0-based                                    |
+| `tile_xml_id`          | `TileID` attr             | City center location                       |
+| `player_xml_id`        | `Player` attr             | NULL when city is in anarchy (`Player="-1"`) |
+| `family`               | `Family` attr             | e.g. `FAMILY_SAITE`                        |
+| `founded_turn`         | `Founded` attr            | Turn founded                               |
+| `city_name`            | `NameType` (or `Name`)    | e.g. `CITYNAME_WASET`                      |
+| `governor_xml_id`      | `GovernorID`              | Character ID                               |
+| `governor_turn`        | `GovernorTurn`            | Turn governor was assigned                 |
+| `citizens`             | `Citizens`                |                                             |
+| `growth_count`         | `GrowthCount`             | Total historical growth                    |
+| `specialist_count`     | `SpecialistProducedCount` | (not `SpecialistCount`)                    |
+| `unit_production_count`| `UnitProductionCount` OR sum of `UnitProductionCounts` children | Version-conditional |
+| `hurry_civics_count`   | `HurryCivicsCount`        |                                             |
+| `hurry_money_count`    | `HurryMoneyCount`         |                                             |
+| `hurry_training_count` | `HurryTrainingCount`      |                                             |
+| `hurry_population_count`| `HurryPopulationCount`   |                                             |
+| `buy_tile_count`       | `BuyTileCount`            |                                             |
+| `is_capital`           | `<Capital />`             | self-closing flag                          |
+| `first_owner_xml_id`   | `FirstPlayer`             | (not `FirstOwnerPlayerID`)                 |
+| `last_owner_xml_id`    | `LastPlayer`              |                                             |
+
+Several plausible-looking fields **do not exist** in the XML and must
+not be parsed: `GrowthProgress`, `GeneralID`, top-level `Agent` (use
+the `<AgentTurn>` / `<AgentCharacterID>` / `<AgentTileID>` sibling
+trio instead).
+
 ---
 
 ## Tile Element
@@ -1005,9 +1128,25 @@ From a sample 53-entry MemoryList:
 
 ### Tile Structure
 
-Tile elements have **no attributes** and variable children based on tile contents.
+Tile elements have **no attributes** and variable children based on tile
+contents — empty terrain, improvements, units, resources, ownership
+history, last-seen state, etc.
 
-**Note:** The exact structure varies significantly based on what's on the tile (empty terrain, improvements, units, resources, etc.). Detailed tile structure requires further investigation if needed.
+### Notable children
+
+- **`<OwnerHistory>`** — turn-keyed ownership trail. See *Format Quirks &
+  Parsing Gotchas → Tile ownership history* below.
+- **`<Unit>`** — zero or more unit instances actually on this tile. Full
+  schema in *Format Quirks → Individual units live inside `<Tile>`* below
+  and in the canonical parser at `src/lib/parser/parsers/units.ts`.
+- **`<LastSeenUnits>`** — fog-of-war snapshots of opposing units. Same
+  shape as the top-level `<Unit>` block but represents a remembered
+  state, not the current state.
+- **Improvements / specialists** — when present, attached directly to the
+  Tile element (one tile holds at most one improvement and one
+  specialist). Improvement metadata: `improvement`, `improvement_pillaged`,
+  `improvement_disabled`, `improvement_turns_left`,
+  `improvement_develop_turns`.
 
 ---
 
@@ -1139,6 +1278,357 @@ database_player_id = int(xml_id) + 1
 - Extract for inspection: `unzip -p saves/match_*.zip | head -n 1000`
 - Root element contains match metadata as attributes
 - Player elements contain turn-by-turn data
+
+---
+
+## Format Quirks & Parsing Gotchas
+
+The save-format-bearing nuggets distilled from the larger 2025 docs cleanup
+(see `doc-audit.html`). Each subsection captures a non-obvious behaviour or
+invariant that the TS parser at `src/lib/parser/` has either had to handle, or
+will when the unparsed XML it points at is wired up.
+
+### Sentinel values
+
+- **`-1`** = "no player / unowned / anarchy / tribal / non-allied". Used across
+  characters, tiles, tribes, and cities (cities being captured serialize with
+  `Player="-1"`). Schema columns that reference players must allow NULL.
+  Filtering pattern at parse time: drop or null-coerce any reference equal to
+  `-1` before persisting.
+- **`2147483647`** = AI player (in `AIControlledToTurn`). The active human has
+  `0`. **But** in multiplayer, non-active humans have
+  `AIControlledToTurn > 0` and are identified by a non-empty `OnlineID`. The
+  load-bearing rule is therefore:
+
+  ```
+  isHuman = (OnlineID present and non-empty) OR (AIControlledToTurn === 0)
+  ```
+
+  Canonical implementation: `src/lib/parser/parsers/players.ts:54–59`. The
+  `AIControlledToTurn === 0` shortcut alone misflags every non-active human
+  in a multiplayer save.
+
+### Yields are fixed-point ×10
+
+All yield integers are stored ×10 of the display value. Always divide by 10
+at the display layer. See `docs/reference/yields.md` for the design rationale
+(precision, multiplayer desync, fixed-point arithmetic).
+
+### Time-series: sparse turn-keyed elements
+
+Player and game-level history is encoded as `<TX>value</TX>` children, where
+only turns whose value changed are recorded:
+
+```xml
+<YieldRateHistory>
+  <YIELD_SCIENCE>
+    <T36>42</T36>
+    <T70>58</T70>
+  </YIELD_SCIENCE>
+</YieldRateHistory>
+```
+
+Consumers (charts, deltas) must fill-forward: turn 37's value equals turn 36's
+recorded value, not zero.
+
+### Player-keyed elements: `<P.0>` format
+
+Per-player values appear as child elements whose tag name is literally
+`P.{playerIndex}`. Used for family/religion opinion histories, unit family
+associations, city luxury trade. Example from `parseUnits()`:
+
+```xml
+<PlayerFamily>
+  <P.0>FAMILY_KOSALA</P.0>
+  <P.1>FAMILY_FABIUS</P.1>
+</PlayerFamily>
+```
+
+Parse by stripping the `P.` prefix and treating the remainder as the player's
+XML ID.
+
+### Tile ownership history via `<OwnerHistory>`
+
+Tile ownership is sparse, turn-keyed, with `-1` for unowned:
+
+```xml
+<Tile>
+  <OwnerHistory>
+    <T36>0</T36>   <!-- Turn 36: player 0 took ownership -->
+    <T70>1</T70>   <!-- Turn 70: player 1 conquered it -->
+    <T95>-1</T95>  <!-- Turn 95: became unowned -->
+  </OwnerHistory>
+</Tile>
+```
+
+Current owner = value at max turn. The owner's *city* is found via the
+City element's `CityTerritory` child, **not** on the Tile — this is why
+tile-city linkage requires either a two-pass parse or a pre-resolved
+tile→city map.
+
+### Greek Diadochi as separate nations
+
+The Hellenistic successor states are encoded as distinct nation values, not
+as `NATION_GREECE` + dynasty:
+
+| XML value          | Conceptually        |
+| ------------------ | ------------------- |
+| `NATION_SELEUCUS`  | Greece, Seleucid    |
+| `NATION_PTOLEMY`   | Egypt, Ptolemaic    |
+| `NATION_ANTIGONUS` | Greece, Antigonid   |
+
+Format-stable across 266 saves spanning 3+ years; the game has not migrated
+to a `GREECE + DYNASTY_SELEUCID` shape. UI normalization (if desired)
+should happen at query/display time, not at parse time — parse-time
+normalization collides with newer saves that may yet adopt the cleaner shape.
+
+### Memory list format changed 2024 → 2025
+
+**2024 format**: five separate lists at the Player level, each with numeric
+IDs:
+
+```xml
+<MemoryPlayerList>
+  <MemoryPlayerData>
+    <Type>MEMORYPLAYER_HOSTED_COUNSEL</Type>
+    <Player>1</Player>
+    <Turn>64</Turn>
+  </MemoryPlayerData>
+</MemoryPlayerList>
+<MemoryFamilyList>
+  <MemoryFamilyData>
+    <Family>4</Family>      <!-- numeric -->
+  </MemoryFamilyData>
+</MemoryFamilyList>
+```
+
+**2025 format**: one consolidated `MemoryList`, with string names rather than
+numeric IDs:
+
+```xml
+<MemoryList>
+  <MemoryData>
+    <Type>MEMORYFAMILY_FOUNDED_CITY</Type>
+    <Family>FAMILY_DIDONIAN</Family>  <!-- string -->
+  </MemoryData>
+</MemoryList>
+```
+
+Parser must support both. See `backward-compatibility-memory-parser.md` for
+the fallback pattern and full event-type catalogue.
+
+### DLCs vs mods
+
+These are encoded in two different places:
+
+- **Mods** live inside the `Version` Root attribute, as `+`-separated tokens
+  after the version number:
+
+  ```
+  Version: 1.0.70671+name-every-child1+different-leaders1=-123456
+  ```
+
+- **DLCs** live in a separate `<GameContent>` element with self-closing
+  children:
+
+  ```xml
+  <GameContent>
+    <DLC_HEROES_OF_AEGEAN />
+    <DLC_THE_SACRED_AND_THE_PROFANE />
+  </GameContent>
+  ```
+
+A `Version`-string-only DLC parser will report zero DLCs on every save.
+
+### Culture level is a string enum
+
+`<CultureLevel>` stores a string constant, not an integer:
+
+| Value                  | Tier |
+| ---------------------- | ---- |
+| `CULTURE_WEAK`         | 0    |
+| `CULTURE_DEVELOPING`   | 1    |
+| `CULTURE_STRONG`       | 2    |
+| `CULTURE_ESTABLISHED`  | 3    |
+| `CULTURE_LEGENDARY`    | 4    |
+
+Schema columns must be VARCHAR; integer parsing throws.
+
+### Unit production: version-specific element shape
+
+Older saves expose a single aggregate count:
+
+```xml
+<UnitProductionCount>42</UnitProductionCount>
+```
+
+Newer saves (2025+) expose only a per-type breakdown:
+
+```xml
+<UnitProductionCounts>
+  <UNIT_HASTATUS>15</UNIT_HASTATUS>
+  <UNIT_SLINGER>9</UNIT_SLINGER>
+  <!-- ... -->
+</UnitProductionCounts>
+```
+
+Parse `UnitProductionCount` first; if absent, sum the children of
+`UnitProductionCounts`.
+
+### `FamilyClass` is nested, not a Root child
+
+It looks like it should be a direct child of `<Root>`, but it isn't —
+DOM child enumeration misses it. Use a descendants-walk lookup.
+The element maps families to archetype constants:
+
+```xml
+<FamilyClass>
+  <FAMILY_SARGONID>FAMILYCLASS_CHAMPIONS</FAMILY_SARGONID>
+  <FAMILY_TUDIYA>FAMILYCLASS_HUNTERS</FAMILY_TUDIYA>
+  <FAMILY_ADASI>FAMILYCLASS_PATRONS</FAMILY_ADASI>
+</FamilyClass>
+```
+
+Known archetype values: `FAMILYCLASS_CHAMPIONS`, `_HUNTERS`, `_PATRONS`,
+`_CLERICS`, `_ARTISANS`.
+
+### Individual units live inside `<Tile>`, not at Root
+
+Verified across saves from 2022 through 2026 (223–419 unit instances per
+save). The `<Unit>` element carries:
+
+```xml
+<Tile ID="100">
+  <Unit ID="1" Type="UNIT_HASTATUS" Player="0" Tribe="NONE" Seed="12345">
+    <XP>120</XP>
+    <Level>2</Level>
+    <CreateTurn>50</CreateTurn>
+    <Facing>SW</Facing>
+    <OriginalPlayer>0</OriginalPlayer>
+    <PlayerFamily><P.0>FAMILY_FABIUS</P.0></PlayerFamily>
+    <Promotions>            <!-- acquired -->
+      <PROMOTION_STRIKE1 />
+    </Promotions>
+    <PromotionsAvailable>   <!-- not yet acquired -->
+      <PROMOTION_TRACKER />
+      <PROMOTION_SEABORN />
+    </PromotionsAvailable>
+  </Unit>
+</Tile>
+```
+
+Optional fields are version- and unit-type-conditional (`Level` / `XP` for
+combat units, `Gender` for workers, etc.). A parallel set of `<Unit>`
+elements lives inside `<LastSeenUnits>` and represents fog-of-war snapshots
+of opposing units; treat those as a separate data stream.
+
+Aggregate counts (`<UnitsProduced>` at the Player level,
+`<UnitProductionCounts>` at the City level) are **also** present — they're
+for production analytics, not a substitute for the real unit list.
+
+Canonical TS implementation: `src/lib/parser/parsers/units.ts`.
+
+### Optional `<ID>` in `RelationshipData`
+
+Some character relationships omit the target ID:
+
+```xml
+<!-- Case 1: standard, has target -->
+<RelationshipData>
+  <Type>RELATIONSHIP_PLOTTING_AGAINST</Type>
+  <ID>10</ID>
+  <Turn>15</Turn>
+</RelationshipData>
+
+<!-- Case 2: self/incomplete, no target -->
+<RelationshipData>
+  <Type>RELATIONSHIP_SOME_TYPE</Type>
+  <Turn>20</Turn>
+</RelationshipData>
+```
+
+Parser must treat `<ID>` as optional and either skip the row or null-coerce
+the target.
+
+### Duplicate character rows exist
+
+Marriages, stats, traits, and relationships can appear duplicated for the
+same character within a single save. Apply a last-wins dedup pass before
+insertion. (The within-import uniqueness invariant below holds for
+top-level entities; this is the character-row exception.)
+
+### Within-import uniqueness invariant
+
+Apart from the character-row case above, each entity appears exactly once
+per save file. No upstream dedup is required for cities, tiles, units,
+players, families, religions, etc. — duplicate-detection at upload time
+runs at the file level, not per-entity.
+
+### Parsing-order constraints (multi-pass)
+
+Several relationships require two-pass parsing or pre-resolution:
+
+- **Character parents** — parents may appear later in the XML than children
+  that reference them.
+- **Tile → city ownership** — ownership lives in `<City><CityTerritory>`,
+  not on the Tile; build a tile→city map before assigning Tile.owner_city_id.
+- **`birth_city` on characters** — references a city by XML ID.
+- **Ownership history** — interlocks with current Tile.owner derivation.
+
+### Enum cleanup conventions
+
+Backend enum strings are prefix-stripped and title-cased for display via
+`formatEnum()` in `src/lib/utils/formatting.ts`. Watch for the surprises:
+
+- `MAPCLASS_CoastalRainBasin` → "Coastal Rain Basin" (camel-cased token, not
+  underscore-separated).
+- `MAPSIZE_SMALLEST` → "Duel" (not "Smallest" — it's a named map size).
+- `NATION_*` / `RELIGION_*` / `LEVEL_*` prefixes are stripped before display.
+
+### Typical save scale
+
+Useful as a budget when sizing memory and choosing batch granularity:
+
+- 5 players, ~449 characters, ~5,476 tiles, ~43 cities per save.
+- ~2,700 tiles need city ownership resolution.
+- 223–419 unit instances inside `<Tile>` (varies by year / war state).
+- File size 5–50 MB. DOM parse is fine up to ~20 MB.
+- XML parsing is ~6% of upload time; the rest is data shaping + I/O.
+
+### Schema evolution archaeology
+
+The old DuckDB schema's migration log (`schema_migrations` table, v2.0–v2.13)
+records what was *learned* about the format incrementally — each version
+bump usually reflects a save-format surprise discovered the hard way:
+
+- **v2.4** — `enabled_dlc` was renamed `enabled_mods` once the
+  `Version` attribute was discovered to contain mods only, and a separate
+  `enabled_dlc` column was added for `<GameContent>` parsing.
+- **v2.7** — Three columns (`growth_progress`, `general_id`, `agent_id`)
+  were removed after they were confirmed not to exist in the XML at all.
+- **v2.8** — Eight new city columns added once
+  `governor_turn`/`hurry_training_count`/`buy_tile_count` were located in
+  the actual save XML.
+- **v2.9** — Separate tables for project counts, enemy agents, and
+  luxuries; also a fallback from `TeamHappinessLevel` to legacy
+  `TeamDiscontentLevel` for older saves.
+- **v2.10** — Individual unit tables added after Unit instances were
+  located inside `<Tile>` (contradicting the earlier "no individual units"
+  assumption).
+- **v2.13** — `event_logs.data1/data2/data3` changed from INTEGER to
+  VARCHAR after string values turned up in real saves.
+
+Future format discoveries should be appended here, even though the DuckDB
+schema itself is gone.
+
+### DOM memory caution
+
+When using a full-DOM XML parser (`fast-xml-parser`, `roxmltree`, etc.) on
+saves, the parsed-tree footprint can reach ~20 MB per file — small per file,
+but the old Rust parser had a latent leak via `Box::leak` that compounded
+across batch imports. The TS parser runs each upload in a Web Worker and
+discards the tree on completion, which sidesteps the class of bug; preserve
+that pattern if the worker pipeline is ever refactored.
 
 ---
 

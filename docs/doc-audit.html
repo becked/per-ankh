@@ -1,0 +1,1350 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Per-Ankh — docs/ Audit (Issue #39 Review)</title>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							black: "var(--color-black)",
+							brown: "var(--color-brown)",
+							"dark-brown": "var(--color-dark-brown)",
+							orange: "var(--color-orange)",
+							tan: "var(--color-tan)",
+							"tan-hover": "var(--color-tan-hover)",
+							white: "var(--color-white)",
+							yellow: "var(--color-yellow)",
+							"blue-gray": "var(--color-blue-gray)",
+							"border-gray": "var(--color-border-gray)",
+							gray: { 200: "var(--color-gray-200)" },
+						},
+					},
+				},
+			};
+		</script>
+
+		<style>
+			:root {
+				--color-black: #000000;
+				--color-brown: #a52a2a;
+				--color-dark-brown: #79261d;
+				--color-orange: #ffa500;
+				--color-tan: #d2b48c;
+				--color-tan-hover: #d2b48c;
+				--color-white: #ffffff;
+				--color-yellow: #ffff00;
+				--color-blue-gray: #211a12;
+				--color-border-gray: #1c160f;
+				--color-gray-200: #eeeeee;
+
+				--verdict-keep: #5fa15f;
+				--verdict-caveat: #c1872f;
+				--verdict-extract: #ffa500;
+				--verdict-delete: #c25a4a;
+			}
+
+			html,
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				background-color: var(--color-blue-gray);
+				color: var(--color-white);
+				margin: 0;
+				padding: 0;
+			}
+
+			.audit-shell {
+				display: grid;
+				grid-template-columns: 260px 1fr;
+				min-height: 100vh;
+			}
+			.audit-toc {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				height: 100vh;
+				overflow-y: auto;
+				border-right: 1px solid #000;
+				padding: 1.5rem 1rem;
+				background-color: #1a1410;
+			}
+			.audit-toc h1 {
+				font-size: 0.875rem;
+				font-weight: bold;
+				color: var(--color-orange);
+				margin-bottom: 1rem;
+				border-bottom: 1px solid #000;
+				padding-bottom: 0.5rem;
+			}
+			.audit-toc ol {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				font-size: 0.75rem;
+			}
+			.audit-toc ol li {
+				margin-bottom: 0.25rem;
+			}
+			.audit-toc a {
+				color: var(--color-tan);
+				text-decoration: none;
+				display: block;
+				padding: 0.25rem 0.5rem;
+				border-radius: 3px;
+			}
+			.audit-toc a:hover {
+				background: #35302b;
+				color: var(--color-orange);
+			}
+			.audit-toc .toc-sub {
+				padding-left: 0.75rem;
+				color: #999;
+				font-size: 0.7rem;
+			}
+
+			.audit-main {
+				padding: 2rem 2.5rem;
+				max-width: 1200px;
+			}
+			.audit-main h2 {
+				font-size: 1.75rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				border-bottom: 2px solid var(--color-orange);
+				padding-bottom: 0.5rem;
+				margin-top: 3rem;
+				margin-bottom: 1rem;
+			}
+			.audit-main h2:first-child {
+				margin-top: 0;
+			}
+			.audit-main h3 {
+				font-size: 1.125rem;
+				font-weight: bold;
+				color: var(--color-tan);
+				margin-top: 2rem;
+				margin-bottom: 0.5rem;
+			}
+			.audit-main h4 {
+				font-size: 0.95rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				margin-top: 1.25rem;
+				margin-bottom: 0.5rem;
+			}
+			.audit-main p,
+			.audit-main li {
+				color: #c5c3c2;
+				font-size: 0.875rem;
+				line-height: 1.55;
+			}
+			.audit-main p.section-intro {
+				margin-bottom: 1.5rem;
+			}
+			.audit-main code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.8rem;
+				background: #0e0a07;
+				padding: 0.1rem 0.35rem;
+				border-radius: 2px;
+				color: var(--color-orange);
+			}
+
+			/* Stat cards */
+			.stat-row {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 0.75rem;
+				margin: 1.5rem 0;
+			}
+			.stat-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1rem;
+			}
+			.stat-card .stat-num {
+				font-size: 2rem;
+				font-weight: bold;
+				display: block;
+				line-height: 1;
+			}
+			.stat-card .stat-label {
+				font-size: 0.7rem;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				margin-top: 0.25rem;
+				display: block;
+			}
+			.stat-card .stat-note {
+				font-size: 0.7rem;
+				color: var(--color-tan);
+				margin-top: 0.4rem;
+				display: block;
+			}
+			.stat-card.keep .stat-num {
+				color: var(--verdict-keep);
+			}
+			.stat-card.caveat .stat-num {
+				color: var(--verdict-caveat);
+			}
+			.stat-card.extract .stat-num {
+				color: var(--verdict-extract);
+			}
+			.stat-card.delete .stat-num {
+				color: var(--verdict-delete);
+			}
+
+			/* Verdict badges */
+			.verdict {
+				display: inline-block;
+				font-size: 0.65rem;
+				font-weight: bold;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				padding: 0.15rem 0.5rem;
+				border-radius: 3px;
+				color: var(--color-black);
+				margin-right: 0.5rem;
+				vertical-align: middle;
+			}
+			.verdict.keep {
+				background: var(--verdict-keep);
+			}
+			.verdict.caveat {
+				background: var(--verdict-caveat);
+			}
+			.verdict.extract {
+				background: var(--verdict-extract);
+			}
+			.verdict.delete {
+				background: var(--verdict-delete);
+				color: var(--color-white);
+			}
+
+			/* File cards */
+			.file-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-left: 3px solid #2a2622;
+				border-radius: 6px;
+				padding: 0.85rem 1rem;
+				margin-bottom: 0.75rem;
+			}
+			.file-card.keep {
+				border-left-color: var(--verdict-keep);
+			}
+			.file-card.caveat {
+				border-left-color: var(--verdict-caveat);
+			}
+			.file-card.extract {
+				border-left-color: var(--verdict-extract);
+			}
+			.file-card.delete {
+				border-left-color: var(--verdict-delete);
+			}
+			.file-card .file-path {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.78rem;
+				color: var(--color-tan);
+				word-break: break-all;
+				margin-bottom: 0.35rem;
+			}
+			.file-card .file-summary {
+				font-size: 0.82rem;
+				color: #c5c3c2;
+				line-height: 1.45;
+				margin: 0.4rem 0;
+			}
+			.file-card .file-nuggets {
+				margin-top: 0.5rem;
+				padding: 0.5rem 0.75rem;
+				background: #0e0a07;
+				border-radius: 3px;
+				font-size: 0.78rem;
+				color: var(--color-tan);
+			}
+			.file-card .file-nuggets strong {
+				color: var(--color-orange);
+				display: block;
+				margin-bottom: 0.25rem;
+				font-size: 0.72rem;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+			}
+			.file-card .file-nuggets ul {
+				margin: 0;
+				padding-left: 1.1rem;
+			}
+			.file-card .file-nuggets li {
+				margin-bottom: 0.15rem;
+				font-size: 0.78rem;
+				color: var(--color-tan);
+			}
+			.file-card.delete .file-summary {
+				color: #888;
+			}
+
+			.delete-list {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 0.75rem 1rem;
+				margin: 0.75rem 0;
+			}
+			.delete-list .file-row {
+				border-bottom: 1px solid #2a2622;
+				padding: 0.45rem 0;
+				font-size: 0.78rem;
+				display: grid;
+				grid-template-columns: minmax(0, 1fr) 2fr;
+				gap: 1rem;
+			}
+			.delete-list .file-row:last-child {
+				border-bottom: none;
+			}
+			.delete-list .file-row .path {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				color: #aaa;
+				word-break: break-all;
+			}
+			.delete-list .file-row .why {
+				color: #888;
+			}
+
+			.callout {
+				background: #1a1410;
+				border-left: 3px solid var(--color-orange);
+				padding: 0.85rem 1rem;
+				margin: 1rem 0;
+				border-radius: 0 4px 4px 0;
+				font-size: 0.85rem;
+				line-height: 1.5;
+			}
+			.callout strong {
+				color: var(--color-orange);
+			}
+			.callout.warn {
+				border-left-color: var(--verdict-delete);
+			}
+			.callout.warn strong {
+				color: var(--verdict-delete);
+			}
+
+			.nugget-grid {
+				display: grid;
+				grid-template-columns: 1fr 1fr;
+				gap: 0.75rem;
+				margin: 1rem 0;
+			}
+			.nugget {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 0.85rem 1rem;
+				font-size: 0.82rem;
+				line-height: 1.5;
+			}
+			.nugget .nug-title {
+				font-weight: bold;
+				color: var(--color-orange);
+				font-size: 0.78rem;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				display: block;
+				margin-bottom: 0.35rem;
+			}
+			.nugget .nug-source {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.7rem;
+				color: #888;
+				margin-top: 0.35rem;
+				display: block;
+			}
+			.nugget code {
+				font-size: 0.75rem;
+			}
+
+			table.diff-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 0.8rem;
+				margin: 1rem 0;
+			}
+			table.diff-table th,
+			table.diff-table td {
+				text-align: left;
+				padding: 0.5rem 0.75rem;
+				border-bottom: 1px solid #2a2622;
+				vertical-align: top;
+			}
+			table.diff-table th {
+				color: var(--color-orange);
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				background: #1a1410;
+			}
+			table.diff-table tr:hover {
+				background: #1a1410;
+			}
+			table.diff-table .file-cell {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.72rem;
+				color: var(--color-tan);
+				word-break: break-all;
+			}
+
+			.action-list {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1rem 1.25rem;
+				margin: 1rem 0;
+			}
+			.action-list ol {
+				padding-left: 1.2rem;
+				margin: 0;
+			}
+			.action-list li {
+				margin-bottom: 0.6rem;
+				font-size: 0.85rem;
+				line-height: 1.5;
+				color: #c5c3c2;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="audit-shell">
+			<nav class="audit-toc">
+				<h1>Per-Ankh docs/ Audit</h1>
+				<ol>
+					<li><a href="#summary">1. Summary</a></li>
+					<li><a href="#headline">2. Headline finding</a></li>
+					<li><a href="#methodology">3. Methodology</a></li>
+					<li><a href="#diff-issue39">4. Revisions vs Issue #39</a></li>
+					<li><a href="#knowledge">5. Save-format knowledge to preserve</a></li>
+					<li><a href="#keep">6. KEEP (active &amp; reference)</a></li>
+					<li class="toc-sub"><a href="#keep-active">Active runbooks &amp; specs</a></li>
+					<li class="toc-sub"><a href="#keep-format">Save-format reference</a></li>
+					<li class="toc-sub"><a href="#keep-html">HTML reference docs</a></li>
+					<li><a href="#caveat">7. KEEP with caveats</a></li>
+					<li><a href="#extract">8. EXTRACT (mine for nuggets)</a></li>
+					<li class="toc-sub"><a href="#extract-format">Save-format nuggets</a></li>
+					<li class="toc-sub"><a href="#extract-bugs">Bug/edge-case finds</a></li>
+					<li class="toc-sub"><a href="#extract-perf">Perf &amp; scale lessons</a></li>
+					<li class="toc-sub"><a href="#extract-arch">Architecture/algorithm</a></li>
+					<li class="toc-sub"><a href="#extract-misc">Misc transferable</a></li>
+					<li><a href="#delete">9. DELETE (no salvage)</a></li>
+					<li><a href="#followups">10. Follow-ups</a></li>
+				</ol>
+			</nav>
+
+			<main class="audit-main">
+				<header style="margin-bottom: 2rem">
+					<h2 style="margin-top: 0; border-bottom: 3px solid var(--color-orange)">
+						docs/ Audit — Issue #39 Review
+					</h2>
+					<p class="section-intro">
+						A file-by-file review of <code>docs/</code> measured against the
+						question:
+						<em
+							>even though the Tauri/Rust/DuckDB stack is gone, does this doc
+							still encode save-file format knowledge, XML quirks, parsing
+							algorithms, or edge cases worth preserving for the TypeScript
+							parser at <code>src/lib/parser/</code>?</em
+						>
+					</p>
+					<p class="section-intro" style="font-size: 0.78rem; color: #888">
+						<strong>Trigger:</strong> GitHub Issue #39 proposed deleting ~80
+						files from <code>docs/</code>. Jeff's instinct was that the issue
+						deletes too aggressively. This audit confirms that instinct and
+						proposes a more conservative cut.
+					</p>
+				</header>
+
+				<!-- ============ 1. SUMMARY ============ -->
+				<h2 id="summary">1. Summary</h2>
+				<p class="section-intro">
+					108 files reviewed across <code>docs/</code> and subdirectories. Each
+					was classified <strong>KEEP</strong>, <strong>KEEP-with-caveats</strong>,
+					<strong>EXTRACT</strong>, or <strong>DELETE</strong> against the
+					save-file-knowledge rubric.
+				</p>
+				<div class="stat-row">
+					<div class="stat-card keep">
+						<span class="stat-num">22</span>
+						<span class="stat-label">Keep</span>
+						<span class="stat-note">Active runbooks, format reference, design docs</span>
+					</div>
+					<div class="stat-card caveat">
+						<span class="stat-num">5</span>
+						<span class="stat-label">Keep w/ caveats</span>
+						<span class="stat-note">Mostly accurate, parts stale — flag inline</span>
+					</div>
+					<div class="stat-card extract">
+						<span class="stat-num">43</span>
+						<span class="stat-label">Extract</span>
+						<span class="stat-note">Has format/parsing nuggets worth saving</span>
+					</div>
+					<div class="stat-card delete">
+						<span class="stat-num">38</span>
+						<span class="stat-label">Delete</span>
+						<span class="stat-note">Pure Tauri/Rust/DuckDB infra; no salvage</span>
+					</div>
+				</div>
+
+				<!-- ============ 2. HEADLINE ============ -->
+				<h2 id="headline">2. Headline finding</h2>
+				<div class="callout">
+					<strong>Issue #39 is right about most of the active docs, but wrong about ~40 of the proposed deletions.</strong>
+					About half of the docs slated for deletion contain genuine save-file
+					structure knowledge that won't exist anywhere else once they're gone:
+					sentinel-value conventions, XML element hierarchies, version-evolution
+					quirks, parsing-order constraints, real-world data
+					patterns. The cost of deleting 80 files is bigger than the cost of
+					keeping 60 with caveats — git history isn't a substitute when the
+					LLM, the new contributor, and the format itself all benefit from
+					having this stuff indexed and searchable.
+				</div>
+				<div class="callout warn">
+					<strong>Also discovered during the audit:</strong> Issue #39 didn't
+					mention <code>section-3.4-content-hashing.html</code>, but it's
+					actively cross-referenced from <code>src/lib/SpriteMap.svelte</code>
+					— deleting it would break a live citation. And
+					<code>reference/parsing-and-importing.md</code> has a correctness bug
+					in its <code>is_human</code> rule (line ~540) that contradicts the
+					actual TS parser; if we keep the doc, the rule needs to be fixed.
+				</div>
+
+				<!-- ============ 3. METHODOLOGY ============ -->
+				<h2 id="methodology">3. Methodology</h2>
+				<p>
+					Ten parallel exploration agents each read a batch of files end-to-end
+					and returned, per file: a paragraph summary, a verdict (KEEP /
+					EXTRACT / DELETE), and a list of any specific transferable nuggets.
+					The rubric was identical across batches:
+				</p>
+				<ul>
+					<li>
+						<strong>KEEP</strong> — still directly useful for the current
+						SvelteKit/TS web app.
+					</li>
+					<li>
+						<strong>EXTRACT</strong> — contains save-file format insights, XML
+						structure docs, parsing algorithm ideas, or edge cases that are
+						language-agnostic and would help the current TS parser. Even one
+						useful paragraph counts.
+					</li>
+					<li>
+						<strong>DELETE</strong> — pure Rust/DuckDB/Tauri implementation
+						detail with no transferable knowledge.
+					</li>
+				</ul>
+				<p>
+					The TypeScript parser at <code>src/lib/parser/parsers/</code> was
+					used as ground truth where docs claimed save-format facts (notably for
+					the <code>reference/</code> batch).
+				</p>
+
+				<!-- ============ 4. DIFF VS ISSUE #39 ============ -->
+				<h2 id="diff-issue39">4. Revisions vs Issue #39</h2>
+				<p class="section-intro">
+					Issue #39's "delete" list was triaged item-by-item. Below: every
+					meaningful disagreement.
+				</p>
+				<table class="diff-table">
+					<thead>
+						<tr>
+							<th style="width: 30%">File</th>
+							<th style="width: 18%">Issue #39 verdict</th>
+							<th style="width: 18%">Audit verdict</th>
+							<th>Why</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td class="file-cell">schema.sql</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>1065 lines of XML→column mappings, inline commentary on what XML fields mean, plus a v2.0→v2.13 migration history that documents incremental save-format discoveries (e.g. v2.13: <code>data1/data2/data3</code> became VARCHAR — a real save-format quirk).</td>
+						</tr>
+						<tr>
+							<td class="file-cell">parser.py</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>Reference Python parser showing enum cleanup rules (e.g. <code>MAPCLASS_CoastalRainBasin → "Coastal Rain Basin"</code>, <code>MAPSIZE_SMALLEST → "Duel"</code>), fallback logic for missing <code>&lt;Turn&gt;</code>, regex edge cases. Cross-implementation check for the TS parser.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">cloudflare-architecture.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict caveat">keep w/ caveats</span></td>
+							<td>Documents the legacy <code>/v1/share/*</code> endpoints that <em>still serve live traffic</em> via the v0.2.0 desktop redirect bridge. The framing is dated (desktop app as primary user) but the API/rate-limit/D1 schema is current.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">reference/city-data.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict caveat">keep w/ caveats</span></td>
+							<td>Core city XML field mappings (lines 96–118) match the current <code>parseCities()</code> in TS verbatim. The DuckDB schema + multi-pass sections (lines 286–390) are stale and should be flagged inline. Most of the doc is permanent reference.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">reference/parsing-and-importing.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>~70% is dead Tauri infra. ~30% (Save File Format, Parsing Patterns logic, Gotchas) transfers. <strong>Also</strong>: the <code>is_human</code> rule at ~L540 is wrong vs current TS — only checks <code>AIControlledToTurn</code>, misses the <code>OnlineID</code> branch that handles non-active multiplayer humans.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">reference/tauri-icons.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>Tauri tooling sections dead. Design rationale for the hieroglyph 𓉑 icon (lines 44–84) is timeless and still informs the favicon / PWA manifest.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">debugging-character-relationships-id.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>Documents that <code>RelationshipData</code> has an <em>optional</em> <code>&lt;ID&gt;</code> child — assuming required will crash the TS parser. Concrete XML examples included.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">debugging-get-player-negative-one.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>Catalogues every entity where <code>-1</code> is the "no player" sentinel: tribal characters, unowned tiles, non-allied tribes, cities in anarchy. A foundational save-format invariant the TS parser must encode.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">greek-dynasty-normalization-issue.md<br/>+ implementation-plan-dynasty-normalization.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>Diadochi (Seleucid/Ptolemaic/Antigonid) appear as <code>NATION_SELEUCUS</code>/<code>NATION_PTOLEMY</code>/<code>NATION_ANTIGONUS</code> rather than <code>GREECE</code>+dynasty. Confirmed format-stable across 266 saves spanning 3+ years. Same wall the TS parser will hit.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">plans/* (13 files)</td>
+							<td><span class="verdict delete">delete all</span></td>
+							<td>mix</td>
+							<td>6 plans contain real XML-structure documentation (<code>unit-ingestion.md</code>, <code>xml-parser-milestone-4-6-updates.md</code>, <code>separate-dlc-and-mods-parsing.md</code>, <code>fix-human-player-detection.md</code>, <code>city-data-coverage.md</code>, <code>version-detection-and-parsing-fixes.md</code>). 6 are pure Tauri infra. See section 8.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">implementation/* (3 files)</td>
+							<td><span class="verdict delete">delete all</span></td>
+							<td><span class="verdict extract">extract all 3</span></td>
+							<td>Each documents that the save file has duplicate character rows (marriages/stats/traits/relationships) requiring a dedup pass — that's a save-format finding even if DuckDB Appender API is gone. Tile-ownership docs encode ~2,700-row scale + composite-FK constraint patterns.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">reports/parser_comparison.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict keep">keep</span></td>
+							<td>1,500-line architectural comparison of the Python tournament parser vs Rust parser. Catalogs ~40 entity types, two-pass parsing rationale, ID mapping needs. Format-agnostic.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">issues/cities-tab-data-bugs.md<br/>+ issues/familyclass-parsing-issue.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>cities-tab: <code>culture_level</code> is a string enum (<code>CULTURE_WEAK</code>…), unit production has version-specific XML shapes. familyclass: <code>FamilyClass</code> is not a Root child — needs <code>descendants()</code> traversal; maps families to archetype constants.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">code-review-2026-02-02.md</td>
+							<td><span class="verdict delete">delete</span></td>
+							<td><span class="verdict extract">extract</span></td>
+							<td>Memory-leak pattern in XML parser (Box::leak ~20MB/file) is a real bug class to watch for in any DOM-style parser. Confirms aggregate-only unit data. Brittle schema parsing lesson.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">benchmark-results-* and performance-*</td>
+							<td><span class="verdict delete">delete all</span></td>
+							<td><span class="verdict extract">extract most</span></td>
+							<td>Document the typical scale per save (5 players, 449 characters, 5,476 tiles, 43 cities, ~2,700 tile ownership updates) and which entities dominate import time. Save-format-anchored, language-agnostic.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">cloud-productionization-plan.md</td>
+							<td><span class="verdict keep">keep until ship</span></td>
+							<td><span class="verdict delete">delete</span></td>
+							<td>The doc itself says it's superseded by <code>cloud-deploy-plan.md</code> and <code>tauri-removal-plan.md</code>. Phases F–G were executed differently than written. Keeping risks future contributors implementing stale procedures.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">section-3.4-content-hashing.html</td>
+							<td>—</td>
+							<td><span class="verdict keep">keep</span></td>
+							<td>Not in Issue #39's list, but actively cross-referenced from <code>src/lib/SpriteMap.svelte</code>. Don't delete.</td>
+						</tr>
+						<tr>
+							<td class="file-cell">design-audit.html, security-review.html, flow-security-walkthrough.html</td>
+							<td>—</td>
+							<td><span class="verdict keep">keep</span></td>
+							<td>Active, recent, cross-linked. Already covered implicitly.</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<!-- ============ 5. KNOWLEDGE TO PRESERVE ============ -->
+				<h2 id="knowledge">5. Save-format knowledge to preserve</h2>
+				<p class="section-intro">
+					Distilled from the EXTRACT pile — the load-bearing save-format facts
+					that, if Issue #39 ran as-is, would no longer be documented anywhere
+					searchable. These are the actual reason to keep ~half of what #39
+					wants to delete.
+				</p>
+				<div class="nugget-grid">
+					<div class="nugget">
+						<span class="nug-title">Sentinel value: -1</span>
+						Used for "no player / unowned / anarchy / tribal / non-allied" across
+						character, tile, tribe, and city entities. Parsers that don't filter
+						<code>-1</code> crash on <code>get_player(-1)</code>.
+						<span class="nug-source">debugging-get-player-negative-one.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Sentinel value: 2147483647</span>
+						AI players have <code>AIControlledToTurn="2147483647"</code>; the active human has
+						<code>0</code>. <strong>But</strong> non-active humans in multiplayer
+						have AIControlledToTurn &gt; 0 — must also check <code>OnlineID</code>
+						is non-empty. The TS parser does this; the old reference doc doesn't.
+						<span class="nug-source">plans/fix-human-player-detection.md + src/lib/parser/parsers/players.ts</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Yields are fixed-point ×10</span>
+						All yield integers are stored ×10 of display value. Always divide by
+						10 at the display layer. Design rationale (precision, multiplayer
+						desync) explained.
+						<span class="nug-source">reference/yields.md, prospector-xml-data-sources-for-charts.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Time-series sparse turn-keyed format</span>
+						<code>&lt;YieldRateHistory&gt;&lt;YIELD_SCIENCE&gt;&lt;T36&gt;42&lt;/T36&gt;&lt;T70&gt;58&lt;/T70&gt;&lt;/YIELD_SCIENCE&gt;&lt;/YieldRateHistory&gt;</code>
+						— only turns with changes are recorded. Charts need fill-forward.
+						<span class="nug-source">xml-parser-milestone-4-6-updates.md, prospector-xml-data-sources-for-charts.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Player-keyed elements: <code>&lt;P.0&gt;</code> format</span>
+						Per-player values in many places (family/religion opinions, luxury
+						trade, unit family). Element name is literal <code>P.{playerIndex}</code>.
+						<span class="nug-source">xml-parser-milestone-4-6-updates.md, plans/unit-ingestion.md, plans/city-data-coverage.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Tile ownership history</span>
+						<code>&lt;OwnerHistory&gt;&lt;T36&gt;0&lt;/T36&gt;&lt;T70&gt;1&lt;/T70&gt;&lt;/OwnerHistory&gt;</code>
+						— turn-keyed with -1 = unowned. Current owner = value at max turn.
+						<span class="nug-source">tile-ownership-implementation-hybrid.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Greek dynasties as separate nations</span>
+						Seleucid/Ptolemaic/Antigonid show up as <code>NATION_SELEUCUS</code>,
+						<code>NATION_PTOLEMY</code>, <code>NATION_ANTIGONUS</code> — not
+						<code>NATION_GREECE</code> + dynasty. Format-stable across 266 saves /
+						3+ years. Normalization decision is open.
+						<span class="nug-source">greek-dynasty-normalization-issue.md, implementation-plan-dynasty-normalization.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Memory list format: 2024 → 2025 change</span>
+						2024: 5 separate lists (<code>MemoryPlayerList</code>, <code>MemoryFamilyList</code>, …)
+						with numeric IDs. 2025: single <code>MemoryList</code> with string
+						names. Parser needs both branches.
+						<span class="nug-source">backward-compatibility-memory-parser.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">DLCs vs Mods</span>
+						<code>Version</code> attribute encodes mods only
+						(<code>Version: 1.0.70671+mod1+mod2+...</code>). DLCs are in a
+						separate <code>&lt;GameContent&gt;</code> element with self-closing
+						<code>&lt;DLC_*/&gt;</code> children.
+						<span class="nug-source">plans/separate-dlc-and-mods-parsing.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Culture level is a string enum</span>
+						<code>CULTURE_WEAK</code>, <code>CULTURE_DEVELOPING</code>, … —
+						not an integer. Schema/parser must handle as VARCHAR / string.
+						<span class="nug-source">issues/cities-tab-data-bugs.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Unit production has version-specific shape</span>
+						<code>UnitProductionCount</code> (singular, older) vs
+						<code>UnitProductionCounts</code> (plural, newer). Fall back when
+						the new form is missing.
+						<span class="nug-source">issues/cities-tab-data-bugs.md, plans/city-data-coverage.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">FamilyClass is not a Root child</span>
+						<code>FamilyClass</code> elements live nested, not at root. Use
+						<code>descendants()</code>, not <code>children()</code>. Maps families
+						to archetypes (<code>FAMILYCLASS_CHAMPIONS</code>, <code>_HUNTERS</code>,
+						<code>_PATRONS</code>, <code>_CLERICS</code>, <code>_ARTISANS</code>).
+						<span class="nug-source">issues/familyclass-parsing-issue.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Individual units live inside <code>&lt;Tile&gt;</code></span>
+						<code>&lt;Unit&gt;</code> elements with <code>ID</code>, <code>Type</code>,
+						<code>Player</code>, <code>Tribe</code>, <code>XP</code>,
+						<code>TurnsSinceLastMove</code>, <code>CreateTurn</code>,
+						<code>Facing</code>, <code>OriginalPlayer</code>,
+						<code>PlayerFamily</code>, <code>Promotions</code>,
+						<code>PromotionsAvailable</code>, etc. — nested under
+						<code>&lt;Tile&gt;</code>, <em>not</em> at Root level. Verified across
+						2022 / 2024 / 2025 / 2026 saves (counts 223–419 per save). Also
+						<code>&lt;LastSeenUnits&gt;</code> contains snapshot copies for fog
+						of war. Aggregate <code>&lt;UnitsProduced&gt;</code> /
+						<code>&lt;UnitProductionCounts&gt;</code> are <em>also</em> present —
+						they're for production analytics, not a substitute for real units.
+						<span class="nug-source">plans/unit-ingestion.md (canonical) + src/lib/parser/parsers/units.ts; verified by unzip-and-count across 4 saves</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Optional <code>&lt;ID&gt;</code> in RelationshipData</span>
+						Some relationship records (self-relationships, incomplete data) omit
+						the target ID child. Parser must handle as optional.
+						<span class="nug-source">debugging-character-relationships-id.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Duplicate character rows exist in saves</span>
+						Marriages, stats, traits, relationships can appear with duplicate
+						rows in source XML. Dedup pass (last-wins) required before insert.
+						<span class="nug-source">implementation/appender-deduplication.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Parsing-order constraints</span>
+						Character parent FK (parents may appear later than children); tile
+						→ city ownership (city_id lives in City elements, not Tile);
+						birth_city; ownership-history. All require two-pass / pre-resolution.
+						<span class="nug-source">hybrid_parser_migration_plan_v2.md, db-optimization-implementation-guide.md, future-optimization-tile-ownership.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Within-import uniqueness</span>
+						Entities appear exactly once per save file. No need for in-file
+						dedup logic except for the character-row edge cases noted above.
+						<span class="nug-source">on-conflict-investigation.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Cities in anarchy: <code>Player="-1"</code></span>
+						Cities being captured / in revolt can have Player = -1. Schema
+						should allow nullable owner for transitional states.
+						<span class="nug-source">debugging-get-player-negative-one.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">High-value unparsed XML</span>
+						Verified-present in real saves but not yet parsed: city yields,
+						legitimacy history, character marriages, LogData events at
+						<code>/Root/Player/PermanentLogList/LogData</code>, MemoryData at
+						<code>/Root/Player/MemoryList/MemoryData</code>.
+						<span class="nug-source">schema-save-format-alignment-analysis.md, next-parser-tasks.md, xml-parser-gap-analysis.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Typical save scale</span>
+						5 players, 449 characters, ~5,476 tiles, 43 cities, ~2,700 tiles
+						with city ownership. Files 5–50 MB. XML parsing is ~6% of import
+						time; DB operations are 94%. Use as design constraints &amp; budgets.
+						<span class="nug-source">benchmark-results-*, performance-diagnosis-2025-11-07.md, performance-results-2025-11-07.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Match-scoped entity IDs</span>
+						In the old DuckDB schema each match has independent ID sequences
+						from 1. Composite PKs are <code>(entity_id, match_id)</code>.
+						Cloud schema uses different ID semantics — but the pattern explains
+						the historical schema.
+						<span class="nug-source">schema-fix-composite-primary-keys.md, reports/parser_comparison.md</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Enum cleanup conventions</span>
+						<code>MAPCLASS_CoastalRainBasin → "Coastal Rain Basin"</code>,
+						<code>MAPSIZE_SMALLEST → "Duel"</code>, <code>NATION_</code>/<code>RELIGION_</code>/<code>LEVEL_</code>
+						prefix stripping plus regex/title-case rules. The TS app has
+						<code>formatEnum()</code> for this; <code>parser.py</code> documents
+						the original cases.
+						<span class="nug-source">parser.py, CLAUDE.md (formatEnum)</span>
+					</div>
+					<div class="nugget">
+						<span class="nug-title">Schema migration archaeology</span>
+						<code>schema.sql</code> changelog (v2.0→v2.13) documents what was
+						<em>learned</em> incrementally: <code>data1/data2/data3</code> turned
+						out to be VARCHAR not INT, units table added in v2.11, etc. Each
+						change point reflects a save-format surprise.
+						<span class="nug-source">schema.sql lines 1024–1037</span>
+					</div>
+				</div>
+
+				<!-- ============ 6. KEEP ============ -->
+				<h2 id="keep">6. KEEP — active &amp; reference</h2>
+
+				<h3 id="keep-active">Active runbooks, specs, and architecture</h3>
+
+				<div class="file-card keep">
+					<div class="file-path">docs/cloud-deploy-plan.md</div>
+					<div><span class="verdict keep">keep</span>Active deploy runbook for per-ankh.app cutover. Single source of truth for production deployment.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/cloud-rewrite-spec.md</div>
+					<div><span class="verdict keep">keep</span>Core architecture spec. Parser sections (why TS not WASM, fast-xml-parser entity handling), D1 schema, R2 layout, OAuth model all current. Header notes parts are historical — that framing is fine.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/tauri-removal-plan.md</div>
+					<div><span class="verdict keep">keep</span>Authoritative record of what was removed and why <code>web/</code> remains. Doubles as a template for future major removals.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/tournament-feature-spec.md</div>
+					<div><span class="verdict keep">keep</span>MVP-target tournament feature spec. Schema, Swiss + bracket, tiebreaker cascade, collections-port section all forward-looking.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/feature-share-game.md</div>
+					<div><span class="verdict keep">keep</span>Was on Issue #39's delete list (as desktop share spec), but contains current web viewer architecture (SvelteKit-on-Pages, SharedGameData schema, code-reuse symlink strategy). Re-evaluate.</div>
+				</div>
+
+				<h3 id="keep-format">Save-file format reference</h3>
+
+				<div class="file-card keep">
+					<div class="file-path">docs/save-file-format.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">The flagship format reference. Root attributes (31), Player/Character/City/Tile/Tribe/Game hierarchy, LogData event types, MemoryData rules, ID conversion, yield ×10 rule.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/prospector-xml-data-sources-for-charts.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">XPath catalogue for every chart's data source + the critical transformation rules (yield ÷10, hex coordinate calc, player-id 0→1 conversion).</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/xml-parser-gap-analysis.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">Exhaustive catalogue of XML fields present-but-unparsed, with coverage percentages by entity (Root ~73%, Player ~32%, …) and version-specific deltas across 2022–2025 saves.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/unit-location-in-xml.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary"><strong>Rewritten during this audit.</strong> Was previously wrong — claimed no individual unit instances exist anywhere. Corrected to document <code>&lt;Tile&gt;/&lt;Unit&gt;</code> as the canonical location (verified across 2022–2026 saves: 223–419 units per save), with sample XML, attribute list, and per-version counts. <code>&lt;LastSeenUnits&gt;</code> reframed as fog-of-war snapshot. Trimmed "What's NOT in the XML" to its only true claim (display names + standalone HP field).</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/schema-comparison-analysis.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">Per-Ankh schema vs Prospector schema, with explicit XML source paths per entity. Best surviving map of <em>which XML structure produces which derived table</em>.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/schema-save-format-alignment-analysis.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary"><strong>Corrected during this audit.</strong> Data-availability matrix is still useful, but the doc originally asserted "save files contain NO <code>&lt;Unit&gt;</code> elements whatsoever" / "individual unit tracking is impossible" — both false. A stale-doc banner now flags this; the executive-summary "critical mismatch", the doc-vs-reality tables, the Issue 2 (Unit Tracking) section, the data-availability matrix, the schema-metadata recommendation, and the conclusion's priority list have all been updated. New appendix F shows the verified per-unit XML.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/next-parser-tasks.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">Prioritized roadmap with concrete XPaths for unparsed data (LogData, MemoryData, character marriages, legitimacy). Directly actionable for the TS parser.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/parsing-issues-analysis.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">Meta-inventory of which game systems are represented in saves vs not (military, religion, character relationships, events, governance). High-level strategic doc.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/tile-ownership-implementation-hybrid.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">XML structure for <code>&lt;OwnerHistory&gt;</code> with verified parsing implementation + queries. The canonical reference for tile ownership semantics.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/backward-compatibility-memory-parser.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">2024 vs 2025 memory-list format change documented in detail. Fallback parsing pattern. Both XML structures shown side-by-side.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/implementation-status.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary"><strong>Banner + targeted edits during this audit.</strong> "Key learnings" remain useful (attribute-based XML, pervasive <code>-1</code> sentinels, families/religions as constants only). The "Individual units do NOT exist" claim in the Unit Production Parsers section and the "Critical Path" list has been retracted with a pointer to <code>docs/unit-location-in-xml.md</code> and <code>src/lib/parser/parsers/units.ts</code>.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/plans/xml-parser-milestone-4-6-updates.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">The single most accurate documentation of actual XML nesting (mixed strategy: root-level + nested in Game/Player/Character/City/Tile). Time-series sparse format, player-keyed elements, distributed event data — all here.</div></div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/reference/color-scheme.md</div>
+					<div><span class="verdict keep">keep</span>Live UI palette reference, cited from <code>CLAUDE.md</code>.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/reference/yields.md</div>
+					<div><span class="verdict keep">keep</span>Why-yields-are-fixed-point design rationale. Format-anchored, language-agnostic.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/reports/parser_comparison.md</div>
+					<div><span class="verdict keep">keep</span><div class="file-summary">1,500-line Python (Prospector) vs Rust (Per-Ankh) parser comparison. ID-mapping, two-pass parsing rationale, ~40 entity types catalogued.</div></div>
+				</div>
+
+				<h3 id="keep-html">HTML reference docs</h3>
+
+				<div class="file-card keep">
+					<div class="file-path">docs/design-audit.html</div>
+					<div><span class="verdict keep">keep</span>Living design-system reference for the current SvelteKit app.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/security-review.html</div>
+					<div><span class="verdict keep">keep</span>Recent security audit of the cloud app. Cross-linked with the flow walkthrough.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/flow-security-walkthrough.html</div>
+					<div><span class="verdict keep">keep</span>Mermaid-flow architecture document for current auth/authorization/validation paths.</div>
+				</div>
+				<div class="file-card keep">
+					<div class="file-path">docs/section-3.4-content-hashing.html</div>
+					<div><span class="verdict keep">keep</span><strong>Actively referenced from <code>src/lib/SpriteMap.svelte</code></strong>. Deleting it breaks a live citation. Not in Issue #39's list — flag separately.</div>
+				</div>
+
+				<!-- ============ 7. KEEP WITH CAVEATS ============ -->
+				<h2 id="caveat">7. KEEP with caveats</h2>
+				<p class="section-intro">
+					Still load-bearing, but with sections that need a "stale below this
+					line" warning so future readers don't trust dead implementation details.
+				</p>
+
+				<div class="file-card caveat">
+					<div class="file-path">docs/cloudflare-architecture.md</div>
+					<div><span class="verdict caveat">keep w/ caveats</span><div class="file-summary">The <code>/v1/share/*</code> endpoints are still live (legacy desktop redirect bridge). API surface, rate limits, blocklists, D1 share schema all current. <strong>Caveat:</strong> top-level framing ("desktop app as primary user") is dated — add a note that the desktop app is gone and these endpoints are accessed via redirect from the new SSR Worker.</div></div>
+				</div>
+				<div class="file-card caveat">
+					<div class="file-path">docs/reference/city-data.md</div>
+					<div><span class="verdict caveat">keep w/ caveats</span><div class="file-summary">Core City struct mapping (L96–118) matches current <code>parseCities()</code> in TS. Extended-data tables and field semantics still accurate. <strong>Stale:</strong> DuckDB schema (L286–377) and multi-pass insertion section (L381–390) — add inline warning. Issue #39 wanted to delete this entirely; recommend keep with annotation.</div></div>
+				</div>
+				<div class="file-card caveat">
+					<div class="file-path">docs/issues/cities-tab-data-bugs.md</div>
+					<div><span class="verdict extract">extract</span><span class="verdict caveat">or keep</span><div class="file-summary">Could also be classified KEEP — the culture-level-as-string-enum and unit-production version-shape findings are pure save-format facts. Issue #39 wanted to delete; recommend keep or extract.</div></div>
+				</div>
+				<div class="file-card caveat">
+					<div class="file-path">docs/issues/familyclass-parsing-issue.md</div>
+					<div><span class="verdict extract">extract</span><span class="verdict caveat">or keep</span><div class="file-summary">FamilyClass-as-descendants finding and the archetype constant list are permanent save-format facts. Could be KEEP rather than EXTRACT.</div></div>
+				</div>
+
+				<!-- ============ 8. EXTRACT ============ -->
+				<h2 id="extract">8. EXTRACT — mine for nuggets, then archive or fold in</h2>
+				<p class="section-intro">
+					The contents of these files contain at least one save-format,
+					XML-structure, or algorithm insight that should survive. Recommended
+					workflow: pull the nuggets into a consolidated
+					<code>docs/reference/save-format-notes.md</code> (or fold each into the
+					relevant existing reference doc), then delete the original — or move
+					it to <code>docs/archive/</code> if the framing has any historical
+					value.
+				</p>
+
+				<h3 id="extract-format">Save-format nuggets</h3>
+
+				<div class="file-card extract">
+					<div class="file-path">docs/debugging-get-player-negative-one.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Sentinel <code>-1</code> usage catalogued across all entity types: tribal characters, unowned tiles, non-allied tribes, cities in anarchy (e.g. SALONA captured-state). Concrete real-world cases.</div>
+					<div class="file-nuggets"><strong>Nuggets</strong>
+					<ul>
+						<li>Cities in anarchy/being captured serialize with <code>Player="-1"</code>.</li>
+						<li>Schema columns referencing players must allow NULL.</li>
+						<li>Filtering pattern: <code>filter(id =&gt; id &gt;= 0)</code>.</li>
+					</ul></div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/debugging-character-relationships-id.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">RelationshipData's <code>&lt;ID&gt;</code> child is optional; some self/incomplete relationships omit it.</div>
+					<div class="file-nuggets"><strong>Nuggets</strong>
+					<ul>
+						<li>Two real-world XML examples (with and without ID).</li>
+						<li>Parser must treat ID as optional and skip relationships without a target.</li>
+					</ul></div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/bug-human-nation-detection.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Documents <code>&lt;player&gt;</code> / <code>&lt;nation&gt;</code> / <code>&lt;isHuman&gt;</code> hierarchy and the Babylonian-game scenario where an AI had a human-like name. Underlying parsing insight is current.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/greek-dynasty-normalization-issue.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Diadochi encoding quirk + format-stability evidence (266 saves over 3+ years, no schema change).</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/implementation-plan-dynasty-normalization.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Specific mapping rules (<code>SELEUCUS → GREECE+SELEUCID</code> etc.) and the analytical confidence that the format hasn't drifted.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/plans/city-data-coverage.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Corrects XML element names: <code>SpecialistProducedCount</code> not <code>SpecialistCount</code>; <code>FirstPlayer</code> not <code>FirstOwnerPlayerID</code>; <code>GrowthProgress</code> doesn't exist. <code>ProjectCount</code>, <code>AgentTurn</code>/<code>AgentCharacterID</code>/<code>AgentTileID</code>, <code>LuxuryTurn</code> in P.X form. Legacy <code>TeamHappinessLevel</code> vs <code>TeamDiscontentLevel</code>.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/plans/fix-human-player-detection.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Documents the <code>AIControlledToTurn=0</code> vs <code>2147483647</code> rule and (implicitly) the gap that the auto-memory note plus current TS code already capture: must also check <code>OnlineID</code>.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/plans/separate-dlc-and-mods-parsing.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Mods are encoded in the <code>Version</code> attribute (<code>Version: 1.0.70671+modA+modB+…</code>); DLCs are in a separate <code>&lt;GameContent&gt;</code> element with self-closing <code>&lt;DLC_*/&gt;</code> children.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/plans/unit-ingestion.md</div>
+					<div><span class="verdict extract">extract</span><span class="verdict caveat">or keep</span><div class="file-summary"><strong>Confirmed canonical during this audit.</strong> Documents Unit elements nested inside Tile, with separate <code>&lt;Promotions&gt;</code> / <code>&lt;PromotionsAvailable&gt;</code> lists, <code>&lt;BonusEffectUnits&gt;</code> with stack counts, and family via <code>&lt;PlayerFamily&gt;&lt;P.0&gt;FAMILY_FABIUS&lt;/P.0&gt;</code>. XP/level conditional, gender for workers only. Verified against live saves (2022–2026, 223–419 units per save); the three older docs that contradicted this have since been corrected. Could be promoted to KEEP given how authoritative it turned out to be — or extracted into <code>save-file-format.md</code> as the canonical Unit section.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/plans/version-detection-and-parsing-fixes.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Root attribute inventory + the Version-string parsing helper. Useful reference for what game configuration data is available without descending into nested elements.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/plans/xml-parser-implementation.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Phase 1 ZIP security (compression ratio, path traversal, UTF-8) and hybrid DOM/streaming parsing strategy (DOM &lt; 20 MB, streaming above). Format-agnostic.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/issues/cities-tab-data-bugs.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Culture level is a string enum (<code>CULTURE_WEAK</code>, <code>CULTURE_DEVELOPING</code>, …). <code>UnitProductionCount</code> vs <code>UnitProductionCounts</code> version-shape fallback.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/issues/familyclass-parsing-issue.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">FamilyClass needs <code>descendants()</code> not <code>children()</code>; family→archetype constants (<code>FAMILYCLASS_CHAMPIONS</code>, <code>_HUNTERS</code>, <code>_PATRONS</code>, <code>_CLERICS</code>, <code>_ARTISANS</code>).</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/feature-1.1-match-summary-implementation-plan.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Winner extraction via <code>TeamVictories/Team</code>, then Team→Player ID mapping. Victory types + DLC list in matches table. Sample XML included.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/reference/parsing-and-importing.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">~30% transferable (Save File Format, Parsing Patterns logic, Common Gotchas). ~70% is dead Tauri/DuckDB infra (module org, data flow, ID mapper, concurrency).</div>
+					<div class="file-nuggets"><strong>Action item</strong>
+					<ul>
+						<li><strong>Bug:</strong> the <code>is_human</code> rule at ~L540 contradicts the TS parser. Either fix in place before extracting, or extract only the format sections and drop the stale rule.</li>
+					</ul></div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/reference/tauri-icons.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Design rationale for the 𓉑 hieroglyph icon (L44–84) is timeless. Tauri tooling sections (icon bundling, .icns/.ico generation) are dead.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/schema.sql</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">1065 lines. Inline comments map XML attributes → columns across ~62 tables. The migration changelog (v2.0 → v2.13) records save-format discoveries one by one — e.g. v2.13 changed <code>data1/data2/data3</code> to VARCHAR because they aren't always integers.</div>
+					<div class="file-nuggets"><strong>Action</strong>
+					<ul>
+						<li>Fold the XML↔column mapping into a consolidated save-format notes file, then delete the SQL.</li>
+						<li>Preserve the changelog (or at least the <em>why</em> behind each version bump) — it's a low-cost record of hard-won format knowledge.</li>
+					</ul></div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/parser.py</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Reference Python parser. Documents enum cleanup (<code>MAPCLASS_CoastalRainBasin → "Coastal Rain Basin"</code>, <code>MAPSIZE_SMALLEST → "Duel"</code>), regex edge cases for MapClass, fallback for missing <code>&lt;Turn&gt;</code>, OnlineID-based human detection, and the basic ZIP+XML pipeline.</div>
+					<div class="file-nuggets"><strong>Action</strong>
+					<ul>
+						<li>Cross-check enum cleanup against TS <code>formatEnum()</code>.</li>
+						<li>Preserve the fallback heuristics in the consolidated notes.</li>
+					</ul></div></div>
+				</div>
+
+				<h3 id="extract-bugs">Bug / edge-case finds</h3>
+
+				<div class="file-card extract">
+					<div class="file-path">docs/implementation/appender-deduplication.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Save XML can contain duplicate character rows (marriages, stats, traits, relationships). Last-wins dedup pattern. The DuckDB-Appender framing is dead; the duplicate-data fact is not.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/implementation/tile-ownership-on-conflict-implementation.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Documents the ~2,700-tile update scale and the composite (<code>tile_id</code>, <code>match_id</code>) FK pattern. Notes a real DuckDB MVCC bug with composite-PK UPDATEs.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/implementation/tile-ownership-update-optimization.md</div>
+					<div><span class="verdict extract">extract</span>Condensed companion to the above. Same nuggets.</div>
+				</div>
+
+				<h3 id="extract-perf">Performance &amp; scale lessons</h3>
+
+				<div class="file-card extract">
+					<div class="file-path">docs/benchmark-results-2025-11-07.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Entity-scale baseline (5 players / 449 characters / 5,476 tiles / 43 cities). Character extended data (stats/traits/relationships/marriages) is the heaviest entity.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/benchmark-results-2025-11-11-hybrid-parser.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">XML parsing is ~6% of import time; DB operations dominate. Use as a design budget — don't over-optimize parsing.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/database-analysis-2025-11-06.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Empty-column inventory points at which XML fields the old parser missed (birth_father_id / birth_mother_id, etc.) or which don't exist at all.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/db-optimization-implementation-guide.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Two-pass tile-city resolution explained: city ownership lives in City elements not Tile. Pre-parse-into-map strategy. SQL string-size cautionary tale.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/performance-diagnosis-2025-11-07.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">N+1 anti-pattern, character-data nested-structure complexity, ID mapping cost (XML ID → DB ID), FK-resolution ordering. All language-agnostic.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/performance-results-2025-11-07.md</div>
+					<div><span class="verdict extract">extract</span>Validation that batching wins (Appender 1370× / 18×, batched UPDATE 15×). Lesson: bulk-insert mechanisms matter regardless of engine.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/future-optimization-tile-ownership.md</div>
+					<div><span class="verdict extract">extract</span>Two-pass vs pre-parse trade-off; explicit explanation of why city ownership data lives in City not Tile elements.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/on-conflict-investigation.md</div>
+					<div><span class="verdict extract">extract</span>Establishes the within-import uniqueness invariant: entities appear exactly once per save (apart from the character dedup edge cases).</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/reports/performance-regression-analysis-2025-11-08.md</div>
+					<div><span class="verdict extract">extract</span>Per-entity timing breakdown; tile ownership + character data are the heaviest entries.</div>
+				</div>
+
+				<h3 id="extract-arch">Architecture &amp; algorithm</h3>
+
+				<div class="file-card extract">
+					<div class="file-path">docs/hybrid_parser_architecture.md</div>
+					<div><span class="verdict extract">extract</span>Multi-pass insertion ordering rules (Pass 2a parents, 2b tile-city ownership, 2c ownership history, 2d birth cities). Save-format constraint, not Rust.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/hybrid_parser_architecture-feedback.md</div>
+					<div><span class="verdict extract">extract</span>FK validation strategies, ID preservation rationale, DOM-vs-streaming for large saves.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/hybrid_parser_architecture-feedback-2.md</div>
+					<div><span class="verdict extract">extract</span>Two-pass insertion necessity, memory-budget findings, comprehensive error-reporting approach.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/hybrid_parser_batch3_progress.md</div>
+					<div><span class="verdict extract">extract</span>Nested-data parsing challenges (city_data, player_data sub-types, timeseries volume, event-story complexity).</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/hybrid_parser_migration_plan_v2.md</div>
+					<div><span class="verdict extract">extract</span>Complete entity inventory (16 types), multi-pass FK ordering rules, XML-ID preservation rationale, validation-layer design.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/schema-fix-composite-primary-keys.md</div>
+					<div><span class="verdict extract">extract</span>Composite-key pattern <code>(entity_id, match_id)</code> for multi-match storage. Database-agnostic concept.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/tile-ownership-option-b-assessment.md</div>
+					<div><span class="verdict extract">extract</span>Trade-off methodology: specialized-vs-generic schema, type safety vs flexibility. Reusable when deciding which XML structures merit dedicated derivations.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/reviews/hybrid_parser_architecture-review_1.md</div>
+					<div><span class="verdict extract">extract</span>Memory characteristics (40–60 MB GameData in flight), serialization durability, FK validation patterns.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/reviews/hybrid_parser_architecture-review_2.md</div>
+					<div><span class="verdict extract">extract</span>Validation layers between parse and insert, entity dependency graphs, progress-callback design.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/reviews/xml-parser-implementation-plan-review-1.md</div>
+					<div><span class="verdict extract">extract</span>FK delete-cascade ordering, composite PKs, ~20+ entity types, <code>xml_id</code> storage rationale (debugging / export).</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/reviews/xml-parser-implementation-plan-review-2.md</div>
+					<div><span class="verdict extract">extract</span>DOM vs streaming threshold (~20 MB), ID stability, XXE/entity expansion, savepoint granularity.</div>
+				</div>
+
+				<h3 id="extract-misc">Misc transferable</h3>
+
+				<div class="file-card extract">
+					<div class="file-path">docs/code-review-2026-02-02.md</div>
+					<div><span class="verdict extract">extract</span><div class="file-summary">Memory-leak pattern in roxmltree (Box::leak ~20 MB/file) — a general DOM-parser failure mode to watch for. Brittle-schema-parsing lesson. Confirms aggregate-only unit data.</div></div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/bundle-hieroglyph-font.md</div>
+					<div><span class="verdict extract">extract</span>@fontsource scoped-import pattern for shipping the Egyptian hieroglyph font. Web-app-applicable.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/chart-sizing-issue.md</div>
+					<div><span class="verdict extract">extract</span>ECharts initialization-timing quirks and the investigation log. Useful debug reference if the chart bug recurs.</div>
+				</div>
+				<div class="file-card extract">
+					<div class="file-path">docs/asset-support-proposal.md</div>
+					<div><span class="verdict extract">extract</span>Old World asset extraction pipeline (unitypy from Unity resources.assets) + licensing rationale (assets come from user's game install). Informs the existing pinacotheca bake pipeline.</div>
+				</div>
+
+				<!-- ============ 9. DELETE ============ -->
+				<h2 id="delete">9. DELETE — no transferable knowledge</h2>
+				<p class="section-intro">
+					Pure Rust/DuckDB/Tauri infrastructure: implementation status updates,
+					connection-lifecycle bugs, Tauri-event plumbing, GitHub Actions for the
+					desktop release, dead landing-page assets. Git history is the right
+					place for these.
+				</p>
+
+				<div class="delete-list">
+					<div class="file-row"><div class="path">docs/hybrid_parser_phase1-3_validation.md</div><div class="why">Rust implementation status only.</div></div>
+					<div class="file-row"><div class="path">docs/hybrid_parser_phase3_remaining_work.md</div><div class="why">Rust-specific wiring instructions.</div></div>
+					<div class="file-row"><div class="path">docs/hybrid_parser_phase4_complete_next_steps.md</div><div class="why">Deployment status of the dead Rust binary.</div></div>
+					<div class="file-row"><div class="path">docs/database-analysis.md</div><div class="why">Snapshot of one DuckDB import; superseded by the 11-06 variant.</div></div>
+					<div class="file-row"><div class="path">docs/parallel-batch-import.md</div><div class="why">Tauri parallel-batch architecture; doesn't apply to browser-side TS parser.</div></div>
+					<div class="file-row"><div class="path">docs/intra-file-progress-implementation.md</div><div class="why">Tauri progress-event plumbing.</div></div>
+					<div class="file-row"><div class="path">docs/bug-index-corruption-analysis.md</div><div class="why">DuckDB WAL/connection-lifecycle bug.</div></div>
+					<div class="file-row"><div class="path">docs/fix-batch-import-crash.md</div><div class="why">Rust rayon stack-depth fix.</div></div>
+					<div class="file-row"><div class="path">docs/fix-import-progress-events.md</div><div class="why">Tauri event-loop blocking.</div></div>
+					<div class="file-row"><div class="path">docs/tauri-progress-events-investigation.md</div><div class="why">Tauri 2.x event-bridge troubleshooting.</div></div>
+					<div class="file-row"><div class="path">docs/tile-city-ownership-investigation-2025-11-11.md</div><div class="why">DuckDB MVCC bug with composite PKs (relevant only inside DuckDB).</div></div>
+					<div class="file-row"><div class="path">docs/remove-fk-constraints-plan.md</div><div class="why">DuckDB FK removal plan; the multi-pass-parsing nugget is captured better elsewhere.</div></div>
+					<div class="file-row"><div class="path">docs/TODO-appender-migration.md</div><div class="why">DuckDB Appender API migration.</div></div>
+					<div class="file-row"><div class="path">docs/todo-optimize-human-nation-storage.md</div><div class="why">DuckDB schema denormalization.</div></div>
+					<div class="file-row"><div class="path">docs/xml_parser_comparison.md</div><div class="why">Rust XML library comparison (roxmltree/quick-xml/sxd-document); not applicable to TS.</div></div>
+					<div class="file-row"><div class="path">docs/statistics-and-visualizations-report.md</div><div class="why">Analytics product planning, no parsing content.</div></div>
+					<div class="file-row"><div class="path">docs/plans/cities-tab.md</div><div class="why">Tauri+SvelteKit cities-tab UI plan.</div></div>
+					<div class="file-row"><div class="path">docs/plans/database-recovery.md</div><div class="why">DuckDB WAL recovery + Tauri dialog flow.</div></div>
+					<div class="file-row"><div class="path">docs/plans/map-tab-implementation.md</div><div class="why">Old Tauri map UI; SpriteMap is the current implementation.</div></div>
+					<div class="file-row"><div class="path">docs/plans/xml-parser-implementation-action-items-from-review.md</div><div class="why">Rust/Tauri architecture decisions.</div></div>
+					<div class="file-row"><div class="path">docs/plans/xml-parser-v2.2-changes-summary.md</div><div class="why">DuckDB-specific update strategies (UPSERT, match_locks).</div></div>
+					<div class="file-row"><div class="path">docs/plans/yield-views.md</div><div class="why">DuckDB view for the ×10 conversion; not applicable to TS.</div></div>
+					<div class="file-row"><div class="path">docs/reviews/code-review-2025-01-07.md</div><div class="why">Tauri+Rust+DuckDB stack code review.</div></div>
+					<div class="file-row"><div class="path">docs/architecture/chart-loading-states.md</div><div class="why">Tauri-command latency; the cloud app fetches differently.</div></div>
+					<div class="file-row"><div class="path">docs/reference/tauri_architecture.md</div><div class="why">Generic Tauri docs; stack is gone.</div></div>
+					<div class="file-row"><div class="path">docs/deployment.md</div><div class="why">GitHub Actions for the desktop release.</div></div>
+					<div class="file-row"><div class="path">docs/dialog-audit-report.md</div><div class="why">Tauri dialog plugin migration.</div></div>
+					<div class="file-row"><div class="path">docs/native-window-chrome-proposal.md</div><div class="why">Desktop window chrome; the web app has none.</div></div>
+					<div class="file-row"><div class="path">docs/collections-implementation-plan.md</div><div class="why">DuckDB schema + Tauri commands for desktop collections feature; tournament-feature-spec covers the cloud collections port.</div></div>
+					<div class="file-row"><div class="path">docs/cloud-productionization-plan.md</div><div class="why">Explicitly superseded by cloud-deploy-plan.md and tauri-removal-plan.md. Doc itself flags Phases F–G as not-as-executed.</div></div>
+					<div class="file-row"><div class="path">docs/app_state.sql</div><div class="why">Desktop API-key + cloud-share key/value store; no format content.</div></div>
+					<div class="file-row"><div class="path">docs/index.html</div><div class="why">Old desktop landing page.</div></div>
+					<div class="file-row"><div class="path">docs/style.css</div><div class="why">Stylesheet for the old landing page.</div></div>
+					<div class="file-row"><div class="path">docs/logo.png</div><div class="why">Only referenced by docs/index.html.</div></div>
+					<div class="file-row"><div class="path">docs/screenshot.png</div><div class="why">Old desktop screenshot for docs/index.html.</div></div>
+					<div class="file-row"><div class="path">docs/screenshot2.png</div><div class="why">Same.</div></div>
+					<div class="file-row"><div class="path">docs/map.mp4</div><div class="why">Old desktop demo video.</div></div>
+				</div>
+
+				<!-- ============ 10. FOLLOW-UPS ============ -->
+				<h2 id="followups">10. Follow-ups</h2>
+				<div class="action-list">
+					<ol>
+						<li>
+							<strong>Update Issue #39's delete list</strong> to match this audit's
+							revisions (see section 4). Most consequential changes:
+							<em>don't</em> delete <code>schema.sql</code>, <code>parser.py</code>,
+							<code>cloudflare-architecture.md</code>, <code>reference/city-data.md</code>,
+							<code>reference/parsing-and-importing.md</code>, the bug/debugging files,
+							the dynasty-normalization files, the format-bearing plans/ files, or
+							the issues/ files. <em>Do</em> add <code>cloud-productionization-plan.md</code>
+							to the delete list (it's self-flagged as superseded). And confirm
+							<code>section-3.4-content-hashing.html</code> stays — it's actively cited
+							from <code>SpriteMap.svelte</code>.
+						</li>
+						<li>
+							<strong>Consolidate the EXTRACT nuggets</strong> into a single
+							<code>docs/reference/save-format-notes.md</code> (or fold each into the
+							adjacent KEEP doc — e.g. dynasty-normalization findings into
+							<code>save-file-format.md</code>'s "Gotchas" section). Then the EXTRACT
+							originals can be deleted with the knowledge preserved.
+						</li>
+						<li>
+							<strong>Fix <code>reference/parsing-and-importing.md</code> L540–545</strong>
+							before either keeping or extracting it. The <code>is_human</code> rule
+							as written is wrong; the TS parser's actual rule is
+							<code>isHuman = (OnlineID non-empty) || (AIControlledToTurn === 0)</code>.
+							If we extract, drop the rule; if we keep, fix it.
+						</li>
+						<li>
+							<strong>Unit-instance contradiction — resolved.</strong>
+							Verified by unzipping four saves spanning 2022–2026: every save
+							contains 223–419 <code>&lt;Unit&gt;</code> elements nested inside
+							<code>&lt;Tile&gt;</code>, plus a parallel set in
+							<code>&lt;LastSeenUnits&gt;</code>. The TS parser
+							(<code>src/lib/parser/parsers/units.ts</code>, 344 lines) actively
+							parses them and emits <code>units: unitsWire</code> in the share
+							blob. <code>plans/unit-ingestion.md</code> is canonical. The three
+							older docs (<code>unit-location-in-xml.md</code>,
+							<code>implementation-status.md</code>,
+							<code>schema-save-format-alignment-analysis.md</code>) were wrong
+							and have been corrected in-place with banners + retractions during
+							this audit. The "no individual units" claim originated 2025-11-05/06
+							and was never updated after the 2025-12-04 unit-ingestion shipped
+							(commit <code>f96a75e</code>).
+						</li>
+						<li>
+							<strong>After the cull, restructure</strong>:
+							<code>docs/</code> for active runbooks &amp; specs;
+							<code>docs/reference/</code> for save-format + design + yield + color
+							docs; <code>docs/archive/</code> for the historically-valuable but
+							superseded plans (e.g. <code>cloud-productionization-plan.md</code> if
+							you want the receipts, the hybrid_parser arch docs if you want the
+							reasoning trail).
+						</li>
+						<li>
+							<strong>Remove the stale auto-memory note</strong>
+							<code>project_parsing_doc_stale.md</code> once
+							<code>reference/parsing-and-importing.md</code> is fixed or removed.
+						</li>
+						<li>
+							<strong>Update <code>CLAUDE.md</code></strong> if any removed paths
+							are referenced (none currently are except <code>reference/color-scheme.md</code>
+							which stays).
+						</li>
+					</ol>
+				</div>
+			</main>
+		</div>
+	</body>
+</html>
