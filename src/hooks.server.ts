@@ -40,7 +40,7 @@ const reportToHeader = JSON.stringify({
 // header forwarded by hand — SvelteKit's `event.fetch` does not forward
 // cookies cross-origin (browser-like security). Without this, hard
 // refreshes of authenticated pages (e.g. /games/[id], /dashboard) call
-// the API server-side with no auth and get 401, redirecting to /login
+// the API server-side with no auth and get 401, redirecting to /
 // despite the user having a valid session cookie.
 //
 // Pairs with cloud/src/session.ts setting Domain=per-ankh.app on the

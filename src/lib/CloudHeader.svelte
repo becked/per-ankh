@@ -163,7 +163,7 @@
 					</button>
 					<div class="border-t border-black"></div>
 					<a
-						href={resolve("/login")}
+						href={resolve("/")}
 						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
 						onclick={closeMenu}
 					>

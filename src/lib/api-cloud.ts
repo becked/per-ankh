@@ -1,5 +1,5 @@
 // Cloud API client — fetch wrapper for the Per-Ankh Worker. Consumed by
-// all cloud pages (`/login`, `/auth/callback`, `/games`, `/games/[id]`,
+// all cloud pages (`/`, `/auth/callback`, `/games`, `/games/[id]`,
 // `/upload`).
 //
 // Configure via VITE_API_URL (see .env.example).
@@ -268,7 +268,7 @@ export const cloudApi = {
 	// Download the raw save .zip for a game. Auth required (any logged-in
 	// user); the Worker enforces is_public-or-owner. Throws
 	// UnauthorizedError on 401 — caller should bounce anonymous viewers
-	// to /login. Throws ApiError(404) on private-not-owned (existence
+	// to /. Throws ApiError(404) on private-not-owned (existence
 	// hidden) and ApiError(429) on rate limit.
 	downloadGame: async (
 		id: string,

@@ -23,7 +23,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		};
 	} catch (err) {
 		if (err instanceof UnauthorizedError) {
-			throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+			throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
 		}
 		throw err;
 	}

@@ -12,7 +12,7 @@ import type { LayoutLoad } from "./$types";
 // can render the avatar/display_name (or "Sign in") on every page.
 //
 // Per-page auth guards stay where they are — those redirect on
-// UnauthorizedError to /login. The layout fetch is for chrome only; a
+// UnauthorizedError to /. The layout fetch is for chrome only; a
 // null `user` here just renders the signed-out header without disrupting
 // the page's own load.
 //

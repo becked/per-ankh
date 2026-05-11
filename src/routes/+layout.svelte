@@ -8,13 +8,11 @@
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
 
-	// Cloud header is shown on every route except the auth flow (login +
-	// OAuth callback) and the marketing landing — none of those have a
+	// Cloud header is shown on every route except the auth flow (OAuth
+	// callback) and the marketing/login landing — none of those have a
 	// user context that would make the nav meaningful.
 	const showCloudHeader = $derived(
-		page.url.pathname !== "/" &&
-			page.url.pathname !== "/login" &&
-			!page.url.pathname.startsWith("/auth/"),
+		page.url.pathname !== "/" && !page.url.pathname.startsWith("/auth/"),
 	);
 
 	// Single source of truth for OG / Twitter metadata. Pages override by

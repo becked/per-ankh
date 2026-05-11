@@ -13,7 +13,7 @@
 	onMount(async () => {
 		const me = await cloudApi.getMe();
 		if (!me) {
-			await goto(resolve("/login?next=/upload"), { replaceState: true });
+			await goto(resolve("/?next=/upload"), { replaceState: true });
 			return;
 		}
 		ready = true;

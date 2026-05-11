@@ -11,7 +11,7 @@
 	//   - Public/Private lock: owner-only.
 	//   - Download: any signed-in user (owner or not). Hidden for anonymous
 	//     viewers — the API rejects unauthenticated downloads anyway, and
-	//     surfacing a button that immediately bounces to /login is noise.
+	//     surfacing a button that immediately bounces to / is noise.
 	//   - Delete: owner-only.
 
 	import { goto, invalidateAll } from "$app/navigation";
@@ -147,7 +147,7 @@
 			if (err instanceof UnauthorizedError) {
 				const next = encodeURIComponent(page.url.pathname);
 				// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic next-query construction; resolve()'s branded types don't admit dynamic search strings
-				await goto(`/login?next=${next}`);
+				await goto(`/?next=${next}`);
 				return;
 			}
 			if (err instanceof ApiError && err.status === 429) {

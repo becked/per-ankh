@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from "svelte";
-	import { goto } from "$app/navigation";
+	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { cloudApi, ApiError } from "$lib/api-cloud";
 	import { safeNext } from "$lib/utils/safe-next";
@@ -39,8 +39,16 @@
 			// defense-in-depth in case the worker is from before the field
 			// was introduced and `next` comes back undefined.
 			const target = safeNext(me.next);
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- target is server- and client-validated via safeNext(); resolve()'s branded route types don't admit dynamic paths
-			setTimeout(() => goto(target, { replaceState: true }), 500);
+			// invalidateAll() reruns the root +layout.ts user load so
+			// CloudHeader picks up the freshly-set session and renders the
+			// signed-in menu. Without this, goto() does a client-side nav
+			// that skips the layout load, leaving data.user stuck at the
+			// null value captured before the OAuth callback completed.
+			setTimeout(async () => {
+				await invalidateAll();
+				// eslint-disable-next-line svelte/no-navigation-without-resolve -- target is server- and client-validated via safeNext(); resolve()'s branded route types don't admit dynamic paths
+				await goto(target, { replaceState: true });
+			}, 500);
 		} catch (err) {
 			const message =
 				err instanceof ApiError
@@ -56,7 +64,7 @@
 <div class="flex min-h-screen flex-col bg-blue-gray">
 	<!--
 		Stripped-down header for the auth flow: just the centered wordmark,
-		no hamburger / search. Matches /login so the OAuth round-trip feels
+		no hamburger / search. Matches / so the OAuth round-trip feels
 		visually continuous.
 	-->
 	<header
@@ -88,7 +96,7 @@
 						{status.message}
 					</p>
 					<a
-						href={resolve("/login")}
+						href={resolve("/")}
 						class="mt-3 inline-block rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange"
 					>
 						Try again

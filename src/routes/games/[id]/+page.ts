@@ -73,7 +73,7 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		game = await cloudApi.getGame(params.id, { fetch });
 	} catch (err) {
 		if (err instanceof UnauthorizedError) {
-			throw redirect(303, `/login?next=${encodeURIComponent(url.pathname)}`);
+			throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
 		}
 		return mapApiErrorToPage(err);
 	}
