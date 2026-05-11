@@ -14,32 +14,96 @@
 	//     surfacing a button that immediately bounces to /login is noise.
 	//   - Delete: owner-only.
 
-	import { goto } from "$app/navigation";
+	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
-	import { cloudApi, ApiError, UnauthorizedError } from "$lib/api-cloud";
+	import {
+		cloudApi,
+		ApiError,
+		UnauthorizedError,
+		type CollectionInfo,
+	} from "$lib/api-cloud";
 
 	interface Props {
 		gameId: string;
 		isOwner: boolean;
 		isPublic: boolean;
+		collections?: CollectionInfo[];
+		currentCollectionId?: number | null;
 	}
 
-	let { gameId, isOwner, isPublic = $bindable() }: Props = $props();
+	let {
+		gameId,
+		isOwner,
+		isPublic = $bindable(),
+		collections = [],
+		currentCollectionId = null,
+	}: Props = $props();
 
-	type Popover = "lock" | "download" | "delete";
+	type Popover = "lock" | "collection" | "download" | "delete";
 	let openPopover = $state<Popover | null>(null);
 
 	let toggling = $state(false);
+	let moving = $state(false);
 	let downloading = $state(false);
 	let deleting = $state(false);
 
+	let showNewCollectionInput = $state(false);
+	let newCollectionName = $state("");
+	let createError = $state<string | null>(null);
+
 	function togglePopover(name: Popover) {
 		openPopover = openPopover === name ? null : name;
+		if (openPopover !== "collection") {
+			showNewCollectionInput = false;
+			newCollectionName = "";
+			createError = null;
+		}
 	}
 
 	function closePopover() {
 		openPopover = null;
+		showNewCollectionInput = false;
+		newCollectionName = "";
+		createError = null;
+	}
+
+	async function moveToCollection(collectionId: number) {
+		if (moving || collectionId === currentCollectionId) {
+			closePopover();
+			return;
+		}
+		moving = true;
+		try {
+			await cloudApi.moveGameToCollection(gameId, collectionId);
+			await invalidateAll();
+			closePopover();
+		} catch (err) {
+			alert(`Move failed: ${err instanceof Error ? err.message : err}`);
+		} finally {
+			moving = false;
+		}
+	}
+
+	async function createAndMoveToCollection() {
+		const name = newCollectionName.trim();
+		if (!name || moving) return;
+		moving = true;
+		createError = null;
+		try {
+			const created = await cloudApi.createCollection(name);
+			await cloudApi.moveGameToCollection(gameId, created.collection_id);
+			await invalidateAll();
+			closePopover();
+		} catch (err) {
+			if (err instanceof ApiError && err.code === "DUPLICATE_NAME") {
+				createError = "A collection with that name already exists";
+				return;
+			}
+			createError = "Failed to create collection";
+		} finally {
+			moving = false;
+		}
 	}
 
 	async function confirmToggleVisibility() {
@@ -203,6 +267,143 @@
 						>
 							{isPublic ? "Make private" : "Make public"}
 						</button>
+					</div>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	{#if isOwner}
+		<div class="relative">
+			<button
+				type="button"
+				onclick={() => togglePopover("collection")}
+				disabled={moving}
+				aria-haspopup="dialog"
+				aria-expanded={openPopover === "collection"}
+				title="Add to collection"
+				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-3.5 w-3.5"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z"
+					/>
+				</svg>
+			</button>
+
+			{#if openPopover === "collection"}
+				<!--
+					stopPropagation here because clicks on inline-toggle controls
+					inside this popover (e.g. "+ New collection…", Cancel) swap
+					the clicked element out of the DOM via {#if}; by the time the
+					click bubbles to the window-level handleClickOutside,
+					target.closest() can no longer find the popover and it gets
+					closed unintentionally.
+				-->
+				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+				<div
+					class="action-popover absolute right-0 top-full z-50 mt-2 w-56 rounded border-2 border-black bg-blue-gray p-2 shadow-lg"
+					role="dialog"
+					tabindex="-1"
+					onclick={(e) => e.stopPropagation()}
+				>
+					<p class="mb-2 px-1 text-xs font-semibold text-tan">
+						Move to collection
+					</p>
+					<div class="max-h-56 overflow-y-auto">
+						{#each collections as c (c.collection_id)}
+							{@const isCurrent = c.collection_id === currentCollectionId}
+							<button
+								type="button"
+								onclick={() => moveToCollection(c.collection_id)}
+								disabled={moving}
+								class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50 {isCurrent
+									? 'bg-[#35302b]'
+									: ''}"
+							>
+								<span class="truncate">{c.name}</span>
+								{#if isCurrent}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-3.5 w-3.5 shrink-0 text-orange"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										aria-hidden="true"
+									>
+										<path
+											fill-rule="evenodd"
+											d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
+											clip-rule="evenodd"
+										/>
+									</svg>
+								{/if}
+							</button>
+						{/each}
+					</div>
+
+					<div class="mt-1 border-t border-black pt-1">
+						{#if showNewCollectionInput}
+							<!-- svelte-ignore a11y_autofocus -->
+							<input
+								type="text"
+								bind:value={newCollectionName}
+								placeholder="Collection name"
+								autofocus
+								class="w-full rounded border border-[#4a433b] bg-[#35302b] px-2 py-1 text-xs text-tan placeholder:text-[#c5c3c2] focus:border-[#5a524a] focus:outline-none"
+								onkeydown={(e) => {
+									if (e.key === "Enter") createAndMoveToCollection();
+									if (e.key === "Escape") {
+										showNewCollectionInput = false;
+										newCollectionName = "";
+										createError = null;
+									}
+								}}
+							/>
+							{#if createError}
+								<p class="mt-1 px-1 text-[10px] text-orange">{createError}</p>
+							{/if}
+							<div class="mt-1 flex justify-end gap-2">
+								<button
+									type="button"
+									onclick={() => {
+										showNewCollectionInput = false;
+										newCollectionName = "";
+										createError = null;
+									}}
+									class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+								>
+									Cancel
+								</button>
+								<button
+									type="button"
+									onclick={createAndMoveToCollection}
+									disabled={!newCollectionName.trim() || moving}
+									class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors disabled:opacity-50"
+								>
+									Create
+								</button>
+							</div>
+						{:else}
+							<button
+								type="button"
+								onclick={() => {
+									showNewCollectionInput = true;
+								}}
+								class="w-full rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							>
+								+ New collection…
+							</button>
+						{/if}
 					</div>
 				</div>
 			{/if}

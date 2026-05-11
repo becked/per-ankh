@@ -86,7 +86,14 @@
 				onMapTurnChange={handleMapTurnChange}
 			>
 				{#snippet headerActions()}
-					<GameActions {gameId} {isOwner} bind:isPublic />
+					<GameActions
+						{gameId}
+						{isOwner}
+						bind:isPublic
+						collections={data.collections ?? []}
+						currentCollectionId={data.games?.find((g) => g.game_id === gameId)
+							?.collection_id ?? null}
+					/>
 				{/snippet}
 				{#snippet preTabs()}
 					{#if isReimportAvailable}
