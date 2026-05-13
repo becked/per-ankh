@@ -53,9 +53,48 @@ import type { OnlineIdsEnv } from "./online-ids";
 import { handleStats } from "./stats";
 import type { StatsEnv } from "./stats";
 import { handleCspReport } from "./csp";
+import {
+	handleGameTournamentLink,
+	handleTournamentBracket,
+	handleTournamentDetail,
+	handleTournamentList,
+	handleTournamentMatchDetail,
+	handleTournamentMatches,
+	handleTournamentRounds,
+	handleTournamentStandings,
+} from "./tournament/public";
+import type { TournamentPublicEnv } from "./tournament/public";
+import {
+	handleDismissBanner,
+	handleMyMatches,
+	handleMyTournaments,
+} from "./tournament/player";
+import type { TournamentPlayerEnv } from "./tournament/player";
+import {
+	handleBulkCreateSlots,
+	handleCompleteTournament,
+	handleDeleteSlot,
+	handleGenerateRound,
+	handlePatchPairing,
+	handlePatchSlot,
+	handlePatchTournament,
+	handleRetroEditMatch,
+	handleStartRound,
+	handleStartSwiss,
+	handleTransitionChampionship,
+} from "./tournament/admin";
+import type { TournamentAdminEnv } from "./tournament/admin";
 
 interface Env
-	extends AuthEnv, GamesEnv, CollectionsEnv, OnlineIdsEnv, StatsEnv {
+	extends
+		AuthEnv,
+		GamesEnv,
+		CollectionsEnv,
+		OnlineIdsEnv,
+		StatsEnv,
+		TournamentPublicEnv,
+		TournamentPlayerEnv,
+		TournamentAdminEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
 	SESSIONS_KV: KVNamespace;
@@ -70,7 +109,6 @@ interface Env
 	UPLOADS_ENABLED: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
-	ALLOWED_DISCORD_USERNAMES: string;
 }
 
 // UUID v4 format: 8-4-4-4-12 hex chars
@@ -536,6 +574,7 @@ type RouteHandler = (
 	request: Request,
 	env: Env,
 	match: RegExpMatchArray | null,
+	ctx: ExecutionContext,
 ) => Promise<Response>;
 
 interface RouteSpec {
@@ -601,6 +640,15 @@ const ROUTES: RouteSpec[] = [
 		handler: (r, e, m) => handleGameDetail(m![1], r, e),
 	},
 	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/tournament-link$/,
+		},
+		route: "GET /v1/games/:id/tournament-link",
+		handler: (r, e, m) => handleGameTournamentLink(m![1], r, e),
+	},
+	{
 		method: "PATCH",
 		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
 		route: "PATCH /v1/games/:id",
@@ -658,6 +706,204 @@ const ROUTES: RouteSpec[] = [
 		handler: (r) => handleCspReport(r),
 	},
 
+	// Cloud rewrite: /v1/tournaments/* — more-specific patterns first
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/tournaments" },
+		route: "GET /v1/tournaments",
+		handler: (r, e) => handleTournamentList(r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/standings$/,
+		},
+		route: "GET /v1/tournaments/:id/standings",
+		handler: (r, e, m) => handleTournamentStandings(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/bracket$/,
+		},
+		route: "GET /v1/tournaments/:id/bracket",
+		handler: (r, e, m) => handleTournamentBracket(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/rounds$/,
+		},
+		route: "GET /v1/tournaments/:id/rounds",
+		handler: (r, e, m) => handleTournamentRounds(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches$/,
+		},
+		route: "GET /v1/tournaments/:id/matches",
+		handler: (r, e, m) => handleTournamentMatches(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "GET /v1/tournaments/:id/matches/:match_id",
+		handler: (r, e, m) => handleTournamentMatchDetail(m![1], m![2], r, e),
+	},
+	// Player + admin mutations on matches (more specific than detail GET above)
+	{
+		method: "PATCH",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})\/pairing$/,
+		},
+		route: "PATCH /v1/tournaments/:id/matches/:match_id/pairing",
+		handler: (r, e, m) => handlePatchPairing(m![1], m![2], r, e),
+	},
+	{
+		method: "PATCH",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "PATCH /v1/tournaments/:id/matches/:match_id",
+		handler: (r, e, m) => handleRetroEditMatch(m![1], m![2], r, e),
+	},
+	// Round controls
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/rounds\/([A-Za-z0-9_-]{21})\/start$/,
+		},
+		route: "POST /v1/tournaments/:id/rounds/:round_id/start",
+		handler: (r, e, m) => handleStartRound(m![1], m![2], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/rounds$/,
+		},
+		route: "POST /v1/tournaments/:id/rounds",
+		handler: (r, e, m) => handleGenerateRound(m![1], r, e),
+	},
+	// Slots
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/slots$/,
+		},
+		route: "POST /v1/tournaments/:id/slots",
+		handler: (r, e, m) => handleBulkCreateSlots(m![1], r, e),
+	},
+	{
+		method: "PATCH",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/slots\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "PATCH /v1/tournaments/:id/slots/:slot_id",
+		handler: (r, e, m) => handlePatchSlot(m![1], m![2], r, e),
+	},
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/slots\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "DELETE /v1/tournaments/:id/slots/:slot_id",
+		handler: (r, e, m) => handleDeleteSlot(m![1], m![2], r, e),
+	},
+	// Lifecycle
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/start-swiss$/,
+		},
+		route: "POST /v1/tournaments/:id/start-swiss",
+		handler: (r, e, m) => handleStartSwiss(m![1], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/transition-championship$/,
+		},
+		route: "POST /v1/tournaments/:id/transition-championship",
+		handler: (r, e, m) => handleTransitionChampionship(m![1], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/complete$/,
+		},
+		route: "POST /v1/tournaments/:id/complete",
+		handler: (r, e, m) => handleCompleteTournament(m![1], r, e),
+	},
+	{
+		method: "PATCH",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "PATCH /v1/tournaments/:id",
+		handler: (r, e, m) => handlePatchTournament(m![1], r, e),
+	},
+	// Tournament detail by slug (must come AFTER all /tournaments/:id/... routes;
+	// slug regex is broader)
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([a-z0-9][a-z0-9-]{0,63})$/,
+		},
+		route: "GET /v1/tournaments/:slug",
+		handler: (r, e, m) => handleTournamentDetail(m![1], r, e),
+	},
+
+	// User-facing tournament endpoints
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/users/me/tournaments" },
+		route: "GET /v1/users/me/tournaments",
+		handler: (r, e) => handleMyTournaments(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/users/me/matches" },
+		route: "GET /v1/users/me/matches",
+		handler: (r, e) => handleMyMatches(r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/users\/me\/tournaments\/([A-Za-z0-9_-]{21})\/dismiss-banner$/,
+		},
+		route: "POST /v1/users/me/tournaments/:id/dismiss-banner",
+		handler: (r, e, m) => handleDismissBanner(m![1], r, e),
+	},
+
 	// Legacy: /v1/share/*
 	{
 		method: "POST",
@@ -692,23 +938,29 @@ function isCloudPath(pathname: string): boolean {
 		pathname === "/v1/collections" ||
 		pathname.startsWith("/v1/users/") ||
 		pathname === "/v1/stats" ||
-		pathname === "/v1/csp-report"
+		pathname === "/v1/csp-report" ||
+		pathname === "/v1/tournaments" ||
+		pathname.startsWith("/v1/tournaments/")
 	);
 }
 
-function dispatch(request: Request, env: Env): Promise<Response> {
+function dispatch(
+	request: Request,
+	env: Env,
+	ctx: ExecutionContext,
+): Promise<Response> {
 	const url = new URL(request.url);
 	for (const r of ROUTES) {
 		if (r.method !== request.method) continue;
 		if (r.match.kind === "path") {
 			if (r.match.path !== url.pathname) continue;
 			setRoute(r.route);
-			return r.handler(request, env, null);
+			return r.handler(request, env, null, ctx);
 		}
 		const m = url.pathname.match(r.match.regex);
 		if (!m) continue;
 		setRoute(r.route);
-		return r.handler(request, env, m);
+		return r.handler(request, env, m, ctx);
 	}
 	// 404 — pick CORS based on path so error responses still allow the
 	// origin that asked. The cloud helper echoes the request Origin; the
@@ -728,7 +980,7 @@ export default {
 	async fetch(
 		request: Request,
 		env: Env,
-		_ctx: ExecutionContext,
+		ctx: ExecutionContext,
 	): Promise<Response> {
 		return runWithLogContext(request, async () => {
 			const url = new URL(request.url);
@@ -741,7 +993,7 @@ export default {
 						: corsHeaders(env);
 					response = new Response(null, { status: 204, headers });
 				} else {
-					response = await dispatch(request, env);
+					response = await dispatch(request, env, ctx);
 				}
 			} catch (err) {
 				// Top-level safety net. Any uncaught throw becomes a 500 with

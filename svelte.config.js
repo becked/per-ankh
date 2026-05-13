@@ -14,17 +14,18 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // client-side fetches need localhost whitelisted in connect-src.
 // Production CSP stays tight (only api.per-ankh.app).
 //
-// Dev is detected via `process.argv[2] === "dev"` rather than
-// `NODE_ENV !== "production"`. NODE_ENV is set by Vite *after* the CLI
-// loads, and any value inherited from the shell (e.g. an exported
+// Dev is detected by looking for "dev" anywhere in process.argv rather
+// than `NODE_ENV !== "production"`. NODE_ENV is set by Vite *after* the
+// CLI loads, and any value inherited from the shell (e.g. an exported
 // `NODE_ENV=production` from a deploy session) wins at svelte.config
 // load time — silently shipping a dev CSP without the localhost entry
-// and breaking every cloudApi call in the browser. Vite's own argv is
-// stable: `vite dev`, `vite build`, `vite preview` each put their
-// subcommand at argv[2] before svelte.config.js is read. svelte-check
-// and svelte-kit sync also load this file but pass their own flags as
-// argv[2], which correctly resolves to non-dev (CSP isn't consulted
-// during type-checks anyway).
+// and breaking every cloudApi call in the browser.
+//
+// `argv.includes("dev")` rather than `argv[2] === "dev"` because node
+// flags between the binary and the subcommand can shift argv (e.g.
+// `node --inspect vite.js dev` puts "dev" at index 3, not 2). The build
+// + preview commands don't contain "dev" anywhere in argv, so this
+// stays correct for non-dev invocations.
 //
 // `cloudflareinsights.com` is the POST target for the Cloudflare Web
 // Analytics beacon (the script itself loads from
@@ -32,7 +33,7 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // Cloudflare auto-injects the beacon when Web Analytics is enabled on
 // the Worker; without both directives the script loads-and-blocks and
 // the beacon submission fails.
-const isDev = process.argv[2] === "dev";
+const isDev = process.argv.includes("dev");
 const connectSrc = [
 	"self",
 	"https://api.per-ankh.app",

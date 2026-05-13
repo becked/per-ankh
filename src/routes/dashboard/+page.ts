@@ -10,16 +10,21 @@ import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	try {
-		const [stats, gamesRes, collectionsRes] = await Promise.all([
-			cloudApi.getStats({ fetch }),
-			cloudApi.listGames({ fetch }),
-			cloudApi.listCollections({ fetch }),
-		]);
+		const [stats, gamesRes, collectionsRes, myTournamentsRes, myMatchesRes] =
+			await Promise.all([
+				cloudApi.getStats({ fetch }),
+				cloudApi.listGames({ fetch }),
+				cloudApi.listCollections({ fetch }),
+				cloudApi.getMyTournaments({ fetch }).catch(() => ({ tournaments: [] })),
+				cloudApi.getMyMatches({ fetch }).catch(() => ({ matches: [] })),
+			]);
 		return {
 			stats,
 			games: gamesRes.games,
 			collections: collectionsRes.collections,
 			publicCount: collectionsRes.public_count,
+			myTournaments: myTournamentsRes.tournaments,
+			myMatches: myMatchesRes.matches,
 		};
 	} catch (err) {
 		if (err instanceof UnauthorizedError) {

@@ -31,17 +31,13 @@ import {
 	sessionFromRequest,
 } from "./session";
 import type { SessionEnv } from "./session";
-import { logError, logWarn } from "./log";
+import { logError } from "./log";
 
 export interface AuthEnv extends SessionEnv {
 	SHARE_DB: D1Database;
 	ALLOWED_ORIGINS: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
-	// Comma-separated Discord usernames (the new globally-unique handle, not
-	// the display name). Whitespace-trimmed, case-insensitive. Empty / unset
-	// fails closed — every login is rejected.
-	ALLOWED_DISCORD_USERNAMES: string;
 }
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
@@ -109,20 +105,6 @@ interface UserRow {
 
 function oauthKey(id: string): string {
 	return `oauth:${id}`;
-}
-
-// Parse `ALLOWED_DISCORD_USERNAMES` into a Set of trimmed lowercase entries.
-// Returns an empty set when the env var is missing or empty, which makes
-// every membership check fail (fail-closed).
-function parseAllowedUsernames(env: AuthEnv): Set<string> {
-	const raw = env.ALLOWED_DISCORD_USERNAMES;
-	if (!raw) return new Set();
-	return new Set(
-		raw
-			.split(",")
-			.map((u) => u.trim().toLowerCase())
-			.filter((u) => u.length > 0),
-	);
 }
 
 // Build the public avatar URL from the stored hash. Default avatar
@@ -381,37 +363,11 @@ export async function handleDiscordCallback(
 		);
 	}
 
-	const allowedUsernames = parseAllowedUsernames(env);
+	// Discord OAuth is open to any Discord account — the closed-beta
+	// allowlist was lifted ahead of the first public tournament. Rate
+	// limits + the events-table audit log are the remaining brake on
+	// account spam.
 	const discordUsername = discordUser.username.toLowerCase();
-	if (!allowedUsernames.has(discordUsername)) {
-		// Audit trail captures the rejected discord_id + username for
-		// moderation. The events table is internal D1 — these fields stored
-		// here are NOT shipped to Logpush. Structured logs scrub via the PII
-		// deny-list (logWarn below carries no identifying field).
-		try {
-			await env.SHARE_DB.prepare(
-				`INSERT INTO events (event_type, ip_address, metadata)
-				 VALUES ('login_denied', ?, ?)`,
-			)
-				.bind(
-					getClientIp(request),
-					JSON.stringify({
-						discord_id: discordUser.id,
-						discord_username: discordUser.username,
-					}),
-				)
-				.run();
-		} catch (e) {
-			logError("audit_event_log_failed", e, { event_type: "login_denied" });
-		}
-		logWarn("login_denied");
-		return errorResponse(
-			"This beta is invite-only.",
-			403,
-			cors,
-			"NOT_AUTHORIZED",
-		);
-	}
 
 	const displayName = discordUser.global_name ?? discordUser.username;
 	const email = discordUser.email ?? null;
@@ -459,6 +415,37 @@ export async function handleDiscordCallback(
 	)
 		.bind(upsert.user_id)
 		.run();
+
+	// Tournament-slot claim. The admin pre-fills tournament_slots with
+	// expected discord_usernames; logging in claims any unclaimed slot
+	// matching this user. Two-step lookup:
+	//   1. discord_id-pinned slots from prior claims (Discord usernames are
+	//      mutable; the snowflake ID isn't). Updates user_id only — discord_id
+	//      already matches.
+	//   2. Unclaimed slots matched by discord_username (case-insensitive: both
+	//      stored and queried lowercase via auth.ts:385 and the schemas).
+	//      Pins discord_id for future logins so a later username change
+	//      doesn't break the claim.
+	// Only targets active (non-complete) tournaments. Failures are degraded
+	// state — the user can still log in and discover their tournament via
+	// the My Tournaments page, just without the auto-claim. Fire-and-forget
+	// log; don't fail the OAuth callback.
+	try {
+		await env.SHARE_DB.batch([
+			env.SHARE_DB.prepare(
+				`UPDATE tournament_slots SET user_id = ?
+				 WHERE discord_id = ? AND user_id IS NULL
+				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
+			).bind(upsert.user_id, discordUser.id),
+			env.SHARE_DB.prepare(
+				`UPDATE tournament_slots SET user_id = ?, discord_id = ?
+				 WHERE discord_username = ? AND user_id IS NULL AND discord_id IS NULL
+				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
+			).bind(upsert.user_id, discordUser.id, discordUsername),
+		]);
+	} catch (e) {
+		logError("tournament_slot_claim_failed", e, { user_id: upsert.user_id });
+	}
 
 	const sessionToken = await createSession(
 		env,
@@ -533,20 +520,6 @@ export async function handleMe(
 
 	if (!row) {
 		// Session points at a deleted user — clean up and 401.
-		await deleteSession(env, session.token);
-		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
-	}
-
-	// Defensive: revoke sessions for users who were provisioned before the
-	// initial-release allowlist was deployed (or whose access was revoked
-	// post-login). The callback gate prevents new mismatches from being
-	// created; this catches any stale entry already in KV. The username on
-	// the session is the snapshot at login time — if a user later renames
-	// themselves out of the allowlist we won't catch that until they
-	// re-authenticate, but Discord usernames are stable enough in practice
-	// that this is acceptable.
-	const allowedUsernames = parseAllowedUsernames(env);
-	if (!allowedUsernames.has(session.data.discord_username)) {
 		await deleteSession(env, session.token);
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}

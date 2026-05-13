@@ -367,4 +367,460 @@ export const cloudApi = {
 			body: JSON.stringify({ collection_id: collectionId }),
 		});
 	},
+
+	// --- Tournaments (public reads) ---
+	listTournaments: async (
+		params: { status?: string; limit?: number; offset?: number } = {},
+		opts?: CallOpts,
+	): Promise<TournamentListResponse> => {
+		const qs = new URLSearchParams();
+		if (params.status) qs.set("status", params.status);
+		if (params.limit !== undefined) qs.set("limit", String(params.limit));
+		if (params.offset !== undefined) qs.set("offset", String(params.offset));
+		const path = qs.toString() ? `/tournaments?${qs}` : "/tournaments";
+		const res = await request(path, opts);
+		return res.json() as Promise<TournamentListResponse>;
+	},
+
+	getTournament: async (
+		slug: string,
+		opts?: CallOpts,
+	): Promise<TournamentDetail> => {
+		const res = await request(`/tournaments/${slug}`, opts);
+		return res.json() as Promise<TournamentDetail>;
+	},
+
+	getTournamentStandings: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<StandingsResponse> => {
+		const res = await request(`/tournaments/${tournamentId}/standings`, opts);
+		return res.json() as Promise<StandingsResponse>;
+	},
+
+	getTournamentBracket: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<BracketResponse> => {
+		const res = await request(`/tournaments/${tournamentId}/bracket`, opts);
+		return res.json() as Promise<BracketResponse>;
+	},
+
+	getTournamentRounds: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<{ tournament_id: string; rounds: TournamentRound[] }> => {
+		const res = await request(`/tournaments/${tournamentId}/rounds`, opts);
+		return res.json() as Promise<{
+			tournament_id: string;
+			rounds: TournamentRound[];
+		}>;
+	},
+
+	getTournamentMatches: async (
+		tournamentId: string,
+		params: { round_id?: string; phase?: string; division?: string } = {},
+		opts?: CallOpts,
+	): Promise<{ tournament_id: string; matches: TournamentMatch[] }> => {
+		const qs = new URLSearchParams();
+		for (const [k, v] of Object.entries(params)) {
+			if (v) qs.set(k, v);
+		}
+		const path = qs.toString()
+			? `/tournaments/${tournamentId}/matches?${qs}`
+			: `/tournaments/${tournamentId}/matches`;
+		const res = await request(path, opts);
+		return res.json() as Promise<{
+			tournament_id: string;
+			matches: TournamentMatch[];
+		}>;
+	},
+
+	getGameTournamentLink: async (
+		gameId: string,
+		opts?: CallOpts,
+	): Promise<{ link: GameTournamentLink | null }> => {
+		const res = await request(`/games/${gameId}/tournament-link`, opts);
+		return res.json() as Promise<{ link: GameTournamentLink | null }>;
+	},
+
+	getTournamentMatch: async (
+		tournamentId: string,
+		matchId: string,
+		opts?: CallOpts,
+	): Promise<TournamentMatch & { tournament_id: string }> => {
+		const res = await request(
+			`/tournaments/${tournamentId}/matches/${matchId}`,
+			opts,
+		);
+		return res.json() as Promise<TournamentMatch & { tournament_id: string }>;
+	},
+
+	// --- Tournaments (authenticated player) ---
+	getMyTournaments: async (
+		opts?: CallOpts,
+	): Promise<{ tournaments: MyTournamentEntry[] }> => {
+		const res = await request("/users/me/tournaments", opts);
+		return res.json() as Promise<{ tournaments: MyTournamentEntry[] }>;
+	},
+
+	getMyMatches: async (
+		opts?: CallOpts,
+	): Promise<{ matches: MyMatchEntry[] }> => {
+		const res = await request("/users/me/matches", opts);
+		return res.json() as Promise<{ matches: MyMatchEntry[] }>;
+	},
+
+	dismissTournamentBanner: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/users/me/tournaments/${tournamentId}/dismiss-banner`, {
+			...opts,
+			method: "POST",
+		});
+	},
+
+	// --- Tournaments (per-tournament admin) ---
+	patchTournament: async (
+		tournamentId: string,
+		body: Partial<TournamentDetail>,
+		opts?: CallOpts,
+	): Promise<{ tournament: TournamentDetail }> => {
+		const res = await request(`/tournaments/${tournamentId}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		return res.json() as Promise<{ tournament: TournamentDetail }>;
+	},
+
+	bulkCreateSlots: async (
+		tournamentId: string,
+		slots: Array<{
+			division: Division;
+			discord_username: string;
+			swiss_seed?: number;
+		}>,
+		opts?: CallOpts,
+	): Promise<{
+		created: Array<{ slot_id: string; division: Division; swiss_seed: number }>;
+	}> => {
+		const res = await request(`/tournaments/${tournamentId}/slots`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(slots),
+		});
+		return res.json() as Promise<{
+			created: Array<{
+				slot_id: string;
+				division: Division;
+				swiss_seed: number;
+			}>;
+		}>;
+	},
+
+	patchSlot: async (
+		tournamentId: string,
+		slotId: string,
+		body: {
+			discord_username?: string;
+			division?: Division;
+			swiss_seed?: number;
+		},
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/${slotId}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+	},
+
+	deleteSlot: async (
+		tournamentId: string,
+		slotId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/${slotId}`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
+	startSwiss: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<{ tournament: TournamentDetail }> => {
+		const res = await request(`/tournaments/${tournamentId}/start-swiss`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: "{}",
+		});
+		return res.json() as Promise<{ tournament: TournamentDetail }>;
+	},
+
+	generateRound: async (
+		tournamentId: string,
+		body: { division?: Division },
+		opts?: CallOpts,
+	): Promise<{ round_id: string; matches: number }> => {
+		const res = await request(`/tournaments/${tournamentId}/rounds`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		return res.json() as Promise<{ round_id: string; matches: number }>;
+	},
+
+	patchPairing: async (
+		tournamentId: string,
+		matchId: string,
+		body: {
+			slot_a_id?: string;
+			slot_b_id?: string | null;
+			map_script?: string;
+			pick_order_winner_slot_id?: string | null;
+		},
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/matches/${matchId}/pairing`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+	},
+
+	startRound: async (
+		tournamentId: string,
+		roundId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/rounds/${roundId}/start`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: "{}",
+		});
+	},
+
+	retroEditMatch: async (
+		tournamentId: string,
+		matchId: string,
+		body: {
+			winner_slot_id?: string | null;
+			status?: "pending" | "reported" | "forfeit" | "bye";
+			game_id?: string | null;
+			notes?: string;
+		},
+		opts?: CallOpts,
+	): Promise<{ match: TournamentMatch }> => {
+		const res = await request(
+			`/tournaments/${tournamentId}/matches/${matchId}`,
+			{
+				...opts,
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			},
+		);
+		return res.json() as Promise<{ match: TournamentMatch }>;
+	},
+
+	transitionChampionship: async (
+		tournamentId: string,
+		body: { override_ranks?: { A: string[]; B: string[] } } = {},
+		opts?: CallOpts,
+	): Promise<{
+		status: "championship";
+		round_id: string;
+		matches: number;
+		advancers: { A: string[]; B: string[] };
+	}> => {
+		const res = await request(
+			`/tournaments/${tournamentId}/transition-championship`,
+			{
+				...opts,
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			},
+		);
+		return res.json() as Promise<{
+			status: "championship";
+			round_id: string;
+			matches: number;
+			advancers: { A: string[]; B: string[] };
+		}>;
+	},
+
+	completeTournament: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<{ status: "complete" }> => {
+		const res = await request(`/tournaments/${tournamentId}/complete`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: "{}",
+		});
+		return res.json() as Promise<{ status: "complete" }>;
+	},
 } as const;
+
+// --- Tournament types ---
+
+export type TournamentStatus = "setup" | "swiss" | "championship" | "complete";
+export type TournamentPhase = "swiss" | "championship";
+export type Division = "A" | "B";
+
+export interface TournamentListItem {
+	tournament_id: string;
+	slug: string;
+	name: string;
+	status: TournamentStatus;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface TournamentListResponse {
+	tournaments: TournamentListItem[];
+	limit: number;
+	offset: number;
+}
+
+export interface TournamentDetail {
+	tournament_id: string;
+	slug: string;
+	name: string;
+	description: string | null;
+	status: TournamentStatus;
+	division_a_name: string;
+	division_b_name: string;
+	swiss_advance_count: number | null;
+	swiss_wins_to_advance: number;
+	swiss_losses_to_eliminate: number;
+	swiss_max_rounds: number;
+	allowed_map_scripts: string[];
+	slot_counts: { swiss: number; championship: number };
+	is_viewer_admin: boolean;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface SlotStanding {
+	slot_id: string;
+	wins: number;
+	losses: number;
+	status: "active" | "advanced" | "eliminated";
+	median_buchholz: number;
+	solkoff: number;
+	rank: number;
+	tied_with: string[];
+	discord_username: string | null;
+	user_id: string | null;
+	swiss_seed: number | null;
+}
+
+export interface StandingsResponse {
+	tournament_id: string;
+	divisions: {
+		A: { name: string; standings: SlotStanding[] };
+		B: { name: string; standings: SlotStanding[] };
+	};
+}
+
+export interface BracketSlot {
+	slot_id: string;
+	championship_seed: number | null;
+	discord_username: string | null;
+	user_id: string | null;
+}
+
+export interface BracketRound {
+	round_id: string;
+	round_number: number;
+	status: "pending" | "in_progress" | "complete";
+	matches: TournamentMatch[];
+}
+
+export interface BracketResponse {
+	tournament_id: string;
+	slots: BracketSlot[];
+	rounds: BracketRound[];
+}
+
+export interface TournamentRound {
+	round_id: string;
+	tournament_id: string;
+	phase: TournamentPhase;
+	division: Division | null;
+	round_number: number;
+	status: "pending" | "in_progress" | "complete";
+	generated_at: string | null;
+	started_at: string | null;
+	completed_at: string | null;
+}
+
+export interface TournamentMatch {
+	match_id: string;
+	round_id?: string;
+	round_number?: number;
+	phase?: TournamentPhase;
+	division?: Division | null;
+	slot_a_id: string;
+	slot_b_id: string | null;
+	map_script: string | null;
+	pick_order_winner_slot_id: string | null;
+	status: "pending" | "reported" | "forfeit" | "bye";
+	winner_slot_id: string | null;
+	game_id: string | null;
+	reported_by_user_id: string | null;
+	reported_at: string | null;
+	notes: string | null;
+}
+
+export interface MyTournamentEntry {
+	tournament_id: string;
+	slug: string;
+	name: string;
+	status: TournamentStatus;
+	slot_id: string;
+	division: Division | null;
+	claim_banner_dismissed_at: string | null;
+}
+
+export interface MyMatchEntry extends TournamentMatch {
+	tournament_id: string;
+	tournament_slug: string;
+	tournament_name: string;
+	round_status: "pending" | "in_progress" | "complete";
+}
+
+export interface GameTournamentLink {
+	tournament: {
+		tournament_id: string;
+		slug: string;
+		name: string;
+		status: TournamentStatus;
+	};
+	match: {
+		match_id: string;
+		phase: TournamentPhase;
+		division: Division | null;
+		round_number: number;
+		map_script: string | null;
+		status: "pending" | "reported" | "forfeit" | "bye";
+		slot_a_id: string;
+		slot_b_id: string | null;
+		winner_slot_id: string | null;
+		slot_a_username: string | null;
+		slot_b_username: string | null;
+	};
+}

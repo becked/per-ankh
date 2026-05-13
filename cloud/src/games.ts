@@ -765,6 +765,19 @@ export async function handleGameUpload(
 	const dataPart = form.get("data");
 	const savePart = form.get("save");
 	const indexRaw = form.get("uploader_player_index");
+	// Optional: link this upload to a tournament match. When provided, we
+	// validate participation up-front (and admin override), then after the
+	// main D1 batch succeeds we move the game into the user's
+	// `Tournament: {name}` collection and force is_public=TRUE. The match's
+	// game_id link itself is set later via the report endpoint, keeping
+	// save-upload and result-reporting independent.
+	const tournamentMatchIdRaw = form.get("tournament_match_id");
+	// Observer-mode mapping fields. Required when an admin uploads to a match
+	// they're not a participant in (uploader_player_index = null). Ignored
+	// for participant uploads (mappings derived from uploader_player_index
+	// + elimination). See handleGameUpload tournament block below.
+	const tournamentSlotARaw = form.get("tournament_slot_a_player_index");
+	const tournamentSlotBRaw = form.get("tournament_slot_b_player_index");
 	const isBlobLike = (v: unknown): v is Blob =>
 		!!v &&
 		typeof v === "object" &&
@@ -784,6 +797,21 @@ export async function handleGameUpload(
 			"MISSING_INDEX",
 		);
 	}
+	let tournamentMatchId: string | null = null;
+	if (tournamentMatchIdRaw !== null) {
+		if (
+			typeof tournamentMatchIdRaw !== "string" ||
+			!/^[A-Za-z0-9_-]{21}$/.test(tournamentMatchIdRaw)
+		) {
+			return errorResponse(
+				"Invalid tournament_match_id",
+				400,
+				cors,
+				"INVALID_TOURNAMENT_MATCH_ID",
+			);
+		}
+		tournamentMatchId = tournamentMatchIdRaw;
+	}
 	const dataBlob = dataPart;
 	const saveBlob = savePart;
 
@@ -795,6 +823,100 @@ export async function handleGameUpload(
 	}
 	if (dataBlob.size === 0 || saveBlob.size === 0) {
 		return errorResponse("Empty payload", 400, cors, "EMPTY_PAYLOAD");
+	}
+
+	// Tournament-link validation. We resolve match → tournament here so we
+	// can fail fast (before decompression and parser work), and so we have
+	// the tournament_name handy for the post-insert collection assignment.
+	// Caller must be slot_a/slot_b's user_id OR a tournament_admins row.
+	let tournamentContext: {
+		match_id: string;
+		tournament_id: string;
+		tournament_name: string;
+		slot_a_id: string;
+		slot_b_id: string | null;
+		slot_a_user_id: string | null;
+		slot_b_user_id: string | null;
+		// True when the caller's user_id matches either slot's user_id.
+		// Drives participant-mode mapping derivation. False when caller is
+		// an admin uploading on behalf of others (observer mode) — then the
+		// slot_*_player_index form fields are required.
+		is_participant: boolean;
+		// Derived after the blob is parsed, before D1 write. Populated by
+		// the slot-mapping + winner-derivation block further down.
+		slot_a_player_index?: number;
+		slot_b_player_index?: number;
+		winner_slot_id?: string;
+		// Admin observer uploads override an already-reported match. The
+		// flag is set so the match UPDATE doesn't filter on status='pending'.
+		is_admin_override: boolean;
+	} | null = null;
+	if (tournamentMatchId !== null) {
+		const match = await env.SHARE_DB.prepare(
+			`SELECT m.slot_a_id, m.slot_b_id, r.tournament_id, t.name AS tournament_name,
+			        t.status AS tournament_status,
+			        sa.user_id AS slot_a_user, sb.user_id AS slot_b_user
+			 FROM tournament_matches m
+			 JOIN tournament_rounds r ON r.round_id = m.round_id
+			 JOIN tournaments t ON t.tournament_id = r.tournament_id
+			 JOIN tournament_slots sa ON sa.slot_id = m.slot_a_id
+			 LEFT JOIN tournament_slots sb ON sb.slot_id = m.slot_b_id
+			 WHERE m.match_id = ?`,
+		)
+			.bind(tournamentMatchId)
+			.first<{
+				slot_a_id: string;
+				slot_b_id: string | null;
+				tournament_id: string;
+				tournament_name: string;
+				tournament_status: string;
+				slot_a_user: string | null;
+				slot_b_user: string | null;
+			}>();
+		if (!match) {
+			return errorResponse(
+				"Tournament match not found",
+				404,
+				cors,
+				"MATCH_NOT_FOUND",
+			);
+		}
+		if (match.tournament_status === "complete") {
+			return errorResponse(
+				"Tournament is complete",
+				409,
+				cors,
+				"TOURNAMENT_COMPLETE",
+			);
+		}
+		const isParticipant =
+			userId === match.slot_a_user || userId === match.slot_b_user;
+		if (!isParticipant) {
+			const adminRow = await env.SHARE_DB.prepare(
+				"SELECT 1 FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
+			)
+				.bind(match.tournament_id, userId)
+				.first();
+			if (!adminRow) {
+				return errorResponse(
+					"Not a participant or admin for this match",
+					403,
+					cors,
+					"NOT_MATCH_PARTICIPANT",
+				);
+			}
+		}
+		tournamentContext = {
+			match_id: tournamentMatchId,
+			tournament_id: match.tournament_id,
+			tournament_name: match.tournament_name,
+			slot_a_id: match.slot_a_id,
+			slot_b_id: match.slot_b_id,
+			slot_a_user_id: match.slot_a_user,
+			slot_b_user_id: match.slot_b_user,
+			is_participant: isParticipant,
+			is_admin_override: !isParticipant,
+		};
 	}
 
 	// Decompress + parse blob
@@ -891,6 +1013,135 @@ export async function handleGameUpload(
 			cors,
 			"UNKNOWN_PLAYER_INDEX",
 		);
+	}
+
+	// Tournament slot↔player mapping + winner derivation. Done now that the
+	// blob's player_roster is validated. Two modes:
+	//   * Participant: caller is slot_a/slot_b's user. Mapping derived from
+	//     uploader_player_index (caller's slot) + the other human in the
+	//     roster by elimination.
+	//   * Observer: caller is a tournament admin uploading on someone else's
+	//     behalf. Both slot_*_player_index form fields required; uploader
+	//     must NOT claim a slot via uploader_player_index.
+	// In both modes we then check match_metadata.winner against the
+	// mapping to derive winner_slot_id.
+	if (tournamentContext) {
+		const humans = roster.filter((p) => p.is_human);
+		if (humans.length !== 2) {
+			return errorResponse(
+				`Tournament matches require exactly 2 humans; got ${humans.length}`,
+				409,
+				cors,
+				"WRONG_HUMAN_COUNT",
+			);
+		}
+
+		let slotAIdx: number;
+		let slotBIdx: number;
+
+		if (tournamentContext.is_participant) {
+			if (uploaderIndex === null) {
+				return errorResponse(
+					"Participants must select their player in the upload picker",
+					400,
+					cors,
+					"MISSING_PARTICIPANT_INDEX",
+				);
+			}
+			const callerIsSlotA = userId === tournamentContext.slot_a_user_id;
+			const otherHuman = humans.find((p) => p.player_index !== uploaderIndex);
+			if (!otherHuman) {
+				return errorResponse(
+					"Could not identify the other human in the save",
+					409,
+					cors,
+					"OTHER_PLAYER_MISSING",
+				);
+			}
+			if (callerIsSlotA) {
+				slotAIdx = uploaderIndex;
+				slotBIdx = otherHuman.player_index;
+			} else {
+				slotAIdx = otherHuman.player_index;
+				slotBIdx = uploaderIndex;
+			}
+		} else {
+			// Observer mode (admin uploading)
+			if (uploaderIndex !== null) {
+				return errorResponse(
+					"Observer uploads must have uploader_player_index = null",
+					400,
+					cors,
+					"INVALID_OBSERVER_UPLOAD",
+				);
+			}
+			if (
+				typeof tournamentSlotARaw !== "string" ||
+				typeof tournamentSlotBRaw !== "string"
+			) {
+				return errorResponse(
+					"Observer uploads require tournament_slot_a_player_index and tournament_slot_b_player_index form fields",
+					400,
+					cors,
+					"MISSING_SLOT_MAPPING",
+				);
+			}
+			const parsedA = parseInt(tournamentSlotARaw, 10);
+			const parsedB = parseInt(tournamentSlotBRaw, 10);
+			if (
+				!Number.isInteger(parsedA) ||
+				!Number.isInteger(parsedB) ||
+				parsedA < 0 ||
+				parsedB < 0 ||
+				parsedA === parsedB
+			) {
+				return errorResponse(
+					"Invalid slot mapping (both must be distinct non-negative integers)",
+					400,
+					cors,
+					"INVALID_SLOT_MAPPING",
+				);
+			}
+			if (!humansByIndex.has(parsedA) || !humansByIndex.has(parsedB)) {
+				return errorResponse(
+					"Slot mappings must reference humans in the save's player roster",
+					400,
+					cors,
+					"INVALID_SLOT_MAPPING",
+				);
+			}
+			slotAIdx = parsedA;
+			slotBIdx = parsedB;
+		}
+
+		// Derive winner_slot_id by matching the save's winner_player_xml_id
+		// to the slot mappings. Uses the same field the regular game-detail
+		// path uses to set player_summaries.is_winner.
+		const winnerXmlId =
+			blob.match_metadata?.winner?.winner_player_xml_id ?? null;
+		if (winnerXmlId === null) {
+			return errorResponse(
+				"Save has no recorded winner; cannot report this match",
+				409,
+				cors,
+				"NO_WINNER",
+			);
+		}
+		let winnerSlotId: string | null = null;
+		if (winnerXmlId === slotAIdx) winnerSlotId = tournamentContext.slot_a_id;
+		else if (winnerXmlId === slotBIdx)
+			winnerSlotId = tournamentContext.slot_b_id;
+		if (winnerSlotId === null) {
+			return errorResponse(
+				`Winner (player_index ${winnerXmlId}) does not correspond to either slot — check the slot mapping`,
+				409,
+				cors,
+				"WINNER_NOT_IN_MATCH",
+			);
+		}
+		tournamentContext.slot_a_player_index = slotAIdx;
+		tournamentContext.slot_b_player_index = slotBIdx;
+		tournamentContext.winner_slot_id = winnerSlotId;
 	}
 
 	// Server-side hash of the raw ZIP. Don't trust client.
@@ -1062,6 +1313,82 @@ export async function handleGameUpload(
 				// Non-fatal — uploads still succeed even if linking fails.
 				logError("capture_online_ids_failed", e, { game_id: gameId });
 			}
+		}
+	}
+
+	// Tournament-linked uploads: move into the user's `Tournament: {name}`
+	// collection (find-or-create) and force is_public=TRUE. Failures here
+	// are degraded state — the game is uploaded successfully but stays in
+	// the default collection. Log and continue rather than reject.
+	if (tournamentContext) {
+		try {
+			let tournamentCollectionId: number | null = null;
+			const collectionName = `Tournament: ${tournamentContext.tournament_name}`;
+			// INSERT OR IGNORE keyed on (user_id, name) UNIQUE — safe to re-run.
+			await env.SHARE_DB.prepare(
+				"INSERT OR IGNORE INTO collections (user_id, name, is_default) VALUES (?, ?, 0)",
+			)
+				.bind(userId, collectionName)
+				.run();
+			const collRow = await env.SHARE_DB.prepare(
+				"SELECT collection_id FROM collections WHERE user_id = ? AND name = ?",
+			)
+				.bind(userId, collectionName)
+				.first<{ collection_id: number }>();
+			if (collRow) tournamentCollectionId = collRow.collection_id;
+			await env.SHARE_DB.prepare(
+				`UPDATE games SET collection_id = ?, is_public = 1, updated_at = datetime('now')
+				 WHERE game_id = ?`,
+			)
+				.bind(tournamentCollectionId, gameId)
+				.run();
+		} catch (e) {
+			logError("tournament_link_failed", e, {
+				game_id: gameId,
+				match_id: tournamentContext.match_id,
+			});
+		}
+
+		// Link the upload to the match. First-upload-wins for participants
+		// (the UPDATE is guarded by status='pending'); admin observer
+		// uploads always override and replace the linked game. The earlier
+		// blob-parse block populated slot_a/b_player_index and winner_slot_id.
+		try {
+			const isOverride = tournamentContext.is_admin_override;
+			const matchUpdate = await env.SHARE_DB.prepare(
+				`UPDATE tournament_matches
+				   SET game_id = ?, winner_slot_id = ?, status = 'reported',
+				       slot_a_player_index = ?, slot_b_player_index = ?,
+				       reported_by_user_id = ?, reported_at = datetime('now')
+				 WHERE match_id = ?
+				   AND (? = 1 OR status = 'pending')`,
+			)
+				.bind(
+					gameId,
+					tournamentContext.winner_slot_id ?? null,
+					tournamentContext.slot_a_player_index ?? null,
+					tournamentContext.slot_b_player_index ?? null,
+					userId,
+					tournamentContext.match_id,
+					isOverride ? 1 : 0,
+				)
+				.run();
+			// rowcount=0 + non-override means the match was already reported
+			// by someone else. The save still lives in the uploader's
+			// library; we just don't change the match link. Fits the
+			// first-upload-wins semantic the spec calls for.
+			if ((matchUpdate.meta?.changes ?? 0) > 0) {
+				await env.SHARE_DB.prepare(
+					"UPDATE tournaments SET updated_at = datetime('now') WHERE tournament_id = ?",
+				)
+					.bind(tournamentContext.tournament_id)
+					.run();
+			}
+		} catch (e) {
+			logError("tournament_match_link_failed", e, {
+				game_id: gameId,
+				match_id: tournamentContext.match_id,
+			});
 		}
 	}
 
@@ -1362,6 +1689,30 @@ export async function handleGamePatch(
 				429,
 				cors,
 				"RATE_LIMIT_USER",
+			);
+		}
+	}
+
+	// Tournament lockout: a game linked to a match in an active tournament
+	// stays public so anonymous viewers can see the linked save on the
+	// tournament page. The owner can still flip it private once the
+	// tournament reaches 'complete' status.
+	if (is_public === false) {
+		const link = await env.SHARE_DB.prepare(
+			`SELECT 1 FROM tournament_matches m
+			 JOIN tournament_rounds r ON r.round_id = m.round_id
+			 JOIN tournaments t ON t.tournament_id = r.tournament_id
+			 WHERE m.game_id = ? AND t.status != 'complete'
+			 LIMIT 1`,
+		)
+			.bind(gameId)
+			.first();
+		if (link) {
+			return errorResponse(
+				"Game is linked to an active tournament match",
+				409,
+				cors,
+				"LINKED_TO_ACTIVE_TOURNAMENT",
 			);
 		}
 	}

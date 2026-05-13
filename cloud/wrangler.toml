@@ -85,10 +85,8 @@ ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
 DISCORD_CLIENT_ID = "1500901451034263604"
 # DISCORD_CLIENT_SECRET is set out-of-band:
 #   npx wrangler secret put DISCORD_CLIENT_SECRET
-# ALLOWED_DISCORD_USERNAMES is the initial-release allowlist
-# (comma-separated Discord usernames, lowercase). Set out-of-band so
-# tester handles aren't checked into git:
-#   npx wrangler secret put ALLOWED_DISCORD_USERNAMES
-# Empty / unset fails closed — every login is rejected.
-# For local `wrangler dev`, put it in cloud/.dev.vars (gitignored).
-# /v1/share/* is not session-gated and is unaffected by this gate.
+# The closed-beta ALLOWED_DISCORD_USERNAMES gate was lifted with the
+# tournament launch — Discord OAuth is now open to any account. Rate
+# limits + the events-table audit log are the remaining brakes on abuse.
+# The remote secret can be deleted with:
+#   npx wrangler secret delete ALLOWED_DISCORD_USERNAMES

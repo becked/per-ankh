@@ -16,10 +16,9 @@ export interface SessionEnv {
 
 export interface SessionData {
 	user_id: string;
-	// Snapshot of the user's Discord username at login (lowercased). Used by
-	// /me to re-check membership in `ALLOWED_DISCORD_USERNAMES` on every
-	// request, so revoking access takes effect within the session's KV TTL
-	// without requiring a D1 schema change.
+	// Snapshot of the user's Discord username at login (lowercased).
+	// Preserved on the session for future audit / debugging; no longer used
+	// for an access check now that the closed-beta allowlist is lifted.
 	discord_username: string;
 }
 

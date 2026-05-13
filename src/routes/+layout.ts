@@ -4,7 +4,7 @@
 export const ssr = true;
 export const prerender = false;
 
-import { cloudApi, type UserMe } from "$lib/api-cloud";
+import { cloudApi, type MyTournamentEntry, type UserMe } from "$lib/api-cloud";
 import { DEFAULT_META, type PageMeta } from "$lib/page-meta";
 import type { LayoutLoad } from "./$types";
 
@@ -22,13 +22,33 @@ import type { LayoutLoad } from "./$types";
 // Twitter block from `data.meta`.
 export const load: LayoutLoad = async ({
 	fetch,
-}): Promise<{ user: UserMe | null; meta: PageMeta }> => {
+}): Promise<{
+	user: UserMe | null;
+	meta: PageMeta;
+	tournamentNotices: MyTournamentEntry[];
+}> => {
 	try {
 		const user = await cloudApi.getMe({ fetch });
-		return { user, meta: DEFAULT_META };
+		// Tournament enrollment banner: only fetched for signed-in users, and
+		// only the ones they haven't dismissed and that haven't completed.
+		// Failures are swallowed — the banner is a nice-to-have, not load
+		// bearing for any page.
+		let notices: MyTournamentEntry[] = [];
+		if (user) {
+			try {
+				const res = await cloudApi.getMyTournaments({ fetch });
+				notices = res.tournaments.filter(
+					(t) =>
+						t.status !== "complete" && t.claim_banner_dismissed_at === null,
+				);
+			} catch {
+				// fall through with empty list
+			}
+		}
+		return { user, meta: DEFAULT_META, tournamentNotices: notices };
 	} catch {
 		// Network errors etc. — header just renders signed-out state.
 		// Page-level loads will surface real errors when they fire.
-		return { user: null, meta: DEFAULT_META };
+		return { user: null, meta: DEFAULT_META, tournamentNotices: [] };
 	}
 };

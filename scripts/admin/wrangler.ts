@@ -1,6 +1,11 @@
 // Thin wrappers around `npx wrangler d1 execute` and `wrangler r2 object delete`.
 // Spawns the wrangler binary in cloud/ and parses --json output. Used by every
 // admin subcommand.
+//
+// Targets remote (production D1 + R2) by default. Callers can opt into local
+// via setLocal(true) at startup — toggled by the `--local` global flag in
+// the CLI router. Useful for testing the tournament admin commands against
+// the local .wrangler state during development.
 
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
@@ -9,6 +14,20 @@ import { dirname, resolve } from "node:path";
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CLOUD_DIR = resolve(REPO_ROOT, "cloud");
 const WRANGLER_BIN = resolve(CLOUD_DIR, "node_modules/.bin/wrangler");
+
+let useLocal = false;
+
+export function setLocal(value: boolean): void {
+	useLocal = value;
+}
+
+export function isLocal(): boolean {
+	return useLocal;
+}
+
+function targetFlag(): string {
+	return useLocal ? "--local" : "--remote";
+}
 
 // Matches cloud/wrangler.toml [d1_databases].database_name and
 // [r2_buckets].bucket_name. Hardcoded — there's only one environment, and
@@ -67,7 +86,7 @@ export async function d1Query<T = Record<string, unknown>>(
 		"d1",
 		"execute",
 		DB_NAME,
-		"--remote",
+		targetFlag(),
 		"--json",
 		"--command",
 		sql,
@@ -92,7 +111,7 @@ export async function d1Batch(sqls: string[]): Promise<unknown[][]> {
 		"d1",
 		"execute",
 		DB_NAME,
-		"--remote",
+		targetFlag(),
 		"--json",
 		"--command",
 		sql,
@@ -112,7 +131,7 @@ export async function d1Exec(sql: string): Promise<void> {
 		"d1",
 		"execute",
 		DB_NAME,
-		"--remote",
+		targetFlag(),
 		"--json",
 		"--command",
 		sql,
@@ -140,7 +159,7 @@ export async function r2Delete(key: string): Promise<void> {
 		"object",
 		"delete",
 		`${R2_BUCKET}/${key}`,
-		"--remote",
+		targetFlag(),
 	]);
 	if (code !== 0) {
 		throw new Error(

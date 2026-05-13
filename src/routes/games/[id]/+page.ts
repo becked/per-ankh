@@ -102,12 +102,25 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		}
 	}
 
+	// Tournament link: cheap public read that returns the linked
+	// tournament/match (or null) for any game. Used by the preTabs banner
+	// on GameDetailView. Failure here just hides the banner — don't block
+	// the page render.
+	let tournamentLink = null;
+	try {
+		const linkRes = await cloudApi.getGameTournamentLink(params.id, { fetch });
+		tournamentLink = linkRes.link;
+	} catch {
+		// fall through
+	}
+
 	return {
 		game,
 		isOwner,
 		games,
 		collections,
 		publicCount,
+		tournamentLink,
 		meta: buildMeta(game),
 	};
 };
