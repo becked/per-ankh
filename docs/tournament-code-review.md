@@ -16,11 +16,27 @@ config). Every reported finding was then re-verified against the actual
 code by hand — false positives were dropped, agent claims were corrected
 where wrong, and items already in §Open work were removed to avoid noise.
 
+**Status as of 2026-05-14:**
+
+- **Authz + data-integrity bundle closed** in `56923f4` — items #1, #2,
+  #3, #4, #5, #7, #8, #10. All 5 Critical items are now resolved.
+- **Integration test harness landed** in `f6e4ecc` — 39 tests under
+  `cloud/test/integration/tournament/` exercise the closed items and
+  pin them load-bearing. Closes the "handler-level integration coverage
+  is absent" gap.
+- **Remaining open:** items #6, #9, #11–#19 (Important), #20–#32
+  (Nice-to-have). Per-item Status lines below mark what's closed.
+
 ## Critical
 
 Real bugs that should land before the first live tournament.
 
 ### 1. `handlePatchPairing` doesn't verify the match belongs to the URL tournament
+
+**Status:** Fixed in `56923f4`. Test: `patch-pairing.test.ts` › "rejects a
+patch when the match belongs to a different tournament". Cross-tournament
+check placed before the status check so `MATCH_NOT_PENDING` doesn't leak
+existence.
 
 `cloud/src/tournament/admin.ts:732-735` calls `loadMatch(env, matchId)` and
 proceeds without checking that the match's round belongs to `tournamentId`.
@@ -31,6 +47,13 @@ and mutate B's match — the admin gate at line 78 only verifies admin-of-A.
 
 ### 2. `handlePatchPairing` writes slot IDs without validating they belong to the tournament/division
 
+**Status:** Fixed in `56923f4`. Tests: `patch-pairing.test.ts` › "rejects
+{slot_a_id,slot_b_id,pick_order_winner_slot_id} when the slot belongs to a
+different tournament" (parameterized), "rejects slot_a_id from the wrong
+division (same tournament)", "rejects pick_order_winner_slot_id that isn't
+slot_a or slot_b after the patch". New `loadSlotInTournament` helper in
+`data.ts` is reused by #8 and #10.
+
 `cloud/src/tournament/admin.ts:744-761` + `cloud/src/schemas/tournament.ts:94-101`.
 The Valibot schema only enforces nanoid21 format. Combined with #1, an admin
 can splice a slot from any tournament into any pending match. The schema
@@ -38,6 +61,15 @@ also allows `slot_b_id: null`, which writes a non-bye match with a null
 opponent (status stays `pending`, winner stays NULL) — see #7 below.
 
 ### 3. Championship follow-up pairings are non-deterministic
+
+**Status:** Fixed in `56923f4`. Migration `0008_tournament_match_index.sql`
+adds a 1-based `match_index` column, set at all three INSERT sites (swiss,
+championship round 1, championship follow-up). `loadMatches` and
+`loadMatchesWithRound` ORDER BY include `m.match_index`; redundant
+`created_at.localeCompare` re-sort removed. Tests:
+`generate-round.test.ts` › "populates match_index 1..N" (×3),
+"…returns matches in match_index order…", "produces identical match
+ordering across two reads".
 
 `cloud/src/tournament/admin.ts:631-633` sorts prior matches by
 `created_at.localeCompare`, but every match in a round is inserted in a
@@ -54,6 +86,10 @@ ordering derived from championship_seed.
 
 ### 4. `MatchRow` type is missing the columns added by migration 0007
 
+**Status:** Fixed in `56923f4`. `MatchRow` declares both columns;
+`loadMatchesWithRound`'s explicit projection includes them so the type
+stays honest. No runtime test (pure type fix) — caught by `tsc --noEmit`.
+
 `cloud/src/tournament/data.ts:60-74` doesn't declare `slot_a_player_index`
 or `slot_b_player_index`, but `loadMatches`/`loadMatch` do `SELECT m.*` so
 the columns are present at runtime. `cloud/src/games.ts:1316-1370` writes
@@ -61,6 +97,11 @@ them via UPDATE. TypeScript can't catch a reader that misuses these
 fields. A `cloud` package typecheck script (see #30) would have caught it.
 
 ### 5. `MyMatchEntry extends TournamentMatch` overpromises
+
+**Status:** Fixed in `56923f4`. `MyMatchEntry` is now hand-rolled to match
+the `handleMyMatches` SELECT exactly. Test: `my-matches.test.ts` › "exposes
+exactly the fields handleMyMatches selects (no more, no less)" — strict
+key-set comparison fails loudly if the SELECT ever drifts.
 
 `src/lib/api-cloud.ts:799-804` makes every `TournamentMatch` field
 non-optional, but the worker at `cloud/src/tournament/player.ts:57-69`
@@ -80,6 +121,13 @@ from `cloud/src/tournament/authz.ts`.
 
 ### 7. `PatchPairingSchema` allows nulling `slot_b_id` without status/winner updates
 
+**Status:** Fixed in `56923f4`. `v.nullable` dropped from `slot_b_id`.
+Rationale (also in the schema comment): byes are an artifact of pairing
+generation, not a post-hoc admin edit — nulling here would bypass the
+"no slot gets two byes" invariant *and* drop the displaced slot from the
+round. Test: `patch-pairing.test.ts` › "rejects null slot_b_id at schema
+validation".
+
 `cloud/src/schemas/tournament.ts:96`. The handler at
 `cloud/src/tournament/admin.ts:744-761` just writes the patch fields
 verbatim — no companion `status='bye'` + `winner_slot_id=slot_a_id`
@@ -87,6 +135,12 @@ update. Result: an inconsistent match (pending status, no opponent, no
 winner) that breaks downstream pairing/standings.
 
 ### 8. `PatchMatchSchema` doesn't validate `winner_slot_id ∈ {slot_a_id, slot_b_id}`
+
+**Status:** Fixed in `56923f4`. Schema unchanged (still allows null for
+clearing); handler-level check added in `handleRetroEditMatch` with
+defense-in-depth slot load via `loadSlotInTournament`. Tests:
+`retro-edit.test.ts` › "rejects a winner_slot_id outside the match's two
+slots", "rejects a winner_slot_id from a different tournament".
 
 `cloud/src/schemas/tournament.ts:110-117`. Admin can mark a match as won
 by an arbitrary nanoid; the worker writes it. Standings then compute
@@ -101,6 +155,15 @@ line 976-983. Fail-fast belongs in start-swiss with
 `advanceCount <= floor(min(divA, divB) / 2)`.
 
 ### 10. `transition-championship` override branch doesn't validate slot IDs
+
+**Status:** Fixed in `56923f4`. Override branch now validates each
+advancer in-memory against the already-loaded `slots` array (no extra DB
+roundtrips): in-tournament, swiss-phase, correct division. Specific 4xx
+codes replace the eventual 500 `SOURCE_SLOT_MISSING`. Tests:
+`transition-championship.test.ts` › "rejects an override slot from a
+different tournament", "…from the wrong division (same tournament)",
+"…that's not swiss-phase" (uses direct SQL to construct the unreachable
+defensive state).
 
 `cloud/src/tournament/admin.ts:952-963`. `ids.slice(0, advance_count)`
 is taken on faith. The eventual catch is `slots.find(...)` at line 1025
@@ -310,10 +373,12 @@ Worth recording so they don't get re-raised:
 
 ## Suggested order of fixes
 
-1. **Authz + data integrity bundle**: 1, 2, 3, 7, 8, 10. These are
-   the actual exploitable / data-integrity issues.
-2. **Type-safety bundle**: 4, 5, 11, 12, 30. Cheap, mechanical fixes.
-   Add the typecheck script first so the rest get checked.
+1. ~~**Authz + data integrity bundle**: 1, 2, 3, 7, 8, 10.~~ **Done in
+   `56923f4`** (expanded to include #4 and #5 since they were Critical
+   and the diff was already touching the same files).
+2. **Type-safety bundle**: ~~4, 5~~, 11, 12, 30. Cheap, mechanical fixes.
+   Add the typecheck script first so the rest get checked. (Items #4
+   and #5 already landed with bundle 1.)
 3. **UX-blocking bundle**: 9, 13, 14, 16. Things that make the admin
    panel functional during a live tournament.
 4. **Polish bundle**: everything else, prioritized as time permits
@@ -326,3 +391,10 @@ especially before the migration to remote D1 and the first live
 tournament. The verification step (item-by-item reading of cited
 file:line against current code) caught two false positives in the
 subagent reports, so don't skip it.
+
+The integration test harness added in `f6e4ecc`
+(`cloud/test/integration/tournament/`) now covers the closed items.
+Each fix was verified load-bearing — reverted, the matching test fails
+with the expected error. Future reviews should run `npm test` first;
+any new finding that lacks a test claiming to catch it is a candidate
+for the harness rather than (just) the punch list.
