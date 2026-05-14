@@ -70,6 +70,16 @@ export interface MatchRow {
 	reported_by_user_id: string | null;
 	reported_at: string | null;
 	notes: string | null;
+	// Player indexes from the uploaded save (migration 0007). Populated by
+	// the upload flow in games.ts when a tournament-linked game is reported;
+	// NULL for matches without a linked game (bye, forfeit, pending).
+	slot_a_player_index: number | null;
+	slot_b_player_index: number | null;
+	// 1-based position of this match within its round (migration 0008).
+	// Set at INSERT time by every code path that creates matches. Drives
+	// deterministic ORDER BY in loadMatches; consumed by
+	// generateChampionshipFollowup to pair winners by structural position.
+	match_index: number | null;
 	created_at: string;
 }
 
@@ -129,7 +139,7 @@ export async function loadMatches(
 		`SELECT m.* FROM tournament_matches m
 		 JOIN tournament_rounds r ON r.round_id = m.round_id
 		 WHERE r.tournament_id = ?
-		 ORDER BY r.phase, r.division, r.round_number, m.created_at`,
+		 ORDER BY r.phase, r.division, r.round_number, m.match_index, m.created_at`,
 	)
 		.bind(tournamentId)
 		.all<MatchRow>();
@@ -166,6 +176,22 @@ export async function loadSlot(
 		"SELECT * FROM tournament_slots WHERE slot_id = ?",
 	)
 		.bind(slotId)
+		.first<SlotRow>();
+}
+
+// Tournament-scoped slot load. Returns null if the slot doesn't exist OR
+// belongs to a different tournament. Use this whenever a handler accepts a
+// slot_id from request input — the URL pins one tournament, the body must
+// not be allowed to splice in a slot from another.
+export async function loadSlotInTournament(
+	env: TournamentEnv,
+	slotId: string,
+	tournamentId: string,
+): Promise<SlotRow | null> {
+	return env.SHARE_DB.prepare(
+		"SELECT * FROM tournament_slots WHERE slot_id = ? AND tournament_id = ?",
+	)
+		.bind(slotId, tournamentId)
 		.first<SlotRow>();
 }
 

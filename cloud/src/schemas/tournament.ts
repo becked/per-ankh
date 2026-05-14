@@ -91,9 +91,15 @@ export const GenerateRoundSchema = v.object({
 	division: v.optional(DivisionSchema),
 });
 
+// slot_b_id is NOT nullable: byes are an artifact of pairing generation
+// (pickByeRecipient), not a post-hoc admin edit. Nulling slot_b_id via
+// PATCH would (a) bypass the "no slot gets two byes" invariant and
+// (b) silently drop the displaced slot from the round. Admins who need
+// to mark a real match as a bye should retro-edit status='bye' with
+// both slots still present.
 export const PatchPairingSchema = v.object({
 	slot_a_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
-	slot_b_id: v.optional(v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex)))),
+	slot_b_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
 	map_script: v.optional(MapScriptSchema),
 	pick_order_winner_slot_id: v.optional(
 		v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),

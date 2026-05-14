@@ -510,14 +510,16 @@ async function loadMatchesWithRound(
 		`SELECT
 		   m.match_id, m.round_id, m.slot_a_id, m.slot_b_id, m.map_script,
 		   m.pick_order_winner_slot_id, m.status, m.winner_slot_id, m.game_id,
-		   m.reported_by_user_id, m.reported_at, m.notes, m.created_at,
+		   m.reported_by_user_id, m.reported_at, m.notes,
+		   m.slot_a_player_index, m.slot_b_player_index, m.match_index,
+		   m.created_at,
 		   r.tournament_id, r.phase, r.division, r.round_number,
 		   r.status AS round_status,
 		   r.generated_at, r.started_at, r.completed_at
 		 FROM tournament_matches m
 		 JOIN tournament_rounds r ON r.round_id = m.round_id
 		 WHERE r.tournament_id = ?
-		 ORDER BY r.phase, r.division, r.round_number, m.created_at`,
+		 ORDER BY r.phase, r.division, r.round_number, m.match_index, m.created_at`,
 	)
 		.bind(tournamentId)
 		.all<MatchRow & RoundRow & { round_status: RoundRow["status"] }>();
@@ -535,6 +537,9 @@ async function loadMatchesWithRound(
 			reported_by_user_id: row.reported_by_user_id,
 			reported_at: row.reported_at,
 			notes: row.notes,
+			slot_a_player_index: row.slot_a_player_index,
+			slot_b_player_index: row.slot_b_player_index,
+			match_index: row.match_index,
 			created_at: row.created_at,
 		},
 		round: {

@@ -583,7 +583,7 @@ export const cloudApi = {
 		matchId: string,
 		body: {
 			slot_a_id?: string;
-			slot_b_id?: string | null;
+			slot_b_id?: string;
 			map_script?: string;
 			pick_order_winner_slot_id?: string | null;
 		},
@@ -796,11 +796,27 @@ export interface MyTournamentEntry {
 	claim_banner_dismissed_at: string | null;
 }
 
-export interface MyMatchEntry extends TournamentMatch {
+// Hand-rolled to match the SELECT in cloud handleMyMatches exactly. Does NOT
+// extend TournamentMatch — that endpoint returns a narrower projection (no
+// pick_order_winner_slot_id, reported_by_user_id, notes) and pretending
+// otherwise would surface undefined under non-optional fields.
+export interface MyMatchEntry {
+	match_id: string;
+	round_id: string;
+	slot_a_id: string;
+	slot_b_id: string | null;
+	map_script: string | null;
+	status: "pending" | "reported" | "forfeit" | "bye";
+	winner_slot_id: string | null;
+	game_id: string | null;
+	reported_at: string | null;
 	tournament_id: string;
+	phase: TournamentPhase;
+	division: Division | null;
+	round_number: number;
+	round_status: "pending" | "in_progress" | "complete";
 	tournament_slug: string;
 	tournament_name: string;
-	round_status: "pending" | "in_progress" | "complete";
 }
 
 export interface GameTournamentLink {

@@ -37,6 +37,7 @@ import {
 	loadRound,
 	loadRounds,
 	loadSlot,
+	loadSlotInTournament,
 	loadSlots,
 	loadTournamentById,
 	matchRowToRef,
@@ -570,15 +571,16 @@ async function generateSwissRound(
 			 VALUES (?, ?, 'swiss', ?, ?, 'pending', datetime('now'))`,
 		).bind(roundId, tournament.tournament_id, division, nextRoundNumber),
 	];
-	for (const p of withMaps) {
+	for (let i = 0; i < withMaps.length; i++) {
+		const p = withMaps[i];
 		const matchId = nanoid(21);
 		const isBye = p.slot_b_id === null;
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				matchId,
 				roundId,
@@ -588,6 +590,7 @@ async function generateSwissRound(
 				isBye ? null : p.slot_b_id, // default pick-order to slot_b
 				isBye ? "bye" : "pending",
 				isBye ? p.slot_a_id : null,
+				i + 1,
 			),
 		);
 	}
@@ -628,9 +631,11 @@ async function generateChampionshipFollowup(
 	if (!closeResult.ok) {
 		return errorResponse(closeResult.reason, 409, cors, closeResult.code);
 	}
-	const priorMatches = allMatches
-		.filter((m) => m.round_id === lastRound.round_id)
-		.sort((a, b) => a.created_at.localeCompare(b.created_at));
+	// loadMatches orders by (phase, division, round_number, match_index,
+	// created_at), so filtering to one round yields match_index order.
+	const priorMatches = allMatches.filter(
+		(m) => m.round_id === lastRound.round_id,
+	);
 
 	if (priorMatches.length === 1) {
 		// That was the final.
@@ -685,14 +690,15 @@ async function generateChampionshipFollowup(
 	const seed = `${tournament.tournament_id}|championship|r${nextRoundNumber}`;
 	const withMaps = assignMapsToPairings(pairings, allowedMaps, matchRefs, seed);
 
-	for (const p of withMaps) {
+	for (let i = 0; i < withMaps.length; i++) {
+		const p = withMaps[i];
 		const matchId = nanoid(21);
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id)
-				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL)`,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
+				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
 			).bind(
 				matchId,
 				roundId,
@@ -700,6 +706,7 @@ async function generateChampionshipFollowup(
 				p.slot_b_id,
 				p.map_script,
 				p.slot_b_id,
+				i + 1,
 			),
 		);
 	}
@@ -733,6 +740,13 @@ export async function handlePatchPairing(
 	if (!match) {
 		return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
 	}
+	// Scope the match to the URL's tournament before any other check —
+	// otherwise MATCH_NOT_PENDING would leak existence of a reported match
+	// in a different tournament to an admin of this one.
+	const round = await loadRound(env, match.round_id);
+	if (!round || round.tournament_id !== tournamentId) {
+		return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
+	}
 	if (match.status !== "pending" && match.status !== "bye") {
 		return errorResponse(
 			"Can only edit pairing on a pending match",
@@ -744,6 +758,54 @@ export async function handlePatchPairing(
 	const body = await parseJsonBody(request, PatchPairingSchema, cors);
 	if (!body.ok) return body.response;
 	const patch = body.body;
+
+	// Validate each slot ID supplied in the patch: must exist, belong to
+	// this tournament, and match the round's phase + division.
+	for (const slotId of [
+		patch.slot_a_id,
+		patch.slot_b_id,
+		patch.pick_order_winner_slot_id,
+	]) {
+		if (slotId == null) continue;
+		const slot = await loadSlotInTournament(env, slotId, tournamentId);
+		if (!slot) {
+			return errorResponse(
+				"Slot not in tournament",
+				400,
+				cors,
+				"SLOT_NOT_IN_TOURNAMENT",
+			);
+		}
+		if (slot.phase !== round.phase || slot.division !== round.division) {
+			return errorResponse(
+				"Slot phase/division does not match round",
+				400,
+				cors,
+				"SLOT_PHASE_MISMATCH",
+			);
+		}
+	}
+
+	// Enforce pick_order_winner_slot_id ∈ {slot_a_id, slot_b_id} against the
+	// POST-patch state — caller may be changing slot_a/slot_b in the same body.
+	const postA = patch.slot_a_id ?? match.slot_a_id;
+	const postB = patch.slot_b_id ?? match.slot_b_id;
+	const postPickWinner =
+		"pick_order_winner_slot_id" in patch
+			? patch.pick_order_winner_slot_id
+			: match.pick_order_winner_slot_id;
+	if (
+		postPickWinner != null &&
+		postPickWinner !== postA &&
+		postPickWinner !== postB
+	) {
+		return errorResponse(
+			"pick_order_winner_slot_id must be one of slot_a_id or slot_b_id",
+			400,
+			cors,
+			"PICK_ORDER_WINNER_NOT_IN_MATCH",
+		);
+	}
 
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
@@ -843,6 +905,39 @@ export async function handleRetroEditMatch(
 	const body = await parseJsonBody(request, PatchMatchSchema, cors);
 	if (!body.ok) return body.response;
 	const patch = body.body;
+
+	// winner_slot_id must be one of this match's two slots. Schema only
+	// validates nanoid shape, so without this an admin could mark the
+	// match as won by a stranger's slot.
+	if (patch.winner_slot_id != null) {
+		if (
+			patch.winner_slot_id !== match.slot_a_id &&
+			patch.winner_slot_id !== match.slot_b_id
+		) {
+			return errorResponse(
+				"winner_slot_id must be one of slot_a_id or slot_b_id",
+				400,
+				cors,
+				"WINNER_NOT_IN_MATCH",
+			);
+		}
+		// Defense in depth: confirm the slot row actually exists in this
+		// tournament. Guards against retro-editing a match that references
+		// an orphaned slot ID.
+		const winnerSlot = await loadSlotInTournament(
+			env,
+			patch.winner_slot_id,
+			tournamentId,
+		);
+		if (!winnerSlot) {
+			return errorResponse(
+				"Winner slot not in tournament",
+				400,
+				cors,
+				"SLOT_NOT_IN_TOURNAMENT",
+			);
+		}
+	}
 
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
@@ -959,7 +1054,38 @@ export async function handleTransitionChampionship(
 					"INVALID_OVERRIDE",
 				);
 			}
-			advancersByDiv[division] = ids.slice(0, tournament.swiss_advance_count);
+			const chosen = ids.slice(0, tournament.swiss_advance_count);
+			// Validate each override slot up-front. Previously a bad ID would
+			// trip the eventual sourceSlot.find at line ~1120 and 500 with
+			// SOURCE_SLOT_MISSING — surface specific 4xx errors instead.
+			for (const slotId of chosen) {
+				const slot = slots.find((s) => s.slot_id === slotId);
+				if (!slot) {
+					return errorResponse(
+						`Override slot ${slotId} not in tournament`,
+						400,
+						cors,
+						"OVERRIDE_SLOT_NOT_IN_TOURNAMENT",
+					);
+				}
+				if (slot.phase !== "swiss") {
+					return errorResponse(
+						`Override slot ${slotId} is not a swiss-phase slot`,
+						400,
+						cors,
+						"OVERRIDE_SLOT_WRONG_PHASE",
+					);
+				}
+				if (slot.division !== division) {
+					return errorResponse(
+						`Override slot ${slotId} is in division ${slot.division ?? "null"}, not ${division}`,
+						400,
+						cors,
+						"OVERRIDE_SLOT_WRONG_DIVISION",
+					);
+				}
+			}
+			advancersByDiv[division] = chosen;
 			continue;
 		}
 		const divSlots = slots
@@ -1070,14 +1196,15 @@ export async function handleTransitionChampionship(
 		matchRefs,
 		seed,
 	);
-	for (const p of withMaps) {
+	for (let i = 0; i < withMaps.length; i++) {
+		const p = withMaps[i];
 		const matchId = nanoid(21);
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id)
-				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL)`,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
+				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
 			).bind(
 				matchId,
 				roundId,
@@ -1085,6 +1212,7 @@ export async function handleTransitionChampionship(
 				p.slot_b_id,
 				p.map_script,
 				p.slot_b_id,
+				i + 1,
 			),
 		);
 	}

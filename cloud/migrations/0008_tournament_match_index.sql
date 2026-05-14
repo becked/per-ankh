@@ -1,0 +1,22 @@
+-- Add a deterministic, 1-based position for each match within its round.
+--
+-- Before this column, match order within a round was inferred from
+-- m.created_at, but rounds are batch-inserted with datetime('now') at
+-- seconds resolution → identical timestamps → SQLite ORDER BY returns
+-- rows in undefined order. Championship follow-up pairings consume
+-- prior-round matches by array index ([0] vs [1], [2] vs [3], ...), so
+-- non-deterministic read order can produce different semifinal/final
+-- brackets across reads of the same DB state.
+--
+-- Set at insert time by every code path that batch-inserts matches:
+--   * swiss round generation (admin.generateSwissRound)
+--   * championship round 1 (admin.handleTransitionChampionship)
+--   * championship follow-up (admin.generateChampionshipFollowup)
+--
+-- 1-based to match the existing match_index field in
+-- ChampionshipFollowupTemplate / buildChampionshipRound1.
+--
+-- Nullable for forward compatibility; loadMatches keeps m.created_at as
+-- a defensive tertiary sort key.
+
+ALTER TABLE tournament_matches ADD COLUMN match_index INTEGER;
