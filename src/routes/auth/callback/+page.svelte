@@ -8,9 +8,11 @@
 	type Status =
 		| { kind: "loading" }
 		| { kind: "success"; displayName: string }
-		| { kind: "error"; message: string };
+		| { kind: "error"; message: string; code: string | null };
 
 	let status = $state<Status>({ kind: "loading" });
+
+	const OW_DISCORD_INVITE_URL = "https://discord.com/invite/BNVpEgJ";
 
 	onMount(async () => {
 		const params = new URLSearchParams(window.location.search);
@@ -20,13 +22,14 @@
 
 		if (oauthError) {
 			const desc = params.get("error_description") ?? oauthError;
-			status = { kind: "error", message: `Discord: ${desc}` };
+			status = { kind: "error", message: `Discord: ${desc}`, code: null };
 			return;
 		}
 		if (!code || !state) {
 			status = {
 				kind: "error",
 				message: "Missing code or state in callback URL",
+				code: null,
 			};
 			return;
 		}
@@ -56,7 +59,8 @@
 					: err instanceof Error
 						? err.message
 						: "Login failed";
-			status = { kind: "error", message };
+			const code = err instanceof ApiError ? err.code : null;
+			status = { kind: "error", message, code };
 		}
 	});
 </script>
@@ -95,6 +99,16 @@
 					<p class="mt-2 break-words text-xs text-gray-400">
 						{status.message}
 					</p>
+					{#if status.code === "NOT_IN_GUILD"}
+						<a
+							href={OW_DISCORD_INVITE_URL}
+							target="_blank"
+							rel="noopener noreferrer"
+							class="mt-3 mr-2 inline-block rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange"
+						>
+							Join the Old World Discord
+						</a>
+					{/if}
 					<a
 						href={resolve("/")}
 						class="mt-3 inline-block rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange"

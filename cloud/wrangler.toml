@@ -85,8 +85,9 @@ ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
 DISCORD_CLIENT_ID = "1500901451034263604"
 # DISCORD_CLIENT_SECRET is set out-of-band:
 #   npx wrangler secret put DISCORD_CLIENT_SECRET
-# The closed-beta ALLOWED_DISCORD_USERNAMES gate was lifted with the
-# tournament launch — Discord OAuth is now open to any account. Rate
-# limits + the events-table audit log are the remaining brakes on abuse.
-# The remote secret can be deleted with:
-#   npx wrangler secret delete ALLOWED_DISCORD_USERNAMES
+# Login gate: callers must be a member of this Discord guild. Replaced the
+# closed-beta ALLOWED_DISCORD_USERNAMES allowlist with a coarser
+# membership check against the Old World community Discord
+# (https://discord.com/invite/BNVpEgJ). Enforced in handleDiscordCallback
+# via `guilds` scope + GET /users/@me/guilds.
+DISCORD_REQUIRED_GUILD_ID = "703016545953251379"

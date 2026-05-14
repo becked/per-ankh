@@ -38,12 +38,17 @@ export interface AuthEnv extends SessionEnv {
 	ALLOWED_ORIGINS: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
+	DISCORD_REQUIRED_GUILD_ID: string;
 }
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
 const DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token";
 const DISCORD_USER_URL = "https://discord.com/api/users/@me";
-const OAUTH_SCOPE = "identify email"; // identify = profile, email = user email
+const DISCORD_GUILDS_URL = "https://discord.com/api/users/@me/guilds";
+// `guilds` is required to read /users/@me/guilds for the OW-Discord
+// membership check in handleDiscordCallback.
+const OAUTH_SCOPE = "identify email guilds";
+const OW_DISCORD_INVITE_URL = "https://discord.com/invite/BNVpEgJ";
 const OAUTH_PENDING_COOKIE = "oauth_pending";
 const OAUTH_PENDING_TTL_SECONDS = 300; // 5 minutes
 
@@ -363,10 +368,44 @@ export async function handleDiscordCallback(
 		);
 	}
 
-	// Discord OAuth is open to any Discord account — the closed-beta
-	// allowlist was lifted ahead of the first public tournament. Rate
-	// limits + the events-table audit log are the remaining brake on
-	// account spam.
+	// Guild-membership gate. Replaces the lifted closed-beta username
+	// allowlist. Runs BEFORE the users-table upsert so rejected callers
+	// never create an orphan row. Pagination intentionally omitted: Discord
+	// returns up to 200 guilds on the first page, and a user in 200+
+	// guilds who can't reorder their list is a rare enough edge case to
+	// defer until it actually bites.
+	const guildsRes = await fetch(DISCORD_GUILDS_URL, {
+		headers: { Authorization: `Bearer ${tokenData.access_token}` },
+	});
+	if (!guildsRes.ok) {
+		const detail = await guildsRes.text().catch(() => "");
+		logError("discord_guilds_fetch_failed", null, {
+			discord_status: guildsRes.status,
+			discord_detail: detail.slice(0, 500),
+		});
+		return errorResponse(
+			"Discord guild check failed",
+			502,
+			cors,
+			"GUILDS_FETCH_FAILED",
+		);
+	}
+	const guilds = (await guildsRes.json()) as Array<{ id: string }>;
+	const inOwGuild = guilds.some(
+		(g) => g.id === env.DISCORD_REQUIRED_GUILD_ID,
+	);
+	if (!inOwGuild) {
+		logError("discord_guild_check_rejected", null, {
+			discord_id: discordUser.id,
+		});
+		return errorResponse(
+			`You need to join the Old World Discord to sign in: ${OW_DISCORD_INVITE_URL}`,
+			403,
+			cors,
+			"NOT_IN_GUILD",
+		);
+	}
+
 	const discordUsername = discordUser.username.toLowerCase();
 
 	const displayName = discordUser.global_name ?? discordUser.username;
