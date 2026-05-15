@@ -6,7 +6,7 @@
 
 import { randomBytes } from "node:crypto";
 
-import { confirmNuke } from "../../lib/confirm";
+import { confirmTyping } from "../../lib/confirm";
 import {
 	type Column,
 	emdash,
@@ -108,7 +108,7 @@ function printHelp(): void {
 			"  revoke-admin <tournament_id> <user_id>",
 			"                          Revoke per-tournament admin",
 			"  delete <id>             Delete tournament + all slots/rounds/matches",
-			"                          (Type 'nuke' to confirm. Cascades.)",
+			"                          (Type 'delete' to confirm. Cascades.)",
 			"",
 		].join("\n"),
 	);
@@ -180,10 +180,12 @@ async function runList(argv: string[], opts: CommandOpts): Promise<void> {
 	const limit = flagInt(flags, "limit", 50);
 	const status = flagString(flags, "status");
 	const allowedStatus = new Set(["setup", "swiss", "championship", "complete"]);
-	const where =
-		status && allowedStatus.has(status)
-			? `WHERE status = ${sqlStr(status)}`
-			: "";
+	if (status !== undefined && !allowedStatus.has(status)) {
+		throw new Error(
+			`unknown --status value: ${status} (expected one of: setup, swiss, championship, complete)`,
+		);
+	}
+	const where = status ? `WHERE status = ${sqlStr(status)}` : "";
 	const rows = await d1Query<{
 		tournament_id: string;
 		slug: string;
@@ -319,7 +321,7 @@ async function runShow(argv: string[], opts: CommandOpts): Promise<void> {
 
 async function runGrantAdmin(
 	argv: string[],
-	_opts: CommandOpts,
+	opts: CommandOpts,
 ): Promise<void> {
 	const { positional } = parseFlags(argv);
 	const tournamentId = positional[0];
@@ -344,12 +346,21 @@ async function runGrantAdmin(
 		VALUES (${sqlStr(tournamentId)}, ${sqlStr(userId)})
 		ON CONFLICT (tournament_id, user_id) DO NOTHING
 	`);
-	ok(`Granted admin: ${u[0].display_name} (${userId}) → ${tournamentId}`);
+	if (opts.json) {
+		printJson({
+			tournament_id: tournamentId,
+			user_id: userId,
+			display_name: u[0].display_name,
+			granted: true,
+		});
+	} else {
+		ok(`Granted admin: ${u[0].display_name} (${userId}) → ${tournamentId}`);
+	}
 }
 
 async function runRevokeAdmin(
 	argv: string[],
-	_opts: CommandOpts,
+	opts: CommandOpts,
 ): Promise<void> {
 	const { positional } = parseFlags(argv);
 	const tournamentId = positional[0];
@@ -363,7 +374,11 @@ async function runRevokeAdmin(
 		DELETE FROM tournament_admins
 		WHERE tournament_id = ${sqlStr(tournamentId)} AND user_id = ${sqlStr(userId)}
 	`);
-	ok(`Revoked admin: ${userId} from ${tournamentId}`);
+	if (opts.json) {
+		printJson({ tournament_id: tournamentId, user_id: userId, revoked: true });
+	} else {
+		ok(`Revoked admin: ${userId} from ${tournamentId}`);
+	}
 }
 
 async function runDelete(argv: string[], opts: CommandOpts): Promise<void> {
@@ -383,8 +398,9 @@ async function runDelete(argv: string[], opts: CommandOpts): Promise<void> {
 	const tournament = t[0];
 
 	if (!opts.yes) {
-		const confirmed = await confirmNuke(
+		const confirmed = await confirmTyping(
 			`This will delete tournament '${tournament.name}' (${tournament.status}) and ALL its slots, rounds, and matches. R2 game blobs are NOT deleted — only the tournament structure.`,
+			"delete",
 		);
 		if (!confirmed) {
 			info("Aborted.");
@@ -396,5 +412,13 @@ async function runDelete(argv: string[], opts: CommandOpts): Promise<void> {
 	await d1Exec(
 		`DELETE FROM tournaments WHERE tournament_id = ${sqlStr(tournamentId)}`,
 	);
-	ok(`Deleted tournament: ${tournament.name} (${tournamentId})`);
+	if (opts.json) {
+		printJson({
+			tournament_id: tournamentId,
+			name: tournament.name,
+			deleted: true,
+		});
+	} else {
+		ok(`Deleted tournament: ${tournament.name} (${tournamentId})`);
+	}
 }
