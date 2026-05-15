@@ -16,16 +16,25 @@ config). Every reported finding was then re-verified against the actual
 code by hand — false positives were dropped, agent claims were corrected
 where wrong, and items already in §Open work were removed to avoid noise.
 
-**Status as of 2026-05-14:**
+**Status as of 2026-05-15:**
 
 - **Authz + data-integrity bundle closed** in `56923f4` — items #1, #2,
-  #3, #4, #5, #7, #8, #10. All 5 Critical items are now resolved.
+  #3, #4, #5, #7, #8, #10. All 5 Critical items resolved.
 - **Integration test harness landed** in `f6e4ecc` — 39 tests under
   `cloud/test/integration/tournament/` exercise the closed items and
   pin them load-bearing. Closes the "handler-level integration coverage
   is absent" gap.
-- **Remaining open:** items #6, #9, #11–#19 (Important), #20–#32
-  (Nice-to-have). Per-item Status lines below mark what's closed.
+- **All remaining items closed** across seven follow-up commits:
+  - `#22` swiss_seed NOT NULL trigger migration
+  - `#6, #9, #14, #21, #23, #24, #25, #26` worker invariants + error
+    shape, with 9 new integration tests
+  - `#13, #14 UI, #15, #16, #18, #19, #31, #32` UI bug bundle
+  - `#17` bulk upload observer mode for 3+ humans
+  - `#11, #12, #30` client type narrowing + cloud typecheck script
+  - `#27, #28, #29` admin CLI polish
+  - `#20` real rematch-swap pairing test (verified load-bearing —
+    reverting the swap loop in `pairing.ts:170-189` fails the new test)
+  - Full cloud test suite: 100 tests passing.
 
 ## Critical
 

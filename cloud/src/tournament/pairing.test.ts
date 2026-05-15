@@ -89,40 +89,62 @@ describe("pairSwissRound — round 2+", () => {
 		expect(pairKeys).toContain(unorderedPair("C", "D"));
 	});
 
-	it("avoids rematches via in-bucket swap when possible", () => {
-		// 4 slots, all 1-0. A vs B was a rematch in round 1. Should pair
-		// A vs the OTHER winner (C or D) instead.
-		const slots = ["A", "B", "C", "D"].map((id, i) => slot(id, i + 1));
-		const priorMatches: MatchRef[] = [
-			match("m1", 1, "A", "B", "A"),
-			match("m2", 1, "C", "X", "C"),
-			match("m3", 1, "D", "Y", "D"),
-			match("m4", 1, "X", "Y", "X"), // filler so X,Y exist
+	it("avoids a forced rematch via in-bucket swap when both replacement pairings are fresh", () => {
+		// 8 slots play 2 rounds engineered so the (1-1) bucket in round 3
+		// contains A, B, C, D — with both default-pair candidates (A-C from
+		// round 1, B-D from round 1) being prior matches. The swap branch
+		// at pairing.ts:170-189 should produce A-D and B-C instead.
+		//
+		// E, F reach 2-0 and are advanced (excluded from round-3 pairing).
+		// P, Q reach 0-2 and are eliminated (also excluded).
+		const allSlots = [
+			slot("A", 1),
+			slot("B", 2),
+			slot("C", 3),
+			slot("D", 4),
+			slot("E", 5),
+			slot("F", 6),
+			slot("P", 7),
+			slot("Q", 8),
 		];
-		const allSlots = [...slots, slot("X", 5), slot("Y", 6)];
-		// Round 2: A, B, C, D all 1-0; X is 1-1, Y is 0-2.
-		// Actually fix priorMatches so all 4 are 1-0 and nobody else interferes.
-		const cleanPrior = [
-			match("p1", 1, "A", "B", "A"),
-			match("p2", 1, "C", "X", "C"),
-			match("p3", 1, "D", "Y", "D"),
-			match("p4", 1, "X", "Y", "X"),
+		const shortConfig: TournamentConfig = {
+			swiss_wins_to_advance: 2,
+			swiss_losses_to_eliminate: 2,
+			swiss_max_rounds: 4,
+		};
+		const prior: MatchRef[] = [
+			// Round 1: A beats C, B beats D — the rematches we'll avoid later.
+			match("r1m1", 1, "A", "C", "A"),
+			match("r1m2", 1, "B", "D", "B"),
+			match("r1m3", 1, "E", "P", "E"),
+			match("r1m4", 1, "F", "Q", "F"),
+			// Round 2: E beats A, F beats B (drops A/B to 1-1 alongside C/D);
+			// C beats P, D beats Q (lifts C/D to 1-1).
+			match("r2m1", 2, "E", "A", "E"),
+			match("r2m2", 2, "F", "B", "F"),
+			match("r2m3", 2, "C", "P", "C"),
+			match("r2m4", 2, "D", "Q", "D"),
 		];
-		// A=1-0, B=0-1, C=1-0, D=1-0, X=1-1, Y=0-2.
-		// Bucket (1,0): [A, C, D]. (0,1): [B], (1,1): [X], (0,2): [Y]
-		// Odd-sized (1,0) bucket → lowest floats down. Lowest in (1,0) by seed: D.
-		// D floats into (0,1) bucket → (0,1) has [B, D]. Pair B vs D.
-		// (1,0) now has [A, C]. Pair A vs C — but check rematch. A-C is fresh.
-		// (1,1): [X], odd → floats to (0,2). (0,2) has [Y, X]. Pair X vs Y? But X-Y is a rematch (round 1).
-		// One swap option in 2-bucket: none. So A-C: ok, B-D: ok, X-Y: rematch accepted.
-		const pairings = pairSwissRound(allSlots, cleanPrior, 2, CONFIG, "seed");
-		// Verify pairing count: 3 matches (6 slots / 2).
-		expect(pairings).toHaveLength(3);
-		// Verify A-B is NOT in the pairings (rematch avoidance from round 1).
+
+		const pairings = pairSwissRound(
+			allSlots,
+			prior,
+			3,
+			shortConfig,
+			"rematch-swap",
+		);
+
+		// 4 active slots → 2 pairings. (E/F advanced, P/Q eliminated.)
+		expect(pairings).toHaveLength(2);
 		const pairKeys = pairings.map((p) =>
 			unorderedPair(p.slot_a_id, p.slot_b_id),
 		);
-		expect(pairKeys).not.toContain(unorderedPair("A", "B"));
+		// Default seed-based pairing would produce A-C and B-D; both are
+		// prior matches. The swap branch should pick A-D and B-C instead.
+		expect(pairKeys).not.toContain(unorderedPair("A", "C"));
+		expect(pairKeys).not.toContain(unorderedPair("B", "D"));
+		expect(pairKeys).toContain(unorderedPair("A", "D"));
+		expect(pairKeys).toContain(unorderedPair("B", "C"));
 	});
 
 	it("gives a bye to lowest-ranked slot with no prior bye", () => {
