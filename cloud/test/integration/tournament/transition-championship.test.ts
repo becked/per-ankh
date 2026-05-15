@@ -217,4 +217,77 @@ describe("POST /v1/tournaments/:id/transition-championship", () => {
 			expect((await t.refresh()).status).toBe("championship");
 		});
 	});
+
+	describe("cascade-tie error shape (#25)", () => {
+		it("returns 409 with division, tied_slot_ids, ranked alongside the standard error/code", async () => {
+			// Engineer a cascade tie at the cutoff: 4 slots/div, 1 round, all
+			// matches won by slot_a. Winners (2) tie at rank 1; losers (2) tie
+			// at rank 3. With swiss_advance_count=3, ranked[2] and ranked[3]
+			// share rank 3 — collectTiedAtCutoff fires.
+			const t = await makeTournament({ slotsPerDivision: 4 });
+			await expectOk(
+				await request.patch({
+					path: `/v1/tournaments/${t.tournamentId}`,
+					as: t.admin,
+					body: {
+						swiss_wins_to_advance: 1,
+						swiss_losses_to_eliminate: 1,
+						swiss_max_rounds: 1,
+						swiss_advance_count: 3,
+					},
+				}),
+			);
+			await expectOk(
+				await request.post({
+					path: `/v1/tournaments/${t.tournamentId}/start-swiss`,
+					as: t.admin,
+				}),
+			);
+			for (const division of ["A", "B"] as const) {
+				const roundRes = await request.post({
+					path: `/v1/tournaments/${t.tournamentId}/rounds`,
+					as: t.admin,
+					body: { division },
+				});
+				const { round_id } = await expectOk<{ round_id: string }>(roundRes);
+				await expectOk(
+					await request.post({
+						path: `/v1/tournaments/${t.tournamentId}/rounds/${round_id}/start`,
+						as: t.admin,
+					}),
+				);
+			}
+			for (const m of await t.matches()) {
+				if (m.status === "bye") continue;
+				await expectOk(
+					await request.patch({
+						path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
+						as: t.admin,
+						body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					}),
+				);
+			}
+
+			const res = await request.post({
+				path: `/v1/tournaments/${t.tournamentId}/transition-championship`,
+				as: t.admin,
+			});
+			expect(res.status).toBe(409);
+			const body = (await res.json()) as Record<string, unknown>;
+			expect(body.code).toBe("CASCADE_TIE_AT_CUTOFF");
+			expect(body.error).toBe("Cascade tied at advance cutoff");
+			expect(["A", "B"]).toContain(body.division);
+			expect(Array.isArray(body.tied_slot_ids)).toBe(true);
+			expect((body.tied_slot_ids as string[]).length).toBeGreaterThan(0);
+			expect(Array.isArray(body.ranked)).toBe(true);
+			for (const r of body.ranked as Array<Record<string, unknown>>) {
+				expect(r).toHaveProperty("slot_id");
+				expect(r).toHaveProperty("rank");
+				expect(r).toHaveProperty("wins");
+				expect(r).toHaveProperty("losses");
+				expect(r).toHaveProperty("median_buchholz");
+				expect(r).toHaveProperty("solkoff");
+			}
+		});
+	});
 });

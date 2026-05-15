@@ -53,9 +53,12 @@ export async function handleMyMatches(
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
 	// Match by slot.user_id (after slot claim). Returns all matches a
-	// caller's slots have participated in, across all tournaments.
+	// caller's slots have participated in, across all tournaments. DISTINCT
+	// guards against an edge case where the caller owns both slots of one
+	// match — no DB constraint prevents that and the OR-join would
+	// otherwise return two rows for the same match.
 	const res = await env.SHARE_DB.prepare(
-		`SELECT m.match_id, m.round_id, m.slot_a_id, m.slot_b_id, m.map_script,
+		`SELECT DISTINCT m.match_id, m.round_id, m.slot_a_id, m.slot_b_id, m.map_script,
 		        m.status, m.winner_slot_id, m.game_id, m.reported_at,
 		        r.tournament_id, r.phase, r.division, r.round_number,
 		        r.status AS round_status,
@@ -82,6 +85,25 @@ export async function handleDismissBanner(
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+	// 404 when the user has no slot in the tournament — keeps the API
+	// consistent with the rest of the surface (every other endpoint that
+	// names a tournament_id returns 404 when the caller has nothing to act
+	// on). A second call after a successful dismiss is still 200 with
+	// dismissed: 0, which is idempotent-correct.
+	const slot = await env.SHARE_DB.prepare(
+		`SELECT 1 AS ok FROM tournament_slots
+		 WHERE tournament_id = ? AND user_id = ? LIMIT 1`,
+	)
+		.bind(tournamentId, session.data.user_id)
+		.first<{ ok: number }>();
+	if (!slot) {
+		return errorResponse(
+			"No slot in tournament for this user",
+			404,
+			cors,
+			"NO_SLOT_IN_TOURNAMENT",
+		);
 	}
 	const result = await env.SHARE_DB.prepare(
 		`UPDATE tournament_slots SET claim_banner_dismissed_at = datetime('now')

@@ -83,6 +83,40 @@ describe("GET /v1/users/me/matches", () => {
 		);
 	});
 
+	it("deduplicates when the caller owns both slots of a single match (#23)", async () => {
+		// No DB constraint prevents one user from claiming both slots of a
+		// match (an admin error, but reachable). The OR-join in handleMyMatches
+		// would produce two rows for the same match; SELECT DISTINCT guards
+		// against that. Construct the edge case by direct UPDATE.
+		const dupOwner = await makeUser({ discordUsername: "owns-both-slots" });
+		const t = await makeTournament({
+			slotsPerDivision: 4,
+			advanceTo: "swiss-round-1-generated",
+		});
+		const match = (await t.matches()).find(
+			(m) => m.slot_b_id !== null && m.status === "pending",
+		);
+		expect(match).toBeDefined();
+		if (!match || !match.slot_b_id) return;
+		await env.SHARE_DB.prepare(
+			`UPDATE tournament_slots SET user_id = ? WHERE slot_id IN (?, ?)`,
+		)
+			.bind(dupOwner.userId, match.slot_a_id, match.slot_b_id)
+			.run();
+
+		const res = await request.get({
+			path: "/v1/users/me/matches",
+			as: dupOwner,
+		});
+		const body = await expectOk<{
+			matches: Array<Record<string, unknown>>;
+		}>(res);
+		const ownedRows = body.matches.filter(
+			(m) => m.match_id === match.match_id,
+		);
+		expect(ownedRows).toHaveLength(1);
+	});
+
 	it("exposes exactly the fields handleMyMatches selects (no more, no less)", async () => {
 		const player = await makeUser({ discordUsername: "shape-check-player" });
 		await makeTournament({

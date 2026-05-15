@@ -137,6 +137,71 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 		});
 	});
 
+	describe("status ↔ winner_slot_id coupling (#14)", () => {
+		it("rejects status='pending' with an explicit non-null winner_slot_id", async () => {
+			const t = await makeTournament({
+				advanceTo: "swiss-round-1-generated",
+			});
+			const m = await firstPendingMatchOf(t);
+
+			const res = await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
+				as: t.admin,
+				body: { winner_slot_id: m.slot_a_id, status: "pending" },
+			});
+
+			await expectErrorCode(res, {
+				status: 400,
+				code: "WINNER_REQUIRES_NON_PENDING_STATUS",
+			});
+		});
+
+		it("forces winner_slot_id to null when patching status to 'pending' without an explicit winner", async () => {
+			// Start with a reported match; admin sends only { status: 'pending' }.
+			// The server-side invariant should clear winner_slot_id automatically
+			// rather than leave the row in a status=pending + winner_set state.
+			const t = await makeTournament({
+				advanceTo: "swiss-round-1-reported",
+			});
+			const reported = (await t.matches()).find(
+				(row) => row.status === "reported",
+			);
+			expect(reported).toBeDefined();
+			if (!reported) return;
+			expect(reported.winner_slot_id).not.toBeNull();
+
+			const res = await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/matches/${reported.match_id}`,
+				as: t.admin,
+				body: { status: "pending" },
+			});
+
+			const body = await expectOk<{
+				match: { winner_slot_id: string | null; status: string };
+			}>(res);
+			expect(body.match.status).toBe("pending");
+			expect(body.match.winner_slot_id).toBeNull();
+		});
+
+		it("rejects status='reported' with an explicit null winner_slot_id", async () => {
+			const t = await makeTournament({
+				advanceTo: "swiss-round-1-generated",
+			});
+			const m = await firstPendingMatchOf(t);
+
+			const res = await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
+				as: t.admin,
+				body: { winner_slot_id: null, status: "reported" },
+			});
+
+			await expectErrorCode(res, {
+				status: 400,
+				code: "WINNER_REQUIRED_FOR_STATUS",
+			});
+		});
+	});
+
 	describe("cross-tournament authz", () => {
 		it("returns 404 for a match in a different tournament", async () => {
 			const a = await makeTournament({

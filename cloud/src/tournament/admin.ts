@@ -40,6 +40,7 @@ import {
 	loadSlotInTournament,
 	loadSlots,
 	loadTournamentById,
+	MapConfigError,
 	matchRowToRef,
 	parseAllowedMaps,
 	slotRowToRef,
@@ -128,6 +129,28 @@ async function parseJsonBody<T>(
 		};
 	}
 	return { ok: true, body: result.output };
+}
+
+// Wrap parseAllowedMaps so the corrupted-config case becomes an explicit
+// 500 with MAP_CONFIG_INVALID rather than propagating into assignMap as a
+// misleading "allowedMaps must be non-empty" 500. Reachable only via
+// direct-DB tampering — the write paths (PATCH schema + CLI create) both
+// enforce a non-empty string array.
+function parseAllowedMapsOrError(
+	tournament: TournamentRow,
+	cors: Record<string, string>,
+): { ok: true; maps: string[] } | { ok: false; response: Response } {
+	try {
+		return { ok: true, maps: parseAllowedMaps(tournament) };
+	} catch (e) {
+		if (e instanceof MapConfigError) {
+			return {
+				ok: false,
+				response: errorResponse(e.message, 500, cors, "MAP_CONFIG_INVALID"),
+			};
+		}
+		throw e;
+	}
 }
 
 // ----------------------------------------------------------------------
@@ -270,9 +293,6 @@ export async function handleBulkCreateSlots(
 				 VALUES (?, ?, 'swiss', ?, ?, ?)`,
 			).bind(slotId, tournamentId, s.division, seed, s.discord_username),
 		);
-		if (s.swiss_seed === undefined) {
-			// keep nextSeedByDiv consistent for subsequent auto-allocations
-		}
 		created.push({ slot_id: slotId, division: s.division, swiss_seed: seed });
 	}
 	statements.push(
@@ -449,6 +469,21 @@ export async function handleStartSwiss(
 			"INSUFFICIENT_PLAYERS",
 		);
 	}
+	// Fail-fast: advance_count > smaller division's size is unrecoverable.
+	// Without this, the tournament starts, plays through Swiss, and only
+	// hits INSUFFICIENT_ADVANCERS at transition-championship time. The
+	// bound is min(divA, divB) (not /2) — computeStandings ranks every
+	// slot regardless of active/eliminated status, so eliminations don't
+	// shrink the candidate pool.
+	const smallerDiv = Math.min(divA, divB);
+	if (advanceCount > smallerDiv) {
+		return errorResponse(
+			`swiss_advance_count (${advanceCount}) exceeds smaller division's size (${smallerDiv})`,
+			409,
+			cors,
+			"ADVANCE_COUNT_TOO_LARGE",
+		);
+	}
 	await env.SHARE_DB.prepare(
 		`UPDATE tournaments SET status = 'swiss', swiss_advance_count = ?, updated_at = datetime('now')
 		 WHERE tournament_id = ?`,
@@ -555,7 +590,9 @@ async function generateSwissRound(
 		seed,
 	);
 
-	const allowedMaps = parseAllowedMaps(tournament);
+	const mapsResult = parseAllowedMapsOrError(tournament, cors);
+	if (!mapsResult.ok) return mapsResult.response;
+	const allowedMaps = mapsResult.maps;
 	const withMaps = assignMapsToPairings(
 		pairings,
 		allowedMaps,
@@ -686,7 +723,9 @@ async function generateChampionshipFollowup(
 		tournament.tournament_id,
 		allMatches,
 	);
-	const allowedMaps = parseAllowedMaps(tournament);
+	const mapsResult = parseAllowedMapsOrError(tournament, cors);
+	if (!mapsResult.ok) return mapsResult.response;
+	const allowedMaps = mapsResult.maps;
 	const seed = `${tournament.tournament_id}|championship|r${nextRoundNumber}`;
 	const withMaps = assignMapsToPairings(pairings, allowedMaps, matchRefs, seed);
 
@@ -939,6 +978,38 @@ export async function handleRetroEditMatch(
 		}
 	}
 
+	// Status ↔ winner_slot_id invariant. status='pending' forbids a winner;
+	// 'reported'/'forfeit' require one. Validated against the post-patch
+	// state so callers may patch either field independently. The UI always
+	// sends both, but we don't trust that.
+	if (patch.status === "pending") {
+		if (patch.winner_slot_id != null) {
+			return errorResponse(
+				"winner_slot_id must be null when status is 'pending'",
+				400,
+				cors,
+				"WINNER_REQUIRES_NON_PENDING_STATUS",
+			);
+		}
+		// Force-clear in case patch.winner_slot_id was absent. Mutates patch
+		// so the existing UPDATE loop emits SET winner_slot_id = NULL.
+		patch.winner_slot_id = null;
+	}
+	const postStatus = patch.status ?? match.status;
+	const postWinner =
+		"winner_slot_id" in patch ? patch.winner_slot_id : match.winner_slot_id;
+	if (
+		(postStatus === "reported" || postStatus === "forfeit") &&
+		postWinner == null
+	) {
+		return errorResponse(
+			"winner_slot_id is required when status is 'reported' or 'forfeit'",
+			400,
+			cors,
+			"WINNER_REQUIRED_FOR_STATUS",
+		);
+	}
+
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
 	for (const [key, value] of Object.entries(patch)) {
@@ -1109,10 +1180,12 @@ export async function handleTransitionChampionship(
 		}
 		const tied = collectTiedAtCutoff(ranked, cutoff);
 		if (tied.length > 0) {
-			return jsonResponse(
+			return errorResponse(
+				"Cascade tied at advance cutoff",
+				409,
+				cors,
+				"CASCADE_TIE_AT_CUTOFF",
 				{
-					error: "Cascade tied at advance cutoff",
-					code: "CASCADE_TIE_AT_CUTOFF",
 					division,
 					tied_slot_ids: tied,
 					ranked: ranked.map((r) => ({
@@ -1124,8 +1197,6 @@ export async function handleTransitionChampionship(
 						solkoff: r.solkoff,
 					})),
 				},
-				409,
-				cors,
 			);
 		}
 		advancersByDiv[division] = ranked.slice(0, cutoff).map((r) => r.slot_id);
@@ -1184,7 +1255,9 @@ export async function handleTransitionChampionship(
 		).bind(roundId, tournamentId),
 	);
 
-	const allowedMaps = parseAllowedMaps(tournament);
+	const mapsResult = parseAllowedMapsOrError(tournament, cors);
+	if (!mapsResult.ok) return mapsResult.response;
+	const allowedMaps = mapsResult.maps;
 	const matchPairings: Pairing[] = round1Templates.map((t) => ({
 		slot_a_id: championshipSlotIds[t.seed_a]!,
 		slot_b_id: championshipSlotIds[t.seed_b]!,

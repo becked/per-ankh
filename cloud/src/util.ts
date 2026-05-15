@@ -100,6 +100,7 @@ export function errorResponse(
 	status: number,
 	cors: Record<string, string>,
 	code?: string,
+	extra?: Record<string, unknown>,
 ): Response {
 	// Surface the error code on the request-scoped log context so the
 	// access-log envelope picks it up automatically — handlers don't have
@@ -107,6 +108,7 @@ export function errorResponse(
 	if (code) setErrorCode(code);
 	const body: Record<string, unknown> = { error: message };
 	if (code) body.code = code;
+	if (extra) Object.assign(body, extra);
 	return jsonResponse(body, status, cors);
 }
 

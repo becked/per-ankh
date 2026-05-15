@@ -5,7 +5,7 @@
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
-import { expectOk } from "../../helpers/assertions";
+import { expectErrorCode, expectOk } from "../../helpers/assertions";
 import { makeTournament, makeUser } from "../../helpers/builders";
 import { request } from "../../helpers/requests";
 
@@ -165,6 +165,30 @@ describe("tournament flow", () => {
 			expect(bye.slot_b_id).toBeNull();
 			expect(bye.winner_slot_id).toBe(bye.slot_a_id);
 		}
+	});
+
+	it("rejects start-swiss when swiss_advance_count exceeds the smaller division's size (#9)", async () => {
+		// Override swiss_advance_count to 5 while only 4 slots per division
+		// exist. start-swiss must reject up-front rather than letting the
+		// tournament run to completion and then fail at transition.
+		const t = await makeTournament({ slotsPerDivision: 4 });
+		await expectOk(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}`,
+				as: t.admin,
+				body: { swiss_advance_count: 5 },
+			}),
+		);
+
+		const res = await request.post({
+			path: `/v1/tournaments/${t.tournamentId}/start-swiss`,
+			as: t.admin,
+		});
+
+		await expectErrorCode(res, {
+			status: 409,
+			code: "ADVANCE_COUNT_TOO_LARGE",
+		});
 	});
 
 	it("returns the caller's pending matches across multiple tournaments via /v1/users/me/matches", async () => {

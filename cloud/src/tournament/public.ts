@@ -2,6 +2,7 @@
 
 import { sessionFromRequest } from "../session";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
+import { isTournamentAdmin } from "./authz";
 import {
 	loadMatch,
 	loadMatches,
@@ -9,6 +10,7 @@ import {
 	loadSlots,
 	loadTournamentById,
 	loadTournamentBySlug,
+	MapConfigError,
 	matchRowToRef,
 	parseAllowedMaps,
 	slotRowToRef,
@@ -103,14 +105,21 @@ export async function handleTournamentDetail(
 	// is_viewer_admin lets the frontend show observer-upload affordances
 	// without a second round-trip. Anonymous callers always see false.
 	const session = await sessionFromRequest(env, request);
-	let is_viewer_admin = false;
-	if (session) {
-		const adminRow = await env.SHARE_DB.prepare(
-			"SELECT 1 AS ok FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
-		)
-			.bind(tournament.tournament_id, session.data.user_id)
-			.first<{ ok: number }>();
-		is_viewer_admin = adminRow !== null;
+	const is_viewer_admin = await isTournamentAdmin(
+		env,
+		session?.data ?? null,
+		tournament.tournament_id,
+	);
+	// Public-read leniency: render the tournament detail even if the maps
+	// JSON is corrupted (admins will see the failure surface via round
+	// generation; no need to break the public-facing page). Admin write
+	// paths still throw MAP_CONFIG_INVALID via parseAllowedMapsOrError.
+	let allowed_map_scripts: string[];
+	try {
+		allowed_map_scripts = parseAllowedMaps(tournament);
+	} catch (e) {
+		if (!(e instanceof MapConfigError)) throw e;
+		allowed_map_scripts = [];
 	}
 	return jsonResponse(
 		{
@@ -125,7 +134,7 @@ export async function handleTournamentDetail(
 			swiss_wins_to_advance: tournament.swiss_wins_to_advance,
 			swiss_losses_to_eliminate: tournament.swiss_losses_to_eliminate,
 			swiss_max_rounds: tournament.swiss_max_rounds,
-			allowed_map_scripts: parseAllowedMaps(tournament),
+			allowed_map_scripts,
 			slot_counts: {
 				swiss: counts["swiss"] ?? 0,
 				championship: counts["championship"] ?? 0,
