@@ -23,10 +23,10 @@
 			await cloudApi.dismissTournamentBanner(tournamentId);
 		} catch {
 			// Server-side dismiss failed but the in-memory store already hides
-			// it for this session; the banner will reappear on next hard
-			// reload. Acceptable degraded state — no retry surface for the
-			// user. Errors are intentionally swallowed; the operation is
-			// purely cosmetic.
+			// it for this session; the banner will reappear on next navigation
+			// (invalidateAll re-fetches /users/me/tournaments and repopulates).
+			// Acceptable degraded state — no retry surface for the user. Errors
+			// are intentionally swallowed; the operation is purely cosmetic.
 		}
 	}
 </script>

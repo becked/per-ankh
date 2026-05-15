@@ -39,21 +39,13 @@
 	style="background-color: #35302B;"
 >
 	<div class="grid grid-cols-1 gap-px lg:grid-cols-2" style="background-color: #2a2622;">
-		<div
-			class="p-3"
-			style="background-color: #35302B;"
-			class:bg-opacity-100={match.winner_slot_id === match.slot_a_id}
-		>
+		<div class="p-3" style="background-color: #35302B;">
 			<p class="truncate text-sm font-bold text-tan">{slotALabel}</p>
 			{#if match.winner_slot_id === match.slot_a_id}
 				<p class="mt-1 text-xs text-orange">Winner</p>
 			{/if}
 		</div>
-		<div
-			class="p-3"
-			style="background-color: #35302B;"
-			class:bg-opacity-100={match.winner_slot_id === match.slot_b_id}
-		>
+		<div class="p-3" style="background-color: #35302B;">
 			<p class="truncate text-sm font-bold text-tan">
 				{slotBLabel}
 			</p>

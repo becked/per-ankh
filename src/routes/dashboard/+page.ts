@@ -10,13 +10,28 @@ import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ fetch, url }) => {
 	try {
+		// Tournament fetches degrade gracefully when the feature is unused —
+		// catch swallows their errors so a tournament-table outage doesn't
+		// break the dashboard. Re-throw UnauthorizedError so the outer
+		// redirect still fires; otherwise we'd silently mask auth failures if
+		// the other fetches ever stop throwing 401.
+		const swallowExceptAuth =
+			<T,>(fallback: T) =>
+			(err: unknown): T => {
+				if (err instanceof UnauthorizedError) throw err;
+				return fallback;
+			};
 		const [stats, gamesRes, collectionsRes, myTournamentsRes, myMatchesRes] =
 			await Promise.all([
 				cloudApi.getStats({ fetch }),
 				cloudApi.listGames({ fetch }),
 				cloudApi.listCollections({ fetch }),
-				cloudApi.getMyTournaments({ fetch }).catch(() => ({ tournaments: [] })),
-				cloudApi.getMyMatches({ fetch }).catch(() => ({ matches: [] })),
+				cloudApi
+					.getMyTournaments({ fetch })
+					.catch(swallowExceptAuth({ tournaments: [] })),
+				cloudApi
+					.getMyMatches({ fetch })
+					.catch(swallowExceptAuth({ matches: [] })),
 			]);
 		return {
 			stats,

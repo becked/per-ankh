@@ -97,6 +97,12 @@ export const GenerateRoundSchema = v.object({
 // (b) silently drop the displaced slot from the round. Admins who need
 // to mark a real match as a bye should retro-edit status='bye' with
 // both slots still present.
+//
+// map_script is NOT nullable either: match generation always assigns one
+// for non-bye matches (assignMap throws on empty input), and the admin
+// pairing-edit UI is for replacing the map, not removing it. Byes carry
+// map_script=null because the bye row is INSERTed with null at round
+// generation — there's no post-hoc clear path.
 export const PatchPairingSchema = v.object({
 	slot_a_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
 	slot_b_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),

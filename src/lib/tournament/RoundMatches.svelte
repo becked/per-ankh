@@ -166,7 +166,8 @@
 							value={retroWinnerSlotId}
 							onchange={(e) =>
 								onRetroWinner((e.target as HTMLSelectElement).value || null)}
-							class="mt-1 block rounded border border-black bg-[#35302b] p-1 text-xs text-tan"
+							disabled={retroStatus === "pending"}
+							class="mt-1 block rounded border border-black bg-[#35302b] p-1 text-xs text-tan disabled:opacity-50"
 						>
 							<option value={match.slot_a_id}
 								>{slotLabel(match.slot_a_id)}</option

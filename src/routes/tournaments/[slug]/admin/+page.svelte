@@ -17,44 +17,25 @@
 	let busy = $state(false);
 	let banner = $state<{ kind: "ok" | "err"; message: string } | null>(null);
 
-	// Slot identity lookup so we can show usernames against slot_ids.
+	// Slot identity lookup — slot_id → discord_username (or null if
+	// unclaimed). Only consumed by slotLabel; the W-L column reads from
+	// data.standings directly via swissSlotRows.
 	const slotInfo = $derived.by(() => {
-		const out: Record<
-			string,
-			{
-				username: string | null;
-				user_id: string | null;
-				division: Division | null;
-				phase: "swiss" | "championship";
-				swiss_seed: number | null;
-			}
-		> = {};
+		const out: Record<string, string | null> = {};
 		for (const div of ["A", "B"] as const) {
 			for (const s of data.standings.divisions[div].standings) {
-				out[s.slot_id] = {
-					username: s.discord_username,
-					user_id: s.user_id,
-					division: div,
-					phase: "swiss",
-					swiss_seed: null,
-				};
+				out[s.slot_id] = s.discord_username;
 			}
 		}
 		for (const s of data.bracket.slots) {
-			out[s.slot_id] = {
-				username: s.discord_username,
-				user_id: s.user_id,
-				division: null,
-				phase: "championship",
-				swiss_seed: null,
-			};
+			out[s.slot_id] = s.discord_username;
 		}
 		return out;
 	});
 
 	function slotLabel(slotId: string | null): string {
 		if (!slotId) return "BYE";
-		return slotInfo[slotId]?.username ?? `slot ${slotId.slice(0, 6)}`;
+		return slotInfo[slotId] ?? `slot ${slotId.slice(0, 6)}`;
 	}
 
 	function swissSlotRows(division: Division) {
@@ -473,7 +454,10 @@
 										type="button"
 										class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 										onclick={saveSettings}
-										disabled={busy}
+										disabled={busy ||
+											!editName.trim() ||
+											!editDivAName.trim() ||
+											!editDivBName.trim()}
 									>
 										Save
 									</button>
@@ -732,7 +716,10 @@
 													onSaveRetroEdit={saveRetroEdit}
 													onCancelRetroEdit={() => (retroEditMatchId = null)}
 													onRetroWinner={(v) => (retroWinnerSlotId = v)}
-													onRetroStatus={(v) => (retroStatus = v)}
+													onRetroStatus={(v) => {
+														retroStatus = v;
+														if (v === "pending") retroWinnerSlotId = null;
+													}}
 												/>
 											</div>
 										{/each}
