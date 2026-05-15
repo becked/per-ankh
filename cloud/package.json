@@ -8,7 +8,8 @@
 		"migrate:local": "wrangler d1 migrations apply per-ankh-share-index --local",
 		"migrate:remote": "wrangler d1 migrations apply per-ankh-share-index --remote",
 		"test": "vitest run",
-		"test:watch": "vitest"
+		"test:watch": "vitest",
+		"typecheck": "tsc --noEmit"
 	},
 	"dependencies": {
 		"nanoid": "^5.0.0",

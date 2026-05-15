@@ -419,7 +419,12 @@ export const cloudApi = {
 
 	getTournamentMatches: async (
 		tournamentId: string,
-		params: { round_id?: string; phase?: string; division?: string } = {},
+		params: {
+			round_id?: string;
+			phase?: string;
+			division?: string;
+			slot_id?: string;
+		} = {},
 		opts?: CallOpts,
 	): Promise<{ tournament_id: string; matches: TournamentMatch[] }> => {
 		const qs = new URLSearchParams();
@@ -484,7 +489,7 @@ export const cloudApi = {
 	// --- Tournaments (per-tournament admin) ---
 	patchTournament: async (
 		tournamentId: string,
-		body: Partial<TournamentDetail>,
+		body: PatchTournamentBody,
 		opts?: CallOpts,
 	): Promise<{ tournament: TournamentDetail }> => {
 		const res = await request(`/tournaments/${tournamentId}`, {
@@ -712,6 +717,24 @@ export interface TournamentDetail {
 	is_viewer_admin: boolean;
 	created_at: string;
 	updated_at: string;
+}
+
+// Mirrors cloud/src/schemas/tournament.ts:PatchTournamentSchema. Narrower
+// than Partial<TournamentDetail> on purpose: PATCH only accepts
+// metadata/config edits, not the derived fields (slot_counts,
+// is_viewer_admin) or immutable fields (tournament_id, slug, created_at).
+// Valibot strips unknown keys server-side anyway, so this is type-hygiene
+// rather than a security boundary.
+export interface PatchTournamentBody {
+	name?: string;
+	description?: string | null;
+	division_a_name?: string;
+	division_b_name?: string;
+	swiss_advance_count?: number;
+	swiss_wins_to_advance?: number;
+	swiss_losses_to_eliminate?: number;
+	swiss_max_rounds?: number;
+	allowed_map_scripts?: string[];
 }
 
 export interface SlotStanding {
