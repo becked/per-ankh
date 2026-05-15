@@ -123,6 +123,10 @@ status, winner_slot_id, game_id, reported_at`. Fields
 
 ### 6. Inline `tournament_admins` SQL in a third site
 
+**Status:** Fixed in `2303253`. `handleTournamentDetail` calls
+`isTournamentAdmin()` from `./authz` directly (the helper already
+handles null sessions). Pure refactor — no test added.
+
 The implementation notes call out `cloud/src/games.ts:894-901`. A third
 copy lives at `cloud/src/tournament/public.ts:108-113` (the
 `is_viewer_admin` check). Should funnel through `isTournamentAdmin()`
@@ -157,6 +161,13 @@ against a stranger.
 
 ### 9. `handleStartSwiss` doesn't bound `swiss_advance_count` by division size
 
+**Status:** Fixed in `2303253`. Bound is `<= min(divA, divB)`, not the
+reviewer's `floor(.../2)` — eliminations don't shrink the ranked pool
+because `computeStandings` ranks every slot regardless of
+active/eliminated status, so the cap is just the per-division size.
+Test: `flow.test.ts` › "rejects start-swiss when swiss_advance_count
+exceeds the smaller division's size (#9)".
+
 `cloud/src/tournament/admin.ts:441-450` only checks `advanceCount < 1`.
 An admin who sets `swiss_advance_count=8` in setup with `divA=4`/`divB=4`
 will start swiss, play 3 rounds, then hit `INSUFFICIENT_ADVANCERS` at
@@ -182,6 +193,11 @@ to this tournament, and matches the named division.
 
 ### 11. `patchTournament` body type is `Partial<TournamentDetail>`
 
+**Status:** Fixed in `5c73729`. New `PatchTournamentBody` interface
+mirrors `PatchTournamentSchema` field-for-field. Type-hygiene only —
+Valibot's `v.object` strips unknown keys server-side, so this is not a
+security boundary. No runtime test (pure type change).
+
 `src/lib/api-cloud.ts:486-499`. TypeScript happily lets callers pass
 `is_viewer_admin`, `slot_counts`, `tournament_id`, `slug`, `created_at`,
 `updated_at` — none of which the PATCH endpoint accepts. Define a
@@ -189,11 +205,21 @@ dedicated `PatchTournamentBody` shape.
 
 ### 12. `getTournamentMatches` client type omits `slot_id` param
 
+**Status:** Fixed in `5c73729`. `slot_id?: string` added to the params
+type.
+
 `src/lib/api-cloud.ts:420-436`. The worker
 (`cloud/src/tournament/public.ts:328`) reads it. Either add to the type
 or document the omission.
 
 ### 13. `pairingMapInput || undefined` can't clear an existing pairing's map
+
+**Status:** Closed as intentional in `dab2251`. `PatchPairingSchema`
+comment now documents the rationale: match generation always assigns
+a map for non-bye matches (`assignMap` throws on empty input), so
+admins can replace but not null. Byes carry `map_script=null` because
+the row is INSERTed with null at round generation; there's no post-hoc
+clear path. No code change.
 
 `src/routes/tournaments/[slug]/admin/+page.svelte:316`. Empty input
 sends `{}` (field omitted); the worker treats that as "no change".
@@ -204,6 +230,17 @@ both schema (accept null) and the frontend payload.
 
 ### 14. Retro-edit winner picker has no null option
 
+**Status:** Fixed in `2303253` (server invariant) + `dab2251` (UI
+coupling). Server: status='pending' rejects an explicit non-null winner
+and force-clears `winner_slot_id` on the row; status='reported'/
+'forfeit' require a non-null winner against the post-patch state. UI:
+selecting status='pending' auto-clears `retroWinnerSlotId` and
+disables the `<select>`, so the body always matches the invariant.
+Tests: `retro-edit.test.ts` › "rejects status='pending' with an
+explicit non-null winner_slot_id", "forces winner_slot_id to null when
+patching status to 'pending' without an explicit winner", "rejects
+status='reported' with an explicit null winner_slot_id".
+
 `src/lib/tournament/RoundMatches.svelte:165-179`. The `<select>` only
 offers slot_a and slot_b. Setting `status='pending'` should send
 `winner_slot_id=null`, but the picker has no way to express that —
@@ -211,6 +248,10 @@ offers slot_a and slot_b. Setting `status='pending'` should send
 ships whichever slot was last selected.
 
 ### 15. `MatchCard` winner highlight is a no-op
+
+**Status:** Fixed in `dab2251`. Dead `class:bg-opacity-100` toggles
+deleted from both cells. The "Winner" text label + bold name remain
+the visual cue (sufficient for the use case).
 
 `src/lib/tournament/MatchCard.svelte:45,55`. `class:bg-opacity-100={...}`
 toggles a Tailwind utility that requires a Tailwind bg class, but the
@@ -220,12 +261,24 @@ so the visual still works.)
 
 ### 16. `saveSettings` lets you submit an empty name
 
+**Status:** Fixed in `dab2251`. Save button now disabled when any of
+`editName.trim()`, `editDivAName.trim()`, `editDivBName.trim()` is
+empty.
+
 `src/routes/tournaments/[slug]/admin/+page.svelte:148-167`. No
 client-side validation; relies on worker rejection. Trivial fix:
 `disabled={busy || !editName.trim() || !editDivAName.trim() ||
 !editDivBName.trim()}` on the Save button.
 
 ### 17. BulkUploadModal observer mode silently auto-picks slot B on 3+-human saves
+
+**Status:** Fixed in `cf3d8c1`. `selectSlotAPlayer` only auto-fills
+`slotBPlayerIndex` when `humans.length === 2`; any other count leaves
+it null, so `rowReadyToUpload` returns false and the Upload button
+stays disabled. The observer-mode error banner now renders
+unconditionally on `humans.length !== 2`, so 3+-human saves surface
+the warning instead of silently picking a stranger. No integration
+test (UI-only); server-side `WRONG_HUMAN_COUNT` is the safety net.
 
 `src/lib/BulkUploadModal.svelte:234-238` uses `find()` for "the other
 human" — for 3+ humans it grabs the first one. The error banner at
@@ -236,12 +289,22 @@ you waste an upload.
 
 ### 18. `slotInfo` in admin/+page.svelte builds 4 unused fields per slot
 
+**Status:** Fixed in `dab2251`. Trimmed to
+`Record<string, string | null>` mapping slot_id → username. Verified
+the W-L column reads from `data.standings` directly via
+`swissSlotRows`, not from slotInfo.
+
 `src/routes/tournaments/[slug]/admin/+page.svelte:21-53`. Only
 `username` is consumed (via `slotLabel`). `swiss_seed` is hardcoded to
 `null` and never read. Either trim to a `Record<string, string>` or
 actually populate `swiss_seed`.
 
 ### 19. `SlotUsernameCell` UX rough edges
+
+**Status:** Fixed in `dab2251`. Autofocus via new
+`$lib/actions/autofocus.ts` action (selects existing value too);
+Enter saves; Esc cancels; empty input shows an inline red error
+"Username cannot be empty" instead of silently exiting edit mode.
 
 `src/lib/tournament/SlotUsernameCell.svelte`:
 
@@ -253,6 +316,13 @@ actually populate `swiss_seed`.
 
 ### 20. Pairing test claims to exercise rematch swap but doesn't
 
+**Status:** Fixed in `400a603`. Replaced with an 8-slot, 2-round
+scenario that forces A, B, C, D into the same (1-1) bucket in round 3
+with both default-pair candidates (A-C, B-D) being prior matches.
+The swap branch produces A-D and B-C. Verified load-bearing:
+temporarily commenting out the swap loop at `pairing.ts:170-189` fails
+the new test with `expected ['A|C', 'B|D'] to not include 'A|C'`.
+
 `cloud/src/tournament/pairing.test.ts:92-126`. After round 1
 A=(1,0) B=(0,1) end up in different buckets, so the assertion
 `not.toContain(unorderedPair("A", "B"))` is trivially true regardless
@@ -263,6 +333,15 @@ forced rematch is avoidable via swap.
 
 ### 21. `parseAllowedMaps` returns `[]` on parse failure; downstream throws a 500
 
+**Status:** Fixed in `2303253`. `parseAllowedMaps` now throws
+`MapConfigError` on bad JSON, wrong shape, or empty array. The three
+admin call sites (generateSwissRound, generateChampionshipFollowup,
+handleTransitionChampionship) wrap via a `parseAllowedMapsOrError`
+helper and surface a 500 `MAP_CONFIG_INVALID` with a clear message.
+The public read path (`handleTournamentDetail`) stays lenient — catches
+and returns `[]` so a corrupted-tournament public view still loads.
+Reachable only via direct-DB tampering; no runtime test.
+
 `cloud/src/tournament/data.ts:222-232` swallows JSON errors and returns
 `[]`. Three callers (`admin.ts:557,684,1061`) hand the result to
 `assignMap`, which throws `"allowedMaps must be non-empty"`
@@ -272,6 +351,18 @@ forced rematch is avoidable via swap.
 
 ### 22. `compareForPairing` null `swiss_seed` fallback to 0
 
+**Status:** Fixed in `aeaea48`. Migration 0009 adds two triggers
+(BEFORE INSERT and BEFORE UPDATE OF swiss_seed,phase) on
+`tournament_slots` that fail with `swiss_seed required for swiss-phase
+slots` if any swiss-phase row tries to set NULL. Triggers chosen over
+the create-new-table-copy-drop-rename pattern to avoid PRAGMA
+foreign_keys juggling around the four `tournament_matches` FK
+references back into `tournament_slots`. No code path writes NULL
+today, so the migration formalises an existing invariant; the
+`?? 0` fallback in `compareForPairing` is now provably dead for
+swiss-phase slots (kept for type-shape uniformity since championship
+slots still have NULL swiss_seed).
+
 `cloud/src/tournament/pairing.ts:121`. Schema allows null for
 swiss-phase slots (`cloud/migrations/0006_tournaments.sql:93`); tests
 always set sequential seeds. Untested branch. Consider making
@@ -279,16 +370,39 @@ always set sequential seeds. Untested branch. Consider making
 
 ### 23. `handleMyMatches` JOIN with `OR` can duplicate rows
 
+**Status:** Fixed in `2303253`. `SELECT DISTINCT` added. Test:
+`my-matches.test.ts` › "deduplicates when the caller owns both slots
+of a single match (#23)" — constructs the edge case via direct UPDATE
+of both slot rows to the same user_id and asserts a single response
+row.
+
 `cloud/src/tournament/player.ts:66`. If a user owns both slots in a
 match (edge case but not schema-prevented), the row appears twice.
 `SELECT DISTINCT` or a `UNION` would fix it cheaply.
 
 ### 24. `handleDismissBanner` returns 200 on unknown tournament
 
+**Status:** Fixed in `2303253`. Pre-check returns 404
+`NO_SLOT_IN_TOURNAMENT` when the caller has no slot in the named
+tournament; once a slot exists, the UPDATE-then-return-changes flow
+is preserved (200/dismissed=0 on second call is still idempotent).
+Tests in new `dismiss-banner.test.ts`: "returns 401 to an
+unauthenticated request", "returns 404 when the caller has no slot
+in the tournament", "dismisses on first call (dismissed=1) and is
+idempotent on second (dismissed=0)".
+
 `cloud/src/tournament/player.ts:76-93`. Returns `{dismissed: 0}` with
 200 instead of 404. Inconsistent with the rest of the API.
 
 ### 25. `transition-championship` cascade-tie returns non-standard error shape
+
+**Status:** Fixed in `2303253`. `errorResponse` grows an optional
+`extra: Record<string, unknown>` parameter (backward-compatible —
+existing 4-arg callers keep working); cascade-tie 409 now flows
+through it. Frontend reads the same field names (division,
+tied_slot_ids, ranked). Test: `transition-championship.test.ts` ›
+"returns 409 with division, tied_slot_ids, ranked alongside the
+standard error/code".
 
 `cloud/src/tournament/admin.ts:986-1003` uses `jsonResponse` (with
 extra `division`, `tied_slot_ids`, `ranked` fields) instead of
@@ -298,6 +412,10 @@ payload fields, or document the convention break.
 
 ### 26. Empty `if` block at `admin.ts:272-274`
 
+**Status:** Fixed in `2303253`. Dead stub deleted. The
+`UNIQUE (tournament_id, phase, division, swiss_seed)` constraint
+already covers the underlying concern; no behavior change.
+
 Just a comment, no code. Cleanup pass. The intent (advance
 `nextSeedByDiv` past explicit-seed entries to avoid collision in a
 mixed batch) isn't implemented, but the
@@ -306,11 +424,22 @@ would catch it anyway.
 
 ### 27. CLI `delete` confirms with "nuke"
 
+**Status:** Fixed in `150b6eb`. New
+`confirmTyping(prompt, expected)` helper in `scripts/lib/confirm.ts`;
+`tournament delete` now prompts for "delete". `confirmNuke` survives
+for the actual `nuke-*` subcommands so muscle memory still matches
+those. Help text updated.
+
 `scripts/admin/commands/tournament.ts:386` uses `confirmNuke` for a
 `delete` subcommand. Operators will type the wrong verb. Either rename
 the helper or add a tournament-specific confirm.
 
 ### 28. `grant-admin`/`revoke-admin`/`delete` ignore `--json`
+
+**Status:** Fixed in `150b6eb`. All three now emit JSON on success:
+`{tournament_id, user_id, display_name, granted}`,
+`{tournament_id, user_id, revoked}`,
+`{tournament_id, name, deleted}`.
 
 `scripts/admin/commands/tournament.ts:320,350,369`. `create`/`list`/
 `show` honor it. `scripts/admin/index.ts:59` advertises `--json` as
@@ -318,16 +447,32 @@ global.
 
 ### 29. `runList` silently drops invalid `--status`
 
+**Status:** Fixed in `150b6eb`. Throws `unknown --status value: X
+(expected one of: setup, swiss, championship, complete)` instead of
+silently dropping the filter. Exit code 1. Matches the pattern in
+`scripts/admin/commands/users.ts`.
+
 `scripts/admin/commands/tournament.ts:182-186`. Compare to
 `scripts/admin/commands/users.ts:88-92` which throws on invalid sort.
 
 ### 30. No `typecheck` script for the cloud package
+
+**Status:** Fixed in `5c73729`. `cloud/package.json` exposes
+`npm run typecheck` (`tsc --noEmit`). The prod preflight at
+`scripts/prod/checks/typescript.ts` already shells out to the same
+command in the `cloud/` dir, so the preflight gate predated this
+commit; the new script gives operators a discoverable invocation.
 
 `cloud/package.json` runs vitest but not `tsc --noEmit`. Vitest doesn't
 typecheck by default. Would catch #4. Add `"typecheck": "tsc --noEmit"`
 and wire it into the preflight check.
 
 ### 31. `TournamentBanner` optimistic dismiss doesn't rollback on POST failure
+
+**Status:** Closed as comment-only in `dab2251`. Updated to
+"next navigation (invalidateAll refetches and repopulates)" — accurate
+description of current behavior. Swallow-on-failure stays: the
+operation is cosmetic and there's no useful retry surface for the user.
 
 `src/lib/tournament/TournamentBanner.svelte:20-31`. The banner stays
 dismissed in the store but the next `invalidateAll` repopulates from
@@ -336,6 +481,11 @@ server state, so it reappears. The in-file comment claims this is OK
 update the comment, or restore on failure.
 
 ### 32. Dashboard tournament fetches swallow `UnauthorizedError`
+
+**Status:** Fixed in `dab2251`. Both `.catch()` blocks go through a
+`swallowExceptAuth(fallback)` helper that re-throws
+`UnauthorizedError` (so the outer redirect still fires) while keeping
+the fallback behavior for everything else.
 
 `src/routes/dashboard/+page.ts:18-19`. Other parallel fetches handle
 it, so the redirect still fires today — but masks a real auth failure
@@ -382,16 +532,22 @@ Worth recording so they don't get re-raised:
 
 ## Suggested order of fixes
 
+All bundles closed. Order of landing for reference:
+
 1. ~~**Authz + data integrity bundle**: 1, 2, 3, 7, 8, 10.~~ **Done in
    `56923f4`** (expanded to include #4 and #5 since they were Critical
    and the diff was already touching the same files).
-2. **Type-safety bundle**: ~~4, 5~~, 11, 12, 30. Cheap, mechanical fixes.
-   Add the typecheck script first so the rest get checked. (Items #4
-   and #5 already landed with bundle 1.)
-3. **UX-blocking bundle**: 9, 13, 14, 16. Things that make the admin
-   panel functional during a live tournament.
-4. **Polish bundle**: everything else, prioritized as time permits
-   before launch.
+2. ~~**Type-safety bundle**: 4, 5, 11, 12, 30.~~ **Done** — #4 and #5
+   landed with bundle 1 (`56923f4`); #11, #12, #30 landed in
+   `5c73729`.
+3. ~~**UX-blocking bundle**: 9, 13, 14, 16.~~ **Done** — #9 landed
+   server-side in `2303253`; #14 split across `2303253` (server) +
+   `dab2251` (UI); #13 closed as intentional in `dab2251`; #16 landed
+   in `dab2251`.
+4. ~~**Polish bundle**: everything else.~~ **Done** across
+   `aeaea48` (#22), `2303253` (#6, #21, #23, #24, #25, #26),
+   `dab2251` (#15, #18, #19, #31, #32), `cf3d8c1` (#17),
+   `150b6eb` (#27, #28, #29), `400a603` (#20).
 
 ## Operational note
 
