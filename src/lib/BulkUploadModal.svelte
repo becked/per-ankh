@@ -229,13 +229,22 @@
 
 	// In observer mode picking Slot A's player auto-fills Slot B as the
 	// other human in the roster. Tournament matches require exactly 2
-	// humans, so by-elimination is unambiguous. The auto-fill is shown
-	// read-only in the UI so the admin can verify.
+	// humans, so by-elimination is unambiguous WHEN there are exactly 2
+	// humans. For any other count we leave slotBPlayerIndex null so the
+	// row stays unready (see rowReadyToUpload) and the human-count error
+	// banner fires; otherwise we'd silently pick a stranger as slot B and
+	// only catch it server-side as WRONG_HUMAN_COUNT.
 	function selectSlotAPlayer(row: Row, value: number) {
 		if (row.status.kind !== "ready") return;
 		row.status.slotAPlayerIndex = value;
-		const otherHuman = row.status.humans.find((h) => h.player_index !== value);
-		row.status.slotBPlayerIndex = otherHuman?.player_index ?? null;
+		if (row.status.humans.length === 2) {
+			const otherHuman = row.status.humans.find(
+				(h) => h.player_index !== value,
+			);
+			row.status.slotBPlayerIndex = otherHuman?.player_index ?? null;
+		} else {
+			row.status.slotBPlayerIndex = null;
+		}
 	}
 
 	// In observer mode the row is ready to upload only when both slot
@@ -500,6 +509,12 @@
 					{:else if row.status.kind === "ready"}
 						{@const ready = row.status}
 						{#if observerMode}
+							{#if ready.humans.length !== 2}
+								<p class="mb-2 text-xs text-orange">
+									Tournament matches require exactly 2 humans in the save; got
+									{ready.humans.length}. Cannot upload.
+								</p>
+							{/if}
 							<p class="text-xs text-gray-400">
 								{slotALabel ?? "Slot A"} played as:
 							</p>
@@ -543,11 +558,6 @@
 											"—"}
 									</span>
 									<span class="opacity-60">(auto-inferred)</span>
-								</p>
-							{:else if ready.humans.length !== 2}
-								<p class="mt-2 text-xs text-orange">
-									Tournament matches require exactly 2 humans in the save; got
-									{ready.humans.length}.
 								</p>
 							{/if}
 						{:else}
