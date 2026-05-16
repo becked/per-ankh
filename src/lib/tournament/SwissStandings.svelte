@@ -5,6 +5,9 @@
 		divisionName,
 		standings,
 	}: { divisionName: string; standings: SlotStanding[] } = $props();
+	// Empty divisionName suppresses the heading — used when the parent
+	// section already labels the division (e.g. under SwissFlowBracket).
+	const showHeader = $derived(divisionName.length > 0);
 
 	function statusBadge(s: SlotStanding["status"]): string {
 		return s === "advanced" ? "✓" : s === "eliminated" ? "✗" : "";
@@ -16,12 +19,14 @@
 </script>
 
 <section class="rounded-lg p-3" style="background-color: #35302B;">
-	<h3
-		class="mb-2 pb-1 text-sm font-bold text-tan"
-		style="border-bottom: 1px solid #2a2622;"
-	>
-		{divisionName}
-	</h3>
+	{#if showHeader}
+		<h3
+			class="mb-2 pb-1 text-sm font-bold text-tan"
+			style="border-bottom: 1px solid #2a2622;"
+		>
+			{divisionName}
+		</h3>
+	{/if}
 	{#if standings.length === 0}
 		<p class="text-xs text-tan opacity-70">No slots yet.</p>
 	{:else}
