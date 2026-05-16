@@ -1,15 +1,10 @@
 # Per-Ankh Cloud Deploy Plan
 
-> **Automation note:** §4 steps 2, 3, 6 (and a 3-probe subset of §5) are now
-> automated by `./per-ankh prod deploy`. The preflight checks (`./per-ankh prod
-preflight`) cover lint, typecheck, format, npm audit, secret-leak scanning,
-> `[vars]` vs `secrets` hygiene, and required-secret presence. This document
-> remains the source of truth for the manual parts: custom-domain attach, Pages
-> detach, Cloudflare dashboard config, and the functional smoke checklist
-> (OAuth, upload, share visibility) that requires a browser session.
+> **Status (2026-05-16):** Cloud rewrite is shipped and live at https://per-ankh.app. §3 (Cloudflare provisioning) and §4 (Deploy steps) are historical — kept for reference and for future re-deploy runbook use. §6 (First-week monitoring), §7 (Explicitly NOT doing), §8 (Parked follow-ups) are still applicable.
+>
+> Day-to-day deploy is now `./per-ankh prod deploy` (preflight → migrate → worker → frontend → smoke). Preflight (`./per-ankh prod preflight`) covers lint, typecheck, format, npm audit, secret-leak scanning, `[vars]` vs `secrets` hygiene, and required-secret presence. Most §3 setup steps are one-time and won't need redoing; §4 step ordering still applies if cutover ever needs to be repeated.
 
-Forward-only checklist for getting the cloud rewrite (currently on
-`cloud-rewrite`) deployed to https://per-ankh.app. Replaces the active
+Forward-only checklist for getting the cloud rewrite deployed to https://per-ankh.app. Replaces the active
 parts of [`cloud-productionization-plan.md`](./cloud-productionization-plan.md);
 the old doc stays as historical context.
 
@@ -24,15 +19,14 @@ the old doc stays as historical context.
   Rotate by `wrangler secret put INVITE_CODE` with a new value — no
   redeploy, new logins pick it up immediately.
 - Legacy `/v1/share/*` endpoints stay live on the API Worker (desktop
-  v0.2.0 still mints share URLs against it). The legacy share viewer
-  (`web/`) currently owns `per-ankh.app` via a Cloudflare Pages custom
-  domain attachment; deploy moves `per-ankh.app` to the new SSR Worker,
-  reattaches the legacy SPA to `legacy.per-ankh.app`, and adds a
+  v0.2.0 still mints share URLs against it). At cutover, deploy moved
+  `per-ankh.app` from the Pages project to the new SSR Worker,
+  reattached the legacy SPA to `legacy.per-ankh.app`, and added a
   `/share/*` 302 from `per-ankh.app` to `legacy.per-ankh.app` to keep old
   share URLs resolving (see §3.8 + §4 step 5).
 
-Real test users will arrive with the next feature, providing live feedback;
-that's why this plan deliberately skips formal bake stages.
+Real test users arrived with the next feature, providing live feedback;
+that's why this plan deliberately skipped formal bake stages.
 
 ## 2. UI polish backlog (deploy-blocking)
 
@@ -42,7 +36,9 @@ Fill in as items surface. Empty this list before running §4.
 
 ## 3. Cloudflare provisioning checklist
 
-One-time setup. None of this is in the repo today; everything below blocks deploy.
+> **Status: completed.** Historical reference for the one-time setup. Re-run any of these if a fresh environment ever needs provisioning.
+
+One-time setup. Everything below blocked the original deploy.
 
 ### 3.1. Sessions KV namespace
 
@@ -80,6 +76,8 @@ by the frontend at request time (`cloud/src/auth.ts:164`), and Discord
 rejects URIs not on its allowlist.
 
 ### 3.4. Content-hashed atlas + sprite paths
+
+> **Status: implemented in `373ce65`.** Manifests live at `src/lib/generated/{atlas-manifest,sprite-manifest,tech-names}.ts`; `_headers` at repo root sets `Cache-Control: immutable, max-age=1y` on `/atlases/*` and `/sprites/*`. See `CLAUDE.md` § "Content-hashed paths" for the live pipeline.
 
 The 26 MB of atlases (~6 MB hit on every first paint of `/games/[id]`) need
 aggressive caching, but Pinacotheca iteration means re-bakes happen
@@ -317,6 +315,8 @@ has migrated.
 
 ## 4. Deploy
 
+> **Status: completed; now automated.** The first deploy ran via these manual steps at cutover. Day-to-day deploys now run through `./per-ankh prod deploy` (see top-of-file status banner). Steps below are kept for re-deploy runbook reference.
+
 In order:
 
 1. **Merge `cloud-rewrite` to `main`.** Use merge-commit or rebase-and-merge,
@@ -366,6 +366,8 @@ In order:
 8. **Run §5 smoke test against prod.** Do not announce until it passes.
 
 ## 5. Smoke test
+
+> **Status: now automated.** A 3-probe subset (anonymous home, auth/me, legacy share host) runs as part of `./per-ankh prod deploy`. The full functional smoke (OAuth, upload, download, reparse, delete, share-redirect) remains manual and is the authoritative checklist below.
 
 Against the live `https://per-ankh.app`. Run in this order:
 

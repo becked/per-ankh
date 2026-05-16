@@ -7,8 +7,8 @@
 //        pick_order_winner is one of {slot_a, slot_b} post-patch
 //   #7   PatchPairingSchema.slot_b_id no longer accepts null
 //
-// Test names describe behavior; bug numbers are in side-comments for
-// traceability to docs/tournament-code-review.md.
+// Test names describe behavior; bug numbers in side-comments are
+// historical traceability to the May 2026 review punch list.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";

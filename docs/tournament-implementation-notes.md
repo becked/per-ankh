@@ -5,17 +5,13 @@ spec describes _what_ the tournament feature does at the goal level; this
 file records _what was built_, _what we deferred_, and _what still needs to
 happen_ before the feature is production-ready.
 
-Living document — update as TODOs land. Current branch: tournament work in
-progress, not yet merged to `main`.
+## Status
 
-## Timeline
-
-- **Day 0**: spec written (pre-cloud-rewrite).
-- **Day 1–2**: this session — full first pass of the feature landed in a
-  working state on a feature branch. Functional end-to-end on local D1; not
-  yet deployed.
-- **~Day 30**: first live tournament opens. We have ~4 weeks of buffer to
-  close the gaps below.
+Tournament feature is shipped on the `tournament` branch (commit `8de96ff`
+and follow-ups). First-pass code review punch list (32 items) is fully
+closed with 100 passing tests under `cloud/test/integration/tournament/`.
+Open items below are the post-review hardening work that didn't make the
+punch list.
 
 ## What landed this session
 
@@ -24,7 +20,7 @@ D1." Functional but with known gaps (next section).
 
 ### Schema (D1)
 
-Two migrations applied locally; not yet remote.
+Four migrations applied locally; not yet remote.
 
 - `0006_tournaments.sql` — 5 new tables:
   - `tournaments` — metadata + lifecycle status (`setup`/`swiss`/
@@ -39,6 +35,14 @@ Two migrations applied locally; not yet remote.
   and `slot_b_player_index` columns to `tournament_matches`. Records which
   roster position in the linked save corresponds to each slot. Enables
   future cross-match analytics that join slot → player_summaries.
+- `0008_tournament_match_index.sql` — stable 1-based `match_index` column
+  for deterministic championship follow-up pairing. Closed code-review
+  item #3 (matches in a round shared `datetime('now')` timestamps to the
+  second, so `ORDER BY created_at` was undefined within a round).
+- `0009_swiss_seed_not_null.sql` — BEFORE INSERT / BEFORE UPDATE triggers
+  on `tournament_slots` enforcing `swiss_seed NOT NULL` for swiss-phase
+  rows. Closed code-review item #22 (`compareForPairing` null fallback
+  was an untested branch).
 
 ### Worker (cloud/)
 
@@ -212,8 +216,8 @@ flags an unexpected result change.
 
 ### 5. Remove the `ALLOWED_DISCORD_USERNAMES` prod secret
 
-The code no longer reads it, but the secret is still set on the deployed
-Worker config. Hygiene cleanup after next deploy:
+**Status:** code closed (no grep hits in `cloud/`), operational cleanup
+pending. Run after next deploy:
 
 ```
 cd cloud && npx wrangler secret delete ALLOWED_DISCORD_USERNAMES
@@ -224,10 +228,11 @@ prod config.
 
 ### 6. Apply migrations to remote D1
 
-`0006_tournaments.sql` and `0007_tournament_match_player_indexes.sql`
-are applied locally only. Run `(cd cloud && npm run migrate:remote)` or
-`./per-ankh prod migrate` when ready to deploy. Rehearse on a throwaway
-D1 first per `CLAUDE.md` policy.
+Four tournament migrations are applied locally only:
+`0006_tournaments.sql`, `0007_tournament_match_player_indexes.sql`,
+`0008_tournament_match_index.sql`, `0009_swiss_seed_not_null.sql`. Run
+`(cd cloud && npm run migrate:remote)` or `./per-ankh prod migrate` when
+ready to deploy. Rehearse on a throwaway D1 first per `CLAUDE.md` policy.
 
 ### 7. CSRF / Content-Type hardening on new endpoints
 
@@ -261,7 +266,13 @@ header was caching client-side and breaking `invalidateAll`. A rate
 limit + a smaller cache layer (Worker-side only, no client cache header)
 is the better long-term shape.
 
-### 9. Audit Discord ID-based identity flow
+## Verified — left as-is
+
+These were originally tracked as "open work" but are audit/verification
+items, not pending code. Recorded here as design history; spot-check
+before the live tournament.
+
+### Discord ID-based identity flow
 
 When a Discord user renames their handle:
 
@@ -275,15 +286,15 @@ When a Discord user renames their handle:
    collisions globally; but worth not assuming). Our code lowercases
    everywhere. ✓
 
-### 10. Re-import edge case for tournament-linked games
+### Re-import edge case for tournament-linked games
 
 When a player re-uploads the same save (newer parser_version), the
 existing re-import path preserves `is_public`, `collection_id`, and
 `created_at` on the games row. But the worker's tournament-link block
 runs again, which would re-derive winner + re-link the match. With
 first-upload-wins, the second attempt's UPDATE would be a no-op (status
-already 'reported'). That's correct behavior — verify it stays that way
-when re-import semantics are stress-tested.
+already 'reported'). That's correct behavior — sanity-test before live
+tournament.
 
 ## Deferred decisions
 
@@ -425,9 +436,9 @@ the cloud rewrite. New surfaces in this branch warrant a fresh pass:
 In rough order. Most are documented in [`cloud-deploy-plan.md`](./cloud-deploy-plan.md);
 this is the tournament-specific addendum.
 
-1. [ ] Close all Open Work items above (#1-#10), or explicitly decide
-       which to defer
-2. [ ] Apply migrations 0006 + 0007 to remote D1
+1. [ ] Close remaining Open Work items (#1–#4, #6, #7, #8), or explicitly
+       decide which to defer
+2. [ ] Apply migrations 0006–0009 to remote D1
        (`(cd cloud && npm run migrate:remote)`)
 3. [ ] Delete `ALLOWED_DISCORD_USERNAMES` prod secret (Open Work §5)
 4. [ ] Deploy worker + frontend (`./per-ankh prod deploy`)
