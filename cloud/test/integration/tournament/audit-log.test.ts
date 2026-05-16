@@ -31,6 +31,24 @@ async function adminEventsForUser(userId: string): Promise<AdminEventRow[]> {
 	return res.results ?? [];
 }
 
+// System-triggered events (auto-advance round generation, auto-complete)
+// land in events with event_type='tournament_system' and user_id=NULL.
+// Filtered by tournament_id since there's no per-user attribution.
+async function systemEventsForTournament(
+	tournamentId: string,
+): Promise<AdminEventRow[]> {
+	const res = await env.SHARE_DB.prepare(
+		`SELECT event_type, user_id, metadata FROM events
+		 WHERE event_type = 'tournament_system'
+		 ORDER BY id ASC`,
+	).all<AdminEventRow>();
+	return (res.results ?? []).filter((row) => {
+		if (!row.metadata) return false;
+		const meta = JSON.parse(row.metadata) as { tournament_id?: string };
+		return meta.tournament_id === tournamentId;
+	});
+}
+
 function actionsFor(rows: AdminEventRow[]): string[] {
 	return rows.map((r) => {
 		const meta = r.metadata
@@ -93,23 +111,25 @@ describe("tournament admin audit log", () => {
 		);
 	});
 
-	it("POST /tournaments/:id/start-swiss emits swiss_started", async () => {
+	it("POST /tournaments/:id/start emits tournament_started", async () => {
 		const t = await makeTournament();
 		const res = await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/start-swiss`,
+			path: `/v1/tournaments/${t.tournamentId}/start`,
 			as: t.admin,
 		});
 		await expectOk(res);
 		expect(actionsFor(await adminEventsForUser(t.admin.userId))).toContain(
-			"swiss_started",
+			"tournament_started",
 		);
 	});
 
-	it("POST /tournaments/:id/rounds + start emits round_generated and round_started", async () => {
-		const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
-		const actions = actionsFor(await adminEventsForUser(t.admin.userId));
-		expect(actions).toContain("round_generated");
-		expect(actions).toContain("round_started");
+	it("auto-generated next round emits a tournament_system round_generated event", async () => {
+		const t = await makeTournament({ advanceTo: "swiss-round-1-reported" });
+		// Builder reported every Round 1 match; auto-advance generated R2
+		// in both divisions. Two system events expected (one per division).
+		const actions = actionsFor(await systemEventsForTournament(t.tournamentId));
+		const generated = actions.filter((a) => a === "round_generated");
+		expect(generated).toHaveLength(2);
 	});
 
 	it("PATCH /tournaments/:id/matches/:match_id/pairing emits pairing_patched", async () => {
@@ -186,8 +206,10 @@ describe("tournament admin audit log", () => {
 		);
 	});
 
-	it("POST /tournaments/:id/complete emits tournament_completed", async () => {
-		// Drive a 4-slot swiss → championship semis → final → complete.
+	it("auto-completing the tournament on the championship final emits a tournament_system tournament_completed event", async () => {
+		// Drive a 4-slot swiss → transition → championship semis → final.
+		// Final report fires auto-advance, which auto-completes the
+		// tournament — no admin /complete call exists.
 		const t = await makeTournament({ slotsPerDivision: 4 });
 		await expectOk(
 			await request.patch({
@@ -208,43 +230,23 @@ describe("tournament admin audit log", () => {
 			}),
 		);
 		await driveChampionshipToFinal(t);
-		await expectOk(
-			await request.post({
-				path: `/v1/tournaments/${t.tournamentId}/complete`,
-				as: t.admin,
-			}),
-		);
 
-		expect(actionsFor(await adminEventsForUser(t.admin.userId))).toContain(
-			"tournament_completed",
-		);
+		expect(
+			actionsFor(await systemEventsForTournament(t.tournamentId)),
+		).toContain("tournament_completed");
 	});
 });
 
-// Drives a single swiss round: generate + start in both divisions, then
-// report every non-bye match with slot_a as the winner. Used to set up
-// the championship-transition audit assertions; mirrors flow.test.ts.
+// Drives a single swiss round: /start + report every non-bye match with
+// slot_a as the winner. swiss_max_rounds=1 keeps auto-advance from
+// generating a Round 2.
 async function driveSwissOneRound(t: TestTournament): Promise<void> {
 	await expectOk(
 		await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/start-swiss`,
+			path: `/v1/tournaments/${t.tournamentId}/start`,
 			as: t.admin,
 		}),
 	);
-	for (const division of ["A", "B"] as const) {
-		const roundRes = await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/rounds`,
-			as: t.admin,
-			body: { division },
-		});
-		const { round_id } = await expectOk<{ round_id: string }>(roundRes);
-		await expectOk(
-			await request.post({
-				path: `/v1/tournaments/${t.tournamentId}/rounds/${round_id}/start`,
-				as: t.admin,
-			}),
-		);
-	}
 	for (const m of await t.matches()) {
 		if (m.status === "bye") continue;
 		await expectOk(
@@ -258,22 +260,16 @@ async function driveSwissOneRound(t: TestTournament): Promise<void> {
 }
 
 // Drives the championship from "semifinals generated" through to
-// "final reported". Caller is responsible for the surrounding
-// transition-championship call and the terminal /complete call.
+// "final reported". Caller transitioned to championship already; the
+// final auto-spawns when the semis report and auto-completes when the
+// final reports.
 async function driveChampionshipToFinal(t: TestTournament): Promise<void> {
-	// Semifinal round was auto-generated by transition-championship.
-	const champRounds = (await t.rounds()).filter((r) => r.phase === "championship");
-	expect(champRounds).toHaveLength(1);
-	await expectOk(
-		await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/rounds/${champRounds[0].round_id}/start`,
-			as: t.admin,
-		}),
-	);
-	const semis = (await t.matches()).filter(
-		(m) => m.round_id === champRounds[0].round_id,
-	);
-	for (const m of semis) {
+	const champR1 = (await t.rounds()).find(
+		(r) => r.phase === "championship" && r.round_number === 1,
+	)!;
+	for (const m of (await t.matches()).filter(
+		(m) => m.round_id === champR1.round_id,
+	)) {
 		await expectOk(
 			await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
@@ -282,22 +278,12 @@ async function driveChampionshipToFinal(t: TestTournament): Promise<void> {
 			}),
 		);
 	}
-
-	// Final round (championship follow-up — no division/round body).
-	const finalRoundRes = await request.post({
-		path: `/v1/tournaments/${t.tournamentId}/rounds`,
-		as: t.admin,
-	});
-	const { round_id: finalRoundId } = await expectOk<{ round_id: string }>(
-		finalRoundRes,
+	const champR2 = (await t.rounds()).find(
+		(r) => r.phase === "championship" && r.round_number === 2,
+	)!;
+	const finals = (await t.matches()).filter(
+		(m) => m.round_id === champR2.round_id,
 	);
-	await expectOk(
-		await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/rounds/${finalRoundId}/start`,
-			as: t.admin,
-		}),
-	);
-	const finals = (await t.matches()).filter((m) => m.round_id === finalRoundId);
 	expect(finals).toHaveLength(1);
 	await expectOk(
 		await request.patch({

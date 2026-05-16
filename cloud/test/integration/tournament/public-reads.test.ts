@@ -36,7 +36,9 @@ describe("public read handlers", () => {
 
 		expect(body.limit).toBeGreaterThan(0);
 		expect(body.offset).toBe(0);
-		const row = body.tournaments.find((r) => r.tournament_id === t.tournamentId);
+		const row = body.tournaments.find(
+			(r) => r.tournament_id === t.tournamentId,
+		);
 		expect(row).toBeDefined();
 		expect(row?.slug).toBe(t.slug);
 		expect(row?.name).toBe("Shape List Cup");
@@ -399,24 +401,10 @@ async function driveToChampionship(): Promise<TestTournament> {
 	);
 	await expectOk(
 		await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/start-swiss`,
+			path: `/v1/tournaments/${t.tournamentId}/start`,
 			as: t.admin,
 		}),
 	);
-	for (const division of ["A", "B"] as const) {
-		const roundRes = await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/rounds`,
-			as: t.admin,
-			body: { division },
-		});
-		const { round_id } = await expectOk<{ round_id: string }>(roundRes);
-		await expectOk(
-			await request.post({
-				path: `/v1/tournaments/${t.tournamentId}/rounds/${round_id}/start`,
-				as: t.admin,
-			}),
-		);
-	}
 	for (const m of await t.matches()) {
 		if (m.status === "bye") continue;
 		await expectOk(

@@ -38,24 +38,10 @@ async function makeSwissDoneTournament(opts?: {
 	);
 	await expectOk(
 		await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/start-swiss`,
+			path: `/v1/tournaments/${t.tournamentId}/start`,
 			as: t.admin,
 		}),
 	);
-	for (const division of ["A", "B"] as const) {
-		const roundRes = await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/rounds`,
-			as: t.admin,
-			body: { division },
-		});
-		const { round_id } = await expectOk<{ round_id: string }>(roundRes);
-		await expectOk(
-			await request.post({
-				path: `/v1/tournaments/${t.tournamentId}/rounds/${round_id}/start`,
-				as: t.admin,
-			}),
-		);
-	}
 	for (const m of await t.matches()) {
 		if (m.status === "bye") continue;
 		await expectOk(
@@ -122,7 +108,10 @@ describe("POST /v1/tournaments/:id/transition-championship", () => {
 				(s) => s.slotId,
 			);
 			// Replace the first A advancer with a slot from the foreign tournament.
-			const tamperedA = [foreign.slotsByDivision.A[0].slotId, ...validA.slice(1)];
+			const tamperedA = [
+				foreign.slotsByDivision.A[0].slotId,
+				...validA.slice(1),
+			];
 
 			const res = await request.post({
 				path: `/v1/tournaments/${t.tournamentId}/transition-championship`,
@@ -239,24 +228,10 @@ describe("POST /v1/tournaments/:id/transition-championship", () => {
 			);
 			await expectOk(
 				await request.post({
-					path: `/v1/tournaments/${t.tournamentId}/start-swiss`,
+					path: `/v1/tournaments/${t.tournamentId}/start`,
 					as: t.admin,
 				}),
 			);
-			for (const division of ["A", "B"] as const) {
-				const roundRes = await request.post({
-					path: `/v1/tournaments/${t.tournamentId}/rounds`,
-					as: t.admin,
-					body: { division },
-				});
-				const { round_id } = await expectOk<{ round_id: string }>(roundRes);
-				await expectOk(
-					await request.post({
-						path: `/v1/tournaments/${t.tournamentId}/rounds/${round_id}/start`,
-						as: t.admin,
-					}),
-				);
-			}
 			for (const m of await t.matches()) {
 				if (m.status === "bye") continue;
 				await expectOk(

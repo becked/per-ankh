@@ -7,7 +7,6 @@ import { nanoid } from "nanoid";
 import * as v from "valibot";
 import {
 	BulkCreateSlotsSchema,
-	GenerateRoundSchema,
 	PatchMatchSchema,
 	PatchPairingSchema,
 	PatchSlotSchema,
@@ -54,7 +53,7 @@ import {
 	type TournamentEnv,
 	type TournamentRow,
 } from "./data";
-import type { Division, Phase } from "./types";
+import type { Division, MatchRef, Phase, SlotRef } from "./types";
 
 export interface TournamentAdminEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
@@ -510,10 +509,15 @@ export async function handleDeleteSlot(
 }
 
 // ----------------------------------------------------------------------
-// POST /v1/tournaments/:id/start-swiss
+// POST /v1/tournaments/:id/start
+//
+// One-shot: setup → swiss + generate Round 1 for both divisions. Replaces
+// the old start-swiss / generate-round / start-round trio. After this,
+// rounds advance automatically as matches report (see
+// maybeAdvanceAfterMatchReport).
 // ----------------------------------------------------------------------
 
-export async function handleStartSwiss(
+export async function handleStartTournament(
 	tournamentId: string,
 	request: Request,
 	env: TournamentAdminEnv,
@@ -570,316 +574,47 @@ export async function handleStartSwiss(
 			"ADVANCE_COUNT_TOO_LARGE",
 		);
 	}
-	await env.SHARE_DB.prepare(
-		`UPDATE tournaments SET status = 'swiss', swiss_advance_count = ?, updated_at = datetime('now')
-		 WHERE tournament_id = ?`,
-	)
-		.bind(advanceCount, tournamentId)
-		.run();
-	const updated = await loadTournamentById(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "swiss_started", {
-		advance_count: advanceCount,
-	});
-	return jsonResponse({ tournament: updated }, 200, cors);
-}
 
-// ----------------------------------------------------------------------
-// POST /v1/tournaments/:id/rounds — generate next round
-// Body: { division?: 'A'|'B' } for swiss; division ignored for championship.
-// ----------------------------------------------------------------------
+	const mapsResult = parseAllowedMapsOrError(tournament, cors);
+	if (!mapsResult.ok) return mapsResult.response;
+	const allowedMaps = mapsResult.maps;
 
-export async function handleGenerateRound(
-	tournamentId: string,
-	request: Request,
-	env: TournamentAdminEnv,
-): Promise<Response> {
-	const cors = cloudCorsHeaders(env, request);
-	const a = await authedTournament(tournamentId, request, env);
-	if (!a.ok) return a.response;
-	const { tournament } = a;
-	if (tournament.status !== "swiss" && tournament.status !== "championship") {
-		return errorResponse(
-			"Cannot generate a round outside swiss/championship phase",
-			409,
-			cors,
-			"INVALID_PHASE",
-		);
-	}
-	const body = await parseJsonBody(request, GenerateRoundSchema, cors);
-	if (!body.ok) return body.response;
-	const reqBody = body.body;
-
-	if (tournament.status === "swiss") {
-		if (!reqBody.division) {
-			return errorResponse(
-				"division required when generating a swiss round",
-				400,
-				cors,
-				"DIVISION_REQUIRED",
-			);
-		}
-		return generateSwissRound(
+	const statements: D1PreparedStatement[] = [
+		env.SHARE_DB.prepare(
+			`UPDATE tournaments SET status = 'swiss', swiss_advance_count = ?,
+			        updated_at = datetime('now')
+			 WHERE tournament_id = ?`,
+		).bind(advanceCount, tournamentId),
+	];
+	const summaries: { division: Division; round_id: string; matches: number }[] =
+		[];
+	for (const division of ["A", "B"] as const) {
+		const divSlots = swissSlots
+			.filter((s) => s.division === division)
+			.map(slotRowToRef);
+		const built = buildSwissRoundStatements(
 			env,
 			tournament,
-			reqBody.division,
-			cors,
-			a.userId,
-		);
-	}
-	// championship: generate next round from winners
-	return generateChampionshipFollowup(env, tournament, cors, a.userId);
-}
-
-async function generateSwissRound(
-	env: TournamentAdminEnv,
-	tournament: TournamentRow,
-	division: Division,
-	cors: Record<string, string>,
-	userId: string,
-): Promise<Response> {
-	const rounds = await loadRounds(env, tournament.tournament_id);
-	const divRounds = rounds.filter(
-		(r) => r.phase === "swiss" && r.division === division,
-	);
-	const nextRoundNumber = divRounds.length + 1;
-
-	if (nextRoundNumber > tournament.swiss_max_rounds) {
-		return errorResponse(
-			`Already past max swiss rounds (${tournament.swiss_max_rounds})`,
-			409,
-			cors,
-			"MAX_ROUNDS_REACHED",
-		);
-	}
-
-	const allMatches = await loadMatches(env, tournament.tournament_id);
-
-	// Auto-close any prior round in this division: in_progress → complete
-	// if all matches are reported. The dedicated Close button was dropped;
-	// closing is implicit on advance.
-	for (const r of divRounds) {
-		const closeResult = await autoCloseRoundIfReady(env, r, allMatches);
-		if (!closeResult.ok) {
-			return errorResponse(closeResult.reason, 409, cors, closeResult.code);
-		}
-	}
-
-	const allSlots = await loadSlots(env, tournament.tournament_id);
-	const divSlots = allSlots
-		.filter((s) => s.phase === "swiss" && s.division === division)
-		.map(slotRowToRef);
-
-	const matchRefs = await matchRefsForTournament(
-		env,
-		tournament.tournament_id,
-		allMatches,
-	);
-	const divMatchRefs = matchRefs.filter((m) => m.division === division);
-
-	const config = tournamentConfig(tournament);
-	const seed = `${tournament.tournament_id}|swiss|${division}|r${nextRoundNumber}`;
-	const pairings: Pairing[] = pairSwissRound(
-		divSlots,
-		divMatchRefs,
-		nextRoundNumber,
-		config,
-		seed,
-	);
-
-	const mapsResult = parseAllowedMapsOrError(tournament, cors);
-	if (!mapsResult.ok) return mapsResult.response;
-	const allowedMaps = mapsResult.maps;
-	const withMaps = assignMapsToPairings(
-		pairings,
-		allowedMaps,
-		divMatchRefs,
-		seed,
-	);
-
-	const roundId = nanoid(21);
-	const statements: D1PreparedStatement[] = [
-		env.SHARE_DB.prepare(
-			`INSERT INTO tournament_rounds
-			   (round_id, tournament_id, phase, division, round_number, status, generated_at)
-			 VALUES (?, ?, 'swiss', ?, ?, 'pending', datetime('now'))`,
-		).bind(roundId, tournament.tournament_id, division, nextRoundNumber),
-	];
-	for (let i = 0; i < withMaps.length; i++) {
-		const p = withMaps[i];
-		const matchId = nanoid(21);
-		const isBye = p.slot_b_id === null;
-		statements.push(
-			env.SHARE_DB.prepare(
-				`INSERT INTO tournament_matches
-				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-			).bind(
-				matchId,
-				roundId,
-				p.slot_a_id,
-				p.slot_b_id,
-				p.map_script,
-				isBye ? null : p.slot_b_id, // default pick-order to slot_b
-				isBye ? "bye" : "pending",
-				isBye ? p.slot_a_id : null,
-				i + 1,
-			),
-		);
-	}
-	statements.push(
-		env.SHARE_DB.prepare(
-			"UPDATE tournaments SET updated_at = datetime('now') WHERE tournament_id = ?",
-		).bind(tournament.tournament_id),
-	);
-	await env.SHARE_DB.batch(statements);
-	logTournamentAdminAction(
-		env,
-		userId,
-		tournament.tournament_id,
-		"round_generated",
-		{
-			phase: "swiss",
 			division,
-			round_number: nextRoundNumber,
-			round_id: roundId,
-		},
-	);
-	return jsonResponse(
-		{ round_id: roundId, matches: withMaps.length },
-		201,
-		cors,
-	);
-}
-
-async function generateChampionshipFollowup(
-	env: TournamentAdminEnv,
-	tournament: TournamentRow,
-	cors: Record<string, string>,
-	userId: string,
-): Promise<Response> {
-	const rounds = await loadRounds(env, tournament.tournament_id);
-	const champRounds = rounds.filter((r) => r.phase === "championship");
-	if (champRounds.length === 0) {
-		return errorResponse(
-			"No championship round 1 yet; call /transition-championship first",
-			409,
-			cors,
-			"NO_CHAMPIONSHIP",
+			1,
+			divSlots,
+			[],
+			allowedMaps,
 		);
+		statements.push(...built.statements);
+		summaries.push({
+			division,
+			round_id: built.roundId,
+			matches: built.matchCount,
+		});
 	}
-	const lastRound = champRounds[champRounds.length - 1];
-	const allMatches = await loadMatches(env, tournament.tournament_id);
-	// Auto-close the prior championship round if it's in_progress and all
-	// matches are reported. Implicit close on advance (the dedicated Close
-	// button was dropped).
-	const closeResult = await autoCloseRoundIfReady(env, lastRound, allMatches);
-	if (!closeResult.ok) {
-		return errorResponse(closeResult.reason, 409, cors, closeResult.code);
-	}
-	// loadMatches orders by (phase, division, round_number, match_index,
-	// created_at), so filtering to one round yields match_index order.
-	const priorMatches = allMatches.filter(
-		(m) => m.round_id === lastRound.round_id,
-	);
-
-	if (priorMatches.length === 1) {
-		// That was the final.
-		return errorResponse(
-			"Championship final already played; mark tournament complete",
-			409,
-			cors,
-			"CHAMPIONSHIP_FINISHED",
-		);
-	}
-
-	for (const m of priorMatches) {
-		if (!m.winner_slot_id) {
-			return errorResponse(
-				"All prior matches must have winners before generating the next round",
-				409,
-				cors,
-				"MISSING_WINNERS",
-			);
-		}
-	}
-
-	const templates = buildChampionshipFollowupRound(priorMatches.length);
-	const nextRoundNumber = lastRound.round_number + 1;
-	const roundId = nanoid(21);
-	const statements: D1PreparedStatement[] = [
-		env.SHARE_DB.prepare(
-			`INSERT INTO tournament_rounds
-			   (round_id, tournament_id, phase, division, round_number, status, generated_at)
-			 VALUES (?, ?, 'championship', NULL, ?, 'pending', datetime('now'))`,
-		).bind(roundId, tournament.tournament_id, nextRoundNumber),
-	];
-
-	// Build new championship slots inheriting from prior winners — but actually
-	// the spec is to reuse championship slots across rounds (each player keeps
-	// the same slot through the bracket). The winners are slot IDs from
-	// existing championship slots. So no new slots; matches reference
-	// existing slot_ids.
-	const pairings: Pairing[] = [];
-	for (const t of templates) {
-		const winnerA = priorMatches[t.source_match_a_index - 1].winner_slot_id!;
-		const winnerB = priorMatches[t.source_match_b_index - 1].winner_slot_id!;
-		pairings.push({ slot_a_id: winnerA, slot_b_id: winnerB });
-	}
-
-	const matchRefs = await matchRefsForTournament(
-		env,
-		tournament.tournament_id,
-		allMatches,
-	);
-	const mapsResult = parseAllowedMapsOrError(tournament, cors);
-	if (!mapsResult.ok) return mapsResult.response;
-	const allowedMaps = mapsResult.maps;
-	const seed = `${tournament.tournament_id}|championship|r${nextRoundNumber}`;
-	const withMaps = assignMapsToPairings(pairings, allowedMaps, matchRefs, seed);
-
-	for (let i = 0; i < withMaps.length; i++) {
-		const p = withMaps[i];
-		const matchId = nanoid(21);
-		statements.push(
-			env.SHARE_DB.prepare(
-				`INSERT INTO tournament_matches
-				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
-			).bind(
-				matchId,
-				roundId,
-				p.slot_a_id,
-				p.slot_b_id,
-				p.map_script,
-				p.slot_b_id,
-				i + 1,
-			),
-		);
-	}
-	statements.push(
-		env.SHARE_DB.prepare(
-			"UPDATE tournaments SET updated_at = datetime('now') WHERE tournament_id = ?",
-		).bind(tournament.tournament_id),
-	);
 	await env.SHARE_DB.batch(statements);
-	logTournamentAdminAction(
-		env,
-		userId,
-		tournament.tournament_id,
-		"round_generated",
-		{
-			phase: "championship",
-			round_number: nextRoundNumber,
-			round_id: roundId,
-		},
-	);
-	return jsonResponse(
-		{ round_id: roundId, matches: withMaps.length },
-		201,
-		cors,
-	);
+	const updated = await loadTournamentById(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_started", {
+		advance_count: advanceCount,
+		rounds: summaries,
+	});
+	return jsonResponse({ tournament: updated, rounds: summaries }, 201, cors);
 }
 
 // ----------------------------------------------------------------------
@@ -987,45 +722,6 @@ export async function handlePatchPairing(
 		fields_changed: fragments.length,
 	});
 	return jsonResponse({ match: updated }, 200, cors);
-}
-
-// ----------------------------------------------------------------------
-// POST /v1/tournaments/:id/rounds/:round_id/start
-// POST /v1/tournaments/:id/rounds/:round_id/close
-// ----------------------------------------------------------------------
-
-export async function handleStartRound(
-	tournamentId: string,
-	roundId: string,
-	request: Request,
-	env: TournamentAdminEnv,
-): Promise<Response> {
-	const cors = cloudCorsHeaders(env, request);
-	const a = await authedTournament(tournamentId, request, env);
-	if (!a.ok) return a.response;
-	const round = await loadRound(env, roundId);
-	if (!round || round.tournament_id !== tournamentId) {
-		return errorResponse("Round not found", 404, cors, "ROUND_NOT_FOUND");
-	}
-	if (round.status !== "pending") {
-		return errorResponse(
-			`Round is ${round.status}`,
-			409,
-			cors,
-			"INVALID_ROUND_STATUS",
-		);
-	}
-	await env.SHARE_DB.prepare(
-		`UPDATE tournament_rounds SET status = 'in_progress', started_at = datetime('now')
-		 WHERE round_id = ?`,
-	)
-		.bind(roundId)
-		.run();
-	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "round_started", {
-		round_id: roundId,
-	});
-	return jsonResponse({ round_id: roundId, status: "in_progress" }, 200, cors);
 }
 
 // ----------------------------------------------------------------------
@@ -1159,6 +855,13 @@ export async function handleRetroEditMatch(
 			(k) => patch[k as keyof typeof patch] !== undefined,
 		),
 	});
+	// Forward transition (pending → non-pending) may complete the round.
+	// Reverse transitions are intentional admin un-reports; leave any
+	// already-auto-generated next round alone (admin can manually fix or
+	// retro-edit further). See docs/tournament-implementation-notes.md.
+	if (match.status === "pending" && postStatus !== "pending") {
+		await maybeAdvanceAfterMatchReport(env, matchId);
+	}
 	return jsonResponse({ match: updated }, 200, cors);
 }
 
@@ -1383,8 +1086,10 @@ export async function handleTransitionChampionship(
 	statements.push(
 		env.SHARE_DB.prepare(
 			`INSERT INTO tournament_rounds
-			   (round_id, tournament_id, phase, division, round_number, status, generated_at)
-			 VALUES (?, ?, 'championship', NULL, 1, 'pending', datetime('now'))`,
+			   (round_id, tournament_id, phase, division, round_number, status,
+			    generated_at, started_at)
+			 VALUES (?, ?, 'championship', NULL, 1, 'in_progress',
+			         datetime('now'), datetime('now'))`,
 		).bind(roundId, tournamentId),
 	);
 
@@ -1467,66 +1172,6 @@ function collectTiedAtCutoff(
 }
 
 // ----------------------------------------------------------------------
-// POST /v1/tournaments/:id/complete
-// ----------------------------------------------------------------------
-
-export async function handleCompleteTournament(
-	tournamentId: string,
-	request: Request,
-	env: TournamentAdminEnv,
-): Promise<Response> {
-	const cors = cloudCorsHeaders(env, request);
-	const a = await authedTournament(tournamentId, request, env);
-	if (!a.ok) return a.response;
-	const { tournament } = a;
-	if (tournament.status !== "championship") {
-		return errorResponse(
-			"Tournament is not in 'championship' phase",
-			409,
-			cors,
-			"INVALID_PHASE",
-		);
-	}
-	// Find the final match (last championship round, single match, with winner).
-	const rounds = await loadRounds(env, tournamentId);
-	const champRounds = rounds.filter((r) => r.phase === "championship");
-	if (champRounds.length === 0) {
-		return errorResponse(
-			"No championship rounds",
-			409,
-			cors,
-			"NO_CHAMPIONSHIP",
-		);
-	}
-	const lastRound = champRounds[champRounds.length - 1];
-	const allMatches = await loadMatches(env, tournamentId);
-	const lastMatches = allMatches.filter(
-		(m) => m.round_id === lastRound.round_id,
-	);
-	if (lastMatches.length !== 1 || !lastMatches[0].winner_slot_id) {
-		return errorResponse(
-			"Final has not been decided",
-			409,
-			cors,
-			"FINAL_INCOMPLETE",
-		);
-	}
-	// Auto-close the final round if it's still in_progress.
-	const closeResult = await autoCloseRoundIfReady(env, lastRound, allMatches);
-	if (!closeResult.ok) {
-		return errorResponse(closeResult.reason, 409, cors, closeResult.code);
-	}
-	await env.SHARE_DB.prepare(
-		`UPDATE tournaments SET status = 'complete', updated_at = datetime('now')
-		 WHERE tournament_id = ?`,
-	)
-		.bind(tournamentId)
-		.run();
-	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_completed");
-	return jsonResponse({ status: "complete" }, 200, cors);
-}
-
-// ----------------------------------------------------------------------
 // Helpers
 // ----------------------------------------------------------------------
 
@@ -1581,4 +1226,307 @@ async function matchRefsForTournament(
 			division: r.division,
 		});
 	});
+}
+
+// Build the D1 statements to insert a swiss round + its matches. Pure
+// builder so the caller can batch with other writes (e.g. the start-
+// tournament path atomically writes both divisions' Round 1 plus the
+// status flip in one batch). Rounds are always created in_progress —
+// the `pending` state was removed when the admin "Start round" button
+// was dropped.
+function buildSwissRoundStatements(
+	env: TournamentEnv,
+	tournament: TournamentRow,
+	division: Division,
+	nextRoundNumber: number,
+	divSlots: SlotRef[],
+	divMatchRefs: MatchRef[],
+	allowedMaps: string[],
+): { statements: D1PreparedStatement[]; roundId: string; matchCount: number } {
+	const config = tournamentConfig(tournament);
+	const seed = `${tournament.tournament_id}|swiss|${division}|r${nextRoundNumber}`;
+	const pairings: Pairing[] = pairSwissRound(
+		divSlots,
+		divMatchRefs,
+		nextRoundNumber,
+		config,
+		seed,
+	);
+	const withMaps = assignMapsToPairings(
+		pairings,
+		allowedMaps,
+		divMatchRefs,
+		seed,
+	);
+
+	const roundId = nanoid(21);
+	const statements: D1PreparedStatement[] = [
+		env.SHARE_DB.prepare(
+			`INSERT INTO tournament_rounds
+			   (round_id, tournament_id, phase, division, round_number, status,
+			    generated_at, started_at)
+			 VALUES (?, ?, 'swiss', ?, ?, 'in_progress',
+			         datetime('now'), datetime('now'))`,
+		).bind(roundId, tournament.tournament_id, division, nextRoundNumber),
+	];
+	for (let i = 0; i < withMaps.length; i++) {
+		const p = withMaps[i];
+		const matchId = nanoid(21);
+		const isBye = p.slot_b_id === null;
+		statements.push(
+			env.SHARE_DB.prepare(
+				`INSERT INTO tournament_matches
+				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+			).bind(
+				matchId,
+				roundId,
+				p.slot_a_id,
+				p.slot_b_id,
+				p.map_script,
+				isBye ? null : p.slot_b_id, // default pick-order to slot_b
+				isBye ? "bye" : "pending",
+				isBye ? p.slot_a_id : null,
+				i + 1,
+			),
+		);
+	}
+	return { statements, roundId, matchCount: withMaps.length };
+}
+
+// Build the D1 statements to insert a championship round (rounds 2+; round 1
+// is built inline by handleTransitionChampionship). Caller supplies the
+// pairings (derived from prior-round winners) so this function stays a
+// pure builder.
+function buildChampionshipRoundStatements(
+	env: TournamentEnv,
+	tournament: TournamentRow,
+	nextRoundNumber: number,
+	pairings: Pairing[],
+	matchRefs: MatchRef[],
+	allowedMaps: string[],
+): { statements: D1PreparedStatement[]; roundId: string; matchCount: number } {
+	const seed = `${tournament.tournament_id}|championship|r${nextRoundNumber}`;
+	const withMaps = assignMapsToPairings(pairings, allowedMaps, matchRefs, seed);
+	const roundId = nanoid(21);
+	const statements: D1PreparedStatement[] = [
+		env.SHARE_DB.prepare(
+			`INSERT INTO tournament_rounds
+			   (round_id, tournament_id, phase, division, round_number, status,
+			    generated_at, started_at)
+			 VALUES (?, ?, 'championship', NULL, ?, 'in_progress',
+			         datetime('now'), datetime('now'))`,
+		).bind(roundId, tournament.tournament_id, nextRoundNumber),
+	];
+	for (let i = 0; i < withMaps.length; i++) {
+		const p = withMaps[i];
+		const matchId = nanoid(21);
+		statements.push(
+			env.SHARE_DB.prepare(
+				`INSERT INTO tournament_matches
+				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
+				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
+			).bind(
+				matchId,
+				roundId,
+				p.slot_a_id,
+				p.slot_b_id,
+				p.map_script,
+				p.slot_b_id,
+				i + 1,
+			),
+		);
+	}
+	return { statements, roundId, matchCount: withMaps.length };
+}
+
+// System-triggered audit entry (no admin user_id). event_type is distinct
+// from 'tournament_admin' so per-admin rate-limit queries naturally skip
+// these rows and log inspection can separate human from automatic actions.
+function logSystemTournamentAction(
+	env: TournamentEnv,
+	tournamentId: string,
+	action: string,
+	extra?: Record<string, unknown>,
+): void {
+	const metadata = JSON.stringify({
+		action,
+		tournament_id: tournamentId,
+		...(extra ?? {}),
+	});
+	env.SHARE_DB.prepare(
+		`INSERT INTO events (event_type, user_id, metadata)
+		 VALUES ('tournament_system', NULL, ?)`,
+	)
+		.bind(metadata)
+		.run()
+		.catch((e: unknown) => {
+			logError("tournament_system_audit_failed", e, {
+				action,
+				tournament_id: tournamentId,
+			});
+		});
+}
+
+// Called after any match transitions pending → non-pending (upload-reports
+// from cloud/src/games.ts and admin retro-edits in handleRetroEditMatch).
+// If the just-reported match completes its round, this auto-closes the
+// round and either auto-generates the next round in that phase/division
+// or auto-completes the tournament (championship final).
+//
+// Idempotent and best-effort: any failure logs but does not propagate.
+// Skips when the work has already been done (race-safe against parallel
+// reports racing the same round to completion).
+export async function maybeAdvanceAfterMatchReport(
+	env: TournamentEnv,
+	matchId: string,
+): Promise<void> {
+	try {
+		const match = await loadMatch(env, matchId);
+		if (!match) return;
+		const round = await loadRound(env, match.round_id);
+		if (!round) return;
+		const tournament = await loadTournamentById(env, round.tournament_id);
+		if (!tournament) return;
+
+		const allMatches = await loadMatches(env, tournament.tournament_id);
+		const roundMatches = allMatches.filter(
+			(m) => m.round_id === round.round_id,
+		);
+		if (roundMatches.some((m) => m.status === "pending")) return;
+
+		const statements: D1PreparedStatement[] = [];
+
+		// Close the just-completed round. WHERE guard makes the UPDATE
+		// idempotent if a parallel report already closed it.
+		if (round.status !== "complete") {
+			statements.push(
+				env.SHARE_DB.prepare(
+					`UPDATE tournament_rounds SET status = 'complete', completed_at = datetime('now')
+					 WHERE round_id = ? AND status != 'complete'`,
+				).bind(round.round_id),
+			);
+		}
+
+		const allRounds = await loadRounds(env, tournament.tournament_id);
+		let auditAction = "round_closed";
+		let auditMetadata: Record<string, unknown> = {
+			round_id: round.round_id,
+			phase: round.phase,
+			division: round.division,
+		};
+
+		if (round.phase === "swiss") {
+			const division = round.division as Division;
+			const downstream = allRounds.find(
+				(r) =>
+					r.phase === "swiss" &&
+					r.division === division &&
+					r.round_number > round.round_number,
+			);
+			if (
+				!downstream &&
+				round.round_number < tournament.swiss_max_rounds &&
+				tournament.status === "swiss"
+			) {
+				const slots = await loadSlots(env, tournament.tournament_id);
+				const divSlots = slots
+					.filter((s) => s.phase === "swiss" && s.division === division)
+					.map(slotRowToRef);
+				const matchRefs = await matchRefsForTournament(
+					env,
+					tournament.tournament_id,
+					allMatches,
+				);
+				const divMatchRefs = matchRefs.filter((m) => m.division === division);
+				const allowedMaps = parseAllowedMaps(tournament);
+				const built = buildSwissRoundStatements(
+					env,
+					tournament,
+					division,
+					round.round_number + 1,
+					divSlots,
+					divMatchRefs,
+					allowedMaps,
+				);
+				statements.push(...built.statements);
+				auditAction = "round_generated";
+				auditMetadata = {
+					phase: "swiss",
+					division,
+					round_number: round.round_number + 1,
+					round_id: built.roundId,
+				};
+			}
+		} else {
+			// championship
+			const downstream = allRounds.find(
+				(r) =>
+					r.phase === "championship" && r.round_number > round.round_number,
+			);
+			if (!downstream && tournament.status === "championship") {
+				if (roundMatches.length === 1) {
+					// The just-closed round was the final.
+					statements.push(
+						env.SHARE_DB.prepare(
+							`UPDATE tournaments SET status = 'complete', updated_at = datetime('now')
+							 WHERE tournament_id = ? AND status = 'championship'`,
+						).bind(tournament.tournament_id),
+					);
+					auditAction = "tournament_completed";
+					auditMetadata = {
+						round_id: round.round_id,
+					};
+				} else {
+					// roundMatches is already in match_index order (loadMatches
+					// orders by phase, division, round_number, match_index).
+					const templates = buildChampionshipFollowupRound(roundMatches.length);
+					const pairings: Pairing[] = templates.map((t) => ({
+						slot_a_id: roundMatches[t.source_match_a_index - 1].winner_slot_id!,
+						slot_b_id: roundMatches[t.source_match_b_index - 1].winner_slot_id!,
+					}));
+					const matchRefs = await matchRefsForTournament(
+						env,
+						tournament.tournament_id,
+						allMatches,
+					);
+					const allowedMaps = parseAllowedMaps(tournament);
+					const built = buildChampionshipRoundStatements(
+						env,
+						tournament,
+						round.round_number + 1,
+						pairings,
+						matchRefs,
+						allowedMaps,
+					);
+					statements.push(...built.statements);
+					auditAction = "round_generated";
+					auditMetadata = {
+						phase: "championship",
+						round_number: round.round_number + 1,
+						round_id: built.roundId,
+					};
+				}
+			}
+		}
+
+		if (statements.length === 0) return;
+
+		statements.push(
+			env.SHARE_DB.prepare(
+				"UPDATE tournaments SET updated_at = datetime('now') WHERE tournament_id = ?",
+			).bind(tournament.tournament_id),
+		);
+		await env.SHARE_DB.batch(statements);
+		logSystemTournamentAction(
+			env,
+			tournament.tournament_id,
+			auditAction,
+			auditMetadata,
+		);
+	} catch (e) {
+		logError("tournament_auto_advance_failed", e, { match_id: matchId });
+	}
 }

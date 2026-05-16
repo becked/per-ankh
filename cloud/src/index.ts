@@ -73,15 +73,12 @@ import {
 import type { TournamentPlayerEnv } from "./tournament/player";
 import {
 	handleBulkCreateSlots,
-	handleCompleteTournament,
 	handleDeleteSlot,
-	handleGenerateRound,
 	handlePatchPairing,
 	handlePatchSlot,
 	handlePatchTournament,
 	handleRetroEditMatch,
-	handleStartRound,
-	handleStartSwiss,
+	handleStartTournament,
 	handleTransitionChampionship,
 } from "./tournament/admin";
 import type { TournamentAdminEnv } from "./tournament/admin";
@@ -781,26 +778,6 @@ const ROUTES: RouteSpec[] = [
 		route: "PATCH /v1/tournaments/:id/matches/:match_id",
 		handler: (r, e, m) => handleRetroEditMatch(m![1], m![2], r, e),
 	},
-	// Round controls
-	{
-		method: "POST",
-		match: {
-			kind: "regex",
-			regex:
-				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/rounds\/([A-Za-z0-9_-]{21})\/start$/,
-		},
-		route: "POST /v1/tournaments/:id/rounds/:round_id/start",
-		handler: (r, e, m) => handleStartRound(m![1], m![2], r, e),
-	},
-	{
-		method: "POST",
-		match: {
-			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/rounds$/,
-		},
-		route: "POST /v1/tournaments/:id/rounds",
-		handler: (r, e, m) => handleGenerateRound(m![1], r, e),
-	},
 	// Slots
 	{
 		method: "POST",
@@ -831,15 +808,18 @@ const ROUTES: RouteSpec[] = [
 		route: "DELETE /v1/tournaments/:id/slots/:slot_id",
 		handler: (r, e, m) => handleDeleteSlot(m![1], m![2], r, e),
 	},
-	// Lifecycle
+	// Lifecycle — single admin gate (the second is /transition-championship).
+	// Round 1 for both Swiss divisions is generated in this same call;
+	// subsequent rounds auto-spawn when the prior one is fully reported,
+	// and the tournament auto-completes on the championship final.
 	{
 		method: "POST",
 		match: {
 			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/start-swiss$/,
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/start$/,
 		},
-		route: "POST /v1/tournaments/:id/start-swiss",
-		handler: (r, e, m) => handleStartSwiss(m![1], r, e),
+		route: "POST /v1/tournaments/:id/start",
+		handler: (r, e, m) => handleStartTournament(m![1], r, e),
 	},
 	{
 		method: "POST",
@@ -850,15 +830,6 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "POST /v1/tournaments/:id/transition-championship",
 		handler: (r, e, m) => handleTransitionChampionship(m![1], r, e),
-	},
-	{
-		method: "POST",
-		match: {
-			kind: "regex",
-			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/complete$/,
-		},
-		route: "POST /v1/tournaments/:id/complete",
-		handler: (r, e, m) => handleCompleteTournament(m![1], r, e),
 	},
 	{
 		method: "PATCH",

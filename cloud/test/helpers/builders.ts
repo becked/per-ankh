@@ -73,9 +73,13 @@ export interface TestSlot {
 	readonly owner: TestUser | null;
 }
 
+// "setup" — slots in place, no rounds yet (admin hasn't clicked Start).
+// "swiss-round-1-generated" — admin pressed Start; Round 1 exists in_progress
+//   for both divisions with all matches pending.
+// "swiss-round-1-reported" — all Round 1 matches reported. With auto-advance
+//   this implicitly closes Round 1 and generates Round 2 for both divisions.
 export type TournamentPhase =
 	| "setup"
-	| "swiss-pending"
 	| "swiss-round-1-generated"
 	| "swiss-round-1-reported";
 
@@ -197,7 +201,9 @@ export async function makeTournament(
 	const slotsByDivision: { A: TestSlot[]; B: TestSlot[] } = { A: [], B: [] };
 	for (const row of finalRows) {
 		if (row.division !== "A" && row.division !== "B") {
-			throw new Error(`Slot ${row.slot_id} has unexpected division ${row.division}`);
+			throw new Error(
+				`Slot ${row.slot_id} has unexpected division ${row.division}`,
+			);
 		}
 		if (row.swiss_seed == null) {
 			throw new Error(`Slot ${row.slot_id} has null swiss_seed`);
@@ -229,34 +235,20 @@ export async function makeTournament(
 	// 5) Advance through phases using real handlers.
 	if (advanceTo === "setup") return t;
 
+	// /start does setup → swiss + Round 1 (in_progress) for both divisions
+	// atomically. The deprecated /start-swiss + per-division /rounds +
+	// /rounds/:id/start trio collapsed into this single endpoint.
 	await expectOk(
 		await request.post({
-			path: `/v1/tournaments/${tournamentId}/start-swiss`,
+			path: `/v1/tournaments/${tournamentId}/start`,
 			as: admin,
 		}),
 	);
-	if (advanceTo === "swiss-pending") return t;
-
-	for (const division of ["A", "B"] as const) {
-		const roundRes = await request.post({
-			path: `/v1/tournaments/${tournamentId}/rounds`,
-			as: admin,
-			body: { division },
-		});
-		const { round_id } = await expectOk<{ round_id: string }>(roundRes);
-		// Start each round immediately. Matches stay pending until reported,
-		// but the round status moves pending → in_progress, which is what
-		// transition-championship's auto-close logic expects.
-		await expectOk(
-			await request.post({
-				path: `/v1/tournaments/${tournamentId}/rounds/${round_id}/start`,
-				as: admin,
-			}),
-		);
-	}
 	if (advanceTo === "swiss-round-1-generated") return t;
 
-	// Report all round-1 matches; slot_a wins for determinism.
+	// Report all round-1 matches; slot_a wins for determinism. The last
+	// pending match's retro-edit fires auto-advance, which closes Round 1
+	// and generates Round 2 in that division.
 	const round1Matches = await t.matches();
 	for (const m of round1Matches) {
 		if (m.status === "bye") continue;

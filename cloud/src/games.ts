@@ -32,6 +32,7 @@ import type { SessionEnv } from "./session";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
 import { isTournamentAdmin } from "./tournament/authz";
+import { maybeAdvanceAfterMatchReport } from "./tournament/admin";
 import {
 	buildSummaryGameContext,
 	derivePlayerSummary,
@@ -1386,6 +1387,12 @@ export async function handleGameUpload(
 				)
 					.bind(tournamentContext.tournament_id)
 					.run();
+				// This was the first report (or an admin override) that
+				// flipped the match to non-pending. Auto-advance handles
+				// closing the round + generating the next round /
+				// completing the tournament. Helper swallows its own
+				// errors so upload success is never gated on it.
+				await maybeAdvanceAfterMatchReport(env, tournamentContext.match_id);
 			}
 		} catch (e) {
 			logError("tournament_match_link_failed", e, {

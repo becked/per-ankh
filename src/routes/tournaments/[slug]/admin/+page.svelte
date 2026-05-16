@@ -79,6 +79,37 @@
 		return out;
 	});
 
+	// Lifecycle action gates. Buttons render only when the underlying action
+	// would actually succeed — no "Transition" button glaring at admin while
+	// Swiss has 4 of 5 rounds left to play.
+
+	// Start is plausible once both divisions have at least one slot. The
+	// server still validates advance_count / map config; the rare edge cases
+	// (1-slot divisions, etc.) surface through ApiError as usual.
+	const startReady = $derived(
+		data.tournament.status === "setup" &&
+			swissSlotRows("A").length > 0 &&
+			swissSlotRows("B").length > 0,
+	);
+
+	// Transition is offered only when both divisions have played up to
+	// swiss_max_rounds and every match in their final round is non-pending.
+	// Stricter than the server's gate (which only blocks on pending matches)
+	// so admin doesn't transition mid-Swiss by surprise.
+	const transitionReady = $derived.by(() => {
+		if (data.tournament.status !== "swiss") return false;
+		for (const div of ["A", "B"] as const) {
+			const rounds = div === "A" ? swissRoundsA : swissRoundsB;
+			if (rounds.length === 0) return false;
+			const last = rounds[rounds.length - 1];
+			if (last.round_number !== data.tournament.swiss_max_rounds) return false;
+			const matches = matchesByRound[last.round_id] ?? [];
+			if (matches.length === 0) return false;
+			if (matches.some((m) => m.status === "pending")) return false;
+		}
+		return true;
+	});
+
 	async function withBusy<T>(
 		op: () => Promise<T>,
 		successMessage?: string,
@@ -186,73 +217,16 @@
 
 	// --- Lifecycle ---
 
-	async function startSwiss() {
+	async function startTournament() {
 		if (
 			!confirm(
-				"Start Swiss phase? This locks the slot list and computes advance count.",
+				"Start the tournament? Locks the slot list and generates Round 1 for both divisions.",
 			)
 		)
 			return;
 		await withBusy(
-			() => cloudApi.startSwiss(data.tournament.tournament_id),
-			"Started Swiss",
-		);
-	}
-
-	// Generate the next Swiss round for both divisions in one shot. Divisions
-	// can technically diverge (one finishes a round before the other), but in
-	// practice admins want them in lockstep. If one division has an open
-	// prior round and the other doesn't, we'll partial-succeed and show
-	// which division failed — admin can then close the laggard and retry.
-	async function generateRound() {
-		busy = true;
-		banner = null;
-		const errors: string[] = [];
-		let succeeded = 0;
-		try {
-			for (const div of ["A", "B"] as const) {
-				try {
-					await cloudApi.generateRound(data.tournament.tournament_id, {
-						division: div,
-					});
-					succeeded++;
-				} catch (err) {
-					if (err instanceof ApiError) {
-						errors.push(
-							`${data.standings.divisions[div].name}: ${err.message}${err.code ? ` (${err.code})` : ""}`,
-						);
-					} else {
-						errors.push(`${data.standings.divisions[div].name}: failed`);
-					}
-				}
-			}
-			await invalidateAll();
-			if (errors.length === 0) {
-				banner = { kind: "ok", message: "Generated next round" };
-			} else if (succeeded === 0) {
-				banner = { kind: "err", message: errors.join(" · ") };
-			} else {
-				banner = {
-					kind: "err",
-					message: `Partial: ${succeeded} generated, ${errors.join(" · ")}`,
-				};
-			}
-		} finally {
-			busy = false;
-		}
-	}
-
-	async function generateChampRound() {
-		await withBusy(
-			() => cloudApi.generateRound(data.tournament.tournament_id, {}),
-			"Generated next championship round",
-		);
-	}
-
-	async function startRound(roundId: string) {
-		await withBusy(
-			() => cloudApi.startRound(data.tournament.tournament_id, roundId),
-			"Round started",
+			() => cloudApi.startTournament(data.tournament.tournament_id),
+			"Started tournament",
 		);
 	}
 
@@ -266,17 +240,6 @@
 		await withBusy(
 			() => cloudApi.transitionChampionship(data.tournament.tournament_id),
 			"Transitioned to championship",
-		);
-	}
-
-	async function completeTournament() {
-		if (
-			!confirm("Mark the tournament complete? This freezes all admin actions.")
-		)
-			return;
-		await withBusy(
-			() => cloudApi.completeTournament(data.tournament.tournament_id),
-			"Tournament marked complete",
 		);
 	}
 
@@ -406,6 +369,23 @@
 									<span class="opacity-60">Division B:</span>
 									{data.tournament.division_b_name}
 								</div>
+								<div>
+									<span class="opacity-60">Swiss max rounds:</span>
+									{data.tournament.swiss_max_rounds}
+								</div>
+								<div>
+									<span class="opacity-60"
+										>Wins to advance / losses to eliminate:</span
+									>
+									{data.tournament.swiss_wins_to_advance} / {data.tournament
+										.swiss_losses_to_eliminate}
+								</div>
+								{#if data.tournament.swiss_advance_count !== null}
+									<div class="lg:col-span-2">
+										<span class="opacity-60">Championship advancers:</span>
+										{data.tournament.swiss_advance_count} per division
+									</div>
+								{/if}
 								{#if data.tournament.description}
 									<div class="lg:col-span-2">
 										<span class="opacity-60">Description:</span>
@@ -467,53 +447,6 @@
 					</div>
 				</section>
 
-				<!-- Lifecycle controls -->
-				<section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
-					<h2 class="mb-3 text-sm font-bold text-tan">Lifecycle</h2>
-					<div
-						class="flex flex-wrap gap-2 rounded-lg p-3"
-						style="background-color: #35302B;"
-					>
-						{#if data.tournament.status === "setup"}
-							<button
-								type="button"
-								class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-								onclick={startSwiss}
-								disabled={busy}
-							>
-								Start Swiss
-							</button>
-						{:else if data.tournament.status === "swiss"}
-							<button
-								type="button"
-								class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-								onclick={transitionChampionship}
-								disabled={busy}
-							>
-								Transition to Championship
-							</button>
-						{:else if data.tournament.status === "championship"}
-							<button
-								type="button"
-								class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-								onclick={completeTournament}
-								disabled={busy}
-							>
-								Mark Complete
-							</button>
-						{:else}
-							<p class="text-xs text-tan opacity-70">
-								Tournament is complete — no further admin actions.
-							</p>
-						{/if}
-					</div>
-					{#if data.tournament.swiss_advance_count !== null}
-						<p class="mt-2 text-xs text-tan opacity-70">
-							Swiss advance count: {data.tournament.swiss_advance_count} per division
-						</p>
-					{/if}
-				</section>
-
 				<!-- Slots -->
 				<section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
 					<h2 class="mb-3 text-sm font-bold text-tan">Slots</h2>
@@ -560,6 +493,28 @@
 							>
 								Add slot
 							</button>
+						</div>
+					{/if}
+
+					{#if data.tournament.status === "setup"}
+						<div
+							class="mb-3 flex flex-wrap items-center justify-end gap-2 rounded-lg p-3"
+							style="background-color: #35302B;"
+						>
+							{#if startReady}
+								<button
+									type="button"
+									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+									onclick={startTournament}
+									disabled={busy}
+								>
+									Start Tournament
+								</button>
+							{:else}
+								<p class="text-xs text-tan opacity-60">
+									Add at least one player to each division to start.
+								</p>
+							{/if}
 						</div>
 					{/if}
 
@@ -629,35 +584,45 @@
 						style="background-color: #2a2622;"
 					>
 						<h2 class="mb-3 text-sm font-bold text-tan">Rounds</h2>
+						<p class="mb-3 text-xs text-tan opacity-60">
+							Rounds advance automatically — the next round generates when every
+							match in the prior round is reported. Players report results by
+							uploading their save from each match's page; you can also record
+							results inline below.
+						</p>
 
-						{#if data.tournament.status === "swiss"}
-							<div class="mb-3">
-								<button
-									type="button"
-									class="rounded border border-brown px-3 py-1.5 text-xs text-tan hover:bg-brown disabled:opacity-50"
-									onclick={generateRound}
-									disabled={busy}
-								>
-									Generate next round
-								</button>
-								<p class="mt-2 text-xs text-tan opacity-60">
-									Once a round is started, players report results from each
-									match's page. You can also record results inline below.
+						{#if data.tournament.status === "swiss" && transitionReady}
+							<div
+								class="mb-4 flex flex-wrap items-center justify-end gap-2 rounded-lg p-3"
+								style="background-color: #35302B;"
+							>
+								<p class="mr-auto text-xs text-tan opacity-70">
+									Swiss is complete. Ready to build the championship bracket.
 								</p>
-							</div>
-						{/if}
-
-						{#if data.tournament.status === "championship"}
-							<div class="mb-3">
 								<button
 									type="button"
-									class="rounded border border-brown px-3 py-1.5 text-xs text-tan hover:bg-brown disabled:opacity-50"
-									onclick={generateChampRound}
+									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+									onclick={transitionChampionship}
 									disabled={busy}
 								>
-									Generate next championship round
+									Transition to Championship
 								</button>
 							</div>
+						{:else if data.tournament.status === "championship"}
+							<p
+								class="mb-4 rounded-lg p-3 text-xs text-tan opacity-70"
+								style="background-color: #35302B;"
+							>
+								Championship in progress — tournament will auto-complete when
+								the final is reported.
+							</p>
+						{:else if data.tournament.status === "complete"}
+							<p
+								class="mb-4 rounded-lg p-3 text-xs text-tan opacity-70"
+								style="background-color: #35302B;"
+							>
+								Tournament is complete — no further admin actions.
+							</p>
 						{/if}
 
 						{#each [{ label: data.standings.divisions.A.name, rounds: swissRoundsA }, { label: data.standings.divisions.B.name, rounds: swissRoundsB }, { label: "Championship", rounds: champRounds }] as group (group.label)}
@@ -682,18 +647,6 @@
 															{round.status}
 														</span>
 													</h4>
-													<div class="flex gap-1">
-														{#if round.status === "pending"}
-															<button
-																type="button"
-																class="hover:bg-orange/20 rounded border border-orange px-2 py-0.5 text-[10px] text-tan disabled:opacity-50"
-																onclick={() => startRound(round.round_id)}
-																disabled={busy}
-															>
-																Start
-															</button>
-														{/if}
-													</div>
 												</div>
 
 												<RoundMatches

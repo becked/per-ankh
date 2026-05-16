@@ -572,31 +572,26 @@ export const cloudApi = {
 		});
 	},
 
-	startSwiss: async (
+	// Single admin gate that flips setup → swiss and generates Round 1
+	// for both divisions in one batch. Subsequent rounds advance
+	// automatically on the server when a round's last match reports.
+	startTournament: async (
 		tournamentId: string,
 		opts?: CallOpts,
-	): Promise<{ tournament: TournamentDetail }> => {
-		const res = await request(`/tournaments/${tournamentId}/start-swiss`, {
+	): Promise<{
+		tournament: TournamentDetail;
+		rounds: { division: Division; round_id: string; matches: number }[];
+	}> => {
+		const res = await request(`/tournaments/${tournamentId}/start`, {
 			...opts,
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: "{}",
 		});
-		return res.json() as Promise<{ tournament: TournamentDetail }>;
-	},
-
-	generateRound: async (
-		tournamentId: string,
-		body: { division?: Division },
-		opts?: CallOpts,
-	): Promise<{ round_id: string; matches: number }> => {
-		const res = await request(`/tournaments/${tournamentId}/rounds`, {
-			...opts,
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify(body),
-		});
-		return res.json() as Promise<{ round_id: string; matches: number }>;
+		return res.json() as Promise<{
+			tournament: TournamentDetail;
+			rounds: { division: Division; round_id: string; matches: number }[];
+		}>;
 	},
 
 	patchPairing: async (
@@ -615,19 +610,6 @@ export const cloudApi = {
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body),
-		});
-	},
-
-	startRound: async (
-		tournamentId: string,
-		roundId: string,
-		opts?: CallOpts,
-	): Promise<void> => {
-		await request(`/tournaments/${tournamentId}/rounds/${roundId}/start`, {
-			...opts,
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: "{}",
 		});
 	},
 
@@ -679,19 +661,6 @@ export const cloudApi = {
 			matches: number;
 			advancers: { A: string[]; B: string[] };
 		}>;
-	},
-
-	completeTournament: async (
-		tournamentId: string,
-		opts?: CallOpts,
-	): Promise<{ status: "complete" }> => {
-		const res = await request(`/tournaments/${tournamentId}/complete`, {
-			...opts,
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: "{}",
-		});
-		return res.json() as Promise<{ status: "complete" }>;
 	},
 } as const;
 

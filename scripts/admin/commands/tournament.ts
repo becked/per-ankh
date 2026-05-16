@@ -1,7 +1,7 @@
 // `./per-ankh admin tournament <subcommand>` — tournament metadata + admin
 // role management. Tournament creation lives here (not in the API) so the
 // only path to inserting tournament_admins is operator-driven. Player slot
-// creation + lifecycle (start-swiss, generate rounds, etc.) is in the
+// management + lifecycle (start, transition-championship) lives in the
 // tournament admin web UI; the CLI handles only the bootstrapping bits.
 
 import { randomBytes } from "node:crypto";
@@ -319,10 +319,7 @@ async function runShow(argv: string[], opts: CommandOpts): Promise<void> {
 	}
 }
 
-async function runGrantAdmin(
-	argv: string[],
-	opts: CommandOpts,
-): Promise<void> {
+async function runGrantAdmin(argv: string[], opts: CommandOpts): Promise<void> {
 	const { positional } = parseFlags(argv);
 	const tournamentId = positional[0];
 	const userId = positional[1];

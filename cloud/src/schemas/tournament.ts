@@ -84,13 +84,6 @@ export const PatchSlotSchema = v.object({
 	),
 });
 
-export const GenerateRoundSchema = v.object({
-	// Optional — handler infers the next round if not provided. Phase always
-	// matches the tournament's current status. Division is required for swiss,
-	// ignored for championship.
-	division: v.optional(DivisionSchema),
-});
-
 // slot_b_id is NOT nullable: byes are an artifact of pairing generation
 // (pickByeRecipient), not a post-hoc admin edit. Nulling slot_b_id via
 // PATCH would (a) bypass the "no slot gets two byes" invariant and
