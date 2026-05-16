@@ -66,6 +66,7 @@ import {
 import type { TournamentPublicEnv } from "./tournament/public";
 import {
 	handleDismissBanner,
+	handleMyAdminTournaments,
 	handleMyMatches,
 	handleMyTournaments,
 } from "./tournament/player";
@@ -886,6 +887,12 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/users/me/tournaments" },
 		route: "GET /v1/users/me/tournaments",
 		handler: (r, e) => handleMyTournaments(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/users/me/admin-tournaments" },
+		route: "GET /v1/users/me/admin-tournaments",
+		handler: (r, e) => handleMyAdminTournaments(r, e),
 	},
 	{
 		method: "GET",

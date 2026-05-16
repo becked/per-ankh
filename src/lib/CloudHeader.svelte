@@ -7,10 +7,23 @@
 	import { page } from "$app/state";
 	import SearchInput from "$lib/SearchInput.svelte";
 	import AboutModal from "$lib/AboutModal.svelte";
-	import { cloudApi, type UserMe } from "$lib/api-cloud";
+	import {
+		cloudApi,
+		type MyAdminTournamentEntry,
+		type MyTournamentEntry,
+		type UserMe,
+	} from "$lib/api-cloud";
 	import { searchQuery } from "$lib/stores/search";
 
-	let { user }: { user: UserMe | null } = $props();
+	let {
+		user,
+		myTournaments = [],
+		adminTournaments = [],
+	}: {
+		user: UserMe | null;
+		myTournaments?: MyTournamentEntry[];
+		adminTournaments?: MyAdminTournamentEntry[];
+	} = $props();
 
 	let isMenuOpen = $state(false);
 	let isAboutModalOpen = $state(false);
@@ -130,6 +143,35 @@
 					>
 						Upload saves
 					</a>
+					<div class="border-t border-black"></div>
+					<a
+						href={resolve("/tournaments")}
+						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						onclick={closeMenu}
+					>
+						Tournaments
+					</a>
+					{#each myTournaments as t (t.tournament_id)}
+						<a
+							href={resolve(`/tournaments/${t.slug}`)}
+							title={t.name}
+							class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							onclick={closeMenu}
+						>
+							<span aria-hidden="true" class="mr-1.5">•</span>{t.name}
+						</a>
+					{/each}
+					{#each adminTournaments as t (t.tournament_id)}
+						<a
+							href={resolve(`/tournaments/${t.slug}/admin`)}
+							title="{t.name} (Admin)"
+							class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							onclick={closeMenu}
+						>
+							<span aria-hidden="true" class="mr-1.5">•</span>{t.name} (Admin)
+						</a>
+					{/each}
+					<div class="border-t border-black"></div>
 					<a
 						href={resolve("/account")}
 						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
@@ -144,7 +186,6 @@
 					>
 						About
 					</button>
-					<div class="border-t border-black"></div>
 					<button
 						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50"
 						type="button"
@@ -161,6 +202,14 @@
 					>
 						About
 					</button>
+					<div class="border-t border-black"></div>
+					<a
+						href={resolve("/tournaments")}
+						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+						onclick={closeMenu}
+					>
+						Tournaments
+					</a>
 					<div class="border-t border-black"></div>
 					<a
 						href={resolve("/")}

@@ -4,7 +4,12 @@
 export const ssr = true;
 export const prerender = false;
 
-import { cloudApi, type MyTournamentEntry, type UserMe } from "$lib/api-cloud";
+import {
+	cloudApi,
+	type MyAdminTournamentEntry,
+	type MyTournamentEntry,
+	type UserMe,
+} from "$lib/api-cloud";
 import { DEFAULT_META, type PageMeta } from "$lib/page-meta";
 import type { LayoutLoad } from "./$types";
 
@@ -26,29 +31,56 @@ export const load: LayoutLoad = async ({
 	user: UserMe | null;
 	meta: PageMeta;
 	tournamentNotices: MyTournamentEntry[];
+	myTournaments: MyTournamentEntry[];
+	adminTournaments: MyAdminTournamentEntry[];
 }> => {
 	try {
 		const user = await cloudApi.getMe({ fetch });
-		// Tournament enrollment banner: only fetched for signed-in users, and
-		// only the ones they haven't dismissed and that haven't completed.
-		// Failures are swallowed — the banner is a nice-to-have, not load
-		// bearing for any page.
+		// Two slices off the same player-tournaments fetch:
+		//   - `tournamentNotices` drives the dismissible enrollment banner
+		//     (status != complete AND not dismissed).
+		//   - `myTournaments` drives the header dropdown (status != complete,
+		//     ignores dismiss — the menu is navigation, not a notice).
+		// `adminTournaments` is its own fetch (admin membership is a
+		// separate table). All three are nice-to-haves: failures fall through
+		// to empty lists so the header still renders.
 		let notices: MyTournamentEntry[] = [];
+		let myTournaments: MyTournamentEntry[] = [];
+		let adminTournaments: MyAdminTournamentEntry[] = [];
 		if (user) {
 			try {
 				const res = await cloudApi.getMyTournaments({ fetch });
-				notices = res.tournaments.filter(
-					(t) =>
-						t.status !== "complete" && t.claim_banner_dismissed_at === null,
+				const active = res.tournaments.filter((t) => t.status !== "complete");
+				myTournaments = active;
+				notices = active.filter((t) => t.claim_banner_dismissed_at === null);
+			} catch {
+				// fall through with empty lists
+			}
+			try {
+				const res = await cloudApi.getMyAdminTournaments({ fetch });
+				adminTournaments = res.tournaments.filter(
+					(t) => t.status !== "complete",
 				);
 			} catch {
 				// fall through with empty list
 			}
 		}
-		return { user, meta: DEFAULT_META, tournamentNotices: notices };
+		return {
+			user,
+			meta: DEFAULT_META,
+			tournamentNotices: notices,
+			myTournaments,
+			adminTournaments,
+		};
 	} catch {
 		// Network errors etc. — header just renders signed-out state.
 		// Page-level loads will surface real errors when they fire.
-		return { user: null, meta: DEFAULT_META, tournamentNotices: [] };
+		return {
+			user: null,
+			meta: DEFAULT_META,
+			tournamentNotices: [],
+			myTournaments: [],
+			adminTournaments: [],
+		};
 	}
 };

@@ -43,6 +43,32 @@ export async function handleMyTournaments(
 	return jsonResponse({ tournaments: res.results ?? [] }, 200, cors);
 }
 
+export async function handleMyAdminTournaments(
+	request: Request,
+	env: TournamentPlayerEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+	const res = await env.SHARE_DB.prepare(
+		`SELECT t.tournament_id, t.slug, t.name, t.status
+		 FROM tournament_admins a
+		 JOIN tournaments t ON t.tournament_id = a.tournament_id
+		 WHERE a.user_id = ?
+		 ORDER BY t.created_at DESC`,
+	)
+		.bind(session.data.user_id)
+		.all<{
+			tournament_id: string;
+			slug: string;
+			name: string;
+			status: string;
+		}>();
+	return jsonResponse({ tournaments: res.results ?? [] }, 200, cors);
+}
+
 export async function handleMyMatches(
 	request: Request,
 	env: TournamentPlayerEnv,

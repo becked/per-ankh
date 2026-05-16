@@ -478,6 +478,13 @@ export const cloudApi = {
 		return res.json() as Promise<{ tournaments: MyTournamentEntry[] }>;
 	},
 
+	getMyAdminTournaments: async (
+		opts?: CallOpts,
+	): Promise<{ tournaments: MyAdminTournamentEntry[] }> => {
+		const res = await request("/users/me/admin-tournaments", opts);
+		return res.json() as Promise<{ tournaments: MyAdminTournamentEntry[] }>;
+	},
+
 	getMyMatches: async (
 		opts?: CallOpts,
 	): Promise<{ matches: MyMatchEntry[] }> => {
@@ -826,6 +833,13 @@ export interface MyTournamentEntry {
 	slot_id: string;
 	division: Division | null;
 	claim_banner_dismissed_at: string | null;
+}
+
+export interface MyAdminTournamentEntry {
+	tournament_id: string;
+	slug: string;
+	name: string;
+	status: TournamentStatus;
 }
 
 // Hand-rolled to match the SELECT in cloud handleMyMatches exactly. Does NOT
