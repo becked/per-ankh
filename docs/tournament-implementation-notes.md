@@ -153,11 +153,32 @@ The biggest design-shape decisions, in case anyone needs to remember why:
   reports. Participant uploads to an already-reported match → save lands
   in their library but match link is unchanged. Admin observer upload is
   the only override path.
-- **Auto-close on advance.** No explicit "Close round" button. Closing
-  is implicit on `generateRound` / `transition-championship` /
-  `complete` — those three actions auto-close any in_progress predecessor
-  rounds if all matches are reported. Pending matches still block the
-  advance with a clear error.
+- **Auto-advance on match report.** Only two admin gates remain:
+  `POST /v1/tournaments/:id/start` (setup → swiss + Round 1 for both
+  divisions in one batch, all rounds created `status='in_progress'`)
+  and `/transition-championship` (still admin-gated because cascade
+  ties at the cutoff may need `override_ranks`, and the admin signals
+  end-of-Swiss). Everything else happens through
+  `maybeAdvanceAfterMatchReport` in `cloud/src/tournament/admin.ts`,
+  invoked from the upload flow (`games.ts` after the match UPDATE)
+  and from `handleRetroEditMatch` on pending → non-pending transitions:
+  when the round's last pending match is reported, the helper closes
+  the round and either spawns the next round in-place (Swiss in the
+  same division if `round_number < swiss_max_rounds`, championship if
+  the prior round had > 1 match) or auto-completes the tournament
+  (championship 1-match final). The `pending` round status dropped
+  out of the application flow; rounds go straight to `in_progress`.
+  System-triggered audit entries (auto-generation, auto-completion)
+  land under `event_type='tournament_system'` with `user_id=NULL`,
+  keeping them out of the per-admin rate-limit count.
+- **Known retro-edit edge.** `downstreamBlocked` still only blocks on
+  _non-pending_ downstream matches, so a retro-edit on a complete
+  round is permitted even after auto-advance has spawned the next
+  round (all its matches start pending). If the edit flips a winner
+  that the next round's pairings were computed from, those pairings
+  go stale and admin must fix them via `PATCH /matches/:id/pairing`
+  (UI already exposes this). Acceptable for MVP — a regenerate-round
+  endpoint is the proper fix if it shows up in practice.
 - **Cards, not SVG bracket.** See Deferred Decisions §1.
 
 ## Open work
@@ -349,7 +370,7 @@ the cloud rewrite. New surfaces in this branch warrant a fresh pass:
    owner can. Make sure there's no race where the tournament transitions
    to 'complete' mid-upload and the lockout misfires.
 7. **Slot↔player_index trust**: in admin observer uploads, the admin
-   maps slot→player_index. Nothing validates the mapping is _correct_
+   maps slot→player*index. Nothing validates the mapping is \_correct*
    (just that the indexes reference humans). Trust model: admin trusted.
    Same trust as first-report-wins — acceptable per user.
 8. **CSP `connect-src`**: we updated the dev detection in
@@ -382,4 +403,9 @@ this is the tournament-specific addendum.
 9. [ ] Grant admin to 4 operators
 10. [ ] Admin pre-fills slots via the web admin panel
 11. [ ] Announce to players; they sign in to claim
-12. [ ] Start swiss; generate round 1; players upload; advance rounds...
+12. [ ] Click **Start Tournament** in the admin panel; players upload
+        saves to report results; Swiss rounds spawn automatically as
+        prior rounds fill in. When the final round of every division
+        is reported, the admin panel exposes **Transition to
+        Championship**. Championship rounds also auto-spawn; the
+        tournament auto-completes when the final match reports.
