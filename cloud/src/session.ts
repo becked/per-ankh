@@ -1,6 +1,7 @@
-// Session management. Sessions live in KV under `session:<token>`, with a
-// 30-day TTL that's refreshed on each successful read. The cookie carries
-// the opaque token; nothing else is stored client-side.
+// Session management. Sessions live in KV under `session:<token>` with a
+// fixed 30-day TTL from creation. Reads do NOT bump expiration, so a user
+// has to re-sign-in 30 days after their last login regardless of activity.
+// The cookie carries the opaque token; nothing else is stored client-side.
 //
 // Keys:
 //   session:<nanoid(32)>  → SessionData     (30-day TTL)
@@ -129,6 +130,29 @@ export function sessionCookie(token: string, request: Request): string {
 		"SameSite=Lax",
 		"Path=/",
 		`Max-Age=${SESSION_TTL_SECONDS}`,
+	];
+	const domain = sessionCookieDomain(request);
+	if (domain) parts.push(`Domain=${domain}`);
+	if (isSecureRequest(request)) parts.push("Secure");
+	return parts.join("; ");
+}
+
+// Non-auth "returning user" hint, set on every successful login. Read by
+// the login page to hide the invite-code field for users who've signed in
+// before — so existing users aren't shown a field that doesn't apply to
+// them. Deliberately NOT HttpOnly: the frontend reads it from
+// document.cookie. The cookie carries no auth value; flipping it client-
+// side just shows or hides one input. 1-year Max-Age outlives the 30-day
+// session so the hint survives forced relogins.
+const SEEN_COOKIE = "pa_seen";
+const SEEN_COOKIE_MAX_AGE = 60 * 60 * 24 * 365; // 1 year
+
+export function seenCookie(request: Request): string {
+	const parts = [
+		`${SEEN_COOKIE}=1`,
+		"SameSite=Lax",
+		"Path=/",
+		`Max-Age=${SEEN_COOKIE_MAX_AGE}`,
 	];
 	const domain = sessionCookieDomain(request);
 	if (domain) parts.push(`Domain=${domain}`);

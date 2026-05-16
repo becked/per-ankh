@@ -18,12 +18,11 @@ the old doc stays as historical context.
 - Tauri is gone. v0.2.0 GitHub Release is the desktop-final artifact.
 - Cloud Worker is feature-complete (auth, upload, games, dashboard, sharing,
   reparse, downloads, observability, audit log, CSP reporting).
-- Initial release ships gated to a Discord username allowlist via
-  `ALLOWED_DISCORD_USERNAMES` (comma-separated, lowercase, fail-closed if
-  unset). Usernames chosen over snowflake IDs because testers can read
-  theirs off Settings → My Account; snowflakes require Developer Mode plus
-  a right-click. List expands by `wrangler secret put`-ing a new
-  comma-separated value as test users join the next feature.
+- Sign-up is gated by a single shared invite-code passphrase, the
+  `INVITE_CODE` Worker secret. Only new accounts are checked (existing
+  `discord_id` in `users` bypasses); failed attempts are per-IP rate-limited.
+  Rotate by `wrangler secret put INVITE_CODE` with a new value — no
+  redeploy, new logins pick it up immediately.
 - Legacy `/v1/share/*` endpoints stay live on the API Worker (desktop
   v0.2.0 still mints share URLs against it). The legacy share viewer
   (`web/`) currently owns `per-ankh.app` via a Cloudflare Pages custom
@@ -61,14 +60,13 @@ Paste the returned `id` and `preview_id` into `cloud/wrangler.toml`.
 
 ```bash
 cd cloud
-npx wrangler secret put DISCORD_CLIENT_SECRET       # from Discord developer portal
-npx wrangler secret put ALLOWED_DISCORD_USERNAMES   # comma-separated, e.g. ".becked,alice,bob"
+npx wrangler secret put DISCORD_CLIENT_SECRET   # from Discord developer portal
+npx wrangler secret put INVITE_CODE             # sign-up passphrase, share OOB
 ```
 
-Lowercase the values; the auth handler normalizes `discordUser.username`
-to lowercase before testing membership in the parsed list. The handler is
-fail-closed if `ALLOWED_DISCORD_USERNAMES` is unset, so don't skip it —
-login will hard-fail with no helpful diagnostic until it's set.
+`./per-ankh prod preflight` will fail if either is unset on the production
+Worker. Rotate `INVITE_CODE` later with the same command — new value, no
+redeploy.
 
 ### 3.3. Discord OAuth app
 

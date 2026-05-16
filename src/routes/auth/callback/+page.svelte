@@ -12,8 +12,6 @@
 
 	let status = $state<Status>({ kind: "loading" });
 
-	const OW_DISCORD_INVITE_URL = "https://discord.com/invite/BNVpEgJ";
-
 	onMount(async () => {
 		const params = new URLSearchParams(window.location.search);
 		const code = params.get("code");
@@ -55,7 +53,7 @@
 		} catch (err) {
 			const message =
 				err instanceof ApiError
-					? `${err.code ?? err.status}: ${err.message}`
+					? err.message
 					: err instanceof Error
 						? err.message
 						: "Login failed";
@@ -99,16 +97,6 @@
 					<p class="mt-2 break-words text-xs text-gray-400">
 						{status.message}
 					</p>
-					{#if status.code === "NOT_IN_GUILD"}
-						<a
-							href={OW_DISCORD_INVITE_URL}
-							target="_blank"
-							rel="noopener noreferrer"
-							class="mt-3 mr-2 inline-block rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange"
-						>
-							Join the Old World Discord
-						</a>
-					{/if}
 					<a
 						href={resolve("/")}
 						class="mt-3 inline-block rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange"
