@@ -1,0 +1,12 @@
+// Tournament rate-limit ceilings. Hardcoded for v1 — promote to
+// wrangler.toml vars if operators need to retune during a live event.
+
+// Per-user admin mutation budget. Spec said 30/hour/tournament; we
+// simplified to per-user because the threat model (stolen admin
+// session) is identical at our 4-admin-per-tournament scale.
+export const TOURNAMENT_ADMIN_ACTIONS_PER_HOUR = 30;
+
+// Per-IP budget for anonymous tournament reads (list/detail/standings/
+// bracket/rounds/matches/match-detail + game tournament-link). Scraper
+// User-Agents bypass.
+export const TOURNAMENT_VIEW_PER_HOUR = 600;

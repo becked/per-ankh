@@ -31,6 +31,7 @@ import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
+import { isTournamentAdmin } from "./tournament/authz";
 import {
 	buildSummaryGameContext,
 	derivePlayerSummary,
@@ -79,7 +80,7 @@ const SCRAPER_UA_PREFIXES = [
 	"whatsapp/",
 ];
 
-function isScraperUA(ua: string | null): boolean {
+export function isScraperUA(ua: string | null): boolean {
 	if (!ua) return false;
 	const lower = ua.toLowerCase();
 	return SCRAPER_UA_PREFIXES.some((p) => lower.startsWith(p));
@@ -105,18 +106,20 @@ const TECH_LAW_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / 4); // 24
 // safely parameterized (event_type can't be a bind parameter — it's part
 // of the WHERE clause structure — but the allowlist closes the injection
 // path while still letting all callers share one query shape).
-type RateLimitedEventType =
+export type RateLimitedEventType =
 	| "upload"
 	| "reimport"
 	| "visibility_change"
 	| "download"
-	| "anon_read";
+	| "anon_read"
+	| "tournament_admin"
+	| "tournament_view";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.
 const UPLOAD_EVENT_TYPES = ["upload", "reimport"] as const;
 
-async function countEventsSince(
+export async function countEventsSince(
 	db: D1Database,
 	eventType: RateLimitedEventType | readonly RateLimitedEventType[],
 	column: "user_id" | "ip_address" | null,
@@ -892,12 +895,12 @@ export async function handleGameUpload(
 		const isParticipant =
 			userId === match.slot_a_user || userId === match.slot_b_user;
 		if (!isParticipant) {
-			const adminRow = await env.SHARE_DB.prepare(
-				"SELECT 1 FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
-			)
-				.bind(match.tournament_id, userId)
-				.first();
-			if (!adminRow) {
+			const isAdmin = await isTournamentAdmin(
+				env,
+				session.data,
+				match.tournament_id,
+			);
+			if (!isAdmin) {
 				return errorResponse(
 					"Not a participant or admin for this match",
 					403,

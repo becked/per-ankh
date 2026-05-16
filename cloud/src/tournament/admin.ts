@@ -16,6 +16,9 @@ import {
 } from "../schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "../session";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
+import { countEventsSince } from "../games";
+import { logError } from "../log";
+import { TOURNAMENT_ADMIN_ACTIONS_PER_HOUR } from "./limits";
 import {
 	advanceCountSuggestion,
 	buildChampionshipFollowupRound,
@@ -87,6 +90,26 @@ async function authedTournament(
 		}
 		throw e;
 	}
+	// Per-user rate limit on admin mutations. Bounds the damage from a
+	// stolen admin session (4 admins acting deliberately stay well below
+	// the limit).
+	const adminEventCount = await countEventsSince(
+		env.SHARE_DB,
+		"tournament_admin",
+		"user_id",
+		session.data.user_id,
+	);
+	if (adminEventCount >= TOURNAMENT_ADMIN_ACTIONS_PER_HOUR) {
+		return {
+			ok: false,
+			response: errorResponse(
+				"Tournament admin rate limit exceeded",
+				429,
+				cors,
+				"RATE_LIMIT_TOURNAMENT_ADMIN",
+			),
+		};
+	}
 	const tournament = await loadTournamentById(env, tournamentId);
 	if (!tournament) {
 		return {
@@ -102,11 +125,59 @@ async function authedTournament(
 	return { ok: true, tournament, userId: session.data.user_id };
 }
 
+// Fire-and-forget audit + rate-limit insert. Logged at the end of an admin
+// handler's happy path so failed mutations don't leave audit ghosts. The
+// same event_type drives the per-user rate limit (countEventsSince above),
+// so every successful mutation counts toward the next hour's budget.
+function logTournamentAdminAction(
+	env: TournamentAdminEnv,
+	userId: string,
+	tournamentId: string,
+	action: string,
+	extra?: Record<string, unknown>,
+): void {
+	const metadata = JSON.stringify({
+		action,
+		tournament_id: tournamentId,
+		...(extra ?? {}),
+	});
+	env.SHARE_DB.prepare(
+		`INSERT INTO events (event_type, user_id, metadata)
+		 VALUES ('tournament_admin', ?, ?)`,
+	)
+		.bind(userId, metadata)
+		.run()
+		.catch((e: unknown) => {
+			logError("tournament_admin_audit_failed", e, {
+				action,
+				tournament_id: tournamentId,
+				user_id: userId,
+			});
+		});
+}
+
 async function parseJsonBody<T>(
 	request: Request,
 	schema: v.GenericSchema<unknown, T>,
 	cors: Record<string, string>,
 ): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
+	// Defense-in-depth against CSRF: SameSite=Lax already blocks
+	// cross-origin POST in modern browsers, but an explicit Content-Type
+	// check rejects form-encoded submissions that could otherwise reach a
+	// JSON endpoint with a non-empty body.
+	const rawType = request.headers.get("Content-Type") ?? "";
+	const baseType = rawType.split(";", 1)[0].trim().toLowerCase();
+	if (baseType !== "application/json") {
+		return {
+			ok: false,
+			response: errorResponse(
+				"Content-Type must be application/json",
+				415,
+				cors,
+				"UNSUPPORTED_MEDIA_TYPE",
+			),
+		};
+	}
 	let parsed: unknown;
 	try {
 		parsed = await request.json();
@@ -211,6 +282,11 @@ export async function handlePatchTournament(
 		.bind(...binds)
 		.run();
 	const updated = await loadTournamentById(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_patched", {
+		fields_changed: Object.keys(patch).filter(
+			(k) => patch[k as keyof typeof patch] !== undefined,
+		),
+	});
 	return jsonResponse({ tournament: updated }, 200, cors);
 }
 
@@ -301,6 +377,9 @@ export async function handleBulkCreateSlots(
 		).bind(tournamentId),
 	);
 	await env.SHARE_DB.batch(statements);
+	logTournamentAdminAction(env, a.userId, tournamentId, "slots_bulk_created", {
+		count: created.length,
+	});
 	return jsonResponse({ created }, 201, cors);
 }
 
@@ -390,6 +469,10 @@ export async function handlePatchSlot(
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadSlot(env, slotId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "slot_patched", {
+		slot_id: slotId,
+		username_changed: usernameChanged,
+	});
 	return jsonResponse({ slot: updated }, 200, cors);
 }
 
@@ -420,6 +503,9 @@ export async function handleDeleteSlot(
 		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
 	}
 	await bumpTournamentUpdatedAt(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "slot_deleted", {
+		slot_id: slotId,
+	});
 	return new Response(null, { status: 204, headers: cors });
 }
 
@@ -491,6 +577,9 @@ export async function handleStartSwiss(
 		.bind(advanceCount, tournamentId)
 		.run();
 	const updated = await loadTournamentById(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "swiss_started", {
+		advance_count: advanceCount,
+	});
 	return jsonResponse({ tournament: updated }, 200, cors);
 }
 
@@ -529,10 +618,16 @@ export async function handleGenerateRound(
 				"DIVISION_REQUIRED",
 			);
 		}
-		return generateSwissRound(env, tournament, reqBody.division, cors);
+		return generateSwissRound(
+			env,
+			tournament,
+			reqBody.division,
+			cors,
+			a.userId,
+		);
 	}
 	// championship: generate next round from winners
-	return generateChampionshipFollowup(env, tournament, cors);
+	return generateChampionshipFollowup(env, tournament, cors, a.userId);
 }
 
 async function generateSwissRound(
@@ -540,6 +635,7 @@ async function generateSwissRound(
 	tournament: TournamentRow,
 	division: Division,
 	cors: Record<string, string>,
+	userId: string,
 ): Promise<Response> {
 	const rounds = await loadRounds(env, tournament.tournament_id);
 	const divRounds = rounds.filter(
@@ -637,6 +733,18 @@ async function generateSwissRound(
 		).bind(tournament.tournament_id),
 	);
 	await env.SHARE_DB.batch(statements);
+	logTournamentAdminAction(
+		env,
+		userId,
+		tournament.tournament_id,
+		"round_generated",
+		{
+			phase: "swiss",
+			division,
+			round_number: nextRoundNumber,
+			round_id: roundId,
+		},
+	);
 	return jsonResponse(
 		{ round_id: roundId, matches: withMaps.length },
 		201,
@@ -648,6 +756,7 @@ async function generateChampionshipFollowup(
 	env: TournamentAdminEnv,
 	tournament: TournamentRow,
 	cors: Record<string, string>,
+	userId: string,
 ): Promise<Response> {
 	const rounds = await loadRounds(env, tournament.tournament_id);
 	const champRounds = rounds.filter((r) => r.phase === "championship");
@@ -755,6 +864,17 @@ async function generateChampionshipFollowup(
 		).bind(tournament.tournament_id),
 	);
 	await env.SHARE_DB.batch(statements);
+	logTournamentAdminAction(
+		env,
+		userId,
+		tournament.tournament_id,
+		"round_generated",
+		{
+			phase: "championship",
+			round_number: nextRoundNumber,
+			round_id: roundId,
+		},
+	);
 	return jsonResponse(
 		{ round_id: roundId, matches: withMaps.length },
 		201,
@@ -862,6 +982,10 @@ export async function handlePatchPairing(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "pairing_patched", {
+		match_id: matchId,
+		fields_changed: fragments.length,
+	});
 	return jsonResponse({ match: updated }, 200, cors);
 }
 
@@ -898,6 +1022,9 @@ export async function handleStartRound(
 		.bind(roundId)
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "round_started", {
+		round_id: roundId,
+	});
 	return jsonResponse({ round_id: roundId, status: "in_progress" }, 200, cors);
 }
 
@@ -1026,6 +1153,12 @@ export async function handleRetroEditMatch(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "match_retro_edited", {
+		match_id: matchId,
+		fields_changed: Object.keys(patch).filter(
+			(k) => patch[k as keyof typeof patch] !== undefined,
+		),
+	});
 	return jsonResponse({ match: updated }, 200, cors);
 }
 
@@ -1297,6 +1430,17 @@ export async function handleTransitionChampionship(
 		).bind(tournamentId),
 	);
 	await env.SHARE_DB.batch(statements);
+	logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"championship_transitioned",
+		{
+			round_id: roundId,
+			advance_count: tournament.swiss_advance_count,
+			override: !!override,
+		},
+	);
 	return jsonResponse(
 		{
 			status: "championship",
@@ -1378,6 +1522,7 @@ export async function handleCompleteTournament(
 	)
 		.bind(tournamentId)
 		.run();
+	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_completed");
 	return jsonResponse({ status: "complete" }, 200, cors);
 }
 

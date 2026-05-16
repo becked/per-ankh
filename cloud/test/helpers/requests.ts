@@ -59,3 +59,27 @@ export const request = {
 	patch: (opts: RequestOpts) => send("PATCH", opts),
 	delete: (opts: RequestOpts) => send("DELETE", opts),
 } as const;
+
+export interface MultipartOpts {
+	readonly path: string;
+	readonly form: FormData;
+	readonly as?: AuthedUser;
+	readonly origin?: string;
+}
+
+// Posts a multipart/form-data body. The runtime generates the
+// Content-Type header (with the boundary) from the FormData body —
+// don't override it.
+export async function postMultipart(opts: MultipartOpts): Promise<Response> {
+	const headers: Record<string, string> = {
+		Origin: opts.origin ?? DEFAULT_ORIGIN,
+	};
+	if (opts.as) {
+		headers["Cookie"] = `session=${opts.as.sessionToken}`;
+	}
+	return SELF.fetch(`http://test${opts.path}`, {
+		method: "POST",
+		headers,
+		body: opts.form,
+	});
+}

@@ -1,7 +1,14 @@
 // Public (anonymous-read) tournament handlers. No session required.
 
 import { sessionFromRequest } from "../session";
-import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
+import {
+	cloudCorsHeaders,
+	errorResponse,
+	getClientIp,
+	jsonResponse,
+} from "../util";
+import { countEventsSince, isScraperUA } from "../games";
+import { logError } from "../log";
 import { isTournamentAdmin } from "./authz";
 import {
 	loadMatch,
@@ -20,6 +27,7 @@ import {
 	type TournamentEnv,
 	type TournamentRow,
 } from "./data";
+import { TOURNAMENT_VIEW_PER_HOUR } from "./limits";
 import {
 	computeStandings,
 	rankStandings,
@@ -34,11 +42,52 @@ export interface TournamentPublicEnv extends TournamentEnv {
 const LIST_LIMIT_MAX = 100;
 const LIST_LIMIT_DEFAULT = 20;
 
+// Per-IP rate limit on anonymous tournament reads. Scraper User-Agents
+// (Discord/Slack/Twitter link previews) bypass both the gate and the
+// audit-log insert — they fan out load that's not meaningful to count.
+// Applies to everyone, including signed-in users; 600/hour is generous
+// enough that no real UI traffic should hit it.
+async function enforceTournamentViewRateLimit(
+	env: TournamentPublicEnv,
+	request: Request,
+	cors: Record<string, string>,
+): Promise<Response | null> {
+	const ua = request.headers.get("User-Agent");
+	if (isScraperUA(ua)) return null;
+	const ip = getClientIp(request) ?? "untrusted";
+	const count = await countEventsSince(
+		env.SHARE_DB,
+		"tournament_view",
+		"ip_address",
+		ip,
+	);
+	if (count >= TOURNAMENT_VIEW_PER_HOUR) {
+		return errorResponse(
+			"Tournament view rate limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_TOURNAMENT_VIEW",
+		);
+	}
+	env.SHARE_DB.prepare(
+		`INSERT INTO events (event_type, ip_address)
+		 VALUES ('tournament_view', ?)`,
+	)
+		.bind(ip)
+		.run()
+		.catch((e: unknown) => {
+			logError("tournament_view_audit_failed", e, { ip });
+		});
+	return null;
+}
+
 export async function handleTournamentList(
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const url = new URL(request.url);
 	const status = url.searchParams.get("status");
 	const limit = clampInt(
@@ -86,6 +135,8 @@ export async function handleTournamentDetail(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const tournament = await loadTournamentBySlug(env, slug);
 	if (!tournament) {
 		return errorResponse(
@@ -154,6 +205,8 @@ export async function handleTournamentStandings(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
 	if (!tournament) {
 		return errorResponse(
@@ -251,6 +304,8 @@ export async function handleTournamentBracket(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
 	if (!tournament) {
 		return errorResponse(
@@ -298,6 +353,8 @@ export async function handleTournamentRounds(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
 	if (!tournament) {
 		return errorResponse(
@@ -321,6 +378,8 @@ export async function handleTournamentMatches(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
 	if (!tournament) {
 		return errorResponse(
@@ -372,6 +431,8 @@ export async function handleTournamentMatchDetail(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
 	if (!tournament) {
 		return errorResponse(
@@ -417,6 +478,8 @@ export async function handleGameTournamentLink(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
 	const row = await env.SHARE_DB.prepare(
 		`SELECT m.match_id, m.slot_a_id, m.slot_b_id, m.status, m.winner_slot_id,
 		        m.map_script,
