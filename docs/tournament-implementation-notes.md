@@ -9,9 +9,13 @@ happen_ before the feature is production-ready.
 
 Tournament feature is shipped on the `tournament` branch (commit `8de96ff`
 and follow-ups). First-pass code review punch list (32 items) is fully
-closed with 100 passing tests under `cloud/test/integration/tournament/`.
-Open items below are the post-review hardening work that didn't make the
-punch list.
+closed. Second-pass hardening — per-user admin rate limits, anonymous-read
+rate limits, Content-Type strictness on JSON endpoints, per-mutation audit
+log, plus `requireMatchParticipantOrAdmin` dead-code removal and the
+`games.ts → tournament/authz` SQL-dedup refactor — landed in commit
+`901276e`. Cloud suite: 136 passing across 17 test files (12 tournament
+integration files). Remaining open items below are operational deploy
+steps, not code.
 
 ## What landed this session
 
@@ -64,7 +68,7 @@ Four migrations applied locally; not yet remote.
     `ChampionshipMatchTemplate` builders
   - `data.ts` — D1 row types + shared queries + row → ref adapters
   - `authz.ts` — `requireTournamentAdmin`, `requireMatchParticipantOrAdmin`
-    (currently dead; see Open Work §1), `isTournamentAdmin`, `AuthzError`
+    `isTournamentAdmin`, `AuthzError`
   - `public.ts` — 7 anonymous-read handlers (list, detail-by-slug,
     standings, bracket, rounds, matches, match detail) + a new
     `handleGameTournamentLink` for the game-detail page banner
@@ -158,63 +162,10 @@ The biggest design-shape decisions, in case anyone needs to remember why:
 
 ## Open work
 
-Ordered roughly by priority for the upcoming tournament.
+Operational deploy steps only — all code-level open items closed in
+`901276e`.
 
-### 1. Dead code: `requireMatchParticipantOrAdmin`
-
-`cloud/src/tournament/authz.ts:71` — used only by `handleReportMatch`
-which we deleted. Should be removed in a cleanup pass. Pure deletion;
-about 30 lines.
-
-### 2. Tournament admin rate limits
-
-The plan called for a `tournament_admin` event type at 30/hour/tournament
-to bound admin actions against a stolen session. Currently every admin
-mutation is auth-gated by `requireTournamentAdmin` but otherwise
-unbounded.
-
-Risk profile: 4 admins acting deliberately, so the real-life threat is
-session theft → unbounded mutation. For 4 weeks the risk is low; for the
-live tournament it's nonzero. Implementation: reuse the existing
-`countEventsSince` pattern from `cloud/src/games.ts:119`; log a
-`tournament_admin` event on each mutation, check the count first.
-
-Should land before the tournament opens to 50+ players.
-
-### 3. Code duplication: tournament_admins SQL
-
-`cloud/src/games.ts:894-901` inlines a SELECT against `tournament_admins`
-instead of calling `isTournamentAdmin()` from
-`cloud/src/tournament/authz.ts`. Identical SQL, just not factored.
-
-The reason was probably dependency-cycle avoidance — `games.ts` doesn't
-otherwise import from `tournament/`. Worth refactoring: either import
-`isTournamentAdmin` (clean dependency, since `authz.ts` only depends on
-`session.ts` and `data.ts`) or move the helper to a shared spot
-(`cloud/src/util.ts` or a new `cloud/src/admin-gates.ts`).
-
-### 4. Audit log coverage
-
-Substitutions emit `tournament_slot_substituted` events. The following
-admin actions emit nothing:
-
-- `PATCH /tournaments/:id` (metadata edit, including division renames)
-- Bulk slot create / individual slot delete
-- `start-swiss`
-- `generateRound` (auto-close events too)
-- `startRound`
-- `PATCH /matches/:match_id` (retro-edit) — high-value to audit
-- `transition-championship`
-- `resolve-tie` (via the override_ranks body on transition)
-- `complete`
-
-The events table exists and is the right destination — just need the
-inserts. Recommend: one `tournament_admin_action` event type with a
-metadata JSON describing the action (action, tournament_id, target id,
-diff). Operational value: post-tournament investigation if a player
-flags an unexpected result change.
-
-### 5. Remove the `ALLOWED_DISCORD_USERNAMES` prod secret
+### 1. Remove the `ALLOWED_DISCORD_USERNAMES` prod secret
 
 **Status:** code closed (no grep hits in `cloud/`), operational cleanup
 pending. Run after next deploy:
@@ -226,7 +177,7 @@ cd cloud && npx wrangler secret delete ALLOWED_DISCORD_USERNAMES
 Not security-load-bearing — just removes confusing dead state from the
 prod config.
 
-### 6. Apply migrations to remote D1
+### 2. Apply migrations to remote D1
 
 Four tournament migrations are applied locally only:
 `0006_tournaments.sql`, `0007_tournament_match_player_indexes.sql`,
@@ -234,37 +185,15 @@ Four tournament migrations are applied locally only:
 `(cd cloud && npm run migrate:remote)` or `./per-ankh prod migrate` when
 ready to deploy. Rehearse on a throwaway D1 first per `CLAUDE.md` policy.
 
-### 7. CSRF / Content-Type hardening on new endpoints
+### Historical note: Cache strategy on /standings + /bracket
 
-The new admin POST/PATCH endpoints rely on the existing session cookie's
-`SameSite=Lax` for CSRF protection (sufficient for state-changing POST
-under that mode). The pre-existing security review finding F-04
-(validate `Content-Type: application/json` on state-changing endpoints)
-applies to the new endpoints too — none of them explicitly check
-Content-Type. The Valibot body validators reject malformed JSON, which
-mostly closes the same gap, but per the security review the explicit
-check is the defense-in-depth recommendation.
-
-Track under [issue #44](https://github.com/becked/per-ankh/issues/44),
-F-04 specifically.
-
-### 8. Anonymous read rate limits on tournament endpoints
-
-`/v1/tournaments`, `/v1/tournaments/:slug`, `/v1/tournaments/:id/standings`,
-`/v1/tournaments/:id/bracket`, `/v1/tournaments/:id/matches`,
-`/v1/tournaments/:id/matches/:match_id`, and the new
-`/v1/games/:id/tournament-link` are all anonymous reads with no rate
-limits.
-
-The plan called for a `tournament_view` event type at 600/hour/IP. Not
-implemented. With a small tournament + organic traffic this isn't
-urgent; for the live event with potential spectator burst, worth adding.
-
-Note: we previously had Cache API memoization on `/standings` and
-`/bracket` (30s TTL) but removed it because the `Cache-Control: max-age`
-header was caching client-side and breaking `invalidateAll`. A rate
-limit + a smaller cache layer (Worker-side only, no client cache header)
-is the better long-term shape.
+We previously had Cache API memoization on `/standings` and `/bracket`
+(30s TTL) but removed it because the `Cache-Control: max-age` header
+was caching client-side and breaking `invalidateAll`. With the
+anonymous-read rate limit now in place (`TOURNAMENT_VIEW_PER_HOUR` in
+`cloud/src/tournament/limits.ts`), a Worker-side-only cache layer (no
+client cache header) is the better long-term shape if read latency
+becomes a concern.
 
 ## Verified — left as-is
 
@@ -350,10 +279,10 @@ We have time. Two passes worth doing before launch:
 
 Things worth a fresh look:
 
-- **`requireTournamentAdmin` vs inline SQL**: should `cloud/src/games.ts`
-  factor out the duplicated SQL? (Open Work §3.) Bigger pattern: are
-  there other places where authz logic is duplicated rather than going
-  through `authz.ts`?
+- **Authz centralization**: the `games.ts → tournament/authz` dedup is
+  done (`isTournamentAdmin` is now the single source of truth). Bigger
+  pattern: are there other places where authz logic is duplicated rather
+  than going through `authz.ts`?
 - **Cache strategy on read endpoints**: we removed the Cache API
   memoization on standings/bracket. Is per-Worker LRU + no client cache
   header the right shape? Or just keep the simple recompute-every-read
@@ -402,13 +331,13 @@ the cloud rewrite. New surfaces in this branch warrant a fresh pass:
    was audited; the new endpoints inherit it). Discord usernames are
    public-by-design; OK to expose. Verify Discord IDs are NOT exposed
    on any public endpoint (they aren't — only stored internally).
-4. **Upload abuse**: closed-beta allowlist gone. Per-user/per-IP/global
-   rate limits still in place on uploads. With any Discord account
-   able to sign up, account creation is essentially unlimited
-   (only bounded by Discord's own anti-abuse). Spam vector: someone
-   registers many accounts and burns quota. Mitigation: per-IP limits
-   still apply. Worth confirming the per-IP upload limit is tight
-   enough.
+4. **Upload abuse**: signup is gated by the invite-code passphrase
+   (commit `a12d6cd`; `cloud/src/auth.ts` validates at OAuth callback,
+   per-IP throttle on `invite_code_failed` events). Per-user/per-IP/global
+   upload rate limits still apply on top. Account creation is bounded
+   by invite-code knowledge + Discord's own anti-abuse. Spam vector
+   narrowed; worth confirming the invite-code per-IP throttle is tight
+   enough and the per-IP upload limit holds if a code leaks publicly.
 5. **Admin retro-edit downstream guard**: for championship matches,
    the guard refuses if _any_ later-round championship match has
    non-pending status. This is the coarser-but-safe variant
@@ -436,23 +365,21 @@ the cloud rewrite. New surfaces in this branch warrant a fresh pass:
 In rough order. Most are documented in [`cloud-deploy-plan.md`](./cloud-deploy-plan.md);
 this is the tournament-specific addendum.
 
-1. [ ] Close remaining Open Work items (#1–#4, #6, #7, #8), or explicitly
-       decide which to defer
-2. [ ] Apply migrations 0006–0009 to remote D1
-       (`(cd cloud && npm run migrate:remote)`)
-3. [ ] Delete `ALLOWED_DISCORD_USERNAMES` prod secret (Open Work §5)
-4. [ ] Deploy worker + frontend (`./per-ankh prod deploy`)
-5. [ ] Land timezone-capture issue #48 (helpful for admin's division
+1. [ ] Apply migrations 0006–0009 to remote D1
+       (`(cd cloud && npm run migrate:remote)`) — Open Work §2
+2. [ ] Delete `ALLOWED_DISCORD_USERNAMES` prod secret — Open Work §1
+3. [ ] Deploy worker + frontend (`./per-ankh prod deploy`)
+4. [ ] Land timezone-capture issue #48 (helpful for admin's division
        assignments but not blocking)
-6. [ ] Land issue #43 (account deletion + data export) — separate from
-       tournament work, but the closed-beta allowlist removal makes it
-       more important since anyone can now sign up
-7. [ ] Walk a 4-slot mock tournament end-to-end on prod before opening
+5. [ ] Land issue #43 (account deletion + data export) — separate from
+       tournament work; less urgent now that invite-code gating bounds
+       account creation
+6. [ ] Walk a 4-slot mock tournament end-to-end on prod before opening
        signups (use throwaway Discord accounts)
-8. [ ] Decide on the bracket viz (Deferred §1)
-9. [ ] Create the tournament via CLI:
+7. [ ] Decide on the bracket viz (Deferred §1)
+8. [ ] Create the tournament via CLI:
        `./per-ankh admin tournament create <slug> "<name>" --maps "..."`
-10. [ ] Grant admin to 4 operators
-11. [ ] Admin pre-fills slots via the web admin panel
-12. [ ] Announce to players; they sign in to claim
-13. [ ] Start swiss; generate round 1; players upload; advance rounds...
+9. [ ] Grant admin to 4 operators
+10. [ ] Admin pre-fills slots via the web admin panel
+11. [ ] Announce to players; they sign in to claim
+12. [ ] Start swiss; generate round 1; players upload; advance rounds...
