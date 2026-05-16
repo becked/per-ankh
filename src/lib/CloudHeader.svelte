@@ -14,6 +14,7 @@
 		type UserMe,
 	} from "$lib/api-cloud";
 	import { searchQuery } from "$lib/stores/search";
+	import { sidebarWidth } from "$lib/stores/sidebarWidth";
 
 	let {
 		user,
@@ -88,7 +89,7 @@
 <svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
 <header
-	class="relative flex w-full shrink-0 items-center justify-between border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+	class="relative flex w-full shrink-0 items-center justify-between border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-2"
 >
 	<!-- Left: hamburger + dropdown -->
 	<div class="menu-container flex-shrink-0">
@@ -135,13 +136,6 @@
 						onclick={closeMenu}
 					>
 						Dashboard
-					</a>
-					<a
-						href={resolve("/upload")}
-						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						onclick={closeMenu}
-					>
-						Upload saves
 					</a>
 					<div class="border-t border-black"></div>
 					<a
@@ -252,18 +246,47 @@
 	</div>
 
 	<!--
-		Right: search input bound to the global searchQuery store. Visible
-		only on routes where the games sidebar is mounted; kept in the DOM
-		when hidden so the bound value survives navigation.
+		Right: upload shortcut + search input bound to the global searchQuery
+		store. Search is visible only on routes where the games sidebar is
+		mounted, but stays in the DOM so the bound value survives navigation.
+		Upload icon mirrors the "Upload saves" menu entry and only shows for
+		signed-in users.
 	-->
-	<SearchInput
-		bind:value={$searchQuery}
-		variant="dark"
-		placeholder="Search games"
-		class="-mr-4 w-[171px] flex-shrink-0 pl-1 pr-2 {searchVisible
-			? ''
-			: 'invisible'}"
-	/>
+	<div class="flex flex-shrink-0 items-center gap-2">
+		{#if user}
+			<a
+				href={resolve("/upload")}
+				class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange {searchVisible
+					? ''
+					: 'invisible'}"
+				aria-label="Upload saves"
+				title="Upload saves"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-3.5 w-3.5"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5L12 3m0 0l4.5 4.5M12 3v13.5"
+					/>
+				</svg>
+			</a>
+		{/if}
+		<SearchInput
+			bind:value={$searchQuery}
+			variant="dark"
+			placeholder="Search games"
+			class="-mr-4 flex-shrink-0 pl-1 pr-2 {searchVisible ? '' : 'invisible'}"
+			style="width: {$sidebarWidth}px"
+		/>
+	</div>
 </header>
 
 <AboutModal

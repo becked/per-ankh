@@ -70,7 +70,7 @@
 		visually continuous.
 	-->
 	<header
-		class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+		class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-2"
 	>
 		<div class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200">
 			𓉑 Per Ankh
