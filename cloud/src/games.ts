@@ -31,7 +31,7 @@ import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
-import { isTournamentAdmin } from "./tournament/authz";
+import { AuthzError, isTournamentAdmin, requireTournamentBeta } from "./tournament/authz";
 import { maybeAdvanceAfterMatchReport } from "./tournament/admin";
 import {
 	buildSummaryGameContext,
@@ -969,6 +969,17 @@ export async function handleGameUpload(
 		is_admin_override: boolean;
 	} | null = null;
 	if (tournamentMatchId !== null) {
+		// Beta gate before the match lookup — a non-beta user with a
+		// guessed match ID gets the same 404 they'd get on the tournament
+		// list, not a "match not found" that hints the feature exists.
+		try {
+			await requireTournamentBeta(env, session.data);
+		} catch (e) {
+			if (e instanceof AuthzError) {
+				return errorResponse(e.message, e.status, cors, e.code);
+			}
+			throw e;
+		}
 		const match = await env.SHARE_DB.prepare(
 			`SELECT m.slot_a_id, m.slot_b_id, r.tournament_id, t.name AS tournament_name,
 			        t.status AS tournament_status,

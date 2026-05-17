@@ -18,6 +18,21 @@ the old doc stays as historical context.
   `discord_id` in `users` bypasses); failed attempts are per-IP rate-limited.
   Rotate by `wrangler secret put INVITE_CODE` with a new value — no
   redeploy, new logins pick it up immediately.
+- **Tournament feature is in private beta.** Every tournament endpoint
+  (public reads, player endpoints, admin endpoints, the tournament-link
+  branch of game upload) 404s unless the caller's discord_id is in the
+  `tournament_beta_users` table. The first deploy that includes migration
+  `0012_tournament_beta_users.sql` ships with an EMPTY allowlist — nobody
+  can see the tournament UI until the operator grants themselves access:
+  ```
+  ./per-ankh admin tournament beta-grant <your-discord-id> --note "self"
+  ./per-ankh admin tournament beta-list   # confirm
+  ```
+  Grants take effect on the next request — no re-login required for users
+  whose `user_id` is already in the row (CLI auto-pins on grant when the
+  user has signed in). Grants by raw `discord_id` for users who haven't
+  signed in yet get pinned on their first OAuth callback. To exit the
+  beta later, drop the gate or default-grant everyone.
 - Legacy `/v1/share/*` endpoints stay live on the API Worker (desktop
   v0.2.0 still mints share URLs against it). At cutover, deploy moved
   `per-ankh.app` from the Pages project to the new SSR Worker,
@@ -335,6 +350,15 @@ In order:
    ```bash
    cd cloud && npm run migrate:remote
    ```
+   After this lands, **if migration `0012_tournament_beta_users.sql` was
+   in the batch**, the tournament UI is invisible to everyone until at
+   least one beta user is granted:
+   ```bash
+   ./per-ankh admin tournament beta-grant <your-discord-id> --note "self"
+   ./per-ankh admin tournament beta-list
+   ```
+   Do this before announcing — otherwise the operator's own login can't
+   reach the tournament pages.
 4. **Deploy the API Worker.**
    ```bash
    cd cloud && npx wrangler deploy

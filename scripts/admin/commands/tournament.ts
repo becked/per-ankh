@@ -1,8 +1,16 @@
-// `./per-ankh admin tournament <subcommand>` — tournament metadata + admin
-// role management. Tournament creation lives here (not in the API) so the
-// only path to inserting tournament_admins is operator-driven. Player slot
-// management + lifecycle (start, transition-championship) lives in the
-// tournament admin web UI; the CLI handles only the bootstrapping bits.
+// `./per-ankh admin tournament <subcommand>` — tournament metadata, admin
+// role management, and (during the private beta) the beta allowlist.
+//
+// Tournament creation lives both here AND in the UI; UI creators become
+// admins of their own tournaments automatically, so the CLI's `create`
+// + `grant-admin` are for operator-bootstrapped tournaments and for adding
+// a second admin to an existing tournament. Player slot management +
+// lifecycle (start, transition-championship) lives in the web UI.
+//
+// Beta allowlist subcommands (`beta-grant|beta-revoke|beta-list`) are
+// CLI-only; the API does not expose them. While the beta is on, every
+// tournament endpoint 404s for callers whose discord_id isn't in
+// tournament_beta_users.
 
 import { randomBytes } from "node:crypto";
 
@@ -84,6 +92,12 @@ export async function run(argv: string[], opts: CommandOpts): Promise<void> {
 			return runRevokeAdmin(rest, opts);
 		case "delete":
 			return runDelete(rest, opts);
+		case "beta-grant":
+			return runBetaGrant(rest, opts);
+		case "beta-revoke":
+			return runBetaRevoke(rest, opts);
+		case "beta-list":
+			return runBetaList(rest, opts);
 		case undefined:
 		case "--help":
 		case "-h":
@@ -110,6 +124,16 @@ function printHelp(): void {
 			"                          Revoke per-tournament admin",
 			"  delete <id>             Delete tournament + all slots/rounds/matches",
 			"                          (Type 'delete' to confirm. Cascades.)",
+			"",
+			"Beta allowlist (private beta gate on every tournament endpoint):",
+			"  beta-grant <id> [--note N]",
+			"                          Add a user to the beta. <id> is either a",
+			"                          user_id (nanoid21) or a raw Discord snowflake.",
+			"                          Snowflakes can be pre-granted before signup;",
+			"                          user_id is pinned at first login.",
+			"  beta-revoke <id>        Remove a user from the beta. <id> can be",
+			"                          either form. Effective immediately.",
+			"  beta-list [--json]      Show the current beta allowlist.",
 			"",
 		].join("\n"),
 	);
@@ -430,4 +454,189 @@ async function runDelete(argv: string[], opts: CommandOpts): Promise<void> {
 	} else {
 		ok(`Deleted tournament: ${tournament.name} (${tournamentId})`);
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Beta allowlist
+// ---------------------------------------------------------------------------
+
+// Resolve either a user_id (nanoid21) or a raw Discord snowflake into
+// { discord_id, user_id | null }. Errors with operator-actionable messages
+// when the shape doesn't match or the user_id isn't in `users`. Discord
+// IDs go through unverified — pre-signup grants are intentional.
+interface ResolvedBetaTarget {
+	discordId: string;
+	userId: string | null;
+	displayName: string | null;
+}
+
+async function resolveBetaTarget(arg: string): Promise<ResolvedBetaTarget> {
+	// nanoid21: exactly 21 chars from [A-Za-z0-9_-]. Discord IDs are
+	// numeric and currently 17-19 digits; we accept 15-20 to be generous
+	// across snowflake epochs.
+	const isNanoid21 = /^[A-Za-z0-9_-]{21}$/.test(arg);
+	const isDiscordId = /^\d{15,20}$/.test(arg);
+	if (isNanoid21) {
+		const rows = await d1Query<{ user_id: string; discord_id: string; display_name: string }>(
+			`SELECT user_id, discord_id, display_name FROM users
+			 WHERE user_id = ${sqlStr(arg)}`,
+		);
+		if (rows.length === 0) {
+			throw new Error(
+				`User not found: ${arg}\n` +
+					`If you meant a Discord ID, double-check — discord IDs are all-digits, ` +
+					`typically 18-19 chars (turn on Discord Developer Mode → Copy User ID).`,
+			);
+		}
+		return {
+			discordId: rows[0].discord_id,
+			userId: rows[0].user_id,
+			displayName: rows[0].display_name,
+		};
+	}
+	if (isDiscordId) {
+		// Allow pre-grant for a user who hasn't signed in yet — the login-
+		// time pin in handleDiscordCallback fills in user_id on first
+		// signup. If the user already exists, attach their user_id now so
+		// the request-time gate skips the unpinned scan.
+		const rows = await d1Query<{ user_id: string; display_name: string }>(
+			`SELECT user_id, display_name FROM users WHERE discord_id = ${sqlStr(arg)}`,
+		);
+		return {
+			discordId: arg,
+			userId: rows[0]?.user_id ?? null,
+			displayName: rows[0]?.display_name ?? null,
+		};
+	}
+	throw new Error(
+		`Unrecognized ID shape: "${arg}"\n` +
+			`Expected either a user_id (21 chars from the nanoid alphabet) or ` +
+			`a Discord snowflake (15-20 digits). To find a Discord ID: ` +
+			`turn on Developer Mode in Discord and right-click → Copy User ID, ` +
+			`or run ./per-ankh admin users to list signed-up users.`,
+	);
+}
+
+async function runBetaGrant(argv: string[], opts: CommandOpts): Promise<void> {
+	const { positional, flags } = parseFlags(argv);
+	const arg = positional[0];
+	if (!arg) {
+		throw new Error(
+			"Usage: ./per-ankh admin tournament beta-grant <user_id|discord_id> [--note \"...\"]",
+		);
+	}
+	const note = flagString(flags, "note") ?? null;
+	const target = await resolveBetaTarget(arg);
+
+	const result = await d1Query<{ changes: number }>(`
+		INSERT INTO tournament_beta_users (discord_id, user_id, note)
+		VALUES (
+			${sqlStr(target.discordId)},
+			${target.userId === null ? "NULL" : sqlStr(target.userId)},
+			${note === null ? "NULL" : sqlStr(note)}
+		)
+		ON CONFLICT(discord_id) DO UPDATE SET
+			user_id = COALESCE(excluded.user_id, tournament_beta_users.user_id),
+			note = COALESCE(excluded.note, tournament_beta_users.note)
+		RETURNING (CASE WHEN granted_at = datetime('now') THEN 1 ELSE 0 END) AS changes
+	`);
+	// RETURNING never empty since INSERT … ON CONFLICT always touches a row.
+	const wasNew = (result[0]?.changes ?? 0) === 1;
+
+	if (opts.json) {
+		printJson({
+			discord_id: target.discordId,
+			user_id: target.userId,
+			display_name: target.displayName,
+			note,
+			created: wasNew,
+		});
+		return;
+	}
+	const who = target.displayName
+		? `${target.displayName} (discord ${target.discordId})`
+		: `discord ${target.discordId}${target.userId ? ` / user ${target.userId}` : " (no signup yet)"}`;
+	if (wasNew) {
+		ok(`Granted beta access: ${who}${note ? ` — ${note}` : ""}`);
+	} else {
+		info(`Already in beta: ${who} (note + user_id refreshed if newly known)`);
+	}
+}
+
+async function runBetaRevoke(
+	argv: string[],
+	opts: CommandOpts,
+): Promise<void> {
+	const { positional } = parseFlags(argv);
+	const arg = positional[0];
+	if (!arg) {
+		throw new Error(
+			"Usage: ./per-ankh admin tournament beta-revoke <user_id|discord_id>",
+		);
+	}
+	// Skip the users-table lookup for the revoke path — operators may want
+	// to revoke a discord_id that was pre-granted and never signed up.
+	// Either form lands the same DELETE.
+	const isNanoid21 = /^[A-Za-z0-9_-]{21}$/.test(arg);
+	const isDiscordId = /^\d{15,20}$/.test(arg);
+	if (!isNanoid21 && !isDiscordId) {
+		throw new Error(
+			`Unrecognized ID shape: "${arg}" (expected user_id or discord_id)`,
+		);
+	}
+	const result = await d1Query<{ discord_id: string }>(`
+		DELETE FROM tournament_beta_users
+		WHERE ${isNanoid21 ? "user_id" : "discord_id"} = ${sqlStr(arg)}
+		RETURNING discord_id
+	`);
+	if (opts.json) {
+		printJson({ revoked: result.length, discord_ids: result.map((r) => r.discord_id) });
+	} else if (result.length === 0) {
+		info(`No beta row matched ${arg} — nothing to revoke.`);
+	} else {
+		ok(`Revoked beta access (${result.length} row${result.length === 1 ? "" : "s"})`);
+	}
+}
+
+async function runBetaList(argv: string[], opts: CommandOpts): Promise<void> {
+	parseFlags(argv); // currently no flags beyond --json (read from opts)
+	const rows = await d1Query<{
+		discord_id: string;
+		user_id: string | null;
+		display_name: string | null;
+		granted_at: string;
+		note: string | null;
+	}>(`
+		SELECT b.discord_id, b.user_id, u.display_name, b.granted_at, b.note
+		FROM tournament_beta_users b
+		LEFT JOIN users u ON u.user_id = b.user_id
+		ORDER BY b.granted_at
+	`);
+	if (opts.json) {
+		printJson(rows);
+		return;
+	}
+	if (rows.length === 0) {
+		info("No beta users granted yet.");
+		info("Grant with: ./per-ankh admin tournament beta-grant <user_id|discord_id>");
+		return;
+	}
+	const cols: Column[] = [
+		{ header: "discord_id", width: 20 },
+		{ header: "user_id", width: 21 },
+		{ header: "display_name", width: 24 },
+		{ header: "granted", width: 16 },
+		{ header: "note", width: 30 },
+	];
+	printTable(
+		cols,
+		rows.map((r) => [
+			r.discord_id,
+			r.user_id ?? "—",
+			r.display_name ?? "(not signed in yet)",
+			formatDate(r.granted_at),
+			r.note ?? "—",
+		]),
+	);
+	printCount(rows.length, "beta users");
 }

@@ -506,6 +506,24 @@ export async function handleDiscordCallback(
 		.bind(upsert.user_id)
 		.run();
 
+	// Tournament beta-allowlist pin. Operators can pre-grant beta access by
+	// discord_id before a user first signs in (see
+	// `./per-ankh admin tournament beta-grant`). On login we fill in the
+	// user_id so the request-time check (requireTournamentBeta in
+	// tournament/authz.ts) can use the fast PK lookup. Mirrors the slot-
+	// claim pattern below. Fire-and-forget — failure just means the user
+	// has to re-login before they see tournaments.
+	try {
+		await env.SHARE_DB.prepare(
+			`UPDATE tournament_beta_users SET user_id = ?
+			 WHERE discord_id = ? AND user_id IS NULL`,
+		)
+			.bind(upsert.user_id, discordUser.id)
+			.run();
+	} catch (e) {
+		logError("tournament_beta_pin_failed", e, { user_id: upsert.user_id });
+	}
+
 	// Tournament-slot claim. The admin pre-fills tournament_slots with
 	// expected discord_usernames; logging in claims any unclaimed slot
 	// matching this user. Two-step lookup:
@@ -619,12 +637,22 @@ export async function handleMe(
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
 
+	// is_beta lets the frontend hide tournament UI (header link, layout
+	// fetches) for non-beta users. Not load-bearing for authz — the
+	// worker re-checks on every tournament endpoint.
+	const beta = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
+	)
+		.bind(row.user_id)
+		.first<{ ok: number }>();
+
 	return jsonResponse(
 		{
 			user_id: row.user_id,
 			discord_id: row.discord_id,
 			display_name: row.display_name,
 			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
+			is_beta: beta !== null,
 		},
 		200,
 		cors,

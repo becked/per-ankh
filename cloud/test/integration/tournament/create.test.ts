@@ -67,7 +67,7 @@ async function seedCreateEvents(userId: string, count: number): Promise<void> {
 }
 
 describe("POST /v1/tournaments — auth", () => {
-	it("returns 401 when no session cookie is present", async () => {
+	it("returns 404 when no session cookie is present (beta gate hides existence)", async () => {
 		const res = await request.post({
 			path: "/v1/tournaments",
 			body: {
@@ -76,7 +76,10 @@ describe("POST /v1/tournaments — auth", () => {
 				allowed_map_scripts: [VALID_MAP],
 			} satisfies CreateBody,
 		});
-		await expectErrorCode(res, { status: 401, code: "UNAUTHORIZED" });
+		await expectErrorCode(res, {
+			status: 404,
+			code: "TOURNAMENT_NOT_FOUND",
+		});
 	});
 });
 

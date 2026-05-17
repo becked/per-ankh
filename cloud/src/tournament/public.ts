@@ -1,6 +1,11 @@
-// Public (anonymous-read) tournament handlers. No session required.
+// Public-shaped tournament handlers. During the private beta these all
+// require both a session and a tournament_beta_users row — anon callers
+// and non-beta callers get a 404 via requireBetaOr404. The "public" label
+// is preserved because the handlers don't gate on per-tournament roles;
+// once the beta lifts, removing requireBetaOr404 from each handler
+// restores anonymous access.
 
-import { sessionFromRequest } from "../session";
+import { sessionFromRequest, type SessionData } from "../session";
 import {
 	cloudCorsHeaders,
 	errorResponse,
@@ -9,7 +14,7 @@ import {
 } from "../util";
 import { countEventsSince, isScraperUA } from "../games";
 import { logError } from "../log";
-import { isTournamentAdmin } from "./authz";
+import { AuthzError, isTournamentAdmin, requireTournamentBeta } from "./authz";
 import {
 	loadMatch,
 	loadMatches,
@@ -82,11 +87,41 @@ async function enforceTournamentViewRateLimit(
 	return null;
 }
 
+// Tournament beta gate. Resolves the session, runs requireTournamentBeta,
+// and translates an AuthzError into the standard error response so every
+// handler can early-return on a single line. Returns the session on the
+// happy path (saves the caller a second sessionFromRequest call when the
+// handler needs the session anyway, e.g. to compute is_viewer_admin).
+async function requireBetaOr404(
+	env: TournamentPublicEnv,
+	request: Request,
+	cors: Record<string, string>,
+): Promise<
+	| { ok: true; session: { token: string; data: SessionData } | null }
+	| { ok: false; response: Response }
+> {
+	const session = await sessionFromRequest(env, request);
+	try {
+		await requireTournamentBeta(env, session?.data ?? null);
+	} catch (e) {
+		if (e instanceof AuthzError) {
+			return {
+				ok: false,
+				response: errorResponse(e.message, e.status, cors, e.code),
+			};
+		}
+		throw e;
+	}
+	return { ok: true, session };
+}
+
 export async function handleTournamentList(
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const url = new URL(request.url);
@@ -107,7 +142,7 @@ export async function handleTournamentList(
 	// into a SQL predicate. Binding NULL when there's no session causes
 	// `ta.user_id = ?` to never match (NULL comparisons are unknown), so
 	// anonymous callers naturally see only non-setup rows.
-	const session = await sessionFromRequest(env, request);
+	const session = gate.session;
 	const viewerId = session?.data.user_id ?? null;
 
 	const params: unknown[] = [viewerId];
@@ -149,6 +184,8 @@ export async function handleTournamentDetail(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentBySlug(env, slug);
@@ -161,11 +198,12 @@ export async function handleTournamentDetail(
 		);
 	}
 	// is_viewer_admin lets the frontend show observer-upload affordances
-	// without a second round-trip. Anonymous callers always see false.
-	const session = await sessionFromRequest(env, request);
+	// without a second round-trip. Always backed by the gate-resolved
+	// session — anon callers can't reach here once the beta gate is on,
+	// but the null branch is preserved for the post-beta world.
 	const is_viewer_admin = await isTournamentAdmin(
 		env,
-		session?.data ?? null,
+		gate.session?.data ?? null,
 		tournament.tournament_id,
 	);
 	// Setup-phase tournaments are admin-only. 404 (not 403) so we don't
@@ -229,13 +267,15 @@ export async function handleTournamentDetail(
 // read endpoint that exposes setup data (standings, bracket, rounds,
 // matches, match detail) returns 404 — not 403 — to non-admins, to
 // match the detail endpoint and avoid leaking tournament existence.
+//
+// Callers pass the session they already resolved via requireBetaOr404 so
+// the lookup is done once per request.
 async function setupGateHides(
 	env: TournamentPublicEnv,
-	request: Request,
+	session: { token: string; data: SessionData } | null,
 	tournament: TournamentRow,
 ): Promise<boolean> {
 	if (tournament.status !== "setup") return false;
-	const session = await sessionFromRequest(env, request);
 	const isAdmin = await isTournamentAdmin(
 		env,
 		session?.data ?? null,
@@ -250,10 +290,12 @@ export async function handleTournamentStandings(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, request, tournament))) {
+	if (!tournament || (await setupGateHides(env, gate.session, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -349,10 +391,12 @@ export async function handleTournamentBracket(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, request, tournament))) {
+	if (!tournament || (await setupGateHides(env, gate.session, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -398,10 +442,12 @@ export async function handleTournamentRounds(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, request, tournament))) {
+	if (!tournament || (await setupGateHides(env, gate.session, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -423,10 +469,12 @@ export async function handleTournamentMatches(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, request, tournament))) {
+	if (!tournament || (await setupGateHides(env, gate.session, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -476,10 +524,12 @@ export async function handleTournamentMatchDetail(
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, request, tournament))) {
+	if (!tournament || (await setupGateHides(env, gate.session, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -516,13 +566,17 @@ export async function handleTournamentMatchDetail(
 
 // GET /v1/games/:game_id/tournament-link — returns the tournament+match
 // pair if the game is linked, or null. Used by the /games/[id] page to
-// render the "linked to tournament X" preTabs banner. Anonymous read.
+// render the "linked to tournament X" preTabs banner. Beta-gated like the
+// rest of the tournament surface so non-beta viewers of a tournament-linked
+// game don't see a link they can't follow.
 export async function handleGameTournamentLink(
 	gameId: string,
 	request: Request,
 	env: TournamentPublicEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
+	const gate = await requireBetaOr404(env, request, cors);
+	if (!gate.ok) return gate.response;
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const row = await env.SHARE_DB.prepare(

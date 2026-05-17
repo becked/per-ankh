@@ -172,29 +172,31 @@
 					>
 						Dashboard
 					</a>
-					<div class="border-t border-black"></div>
-					<a
-						href={resolve("/tournaments")}
-						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						onclick={closeMenu}
-					>
-						Tournaments
-					</a>
-					{#each tournamentMenuEntries as t (t.tournament_id)}
+					{#if user.is_beta}
+						<div class="border-t border-black"></div>
 						<a
-							href={resolve(`/tournaments/${t.slug}`)}
-							title={t.isAdmin ? `${t.name} (admin)` : t.name}
-							class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							href={resolve("/tournaments")}
+							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
 							onclick={closeMenu}
 						>
-							<span aria-hidden="true" class="mr-1.5">•</span
-							>{t.name}{#if t.isAdmin}<span
-									class="ml-1 opacity-60"
-									aria-label="admin"
-									title="You administer this tournament">⚙</span
-								>{/if}
+							Tournaments
 						</a>
-					{/each}
+						{#each tournamentMenuEntries as t (t.tournament_id)}
+							<a
+								href={resolve(`/tournaments/${t.slug}`)}
+								title={t.isAdmin ? `${t.name} (admin)` : t.name}
+								class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+								onclick={closeMenu}
+							>
+								<span aria-hidden="true" class="mr-1.5">•</span
+								>{t.name}{#if t.isAdmin}<span
+										class="ml-1 opacity-60"
+										aria-label="admin"
+										title="You administer this tournament">⚙</span
+									>{/if}
+							</a>
+						{/each}
+					{/if}
 					<div class="border-t border-black"></div>
 					<a
 						href={resolve("/account")}
@@ -226,14 +228,6 @@
 					>
 						About
 					</button>
-					<div class="border-t border-black"></div>
-					<a
-						href={resolve("/tournaments")}
-						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						onclick={closeMenu}
-					>
-						Tournaments
-					</a>
 					<div class="border-t border-black"></div>
 					<a
 						href={resolve("/")}

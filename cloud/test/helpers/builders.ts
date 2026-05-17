@@ -38,6 +38,10 @@ let discordIdCounter = 1_000_000_000_000_000_000n;
 
 export async function makeUser(opts?: {
 	discordUsername?: string;
+	// Skip the default tournament_beta_users seed. Every cloud test suite is
+	// tournament-related so the default is "yes, in the beta" — only
+	// beta-gate tests opt out.
+	omitBeta?: boolean;
 }): Promise<TestUser> {
 	const userId = nanoid(21);
 	// Snowflake-looking but deterministic-enough for test debugging.
@@ -58,7 +62,26 @@ export async function makeUser(opts?: {
 		{ expirationTtl: SESSION_TTL_SECONDS },
 	);
 
-	return { userId, discordId, discordUsername, sessionToken };
+	const user = { userId, discordId, discordUsername, sessionToken };
+	if (!opts?.omitBeta) {
+		await seedBetaUser(user);
+	}
+	return user;
+}
+
+// Insert a tournament_beta_users row for the user. Required for any
+// tournament endpoint to return 2xx — the production gate (see
+// cloud/src/tournament/authz.ts requireTournamentBeta) returns 404 for
+// non-members. `makeTournament` calls this for its admin + slot owners by
+// default, so tests that exercise the happy path don't need to call it
+// themselves; tests of the gate itself opt out via `omitBeta: true`.
+export async function seedBetaUser(user: TestUser): Promise<void> {
+	await env.SHARE_DB.prepare(
+		`INSERT INTO tournament_beta_users (discord_id, user_id) VALUES (?, ?)
+		 ON CONFLICT(discord_id) DO NOTHING`,
+	)
+		.bind(user.discordId, user.userId)
+		.run();
 }
 
 // ---------------------------------------------------------------------------
@@ -108,6 +131,10 @@ export interface MakeTournamentOpts {
 	};
 	readonly allowedMaps?: readonly string[]; // default ["MAP_SEASIDE", "MAP_RIVER"]
 	readonly advanceTo?: TournamentPhase; // default "setup"
+	// Skip the default seedBetaUser call for the admin + slot owners. Used
+	// by tests that want to verify the beta gate's 404 behavior with a
+	// realistic tournament setup.
+	readonly omitBeta?: boolean;
 }
 
 export async function makeTournament(
@@ -115,11 +142,23 @@ export async function makeTournament(
 ): Promise<TestTournament> {
 	const admin = opts.admin ?? (await makeUser());
 	const tournamentId = nanoid(21);
-	const slug = opts.slug ?? `t-${nanoid(8).toLowerCase()}`;
+	// nanoid's alphabet includes `_` which the slug regex rejects — strip
+	// those out so generated slugs always match /^[a-z0-9][a-z0-9-]{0,63}$/.
+	const slug = opts.slug ?? `t-${nanoid(8).toLowerCase().replace(/_/g, "-")}`;
 	const name = opts.name ?? `Test Tournament ${slug}`;
 	const slotsPerDivision = opts.slotsPerDivision ?? 4;
 	const allowedMaps = opts.allowedMaps ?? ["MAP_SEASIDE", "MAP_RIVER"];
 	const advanceTo: TournamentPhase = opts.advanceTo ?? "setup";
+
+	// Beta-seed every user this tournament will touch via API. Done before
+	// the admin INSERT so the (now beta-gated) /slots handler call below
+	// passes. Tests that exercise the gate itself set omitBeta: true and
+	// call seedBetaUser themselves on the users that should pass.
+	if (!opts.omitBeta) {
+		await seedBetaUser(admin);
+		for (const u of opts.slotOwners?.A ?? []) await seedBetaUser(u);
+		for (const u of opts.slotOwners?.B ?? []) await seedBetaUser(u);
+	}
 
 	// 1) Direct INSERT (no API endpoint for tournament creation).
 	await env.SHARE_DB.prepare(

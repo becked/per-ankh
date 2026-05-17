@@ -1,9 +1,12 @@
 // Tournament authorization helpers.
 //
+// requireTournamentBeta — the caller must own a row in tournament_beta_users
+// (operator-managed allowlist for the private beta). Throws 404, not 403,
+// so non-beta callers can't tell the feature exists.
+//
 // requireTournamentAdmin — the caller must own a row in tournament_admins
-// for the target tournament. CLI is the only path to insert into that
-// table. Throws AuthzError with a status code; handlers translate to JSON
-// responses via the shared errorResponse helper.
+// for the target tournament. Throws AuthzError with a status code; handlers
+// translate to JSON responses via the shared errorResponse helper.
 
 import type { SessionData } from "../session";
 import type { TournamentEnv } from "./data";
@@ -17,6 +20,40 @@ export class AuthzError extends Error {
 		super(message);
 		this.name = "AuthzError";
 	}
+}
+
+// Beta gate. Throws 404 (not 403) so non-members can't distinguish "feature
+// hidden from me" from "feature doesn't exist." Lookup is keyed on user_id
+// after the login-time pin in handleDiscordCallback runs; pre-login grants
+// (keyed only on discord_id) become reachable on the user's next sign-in.
+export async function requireTournamentBeta(
+	env: TournamentEnv,
+	session: SessionData | null,
+): Promise<void> {
+	if (!session) {
+		throw new AuthzError(404, "TOURNAMENT_NOT_FOUND", "Not found");
+	}
+	const row = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
+	)
+		.bind(session.user_id)
+		.first<{ ok: number }>();
+	if (!row) {
+		throw new AuthzError(404, "TOURNAMENT_NOT_FOUND", "Not found");
+	}
+}
+
+export async function isTournamentBeta(
+	env: TournamentEnv,
+	session: SessionData | null,
+): Promise<boolean> {
+	if (!session) return false;
+	const row = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
+	)
+		.bind(session.user_id)
+		.first<{ ok: number }>();
+	return row !== null;
 }
 
 export async function requireTournamentAdmin(

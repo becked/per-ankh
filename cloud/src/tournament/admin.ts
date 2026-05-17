@@ -38,7 +38,7 @@ import {
 	rankStandings,
 	type RankedStanding,
 } from "./standings";
-import { AuthzError, requireTournamentAdmin } from "./authz";
+import { AuthzError, requireTournamentAdmin, requireTournamentBeta } from "./authz";
 import {
 	bumpTournamentUpdatedAt,
 	loadMatch,
@@ -178,6 +178,11 @@ export interface TournamentAdminEnv extends TournamentEnv, SessionEnv {
 // Helper: load tournament and verify caller is an admin. Returns null on
 // any failure mode after sending the appropriate response back through the
 // `respond` callback pattern. Saves ~10 lines per handler.
+//
+// Gate order: anon → beta → admin. Anon and non-beta both collapse to a
+// 404 TOURNAMENT_NOT_FOUND to keep the URL existence hidden from outside
+// the beta cohort; only an authed beta caller who isn't an admin gets the
+// distinguishing 403 NOT_TOURNAMENT_ADMIN.
 async function authedTournament(
 	tournamentId: string,
 	request: Request,
@@ -191,10 +196,16 @@ async function authedTournament(
 	if (!session) {
 		return {
 			ok: false,
-			response: errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED"),
+			response: errorResponse(
+				"Not found",
+				404,
+				cors,
+				"TOURNAMENT_NOT_FOUND",
+			),
 		};
 	}
 	try {
+		await requireTournamentBeta(env, session.data);
 		await requireTournamentAdmin(env, session.data, tournamentId);
 	} catch (e) {
 		if (e instanceof AuthzError) {
@@ -405,7 +416,23 @@ export async function handleCreateTournament(
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
-		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+		// 404 to anon, not 401 — keeps consistent with the rest of the
+		// gated surface, which hides the tournament URL space entirely
+		// from non-beta callers.
+		return errorResponse(
+			"Not found",
+			404,
+			cors,
+			"TOURNAMENT_NOT_FOUND",
+		);
+	}
+	try {
+		await requireTournamentBeta(env, session.data);
+	} catch (e) {
+		if (e instanceof AuthzError) {
+			return errorResponse(e.message, e.status, cors, e.code);
+		}
+		throw e;
 	}
 
 	// Per-user create-tournament rate limit. Bounds spam from a single

@@ -47,7 +47,12 @@ export const load: LayoutLoad = async ({
 		let notices: MyTournamentEntry[] = [];
 		let myTournaments: MyTournamentEntry[] = [];
 		let adminTournaments: MyAdminTournamentEntry[] = [];
-		if (user) {
+		// Tournament fetches are gated by the beta allowlist on the worker
+		// (404 to non-beta callers). Skip the round-trips entirely for
+		// non-beta users so we don't fire two guaranteed-404 requests on
+		// every page render. The catch blocks still tolerate failure (e.g.
+		// network) so a hiccup doesn't break the header chrome.
+		if (user?.is_beta) {
 			try {
 				const res = await cloudApi.getMyTournaments({ fetch });
 				const active = res.tournaments.filter((t) => t.status !== "complete");

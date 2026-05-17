@@ -105,7 +105,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/map", () => {
 	});
 
 	describe("authentication & authorization regression", () => {
-		it("returns 401 to an unauthenticated request", async () => {
+		it("returns 404 to an unauthenticated request (beta gate hides existence)", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 			const m = await firstPendingMatchOf(t);
 
@@ -114,7 +114,10 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/map", () => {
 				body: { map_script: "MAP_RIVER" },
 			});
 
-			await expectErrorCode(res, { status: 401, code: "UNAUTHORIZED" });
+			await expectErrorCode(res, {
+				status: 404,
+				code: "TOURNAMENT_NOT_FOUND",
+			});
 		});
 
 		it("returns 403 to an admin of a different tournament", async () => {

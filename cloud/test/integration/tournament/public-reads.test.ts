@@ -1,15 +1,23 @@
-// Response-shape assertions for the 8 public (anonymous-read)
-// tournament handlers in cloud/src/tournament/public.ts and the
-// game-tournament-link helper. The current suite hits some of these
-// for rate-limit/ordering side effects but never asserts the body
-// shape — a refactor that drops a documented field would slip
-// through. This file pins each handler's contract.
+// Response-shape assertions for the 8 public-shaped tournament handlers
+// in cloud/src/tournament/public.ts and the game-tournament-link helper.
+// The current suite hits some of these for rate-limit/ordering side
+// effects but never asserts the body shape — a refactor that drops a
+// documented field would slip through. This file pins each handler's
+// contract.
+//
+// While the beta is on, the "public" handlers require a session + beta
+// membership. Every test caller in this file goes through `t.admin`
+// (which makeTournament beta-seeds by default).
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { nanoid } from "nanoid";
 import { beforeAll, describe, expect, it } from "vitest";
 import { expectOk } from "../../helpers/assertions";
-import { makeTournament, type TestTournament } from "../../helpers/builders";
+import {
+	makeTournament,
+	makeUser,
+	type TestTournament,
+} from "../../helpers/builders";
 import { request } from "../../helpers/requests";
 
 beforeAll(async () => {
@@ -20,7 +28,7 @@ describe("public read handlers", () => {
 	it("GET /v1/tournaments returns a list of tournament summary rows", async () => {
 		const t = await makeTournament({ name: "Shape List Cup" });
 
-		const res = await request.get({ path: "/v1/tournaments" });
+		const res = await request.get({ path: "/v1/tournaments", as: t.admin });
 		const body = await expectOk<{
 			tournaments: Array<{
 				tournament_id: string;
@@ -50,7 +58,10 @@ describe("public read handlers", () => {
 	it("GET /v1/tournaments/:slug returns the full tournament detail shape", async () => {
 		const t = await makeTournament({ name: "Detail Cup" });
 
-		const res = await request.get({ path: `/v1/tournaments/${t.slug}` });
+		const res = await request.get({
+			path: `/v1/tournaments/${t.slug}`,
+			as: t.admin,
+		});
 		const body = await expectOk<{
 			tournament_id: string;
 			slug: string;
@@ -78,8 +89,8 @@ describe("public read handlers", () => {
 		// Default 4 slots per division from makeTournament.
 		expect(body.slot_counts.swiss).toBe(8);
 		expect(body.slot_counts.championship).toBe(0);
-		// Anonymous caller — admin affordances stay hidden.
-		expect(body.is_viewer_admin).toBe(false);
+		// Caller is the tournament admin — affordances flagged on.
+		expect(body.is_viewer_admin).toBe(true);
 	});
 
 	it("GET /v1/tournaments/:id/standings returns ranked standings keyed by division", async () => {
@@ -89,6 +100,7 @@ describe("public read handlers", () => {
 
 		const res = await request.get({
 			path: `/v1/tournaments/${t.tournamentId}/standings`,
+			as: t.admin,
 		});
 		const body = await expectOk<{
 			tournament_id: string;
@@ -143,6 +155,7 @@ describe("public read handlers", () => {
 
 		const res = await request.get({
 			path: `/v1/tournaments/${t.tournamentId}/bracket`,
+			as: t.admin,
 		});
 		const body = await expectOk<{
 			tournament_id: string;
@@ -192,6 +205,7 @@ describe("public read handlers", () => {
 
 		const res = await request.get({
 			path: `/v1/tournaments/${t.tournamentId}/rounds`,
+			as: t.admin,
 		});
 		const body = await expectOk<{
 			tournament_id: string;
@@ -227,6 +241,7 @@ describe("public read handlers", () => {
 
 		const res = await request.get({
 			path: `/v1/tournaments/${t.tournamentId}/matches`,
+			as: t.admin,
 		});
 		const body = await expectOk<{
 			tournament_id: string;
@@ -266,6 +281,7 @@ describe("public read handlers", () => {
 
 		const res = await request.get({
 			path: `/v1/tournaments/${t.tournamentId}/matches/${target.match_id}`,
+			as: t.admin,
 		});
 		const body = await expectOk<{
 			match_id: string;
@@ -320,6 +336,7 @@ describe("public read handlers", () => {
 
 		const res = await request.get({
 			path: `/v1/games/${gameId}/tournament-link`,
+			as: t.admin,
 		});
 		const body = await expectOk<{
 			link: {
@@ -360,23 +377,22 @@ describe("public read handlers", () => {
 	});
 
 	it("GET /v1/games/:id/tournament-link returns { link: null } for an unlinked game", async () => {
-		const userId = nanoid(21);
-		await env.SHARE_DB.prepare(
-			"INSERT INTO users (user_id, discord_id, display_name) VALUES (?, ?, ?)",
-		)
-			.bind(userId, "9999999999999999", "noop")
-			.run();
+		// Game owner can be anyone; the caller just needs to be in the beta
+		// to clear the gate. The handler doesn't gate on ownership.
+		const owner = await makeUser();
+		const viewer = await makeUser();
 		const gameId = nanoid(21);
 		await env.SHARE_DB.prepare(
 			`INSERT INTO games (game_id, user_id, xml_game_id, total_turns,
 			                    file_hash, is_public, parser_version)
 			 VALUES (?, ?, 'xml-id', 10, 'cafebabe', 1, '2.4.0')`,
 		)
-			.bind(gameId, userId)
+			.bind(gameId, owner.userId)
 			.run();
 
 		const res = await request.get({
 			path: `/v1/games/${gameId}/tournament-link`,
+			as: viewer,
 		});
 		const body = await expectOk<{ link: unknown | null }>(res);
 		expect(body.link).toBeNull();

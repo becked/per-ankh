@@ -14,6 +14,11 @@ export interface UserMe {
 	discord_id: string;
 	display_name: string;
 	avatar_url: string;
+	// True iff the user is on the tournament beta allowlist. Drives the
+	// header's Tournaments link visibility and skips layout-load tournament
+	// fetches for non-beta users. Not load-bearing for security — the
+	// worker re-checks on every tournament endpoint.
+	is_beta: boolean;
 }
 
 export interface GameListItem {
