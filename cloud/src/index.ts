@@ -78,6 +78,7 @@ import {
 	handlePatchMatchMap,
 	handlePatchSlot,
 	handlePatchTournament,
+	handleReorderSlots,
 	handleRetroEditMatch,
 	handleStartTournament,
 	handleTransitionChampionship,
@@ -794,6 +795,15 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "POST /v1/tournaments/:id/slots",
 		handler: (r, e, m) => handleBulkCreateSlots(m![1], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/slots\/reorder$/,
+		},
+		route: "POST /v1/tournaments/:id/slots/reorder",
+		handler: (r, e, m) => handleReorderSlots(m![1], r, e),
 	},
 	{
 		method: "PATCH",

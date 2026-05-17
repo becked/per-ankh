@@ -12,6 +12,7 @@ import {
 	PatchMatchMapSchema,
 	PatchSlotSchema,
 	PatchTournamentSchema,
+	ReorderSlotsSchema,
 	TransitionChampionshipSchema,
 } from "../schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "../session";
@@ -743,6 +744,106 @@ export async function handleDeleteSlot(
 		slot_id: slotId,
 	});
 	return new Response(null, { status: 204, headers: cors });
+}
+
+// ----------------------------------------------------------------------
+// POST /v1/tournaments/:id/slots/reorder — reseed swiss-phase slots
+//
+// Admin reorders the seed list (drag-and-drop in the setup UI). Body carries
+// the desired display order for both divisions; the server renumbers
+// swiss_seed = 1..N within each and updates division for any slot that moved
+// across. Setup-only — once round 1 has paired against the old seeds,
+// reseeding would desync match history from the visible order.
+// ----------------------------------------------------------------------
+
+export async function handleReorderSlots(
+	tournamentId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+	const { tournament } = a;
+	if (tournament.status !== "setup") {
+		return errorResponse(
+			"Slots can only be reordered in 'setup' status",
+			409,
+			cors,
+			"INVALID_PHASE",
+		);
+	}
+	const body = await parseJsonBody(request, ReorderSlotsSchema, cors);
+	if (!body.ok) return body.response;
+	const { divisions } = body.body;
+
+	const swissSlots = (await loadSlots(env, tournamentId)).filter(
+		(s) => s.phase === "swiss",
+	);
+	const requested = [...divisions.A, ...divisions.B];
+	const requestedSet = new Set(requested);
+	if (requestedSet.size !== requested.length) {
+		return errorResponse(
+			"Duplicate slot_id in reorder payload",
+			400,
+			cors,
+			"DUPLICATE_SLOT",
+		);
+	}
+	const existingIds = new Set(swissSlots.map((s) => s.slot_id));
+	if (
+		requestedSet.size !== existingIds.size ||
+		[...requestedSet].some((id) => !existingIds.has(id))
+	) {
+		return errorResponse(
+			"Reorder payload must include every swiss-phase slot exactly once",
+			400,
+			cors,
+			"INCOMPLETE_REORDER",
+		);
+	}
+
+	// Two-phase rewrite: shift all current swiss_seeds to negative first, so
+	// the per-slot UPDATEs that follow can assign 1..N without tripping the
+	// UNIQUE (tournament_id, phase, division, swiss_seed) constraint
+	// mid-batch. The unique index allows negatives, and no other code path
+	// reads negative seeds — they're only visible inside this batch.
+	const statements: D1PreparedStatement[] = [
+		env.SHARE_DB.prepare(
+			`UPDATE tournament_slots
+			 SET swiss_seed = -swiss_seed
+			 WHERE tournament_id = ? AND phase = 'swiss' AND swiss_seed IS NOT NULL`,
+		).bind(tournamentId),
+	];
+	for (const division of ["A", "B"] as const) {
+		divisions[division].forEach((slotId, index) => {
+			statements.push(
+				env.SHARE_DB.prepare(
+					`UPDATE tournament_slots
+					 SET division = ?, swiss_seed = ?
+					 WHERE slot_id = ? AND tournament_id = ?`,
+				).bind(division, index + 1, slotId, tournamentId),
+			);
+		});
+	}
+	statements.push(
+		env.SHARE_DB.prepare(
+			"UPDATE tournaments SET updated_at = datetime('now') WHERE tournament_id = ?",
+		).bind(tournamentId),
+	);
+	await env.SHARE_DB.batch(statements);
+
+	logTournamentAdminAction(env, a.userId, tournamentId, "slots_reordered", {
+		count: requested.length,
+		division_a: divisions.A.length,
+		division_b: divisions.B.length,
+	});
+	const updated = await loadSlots(env, tournamentId);
+	return jsonResponse(
+		{ slots: updated.filter((s) => s.phase === "swiss").map(slotRowToRef) },
+		200,
+		cors,
+	);
 }
 
 // ----------------------------------------------------------------------

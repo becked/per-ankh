@@ -7,6 +7,7 @@
 		ApiError,
 		cloudApi,
 		type Division,
+		type SlotStanding,
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
@@ -212,6 +213,138 @@
 		);
 	}
 
+	// Drag-and-drop reorder of swiss-phase slots (setup only). localOrder is
+	// a writable derived: it re-projects from slotsA/slotsB whenever server
+	// data refreshes, but we can also assign to it directly to show the
+	// reorder immediately while the PATCH is in flight. The next data
+	// invalidation re-projects and either confirms the optimistic state or
+	// (on error rollback) restores the prior order.
+	let localOrder: { A: SlotStanding[]; B: SlotStanding[] } = $derived({
+		A: [...slotsA],
+		B: [...slotsB],
+	});
+
+	let dragSlotId = $state<string | null>(null);
+	let dragOver = $state<{ division: Division; index: number } | null>(null);
+
+	// Which division the currently-dragged slot lives in. Same-div drops
+	// "auto-append" on the last row thanks to the source-removal index shift,
+	// so we only need the explicit end-zone for cross-division drags — using
+	// this to gate the strip's visibility avoids a useless dashed bar when
+	// the source is already in this division.
+	const dragSourceDivision = $derived.by((): Division | null => {
+		if (!dragSlotId) return null;
+		for (const d of ["A", "B"] as const) {
+			if (localOrder[d].some((s) => s.slot_id === dragSlotId)) return d;
+		}
+		return null;
+	});
+
+	function onSlotDragStart(slotId: string, e: DragEvent) {
+		if (!isAdmin || busy || data.tournament.status !== "setup") {
+			e.preventDefault();
+			return;
+		}
+		dragSlotId = slotId;
+		if (e.dataTransfer) {
+			e.dataTransfer.effectAllowed = "move";
+			e.dataTransfer.setData("text/plain", slotId);
+		}
+	}
+
+	// "Drop on row N" = "this slot takes row N's seat; row N and everything
+	// after shift down". Cleaner and more reachable than bisect-by-Y, which
+	// leaves the bottom-half target a 10px sliver on small rows and makes
+	// the last-row's "drop below" impossible to hit. End-zone handles the
+	// "append after the last row" case explicitly.
+	function onSlotDragOverRow(division: Division, idx: number, e: DragEvent) {
+		if (!dragSlotId) return;
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+		dragOver = { division, index: idx };
+	}
+
+	function onSlotDragOverEnd(division: Division, e: DragEvent) {
+		if (!dragSlotId) return;
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+		dragOver = { division, index: localOrder[division].length };
+	}
+
+	function onSlotDragOverEmpty(division: Division, e: DragEvent) {
+		if (!dragSlotId) return;
+		e.preventDefault();
+		if (e.dataTransfer) e.dataTransfer.dropEffect = "move";
+		dragOver = { division, index: 0 };
+	}
+
+	function onSlotDragEnd() {
+		dragSlotId = null;
+		dragOver = null;
+	}
+
+	async function onSlotDrop(division: Division, e: DragEvent) {
+		e.preventDefault();
+		if (!dragSlotId || !dragOver) {
+			onSlotDragEnd();
+			return;
+		}
+		const slotId = dragSlotId;
+		const insertAt = dragOver.index;
+		onSlotDragEnd();
+
+		// Pluck the slot from whichever division currently holds it so we can
+		// re-insert it at the drop target's index.
+		const next: { A: SlotStanding[]; B: SlotStanding[] } = {
+			A: [...localOrder.A],
+			B: [...localOrder.B],
+		};
+		let fromDiv: Division | null = null;
+		let moved: SlotStanding | undefined;
+		for (const d of ["A", "B"] as const) {
+			const i = next[d].findIndex((s) => s.slot_id === slotId);
+			if (i >= 0) {
+				fromDiv = d;
+				[moved] = next[d].splice(i, 1);
+				break;
+			}
+		}
+		if (!moved || !fromDiv) return;
+
+		// "Take row N's seat" semantics: insert at insertAt directly. Splice
+		// clamps insertAt > array.length to "append" automatically, so the
+		// end-zone (insertAt = slots.length) works without a special case.
+		next[division].splice(insertAt, 0, moved);
+
+		// No-op when the resulting array matches the starting one (e.g.,
+		// dropped onto own row, or end-zone with source already at end of
+		// same division).
+		if (
+			fromDiv === division &&
+			next[division].length === localOrder[division].length &&
+			next[division].every(
+				(s, i) => s.slot_id === localOrder[division][i].slot_id,
+			)
+		) {
+			return;
+		}
+
+		localOrder = next;
+		const divisions = {
+			A: next.A.map((s) => s.slot_id),
+			B: next.B.map((s) => s.slot_id),
+		};
+		const result = await withBusy(
+			() => cloudApi.reorderSlots(data.tournament.tournament_id, divisions),
+			"Reordered slots",
+		);
+		if (result === null) {
+			// Roll back optimistic UI on failure — invalidateAll didn't run, so
+			// the resync $effect won't fire on its own.
+			localOrder = { A: [...slotsA], B: [...slotsB] };
+		}
+	}
+
 	async function startTournament() {
 		if (
 			!confirm(
@@ -353,6 +486,16 @@
 									<input
 										type="text"
 										bind:value={newSlotUsername}
+										data-1p-ignore
+										data-lpignore="true"
+										data-bwignore
+										data-form-type="other"
+										onkeydown={(e) => {
+											if (e.key === "Enter" && !busy && newSlotUsername.trim()) {
+												e.preventDefault();
+												addSlot();
+											}
+										}}
 										class="mt-1 block rounded border border-black bg-[#35302b] p-1.5 text-xs text-tan"
 									/>
 								</label>
@@ -395,17 +538,34 @@
 
 						<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
 							{#each ["A", "B"] as const as div (div)}
-								{@const slots = data.standings.divisions[div].standings}
+								{@const slots = localOrder[div]}
+								{@const draggable = isAdmin && !busy}
 								<div class="rounded-lg p-3" style="background-color: #35302B;">
 									<h3 class="mb-2 text-xs uppercase text-tan opacity-70">
 										{data.standings.divisions[div].name}
 									</h3>
 									{#if slots.length === 0}
-										<p class="text-xs text-tan opacity-50">No slots yet.</p>
+										<p
+											class="text-xs text-tan opacity-50"
+											class:outline={isAdmin &&
+												dragSlotId &&
+												dragOver?.division === div}
+											class:outline-orange={isAdmin &&
+												dragSlotId &&
+												dragOver?.division === div}
+											ondragover={(e) => onSlotDragOverEmpty(div, e)}
+											ondrop={(e) => onSlotDrop(div, e)}
+											role="presentation"
+										>
+											No slots yet.
+										</p>
 									{:else}
 										<table class="w-full text-xs text-tan">
 											<thead>
 												<tr class="border-b border-black">
+													{#if isAdmin}
+														<th class="w-4"></th>
+													{/if}
 													<th class="py-1 pr-2 text-left">#</th>
 													<th class="py-1 pr-2 text-left">Username</th>
 													<th class="py-1 text-right">Claimed</th>
@@ -415,10 +575,32 @@
 												</tr>
 											</thead>
 											<tbody>
-												{#each slots as s (s.slot_id)}
+												{#each slots as s, idx (s.slot_id)}
+													{@const showRowTarget =
+														dragSlotId !== null &&
+														dragSlotId !== s.slot_id &&
+														dragOver?.division === div &&
+														dragOver.index === idx}
 													<tr
 														class="border-b border-black border-opacity-30 last:border-0"
+														class:opacity-40={dragSlotId === s.slot_id}
+														class:bg-orange={showRowTarget}
+														class:bg-opacity-20={showRowTarget}
+														draggable={draggable ? "true" : "false"}
+														ondragstart={(e) => onSlotDragStart(s.slot_id, e)}
+														ondragend={onSlotDragEnd}
+														ondragover={(e) => onSlotDragOverRow(div, idx, e)}
+														ondrop={(e) => onSlotDrop(div, e)}
 													>
+														{#if isAdmin}
+															<td
+																class="select-none py-1 pr-1 text-center text-tan opacity-40"
+																class:cursor-grab={draggable}
+																aria-label="Drag to reorder"
+															>
+																⋮⋮
+															</td>
+														{/if}
 														<td class="py-1 pr-2 font-mono">
 															{s.swiss_seed ?? s.rank}
 														</td>
@@ -456,6 +638,22 @@
 												{/each}
 											</tbody>
 										</table>
+										{#if isAdmin && dragSlotId && dragSourceDivision !== div}
+											{@const showEndTarget =
+												dragOver?.division === div &&
+												dragOver.index === slots.length}
+											<div
+												class="mt-1 rounded border border-dashed py-2"
+												class:border-orange={showEndTarget}
+												class:bg-orange={showEndTarget}
+												class:bg-opacity-20={showEndTarget}
+												class:border-black={!showEndTarget}
+												class:opacity-60={!showEndTarget}
+												ondragover={(e) => onSlotDragOverEnd(div, e)}
+												ondrop={(e) => onSlotDrop(div, e)}
+												role="presentation"
+											></div>
+										{/if}
 									{/if}
 								</div>
 							{/each}

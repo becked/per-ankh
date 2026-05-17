@@ -582,6 +582,23 @@ export const cloudApi = {
 		});
 	},
 
+	// Drag-and-drop reorder of swiss-phase slots. divisions.A and .B are the
+	// desired display order (slot_ids); server renumbers swiss_seed = 1..N
+	// within each and reassigns division for slots that moved across.
+	// Setup-only on the server — call returns 409 if status !== "setup".
+	reorderSlots: async (
+		tournamentId: string,
+		divisions: { A: string[]; B: string[] },
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/reorder`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ divisions }),
+		});
+	},
+
 	// Single admin gate that flips setup → swiss and generates Round 1
 	// for both divisions in one batch. Subsequent rounds advance
 	// automatically on the server when a round's last match reports.

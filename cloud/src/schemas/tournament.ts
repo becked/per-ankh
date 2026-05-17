@@ -132,6 +132,24 @@ export const PatchSlotSchema = v.object({
 	),
 });
 
+// Body for POST /v1/tournaments/:id/slots/reorder. Each division array is the
+// desired display order; the server renumbers swiss_seed = 1..N within each
+// division and reassigns division for any slot that moved across. The caller
+// must include every swiss-phase slot exactly once across the two arrays —
+// the handler rejects partial reorder payloads to avoid leaving orphan seeds.
+export const ReorderSlotsSchema = v.object({
+	divisions: v.object({
+		A: v.pipe(
+			v.array(v.pipe(v.string(), v.regex(nanoid21Regex))),
+			v.maxLength(200),
+		),
+		B: v.pipe(
+			v.array(v.pipe(v.string(), v.regex(nanoid21Regex))),
+			v.maxLength(200),
+		),
+	}),
+});
+
 // map_script is not nullable: match generation always assigns one for
 // non-bye matches (assignMap throws on empty input), and the admin's only
 // map-edit UI is for replacing it, not clearing it. Byes carry
