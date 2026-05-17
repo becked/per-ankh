@@ -179,7 +179,7 @@
 	<div class="grid-scroll">
 		<div
 			class="grid"
-			style:grid-template-columns="repeat({maxRounds}, minmax(180px, 1fr))
+			style:grid-template-columns="repeat({maxRounds}, minmax(140px, 1fr))
 			minmax(110px, 0.7fr)"
 			style:grid-template-rows="auto repeat({totalContentRows}, minmax(0, auto))"
 		>
