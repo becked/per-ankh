@@ -25,6 +25,7 @@ import {
 	printJson,
 } from "../../lib/cli";
 import { d1Exec, d1Query, sqlStr } from "../wrangler";
+import { KNOWN_MAP_SCRIPTS } from "$lib/tournament/map-scripts";
 
 // Nanoid-compatible 21-char ID generator (no external dep). Uses the
 // standard nanoid alphabet so IDs are interchangeable with worker-issued
@@ -140,6 +141,17 @@ async function runCreate(argv: string[], opts: CommandOpts): Promise<void> {
 		.filter((m) => m.length > 0);
 	if (maps.length === 0) {
 		throw new Error("--maps cannot be empty after parsing");
+	}
+	const validMapScripts = new Set(KNOWN_MAP_SCRIPTS.map((s) => s.value));
+	const invalidMaps = maps.filter((m) => !validMapScripts.has(m));
+	if (invalidMaps.length > 0) {
+		throw new Error(
+			`Unknown map_script value(s): ${invalidMaps.join(", ")}\n` +
+				`Expected canonical MAPCLASS_MapScript<Name> identifiers — ` +
+				`see KNOWN_MAP_SCRIPTS in src/lib/tournament/map-scripts.ts ` +
+				`for the full list (e.g. MAPCLASS_MapScriptContinent, ` +
+				`MAPCLASS_MapScriptAridPlateau, MAPCLASS_MapScriptInlandSea2).`,
+		);
 	}
 	const description = flagString(flags, "description") ?? null;
 	const divA = flagString(flags, "div-a") ?? "Division A";
