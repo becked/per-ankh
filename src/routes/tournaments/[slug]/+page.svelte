@@ -689,6 +689,22 @@
 						</p>
 					</section>
 				{:else}
+					{#if data.bracket.rounds.length > 0}
+						<section
+							class="mb-6 rounded-lg p-4"
+							style="background-color: #2a2622;"
+						>
+							<h2 class="mb-3 text-sm font-bold text-tan">
+								Championship Bracket
+							</h2>
+							<ChampionshipBracketTree
+								bracket={data.bracket}
+								tournamentSlug={data.tournament.slug}
+								onMatchClick={openMatch}
+							/>
+						</section>
+					{/if}
+
 					{#each ["A", "B"] as const as division (division)}
 						{@const divisionData = data.standings.divisions[division]}
 						{#if divisionData.standings.length > 0}
@@ -719,22 +735,6 @@
 							</section>
 						{/if}
 					{/each}
-				{/if}
-
-				{#if data.bracket.rounds.length > 0}
-					<section
-						class="mb-6 rounded-lg p-4"
-						style="background-color: #2a2622;"
-					>
-						<h2 class="mb-3 text-sm font-bold text-tan">
-							Championship Bracket
-						</h2>
-						<ChampionshipBracketTree
-							bracket={data.bracket}
-							tournamentSlug={data.tournament.slug}
-							onMatchClick={openMatch}
-						/>
-					</section>
 				{/if}
 			</div>
 		</div>
