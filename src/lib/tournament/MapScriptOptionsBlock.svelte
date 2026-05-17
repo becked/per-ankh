@@ -23,9 +23,13 @@
 	// Local working copy. svelte-ignore on the initial read mirrors the
 	// pattern in TournamentMapsPanel.svelte:21 — we want the initial value
 	// from the prop but then keep our own optimistic state.
+	//
+	// $state.snapshot (not structuredClone) is required when cloning a value
+	// that is, or will become, a $state proxy: structuredClone trips on the
+	// proxy's internals with a DataCloneError ("Window could not be cloned").
 	// svelte-ignore state_referenced_locally
 	let working = $state<MapScriptOptions>(
-		structuredClone(tournament.map_script_options),
+		$state.snapshot(tournament.map_script_options),
 	);
 
 	let status = $state<
@@ -52,12 +56,12 @@
 			}
 			status = { kind: "err", message };
 			// Roll back to server state.
-			working = structuredClone(tournament.map_script_options);
+			working = $state.snapshot(tournament.map_script_options);
 		}
 	}
 
 	function setOption(option: string, value: string | boolean) {
-		const next: MapScriptOptions = structuredClone(working);
+		const next: MapScriptOptions = $state.snapshot(working);
 		if (!next[script]) next[script] = {};
 		next[script][option] = value;
 		working = next;

@@ -18,6 +18,31 @@ export type MapOptionDef =
 	  };
 
 export const MAP_OPTION_DEFS: Readonly<Record<string, MapOptionDef>> = {
+	MAPASPECTRATIO: {
+		kind: "select",
+		label: "Map Aspect Ratio",
+		choices: [
+			{ value: "MAPASPECTRATIO_SQUARE", label: "Square" },
+			{ value: "MAPASPECTRATIO_WIDE", label: "Wide" },
+			{ value: "MAPASPECTRATIO_ULTRAWIDE", label: "Ultra-wide" },
+			{ value: "MAPASPECTRATIO_DYNAMIC", label: "Dynamic" },
+		],
+		default: "MAPASPECTRATIO_SQUARE",
+	},
+	MAPSIZE: {
+		kind: "select",
+		label: "Map Size",
+		choices: [
+			{ value: "MAPSIZE_SMALLEST", label: "Duel" },
+			{ value: "MAPSIZE_TINY", label: "Tiny" },
+			{ value: "MAPSIZE_SMALL", label: "Small" },
+			{ value: "MAPSIZE_MEDIUM", label: "Medium" },
+			{ value: "MAPSIZE_LARGE", label: "Large" },
+			{ value: "MAPSIZE_HUGE", label: "Huge" },
+			{ value: "MAPSIZE_RANDOM", label: "Random" },
+		],
+		default: "MAPSIZE_SMALLEST",
+	},
 	MAP_OPTIONS_ARCHIPELAGO_LANDMASS: {
 		kind: "select",
 		label: "Islands Size",

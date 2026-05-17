@@ -11,7 +11,11 @@
 		unaddedMapScriptsByDlc,
 	} from "$lib/tournament/map-scripts";
 	import MapScriptOptionsBlock from "$lib/tournament/MapScriptOptionsBlock.svelte";
-	import { optionsForScript } from "$lib/tournament/map-script-options";
+	import {
+		effectiveOptionValue,
+		mapOptionChoiceLabel,
+		optionsForScript,
+	} from "$lib/tournament/map-script-options";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -129,6 +133,22 @@
 									></span>
 								{/if}
 								<span class="flex-1 text-sm">{mapScriptLabel(script)}</span>
+								{#if !isExpanded}
+									{@const aspect = effectiveOptionValue(
+										tournament.map_script_options,
+										script,
+										"MAPASPECTRATIO",
+									)}
+									{@const size = effectiveOptionValue(
+										tournament.map_script_options,
+										script,
+										"MAPSIZE",
+									)}
+									<span class="text-[11px] text-tan opacity-70">
+										{mapOptionChoiceLabel("MAPASPECTRATIO", aspect)}
+										{mapOptionChoiceLabel("MAPSIZE", size)}
+									</span>
+								{/if}
 								{#if expandable}
 									<span class="text-[10px] text-tan opacity-50">
 										{optsCount} option{optsCount === 1 ? "" : "s"}

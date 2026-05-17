@@ -6,11 +6,19 @@
 //   Reference/XML/Infos/mapOptionsSingle.xml      — toggle options (bMultiPlayerValid)
 //   Reference/XML/Infos/mapOptionsMulti.xml       — select options (Choices, Default)
 //   Reference/XML/Infos/mapOptionsMulti-wog.xml   — WoG DLC select options
+//   Reference/XML/Infos/mapSize.xml               — synthetic MAPSIZE option
+//   Reference/XML/Infos/mapAspectRatio.xml        — synthetic MAPASPECTRATIO option
 //   Reference/XML/Infos/text-*.xml                — TEXT_* → en-US labels (merged)
 //   Reference/Source/Base/Game/GameCore/MapScripts/{Map,m}apScript*.cs
 //                                                 — per-script options.Add(...) calls
 //   Reference/Source/Base/Game/GameCore/MapScripts/DefaultMapScript.cs
 //                                                 — globals applied to every script
+//
+// SYNTHETIC OPTIONS: map size and aspect ratio aren't registered via the
+// usual options.Add(...) C# calls — they're top-level OW game-setup params
+// in their own XML files. We inject them as "MAPSIZE" / "MAPASPECTRATIO"
+// synthetic globals so admins can configure them per-script alongside the
+// real options.
 //
 // Filename quirks preserved verbatim (Mohawk source):
 //   MapScripLakesAndGulfs.cs        — missing trailing 't' in "MapScript"
@@ -61,6 +69,24 @@ interface TextEntry {
 	zType?: string;
 	"en-US"?: string;
 }
+
+interface SizeOrAspectEntry {
+	zType?: string;
+	Name?: string;
+}
+
+// Synthetic option zTypes injected as globals — see header comment. Defaults
+// suit Per-Ankh's 1v1 Swiss tournament format: Duel is the OW map size sized
+// for two players (2025 tiles), and Square is the standard competitive aspect.
+const SYNTHETIC_OPTION_LABELS: Readonly<Record<string, string>> = {
+	MAPSIZE: "Map Size",
+	MAPASPECTRATIO: "Map Aspect Ratio",
+};
+const SYNTHETIC_OPTION_DEFAULTS: Readonly<Record<string, string>> = {
+	MAPSIZE: "MAPSIZE_SMALLEST",
+	MAPASPECTRATIO: "MAPASPECTRATIO_SQUARE",
+};
+const SYNTHETIC_GLOBALS: readonly string[] = ["MAPSIZE", "MAPASPECTRATIO"];
 
 type OptionDef =
 	| {
@@ -178,11 +204,21 @@ async function main(): Promise<void> {
 	const singlePath = resolve(infosDir, "mapOptionsSingle.xml");
 	const multiPath = resolve(infosDir, "mapOptionsMulti.xml");
 	const multiWogPath = resolve(infosDir, "mapOptionsMulti-wog.xml");
+	const mapSizePath = resolve(infosDir, "mapSize.xml");
+	const mapAspectRatioPath = resolve(infosDir, "mapAspectRatio.xml");
 
-	const [singleEntries, multiEntries, multiWogEntries] = await Promise.all([
+	const [
+		singleEntries,
+		multiEntries,
+		multiWogEntries,
+		sizeEntries,
+		aspectEntries,
+	] = await Promise.all([
 		loadEntries<SingleEntry>(singlePath),
 		loadEntries<MultiEntry>(multiPath),
 		loadEntries<MultiEntry>(multiWogPath),
+		loadEntries<SizeOrAspectEntry>(mapSizePath),
+		loadEntries<SizeOrAspectEntry>(mapAspectRatioPath),
 	]);
 
 	// ─── Text lookup (TEXT_* → en-US) merged across all text-*.xml files ──
@@ -212,7 +248,10 @@ async function main(): Promise<void> {
 	const csFiles = mapScriptFiles.filter((f) => /\.cs$/.test(f));
 
 	const defaultPath = resolve(mapScriptsDir, "DefaultMapScript.cs");
-	const globals = await parseGlobalOptions(defaultPath);
+	const parsedGlobals = await parseGlobalOptions(defaultPath);
+	// Prepend synthetic globals so MAPSIZE / MAPASPECTRATIO appear first in
+	// every script's option block, matching OW lobby ordering.
+	const globals = [...SYNTHETIC_GLOBALS, ...parsedGlobals];
 
 	const scriptDecls: ScriptDecl[] = [];
 	for (const f of csFiles) {
@@ -293,6 +332,54 @@ async function main(): Promise<void> {
 		};
 	}
 
+	// ─── Synthetic options (size + aspect ratio) ─────────────────────
+	// Built from mapSize.xml / mapAspectRatio.xml. Each XML <Entry> becomes
+	// a choice on the synthetic option. Entries' <Name> fields are TEXT_*
+	// keys resolved against the merged text-*.xml lookup (e.g.
+	// TEXT_MAPSIZE_DUEL → "Duel"). Option-group labels are hand-set.
+	function buildSyntheticOption(
+		key: keyof typeof SYNTHETIC_OPTION_LABELS,
+		entries: SizeOrAspectEntry[],
+		valuePrefix: string,
+	): OptionDef {
+		const choices = entries
+			.filter(
+				(
+					e,
+				): e is Required<Pick<SizeOrAspectEntry, "zType">> &
+					SizeOrAspectEntry =>
+					typeof e.zType === "string" && e.zType.length > 0,
+			)
+			.map((e) => ({
+				value: e.zType,
+				label: labelFor(e.Name, formatEnum(e.zType, valuePrefix)),
+			}));
+		if (choices.length === 0) {
+			throw new Error(
+				`bake-map-options: synthetic option ${key} resolved zero choices. ` +
+					`Did Reference/XML/Infos/${key === "MAPSIZE" ? "mapSize" : "mapAspectRatio"}.xml change shape?`,
+			);
+		}
+		const def: string = SYNTHETIC_OPTION_DEFAULTS[key];
+		if (!choices.some((c) => c.value === def)) {
+			throw new Error(
+				`bake-map-options: synthetic default ${def} is not a choice of ${key}.`,
+			);
+		}
+		return {
+			kind: "select",
+			label: SYNTHETIC_OPTION_LABELS[key],
+			choices,
+			default: def,
+		};
+	}
+	optionDefs.MAPSIZE = buildSyntheticOption("MAPSIZE", sizeEntries, "MAPSIZE_");
+	optionDefs.MAPASPECTRATIO = buildSyntheticOption(
+		"MAPASPECTRATIO",
+		aspectEntries,
+		"MAPASPECTRATIO_",
+	);
+
 	// Now re-fill the choice labels — the multi loop above used formatEnum
 	// fallback for every choice because we didn't have the choice's TEXT_*
 	// key. For choice labels, the convention is the choice zValue itself
@@ -342,7 +429,8 @@ async function main(): Promise<void> {
 
 	// Sort the option-def map and the script keys for deterministic output.
 	const sortedOptions: Record<string, OptionDef> = {};
-	for (const k of Object.keys(optionDefs).sort()) sortedOptions[k] = optionDefs[k];
+	for (const k of Object.keys(optionDefs).sort())
+		sortedOptions[k] = optionDefs[k];
 	const sortedScripts: Record<string, string[]> = {};
 	for (const k of Object.keys(scriptOptions).sort())
 		sortedScripts[k] = scriptOptions[k];
