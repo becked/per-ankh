@@ -102,6 +102,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 		"/sprites/crests/CREST_TRIBE_THRACIANS.874eeead.png",
 	"crests/CREST_TRIBE_VANDALS":
 		"/sprites/crests/CREST_TRIBE_VANDALS.9f24d9b7.png",
+	"icons/ACHIEVEMENT_WIN": "/sprites/icons/ACHIEVEMENT_WIN.5cff6493.png",
 	"icons/IMPROVEMENT_FINISHED":
 		"/sprites/icons/IMPROVEMENT_FINISHED.f131e64d.png",
 	"icons/MAP_OVERVIEW": "/sprites/icons/MAP_OVERVIEW.5c63299a.png",

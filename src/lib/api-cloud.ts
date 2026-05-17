@@ -231,22 +231,29 @@ export const cloudApi = {
 		return res.json() as Promise<GameListResponse>;
 	},
 
-	// Owner GET — returns the blob with an `is_public` flag injected by the
-	// Worker so the visibility toggle has its initial state. The `is_public`
-	// field is server-supplied metadata, not part of the parser's output.
+	// Owner GET — returns the blob with `is_public` and `user_nation`
+	// injected by the Worker. `is_public` drives the visibility toggle's
+	// initial state; `user_nation` is the uploader's picked nation (null in
+	// observer mode) and lets the detail view label the page with the
+	// uploader's choice instead of the alphabetical-first-human heuristic.
 	getGame: async (
 		id: string,
 		opts?: CallOpts,
-	): Promise<FullGameData & { is_public?: boolean }> => {
+	): Promise<FullGameData & { is_public?: boolean; user_nation?: string | null }> => {
 		const res = await request(`/games/${id}`, opts);
-		return res.json() as Promise<FullGameData & { is_public?: boolean }>;
+		return res.json() as Promise<
+			FullGameData & { is_public?: boolean; user_nation?: string | null }
+		>;
 	},
 
 	// Anonymous public read — no credentials, no auto-redirect to login.
 	// Used as a fallback when getGame() returns 401 (the user isn't signed in
 	// or doesn't own the game). 401 from this path means the game is
 	// genuinely private; 404 means it doesn't exist.
-	getPublicGame: async (id: string, opts?: CallOpts): Promise<FullGameData> => {
+	getPublicGame: async (
+		id: string,
+		opts?: CallOpts,
+	): Promise<FullGameData & { user_nation?: string | null }> => {
 		const f = opts?.fetch ?? fetch;
 		const headers = new Headers();
 		// No credentials: include — anonymous read.
@@ -257,7 +264,7 @@ export const cloudApi = {
 		if (!res.ok) {
 			throw new ApiError(res.status, null, res.statusText);
 		}
-		return res.json() as Promise<FullGameData>;
+		return res.json() as Promise<FullGameData & { user_nation?: string | null }>;
 	},
 
 	toggleVisibility: async (

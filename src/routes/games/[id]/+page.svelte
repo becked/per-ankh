@@ -82,6 +82,7 @@
 				improvementData={game.improvement_data}
 				gameReligions={game.game_religions}
 				playerWonders={game.player_wonders}
+				userNation={game.user_nation ?? null}
 				{mapTiles}
 				{selectedMapTurn}
 				onMapTurnChange={handleMapTurnChange}

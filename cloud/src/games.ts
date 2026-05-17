@@ -1610,10 +1610,10 @@ export async function handleGameDetail(
 	const session = await sessionFromRequest(env, request);
 
 	const row = await env.SHARE_DB.prepare(
-		"SELECT user_id, is_public FROM games WHERE game_id = ?",
+		"SELECT user_id, is_public, user_nation FROM games WHERE game_id = ?",
 	)
 		.bind(gameId)
-		.first<{ user_id: string; is_public: number }>();
+		.first<{ user_id: string; is_public: number; user_nation: string | null }>();
 	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
 
 	const isOwner = session?.data.user_id === row.user_id;
@@ -1683,12 +1683,16 @@ export async function handleGameDetail(
 	// Parse, transform, re-serialize. Owner gets an `is_public` flag
 	// injected for the visibility toggle's initial state; anonymous viewers
 	// get the blob with online_id stripped (PII protection — see
-	// stripOnlineIds). FullGameData is a looseObject schema so the extra
-	// is_public top-level field is non-breaking.
+	// stripOnlineIds). Both get `user_nation` (the uploader's picked nation,
+	// or null in observer mode) so the detail view can label the H1 with
+	// the uploader's choice instead of falling back to the alphabetical-
+	// first-human heuristic. FullGameData is a looseObject schema so the
+	// extra top-level fields are non-breaking.
 	const parsed = JSON.parse(new TextDecoder().decode(decompressed)) as unknown;
-	const transformed = isOwner
+	const baseBlob = isOwner
 		? { ...(parsed as Record<string, unknown>), is_public: isPublic }
-		: stripOnlineIds(parsed);
+		: (stripOnlineIds(parsed) as Record<string, unknown>);
+	const transformed = { ...baseBlob, user_nation: row.user_nation };
 	const bodyText = JSON.stringify(transformed);
 
 	// Vary: Cookie keeps the public-cache key correct. Scrapers send no

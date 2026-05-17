@@ -84,6 +84,10 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 		source: "other/Cycle_Normal_EndTurn.png",
 		target: "TURN.png",
 	},
+	{
+		source: "achievements/ACHIEVEMENT_WIN.png",
+		target: "ACHIEVEMENT_WIN.png",
+	},
 ];
 
 function contentHash(buf: Buffer): string {
