@@ -279,7 +279,7 @@ Deploy the Worker schema change before releasing the frontend that depends on it
 
 - **YAGNI.** Implement what's needed now, not what might be useful later.
 - **DRY.** Reuse existing patterns; extract shared logic.
-- **Atomic commits.** One logical change per commit.
+- **Atomic commits.** One logical change per commit. (But be pragmatic, no git jujitsu just to follow this principle.)
 - **Comments explain WHY.** The code shows WHAT. Document edge cases, business rules, non-obvious decisions.
 
 ## Commit Messages
