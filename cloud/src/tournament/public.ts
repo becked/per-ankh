@@ -101,17 +101,30 @@ export async function handleTournamentList(
 	const allowedStatus = new Set(["setup", "swiss", "championship", "complete"]);
 	const filter = status && allowedStatus.has(status) ? status : null;
 
-	const stmt = filter
-		? env.SHARE_DB.prepare(
-				`SELECT tournament_id, slug, name, status, created_at, updated_at
-				 FROM tournaments WHERE status = ?
-				 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-			).bind(filter, limit, offset)
-		: env.SHARE_DB.prepare(
-				`SELECT tournament_id, slug, name, status, created_at, updated_at
-				 FROM tournaments
-				 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
-			).bind(limit, offset);
+	// Setup-phase tournaments are admin-only. A LEFT JOIN against
+	// tournament_admins for the current viewer turns the visibility check
+	// into a SQL predicate. Binding NULL when there's no session causes
+	// `ta.user_id = ?` to never match (NULL comparisons are unknown), so
+	// anonymous callers naturally see only non-setup rows.
+	const session = await sessionFromRequest(env, request);
+	const viewerId = session?.data.user_id ?? null;
+
+	const params: unknown[] = [viewerId];
+	let whereSetup = "(t.status != 'setup' OR ta.user_id IS NOT NULL)";
+	if (filter) {
+		whereSetup += " AND t.status = ?";
+		params.push(filter);
+	}
+	params.push(limit, offset);
+
+	const stmt = env.SHARE_DB.prepare(
+		`SELECT t.tournament_id, t.slug, t.name, t.status, t.created_at, t.updated_at
+		 FROM tournaments t
+		 LEFT JOIN tournament_admins ta
+		   ON ta.tournament_id = t.tournament_id AND ta.user_id = ?
+		 WHERE ${whereSetup}
+		 ORDER BY t.created_at DESC LIMIT ? OFFSET ?`,
+	).bind(...params);
 
 	const res = await stmt.all<{
 		tournament_id: string;
@@ -146,13 +159,6 @@ export async function handleTournamentDetail(
 			"TOURNAMENT_NOT_FOUND",
 		);
 	}
-	const slotCount = await env.SHARE_DB.prepare(
-		"SELECT phase, COUNT(*) AS count FROM tournament_slots WHERE tournament_id = ? GROUP BY phase",
-	)
-		.bind(tournament.tournament_id)
-		.all<{ phase: string; count: number }>();
-	const counts: Record<string, number> = {};
-	for (const row of slotCount.results ?? []) counts[row.phase] = row.count;
 	// is_viewer_admin lets the frontend show observer-upload affordances
 	// without a second round-trip. Anonymous callers always see false.
 	const session = await sessionFromRequest(env, request);
@@ -161,6 +167,23 @@ export async function handleTournamentDetail(
 		session?.data ?? null,
 		tournament.tournament_id,
 	);
+	// Setup-phase tournaments are admin-only. 404 (not 403) so we don't
+	// leak existence to non-admins.
+	if (tournament.status === "setup" && !is_viewer_admin) {
+		return errorResponse(
+			"Tournament not found",
+			404,
+			cors,
+			"TOURNAMENT_NOT_FOUND",
+		);
+	}
+	const slotCount = await env.SHARE_DB.prepare(
+		"SELECT phase, COUNT(*) AS count FROM tournament_slots WHERE tournament_id = ? GROUP BY phase",
+	)
+		.bind(tournament.tournament_id)
+		.all<{ phase: string; count: number }>();
+	const counts: Record<string, number> = {};
+	for (const row of slotCount.results ?? []) counts[row.phase] = row.count;
 	// Public-read leniency: render the tournament detail even if the maps
 	// JSON is corrupted (admins will see the failure surface via round
 	// generation; no need to break the public-facing page). Admin write
@@ -199,6 +222,25 @@ export async function handleTournamentDetail(
 	);
 }
 
+// Setup-phase tournaments are admin-only. Centralised so every public
+// read endpoint that exposes setup data (standings, bracket, rounds,
+// matches, match detail) returns 404 — not 403 — to non-admins, to
+// match the detail endpoint and avoid leaking tournament existence.
+async function setupGateHides(
+	env: TournamentPublicEnv,
+	request: Request,
+	tournament: TournamentRow,
+): Promise<boolean> {
+	if (tournament.status !== "setup") return false;
+	const session = await sessionFromRequest(env, request);
+	const isAdmin = await isTournamentAdmin(
+		env,
+		session?.data ?? null,
+		tournament.tournament_id,
+	);
+	return !isAdmin;
+}
+
 export async function handleTournamentStandings(
 	tournamentId: string,
 	request: Request,
@@ -208,7 +250,7 @@ export async function handleTournamentStandings(
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament) {
+	if (!tournament || (await setupGateHides(env, request, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -307,7 +349,7 @@ export async function handleTournamentBracket(
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament) {
+	if (!tournament || (await setupGateHides(env, request, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -356,7 +398,7 @@ export async function handleTournamentRounds(
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament) {
+	if (!tournament || (await setupGateHides(env, request, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -381,7 +423,7 @@ export async function handleTournamentMatches(
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament) {
+	if (!tournament || (await setupGateHides(env, request, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -434,7 +476,7 @@ export async function handleTournamentMatchDetail(
 	const rl = await enforceTournamentViewRateLimit(env, request, cors);
 	if (rl) return rl;
 	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament) {
+	if (!tournament || (await setupGateHides(env, request, tournament))) {
 		return errorResponse(
 			"Tournament not found",
 			404,
