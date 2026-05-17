@@ -228,7 +228,10 @@
 										{slotLabel(m.slot_a_id)}
 									</span>
 									{#if aPick}
-										<span class="pick-label">first pick</span>
+										<span class="pick-label">First pick</span>
+									{/if}
+									{#if m.map_script}
+										<span class="map-label">{mapScriptLabel(m.map_script)}</span>
 									{/if}
 								</div>
 								<div class="match-row">
@@ -236,12 +239,9 @@
 										{slotLabel(m.slot_b_id)}
 									</span>
 									{#if bPick}
-										<span class="pick-label">first pick</span>
+										<span class="pick-label">First pick</span>
 									{/if}
 								</div>
-								{#if m.map_script}
-									<span class="map-label">{mapScriptLabel(m.map_script)}</span>
-								{/if}
 							</a>
 						{/each}
 					</div>
@@ -403,15 +403,12 @@
 	}
 
 	.map-label {
+		flex-shrink: 0;
 		font-size: 0.55rem;
 		opacity: 0.55;
 		font-family: ui-monospace, monospace;
 		color: var(--color-tan, #e8d8b8);
-		overflow: hidden;
-		text-overflow: ellipsis;
 		white-space: nowrap;
-		min-width: 0;
-		margin-top: 0.1rem;
 	}
 
 	.gutter {

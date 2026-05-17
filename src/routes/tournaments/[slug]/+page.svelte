@@ -245,7 +245,7 @@
 			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
-			<div class="mx-auto max-w-6xl">
+			<div>
 				<header class="mb-6">
 					<div class="flex items-baseline justify-between gap-3">
 						<h1 class="text-2xl font-bold text-tan">{data.tournament.name}</h1>
