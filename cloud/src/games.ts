@@ -1914,6 +1914,30 @@ export async function handleGameDelete(
 		return errorResponse("Forbidden", 403, cors, "FORBIDDEN");
 	}
 
+	// Tournament lockout: same shape as handleGamePatch. Refuse to delete a
+	// save that's linked to an active tournament match — without this guard,
+	// the R2 deletes below succeed but the D1 DELETE aborts on the
+	// tournament_matches.game_id FK, leaving the games row with no R2 backing.
+	// Once the tournament reaches 'complete', the trigger in migration 0013
+	// nulls the match's game_id so the DELETE proceeds cleanly.
+	const link = await env.SHARE_DB.prepare(
+		`SELECT 1 FROM tournament_matches m
+		 JOIN tournament_rounds r ON r.round_id = m.round_id
+		 JOIN tournaments t ON t.tournament_id = r.tournament_id
+		 WHERE m.game_id = ? AND t.status != 'complete'
+		 LIMIT 1`,
+	)
+		.bind(gameId)
+		.first();
+	if (link) {
+		return errorResponse(
+			"Game is linked to an active tournament match",
+			409,
+			cors,
+			"LINKED_TO_ACTIVE_TOURNAMENT",
+		);
+	}
+
 	// R2 cleanup first (hardest to undo); D1 cascade handles dependents.
 	try {
 		await Promise.all([

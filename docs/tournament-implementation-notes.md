@@ -17,7 +17,11 @@ log, plus `requireMatchParticipantOrAdmin` dead-code removal and the
 bracket + W-L flow viz (`336c5af`, `a242f8a`), admin/match routes
 collapsed into modal-driven public page (`5972110`), admin result entry
 on pending matches (`c1d9baf`), match status rename `reported → complete`
-(`0ec0c75` + migration `0010`). Remaining open items below are
+(`0ec0c75` + migration `0010`), admin-configurable per-script map options
+(`535cf38` + migration `0011`), private-beta allowlist gating every
+tournament surface (`457e406` + migration `0012`), and the matching
+`LINKED_TO_ACTIVE_TOURNAMENT` lockout + post-completion SET NULL trigger
+on `handleGameDelete` (migration `0013`). Remaining open items below are
 operational deploy steps, not code.
 
 ## What landed this session
@@ -27,7 +31,7 @@ D1." Functional but with known gaps (next section).
 
 ### Schema (D1)
 
-Five migrations applied locally; not yet remote.
+Eight migrations applied locally; not yet remote.
 
 - `0006_tournaments.sql` — 5 new tables:
   - `tournaments` — metadata + lifecycle status (`setup`/`swiss`/
@@ -55,6 +59,28 @@ Five migrations applied locally; not yet remote.
   endpoint) and stopped fitting once admins could record results without
   a save and the `/report` endpoint was removed. `'complete'` also
   aligns with `tournament_rounds` and `tournaments` terminal status.
+- `0011_tournament_map_script_options.sql` — adds
+  `tournaments.map_script_options` (JSON, defaults to `'{}'`). Holds
+  admin-configured per-script overrides for `MAP_OPTIONS_*` values; the
+  auto-map-assignment block reads these instead of the XML `<Default>`
+  when present. Backwards compatible: an empty object means "use XML
+  defaults," which is what every existing tournament does.
+- `0012_tournament_beta_users.sql` — adds `tournament_beta_users` (PK
+  `discord_id`, optional `user_id` filled in at login). Backs the
+  `requireTournamentBeta` gate that hides the entire tournament product
+  from non-beta callers (404, not 403). Operator-managed only via
+  `./per-ankh admin tournament beta-{grant,revoke,list}`. Claim flow
+  mirrors `tournament_slots`: operator pre-inserts by `discord_id`, login
+  pins `user_id` so later checks use the fast PK lookup.
+- `0013_tournament_match_game_set_null.sql` — BEFORE DELETE trigger on
+  `games` that nulls `tournament_matches.game_id`. Pairs with the new
+  `LINKED_TO_ACTIVE_TOURNAMENT` 409 on `handleGameDelete`: during an
+  active tournament the worker refuses the delete; after the tournament
+  marks complete the trigger lets the delete proceed cleanly, dropping
+  the match→game link but preserving `winner_slot_id` and `status`.
+  Triggers were chosen over the ALTER-via-create-new-table dance for the
+  same reason as `0009` (low write rate, less failure-prone than
+  toggling `PRAGMA foreign_keys`).
 
 ### Worker (cloud/)
 
@@ -221,12 +247,15 @@ prod config.
 
 ### 2. Apply migrations to remote D1
 
-Five tournament migrations are applied locally only:
+Eight tournament migrations are applied locally only:
 `0006_tournaments.sql`, `0007_tournament_match_player_indexes.sql`,
 `0008_tournament_match_index.sql`, `0009_swiss_seed_not_null.sql`,
-`0010_match_status_complete.sql`. Run `(cd cloud && npm run migrate:remote)`
-or `./per-ankh prod migrate` when ready to deploy. Rehearse on a
-throwaway D1 first per `CLAUDE.md` policy.
+`0010_match_status_complete.sql`,
+`0011_tournament_map_script_options.sql`,
+`0012_tournament_beta_users.sql`,
+`0013_tournament_match_game_set_null.sql`. Run
+`(cd cloud && npm run migrate:remote)` or `./per-ankh prod migrate` when
+ready to deploy. Rehearse on a throwaway D1 first per `CLAUDE.md` policy.
 
 ### Historical note: Cache strategy on /standings + /bracket
 
@@ -376,11 +405,16 @@ the cloud rewrite. New surfaces in this branch warrant a fresh pass:
    non-pending status. This is the coarser-but-safe variant
    (vs. the bracket-reachability check the plan mentioned). Confirm
    that's still the right call.
-6. **The `is_public` lockout window**: tournament-linked games
-   force-publish. The lockout means owner can't take them private
-   while the tournament is active. After tournament marks 'complete',
-   owner can. Make sure there's no race where the tournament transitions
-   to 'complete' mid-upload and the lockout misfires.
+6. **The `is_public` and delete lockouts**: tournament-linked games
+   force-publish. The patch-side lockout means owner can't take them
+   private while the tournament is active. The delete-side lockout
+   (`LINKED_TO_ACTIVE_TOURNAMENT` on `handleGameDelete`, plus migration
+   `0013`'s BEFORE DELETE trigger on `games`) means owner also can't
+   delete the save mid-tournament; after `t.status='complete'` the
+   trigger nulls the match's `game_id` and the delete proceeds.
+   Verify both behave symmetrically and that there's no race where the
+   tournament transitions to `'complete'` mid-upload/-delete and either
+   lockout misfires.
 7. **Slot↔player_index trust**: in admin observer uploads, the admin
    maps slot→player*index. Nothing validates the mapping is \_correct*
    (just that the indexes reference humans). Trust model: admin trusted.
