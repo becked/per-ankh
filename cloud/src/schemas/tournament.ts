@@ -102,7 +102,7 @@ export const PatchMatchMapSchema = v.object({
 export const ReportMatchSchema = v.object({
 	winner_slot_id: v.pipe(v.string(), v.regex(nanoid21Regex)),
 	game_id: v.optional(v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex)))),
-	status: v.optional(v.picklist(["reported", "forfeit"])),
+	status: v.optional(v.picklist(["complete", "forfeit"])),
 	notes: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 });
 
@@ -110,7 +110,7 @@ export const PatchMatchSchema = v.object({
 	winner_slot_id: v.optional(
 		v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),
 	),
-	status: v.optional(v.picklist(["pending", "reported", "forfeit", "bye"])),
+	status: v.optional(v.picklist(["pending", "complete", "forfeit", "bye"])),
 	game_id: v.optional(v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex)))),
 	notes: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 });

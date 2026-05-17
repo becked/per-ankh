@@ -90,7 +90,7 @@
 			}
 			bucket.matches.push(m);
 
-			if (m.status === "reported" || m.status === "forfeit") {
+			if (m.status === "complete" || m.status === "forfeit") {
 				const aWon = m.winner_slot_id === m.slot_a_id;
 				record[m.slot_a_id] = {
 					wins: aRec.wins + (aWon ? 1 : 0),
@@ -212,8 +212,8 @@
 							{@const aWon = m.winner_slot_id === m.slot_a_id}
 							{@const bWon = m.winner_slot_id === m.slot_b_id}
 							{@const isBye = m.status === "bye"}
-							{@const isReported =
-								m.status === "reported" || m.status === "forfeit"}
+							{@const isDecided =
+								m.status === "complete" || m.status === "forfeit"}
 							<a
 								class="match"
 								href="{resolve('/tournaments/[slug]', {
@@ -228,7 +228,7 @@
 								<span class="slot" class:winner={bWon}>
 									{slotLabel(m.slot_b_id)}
 								</span>
-								{#if !isReported && !isBye}
+								{#if !isDecided && !isBye}
 									<span class="pending-dot" aria-label="pending"></span>
 								{/if}
 							</a>

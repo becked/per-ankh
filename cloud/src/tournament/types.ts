@@ -5,7 +5,7 @@
 
 export type Phase = "swiss" | "championship";
 export type Division = "A" | "B";
-export type MatchStatus = "pending" | "reported" | "forfeit" | "bye";
+export type MatchStatus = "pending" | "complete" | "forfeit" | "bye";
 export type SwissStatus = "active" | "advanced" | "eliminated";
 
 export interface SlotRef {

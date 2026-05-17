@@ -38,10 +38,10 @@
 	// svelte-ignore state_referenced_locally
 	let retroWinnerSlotId = $state<string | null>(match.winner_slot_id);
 	// svelte-ignore state_referenced_locally
-	let retroStatus = $state<"reported" | "forfeit" | "pending">(
-		match.status === "reported" || match.status === "forfeit"
+	let retroStatus = $state<"complete" | "forfeit" | "pending">(
+		match.status === "complete" || match.status === "forfeit"
 			? match.status
-			: "reported",
+			: "complete",
 	);
 
 	const isAdmin = $derived(tournament.is_viewer_admin === true);
@@ -128,8 +128,8 @@
 		retroWinnerSlotId = match.winner_slot_id;
 		retroStatus =
 			match.status === "pending"
-				? "reported"
-				: (match.status as "reported" | "forfeit");
+				? "complete"
+				: (match.status as "complete" | "forfeit");
 		editMode = "retro";
 	}
 
@@ -146,8 +146,7 @@
 	}
 
 	function statusBadgeClass(status: string): string {
-		if (status === "complete" || status === "reported" || status === "bye")
-			return "text-orange";
+		if (status === "complete" || status === "bye") return "text-orange";
 		if (status === "in_progress") return "text-orange opacity-80";
 		return "text-tan opacity-60";
 	}
@@ -372,7 +371,7 @@
 									}}
 									class="mt-1 block w-full rounded border border-black bg-[#2a2622] p-1.5 text-xs text-tan"
 								>
-									<option value="reported">reported</option>
+									<option value="complete">complete</option>
 									<option value="forfeit">forfeit</option>
 									<option value="pending">pending</option>
 								</select>

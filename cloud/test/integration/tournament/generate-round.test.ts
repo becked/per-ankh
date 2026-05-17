@@ -62,7 +62,7 @@ describe("match_index population (#3)", () => {
 				await request.patch({
 					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 					as: t.admin,
-					body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					body: { winner_slot_id: m.slot_a_id, status: "complete" },
 				}),
 			);
 		}
@@ -112,7 +112,7 @@ describe("match_index population (#3)", () => {
 				await request.patch({
 					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 					as: t.admin,
-					body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					body: { winner_slot_id: m.slot_a_id, status: "complete" },
 				}),
 			);
 		}
@@ -133,7 +133,7 @@ describe("match_index population (#3)", () => {
 				await request.patch({
 					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 					as: t.admin,
-					body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					body: { winner_slot_id: m.slot_a_id, status: "complete" },
 				}),
 			);
 		}
@@ -224,7 +224,7 @@ describe("auto-advance", () => {
 				await request.patch({
 					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 					as: t.admin,
-					body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					body: { winner_slot_id: m.slot_a_id, status: "complete" },
 				}),
 			);
 		}
@@ -241,7 +241,7 @@ describe("auto-advance", () => {
 	it("auto-generates the next Swiss round in a division when its last match reports", async () => {
 		const t = await makeTournament({
 			slotsPerDivision: 4,
-			advanceTo: "swiss-round-1-reported",
+			advanceTo: "swiss-round-1-complete",
 		});
 		// Builder reported every Round 1 match. Auto-advance should have
 		// generated Round 2 for both divisions, all in_progress.
@@ -280,7 +280,7 @@ describe("auto-advance", () => {
 				await request.patch({
 					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 					as: t.admin,
-					body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					body: { winner_slot_id: m.slot_a_id, status: "complete" },
 				}),
 			);
 		}
@@ -317,7 +317,7 @@ describe("auto-advance", () => {
 				await request.patch({
 					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 					as: t.admin,
-					body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					body: { winner_slot_id: m.slot_a_id, status: "complete" },
 				}),
 			);
 		}
@@ -338,7 +338,7 @@ describe("auto-advance", () => {
 				await request.patch({
 					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 					as: t.admin,
-					body: { winner_slot_id: m.slot_a_id, status: "reported" },
+					body: { winner_slot_id: m.slot_a_id, status: "complete" },
 				}),
 			);
 		}
@@ -353,7 +353,7 @@ describe("auto-advance", () => {
 			await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${finalMatch.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: finalMatch.slot_a_id, status: "reported" },
+				body: { winner_slot_id: finalMatch.slot_a_id, status: "complete" },
 			}),
 		);
 		const tournamentRow = await t.refresh();

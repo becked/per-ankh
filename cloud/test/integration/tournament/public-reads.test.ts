@@ -84,7 +84,7 @@ describe("public read handlers", () => {
 
 	it("GET /v1/tournaments/:id/standings returns ranked standings keyed by division", async () => {
 		const t = await makeTournament({
-			advanceTo: "swiss-round-1-reported",
+			advanceTo: "swiss-round-1-complete",
 		});
 
 		const res = await request.get({
@@ -310,7 +310,7 @@ describe("public read handlers", () => {
 			.bind(gameId, t.admin.userId)
 			.run();
 		await env.SHARE_DB.prepare(
-			`UPDATE tournament_matches SET game_id = ?, status = 'reported',
+			`UPDATE tournament_matches SET game_id = ?, status = 'complete',
 			        winner_slot_id = slot_a_id, reported_by_user_id = ?,
 			        reported_at = datetime('now')
 			 WHERE match_id = ?`,
@@ -351,7 +351,7 @@ describe("public read handlers", () => {
 		expect(body.link?.tournament.name).toBe("Link Cup");
 		expect(body.link?.match.match_id).toBe(target.match_id);
 		expect(body.link?.match.phase).toBe("swiss");
-		expect(body.link?.match.status).toBe("reported");
+		expect(body.link?.match.status).toBe("complete");
 		expect(body.link?.match.slot_a_id).toBe(target.slot_a_id);
 		expect(body.link?.match.winner_slot_id).toBe(target.slot_a_id);
 		// Slot usernames are joined in from tournament_slots — the builder
@@ -411,7 +411,7 @@ async function driveToChampionship(): Promise<TestTournament> {
 			await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: m.slot_a_id, status: "reported" },
+				body: { winner_slot_id: m.slot_a_id, status: "complete" },
 			}),
 		);
 	}

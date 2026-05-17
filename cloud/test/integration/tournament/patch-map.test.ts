@@ -88,9 +88,9 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/map", () => {
 			await expectErrorCode(res, { status: 404, code: "MATCH_NOT_FOUND" });
 		});
 
-		it("rejects a patch on a match whose status is already 'reported'", async () => {
-			const t = await makeTournament({ advanceTo: "swiss-round-1-reported" });
-			const reported = (await t.matches()).find((m) => m.status === "reported");
+		it("rejects a patch on a match whose status is already 'complete'", async () => {
+			const t = await makeTournament({ advanceTo: "swiss-round-1-complete" });
+			const reported = (await t.matches()).find((m) => m.status === "complete");
 			expect(reported).toBeDefined();
 			if (!reported) return;
 

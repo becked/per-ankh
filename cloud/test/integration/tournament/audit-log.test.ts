@@ -124,7 +124,7 @@ describe("tournament admin audit log", () => {
 	});
 
 	it("auto-generated next round emits a tournament_system round_generated event", async () => {
-		const t = await makeTournament({ advanceTo: "swiss-round-1-reported" });
+		const t = await makeTournament({ advanceTo: "swiss-round-1-complete" });
 		// Builder reported every Round 1 match; auto-advance generated R2
 		// in both divisions. Two system events expected (one per division).
 		const actions = actionsFor(await systemEventsForTournament(t.tournamentId));
@@ -154,7 +154,7 @@ describe("tournament admin audit log", () => {
 	});
 
 	it("PATCH /tournaments/:id/matches/:match_id (retro edit) emits match_retro_edited", async () => {
-		const t = await makeTournament({ advanceTo: "swiss-round-1-reported" });
+		const t = await makeTournament({ advanceTo: "swiss-round-1-complete" });
 		// The advance-to helper already reported every match, but it did so by
 		// PATCH /matches/:id — which is the same retro-edit endpoint we're
 		// auditing. The audit-log events were emitted then.
@@ -253,7 +253,7 @@ async function driveSwissOneRound(t: TestTournament): Promise<void> {
 			await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: m.slot_a_id, status: "reported" },
+				body: { winner_slot_id: m.slot_a_id, status: "complete" },
 			}),
 		);
 	}
@@ -274,7 +274,7 @@ async function driveChampionshipToFinal(t: TestTournament): Promise<void> {
 			await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: m.slot_a_id, status: "reported" },
+				body: { winner_slot_id: m.slot_a_id, status: "complete" },
 			}),
 		);
 	}
@@ -289,7 +289,7 @@ async function driveChampionshipToFinal(t: TestTournament): Promise<void> {
 		await request.patch({
 			path: `/v1/tournaments/${t.tournamentId}/matches/${finals[0].match_id}`,
 			as: t.admin,
-			body: { winner_slot_id: finals[0].slot_a_id, status: "reported" },
+			body: { winner_slot_id: finals[0].slot_a_id, status: "complete" },
 		}),
 	);
 }

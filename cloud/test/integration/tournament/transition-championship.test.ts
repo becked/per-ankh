@@ -48,7 +48,7 @@ async function makeSwissDoneTournament(opts?: {
 			await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: m.slot_a_id, status: "reported" },
+				body: { winner_slot_id: m.slot_a_id, status: "complete" },
 			}),
 		);
 	}
@@ -238,7 +238,7 @@ describe("POST /v1/tournaments/:id/transition-championship", () => {
 					await request.patch({
 						path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 						as: t.admin,
-						body: { winner_slot_id: m.slot_a_id, status: "reported" },
+						body: { winner_slot_id: m.slot_a_id, status: "complete" },
 					}),
 				);
 			}

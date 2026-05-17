@@ -749,7 +749,7 @@ export async function handleRetroEditMatch(
 	}
 
 	// Status ↔ winner_slot_id invariant. status='pending' forbids a winner;
-	// 'reported'/'forfeit' require one. Validated against the post-patch
+	// 'complete'/'forfeit' require one. Validated against the post-patch
 	// state so callers may patch either field independently. The UI always
 	// sends both, but we don't trust that.
 	if (patch.status === "pending") {
@@ -769,11 +769,11 @@ export async function handleRetroEditMatch(
 	const postWinner =
 		"winner_slot_id" in patch ? patch.winner_slot_id : match.winner_slot_id;
 	if (
-		(postStatus === "reported" || postStatus === "forfeit") &&
+		(postStatus === "complete" || postStatus === "forfeit") &&
 		postWinner == null
 	) {
 		return errorResponse(
-			"winner_slot_id is required when status is 'reported' or 'forfeit'",
+			"winner_slot_id is required when status is 'complete' or 'forfeit'",
 			400,
 			cors,
 			"WINNER_REQUIRED_FOR_STATUS",

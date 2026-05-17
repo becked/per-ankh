@@ -88,7 +88,7 @@ describe("POST /v1/games with tournament_match_id", () => {
 		expect(res.status).toBe(201);
 
 		const matchAfter = await loadMatch(aMatch!.match_id);
-		expect(matchAfter?.status).toBe("reported");
+		expect(matchAfter?.status).toBe("complete");
 		expect(matchAfter?.winner_slot_id).toBe(aSlot.slotId);
 		expect(matchAfter?.game_id).toBe(body.game_id);
 		expect(matchAfter?.reported_by_user_id).toBe(playerA.userId);
@@ -184,7 +184,7 @@ describe("POST /v1/games with tournament_match_id", () => {
 		expect(res.status).toBe(201);
 
 		const matchAfter = await loadMatch(target.match_id);
-		expect(matchAfter?.status).toBe("reported");
+		expect(matchAfter?.status).toBe("complete");
 		// winnerIndex=0 mapped to slot_a via the explicit mapping above.
 		expect(matchAfter?.winner_slot_id).toBe(target.slot_a_id);
 		expect(matchAfter?.game_id).toBe(body.game_id);
@@ -247,7 +247,7 @@ describe("POST /v1/games with tournament_match_id", () => {
 
 		// Match should now be reported, pointing at the existing game.
 		const matchAfter = await loadMatch(target.match_id);
-		expect(matchAfter?.status).toBe("reported");
+		expect(matchAfter?.status).toBe("complete");
 		expect(matchAfter?.game_id).toBe(firstBody.game_id);
 		expect(matchAfter?.winner_slot_id).toBe(target.slot_a_id);
 		expect(matchAfter?.reported_by_user_id).toBe(t.admin.userId);

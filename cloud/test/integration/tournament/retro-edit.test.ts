@@ -36,14 +36,14 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			const res = await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: m.slot_a_id, status: "reported" },
+				body: { winner_slot_id: m.slot_a_id, status: "complete" },
 			});
 
 			const body = await expectOk<{
 				match: { winner_slot_id: string | null; status: string };
 			}>(res);
 			expect(body.match.winner_slot_id).toBe(m.slot_a_id);
-			expect(body.match.status).toBe("reported");
+			expect(body.match.status).toBe("complete");
 		});
 
 		it("reports a winner that matches slot_b_id", async () => {
@@ -57,7 +57,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			const res = await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: m.slot_b_id, status: "reported" },
+				body: { winner_slot_id: m.slot_b_id, status: "complete" },
 			});
 
 			const body = await expectOk<{ match: { winner_slot_id: string | null } }>(
@@ -68,10 +68,10 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 
 		it("clears a previously-set winner by sending winner_slot_id=null", async () => {
 			const t = await makeTournament({
-				advanceTo: "swiss-round-1-reported",
+				advanceTo: "swiss-round-1-complete",
 			});
 			const reported = (await t.matches()).find(
-				(row) => row.status === "reported",
+				(row) => row.status === "complete",
 			);
 			expect(reported).toBeDefined();
 			if (!reported) return;
@@ -106,7 +106,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			const res = await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: stranger.slotId, status: "reported" },
+				body: { winner_slot_id: stranger.slotId, status: "complete" },
 			});
 
 			await expectErrorCode(res, {
@@ -126,7 +126,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			const res = await request.patch({
 				path: `/v1/tournaments/${a.tournamentId}/matches/${m.match_id}`,
 				as: a.admin,
-				body: { winner_slot_id: foreignSlot.slotId, status: "reported" },
+				body: { winner_slot_id: foreignSlot.slotId, status: "complete" },
 			});
 
 			// Caught by the membership check before defense-in-depth runs.
@@ -161,10 +161,10 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			// The server-side invariant should clear winner_slot_id automatically
 			// rather than leave the row in a status=pending + winner_set state.
 			const t = await makeTournament({
-				advanceTo: "swiss-round-1-reported",
+				advanceTo: "swiss-round-1-complete",
 			});
 			const reported = (await t.matches()).find(
-				(row) => row.status === "reported",
+				(row) => row.status === "complete",
 			);
 			expect(reported).toBeDefined();
 			if (!reported) return;
@@ -183,7 +183,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			expect(body.match.winner_slot_id).toBeNull();
 		});
 
-		it("rejects status='reported' with an explicit null winner_slot_id", async () => {
+		it("rejects status='complete' with an explicit null winner_slot_id", async () => {
 			const t = await makeTournament({
 				advanceTo: "swiss-round-1-generated",
 			});
@@ -192,7 +192,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			const res = await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: t.admin,
-				body: { winner_slot_id: null, status: "reported" },
+				body: { winner_slot_id: null, status: "complete" },
 			});
 
 			await expectErrorCode(res, {
@@ -216,7 +216,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			const res = await request.patch({
 				path: `/v1/tournaments/${a.tournamentId}/matches/${bMatch.match_id}`,
 				as: a.admin,
-				body: { winner_slot_id: bMatch.slot_a_id, status: "reported" },
+				body: { winner_slot_id: bMatch.slot_a_id, status: "complete" },
 			});
 
 			await expectErrorCode(res, { status: 404, code: "MATCH_NOT_FOUND" });
@@ -233,7 +233,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			const res = await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
 				as: otherAdmin,
-				body: { winner_slot_id: m.slot_a_id, status: "reported" },
+				body: { winner_slot_id: m.slot_a_id, status: "complete" },
 			});
 
 			await expectErrorCode(res, {

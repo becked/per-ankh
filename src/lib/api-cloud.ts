@@ -602,7 +602,7 @@ export const cloudApi = {
 		matchId: string,
 		body: {
 			winner_slot_id?: string | null;
-			status?: "pending" | "reported" | "forfeit" | "bye";
+			status?: "pending" | "complete" | "forfeit" | "bye";
 			game_id?: string | null;
 			notes?: string;
 		},
@@ -758,7 +758,7 @@ export interface TournamentMatch {
 	slot_b_id: string | null;
 	map_script: string | null;
 	pick_order_winner_slot_id: string | null;
-	status: "pending" | "reported" | "forfeit" | "bye";
+	status: "pending" | "complete" | "forfeit" | "bye";
 	winner_slot_id: string | null;
 	game_id: string | null;
 	reported_by_user_id: string | null;
@@ -793,7 +793,7 @@ export interface MyMatchEntry {
 	slot_a_id: string;
 	slot_b_id: string | null;
 	map_script: string | null;
-	status: "pending" | "reported" | "forfeit" | "bye";
+	status: "pending" | "complete" | "forfeit" | "bye";
 	winner_slot_id: string | null;
 	game_id: string | null;
 	reported_at: string | null;
@@ -819,7 +819,7 @@ export interface GameTournamentLink {
 		division: Division | null;
 		round_number: number;
 		map_script: string | null;
-		status: "pending" | "reported" | "forfeit" | "bye";
+		status: "pending" | "complete" | "forfeit" | "bye";
 		slot_a_id: string;
 		slot_b_id: string | null;
 		winner_slot_id: string | null;

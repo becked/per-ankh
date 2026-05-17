@@ -146,9 +146,10 @@ CREATE INDEX idx_rounds_tournament ON tournament_rounds(tournament_id);
 -- NULL for byes.
 --
 -- status:
---   pending   — not yet reported
---   reported  — result entered via /report or admin retro-edit
---   forfeit   — admin-recorded result without a save; winner is set
+--   pending   — not yet decided
+--   complete  — match played and result captured (with or without save).
+--               Migration 0010 renamed this from 'reported'.
+--   forfeit   — admin-recorded result without play; winner is set
 --   bye       — slot_b_id IS NULL; winner_slot_id = slot_a_id
 --
 -- game_id is the linked save (whichever participant uploaded first via
@@ -165,7 +166,7 @@ CREATE TABLE tournament_matches (
     slot_b_id TEXT REFERENCES tournament_slots(slot_id),  -- NULL = bye
     map_script TEXT,
     pick_order_winner_slot_id TEXT REFERENCES tournament_slots(slot_id),  -- NULL for byes
-    status TEXT NOT NULL,                                 -- 'pending'|'reported'|'forfeit'|'bye'
+    status TEXT NOT NULL,                                 -- 'pending'|'complete'|'forfeit'|'bye'
     winner_slot_id TEXT REFERENCES tournament_slots(slot_id),
     game_id TEXT REFERENCES games(game_id),               -- the linked save (NULL for forfeit/bye)
     reported_by_user_id TEXT REFERENCES users(user_id),

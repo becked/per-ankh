@@ -18,7 +18,7 @@ function m(
 		slot_a_id: a,
 		slot_b_id: b,
 		map_script: map,
-		status: "reported",
+		status: "complete",
 		winner_slot_id: a,
 	};
 }

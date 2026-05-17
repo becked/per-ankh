@@ -173,7 +173,7 @@
 						m.winner_slot_id === m.slot_b_id && m.winner_slot_id !== null}
 					<a
 						class="match"
-						class:reported={m.status === "reported" || m.status === "forfeit"}
+						class:decided={m.status === "complete" || m.status === "forfeit"}
 						href="{resolve('/tournaments/[slug]', {
 							slug: tournamentSlug,
 						})}?match={m.match_id}"

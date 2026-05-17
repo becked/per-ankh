@@ -765,7 +765,7 @@ async function linkTournamentMatch(
 		const isOverride = tournamentContext.is_admin_override;
 		const matchUpdate = await env.SHARE_DB.prepare(
 			`UPDATE tournament_matches
-			   SET game_id = ?, winner_slot_id = ?, status = 'reported',
+			   SET game_id = ?, winner_slot_id = ?, status = 'complete',
 			       slot_a_player_index = ?, slot_b_player_index = ?,
 			       reported_by_user_id = ?, reported_at = datetime('now')
 			 WHERE match_id = ?

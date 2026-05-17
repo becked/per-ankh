@@ -76,12 +76,13 @@ export interface TestSlot {
 // "setup" — slots in place, no rounds yet (admin hasn't clicked Start).
 // "swiss-round-1-generated" — admin pressed Start; Round 1 exists in_progress
 //   for both divisions with all matches pending.
-// "swiss-round-1-reported" — all Round 1 matches reported. With auto-advance
-//   this implicitly closes Round 1 and generates Round 2 for both divisions.
+// "swiss-round-1-complete" — all Round 1 matches reach status='complete'. With
+//   auto-advance this implicitly closes Round 1 and generates Round 2 for both
+//   divisions.
 export type TournamentPhase =
 	| "setup"
 	| "swiss-round-1-generated"
-	| "swiss-round-1-reported";
+	| "swiss-round-1-complete";
 
 export interface TestTournament {
 	readonly tournamentId: string;
@@ -256,7 +257,7 @@ export async function makeTournament(
 			await request.patch({
 				path: `/v1/tournaments/${tournamentId}/matches/${m.match_id}`,
 				as: admin,
-				body: { winner_slot_id: m.slot_a_id, status: "reported" },
+				body: { winner_slot_id: m.slot_a_id, status: "complete" },
 			}),
 		);
 	}

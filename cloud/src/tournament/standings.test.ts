@@ -30,7 +30,7 @@ function match(
 	a: string,
 	b: string | null,
 	winner: string | null,
-	status: MatchRef["status"] = "reported",
+	status: MatchRef["status"] = "complete",
 ): MatchRef {
 	return {
 		match_id: id,
