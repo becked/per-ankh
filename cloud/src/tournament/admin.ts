@@ -1,7 +1,9 @@
 // Admin-only tournament endpoints. All require a tournament_admins row for
 // the target tournament; the helper requireTournamentAdmin returns 403
-// otherwise. None of these are CLI-only — the CLI is reserved for the
-// tournament_admins grant itself (no API path for granting admin).
+// otherwise. handleCreateTournament is the one exception that doesn't gate
+// on requireTournamentAdmin — it only requires a session, and inserts the
+// caller's user_id into tournament_admins as part of the create batch.
+// Granting admin to a second user on an existing tournament is CLI-only.
 
 import { nanoid } from "nanoid";
 import * as v from "valibot";

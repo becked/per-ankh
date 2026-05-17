@@ -47,9 +47,13 @@ CREATE INDEX idx_tournaments_status ON tournaments(status);
 
 -- ============================================================
 -- TOURNAMENT_ADMINS
--- Per-tournament admin role. CLI-managed only (no API write path) so the
--- only way to escalate is wrangler/super-admin. requireTournamentAdmin()
--- queries this table for every admin mutation.
+-- Per-tournament admin role. requireTournamentAdmin() queries this table
+-- for every admin mutation. Two write paths:
+--   * handleCreateTournament inserts a row for the creator's user_id as
+--     part of the create batch (so any signed-in user becomes admin of
+--     tournaments they create).
+--   * `./per-ankh admin tournament grant-admin` is the only way to add
+--     a second admin to an existing tournament.
 -- ============================================================
 
 CREATE TABLE tournament_admins (
