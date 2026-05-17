@@ -423,8 +423,7 @@
 					<li><a href="#cleared">Evaluated &amp; cleared</a></li>
 					<li class="toc-sub">
 						<a href="#c01"
-							><span class="toc-sev clear">✓</span>C-01 Dynamic UPDATE
-							SQL</a
+							><span class="toc-sev clear">✓</span>C-01 Dynamic UPDATE SQL</a
 						>
 					</li>
 					<li class="toc-sub">
@@ -446,8 +445,7 @@
 					</li>
 					<li class="toc-sub">
 						<a href="#c05"
-							><span class="toc-sev clear">✓</span>C-05 Cross-tournament
-							IDOR</a
+							><span class="toc-sev clear">✓</span>C-05 Cross-tournament IDOR</a
 						>
 					</li>
 					<li class="toc-sub">
@@ -463,8 +461,7 @@
 					</li>
 					<li class="toc-sub">
 						<a href="#c08"
-							><span class="toc-sev clear">✓</span>C-08 Games delete
-							trigger</a
+							><span class="toc-sev clear">✓</span>C-08 Games delete trigger</a
 						>
 					</li>
 					<li class="toc-sub">
@@ -487,8 +484,7 @@
 					</li>
 					<li class="toc-sub">
 						<a href="#c13"
-							><span class="toc-sev clear">✓</span>C-13 Admin CLI dynamic
-							SQL</a
+							><span class="toc-sev clear">✓</span>C-13 Admin CLI dynamic SQL</a
 						>
 					</li>
 					<li><a href="#functional">Functional bugs noted in passing</a></li>
@@ -510,12 +506,12 @@
 						tournaments to Per-Ankh. Scope covers everything new on the branch
 						relative to <code>main</code>: 13 cloud-Worker source files under
 						<code>cloud/src/tournament/</code>, 8 new D1 migrations
-						(<code>0006</code>–<code>0013</code>), the tournament-link guard
-						on the games delete path, the beta-allowlist gate threaded through
+						(<code>0006</code>–<code>0013</code>), the tournament-link guard on
+						the games delete path, the beta-allowlist gate threaded through
 						auth, the public read endpoints, the admin handlers and admin CLI,
 						and the SvelteKit tournament UI under
-						<code>src/lib/tournament/</code> + <code>src/routes/tournaments/</code>.
-						Reviewed 2026-05-17.
+						<code>src/lib/tournament/</code> +
+						<code>src/routes/tournaments/</code>. Reviewed 2026-05-17.
 					</p>
 				</header>
 
@@ -523,8 +519,8 @@
 				<h2 id="exec">Executive summary</h2>
 				<p class="section-intro">
 					<strong
-						>No high-confidence security vulnerabilities were introduced by
-						this branch.</strong
+						>No high-confidence security vulnerabilities were introduced by this
+						branch.</strong
 					>
 					The tournament feature is well-defended. Authorization is centralized
 					through a small set of wrappers (<code>authedTournament</code>,
@@ -555,10 +551,11 @@
 					The branch also closes a previously-unguarded delete path: migration
 					<code>0013</code> pairs a worker-side 409
 					<code>LINKED_TO_ACTIVE_TOURNAMENT</code> guard in
-					<code>handleGameDelete</code> with a D1 <code>BEFORE DELETE</code>
-					trigger that nulls <code>tournament_matches.game_id</code>. The
-					two-layer design prevents the prior race where R2 blobs were dropped
-					before the FK aborted the D1 <code>DELETE</code>.
+					<code>handleGameDelete</code> with a D1
+					<code>BEFORE DELETE</code> trigger that nulls
+					<code>tournament_matches.game_id</code>. The two-layer design prevents
+					the prior race where R2 blobs were dropped before the FK aborted the
+					D1 <code>DELETE</code>.
 				</p>
 
 				<div class="severity-tiles">
@@ -591,11 +588,11 @@
 						<dt>In scope</dt>
 						<dd>
 							All changes on <code>tournament</code> relative to
-							<code>main</code> as of commit <code>13b3f08</code>. Cloud
-							Worker tournament module (<code>cloud/src/tournament/</code>:
-							admin, authz, public, data, player, bracket, pairing, standings,
-							limits, maps, canonical-map-options, canonical-maps, rng),
-							migrations <code>0006</code>–<code>0013</code>, the
+							<code>main</code> as of commit <code>13b3f08</code>. Cloud Worker
+							tournament module (<code>cloud/src/tournament/</code>: admin,
+							authz, public, data, player, bracket, pairing, standings, limits,
+							maps, canonical-map-options, canonical-maps, rng), migrations
+							<code>0006</code>–<code>0013</code>, the
 							<code>games.ts</code> delete-guard, beta-allowlist wiring in
 							<code>auth.ts</code>, validation schemas
 							(<code>cloud/src/schemas/tournament.ts</code>), routing in
@@ -607,23 +604,23 @@
 						<dd>
 							Pre-existing surfaces not touched by this branch (re-reviewed in
 							the
-							<a href="security-review.html">2026-05-10 cloud-rewrite review</a>):
-							OAuth flow internals, session-cookie attributes, base CSP / SSR
-							security headers, parser worker, share-blob shape for non-tournament
-							games. Cloudflare dashboard configuration (WAF, edge HSTS, Bot
-							Fight Mode) and third-party services (Discord OAuth, R2 ACLs) are
-							also out of scope.
+							<a href="security-review.html">2026-05-10 cloud-rewrite review</a
+							>): OAuth flow internals, session-cookie attributes, base CSP /
+							SSR security headers, parser worker, share-blob shape for
+							non-tournament games. Cloudflare dashboard configuration (WAF,
+							edge HSTS, Bot Fight Mode) and third-party services (Discord
+							OAuth, R2 ACLs) are also out of scope.
 						</dd>
 						<dt>Method</dt>
 						<dd>
 							A sub-agent enumerated candidate findings file-by-file across the
 							changed surface, tracing every state-changing route from
-							dispatcher → wrapper → handler → DB. The reviewer then spot-checked
-							the dynamic-SQL UPDATE builders, the absence of
+							dispatcher → wrapper → handler → DB. The reviewer then
+							spot-checked the dynamic-SQL UPDATE builders, the absence of
 							<code>{@html}</code> sinks in tournament Svelte components, and
-							the schema-strip guarantee from Valibot in the working tree
-							before signing off. Per the false-positive filtering rules in the
-							review prompt, theoretical issues and defense-in-depth gaps not
+							the schema-strip guarantee from Valibot in the working tree before
+							signing off. Per the false-positive filtering rules in the review
+							prompt, theoretical issues and defense-in-depth gaps not
 							introduced by this branch were not reported.
 						</dd>
 						<dt>Severity</dt>
@@ -674,9 +671,10 @@
 						</div>
 						<div class="k">Evidence</div>
 						<div class="v">
-							<code>admin.ts:687-715</code> (<code>handlePatchTournament</code>) ·
-							<code>admin.ts:860-878</code> (<code>handlePatchSlot</code>) ·
-							<code>admin.ts:1316-1329</code> (<code>handleRetroEditMatch</code>)
+							<code>admin.ts:687-715</code> (<code>handlePatchTournament</code>)
+							· <code>admin.ts:860-878</code> (<code>handlePatchSlot</code>) ·
+							<code>admin.ts:1316-1329</code>
+							(<code>handleRetroEditMatch</code>)
 						</div>
 					</div>
 					<h4>What the pattern looks like</h4>
@@ -703,8 +701,7 @@ await env.SHARE_DB
 					<p>
 						Migrating to <code>v.looseObject</code> or switching to a manual
 						<code>Object.assign</code>-style parser without an allowlist would
-						break the guarantee. If the schema construction changes,
-						re-verify.
+						break the guarantee. If the schema construction changes, re-verify.
 					</p>
 				</article>
 
@@ -783,29 +780,30 @@ await env.SHARE_DB
 					<div class="finding-meta">
 						<div class="k">Component</div>
 						<div class="v">
-							Wrappers in <code>cloud/src/tournament/authz.ts</code>;
-							dispatch in <code>cloud/src/index.ts</code>
+							Wrappers in <code>cloud/src/tournament/authz.ts</code>; dispatch
+							in <code>cloud/src/index.ts</code>
 						</div>
 						<div class="k">Evidence</div>
 						<div class="v">
-							<code>cloud/test/integration/tournament/beta-gate.test.ts:45-148</code>
+							<code
+								>cloud/test/integration/tournament/beta-gate.test.ts:45-148</code
+							>
 							— sweep test
 						</div>
 					</div>
 					<h4>Why it's safe</h4>
 					<p>
-						Every tournament-namespaced route in the dispatcher resolves
-						through one of three wrappers — <code>authedTournament</code>,
+						Every tournament-namespaced route in the dispatcher resolves through
+						one of three wrappers — <code>authedTournament</code>,
 						<code>requireBetaOr404</code>, or <code>authedBetaSession</code> —
 						each of which calls <code>requireTournamentBeta</code> before any
-						handler logic runs. The
-						<code>beta-gate.test.ts</code> sweep asserts that a non-beta
-						authenticated user receives <code>404</code> with body
-						<code>TOURNAMENT_NOT_FOUND</code> across the 17 endpoints it
-						covers. The four endpoints it doesn't cover by name (reorder
-						slots, patch slot, delete slot, the games-tournament-link branch)
-						all go through the same wrappers in source. The 404 (rather than
-						403) hides feature existence rather than just access.
+						handler logic runs. The <code>beta-gate.test.ts</code> sweep asserts
+						that a non-beta authenticated user receives <code>404</code> with
+						body <code>TOURNAMENT_NOT_FOUND</code> across the 17 endpoints it
+						covers. The four endpoints it doesn't cover by name (reorder slots,
+						patch slot, delete slot, the games-tournament-link branch) all go
+						through the same wrappers in source. The 404 (rather than 403) hides
+						feature existence rather than just access.
 					</p>
 				</article>
 
@@ -826,10 +824,12 @@ await env.SHARE_DB
 						</div>
 						<div class="k">Evidence</div>
 						<div class="v">
-							<code>data.ts:187-197</code> (<code>loadSlotInTournament</code>)
-							· <code>admin.ts:1177,1231</code> (round-tournament guards) ·
+							<code>data.ts:187-197</code> (<code>loadSlotInTournament</code>) ·
+							<code>admin.ts:1177,1231</code> (round-tournament guards) ·
 							<code>public.ts:550</code> ·
-							<code>cloud/test/integration/tournament/retro-edit.test.ts:205-243</code>
+							<code
+								>cloud/test/integration/tournament/retro-edit.test.ts:205-243</code
+							>
 						</div>
 					</div>
 					<h4>Why it's safe</h4>
@@ -837,8 +837,8 @@ await env.SHARE_DB
 						Every admin handler that accepts a <code>slot_id</code> or
 						<code>match_id</code> in the URL or body re-validates that the
 						target row's <code>tournament_id</code> matches the URL's
-						<code>:tournament_id</code> path parameter. A user with admin
-						rights on tournament A who supplies a body referencing a slot from
+						<code>:tournament_id</code> path parameter. A user with admin rights
+						on tournament A who supplies a body referencing a slot from
 						tournament B receives a 404, not a successful write. The
 						<code>retro-edit</code> integration test exercises this
 						cross-tournament path explicitly.
@@ -868,8 +868,8 @@ await env.SHARE_DB
 						<code>handleRetroEditMatch</code> validates that the supplied
 						<code>winner_slot_id</code> is one of the two slot IDs attached to
 						the match being edited <em>and</em> that the slot belongs to the
-						URL's tournament. An admin cannot retroactively crown a slot from
-						a different match or a different tournament.
+						URL's tournament. An admin cannot retroactively crown a slot from a
+						different match or a different tournament.
 					</p>
 				</article>
 
@@ -897,9 +897,9 @@ await env.SHARE_DB
 					<p>
 						Every public read endpoint (detail, standings, bracket, rounds,
 						matches, match detail) calls <code>setupGateHides</code>, which
-						returns 404 if the tournament is in setup phase and the caller
-						isn't an admin. The list endpoint enforces the same constraint
-						via a LEFT JOIN predicate. Draft tournaments are not enumerable.
+						returns 404 if the tournament is in setup phase and the caller isn't
+						an admin. The list endpoint enforces the same constraint via a LEFT
+						JOIN predicate. Draft tournaments are not enumerable.
 					</p>
 				</article>
 
@@ -916,7 +916,9 @@ await env.SHARE_DB
 						<div class="k">Component</div>
 						<div class="v">
 							<code>cloud/src/games.ts</code> +
-							<code>cloud/migrations/0013_tournament_match_game_set_null.sql</code>
+							<code
+								>cloud/migrations/0013_tournament_match_game_set_null.sql</code
+							>
 						</div>
 						<div class="k">Evidence</div>
 						<div class="v">
@@ -926,11 +928,11 @@ await env.SHARE_DB
 					</div>
 					<h4>Why it's safe</h4>
 					<p>
-						The pre-fix bug (R2 blobs deleted before the D1 DELETE aborted on
-						an FK violation) is closed by a two-layer fix: the worker-side
-						guard returns
-						<code>409 LINKED_TO_ACTIVE_TOURNAMENT</code> if the game is
-						linked to a match in a non-<code>complete</code> tournament,
+						The pre-fix bug (R2 blobs deleted before the D1 DELETE aborted on an
+						FK violation) is closed by a two-layer fix: the worker-side guard
+						returns
+						<code>409 LINKED_TO_ACTIVE_TOURNAMENT</code> if the game is linked
+						to a match in a non-<code>complete</code> tournament,
 						<em>before</em> any destructive R2 or D1 work runs. Only after a
 						tournament reaches <code>complete</code> does the guard let the
 						delete through, at which point the migration <code>0013</code>
@@ -939,8 +941,7 @@ await env.SHARE_DB
 						<code>winner_slot_id</code> and <code>status</code>. The trigger
 						can't be exercised against an active tournament because the
 						worker-side guard runs first. New test
-						<code>delete-tournament-linked.test.ts</code> covers both
-						branches.
+						<code>delete-tournament-linked.test.ts</code> covers both branches.
 					</p>
 				</article>
 
@@ -961,8 +962,8 @@ await env.SHARE_DB
 						</div>
 						<div class="k">Evidence</div>
 						<div class="v">
-							No <code>discord_id</code> or <code>email</code> column appears
-							in any tournament response shape; standings / bracket payloads
+							No <code>discord_id</code> or <code>email</code> column appears in
+							any tournament response shape; standings / bracket payloads
 							explicitly enumerate fields.
 						</div>
 					</div>
@@ -991,19 +992,18 @@ await env.SHARE_DB
 						</div>
 						<div class="k">Evidence</div>
 						<div class="v">
-							<code>rng.ts</code> (mulberry32 + FNV-1a seed); <code>nanoid</code>
-							import sites across <code>cloud/src/</code>
+							<code>rng.ts</code> (mulberry32 + FNV-1a seed);
+							<code>nanoid</code> import sites across <code>cloud/src/</code>
 						</div>
 					</div>
 					<h4>Why it's safe</h4>
 					<p>
-						The deterministic <code>mulberry32</code> PRNG seeded by FNV-1a
-						of a tournament / round string is used <em>only</em> for pairing
-						shuffles and per-round map assignment — places where determinism
-						is desirable (so a regenerated round is reproducible and an
-						operator can replay decisions). The output of this RNG does not
-						gate authentication, mint tokens, or generate IDs that need to
-						resist guessing.
+						The deterministic <code>mulberry32</code> PRNG seeded by FNV-1a of a
+						tournament / round string is used <em>only</em> for pairing shuffles
+						and per-round map assignment — places where determinism is desirable
+						(so a regenerated round is reproducible and an operator can replay
+						decisions). The output of this RNG does not gate authentication,
+						mint tokens, or generate IDs that need to resist guessing.
 					</p>
 					<p>
 						Security-sensitive randomness — match IDs, slot IDs, round IDs,
@@ -1037,13 +1037,12 @@ await env.SHARE_DB
 					<p>
 						All POST/PATCH/DELETE tournament routes pass through
 						<code>parseJsonBody</code>, which requires
-						<code>Content-Type: application/json</code> — preventing the
-						classic HTML-form CSRF gadget. The session cookie remains
-						<code>SameSite=Lax</code>, so a cross-site
-						<code>fetch</code> from a non-allowlisted origin will not attach
-						the cookie. The CORS allowlist (production:
-						<code>https://per-ankh.app</code>) is the same as for the rest of
-						the app. There is a dedicated
+						<code>Content-Type: application/json</code> — preventing the classic
+						HTML-form CSRF gadget. The session cookie remains
+						<code>SameSite=Lax</code>, so a cross-site <code>fetch</code> from a
+						non-allowlisted origin will not attach the cookie. The CORS
+						allowlist (production: <code>https://per-ankh.app</code>) is the
+						same as for the rest of the app. There is a dedicated
 						<code>content-type.test.ts</code> integration test asserting the
 						JSON-only behavior.
 					</p>
@@ -1065,15 +1064,15 @@ await env.SHARE_DB
 						<div class="k">Evidence</div>
 						<div class="v">
 							No <code>{@html ...}</code> or <code>innerHTML</code>
-							assignment in any tournament Svelte component (verified via
-							grep on the working tree).
+							assignment in any tournament Svelte component (verified via grep
+							on the working tree).
 						</div>
 					</div>
 					<h4>Why it's safe</h4>
 					<p>
 						User-controlled tournament fields — name, description, slug, slot
-						<code>discord_username</code>, map-script options — are rendered
-						via Svelte's auto-escaping mustache (<code>{...}</code>) only. No
+						<code>discord_username</code>, map-script options — are rendered via
+						Svelte's auto-escaping mustache (<code>{...}</code>) only. No
 						component opts into the raw-HTML sink, and the parent CSP from
 						<code>svelte.config.js</code> remains strict on
 						<code>script-src</code> in any case.
@@ -1103,10 +1102,10 @@ await env.SHARE_DB
 					<h4>Why it's safe</h4>
 					<p>
 						The admin CLI runs locally under the operator's
-						<code>wrangler login</code> session. It is not exposed over the
-						API and its inputs come from CLI flags typed by the operator. This
-						is not part of the runtime attack surface. (Style-wise it would
-						still be nicer to parameterize, but it's not a vulnerability.)
+						<code>wrangler login</code> session. It is not exposed over the API
+						and its inputs come from CLI flags typed by the operator. This is
+						not part of the runtime attack surface. (Style-wise it would still
+						be nicer to parameterize, but it's not a vulnerability.)
 					</p>
 				</article>
 
@@ -1131,20 +1130,19 @@ await env.SHARE_DB
 					<li>
 						<code>cloud/src/tournament/admin.ts:1444-1476</code>
 						(<code>handleTransitionChampionship</code>): the
-						<code>override_ranks</code> array isn't checked for duplicate
-						slot references. An admin who specifies the same slot twice as an
+						<code>override_ranks</code> array isn't checked for duplicate slot
+						references. An admin who specifies the same slot twice as an
 						advancer creates duplicate championship slots all referencing the
 						same source. Admin-only; functional bug.
 					</li>
 					<li>
 						<code>cloud/src/tournament/admin.ts:1325-1329</code>
-						(<code>handleRetroEditMatch</code> <code>game_id</code> patch):
-						any <code>nanoid21</code> that satisfies the FK to
-						<code>games</code> is accepted. Pointing at someone else's private
-						game doesn't bypass that game's ACL — game-detail handlers enforce
-						their own auth — so there's no IDOR / data-exposure path. Admin
-						power that could surprise; consider scoping to games the admin
-						owns.
+						(<code>handleRetroEditMatch</code> <code>game_id</code> patch): any
+						<code>nanoid21</code> that satisfies the FK to <code>games</code> is
+						accepted. Pointing at someone else's private game doesn't bypass
+						that game's ACL — game-detail handlers enforce their own auth — so
+						there's no IDOR / data-exposure path. Admin power that could
+						surprise; consider scoping to games the admin owns.
 					</li>
 				</ul>
 
@@ -1157,8 +1155,8 @@ await env.SHARE_DB
 						<a href="security-review.html">2026-05-10 cloud-rewrite review</a>.
 					</li>
 					<li>
-						Cloudflare dashboard / edge configuration (WAF rules, edge HSTS,
-						Bot Fight Mode, R2 bucket ACLs).
+						Cloudflare dashboard / edge configuration (WAF rules, edge HSTS, Bot
+						Fight Mode, R2 bucket ACLs).
 					</li>
 					<li>
 						Third-party services and their dashboard configuration (Discord
@@ -1181,29 +1179,29 @@ await env.SHARE_DB
 						<strong>Centralized auth-wrapper composition.</strong>
 						<code>authedTournament</code> / <code>requireBetaOr404</code> /
 						<code>authedBetaSession</code> consistently apply the beta gate
-						before admin checks. This is the kind of small-surface
-						authorization plumbing that's easy to extend without breaking
-						existing routes — keep new tournament endpoints going through one
-						of these.
+						before admin checks. This is the kind of small-surface authorization
+						plumbing that's easy to extend without breaking existing routes —
+						keep new tournament endpoints going through one of these.
 					</li>
 					<li>
-						<strong>404-not-403 for feature hiding.</strong> Non-beta users
-						get
+						<strong>404-not-403 for feature hiding.</strong> Non-beta users get
 						<code>TOURNAMENT_NOT_FOUND</code> rather than
-						<code>FORBIDDEN</code>, so the feature's existence isn't
-						observable to outsiders during the private beta. The sweep test in
+						<code>FORBIDDEN</code>, so the feature's existence isn't observable
+						to outsiders during the private beta. The sweep test in
 						<code>beta-gate.test.ts</code> documents the contract.
 					</li>
 					<li>
 						<strong>Schema-stripped keys in dynamic UPDATE builders.</strong>
 						Building SQL fragments from Valibot's parsed <code>output</code>
-						keys (rather than from raw request-body keys) is the right
-						pattern. The shape is easy to copy-paste correctly the next time
-						a patch endpoint is added — but it must be the
+						keys (rather than from raw request-body keys) is the right pattern.
+						The shape is easy to copy-paste correctly the next time a patch
+						endpoint is added — but it must be the
 						<em>parsed</em> output, not the raw body.
 					</li>
 					<li>
-						<strong>Cross-tournament re-checks on every nested resource.</strong>
+						<strong
+							>Cross-tournament re-checks on every nested resource.</strong
+						>
 						Patterns like <code>loadSlotInTournament</code> and the
 						<code>round.tournament_id !== tournamentId</code> guards close the
 						standard IDOR pattern and are cheap to apply consistently.
@@ -1212,17 +1210,16 @@ await env.SHARE_DB
 						<strong>Two-layer destructive-op guard.</strong> The
 						<code>handleGameDelete</code> 409 + migration <code>0013</code>
 						<code>BEFORE DELETE</code> trigger pattern is a good template: the
-						worker-side check gives the user a clean error code, and the
-						trigger keeps DB consistency at the constraint layer if a future
-						code path is ever added that bypasses the handler-side check.
+						worker-side check gives the user a clean error code, and the trigger
+						keeps DB consistency at the constraint layer if a future code path
+						is ever added that bypasses the handler-side check.
 					</li>
 					<li>
 						<strong>RNG separation.</strong> Deterministic
 						<code>mulberry32</code> for pairings / map assignment (replayable,
 						auditable) and crypto-secure <code>nanoid</code> /
 						<code>getRandomValues</code> for IDs and tokens. Keep this
-						distinction explicit if anyone adds another randomized
-						subsystem.
+						distinction explicit if anyone adds another randomized subsystem.
 					</li>
 					<li>
 						<strong>JSON-only state-changing routes.</strong>

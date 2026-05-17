@@ -244,7 +244,9 @@ export const cloudApi = {
 	getGame: async (
 		id: string,
 		opts?: CallOpts,
-	): Promise<FullGameData & { is_public?: boolean; user_nation?: string | null }> => {
+	): Promise<
+		FullGameData & { is_public?: boolean; user_nation?: string | null }
+	> => {
 		const res = await request(`/games/${id}`, opts);
 		return res.json() as Promise<
 			FullGameData & { is_public?: boolean; user_nation?: string | null }
@@ -269,7 +271,9 @@ export const cloudApi = {
 		if (!res.ok) {
 			throw new ApiError(res.status, null, res.statusText);
 		}
-		return res.json() as Promise<FullGameData & { user_nation?: string | null }>;
+		return res.json() as Promise<
+			FullGameData & { user_nation?: string | null }
+		>;
 	},
 
 	toggleVisibility: async (
@@ -717,10 +721,7 @@ export interface TournamentListResponse {
 // or boolean (toggles). Sparse — a missing option key means "use the
 // XML <Default>" at render time. Pre-populated by the server with XML
 // defaults whenever a script enters allowed_map_scripts.
-export type MapScriptOptions = Record<
-	string,
-	Record<string, string | boolean>
->;
+export type MapScriptOptions = Record<string, Record<string, string | boolean>>;
 
 export interface TournamentDetail {
 	tournament_id: string;

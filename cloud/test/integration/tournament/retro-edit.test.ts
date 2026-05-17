@@ -97,9 +97,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id (retro-edit)", () => {
 			});
 			const m = await firstPendingMatchOf(t);
 			const inMatch = new Set([m.slot_a_id, m.slot_b_id]);
-			const stranger = t.slotsByDivision.A.find(
-				(s) => !inMatch.has(s.slotId),
-			);
+			const stranger = t.slotsByDivision.A.find((s) => !inMatch.has(s.slotId));
 			expect(stranger).toBeDefined();
 			if (!stranger) return;
 

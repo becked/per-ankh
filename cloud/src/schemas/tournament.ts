@@ -63,10 +63,7 @@ const AllowedMapScriptsSchema = v.pipe(
 // "value type depends on key" cleanly. The handler runs before any
 // SQL bind.
 const MapScriptOptionValueSchema = v.union([v.string(), v.boolean()]);
-const PerScriptOptionsSchema = v.record(
-	v.string(),
-	MapScriptOptionValueSchema,
-);
+const PerScriptOptionsSchema = v.record(v.string(), MapScriptOptionValueSchema);
 const MapScriptOptionsSchema = v.record(v.string(), PerScriptOptionsSchema);
 
 export const CreateTournamentSchema = v.object({

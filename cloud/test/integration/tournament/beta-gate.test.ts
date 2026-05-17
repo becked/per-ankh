@@ -15,11 +15,7 @@ import { applyD1Migrations, env, SELF } from "cloudflare:test";
 import { nanoid } from "nanoid";
 import { beforeAll, describe, expect, it } from "vitest";
 import { expectErrorCode, expectOk } from "../../helpers/assertions";
-import {
-	makeTournament,
-	makeUser,
-	seedBetaUser,
-} from "../../helpers/builders";
+import { makeTournament, makeUser, seedBetaUser } from "../../helpers/builders";
 import { request } from "../../helpers/requests";
 
 beforeAll(async () => {
@@ -73,9 +69,7 @@ const SWEEP_CASES: SweepCase[] = [
 		label: "match detail",
 		method: "GET",
 		path: ({ tournamentId, matchId }) =>
-			matchId
-				? `/v1/tournaments/${tournamentId}/matches/${matchId}`
-				: null,
+			matchId ? `/v1/tournaments/${tournamentId}/matches/${matchId}` : null,
 	},
 	{
 		label: "my tournaments",
@@ -125,18 +119,14 @@ const SWEEP_CASES: SweepCase[] = [
 		label: "patch match map",
 		method: "PATCH",
 		path: ({ tournamentId, matchId }) =>
-			matchId
-				? `/v1/tournaments/${tournamentId}/matches/${matchId}/map`
-				: null,
+			matchId ? `/v1/tournaments/${tournamentId}/matches/${matchId}/map` : null,
 		body: { map_script: VALID_MAP },
 	},
 	{
 		label: "retro-edit match",
 		method: "PATCH",
 		path: ({ tournamentId, matchId }) =>
-			matchId
-				? `/v1/tournaments/${tournamentId}/matches/${matchId}`
-				: null,
+			matchId ? `/v1/tournaments/${tournamentId}/matches/${matchId}` : null,
 		body: { status: "complete" },
 	},
 	{

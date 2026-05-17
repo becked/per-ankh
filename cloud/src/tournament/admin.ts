@@ -38,7 +38,11 @@ import {
 	rankStandings,
 	type RankedStanding,
 } from "./standings";
-import { AuthzError, requireTournamentAdmin, requireTournamentBeta } from "./authz";
+import {
+	AuthzError,
+	requireTournamentAdmin,
+	requireTournamentBeta,
+} from "./authz";
 import {
 	bumpTournamentUpdatedAt,
 	loadMatch,
@@ -196,12 +200,7 @@ async function authedTournament(
 	if (!session) {
 		return {
 			ok: false,
-			response: errorResponse(
-				"Not found",
-				404,
-				cors,
-				"TOURNAMENT_NOT_FOUND",
-			),
+			response: errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND"),
 		};
 	}
 	try {
@@ -419,12 +418,7 @@ export async function handleCreateTournament(
 		// 404 to anon, not 401 — keeps consistent with the rest of the
 		// gated surface, which hides the tournament URL space entirely
 		// from non-beta callers.
-		return errorResponse(
-			"Not found",
-			404,
-			cors,
-			"TOURNAMENT_NOT_FOUND",
-		);
+		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
 	}
 	try {
 		await requireTournamentBeta(env, session.data);
@@ -660,8 +654,7 @@ export async function handlePatchTournament(
 	// Compute the post-patch allowed_map_scripts list. The map_script_options
 	// reconciliation needs to validate against the *new* list when both fields
 	// are being patched together.
-	const nextAllowed =
-		patch.allowed_map_scripts ?? parseAllowedMaps(tournament);
+	const nextAllowed = patch.allowed_map_scripts ?? parseAllowedMaps(tournament);
 
 	// Compute the post-patch map_script_options object. Three cases:
 	//   1. Caller provided map_script_options → validate, then reconcile.

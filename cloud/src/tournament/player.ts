@@ -20,10 +20,7 @@ async function authedBetaSession(
 	env: TournamentPlayerEnv,
 	request: Request,
 	cors: Record<string, string>,
-): Promise<
-	| { ok: true; userId: string }
-	| { ok: false; response: Response }
-> {
+): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
 		// Anonymous → 404 from the beta gate; preserve the original 401
@@ -31,12 +28,7 @@ async function authedBetaSession(
 		// Aligned with the rest of the beta-gated surface.
 		return {
 			ok: false,
-			response: errorResponse(
-				"Not found",
-				404,
-				cors,
-				"TOURNAMENT_NOT_FOUND",
-			),
+			response: errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND"),
 		};
 	}
 	try {

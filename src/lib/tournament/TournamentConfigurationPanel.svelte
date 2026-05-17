@@ -58,11 +58,7 @@
 	// Bounds mirror the Valibot PatchTournamentSchema. The smaller-division
 	// constraint on advance count is a soft hint only (see template); we
 	// don't clamp because slot counts are a moving target during setup.
-	function clampToRange(
-		raw: unknown,
-		min: number,
-		max: number,
-	): number | null {
+	function clampToRange(raw: unknown, min: number, max: number): number | null {
 		if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
 		const n = Math.trunc(raw);
 		if (n < min || n > max) return null;

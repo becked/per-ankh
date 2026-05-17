@@ -1,10 +1,6 @@
 <script lang="ts">
 	import { invalidateAll } from "$app/navigation";
-	import {
-		ApiError,
-		cloudApi,
-		type TournamentDetail,
-	} from "$lib/api-cloud";
+	import { ApiError, cloudApi, type TournamentDetail } from "$lib/api-cloud";
 	import {
 		DLC_GROUP_LABELS,
 		mapScriptLabel,

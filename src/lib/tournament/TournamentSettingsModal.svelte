@@ -63,10 +63,6 @@
 			</button>
 		</header>
 
-		<TournamentSettingsForm
-			{tournament}
-			onSaved={onClose}
-			onCancel={onClose}
-		/>
+		<TournamentSettingsForm {tournament} onSaved={onClose} onCancel={onClose} />
 	</div>
 </div>

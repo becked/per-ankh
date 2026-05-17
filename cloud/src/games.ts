@@ -31,7 +31,11 @@ import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
-import { AuthzError, isTournamentAdmin, requireTournamentBeta } from "./tournament/authz";
+import {
+	AuthzError,
+	isTournamentAdmin,
+	requireTournamentBeta,
+} from "./tournament/authz";
 import { maybeAdvanceAfterMatchReport } from "./tournament/admin";
 import {
 	buildSummaryGameContext,
@@ -1624,7 +1628,11 @@ export async function handleGameDetail(
 		"SELECT user_id, is_public, user_nation FROM games WHERE game_id = ?",
 	)
 		.bind(gameId)
-		.first<{ user_id: string; is_public: number; user_nation: string | null }>();
+		.first<{
+			user_id: string;
+			is_public: number;
+			user_nation: string | null;
+		}>();
 	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
 
 	const isOwner = session?.data.user_id === row.user_id;

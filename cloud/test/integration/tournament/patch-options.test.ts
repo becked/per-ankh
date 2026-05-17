@@ -54,12 +54,12 @@ describe("PATCH /v1/tournaments/:id — map_script_options", () => {
 		});
 		await expectOk(res);
 		const detail = await getDetail(t.slug, t.admin);
-		expect(detail.map_script_options[DONUT].MAP_OPTIONS_DONUT_IRREGULARITY).toBe(
-			"MAP_OPTION_DONUT_IRREGULARITY_HIGH",
-		);
-		expect(detail.map_script_options[DONUT].MAP_OPTIONS_SINGLE_POINT_SYMMETRY).toBe(
-			true,
-		);
+		expect(
+			detail.map_script_options[DONUT].MAP_OPTIONS_DONUT_IRREGULARITY,
+		).toBe("MAP_OPTION_DONUT_IRREGULARITY_HIGH");
+		expect(
+			detail.map_script_options[DONUT].MAP_OPTIONS_SINGLE_POINT_SYMMETRY,
+		).toBe(true);
 		// Other allowed script still has its XML defaults populated.
 		expect(detail.map_script_options[CONTINENT]).toBeDefined();
 		expect(
@@ -140,8 +140,7 @@ describe("PATCH /v1/tournaments/:id — map_script_options", () => {
 			body: {
 				map_script_options: {
 					[DONUT]: {
-						MAP_OPTIONS_DONUT_IRREGULARITY:
-							"MAP_OPTION_DONUT_IRREGULARITY_LOW",
+						MAP_OPTIONS_DONUT_IRREGULARITY: "MAP_OPTION_DONUT_IRREGULARITY_LOW",
 					},
 				},
 			},
@@ -167,8 +166,8 @@ describe("PATCH /v1/tournaments/:id — map_script_options", () => {
 		await expectOk(res);
 		const detail = await getDetail(t.slug, t.admin);
 		expect(detail.allowed_map_scripts).toEqual([DOTA]);
-		expect(detail.map_script_options[DOTA].MAP_OPTIONS_MULTI_DOTA_RIVER_WIDTH).toBe(
-			"MAP_OPTION_RIVER_WIDE",
-		);
+		expect(
+			detail.map_script_options[DOTA].MAP_OPTIONS_MULTI_DOTA_RIVER_WIDTH,
+		).toBe("MAP_OPTION_RIVER_WIDE");
 	});
 });

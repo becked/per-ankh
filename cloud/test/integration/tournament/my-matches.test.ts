@@ -59,7 +59,9 @@ describe("GET /v1/users/me/matches", () => {
 	});
 
 	it("returns matches for the caller's claimed slots across multiple tournaments", async () => {
-		const player = await makeUser({ discordUsername: "multi-tournament-player" });
+		const player = await makeUser({
+			discordUsername: "multi-tournament-player",
+		});
 		const t1 = await makeTournament({
 			slotsPerDivision: 4,
 			slotOwners: { A: [player] },
@@ -81,9 +83,7 @@ describe("GET /v1/users/me/matches", () => {
 
 		expect(body.matches).toHaveLength(2);
 		const tournamentIds = new Set(body.matches.map((m) => m.tournament_id));
-		expect(tournamentIds).toEqual(
-			new Set([t1.tournamentId, t2.tournamentId]),
-		);
+		expect(tournamentIds).toEqual(new Set([t1.tournamentId, t2.tournamentId]));
 	});
 
 	it("deduplicates when the caller owns both slots of a single match (#23)", async () => {
@@ -114,9 +114,7 @@ describe("GET /v1/users/me/matches", () => {
 		const body = await expectOk<{
 			matches: Array<Record<string, unknown>>;
 		}>(res);
-		const ownedRows = body.matches.filter(
-			(m) => m.match_id === match.match_id,
-		);
+		const ownedRows = body.matches.filter((m) => m.match_id === match.match_id);
 		expect(ownedRows).toHaveLength(1);
 	});
 

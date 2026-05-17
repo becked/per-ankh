@@ -447,7 +447,7 @@ this is the tournament-specific addendum.
        `./per-ankh admin tournament create <slug> "<name>" --maps "..."`
 8. [ ] Grant admin to 4 operators
 9. [ ] Admin pre-fills slots via `TournamentSettingsModal` on the
-        tournament home page
+       tournament home page
 10. [ ] Announce to players; they sign in to claim
 11. [ ] Click **Start Tournament** from the settings modal; players
         upload saves to complete matches; Swiss rounds spawn

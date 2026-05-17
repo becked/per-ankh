@@ -422,8 +422,8 @@
 					<li><a href="#findings">Findings</a></li>
 					<li class="toc-sub">
 						<a href="#r01"
-							><span class="toc-sev med">M</span>R-01 Side-effect before
-							body parse</a
+							><span class="toc-sev med">M</span>R-01 Side-effect before body
+							parse</a
 						>
 					</li>
 					<li class="toc-sub">
@@ -481,14 +481,13 @@
 					</li>
 					<li class="toc-sub">
 						<a href="#r11"
-							><span class="toc-sev low">L</span>R-11 Observer-mode UI
-							gate</a
+							><span class="toc-sev low">L</span>R-11 Observer-mode UI gate</a
 						>
 					</li>
 					<li class="toc-sub">
 						<a href="#r12"
-							><span class="toc-sev low">L</span>R-12
-							<code>admin.ts</code> at 2k lines</a
+							><span class="toc-sev low">L</span>R-12 <code>admin.ts</code> at
+							2k lines</a
 						>
 					</li>
 					<li class="toc-sub">
@@ -512,7 +511,8 @@
 					<p class="section-intro">
 						A code review of
 						<a href="https://github.com/becked/per-ankh/pull/49"
-							>PR&nbsp;#49 (<code>feat: tournament feature (private beta)</code>)</a
+							>PR&nbsp;#49 (<code>feat: tournament feature (private beta)</code
+							>)</a
 						>
 						— a two-phase tournament feature (Swiss qualifier → single-elim
 						championship) gated behind a private-beta allowlist. The change
@@ -520,14 +520,14 @@
 						<code>0006</code>–<code>0013</code>, a new
 						<code>cloud/src/tournament/</code> Worker module, the SvelteKit
 						<code>src/lib/tournament/</code> UI, a tournament admin CLI under
-						<code>scripts/admin/commands/tournament.ts</code>, and a new map-options
-						bake script. This review focuses on
+						<code>scripts/admin/commands/tournament.ts</code>, and a new
+						map-options bake script. This review focuses on
 						<strong
 							>correctness, project-convention adherence, performance, test
 							coverage, and code organization</strong
 						>
-						— the security audit was done separately
-						(<a href="security-review-tournament.html"
+						— the security audit was done separately (<a
+							href="security-review-tournament.html"
 							>2026-05-17 tournament security review</a
 						>) and found no vulnerabilities. Reviewed against
 						<code>tournament</code> @ <code>13b3f08</code>.
@@ -541,11 +541,11 @@
 					algorithms (pairing, standings, bracket, maps, RNG) are isolated from
 					D1, have direct unit tests, and use a deterministic
 					<code>mulberry32</code> seed so the integration tests stay
-					reproducible. The Worker authorization layer is small,
-					consistently applied through a handful of named wrappers
+					reproducible. The Worker authorization layer is small, consistently
+					applied through a handful of named wrappers
 					(<code>authedTournament</code>, <code>requireTournamentBeta</code>,
-					<code>requireTournamentAdmin</code>), and the integration-test sweep in
-					<code>cloud/test/integration/tournament/</code> already pins the
+					<code>requireTournamentAdmin</code>), and the integration-test sweep
+					in <code>cloud/test/integration/tournament/</code> already pins the
 					contract on every state-changing endpoint. Migration design — triggers
 					over create-new-table for adding constraints, explicit
 					<code>match_index</code> column for deterministic ordering, BEFORE
@@ -614,28 +614,27 @@
 							Security analysis (covered by the
 							<a href="security-review-tournament.html"
 								>tournament security review</a
-							>). The
-							<code>cloud/package-lock.json</code> dependency bump. Manual
-							end-to-end testing of OAuth + claim flow against a live Discord
-							app.
+							>). The <code>cloud/package-lock.json</code> dependency bump.
+							Manual end-to-end testing of OAuth + claim flow against a live
+							Discord app.
 						</dd>
 						<dt>Method</dt>
 						<dd>
 							Two parallel sub-agents enumerated candidate findings — one for
 							the Worker / schemas / migrations / data layer, one for the
 							SvelteKit UI / admin CLI / API client. Each finding was then
-							re-verified by the reviewer against the working tree (grep,
-							direct file reads) before being accepted into the report. Per
-							project conventions, claims that didn't survive verification
-							were dropped rather than weakened. Two of the sub-agent's
-							candidate findings overlap with the security review's
+							re-verified by the reviewer against the working tree (grep, direct
+							file reads) before being accepted into the report. Per project
+							conventions, claims that didn't survive verification were dropped
+							rather than weakened. Two of the sub-agent's candidate findings
+							overlap with the security review's
 							<em>"functional bugs noted in passing"</em> section and are not
 							re-listed here.
 						</dd>
 						<dt>Severity</dt>
 						<dd>
-							Critical / High / Medium / Low / Info. Medium = a real bug or
-							gap worth fixing soon. Low = polish / cleanup. Info = worth
+							Critical / High / Medium / Low / Info. Medium = a real bug or gap
+							worth fixing soon. Low = polish / cleanup. Info = worth
 							documenting but not changing.
 						</dd>
 					</dl>
@@ -689,18 +688,17 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						round whose matches are all decided, then the handler parses the
 						body. If the body fails validation (e.g. a malformed
 						<code>override_ranks</code>), the request 400s but the round
-						closures persist. The state change isn't <em>wrong</em> — the
-						rounds were genuinely ready to close — but it's a surprising
-						observable effect of a "failed" request and complicates manual
-						recovery: an admin who fixes their override payload and retries
-						gets a different system state than they started with.
+						closures persist. The state change isn't <em>wrong</em> — the rounds
+						were genuinely ready to close — but it's a surprising observable
+						effect of a "failed" request and complicates manual recovery: an
+						admin who fixes their override payload and retries gets a different
+						system state than they started with.
 					</p>
 					<h4>Recommendation</h4>
 					<p>
 						Move <code>parseJsonBody</code> ahead of the auto-close loop. Body
-						parsing is cheap and has no side effect, so doing it first
-						preserves the invariant "if the response is a 4xx the DB is
-						unchanged."
+						parsing is cheap and has no side effect, so doing it first preserves
+						the invariant "if the response is a 4xx the DB is unchanged."
 					</p>
 				</article>
 
@@ -744,9 +742,9 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						<code>cloud/migrations/0006_tournaments.sql:37</code> says
 						<code>swiss_advance_count</code> is null until
 						<code>start-swiss</code> computes a suggestion via
-						<code>advanceCountSuggestion</code>. The honest UX is "(not yet
-						set — will default to N when you start the Swiss phase)" rather
-						than picking 0 or 1 silently. If you must pick a number, use
+						<code>advanceCountSuggestion</code>. The honest UX is "(not yet set
+						— will default to N when you start the Swiss phase)" rather than
+						picking 0 or 1 silently. If you must pick a number, use
 						<code>advanceCountSuggestion(divSlots)</code> so the placeholder
 						matches what start-swiss will actually do.
 					</p>
@@ -778,9 +776,9 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<h4>What's missing</h4>
 					<p>
 						All three modals correctly set
-						<code>role="dialog" aria-modal="true" tabindex="-1"</code>, but
-						Tab can still escape to the page underneath, and on close focus
-						doesn't return to the invoking trigger. The
+						<code>role="dialog" aria-modal="true" tabindex="-1"</code>, but Tab
+						can still escape to the page underneath, and on close focus doesn't
+						return to the invoking trigger. The
 						<code>use:autofocus</code> action focuses the first form field on
 						open (good), but doesn't establish a trap.
 					</p>
@@ -788,10 +786,9 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<p>
 						Roll a small focus-trap helper (first/last sentinel
 						<code>tabindex=0</code> nodes that wrap focus on
-						<code>focusin</code>) or bring in
-						<code>svelte-focus-trap</code>. Store the previously-focused
-						element when the modal opens and restore it on close. Same pattern
-						will cover all three modals.
+						<code>focusin</code>) or bring in <code>svelte-focus-trap</code>.
+						Store the previously-focused element when the modal opens and
+						restore it on close. Same pattern will cover all three modals.
 					</p>
 				</article>
 
@@ -801,20 +798,22 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						<span class="finding-num">R-04</span>
 						<span class="sev med">Medium</span>
 						<span class="finding-title"
-							>Championship bracket SVG lacks screen-reader labels and
-							list semantics</span
+							>Championship bracket SVG lacks screen-reader labels and list
+							semantics</span
 						>
 					</div>
 					<div class="finding-meta">
 						<div class="k">Component</div>
 						<div class="v"><code>ChampionshipBracketTree.svelte</code></div>
 						<div class="k">Evidence</div>
-						<div class="v"><code>ChampionshipBracketTree.svelte:138-197</code></div>
+						<div class="v">
+							<code>ChampionshipBracketTree.svelte:138-197</code>
+						</div>
 					</div>
 					<h4>What's missing</h4>
 					<p>
-						The connector <code>&lt;svg aria-hidden="true"&gt;</code> is right
-						— connectors are decorative. The matches themselves render as
+						The connector <code>&lt;svg aria-hidden="true"&gt;</code> is right —
+						connectors are decorative. The matches themselves render as
 						absolutely-positioned <code>&lt;a class="match"&gt;</code> nodes
 						inside an unlabeled <code>position:relative</code> canvas with no
 						round-column landmarks, no <code>aria-label</code> on each match
@@ -857,22 +856,21 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					</div>
 					<h4>Why it's dead</h4>
 					<p>
-						<code>statusBadgeClass</code> handles
-						<code>"in_progress"</code> as a possible
-						<code>match.status</code>, but
-						<code>TournamentMatch.status</code> in
-						<code>api-cloud.ts</code> is typed
-						<code>"pending" | "complete" | "forfeit" | "bye"</code>. The
+						<code>statusBadgeClass</code> handles <code>"in_progress"</code> as
+						a possible <code>match.status</code>, but
+						<code>TournamentMatch.status</code> in <code>api-cloud.ts</code> is
+						typed <code>"pending" | "complete" | "forfeit" | "bye"</code>. The
 						<code>"in_progress"</code> state exists on
 						<code>BracketRound.status</code> (rounds, not matches). The branch
 						never runs.
 					</p>
 					<h4>Recommendation</h4>
 					<p>
-						Tighten the parameter type
-						(<code>status: TournamentMatch["status"]</code>) and drop the
-						dead branch. TypeScript will then surface any future call site
-						that tries to pass a round status to a match-status formatter.
+						Tighten the parameter type (<code
+							>status: TournamentMatch["status"]</code
+						>) and drop the dead branch. TypeScript will then surface any future
+						call site that tries to pass a round status to a match-status
+						formatter.
 					</p>
 				</article>
 
@@ -905,7 +903,8 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						<code>invalidateAll()</code> directly after the patch — no
 						optimistic intermediate state exists. Per the project's
 						<em>"don't design for hypothetical future requirements"</em>
-						guidance in CLAUDE.md, drop the function until a caller materializes.
+						guidance in CLAUDE.md, drop the function until a caller
+						materializes.
 					</p>
 				</article>
 
@@ -929,13 +928,13 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<p>
 						The query-string builder filters with <code>if (v)</code>, which
 						drops empty strings, <code>0</code>, and <code>false</code>. Today
-						all params happen to be opaque IDs / enums so the bug is latent,
-						but per the project rule in CLAUDE.md
-						("<em>data layer (strict): use <code>??</code> for null/undefined;
-						<strong>never</strong> use <code>||</code> for data computation</em>"),
-						this should be <code>if (v != null)</code> to pre-empt the next
-						param that legitimately accepts <code>""</code> or
-						<code>0</code>.
+						all params happen to be opaque IDs / enums so the bug is latent, but
+						per the project rule in CLAUDE.md ("<em
+							>data layer (strict): use <code>??</code> for null/undefined;
+							<strong>never</strong> use <code>||</code> for data
+							computation</em
+						>"), this should be <code>if (v != null)</code> to pre-empt the next
+						param that legitimately accepts <code>""</code> or <code>0</code>.
 					</p>
 				</article>
 
@@ -967,16 +966,15 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					</div>
 					<h4>What's duplicated</h4>
 					<p>
-						Each component implements the same status-discriminated union
-						(<code>{ kind: 'idle' | 'saving' | 'error' }</code>), the same
-						<code>ApiError</code>-narrowed message extraction, and the same
-						<code>invalidateAll()</code> follow-up. The implementations drift:
-						<code>MapScriptOptionsBlock</code> and
+						Each component implements the same status-discriminated union (<code
+							>{ kind: 'idle' | 'saving' | 'error' }</code
+						>), the same <code>ApiError</code>-narrowed message extraction, and
+						the same <code>invalidateAll()</code> follow-up. The implementations
+						drift: <code>MapScriptOptionsBlock</code> and
 						<code>TournamentMapsPanel</code> roll back local state on error;
 						<code>TournamentConfigurationPanel</code> and
-						<code>TournamentOverviewPanel</code> do not. A future patch
-						surface (the eighth, the ninth) inherits whichever drift is
-						current.
+						<code>TournamentOverviewPanel</code> do not. A future patch surface
+						(the eighth, the ninth) inherits whichever drift is current.
 					</p>
 					<h4>Recommendation</h4>
 					<p>
@@ -1007,9 +1005,12 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					</div>
 					<h4>What it costs</h4>
 					<p>
-						<code>downstreamBlocked</code> iterates rounds <em>strictly after</em>
+						<code>downstreamBlocked</code> iterates rounds
+						<em>strictly after</em>
 						the retro-edited round and issues a
-						<code>SELECT COUNT(*) FROM tournament_matches WHERE round_id = ?</code>
+						<code
+							>SELECT COUNT(*) FROM tournament_matches WHERE round_id = ?</code
+						>
 						per round. With M rounds × 2 divisions × R matches, this is M−1
 						round trips per retro-edit. Not hot today (retro-edits are rare),
 						but a single grouped query
@@ -1018,8 +1019,8 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 							status != 'pending' GROUP BY round_id</code
 						>
 						collapses it to one — fewer round-trips reduces the
-						Cloudflare-Worker-to-D1 latency window in which a concurrent
-						report could race.
+						Cloudflare-Worker-to-D1 latency window in which a concurrent report
+						could race.
 					</p>
 				</article>
 
@@ -1047,9 +1048,12 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<p>
 						The handler does an <code>INSERT … ON CONFLICT … DO UPDATE</code>
 						with
-						<code>RETURNING (CASE WHEN granted_at = datetime('now') THEN 1 ELSE 0 END)</code>
-						to discriminate inserted vs already-present rows. Correctness
-						relies on (a) the column default also being
+						<code
+							>RETURNING (CASE WHEN granted_at = datetime('now') THEN 1 ELSE 0
+							END)</code
+						>
+						to discriminate inserted vs already-present rows. Correctness relies
+						on (a) the column default also being
 						<code>datetime('now')</code> and (b) SQLite evaluating both
 						invocations within the same statement at the same second-precision
 						boundary. This <em>usually</em> works, but it's coupled to a
@@ -1060,11 +1064,10 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<h4>Recommendation</h4>
 					<p>
 						Either pre-check existence with a separate
-						<code>SELECT 1</code> (one extra round-trip, much clearer), or add
-						a sentinel column (e.g. <code>last_seen_at</code>) that the
+						<code>SELECT 1</code> (one extra round-trip, much clearer), or add a
+						sentinel column (e.g. <code>last_seen_at</code>) that the
 						<code>DO UPDATE</code> bumps so
-						<code>RETURNING granted_at = last_seen_at</code> becomes the
-						signal.
+						<code>RETURNING granted_at = last_seen_at</code> becomes the signal.
 					</p>
 				</article>
 
@@ -1087,32 +1090,33 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						<div class="k">Evidence</div>
 						<div class="v">
 							<code>upload/+page.svelte:25-29</code>
-							(<code>observerMode</code> derived from
-							<code>?observer=1</code>) · enforcement at
+							(<code>observerMode</code> derived from <code>?observer=1</code>)
+							· enforcement at
 							<code>cloud/src/games.ts:1020-1036</code>
 						</div>
 					</div>
 					<h4>What happens</h4>
 					<p>
-						<code>observerMode</code> is derived from the URL query string
-						with no admin check. A beta user (non-admin participant) who
-						lands on <code>/upload?tournament_match_id=X&amp;observer=1</code>
-						gets the observer UI: extra slot-mapping pickers, a different
-						"Player as" labelling. The Worker correctly rejects this
-						(<code>games.ts:1029</code> →
-						<code>403 NOT_MATCH_PARTICIPANT</code>), so this is a UX issue,
+						<code>observerMode</code> is derived from the URL query string with
+						no admin check. A beta user (non-admin participant) who lands on
+						<code>/upload?tournament_match_id=X&amp;observer=1</code> gets the
+						observer UI: extra slot-mapping pickers, a different "Player as"
+						labelling. The Worker correctly rejects this (<code
+							>games.ts:1029</code
+						>
+						→ <code>403 NOT_MATCH_PARTICIPANT</code>), so this is a UX issue,
 						not a security one — but the user only finds out
 						<em>after</em> they've parsed the save and the upload submits.
 					</p>
 					<h4>Recommendation</h4>
 					<p>
 						On <code>onMount</code>, if
-						<code>observerMode &amp;&amp; !user-is-admin-for-the-tournament</code>,
-						either redirect to the same URL without
+						<code
+							>observerMode &amp;&amp; !user-is-admin-for-the-tournament</code
+						>, either redirect to the same URL without
 						<code>?observer=1</code> or show a "you're not an admin for this
-						tournament" message before unlocking the modal. Cheap to add
-						since the page already fetches the match + standings for label
-						resolution.
+						tournament" message before unlocking the modal. Cheap to add since
+						the page already fetches the match + standings for label resolution.
 					</p>
 				</article>
 
@@ -1122,8 +1126,8 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						<span class="finding-num">R-12</span>
 						<span class="sev low">Low</span>
 						<span class="finding-title"
-							><code>cloud/src/tournament/admin.ts</code> mixes too many concerns
-							at 2,012 lines</span
+							><code>cloud/src/tournament/admin.ts</code> mixes too many
+							concerns at 2,012 lines</span
 						>
 					</div>
 					<div class="finding-meta">
@@ -1139,34 +1143,32 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						The file holds:
 						<code>handleCreateTournament</code>,
 						<code>handlePatch*</code> (tournament / slot / match / map),
-						<code>handleBulkCreateSlots</code>,
-						<code>handleReorderSlots</code>, <code>handleStartSwiss</code>,
+						<code>handleBulkCreateSlots</code>, <code>handleReorderSlots</code>,
+						<code>handleStartSwiss</code>,
 						<code>handleTransitionChampionship</code>,
-						<code>handleRetroEditMatch</code>,
-						<code>handleGenerateRound</code>; the
-						<code>maybeAdvanceAfterMatchReport</code> FSM (which is
-						<em>imported by <code>games.ts</code></em>); pure builders
-						(<code>buildSwissRoundStatements</code>,
+						<code>handleRetroEditMatch</code>, <code>handleGenerateRound</code>;
+						the <code>maybeAdvanceAfterMatchReport</code> FSM (which is
+						<em>imported by <code>games.ts</code></em
+						>); pure builders (<code>buildSwissRoundStatements</code>,
 						<code>buildChampionshipRoundStatements</code>); helpers
 						(<code>downstreamBlocked</code>, <code>collectTiedAtCutoff</code>,
-						<code>autoCloseRoundIfReady</code>, audit-log helpers, slug
-						helpers, the map-script-options
-						<code>validateMapScriptOptions</code> /
+						<code>autoCloseRoundIfReady</code>, audit-log helpers, slug helpers,
+						the map-script-options <code>validateMapScriptOptions</code> /
 						<code>reconcileMapScriptOptions</code> pair).
 					</p>
 					<h4>Recommendation</h4>
 					<p>
 						Not a blocker — the comments make each section findable. But the
 						natural seam is
-						<code>maybeAdvanceAfterMatchReport</code>: it's the one symbol
-						that crosses module boundaries (called from
-						<code>games.ts</code>). Splitting into
+						<code>maybeAdvanceAfterMatchReport</code>: it's the one symbol that
+						crosses module boundaries (called from <code>games.ts</code>).
+						Splitting into
 						<code
 							>tournament/admin/{create,patch,slots,start,transition,retro,advance}.ts</code
 						>
 						would shrink the working-set for the next feature touching the
-						tournament admin surface. Defer until that next feature lands so
-						the split is informed by real code.
+						tournament admin surface. Defer until that next feature lands so the
+						split is informed by real code.
 					</p>
 				</article>
 
@@ -1176,8 +1178,7 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						<span class="finding-num">R-13</span>
 						<span class="sev info">Info</span>
 						<span class="finding-title"
-							>Bye wins indirectly enrich opponents' Solkoff /
-							Buchholz</span
+							>Bye wins indirectly enrich opponents' Solkoff / Buchholz</span
 						>
 					</div>
 					<div class="finding-meta">
@@ -1189,26 +1190,23 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<h4>What's happening</h4>
 					<p>
 						<code>collectOpponents</code> correctly excludes byes from the
-						opponent list (a player who got a bye doesn't have a
-						"bye-opponent" inflating their Buchholz). But
-						<code>computeRecord</code> counts a bye <em>as</em> a win for the
-						receiver. So if player A receives a bye in round 1 and plays
-						player B in round 2, then in B's Buchholz, A's wins (which now
-						include the bye win) raise B's tiebreaker total. Standard Swiss
-						has split conventions on this — some implementations strip bye
-						wins from the strength-of-schedule pool, some don't.
+						opponent list (a player who got a bye doesn't have a "bye-opponent"
+						inflating their Buchholz). But <code>computeRecord</code> counts a
+						bye <em>as</em> a win for the receiver. So if player A receives a
+						bye in round 1 and plays player B in round 2, then in B's Buchholz,
+						A's wins (which now include the bye win) raise B's tiebreaker total.
+						Standard Swiss has split conventions on this — some implementations
+						strip bye wins from the strength-of-schedule pool, some don't.
 					</p>
 					<h4>Recommendation</h4>
 					<p>
-						Document the intentional convention in the comment block at the
-						top of <code>standings.ts</code> ("byes count as wins for the
-						receiver and that win <em>does</em> propagate into downstream
-						opponents' Buchholz/Solkoff"). If the team prefers the
-						strip-bye-wins convention, change
-						<code>computeRecord</code> to track
-						<code>{ wins, losses, bye_wins }</code> and subtract bye_wins
-						from the opponent's pool — but that's a behavior change, not a
-						bug fix.
+						Document the intentional convention in the comment block at the top
+						of <code>standings.ts</code> ("byes count as wins for the receiver
+						and that win <em>does</em> propagate into downstream opponents'
+						Buchholz/Solkoff"). If the team prefers the strip-bye-wins
+						convention, change <code>computeRecord</code> to track
+						<code>{ wins, losses, bye_wins }</code> and subtract bye_wins from
+						the opponent's pool — but that's a behavior change, not a bug fix.
 					</p>
 				</article>
 
@@ -1222,19 +1220,19 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<code>beta-gate.test.ts</code> sweep tests the 404-not-403 contract
 					across the whole tournament surface. Pure-function modules
 					(<code>pairing</code>, <code>standings</code>, <code>bracket</code>,
-					<code>maps</code>, <code>canonical-map-options</code>) each have direct
-					unit tests with edge-case coverage (rematch-swap, bucket spillover,
-					byes, cascade tie at cutoff, override_ranks validation).
+					<code>maps</code>, <code>canonical-map-options</code>) each have
+					direct unit tests with edge-case coverage (rematch-swap, bucket
+					spillover, byes, cascade tie at cutoff, override_ranks validation).
 				</p>
 				<h3>Well-covered</h3>
 				<ul>
 					<li>
-						Pairing edge cases — round 1, rematch-swap, bucket spillover,
-						byes, exclusions (<code>pairing.test.ts</code>).
+						Pairing edge cases — round 1, rematch-swap, bucket spillover, byes,
+						exclusions (<code>pairing.test.ts</code>).
 					</li>
 					<li>
-						Standings — Buchholz, median-Buchholz (MB), forfeit/bye
-						conventions, tie ranking (<code>standings.test.ts</code>).
+						Standings — Buchholz, median-Buchholz (MB), forfeit/bye conventions,
+						tie ranking (<code>standings.test.ts</code>).
 					</li>
 					<li>
 						Cascade tie at cutoff + override_ranks validation
@@ -1242,12 +1240,13 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					</li>
 					<li>
 						Auto-advance scenarios, <code>match_index</code> population,
-						multi-tournament <code>/my-matches</code>
-						(<code>flow.test.ts</code>, <code>generate-round.test.ts</code>).
+						multi-tournament
+						<code>/my-matches</code> (<code>flow.test.ts</code>,
+						<code>generate-round.test.ts</code>).
 					</li>
 					<li>
-						Rate limits — admin per-user, view per-IP — and audit-log
-						structure (<code>rate-limit-*.test.ts</code>,
+						Rate limits — admin per-user, view per-IP — and audit-log structure
+						(<code>rate-limit-*.test.ts</code>,
 						<code>audit-log.test.ts</code>).
 					</li>
 					<li>
@@ -1262,40 +1261,41 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 					<li>
 						<strong>Discord-callback slot claim flow</strong>
 						(<code>cloud/src/auth.ts</code>): the two-step UPDATE (pin by
-						<code>discord_id</code>, fall back to
-						<code>discord_username</code>) is the only path connecting Discord
-						login → tournament participation. No tests exercise (a) first-time
-						claim via username pins <code>discord_id</code>, (b) returning
-						user re-claims via <code>discord_id</code> after a Discord rename,
-						(c) substitution clears claim and the new user re-claims, (d)
+						<code>discord_id</code>, fall back to <code>discord_username</code>)
+						is the only path connecting Discord login → tournament
+						participation. No tests exercise (a) first-time claim via username
+						pins <code>discord_id</code>, (b) returning user re-claims via
+						<code>discord_id</code> after a Discord rename, (c) substitution
+						clears claim and the new user re-claims, (d)
 						<code>status='complete'</code> tournaments don't auto-claim.
 					</li>
 					<li>
 						<strong>Bye-match upload attempt</strong>: no test asserts the
 						worker's behavior when a participant POSTs a save with
 						<code>tournament_match_id</code> referencing a match where
-						<code>status='bye'</code>. The
-						<code>WRONG_HUMAN_COUNT</code> path probably catches it, but the
-						contract isn't pinned.
+						<code>status='bye'</code>. The <code>WRONG_HUMAN_COUNT</code> path
+						probably catches it, but the contract isn't pinned.
 					</li>
 					<li>
 						<strong>End-to-end substitution flow</strong>: admin edits
-						<code>discord_username</code> on a claimed slot, the old user
-						can no longer claim, the new user logs in and claims. The
-						pieces are tested in isolation; the composition isn't.
+						<code>discord_username</code> on a claimed slot, the old user can no
+						longer claim, the new user logs in and claims. The pieces are tested
+						in isolation; the composition isn't.
 					</li>
 					<li>
 						<strong>Parallel last-match reports</strong>:
 						<code>maybeAdvanceAfterMatchReport</code>'s behavior when two
 						reports complete the last round of a phase simultaneously. The
-						concurrent-report safety on a single match
-						(<code>WHERE status='pending'</code>) is documented but the
-						round/phase-level transition isn't.
+						concurrent-report safety on a single match (<code
+							>WHERE status='pending'</code
+						>) is documented but the round/phase-level transition isn't.
 					</li>
 					<li>
-						<strong><code>parseAllowedMaps</code> corruption surfacing
-						<code>MAP_CONFIG_INVALID</code></strong> at
-						<code>handleStartSwiss</code> — pin the typed-error contract.
+						<strong
+							><code>parseAllowedMaps</code> corruption surfacing
+							<code>MAP_CONFIG_INVALID</code></strong
+						>
+						at <code>handleStartSwiss</code> — pin the typed-error contract.
 					</li>
 				</ul>
 
@@ -1304,20 +1304,21 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 				<ul>
 					<li>
 						<strong>Pure-function algorithms isolated from D1.</strong>
-						<code>pairing</code>, <code>standings</code>,
-						<code>bracket</code>, <code>maps</code>, and <code>rng</code> take
-						narrow <code>SlotRef</code>/<code>MatchRef</code>/<code>config</code>
-						inputs and return plain values. Handlers map D1 rows to refs at
-						the boundary. This is what makes the unit tests possible and the
+						<code>pairing</code>, <code>standings</code>, <code>bracket</code>,
+						<code>maps</code>, and <code>rng</code> take narrow
+						<code>SlotRef</code>/<code>MatchRef</code>/<code>config</code>
+						inputs and return plain values. Handlers map D1 rows to refs at the
+						boundary. This is what makes the unit tests possible and the
 						integration tests fast.
 					</li>
 					<li>
-						<strong>Deterministic
-							<code>mulberry32</code> RNG seeded on
-							<code>(tournament_id, phase, round)</code>.</strong>
-						Same input → same pairings and map assignments. "Regenerate
-						round" produces the same output until something explicit changes
-						(e.g., new admin override). Integration tests rely on this.
+						<strong
+							>Deterministic <code>mulberry32</code> RNG seeded on
+							<code>(tournament_id, phase, round)</code>.</strong
+						>
+						Same input → same pairings and map assignments. "Regenerate round"
+						produces the same output until something explicit changes (e.g., new
+						admin override). Integration tests rely on this.
 					</li>
 					<li>
 						<strong>Two-layer destructive-op guards.</strong> The
@@ -1333,33 +1334,33 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						create-new-table for constraint changes (<code>0009</code>,
 						<code>0013</code>) avoid the
 						<code>PRAGMA foreign_keys</code> toggling dance against
-						<code>tournament_matches</code>' four FK references. Each
-						migration has a heading comment that explains the change in
-						context.
+						<code>tournament_matches</code>' four FK references. Each migration
+						has a heading comment that explains the change in context.
 					</li>
 					<li>
-						<strong>Centralized auth wrappers + 404-not-403 for feature
-							hiding.</strong>
+						<strong
+							>Centralized auth wrappers + 404-not-403 for feature
+							hiding.</strong
+						>
 						<code>authedTournament</code>, <code>requireTournamentBeta</code>,
-						<code>requireTournamentAdmin</code> applied in a consistent
-						order — anon → beta → admin — so the beta-allowlist gate hides
-						feature existence from outside the beta cohort.
+						<code>requireTournamentAdmin</code> applied in a consistent order —
+						anon → beta → admin — so the beta-allowlist gate hides feature
+						existence from outside the beta cohort.
 					</li>
 					<li>
 						<strong>Stable bracket slots survive substitution.</strong>
 						<code>tournament_slots</code> persists across player swaps;
 						standings are computed by querying
-						<code>tournament_matches</code> against
-						<code>slot_id</code>. No derived-state drift on retro-edit.
+						<code>tournament_matches</code> against <code>slot_id</code>. No
+						derived-state drift on retro-edit.
 					</li>
 					<li>
 						<strong>Match-modal shallow routing.</strong>
 						<code>+page.svelte:86-91</code> backs the modal off both
 						<code>page.state.match</code> (push-state) and
 						<code>?match=</code> URL fallback, handles deep links and
-						post-upload returns, and the cascade-deleted-ID effect at
-						lines 118-120 closes the modal cleanly. Small surface, lots of
-						UX value.
+						post-upload returns, and the cascade-deleted-ID effect at lines
+						118-120 closes the modal cleanly. Small surface, lots of UX value.
 					</li>
 					<li>
 						<strong>Two-phase swiss_seed rewrite for reorder.</strong>
@@ -1381,18 +1382,20 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 				<ul>
 					<li>
 						<strong>Security analysis.</strong> Covered in the
-						<a href="security-review-tournament.html">tournament security review</a>.
-						Two of the candidate findings ("override_ranks duplicate slot
+						<a href="security-review-tournament.html"
+							>tournament security review</a
+						>. Two of the candidate findings ("override_ranks duplicate slot
 						refs", "<code>handlePatchMatchMap</code> doesn't intersect against
 						<code>allowed_map_scripts</code>") overlap with that review's
 						"functional bugs noted in passing" section and are not re-listed
 						here.
 					</li>
 					<li>
-						<strong><code>cloud/package-lock.json</code> dependency bump.</strong>
+						<strong
+							><code>cloud/package-lock.json</code> dependency bump.</strong
+						>
 						Not inspected line-by-line; the preflight
-						<code>npm audit</code> in the deploy CLI covers vulnerable
-						versions.
+						<code>npm audit</code> in the deploy CLI covers vulnerable versions.
 					</li>
 					<li>
 						<strong>Manual end-to-end against live Discord OAuth.</strong>
@@ -1404,8 +1407,8 @@ if (!body.ok) return body.response;   // 400, but Swiss rounds already flipped t
 						<strong>Visual / design QA.</strong> The
 						<code>SwissFlowBracket</code> and
 						<code>ChampionshipBracketTree</code> visualizations look right in
-						the screenshots embedded in the implementation notes, but the
-						review didn't render them against a real tournament.
+						the screenshots embedded in the implementation notes, but the review
+						didn't render them against a real tournament.
 					</li>
 				</ul>
 

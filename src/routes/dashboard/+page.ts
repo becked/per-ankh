@@ -16,7 +16,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		// redirect still fires; otherwise we'd silently mask auth failures if
 		// the other fetches ever stop throwing 401.
 		const swallowExceptAuth =
-			<T,>(fallback: T) =>
+			<T>(fallback: T) =>
 			(err: unknown): T => {
 				if (err instanceof UnauthorizedError) throw err;
 				return fallback;

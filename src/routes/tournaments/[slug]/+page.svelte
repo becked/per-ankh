@@ -106,10 +106,9 @@
 	}
 
 	function closeMatch() {
-		pushState(
-			resolve("/tournaments/[slug]", { slug: data.tournament.slug }),
-			{ match: null },
-		);
+		pushState(resolve("/tournaments/[slug]", { slug: data.tournament.slug }), {
+			match: null,
+		});
 	}
 
 	// If the URL references a match that doesn't exist in our match list
@@ -508,7 +507,11 @@
 										data-bwignore
 										data-form-type="other"
 										onkeydown={(e) => {
-											if (e.key === "Enter" && !busy && newSlotUsername.trim()) {
+											if (
+												e.key === "Enter" &&
+												!busy &&
+												newSlotUsername.trim()
+											) {
 												e.preventDefault();
 												addSlot();
 											}

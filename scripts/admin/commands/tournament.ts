@@ -477,7 +477,11 @@ async function resolveBetaTarget(arg: string): Promise<ResolvedBetaTarget> {
 	const isNanoid21 = /^[A-Za-z0-9_-]{21}$/.test(arg);
 	const isDiscordId = /^\d{15,20}$/.test(arg);
 	if (isNanoid21) {
-		const rows = await d1Query<{ user_id: string; discord_id: string; display_name: string }>(
+		const rows = await d1Query<{
+			user_id: string;
+			discord_id: string;
+			display_name: string;
+		}>(
 			`SELECT user_id, discord_id, display_name FROM users
 			 WHERE user_id = ${sqlStr(arg)}`,
 		);
@@ -522,7 +526,7 @@ async function runBetaGrant(argv: string[], opts: CommandOpts): Promise<void> {
 	const arg = positional[0];
 	if (!arg) {
 		throw new Error(
-			"Usage: ./per-ankh admin tournament beta-grant <user_id|discord_id> [--note \"...\"]",
+			'Usage: ./per-ankh admin tournament beta-grant <user_id|discord_id> [--note "..."]',
 		);
 	}
 	const note = flagString(flags, "note") ?? null;
@@ -563,10 +567,7 @@ async function runBetaGrant(argv: string[], opts: CommandOpts): Promise<void> {
 	}
 }
 
-async function runBetaRevoke(
-	argv: string[],
-	opts: CommandOpts,
-): Promise<void> {
+async function runBetaRevoke(argv: string[], opts: CommandOpts): Promise<void> {
 	const { positional } = parseFlags(argv);
 	const arg = positional[0];
 	if (!arg) {
@@ -590,11 +591,16 @@ async function runBetaRevoke(
 		RETURNING discord_id
 	`);
 	if (opts.json) {
-		printJson({ revoked: result.length, discord_ids: result.map((r) => r.discord_id) });
+		printJson({
+			revoked: result.length,
+			discord_ids: result.map((r) => r.discord_id),
+		});
 	} else if (result.length === 0) {
 		info(`No beta row matched ${arg} — nothing to revoke.`);
 	} else {
-		ok(`Revoked beta access (${result.length} row${result.length === 1 ? "" : "s"})`);
+		ok(
+			`Revoked beta access (${result.length} row${result.length === 1 ? "" : "s"})`,
+		);
 	}
 }
 
@@ -618,7 +624,9 @@ async function runBetaList(argv: string[], opts: CommandOpts): Promise<void> {
 	}
 	if (rows.length === 0) {
 		info("No beta users granted yet.");
-		info("Grant with: ./per-ankh admin tournament beta-grant <user_id|discord_id>");
+		info(
+			"Grant with: ./per-ankh admin tournament beta-grant <user_id|discord_id>",
+		);
 		return;
 	}
 	const cols: Column[] = [

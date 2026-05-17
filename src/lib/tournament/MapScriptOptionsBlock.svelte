@@ -73,45 +73,6 @@
 	}
 </script>
 
-<style>
-	.themed-checkbox {
-		appearance: none;
-		width: 16px;
-		height: 16px;
-		border: 2px solid var(--color-tan);
-		border-radius: 3px;
-		background: transparent;
-		cursor: pointer;
-		position: relative;
-		flex-shrink: 0;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease;
-	}
-	.themed-checkbox:checked {
-		background: var(--color-orange);
-		border-color: var(--color-orange);
-	}
-	.themed-checkbox:checked::after {
-		content: "";
-		position: absolute;
-		left: 3px;
-		top: -1px;
-		width: 5px;
-		height: 10px;
-		border: solid #1a1a1a;
-		border-width: 0 2px 2px 0;
-		transform: rotate(45deg);
-	}
-	.themed-checkbox:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-	.themed-checkbox:not(:disabled):hover {
-		border-color: var(--color-orange);
-	}
-</style>
-
 <div class="flex flex-col gap-1.5">
 	{#if scriptOptions.length === 0}
 		<p class="text-xs text-tan opacity-60">No options for this script.</p>
@@ -155,3 +116,42 @@
 		{/if}
 	{/if}
 </div>
+
+<style>
+	.themed-checkbox {
+		appearance: none;
+		width: 16px;
+		height: 16px;
+		border: 2px solid var(--color-tan);
+		border-radius: 3px;
+		background: transparent;
+		cursor: pointer;
+		position: relative;
+		flex-shrink: 0;
+		transition:
+			background 0.15s ease,
+			border-color 0.15s ease;
+	}
+	.themed-checkbox:checked {
+		background: var(--color-orange);
+		border-color: var(--color-orange);
+	}
+	.themed-checkbox:checked::after {
+		content: "";
+		position: absolute;
+		left: 3px;
+		top: -1px;
+		width: 5px;
+		height: 10px;
+		border: solid #1a1a1a;
+		border-width: 0 2px 2px 0;
+		transform: rotate(45deg);
+	}
+	.themed-checkbox:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+	.themed-checkbox:not(:disabled):hover {
+		border-color: var(--color-orange);
+	}
+</style>
