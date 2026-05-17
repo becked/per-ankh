@@ -476,13 +476,15 @@
 
 				{#if data.tournament.status === "setup"}
 					{#if isAdmin}
-						<TournamentOverviewPanel tournament={data.tournament} />
+						<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+							<TournamentOverviewPanel tournament={data.tournament} />
+							<TournamentMapsPanel tournament={data.tournament} />
+						</div>
 						<TournamentConfigurationPanel
 							tournament={data.tournament}
 							divACount={slotsA.length}
 							divBCount={slotsB.length}
 						/>
-						<TournamentMapsPanel tournament={data.tournament} />
 					{/if}
 
 					<section
@@ -700,6 +702,7 @@
 										standings={divisionData.standings}
 										matches={matchesByDivision[division]}
 										tournamentSlug={data.tournament.slug}
+										mapScriptOptions={data.tournament.map_script_options}
 										onMatchClick={openMatch}
 									/>
 									<SwissStandings

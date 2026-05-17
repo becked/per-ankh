@@ -27,6 +27,7 @@ export interface TournamentRow {
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
 	allowed_map_scripts: string; // JSON array
+	map_script_options: string; // JSON object: { [MAPCLASS]: { [OPTION]: string | boolean } }
 	created_at: string;
 	updated_at: string;
 }
@@ -279,4 +280,33 @@ export function parseAllowedMaps(t: TournamentRow): string[] {
 		);
 	}
 	return parsed;
+}
+
+// Parse the JSON-encoded map_script_options column. Unlike parseAllowedMaps,
+// this returns {} for any corruption (bad JSON, wrong shape) rather than
+// throwing — every value is optional with an XML fallback, so a corrupted
+// blob falls through to in-game defaults instead of bricking the tournament.
+// Schema-level validation at write time keeps the corruption window narrow.
+export function parseMapScriptOptions(
+	t: TournamentRow,
+): Record<string, Record<string, string | boolean>> {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(t.map_script_options);
+	} catch {
+		return {};
+	}
+	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
+		return {};
+	}
+	const out: Record<string, Record<string, string | boolean>> = {};
+	for (const [script, optsObj] of Object.entries(parsed)) {
+		if (typeof optsObj !== "object" || optsObj === null) continue;
+		const cleaned: Record<string, string | boolean> = {};
+		for (const [k, v] of Object.entries(optsObj as Record<string, unknown>)) {
+			if (typeof v === "string" || typeof v === "boolean") cleaned[k] = v;
+		}
+		out[script] = cleaned;
+	}
+	return out;
 }

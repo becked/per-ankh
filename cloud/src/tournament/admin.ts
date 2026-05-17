@@ -51,6 +51,7 @@ import {
 	MapConfigError,
 	matchRowToRef,
 	parseAllowedMaps,
+	parseMapScriptOptions,
 	slotRowToRef,
 	tournamentConfig,
 	type MatchRow,
@@ -59,7 +60,114 @@ import {
 	type TournamentEnv,
 	type TournamentRow,
 } from "./data";
+import {
+	CANONICAL_MAP_OPTIONS,
+	CANONICAL_MAP_OPTION_DEFAULTS,
+	CANONICAL_SCRIPT_OPTIONS,
+} from "./canonical-map-options";
 import type { Division, MatchRef, Phase, SlotRef } from "./types";
+
+// ---------- Map-script options helpers ----------
+
+// Type used in-memory throughout admin.ts. The on-disk representation is
+// JSON.stringify of the same shape.
+type MapScriptOptions = Record<string, Record<string, string | boolean>>;
+
+// Validates raw input against the canonical manifest + the post-patch
+// allowed_map_scripts list. Drops scripts not in the allowed list (with
+// an error). Drops options not registered by the script (with an error).
+// Drops values that don't match the option's kind / choices (with an error).
+// Returns the cleaned object on success.
+function validateMapScriptOptions(
+	raw: MapScriptOptions,
+	allowedScripts: readonly string[],
+): { ok: true; value: MapScriptOptions } | { ok: false; message: string } {
+	const allowed = new Set(allowedScripts);
+	const out: MapScriptOptions = {};
+	for (const [script, optsObj] of Object.entries(raw)) {
+		if (!allowed.has(script)) {
+			return {
+				ok: false,
+				message: `map_script_options key "${script}" is not in allowed_map_scripts`,
+			};
+		}
+		const applicable = CANONICAL_SCRIPT_OPTIONS[script];
+		if (!applicable) {
+			return {
+				ok: false,
+				message: `map_script_options key "${script}" has no known options manifest`,
+			};
+		}
+		const applicableSet = new Set(applicable);
+		const cleaned: Record<string, string | boolean> = {};
+		for (const [optKey, optVal] of Object.entries(optsObj)) {
+			if (!applicableSet.has(optKey)) {
+				return {
+					ok: false,
+					message: `option "${optKey}" does not apply to script "${script}"`,
+				};
+			}
+			const def = CANONICAL_MAP_OPTIONS[optKey];
+			if (!def) {
+				return {
+					ok: false,
+					message: `option "${optKey}" is not a canonical map option`,
+				};
+			}
+			if (def.kind === "toggle") {
+				if (typeof optVal !== "boolean") {
+					return {
+						ok: false,
+						message: `option "${optKey}" expects boolean, got ${typeof optVal}`,
+					};
+				}
+				cleaned[optKey] = optVal;
+			} else {
+				if (typeof optVal !== "string") {
+					return {
+						ok: false,
+						message: `option "${optKey}" expects string choice, got ${typeof optVal}`,
+					};
+				}
+				if (!def.choices.includes(optVal)) {
+					return {
+						ok: false,
+						message: `option "${optKey}" got invalid choice "${optVal}"`,
+					};
+				}
+				cleaned[optKey] = optVal;
+			}
+		}
+		out[script] = cleaned;
+	}
+	return { ok: true, value: out };
+}
+
+// Reconciles a map_script_options object against an allowed_map_scripts
+// list: drops blocks for scripts no longer allowed, pre-populates blocks
+// for newly-allowed scripts with their XML defaults. Used on tournament
+// create and on patches that change allowed_map_scripts.
+function reconcileMapScriptOptions(
+	existing: MapScriptOptions,
+	allowed: readonly string[],
+): MapScriptOptions {
+	const out: MapScriptOptions = {};
+	for (const script of allowed) {
+		const applicable = CANONICAL_SCRIPT_OPTIONS[script];
+		if (!applicable) continue; // Should never happen — allowed_map_scripts is canonical-gated.
+		const prev = existing[script] ?? {};
+		const next: Record<string, string | boolean> = {};
+		for (const optKey of applicable) {
+			if (Object.prototype.hasOwnProperty.call(prev, optKey)) {
+				next[optKey] = prev[optKey];
+			} else {
+				next[optKey] = CANONICAL_MAP_OPTION_DEFAULTS[optKey] ?? false;
+			}
+		}
+		out[script] = next;
+	}
+	return out;
+}
 
 export interface TournamentAdminEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
@@ -370,6 +478,26 @@ export async function handleCreateTournament(
 	const swissWinsToAdvance = input.swiss_wins_to_advance ?? 3;
 	const swissLossesToEliminate = input.swiss_losses_to_eliminate ?? 3;
 
+	// Map-script options: validate caller input (if any), then reconcile
+	// against allowed_map_scripts so every allowed script gets a populated
+	// options block (XML defaults for unset values). Stored as JSON.
+	let mapScriptOptions: MapScriptOptions = {};
+	if (input.map_script_options) {
+		const valid = validateMapScriptOptions(
+			input.map_script_options as MapScriptOptions,
+			input.allowed_map_scripts,
+		);
+		if (!valid.ok) {
+			return errorResponse(valid.message, 400, cors, "MAP_OPTIONS_INVALID");
+		}
+		mapScriptOptions = valid.value;
+	}
+	mapScriptOptions = reconcileMapScriptOptions(
+		mapScriptOptions,
+		input.allowed_map_scripts,
+	);
+	const mapScriptOptionsJson = JSON.stringify(mapScriptOptions);
+
 	const metadata = JSON.stringify({
 		action: "tournament_created",
 		tournament_id: tournamentId,
@@ -383,8 +511,8 @@ export async function handleCreateTournament(
 				    tournament_id, slug, name, description, status,
 				    division_a_name, division_b_name,
 				    swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds,
-				    allowed_map_scripts
-				 ) VALUES (?, ?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?)`,
+				    allowed_map_scripts, map_script_options
+				 ) VALUES (?, ?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				tournamentId,
 				slug,
@@ -396,6 +524,7 @@ export async function handleCreateTournament(
 				swissLossesToEliminate,
 				swissMaxRounds,
 				allowedMapsJson,
+				mapScriptOptionsJson,
 			),
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_admins (tournament_id, user_id) VALUES (?, ?)`,
@@ -450,6 +579,7 @@ export async function handleCreateTournament(
 				swiss_losses_to_eliminate: created.swiss_losses_to_eliminate,
 				swiss_max_rounds: created.swiss_max_rounds,
 				allowed_map_scripts: input.allowed_map_scripts,
+				map_script_options: mapScriptOptions,
 				slot_counts: { swiss: 0, championship: 0 },
 				is_viewer_admin: true,
 				created_at: created.created_at,
@@ -487,7 +617,8 @@ export async function handlePatchTournament(
 			patch.swiss_wins_to_advance !== undefined ||
 			patch.swiss_losses_to_eliminate !== undefined ||
 			patch.swiss_max_rounds !== undefined ||
-			patch.allowed_map_scripts !== undefined)
+			patch.allowed_map_scripts !== undefined ||
+			patch.map_script_options !== undefined)
 	) {
 		return errorResponse(
 			"Cannot edit Swiss config after the tournament has started",
@@ -497,6 +628,33 @@ export async function handlePatchTournament(
 		);
 	}
 
+	// Compute the post-patch allowed_map_scripts list. The map_script_options
+	// reconciliation needs to validate against the *new* list when both fields
+	// are being patched together.
+	const nextAllowed =
+		patch.allowed_map_scripts ?? parseAllowedMaps(tournament);
+
+	// Compute the post-patch map_script_options object. Three cases:
+	//   1. Caller provided map_script_options → validate, then reconcile.
+	//   2. Caller changed allowed_map_scripts (only) → reconcile existing
+	//      against new list (drops removed scripts' blocks, pre-populates
+	//      newly-added ones).
+	//   3. Neither → leave map_script_options alone.
+	let nextMapScriptOptions: MapScriptOptions | undefined;
+	if (patch.map_script_options !== undefined) {
+		const valid = validateMapScriptOptions(
+			patch.map_script_options as MapScriptOptions,
+			nextAllowed,
+		);
+		if (!valid.ok) {
+			return errorResponse(valid.message, 400, cors, "MAP_OPTIONS_INVALID");
+		}
+		nextMapScriptOptions = reconcileMapScriptOptions(valid.value, nextAllowed);
+	} else if (patch.allowed_map_scripts !== undefined) {
+		const existing = parseMapScriptOptions(tournament);
+		nextMapScriptOptions = reconcileMapScriptOptions(existing, nextAllowed);
+	}
+
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
 	for (const [key, value] of Object.entries(patch)) {
@@ -504,10 +662,18 @@ export async function handlePatchTournament(
 		if (key === "allowed_map_scripts") {
 			fragments.push(`${key} = ?`);
 			binds.push(JSON.stringify(value));
+		} else if (key === "map_script_options") {
+			// Skip — handled below from nextMapScriptOptions (which may have
+			// been reconciled or pre-populated).
+			continue;
 		} else {
 			fragments.push(`${key} = ?`);
 			binds.push(value);
 		}
+	}
+	if (nextMapScriptOptions !== undefined) {
+		fragments.push("map_script_options = ?");
+		binds.push(JSON.stringify(nextMapScriptOptions));
 	}
 	if (fragments.length === 0) {
 		return jsonResponse({ tournament }, 200, cors);

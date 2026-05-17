@@ -10,6 +10,12 @@
 	import { invalidateAll } from "$app/navigation";
 	import { autofocus } from "$lib/actions/autofocus";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
+	import {
+		effectiveOptionValue,
+		mapOptionChoiceLabel,
+		mapOptionLabel,
+		optionsForScript,
+	} from "$lib/tournament/map-script-options";
 
 	interface Props {
 		match: TournamentMatch;
@@ -57,6 +63,23 @@
 	const mapName = $derived(
 		match.map_script ? mapScriptLabel(match.map_script) : null,
 	);
+
+	// Read-only list of (option, value) pairs for the match's script, used
+	// in the body to communicate hosting config to players. Empty when no
+	// map_script is set or the script has no applicable options.
+	const matchMapOptions = $derived.by(() => {
+		const script = match.map_script;
+		if (!script) return [];
+		const stored = tournament.map_script_options;
+		return optionsForScript(script).map((option) => ({
+			option,
+			label: mapOptionLabel(option),
+			value: mapOptionChoiceLabel(
+				option,
+				effectiveOptionValue(stored, script, option),
+			),
+		}));
+	});
 
 	const isParticipant = $derived(
 		user !== null &&
@@ -246,6 +269,18 @@
 		{/if}
 
 		<div class="flex flex-col gap-3">
+			{#if matchMapOptions.length > 0}
+				<dl
+					class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 rounded-lg p-3 text-xs text-tan"
+					style="background-color: #35302B;"
+				>
+					{#each matchMapOptions as opt (opt.option)}
+						<dt class="opacity-70">{opt.label}</dt>
+						<dd class="text-orange">{opt.value}</dd>
+					{/each}
+				</dl>
+			{/if}
+
 			{#if canUploadAsParticipant || canUploadAsObserver}
 				<div
 					class="flex flex-wrap items-center gap-2 rounded-lg p-3"

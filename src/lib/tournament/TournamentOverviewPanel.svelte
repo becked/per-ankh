@@ -115,25 +115,23 @@
 			></textarea>
 		</label>
 
-		<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-			<label class="flex flex-col gap-1">
-				<span>Division A name</span>
-				<input
-					type="text"
-					bind:value={divisionAName}
-					onblur={commitDivisionA}
-					class="rounded border border-black bg-[#35302b] p-1.5"
-				/>
-			</label>
-			<label class="flex flex-col gap-1">
-				<span>Division B name</span>
-				<input
-					type="text"
-					bind:value={divisionBName}
-					onblur={commitDivisionB}
-					class="rounded border border-black bg-[#35302b] p-1.5"
-				/>
-			</label>
-		</div>
+		<label class="flex flex-col gap-1">
+			<span>Division A name</span>
+			<input
+				type="text"
+				bind:value={divisionAName}
+				onblur={commitDivisionA}
+				class="rounded border border-black bg-[#35302b] p-1.5"
+			/>
+		</label>
+		<label class="flex flex-col gap-1">
+			<span>Division B name</span>
+			<input
+				type="text"
+				bind:value={divisionBName}
+				onblur={commitDivisionB}
+				class="rounded border border-black bg-[#35302b] p-1.5"
+			/>
+		</label>
 	</div>
 </section>

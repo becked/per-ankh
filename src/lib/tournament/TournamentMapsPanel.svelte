@@ -10,6 +10,8 @@
 		mapScriptLabel,
 		unaddedMapScriptsByDlc,
 	} from "$lib/tournament/map-scripts";
+	import MapScriptOptionsBlock from "$lib/tournament/MapScriptOptionsBlock.svelte";
+	import { optionsForScript } from "$lib/tournament/map-script-options";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -28,6 +30,13 @@
 	>({ kind: "idle" });
 
 	const unaddedGroups = $derived(unaddedMapScriptsByDlc(allowedMapScripts));
+
+	// Track which scripts have their options expanded. Local-only state;
+	// resets on remount, intentional (no per-user persistence needed).
+	let expanded = $state<Record<string, boolean>>({});
+	function toggleExpanded(script: string) {
+		expanded[script] = !expanded[script];
+	}
 
 	async function commit(next: string[]) {
 		status = { kind: "saving" };
@@ -80,22 +89,81 @@
 				None — add at least one before starting the tournament.
 			</p>
 		{:else}
-			<ul class="flex flex-wrap gap-1.5">
+			<ul class="flex flex-col gap-1.5">
 				{#each allowedMapScripts as script (script)}
+					{@const optsCount = optionsForScript(script).length}
+					{@const isExpanded = expanded[script] === true}
+					{@const expandable = optsCount > 0}
 					<li
-						class="inline-flex items-center gap-1.5 rounded border border-black bg-[#35302b] py-0.5 pl-2 pr-1"
+						class="overflow-hidden rounded border border-black bg-[#35302b]"
 						title={script}
 					>
-						<span>{mapScriptLabel(script)}</span>
-						<button
-							type="button"
-							class="text-tan opacity-60 transition-colors hover:text-red-400 hover:opacity-100 disabled:opacity-30"
-							onclick={() => removeMapScript(script)}
-							disabled={status.kind === "saving"}
-							aria-label="Remove {mapScriptLabel(script)}"
-						>
-							×
-						</button>
+						<div class="flex items-stretch">
+							<button
+								type="button"
+								class="flex flex-1 items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[#3d3832] disabled:cursor-default disabled:hover:bg-transparent"
+								onclick={() => expandable && toggleExpanded(script)}
+								disabled={!expandable}
+								aria-expanded={expandable ? isExpanded : undefined}
+								aria-label={expandable
+									? `${isExpanded ? "Collapse" : "Expand"} ${mapScriptLabel(script)} options`
+									: undefined}
+							>
+								{#if expandable}
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-4 w-4 shrink-0 text-tan opacity-70 transition-transform"
+										class:rotate-90={isExpanded}
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										aria-hidden="true"
+									>
+										<path
+											fill-rule="evenodd"
+											d="M7.21 14.77a.75.75 0 010-1.06L10.94 10 7.21 6.29a.75.75 0 111.06-1.06l4.25 4.25a.75.75 0 010 1.06l-4.25 4.25a.75.75 0 01-1.06-.02z"
+											clip-rule="evenodd"
+										/>
+									</svg>
+								{:else}
+									<span class="inline-block h-4 w-4 shrink-0" aria-hidden="true"
+									></span>
+								{/if}
+								<span class="flex-1 text-sm">{mapScriptLabel(script)}</span>
+								{#if expandable}
+									<span class="text-[10px] text-tan opacity-50">
+										{optsCount} option{optsCount === 1 ? "" : "s"}
+									</span>
+								{/if}
+							</button>
+							<button
+								type="button"
+								class="flex shrink-0 items-center justify-center border-l border-black px-3 text-tan opacity-60 transition-colors hover:bg-[#3d3832] hover:text-red-400 hover:opacity-100 disabled:opacity-30"
+								onclick={() => removeMapScript(script)}
+								disabled={status.kind === "saving"}
+								aria-label="Remove {mapScriptLabel(script)}"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M6 18L18 6M6 6l12 12"
+									/>
+								</svg>
+							</button>
+						</div>
+						{#if isExpanded && expandable}
+							<div class="border-t border-black bg-[#2a2622] px-3 py-2">
+								<MapScriptOptionsBlock {tournament} {script} />
+							</div>
+						{/if}
 					</li>
 				{/each}
 			</ul>

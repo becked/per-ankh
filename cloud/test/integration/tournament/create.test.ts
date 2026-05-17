@@ -31,6 +31,7 @@ interface CreateBody {
 	swiss_max_rounds?: number;
 	swiss_wins_to_advance?: number;
 	swiss_losses_to_eliminate?: number;
+	map_script_options?: Record<string, Record<string, string | boolean>>;
 }
 
 interface TournamentResponse {
@@ -46,6 +47,7 @@ interface TournamentResponse {
 		swiss_losses_to_eliminate: number;
 		swiss_max_rounds: number;
 		allowed_map_scripts: string[];
+		map_script_options: Record<string, Record<string, string | boolean>>;
 		slot_counts: { swiss: number; championship: number };
 		is_viewer_admin: boolean;
 		created_at: string;
@@ -209,6 +211,137 @@ describe("POST /v1/tournaments — validation", () => {
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 400, code: "INVALID_BODY" });
+	});
+});
+
+describe("POST /v1/tournaments — map_script_options", () => {
+	it("pre-populates options for every allowed script with XML defaults when none supplied", async () => {
+		const user = await makeUser();
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: user,
+			body: {
+				slug: uniqueSlug("opts-defaults"),
+				name: "Opts Defaults",
+				allowed_map_scripts: [VALID_MAP, VALID_MAP_2],
+			} satisfies CreateBody,
+		});
+		const body = await expectOk<TournamentResponse>(res);
+		const opts = body.tournament.map_script_options;
+		expect(Object.keys(opts).sort()).toEqual([VALID_MAP, VALID_MAP_2].sort());
+		// Donut's XML defaults from canonical-map-options.ts
+		expect(opts[VALID_MAP]).toMatchObject({
+			MAP_OPTIONS_MULTI_RESOURCE_DENSITY: "MAP_OPTION_MEDIUM_RESOURCES",
+			MAP_OPTIONS_DONUT_IRREGULARITY: "MAP_OPTION_DONUT_IRREGULARITY_MEDIUM",
+			MAP_OPTIONS_SINGLE_POINT_SYMMETRY: false,
+		});
+	});
+
+	it("accepts admin overrides and merges them into the defaults", async () => {
+		const user = await makeUser();
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: user,
+			body: {
+				slug: uniqueSlug("opts-override"),
+				name: "Opts Override",
+				allowed_map_scripts: [VALID_MAP],
+				map_script_options: {
+					[VALID_MAP]: {
+						MAP_OPTIONS_DONUT_IRREGULARITY:
+							"MAP_OPTION_DONUT_IRREGULARITY_HIGH",
+						MAP_OPTIONS_SINGLE_POINT_SYMMETRY: true,
+					},
+				},
+			} satisfies CreateBody,
+		});
+		const body = await expectOk<TournamentResponse>(res);
+		const donut = body.tournament.map_script_options[VALID_MAP];
+		expect(donut.MAP_OPTIONS_DONUT_IRREGULARITY).toBe(
+			"MAP_OPTION_DONUT_IRREGULARITY_HIGH",
+		);
+		expect(donut.MAP_OPTIONS_SINGLE_POINT_SYMMETRY).toBe(true);
+		// Unset options still get XML default
+		expect(donut.MAP_OPTIONS_MULTI_RESOURCE_DENSITY).toBe(
+			"MAP_OPTION_MEDIUM_RESOURCES",
+		);
+	});
+
+	it("rejects options for a script not in allowed_map_scripts", async () => {
+		const user = await makeUser();
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: user,
+			body: {
+				slug: uniqueSlug("opts-unallowed"),
+				name: "Opts Unallowed",
+				allowed_map_scripts: [VALID_MAP],
+				map_script_options: {
+					[VALID_MAP_2]: {
+						MAP_OPTIONS_MULTI_RESOURCE_DENSITY: "MAP_OPTION_HIGH_RESOURCES",
+					},
+				},
+			} satisfies CreateBody,
+		});
+		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
+	});
+
+	it("rejects an option that doesn't apply to its script", async () => {
+		const user = await makeUser();
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: user,
+			body: {
+				slug: uniqueSlug("opts-misapplied"),
+				name: "Opts Misapplied",
+				allowed_map_scripts: [VALID_MAP],
+				map_script_options: {
+					// Donut doesn't register DOTA_RIVER_WIDTH
+					[VALID_MAP]: {
+						MAP_OPTIONS_MULTI_DOTA_RIVER_WIDTH: "MAP_OPTION_RIVER_WIDE",
+					},
+				},
+			} satisfies CreateBody,
+		});
+		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
+	});
+
+	it("rejects a select option with a value outside its choices", async () => {
+		const user = await makeUser();
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: user,
+			body: {
+				slug: uniqueSlug("opts-badchoice"),
+				name: "Opts Bad Choice",
+				allowed_map_scripts: [VALID_MAP],
+				map_script_options: {
+					[VALID_MAP]: {
+						MAP_OPTIONS_DONUT_IRREGULARITY: "MAP_OPTION_NOT_A_REAL_CHOICE",
+					},
+				},
+			} satisfies CreateBody,
+		});
+		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
+	});
+
+	it("rejects a toggle option with a string value", async () => {
+		const user = await makeUser();
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: user,
+			body: {
+				slug: uniqueSlug("opts-badbool"),
+				name: "Opts Bad Bool",
+				allowed_map_scripts: [VALID_MAP],
+				map_script_options: {
+					[VALID_MAP]: {
+						MAP_OPTIONS_SINGLE_POINT_SYMMETRY: "yes",
+					},
+				},
+			} satisfies CreateBody,
+		});
+		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
 	});
 });
 

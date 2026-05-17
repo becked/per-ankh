@@ -20,6 +20,7 @@ import {
 	MapConfigError,
 	matchRowToRef,
 	parseAllowedMaps,
+	parseMapScriptOptions,
 	slotRowToRef,
 	tournamentConfig,
 	type MatchRow,
@@ -195,6 +196,7 @@ export async function handleTournamentDetail(
 		if (!(e instanceof MapConfigError)) throw e;
 		allowed_map_scripts = [];
 	}
+	const map_script_options = parseMapScriptOptions(tournament);
 	return jsonResponse(
 		{
 			tournament_id: tournament.tournament_id,
@@ -209,6 +211,7 @@ export async function handleTournamentDetail(
 			swiss_losses_to_eliminate: tournament.swiss_losses_to_eliminate,
 			swiss_max_rounds: tournament.swiss_max_rounds,
 			allowed_map_scripts,
+			map_script_options,
 			slot_counts: {
 				swiss: counts["swiss"] ?? 0,
 				championship: counts["championship"] ?? 0,

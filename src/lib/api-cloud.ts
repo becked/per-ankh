@@ -707,6 +707,16 @@ export interface TournamentListResponse {
 	offset: number;
 }
 
+// Per-script option overrides keyed by MAPCLASS_* → option zType →
+// value. Values are either a string (one of the option's <Choices>)
+// or boolean (toggles). Sparse — a missing option key means "use the
+// XML <Default>" at render time. Pre-populated by the server with XML
+// defaults whenever a script enters allowed_map_scripts.
+export type MapScriptOptions = Record<
+	string,
+	Record<string, string | boolean>
+>;
+
 export interface TournamentDetail {
 	tournament_id: string;
 	slug: string;
@@ -720,6 +730,7 @@ export interface TournamentDetail {
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
 	allowed_map_scripts: string[];
+	map_script_options: MapScriptOptions;
 	slot_counts: { swiss: number; championship: number };
 	is_viewer_admin: boolean;
 	created_at: string;
@@ -742,6 +753,7 @@ export interface PatchTournamentBody {
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
 	allowed_map_scripts?: string[];
+	map_script_options?: MapScriptOptions;
 }
 
 // Mirrors cloud/src/schemas/tournament.ts:CreateTournamentSchema. Only
@@ -759,6 +771,7 @@ export interface CreateTournamentBody {
 	swiss_wins_to_advance?: number;
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
+	map_script_options?: MapScriptOptions;
 }
 
 export interface SlotStanding {

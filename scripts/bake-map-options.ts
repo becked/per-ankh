@@ -1,0 +1,366 @@
+// Bake the map-script options manifest from the OW reference XML + C# source
+// so tournament admins can configure per-script options (e.g. Donut's Player
+// Start Location, Irregularity, etc.) the way OW's lobby exposes them.
+//
+// SOURCES (local-only, via the Reference/ symlink resolved by paths.ts):
+//   Reference/XML/Infos/mapOptionsSingle.xml      — toggle options (bMultiPlayerValid)
+//   Reference/XML/Infos/mapOptionsMulti.xml       — select options (Choices, Default)
+//   Reference/XML/Infos/mapOptionsMulti-wog.xml   — WoG DLC select options
+//   Reference/XML/Infos/text-*.xml                — TEXT_* → en-US labels (merged)
+//   Reference/Source/Base/Game/GameCore/MapScripts/{Map,m}apScript*.cs
+//                                                 — per-script options.Add(...) calls
+//   Reference/Source/Base/Game/GameCore/MapScripts/DefaultMapScript.cs
+//                                                 — globals applied to every script
+//
+// Filename quirks preserved verbatim (Mohawk source):
+//   MapScripLakesAndGulfs.cs        — missing trailing 't' in "MapScript"
+//   MapScriptMediterrancean.cs      — misspelling in source
+//   Mapscript<X>.cs (Indus DLC)     — lowercase 's' in "Mapscript"
+//
+// OUTPUT: .bake/map-options.json (gitignored sidecar). The finalize step
+// (scripts/build-manifests.ts) reads it and emits the runtime modules at
+// src/lib/generated/{map-option-defs,map-script-options}.ts.
+//
+// Filters:
+//   - Options with bMultiPlayerValid=0 are dropped (tournaments are MP-only).
+//   - Options not registered by any script (including DefaultMapScript) are
+//     dropped — there's nowhere to surface them.
+//
+// Run: npm run bake:map-options
+
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { XMLParser } from "fast-xml-parser";
+
+import { resolveReferenceXml } from "./lib/paths.js";
+import { formatEnum } from "../src/lib/utils/formatting.js";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const REPO_ROOT = resolve(__dirname, "..");
+const SIDECAR = resolve(REPO_ROOT, ".bake/map-options.json");
+
+interface MultiEntry {
+	zType?: string;
+	Name?: string;
+	Choices?: { zValue?: string | string[] };
+	Default?: string;
+	bSinglePlayerValid?: string;
+	bMultiPlayerValid?: string;
+}
+
+interface SingleEntry {
+	zType?: string;
+	Name?: string;
+	bSinglePlayerValid?: string;
+	bMultiPlayerValid?: string;
+}
+
+interface TextEntry {
+	zType?: string;
+	"en-US"?: string;
+}
+
+type OptionDef =
+	| {
+			kind: "select";
+			label: string;
+			choices: { value: string; label: string }[];
+			default: string;
+	  }
+	| { kind: "toggle"; label: string; default: false };
+
+const parser = new XMLParser({
+	ignoreAttributes: true,
+	parseTagValue: false,
+	ignoreDeclaration: true,
+	ignorePiTags: true,
+});
+
+async function loadEntries<T>(path: string): Promise<T[]> {
+	const xml = await readFile(path, "utf-8");
+	const parsed = parser.parse(xml) as { Root?: { Entry?: T | T[] } };
+	const entry = parsed.Root?.Entry;
+	if (entry == null) return [];
+	const arr = Array.isArray(entry) ? entry : [entry];
+	// The first <Entry> in each file is a template with empty/null fields
+	// declaring the shape. Filter it out — entries with no zType are noise.
+	return arr.filter((e) => {
+		const z = (e as { zType?: string }).zType;
+		return typeof z === "string" && z.length > 0;
+	});
+}
+
+function toChoiceArray(c: MultiEntry["Choices"]): string[] {
+	if (!c?.zValue) return [];
+	return Array.isArray(c.zValue) ? c.zValue : [c.zValue];
+}
+
+function isMpValid(e: { bMultiPlayerValid?: string }): boolean {
+	// Absent flag means valid (XML default). Explicit "0" means invalid in MP.
+	return e.bMultiPlayerValid !== "0";
+}
+
+// Strips inline-comment prefix so commented-out lines don't match. We rely on
+// the fact that C# uses // for both leading and trailing comments; the regex
+// then anchors options.Add to start-of-effective-line.
+const ADD_OPTION_RE =
+	/^\s*options\.Add\(infos\.getType<MapOptions(Multi|Single)Type>\("([^"]+)"\)\)/gm;
+
+interface ScriptDecl {
+	mapclass: string;
+	options: string[]; // ordered, de-duplicated
+}
+
+// Translate a C# filename (without extension) into its MAPCLASS_* identifier.
+// Examples:
+//   MapScriptDonut          → MAPCLASS_MapScriptDonut
+//   MapScripLakesAndGulfs   → MAPCLASS_MapScripLakesAndGulfs   (preserved typo)
+//   MapscriptJungle         → MAPCLASS_MapscriptJungle         (lowercase s)
+//   DefaultMapScript        → (skipped — handled separately as globals)
+//   MapScriptInterface      → (skipped — interface, not a script)
+function mapclassForFile(basename: string): string | null {
+	if (basename === "DefaultMapScript" || basename === "MapScriptInterface") {
+		return null;
+	}
+	// Both "MapScrip" (covers the LakesAndGulfs typo + all real MapScript*)
+	// and "Mapscript" (Indus DLC lowercase-s) are valid prefixes.
+	if (basename.startsWith("MapScrip") || basename.startsWith("Mapscript")) {
+		return `MAPCLASS_${basename}`;
+	}
+	return null;
+}
+
+async function parseScriptFile(
+	path: string,
+	basename: string,
+): Promise<ScriptDecl | null> {
+	const mapclass = mapclassForFile(basename);
+	if (!mapclass) return null;
+	const src = await readFile(path, "utf-8");
+	const seen = new Set<string>();
+	const options: string[] = [];
+	for (const m of src.matchAll(ADD_OPTION_RE)) {
+		const zType = m[2];
+		if (seen.has(zType)) continue;
+		seen.add(zType);
+		options.push(zType);
+	}
+	return { mapclass, options };
+}
+
+async function parseGlobalOptions(path: string): Promise<string[]> {
+	const src = await readFile(path, "utf-8");
+	const seen = new Set<string>();
+	const options: string[] = [];
+	for (const m of src.matchAll(ADD_OPTION_RE)) {
+		const zType = m[2];
+		if (seen.has(zType)) continue;
+		seen.add(zType);
+		options.push(zType);
+	}
+	return options;
+}
+
+async function main(): Promise<void> {
+	const xmlDir = resolveReferenceXml();
+	// resolveReferenceXml() returns the XML dir; the source tree is its
+	// sibling under the same Reference root.
+	const referenceRoot = resolve(xmlDir, "..");
+	const infosDir = resolve(xmlDir, "Infos");
+	const mapScriptsDir = resolve(
+		referenceRoot,
+		"Source/Base/Game/GameCore/MapScripts",
+	);
+
+	// ─── Option definitions ──────────────────────────────────────────
+	const singlePath = resolve(infosDir, "mapOptionsSingle.xml");
+	const multiPath = resolve(infosDir, "mapOptionsMulti.xml");
+	const multiWogPath = resolve(infosDir, "mapOptionsMulti-wog.xml");
+
+	const [singleEntries, multiEntries, multiWogEntries] = await Promise.all([
+		loadEntries<SingleEntry>(singlePath),
+		loadEntries<MultiEntry>(multiPath),
+		loadEntries<MultiEntry>(multiWogPath),
+	]);
+
+	// ─── Text lookup (TEXT_* → en-US) merged across all text-*.xml files ──
+	const allFiles = await readdir(infosDir);
+	const textFiles = allFiles
+		.filter((f) => /^text-.*\.xml$/.test(f))
+		.map((f) => resolve(infosDir, f));
+	const textFileEntries = await Promise.all(
+		textFiles.map((p) => loadEntries<TextEntry>(p)),
+	);
+	const textByKey = new Map<string, string>();
+	for (const entries of textFileEntries) {
+		for (const t of entries) {
+			if (t.zType && t["en-US"]) textByKey.set(t.zType, t["en-US"]);
+		}
+	}
+	const labelFor = (textKey: string | undefined, fallback: string): string => {
+		if (textKey) {
+			const hit = textByKey.get(textKey);
+			if (hit) return hit;
+		}
+		return fallback;
+	};
+
+	// ─── C# source: per-script + globals ─────────────────────────────
+	const mapScriptFiles = await readdir(mapScriptsDir);
+	const csFiles = mapScriptFiles.filter((f) => /\.cs$/.test(f));
+
+	const defaultPath = resolve(mapScriptsDir, "DefaultMapScript.cs");
+	const globals = await parseGlobalOptions(defaultPath);
+
+	const scriptDecls: ScriptDecl[] = [];
+	for (const f of csFiles) {
+		const basename = f.replace(/\.cs$/, "");
+		const decl = await parseScriptFile(resolve(mapScriptsDir, f), basename);
+		if (decl) scriptDecls.push(decl);
+	}
+
+	// Hard assertion: if a known script registered no options after parsing,
+	// something is wrong with the C# regex. Catches a complete parse failure
+	// immediately rather than emitting a confusingly-empty manifest.
+	for (const decl of scriptDecls) {
+		if (decl.options.length === 0) {
+			console.warn(
+				`bake-map-options: warning — ${decl.mapclass} parsed zero options.Add() calls. ` +
+					`This script will only get the DefaultMapScript globals.`,
+			);
+		}
+	}
+	if (globals.length === 0) {
+		throw new Error(
+			"bake-map-options: DefaultMapScript.cs yielded zero options.Add() calls. " +
+				"Did Mohawk refactor how options are registered? Re-check ADD_OPTION_RE.",
+		);
+	}
+
+	// ─── Build the canonical zType set (registered by any script + globals) ──
+	const registered = new Set<string>(globals);
+	for (const d of scriptDecls) {
+		for (const o of d.options) registered.add(o);
+	}
+
+	// ─── Build OptionDef map, filtering by MP-validity + registration ────
+	const optionDefs: Record<string, OptionDef> = {};
+
+	for (const e of multiEntries) {
+		const zType = e.zType!;
+		if (!isMpValid(e)) continue;
+		if (!registered.has(zType)) continue;
+		const choiceValues = toChoiceArray(e.Choices);
+		if (choiceValues.length === 0) continue;
+		const defaultValue = e.Default ?? choiceValues[0];
+		optionDefs[zType] = {
+			kind: "select",
+			label: labelFor(e.Name, formatEnum(zType, "MAP_OPTIONS_")),
+			choices: choiceValues.map((v) => ({
+				value: v,
+				label: labelFor(undefined, formatEnum(v, "MAP_OPTION_")),
+			})),
+			default: defaultValue,
+		};
+	}
+	for (const e of multiWogEntries) {
+		const zType = e.zType!;
+		if (!isMpValid(e)) continue;
+		if (!registered.has(zType)) continue;
+		const choiceValues = toChoiceArray(e.Choices);
+		if (choiceValues.length === 0) continue;
+		const defaultValue = e.Default ?? choiceValues[0];
+		optionDefs[zType] = {
+			kind: "select",
+			label: labelFor(e.Name, formatEnum(zType, "MAP_OPTIONS_")),
+			choices: choiceValues.map((v) => ({
+				value: v,
+				label: labelFor(undefined, formatEnum(v, "MAP_OPTION_")),
+			})),
+			default: defaultValue,
+		};
+	}
+	for (const e of singleEntries) {
+		const zType = e.zType!;
+		if (!isMpValid(e)) continue;
+		if (!registered.has(zType)) continue;
+		optionDefs[zType] = {
+			kind: "toggle",
+			label: labelFor(e.Name, formatEnum(zType, "MAP_OPTIONS_SINGLE_")),
+			default: false,
+		};
+	}
+
+	// Now re-fill the choice labels — the multi loop above used formatEnum
+	// fallback for every choice because we didn't have the choice's TEXT_*
+	// key. For choice labels, the convention is the choice zValue itself
+	// resolves directly through text-infos as a TEXT_MAP_OPTION_* key in
+	// some cases (e.g. TEXT_MAP_OPTION_HIGH_RESOURCES → "High"). Try the
+	// straight zValue key first, then the TEXT_-prefixed form.
+	for (const def of Object.values(optionDefs)) {
+		if (def.kind !== "select") continue;
+		for (const c of def.choices) {
+			const direct = textByKey.get(c.value);
+			if (direct) {
+				c.label = direct;
+				continue;
+			}
+			const textForm = textByKey.get(`TEXT_${c.value}`);
+			if (textForm) {
+				c.label = textForm;
+				continue;
+			}
+			// formatEnum fallback already applied above.
+		}
+	}
+
+	// ─── Per-script options array (globals first, then script-specific) ──
+	// Some scripts already include some globals via their own options.Add(...)
+	// calls (e.g. MapScriptRejuvenation.cs adds CITY_SITE_DENSITY itself).
+	// Dedupe but keep globals-first ordering.
+	const scriptOptions: Record<string, string[]> = {};
+	for (const decl of scriptDecls) {
+		const seen = new Set<string>();
+		const out: string[] = [];
+		for (const o of globals) {
+			if (!optionDefs[o]) continue; // dropped by filters
+			if (seen.has(o)) continue;
+			seen.add(o);
+			out.push(o);
+		}
+		for (const o of decl.options) {
+			if (!optionDefs[o]) continue;
+			if (seen.has(o)) continue;
+			seen.add(o);
+			out.push(o);
+		}
+		// Only emit scripts that resolved to at least one option.
+		if (out.length > 0) scriptOptions[decl.mapclass] = out;
+	}
+
+	// Sort the option-def map and the script keys for deterministic output.
+	const sortedOptions: Record<string, OptionDef> = {};
+	for (const k of Object.keys(optionDefs).sort()) sortedOptions[k] = optionDefs[k];
+	const sortedScripts: Record<string, string[]> = {};
+	for (const k of Object.keys(scriptOptions).sort())
+		sortedScripts[k] = scriptOptions[k];
+
+	const payload = {
+		options: sortedOptions,
+		scriptOptions: sortedScripts,
+	};
+
+	await mkdir(dirname(SIDECAR), { recursive: true });
+	await writeFile(SIDECAR, JSON.stringify(payload, null, "\t") + "\n", "utf-8");
+
+	console.log(
+		`bake-map-options: ${Object.keys(sortedOptions).length} option defs, ` +
+			`${Object.keys(sortedScripts).length} scripts ` +
+			`(globals: ${globals.length}, merged ${textFiles.length} text-*.xml files) ` +
+			`→ ${SIDECAR.replace(REPO_ROOT + "/", "")}`,
+	);
+}
+
+await main();

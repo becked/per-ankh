@@ -1,7 +1,12 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
-	import type { SlotStanding, TournamentMatch } from "$lib/api-cloud";
+	import type {
+		MapScriptOptions,
+		SlotStanding,
+		TournamentMatch,
+	} from "$lib/api-cloud";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
+	import { summarizeOptions } from "$lib/tournament/map-script-options";
 
 	type Props = {
 		winsToAdvance: number;
@@ -12,6 +17,9 @@
 		// filtering by division before passing in.
 		matches: TournamentMatch[];
 		tournamentSlug: string;
+		// Per-script options blob from TournamentDetail — used to render the
+		// tooltip on each match's map name with the admin-set options.
+		mapScriptOptions: MapScriptOptions;
 		// eslint-disable-next-line no-unused-vars -- param name is documentary
 		onMatchClick: (matchId: string) => void;
 	};
@@ -23,6 +31,7 @@
 		standings,
 		matches,
 		tournamentSlug,
+		mapScriptOptions,
 		onMatchClick,
 	}: Props = $props();
 
@@ -231,7 +240,16 @@
 										<span class="pick-label">First pick</span>
 									{/if}
 									{#if m.map_script}
-										<span class="map-label">{mapScriptLabel(m.map_script)}</span>
+										{@const optsSummary = summarizeOptions(
+											mapScriptOptions,
+											m.map_script,
+										)}
+										<span
+											class="map-label"
+											title={optsSummary || mapScriptLabel(m.map_script)}
+										>
+											{mapScriptLabel(m.map_script)}
+										</span>
 									{/if}
 								</div>
 								<div class="match-row">

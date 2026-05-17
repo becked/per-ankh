@@ -53,6 +53,22 @@ const AllowedMapScriptsSchema = v.pipe(
 	v.maxLength(64),
 );
 
+// Shape-only schema for the map_script_options column. Keys are MAPCLASS
+// strings; values are objects keyed by MAP_OPTIONS_* option zType, with
+// either a string (select choice) or boolean (toggle) value.
+//
+// Semantic validation (script ∈ allowed_map_scripts, option ∈ script's
+// applicable set, value ∈ option's choices) is done in the handler
+// (validateMapScriptOptions in admin.ts) since v.record can't express
+// "value type depends on key" cleanly. The handler runs before any
+// SQL bind.
+const MapScriptOptionValueSchema = v.union([v.string(), v.boolean()]);
+const PerScriptOptionsSchema = v.record(
+	v.string(),
+	MapScriptOptionValueSchema,
+);
+const MapScriptOptionsSchema = v.record(v.string(), PerScriptOptionsSchema);
+
 export const CreateTournamentSchema = v.object({
 	// Optional. When absent, the handler derives a slug from `name` and
 	// disambiguates collisions with a short random suffix. The admin CLI
@@ -82,6 +98,7 @@ export const CreateTournamentSchema = v.object({
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
 	),
 	allowed_map_scripts: AllowedMapScriptsSchema,
+	map_script_options: v.optional(MapScriptOptionsSchema),
 });
 
 export const PatchTournamentSchema = v.object({
@@ -108,6 +125,7 @@ export const PatchTournamentSchema = v.object({
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
 	),
 	allowed_map_scripts: v.optional(AllowedMapScriptsSchema),
+	map_script_options: v.optional(MapScriptOptionsSchema),
 });
 
 export const BulkCreateSlotsSchema = v.pipe(
