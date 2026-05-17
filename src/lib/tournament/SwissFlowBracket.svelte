@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
 	import type { SlotStanding, TournamentMatch } from "$lib/api-cloud";
+	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 
 	type Props = {
 		winsToAdvance: number;
@@ -211,9 +212,10 @@
 						{#each b.matches as m (m.match_id)}
 							{@const aWon = m.winner_slot_id === m.slot_a_id}
 							{@const bWon = m.winner_slot_id === m.slot_b_id}
-							{@const isBye = m.status === "bye"}
-							{@const isDecided =
-								m.status === "complete" || m.status === "forfeit"}
+							{@const aPick = m.pick_order_winner_slot_id === m.slot_a_id}
+							{@const bPick =
+								m.pick_order_winner_slot_id != null &&
+								m.pick_order_winner_slot_id === m.slot_b_id}
 							<a
 								class="match"
 								href="{resolve('/tournaments/[slug]', {
@@ -221,15 +223,24 @@
 								})}?match={m.match_id}"
 								onclick={(e) => handleMatchClick(m.match_id, e)}
 							>
-								<span class="slot" class:winner={aWon}>
-									{slotLabel(m.slot_a_id)}
-								</span>
-								<span class="vs">{isBye ? "" : "vs"}</span>
-								<span class="slot" class:winner={bWon}>
-									{slotLabel(m.slot_b_id)}
-								</span>
-								{#if !isDecided && !isBye}
-									<span class="pending-dot" aria-label="pending"></span>
+								<div class="match-row">
+									<span class="slot" class:winner={aWon}>
+										{slotLabel(m.slot_a_id)}
+									</span>
+									{#if aPick}
+										<span class="pick-label">first pick</span>
+									{/if}
+								</div>
+								<div class="match-row">
+									<span class="slot" class:winner={bWon}>
+										{slotLabel(m.slot_b_id)}
+									</span>
+									{#if bPick}
+										<span class="pick-label">first pick</span>
+									{/if}
+								</div>
+								{#if m.map_script}
+									<span class="map-label">{mapScriptLabel(m.map_script)}</span>
 								{/if}
 							</a>
 						{/each}
@@ -346,10 +357,9 @@
 	}
 
 	.match {
-		display: grid;
-		grid-template-columns: 1fr auto 1fr auto;
-		align-items: center;
-		gap: 0.4rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.15rem;
 		padding: 0.3rem 0.4rem;
 		border-radius: 0.25rem;
 		background-color: #2a2622;
@@ -357,10 +367,18 @@
 		font-size: 0.75rem;
 		text-decoration: none;
 		transition: background-color 0.1s;
+		min-width: 0;
 	}
 
 	.match:hover {
 		background-color: #1f1c19;
+	}
+
+	.match-row {
+		display: flex;
+		align-items: baseline;
+		gap: 0.3rem;
+		min-width: 0;
 	}
 
 	.slot {
@@ -368,10 +386,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-	}
-
-	.slot:nth-child(3) {
-		text-align: right;
+		flex: 1 1 auto;
 	}
 
 	.slot.winner {
@@ -379,17 +394,24 @@
 		font-weight: 700;
 	}
 
-	.vs {
-		font-size: 0.65rem;
-		opacity: 0.5;
+	.pick-label {
+		flex-shrink: 0;
+		font-size: 0.55rem;
+		opacity: 0.55;
 		font-family: ui-monospace, monospace;
+		color: var(--color-tan, #e8d8b8);
 	}
 
-	.pending-dot {
-		width: 0.4rem;
-		height: 0.4rem;
-		border-radius: 50%;
-		background-color: rgba(232, 216, 184, 0.35);
+	.map-label {
+		font-size: 0.55rem;
+		opacity: 0.55;
+		font-family: ui-monospace, monospace;
+		color: var(--color-tan, #e8d8b8);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+		margin-top: 0.1rem;
 	}
 
 	.gutter {
