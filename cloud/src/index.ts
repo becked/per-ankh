@@ -74,7 +74,7 @@ import type { TournamentPlayerEnv } from "./tournament/player";
 import {
 	handleBulkCreateSlots,
 	handleDeleteSlot,
-	handlePatchPairing,
+	handlePatchMatchMap,
 	handlePatchSlot,
 	handlePatchTournament,
 	handleRetroEditMatch,
@@ -763,10 +763,10 @@ const ROUTES: RouteSpec[] = [
 		match: {
 			kind: "regex",
 			regex:
-				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})\/pairing$/,
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})\/map$/,
 		},
-		route: "PATCH /v1/tournaments/:id/matches/:match_id/pairing",
-		handler: (r, e, m) => handlePatchPairing(m![1], m![2], r, e),
+		route: "PATCH /v1/tournaments/:id/matches/:match_id/map",
+		handler: (r, e, m) => handlePatchMatchMap(m![1], m![2], r, e),
 	},
 	{
 		method: "PATCH",

@@ -191,6 +191,79 @@ describe("POST /v1/games with tournament_match_id", () => {
 		expect(matchAfter?.reported_by_user_id).toBe(t.admin.userId);
 	});
 
+	it("dedup-link: admin observer uploads a save already in their library, match is still reported using the existing game_id", async () => {
+		const t = await makeTournament({
+			name: "Dedup Cup",
+			advanceTo: "swiss-round-1-generated",
+		});
+		const target = (await t.matches()).find((m) => m.status === "pending")!;
+
+		// First upload: admin lands the save in their own library, no
+		// tournament context. The bytes are pinned via a shared nonce so
+		// the second upload produces a matching file_hash for dedup.
+		const sharedNonce = "dedup-relink-fixture";
+		const firstForm = await buildUploadFormData({
+			winnerIndex: 0,
+			uploaderIndex: null,
+			nonce: sharedNonce,
+		});
+		const firstRes = await postMultipart({
+			path: "/v1/games",
+			form: firstForm,
+			as: t.admin,
+		});
+		const firstBody = await expectOk<{ game_id: string }>(firstRes);
+		expect(firstRes.status).toBe(201);
+
+		// Match should still be pending — the first upload had no tournament
+		// context.
+		const matchBefore = await loadMatch(target.match_id);
+		expect(matchBefore?.status).toBe("pending");
+		expect(matchBefore?.game_id).toBeNull();
+
+		// Second upload: same bytes (shared nonce), now with tournament
+		// context. Server hits dedup-by-file_hash but should still run the
+		// match-link block and return 200 with the existing game_id.
+		const secondForm = await buildUploadFormData({
+			winnerIndex: 0,
+			uploaderIndex: null,
+			nonce: sharedNonce,
+		});
+		secondForm.set("tournament_match_id", target.match_id);
+		secondForm.set("tournament_slot_a_player_index", "0");
+		secondForm.set("tournament_slot_b_player_index", "1");
+		const secondRes = await postMultipart({
+			path: "/v1/games",
+			form: secondForm,
+			as: t.admin,
+		});
+		const secondBody = await expectOk<{
+			game_id: string;
+			tournament_match_reported: boolean;
+		}>(secondRes);
+		expect(secondRes.status).toBe(200);
+		expect(secondBody.game_id).toBe(firstBody.game_id);
+		expect(secondBody.tournament_match_reported).toBe(true);
+
+		// Match should now be reported, pointing at the existing game.
+		const matchAfter = await loadMatch(target.match_id);
+		expect(matchAfter?.status).toBe("reported");
+		expect(matchAfter?.game_id).toBe(firstBody.game_id);
+		expect(matchAfter?.winner_slot_id).toBe(target.slot_a_id);
+		expect(matchAfter?.reported_by_user_id).toBe(t.admin.userId);
+
+		// The reused game should now be public and live in the tournament's
+		// collection (the link block applies to dedup-link too).
+		const gameAfter = await loadGame(firstBody.game_id);
+		expect(gameAfter?.is_public).toBe(1);
+		const collName =
+			gameAfter?.collection_id !== null &&
+			gameAfter?.collection_id !== undefined
+				? await loadCollectionName(gameAfter.collection_id)
+				: null;
+		expect(collName).toBe("Tournament: Dedup Cup");
+	});
+
 	it("rejects 403 NOT_MATCH_PARTICIPANT when a non-participant non-admin uploads with a tournament_match_id", async () => {
 		const t = await makeTournament({
 			advanceTo: "swiss-round-1-generated",

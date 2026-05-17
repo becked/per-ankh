@@ -415,17 +415,6 @@ export const cloudApi = {
 		return res.json() as Promise<BracketResponse>;
 	},
 
-	getTournamentRounds: async (
-		tournamentId: string,
-		opts?: CallOpts,
-	): Promise<{ tournament_id: string; rounds: TournamentRound[] }> => {
-		const res = await request(`/tournaments/${tournamentId}/rounds`, opts);
-		return res.json() as Promise<{
-			tournament_id: string;
-			rounds: TournamentRound[];
-		}>;
-	},
-
 	getTournamentMatches: async (
 		tournamentId: string,
 		params: {
@@ -594,18 +583,13 @@ export const cloudApi = {
 		}>;
 	},
 
-	patchPairing: async (
+	patchMatchMap: async (
 		tournamentId: string,
 		matchId: string,
-		body: {
-			slot_a_id?: string;
-			slot_b_id?: string;
-			map_script?: string;
-			pick_order_winner_slot_id?: string | null;
-		},
+		body: { map_script?: string },
 		opts?: CallOpts,
 	): Promise<void> => {
-		await request(`/tournaments/${tournamentId}/matches/${matchId}/pairing`, {
+		await request(`/tournaments/${tournamentId}/matches/${matchId}/map`, {
 			...opts,
 			method: "PATCH",
 			headers: { "Content-Type": "application/json" },
@@ -762,18 +746,6 @@ export interface BracketResponse {
 	tournament_id: string;
 	slots: BracketSlot[];
 	rounds: BracketRound[];
-}
-
-export interface TournamentRound {
-	round_id: string;
-	tournament_id: string;
-	phase: TournamentPhase;
-	division: Division | null;
-	round_number: number;
-	status: "pending" | "in_progress" | "complete";
-	generated_at: string | null;
-	started_at: string | null;
-	completed_at: string | null;
 }
 
 export interface TournamentMatch {

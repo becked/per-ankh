@@ -132,24 +132,24 @@ describe("tournament admin audit log", () => {
 		expect(generated).toHaveLength(2);
 	});
 
-	it("PATCH /tournaments/:id/matches/:match_id/pairing emits pairing_patched", async () => {
-		const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
+	it("PATCH /tournaments/:id/matches/:match_id/map emits match_map_patched", async () => {
+		const t = await makeTournament({
+			advanceTo: "swiss-round-1-generated",
+			allowedMaps: ["MAP_SEASIDE", "MAP_RIVER", "MAP_CONTINENTS"],
+		});
 		const matches = await t.matches();
 		const target = matches.find((m) => m.status === "pending");
 		expect(target).toBeDefined();
-		// Swap slot_a and slot_b — both are valid swiss slots in the same
-		// division as the round.
+		const newMap =
+			target!.map_script === "MAP_CONTINENTS" ? "MAP_RIVER" : "MAP_CONTINENTS";
 		const res = await request.patch({
-			path: `/v1/tournaments/${t.tournamentId}/matches/${target!.match_id}/pairing`,
+			path: `/v1/tournaments/${t.tournamentId}/matches/${target!.match_id}/map`,
 			as: t.admin,
-			body: {
-				slot_a_id: target!.slot_b_id,
-				slot_b_id: target!.slot_a_id,
-			},
+			body: { map_script: newMap },
 		});
 		await expectOk(res);
 		expect(actionsFor(await adminEventsForUser(t.admin.userId))).toContain(
-			"pairing_patched",
+			"match_map_patched",
 		);
 	});
 

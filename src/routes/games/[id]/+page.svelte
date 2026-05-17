@@ -114,10 +114,9 @@
 						>
 							<a
 								class="font-bold text-orange hover:underline"
-								href={resolve("/tournaments/[slug]/matches/[match_id]", {
+								href="{resolve('/tournaments/[slug]', {
 									slug: data.tournamentLink.tournament.slug,
-									match_id: data.tournamentLink.match.match_id,
-								})}
+								})}?match={data.tournamentLink.match.match_id}"
 							>
 								{data.tournamentLink.tournament.name}
 							</a>

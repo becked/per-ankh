@@ -5,7 +5,19 @@
 	let {
 		bracket,
 		tournamentSlug,
-	}: { bracket: BracketResponse; tournamentSlug: string } = $props();
+		onMatchClick,
+	}: {
+		bracket: BracketResponse;
+		tournamentSlug: string;
+		// eslint-disable-next-line no-unused-vars -- param name is documentary
+		onMatchClick: (matchId: string) => void;
+	} = $props();
+
+	function handleMatchClick(matchId: string, e: MouseEvent) {
+		if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+		e.preventDefault();
+		onMatchClick(matchId);
+	}
 
 	// Box / spacing geometry. Match-box height is fixed so the bracket math
 	// stays exact regardless of slot name length (long names ellipsize).
@@ -162,10 +174,10 @@
 					<a
 						class="match"
 						class:reported={m.status === "reported" || m.status === "forfeit"}
-						href={resolve("/tournaments/[slug]/matches/[match_id]", {
+						href="{resolve('/tournaments/[slug]', {
 							slug: tournamentSlug,
-							match_id: m.match_id,
-						})}
+						})}?match={m.match_id}"
+						onclick={(e) => handleMatchClick(m.match_id, e)}
 						style:left="{m.left}px"
 						style:top="{m.top}px"
 						style:width="{MATCH_W}px"

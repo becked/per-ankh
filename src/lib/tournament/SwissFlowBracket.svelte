@@ -11,6 +11,8 @@
 		// filtering by division before passing in.
 		matches: TournamentMatch[];
 		tournamentSlug: string;
+		// eslint-disable-next-line no-unused-vars -- param name is documentary
+		onMatchClick: (matchId: string) => void;
 	};
 
 	let {
@@ -20,7 +22,14 @@
 		standings,
 		matches,
 		tournamentSlug,
+		onMatchClick,
 	}: Props = $props();
+
+	function handleMatchClick(matchId: string, e: MouseEvent) {
+		if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+		e.preventDefault();
+		onMatchClick(matchId);
+	}
 
 	const labelOf = $derived.by(() => {
 		const out: Record<string, string> = {};
@@ -207,10 +216,10 @@
 								m.status === "reported" || m.status === "forfeit"}
 							<a
 								class="match"
-								href={resolve("/tournaments/[slug]/matches/[match_id]", {
+								href="{resolve('/tournaments/[slug]', {
 									slug: tournamentSlug,
-									match_id: m.match_id,
-								})}
+								})}?match={m.match_id}"
+								onclick={(e) => handleMatchClick(m.match_id, e)}
 							>
 								<span class="slot" class:winner={aWon}>
 									{slotLabel(m.slot_a_id)}

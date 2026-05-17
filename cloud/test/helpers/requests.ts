@@ -3,9 +3,9 @@
 // Tests read like:
 //
 //   const res = await asAdmin.patch({
-//     path: `/v1/tournaments/${t.tournamentId}/matches/${m.matchId}/pairing`,
+//     path: `/v1/tournaments/${t.tournamentId}/matches/${m.matchId}/map`,
 //     as: t.admin,
-//     body: { slot_a_id: otherT.slotsByDivision.A[0].slotId },
+//     body: { map_script: "MAP_RIVER" },
 //   });
 //
 // The `as` field names the actor (admin, player, anonymous via omission).

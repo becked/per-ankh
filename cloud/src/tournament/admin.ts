@@ -8,7 +8,7 @@ import * as v from "valibot";
 import {
 	BulkCreateSlotsSchema,
 	PatchMatchSchema,
-	PatchPairingSchema,
+	PatchMatchMapSchema,
 	PatchSlotSchema,
 	PatchTournamentSchema,
 	TransitionChampionshipSchema,
@@ -618,10 +618,13 @@ export async function handleStartTournament(
 }
 
 // ----------------------------------------------------------------------
-// PATCH /v1/tournaments/:id/matches/:match_id/pairing — edit pairing
+// PATCH /v1/tournaments/:id/matches/:match_id/map — change the map for a
+// pending or bye match. Slot identity is deliberately not patchable here;
+// see PatchMatchMapSchema in cloud/src/schemas/tournament.ts for the
+// rationale.
 // ----------------------------------------------------------------------
 
-export async function handlePatchPairing(
+export async function handlePatchMatchMap(
 	tournamentId: string,
 	matchId: string,
 	request: Request,
@@ -643,83 +646,27 @@ export async function handlePatchPairing(
 	}
 	if (match.status !== "pending" && match.status !== "bye") {
 		return errorResponse(
-			"Can only edit pairing on a pending match",
+			"Can only edit map on a pending match",
 			409,
 			cors,
 			"MATCH_NOT_PENDING",
 		);
 	}
-	const body = await parseJsonBody(request, PatchPairingSchema, cors);
+	const body = await parseJsonBody(request, PatchMatchMapSchema, cors);
 	if (!body.ok) return body.response;
 	const patch = body.body;
-
-	// Validate each slot ID supplied in the patch: must exist, belong to
-	// this tournament, and match the round's phase + division.
-	for (const slotId of [
-		patch.slot_a_id,
-		patch.slot_b_id,
-		patch.pick_order_winner_slot_id,
-	]) {
-		if (slotId == null) continue;
-		const slot = await loadSlotInTournament(env, slotId, tournamentId);
-		if (!slot) {
-			return errorResponse(
-				"Slot not in tournament",
-				400,
-				cors,
-				"SLOT_NOT_IN_TOURNAMENT",
-			);
-		}
-		if (slot.phase !== round.phase || slot.division !== round.division) {
-			return errorResponse(
-				"Slot phase/division does not match round",
-				400,
-				cors,
-				"SLOT_PHASE_MISMATCH",
-			);
-		}
+	if (patch.map_script === undefined) {
+		return jsonResponse({ match }, 200, cors);
 	}
-
-	// Enforce pick_order_winner_slot_id ∈ {slot_a_id, slot_b_id} against the
-	// POST-patch state — caller may be changing slot_a/slot_b in the same body.
-	const postA = patch.slot_a_id ?? match.slot_a_id;
-	const postB = patch.slot_b_id ?? match.slot_b_id;
-	const postPickWinner =
-		"pick_order_winner_slot_id" in patch
-			? patch.pick_order_winner_slot_id
-			: match.pick_order_winner_slot_id;
-	if (
-		postPickWinner != null &&
-		postPickWinner !== postA &&
-		postPickWinner !== postB
-	) {
-		return errorResponse(
-			"pick_order_winner_slot_id must be one of slot_a_id or slot_b_id",
-			400,
-			cors,
-			"PICK_ORDER_WINNER_NOT_IN_MATCH",
-		);
-	}
-
-	const fragments: string[] = [];
-	const binds: unknown[] = [];
-	for (const [key, value] of Object.entries(patch)) {
-		if (value === undefined) continue;
-		fragments.push(`${key} = ?`);
-		binds.push(value);
-	}
-	if (fragments.length === 0) return jsonResponse({ match }, 200, cors);
-	binds.push(matchId);
 	await env.SHARE_DB.prepare(
-		`UPDATE tournament_matches SET ${fragments.join(", ")} WHERE match_id = ?`,
+		"UPDATE tournament_matches SET map_script = ? WHERE match_id = ?",
 	)
-		.bind(...binds)
+		.bind(patch.map_script, matchId)
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "pairing_patched", {
+	logTournamentAdminAction(env, a.userId, tournamentId, "match_map_patched", {
 		match_id: matchId,
-		fields_changed: fragments.length,
 	});
 	return jsonResponse({ match: updated }, 200, cors);
 }

@@ -26,6 +26,41 @@
 		adminTournaments?: MyAdminTournamentEntry[];
 	} = $props();
 
+	// Union of tournaments the user participates in and tournaments they
+	// admin, deduplicated by tournament_id. Admin-only entries appear with
+	// the ⚙ glyph; participant-and-admin entries also get the glyph.
+	type TournamentMenuEntry = {
+		tournament_id: string;
+		slug: string;
+		name: string;
+		isAdmin: boolean;
+	};
+	const tournamentMenuEntries = $derived.by((): TournamentMenuEntry[] => {
+		const byId: Record<string, TournamentMenuEntry> = {};
+		for (const t of myTournaments) {
+			byId[t.tournament_id] = {
+				tournament_id: t.tournament_id,
+				slug: t.slug,
+				name: t.name,
+				isAdmin: false,
+			};
+		}
+		for (const t of adminTournaments) {
+			const existing = byId[t.tournament_id];
+			if (existing) {
+				existing.isAdmin = true;
+			} else {
+				byId[t.tournament_id] = {
+					tournament_id: t.tournament_id,
+					slug: t.slug,
+					name: t.name,
+					isAdmin: true,
+				};
+			}
+		}
+		return Object.values(byId);
+	});
+
 	let isMenuOpen = $state(false);
 	let isAboutModalOpen = $state(false);
 	let signingOut = $state(false);
@@ -145,24 +180,19 @@
 					>
 						Tournaments
 					</a>
-					{#each myTournaments as t (t.tournament_id)}
+					{#each tournamentMenuEntries as t (t.tournament_id)}
 						<a
 							href={resolve(`/tournaments/${t.slug}`)}
-							title={t.name}
+							title={t.isAdmin ? `${t.name} (admin)` : t.name}
 							class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
 							onclick={closeMenu}
 						>
-							<span aria-hidden="true" class="mr-1.5">•</span>{t.name}
-						</a>
-					{/each}
-					{#each adminTournaments as t (t.tournament_id)}
-						<a
-							href={resolve(`/tournaments/${t.slug}/admin`)}
-							title="{t.name} (Admin)"
-							class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-							onclick={closeMenu}
-						>
-							<span aria-hidden="true" class="mr-1.5">•</span>{t.name} (Admin)
+							<span aria-hidden="true" class="mr-1.5">•</span
+							>{t.name}{#if t.isAdmin}<span
+									class="ml-1 opacity-60"
+									aria-label="admin"
+									title="You administer this tournament">⚙</span
+								>{/if}
 						</a>
 					{/each}
 					<div class="border-t border-black"></div>

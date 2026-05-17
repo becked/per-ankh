@@ -92,10 +92,7 @@
 				slotALabel={slotALabel ?? undefined}
 				slotBLabel={slotBLabel ?? undefined}
 				doneRedirect={tournamentMatchId && returnSlug
-					? resolve("/tournaments/[slug]/matches/[match_id]", {
-							slug: returnSlug,
-							match_id: tournamentMatchId,
-						})
+					? `${resolve("/tournaments/[slug]", { slug: returnSlug })}?match=${encodeURIComponent(tournamentMatchId)}`
 					: undefined}
 			/>
 		{:else}

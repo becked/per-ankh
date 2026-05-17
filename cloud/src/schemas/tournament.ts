@@ -84,25 +84,19 @@ export const PatchSlotSchema = v.object({
 	),
 });
 
-// slot_b_id is NOT nullable: byes are an artifact of pairing generation
-// (pickByeRecipient), not a post-hoc admin edit. Nulling slot_b_id via
-// PATCH would (a) bypass the "no slot gets two byes" invariant and
-// (b) silently drop the displaced slot from the round. Admins who need
-// to mark a real match as a bye should retro-edit status='bye' with
-// both slots still present.
-//
-// map_script is NOT nullable either: match generation always assigns one
-// for non-bye matches (assignMap throws on empty input), and the admin
-// pairing-edit UI is for replacing the map, not removing it. Byes carry
+// map_script is not nullable: match generation always assigns one for
+// non-bye matches (assignMap throws on empty input), and the admin's only
+// map-edit UI is for replacing it, not clearing it. Byes carry
 // map_script=null because the bye row is INSERTed with null at round
 // generation — there's no post-hoc clear path.
-export const PatchPairingSchema = v.object({
-	slot_a_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
-	slot_b_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
+//
+// Slot identity (slot_a_id, slot_b_id) is deliberately not patchable: the
+// substitute-username flow (patchSlot.discord_username) covers the common
+// "player X dropped, Y takes their seat" case, and we don't want to expose
+// match-level slot swaps that leave the displaced slot without a make-up
+// game.
+export const PatchMatchMapSchema = v.object({
 	map_script: v.optional(MapScriptSchema),
-	pick_order_winner_slot_id: v.optional(
-		v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),
-	),
 });
 
 export const ReportMatchSchema = v.object({

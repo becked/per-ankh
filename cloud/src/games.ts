@@ -693,6 +693,118 @@ function normalizeGameListRow(
 	};
 }
 
+// ---------- Helpers ----------
+
+// Resolved tournament context for an upload — populated from the form's
+// tournament_match_id (and the parsed blob's slot mappings + winner). Used
+// by linkTournamentMatch to stamp the match as reported. Kept structurally
+// in sync with the inline literal in handleGameUpload.
+interface TournamentUploadContext {
+	match_id: string;
+	tournament_id: string;
+	tournament_name: string;
+	slot_a_id: string;
+	slot_b_id: string | null;
+	slot_a_user_id: string | null;
+	slot_b_user_id: string | null;
+	is_participant: boolean;
+	slot_a_player_index?: number;
+	slot_b_player_index?: number;
+	winner_slot_id?: string;
+	is_admin_override: boolean;
+}
+
+// Tournament-linked uploads: move the game into the user's
+// `Tournament: {name}` collection (find-or-create), force is_public=TRUE,
+// and stamp the match row with the result. Used by both fresh uploads and
+// the dedup-link path (admin uploads a save that's already in their
+// library — we still want the match reported).
+//
+// Each side-effect is wrapped in its own try/catch and logged. The upload
+// is never rejected by failures here — the game row was already inserted
+// (or already existed, on dedup) by the caller.
+async function linkTournamentMatch(
+	env: GamesEnv,
+	gameId: string,
+	userId: string,
+	tournamentContext: TournamentUploadContext,
+): Promise<void> {
+	try {
+		let tournamentCollectionId: number | null = null;
+		const collectionName = `Tournament: ${tournamentContext.tournament_name}`;
+		// INSERT OR IGNORE keyed on (user_id, name) UNIQUE — safe to re-run.
+		await env.SHARE_DB.prepare(
+			"INSERT OR IGNORE INTO collections (user_id, name, is_default) VALUES (?, ?, 0)",
+		)
+			.bind(userId, collectionName)
+			.run();
+		const collRow = await env.SHARE_DB.prepare(
+			"SELECT collection_id FROM collections WHERE user_id = ? AND name = ?",
+		)
+			.bind(userId, collectionName)
+			.first<{ collection_id: number }>();
+		if (collRow) tournamentCollectionId = collRow.collection_id;
+		await env.SHARE_DB.prepare(
+			`UPDATE games SET collection_id = ?, is_public = 1, updated_at = datetime('now')
+			 WHERE game_id = ?`,
+		)
+			.bind(tournamentCollectionId, gameId)
+			.run();
+	} catch (e) {
+		logError("tournament_link_failed", e, {
+			game_id: gameId,
+			match_id: tournamentContext.match_id,
+		});
+	}
+
+	// Link the upload to the match. First-upload-wins for participants
+	// (the UPDATE is guarded by status='pending'); admin observer uploads
+	// always override and replace the linked game. The caller's blob-parse
+	// block populated slot_a/b_player_index and winner_slot_id.
+	try {
+		const isOverride = tournamentContext.is_admin_override;
+		const matchUpdate = await env.SHARE_DB.prepare(
+			`UPDATE tournament_matches
+			   SET game_id = ?, winner_slot_id = ?, status = 'reported',
+			       slot_a_player_index = ?, slot_b_player_index = ?,
+			       reported_by_user_id = ?, reported_at = datetime('now')
+			 WHERE match_id = ?
+			   AND (? = 1 OR status = 'pending')`,
+		)
+			.bind(
+				gameId,
+				tournamentContext.winner_slot_id ?? null,
+				tournamentContext.slot_a_player_index ?? null,
+				tournamentContext.slot_b_player_index ?? null,
+				userId,
+				tournamentContext.match_id,
+				isOverride ? 1 : 0,
+			)
+			.run();
+		// rowcount=0 + non-override means the match was already reported by
+		// someone else. The save still lives in the uploader's library; we
+		// just don't change the match link. Fits the first-upload-wins
+		// semantic the spec calls for.
+		if ((matchUpdate.meta?.changes ?? 0) > 0) {
+			await env.SHARE_DB.prepare(
+				"UPDATE tournaments SET updated_at = datetime('now') WHERE tournament_id = ?",
+			)
+				.bind(tournamentContext.tournament_id)
+				.run();
+			// First report (or admin override) flipped the match to
+			// non-pending. Auto-advance handles closing the round +
+			// generating the next round / completing the tournament. Helper
+			// swallows its own errors so upload success is never gated on it.
+			await maybeAdvanceAfterMatchReport(env, tournamentContext.match_id);
+		}
+	} catch (e) {
+		logError("tournament_match_link_failed", e, {
+			game_id: gameId,
+			match_id: tournamentContext.match_id,
+		});
+	}
+}
+
 // ---------- Handlers ----------
 
 export async function handleGameUpload(
@@ -1181,6 +1293,51 @@ export async function handleGameUpload(
 	if (existing) {
 		const cmp = compareSemver(blob.parser_version, existing.parser_version);
 		if (cmp <= 0) {
+			// Dedup hit on the bytes. If this upload was also reporting a
+			// tournament match, run the match-link side-effects against the
+			// existing game_id and return success — the match-report is the
+			// action the admin actually intended, even though the storage
+			// side is a no-op. Without this branch the upload would 409 and
+			// the match would stay pending despite the save being on file.
+			if (tournamentContext) {
+				await linkTournamentMatch(
+					env,
+					existing.game_id,
+					userId,
+					tournamentContext,
+				);
+				try {
+					await env.SHARE_DB.prepare(
+						`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+						 VALUES (?, ?, ?, ?, ?)`,
+					)
+						.bind(
+							"upload",
+							existing.game_id,
+							userId,
+							ip,
+							JSON.stringify({
+								tournament_match_relinked: true,
+								match_id: tournamentContext.match_id,
+							}),
+						)
+						.run();
+				} catch (e) {
+					logError("audit_event_log_failed", e, {
+						event_type: "upload",
+						game_id: existing.game_id,
+					});
+				}
+				return jsonResponse(
+					{
+						game_id: existing.game_id,
+						url: `/games/${existing.game_id}`,
+						tournament_match_reported: true,
+					},
+					200,
+					cors,
+				);
+			}
 			return jsonResponse(
 				{
 					error: "Duplicate",
@@ -1321,85 +1478,10 @@ export async function handleGameUpload(
 	}
 
 	// Tournament-linked uploads: move into the user's `Tournament: {name}`
-	// collection (find-or-create) and force is_public=TRUE. Failures here
-	// are degraded state — the game is uploaded successfully but stays in
-	// the default collection. Log and continue rather than reject.
+	// collection, force is_public=TRUE, and stamp the match as reported.
+	// Failures inside the helper are logged but never reject the upload.
 	if (tournamentContext) {
-		try {
-			let tournamentCollectionId: number | null = null;
-			const collectionName = `Tournament: ${tournamentContext.tournament_name}`;
-			// INSERT OR IGNORE keyed on (user_id, name) UNIQUE — safe to re-run.
-			await env.SHARE_DB.prepare(
-				"INSERT OR IGNORE INTO collections (user_id, name, is_default) VALUES (?, ?, 0)",
-			)
-				.bind(userId, collectionName)
-				.run();
-			const collRow = await env.SHARE_DB.prepare(
-				"SELECT collection_id FROM collections WHERE user_id = ? AND name = ?",
-			)
-				.bind(userId, collectionName)
-				.first<{ collection_id: number }>();
-			if (collRow) tournamentCollectionId = collRow.collection_id;
-			await env.SHARE_DB.prepare(
-				`UPDATE games SET collection_id = ?, is_public = 1, updated_at = datetime('now')
-				 WHERE game_id = ?`,
-			)
-				.bind(tournamentCollectionId, gameId)
-				.run();
-		} catch (e) {
-			logError("tournament_link_failed", e, {
-				game_id: gameId,
-				match_id: tournamentContext.match_id,
-			});
-		}
-
-		// Link the upload to the match. First-upload-wins for participants
-		// (the UPDATE is guarded by status='pending'); admin observer
-		// uploads always override and replace the linked game. The earlier
-		// blob-parse block populated slot_a/b_player_index and winner_slot_id.
-		try {
-			const isOverride = tournamentContext.is_admin_override;
-			const matchUpdate = await env.SHARE_DB.prepare(
-				`UPDATE tournament_matches
-				   SET game_id = ?, winner_slot_id = ?, status = 'reported',
-				       slot_a_player_index = ?, slot_b_player_index = ?,
-				       reported_by_user_id = ?, reported_at = datetime('now')
-				 WHERE match_id = ?
-				   AND (? = 1 OR status = 'pending')`,
-			)
-				.bind(
-					gameId,
-					tournamentContext.winner_slot_id ?? null,
-					tournamentContext.slot_a_player_index ?? null,
-					tournamentContext.slot_b_player_index ?? null,
-					userId,
-					tournamentContext.match_id,
-					isOverride ? 1 : 0,
-				)
-				.run();
-			// rowcount=0 + non-override means the match was already reported
-			// by someone else. The save still lives in the uploader's
-			// library; we just don't change the match link. Fits the
-			// first-upload-wins semantic the spec calls for.
-			if ((matchUpdate.meta?.changes ?? 0) > 0) {
-				await env.SHARE_DB.prepare(
-					"UPDATE tournaments SET updated_at = datetime('now') WHERE tournament_id = ?",
-				)
-					.bind(tournamentContext.tournament_id)
-					.run();
-				// This was the first report (or an admin override) that
-				// flipped the match to non-pending. Auto-advance handles
-				// closing the round + generating the next round /
-				// completing the tournament. Helper swallows its own
-				// errors so upload success is never gated on it.
-				await maybeAdvanceAfterMatchReport(env, tournamentContext.match_id);
-			}
-		} catch (e) {
-			logError("tournament_match_link_failed", e, {
-				game_id: gameId,
-				match_id: tournamentContext.match_id,
-			});
-		}
+		await linkTournamentMatch(env, gameId, userId, tournamentContext);
 	}
 
 	// Audit log — distinct event_type for re-imports so admin tooling
