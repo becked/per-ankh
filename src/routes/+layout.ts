@@ -4,7 +4,12 @@
 export const ssr = true;
 export const prerender = false;
 
-import { cloudApi, type UserMe } from "$lib/api-cloud";
+import {
+	cloudApi,
+	type MyAdminTournamentEntry,
+	type MyTournamentEntry,
+	type UserMe,
+} from "$lib/api-cloud";
 import { DEFAULT_META, type PageMeta } from "$lib/page-meta";
 import type { LayoutLoad } from "./$types";
 
@@ -22,13 +27,65 @@ import type { LayoutLoad } from "./$types";
 // Twitter block from `data.meta`.
 export const load: LayoutLoad = async ({
 	fetch,
-}): Promise<{ user: UserMe | null; meta: PageMeta }> => {
+}): Promise<{
+	user: UserMe | null;
+	meta: PageMeta;
+	tournamentNotices: MyTournamentEntry[];
+	myTournaments: MyTournamentEntry[];
+	adminTournaments: MyAdminTournamentEntry[];
+}> => {
 	try {
 		const user = await cloudApi.getMe({ fetch });
-		return { user, meta: DEFAULT_META };
+		// Two slices off the same player-tournaments fetch:
+		//   - `tournamentNotices` drives the dismissible enrollment banner
+		//     (status != complete AND not dismissed).
+		//   - `myTournaments` drives the header dropdown (status != complete,
+		//     ignores dismiss — the menu is navigation, not a notice).
+		// `adminTournaments` is its own fetch (admin membership is a
+		// separate table). All three are nice-to-haves: failures fall through
+		// to empty lists so the header still renders.
+		let notices: MyTournamentEntry[] = [];
+		let myTournaments: MyTournamentEntry[] = [];
+		let adminTournaments: MyAdminTournamentEntry[] = [];
+		// Tournament fetches are gated by the beta allowlist on the worker
+		// (404 to non-beta callers). Skip the round-trips entirely for
+		// non-beta users so we don't fire two guaranteed-404 requests on
+		// every page render. The catch blocks still tolerate failure (e.g.
+		// network) so a hiccup doesn't break the header chrome.
+		if (user?.is_beta) {
+			try {
+				const res = await cloudApi.getMyTournaments({ fetch });
+				const active = res.tournaments.filter((t) => t.status !== "complete");
+				myTournaments = active;
+				notices = active.filter((t) => t.claim_banner_dismissed_at === null);
+			} catch {
+				// fall through with empty lists
+			}
+			try {
+				const res = await cloudApi.getMyAdminTournaments({ fetch });
+				adminTournaments = res.tournaments.filter(
+					(t) => t.status !== "complete",
+				);
+			} catch {
+				// fall through with empty list
+			}
+		}
+		return {
+			user,
+			meta: DEFAULT_META,
+			tournamentNotices: notices,
+			myTournaments,
+			adminTournaments,
+		};
 	} catch {
 		// Network errors etc. — header just renders signed-out state.
 		// Page-level loads will surface real errors when they fire.
-		return { user: null, meta: DEFAULT_META };
+		return {
+			user: null,
+			meta: DEFAULT_META,
+			tournamentNotices: [],
+			myTournaments: [],
+			adminTournaments: [],
+		};
 	}
 };

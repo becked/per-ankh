@@ -1,0 +1,1246 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Per-Ankh — Tournament Branch Security Review</title>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							black: "var(--color-black)",
+							brown: "var(--color-brown)",
+							"dark-brown": "var(--color-dark-brown)",
+							orange: "var(--color-orange)",
+							tan: "var(--color-tan)",
+							"tan-hover": "var(--color-tan-hover)",
+							white: "var(--color-white)",
+							yellow: "var(--color-yellow)",
+							"blue-gray": "var(--color-blue-gray)",
+							"border-gray": "var(--color-border-gray)",
+							gray: { 200: "var(--color-gray-200)" },
+						},
+					},
+				},
+			};
+		</script>
+
+		<style>
+			:root {
+				--color-black: #000000;
+				--color-brown: #a52a2a;
+				--color-dark-brown: #79261d;
+				--color-orange: #ffa500;
+				--color-tan: #d2b48c;
+				--color-tan-hover: #d2b48c;
+				--color-white: #ffffff;
+				--color-yellow: #ffff00;
+				--color-blue-gray: #211a12;
+				--color-border-gray: #1c160f;
+				--color-gray-200: #eeeeee;
+
+				/* Severity palette — kept warm so it sits on the existing surface */
+				--sev-crit: #621118;
+				--sev-high: #b1241d;
+				--sev-med: #d97706;
+				--sev-low: #c1872f;
+				--sev-info: #6b6157;
+				--sev-clear: #4a7a3d;
+			}
+
+			html,
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				background-color: var(--color-blue-gray);
+				color: var(--color-white);
+				margin: 0;
+				padding: 0;
+			}
+
+			.review-shell {
+				display: grid;
+				grid-template-columns: 240px 1fr;
+				min-height: 100vh;
+			}
+			.review-toc {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				height: 100vh;
+				overflow-y: auto;
+				border-right: 1px solid #000;
+				padding: 1.5rem 1rem;
+				background-color: #1a1410;
+			}
+			.review-toc h1 {
+				font-size: 0.875rem;
+				font-weight: bold;
+				color: var(--color-orange);
+				margin-bottom: 1rem;
+				border-bottom: 1px solid #000;
+				padding-bottom: 0.5rem;
+			}
+			.review-toc ol {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				font-size: 0.75rem;
+			}
+			.review-toc ol li {
+				margin-bottom: 0.25rem;
+			}
+			.review-toc a {
+				color: var(--color-tan);
+				text-decoration: none;
+				display: block;
+				padding: 0.25rem 0.5rem;
+				border-radius: 3px;
+			}
+			.review-toc a:hover {
+				background: #35302b;
+				color: var(--color-orange);
+			}
+			.review-toc .toc-sub {
+				padding-left: 0.75rem;
+				color: #999;
+				font-size: 0.7rem;
+			}
+			.review-toc .toc-sub .toc-sev {
+				font-size: 0.6rem;
+				font-weight: 700;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				padding: 1px 5px;
+				border-radius: 999px;
+				margin-right: 0.4rem;
+				vertical-align: 1px;
+				color: #fff;
+			}
+			.toc-sev.crit {
+				background: var(--sev-crit);
+			}
+			.toc-sev.high {
+				background: var(--sev-high);
+			}
+			.toc-sev.med {
+				background: var(--sev-med);
+				color: #1a1410;
+			}
+			.toc-sev.low {
+				background: var(--sev-low);
+				color: #1a1410;
+			}
+			.toc-sev.info {
+				background: var(--sev-info);
+			}
+			.toc-sev.clear {
+				background: var(--sev-clear);
+			}
+
+			.review-main {
+				padding: 2rem 2.5rem;
+				max-width: 1200px;
+			}
+			.review-main h2 {
+				font-size: 1.75rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				border-bottom: 2px solid var(--color-orange);
+				padding-bottom: 0.5rem;
+				margin-top: 3rem;
+				margin-bottom: 1rem;
+			}
+			.review-main h2:first-child {
+				margin-top: 0;
+			}
+			.review-main h3 {
+				font-size: 1.125rem;
+				font-weight: bold;
+				color: var(--color-tan);
+				margin-top: 2rem;
+				margin-bottom: 0.5rem;
+			}
+			.review-main h4 {
+				font-size: 0.75rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				margin: 1.25rem 0 0.4rem;
+			}
+			.review-main p {
+				color: #c5c3c2;
+				font-size: 0.9rem;
+				line-height: 1.55;
+			}
+			.review-main p.section-intro {
+				color: #c5c3c2;
+				font-size: 0.875rem;
+				margin-bottom: 1.5rem;
+				line-height: 1.5;
+			}
+			.review-main p a,
+			.review-main li a {
+				color: var(--color-orange);
+			}
+			.review-main p a:hover,
+			.review-main li a:hover {
+				text-decoration: underline;
+			}
+			.review-main ul,
+			.review-main ol {
+				color: #c5c3c2;
+				font-size: 0.9rem;
+				line-height: 1.55;
+				padding-left: 1.4rem;
+			}
+			.review-main li {
+				margin-bottom: 0.3rem;
+			}
+			.review-main code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.8rem;
+				background: #0e0a07;
+				padding: 0.1rem 0.3rem;
+				border-radius: 2px;
+				color: var(--color-orange);
+			}
+			.review-main pre {
+				background: #0e0a07;
+				color: var(--color-tan);
+				padding: 1rem;
+				border-radius: 4px;
+				font-size: 0.75rem;
+				overflow-x: auto;
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				margin: 0.5rem 0;
+				line-height: 1.5;
+			}
+			.review-main pre code {
+				background: transparent;
+				padding: 0;
+				color: inherit;
+				font-size: inherit;
+			}
+			.review-main strong {
+				color: var(--color-gray-200);
+			}
+
+			/* Severity badge — inline */
+			.sev {
+				display: inline-block;
+				font-size: 0.65rem;
+				font-weight: 700;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				padding: 2px 8px;
+				border-radius: 999px;
+				color: #fff;
+				vertical-align: 2px;
+			}
+			.sev.crit {
+				background: var(--sev-crit);
+			}
+			.sev.high {
+				background: var(--sev-high);
+			}
+			.sev.med {
+				background: var(--sev-med);
+				color: #1a1410;
+			}
+			.sev.low {
+				background: var(--sev-low);
+				color: #1a1410;
+			}
+			.sev.info {
+				background: var(--sev-info);
+			}
+			.sev.clear {
+				background: var(--sev-clear);
+			}
+
+			/* Finding card — same shape as design-audit's pattern-card */
+			.finding-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1.25rem 1.5rem;
+				margin-bottom: 1.25rem;
+			}
+			.finding-card.severity-med {
+				border-left: 4px solid var(--sev-med);
+			}
+			.finding-card.severity-low {
+				border-left: 4px solid var(--sev-low);
+			}
+			.finding-card.severity-info {
+				border-left: 4px solid var(--sev-info);
+			}
+			.finding-card.severity-clear {
+				border-left: 4px solid var(--sev-clear);
+			}
+			.finding-head {
+				display: flex;
+				align-items: baseline;
+				gap: 0.6rem;
+				margin-bottom: 0.4rem;
+				flex-wrap: wrap;
+			}
+			.finding-num {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.75rem;
+				color: #888;
+				font-weight: 700;
+			}
+			.finding-title {
+				font-size: 1rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				line-height: 1.4;
+			}
+			.finding-meta {
+				display: grid;
+				grid-template-columns: 110px 1fr;
+				gap: 0.25rem 1rem;
+				font-size: 0.8rem;
+				margin-bottom: 0.6rem;
+			}
+			.finding-meta .k {
+				font-size: 0.7rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				padding-top: 2px;
+			}
+			.finding-meta .v {
+				color: var(--color-tan);
+			}
+			.finding-meta .v code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.7rem;
+				color: #888;
+				background: #0e0a07;
+				padding: 0.05rem 0.3rem;
+			}
+
+			/* Summary tiles */
+			.severity-tiles {
+				display: grid;
+				grid-template-columns: repeat(5, 1fr);
+				gap: 0.6rem;
+				margin: 1rem 0 1.5rem;
+			}
+			.severity-tile {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 0.9rem 0.6rem;
+				text-align: center;
+			}
+			.severity-tile.tile-crit {
+				border-top: 3px solid var(--sev-crit);
+			}
+			.severity-tile.tile-high {
+				border-top: 3px solid var(--sev-high);
+			}
+			.severity-tile.tile-med {
+				border-top: 3px solid var(--sev-med);
+			}
+			.severity-tile.tile-low {
+				border-top: 3px solid var(--sev-low);
+			}
+			.severity-tile.tile-info {
+				border-top: 3px solid var(--sev-info);
+			}
+			.severity-tile .count {
+				font-size: 1.75rem;
+				font-weight: 700;
+				color: var(--color-gray-200);
+				line-height: 1;
+			}
+			.severity-tile .label {
+				font-size: 0.65rem;
+				font-weight: 700;
+				color: #888;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				margin-top: 0.35rem;
+			}
+
+			/* Scope/methodology meta block */
+			.meta-block {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1rem 1.25rem;
+				margin: 1rem 0;
+			}
+			.meta-block dl {
+				display: grid;
+				grid-template-columns: 130px 1fr;
+				gap: 0.5rem 1rem;
+				margin: 0;
+				font-size: 0.85rem;
+			}
+			.meta-block dt {
+				color: #888;
+				font-weight: 700;
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				padding-top: 2px;
+			}
+			.meta-block dd {
+				margin: 0;
+				color: var(--color-tan);
+				line-height: 1.5;
+			}
+
+			.footer-note {
+				margin-top: 4rem;
+				padding-top: 1rem;
+				border-top: 1px solid #2a2622;
+				color: #888;
+				font-size: 0.75rem;
+				font-style: italic;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="review-shell">
+			<nav class="review-toc">
+				<h1>Tournament Branch Review</h1>
+				<ol>
+					<li><a href="#exec">Executive summary</a></li>
+					<li><a href="#scope">Scope &amp; methodology</a></li>
+					<li><a href="#findings">Findings</a></li>
+					<li><a href="#cleared">Evaluated &amp; cleared</a></li>
+					<li class="toc-sub">
+						<a href="#c01"
+							><span class="toc-sev clear">✓</span>C-01 Dynamic UPDATE
+							SQL</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c02"
+							><span class="toc-sev clear">✓</span>C-02 Tournament list
+							filter</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c03"
+							><span class="toc-sev clear">✓</span>C-03 Prototype-style
+							lookup</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c04"
+							><span class="toc-sev clear">✓</span>C-04 Beta-gate coverage</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c05"
+							><span class="toc-sev clear">✓</span>C-05 Cross-tournament
+							IDOR</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c06"
+							><span class="toc-sev clear">✓</span>C-06 Retro-edit winner</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c07"
+							><span class="toc-sev clear">✓</span>C-07 Setup-phase
+							visibility</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c08"
+							><span class="toc-sev clear">✓</span>C-08 Games delete
+							trigger</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c09"
+							><span class="toc-sev clear">✓</span>C-09 Tournament PII</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c10"
+							><span class="toc-sev clear">✓</span>C-10 RNG separation</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c11"><span class="toc-sev clear">✓</span>C-11 CSRF</a>
+					</li>
+					<li class="toc-sub">
+						<a href="#c12"
+							><span class="toc-sev clear">✓</span>C-12 Tournament XSS</a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#c13"
+							><span class="toc-sev clear">✓</span>C-13 Admin CLI dynamic
+							SQL</a
+						>
+					</li>
+					<li><a href="#functional">Functional bugs noted in passing</a></li>
+					<li><a href="#out-of-scope">What was not reviewed</a></li>
+					<li><a href="#strengths">Strengths worth preserving</a></li>
+				</ol>
+			</nav>
+
+			<main class="review-main">
+				<header style="margin-bottom: 2rem">
+					<h2
+						style="margin-top: 0; border-bottom: 3px solid var(--color-orange)"
+					>
+						Tournament Branch Security Review
+					</h2>
+					<p class="section-intro">
+						A security audit of the <code>tournament</code> branch — the
+						multi-commit feature work that adds Swiss / championship-bracket
+						tournaments to Per-Ankh. Scope covers everything new on the branch
+						relative to <code>main</code>: 13 cloud-Worker source files under
+						<code>cloud/src/tournament/</code>, 8 new D1 migrations
+						(<code>0006</code>–<code>0013</code>), the tournament-link guard
+						on the games delete path, the beta-allowlist gate threaded through
+						auth, the public read endpoints, the admin handlers and admin CLI,
+						and the SvelteKit tournament UI under
+						<code>src/lib/tournament/</code> + <code>src/routes/tournaments/</code>.
+						Reviewed 2026-05-17.
+					</p>
+				</header>
+
+				<!-- ============ EXECUTIVE SUMMARY ============ -->
+				<h2 id="exec">Executive summary</h2>
+				<p class="section-intro">
+					<strong
+						>No high-confidence security vulnerabilities were introduced by
+						this branch.</strong
+					>
+					The tournament feature is well-defended. Authorization is centralized
+					through a small set of wrappers (<code>authedTournament</code>,
+					<code>requireBetaOr404</code>, <code>authedBetaSession</code>) that
+					consistently apply the beta-allowlist gate <em>before</em> admin
+					checks and return <code>404 TOURNAMENT_NOT_FOUND</code> for non-beta
+					users — hiding feature existence, not just access. The integration
+					test suite includes a sweep
+					(<code>cloud/test/integration/tournament/beta-gate.test.ts</code>)
+					that asserts the 404 behavior across the main tournament endpoints.
+				</p>
+				<p class="section-intro">
+					Every dynamic-SQL surface I examined builds its
+					<code>UPDATE</code> fragments from
+					<em>schema-stripped keys</em> (Valibot's <code>v.object</code> drops
+					unknown keys from the parsed output before reaching the SQL builder),
+					with values universally parameter-bound via <code>.bind()</code>.
+					Every cross-tournament resource access (matches, slots, rounds) is
+					re-checked against the URL's <code>tournament_id</code>, defeating the
+					"swap an ID in the body" IDOR pattern. RNG separation is correct: a
+					deterministic <code>mulberry32</code> drives pairing shuffles and
+					map-assignment (where determinism is desirable for replayability),
+					while IDs and tokens use <code>nanoid</code> /
+					<code>crypto.getRandomValues</code>. PII (<code>discord_id</code>,
+					<code>email</code>) is not returned by any tournament endpoint.
+				</p>
+				<p class="section-intro">
+					The branch also closes a previously-unguarded delete path: migration
+					<code>0013</code> pairs a worker-side 409
+					<code>LINKED_TO_ACTIVE_TOURNAMENT</code> guard in
+					<code>handleGameDelete</code> with a D1 <code>BEFORE DELETE</code>
+					trigger that nulls <code>tournament_matches.game_id</code>. The
+					two-layer design prevents the prior race where R2 blobs were dropped
+					before the FK aborted the D1 <code>DELETE</code>.
+				</p>
+
+				<div class="severity-tiles">
+					<div class="severity-tile tile-crit">
+						<div class="count">0</div>
+						<div class="label">Critical</div>
+					</div>
+					<div class="severity-tile tile-high">
+						<div class="count">0</div>
+						<div class="label">High</div>
+					</div>
+					<div class="severity-tile tile-med">
+						<div class="count">0</div>
+						<div class="label">Medium</div>
+					</div>
+					<div class="severity-tile tile-low">
+						<div class="count">0</div>
+						<div class="label">Low</div>
+					</div>
+					<div class="severity-tile tile-info">
+						<div class="count">0</div>
+						<div class="label">Info</div>
+					</div>
+				</div>
+
+				<!-- ============ SCOPE & METHODOLOGY ============ -->
+				<h2 id="scope">Scope &amp; methodology</h2>
+				<div class="meta-block">
+					<dl>
+						<dt>In scope</dt>
+						<dd>
+							All changes on <code>tournament</code> relative to
+							<code>main</code> as of commit <code>13b3f08</code>. Cloud
+							Worker tournament module (<code>cloud/src/tournament/</code>:
+							admin, authz, public, data, player, bracket, pairing, standings,
+							limits, maps, canonical-map-options, canonical-maps, rng),
+							migrations <code>0006</code>–<code>0013</code>, the
+							<code>games.ts</code> delete-guard, beta-allowlist wiring in
+							<code>auth.ts</code>, validation schemas
+							(<code>cloud/src/schemas/tournament.ts</code>), routing in
+							<code>cloud/src/index.ts</code>, the admin CLI
+							(<code>scripts/admin/commands/tournament.ts</code>), and the
+							SvelteKit tournament UI.
+						</dd>
+						<dt>Out of scope</dt>
+						<dd>
+							Pre-existing surfaces not touched by this branch (re-reviewed in
+							the
+							<a href="security-review.html">2026-05-10 cloud-rewrite review</a>):
+							OAuth flow internals, session-cookie attributes, base CSP / SSR
+							security headers, parser worker, share-blob shape for non-tournament
+							games. Cloudflare dashboard configuration (WAF, edge HSTS, Bot
+							Fight Mode) and third-party services (Discord OAuth, R2 ACLs) are
+							also out of scope.
+						</dd>
+						<dt>Method</dt>
+						<dd>
+							A sub-agent enumerated candidate findings file-by-file across the
+							changed surface, tracing every state-changing route from
+							dispatcher → wrapper → handler → DB. The reviewer then spot-checked
+							the dynamic-SQL UPDATE builders, the absence of
+							<code>{@html}</code> sinks in tournament Svelte components, and
+							the schema-strip guarantee from Valibot in the working tree
+							before signing off. Per the false-positive filtering rules in the
+							review prompt, theoretical issues and defense-in-depth gaps not
+							introduced by this branch were not reported.
+						</dd>
+						<dt>Severity</dt>
+						<dd>
+							CVSS-style ladder (Critical / High / Medium / Low / Info). Only
+							findings at confidence ≥8/10 are reported. The
+							<em>Evaluated &amp; cleared</em> section documents what was looked
+							at and why each item is not a vulnerability — useful as a record
+							that the area was examined, and as a reference for future review
+							of code added on top of this branch.
+						</dd>
+					</dl>
+				</div>
+
+				<!-- ============ FINDINGS ============ -->
+				<h2 id="findings">Findings</h2>
+				<p class="section-intro">
+					None. The tournament branch did not introduce any high-confidence
+					vulnerability that meets the
+					<code>impact ≥ Low &amp; confidence ≥ 8</code> bar applied by this
+					review.
+				</p>
+
+				<!-- ============ EVALUATED & CLEARED ============ -->
+				<h2 id="cleared">Evaluated &amp; cleared</h2>
+				<p class="section-intro">
+					Each entry below is a candidate attack path the review considered and
+					rejected, with the specific code that defeats it. These are
+					<em>not</em> findings — they are an audit trail so that future review
+					of code added on top of this branch can see what was checked and what
+					the assumed defense is. If any of the cited defenses is later
+					weakened, the corresponding attack becomes viable.
+				</p>
+
+				<!-- ─────────── C-01 ─────────── -->
+				<article class="finding-card severity-clear" id="c01">
+					<div class="finding-head">
+						<span class="finding-num">C-01</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Dynamic <code>UPDATE</code> SQL fragments in admin handlers</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/admin.ts</code> — patch handlers
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>admin.ts:687-715</code> (<code>handlePatchTournament</code>) ·
+							<code>admin.ts:860-878</code> (<code>handlePatchSlot</code>) ·
+							<code>admin.ts:1316-1329</code> (<code>handleRetroEditMatch</code>)
+						</div>
+					</div>
+					<h4>What the pattern looks like</h4>
+					<pre><code>for (const [key, value] of Object.entries(patch)) {
+  if (value === undefined) continue;
+  fragments.push(`${key} = ?`);
+  binds.push(value);
+}
+await env.SHARE_DB
+  .prepare(`UPDATE tournaments SET ${fragments.join(", ")} WHERE …`)
+  .bind(...binds)
+  .run();</code></pre>
+					<h4>Why it's safe</h4>
+					<p>
+						<code>patch</code> is the <code>.output</code> of a Valibot
+						<code>v.safeParse(schema, body)</code> call (schemas in
+						<code>cloud/src/schemas/tournament.ts</code>). Valibot's
+						<code>v.object</code> strips unknown keys at parse time, so the
+						<code>key</code> reaching the SQL string is always one of a fixed,
+						code-defined column set. Values are always parameter-bound. An
+						attacker cannot smuggle a SQL fragment via a key name or value.
+					</p>
+					<h4>What would make this unsafe later</h4>
+					<p>
+						Migrating to <code>v.looseObject</code> or switching to a manual
+						<code>Object.assign</code>-style parser without an allowlist would
+						break the guarantee. If the schema construction changes,
+						re-verify.
+					</p>
+				</article>
+
+				<!-- ─────────── C-02 ─────────── -->
+				<article class="finding-card severity-clear" id="c02">
+					<div class="finding-head">
+						<span class="finding-num">C-02</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Tournament-list WHERE-clause concatenation</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/public.ts</code> — list handler
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>public.ts:148-163</code> (<code>handleTournamentList</code>)
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						The only string-concatenated piece is a fixed-shape predicate gated
+						on a Valibot-validated <code>filter</code> value drawn from an
+						explicit allowlist set (<code>allowedStatus</code>). Every value
+						that ends up substituted into the query is parameter-bound. No
+						injection surface.
+					</p>
+				</article>
+
+				<!-- ─────────── C-03 ─────────── -->
+				<article class="finding-card severity-clear" id="c03">
+					<div class="finding-head">
+						<span class="finding-num">C-03</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Caller-controlled key lookup into
+							<code>CANONICAL_SCRIPT_OPTIONS</code></span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/admin.ts</code> — map-options
+							reconciliation
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v"><code>admin.ts:96</code></div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						The <code>script</code> key reaching
+						<code>CANONICAL_SCRIPT_OPTIONS[script]</code> is only used after
+						being filtered through <code>allowed.has(script)</code>, where
+						<code>allowed</code> is a <code>Set</code> populated from
+						<code>input.allowed_map_scripts</code>. That field is validated
+						against <code>StrictMapScriptSchema</code> (an enum of canonical
+						<code>MAPCLASS_*</code> identifiers). Strings like
+						<code>__proto__</code>, <code>constructor</code>, etc. cannot
+						survive that validator, so no prototype-pollution-style read or
+						write is possible.
+					</p>
+				</article>
+
+				<!-- ─────────── C-04 ─────────── -->
+				<article class="finding-card severity-clear" id="c04">
+					<div class="finding-head">
+						<span class="finding-num">C-04</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Beta-allowlist gate coverage across tournament surfaces</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							Wrappers in <code>cloud/src/tournament/authz.ts</code>;
+							dispatch in <code>cloud/src/index.ts</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>cloud/test/integration/tournament/beta-gate.test.ts:45-148</code>
+							— sweep test
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						Every tournament-namespaced route in the dispatcher resolves
+						through one of three wrappers — <code>authedTournament</code>,
+						<code>requireBetaOr404</code>, or <code>authedBetaSession</code> —
+						each of which calls <code>requireTournamentBeta</code> before any
+						handler logic runs. The
+						<code>beta-gate.test.ts</code> sweep asserts that a non-beta
+						authenticated user receives <code>404</code> with body
+						<code>TOURNAMENT_NOT_FOUND</code> across the 17 endpoints it
+						covers. The four endpoints it doesn't cover by name (reorder
+						slots, patch slot, delete slot, the games-tournament-link branch)
+						all go through the same wrappers in source. The 404 (rather than
+						403) hides feature existence rather than just access.
+					</p>
+				</article>
+
+				<!-- ─────────── C-05 ─────────── -->
+				<article class="finding-card severity-clear" id="c05">
+					<div class="finding-head">
+						<span class="finding-num">C-05</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Cross-tournament IDOR via swapped match / slot IDs</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/admin.ts</code> +
+							<code>data.ts</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>data.ts:187-197</code> (<code>loadSlotInTournament</code>)
+							· <code>admin.ts:1177,1231</code> (round-tournament guards) ·
+							<code>public.ts:550</code> ·
+							<code>cloud/test/integration/tournament/retro-edit.test.ts:205-243</code>
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						Every admin handler that accepts a <code>slot_id</code> or
+						<code>match_id</code> in the URL or body re-validates that the
+						target row's <code>tournament_id</code> matches the URL's
+						<code>:tournament_id</code> path parameter. A user with admin
+						rights on tournament A who supplies a body referencing a slot from
+						tournament B receives a 404, not a successful write. The
+						<code>retro-edit</code> integration test exercises this
+						cross-tournament path explicitly.
+					</p>
+				</article>
+
+				<!-- ─────────── C-06 ─────────── -->
+				<article class="finding-card severity-clear" id="c06">
+					<div class="finding-head">
+						<span class="finding-num">C-06</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Retro-edit can't crown an arbitrary slot</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/admin.ts</code> —
+							<code>handleRetroEditMatch</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v"><code>admin.ts:1254-1282</code></div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						<code>handleRetroEditMatch</code> validates that the supplied
+						<code>winner_slot_id</code> is one of the two slot IDs attached to
+						the match being edited <em>and</em> that the slot belongs to the
+						URL's tournament. An admin cannot retroactively crown a slot from
+						a different match or a different tournament.
+					</p>
+				</article>
+
+				<!-- ─────────── C-07 ─────────── -->
+				<article class="finding-card severity-clear" id="c07">
+					<div class="finding-head">
+						<span class="finding-num">C-07</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Setup-phase tournaments hidden from non-admins</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/public.ts</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>public.ts:148-163</code> (list LEFT JOIN gate) ·
+							<code>public.ts:273-285</code> (<code>setupGateHides</code>)
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						Every public read endpoint (detail, standings, bracket, rounds,
+						matches, match detail) calls <code>setupGateHides</code>, which
+						returns 404 if the tournament is in setup phase and the caller
+						isn't an admin. The list endpoint enforces the same constraint
+						via a LEFT JOIN predicate. Draft tournaments are not enumerable.
+					</p>
+				</article>
+
+				<!-- ─────────── C-08 ─────────── -->
+				<article class="finding-card severity-clear" id="c08">
+					<div class="finding-head">
+						<span class="finding-num">C-08</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Games delete + tournament-link trigger interaction</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/games.ts</code> +
+							<code>cloud/migrations/0013_tournament_match_game_set_null.sql</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>games.ts:1923-1939</code> (worker-side 409 guard) ·
+							migration <code>0013</code> (BEFORE DELETE trigger)
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						The pre-fix bug (R2 blobs deleted before the D1 DELETE aborted on
+						an FK violation) is closed by a two-layer fix: the worker-side
+						guard returns
+						<code>409 LINKED_TO_ACTIVE_TOURNAMENT</code> if the game is
+						linked to a match in a non-<code>complete</code> tournament,
+						<em>before</em> any destructive R2 or D1 work runs. Only after a
+						tournament reaches <code>complete</code> does the guard let the
+						delete through, at which point the migration <code>0013</code>
+						<code>BEFORE DELETE</code> trigger nulls
+						<code>tournament_matches.game_id</code>, preserving the historical
+						<code>winner_slot_id</code> and <code>status</code>. The trigger
+						can't be exercised against an active tournament because the
+						worker-side guard runs first. New test
+						<code>delete-tournament-linked.test.ts</code> covers both
+						branches.
+					</p>
+				</article>
+
+				<!-- ─────────── C-09 ─────────── -->
+				<article class="finding-card severity-clear" id="c09">
+					<div class="finding-head">
+						<span class="finding-num">C-09</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>PII held back from tournament responses</span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/public.ts</code>,
+							<code>player.ts</code>, <code>admin.ts</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							No <code>discord_id</code> or <code>email</code> column appears
+							in any tournament response shape; standings / bracket payloads
+							explicitly enumerate fields.
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						Tournament endpoints return <code>discord_username</code> (the
+						public Discord display handle, by design) and the internal
+						<code>user_id</code> nanoid. They do not return
+						<code>discord_id</code>, <code>email</code>, <code>online_id</code>,
+						or other PII. <code>online_id</code> stripping in share-blob /
+						game-detail paths is unchanged by this branch.
+					</p>
+				</article>
+
+				<!-- ─────────── C-10 ─────────── -->
+				<article class="finding-card severity-clear" id="c10">
+					<div class="finding-head">
+						<span class="finding-num">C-10</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title">RNG separation</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/rng.ts</code> + ID/token sites
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>rng.ts</code> (mulberry32 + FNV-1a seed); <code>nanoid</code>
+							import sites across <code>cloud/src/</code>
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						The deterministic <code>mulberry32</code> PRNG seeded by FNV-1a
+						of a tournament / round string is used <em>only</em> for pairing
+						shuffles and per-round map assignment — places where determinism
+						is desirable (so a regenerated round is reproducible and an
+						operator can replay decisions). The output of this RNG does not
+						gate authentication, mint tokens, or generate IDs that need to
+						resist guessing.
+					</p>
+					<p>
+						Security-sensitive randomness — match IDs, slot IDs, round IDs,
+						tournament IDs, session tokens, OAuth state / PKCE verifier — uses
+						<code>nanoid</code> (CSPRNG-backed) or
+						<code>crypto.getRandomValues</code> directly.
+					</p>
+				</article>
+
+				<!-- ─────────── C-11 ─────────── -->
+				<article class="finding-card severity-clear" id="c11">
+					<div class="finding-head">
+						<span class="finding-num">C-11</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title">CSRF on new state-changing routes</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>cloud/src/tournament/admin.ts</code> — JSON body parser
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							<code>admin.ts:285-329</code> (<code>parseJsonBody</code>
+							Content-Type assertion) ·
+							<code>cloud/src/session.ts</code> (<code>SameSite=Lax</code>) ·
+							<code>cloud/src/util.ts:62-82</code> (CORS allowlist)
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						All POST/PATCH/DELETE tournament routes pass through
+						<code>parseJsonBody</code>, which requires
+						<code>Content-Type: application/json</code> — preventing the
+						classic HTML-form CSRF gadget. The session cookie remains
+						<code>SameSite=Lax</code>, so a cross-site
+						<code>fetch</code> from a non-allowlisted origin will not attach
+						the cookie. The CORS allowlist (production:
+						<code>https://per-ankh.app</code>) is the same as for the rest of
+						the app. There is a dedicated
+						<code>content-type.test.ts</code> integration test asserting the
+						JSON-only behavior.
+					</p>
+				</article>
+
+				<!-- ─────────── C-12 ─────────── -->
+				<article class="finding-card severity-clear" id="c12">
+					<div class="finding-head">
+						<span class="finding-num">C-12</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title">XSS in tournament UI</span>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>src/lib/tournament/**/*.svelte</code> +
+							<code>src/routes/tournaments/**/*.svelte</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							No <code>{@html ...}</code> or <code>innerHTML</code>
+							assignment in any tournament Svelte component (verified via
+							grep on the working tree).
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						User-controlled tournament fields — name, description, slug, slot
+						<code>discord_username</code>, map-script options — are rendered
+						via Svelte's auto-escaping mustache (<code>{...}</code>) only. No
+						component opts into the raw-HTML sink, and the parent CSP from
+						<code>svelte.config.js</code> remains strict on
+						<code>script-src</code> in any case.
+					</p>
+				</article>
+
+				<!-- ─────────── C-13 ─────────── -->
+				<article class="finding-card severity-clear" id="c13">
+					<div class="finding-head">
+						<span class="finding-num">C-13</span>
+						<span class="sev clear">Cleared</span>
+						<span class="finding-title"
+							>Admin CLI uses dynamic SQL via <code>sqlStr</code></span
+						>
+					</div>
+					<div class="finding-meta">
+						<div class="k">Component</div>
+						<div class="v">
+							<code>scripts/admin/commands/tournament.ts</code>
+						</div>
+						<div class="k">Evidence</div>
+						<div class="v">
+							CLI builds SQL with string concatenation and shells out to
+							<code>wrangler d1 execute</code> as the operator.
+						</div>
+					</div>
+					<h4>Why it's safe</h4>
+					<p>
+						The admin CLI runs locally under the operator's
+						<code>wrangler login</code> session. It is not exposed over the
+						API and its inputs come from CLI flags typed by the operator. This
+						is not part of the runtime attack surface. (Style-wise it would
+						still be nicer to parameterize, but it's not a vulnerability.)
+					</p>
+				</article>
+
+				<!-- ============ FUNCTIONAL BUGS ============ -->
+				<h2 id="functional">Functional bugs noted in passing</h2>
+				<p class="section-intro">
+					These are <em>not</em> security findings — they don't enable any
+					unauthorized access or data exposure. Listed here because the review
+					surfaced them and they look worth fixing as ordinary follow-ups.
+				</p>
+				<ul>
+					<li>
+						<code>cloud/src/tournament/admin.ts:1188-1198</code>
+						(<code>handlePatchMatchMap</code>): doesn't intersect the new
+						<code>map_script</code> against the tournament's
+						<code>allowed_map_scripts</code> at the handler layer, despite the
+						schema comment at
+						<code>cloud/src/schemas/tournament.ts:26</code> implying it does.
+						Stored string is auto-escaped on display, so there is no XSS path;
+						this is a constraint-enforcement gap, not a vulnerability.
+					</li>
+					<li>
+						<code>cloud/src/tournament/admin.ts:1444-1476</code>
+						(<code>handleTransitionChampionship</code>): the
+						<code>override_ranks</code> array isn't checked for duplicate
+						slot references. An admin who specifies the same slot twice as an
+						advancer creates duplicate championship slots all referencing the
+						same source. Admin-only; functional bug.
+					</li>
+					<li>
+						<code>cloud/src/tournament/admin.ts:1325-1329</code>
+						(<code>handleRetroEditMatch</code> <code>game_id</code> patch):
+						any <code>nanoid21</code> that satisfies the FK to
+						<code>games</code> is accepted. Pointing at someone else's private
+						game doesn't bypass that game's ACL — game-detail handlers enforce
+						their own auth — so there's no IDOR / data-exposure path. Admin
+						power that could surprise; consider scoping to games the admin
+						owns.
+					</li>
+				</ul>
+
+				<!-- ============ OUT OF SCOPE ============ -->
+				<h2 id="out-of-scope">What was not reviewed</h2>
+				<ul>
+					<li>
+						Pre-existing surfaces untouched by this branch — already covered by
+						the
+						<a href="security-review.html">2026-05-10 cloud-rewrite review</a>.
+					</li>
+					<li>
+						Cloudflare dashboard / edge configuration (WAF rules, edge HSTS,
+						Bot Fight Mode, R2 bucket ACLs).
+					</li>
+					<li>
+						Third-party services and their dashboard configuration (Discord
+						OAuth app, billing).
+					</li>
+					<li>
+						Dependency-supply-chain audit beyond what
+						<code>npm audit</code> reports as part of preflight.
+					</li>
+					<li>
+						Performance / DoS / rate-limiting capacity — explicitly excluded by
+						the review prompt.
+					</li>
+				</ul>
+
+				<!-- ============ STRENGTHS ============ -->
+				<h2 id="strengths">Strengths worth preserving</h2>
+				<ul>
+					<li>
+						<strong>Centralized auth-wrapper composition.</strong>
+						<code>authedTournament</code> / <code>requireBetaOr404</code> /
+						<code>authedBetaSession</code> consistently apply the beta gate
+						before admin checks. This is the kind of small-surface
+						authorization plumbing that's easy to extend without breaking
+						existing routes — keep new tournament endpoints going through one
+						of these.
+					</li>
+					<li>
+						<strong>404-not-403 for feature hiding.</strong> Non-beta users
+						get
+						<code>TOURNAMENT_NOT_FOUND</code> rather than
+						<code>FORBIDDEN</code>, so the feature's existence isn't
+						observable to outsiders during the private beta. The sweep test in
+						<code>beta-gate.test.ts</code> documents the contract.
+					</li>
+					<li>
+						<strong>Schema-stripped keys in dynamic UPDATE builders.</strong>
+						Building SQL fragments from Valibot's parsed <code>output</code>
+						keys (rather than from raw request-body keys) is the right
+						pattern. The shape is easy to copy-paste correctly the next time
+						a patch endpoint is added — but it must be the
+						<em>parsed</em> output, not the raw body.
+					</li>
+					<li>
+						<strong>Cross-tournament re-checks on every nested resource.</strong>
+						Patterns like <code>loadSlotInTournament</code> and the
+						<code>round.tournament_id !== tournamentId</code> guards close the
+						standard IDOR pattern and are cheap to apply consistently.
+					</li>
+					<li>
+						<strong>Two-layer destructive-op guard.</strong> The
+						<code>handleGameDelete</code> 409 + migration <code>0013</code>
+						<code>BEFORE DELETE</code> trigger pattern is a good template: the
+						worker-side check gives the user a clean error code, and the
+						trigger keeps DB consistency at the constraint layer if a future
+						code path is ever added that bypasses the handler-side check.
+					</li>
+					<li>
+						<strong>RNG separation.</strong> Deterministic
+						<code>mulberry32</code> for pairings / map assignment (replayable,
+						auditable) and crypto-secure <code>nanoid</code> /
+						<code>getRandomValues</code> for IDs and tokens. Keep this
+						distinction explicit if anyone adds another randomized
+						subsystem.
+					</li>
+					<li>
+						<strong>JSON-only state-changing routes.</strong>
+						<code>parseJsonBody</code>'s <code>Content-Type</code> assertion
+						closes the simplest CSRF gadget without needing per-route token
+						plumbing. The dedicated
+						<code>content-type.test.ts</code> integration test pins this
+						behavior so it doesn't regress.
+					</li>
+				</ul>
+
+				<div class="footer-note">
+					Per-Ankh tournament-branch security review — 2026-05-17. File paths
+					cite the working tree at review time; line numbers may drift with
+					subsequent edits. If a cited fact stops matching the code, re-verify
+					before acting on the finding.
+				</div>
+			</main>
+		</div>
+	</body>
+</html>

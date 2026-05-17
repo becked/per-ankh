@@ -41,7 +41,17 @@
 		| {
 				kind: "ready";
 				humans: PlayerRosterEntry[];
+				// `selected` is the participant's player_index (for normal
+				// uploads and tournament-participant uploads), or null for the
+				// non-tournament Observer mode. In tournament-observer mode
+				// (admin uploading on behalf), it stays null and the slot
+				// mappings below carry the player choices instead.
 				selected: number | null;
+				// Tournament-observer mode only: which roster index corresponds
+				// to slot A / slot B in the match. Both must be set + distinct
+				// before upload can proceed.
+				slotAPlayerIndex: number | null;
+				slotBPlayerIndex: number | null;
 				rawZip: Blob;
 				gzippedData: Blob;
 		  }
@@ -57,6 +67,8 @@
 				retry: {
 					humans: PlayerRosterEntry[];
 					selected: number | null;
+					slotAPlayerIndex: number | null;
+					slotBPlayerIndex: number | null;
 					rawZip: Blob;
 					gzippedData: Blob;
 				} | null;
@@ -72,12 +84,34 @@
 
 	let {
 		onBusyChange,
+		tournamentMatchId,
+		observerMode,
+		slotALabel,
+		slotBLabel,
+		doneRedirect,
 	}: {
 		// Fires when the modal enters or leaves an active parse/upload phase.
 		// Hosts use this to drive the HieroglyphParade — marching while busy,
 		// static borders otherwise.
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onBusyChange?: (busy: boolean) => void;
+		// Optional tournament-match link. When present, the upload form
+		// includes the field; the worker validates participation, force-
+		// publics the game, and assigns it to the user's "Tournament: {name}"
+		// collection.
+		tournamentMatchId?: string | null;
+		// True when an admin is uploading on behalf of the match's
+		// participants. Switches the per-row picker from "which player are
+		// you?" to a slot-mapping picker for slot A only (slot B is inferred
+		// from the other human in the roster, since tournament matches have
+		// exactly 2 humans).
+		observerMode?: boolean;
+		slotALabel?: string;
+		slotBLabel?: string;
+		// Where the Done button navigates after a finished upload session.
+		// Defaults to /dashboard. Tournament upload flows pass the match
+		// page so the admin/player returns to the match they were on.
+		doneRedirect?: string;
 	} = $props();
 
 	let rows = $state<Row[]>([]);
@@ -164,7 +198,14 @@
 				r.status = {
 					kind: "ready",
 					humans,
-					selected: defaultSelection(humans, knownOnlineIds),
+					// In observer mode the uploader doesn't claim a slot for
+					// themselves; slot mappings are entered explicitly via the
+					// per-slot pickers below.
+					selected: observerMode
+						? null
+						: defaultSelection(humans, knownOnlineIds),
+					slotAPlayerIndex: null,
+					slotBPlayerIndex: null,
 					rawZip: rawZipBlob,
 					gzippedData,
 				};
@@ -184,6 +225,40 @@
 	function selectFor(row: Row, selected: number | null) {
 		if (row.status.kind !== "ready") return;
 		row.status.selected = selected;
+	}
+
+	// In observer mode picking Slot A's player auto-fills Slot B as the
+	// other human in the roster. Tournament matches require exactly 2
+	// humans, so by-elimination is unambiguous WHEN there are exactly 2
+	// humans. For any other count we leave slotBPlayerIndex null so the
+	// row stays unready (see rowReadyToUpload) and the human-count error
+	// banner fires; otherwise we'd silently pick a stranger as slot B and
+	// only catch it server-side as WRONG_HUMAN_COUNT.
+	function selectSlotAPlayer(row: Row, value: number) {
+		if (row.status.kind !== "ready") return;
+		row.status.slotAPlayerIndex = value;
+		if (row.status.humans.length === 2) {
+			const otherHuman = row.status.humans.find(
+				(h) => h.player_index !== value,
+			);
+			row.status.slotBPlayerIndex = otherHuman?.player_index ?? null;
+		} else {
+			row.status.slotBPlayerIndex = null;
+		}
+	}
+
+	// In observer mode the row is ready to upload only when both slot
+	// mappings are set and distinct. In participant mode the existing rule
+	// holds (`selected` can be a roster index or null/observer).
+	function rowReadyToUpload(row: Row): boolean {
+		if (row.status.kind !== "ready") return false;
+		if (!observerMode) return true;
+		const { slotAPlayerIndex, slotBPlayerIndex } = row.status;
+		return (
+			slotAPlayerIndex !== null &&
+			slotBPlayerIndex !== null &&
+			slotAPlayerIndex !== slotBPlayerIndex
+		);
 	}
 
 	function removeRow(row: Row) {
@@ -211,6 +286,13 @@
 			),
 	);
 	const hasReady = $derived(rows.some((r) => r.status.kind === "ready"));
+	// In observer mode, "ready" requires both slot mappings set+distinct.
+	// Block the Upload button until every ready row passes that check.
+	const allReadyCanUpload = $derived(
+		rows
+			.filter((r) => r.status.kind === "ready")
+			.every((r) => rowReadyToUpload(r)),
+	);
 	const allTerminal = $derived(
 		rows.length > 0 &&
 			rows.every(
@@ -243,7 +325,31 @@
 			const form = new FormData();
 			form.append("data", ready.gzippedData, "game.json.gz");
 			form.append("save", ready.rawZip, fileName);
-			form.append("uploader_player_index", JSON.stringify(ready.selected));
+			// In observer mode the uploader doesn't claim a roster slot;
+			// the worker requires uploader_player_index to be null.
+			form.append(
+				"uploader_player_index",
+				JSON.stringify(observerMode ? null : ready.selected),
+			);
+			if (tournamentMatchId) {
+				form.append("tournament_match_id", tournamentMatchId);
+				if (observerMode) {
+					if (
+						ready.slotAPlayerIndex === null ||
+						ready.slotBPlayerIndex === null
+					) {
+						throw new Error("Observer upload requires both slot mappings");
+					}
+					form.append(
+						"tournament_slot_a_player_index",
+						String(ready.slotAPlayerIndex),
+					);
+					form.append(
+						"tournament_slot_b_player_index",
+						String(ready.slotBPlayerIndex),
+					);
+				}
+			}
 
 			const res = await cloudApi.uploadGame(form);
 			row.status = {
@@ -268,6 +374,8 @@
 				retry: {
 					humans: ready.humans,
 					selected: ready.selected,
+					slotAPlayerIndex: ready.slotAPlayerIndex,
+					slotBPlayerIndex: ready.slotBPlayerIndex,
 					rawZip: ready.rawZip,
 					gzippedData: ready.gzippedData,
 				},
@@ -313,6 +421,8 @@
 			kind: "ready",
 			humans: retry.humans,
 			selected: retry.selected,
+			slotAPlayerIndex: retry.slotAPlayerIndex,
+			slotBPlayerIndex: retry.slotBPlayerIndex,
 			rawZip: retry.rawZip,
 			gzippedData: retry.gzippedData,
 		};
@@ -320,7 +430,8 @@
 	}
 
 	function navigateDone() {
-		void goto(resolve("/dashboard"));
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- doneRedirect is produced by the parent via resolve(); lint can't see through the prop
+		void goto(doneRedirect ?? resolve("/dashboard"));
 	}
 </script>
 
@@ -397,9 +508,86 @@
 						></progress>
 					{:else if row.status.kind === "ready"}
 						{@const ready = row.status}
-						<p class="mb-2 text-xs font-bold text-gray-400">Choose player</p>
-						<ul class="space-y-1">
-							{#each ready.humans as human (human.player_index)}
+						{#if observerMode}
+							{#if ready.humans.length !== 2}
+								<p class="mb-2 text-xs text-orange">
+									Tournament matches require exactly 2 humans in the save; got
+									{ready.humans.length}. Cannot upload.
+								</p>
+							{/if}
+							<p class="text-xs text-gray-400">
+								{slotALabel ?? "Slot A"} played as:
+							</p>
+							<ul class="mt-1 space-y-1">
+								{#each ready.humans as human (human.player_index)}
+									<li>
+										<label
+											class="flex cursor-pointer items-center gap-2 text-sm text-tan"
+										>
+											<input
+												type="radio"
+												name={`slot-A-${row.id}`}
+												disabled={phase !== "picking"}
+												checked={ready.slotAPlayerIndex === human.player_index}
+												onchange={() =>
+													selectSlotAPlayer(row, human.player_index)}
+											/>
+											<span class="font-bold">
+												{human.player_name ||
+													formatEnum(human.nation, "NATION_") ||
+													"—"}
+											</span>
+											{#if human.player_name}
+												<span class="text-xs text-gray-400">
+													{formatEnum(human.nation, "NATION_") ?? "—"}
+												</span>
+											{/if}
+										</label>
+									</li>
+								{/each}
+							</ul>
+							{#if ready.slotBPlayerIndex !== null}
+								{@const slotBHuman = ready.humans.find(
+									(h) => h.player_index === ready.slotBPlayerIndex,
+								)}
+								<p class="mt-3 text-xs text-gray-400">
+									{slotBLabel ?? "Slot B"} played as:
+									<span class="text-tan">
+										{slotBHuman?.player_name ||
+											formatEnum(slotBHuman?.nation ?? null, "NATION_") ||
+											"—"}
+									</span>
+									<span class="opacity-60">(auto-inferred)</span>
+								</p>
+							{/if}
+						{:else}
+							<p class="mb-2 text-xs font-bold text-gray-400">Choose player</p>
+							<ul class="space-y-1">
+								{#each ready.humans as human (human.player_index)}
+									<li>
+										<label
+											class="flex cursor-pointer items-center gap-2 text-sm text-tan"
+										>
+											<input
+												type="radio"
+												name={`uploader-${row.id}`}
+												disabled={phase !== "picking"}
+												checked={ready.selected === human.player_index}
+												onchange={() => selectFor(row, human.player_index)}
+											/>
+											<span class="font-bold">
+												{human.player_name ||
+													formatEnum(human.nation, "NATION_") ||
+													"—"}
+											</span>
+											{#if human.player_name}
+												<span class="text-xs text-gray-400">
+													{formatEnum(human.nation, "NATION_") ?? "—"}
+												</span>
+											{/if}
+										</label>
+									</li>
+								{/each}
 								<li>
 									<label
 										class="flex cursor-pointer items-center gap-2 text-sm text-tan"
@@ -408,37 +596,14 @@
 											type="radio"
 											name={`uploader-${row.id}`}
 											disabled={phase !== "picking"}
-											checked={ready.selected === human.player_index}
-											onchange={() => selectFor(row, human.player_index)}
+											checked={ready.selected === null}
+											onchange={() => selectFor(row, null)}
 										/>
-										<span class="font-bold">
-											{human.player_name ||
-												formatEnum(human.nation, "NATION_") ||
-												"—"}
-										</span>
-										{#if human.player_name}
-											<span class="text-xs text-gray-400">
-												{formatEnum(human.nation, "NATION_") ?? "—"}
-											</span>
-										{/if}
+										<span class="font-bold">Observer</span>
 									</label>
 								</li>
-							{/each}
-							<li>
-								<label
-									class="flex cursor-pointer items-center gap-2 text-sm text-tan"
-								>
-									<input
-										type="radio"
-										name={`uploader-${row.id}`}
-										disabled={phase !== "picking"}
-										checked={ready.selected === null}
-										onchange={() => selectFor(row, null)}
-									/>
-									<span class="font-bold">Observer</span>
-								</label>
-							</li>
-						</ul>
+							</ul>
+						{/if}
 					{:else if row.status.kind === "uploaded"}
 						<a
 							class="text-xs text-orange underline"
@@ -498,7 +663,7 @@
 				<button
 					type="button"
 					onclick={uploadAll}
-					disabled={!allParsed || !hasReady}
+					disabled={!allParsed || !hasReady || !allReadyCanUpload}
 					class="hover:bg-orange/80 rounded bg-orange px-4 py-1 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
 				>
 					Upload {hasReady

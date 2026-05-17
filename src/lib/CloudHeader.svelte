@@ -7,10 +7,59 @@
 	import { page } from "$app/state";
 	import SearchInput from "$lib/SearchInput.svelte";
 	import AboutModal from "$lib/AboutModal.svelte";
-	import { cloudApi, type UserMe } from "$lib/api-cloud";
+	import {
+		cloudApi,
+		type MyAdminTournamentEntry,
+		type MyTournamentEntry,
+		type UserMe,
+	} from "$lib/api-cloud";
 	import { searchQuery } from "$lib/stores/search";
+	import { sidebarWidth } from "$lib/stores/sidebarWidth";
 
-	let { user }: { user: UserMe | null } = $props();
+	let {
+		user,
+		myTournaments = [],
+		adminTournaments = [],
+	}: {
+		user: UserMe | null;
+		myTournaments?: MyTournamentEntry[];
+		adminTournaments?: MyAdminTournamentEntry[];
+	} = $props();
+
+	// Union of tournaments the user participates in and tournaments they
+	// admin, deduplicated by tournament_id. Admin-only entries appear with
+	// the ⚙ glyph; participant-and-admin entries also get the glyph.
+	type TournamentMenuEntry = {
+		tournament_id: string;
+		slug: string;
+		name: string;
+		isAdmin: boolean;
+	};
+	const tournamentMenuEntries = $derived.by((): TournamentMenuEntry[] => {
+		const byId: Record<string, TournamentMenuEntry> = {};
+		for (const t of myTournaments) {
+			byId[t.tournament_id] = {
+				tournament_id: t.tournament_id,
+				slug: t.slug,
+				name: t.name,
+				isAdmin: false,
+			};
+		}
+		for (const t of adminTournaments) {
+			const existing = byId[t.tournament_id];
+			if (existing) {
+				existing.isAdmin = true;
+			} else {
+				byId[t.tournament_id] = {
+					tournament_id: t.tournament_id,
+					slug: t.slug,
+					name: t.name,
+					isAdmin: true,
+				};
+			}
+		}
+		return Object.values(byId);
+	});
 
 	let isMenuOpen = $state(false);
 	let isAboutModalOpen = $state(false);
@@ -75,7 +124,7 @@
 <svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
 
 <header
-	class="relative flex w-full shrink-0 items-center justify-between border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+	class="relative flex w-full shrink-0 items-center justify-between border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-2"
 >
 	<!-- Left: hamburger + dropdown -->
 	<div class="menu-container flex-shrink-0">
@@ -123,13 +172,32 @@
 					>
 						Dashboard
 					</a>
-					<a
-						href={resolve("/upload")}
-						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						onclick={closeMenu}
-					>
-						Upload saves
-					</a>
+					{#if user.is_beta}
+						<div class="border-t border-black"></div>
+						<a
+							href={resolve("/tournaments")}
+							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							onclick={closeMenu}
+						>
+							Tournaments
+						</a>
+						{#each tournamentMenuEntries as t (t.tournament_id)}
+							<a
+								href={resolve(`/tournaments/${t.slug}`)}
+								title={t.isAdmin ? `${t.name} (admin)` : t.name}
+								class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+								onclick={closeMenu}
+							>
+								<span aria-hidden="true" class="mr-1.5">•</span
+								>{t.name}{#if t.isAdmin}<span
+										class="ml-1 opacity-60"
+										aria-label="admin"
+										title="You administer this tournament">⚙</span
+									>{/if}
+							</a>
+						{/each}
+					{/if}
+					<div class="border-t border-black"></div>
 					<a
 						href={resolve("/account")}
 						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
@@ -144,7 +212,6 @@
 					>
 						About
 					</button>
-					<div class="border-t border-black"></div>
 					<button
 						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50"
 						type="button"
@@ -203,18 +270,47 @@
 	</div>
 
 	<!--
-		Right: search input bound to the global searchQuery store. Visible
-		only on routes where the games sidebar is mounted; kept in the DOM
-		when hidden so the bound value survives navigation.
+		Right: upload shortcut + search input bound to the global searchQuery
+		store. Search is visible only on routes where the games sidebar is
+		mounted, but stays in the DOM so the bound value survives navigation.
+		Upload icon mirrors the "Upload saves" menu entry and only shows for
+		signed-in users.
 	-->
-	<SearchInput
-		bind:value={$searchQuery}
-		variant="dark"
-		placeholder="Search games"
-		class="-mr-4 w-[171px] flex-shrink-0 pl-1 pr-2 {searchVisible
-			? ''
-			: 'invisible'}"
-	/>
+	<div class="flex flex-shrink-0 items-center gap-2">
+		{#if user}
+			<a
+				href={resolve("/upload")}
+				class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange {searchVisible
+					? ''
+					: 'invisible'}"
+				aria-label="Upload saves"
+				title="Upload saves"
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-3.5 w-3.5"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+					aria-hidden="true"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5L12 3m0 0l4.5 4.5M12 3v13.5"
+					/>
+				</svg>
+			</a>
+		{/if}
+		<SearchInput
+			bind:value={$searchQuery}
+			variant="dark"
+			placeholder="Search games"
+			class="-mr-4 flex-shrink-0 pl-1 pr-2 {searchVisible ? '' : 'invisible'}"
+			style="width: {$sidebarWidth}px"
+		/>
+	</div>
 </header>
 
 <AboutModal

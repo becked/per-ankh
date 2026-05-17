@@ -211,6 +211,8 @@ Add `--json` to any read command for pipeable output; add `--yes` to skip confir
 
 Flags: `--dry-run`, `--yes`, `--allow-dirty`, `--allow-branch`, `--skip-checks`, `--skip-worker`, `--skip-frontend`, `--skip-smoke`, `--json`. Preflight blocks on uncommitted changes, off-main, behind origin, secret leaks, `[vars]` keys with secret-shaped names, missing prod secrets on the Worker, format/lint/typecheck/audit failures. Functional smoke (OAuth flow, upload, share visibility) stays manual — see deploy plan §5.
 
+**Never run a prod-targeting command without a specific ask from the user.** This covers every `./per-ankh prod <sub>` subcommand (including read-only ones like `preflight`, `status`, and `smoke`) and any direct `wrangler` / `npx wrangler` call against the live worker, D1, R2, or KV. These commands authenticate against the user's Cloudflare account — on this machine that triggers a 1Password prompt — and can hit prod resources even when nominally read-only. If something appears to need prod state, ask first.
+
 ## Asset Bake Pipeline
 
 The sprite map's terrain, hex, resource, and improvement atlases are baked from a local [pinacotheca](https://github.com/becked/pinacotheca) checkout. Both source PNGs (`assets/atlas-sources/`) and outputs (`static/atlases/`, `static/sprites/`) are gitignored — bake locally on demand.
@@ -279,7 +281,7 @@ Deploy the Worker schema change before releasing the frontend that depends on it
 
 - **YAGNI.** Implement what's needed now, not what might be useful later.
 - **DRY.** Reuse existing patterns; extract shared logic.
-- **Atomic commits.** One logical change per commit.
+- **Atomic commits.** One logical change per commit. (But be pragmatic, no git jujitsu just to follow this principle.)
 - **Comments explain WHY.** The code shows WHAT. Document edge cases, business rules, non-obvious decisions.
 
 ## Commit Messages

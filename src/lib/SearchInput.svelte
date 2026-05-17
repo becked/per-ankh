@@ -4,11 +4,13 @@
 		placeholder = "Search",
 		variant = "light",
 		class: className = "",
+		style = "",
 	}: {
 		value?: string;
 		placeholder?: string;
 		variant?: "light" | "dark" | "field";
 		class?: string;
+		style?: string;
 	} = $props();
 
 	const variantStyles = {
@@ -34,7 +36,7 @@
 	const styles = $derived(variantStyles[variant]);
 </script>
 
-<div class="relative {className}">
+<div class="relative {className}" {style}>
 	<div class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2">
 		<svg
 			xmlns="http://www.w3.org/2000/svg"

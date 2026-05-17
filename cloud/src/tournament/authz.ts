@@ -1,0 +1,92 @@
+// Tournament authorization helpers.
+//
+// requireTournamentBeta — the caller must own a row in tournament_beta_users
+// (operator-managed allowlist for the private beta). Throws 404, not 403,
+// so non-beta callers can't tell the feature exists.
+//
+// requireTournamentAdmin — the caller must own a row in tournament_admins
+// for the target tournament. Throws AuthzError with a status code; handlers
+// translate to JSON responses via the shared errorResponse helper.
+
+import type { SessionData } from "../session";
+import type { TournamentEnv } from "./data";
+
+export class AuthzError extends Error {
+	constructor(
+		public status: number,
+		public code: string,
+		message: string,
+	) {
+		super(message);
+		this.name = "AuthzError";
+	}
+}
+
+// Beta gate. Throws 404 (not 403) so non-members can't distinguish "feature
+// hidden from me" from "feature doesn't exist." Lookup is keyed on user_id
+// after the login-time pin in handleDiscordCallback runs; pre-login grants
+// (keyed only on discord_id) become reachable on the user's next sign-in.
+export async function requireTournamentBeta(
+	env: TournamentEnv,
+	session: SessionData | null,
+): Promise<void> {
+	if (!session) {
+		throw new AuthzError(404, "TOURNAMENT_NOT_FOUND", "Not found");
+	}
+	const row = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
+	)
+		.bind(session.user_id)
+		.first<{ ok: number }>();
+	if (!row) {
+		throw new AuthzError(404, "TOURNAMENT_NOT_FOUND", "Not found");
+	}
+}
+
+export async function isTournamentBeta(
+	env: TournamentEnv,
+	session: SessionData | null,
+): Promise<boolean> {
+	if (!session) return false;
+	const row = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
+	)
+		.bind(session.user_id)
+		.first<{ ok: number }>();
+	return row !== null;
+}
+
+export async function requireTournamentAdmin(
+	env: TournamentEnv,
+	session: SessionData | null,
+	tournamentId: string,
+): Promise<void> {
+	if (!session) {
+		throw new AuthzError(401, "UNAUTHORIZED", "Authentication required");
+	}
+	const row = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
+	)
+		.bind(tournamentId, session.user_id)
+		.first<{ ok: number }>();
+	if (!row) {
+		// 403 with no 404-vs-403 distinction — don't leak tournament existence
+		// to non-admins (the public read paths already surface tournament
+		// existence by other means, but the admin paths shouldn't).
+		throw new AuthzError(403, "NOT_TOURNAMENT_ADMIN", "Not a tournament admin");
+	}
+}
+
+export async function isTournamentAdmin(
+	env: TournamentEnv,
+	session: SessionData | null,
+	tournamentId: string,
+): Promise<boolean> {
+	if (!session) return false;
+	const row = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
+	)
+		.bind(tournamentId, session.user_id)
+		.first<{ ok: number }>();
+	return row !== null;
+}

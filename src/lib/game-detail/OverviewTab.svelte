@@ -32,6 +32,7 @@
 		improvementData,
 		gameReligions,
 		playerWonders,
+		userNation = null,
 	}: {
 		gameDetails: GameDetails;
 		playerHistory: PlayerHistory[];
@@ -44,6 +45,11 @@
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
 		playerWonders: PlayerWonder[];
+		// Uploader's picked nation (cloud-only). When set, drives the
+		// save-owner flag below; otherwise falls back to the alphabetical-
+		// first-human heuristic (correct for single-human legacy shares
+		// from the frozen web/ viewer, wrong for multi-human cloud saves).
+		userNation?: string | null;
 	} = $props();
 
 	const UNIT_CLASS_ABBREV: Record<UnitClass, string> = {
@@ -108,7 +114,9 @@
 					playerName: p.player_name,
 					nation: p.nation,
 					isHuman: p.is_human,
-					isSaveOwner: p === gameDetails.players.find((pl) => pl.is_human),
+					isSaveOwner: userNation
+						? p.nation === userNation
+						: p === gameDetails.players.find((pl) => pl.is_human),
 					isWinner: p.nation === gameDetails.winner_civilization,
 					finalVP: lastPoint?.points ?? null,
 					finalMilitary: lastPoint?.military_power ?? null,

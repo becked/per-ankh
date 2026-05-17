@@ -8,7 +8,7 @@
 	type Status =
 		| { kind: "loading" }
 		| { kind: "success"; displayName: string }
-		| { kind: "error"; message: string };
+		| { kind: "error"; message: string; code: string | null };
 
 	let status = $state<Status>({ kind: "loading" });
 
@@ -20,13 +20,14 @@
 
 		if (oauthError) {
 			const desc = params.get("error_description") ?? oauthError;
-			status = { kind: "error", message: `Discord: ${desc}` };
+			status = { kind: "error", message: `Discord: ${desc}`, code: null };
 			return;
 		}
 		if (!code || !state) {
 			status = {
 				kind: "error",
 				message: "Missing code or state in callback URL",
+				code: null,
 			};
 			return;
 		}
@@ -52,11 +53,12 @@
 		} catch (err) {
 			const message =
 				err instanceof ApiError
-					? `${err.code ?? err.status}: ${err.message}`
+					? err.message
 					: err instanceof Error
 						? err.message
 						: "Login failed";
-			status = { kind: "error", message };
+			const code = err instanceof ApiError ? err.code : null;
+			status = { kind: "error", message, code };
 		}
 	});
 </script>
@@ -68,7 +70,7 @@
 		visually continuous.
 	-->
 	<header
-		class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+		class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-2"
 	>
 		<div class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200">
 			𓉑 Per Ankh

@@ -1,5 +1,7 @@
 # Per-Ankh Tournaments: Technical Specification
 
+> **Status:** Feature shipped on the `tournament` branch (commit `8de96ff` and follow-ups). The implementation diverges from this spec in several places — schema details, the registration flow, and a few endpoint shapes. See callouts at the top of §3 and §5, and [`tournament-implementation-notes.md`](./tournament-implementation-notes.md) for the as-built design. The authorization matrix (§7), tiebreaker cascade (§6), and overall lifecycle FSM are accurate.
+
 This document specifies the architecture for layering tournament functionality on top of the cloud rewrite described in [`cloud-rewrite-spec.md`](./cloud-rewrite-spec.md). It assumes the cloud rewrite has shipped: Discord OAuth auth, D1 `users`/`games`/`player_summaries`/`events` tables, R2 blobs at `games/{id}.json.gz` and `saves/{id}.zip`, KV-backed sessions, and the Worker patterns established in `cloud/src/`.
 
 The MVP target is a single live tournament — Old World's first Swiss + championship event — with per-tournament admins, replaceable players, public tournament pages, and minimal verification (we trust uploaders).
@@ -110,6 +112,14 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 ---
 
 ## 3. Domain Model
+
+> **Schema divergence.** The implemented schema (see `cloud/migrations/0006_tournaments.sql`, which has its own "Material divergences from the spec" comment block) differs from this section:
+>
+> - `tournament_registrations` was not built — slots ARE the enrollment. Admin pre-fills `tournament_slots.discord_username`; user logs in → `handleDiscordCallback` claims the slot.
+> - `tournament_slot_history` was not built — substitution mutates the slot directly; the `events` table captures audit (`event_type='tournament_slot_substituted'`).
+> - `tournaments.status` enum is `'setup' | 'swiss' | 'championship' | 'complete'` — the spec's `'signups'` is `'setup'` in code.
+> - `tournament_slots` stores `swiss_seed`, `discord_username`, `discord_id`, `user_id` instead of the spec's `current_user_id` / `swiss_wins` / `swiss_losses` / `swiss_status` fields. W/L is computed on read from `tournament_matches`, so substitution naturally transfers history with no derived-state drift.
+> - Always 2 divisions; names admin-configurable per tournament (`division_a_name`, `division_b_name`).
 
 ### Slot-based bracket model
 
@@ -305,6 +315,12 @@ No frontend UI in MVP. The script wraps `wrangler d1 execute --remote` like the 
 
 ### 5.2 Player registration
 
+> **Flow divergence.** There is no `POST /v1/tournaments/:id/register` endpoint and no `tournament_registrations` table. Enrollment works through slots:
+>
+> 1. Admin creates slots up-front via the admin panel, supplying each player's `discord_username`.
+> 2. User logs in via Discord OAuth; `handleDiscordCallback` runs a slot-claim UPDATE (matches first by `discord_id`, falls back to `discord_username` for first-time claims).
+> 3. `discord_id` is pinned at first claim, so subsequent Discord renames don't break the link.
+
 ```
 Logged-in user → POST /v1/tournaments/:id/register { division_pref }
   │
@@ -316,6 +332,8 @@ INSERT INTO tournament_registrations (... status='registered')
 ```
 
 ### 5.3 Division assignment
+
+> **Flow divergence.** Division is set on the slot at creation time, not via a separate assignment endpoint. The admin panel exposes a bulk slot-create flow per division. The `setup → swiss` transition locks `swiss_advance_count` (default suggestion `largest_power_of_2(floor(min(div_a, div_b) / 2))`, admin-overridable until transition).
 
 ```
 Admin → POST /v1/tournaments/:id/divisions/assign

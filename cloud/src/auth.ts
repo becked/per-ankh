@@ -27,27 +27,29 @@ import {
 	clearSessionCookie,
 	createSession,
 	deleteSession,
+	seenCookie,
 	sessionCookie,
 	sessionFromRequest,
 } from "./session";
 import type { SessionEnv } from "./session";
-import { logError, logWarn } from "./log";
+import { logError } from "./log";
 
 export interface AuthEnv extends SessionEnv {
 	SHARE_DB: D1Database;
 	ALLOWED_ORIGINS: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
-	// Comma-separated Discord usernames (the new globally-unique handle, not
-	// the display name). Whitespace-trimmed, case-insensitive. Empty / unset
-	// fails closed — every login is rejected.
-	ALLOWED_DISCORD_USERNAMES: string;
+	// Invite-code passphrase that gates new-account sign-up. Set out-of-band
+	// via `wrangler secret put INVITE_CODE`. Rotatable without a redeploy.
+	INVITE_CODE: string;
 }
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
 const DISCORD_TOKEN_URL = "https://discord.com/api/oauth2/token";
 const DISCORD_USER_URL = "https://discord.com/api/users/@me";
-const OAUTH_SCOPE = "identify email"; // identify = profile, email = user email
+// No `guilds`/`guilds.members.read` — the Worker never reads server info.
+// Consent screen lists only username/avatar/banner + email.
+const OAUTH_SCOPE = "identify email";
 const OAUTH_PENDING_COOKIE = "oauth_pending";
 const OAUTH_PENDING_TTL_SECONDS = 300; // 5 minutes
 
@@ -58,6 +60,11 @@ interface OAuthPending {
 	// Internal post-login redirect target (e.g. "/games/abc"). Always a
 	// same-origin path; validated by safeNext before storage.
 	next: string;
+	// Invite-code passphrase carried across the Discord round-trip. Validated
+	// at callback time, only for new accounts (existing discord_id bypasses).
+	// Null when the user didn't submit one — they'll be rejected at callback
+	// if Discord identifies them as a new user.
+	invite_code: string | null;
 }
 
 const DEFAULT_NEXT = "/dashboard";
@@ -109,20 +116,6 @@ interface UserRow {
 
 function oauthKey(id: string): string {
 	return `oauth:${id}`;
-}
-
-// Parse `ALLOWED_DISCORD_USERNAMES` into a Set of trimmed lowercase entries.
-// Returns an empty set when the env var is missing or empty, which makes
-// every membership check fail (fail-closed).
-function parseAllowedUsernames(env: AuthEnv): Set<string> {
-	const raw = env.ALLOWED_DISCORD_USERNAMES;
-	if (!raw) return new Set();
-	return new Set(
-		raw
-			.split(",")
-			.map((u) => u.trim().toLowerCase())
-			.filter((u) => u.length > 0),
-	);
 }
 
 // Build the public avatar URL from the stored hash. Default avatar
@@ -177,11 +170,17 @@ export async function handleDiscordStart(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 
-	let body: { redirect_uri?: string; next?: string };
+	let body: {
+		redirect_uri?: string;
+		next?: string;
+		invite_code?: string;
+	};
 	try {
-		body = await readJsonBody<{ redirect_uri?: string; next?: string }>(
-			request,
-		);
+		body = await readJsonBody<{
+			redirect_uri?: string;
+			next?: string;
+			invite_code?: string;
+		}>(request);
 	} catch {
 		return errorResponse("Invalid JSON body", 400, cors, "INVALID_BODY");
 	}
@@ -197,6 +196,22 @@ export async function handleDiscordStart(
 	}
 	const next = safeNext(body.next);
 
+	// Carry invite code verbatim through the Discord round-trip; validated at
+	// callback. Cap length to prevent abusive payloads filling KV — real codes
+	// are short. Empty/missing → null (caller is presumed existing user; gate
+	// rejects at callback if Discord identifies them as new).
+	const rawInvite =
+		typeof body.invite_code === "string" ? body.invite_code : "";
+	if (rawInvite.length > 256) {
+		return errorResponse(
+			"invite_code too long",
+			400,
+			cors,
+			"INVITE_CODE_TOO_LONG",
+		);
+	}
+	const inviteCode = rawInvite.trim() || null;
+
 	const state = generateState();
 	const { verifier, challenge } = await generatePkce();
 	const kvId = nanoid(21);
@@ -206,6 +221,7 @@ export async function handleDiscordStart(
 		code_verifier: verifier,
 		redirect_uri: redirectUri,
 		next,
+		invite_code: inviteCode,
 	};
 	await env.SESSIONS_KV.put(oauthKey(kvId), JSON.stringify(pending), {
 		expirationTtl: OAUTH_PENDING_TTL_SECONDS,
@@ -381,36 +397,66 @@ export async function handleDiscordCallback(
 		);
 	}
 
-	const allowedUsernames = parseAllowedUsernames(env);
 	const discordUsername = discordUser.username.toLowerCase();
-	if (!allowedUsernames.has(discordUsername)) {
-		// Audit trail captures the rejected discord_id + username for
-		// moderation. The events table is internal D1 — these fields stored
-		// here are NOT shipped to Logpush. Structured logs scrub via the PII
-		// deny-list (logWarn below carries no identifying field).
-		try {
-			await env.SHARE_DB.prepare(
-				`INSERT INTO events (event_type, ip_address, metadata)
-				 VALUES ('login_denied', ?, ?)`,
+
+	// Invite-code gate for new accounts only. We can only distinguish new
+	// from returning users after Discord identifies them, hence the check
+	// runs here rather than at /start. Existing discord_id → skip gate.
+	// New user → per-IP rate limit, then constant-time code compare.
+	const existing = await env.SHARE_DB.prepare(
+		`SELECT 1 AS one FROM users WHERE discord_id = ? LIMIT 1`,
+	)
+		.bind(discordUser.id)
+		.first<{ one: number }>();
+
+	if (!existing) {
+		const clientIp = getClientIp(request);
+		// Skip rate-limit check when CF-RAY is missing (misconfigured
+		// topology — getClientIp already emits a warn). A global counter
+		// would let a single attacker block legit users; we'd rather lose
+		// the rate limit than the availability.
+		if (clientIp) {
+			const failed = await env.SHARE_DB.prepare(
+				`SELECT COUNT(*) AS count FROM events
+				 WHERE event_type = 'invite_code_failed'
+				   AND ip_address = ?
+				   AND created_at > datetime('now', '-10 minutes')`,
 			)
-				.bind(
-					getClientIp(request),
-					JSON.stringify({
-						discord_id: discordUser.id,
-						discord_username: discordUser.username,
-					}),
-				)
-				.run();
-		} catch (e) {
-			logError("audit_event_log_failed", e, { event_type: "login_denied" });
+				.bind(clientIp)
+				.first<{ count: number }>();
+			if ((failed?.count ?? 0) >= 10) {
+				logError("invite_code_rate_limited", null, { ip: clientIp });
+				return errorResponse(
+					"Too many invite-code attempts. Try again in a few minutes.",
+					429,
+					cors,
+					"RATE_LIMITED",
+				);
+			}
 		}
-		logWarn("login_denied");
-		return errorResponse(
-			"This beta is invite-only.",
-			403,
-			cors,
-			"NOT_AUTHORIZED",
-		);
+
+		const submitted = pending.invite_code;
+		if (!submitted) {
+			await recordInviteFailure(env, clientIp);
+			return errorResponse(
+				"An invite code is required to sign up.",
+				403,
+				cors,
+				"INVITE_CODE_REQUIRED",
+			);
+		}
+		if (!timingSafeEqual(submitted, env.INVITE_CODE)) {
+			await recordInviteFailure(env, clientIp);
+			logError("invite_code_invalid", null, {
+				discord_id: discordUser.id,
+			});
+			return errorResponse(
+				"Invalid invite code.",
+				403,
+				cors,
+				"INVITE_CODE_INVALID",
+			);
+		}
 	}
 
 	const displayName = discordUser.global_name ?? discordUser.username;
@@ -460,6 +506,55 @@ export async function handleDiscordCallback(
 		.bind(upsert.user_id)
 		.run();
 
+	// Tournament beta-allowlist pin. Operators can pre-grant beta access by
+	// discord_id before a user first signs in (see
+	// `./per-ankh admin tournament beta-grant`). On login we fill in the
+	// user_id so the request-time check (requireTournamentBeta in
+	// tournament/authz.ts) can use the fast PK lookup. Mirrors the slot-
+	// claim pattern below. Fire-and-forget — failure just means the user
+	// has to re-login before they see tournaments.
+	try {
+		await env.SHARE_DB.prepare(
+			`UPDATE tournament_beta_users SET user_id = ?
+			 WHERE discord_id = ? AND user_id IS NULL`,
+		)
+			.bind(upsert.user_id, discordUser.id)
+			.run();
+	} catch (e) {
+		logError("tournament_beta_pin_failed", e, { user_id: upsert.user_id });
+	}
+
+	// Tournament-slot claim. The admin pre-fills tournament_slots with
+	// expected discord_usernames; logging in claims any unclaimed slot
+	// matching this user. Two-step lookup:
+	//   1. discord_id-pinned slots from prior claims (Discord usernames are
+	//      mutable; the snowflake ID isn't). Updates user_id only — discord_id
+	//      already matches.
+	//   2. Unclaimed slots matched by discord_username (case-insensitive: both
+	//      stored and queried lowercase via auth.ts:385 and the schemas).
+	//      Pins discord_id for future logins so a later username change
+	//      doesn't break the claim.
+	// Only targets active (non-complete) tournaments. Failures are degraded
+	// state — the user can still log in and discover their tournament via
+	// the My Tournaments page, just without the auto-claim. Fire-and-forget
+	// log; don't fail the OAuth callback.
+	try {
+		await env.SHARE_DB.batch([
+			env.SHARE_DB.prepare(
+				`UPDATE tournament_slots SET user_id = ?
+				 WHERE discord_id = ? AND user_id IS NULL
+				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
+			).bind(upsert.user_id, discordUser.id),
+			env.SHARE_DB.prepare(
+				`UPDATE tournament_slots SET user_id = ?, discord_id = ?
+				 WHERE discord_username = ? AND user_id IS NULL AND discord_id IS NULL
+				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
+			).bind(upsert.user_id, discordUser.id, discordUsername),
+		]);
+	} catch (e) {
+		logError("tournament_slot_claim_failed", e, { user_id: upsert.user_id });
+	}
+
 	const sessionToken = await createSession(
 		env,
 		upsert.user_id,
@@ -485,6 +580,11 @@ export async function handleDiscordCallback(
 		...cors,
 	});
 	headers.append("Set-Cookie", sessionCookie(sessionToken, request));
+	// Returning-user hint for the login page. Cleared cookies will lose it,
+	// but the login form gracefully handles that (existing users can leave
+	// the invite-code field blank — backend doesn't enforce on existing
+	// discord_id). See session.seenCookie.
+	headers.append("Set-Cookie", seenCookie(request));
 	// Also clear the now-consumed pending cookie.
 	const isHttps = new URL(request.url).protocol === "https:";
 	const clearPending = [
@@ -537,19 +637,14 @@ export async function handleMe(
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
 
-	// Defensive: revoke sessions for users who were provisioned before the
-	// initial-release allowlist was deployed (or whose access was revoked
-	// post-login). The callback gate prevents new mismatches from being
-	// created; this catches any stale entry already in KV. The username on
-	// the session is the snapshot at login time — if a user later renames
-	// themselves out of the allowlist we won't catch that until they
-	// re-authenticate, but Discord usernames are stable enough in practice
-	// that this is acceptable.
-	const allowedUsernames = parseAllowedUsernames(env);
-	if (!allowedUsernames.has(session.data.discord_username)) {
-		await deleteSession(env, session.token);
-		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
-	}
+	// is_beta lets the frontend hide tournament UI (header link, layout
+	// fetches) for non-beta users. Not load-bearing for authz — the
+	// worker re-checks on every tournament endpoint.
+	const beta = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
+	)
+		.bind(row.user_id)
+		.first<{ ok: number }>();
 
 	return jsonResponse(
 		{
@@ -557,6 +652,7 @@ export async function handleMe(
 			discord_id: row.discord_id,
 			display_name: row.display_name,
 			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
+			is_beta: beta !== null,
 		},
 		200,
 		cors,
@@ -594,4 +690,25 @@ export async function handleLogout(
 			...cors,
 		},
 	});
+}
+
+// Log a failed invite-code attempt for per-IP rate limiting. Skips when the
+// client IP is unavailable (CF-RAY missing). Fire-and-forget — a logging
+// failure here is degraded state, not a reason to fail the request, since
+// the caller is already on an error path.
+async function recordInviteFailure(
+	env: AuthEnv,
+	clientIp: string | null,
+): Promise<void> {
+	if (!clientIp) return;
+	try {
+		await env.SHARE_DB.prepare(
+			`INSERT INTO events (event_type, ip_address)
+			 VALUES ('invite_code_failed', ?)`,
+		)
+			.bind(clientIp)
+			.run();
+	} catch (e) {
+		logError("invite_code_failure_log_failed", e);
+	}
 }

@@ -1,9 +1,23 @@
 <script lang="ts">
+	import { onMount } from "svelte";
 	import { cloudApi, ApiError } from "$lib/api-cloud";
 	import { safeNext } from "$lib/utils/safe-next";
 
 	let busy = $state(false);
 	let error = $state<string | null>(null);
+	let inviteCode = $state("");
+	// Set by a prior successful login (1y cookie, see cloud/src/session.ts
+	// seenCookie). When present, the user has signed in before and the
+	// invite-code field shouldn't be shown. Default true (hide on first
+	// paint) so returning users — the common case — never see a flash of
+	// the field before the cookie check finishes. New users get a brief
+	// no-field state before the field appears.
+	let hasSeenBefore = $state(true);
+
+	onMount(() => {
+		const cookies = document.cookie.split("; ");
+		hasSeenBefore = cookies.includes("pa_seen=1");
+	});
 
 	async function signIn() {
 		busy = true;
@@ -15,7 +29,12 @@
 			// same rules — defense in depth.
 			const params = new URLSearchParams(window.location.search);
 			const next = safeNext(params.get("next"));
-			const { authorize_url } = await cloudApi.discordStart(redirectUri, next);
+			const trimmedCode = inviteCode.trim();
+			const { authorize_url } = await cloudApi.discordStart(
+				redirectUri,
+				next,
+				trimmedCode || null,
+			);
 			window.location.href = authorize_url;
 		} catch (err) {
 			busy = false;
@@ -36,7 +55,7 @@
 		so the OAuth round-trip feels visually continuous.
 	-->
 	<header
-		class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-6"
+		class="flex w-full shrink-0 items-center justify-center border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-2"
 	>
 		<div class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200">
 			𓉑 Per Ankh
@@ -55,6 +74,25 @@
 				<p class="mb-3 text-xs text-gray-400">
 					Data visualization &amp; analytics
 				</p>
+
+				{#if !hasSeenBefore}
+					<label class="mb-3 block">
+						<span class="mb-1 block text-xs text-tan">
+							Invite code <span class="text-gray-500">(new users only)</span>
+						</span>
+						<input
+							type="text"
+							bind:value={inviteCode}
+							autocomplete="off"
+							spellcheck="false"
+							class="w-full rounded bg-[#1f1c19] px-2 py-1 text-xs text-tan placeholder-gray-600 focus:outline-none focus:ring-1 focus:ring-orange"
+						/>
+						<span class="mt-1 block text-[11px] text-gray-500">
+							Existing users can leave this blank.
+						</span>
+					</label>
+				{/if}
+
 				<button
 					type="button"
 					onclick={signIn}

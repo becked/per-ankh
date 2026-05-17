@@ -60,6 +60,7 @@
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
+		userNation = null,
 		headerActions,
 		preTabs,
 		mapMissingMessage,
@@ -81,6 +82,14 @@
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
 		selectedMapTurn?: number | null;
+		// The uploader's picked nation, sourced from the games row by the
+		// cloud detail endpoint. When present, the H1 title and OverviewTab's
+		// save-owner flag prefer this over the alphabetical-first-human
+		// heuristic — the latter only works when the save has a single
+		// human, which is the legacy-share-viewer case but not multiplayer
+		// cloud uploads. Null when the uploader picked Observer, or for
+		// legacy callers (the frozen web/ viewer) that don't pass the prop.
+		userNation?: string | null;
 		headerActions?: Snippet;
 		preTabs?: Snippet;
 		mapMissingMessage?: Snippet;
@@ -124,8 +133,13 @@
 	});
 
 	// ─── Derived display values ───────────────────────────────────────
+	// Prefer the uploader's picked nation (cloud-only, plumbed via the
+	// userNation prop) over the alphabetical-first-human heuristic. The
+	// heuristic gives a wrong answer for multi-human saves but is correct
+	// for legacy single-human shares from the (frozen) web/ viewer, which
+	// don't supply userNation.
 	const humanNation = $derived(
-		gameDetails.players.find((p) => p.is_human)?.nation ?? null,
+		userNation ?? gameDetails.players.find((p) => p.is_human)?.nation ?? null,
 	);
 
 	const gameTitle = $derived(
@@ -161,7 +175,7 @@
 </script>
 
 <!-- Header -->
-<div class="mb-8 flex items-baseline justify-between">
+<div class="mb-4 flex items-baseline justify-between">
 	<h1 class="text-3xl font-bold text-gray-200">{gameTitle}</h1>
 	<div class="flex items-center gap-4">
 		{#if headerActions}
@@ -178,7 +192,7 @@
 
 <!-- Summary Section -->
 <div class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
-	<div class="grid grid-cols-2 gap-3 lg:grid-cols-4">
+	<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
 		<!-- Player -->
 		<div class="rounded-lg p-3" style="background-color: #35302B;">
 			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
@@ -194,6 +208,49 @@
 			</p>
 			<p class="text-lg font-bold" style="color: #DBDEE3;">
 				{formatEnum(humanNation, "NATION_")}
+			</p>
+		</div>
+
+		<!-- Winner -->
+		<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				<SpriteIcon
+					category="icons"
+					value="ACHIEVEMENT_WIN"
+					size={14}
+					alt="Winner"
+				/>
+				Winner
+			</p>
+			<p class="text-lg font-bold" style="color: #DBDEE3;">
+				{#if gameDetails.winner_name && gameDetails.winner_civilization}
+					{gameDetails.winner_name} ({formatEnum(
+						gameDetails.winner_civilization,
+						"NATION_",
+					)})
+				{:else}
+					-
+				{/if}
+			</p>
+		</div>
+
+		<!-- Victory Type -->
+		<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				<SpriteIcon
+					category="icons"
+					value="VICTORY_NORMAL"
+					size={14}
+					alt="Victory Type"
+				/>
+				Victory Type
+			</p>
+			<p class="text-lg font-bold" style="color: #DBDEE3;">
+				{#if gameDetails.winner_victory_type}
+					{formatEnum(gameDetails.winner_victory_type, "VICTORY_")}
+				{:else}
+					-
+				{/if}
 			</p>
 		</div>
 
@@ -223,26 +280,6 @@
 			</p>
 			<p class="text-lg font-bold" style="color: #DBDEE3;">
 				{gameDetails.total_turns}
-			</p>
-		</div>
-
-		<!-- Victory Type -->
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
-			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
-				<SpriteIcon
-					category="icons"
-					value="VICTORY_NORMAL"
-					size={14}
-					alt="Victory Type"
-				/>
-				Victory Type
-			</p>
-			<p class="text-lg font-bold" style="color: #DBDEE3;">
-				{#if gameDetails.winner_victory_type}
-					{formatEnum(gameDetails.winner_victory_type, "VICTORY_")}
-				{:else}
-					-
-				{/if}
 			</p>
 		</div>
 	</div>
@@ -350,6 +387,7 @@
 			{improvementData}
 			{gameReligions}
 			{playerWonders}
+			{userNation}
 		/>
 	</Tabs.Content>
 

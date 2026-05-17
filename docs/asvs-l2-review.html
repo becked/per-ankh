@@ -1,0 +1,1675 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Per-Ankh — ASVS 5.0 Level 2 Coverage Review</title>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<style>
+			:root {
+				--color-black: #000000;
+				--color-orange: #ffa500;
+				--color-tan: #d2b48c;
+				--color-blue-gray: #211a12;
+				--color-border-gray: #1c160f;
+				--color-gray-200: #eeeeee;
+
+				/* Status palette for ASVS coverage */
+				--st-met: #4a7a3d;
+				--st-partial: #d97706;
+				--st-gap: #b1241d;
+				--st-na: #6b6157;
+			}
+
+			html,
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				background-color: var(--color-blue-gray);
+				color: #eee;
+				margin: 0;
+				padding: 0;
+			}
+
+			.review-shell {
+				display: grid;
+				grid-template-columns: 260px 1fr;
+				min-height: 100vh;
+			}
+			.review-toc {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				height: 100vh;
+				overflow-y: auto;
+				border-right: 1px solid #000;
+				padding: 1.5rem 1rem;
+				background-color: #1a1410;
+			}
+			.review-toc h1 {
+				font-size: 0.875rem;
+				font-weight: bold;
+				color: var(--color-orange);
+				margin-bottom: 1rem;
+				border-bottom: 1px solid #000;
+				padding-bottom: 0.5rem;
+			}
+			.review-toc ol {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				font-size: 0.75rem;
+			}
+			.review-toc ol li {
+				margin-bottom: 0.2rem;
+			}
+			.review-toc a {
+				color: var(--color-tan);
+				text-decoration: none;
+				display: block;
+				padding: 0.2rem 0.5rem;
+				border-radius: 3px;
+			}
+			.review-toc a:hover {
+				background: #35302b;
+				color: var(--color-orange);
+			}
+			.review-toc .toc-sub {
+				padding-left: 0.9rem;
+				color: #999;
+				font-size: 0.7rem;
+			}
+			.review-toc .toc-counts {
+				font-size: 0.6rem;
+				color: #7a6f63;
+				margin-left: 0.4rem;
+			}
+
+			.review-main {
+				padding: 2rem 2.5rem;
+				max-width: 1400px;
+			}
+			.review-main h2 {
+				font-size: 1.5rem;
+				font-weight: bold;
+				color: #eee;
+				border-bottom: 2px solid var(--color-orange);
+				padding-bottom: 0.5rem;
+				margin-top: 3rem;
+				margin-bottom: 1rem;
+			}
+			.review-main h2:first-child {
+				margin-top: 0;
+			}
+			.review-main h3 {
+				font-size: 1.05rem;
+				font-weight: bold;
+				color: var(--color-tan);
+				margin-top: 2rem;
+				margin-bottom: 0.5rem;
+			}
+			.review-main h4 {
+				font-size: 0.72rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				margin: 1.25rem 0 0.4rem;
+			}
+			.review-main p {
+				color: #c5c3c2;
+				font-size: 0.9rem;
+				line-height: 1.55;
+			}
+			.review-main p.section-intro {
+				color: #c5c3c2;
+				font-size: 0.875rem;
+				margin-bottom: 1.25rem;
+				line-height: 1.5;
+			}
+			.review-main p a,
+			.review-main li a,
+			.review-main td a {
+				color: var(--color-orange);
+			}
+			.review-main p a:hover,
+			.review-main li a:hover,
+			.review-main td a:hover {
+				text-decoration: underline;
+			}
+			.review-main ul,
+			.review-main ol {
+				color: #c5c3c2;
+				font-size: 0.875rem;
+				line-height: 1.55;
+				padding-left: 1.4rem;
+			}
+			.review-main li {
+				margin-bottom: 0.3rem;
+			}
+			.review-main code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.78rem;
+				background: #0e0a07;
+				padding: 0.1rem 0.3rem;
+				border-radius: 2px;
+				color: var(--color-orange);
+			}
+			.review-main strong {
+				color: #eee;
+			}
+
+			/* Status badge — used in TOC + in tables */
+			.st {
+				display: inline-block;
+				font-size: 0.6rem;
+				font-weight: 700;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				padding: 1px 6px;
+				border-radius: 999px;
+				color: #fff;
+				vertical-align: 1px;
+				min-width: 50px;
+				text-align: center;
+			}
+			.st.met {
+				background: var(--st-met);
+			}
+			.st.partial {
+				background: var(--st-partial);
+				color: #1a1410;
+			}
+			.st.gap {
+				background: var(--st-gap);
+			}
+			.st.na {
+				background: var(--st-na);
+			}
+
+			/* Tile summary */
+			.cov-tiles {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 0.7rem;
+				margin: 1rem 0 1.5rem;
+			}
+			.cov-tile {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 0.9rem 0.6rem;
+				text-align: center;
+			}
+			.cov-tile.tile-met {
+				border-top: 3px solid var(--st-met);
+			}
+			.cov-tile.tile-partial {
+				border-top: 3px solid var(--st-partial);
+			}
+			.cov-tile.tile-gap {
+				border-top: 3px solid var(--st-gap);
+			}
+			.cov-tile.tile-na {
+				border-top: 3px solid var(--st-na);
+			}
+			.cov-tile .count {
+				font-size: 1.75rem;
+				font-weight: 700;
+				color: #eee;
+				line-height: 1;
+			}
+			.cov-tile .label {
+				font-size: 0.65rem;
+				font-weight: 700;
+				color: #888;
+				letter-spacing: 0.08em;
+				text-transform: uppercase;
+				margin-top: 0.35rem;
+			}
+
+			/* Meta block reused from existing review docs */
+			.meta-block {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1rem 1.25rem;
+				margin: 1rem 0;
+			}
+			.meta-block dl {
+				display: grid;
+				grid-template-columns: 130px 1fr;
+				gap: 0.5rem 1rem;
+				margin: 0;
+				font-size: 0.85rem;
+			}
+			.meta-block dt {
+				color: #888;
+				font-weight: 700;
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				padding-top: 2px;
+			}
+			.meta-block dd {
+				margin: 0;
+				color: var(--color-tan);
+				line-height: 1.5;
+			}
+
+			/* Gap-list card (top-of-doc actionable summary) */
+			.gap-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 0.85rem 1.1rem;
+				margin-bottom: 0.7rem;
+				border-left: 4px solid var(--st-gap);
+			}
+			.gap-card.partial {
+				border-left-color: var(--st-partial);
+			}
+			.gap-card .gap-head {
+				display: flex;
+				align-items: baseline;
+				gap: 0.6rem;
+				margin-bottom: 0.3rem;
+				flex-wrap: wrap;
+			}
+			.gap-card .gap-id {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.78rem;
+				color: var(--color-orange);
+				font-weight: 700;
+			}
+			.gap-card .gap-title {
+				font-size: 0.95rem;
+				font-weight: 700;
+				color: #eee;
+			}
+			.gap-card .gap-body {
+				font-size: 0.82rem;
+				color: #c5c3c2;
+				line-height: 1.5;
+			}
+			.gap-card .gap-fix {
+				margin-top: 0.35rem;
+				font-size: 0.8rem;
+				color: var(--color-tan);
+			}
+			.gap-card .gap-fix strong {
+				color: #eee;
+			}
+
+			/* Coverage table — the heart of the document */
+			table.cov {
+				width: 100%;
+				border-collapse: collapse;
+				margin-top: 0.6rem;
+				font-size: 0.78rem;
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				overflow: hidden;
+			}
+			table.cov thead {
+				background: #0e0a07;
+			}
+			table.cov th {
+				text-align: left;
+				color: #888;
+				font-size: 0.65rem;
+				font-weight: 700;
+				letter-spacing: 0.06em;
+				text-transform: uppercase;
+				padding: 0.55rem 0.7rem;
+				border-bottom: 1px solid #2a2622;
+				vertical-align: top;
+			}
+			table.cov td {
+				padding: 0.5rem 0.7rem;
+				color: #c5c3c2;
+				vertical-align: top;
+				border-bottom: 1px solid #211a12;
+				line-height: 1.45;
+			}
+			table.cov tr:last-child td {
+				border-bottom: none;
+			}
+			table.cov td.req-id {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				color: var(--color-orange);
+				white-space: nowrap;
+				font-weight: 700;
+				font-size: 0.75rem;
+			}
+			table.cov td.evidence,
+			table.cov td.notes {
+				font-size: 0.75rem;
+			}
+			table.cov td.evidence code {
+				background: transparent;
+				padding: 0;
+				color: #888;
+				font-size: 0.72rem;
+			}
+			table.cov td.status {
+				white-space: nowrap;
+			}
+
+			.chapter-meta {
+				font-size: 0.72rem;
+				color: #888;
+				margin-bottom: 0.4rem;
+			}
+			.chapter-meta .chip {
+				display: inline-block;
+				padding: 1px 7px;
+				border-radius: 999px;
+				margin-right: 0.3rem;
+				background: #0e0a07;
+				color: var(--color-tan);
+				font-weight: 700;
+			}
+
+			.footer-note {
+				margin-top: 4rem;
+				padding-top: 1rem;
+				border-top: 1px solid #2a2622;
+				color: #888;
+				font-size: 0.75rem;
+				font-style: italic;
+			}
+
+			.callout {
+				background: #1a1410;
+				border-left: 4px solid var(--color-orange);
+				padding: 0.75rem 1rem;
+				margin: 0.75rem 0;
+				font-size: 0.85rem;
+				color: #c5c3c2;
+			}
+		</style>
+	</head>
+	<body>
+		<div class="review-shell">
+			<nav class="review-toc">
+				<h1>ASVS 5.0 L2 Review</h1>
+				<ol>
+					<li><a href="#exec">Executive summary</a></li>
+					<li><a href="#tiles">Coverage tiles</a></li>
+					<li><a href="#scope">Scope &amp; methodology</a></li>
+					<li><a href="#gaps">Gap list</a></li>
+					<li><a href="#partials">Partials list</a></li>
+					<li><a href="#chapters">Per-chapter coverage</a></li>
+					<li class="toc-sub">
+						<a href="#v1"
+							>V1 Encoding<span class="toc-counts">Met 13 · N/A 12</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v2"
+							>V2 Validation<span class="toc-counts">Met 7 · Part 2</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v3"
+							>V3 Frontend<span class="toc-counts">Met 7 · Part 5 · Gap 1</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v4"
+							>V4 API<span class="toc-counts">Met 1 · Part 1 · N/A 8</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v5"
+							>V5 Files<span class="toc-counts">Met 3 · Part 1 · Gap 2 · N/A 1</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v6"
+							>V6 Auth<span class="toc-counts">Met 2 · Part 3 · Gap 1 · N/A 22</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v7"
+							>V7 Session<span class="toc-counts">Met 6 · Part 5 · Gap 4 · N/A 2</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v8"
+							>V8 Authorization<span class="toc-counts">Met 5 · Part 1</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v10"
+							>V10 OAuth<span class="toc-counts">Met 5 · Gap 1 · N/A 21</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v11"
+							>V11 Crypto<span class="toc-counts">Met 4 · Part 1 · Gap 2 · N/A 4</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v12"
+							>V12 Comms<span class="toc-counts">Met 1 · Part 3 · N/A 2</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v13"
+							>V13 Config<span class="toc-counts">Met 9 · Part 3</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v14"
+							>V14 Data<span class="toc-counts">Met 4 · Part 3 · Gap 1</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v15"
+							>V15 Coding<span class="toc-counts">Met 8 · Part 1 · Gap 2</span></a
+						>
+					</li>
+					<li class="toc-sub">
+						<a href="#v16"
+							>V16 Logging<span class="toc-counts">Met 7 · Part 4</span></a
+						>
+					</li>
+					<li><a href="#strengths">Strengths worth preserving</a></li>
+					<li><a href="#out-of-scope">Out of scope / deferred</a></li>
+				</ol>
+			</nav>
+
+			<main class="review-main">
+				<header style="margin-bottom: 2rem">
+					<h2
+						style="margin-top: 0; border-bottom: 3px solid var(--color-orange); font-size: 1.75rem"
+					>
+						ASVS 5.0 Level 2 Coverage Review
+					</h2>
+					<p class="section-intro">
+						A coverage-style security review of the Per-Ankh cloud-rewrite
+						stack against the
+						<a
+							href="https://github.com/OWASP/ASVS/tree/master/5.0/en"
+							target="_blank"
+							>OWASP Application Security Verification Standard, version
+							5.0</a
+						>, Level 2 ("Standard" — applications handling sensitive data).
+						This complements the per-PR
+						<a href="security-review.html">exploit-focused review</a> by
+						measuring posture against a published bar rather than searching for
+						concrete bugs. Reviewed 2026-05-17 against branch
+						<code>tournament</code>.
+					</p>
+				</header>
+
+				<!-- ============ EXECUTIVE SUMMARY ============ -->
+				<h2 id="exec">Executive summary</h2>
+				<p class="section-intro">
+					Per-Ankh sits in good shape against ASVS 5.0 L2. The vast majority of
+					applicable requirements are <span class="st met">Met</span> with
+					concrete evidence — universal SQL parameterization, Valibot input
+					validation, hash-mode CSP, server-side file hashing, gzip-bomb caps,
+					PII-deny-list logging, single-IdP OAuth with PKCE and timing-safe
+					state validation, multi-tier rate limits, and consistent
+					cross-tournament IDOR defenses. No
+					<span class="st gap">Gap</span> represents a concrete exploitable
+					vulnerability; the gaps are split roughly evenly between
+					missing-documentation items (data classification, key management,
+					upload policy, logging inventory, vuln remediation SLA) and
+					defense-in-depth opportunities (session lifecycle, redirect-follow on
+					external fetches, antivirus on user-uploaded ZIPs, cookie host
+					prefix, admin session termination).
+				</p>
+				<p class="section-intro">
+					Of the 13 Gaps, the single most actionable code change is
+					<a href="#v15"><code>15.3.2</code></a> —
+					<code>cloud/src/auth.ts:345,374</code> calls Discord with the default
+					<code>redirect: "follow"</code>; setting it to
+					<code>"error"</code> is a one-line hardening against a misconfigured
+					3xx redirecting OAuth secrets to an attacker host. The
+					highest-leverage operational gap is
+					<a href="#v7"><code>7.4.5</code></a> — there is no admin tooling to
+					revoke a user's KV sessions; the existing
+					<code>./per-ankh admin</code> security script
+					(<code>scripts/admin/commands/security.ts:241</code>) explicitly
+					acknowledges this as a known limitation.
+				</p>
+
+				<!-- ============ TILES ============ -->
+				<h2 id="tiles">Coverage tiles</h2>
+				<p class="section-intro">
+					Counts across all 15 in-scope chapters (V1-V8, V10-V16). V9
+					Self-Contained Tokens and V17 WebRTC are entirely <span class="st na"
+						>N/A</span
+					>
+					and not included in the tally.
+				</p>
+				<div class="cov-tiles">
+					<div class="cov-tile tile-met">
+						<div class="count">82</div>
+						<div class="label">Met</div>
+					</div>
+					<div class="cov-tile tile-partial">
+						<div class="count">30</div>
+						<div class="label">Partial</div>
+					</div>
+					<div class="cov-tile tile-gap">
+						<div class="count">13</div>
+						<div class="label">Gap</div>
+					</div>
+					<div class="cov-tile tile-na">
+						<div class="count">72</div>
+						<div class="label">N/A</div>
+					</div>
+				</div>
+				<p class="section-intro">
+					The high N/A count is structural rather than dismissive: Per-Ankh is
+					an OAuth client (not an authorization server), uses no passwords (no
+					V6 password chapters apply), runs only on a memory-safe runtime, has
+					no WYSIWYG / template engine / GraphQL / WebSocket / SAML / OIDC ID
+					tokens, and stores no app-managed at-rest encryption keys. The
+					<em>Met + Partial + Gap = 125 applicable rows</em> denominator is
+					what posture should be read against.
+				</p>
+
+				<!-- ============ SCOPE & METHODOLOGY ============ -->
+				<h2 id="scope">Scope &amp; methodology</h2>
+				<div class="meta-block">
+					<dl>
+						<dt>Standard</dt>
+						<dd>
+							OWASP ASVS 5.0.0 (released 2025). Requirement text fetched from
+							<a
+								href="https://github.com/OWASP/ASVS/tree/master/5.0/en"
+								target="_blank"
+								><code>github.com/OWASP/ASVS/tree/master/5.0/en</code></a
+							>. Level 2 = all L1 requirements + all L2 requirements per row.
+						</dd>
+						<dt>In scope</dt>
+						<dd>
+							Cloud Worker (<code>cloud/src/**</code> + <code>cloud/migrations/**</code>
+							+ <code>cloud/wrangler.toml</code>); SvelteKit app
+							(<code>src/**</code>, <code>svelte.config.js</code>,
+							<code>src/hooks.server.ts</code>, repo-root <code>_headers</code>);
+							deploy CLI (<code>scripts/prod/checks/**</code>); admin CLI
+							(<code>scripts/admin/**</code>).
+						</dd>
+						<dt>Out of scope</dt>
+						<dd>
+							Legacy share viewer (<code>web/</code>, frozen); bake pipeline
+							(<code>scripts/bake-*</code>); parser worker
+							(<code>src/lib/parser/**</code>, deferred for its own pass
+							against V2 + V5); Cloudflare dashboard config (TLS ciphers, HSTS,
+							WAF, Bot Fight); third-party services (Discord OAuth app,
+							billing). V9 Self-Contained Tokens (no JWTs in use), V17 WebRTC
+							(not used).
+						</dd>
+						<dt>Method</dt>
+						<dd>
+							Five parallel sub-agents covered ASVS chapters in balanced
+							buckets (Identity, Access &amp; API, Input &amp; Frontend,
+							Crypto/Comms/Config, Data &amp; Operations). Each fetched the
+							official ASVS 5.0 markdown for its chapters, filtered to L2
+							requirements, and produced a per-requirement coverage table with
+							<code>file:line</code> evidence. The reviewer then verified
+							100% of Gap rulings against the working tree and spot-checked
+							Met rulings, reclassifying where verification disagreed (notably
+							V7.4.4 — logout visibility — was reclassified Gap → Met after
+							confirming <code>CloudHeader</code> ships on every authed route).
+						</dd>
+						<dt>Severity</dt>
+						<dd>
+							Four-state coverage: <span class="st met">Met</span> /
+							<span class="st partial">Partial</span> /
+							<span class="st gap">Gap</span> / <span class="st na">N/A</span>.
+							A Gap is a missing defense; a Partial is a defense that exists but
+							is incomplete (asymmetric application, undocumented, narrowly
+							scoped). No CVSS-style severity here — that's the per-PR review's
+							job.
+						</dd>
+					</dl>
+				</div>
+
+				<!-- ============ GAP LIST ============ -->
+				<h2 id="gaps">Gap list</h2>
+				<p class="section-intro">
+					All <span class="st gap">Gap</span> items, prioritized by risk × leverage.
+					Each links to its per-chapter row for the full evidence trail. The
+					top block contains code/configuration changes; the bottom block
+					contains documentation items where the implementation appears sound
+					but the published spec or runbook doesn't enumerate the controls.
+				</p>
+
+				<h3>Code / configuration gaps</h3>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v15">15.3.2</a></span>
+						<span class="gap-title"
+							>Outbound <code>fetch()</code> to Discord uses default
+							<code>redirect: "follow"</code></span
+						>
+					</div>
+					<div class="gap-body">
+						<code>cloud/src/auth.ts:345-349</code> (token exchange) and
+						<code>cloud/src/auth.ts:374-376</code> (user fetch) call Discord
+						without setting the <code>redirect</code> option. A misconfigured
+						3xx (DNS hijack, mTLS strip, future Discord-side accident) could
+						silently redirect the request — carrying the
+						<code>client_secret</code> body or the user's
+						<code>access_token</code> bearer header — to an unintended host.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> add
+						<code>redirect: "error"</code> (or <code>"manual"</code>) to both
+						<code>fetch()</code> options. One-line change per call site.
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v5">5.4.3</a></span>
+						<span class="gap-title"
+							>No antivirus / structural scan on user-uploaded ZIP saves
+							before re-serving</span
+						>
+					</div>
+					<div class="gap-body">
+						User-uploaded <code>.zip</code> save files are stored in R2 and
+						served back via <code>GET /v1/games/:id/download</code>
+						(<code>cloud/src/games.ts:1995-2010</code>). The download path is
+						auth-gated to the owner or to public-flagged games, but no AV scan
+						runs at upload time. ASVS L2 expects untrusted files served to
+						clients to pass a scanning step.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> integrate a Workers-compatible scan
+						(e.g. via Cloudflare Workers Browser Rendering / a managed AV
+						microservice), or document the accepted risk that downloads are
+						auth-gated and saves are treated as opaque user-content (the parser
+						runs client-side; the server never executes the bytes).
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v7">7.4.5</a></span>
+						<span class="gap-title"
+							>No admin tooling to terminate a user's KV sessions</span
+						>
+					</div>
+					<div class="gap-body">
+						<code>./per-ankh admin nuke-user</code> deletes the D1 row but does
+						not enumerate KV session entries; the existing security script
+						explicitly acknowledges this:
+						<code
+							>scripts/admin/commands/security.ts:241 — "KV sessions are NOT
+							cleared — stale tokens will 401 on next call"</code
+						>. The lazy 401 happens only on endpoints that re-read the user
+						row; endpoints that trust <code>session.data.user_id</code>
+						directly accept orphan sessions until their 30-day TTL.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> add a D1-side session index (or scan the
+						KV with a prefix list if the namespace stays small enough) so
+						<code>nuke-user</code> can call
+						<code>SESSIONS_KV.delete</code> for every active token. Same
+						mechanic enables a self-service "log out everywhere" surface
+						later (V7.5.2).
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v7">7.1.2</a></span>
+						<span class="gap-title"
+							>Concurrent-session policy is undefined and unenforced</span
+						>
+					</div>
+					<div class="gap-body">
+						<code>createSession</code> (<code>cloud/src/session.ts:33-47</code>) writes
+						a new KV entry per login; existing sessions for the same user are
+						not enumerated or invalidated. Multiple devices/browsers each get
+						an independent token, all valid until their own TTL.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> either document a "no per-user session cap"
+						policy explicitly, or implement a cap. Pairs naturally with
+						7.4.5 (same D1 index unlocks both).
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v7">7.5.2</a></span>
+						<span class="gap-title"
+							>Users cannot list or terminate their own sessions</span
+						>
+					</div>
+					<div class="gap-body">
+						<code>/account</code> only exposes logout for the current session.
+						No <code>GET /v1/auth/sessions</code> or
+						<code>DELETE /v1/auth/sessions/:id</code> endpoint exists. A user
+						who suspects an old browser session was compromised has no
+						self-service way to revoke it.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> after 7.4.5 lands, surface the
+						session list on <code>/account</code> with per-row revoke buttons.
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v6">6.8.4</a> / <a href="#v10">10.3.4</a></span>
+						<span class="gap-title"
+							>Authentication strength / recency claims from Discord are not
+							validated</span
+						>
+					</div>
+					<div class="gap-body">
+						Per-Ankh uses Discord OAuth 2.0 (non-OIDC), which returns no
+						<code>acr</code> / <code>amr</code> / <code>auth_time</code> claims.
+						The app has no signal whether the user actually completed Discord
+						2FA, and inherits whatever recency Discord considers acceptable.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> either migrate to Discord's OIDC endpoint
+						and request <code>id_token</code> (Discord supports OIDC discovery),
+						or document the accepted risk and the inherited-MFA stance in
+						<code>docs/security/auth-model.md</code>.
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v3">3.3.3</a></span>
+						<span class="gap-title"
+							>Session cookie does not use the <code>__Host-</code> prefix</span
+						>
+					</div>
+					<div class="gap-body">
+						<code>cloud/src/session.ts:135</code> sets
+						<code>Domain=per-ankh.app</code> to share the session cookie
+						between <code>per-ankh.app</code> (SSR) and
+						<code>api.per-ankh.app</code> (Worker). The
+						<code>__Host-</code> prefix is incompatible with the
+						<code>Domain</code> attribute, so it cannot be used given the
+						current two-host topology. The same risk is already covered by
+						<a href="security-review.html#f16">F-16 in the prior review</a>.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> document the cross-subdomain trade-off as
+						an accepted constraint in <code>docs/security/auth-model.md</code>
+						alongside guidance that any new subdomain inherits session-cookie
+						exposure (and therefore needs to be treated as a critical-impact
+						surface).
+					</div>
+				</div>
+
+				<h3>Documentation gaps</h3>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v14">14.1.2</a></span>
+						<span class="gap-title"
+							>No data-classification &amp; protection-level matrix</span
+						>
+					</div>
+					<div class="gap-body">
+						The <code>PII_KEYS</code> deny-list in
+						<code>cloud/src/log.ts:32-42</code> is a de-facto inventory but
+						lacks a formal taxonomy mapping each data type
+						(<code>discord_id</code>, <code>email</code>,
+						<code>online_id</code>, IP, save bytes, game metadata) to
+						classification and protection requirements.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> add <code>docs/security/data-classification.md</code>
+						with a per-type matrix (sensitivity, encryption, retention,
+						logging stance, access controls). Carries 14.1.1 and 14.2.4
+						(Partials) along with it.
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v11">11.1.1</a> / <a href="#v11">11.1.2</a></span>
+						<span class="gap-title"
+							>No cryptographic key-management policy or inventory</span
+						>
+					</div>
+					<div class="gap-body">
+						Per-Ankh has very few keys
+						(<code>DISCORD_CLIENT_SECRET</code>, <code>INVITE_CODE</code>,
+						Cloudflare-managed at-rest keys for D1/R2/KV) but the policy
+						governing rotation, owner, and lifecycle is implicit. The crypto
+						inventory (SHA-256 + PKCE S256, CSPRNG via
+						<code>crypto.getRandomValues</code>, <code>nanoid</code>,
+						<code>timingSafeEqual</code>) is also undocumented.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> add <code>docs/security/key-management.md</code>
+						combining the policy (rotation cadence, owner, vault =
+						<code>wrangler secret put</code>) and inventory in one page.
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v15">15.1.1</a></span>
+						<span class="gap-title"
+							>No documented vulnerability-remediation SLA for third-party
+							dependencies</span
+						>
+					</div>
+					<div class="gap-body">
+						<code>./per-ankh prod preflight</code> runs
+						<code>npm audit --audit-level=high</code> and blocks deploy on
+						findings (<code>scripts/prod/checks/npm.ts:54-104</code>), but the
+						target SLA against which the gate operates is unstated.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> add a paragraph to
+						<code>docs/cloud-deploy-plan.md</code> defining remediation
+						timeframes (e.g. critical within 7 days, high within 30).
+					</div>
+				</div>
+
+				<div class="gap-card">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v5">5.1.1</a></span>
+						<span class="gap-title">Upload file policy is undocumented</span>
+					</div>
+					<div class="gap-body">
+						Size caps (<code>MAX_BLOB_COMPRESSED=10MB</code>,
+						<code>MAX_BLOB_DECOMPRESSED=50MB</code>,
+						<code>MAX_ZIP_BYTES=50MB</code>) and the no-server-parsing posture
+						are implemented (<code>cloud/src/games.ts:54-56</code>) but not
+						gathered into a single spec section.
+					</div>
+					<div class="gap-fix">
+						<strong>Fix:</strong> add an "Upload file policy" subsection to
+						<code>docs/cloud-rewrite-spec.md</code> listing accepted parts,
+						MIME assumptions, size caps, hashing, and the operator's
+						malicious-file response posture.
+					</div>
+				</div>
+
+				<!-- ============ PARTIALS LIST ============ -->
+				<h2 id="partials">Partials list (high-leverage)</h2>
+				<p class="section-intro">
+					Selected Partials worth fixing alongside the Gap list. Full
+					per-chapter Partial details live in the chapter tables.
+				</p>
+
+				<div class="gap-card partial">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v3">3.4.4</a></span>
+						<span class="gap-title"
+							>API Worker responses omit <code>X-Content-Type-Options: nosniff</code></span
+						>
+					</div>
+					<div class="gap-body">
+						SSR responses set <code>nosniff</code> in
+						<code>src/hooks.server.ts:76</code>; the Worker's
+						<code>jsonResponse</code> helper (<code>cloud/src/util.ts:84-95</code>)
+						does not. Trivial fix.
+					</div>
+				</div>
+
+				<div class="gap-card partial">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v3">3.5.1</a> / <a href="#v3">3.5.2</a></span>
+						<span class="gap-title"
+							>Content-Type CSRF check is asymmetric across endpoints</span
+						>
+					</div>
+					<div class="gap-body">
+						<code>parseJsonBody</code> in
+						<code>cloud/src/tournament/admin.ts:285-329</code> rejects bodies
+						without <code>Content-Type: application/json</code> (CSRF
+						defense-in-depth). <code>cloud/src/auth.ts</code> uses a separate
+						<code>readJsonBody</code> helper without the check
+						(<code>auth.ts:159-161</code>), and
+						<code>handleGamePatch</code> /
+						<code>handleCollectionCreate</code> / multipart upload likewise
+						don't enforce it. <code>SameSite=Lax</code> is the actual
+						load-bearing CSRF defense today; the Content-Type assertion is the
+						belt to that suspenders, and it's currently only on some pants.
+						<strong>Fix:</strong> promote <code>parseJsonBody</code> to a
+						shared helper and route all JSON endpoints through it.
+					</div>
+				</div>
+
+				<div class="gap-card partial">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v7">7.2.4</a></span>
+						<span class="gap-title"
+							>New session on login doesn't invalidate prior sessions</span
+						>
+					</div>
+					<div class="gap-body">
+						<code>createSession</code> (<code>cloud/src/session.ts:38</code>)
+						mints a fresh token; the prior cookie value is overwritten
+						client-side but the prior KV entry continues to live until its
+						independent 30-day TTL. A leaked token from an earlier login
+						remains valid. <strong>Fix:</strong> after 7.4.5 lands, delete
+						prior sessions on login.
+					</div>
+				</div>
+
+				<div class="gap-card partial">
+					<div class="gap-head">
+						<span class="gap-id"><a href="#v14">14.3.2</a></span>
+						<span class="gap-title"
+							>Anti-cache headers are uneven across authed JSON responses</span
+						>
+					</div>
+					<div class="gap-body">
+						Owner game-detail sets <code>Cache-Control: private, no-store</code>
+						(<code>cloud/src/games.ts:1724-1725</code>). <code>/v1/auth/me</code>,
+						<code>/v1/games</code> list, and tournament endpoints set no
+						<code>Cache-Control</code> at all. Modern browsers don't typically
+						cache JSON without explicit headers, but defense-in-depth wants
+						the explicit assertion. <strong>Fix:</strong> set
+						<code>Cache-Control: private, no-store</code> in
+						<code>jsonResponse</code> (or a sibling helper for authed JSON).
+					</div>
+				</div>
+
+				<!-- ============ PER-CHAPTER COVERAGE ============ -->
+				<h2 id="chapters">Per-chapter coverage</h2>
+				<p class="section-intro">
+					Full requirement-by-requirement coverage tables for each in-scope
+					chapter. Status column uses
+					<span class="st met">Met</span>
+					<span class="st partial">Partial</span>
+					<span class="st gap">Gap</span>
+					<span class="st na">N/A</span>. Evidence cites <code>file:line</code> at
+					review time; line numbers may drift with subsequent edits.
+				</p>
+
+				<!-- ===== V1 Encoding ===== -->
+				<h3 id="v1">V1 — Encoding and Sanitization</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 13</span>
+					<span class="chip">Partial 0</span>
+					<span class="chip">Gap 0</span>
+					<span class="chip">N/A 12</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">1.1.1</td><td>Input decoded/unescaped to canonical form once before further processing</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/util.ts:23-36</code>; <code>cloud/src/index.ts:689</code></td><td class="notes">Validation runs after decoding.</td></tr>
+						<tr><td class="req-id">1.1.2</td><td>Output encoding/escaping done as final step by the interpreter</td><td class="status"><span class="st met">Met</span></td><td class="evidence">Svelte 5 auto-escapes <code>{expr}</code> and attribute interpolations throughout <code>src/</code>; <code>grep -rn '{@html'</code> empty</td><td class="notes">Verified zero raw-HTML interpolation.</td></tr>
+						<tr><td class="req-id">1.2.1</td><td>Context-relevant output encoding for HTML/HTTP/XML</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/routes/+layout.svelte:42-51</code>; <code>src/routes/tournaments/[slug]/+page.svelte:396</code></td><td class="notes">Svelte handles HTML/attribute contexts automatically.</td></tr>
+						<tr><td class="req-id">1.2.2</td><td>Dynamic URLs encode untrusted data; safe protocols only</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/lib/utils/safe-next.ts:14-28</code>; mirrored at <code>cloud/src/auth.ts:75-87</code></td><td class="notes">Both server and client reject non-relative redirect targets.</td></tr>
+						<tr><td class="req-id">1.2.3</td><td>Output encoding for dynamic JS / JSON</td><td class="status"><span class="st met">Met</span></td><td class="evidence">All API responses via <code>cloud/src/util.ts:84-95</code> <code>jsonResponse</code> using <code>JSON.stringify</code></td><td class="notes">No string-built JS in templates.</td></tr>
+						<tr><td class="req-id">1.2.4</td><td>Parameterized DB queries — no SQL injection</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:1757-1761</code>; <code>cloud/src/tournament/admin.ts:711-715</code>; <code>cloud/src/tournament/public.ts:156-163</code></td><td class="notes">Dynamic UPDATE fragments only iterate Valibot schema keys; no concatenation of user data into SQL.</td></tr>
+						<tr><td class="req-id">1.2.5</td><td>OS command injection protection</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Workers runtime has no shell / <code>child_process</code>; no OS calls made.</td></tr>
+						<tr><td class="req-id">1.2.6</td><td>LDAP injection protection</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No LDAP usage.</td></tr>
+						<tr><td class="req-id">1.2.7</td><td>XPath injection protection</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">XML parsing via fast-xml-parser into JS objects; no XPath queries.</td></tr>
+						<tr><td class="req-id">1.2.8</td><td>LaTeX injection protection</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No LaTeX processing.</td></tr>
+						<tr><td class="req-id">1.2.9</td><td>Regex metacharacters escaped when interpolating user input</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>grep -rn "new RegExp"</code> empty in <code>cloud/src/</code> and <code>src/</code></td><td class="notes">Only literal regexes used; no dynamic regex construction.</td></tr>
+						<tr><td class="req-id">1.3.1</td><td>Untrusted HTML sanitized via known library</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No WYSIWYG editor; no user-supplied HTML accepted.</td></tr>
+						<tr><td class="req-id">1.3.2</td><td>Avoid <code>eval()</code> and dynamic code execution</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>grep -rn 'eval\s*(\|new Function'</code> empty; CSP <code>script-src</code> omits <code>unsafe-eval</code> (<code>svelte.config.js:62</code>)</td><td class="notes">—</td></tr>
+						<tr><td class="req-id">1.3.3</td><td>Data passed to dangerous context is sanitized + length-bounded</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/schemas/tournament.ts:83-84,190</code>; collection name max 64 at <code>schemas/collection.ts:12</code></td><td class="notes">Length caps on every string input.</td></tr>
+						<tr><td class="req-id">1.3.4</td><td>SVG sanitization</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No user-supplied SVG; static SVGs are repo-controlled assets.</td></tr>
+						<tr><td class="req-id">1.3.5</td><td>Markdown/CSS/XSL stylesheet user content sanitized/disabled</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/routes/tournaments/[slug]/+page.svelte:396</code> renders <code>description</code> as plain text via mustache</td><td class="notes">No markdown rendering of user input.</td></tr>
+						<tr><td class="req-id">1.3.6</td><td>SSRF protection via allowlist</td><td class="status"><span class="st met">Met</span></td><td class="evidence">Only outbound fetches: <code>cloud/src/auth.ts:345,374</code> to hardcoded <code>DISCORD_TOKEN_URL</code> / <code>DISCORD_USER_URL</code></td><td class="notes">No user-controlled URL fed to fetch.</td></tr>
+						<tr><td class="req-id">1.3.7</td><td>Template injection protection</td><td class="status"><span class="st met">Met</span></td><td class="evidence">No server-side template engine; Svelte templates compile-time</td><td class="notes">—</td></tr>
+						<tr><td class="req-id">1.3.8</td><td>JNDI injection</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Not a Java application.</td></tr>
+						<tr><td class="req-id">1.3.9</td><td>memcache sanitization</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Storage is D1/R2/KV; no memcache.</td></tr>
+						<tr><td class="req-id">1.3.10</td><td>Format string sanitization</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">TS template literals have no format-string semantics.</td></tr>
+						<tr><td class="req-id">1.3.11</td><td>SMTP/IMAP injection</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Application sends no mail.</td></tr>
+						<tr><td class="req-id">1.4.1</td><td>Memory-safe string/buffer ops</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">TypeScript on V8/Workers; memory-safe by default.</td></tr>
+						<tr><td class="req-id">1.4.2</td><td>Integer overflow protection</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/schemas/tournament.ts:91-99</code>; <code>cloud/src/schemas/game.ts:78-84</code></td><td class="notes">All numeric inputs Valibot-validated with explicit bounds.</td></tr>
+						<tr><td class="req-id">1.4.3</td><td>Memory cleanup / no use-after-free</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">JS GC-managed runtime.</td></tr>
+						<tr><td class="req-id">1.5.1</td><td>XML parser configured against XXE</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/lib/parser/parse-xml.ts:40-50</code> (<code>ignoreDeclaration</code>, <code>ignorePiTags</code>)</td><td class="notes">fast-xml-parser does not expand external entities. Parser is client-side only.</td></tr>
+						<tr><td class="req-id">1.5.2</td><td>Safe deserialization of untrusted data</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/tournament/admin.ts:316</code>; <code>cloud/src/games.ts:1076,1773</code></td><td class="notes">All deserialized JSON passes Valibot <code>v.safeParse</code> before use.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V2 Validation ===== -->
+				<h3 id="v2">V2 — Validation and Business Logic</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 7</span>
+					<span class="chip">Partial 2</span>
+					<span class="chip">Gap 0</span>
+					<span class="chip">N/A 0</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">2.1.2</td><td>Documentation defines logical/contextual consistency rules</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/schemas/game.ts:189-200</code>; <code>schemas/tournament.ts:172-180</code>; spec docs</td><td class="notes">Invariants documented inline next to enforcement; no single "business invariants" section consolidates them.</td></tr>
+						<tr><td class="req-id">2.1.3</td><td>Per-user and global business logic limits documented</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence">Limits implemented in <code>cloud/src/index.ts:187-233</code>, <code>cloud/src/games.ts:822-865</code>, <code>cloud/src/tournament/limits.ts</code></td><td class="notes">Limits are spread across code constants; no central <code>docs/limits.md</code> summary.</td></tr>
+						<tr><td class="req-id">2.2.1</td><td>Input validation against allow-lists / patterns / ranges</td><td class="status"><span class="st met">Met</span></td><td class="evidence">All POST/PATCH bodies via Valibot schemas; path params regex-validated at dispatch (<code>cloud/src/index.ts:631,638,659,687</code>); query params clamped (<code>cloud/src/tournament/public.ts:129-135</code>)</td><td class="notes">Enum picklists, canonical map-script allowlist.</td></tr>
+						<tr><td class="req-id">2.2.2</td><td>Server-side input validation, never relying on client</td><td class="status"><span class="st met">Met</span></td><td class="evidence">Worker re-validates everything via Valibot; <code>cloud/src/games.ts:1076</code> re-parses uploaded blob server-side; <code>cloud/src/util.ts:185-191</code> hashes server-side</td><td class="notes">—</td></tr>
+						<tr><td class="req-id">2.2.3</td><td>Combinations of related data items are reasonable</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/tournament/admin.ts:643-658,673-685</code>; <code>cloud/src/schemas/game.ts:223-227</code>; <code>cloud/src/games.ts:318-322</code></td><td class="notes">Locked fields, reconciled options, observer-mode invariants.</td></tr>
+						<tr><td class="req-id">2.3.2</td><td>Business logic limits implemented per documentation</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>schemas/tournament.ts:91-99,143</code>; <code>schemas/game.ts:17-30</code></td><td class="notes">Swiss bounds, slot cap of 200, array length caps.</td></tr>
+						<tr><td class="req-id">2.3.3</td><td>Transactions used so operations succeed atomically or roll back</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:1451</code>; <code>cloud/src/tournament/admin.ts:537,811,1029,1144,1617,2002</code></td><td class="notes">D1 <code>batch()</code> is transactional.</td></tr>
+						<tr><td class="req-id">2.3.4</td><td>Business logic level locks against double-booking</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/tournament/admin.ts:642-658</code>; <code>cloud/src/games.ts:762-791</code></td><td class="notes">Status-gated state machine; match-report filters on <code>status='pending'</code>.</td></tr>
+						<tr><td class="req-id">2.4.1</td><td>Anti-automation controls (rate limits, etc.)</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:822-865,1786-1801</code>; <code>cloud/src/tournament/public.ts:56-88</code>; <code>cloud/src/index.ts:236-252</code>; <code>cloud/src/auth.ts:428</code></td><td class="notes">Multi-tier limits (per-user / per-IP / global) on every mutating surface.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V3 Web Frontend ===== -->
+				<h3 id="v3">V3 — Web Frontend Security</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 7</span>
+					<span class="chip">Partial 5</span>
+					<span class="chip">Gap 1</span>
+					<span class="chip">N/A 0</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">3.3.2</td><td>Cookie <code>SameSite</code> attribute set per purpose</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/session.ts:130</code>; <code>cloud/src/auth.ts:247</code></td><td class="notes">Session cookie <code>SameSite=Lax</code> (appropriate for post-login redirect).</td></tr>
+						<tr><td class="req-id">3.3.3</td><td>Cookies use <code>__Host-</code> prefix unless shared across hosts</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence"><code>cloud/src/session.ts:135</code> sets <code>Domain=per-ankh.app</code></td><td class="notes"><code>__Host-</code> incompatible with <code>Domain</code>. Required by cross-subdomain SSR architecture. Document as accepted constraint.</td></tr>
+						<tr><td class="req-id">3.3.4</td><td><code>HttpOnly</code> on cookies not meant for client scripts</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/session.ts:129</code>; <code>cloud/src/auth.ts:246</code></td><td class="notes"><code>pa_seen</code> deliberately not HttpOnly; documented at <code>session.ts:144-145</code>.</td></tr>
+						<tr><td class="req-id">3.4.3</td><td>CSP response header with trusted-content directives</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>svelte.config.js:58-72</code></td><td class="notes">Hash-mode <code>script-src</code> (no <code>unsafe-inline</code>); <code>style-src 'unsafe-inline'</code> is documented compromise.</td></tr>
+						<tr><td class="req-id">3.4.4</td><td><code>X-Content-Type-Options: nosniff</code> on every response</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>src/hooks.server.ts:76</code> (SSR only)</td><td class="notes">API Worker's <code>jsonResponse</code> (<code>cloud/src/util.ts:84-95</code>) does not emit <code>nosniff</code>. Add to the helper.</td></tr>
+						<tr><td class="req-id">3.4.5</td><td>Referrer policy prevents leakage</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/hooks.server.ts:82</code></td><td class="notes"><code>strict-origin-when-cross-origin</code> on SSR; API responses aren't navigations.</td></tr>
+						<tr><td class="req-id">3.4.6</td><td><code>frame-ancestors</code> CSP directive on every response</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence">SSR: <code>svelte.config.js:68</code> + <code>hooks.server.ts:81</code> (XFO: DENY)</td><td class="notes">API JSON responses set neither; not framable in practice, but strict ASVS compliance wants CSP on every response.</td></tr>
+						<tr><td class="req-id">3.5.1</td><td>Anti-forgery / extra-header validation on sensitive functions</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/tournament/admin.ts:294-306</code> (Content-Type assertion); <code>cloud/src/util.ts:62-82</code> (ALLOWED_ORIGINS)</td><td class="notes">Content-Type check only in tournament admin. <code>auth.ts</code>, <code>games.ts</code>, multipart upload don't enforce. SameSite=Lax is the load-bearing defense. <strong>Promote <code>parseJsonBody</code> to shared helper.</strong></td></tr>
+						<tr><td class="req-id">3.5.2</td><td>Sensitive functions only reachable via preflight-triggering requests</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence">Same as 3.5.1</td><td class="notes">PATCH/DELETE + JSON-POST trigger preflight; multipart <code>POST /v1/games</code> does not (CORS simple request). Defended by SameSite=Lax in browsers.</td></tr>
+						<tr><td class="req-id">3.5.3</td><td>Sensitive functions use POST/PUT/PATCH/DELETE, not GET/HEAD</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:587-870</code></td><td class="notes">Mutations bound to POST/PATCH/DELETE only.</td></tr>
+						<tr><td class="req-id">3.5.4</td><td>Separate applications on different hostnames for SOP</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>hooks.server.ts:64-69</code>; <code>session.ts:103-110</code></td><td class="notes">API on <code>api.per-ankh.app</code>, frontend on <code>per-ankh.app</code>, legacy on <code>legacy.per-ankh.app</code>.</td></tr>
+						<tr><td class="req-id">3.5.5</td><td><code>postMessage</code> discards untrusted-origin messages</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>src/lib/parser/worker.ts</code>; <code>src/lib/UploadModal.svelte:134</code></td><td class="notes">Only same-origin Web Worker postMessage; cross-origin to Worker is impossible by browser policy. Compliant; defensive <code>event.origin</code> check would harden.</td></tr>
+						<tr><td class="req-id">3.7.1</td><td>Only supported, secure client-side technologies</td><td class="status"><span class="st met">Met</span></td><td class="evidence">SvelteKit 2 + Svelte 5, TypeScript strict, current libraries</td><td class="notes">Recommend periodic <code>npm audit</code> (covered by V15).</td></tr>
+						<tr><td class="req-id">3.7.2</td><td>Auto-redirect destinations on allowlist</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/lib/utils/safe-next.ts:14-28</code>; <code>cloud/src/auth.ts:75-87</code>; <code>hooks.server.ts:64-69</code></td><td class="notes">Open-redirect defense duplicated server- and client-side.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V4 API ===== -->
+				<h3 id="v4">V4 — API and Web Service</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 1</span>
+					<span class="chip">Partial 1</span>
+					<span class="chip">Gap 0</span>
+					<span class="chip">N/A 8</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">4.1.1</td><td>HTTP responses with a body carry a matching <code>Content-Type</code> (incl. charset)</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/util.ts:84-96</code>; <code>cloud/src/games.ts:1717,2066</code></td><td class="notes">JSON responses set <code>Content-Type</code> but lack explicit <code>; charset=utf-8</code>. Browsers handle UTF-8 default for <code>application/json</code> per RFC 8259. Cosmetic fix.</td></tr>
+						<tr><td class="req-id">4.1.2</td><td>Only user-facing endpoints auto-redirect HTTP→HTTPS; APIs should not</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">HTTP→HTTPS redirect at Cloudflare edge, applied uniformly. API clients call <code>https://</code> directly.</td></tr>
+						<tr><td class="req-id">4.1.3</td><td>Headers set by an intermediary cannot be overridden by end users</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/util.ts:128-134</code> (<code>getClientIp</code>)</td><td class="notes">Only <code>CF-RAY</code> and <code>CF-Connecting-IP</code> read; returns <code>null</code> if <code>CF-RAY</code> missing rather than falling back to user-controllable headers.</td></tr>
+						<tr><td class="req-id">4.2.1</td><td>Components handle HTTP framing per HTTP version to prevent smuggling</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Cloudflare edge fronts the Worker and normalizes HTTP/1.1/2/3 framing. No origin server behind the Worker.</td></tr>
+						<tr><td class="req-id">4.3.1</td><td>GraphQL DoS controls (allowlist/depth/cost/amount limits)</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">REST only; no GraphQL.</td></tr>
+						<tr><td class="req-id">4.3.2</td><td>GraphQL introspection disabled in production</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No GraphQL.</td></tr>
+						<tr><td class="req-id">4.4.1</td><td>WebSocket over TLS (WSS) for all WS connections</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No WebSocket endpoints.</td></tr>
+						<tr><td class="req-id">4.4.2</td><td>WebSocket handshake checks <code>Origin</code> against allowlist</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No WebSocket endpoints.</td></tr>
+						<tr><td class="req-id">4.4.3</td><td>Dedicated WS tokens follow Session Management rules if app session unusable</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No WebSocket endpoints.</td></tr>
+						<tr><td class="req-id">4.4.4</td><td>Dedicated WS tokens obtained or validated through authenticated HTTPS session</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No WebSocket endpoints.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V5 File Handling ===== -->
+				<h3 id="v5">V5 — File Handling</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 3</span>
+					<span class="chip">Partial 1</span>
+					<span class="chip">Gap 2</span>
+					<span class="chip">N/A 1</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">5.1.1</td><td>Documentation defines permitted types, sizes, AV/safe-download policy</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">No upload policy doc. Add "Upload file policy" section to <code>docs/cloud-rewrite-spec.md</code>.</td></tr>
+						<tr><td class="req-id">5.2.1</td><td>Files sized appropriately to prevent DoS / perf degradation</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:54-56,935-943</code>; <code>cloud/src/index.ts:340-372</code></td><td class="notes">Compressed + decompressed caps enforced; Content-Length pre-check.</td></tr>
+						<tr><td class="req-id">5.2.2</td><td>File-extension validation against actual content (magic bytes)</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/games.ts:1054-1090</code> (data part validated); save part stored opaque</td><td class="notes">ZIP <code>save</code> part stored without magic-byte check. Server never parses the bytes; client-side parser is out of scope. Cheap defense-in-depth: verify <code>PK\x03\x04</code> prefix.</td></tr>
+						<tr><td class="req-id">5.2.3</td><td>Compressed files checked against max uncompressed size / file count</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/util.ts:149-181</code> (<code>decompressWithLimit</code> streams gzip with size accumulator)</td><td class="notes">Cancels + throws if cap exceeded. ZIP never extracted server-side.</td></tr>
+						<tr><td class="req-id">5.4.1</td><td>User-submitted filenames validated/ignored; served filename in Content-Disposition</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:204-219</code> (<code>buildSaveFilename</code>); R2 keys at <code>cloud/src/games.ts:1385-1386</code></td><td class="notes">Filename derived from server-trusted <code>game_name</code>; no client-supplied path component reaches R2 keys.</td></tr>
+						<tr><td class="req-id">5.4.2</td><td>Served filenames encoded/sanitized per RFC 6266</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:224-233</code> (<code>buildContentDisposition</code>)</td><td class="notes">Both <code>filename="..."</code> ASCII and <code>filename*=UTF-8''...</code> forms per RFC 5987/6266.</td></tr>
+						<tr><td class="req-id">5.4.3</td><td>Untrusted files scanned by AV before serving</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">No AV scan. Auth-gated download (<code>cloud/src/games.ts:1995-2010</code>) mitigates but does not eliminate malware-distribution risk.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V6 Authentication ===== -->
+				<h3 id="v6">V6 — Authentication</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 2</span>
+					<span class="chip">Partial 3</span>
+					<span class="chip">Gap 1</span>
+					<span class="chip">N/A 22</span>
+				</div>
+				<p style="font-size: 0.8rem; color: #888; margin-top: 0">
+					Per-Ankh has no passwords; nearly all V6.2.x / V6.4.x / V6.5.x /
+					V6.6.x rows resolve to N/A. Discord OAuth is the sole pathway.
+				</p>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">6.1.1</td><td>Document rate-limit / anti-automation controls for stuffing &amp; brute force</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/auth.ts:412-460</code> (invite-code rate limit)</td><td class="notes">Rate-limit exists for invite-code gate; not formally documented. No rate limit on state-mismatch attempts.</td></tr>
+						<tr><td class="req-id">6.1.2 – 6.2.12</td><td>Password-management requirements</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No password authentication. (16 rows collapsed for readability.)</td></tr>
+						<tr><td class="req-id">6.3.1</td><td>Controls preventing credential stuffing / brute force implemented</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/auth.ts:418-436</code></td><td class="notes">Per-IP limit covers the only secret an attacker can submit (invite code). No rate limit on state mismatches.</td></tr>
+						<tr><td class="req-id">6.3.2</td><td>No default accounts / disabled</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:466-488</code></td><td class="notes">Users only exist via Discord OAuth upsert.</td></tr>
+						<tr><td class="req-id">6.3.3</td><td>MFA or multi-mechanism combination</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/auth.ts:345-371</code></td><td class="notes">Inherits whatever 2FA Discord enforces; not verified by app.</td></tr>
+						<tr><td class="req-id">6.3.4</td><td>Multiple pathways → no undocumented routes, consistent controls</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:167-264</code>; <code>cloud/src/index.ts:587-612</code></td><td class="notes">Only one pathway exists.</td></tr>
+						<tr><td class="req-id">6.4.x – 6.6.x</td><td>OTP / lookup-secret / OOB / SMS rules</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No OTP / lookup-secret / OOB / SMS factors. (Rows collapsed.)</td></tr>
+						<tr><td class="req-id">6.8.1</td><td>IdP ID used as namespace to prevent cross-IdP spoofing</td><td class="status"><span class="st na">N/A</span></td><td class="evidence"><code>cloud/src/auth.ts:406-410,472</code></td><td class="notes">Single IdP (Discord); identity keyed on <code>discord_id</code>.</td></tr>
+						<tr><td class="req-id">6.8.2</td><td>Validate signature presence and integrity on auth assertions</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Discord OAuth2 returns no signed assertion to client; identity via server-side <code>/users/@me</code> over TLS.</td></tr>
+						<tr><td class="req-id">6.8.3</td><td>SAML assertions processed once within validity</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No SAML.</td></tr>
+						<tr><td class="req-id">6.8.4</td><td>Auth strength / methods / recentness validated using IdP info</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">Discord OAuth2 (non-OIDC) returns no <code>acr</code>/<code>amr</code>/<code>auth_time</code>. Migrate to OIDC or document accepted risk.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V7 Session ===== -->
+				<h3 id="v7">V7 — Session Management</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 6</span>
+					<span class="chip">Partial 5</span>
+					<span class="chip">Gap 4</span>
+					<span class="chip">N/A 2</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">7.1.1</td><td>Document inactivity timeout + absolute session lifetime</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/session.ts:1-3,27</code></td><td class="notes">Comment documents 30-day absolute lifetime (no separate inactivity timer); not lifted into security docs.</td></tr>
+						<tr><td class="req-id">7.1.2</td><td>Document concurrent-session policy + actions on exceedance</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">Undocumented and unenforced; multiple devices accumulate KV entries.</td></tr>
+						<tr><td class="req-id">7.1.3</td><td>Federated session-coordination controls documented</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Single IdP, no SSO to downstream RPs.</td></tr>
+						<tr><td class="req-id">7.2.1</td><td>Session-token verification on trusted backend service</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/session.ts:49-72,88-99</code></td><td class="notes">Token verified in Worker against KV; no client-side validation.</td></tr>
+						<tr><td class="req-id">7.2.2</td><td>Dynamically generated tokens (not static secrets)</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/session.ts:38</code></td><td class="notes"><code>nanoid(32)</code> per session.</td></tr>
+						<tr><td class="req-id">7.2.3</td><td>Reference tokens unique, cryptographic, ≥ 128 bits entropy</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/session.ts:38</code></td><td class="notes"><code>nanoid(32)</code> ≈ 192 bits entropy via <code>crypto.getRandomValues</code>.</td></tr>
+						<tr><td class="req-id">7.2.4</td><td>New session token on authentication; old one terminated</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/auth.ts:558-562</code></td><td class="notes">New token minted; prior KV entry not deleted. Old leaked tokens remain valid until their TTL.</td></tr>
+						<tr><td class="req-id">7.3.1</td><td>Inactivity timeout enforces re-auth per risk analysis</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/session.ts:1-3,27</code></td><td class="notes">Absolute 30-day TTL acts as only timeout; no separate (shorter) idle timer. Document the risk-based decision.</td></tr>
+						<tr><td class="req-id">7.3.2</td><td>Absolute maximum session lifetime per documented decision</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/session.ts:27,43-45</code></td><td class="notes">30-day TTL; not extended on reads.</td></tr>
+						<tr><td class="req-id">7.4.1</td><td>After termination, further use disallowed</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:662-693</code>; <code>cloud/src/session.ts:74-79,95-96</code></td><td class="notes">Logout deletes KV entry; subsequent reads return null → 401.</td></tr>
+						<tr><td class="req-id">7.4.2</td><td>All sessions terminated on account disable/delete</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/auth.ts:634-638</code></td><td class="notes">Lazy: only endpoints that re-read user row invalidate; others trust <code>session.data.user_id</code> until KV TTL.</td></tr>
+						<tr><td class="req-id">7.4.3</td><td>User can terminate all other sessions after auth-factor change</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No password / MFA factor changes occur in Per-Ankh.</td></tr>
+						<tr><td class="req-id">7.4.4</td><td>Logout visible on every authenticated page</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/routes/+layout.svelte:5,23-25,55</code> renders <code>CloudHeader</code> on every route except <code>/</code> and <code>/auth/*</code>; <code>src/lib/CloudHeader.svelte:96</code> calls <code>cloudApi.logout()</code></td><td class="notes">Verified post-bucket-fanout — sub-agent A could not see this from its scope.</td></tr>
+						<tr><td class="req-id">7.4.5</td><td>Admins can terminate sessions for individual / all users</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence"><code>scripts/admin/commands/security.ts:241</code></td><td class="notes">Comment explicitly: "KV sessions are NOT cleared — stale tokens will 401 on next call". Add D1-side session index to enable enumeration.</td></tr>
+						<tr><td class="req-id">7.5.1</td><td>Full re-authentication before modifying sensitive account attributes</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">No documented "sensitive attributes" set; no step-up surface. Likely defensible as "no sensitive attributes are mutable in-app" — document the decision.</td></tr>
+						<tr><td class="req-id">7.5.2</td><td>Users can view + terminate active sessions after re-auth</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">No UI or endpoint. Add after 7.4.5 lands.</td></tr>
+						<tr><td class="req-id">7.6.1</td><td>RP↔IdP session behaviour aligned, re-auth where needed</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/auth.ts:241</code></td><td class="notes"><code>prompt=none</code> used; rationale not documented.</td></tr>
+						<tr><td class="req-id">7.6.2</td><td>Session creation requires consent or explicit user action</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:167-264, 266-614</code></td><td class="notes">Session only after explicit Discord OAuth start + Discord-side authorization.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V8 Authorization ===== -->
+				<h3 id="v8">V8 — Authorization</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 5</span>
+					<span class="chip">Partial 1</span>
+					<span class="chip">Gap 0</span>
+					<span class="chip">N/A 0</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">8.1.1</td><td>Documentation defines function-level and data-specific authz rules</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>docs/tournament-feature-spec.md:615-631</code>; <code>docs/cloud-rewrite-spec.md:1476</code>; <code>cloud/migrations/0006_tournaments.sql:48-67</code></td><td class="notes">Action × role matrix in tournament spec; sharing model in cloud spec.</td></tr>
+						<tr><td class="req-id">8.1.2</td><td>Documentation defines field-level read/write rules incl. state-dependent</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/games.ts:152-195,1733-1739,1804-1826,1976-1986</code></td><td class="notes">Field-level rules documented inline at enforcement sites but not consolidated into a central spec subsection.</td></tr>
+						<tr><td class="req-id">8.2.1</td><td>Function-level access restricted to consumers with explicit permission</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/tournament/admin.ts:186-252</code>; <code>cloud/src/tournament/authz.ts:29-78</code>; <code>cloud/src/games.ts:1554-1556,1753-1755,1903-1905</code>; <code>cloud/src/tournament/player.ts:19-54</code></td><td class="notes">Every admin mutation through <code>authedTournament</code> (anon→beta→admin ordering); player endpoints via <code>authedBetaSession</code>.</td></tr>
+						<tr><td class="req-id">8.2.2</td><td>Data-specific access restricted to mitigate IDOR/BOLA</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:1614-1639,1757-1765,1907-1915,1830-1839</code>; <code>cloud/src/tournament/data.ts:187-197</code>; <code>cloud/src/tournament/admin.ts:1173-1179,1230-1233,830-836,917-934,1254-1281</code>; <code>cloud/src/tournament/public.ts:540-552</code></td><td class="notes">Defense-in-depth: 404-not-403 on non-owner; nested resources re-checked against URL tournament_id; <code>loadSlotInTournament</code> as canonical helper.</td></tr>
+						<tr><td class="req-id">8.2.3</td><td>Field-level access restricted (BOPLA mitigation)</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:162-195,1702-1707</code>; Valibot schemas via <code>parseJsonBody</code>; <code>cloud/src/tournament/admin.ts:642-658</code>; <code>cloud/src/games.ts:1808-1826,323-325,387-401</code>; <code>cloud/src/auth.ts:617-660</code></td><td class="notes">Multiple layers: Valibot rejects unknown fields; handlers enumerate UPDATE columns; state-dependent locks; <code>handleMe</code> returns curated subset (no email).</td></tr>
+						<tr><td class="req-id">8.4.1</td><td>Multi-tenant cross-tenant controls</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/tournament/admin.ts:830-836,920-933,1173-1179,1230-1233,1266-1281</code>; <code>cloud/src/tournament/data.ts:187-197</code>; <code>cloud/src/tournament/public.ts:540-552</code>; <code>cloud/src/games.ts:1023-1036</code></td><td class="notes">URL tournament_id authoritative; nested IDs re-bound before mutation. <code>requireTournamentAdmin</code> is per-tournament.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V10 OAuth ===== -->
+				<h3 id="v10">V10 — OAuth and OIDC</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 5</span>
+					<span class="chip">Partial 0</span>
+					<span class="chip">Gap 1</span>
+					<span class="chip">N/A 21</span>
+				</div>
+				<p style="font-size: 0.8rem; color: #888; margin-top: 0">
+					Per-Ankh is an OAuth client only (not an authorization server / OP);
+					AS-side requirements (10.4.x partly, 10.6.x, 10.7.x) are N/A. Discord
+					OAuth 2.0 (non-OIDC) is the only IdP; OIDC ID-token requirements
+					(10.5.x) are also N/A.
+				</p>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">10.1.1</td><td>Tokens only sent to components that strictly need them</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:345-376</code></td><td class="notes">Discord access token used only for <code>/users/@me</code>; never persisted. Session contains only <code>user_id</code> + <code>discord_username</code>.</td></tr>
+						<tr><td class="req-id">10.1.2</td><td>Transaction-specific secrets (PKCE / state / nonce) bound to client+session</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:215-228,289-326,307-308,324</code></td><td class="notes">State + verifier in KV keyed by <code>oauth_pending</code> cookie; single-use; timing-safe state comparison.</td></tr>
+						<tr><td class="req-id">10.2.1</td><td>Code-flow client has CSRF protection via PKCE or state</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:215-216,230-237,324</code></td><td class="notes">Both PKCE (S256) and state validation implemented.</td></tr>
+						<tr><td class="req-id">10.2.2</td><td>Mix-up defence (validate <code>iss</code>) when multiple AS</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Single AS.</td></tr>
+						<tr><td class="req-id">10.3.x</td><td>Resource-server bearer-token requirements</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No bearer-token RS pattern; in-house session cookie maps to user_id. 10.3.3 = Met (Discord non-reassignable <code>id</code> used).</td></tr>
+						<tr><td class="req-id">10.3.4</td><td>Auth strength / methods / recency via <code>acr</code>/<code>amr</code>/<code>auth_time</code></td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">Discord OAuth2 returns no such claims. Same root cause as 6.8.4.</td></tr>
+						<tr><td class="req-id">10.4.x</td><td>Authorization-server (AS) side requirements</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Per-Ankh is not an AS. Client-side hardening visible: PKCE S256 (<code>auth.ts:137-151,236-237</code>), confidential client (<code>auth.ts:341-348</code>), minimum scope <code>identify email</code> (<code>auth.ts:52</code>), no refresh-token use.</td></tr>
+						<tr><td class="req-id">10.4.10</td><td>Confidential clients authenticated for backchannel</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:341-348</code></td><td class="notes"><code>client_id</code> + <code>client_secret</code> on token exchange.</td></tr>
+						<tr><td class="req-id">10.5.x</td><td>OIDC ID Token requirements</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No OIDC ID token in use. Discord supports OIDC discovery; not enabled here.</td></tr>
+						<tr><td class="req-id">10.6.x</td><td>OP-side and forced-logout requirements</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">Not an OP.</td></tr>
+						<tr><td class="req-id">10.7.x</td><td>Consent management</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">AS-side (Discord). <code>prompt=none</code> noted in 7.6.1.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V11 Crypto ===== -->
+				<h3 id="v11">V11 — Cryptography</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 4</span>
+					<span class="chip">Partial 1</span>
+					<span class="chip">Gap 2</span>
+					<span class="chip">N/A 4</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">11.1.1</td><td>Documented key-management policy &amp; lifecycle</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">Add <code>docs/security/key-management.md</code>.</td></tr>
+						<tr><td class="req-id">11.1.2</td><td>Maintain a cryptographic inventory</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">Combine with key-management doc.</td></tr>
+						<tr><td class="req-id">11.2.1</td><td>Industry-validated implementations for crypto operations</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:143,145,155</code>; <code>cloud/src/util.ts:18,186</code>; <code>cloud/src/session.ts:38</code></td><td class="notes">Web Crypto API + nanoid; no hand-rolled primitives.</td></tr>
+						<tr><td class="req-id">11.2.2</td><td>Crypto agility (RNG/AEAD/MAC/hash reconfigurable)</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/util.ts:185-191</code>; <code>cloud/src/auth.ts:138-151</code></td><td class="notes">Hashing/randomness in small helpers; algorithm name is a string literal at each call site rather than a single constant. No rotatable encryption keys held.</td></tr>
+						<tr><td class="req-id">11.2.3</td><td>All primitives provide minimum 128 bits of security</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>auth.ts:142,154</code> (256 bits); <code>util.ts:186</code> (SHA-256); <code>session.ts:38</code> (~192 bits)</td><td class="notes">All clear 128 bits.</td></tr>
+						<tr><td class="req-id">11.3.3</td><td>Encrypted data protected against unauthorized modification</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">App stores no app-encrypted data. D1/R2/KV at-rest is Cloudflare-managed AEAD.</td></tr>
+						<tr><td class="req-id">11.4.2</td><td>Passwords stored using approved KDF</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No passwords stored.</td></tr>
+						<tr><td class="req-id">11.4.3</td><td>Hash functions in digital signatures collision-resistant</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No app digital-signature generation/verification.</td></tr>
+						<tr><td class="req-id">11.4.4</td><td>Approved KDF with key stretching for password-derived keys</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No password-based key derivation.</td></tr>
+						<tr><td class="req-id">11.5.1</td><td>Non-guessable random numbers from CSPRNG with ≥ 128 bits</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:143,155</code>; <code>cloud/src/session.ts:38</code></td><td class="notes"><code>mulberry32</code> in <code>cloud/src/tournament/rng.ts</code> is intentionally non-security (pairing/map determinism).</td></tr>
+						<tr><td class="req-id">11.6.1</td><td>Only approved algorithms/modes for key gen / seeding / signatures</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:145-148,237</code></td><td class="notes">SHA-256, CSPRNG only.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V12 Comms ===== -->
+				<h3 id="v12">V12 — Secure Communication</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 1</span>
+					<span class="chip">Partial 3</span>
+					<span class="chip">Gap 0</span>
+					<span class="chip">N/A 2</span>
+				</div>
+				<p style="font-size: 0.8rem; color: #888; margin-top: 0">
+					Most V12 requirements are operator-side at the Cloudflare edge
+					(TLS cipher selection, HSTS, certificate handling). Flagged as
+					Partial where in-code assurance is absent but the platform-level
+					control is configurable.
+				</p>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">12.1.2</td><td>Only recommended cipher suites enabled, strongest preferred</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence">Cloudflare dashboard → SSL/TLS → Edge Certificates</td><td class="notes">Operator-side. Confirm Modern profile / TLS 1.2+.</td></tr>
+						<tr><td class="req-id">12.1.3</td><td>mTLS client certificate validation before use</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No mTLS in use.</td></tr>
+						<tr><td class="req-id">12.3.1</td><td>TLS for all inbound and outbound; no insecure fallback</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/auth.ts:47-49</code>; <code>cloud/src/session.ts:118-122,136</code>; <code>svelte.config.js:39-41</code></td><td class="notes">All outbound URLs HTTPS. Inbound TLS termination + HTTP→HTTPS redirect at Cloudflare edge. HSTS edge-managed — see <a href="security-review.html#f13">F-13 prior review</a>.</td></tr>
+						<tr><td class="req-id">12.3.2</td><td>TLS clients validate certificates before communicating</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:345,374</code></td><td class="notes">Cloudflare Workers <code>fetch</code> validates server certs by default.</td></tr>
+						<tr><td class="req-id">12.3.3</td><td>TLS between internal services; no insecure fallback</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/wrangler.toml:21-40</code></td><td class="notes">Worker ↔ D1/R2/KV on Cloudflare backbone (platform-encrypted). No in-code assurance.</td></tr>
+						<tr><td class="req-id">12.3.4</td><td>TLS between internal services uses trusted certificates</td><td class="status"><span class="st na">N/A</span></td><td class="evidence">—</td><td class="notes">No internally-issued/self-signed certs.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V13 Config ===== -->
+				<h3 id="v13">V13 — Configuration</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 9</span>
+					<span class="chip">Partial 3</span>
+					<span class="chip">Gap 0</span>
+					<span class="chip">N/A 0</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">13.1.1</td><td>All application communication needs are documented</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/wrangler.toml:13,21-40,53,82-85</code>; <code>svelte.config.js:37-41</code></td><td class="notes">External services appear in CSP + wrangler config; no single inventory doc. Add <code>docs/security/comms-inventory.md</code>.</td></tr>
+						<tr><td class="req-id">13.2.1</td><td>Backend-to-backend comms authenticated</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:341-342,375</code>; D1/R2/KV bindings</td><td class="notes">All outbound calls authenticated; binding auth platform-managed.</td></tr>
+						<tr><td class="req-id">13.2.2</td><td>Backend-to-backend accounts have least-necessary privileges</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:52</code>; <code>cloud/wrangler.toml:21-40</code></td><td class="notes">OAuth scope <code>identify email</code> only (no <code>guilds.*</code>); bindings resource-scoped.</td></tr>
+						<tr><td class="req-id">13.2.3</td><td>Service-auth credential is not a default credential</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:41-44</code>; <code>cloud/.gitignore:3</code></td><td class="notes">User-provisioned via <code>wrangler secret put</code>; <code>.dev.vars</code> gitignored.</td></tr>
+						<tr><td class="req-id">13.2.4</td><td>Allowlist defines external resources app may communicate with</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>svelte.config.js:60-72</code>; <code>cloud/wrangler.toml:82</code>; <code>cloud/src/auth.ts:47-49</code></td><td class="notes">CSP + Origin allowlist + hardcoded Discord URLs.</td></tr>
+						<tr><td class="req-id">13.2.5</td><td>Web/app server allowlist of resources/systems</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/util.ts:46-56,62-82</code>; <code>cloud/wrangler.toml:53,82</code></td><td class="notes">Strict server-side CORS allowlist.</td></tr>
+						<tr><td class="req-id">13.3.1</td><td>Secrets management solution (key vault) used</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/wrangler.toml:86-93</code>; <code>scripts/prod/checks/secrets.ts:25,32-72</code></td><td class="notes">Wrangler secrets vault; preflight verifies presence.</td></tr>
+						<tr><td class="req-id">13.3.2</td><td>Access to secret assets follows least privilege</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/.gitignore:3</code>; <code>scripts/prod/checks/secrets.ts:77-124</code></td><td class="notes">Secrets scoped to Worker; one operator. Documented access list missing — combine with 11.1.1 key-management doc.</td></tr>
+						<tr><td class="req-id">13.4.1</td><td>Deployed without source-control metadata exposed</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>.gitignore</code> excludes <code>.svelte-kit/</code>, <code>dist/</code>, <code>build/</code>; SvelteKit adapter ships only <code>.svelte-kit/cloudflare/</code></td><td class="notes">Deploy artifacts exclude <code>.git/</code>. Add <code>GET /.git/HEAD</code> 404 probe to <code>./per-ankh prod smoke</code>.</td></tr>
+						<tr><td class="req-id">13.4.2</td><td>Debug modes disabled in production</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>svelte.config.js:36</code>; <code>cloud/src/log.ts:130-138</code>; <code>cloud/src/index.ts:993-1011</code></td><td class="notes">No debug surfaces; no stack traces in responses.</td></tr>
+						<tr><td class="req-id">13.4.3</td><td>Web servers do not expose directory listings</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/wrangler.toml:13,19-21</code></td><td class="notes">Worker serves explicit routes only.</td></tr>
+						<tr><td class="req-id">13.4.4</td><td>HTTP TRACE not supported in production</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:892-921,942-959</code></td><td class="notes">Route table only dispatches listed methods; TRACE falls through to 404. Cloudflare edge also strips TRACE.</td></tr>
+						<tr><td class="req-id">13.4.5</td><td>Documentation/monitoring endpoints not exposed unless intended</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:892-940</code></td><td class="notes">No <code>/health</code>, <code>/metrics</code>, <code>/docs</code>, <code>/openapi</code>. <code>/v1/csp-report</code> is intentional.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V14 Data Protection ===== -->
+				<h3 id="v14">V14 — Data Protection</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 4</span>
+					<span class="chip">Partial 3</span>
+					<span class="chip">Gap 1</span>
+					<span class="chip">N/A 0</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">14.1.1</td><td>Sensitive data identified and classified into protection levels</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/log.ts:32-42</code>; <code>cloud/migrations/0002_cloud_schema.sql:10-25</code></td><td class="notes">PII deny-list is de-facto inventory; no formal classification taxonomy.</td></tr>
+						<tr><td class="req-id">14.1.2</td><td>Documented protection requirements per sensitivity level</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">Add <code>docs/security/data-classification.md</code>. Email-minimization concern (<code>cloud/src/auth.ts:52,463-487</code>) belongs here — collect only if there's a documented purpose.</td></tr>
+						<tr><td class="req-id">14.2.1</td><td>Sensitive data sent only in HTTP body/headers, not URL/query</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:170-263,266-280</code>; <code>cloud/src/session.ts:126-138</code></td><td class="notes">No tokens in query strings; session in HttpOnly cookie.</td></tr>
+						<tr><td class="req-id">14.2.2</td><td>App prevents sensitive data caching or ensures secure purging</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:1714-1726,2069</code></td><td class="notes">Owner detail <code>private, no-store</code>; download <code>private, max-age=300</code>; <code>Vary: Cookie, Origin</code> on public reads.</td></tr>
+						<tr><td class="req-id">14.2.3</td><td>Sensitive data not sent to untrusted parties</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:345-389</code>; <code>svelte.config.js:38-43</code></td><td class="notes">Outbound only to Discord OAuth endpoints; CSP <code>connect-src</code> = self + api + Cloudflare Insights.</td></tr>
+						<tr><td class="req-id">14.2.4</td><td>Controls per documented protection levels implemented</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence">Implementations exist (PII deny-list, OnlineID strip, auth-gated downloads, 90-day audit cleanup)</td><td class="notes">Ungoverned without 14.1.x docs.</td></tr>
+						<tr><td class="req-id">14.3.2</td><td>Anti-caching headers (<code>no-store</code>) on sensitive responses</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/games.ts:1724-1725,2069</code></td><td class="notes"><code>/v1/auth/me</code>, <code>/v1/games</code>, tournament endpoints set no <code>Cache-Control</code>. Add to <code>jsonResponse</code>.</td></tr>
+						<tr><td class="req-id">14.3.3</td><td>Browser storage excludes sensitive data except session tokens</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>src/lib/stores/sidebarWidth.ts:12,23</code> (only localStorage use, numeric width); <code>cloud/src/session.ts:128</code> (HttpOnly cookie)</td><td class="notes">No tokens/PII in localStorage/sessionStorage.</td></tr>
+					</tbody>
+				</table>
+				<div class="callout">
+					<strong>Related items outside ASVS L2:</strong>
+					The account-deletion gap noted by the
+					<a href="security-review.html#f01">prior review (F-01)</a> maps to
+					ASVS V14.2.7 (L3 only — not a Level 2 violation but documented in
+					the prior review). The email-collection gap (F-14) is folded into
+					14.1.2 above.
+				</div>
+
+				<!-- ===== V15 Secure Coding ===== -->
+				<h3 id="v15">V15 — Secure Coding and Architecture</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 8</span>
+					<span class="chip">Partial 1</span>
+					<span class="chip">Gap 2</span>
+					<span class="chip">N/A 0</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">15.1.1</td><td>Documentation defines risk-based remediation timeframes for 3rd-party vulns</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence">—</td><td class="notes">Add SLA paragraph to <code>docs/cloud-deploy-plan.md</code>.</td></tr>
+						<tr><td class="req-id">15.2.1</td><td>App contains only components within documented update/remediation timeframes</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>scripts/prod/checks/npm.ts:54-104</code></td><td class="notes"><code>npm audit --audit-level=high</code> gate on preflight; no SLA to enforce against.</td></tr>
+						<tr><td class="req-id">15.2.2</td><td>Defenses against loss of availability via resource-demanding functionality</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/util.ts:149-181</code>; <code>cloud/src/validation.ts:19-29</code>; <code>cloud/src/games.ts:54-56,824-865,2013-2036,1786-1802,1646-1678</code>; <code>cloud/src/tournament/public.ts:56-88</code>; <code>cloud/src/tournament/admin.ts:441-454</code>; <code>cloud/src/index.ts:282-284</code></td><td class="notes">gzip-bomb caps, size caps, multi-tier rate limits, kill-switch, global circuit breaker.</td></tr>
+						<tr><td class="req-id">15.2.3</td><td>Production environment only includes functionality required</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:587-921</code>; <code>cloud/wrangler.toml:9</code></td><td class="notes">Single Worker; admin actions via CLI calling wrangler. <code>compatibility_flags</code> = <code>["nodejs_als"]</code> only.</td></tr>
+						<tr><td class="req-id">15.3.1</td><td>App only returns required subset of fields</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:649-659</code>; <code>cloud/src/games.ts:1702-1706,1592-1599</code>; <code>cloud/src/tournament/public.ts:421-428,615-622</code></td><td class="notes"><code>/v1/auth/me</code> excludes <code>email</code>, <code>last_login_at</code>; game list selects explicit columns; tournament public reads project fixed shape.</td></tr>
+						<tr><td class="req-id">15.3.2</td><td>Backend calls to external URLs don't follow redirects unless intended</td><td class="status"><span class="st gap">Gap</span></td><td class="evidence"><code>cloud/src/auth.ts:345-349,374-376</code></td><td class="notes">Both <code>fetch()</code> calls use default <code>redirect: "follow"</code>. Add <code>redirect: "error"</code>.</td></tr>
+						<tr><td class="req-id">15.3.3</td><td>Mass-assignment defenses (limit allowed fields)</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:1773-1781</code>; <code>cloud/src/auth.ts:472-487</code>; <code>cloud/src/tournament/admin.ts:285-329</code></td><td class="notes">All mutations Valibot-validated; no raw input spread into DB writes.</td></tr>
+						<tr><td class="req-id">15.3.4</td><td>Proxy/middleware transfers original IP via trusted fields</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/util.ts:128-134</code></td><td class="notes"><code>getClientIp</code> requires <code>CF-RAY</code>; null otherwise.</td></tr>
+						<tr><td class="req-id">15.3.5</td><td>Variables of correct type, strict equality</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:679-682,1217-1232</code></td><td class="notes">TypeScript strict; D1 boolean coercion helper; numeric parsing with <code>Number.isInteger</code> guards.</td></tr>
+						<tr><td class="req-id">15.3.6</td><td>JavaScript prevents prototype pollution</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/log.ts:32</code>; <code>cloud/src/tournament/admin.ts:363</code>; <code>cloud/src/games.ts:73,493,1133,1620</code>; <code>cloud/src/validation.ts:15</code>; <code>cloud/src/log.ts:113-128</code></td><td class="notes">Sensitive registries use <code>Set</code>/<code>Map</code>; Valibot strict-shape schemas; no <code>Object.assign</code> of input.</td></tr>
+						<tr><td class="req-id">15.3.7</td><td>HTTP parameter pollution defenses</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/games.ts:1560-1572,882-897</code>; <code>cloud/src/tournament/public.ts:127-138</code></td><td class="notes">Single-value <code>searchParams.get</code> / <code>form.get</code> throughout.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ===== V16 Logging ===== -->
+				<h3 id="v16">V16 — Security Logging and Error Handling</h3>
+				<div class="chapter-meta">
+					<span class="chip">Met 7</span>
+					<span class="chip">Partial 4</span>
+					<span class="chip">Gap 0</span>
+					<span class="chip">N/A 0</span>
+				</div>
+				<table class="cov">
+					<thead>
+						<tr>
+							<th style="width: 70px">Req</th>
+							<th>Requirement</th>
+							<th style="width: 85px">Status</th>
+							<th>Evidence</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr><td class="req-id">16.1.1</td><td>Inventory of logging at each layer of the stack</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/log.ts:1-24</code></td><td class="notes">Code-side inventory in log.ts header. Add standalone <code>docs/security/logging-inventory.md</code> covering D1 events, Logpush destination, retention.</td></tr>
+						<tr><td class="req-id">16.2.1</td><td>Each log entry includes when / where / who / what</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/log.ts:140-156,190-205</code>; <code>cloud/migrations/0002_cloud_schema.sql:185-195</code></td><td class="notes">Complete metadata for both emissions and DB audit rows.</td></tr>
+						<tr><td class="req-id">16.2.2</td><td>Time sources synchronized; UTC in security event metadata</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/log.ts:148,191</code>; <code>cloud/migrations/0002_cloud_schema.sql:194</code></td><td class="notes">All timestamps ISO 8601 UTC; SQLite <code>datetime('now')</code> returns UTC.</td></tr>
+						<tr><td class="req-id">16.2.3</td><td>App only stores/broadcasts logs to documented destinations</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/log.ts:3-5</code></td><td class="notes">Logpush sink referenced but not visibly wired. Either wire and document, or document the current "Workers tail only" state.</td></tr>
+						<tr><td class="req-id">16.2.4</td><td>Logs readable/correlatable by log processor (common format)</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/log.ts:60-88,130-138</code>; <code>cloud/src/index.ts:1018</code></td><td class="notes">JSON-per-line + <code>request_id</code> via AsyncLocalStorage, surfaced via <code>X-Request-Id</code>.</td></tr>
+						<tr><td class="req-id">16.2.5</td><td>Logging sensitive data enforces protection-level rules</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/log.ts:32-42,113-128,146,189</code></td><td class="notes">PII deny-list applied at emit; <code>pii_redaction</code> flag set when scrubbing occurred.</td></tr>
+						<tr><td class="req-id">16.3.1</td><td>All authentication operations logged (success and failure)</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/auth.ts:567-576,674-683,705-713,427-435,350-361</code></td><td class="notes">Login / logout / invite-fail / rate-limit / token-exchange-fail all covered.</td></tr>
+						<tr><td class="req-id">16.3.2</td><td>Failed authorization attempts logged</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/tournament/admin.ts:258-283,1828-1851</code>; <code>cloud/src/util.ts:108</code>; <code>cloud/src/log.ts:100-103</code></td><td class="notes">Access log captures 401/403 via <code>setErrorCode</code>; admin actions get DB audit rows.</td></tr>
+						<tr><td class="req-id">16.3.3</td><td>Logs security events defined in docs + bypass attempts</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/csp.ts:131-138</code>; <code>cloud/src/index.ts:352-356</code>; <code>cloud/src/games.ts:1059-1067</code></td><td class="notes">Events logged; no documented "security events we log" list to verify against. Tied to 16.1.1.</td></tr>
+						<tr><td class="req-id">16.3.4</td><td>Unexpected errors and security-control failures logged</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:993-1012</code> and per-handler <code>logError</code> calls</td><td class="notes">Top-level safety net + comprehensive handler-level error logging.</td></tr>
+						<tr><td class="req-id">16.4.1</td><td>Logging components encode data to prevent log injection</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/log.ts:130-138</code></td><td class="notes"><code>JSON.stringify</code> escapes control chars / quotes / newlines; PII deny-list as second layer.</td></tr>
+						<tr><td class="req-id">16.4.2</td><td>Logs protected from unauthorized access and modification</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence">Cloudflare account ACL; D1 <code>events</code> table reachable only via Worker bindings</td><td class="notes">No code-side UPDATE paths; only INSERT + 90-day cleanup DELETE (<code>cloud/src/index.ts:144-156</code>). Integrity rests on operator-only D1 access. Consider append-only mirror (Logpush → R2 with object-lock) for high-value events.</td></tr>
+						<tr><td class="req-id">16.4.3</td><td>Logs securely transmitted to a logically separate system</td><td class="status"><span class="st partial">Partial</span></td><td class="evidence"><code>cloud/src/log.ts:3-5</code></td><td class="notes">Logpush destination referenced but not visibly wired; D1 <code>events</code> lives in the same DB as app data.</td></tr>
+						<tr><td class="req-id">16.5.1</td><td>Generic message returned on unexpected/security-sensitive errors</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:1002-1011</code>; <code>cloud/src/util.ts:98-113</code></td><td class="notes">No stack traces / class names leak to clients.</td></tr>
+						<tr><td class="req-id">16.5.2</td><td>App continues to operate securely when external resource access fails</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:181-185</code>; <code>cloud/src/auth.ts:574-576,681-683,355-361,382-388</code>; <code>cloud/src/games.ts:1338-1342,1409-1412,1465-1474,1942-1949</code>; <code>cloud/src/tournament/admin.ts:276-282,2009-2011</code></td><td class="notes">Audit-log writes never break user-facing requests; Discord failures → 502.</td></tr>
+						<tr><td class="req-id">16.5.3</td><td>App fails gracefully and securely on exception</td><td class="status"><span class="st met">Met</span></td><td class="evidence"><code>cloud/src/index.ts:993-1012</code></td><td class="notes">Top-level safety net returns sanitized 500; CORS preserved on error responses.</td></tr>
+					</tbody>
+				</table>
+
+				<!-- ============ STRENGTHS ============ -->
+				<h2 id="strengths">Strengths worth preserving</h2>
+				<p class="section-intro">
+					Patterns this review independently validated that are worth keeping
+					stable as the app grows.
+				</p>
+				<ul>
+					<li>
+						<strong>Universal SQL parameterization.</strong> Every D1 call uses
+						<code>.prepare(sql).bind(...)</code>. Dynamic <code>UPDATE</code>
+						builders iterate Valibot-stripped keys, never raw request-body
+						keys. (V1.2.4, V15.3.3)
+					</li>
+					<li>
+						<strong>Auth-wrapper composition.</strong>
+						<code>authedTournament</code> / <code>requireBetaOr404</code> /
+						<code>authedBetaSession</code> consistently apply beta-allowlist
+						before admin checks; 404-not-403 hides feature existence.
+						(V8.2.1, V8.4.1)
+					</li>
+					<li>
+						<strong>Cross-tenant re-checks on every nested resource.</strong>
+						URL <code>tournament_id</code> is authoritative; nested
+						<code>slot_id</code> / <code>match_id</code> / <code>round_id</code>
+						in the body are re-bound to that tournament before mutation.
+						(V8.2.2)
+					</li>
+					<li>
+						<strong>Two-layer destructive-op guard</strong> on
+						<code>handleGameDelete</code>: worker-side 409 +
+						migration <code>0013</code> <code>BEFORE DELETE</code> trigger.
+						The trigger can't fire on active tournaments because the
+						worker-side check runs first. (V2.3.4)
+					</li>
+					<li>
+						<strong>Hash-mode CSP</strong> (no
+						<code>script-src 'unsafe-inline'</code>), explicit
+						<code>frame-ancestors 'none'</code> + <code>X-Frame-Options:
+							DENY</code
+						>
+						on SSR, strict <code>connect-src</code> allowlist. (V3.4.3)
+					</li>
+					<li>
+						<strong>Multi-layer rate-limiting:</strong> per-user, per-IP, and
+						global counters on every mutating surface, with a
+						<code>UPLOADS_ENABLED</code> kill switch. (V2.4.1, V15.2.2)
+					</li>
+					<li>
+						<strong>RNG separation.</strong> Deterministic
+						<code>mulberry32</code> for pairing/map assignment (replayable),
+						<code>nanoid</code> + <code>crypto.getRandomValues</code> for
+						security IDs/tokens. (V11.5.1)
+					</li>
+					<li>
+						<strong>PII deny-list at log emission.</strong> Even if a handler
+						accidentally attaches PII to a field, <code>scrubPii</code>
+						catches it before the line ships, and tags the line with
+						<code>pii_redaction: true</code>. (V16.2.5, V16.4.1)
+					</li>
+					<li>
+						<strong>OAuth flow rigor.</strong> PKCE S256, timing-safe state
+						comparison, single-use <code>oauth_pending</code>, confidential
+						client auth, minimum scope, open-redirect defense duplicated on
+						server + client. (V10.1.x, V10.2.1)
+					</li>
+					<li>
+						<strong>Streaming gzip-bomb defense</strong> with size
+						accumulator that cancels the stream on overflow, rather than
+						buffering and checking after. (V5.2.3, V15.2.2)
+					</li>
+					<li>
+						<strong>AsyncLocalStorage request_id correlation</strong>
+						surfaced to clients via <code>X-Request-Id</code> for bug-report
+						attribution without threading context through every signature.
+						(V16.2.4)
+					</li>
+					<li>
+						<strong>Top-level catch returns only <code>{error, request_id}</code></strong>
+						— no stack traces, class names, or error messages from the
+						runtime leak to clients. (V16.5.1)
+					</li>
+				</ul>
+
+				<!-- ============ OUT OF SCOPE ============ -->
+				<h2 id="out-of-scope">Out of scope / deferred</h2>
+				<ul>
+					<li>
+						<strong>Parser worker</strong> (<code>src/lib/parser/**</code>).
+						Deferred for its own pass focused on V2 Validation + V5 File
+						Handling. Untrusted XML/ZIP parsing is in scope <em>for that
+						review</em>; the current review treats the upload boundary as the
+						trust line and notes that the server never executes parser bytes.
+					</li>
+					<li>
+						<strong>Cloudflare dashboard configuration.</strong> Many V12
+						items (TLS cipher selection, HSTS, certificate handling) are
+						operator-side at the edge. Treat the Cloudflare dashboard as a
+						trust boundary outside this review and verify the Modern TLS
+						profile + HSTS at least once per ASVS pass.
+					</li>
+					<li>
+						<strong>Legacy <code>web/</code> share viewer</strong> — frozen;
+						authz model is "anyone with a share_id" by design.
+					</li>
+					<li>
+						<strong>Bake pipeline scripts</strong> (<code>scripts/bake-*</code>).
+						Build-time tooling; not part of the runtime attack surface.
+					</li>
+					<li>
+						<strong>Third-party services</strong> (Discord OAuth app,
+						billing). Their security posture is the vendor's responsibility.
+					</li>
+					<li>
+						<strong>Dependency-supply-chain audit beyond <code>npm audit</code></strong>.
+						Tied to V15.1.1 / V15.2.1 — once an SLA is documented, periodic
+						SCA scanning becomes the operational layer.
+					</li>
+					<li>
+						<strong>V9 Self-Contained Tokens</strong> — entirely N/A (no JWTs
+						in use). Not included in tile counts.
+					</li>
+					<li>
+						<strong>V17 WebRTC</strong> — entirely N/A. Not included in tile
+						counts.
+					</li>
+				</ul>
+
+				<div class="footer-note">
+					Per-Ankh ASVS 5.0 Level 2 coverage review — 2026-05-17. File paths
+					cite the working tree at review time; line numbers may drift with
+					subsequent edits. If a cited fact stops matching the code, re-verify
+					before acting on the finding. Standard: <a
+						href="https://github.com/OWASP/ASVS/tree/master/5.0/en"
+						target="_blank"
+						>OWASP ASVS 5.0.0</a
+					>. Companion to
+					<a href="security-review.html">cloud-rewrite security review</a> and
+					<a href="security-review-tournament.html"
+						>tournament-branch security review</a
+					>.
+				</div>
+			</main>
+		</div>
+	</body>
+</html>

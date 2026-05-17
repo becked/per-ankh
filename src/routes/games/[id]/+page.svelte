@@ -8,6 +8,7 @@
 	import { isNewer } from "$lib/utils/semver";
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import { resolve } from "$app/paths";
 	import ReimportButton from "$lib/ReimportButton.svelte";
 	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
 	import GameActions from "$lib/GameActions.svelte";
@@ -81,6 +82,7 @@
 				improvementData={game.improvement_data}
 				gameReligions={game.game_religions}
 				playerWonders={game.player_wonders}
+				userNation={game.user_nation ?? null}
 				{mapTiles}
 				{selectedMapTurn}
 				onMapTurnChange={handleMapTurnChange}
@@ -105,6 +107,25 @@
 								Click Reparse for the latest version ({PARSER_VERSION}).
 							</p>
 							<ReimportButton {gameId} />
+						</div>
+					{/if}
+					{#if data.tournamentLink}
+						<div
+							class="bg-orange/10 mb-4 rounded border border-orange px-4 py-2 text-xs text-tan"
+						>
+							<a
+								class="font-bold text-orange hover:underline"
+								href="{resolve('/tournaments/[slug]', {
+									slug: data.tournamentLink.tournament.slug,
+								})}?match={data.tournamentLink.match.match_id}"
+							>
+								{data.tournamentLink.tournament.name}
+							</a>
+							<span class="opacity-80">
+								— Round {data.tournamentLink.match.round_number}: {data
+									.tournamentLink.match.slot_a_username ?? "—"} vs
+								{data.tournamentLink.match.slot_b_username ?? "—"}
+							</span>
 						</div>
 					{/if}
 				{/snippet}
