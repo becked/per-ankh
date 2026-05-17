@@ -13,9 +13,12 @@ closed. Second-pass hardening — per-user admin rate limits, anonymous-read
 rate limits, Content-Type strictness on JSON endpoints, per-mutation audit
 log, plus `requireMatchParticipantOrAdmin` dead-code removal and the
 `games.ts → tournament/authz` SQL-dedup refactor — landed in commit
-`901276e`. Cloud suite: 136 passing across 17 test files (12 tournament
-integration files). Remaining open items below are operational deploy
-steps, not code.
+`901276e`. Post-hardening UX work: auto-advance rounds (`ad25f08`), SVG
+bracket + W-L flow viz (`336c5af`, `a242f8a`), admin/match routes
+collapsed into modal-driven public page (`5972110`), admin result entry
+on pending matches (`c1d9baf`), match status rename `reported → complete`
+(`0ec0c75` + migration `0010`). Remaining open items below are
+operational deploy steps, not code.
 
 ## What landed this session
 
@@ -24,7 +27,7 @@ D1." Functional but with known gaps (next section).
 
 ### Schema (D1)
 
-Four migrations applied locally; not yet remote.
+Five migrations applied locally; not yet remote.
 
 - `0006_tournaments.sql` — 5 new tables:
   - `tournaments` — metadata + lifecycle status (`setup`/`swiss`/
@@ -47,6 +50,11 @@ Four migrations applied locally; not yet remote.
   on `tournament_slots` enforcing `swiss_seed NOT NULL` for swiss-phase
   rows. Closed code-review item #22 (`compareForPairing` null fallback
   was an untested branch).
+- `0010_match_status_complete.sql` — rename match status `'reported'` →
+  `'complete'`. The original name described the trigger (`/report`
+  endpoint) and stopped fitting once admins could record results without
+  a save and the `/report` endpoint was removed. `'complete'` also
+  aligns with `tournament_rounds` and `tournaments` terminal status.
 
 ### Worker (cloud/)
 
@@ -72,10 +80,14 @@ Four migrations applied locally; not yet remote.
   - `public.ts` — 7 anonymous-read handlers (list, detail-by-slug,
     standings, bracket, rounds, matches, match detail) + a new
     `handleGameTournamentLink` for the game-detail page banner
-  - `player.ts` — `handleMyTournaments`, `handleMyMatches`,
-    `handleDismissBanner` (the `/report` endpoint and its handler were
-    dropped — upload is now the report; see "Design notes" below)
-  - `admin.ts` — ~12 admin endpoints + the lifecycle state machine. All
+  - `player.ts` — `handleMyTournaments`, `handleMyAdminTournaments`,
+    `handleMyMatches`, `handleDismissBanner` (the `/report` endpoint
+    and its handler were dropped — upload is now the report; see
+    "Design notes" below)
+  - `admin.ts` — 8 admin handlers + the lifecycle state machine
+    (`handlePatchTournament`, `handleBulkCreateSlots`, `handlePatchSlot`,
+    `handleDeleteSlot`, `handleStartTournament`, `handlePatchMatchMap`,
+    `handleRetroEditMatch`, `handleTransitionChampionship`). All
     `requireTournamentAdmin`-gated.
 - `cloud/src/schemas/tournament.ts` — Valibot validators for every admin
   body
@@ -101,13 +113,19 @@ Four migrations applied locally; not yet remote.
 
 ### Frontend (src/)
 
-- `src/routes/tournaments/` — public list, tournament home, match detail,
-  admin panel
-- `src/lib/tournament/` — TournamentCard, SwissStandings, MatchCard,
-  BracketView (cards-by-round; no SVG — see "Deferred decisions" below),
-  TournamentBanner, RoundMatches (per-round inline match list with
-  pairing/retro-edit affordances), SlotUsernameCell (inline substitution
-  editor)
+- `src/routes/tournaments/` — public list (`+page.svelte`) and tournament
+  home (`[slug]/+page.svelte`). Match detail and admin surfaces were
+  initially separate routes; commit `5972110` collapsed them into the
+  public page driven by `MatchModal` and `TournamentSettingsModal`. No
+  nested `/admin/` or `/matches/[match_id]/` routes.
+- `src/lib/tournament/` — `TournamentCard`, `SwissStandings`,
+  `SwissFlowBracket` (per-division W-L bracket SVG, replacing the old
+  cards-by-round list), `ChampionshipBracketTree` (single-elim SVG with
+  elbow connectors), `MatchModal` (per-match view + admin-gated
+  retro-edit and pairing-edit affordances), `TournamentSettingsModal`
+  (admin tournament/slot management), `TournamentBanner` (global
+  enrollment / pending-match nag), `SlotUsernameCell` (inline
+  substitution editor), `map-scripts.ts` (shared map-script labels)
 - `src/lib/stores/tournamentNotice.ts` — module-scoped writable store for
   the global enrollment banner
 - `src/lib/api-cloud.ts` — added 20+ tournament client methods + types
@@ -150,9 +168,12 @@ The biggest design-shape decisions, in case anyone needs to remember why:
   "report match" action. The old `ReportMatchModal` was deleted; the
   `POST /matches/:match_id/report` endpoint was deleted.
 - **First-upload-wins.** Participant uploads to a pending match → match
-  reports. Participant uploads to an already-reported match → save lands
-  in their library but match link is unchanged. Admin observer upload is
-  the only override path.
+  flips to `'complete'` with `winner_slot_id` derived from the save.
+  Participant uploads to an already-completed match → save lands in
+  their library but match link is unchanged. Admin observer upload is
+  the only override path. Admins can also record a result on a pending
+  match from `MatchModal` without any save upload (forfeit or
+  played-but-no-save) — commit `c1d9baf`.
 - **Auto-advance on match report.** Only two admin gates remain:
   `POST /v1/tournaments/:id/start` (setup → swiss + Round 1 for both
   divisions in one batch, all rounds created `status='in_progress'`)
@@ -162,8 +183,9 @@ The biggest design-shape decisions, in case anyone needs to remember why:
   `maybeAdvanceAfterMatchReport` in `cloud/src/tournament/admin.ts`,
   invoked from the upload flow (`games.ts` after the match UPDATE)
   and from `handleRetroEditMatch` on pending → non-pending transitions:
-  when the round's last pending match is reported, the helper closes
-  the round and either spawns the next round in-place (Swiss in the
+  when the round's last pending match flips to a terminal status
+  (`complete` / `forfeit` / `bye`), the helper closes the round and
+  either spawns the next round in-place (Swiss in the
   same division if `round_number < swiss_max_rounds`, championship if
   the prior round had > 1 match) or auto-completes the tournament
   (championship 1-match final). The `pending` round status dropped
@@ -179,7 +201,6 @@ The biggest design-shape decisions, in case anyone needs to remember why:
   go stale and admin must fix them via `PATCH /matches/:id/pairing`
   (UI already exposes this). Acceptable for MVP — a regenerate-round
   endpoint is the proper fix if it shows up in practice.
-- **Cards, not SVG bracket.** See Deferred Decisions §1.
 
 ## Open work
 
@@ -200,11 +221,12 @@ prod config.
 
 ### 2. Apply migrations to remote D1
 
-Four tournament migrations are applied locally only:
+Five tournament migrations are applied locally only:
 `0006_tournaments.sql`, `0007_tournament_match_player_indexes.sql`,
-`0008_tournament_match_index.sql`, `0009_swiss_seed_not_null.sql`. Run
-`(cd cloud && npm run migrate:remote)` or `./per-ankh prod migrate` when
-ready to deploy. Rehearse on a throwaway D1 first per `CLAUDE.md` policy.
+`0008_tournament_match_index.sql`, `0009_swiss_seed_not_null.sql`,
+`0010_match_status_complete.sql`. Run `(cd cloud && npm run migrate:remote)`
+or `./per-ankh prod migrate` when ready to deploy. Rehearse on a
+throwaway D1 first per `CLAUDE.md` policy.
 
 ### Historical note: Cache strategy on /standings + /bracket
 
@@ -229,7 +251,8 @@ When a Discord user renames their handle:
 1. Pre-claim: admin set `slot.discord_username = "olduser"`. User changes
    handle to "newuser" before claiming. The username-based claim never
    fires — admin must manually update the slot's `discord_username` field.
-   Mitigation: admin can edit slots from the admin panel.
+   Mitigation: admin uses the inline slot list on the tournament home
+   page (`SlotUsernameCell`) to substitute the new handle.
 2. Post-claim: `slot.discord_id` is pinned at first claim. Subsequent
    logins match on `discord_id` regardless of username changes. ✓
 3. Two users with handles `becked` and `Becked` (Discord disallows case
@@ -243,32 +266,18 @@ existing re-import path preserves `is_public`, `collection_id`, and
 `created_at` on the games row. But the worker's tournament-link block
 runs again, which would re-derive winner + re-link the match. With
 first-upload-wins, the second attempt's UPDATE would be a no-op (status
-already 'reported'). That's correct behavior — sanity-test before live
+already `'complete'`). That's correct behavior — sanity-test before live
 tournament.
 
 ## Deferred decisions
 
-### 1. Championship bracket visualization (cards vs SVG)
+### 1. ~~Championship bracket visualization (cards vs SVG)~~ — shipped
 
-**Current**: cards-by-round list (`BracketView.svelte`), no connecting
-lines. Each round is its own section; each match is a `MatchCard`.
-
-**Decision history**: we explicitly chose cards for v1 because handling
-byes / non-power-of-2 advance counts cleanly in SVG was extra complexity.
-Subsequent decision: `advanceCountSuggestion` returns the largest power
-of 2 ≤ `floor(min(div_a, div_b) / 2)`, so the championship bracket is
-_always_ a clean power of 2. Byes never happen at the championship phase.
-
-**This makes SVG much more tractable than originally feared.** Standard
-left-to-right tree, fixed match-card width, vertical spacing per round,
-elbow lines between adjacent matches.
-
-**Effort estimate**: 1–2 hours. The main work is geometry + responsive
-behavior (mobile probably needs horizontal scroll or a compact fallback).
-
-**Recommendation**: take this on during the polish phase before launch.
-Spectators look at the bracket; the cards-only view ships information
-but lacks the at-a-glance "where is the final?" affordance.
+Closed: `ChampionshipBracketTree.svelte` is a left-to-right SVG tree
+with elbow connectors (commit `336c5af`). Swiss phase got
+`SwissFlowBracket.svelte` instead of standings tables at the same time.
+Power-of-2 advance count means no bye geometry to worry about.
+Subsequent polish in `a242f8a` tightened the round-column min-width.
 
 ### 2. Cross-match analytics pages
 
@@ -288,9 +297,10 @@ for the first tournament.
 
 ### 5. Forfeit / disputes workflow
 
-Admin "Edit" button on the match in the admin panel is the manual
-override path — sets `status='forfeit'` and `winner_slot_id` without an
-upload. No formal dispute workflow; admin's call.
+The admin controls inside `MatchModal` are the manual override path —
+admin sets `status='forfeit'` (or `'complete'`) and `winner_slot_id`
+without an upload, on either a pending or already-completed match. No
+formal dispute workflow; admin's call.
 
 ## Reviews to schedule
 
@@ -315,10 +325,12 @@ Things worth a fresh look:
 - **Schema decisions**: any of the "we decided X, persist it for future
   use" calls worth revisiting? `slot_a/b_player_index` columns vs a
   separate join table for cross-match analytics is one.
-- **Component boundaries on the frontend**: `RoundMatches.svelte`
-  threads ~15 props through to support pairing-edit + retro-edit state
-  in the parent. That's a smell. Could refactor to a per-match
-  component that owns its own edit state.
+- **Component boundaries on the frontend**: the modal-driven refactor
+  (`5972110`) moved per-match pairing/retro-edit state into
+  `MatchModal.svelte`, which owns its own edit state. The earlier
+  `RoundMatches.svelte` prop-threading smell is gone. Worth re-auditing
+  whether `[slug]/+page.svelte` is now doing too much top-level
+  orchestration that should push into the bracket components.
 
 ### Cybersecurity review
 
@@ -386,7 +398,7 @@ the cloud rewrite. New surfaces in this branch warrant a fresh pass:
 In rough order. Most are documented in [`cloud-deploy-plan.md`](./cloud-deploy-plan.md);
 this is the tournament-specific addendum.
 
-1. [ ] Apply migrations 0006–0009 to remote D1
+1. [ ] Apply migrations 0006–0010 to remote D1
        (`(cd cloud && npm run migrate:remote)`) — Open Work §2
 2. [ ] Delete `ALLOWED_DISCORD_USERNAMES` prod secret — Open Work §1
 3. [ ] Deploy worker + frontend (`./per-ankh prod deploy`)
@@ -397,15 +409,16 @@ this is the tournament-specific addendum.
        account creation
 6. [ ] Walk a 4-slot mock tournament end-to-end on prod before opening
        signups (use throwaway Discord accounts)
-7. [ ] Decide on the bracket viz (Deferred §1)
-8. [ ] Create the tournament via CLI:
+7. [ ] Create the tournament via CLI:
        `./per-ankh admin tournament create <slug> "<name>" --maps "..."`
-9. [ ] Grant admin to 4 operators
-10. [ ] Admin pre-fills slots via the web admin panel
-11. [ ] Announce to players; they sign in to claim
-12. [ ] Click **Start Tournament** in the admin panel; players upload
-        saves to report results; Swiss rounds spawn automatically as
-        prior rounds fill in. When the final round of every division
-        is reported, the admin panel exposes **Transition to
-        Championship**. Championship rounds also auto-spawn; the
-        tournament auto-completes when the final match reports.
+8. [ ] Grant admin to 4 operators
+9. [ ] Admin pre-fills slots via `TournamentSettingsModal` on the
+        tournament home page
+10. [ ] Announce to players; they sign in to claim
+11. [ ] Click **Start Tournament** from the settings modal; players
+        upload saves to complete matches; Swiss rounds spawn
+        automatically as prior rounds fill in. When the final round of
+        every division is complete, the settings modal exposes
+        **Transition to Championship**. Championship rounds also
+        auto-spawn; the tournament auto-completes when the final match
+        completes.
