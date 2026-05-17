@@ -69,8 +69,9 @@
 	);
 	const canUploadAsObserver = $derived(isAdmin);
 	const canEditMap = $derived(isAdmin && match.status === "pending");
-	const canRetroEdit = $derived(
-		isAdmin && match.status !== "pending" && match.status !== "bye",
+	const canRetroEdit = $derived(isAdmin && match.status !== "bye");
+	const retroEditLabel = $derived(
+		match.status === "pending" ? "Set result" : "Edit result",
 	);
 
 	// Map-script dropdown options. If the match currently references a script
@@ -295,7 +296,7 @@
 									onclick={openRetroEdit}
 									disabled={busy}
 								>
-									Edit result
+									{retroEditLabel}
 								</button>
 							{/if}
 						</div>
@@ -342,7 +343,7 @@
 						</div>
 					{:else if editMode === "retro"}
 						<div class="flex flex-col gap-2">
-							<h3 class="text-xs font-bold text-tan">Edit result</h3>
+							<h3 class="text-xs font-bold text-tan">{retroEditLabel}</h3>
 							<label class="text-xs text-tan">
 								Winner
 								<select
