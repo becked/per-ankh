@@ -7,6 +7,7 @@ import { nanoid } from "nanoid";
 import * as v from "valibot";
 import {
 	BulkCreateSlotsSchema,
+	CreateTournamentSchema,
 	PatchMatchSchema,
 	PatchMatchMapSchema,
 	PatchSlotSchema,
@@ -17,7 +18,10 @@ import { sessionFromRequest, type SessionEnv } from "../session";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
 import { countEventsSince } from "../games";
 import { logError } from "../log";
-import { TOURNAMENT_ADMIN_ACTIONS_PER_HOUR } from "./limits";
+import {
+	TOURNAMENT_ADMIN_ACTIONS_PER_HOUR,
+	TOURNAMENT_CREATE_PER_USER_PER_HOUR,
+} from "./limits";
 import {
 	advanceCountSuggestion,
 	buildChampionshipFollowupRound,
@@ -42,6 +46,7 @@ import {
 	loadSlotInTournament,
 	loadSlots,
 	loadTournamentById,
+	loadTournamentBySlug,
 	MapConfigError,
 	matchRowToRef,
 	parseAllowedMaps,
@@ -221,6 +226,238 @@ function parseAllowedMapsOrError(
 		}
 		throw e;
 	}
+}
+
+// ----------------------------------------------------------------------
+// POST /v1/tournaments — anyone signed in can create a tournament.
+// The creator becomes the sole tournament admin (CLI is still the only
+// path for adding additional admins — out of scope until a future
+// session adds a global-admin role).
+// ----------------------------------------------------------------------
+
+// Slugs that would collide with planned/anticipated frontend routes under
+// /tournaments. Kept tight so we don't over-restrict legitimate naming;
+// expand only when adding a real route that would conflict.
+const RESERVED_SLUGS = new Set([
+	"new",
+	"create",
+	"edit",
+	"admin",
+	"settings",
+	"api",
+]);
+
+// Slug derivation for the no-slug create flow. Kebab-cases the name, drops
+// non-[a-z0-9-] characters, collapses repeats, trims hyphens, truncates to
+// 64 chars. Falls back to "tournament" if the sanitized result is empty
+// (e.g. name is all emoji) — the caller then disambiguates with a suffix.
+function deriveSlugFromName(name: string): string {
+	const sanitized = name
+		.toLowerCase()
+		.replace(/[^a-z0-9]+/g, "-")
+		.replace(/^-+|-+$/g, "")
+		.slice(0, 64)
+		.replace(/-+$/g, "");
+	return sanitized || "tournament";
+}
+
+// Resolve a final, unique slug. Tries the base first; on collision (or if
+// the base is reserved), appends "-<short_nanoid>" and retries. The retry
+// loop is bounded — if 8 attempts all collide, something is very wrong
+// (the suffix alphabet alone gives ~17M variants per length-4 suffix).
+async function resolveSlug(
+	env: TournamentAdminEnv,
+	base: string,
+): Promise<string | null> {
+	const candidates: string[] = [];
+	if (!RESERVED_SLUGS.has(base)) candidates.push(base);
+	for (let i = 0; i < 8; i++) {
+		const suffix = nanoid(4)
+			.toLowerCase()
+			.replace(/[^a-z0-9]/g, "");
+		if (!suffix) continue;
+		const candidate = `${base.slice(0, 64 - 1 - suffix.length)}-${suffix}`;
+		if (RESERVED_SLUGS.has(candidate)) continue;
+		candidates.push(candidate);
+	}
+	for (const candidate of candidates) {
+		const taken = await loadTournamentBySlug(env, candidate);
+		if (!taken) return candidate;
+	}
+	return null;
+}
+
+export async function handleCreateTournament(
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	// Per-user create-tournament rate limit. Bounds spam from a single
+	// account; account creation itself is gated by Discord OAuth so
+	// horizontal abuse costs real accounts.
+	const createCount = await countEventsSince(
+		env.SHARE_DB,
+		"tournament_create",
+		"user_id",
+		session.data.user_id,
+	);
+	if (createCount >= TOURNAMENT_CREATE_PER_USER_PER_HOUR) {
+		return errorResponse(
+			"Tournament create rate limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_TOURNAMENT_CREATE",
+		);
+	}
+
+	const body = await parseJsonBody(request, CreateTournamentSchema, cors);
+	if (!body.ok) return body.response;
+	const input = body.body;
+
+	// Slug handling diverges by caller:
+	//   - Explicit slug (admin CLI): reject reserved values + collisions
+	//     up-front so the operator sees the conflict immediately.
+	//   - No slug (public UI): derive from name and disambiguate.
+	let slug: string;
+	if (input.slug !== undefined) {
+		if (RESERVED_SLUGS.has(input.slug)) {
+			return errorResponse(
+				`Slug "${input.slug}" is reserved`,
+				400,
+				cors,
+				"SLUG_RESERVED",
+			);
+		}
+		const existing = await loadTournamentBySlug(env, input.slug);
+		if (existing) {
+			return errorResponse(
+				`Slug "${input.slug}" is taken`,
+				409,
+				cors,
+				"SLUG_TAKEN",
+			);
+		}
+		slug = input.slug;
+	} else {
+		const base = deriveSlugFromName(input.name);
+		const resolved = await resolveSlug(env, base);
+		if (!resolved) {
+			return errorResponse(
+				"Could not pick a unique slug for this name",
+				500,
+				cors,
+				"SLUG_DERIVATION_FAILED",
+			);
+		}
+		slug = resolved;
+	}
+
+	const tournamentId = nanoid(21);
+	const divA = input.division_a_name?.trim() ?? "Division A";
+	const divB = input.division_b_name?.trim() ?? "Division B";
+	const description = input.description?.trim() || null;
+	const allowedMapsJson = JSON.stringify(input.allowed_map_scripts);
+	// Migration defaults: 5 / 3 / 3. Mirror them here so the API returns
+	// the actual stored values without a re-load round-trip on the
+	// happy path (we still re-load below to get created_at/updated_at).
+	const swissMaxRounds = input.swiss_max_rounds ?? 5;
+	const swissWinsToAdvance = input.swiss_wins_to_advance ?? 3;
+	const swissLossesToEliminate = input.swiss_losses_to_eliminate ?? 3;
+
+	const metadata = JSON.stringify({
+		action: "tournament_created",
+		tournament_id: tournamentId,
+		slug,
+	});
+
+	try {
+		await env.SHARE_DB.batch([
+			env.SHARE_DB.prepare(
+				`INSERT INTO tournaments (
+				    tournament_id, slug, name, description, status,
+				    division_a_name, division_b_name,
+				    swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds,
+				    allowed_map_scripts
+				 ) VALUES (?, ?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?)`,
+			).bind(
+				tournamentId,
+				slug,
+				input.name.trim(),
+				description,
+				divA,
+				divB,
+				swissWinsToAdvance,
+				swissLossesToEliminate,
+				swissMaxRounds,
+				allowedMapsJson,
+			),
+			env.SHARE_DB.prepare(
+				`INSERT INTO tournament_admins (tournament_id, user_id) VALUES (?, ?)`,
+			).bind(tournamentId, session.data.user_id),
+			env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, user_id, metadata)
+				 VALUES ('tournament_create', ?, ?)`,
+			).bind(session.data.user_id, metadata),
+		]);
+	} catch (e) {
+		// Race: another batch landed the same slug between our pre-check
+		// and the INSERT. D1 surfaces the SQLite error; identify the slug
+		// UNIQUE constraint specifically to return 409.
+		const msg = e instanceof Error ? e.message : String(e);
+		if (
+			msg.includes("UNIQUE constraint failed") &&
+			msg.includes("tournaments.slug")
+		) {
+			return errorResponse(`Slug "${slug}" is taken`, 409, cors, "SLUG_TAKEN");
+		}
+		throw e;
+	}
+
+	const created = await loadTournamentById(env, tournamentId);
+	if (!created) {
+		// Should never happen — we just inserted it. Surface as 500 so the
+		// failure is visible rather than a confusing "success but blank
+		// response".
+		logError("tournament_create_post_insert_load_failed", null, {
+			tournament_id: tournamentId,
+		});
+		return errorResponse(
+			"Tournament created but failed to reload",
+			500,
+			cors,
+			"TOURNAMENT_LOAD_FAILED",
+		);
+	}
+
+	return jsonResponse(
+		{
+			tournament: {
+				tournament_id: created.tournament_id,
+				slug: created.slug,
+				name: created.name,
+				description: created.description,
+				status: created.status,
+				division_a_name: created.division_a_name,
+				division_b_name: created.division_b_name,
+				swiss_advance_count: created.swiss_advance_count,
+				swiss_wins_to_advance: created.swiss_wins_to_advance,
+				swiss_losses_to_eliminate: created.swiss_losses_to_eliminate,
+				swiss_max_rounds: created.swiss_max_rounds,
+				allowed_map_scripts: input.allowed_map_scripts,
+				slot_counts: { swiss: 0, championship: 0 },
+				is_viewer_admin: true,
+				created_at: created.created_at,
+				updated_at: created.updated_at,
+			},
+		},
+		201,
+		cors,
+	);
 }
 
 // ----------------------------------------------------------------------

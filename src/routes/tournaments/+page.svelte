@@ -1,9 +1,12 @@
 <script lang="ts">
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import TournamentCard from "$lib/tournament/TournamentCard.svelte";
+	import TournamentCreateModal from "$lib/tournament/TournamentCreateModal.svelte";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
+
+	let showCreateModal = $state(false);
 
 	// Group by status so active tournaments surface above completed ones.
 	const active = $derived(
@@ -21,7 +24,18 @@
 			use:autohideScroll
 		>
 			<div class="mx-auto max-w-4xl">
-				<h1 class="mb-4 text-2xl font-bold text-tan">Tournaments</h1>
+				<div class="mb-4 flex items-center justify-between gap-3">
+					<h1 class="text-2xl font-bold text-tan">Tournaments</h1>
+					{#if data.user}
+						<button
+							type="button"
+							class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan"
+							onclick={() => (showCreateModal = true)}
+						>
+							+ New tournament
+						</button>
+					{/if}
+				</div>
 
 				{#if data.tournaments.length === 0}
 					<p class="text-sm text-tan opacity-70">
@@ -61,3 +75,7 @@
 		</div>
 	</main>
 </div>
+
+{#if showCreateModal}
+	<TournamentCreateModal onClose={() => (showCreateModal = false)} />
+{/if}

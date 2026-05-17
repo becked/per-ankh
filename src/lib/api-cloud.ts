@@ -491,6 +491,20 @@ export const cloudApi = {
 		});
 	},
 
+	// --- Tournaments (create — any signed-in user) ---
+	createTournament: async (
+		body: CreateTournamentBody,
+		opts?: CallOpts,
+	): Promise<{ tournament: TournamentDetail }> => {
+		const res = await request("/tournaments", {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		return res.json() as Promise<{ tournament: TournamentDetail }>;
+	},
+
 	// --- Tournaments (per-tournament admin) ---
 	patchTournament: async (
 		tournamentId: string,
@@ -704,6 +718,23 @@ export interface PatchTournamentBody {
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
 	allowed_map_scripts?: string[];
+}
+
+// Mirrors cloud/src/schemas/tournament.ts:CreateTournamentSchema. Only
+// name + allowed_map_scripts are required; the public UI omits `slug`
+// and lets the server derive one from `name`, while the admin CLI sends
+// an explicit slug. Everything else falls back to the SQL defaults in
+// cloud/migrations/0006_tournaments.sql.
+export interface CreateTournamentBody {
+	name: string;
+	allowed_map_scripts: string[];
+	slug?: string;
+	description?: string;
+	division_a_name?: string;
+	division_b_name?: string;
+	swiss_wins_to_advance?: number;
+	swiss_losses_to_eliminate?: number;
+	swiss_max_rounds?: number;
 }
 
 export interface SlotStanding {

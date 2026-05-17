@@ -10,3 +10,10 @@ export const TOURNAMENT_ADMIN_ACTIONS_PER_HOUR = 30;
 // bracket/rounds/matches/match-detail + game tournament-link). Scraper
 // User-Agents bypass.
 export const TOURNAMENT_VIEW_PER_HOUR = 600;
+
+// Per-user budget for tournament creation. Tighter than admin mutations:
+// creating a tournament adds rows + an admin row + squats a slug, and
+// the legitimate use case (an organizer setting up a new event) is rare
+// enough that 5/hour is generous. Spam at this rate is bounded by the
+// cost of acquiring Discord accounts.
+export const TOURNAMENT_CREATE_PER_USER_PER_HOUR = 5;

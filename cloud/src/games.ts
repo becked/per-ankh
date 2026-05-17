@@ -114,7 +114,8 @@ export type RateLimitedEventType =
 	| "download"
 	| "anon_read"
 	| "tournament_admin"
-	| "tournament_view";
+	| "tournament_view"
+	| "tournament_create";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.

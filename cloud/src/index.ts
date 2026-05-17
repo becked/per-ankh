@@ -73,6 +73,7 @@ import {
 import type { TournamentPlayerEnv } from "./tournament/player";
 import {
 	handleBulkCreateSlots,
+	handleCreateTournament,
 	handleDeleteSlot,
 	handlePatchMatchMap,
 	handlePatchSlot,
@@ -710,6 +711,12 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/tournaments" },
 		route: "GET /v1/tournaments",
 		handler: (r, e) => handleTournamentList(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/tournaments" },
+		route: "POST /v1/tournaments",
+		handler: (r, e) => handleCreateTournament(r, e),
 	},
 	{
 		method: "GET",
