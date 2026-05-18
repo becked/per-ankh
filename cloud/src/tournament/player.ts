@@ -9,10 +9,62 @@
 // requireTournamentBeta. Non-beta users get 404 so they can't tell the
 // feature exists.
 
+import { nanoid } from "nanoid";
+import * as v from "valibot";
+import { logError } from "../log";
+import { TournamentSignupSchema } from "../schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "../session";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
-import { type TournamentEnv } from "./data";
+import {
+	bumpTournamentUpdatedAt,
+	loadTournamentById,
+	type TournamentEnv,
+} from "./data";
 import { AuthzError, requireTournamentBeta } from "./authz";
+
+// Mirrors the helper of the same name in admin.ts — kept local because that
+// file's copy isn't exported. A future refactor could lift this to util.ts.
+async function parseJsonBody<T>(
+	request: Request,
+	schema: v.GenericSchema<unknown, T>,
+	cors: Record<string, string>,
+): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
+	const rawType = request.headers.get("Content-Type") ?? "";
+	const baseType = rawType.split(";", 1)[0].trim().toLowerCase();
+	if (baseType !== "application/json") {
+		return {
+			ok: false,
+			response: errorResponse(
+				"Content-Type must be application/json",
+				415,
+				cors,
+				"UNSUPPORTED_MEDIA_TYPE",
+			),
+		};
+	}
+	let parsed: unknown;
+	try {
+		parsed = await request.json();
+	} catch {
+		return {
+			ok: false,
+			response: errorResponse("Invalid JSON body", 400, cors, "INVALID_JSON"),
+		};
+	}
+	const result = v.safeParse(schema, parsed);
+	if (!result.success) {
+		return {
+			ok: false,
+			response: errorResponse(
+				`Invalid body: ${result.issues[0]?.message ?? "unknown"}`,
+				400,
+				cors,
+				"VALIDATION_ERROR",
+			),
+		};
+	}
+	return { ok: true, body: result.output };
+}
 
 // Wraps the session lookup and the beta-gate check. Returns the session
 // for handler use, or an errorResponse-ready 404 on miss.
@@ -166,4 +218,249 @@ export async function handleDismissBanner(
 		.bind(tournamentId, gate.userId)
 		.run();
 	return jsonResponse({ dismissed: result.meta?.changes ?? 0 }, 200, cors);
+}
+
+// ----------------------------------------------------------------------
+// POST /v1/tournaments/:id/signup — self-service enrollment.
+//
+// The mirror of admin.handleBulkCreateSlots: same final state in the DB
+// (a tournament_slots row with discord_username + division + swiss_seed),
+// just initiated by the player and with user_id + discord_id populated up
+// front. Gated on status='setup' AND signups_open=1; auto-closes via the
+// signups_open=0 update in handleStartTournament.
+// ----------------------------------------------------------------------
+
+export async function handleTournamentSignup(
+	tournamentId: string,
+	request: Request,
+	env: TournamentPlayerEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		// 404 not 401 — keep the player-signup surface consistent with the rest
+		// of the beta-gated API, which never tells anonymous callers that
+		// signed-in users would reach a different result.
+		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+	}
+	try {
+		await requireTournamentBeta(env, session.data);
+	} catch (e) {
+		if (e instanceof AuthzError) {
+			return errorResponse(e.message, e.status, cors, e.code);
+		}
+		throw e;
+	}
+
+	const body = await parseJsonBody(request, TournamentSignupSchema, cors);
+	if (!body.ok) return body.response;
+	const { division } = body.body;
+
+	const tournament = await loadTournamentById(env, tournamentId);
+	if (!tournament) {
+		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+	}
+	if (tournament.status !== "setup" || tournament.signups_open !== 1) {
+		return errorResponse(
+			"Signups are not open for this tournament",
+			409,
+			cors,
+			"SIGNUPS_CLOSED",
+		);
+	}
+
+	// Pull the caller's pinned discord_id from the users table. The session
+	// only carries discord_username (mutable); discord_id is the stable key
+	// other parts of the system join on (e.g. handleDiscordCallback's
+	// slot-claim path matches by discord_id first). Storing it on the slot
+	// up-front means a Discord rename won't orphan their seat.
+	const user = await env.SHARE_DB.prepare(
+		"SELECT discord_id, display_name FROM users WHERE user_id = ?",
+	)
+		.bind(session.data.user_id)
+		.first<{ discord_id: string; display_name: string | null }>();
+	if (!user) {
+		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+	}
+
+	// Compute next swiss_seed for the chosen division. Seeds aren't dense
+	// after a withdraw — that's fine, pairing handles arbitrary seeds and
+	// the admin renumbers via reorderSlots before starting.
+	const seedRow = await env.SHARE_DB.prepare(
+		`SELECT COALESCE(MAX(swiss_seed), 0) + 1 AS next_seed
+		 FROM tournament_slots
+		 WHERE tournament_id = ? AND phase = 'swiss' AND division = ?`,
+	)
+		.bind(tournamentId, division)
+		.first<{ next_seed: number }>();
+	const nextSeed = seedRow?.next_seed ?? 1;
+	const slotId = nanoid(21);
+
+	// Atomic insert + uniqueness check. The WHERE NOT EXISTS subquery makes
+	// "one slot per user per swiss tournament" race-safe even without a
+	// partial unique index: two concurrent signups by the same user collapse
+	// to one INSERT, the loser sees meta.changes === 0 below and gets 409.
+	const result = await env.SHARE_DB.prepare(
+		`INSERT INTO tournament_slots
+		   (slot_id, tournament_id, phase, division, swiss_seed,
+		    discord_username, discord_id, user_id, created_at)
+		 SELECT ?, ?, 'swiss', ?, ?, ?, ?, ?, datetime('now')
+		 WHERE NOT EXISTS (
+		   SELECT 1 FROM tournament_slots
+		   WHERE tournament_id = ? AND user_id = ? AND phase = 'swiss'
+		 )`,
+	)
+		.bind(
+			slotId,
+			tournamentId,
+			division,
+			nextSeed,
+			session.data.discord_username,
+			user.discord_id,
+			session.data.user_id,
+			tournamentId,
+			session.data.user_id,
+		)
+		.run();
+
+	if ((result.meta?.changes ?? 0) === 0) {
+		return errorResponse(
+			"You're already signed up for this tournament",
+			409,
+			cors,
+			"ALREADY_SIGNED_UP",
+		);
+	}
+
+	await bumpTournamentUpdatedAt(env, tournamentId);
+
+	// Audit, fire-and-forget — matches the tournament_slot_substituted
+	// pattern in admin.ts (audit failures don't break the operation).
+	env.SHARE_DB.prepare(
+		`INSERT INTO events (event_type, user_id, metadata)
+		 VALUES ('tournament_self_signup', ?, ?)`,
+	)
+		.bind(
+			session.data.user_id,
+			JSON.stringify({
+				tournament_id: tournamentId,
+				slot_id: slotId,
+				division,
+			}),
+		)
+		.run()
+		.catch((e: unknown) => {
+			logError("tournament_self_signup_audit_failed", e, {
+				user_id: session.data.user_id,
+				tournament_id: tournamentId,
+			});
+		});
+
+	return jsonResponse(
+		{
+			slot: {
+				slot_id: slotId,
+				division,
+				swiss_seed: nextSeed,
+			},
+		},
+		201,
+		cors,
+	);
+}
+
+// ----------------------------------------------------------------------
+// DELETE /v1/tournaments/:id/signup — self-withdraw from a tournament.
+//
+// Allowed any time the tournament is still in 'setup' — even if the admin
+// has flipped signups_open back to 0. A player who has signed up should
+// always be able to drop out before the tournament starts; only NEW
+// signups are gated on signups_open.
+// ----------------------------------------------------------------------
+
+export async function handleTournamentWithdraw(
+	tournamentId: string,
+	request: Request,
+	env: TournamentPlayerEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+	}
+	try {
+		await requireTournamentBeta(env, session.data);
+	} catch (e) {
+		if (e instanceof AuthzError) {
+			return errorResponse(e.message, e.status, cors, e.code);
+		}
+		throw e;
+	}
+
+	const tournament = await loadTournamentById(env, tournamentId);
+	if (!tournament) {
+		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+	}
+	if (tournament.status !== "setup") {
+		return errorResponse(
+			"Can't withdraw after the tournament has started",
+			409,
+			cors,
+			"TOURNAMENT_STARTED",
+		);
+	}
+
+	// Pull slot_id first so the audit metadata can name what was deleted.
+	const existing = await env.SHARE_DB.prepare(
+		`SELECT slot_id, division
+		 FROM tournament_slots
+		 WHERE tournament_id = ? AND user_id = ? AND phase = 'swiss'
+		 LIMIT 1`,
+	)
+		.bind(tournamentId, session.data.user_id)
+		.first<{ slot_id: string; division: string }>();
+	if (!existing) {
+		return errorResponse(
+			"You're not signed up for this tournament",
+			404,
+			cors,
+			"NOT_SIGNED_UP",
+		);
+	}
+
+	const result = await env.SHARE_DB.prepare(
+		`DELETE FROM tournament_slots
+		 WHERE slot_id = ? AND user_id = ?`,
+	)
+		.bind(existing.slot_id, session.data.user_id)
+		.run();
+	if ((result.meta?.changes ?? 0) === 0) {
+		// Lost a race with a concurrent admin delete. Same final state, so
+		// treat as success.
+		return new Response(null, { status: 204, headers: cors });
+	}
+
+	await bumpTournamentUpdatedAt(env, tournamentId);
+
+	env.SHARE_DB.prepare(
+		`INSERT INTO events (event_type, user_id, metadata)
+		 VALUES ('tournament_self_withdraw', ?, ?)`,
+	)
+		.bind(
+			session.data.user_id,
+			JSON.stringify({
+				tournament_id: tournamentId,
+				slot_id: existing.slot_id,
+				division: existing.division,
+			}),
+		)
+		.run()
+		.catch((e: unknown) => {
+			logError("tournament_self_withdraw_audit_failed", e, {
+				user_id: session.data.user_id,
+				tournament_id: tournamentId,
+			});
+		});
+
+	return new Response(null, { status: 204, headers: cors });
 }

@@ -14,6 +14,8 @@
 	import ChampionshipBracketTree from "$lib/tournament/ChampionshipBracketTree.svelte";
 	import ChampionshipTransitionPreview from "$lib/tournament/ChampionshipTransitionPreview.svelte";
 	import MatchModal from "$lib/tournament/MatchModal.svelte";
+	import SignupModal from "$lib/tournament/SignupModal.svelte";
+	import SlotUsernameAutocomplete from "$lib/tournament/SlotUsernameAutocomplete.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
@@ -28,6 +30,20 @@
 
 	const isAdmin = $derived(data.tournament.is_viewer_admin === true);
 	const user = $derived(page.data.user as UserMe | null);
+
+	// Self-signup state. viewerSlot drives the "you're signed up" strip
+	// (non-null → strip + Withdraw); canSignUp drives the "Sign up" CTA
+	// (signed-in non-admin who hasn't signed up yet, on a setup-phase
+	// tournament with signups open).
+	const viewerSlot = $derived(data.tournament.viewer_slot);
+	const canSignUp = $derived(
+		user !== null &&
+			!isAdmin &&
+			data.tournament.status === "setup" &&
+			data.tournament.signups_open &&
+			viewerSlot === null,
+	);
+	let signupModalOpen = $state(false);
 
 	// Swiss-phase matches, filtered per division. The flow bracket needs
 	// only its own division's matches so the (W, L) record walk doesn't
@@ -180,6 +196,11 @@
 
 	let newSlotUsername = $state("");
 	let newSlotDivision = $state<Division>("A");
+	// Set by SlotUsernameAutocomplete when the admin picks a real user from
+	// the dropdown; cleared if they edit the value afterward. Threads through
+	// to the bulk-create payload so the worker pre-links the slot to the
+	// canonical user without waiting for an OAuth-callback claim.
+	let newSlotUserId = $state<string | null>(null);
 
 	async function addSlot() {
 		const username = newSlotUsername.trim();
@@ -187,11 +208,18 @@
 		const result = await withBusy(
 			() =>
 				cloudApi.bulkCreateSlots(data.tournament.tournament_id, [
-					{ division: newSlotDivision, discord_username: username },
+					{
+						division: newSlotDivision,
+						discord_username: username,
+						...(newSlotUserId ? { user_id: newSlotUserId } : {}),
+					},
 				]),
 			`Added ${username} to division ${newSlotDivision}`,
 		);
-		if (result) newSlotUsername = "";
+		if (result) {
+			newSlotUsername = "";
+			newSlotUserId = null;
+		}
 	}
 
 	async function substituteSlot(slotId: string, newUsername: string) {
@@ -365,6 +393,23 @@
 	let transitionPreviewOpen = $state(false);
 	let tiebreakerInfoOpen = $state(false);
 
+	async function withdraw() {
+		// Plain confirm() — matches the deleteSlot pattern. Non-technical
+		// players have seen the OS prompt a thousand times; bespoke modal
+		// for a one-action dialog would just be more surface area.
+		if (
+			!confirm(
+				`Withdraw from ${data.tournament.name}? You can sign up again any time before it starts.`,
+			)
+		) {
+			return;
+		}
+		await withBusy(
+			() => cloudApi.withdrawFromTournament(data.tournament.tournament_id),
+			"Withdrew from tournament",
+		);
+	}
+
 	async function transitionChampionship(overrideRanks?: string[]) {
 		transitionPreviewOpen = false;
 		await withBusy(
@@ -398,6 +443,46 @@
 						<p class="mt-2 text-sm text-tan opacity-80">
 							{data.tournament.description}
 						</p>
+					{/if}
+
+					{#if canSignUp}
+						<div class="mt-3 flex flex-wrap items-center justify-end gap-2">
+							<button
+								type="button"
+								class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+								onclick={() => (signupModalOpen = true)}
+								disabled={busy}
+							>
+								Sign up
+							</button>
+						</div>
+					{/if}
+
+					{#if viewerSlot}
+						<div
+							class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-orange border-opacity-50 px-3 py-2"
+							style="background-color: #2a2622;"
+							role="status"
+						>
+							<span class="text-xs text-tan">
+								<span class="text-orange">✓</span> You're signed up —
+								<span class="font-bold"
+									>{viewerSlot.division === "A"
+										? data.tournament.division_a_name
+										: data.tournament.division_b_name}</span
+								>
+							</span>
+							{#if data.tournament.status === "setup"}
+								<button
+									type="button"
+									class="text-xs text-tan underline opacity-70 transition-colors hover:text-red-400 hover:opacity-100 disabled:opacity-30"
+									onclick={withdraw}
+									disabled={busy}
+								>
+									Withdraw
+								</button>
+							{/if}
+						</div>
 					{/if}
 
 					{#if isAdmin}
@@ -501,27 +586,25 @@
 								class="mb-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
 								style="background-color: #35302B;"
 							>
-								<label class="text-xs text-tan">
+								<label class="block min-w-[14rem] text-xs text-tan">
 									Discord username
-									<input
-										type="text"
-										bind:value={newSlotUsername}
-										data-1p-ignore
-										data-lpignore="true"
-										data-bwignore
-										data-form-type="other"
-										onkeydown={(e) => {
-											if (
-												e.key === "Enter" &&
-												!busy &&
-												newSlotUsername.trim()
-											) {
-												e.preventDefault();
-												addSlot();
-											}
-										}}
-										class="mt-1 block rounded border border-black bg-[#35302b] p-1.5 text-xs text-tan"
-									/>
+									<div class="mt-1">
+										<SlotUsernameAutocomplete
+											value={newSlotUsername}
+											onValueChange={(v) => (newSlotUsername = v)}
+											onSelectUser={(u) => (newSlotUserId = u?.user_id ?? null)}
+											disabled={busy}
+											onEnter={() => {
+												if (!busy && newSlotUsername.trim()) addSlot();
+											}}
+											inputAttrs={{
+												"data-1p-ignore": "true",
+												"data-lpignore": "true",
+												"data-bwignore": "true",
+												"data-form-type": "other",
+											}}
+										/>
+									</div>
 								</label>
 								<fieldset class="text-xs text-tan">
 									<legend>Division</legend>
@@ -555,8 +638,12 @@
 							</div>
 						{:else if !hasAnyStandings}
 							<p class="mb-3 text-xs text-tan opacity-70">
-								The tournament hasn't started yet. Claimants will appear here as
-								they're added.
+								{#if data.tournament.signups_open}
+									Players will appear here as they sign up.
+								{:else}
+									The tournament hasn't started yet. Players will appear here as
+									they're added.
+								{/if}
 							</p>
 						{/if}
 
@@ -773,6 +860,14 @@
 	<TournamentSettingsModal
 		tournament={data.tournament}
 		onClose={() => (settingsOpen = false)}
+	/>
+{/if}
+
+{#if signupModalOpen && user}
+	<SignupModal
+		tournament={data.tournament}
+		{user}
+		onClose={() => (signupModalOpen = false)}
 	/>
 {/if}
 

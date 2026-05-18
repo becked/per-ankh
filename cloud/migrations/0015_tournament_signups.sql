@@ -1,0 +1,22 @@
+-- Self-signup for tournaments. Until now, enrollment was admin-driven only:
+-- the admin pre-filled tournament_slots.discord_username, and the slot was
+-- "claimed" when the player logged in via Discord OAuth. Open events need a
+-- self-service path.
+--
+-- The signup endpoints (POST/DELETE /v1/tournaments/:id/signup) are gated on:
+--   * status = 'setup' (always — withdraw and signup both)
+--   * signups_open = 1 (signup only; withdraw is allowed regardless so a
+--     dropped player can leave between when the admin closes signups and
+--     when the admin transitions to swiss)
+--
+-- The flag defaults to 0, so every existing tournament stays closed until
+-- the admin opts in via PATCH /v1/tournaments/:id { signups_open: true }.
+-- handleStartTournament also flips it back to 0 on the setup → swiss
+-- transition, so an admin can't accidentally leave it on.
+--
+-- One-slot-per-user is enforced in the handler with an atomic
+-- INSERT ... WHERE NOT EXISTS rather than a partial unique index — that
+-- sidesteps any chance of an existing admin-prefill double-row tripping
+-- the migration, which would brick deploy.
+
+ALTER TABLE tournaments ADD COLUMN signups_open INTEGER NOT NULL DEFAULT 0;

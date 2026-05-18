@@ -146,7 +146,12 @@ export async function handleTournamentList(
 	const viewerId = session?.data.user_id ?? null;
 
 	const params: unknown[] = [viewerId];
-	let whereSetup = "(t.status != 'setup' OR ta.user_id IS NOT NULL)";
+	// Setup-phase tournaments are visible to:
+	//   1. admins of that tournament (ta.user_id IS NOT NULL), or
+	//   2. anyone, when the admin has opened signups (t.signups_open = 1).
+	// All non-setup statuses are always visible to any beta user.
+	let whereSetup =
+		"(t.status != 'setup' OR ta.user_id IS NOT NULL OR t.signups_open = 1)";
 	if (filter) {
 		whereSetup += " AND t.status = ?";
 		params.push(filter);
@@ -154,7 +159,8 @@ export async function handleTournamentList(
 	params.push(limit, offset);
 
 	const stmt = env.SHARE_DB.prepare(
-		`SELECT t.tournament_id, t.slug, t.name, t.status, t.created_at, t.updated_at
+		`SELECT t.tournament_id, t.slug, t.name, t.status, t.signups_open,
+		        t.created_at, t.updated_at
 		 FROM tournaments t
 		 LEFT JOIN tournament_admins ta
 		   ON ta.tournament_id = t.tournament_id AND ta.user_id = ?
@@ -167,15 +173,19 @@ export async function handleTournamentList(
 		slug: string;
 		name: string;
 		status: string;
+		signups_open: number;
 		created_at: string;
 		updated_at: string;
 	}>();
 
-	return jsonResponse(
-		{ tournaments: res.results ?? [], limit, offset },
-		200,
-		cors,
-	);
+	// Normalize SQLite's INTEGER 0/1 to a boolean for the JSON response so
+	// the frontend can treat it as a plain bool.
+	const tournaments = (res.results ?? []).map((t) => ({
+		...t,
+		signups_open: t.signups_open === 1,
+	}));
+
+	return jsonResponse({ tournaments, limit, offset }, 200, cors);
 }
 
 export async function handleTournamentDetail(
@@ -206,9 +216,14 @@ export async function handleTournamentDetail(
 		gate.session?.data ?? null,
 		tournament.tournament_id,
 	);
-	// Setup-phase tournaments are admin-only. 404 (not 403) so we don't
-	// leak existence to non-admins.
-	if (tournament.status === "setup" && !is_viewer_admin) {
+	// Setup-phase tournaments are admin-only by default, but also visible to
+	// any beta user once the admin opens signups — that's the whole point of
+	// the toggle.
+	if (
+		tournament.status === "setup" &&
+		!is_viewer_admin &&
+		tournament.signups_open !== 1
+	) {
 		return errorResponse(
 			"Tournament not found",
 			404,
@@ -223,6 +238,57 @@ export async function handleTournamentDetail(
 		.all<{ phase: string; count: number }>();
 	const counts: Record<string, number> = {};
 	for (const row of slotCount.results ?? []) counts[row.phase] = row.count;
+	// Per-division swiss counts for the signup modal's "Division A (5 players)"
+	// hint. Cheap aggregate; cheaper than a second round-trip from the
+	// frontend once we've already loaded the tournament here.
+	const divisionCounts = await env.SHARE_DB.prepare(
+		`SELECT division, COUNT(*) AS count
+		 FROM tournament_slots
+		 WHERE tournament_id = ? AND phase = 'swiss'
+		 GROUP BY division`,
+	)
+		.bind(tournament.tournament_id)
+		.all<{ division: string; count: number }>();
+	const swissByDivision: { A: number; B: number } = { A: 0, B: 0 };
+	for (const row of divisionCounts.results ?? []) {
+		if (row.division === "A" || row.division === "B") {
+			swissByDivision[row.division] = row.count;
+		}
+	}
+	// Viewer's swiss slot in this tournament (if any). Drives the "you're
+	// signed up — Division A" strip on the detail page and the Sign up /
+	// Withdraw button choice. Skipped when there's no session.
+	const viewerUserId = gate.session?.data.user_id ?? null;
+	let viewer_slot: {
+		slot_id: string;
+		division: "A" | "B";
+		swiss_seed: number;
+	} | null = null;
+	if (viewerUserId) {
+		const vs = await env.SHARE_DB.prepare(
+			`SELECT slot_id, division, swiss_seed
+			 FROM tournament_slots
+			 WHERE tournament_id = ? AND user_id = ? AND phase = 'swiss'
+			 LIMIT 1`,
+		)
+			.bind(tournament.tournament_id, viewerUserId)
+			.first<{
+				slot_id: string;
+				division: "A" | "B" | null;
+				swiss_seed: number | null;
+			}>();
+		if (
+			vs &&
+			(vs.division === "A" || vs.division === "B") &&
+			vs.swiss_seed != null
+		) {
+			viewer_slot = {
+				slot_id: vs.slot_id,
+				division: vs.division,
+				swiss_seed: vs.swiss_seed,
+			};
+		}
+	}
 	// Public-read leniency: render the tournament detail even if the maps
 	// JSON is corrupted (admins will see the failure surface via round
 	// generation; no need to break the public-facing page). Admin write
@@ -252,7 +318,10 @@ export async function handleTournamentDetail(
 			slot_counts: {
 				swiss: counts["swiss"] ?? 0,
 				championship: counts["championship"] ?? 0,
+				swiss_by_division: swissByDivision,
 			},
+			signups_open: tournament.signups_open === 1,
+			viewer_slot,
 			is_viewer_admin,
 			created_at: tournament.created_at,
 			updated_at: tournament.updated_at,
@@ -262,10 +331,16 @@ export async function handleTournamentDetail(
 	);
 }
 
-// Setup-phase tournaments are admin-only. Centralised so every public
-// read endpoint that exposes setup data (standings, bracket, rounds,
-// matches, match detail) returns 404 — not 403 — to non-admins, to
-// match the detail endpoint and avoid leaking tournament existence.
+// Setup-phase tournaments are admin-only by default — every public read
+// endpoint that exposes setup data (standings, bracket, rounds, matches,
+// match detail) returns 404 (not 403) to non-admins so we don't leak the
+// tournament's existence.
+//
+// Exception: when signups_open=1, the tournament is visible to every beta
+// user (the whole point of the toggle). The companion endpoints return
+// effectively-empty payloads in setup (no rounds → no standings → no
+// matches), but the page load on /tournaments/[slug] expects them not to
+// 404, so we mirror the detail-endpoint predicate here.
 //
 // Callers pass the session they already resolved via requireBetaOr404 so
 // the lookup is done once per request.
@@ -275,6 +350,7 @@ async function setupGateHides(
 	tournament: TournamentRow,
 ): Promise<boolean> {
 	if (tournament.status !== "setup") return false;
+	if (tournament.signups_open === 1) return false;
 	const isAdmin = await isTournamentAdmin(
 		env,
 		session?.data ?? null,

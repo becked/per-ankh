@@ -120,6 +120,14 @@ export const PatchTournamentSchema = v.object({
 	),
 	allowed_map_scripts: v.optional(AllowedMapScriptsSchema),
 	map_script_options: v.optional(MapScriptOptionsSchema),
+	signups_open: v.optional(v.boolean()),
+});
+
+// Body for POST /v1/tournaments/:id/signup. The caller must be signed in
+// (the user_id and discord identity come from the session, not the body) —
+// the only thing the player picks is which division to enter.
+export const TournamentSignupSchema = v.object({
+	division: DivisionSchema,
 });
 
 export const BulkCreateSlotsSchema = v.pipe(
@@ -130,11 +138,35 @@ export const BulkCreateSlotsSchema = v.pipe(
 			swiss_seed: v.optional(
 				v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1000)),
 			),
+			// Optional pre-link via /v1/users/search autocomplete. When set,
+			// the handler resolves the canonical discord_id + discord_username
+			// from the users table (ignoring the body's discord_username) and
+			// creates a slot that's "claimed" from the start — no OAuth-
+			// callback dependency. nanoid21Regex matches the user_id shape;
+			// the handler validates existence and rejects unknown IDs.
+			user_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
 		}),
 	),
 	v.minLength(1, "Must include at least one slot"),
 	v.maxLength(200, "Too many slots"),
 );
+
+// Query schema for GET /v1/users/search. q must be at least 1 char to parse
+// successfully; the handler enforces the practical "min 2 chars before we
+// return matches" rule (returns empty for q.length < 2), keeping the
+// validation surface and the autocomplete UX simple.
+export const UserSearchQuerySchema = v.object({
+	q: v.pipe(
+		v.string(),
+		v.trim(),
+		v.toLowerCase(),
+		v.minLength(1),
+		v.maxLength(32),
+	),
+	limit: v.optional(
+		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
+	),
+});
 
 export const PatchSlotSchema = v.object({
 	discord_username: v.optional(DiscordUsernameSchema),

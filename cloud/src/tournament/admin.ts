@@ -679,6 +679,19 @@ export async function handlePatchTournament(
 		);
 	}
 
+	// Opening signups only makes sense in setup. Outside setup the flag is
+	// inert — handleStartTournament clears it on the transition — but a PATCH
+	// that tries to reopen it after start is a bug, so reject. Closing it
+	// (signups_open=false) after the fact is harmless and allowed.
+	if (locked && patch.signups_open === true) {
+		return errorResponse(
+			"Signups can only be opened while the tournament is in setup",
+			409,
+			cors,
+			"INVALID_PHASE",
+		);
+	}
+
 	// FSM-consistency check on the effective (post-patch) thresholds. Each
 	// field falls back to the existing row's value when not in the patch.
 	const effMaxRounds = patch.swiss_max_rounds ?? tournament.swiss_max_rounds;
@@ -732,6 +745,10 @@ export async function handlePatchTournament(
 			// Skip — handled below from nextMapScriptOptions (which may have
 			// been reconciled or pre-populated).
 			continue;
+		} else if (key === "signups_open") {
+			// SQLite has no boolean; the column is INTEGER 0/1.
+			fragments.push(`${key} = ?`);
+			binds.push(value ? 1 : 0);
 		} else {
 			fragments.push(`${key} = ?`);
 			binds.push(value);
@@ -784,8 +801,84 @@ export async function handleBulkCreateSlots(
 	if (!body.ok) return body.response;
 	const newSlots = body.body;
 
-	// Verify no duplicate discord_usernames within the tournament (existing or
-	// in the same batch).
+	// Resolve canonical identity for slots that ship a user_id (autocomplete
+	// "pre-link" path). The body's discord_username is treated as a hint
+	// from the client; for these slots the worker substitutes the value
+	// stored on the users row so the client can't spoof a mismatched handle
+	// into tournament_slots. user_ids missing from the users table are
+	// rejected up front — no partial batch.
+	const requestedUserIds = Array.from(
+		new Set(newSlots.map((s) => s.user_id).filter((id): id is string => !!id)),
+	);
+	const canonicalByUserId = new Map<
+		string,
+		{ discord_id: string; discord_username: string }
+	>();
+	if (requestedUserIds.length > 0) {
+		const placeholders = requestedUserIds.map(() => "?").join(",");
+		const usersRes = await env.SHARE_DB.prepare(
+			`SELECT user_id, discord_id, discord_username
+			 FROM users
+			 WHERE user_id IN (${placeholders})`,
+		)
+			.bind(...requestedUserIds)
+			.all<{
+				user_id: string;
+				discord_id: string;
+				discord_username: string | null;
+			}>();
+		for (const row of usersRes.results ?? []) {
+			if (row.discord_username) {
+				canonicalByUserId.set(row.user_id, {
+					discord_id: row.discord_id,
+					discord_username: row.discord_username,
+				});
+			}
+		}
+		for (const id of requestedUserIds) {
+			if (!canonicalByUserId.has(id)) {
+				// Either no users row, or that row has discord_username=NULL
+				// (legacy user who hasn't logged in since migration 0016). Both
+				// block pre-linking — admin should fall back to free-text and
+				// let the user claim at next login.
+				return errorResponse(
+					`Unknown or unlinkable user_id: ${id}`,
+					400,
+					cors,
+					"INVALID_USER_ID",
+				);
+			}
+		}
+	}
+
+	// Resolved slot view used for the rest of the handler. For user_id slots,
+	// discord_username is the canonical one; for free-text slots, the body's
+	// value passes through. Carrying discord_id only when user_id is set keeps
+	// the existing slot-claim path (NULL → match by username at OAuth) intact
+	// for free-text rows.
+	const resolvedSlots = newSlots.map((s) => {
+		if (s.user_id) {
+			const c = canonicalByUserId.get(s.user_id)!;
+			return {
+				division: s.division,
+				swiss_seed: s.swiss_seed,
+				discord_username: c.discord_username,
+				discord_id: c.discord_id,
+				user_id: s.user_id,
+			};
+		}
+		return {
+			division: s.division,
+			swiss_seed: s.swiss_seed,
+			discord_username: s.discord_username,
+			discord_id: null as string | null,
+			user_id: null as string | null,
+		};
+	});
+
+	// Verify no duplicate discord_usernames within the tournament (existing
+	// or in the same batch). Runs against resolved usernames so a user_id-
+	// prelinked slot is correctly compared against its canonical handle.
 	const existing = await loadSlots(env, tournamentId);
 	const taken = new Set(
 		existing
@@ -793,7 +886,7 @@ export async function handleBulkCreateSlots(
 			.map((s) => s.discord_username as string),
 	);
 	const batchSet = new Set<string>();
-	for (const s of newSlots) {
+	for (const s of resolvedSlots) {
 		if (taken.has(s.discord_username)) {
 			return errorResponse(
 				`Discord username already used: ${s.discord_username}`,
@@ -828,15 +921,24 @@ export async function handleBulkCreateSlots(
 	const statements: D1PreparedStatement[] = [];
 	const created: { slot_id: string; division: Division; swiss_seed: number }[] =
 		[];
-	for (const s of newSlots) {
+	for (const s of resolvedSlots) {
 		const seed = s.swiss_seed ?? nextSeedByDiv[s.division]++;
 		const slotId = nanoid(21);
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_slots
-				   (slot_id, tournament_id, phase, division, swiss_seed, discord_username)
-				 VALUES (?, ?, 'swiss', ?, ?, ?)`,
-			).bind(slotId, tournamentId, s.division, seed, s.discord_username),
+				   (slot_id, tournament_id, phase, division, swiss_seed,
+				    discord_username, discord_id, user_id)
+				 VALUES (?, ?, 'swiss', ?, ?, ?, ?, ?)`,
+			).bind(
+				slotId,
+				tournamentId,
+				s.division,
+				seed,
+				s.discord_username,
+				s.discord_id,
+				s.user_id,
+			),
 		);
 		created.push({ slot_id: slotId, division: s.division, swiss_seed: seed });
 	}
@@ -1125,7 +1227,12 @@ export async function handleStartTournament(
 
 	const statements: D1PreparedStatement[] = [
 		env.SHARE_DB.prepare(
+			// Also clear signups_open on the transition. Self-signup is only
+			// meaningful in setup, so we don't want the flag stuck "on" once
+			// pairings exist — both the API (handleTournamentSignup checks
+			// status='setup') and the UI key off this transition.
 			`UPDATE tournaments SET status = 'swiss',
+			        signups_open = 0,
 			        updated_at = datetime('now')
 			 WHERE tournament_id = ?`,
 		).bind(tournamentId),

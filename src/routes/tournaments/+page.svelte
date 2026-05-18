@@ -8,9 +8,26 @@
 
 	let showCreateModal = $state(false);
 
-	// Group by status so active tournaments surface above completed ones.
+	// `myTournaments` is loaded by the root layout (`src/routes/+layout.ts`)
+	// and propagated into every page's data. Used here to mark each card with
+	// "✓ You're in" instead of the generic status badge.
+	const enrolledIds = $derived(
+		new Set((data.myTournaments ?? []).map((t) => t.tournament_id)),
+	);
+
+	// Three groups so the most actionable tournaments are at the top:
+	//   1. Open for signups (status='setup' + signups_open) — the player
+	//      can join right now.
+	//   2. Active (everything else that's not complete).
+	//   3. Past (complete).
+	const open = $derived(
+		data.tournaments.filter((t) => t.status === "setup" && t.signups_open),
+	);
 	const active = $derived(
-		data.tournaments.filter((t) => t.status !== "complete"),
+		data.tournaments.filter(
+			(t) =>
+				t.status !== "complete" && !(t.status === "setup" && t.signups_open),
+		),
 	);
 	const completed = $derived(
 		data.tournaments.filter((t) => t.status === "complete"),
@@ -42,6 +59,23 @@
 						No tournaments yet. Check back when one starts.
 					</p>
 				{:else}
+					{#if open.length > 0}
+						<section class="mb-6">
+							<h2
+								class="mb-2 text-xs uppercase tracking-wide text-tan opacity-60"
+							>
+								Open for signups
+							</h2>
+							<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+								{#each open as t (t.tournament_id)}
+									<TournamentCard
+										tournament={t}
+										enrolled={enrolledIds.has(t.tournament_id)}
+									/>
+								{/each}
+							</div>
+						</section>
+					{/if}
 					{#if active.length > 0}
 						<section class="mb-6">
 							<h2
@@ -51,7 +85,10 @@
 							</h2>
 							<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
 								{#each active as t (t.tournament_id)}
-									<TournamentCard tournament={t} />
+									<TournamentCard
+										tournament={t}
+										enrolled={enrolledIds.has(t.tournament_id)}
+									/>
 								{/each}
 							</div>
 						</section>

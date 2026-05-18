@@ -464,13 +464,20 @@ export async function handleDiscordCallback(
 	const emailVerified = discordUser.verified ?? null;
 
 	// Upsert user. ON CONFLICT keyed on discord_id (UNIQUE).
-	// New rows get a fresh nanoid; existing rows keep theirs.
+	// New rows get a fresh nanoid; existing rows keep theirs. discord_username
+	// (lowercased handle, distinct from display_name which may be global_name)
+	// is refreshed on every login — Discord handles are mutable and the
+	// /v1/users/search autocomplete + slot-prelink path both need the current
+	// canonical value. Existing slot links are pinned by discord_id, so a
+	// username refresh here doesn't disturb prior claims.
 	const newUserId = nanoid(21);
 	const upsert = await env.SHARE_DB.prepare(
-		`INSERT INTO users (user_id, discord_id, display_name, avatar_hash, email, email_verified, last_login_at)
-		 VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
+		`INSERT INTO users (user_id, discord_id, display_name, discord_username,
+		                    avatar_hash, email, email_verified, last_login_at)
+		 VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))
 		 ON CONFLICT(discord_id) DO UPDATE SET
 		   display_name = excluded.display_name,
+		   discord_username = excluded.discord_username,
 		   avatar_hash = excluded.avatar_hash,
 		   email = excluded.email,
 		   email_verified = excluded.email_verified,
@@ -481,6 +488,7 @@ export async function handleDiscordCallback(
 			newUserId,
 			discordUser.id,
 			displayName,
+			discordUsername,
 			discordUser.avatar,
 			email,
 			emailVerified === null ? null : emailVerified ? 1 : 0,
@@ -651,6 +659,11 @@ export async function handleMe(
 			user_id: row.user_id,
 			discord_id: row.discord_id,
 			display_name: row.display_name,
+			// The lowercased Discord handle from the session — same value the
+			// tournament slot row carries. Surfacing it on the auth/me payload
+			// lets the SignupModal reassure the player "you'll appear as
+			// @username", matching what the slot list shows.
+			discord_username: session.data.discord_username,
 			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
 			is_beta: beta !== null,
 		},

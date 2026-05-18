@@ -16,6 +16,8 @@
 	let { tournament, divACount, divBCount }: Props = $props();
 
 	// svelte-ignore state_referenced_locally
+	let signupsOpen = $state(tournament.signups_open);
+	// svelte-ignore state_referenced_locally
 	let swissMaxRounds = $state(tournament.swiss_max_rounds);
 	// svelte-ignore state_referenced_locally
 	let swissWinsToAdvance = $state(tournament.swiss_wins_to_advance);
@@ -119,11 +121,20 @@
 		if (thresholdError) return;
 		commit({ swiss_losses_to_eliminate: next });
 	}
+
+	async function commitSignupsOpen(next: boolean) {
+		// Optimistic — flip the local state so the checkbox is responsive,
+		// then PATCH. invalidateAll re-syncs from the canonical row; on
+		// failure we restore from the tournament prop.
+		signupsOpen = next;
+		await commit({ signups_open: next });
+		if (status.kind === "err") signupsOpen = tournament.signups_open;
+	}
 </script>
 
 <section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
 	<header class="mb-3 flex items-baseline justify-between">
-		<h2 class="text-sm font-bold text-tan">Swiss configuration</h2>
+		<h2 class="text-sm font-bold text-tan">Signups</h2>
 		{#if status.kind === "saving"}
 			<span class="text-xs text-tan opacity-60">Saving…</span>
 		{:else if status.kind === "saved"}
@@ -131,6 +142,30 @@
 		{:else if status.kind === "err"}
 			<span class="text-xs text-red-400">{status.message}</span>
 		{/if}
+	</header>
+
+	<div
+		class="mb-4 rounded-lg p-3 text-xs text-tan"
+		style="background-color: #35302B;"
+	>
+		<label class="flex cursor-pointer items-center gap-2">
+			<input
+				type="checkbox"
+				checked={signupsOpen}
+				onchange={(e) =>
+					commitSignupsOpen((e.target as HTMLInputElement).checked)}
+				disabled={status.kind === "saving"}
+			/>
+			<span>Open for signups</span>
+		</label>
+		<p class="mt-1 text-[11px] text-tan opacity-60">
+			When open, any signed-in player can sign up. Closes automatically when you
+			start the tournament.
+		</p>
+	</div>
+
+	<header class="mb-3 flex items-baseline justify-between">
+		<h2 class="text-sm font-bold text-tan">Swiss configuration</h2>
 	</header>
 
 	<div

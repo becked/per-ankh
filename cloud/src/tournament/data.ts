@@ -27,6 +27,10 @@ export interface TournamentRow {
 	swiss_max_rounds: number;
 	allowed_map_scripts: string; // JSON array
 	map_script_options: string; // JSON object: { [MAPCLASS]: { [OPTION]: string | boolean } }
+	// 0/1 (SQLite has no real bool). When 1 AND status='setup', the tournament
+	// is visible to all beta users and POST /signup is enabled. Auto-flipped
+	// to 0 on the setup → swiss transition in handleStartTournament.
+	signups_open: number;
 	created_at: string;
 	updated_at: string;
 }

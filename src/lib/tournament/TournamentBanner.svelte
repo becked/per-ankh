@@ -38,7 +38,7 @@
 				class="flex items-center justify-between gap-2 px-4 py-2 text-xs text-tan"
 			>
 				<span>
-					You're enrolled in
+					You're signed up for
 					<a
 						href={resolve("/tournaments/[slug]", { slug: t.slug })}
 						class="font-bold text-orange hover:underline"

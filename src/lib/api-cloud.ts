@@ -9,10 +9,27 @@ import type { FullGameData } from "$lib/parser/types";
 const DEFAULT_API_BASE = "https://api.per-ankh.app/v1";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE) as string;
 
+// Result row returned by cloudApi.searchUsers — drives the
+// SlotUsernameAutocomplete. Intentionally narrow: discord_username for
+// matching, display_name for human-recognizable disambiguation in the
+// dropdown, discord_id + user_id for the eventual slot pre-link payload.
+// No email, no avatar, no timestamps.
+export interface UserSearchResult {
+	user_id: string;
+	discord_id: string;
+	discord_username: string;
+	display_name: string;
+}
+
 export interface UserMe {
 	user_id: string;
 	discord_id: string;
 	display_name: string;
+	// Lowercased Discord handle (mirrors the value stored on
+	// tournament_slots.discord_username). Used by the SignupModal to show
+	// "Signed in as @username" so players know the exact identity they'll
+	// be entered under.
+	discord_username: string;
 	avatar_url: string;
 	// True iff the user is on the tournament beta allowlist. Drives the
 	// header's Tournaments link visibility and skips layout-load tournament
@@ -542,6 +559,12 @@ export const cloudApi = {
 			division: Division;
 			discord_username: string;
 			swiss_seed?: number;
+			// Optional pre-link via SlotUsernameAutocomplete. When set, the
+			// worker resolves the canonical discord_id + discord_username
+			// from the users table — body's discord_username is treated as
+			// a hint only. Slot is INSERTed as "claimed" (user_id populated)
+			// with no OAuth-callback round trip needed.
+			user_id?: string;
 		}>,
 		opts?: CallOpts,
 	): Promise<{
@@ -605,6 +628,60 @@ export const cloudApi = {
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ divisions }),
+		});
+	},
+
+	// User-prefix search — powers the SlotUsernameAutocomplete on the
+	// admin's add-slot form. Beta-gated; returns up to `limit` users whose
+	// lowercased discord_username starts with `q`. Returns an empty list
+	// for q.length < 2 (still-typing floor; doesn't burn the per-user rate
+	// limit). Throws ApiError(429, RATE_LIMIT_USER_SEARCH) past the ceiling.
+	searchUsers: async (
+		q: string,
+		opts?: { limit?: number } & CallOpts,
+	): Promise<{ users: UserSearchResult[] }> => {
+		const params = new URLSearchParams({ q });
+		if (opts?.limit !== undefined) {
+			params.set("limit", String(opts.limit));
+		}
+		const res = await request(`/users/search?${params.toString()}`, {
+			...opts,
+			method: "GET",
+		});
+		return res.json() as Promise<{ users: UserSearchResult[] }>;
+	},
+
+	// Self-service tournament signup. The player picks a division; the
+	// server creates a tournament_slots row keyed to their session user.
+	// Gated server-side on status='setup' AND signups_open=1.
+	signupForTournament: async (
+		tournamentId: string,
+		division: Division,
+		opts?: CallOpts,
+	): Promise<{
+		slot: { slot_id: string; division: Division; swiss_seed: number };
+	}> => {
+		const res = await request(`/tournaments/${tournamentId}/signup`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ division }),
+		});
+		return res.json() as Promise<{
+			slot: { slot_id: string; division: Division; swiss_seed: number };
+		}>;
+	},
+
+	// Self-withdraw from a tournament. Allowed any time status='setup' —
+	// even after the admin has closed signups, so a dropped-out player can
+	// always vacate their slot before the tournament starts.
+	withdrawFromTournament: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/signup`, {
+			...opts,
+			method: "DELETE",
 		});
 	},
 
@@ -712,6 +789,10 @@ export interface TournamentListItem {
 	slug: string;
 	name: string;
 	status: TournamentStatus;
+	// True iff status='setup' AND the admin has opened signups. Used to drive
+	// the "Open for signups" grouping in the list page and the badge on the
+	// tournament card.
+	signups_open: boolean;
 	created_at: string;
 	updated_at: string;
 }
@@ -742,7 +823,25 @@ export interface TournamentDetail {
 	swiss_max_rounds: number;
 	allowed_map_scripts: string[];
 	map_script_options: MapScriptOptions;
-	slot_counts: { swiss: number; championship: number };
+	slot_counts: {
+		swiss: number;
+		championship: number;
+		// Per-division swiss counts so the SignupModal can show "Division A
+		// (5 players)" without an extra query.
+		swiss_by_division: { A: number; B: number };
+	};
+	// True iff status='setup' AND the admin has opened signups. Drives the
+	// "Sign up" CTA on the detail page and the visibility of setup-phase
+	// tournaments to non-admins.
+	signups_open: boolean;
+	// The caller's swiss slot in this tournament, if any. Drives the "you're
+	// signed up" strip and Withdraw button. Null when the caller has no slot,
+	// when there's no session, or when only a championship slot exists.
+	viewer_slot: {
+		slot_id: string;
+		division: Division;
+		swiss_seed: number;
+	} | null;
 	is_viewer_admin: boolean;
 	created_at: string;
 	updated_at: string;
@@ -764,6 +863,10 @@ export interface PatchTournamentBody {
 	swiss_max_rounds?: number;
 	allowed_map_scripts?: string[];
 	map_script_options?: MapScriptOptions;
+	// Toggle self-service signups. Only valid in setup; PATCH rejects
+	// re-opening once status moves past setup. handleStartTournament auto-
+	// clears the flag on the setup → swiss transition.
+	signups_open?: boolean;
 }
 
 // Mirrors cloud/src/schemas/tournament.ts:CreateTournamentSchema. Only

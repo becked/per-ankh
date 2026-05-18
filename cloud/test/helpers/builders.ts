@@ -50,9 +50,9 @@ export async function makeUser(opts?: {
 		opts?.discordUsername ?? `user-${nanoid(8).toLowerCase()}`;
 
 	await env.SHARE_DB.prepare(
-		`INSERT INTO users (user_id, discord_id, display_name) VALUES (?, ?, ?)`,
+		`INSERT INTO users (user_id, discord_id, display_name, discord_username) VALUES (?, ?, ?, ?)`,
 	)
-		.bind(userId, discordId, discordUsername)
+		.bind(userId, discordId, discordUsername, discordUsername)
 		.run();
 
 	const sessionToken = nanoid(32);
@@ -190,13 +190,18 @@ export async function makeTournament(
 				ownersB[i]?.discordUsername ?? `b${i + 1}-${nanoid(6).toLowerCase()}`,
 		});
 	}
-	await expectOk(
-		await request.post({
-			path: `/v1/tournaments/${tournamentId}/slots`,
-			as: admin,
-			body: slotPayload,
-		}),
-	);
+	// Skip the bulk-create call entirely when slotsPerDivision: 0 — the
+	// BulkCreateSlotsSchema rejects empty arrays, so we'd otherwise 400 here.
+	// Lets signup tests build an empty tournament to assert seed semantics.
+	if (slotPayload.length > 0) {
+		await expectOk(
+			await request.post({
+				path: `/v1/tournaments/${tournamentId}/slots`,
+				as: admin,
+				body: slotPayload,
+			}),
+		);
+	}
 
 	// 3) Direct UPDATE to claim slots whose username matches a provided owner.
 	//    Production claims happen at OAuth login; we shortcut.

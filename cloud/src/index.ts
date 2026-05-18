@@ -69,7 +69,10 @@ import {
 	handleMyAdminTournaments,
 	handleMyMatches,
 	handleMyTournaments,
+	handleTournamentSignup,
+	handleTournamentWithdraw,
 } from "./tournament/player";
+import { handleUserSearch } from "./users";
 import type { TournamentPlayerEnv } from "./tournament/player";
 import {
 	handleBulkCreateSlots,
@@ -848,6 +851,25 @@ const ROUTES: RouteSpec[] = [
 		route: "POST /v1/tournaments/:id/transition-championship",
 		handler: (r, e, m) => handleTransitionChampionship(m![1], r, e),
 	},
+	// Player self-service signup/withdraw.
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/signup$/,
+		},
+		route: "POST /v1/tournaments/:id/signup",
+		handler: (r, e, m) => handleTournamentSignup(m![1], r, e),
+	},
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/signup$/,
+		},
+		route: "DELETE /v1/tournaments/:id/signup",
+		handler: (r, e, m) => handleTournamentWithdraw(m![1], r, e),
+	},
 	{
 		method: "PATCH",
 		match: {
@@ -869,6 +891,15 @@ const ROUTES: RouteSpec[] = [
 		handler: (r, e, m) => handleTournamentDetail(m![1], r, e),
 	},
 
+	// User search — autocomplete source for the slot-creation form.
+	// Must come before any /v1/users/me/... regex routes so the exact-
+	// path match wins.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/users/search" },
+		route: "GET /v1/users/search",
+		handler: (r, e) => handleUserSearch(r, e),
+	},
 	// User-facing tournament endpoints
 	{
 		method: "GET",
