@@ -153,6 +153,40 @@ export function sqlStr(s: string): string {
 	return "'" + s.replace(/'/g, "''") + "'";
 }
 
+// Write a single key/value to the SESSIONS_KV namespace. Used by the
+// dev-login command to mint a local session without going through Discord
+// OAuth. ttl is in seconds; SESSIONS_KV's app-level TTL is 30d (see
+// cloud/src/session.ts SESSION_TTL_SECONDS), so the default matches.
+export async function kvPutSession(
+	key: string,
+	value: string,
+	ttlSeconds: number,
+): Promise<void> {
+	// SESSIONS_KV has both `id` and `preview_id` in wrangler.toml; wrangler
+	// refuses an ambiguous put without an explicit --preview flag.
+	// `wrangler dev` defaults to the preview namespace in local mode, so
+	// we mirror that — otherwise the session lands in a separate local KV
+	// store that the running worker can't see.
+	const { stdout, stderr, code } = await runWrangler([
+		"kv",
+		"key",
+		"put",
+		"--binding",
+		"SESSIONS_KV",
+		"--preview",
+		"--ttl",
+		String(ttlSeconds),
+		targetFlag(),
+		key,
+		value,
+	]);
+	if (code !== 0) {
+		throw new Error(
+			`wrangler kv put failed (exit ${code}):\n${stderr.trim() || stdout.trim()}`,
+		);
+	}
+}
+
 export async function r2Delete(key: string): Promise<void> {
 	const { stderr, code } = await runWrangler([
 		"r2",

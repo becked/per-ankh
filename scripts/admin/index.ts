@@ -13,6 +13,7 @@ import * as events from "./commands/events";
 import * as shares from "./commands/shares";
 import * as security from "./commands/security";
 import * as tournament from "./commands/tournament";
+import * as devLogin from "./commands/dev-login";
 
 function printHelp(): void {
 	process.stdout.write(
@@ -54,6 +55,10 @@ function printHelp(): void {
 			"  tournament grant-admin <t_id> <u_id>   Grant per-tournament admin",
 			"  tournament revoke-admin <t_id> <u_id>  Revoke per-tournament admin",
 			"  tournament delete <t_id>         Delete tournament (cascades to slots/rounds/matches)",
+			"",
+			"Dev (local only):",
+			"  dev-login [--username NAME]      Provision a fake local user + session.",
+			"                                   Requires --local; refuses against remote.",
 			"",
 			"Global flags:",
 			"  --json                           Raw JSON output (skips tables)",
@@ -118,6 +123,8 @@ export async function main(argv: string[]): Promise<void> {
 			return security.runNukeUser(subArgs, opts);
 		case "tournament":
 			return tournament.run(subArgs, opts);
+		case "dev-login":
+			return devLogin.run(subArgs, opts);
 		case undefined:
 		case "help":
 		case "--help":
