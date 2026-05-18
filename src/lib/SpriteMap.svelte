@@ -323,6 +323,29 @@
 	let containerWidth = $state(0);
 	let containerHeight = $state(0);
 
+	// Camera-control state. Tracked here (in addition to viewVersion) so the
+	// overlay zoom buttons can read the current zoom and pan target and feed
+	// adjusted values back into the Deck via setProps.
+	type ViewState = { target: [number, number, number]; zoom: number };
+	const MIN_ZOOM = -6;
+	const MAX_ZOOM = 4;
+	const ZOOM_STEP = 0.75;
+	let currentViewState = $state<ViewState | null>(null);
+
+	// deck.gl's OrthographicViewState.target is [x,y] | [x,y,z] | undefined;
+	// normalize to a 3-tuple so the rest of our code can rely on a single shape.
+	function normalizeViewState(vs: {
+		target?: number[] | [number, number] | [number, number, number];
+		zoom?: number | [number, number];
+	}): ViewState {
+		const t = vs.target ?? [0, 0, 0];
+		const zoom = typeof vs.zoom === "number" ? vs.zoom : 0;
+		return {
+			target: [t[0] ?? 0, t[1] ?? 0, t[2] ?? 0],
+			zoom,
+		};
+	}
+
 	// ─── Fullscreen state (mirror of normal view) ─────────────────────
 	// Same dual-deck pattern as HexMap: WebGL contexts can't move between
 	// canvases, so a separate Deck instance is bound to the dialog's canvas
@@ -335,6 +358,7 @@
 	let fullscreenDeck: Deck<OrthographicView> | null = $state(null);
 	let fullscreenHoverState = $state<HoverState | null>(null);
 	let fullscreenViewVersion = $state(0);
+	let fullscreenCurrentViewState = $state<ViewState | null>(null);
 	let fullscreenContainerEl: HTMLDivElement | null = $state(null);
 	let fullscreenContainerWidth = $state(0);
 	let fullscreenContainerHeight = $state(0);
@@ -1071,6 +1095,39 @@
 		return { target: [centerX, centerY, 0] as [number, number, number], zoom };
 	}
 
+	// Programmatic camera control for the overlay zoom buttons. deck.gl
+	// re-applies initialViewState when a new object reference is passed via
+	// setProps, which jumps the camera without disturbing the controller's
+	// drag/wheel handling.
+	function applyViewState(isFullscreen: boolean, next: ViewState) {
+		const target = isFullscreen ? fullscreenDeck : deck;
+		if (!target) return;
+		target.setProps({
+			initialViewState: { ...next, minZoom: MIN_ZOOM, maxZoom: MAX_ZOOM },
+		});
+		if (isFullscreen) {
+			fullscreenCurrentViewState = next;
+			fullscreenViewVersion++;
+		} else {
+			currentViewState = next;
+			viewVersion++;
+		}
+	}
+
+	function adjustZoom(delta: number, isFullscreen: boolean) {
+		const cur = isFullscreen ? fullscreenCurrentViewState : currentViewState;
+		if (!cur) return;
+		const newZoom = Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, cur.zoom + delta));
+		if (newZoom === cur.zoom) return;
+		applyViewState(isFullscreen, { ...cur, zoom: newZoom });
+	}
+
+	function fitView(isFullscreen: boolean) {
+		const canvas = isFullscreen ? fullscreenCanvas : deckCanvas;
+		if (!canvas) return;
+		applyViewState(isFullscreen, calculateViewState(canvas));
+	}
+
 	function initDeck() {
 		if (!deckCanvas || !assetsLoaded) return;
 
@@ -1088,6 +1145,7 @@
 		deckCanvas.height = canvasHeight * window.devicePixelRatio;
 
 		const viewState = calculateViewState();
+		currentViewState = viewState;
 
 		deck = new Deck({
 			canvas: deckCanvas,
@@ -1097,14 +1155,15 @@
 			views: new OrthographicView({ id: "ortho" }),
 			initialViewState: {
 				...viewState,
-				minZoom: -6,
-				maxZoom: 4,
+				minZoom: MIN_ZOOM,
+				maxZoom: MAX_ZOOM,
 			},
 			controller: true,
 			// Bump viewVersion so locked tooltips re-project on every camera
 			// change. Locked screen positions are derived from worldX/worldY
 			// against the current viewport (see lockedScreen $derived).
-			onViewStateChange: () => {
+			onViewStateChange: ({ viewState: vs }) => {
+				currentViewState = normalizeViewState(vs);
 				viewVersion++;
 			},
 			// Hover dispatch: deck.gl returns the picked layer's data item.
@@ -1138,6 +1197,7 @@
 		fullscreenCanvas.height = canvasHeight * window.devicePixelRatio;
 
 		const viewState = calculateViewState(fullscreenCanvas);
+		fullscreenCurrentViewState = viewState;
 
 		fullscreenDeck = new Deck({
 			canvas: fullscreenCanvas,
@@ -1147,11 +1207,12 @@
 			views: new OrthographicView({ id: "ortho" }),
 			initialViewState: {
 				...viewState,
-				minZoom: -6,
-				maxZoom: 4,
+				minZoom: MIN_ZOOM,
+				maxZoom: MAX_ZOOM,
 			},
 			controller: true,
-			onViewStateChange: () => {
+			onViewStateChange: ({ viewState: vs }) => {
+				fullscreenCurrentViewState = normalizeViewState(vs);
 				fullscreenViewVersion++;
 			},
 			onHover: (info: { object?: MapTile; x: number; y: number }) => {
@@ -1820,6 +1881,77 @@
 	</div>
 {/snippet}
 
+{#snippet zoomControls(isFullscreen: boolean)}
+	{@const cur = isFullscreen ? fullscreenCurrentViewState : currentViewState}
+	{@const zoom = cur?.zoom ?? 0}
+	<div class="zoom-controls">
+		<button
+			type="button"
+			class="zoom-btn"
+			onclick={() => adjustZoom(ZOOM_STEP, isFullscreen)}
+			disabled={zoom >= MAX_ZOOM}
+			aria-label="Zoom in"
+			title="Zoom in"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-4 w-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2.5"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M12 5v14M5 12h14"
+				/>
+			</svg>
+		</button>
+		<button
+			type="button"
+			class="zoom-btn"
+			onclick={() => adjustZoom(-ZOOM_STEP, isFullscreen)}
+			disabled={zoom <= MIN_ZOOM}
+			aria-label="Zoom out"
+			title="Zoom out"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-4 w-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2.5"
+			>
+				<path stroke-linecap="round" stroke-linejoin="round" d="M5 12h14" />
+			</svg>
+		</button>
+		<button
+			type="button"
+			class="zoom-btn"
+			onclick={() => fitView(isFullscreen)}
+			aria-label="Fit map to view"
+			title="Fit map to view"
+		>
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-4 w-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+			>
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M9 4H5a1 1 0 00-1 1v4m16 0V5a1 1 0 00-1-1h-4M4 15v4a1 1 0 001 1h4m6 0h4a1 1 0 001-1v-4"
+				/>
+			</svg>
+		</button>
+	</div>
+{/snippet}
+
 <div class="flex flex-col gap-4">
 	<!-- Layer toggles + turn controls + expand button -->
 	{@render controlsBar("expand")}
@@ -1834,6 +1966,8 @@
 			class="sprite-map-canvas"
 			oncontextmenu={handleContextMenu}
 		></canvas>
+
+		{@render zoomControls(false)}
 
 		{#if showHover && hoverState}
 			<MapTooltip
@@ -1892,6 +2026,8 @@
 				oncontextmenu={handleFullscreenContextMenu}
 			></canvas>
 
+			{@render zoomControls(true)}
+
 			{#if showFullscreenHover && fullscreenHoverState}
 				<MapTooltip
 					tile={fullscreenHoverState.tile}
@@ -1942,6 +2078,39 @@
 		width: 100%;
 		height: 100%;
 		display: block;
+	}
+
+	.zoom-controls {
+		position: absolute;
+		right: 0.75rem;
+		bottom: 0.75rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		z-index: 10;
+		pointer-events: auto;
+	}
+
+	.zoom-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.375rem;
+		background-color: rgb(0 0 0 / 0.5);
+		color: white;
+		cursor: pointer;
+		transition: background-color 0.15s ease;
+	}
+
+	.zoom-btn:hover:not(:disabled) {
+		background-color: rgb(0 0 0 / 0.75);
+	}
+
+	.zoom-btn:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
 	}
 
 	.marker-toggle {
