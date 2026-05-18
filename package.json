@@ -4,7 +4,7 @@
 	"description": "Web analytics for Old World save files",
 	"type": "module",
 	"scripts": {
-		"dev": "vite dev",
+		"dev": "PER_ANKH_DEV=1 vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

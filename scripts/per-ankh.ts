@@ -95,6 +95,13 @@ function cmdDev(): never {
 			cwd: REPO_ROOT,
 			command: resolve(REPO_ROOT, "node_modules/.bin/vite"),
 			args: ["dev"],
+			// Read by svelte.config.js to widen the CSP's connect-src to
+			// include http://localhost:8787 (the wrangler dev worker).
+			// Without this, the browser blocks every cloudApi call. argv-
+			// based detection in svelte.config.js was unreliable across
+			// Vite's various config-loading paths; an explicit env var
+			// removes the ambiguity.
+			env: { ...process.env, PER_ANKH_DEV: "1" },
 		},
 	];
 

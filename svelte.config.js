@@ -14,18 +14,19 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // client-side fetches need localhost whitelisted in connect-src.
 // Production CSP stays tight (only api.per-ankh.app).
 //
-// Dev is detected by looking for "dev" anywhere in process.argv rather
-// than `NODE_ENV !== "production"`. NODE_ENV is set by Vite *after* the
-// CLI loads, and any value inherited from the shell (e.g. an exported
+// Detection: `PER_ANKH_DEV=1` is set by the dev wrapper (scripts/per-ankh.ts)
+// on the vite child process, plus by `npm run dev` via package.json's "dev"
+// script. We previously sniffed process.argv for "dev", but that turned out
+// to be unreliable — depending on how Node/tsx/Vite loads svelte.config.js
+// (esbuild-bundle-then-import, ESM loader, worker thread, etc.) the argv
+// available at config load time can be stripped down to just the node
+// binary. An explicit env var is reliable across all of those.
+//
+// We don't use NODE_ENV because that's set by Vite *after* the CLI loads,
+// and any value inherited from the shell (e.g. an exported
 // `NODE_ENV=production` from a deploy session) wins at svelte.config
 // load time — silently shipping a dev CSP without the localhost entry
 // and breaking every cloudApi call in the browser.
-//
-// `argv.includes("dev")` rather than `argv[2] === "dev"` because node
-// flags between the binary and the subcommand can shift argv (e.g.
-// `node --inspect vite.js dev` puts "dev" at index 3, not 2). The build
-// + preview commands don't contain "dev" anywhere in argv, so this
-// stays correct for non-dev invocations.
 //
 // `cloudflareinsights.com` is the POST target for the Cloudflare Web
 // Analytics beacon (the script itself loads from
@@ -33,7 +34,7 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // Cloudflare auto-injects the beacon when Web Analytics is enabled on
 // the Worker; without both directives the script loads-and-blocks and
 // the beacon submission fails.
-const isDev = process.argv.includes("dev");
+const isDev = process.env.PER_ANKH_DEV === "1";
 const connectSrc = [
 	"self",
 	"https://api.per-ankh.app",
