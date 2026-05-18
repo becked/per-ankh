@@ -26,18 +26,12 @@ import {
 	TOURNAMENT_CREATE_PER_USER_PER_HOUR,
 } from "./limits";
 import {
-	advanceCountSuggestion,
 	buildChampionshipFollowupRound,
 	buildChampionshipRound1,
-	buildChampionshipSeeds,
 } from "./bracket";
 import { assignMapsToPairings } from "./maps";
 import { pairSwissRound, type Pairing } from "./pairing";
-import {
-	computeStandings,
-	rankStandings,
-	type RankedStanding,
-} from "./standings";
+import { computeStandings, rankStandings } from "./standings";
 import {
 	AuthzError,
 	requireTournamentAdmin,
@@ -349,6 +343,33 @@ function parseAllowedMapsOrError(
 	}
 }
 
+// FSM-consistency check on Swiss thresholds. Run from create + patch.
+// Returns an error message on failure, null on success.
+//
+// Rules:
+//   1. swiss_wins_to_advance ≤ swiss_max_rounds — no one could ever clinch
+//      if it took more wins than rounds.
+//   2. swiss_wins_to_advance + swiss_losses_to_eliminate ≤ swiss_max_rounds + 1
+//      — guarantees a player alternating W-L reaches a verdict by max_rounds.
+//      Without this, some players may finish Swiss with status='active' and
+//      no resolution (they would not auto-qualify into the bracket).
+//
+// `swiss_losses_to_eliminate ≤ swiss_max_rounds` is implied by rule 2 plus
+// rule 1 (both ≥ 1).
+function validateSwissThresholds(
+	maxRounds: number,
+	winsToAdvance: number,
+	lossesToEliminate: number,
+): string | null {
+	if (winsToAdvance > maxRounds) {
+		return `swiss_wins_to_advance (${winsToAdvance}) cannot exceed swiss_max_rounds (${maxRounds})`;
+	}
+	if (winsToAdvance + lossesToEliminate > maxRounds + 1) {
+		return `swiss_wins_to_advance + swiss_losses_to_eliminate (${winsToAdvance + lossesToEliminate}) must be ≤ swiss_max_rounds + 1 (${maxRounds + 1}); otherwise some players may finish Swiss with no verdict`;
+	}
+	return null;
+}
+
 // ----------------------------------------------------------------------
 // POST /v1/tournaments — anyone signed in can create a tournament.
 // The creator becomes the sole tournament admin (CLI is still the only
@@ -501,6 +522,15 @@ export async function handleCreateTournament(
 	const swissWinsToAdvance = input.swiss_wins_to_advance ?? 3;
 	const swissLossesToEliminate = input.swiss_losses_to_eliminate ?? 3;
 
+	const thresholdError = validateSwissThresholds(
+		swissMaxRounds,
+		swissWinsToAdvance,
+		swissLossesToEliminate,
+	);
+	if (thresholdError) {
+		return errorResponse(thresholdError, 400, cors, "INVALID_THRESHOLDS");
+	}
+
 	// Map-script options: validate caller input (if any), then reconcile
 	// against allowed_map_scripts so every allowed script gets a populated
 	// options block (XML defaults for unset values). Stored as JSON.
@@ -597,7 +627,6 @@ export async function handleCreateTournament(
 				status: created.status,
 				division_a_name: created.division_a_name,
 				division_b_name: created.division_b_name,
-				swiss_advance_count: created.swiss_advance_count,
 				swiss_wins_to_advance: created.swiss_wins_to_advance,
 				swiss_losses_to_eliminate: created.swiss_losses_to_eliminate,
 				swiss_max_rounds: created.swiss_max_rounds,
@@ -636,8 +665,7 @@ export async function handlePatchTournament(
 	const locked = tournament.status !== "setup";
 	if (
 		locked &&
-		(patch.swiss_advance_count !== undefined ||
-			patch.swiss_wins_to_advance !== undefined ||
+		(patch.swiss_wins_to_advance !== undefined ||
 			patch.swiss_losses_to_eliminate !== undefined ||
 			patch.swiss_max_rounds !== undefined ||
 			patch.allowed_map_scripts !== undefined ||
@@ -649,6 +677,22 @@ export async function handlePatchTournament(
 			cors,
 			"TOURNAMENT_LOCKED",
 		);
+	}
+
+	// FSM-consistency check on the effective (post-patch) thresholds. Each
+	// field falls back to the existing row's value when not in the patch.
+	const effMaxRounds = patch.swiss_max_rounds ?? tournament.swiss_max_rounds;
+	const effWinsToAdvance =
+		patch.swiss_wins_to_advance ?? tournament.swiss_wins_to_advance;
+	const effLossesToEliminate =
+		patch.swiss_losses_to_eliminate ?? tournament.swiss_losses_to_eliminate;
+	const thresholdError = validateSwissThresholds(
+		effMaxRounds,
+		effWinsToAdvance,
+		effLossesToEliminate,
+	);
+	if (thresholdError) {
+		return errorResponse(thresholdError, 400, cors, "INVALID_THRESHOLDS");
 	}
 
 	// Compute the post-patch allowed_map_scripts list. The map_script_options
@@ -1075,42 +1119,16 @@ export async function handleStartTournament(
 			"DIVISION_EMPTY",
 		);
 	}
-	const advanceCount =
-		tournament.swiss_advance_count ?? advanceCountSuggestion(divA, divB);
-	if (advanceCount < 1) {
-		return errorResponse(
-			"Computed advance count is zero — too few players",
-			409,
-			cors,
-			"INSUFFICIENT_PLAYERS",
-		);
-	}
-	// Fail-fast: advance_count > smaller division's size is unrecoverable.
-	// Without this, the tournament starts, plays through Swiss, and only
-	// hits INSUFFICIENT_ADVANCERS at transition-championship time. The
-	// bound is min(divA, divB) (not /2) — computeStandings ranks every
-	// slot regardless of active/eliminated status, so eliminations don't
-	// shrink the candidate pool.
-	const smallerDiv = Math.min(divA, divB);
-	if (advanceCount > smallerDiv) {
-		return errorResponse(
-			`swiss_advance_count (${advanceCount}) exceeds smaller division's size (${smallerDiv})`,
-			409,
-			cors,
-			"ADVANCE_COUNT_TOO_LARGE",
-		);
-	}
-
 	const mapsResult = parseAllowedMapsOrError(tournament, cors);
 	if (!mapsResult.ok) return mapsResult.response;
 	const allowedMaps = mapsResult.maps;
 
 	const statements: D1PreparedStatement[] = [
 		env.SHARE_DB.prepare(
-			`UPDATE tournaments SET status = 'swiss', swiss_advance_count = ?,
+			`UPDATE tournaments SET status = 'swiss',
 			        updated_at = datetime('now')
 			 WHERE tournament_id = ?`,
-		).bind(advanceCount, tournamentId),
+		).bind(tournamentId),
 	];
 	const summaries: { division: Division; round_id: string; matches: number }[] =
 		[];
@@ -1137,7 +1155,6 @@ export async function handleStartTournament(
 	await env.SHARE_DB.batch(statements);
 	const updated = await loadTournamentById(env, tournamentId);
 	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_started", {
-		advance_count: advanceCount,
 		rounds: summaries,
 	});
 	return jsonResponse({ tournament: updated, rounds: summaries }, 201, cors);
@@ -1370,9 +1387,16 @@ async function downstreamBlocked(
 // ----------------------------------------------------------------------
 // POST /v1/tournaments/:id/transition-championship
 //
-// Body (optional): { override_ranks: { A: [slot_ids], B: [slot_ids] } }
-// When provided, uses the admin's explicit ranking. Otherwise applies the
-// cascade and returns 409 if there's a tie at the cutoff.
+// Body (optional): { override_ranks: [slot_id_1, slot_id_2, ...] }
+// When provided, the flat list IS the bracket seed order (skipping the
+// auto-promote-by-status logic). Used to (a) resolve full-cascade ties
+// at any seed, or (b) promote non-clinched slots when too few clinched
+// (INSUFFICIENT_QUALIFIERS case).
+//
+// Otherwise: auto-promote every slot with status='advanced' from both
+// divisions, rank them as a combined list via the seeding cascade
+// (wins → H2H → Buchholz cut-1 → cumulative), and use that as the bracket
+// seed order.
 // ----------------------------------------------------------------------
 
 export async function handleTransitionChampionship(
@@ -1392,14 +1416,6 @@ export async function handleTransitionChampionship(
 			"INVALID_PHASE",
 		);
 	}
-	if (tournament.swiss_advance_count === null) {
-		return errorResponse(
-			"swiss_advance_count not set",
-			409,
-			cors,
-			"NO_ADVANCE_COUNT",
-		);
-	}
 
 	// Auto-close any in_progress Swiss rounds that have all matches
 	// reported. Pending matches (or pending-status rounds) still block.
@@ -1417,117 +1433,103 @@ export async function handleTransitionChampionship(
 	if (!body.ok) return body.response;
 	const override = body.body.override_ranks;
 
-	// Compute rankings per division (or use override).
 	const slots = await loadSlots(env, tournamentId);
 	const matchRefs = await matchRefsForTournament(env, tournamentId, matches);
 	const config = tournamentConfig(tournament);
 
-	const advancersByDiv: Record<Division, string[]> = { A: [], B: [] };
-	for (const division of ["A", "B"] as const) {
-		if (override) {
-			const ids = override[division] ?? [];
-			if (ids.length < tournament.swiss_advance_count) {
+	// Resolve the seed-ordered qualifier list.
+	let seedOrder: string[];
+	if (override) {
+		// Override path: admin supplied the exact bracket seed order.
+		if (override.length < 2) {
+			return errorResponse(
+				`override_ranks must include at least 2 slot IDs (got ${override.length})`,
+				400,
+				cors,
+				"INVALID_OVERRIDE",
+			);
+		}
+		const seen = new Set<string>();
+		for (const slotId of override) {
+			if (seen.has(slotId)) {
 				return errorResponse(
-					`override_ranks.${division} must include at least ${tournament.swiss_advance_count} slot IDs`,
+					`Duplicate slot in override_ranks: ${slotId}`,
 					400,
 					cors,
 					"INVALID_OVERRIDE",
 				);
 			}
-			const chosen = ids.slice(0, tournament.swiss_advance_count);
-			// Validate each override slot up-front. Previously a bad ID would
-			// trip the eventual sourceSlot.find at line ~1120 and 500 with
-			// SOURCE_SLOT_MISSING — surface specific 4xx errors instead.
-			for (const slotId of chosen) {
-				const slot = slots.find((s) => s.slot_id === slotId);
-				if (!slot) {
-					return errorResponse(
-						`Override slot ${slotId} not in tournament`,
-						400,
-						cors,
-						"OVERRIDE_SLOT_NOT_IN_TOURNAMENT",
-					);
-				}
-				if (slot.phase !== "swiss") {
-					return errorResponse(
-						`Override slot ${slotId} is not a swiss-phase slot`,
-						400,
-						cors,
-						"OVERRIDE_SLOT_WRONG_PHASE",
-					);
-				}
-				if (slot.division !== division) {
-					return errorResponse(
-						`Override slot ${slotId} is in division ${slot.division ?? "null"}, not ${division}`,
-						400,
-						cors,
-						"OVERRIDE_SLOT_WRONG_DIVISION",
-					);
-				}
+			seen.add(slotId);
+			const slot = slots.find((s) => s.slot_id === slotId);
+			if (!slot) {
+				return errorResponse(
+					`Override slot ${slotId} not in tournament`,
+					400,
+					cors,
+					"OVERRIDE_SLOT_NOT_IN_TOURNAMENT",
+				);
 			}
-			advancersByDiv[division] = chosen;
-			continue;
+			if (slot.phase !== "swiss") {
+				return errorResponse(
+					`Override slot ${slotId} is not a swiss-phase slot`,
+					400,
+					cors,
+					"OVERRIDE_SLOT_WRONG_PHASE",
+				);
+			}
 		}
-		const divSlots = slots
-			.filter((s) => s.phase === "swiss" && s.division === division)
+		seedOrder = [...override];
+	} else {
+		// Auto path: rank all swiss-phase slots across both divisions in a
+		// single combined cascade (H2H within the combined tied set). Then
+		// filter to status='advanced'.
+		const swissSlots = slots
+			.filter((s) => s.phase === "swiss")
 			.map(slotRowToRef);
-		const divMatches = matchRefs.filter((m) => m.division === division);
-		const standings = computeStandings(divSlots, divMatches, config);
-		const ranked = rankStandings(standings);
+		const standings = computeStandings(swissSlots, matchRefs, config);
+		const ranked = rankStandings(standings, matchRefs);
+		const qualifiers = ranked.filter((r) => r.status === "advanced");
 
-		// Cascade tie at cutoff: the slot at rank (N) and the slot at rank
-		// (N+1) (or any slot at rank N tied with a slot at rank N+1) is
-		// blocked.
-		const cutoff = tournament.swiss_advance_count;
-		if (ranked.length < cutoff) {
+		if (qualifiers.length < 2) {
+			// Surface near-qualifiers (the full ranked list) so the admin's
+			// override UI can present them.
 			return errorResponse(
-				`Division ${division} has ${ranked.length} slots but advance_count is ${cutoff}`,
+				`Only ${qualifiers.length} player(s) reached the win threshold; at least 2 needed. Use override_ranks to promote additional slots.`,
 				409,
 				cors,
-				"INSUFFICIENT_ADVANCERS",
-			);
-		}
-		const tied = collectTiedAtCutoff(ranked, cutoff);
-		if (tied.length > 0) {
-			return errorResponse(
-				"Cascade tied at advance cutoff",
-				409,
-				cors,
-				"CASCADE_TIE_AT_CUTOFF",
+				"INSUFFICIENT_QUALIFIERS",
 				{
-					division,
-					tied_slot_ids: tied,
+					qualifier_count: qualifiers.length,
 					ranked: ranked.map((r) => ({
 						slot_id: r.slot_id,
 						rank: r.rank,
 						wins: r.wins,
 						losses: r.losses,
-						median_buchholz: r.median_buchholz,
-						solkoff: r.solkoff,
+						status: r.status,
+						buchholz_cut1: r.buchholz_cut1,
+						cumulative: r.cumulative,
 					})),
 				},
 			);
 		}
-		advancersByDiv[division] = ranked.slice(0, cutoff).map((r) => r.slot_id);
+		seedOrder = qualifiers.map((q) => q.slot_id);
 	}
 
-	// Build championship slots
-	const seeds = buildChampionshipSeeds(
-		tournament.swiss_advance_count,
-		advancersByDiv.A.length,
-		advancersByDiv.B.length,
-	);
-	const round1Templates = buildChampionshipRound1(seeds.length);
+	// Build bracket structure from the seed order. Bracket size rounds up
+	// to the next power of 2; non-power-of-2 qualifier counts produce R1
+	// byes for top seeds.
+	const round1 = buildChampionshipRound1(seedOrder.length);
 	const roundId = nanoid(21);
 
 	const statements: D1PreparedStatement[] = [];
 	const championshipSlotIds: Record<number, string> = {};
 
-	for (const s of seeds) {
-		const sourceSlotId =
-			s.source_division === "A"
-				? advancersByDiv.A[s.source_rank - 1]
-				: advancersByDiv.B[s.source_rank - 1];
+	// Insert one championship slot per real qualifier (seeds 1..N where N
+	// is seedOrder.length). Phantom seeds (N+1..bracket_size) do not get
+	// championship_slot rows — they exist only as null slot_b_id in R1
+	// bye matches.
+	for (let i = 0; i < seedOrder.length; i++) {
+		const sourceSlotId = seedOrder[i];
 		const sourceSlot = slots.find((row) => row.slot_id === sourceSlotId);
 		if (!sourceSlot) {
 			return errorResponse(
@@ -1537,8 +1539,9 @@ export async function handleTransitionChampionship(
 				"SOURCE_SLOT_MISSING",
 			);
 		}
+		const seed = i + 1;
 		const newSlotId = nanoid(21);
-		championshipSlotIds[s.championship_seed] = newSlotId;
+		championshipSlotIds[seed] = newSlotId;
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_slots
@@ -1548,7 +1551,7 @@ export async function handleTransitionChampionship(
 			).bind(
 				newSlotId,
 				tournamentId,
-				s.championship_seed,
+				seed,
 				sourceSlot.discord_username,
 				sourceSlot.discord_id,
 				sourceSlot.user_id,
@@ -1569,9 +1572,14 @@ export async function handleTransitionChampionship(
 	const mapsResult = parseAllowedMapsOrError(tournament, cors);
 	if (!mapsResult.ok) return mapsResult.response;
 	const allowedMaps = mapsResult.maps;
-	const matchPairings: Pairing[] = round1Templates.map((t) => ({
+
+	// Map assignment: real matches (not byes) get one of allowedMaps; byes
+	// get null. Convert each round1 template to a Pairing (slot_b_id null
+	// for byes) and run assignMapsToPairings, which already handles null
+	// slot_b correctly (returns map_script=null).
+	const matchPairings: Pairing[] = round1.matches.map((t) => ({
 		slot_a_id: championshipSlotIds[t.seed_a]!,
-		slot_b_id: championshipSlotIds[t.seed_b]!,
+		slot_b_id: t.is_bye ? null : championshipSlotIds[t.seed_b]!,
 	}));
 	const seed = `${tournamentId}|championship|r1`;
 	const withMaps = assignMapsToPairings(
@@ -1582,20 +1590,28 @@ export async function handleTransitionChampionship(
 	);
 	for (let i = 0; i < withMaps.length; i++) {
 		const p = withMaps[i];
+		const template = round1.matches[i];
 		const matchId = nanoid(21);
+		const status = template.is_bye ? "bye" : "pending";
+		const winnerSlotId = template.is_bye ? p.slot_a_id : null;
+		// pick_order_winner_slot_id: defaults to slot_b for real matches
+		// (player listed second picks first). NULL for byes.
+		const pickOrderWinner = template.is_bye ? null : p.slot_b_id;
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				matchId,
 				roundId,
 				p.slot_a_id,
 				p.slot_b_id,
 				p.map_script,
-				p.slot_b_id,
+				pickOrderWinner,
+				status,
+				winnerSlotId,
 				i + 1,
 			),
 		);
@@ -1615,7 +1631,9 @@ export async function handleTransitionChampionship(
 		"championship_transitioned",
 		{
 			round_id: roundId,
-			advance_count: tournament.swiss_advance_count,
+			qualifier_count: seedOrder.length,
+			bracket_size: round1.bracket_size,
+			byes: round1.bye_count,
 			override: !!override,
 		},
 	);
@@ -1624,24 +1642,14 @@ export async function handleTransitionChampionship(
 			status: "championship",
 			round_id: roundId,
 			matches: withMaps.length,
-			advancers: advancersByDiv,
+			qualifier_count: seedOrder.length,
+			bracket_size: round1.bracket_size,
+			byes: round1.bye_count,
+			seed_order: seedOrder,
 		},
 		201,
 		cors,
 	);
-}
-
-function collectTiedAtCutoff(
-	ranked: RankedStanding[],
-	cutoff: number,
-): string[] {
-	// If the slot at index cutoff-1 shares its rank with the slot at index
-	// cutoff, the cascade left a tie that bridges the cutoff.
-	if (cutoff <= 0 || cutoff >= ranked.length) return [];
-	const insideRank = ranked[cutoff - 1].rank;
-	const outsideRank = ranked[cutoff].rank;
-	if (insideRank !== outsideRank) return [];
-	return ranked.filter((r) => r.rank === insideRank).map((r) => r.slot_id);
 }
 
 // ----------------------------------------------------------------------

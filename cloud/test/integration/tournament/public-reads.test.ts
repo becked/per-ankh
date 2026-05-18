@@ -70,7 +70,6 @@ describe("public read handlers", () => {
 			status: string;
 			division_a_name: string;
 			division_b_name: string;
-			swiss_advance_count: number;
 			swiss_wins_to_advance: number;
 			swiss_losses_to_eliminate: number;
 			swiss_max_rounds: number;
@@ -93,7 +92,7 @@ describe("public read handlers", () => {
 		expect(body.is_viewer_admin).toBe(true);
 	});
 
-	it("GET /v1/tournaments/:id/standings returns ranked standings keyed by division", async () => {
+	it("GET /v1/tournaments/:id/standings returns ranked standings + combined qualifier ranking", async () => {
 		const t = await makeTournament({
 			advanceTo: "swiss-round-1-complete",
 		});
@@ -112,6 +111,9 @@ describe("public read handlers", () => {
 						rank: number;
 						wins: number;
 						losses: number;
+						buchholz_cut1: number;
+						cumulative: number;
+						h2h: number;
 						discord_username: string | null;
 						swiss_seed: number | null;
 					}>;
@@ -123,11 +125,25 @@ describe("public read handlers", () => {
 						rank: number;
 						wins: number;
 						losses: number;
+						buchholz_cut1: number;
+						cumulative: number;
+						h2h: number;
 						discord_username: string | null;
 						swiss_seed: number | null;
 					}>;
 				};
 			};
+			combined_qualifier_ranking: Array<{
+				slot_id: string;
+				rank: number;
+				wins: number;
+				losses: number;
+				status: string;
+				division: "A" | "B" | null;
+				buchholz_cut1: number;
+				cumulative: number;
+				h2h: number;
+			}>;
 		}>(res);
 
 		expect(body.tournament_id).toBe(t.tournamentId);
@@ -141,12 +157,22 @@ describe("public read handlers", () => {
 			expect(typeof row.rank).toBe("number");
 			expect(typeof row.wins).toBe("number");
 			expect(typeof row.losses).toBe("number");
+			expect(typeof row.buchholz_cut1).toBe("number");
+			expect(typeof row.cumulative).toBe("number");
 			expect(typeof row.swiss_seed).toBe("number");
 		}
 		// After 1 reported swiss round, every match has a winner — so wins
 		// + losses sum to 1 for every slot in a 4-player division.
 		for (const row of body.divisions.A.standings) {
 			expect(row.wins + row.losses).toBe(1);
+		}
+
+		// Combined qualifier ranking spans both divisions, in seed order.
+		expect(body.combined_qualifier_ranking).toBeDefined();
+		expect(body.combined_qualifier_ranking.length).toBe(8);
+		for (const r of body.combined_qualifier_ranking) {
+			expect(["A", "B"]).toContain(r.division);
+			expect(["active", "advanced", "eliminated"]).toContain(r.status);
 		}
 	});
 

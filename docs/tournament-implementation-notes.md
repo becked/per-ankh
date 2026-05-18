@@ -97,9 +97,10 @@ Eight migrations applied locally; not yet remote.
     floats one slot down), bye assignment for odd active counts
   - `maps.ts` — auto-map-assignment per match with anti-repeat preference
     (unplayed > min-combined-play-count with alphabetical tiebreak)
-  - `bracket.ts` — `largestPowerOfTwoAtMost`, `advanceCountSuggestion`,
-    cross-division `buildChampionshipSeeds`, round-1 + follow-up
-    `ChampionshipMatchTemplate` builders
+  - `bracket.ts` — `largestPowerOfTwoAtLeast`, `standardBracketPairs`
+    (recursive 1-vs-N seeding), `buildChampionshipRound1` (variable
+    qualifier counts with byes for top seeds), `buildChampionshipFollowupRound`
+    (adjacent-winner pairing for R2+)
   - `data.ts` — D1 row types + shared queries + row → ref adapters
   - `authz.ts` — `requireTournamentAdmin`, `requireMatchParticipantOrAdmin`
     `isTournamentAdmin`, `AuthzError`

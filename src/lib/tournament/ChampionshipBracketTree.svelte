@@ -174,6 +174,7 @@
 					<a
 						class="match"
 						class:decided={m.status === "complete" || m.status === "forfeit"}
+						class:bye={m.status === "bye"}
 						href="{resolve('/tournaments/[slug]', {
 							slug: tournamentSlug,
 						})}?match={m.match_id}"
@@ -187,7 +188,7 @@
 							{slotLabel(m.slot_a_id)}
 						</div>
 						<div class="slot" class:winner={bWon}>
-							{slotLabel(m.slot_b_id)}
+							{m.status === "bye" ? "BYE" : slotLabel(m.slot_b_id)}
 						</div>
 					</a>
 				{/each}
@@ -261,6 +262,15 @@
 
 	.match:hover {
 		border-color: var(--color-orange, #d97706);
+	}
+
+	/* Bye matches are pre-decided — dim them to keep the visual focus on
+	   the real R1 contests. The winner slot keeps full opacity via .winner. */
+	.match.bye {
+		opacity: 0.6;
+	}
+	.match.bye .winner {
+		opacity: 1;
 	}
 
 	.slot {

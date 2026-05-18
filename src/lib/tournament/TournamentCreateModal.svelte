@@ -35,6 +35,19 @@
 
 	const unaddedGroups = $derived(unaddedMapScriptsByDlc(allowedMapScripts));
 
+	// FSM-consistency: mirror validateSwissThresholds in
+	// cloud/src/tournament/admin.ts. Server validates on create; inline
+	// here so the submit button shows why it's disabled.
+	const thresholdError = $derived.by(() => {
+		if (swissWinsToAdvance > swissMaxRounds) {
+			return `Wins to advance (${swissWinsToAdvance}) cannot exceed max rounds (${swissMaxRounds}).`;
+		}
+		if (swissWinsToAdvance + swissLossesToEliminate > swissMaxRounds + 1) {
+			return `Wins + losses (${swissWinsToAdvance + swissLossesToEliminate}) must be ≤ max rounds + 1 (${swissMaxRounds + 1}).`;
+		}
+		return null;
+	});
+
 	const canSubmit = $derived(
 		!busy &&
 			name.trim().length > 0 &&
@@ -43,7 +56,8 @@
 			allowedMapScripts.length > 0 &&
 			swissMaxRounds > 0 &&
 			swissWinsToAdvance > 0 &&
-			swissLossesToEliminate > 0,
+			swissLossesToEliminate > 0 &&
+			thresholdError === null,
 	);
 
 	function addMapScript(value: string) {
@@ -240,6 +254,9 @@
 						/>
 					</label>
 				</div>
+				{#if thresholdError}
+					<p class="mt-2 text-[11px] text-red-400">{thresholdError}</p>
+				{/if}
 			</fieldset>
 
 			<div class="flex flex-col gap-2">

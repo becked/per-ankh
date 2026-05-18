@@ -669,13 +669,16 @@ export const cloudApi = {
 
 	transitionChampionship: async (
 		tournamentId: string,
-		body: { override_ranks?: { A: string[]; B: string[] } } = {},
+		body: { override_ranks?: string[] } = {},
 		opts?: CallOpts,
 	): Promise<{
 		status: "championship";
 		round_id: string;
 		matches: number;
-		advancers: { A: string[]; B: string[] };
+		qualifier_count: number;
+		bracket_size: number;
+		byes: number;
+		seed_order: string[];
 	}> => {
 		const res = await request(
 			`/tournaments/${tournamentId}/transition-championship`,
@@ -690,7 +693,10 @@ export const cloudApi = {
 			status: "championship";
 			round_id: string;
 			matches: number;
-			advancers: { A: string[]; B: string[] };
+			qualifier_count: number;
+			bracket_size: number;
+			byes: number;
+			seed_order: string[];
 		}>;
 	},
 } as const;
@@ -731,7 +737,6 @@ export interface TournamentDetail {
 	status: TournamentStatus;
 	division_a_name: string;
 	division_b_name: string;
-	swiss_advance_count: number | null;
 	swiss_wins_to_advance: number;
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
@@ -754,7 +759,6 @@ export interface PatchTournamentBody {
 	description?: string | null;
 	division_a_name?: string;
 	division_b_name?: string;
-	swiss_advance_count?: number;
 	swiss_wins_to_advance?: number;
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
@@ -785,12 +789,30 @@ export interface SlotStanding {
 	wins: number;
 	losses: number;
 	status: "active" | "advanced" | "eliminated";
-	median_buchholz: number;
-	solkoff: number;
+	buchholz_cut1: number;
+	cumulative: number;
+	h2h: number;
 	rank: number;
 	tied_with: string[];
 	discord_username: string | null;
 	user_id: string | null;
+	swiss_seed: number | null;
+}
+
+// One entry in the combined-ranking response field. Spans both divisions
+// in seeding-cascade order; used by the championship-transition preview
+// to show admins exactly who will get which bracket seat.
+export interface CombinedQualifier {
+	slot_id: string;
+	rank: number;
+	wins: number;
+	losses: number;
+	status: "active" | "advanced" | "eliminated";
+	h2h: number;
+	buchholz_cut1: number;
+	cumulative: number;
+	division: "A" | "B" | null;
+	discord_username: string | null;
 	swiss_seed: number | null;
 }
 
@@ -800,6 +822,8 @@ export interface StandingsResponse {
 		A: { name: string; standings: SlotStanding[] };
 		B: { name: string; standings: SlotStanding[] };
 	};
+	// Present once the tournament is past 'setup'. Undefined during setup.
+	combined_qualifier_ranking?: CombinedQualifier[];
 }
 
 export interface BracketSlot {

@@ -55,7 +55,6 @@ interface TournamentRow {
 	description: string | null;
 	division_a_name: string;
 	division_b_name: string;
-	swiss_advance_count: number | null;
 	swiss_wins_to_advance: number;
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
@@ -227,10 +226,9 @@ async function runList(argv: string[], opts: CommandOpts): Promise<void> {
 		slug: string;
 		name: string;
 		status: string;
-		swiss_advance_count: number | null;
 		created_at: string;
 	}>(`
-		SELECT tournament_id, slug, name, status, swiss_advance_count, created_at
+		SELECT tournament_id, slug, name, status, created_at
 		FROM tournaments ${where}
 		ORDER BY created_at DESC
 		LIMIT ${limit}
@@ -244,7 +242,6 @@ async function runList(argv: string[], opts: CommandOpts): Promise<void> {
 		{ header: "slug", width: 30 },
 		{ header: "name", width: 28 },
 		{ header: "status", width: 12 },
-		{ header: "advance", width: 8, align: "right" },
 		{ header: "created", width: 16 },
 	];
 	printTable(
@@ -254,7 +251,6 @@ async function runList(argv: string[], opts: CommandOpts): Promise<void> {
 			r.slug,
 			r.name,
 			r.status,
-			r.swiss_advance_count !== null ? String(r.swiss_advance_count) : "—",
 			formatDate(r.created_at),
 		]),
 	);
@@ -314,12 +310,6 @@ async function runShow(argv: string[], opts: CommandOpts): Promise<void> {
 		["description", emdash(tournament.description)],
 		["division A", tournament.division_a_name],
 		["division B", tournament.division_b_name],
-		[
-			"advance per division",
-			tournament.swiss_advance_count !== null
-				? String(tournament.swiss_advance_count)
-				: "(unset)",
-		],
 		[
 			"wins to advance / losses to eliminate / max rounds",
 			`${tournament.swiss_wins_to_advance} / ${tournament.swiss_losses_to_eliminate} / ${tournament.swiss_max_rounds}`,

@@ -12,10 +12,12 @@
 		type UserMe,
 	} from "$lib/api-cloud";
 	import ChampionshipBracketTree from "$lib/tournament/ChampionshipBracketTree.svelte";
+	import ChampionshipTransitionPreview from "$lib/tournament/ChampionshipTransitionPreview.svelte";
 	import MatchModal from "$lib/tournament/MatchModal.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
+	import TiebreakerInfoModal from "$lib/tournament/TiebreakerInfoModal.svelte";
 	import TournamentConfigurationPanel from "$lib/tournament/TournamentConfigurationPanel.svelte";
 	import TournamentMapsPanel from "$lib/tournament/TournamentMapsPanel.svelte";
 	import TournamentOverviewPanel from "$lib/tournament/TournamentOverviewPanel.svelte";
@@ -360,15 +362,17 @@
 		);
 	}
 
-	async function transitionChampionship() {
-		if (
-			!confirm(
-				"Transition to championship? Builds the bracket from Swiss results. This cannot be undone.",
-			)
-		)
-			return;
+	let transitionPreviewOpen = $state(false);
+	let tiebreakerInfoOpen = $state(false);
+
+	async function transitionChampionship(overrideRanks?: string[]) {
+		transitionPreviewOpen = false;
 		await withBusy(
-			() => cloudApi.transitionChampionship(data.tournament.tournament_id),
+			() =>
+				cloudApi.transitionChampionship(
+					data.tournament.tournament_id,
+					overrideRanks ? { override_ranks: overrideRanks } : {},
+				),
 			"Transitioned to championship",
 		);
 	}
@@ -414,7 +418,7 @@
 								<button
 									type="button"
 									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-									onclick={transitionChampionship}
+									onclick={() => (transitionPreviewOpen = true)}
 									disabled={busy || !transitionReady}
 									title={transitionReady
 										? ""
@@ -709,8 +713,19 @@
 						{@const divisionData = data.standings.divisions[division]}
 						{#if divisionData.standings.length > 0}
 							<section class="mb-8">
-								<h2 class="mb-3 text-lg font-bold text-tan">
-									{divisionData.name}
+								<h2
+									class="mb-3 flex items-baseline gap-2 text-lg font-bold text-tan"
+								>
+									<span>{divisionData.name}</span>
+									<button
+										type="button"
+										class="rounded border border-black border-opacity-50 px-1.5 text-[11px] font-normal text-tan opacity-60 transition-opacity hover:opacity-100"
+										onclick={() => (tiebreakerInfoOpen = true)}
+										aria-label="How tiebreakers and qualification work"
+										title="How tiebreakers and qualification work"
+									>
+										?
+									</button>
 								</h2>
 								<div class="space-y-3">
 									<SwissFlowBracket
@@ -759,4 +774,18 @@
 		tournament={data.tournament}
 		onClose={() => (settingsOpen = false)}
 	/>
+{/if}
+
+{#if transitionPreviewOpen && data.standings.combined_qualifier_ranking}
+	<ChampionshipTransitionPreview
+		tournament={data.tournament}
+		combined={data.standings.combined_qualifier_ranking}
+		{busy}
+		onConfirm={transitionChampionship}
+		onCancel={() => (transitionPreviewOpen = false)}
+	/>
+{/if}
+
+{#if tiebreakerInfoOpen}
+	<TiebreakerInfoModal onClose={() => (tiebreakerInfoOpen = false)} />
 {/if}

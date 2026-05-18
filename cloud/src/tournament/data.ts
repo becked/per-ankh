@@ -22,7 +22,6 @@ export interface TournamentRow {
 	status: "setup" | "swiss" | "championship" | "complete";
 	division_a_name: string;
 	division_b_name: string;
-	swiss_advance_count: number | null;
 	swiss_wins_to_advance: number;
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;

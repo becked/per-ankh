@@ -1,102 +1,137 @@
 import { describe, expect, it } from "vitest";
 import {
-	advanceCountSuggestion,
 	buildChampionshipFollowupRound,
 	buildChampionshipRound1,
-	buildChampionshipSeeds,
-	largestPowerOfTwoAtMost,
+	largestPowerOfTwoAtLeast,
+	standardBracketPairs,
 } from "./bracket";
 
-describe("largestPowerOfTwoAtMost", () => {
-	it("returns 0 for inputs below 1", () => {
-		expect(largestPowerOfTwoAtMost(0)).toBe(0);
-		expect(largestPowerOfTwoAtMost(-5)).toBe(0);
-	});
-
+describe("largestPowerOfTwoAtLeast", () => {
 	it.each([
 		[1, 1],
 		[2, 2],
-		[3, 2],
+		[3, 4],
 		[4, 4],
-		[7, 4],
+		[5, 8],
+		[7, 8],
 		[8, 8],
-		[15, 8],
+		[9, 16],
+		[15, 16],
 		[16, 16],
-		[31, 16],
+		[17, 32],
+		[31, 32],
 		[32, 32],
-	])("largestPowerOfTwoAtMost(%i) = %i", (n, expected) => {
-		expect(largestPowerOfTwoAtMost(n)).toBe(expected);
+	])("largestPowerOfTwoAtLeast(%i) = %i", (n, expected) => {
+		expect(largestPowerOfTwoAtLeast(n)).toBe(expected);
+	});
+
+	it("returns 1 for inputs below 1", () => {
+		expect(largestPowerOfTwoAtLeast(0)).toBe(1);
+		expect(largestPowerOfTwoAtLeast(-5)).toBe(1);
 	});
 });
 
-describe("advanceCountSuggestion", () => {
-	it.each([
-		// User-specified targets:
-		[22, 22, 8], // 44 players → top 8 each
-		[33, 33, 16], // 66 players → top 16 each
-		// Other boundaries:
-		[6, 6, 2], // 12 players → top 2 each
-		[8, 8, 4],
-		[14, 14, 4], // floor(14/2)=7, largest pow2 ≤ 7 = 4
-		[63, 63, 16], // floor(63/2)=31, largest pow2 ≤ 31 = 16
-		[64, 64, 32],
-		// Asymmetric divisions take min:
-		[22, 33, 8],
-		[6, 22, 2], // min=6 → 2 advance each → 4-player championship
-	])("advanceCountSuggestion(divA=%i, divB=%i) = %i", (a, b, expected) => {
-		expect(advanceCountSuggestion(a, b)).toBe(expected);
+describe("standardBracketPairs", () => {
+	it("size 2: single (1,2)", () => {
+		expect(standardBracketPairs(2)).toEqual([[1, 2]]);
 	});
-});
 
-describe("buildChampionshipSeeds", () => {
-	it("cross-pairs A_rank_i with B_rank_(N-i+1) at adjacent seeds", () => {
-		const seeds = buildChampionshipSeeds(4, 4, 4);
-		// Expected:
-		// seed 1: A rank 1
-		// seed 2: B rank 4
-		// seed 3: A rank 2
-		// seed 4: B rank 3
-		// seed 5: A rank 3
-		// seed 6: B rank 2
-		// seed 7: A rank 4
-		// seed 8: B rank 1
-		expect(seeds).toEqual([
-			{ championship_seed: 1, source_division: "A", source_rank: 1 },
-			{ championship_seed: 2, source_division: "B", source_rank: 4 },
-			{ championship_seed: 3, source_division: "A", source_rank: 2 },
-			{ championship_seed: 4, source_division: "B", source_rank: 3 },
-			{ championship_seed: 5, source_division: "A", source_rank: 3 },
-			{ championship_seed: 6, source_division: "B", source_rank: 2 },
-			{ championship_seed: 7, source_division: "A", source_rank: 4 },
-			{ championship_seed: 8, source_division: "B", source_rank: 1 },
+	it("size 4: (1,4) (2,3)", () => {
+		expect(standardBracketPairs(4)).toEqual([
+			[1, 4],
+			[2, 3],
 		]);
 	});
 
-	it("throws when advancer counts don't match advanceCount", () => {
-		expect(() => buildChampionshipSeeds(4, 3, 4)).toThrow();
-		expect(() => buildChampionshipSeeds(4, 4, 3)).toThrow();
+	it("size 8: standard 1-vs-N order, adjacent R1 matches feed same R2", () => {
+		expect(standardBracketPairs(8)).toEqual([
+			[1, 8],
+			[4, 5],
+			[2, 7],
+			[3, 6],
+		]);
 	});
 
-	it("works for N=2, 8, 16", () => {
-		expect(buildChampionshipSeeds(2, 2, 2)).toHaveLength(4);
-		expect(buildChampionshipSeeds(8, 8, 8)).toHaveLength(16);
-		expect(buildChampionshipSeeds(16, 16, 16)).toHaveLength(32);
+	it("size 16: nested 1-vs-N", () => {
+		const pairs = standardBracketPairs(16);
+		expect(pairs).toEqual([
+			[1, 16],
+			[8, 9],
+			[4, 13],
+			[5, 12],
+			[2, 15],
+			[7, 10],
+			[3, 14],
+			[6, 11],
+		]);
+	});
+
+	it("rejects non-power-of-2", () => {
+		expect(() => standardBracketPairs(3)).toThrow();
+		expect(() => standardBracketPairs(6)).toThrow();
+		expect(() => standardBracketPairs(1)).toThrow();
 	});
 });
 
 describe("buildChampionshipRound1", () => {
-	it("pairs adjacent seeds", () => {
-		const matches = buildChampionshipRound1(8);
-		expect(matches).toEqual([
-			{ match_index: 1, seed_a: 1, seed_b: 2 },
-			{ match_index: 2, seed_a: 3, seed_b: 4 },
-			{ match_index: 3, seed_a: 5, seed_b: 6 },
-			{ match_index: 4, seed_a: 7, seed_b: 8 },
+	it("exactly 2 qualifiers: 2-bracket, no byes", () => {
+		const r1 = buildChampionshipRound1(2);
+		expect(r1.bracket_size).toBe(2);
+		expect(r1.bye_count).toBe(0);
+		expect(r1.matches).toEqual([
+			{ match_index: 1, seed_a: 1, seed_b: 2, is_bye: false },
 		]);
 	});
 
-	it("throws on odd seat count", () => {
-		expect(() => buildChampionshipRound1(5)).toThrow();
+	it("4 qualifiers: 4-bracket, no byes, standard order", () => {
+		const r1 = buildChampionshipRound1(4);
+		expect(r1.bracket_size).toBe(4);
+		expect(r1.bye_count).toBe(0);
+		expect(r1.matches).toEqual([
+			{ match_index: 1, seed_a: 1, seed_b: 4, is_bye: false },
+			{ match_index: 2, seed_a: 2, seed_b: 3, is_bye: false },
+		]);
+	});
+
+	it("6 qualifiers: 8-bracket with 2 byes for top seeds", () => {
+		const r1 = buildChampionshipRound1(6);
+		expect(r1.bracket_size).toBe(8);
+		expect(r1.bye_count).toBe(2);
+		// Standard 8-bracket pairings: (1,8), (4,5), (2,7), (3,6).
+		// Phantom seeds 7 and 8 → matches with seed_b > 6 are byes.
+		// Seeds 1 (vs phantom 8) and 2 (vs phantom 7) get byes.
+		expect(r1.matches).toEqual([
+			{ match_index: 1, seed_a: 1, seed_b: 8, is_bye: true },
+			{ match_index: 2, seed_a: 4, seed_b: 5, is_bye: false },
+			{ match_index: 3, seed_a: 2, seed_b: 7, is_bye: true },
+			{ match_index: 4, seed_a: 3, seed_b: 6, is_bye: false },
+		]);
+	});
+
+	it("8 qualifiers: 8-bracket, no byes", () => {
+		const r1 = buildChampionshipRound1(8);
+		expect(r1.bracket_size).toBe(8);
+		expect(r1.bye_count).toBe(0);
+		expect(r1.matches.every((m) => !m.is_bye)).toBe(true);
+	});
+
+	it("9 qualifiers: 16-bracket with 7 byes", () => {
+		const r1 = buildChampionshipRound1(9);
+		expect(r1.bracket_size).toBe(16);
+		expect(r1.bye_count).toBe(7);
+		// Seed 1 should get a bye (paired with phantom 16).
+		const seed1Match = r1.matches.find((m) => m.seed_a === 1)!;
+		expect(seed1Match.is_bye).toBe(true);
+		expect(seed1Match.seed_b).toBe(16);
+		// Seed 9 (real) should play seed 8 (real); not a bye.
+		const seed8Match = r1.matches.find((m) => m.seed_a === 8)!;
+		expect(seed8Match.is_bye).toBe(false);
+		expect(seed8Match.seed_b).toBe(9);
+	});
+
+	it("rejects qualifier counts below 2", () => {
+		expect(() => buildChampionshipRound1(0)).toThrow();
+		expect(() => buildChampionshipRound1(1)).toThrow();
 	});
 });
 
@@ -111,15 +146,26 @@ describe("buildChampionshipFollowupRound", () => {
 		]);
 	});
 
+	it("R2 of a 6-qualifier (8-bracket) tournament pairs correctly", () => {
+		// R1 has 4 matches: (1,bye), (4,5), (2,bye), (3,6).
+		// R2 should pair winners of matches 1&2 and matches 3&4.
+		// Match 1 winner = seed 1; match 2 winner = seed 4 or 5;
+		// match 3 winner = seed 2; match 4 winner = seed 3 or 6.
+		// So R2 finals: (seed 1) vs (4 or 5), and (seed 2) vs (3 or 6).
+		// Templates only need to map structurally — the handler reads
+		// winner_slot_id from the prior round at advance time.
+		const templates = buildChampionshipFollowupRound(4);
+		expect(templates).toEqual([
+			{ match_index: 1, source_match_a_index: 1, source_match_b_index: 2 },
+			{ match_index: 2, source_match_a_index: 3, source_match_b_index: 4 },
+		]);
+	});
+
 	it("collapses correctly across rounds", () => {
-		// 16 → 8 → 4 → 2 → 1 (5 rounds total including round 1)
-		const r2 = buildChampionshipFollowupRound(16);
-		expect(r2).toHaveLength(8);
-		const r3 = buildChampionshipFollowupRound(8);
-		expect(r3).toHaveLength(4);
-		const r4 = buildChampionshipFollowupRound(4);
-		expect(r4).toHaveLength(2);
-		const final = buildChampionshipFollowupRound(2);
-		expect(final).toHaveLength(1);
+		// 16 → 8 → 4 → 2 → 1
+		expect(buildChampionshipFollowupRound(16)).toHaveLength(8);
+		expect(buildChampionshipFollowupRound(8)).toHaveLength(4);
+		expect(buildChampionshipFollowupRound(4)).toHaveLength(2);
+		expect(buildChampionshipFollowupRound(2)).toHaveLength(1);
 	});
 });

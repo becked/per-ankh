@@ -21,16 +21,36 @@
 	let swissWinsToAdvance = $state(tournament.swiss_wins_to_advance);
 	// svelte-ignore state_referenced_locally
 	let swissLossesToEliminate = $state(tournament.swiss_losses_to_eliminate);
-	// svelte-ignore state_referenced_locally
-	let swissAdvanceCount = $state(tournament.swiss_advance_count ?? 1);
 
-	// Advancers ≤ smaller-division size is checked at Start (admin.ts
-	// ADVANCE_COUNT_TOO_LARGE). Show "Max {smallerDiv}" live so the admin
-	// notices before hitting Start; it goes red when the value exceeds the
-	// cap. Updates as slots are added/removed since the counts flow in as
-	// props.
-	const smallerDiv = $derived(Math.min(divACount, divBCount));
-	const exceedsCap = $derived(swissAdvanceCount > smallerDiv);
+	// FSM-consistency: mirror validateSwissThresholds in
+	// cloud/src/tournament/admin.ts. Server validates on every PATCH so
+	// this is feedback-only.
+	const thresholdError = $derived.by(() => {
+		if (swissWinsToAdvance > swissMaxRounds) {
+			return `Wins to advance (${swissWinsToAdvance}) cannot exceed max rounds (${swissMaxRounds}).`;
+		}
+		if (swissWinsToAdvance + swissLossesToEliminate > swissMaxRounds + 1) {
+			return `Wins + losses (${swissWinsToAdvance + swissLossesToEliminate}) must be ≤ max rounds + 1 (${swissMaxRounds + 1}). Some players could finish Swiss with no verdict.`;
+		}
+		return null;
+	});
+
+	// Soft hint on likely qualifier count given current settings + division
+	// sizes. The actual count depends on tournament play (forfeits, byes,
+	// W/L distribution), so this is a rough preview, not a guarantee.
+	const expectedQualifiers = $derived.by(() => {
+		// Rough heuristic: each division produces (slotsPerDiv * winsToAdvance /
+		// (winsToAdvance + lossesToEliminate)) qualifiers in steady state.
+		// Round bounds.
+		const denom = swissWinsToAdvance + swissLossesToEliminate;
+		if (denom === 0) return null;
+		const perDiv = (divACount * swissWinsToAdvance) / denom;
+		const total = perDiv + (divBCount * swissWinsToAdvance) / denom;
+		const low = Math.max(2, Math.floor(total * 0.6));
+		const high = Math.min(divACount + divBCount, Math.ceil(total * 1.1));
+		if (low > high) return null;
+		return { low, high };
+	});
 
 	let status = $state<
 		| { kind: "idle" }
@@ -55,9 +75,6 @@
 		}
 	}
 
-	// Bounds mirror the Valibot PatchTournamentSchema. The smaller-division
-	// constraint on advance count is a soft hint only (see template); we
-	// don't clamp because slot counts are a moving target during setup.
 	function clampToRange(raw: unknown, min: number, max: number): number | null {
 		if (typeof raw !== "number" || !Number.isFinite(raw)) return null;
 		const n = Math.trunc(raw);
@@ -73,6 +90,9 @@
 		}
 		swissMaxRounds = next;
 		if (next === tournament.swiss_max_rounds) return;
+		// Skip the commit if the new value would fail server validation;
+		// surface the error inline instead of taking the 400 round-trip.
+		if (thresholdError) return;
 		commit({ swiss_max_rounds: next });
 	}
 
@@ -84,6 +104,7 @@
 		}
 		swissWinsToAdvance = next;
 		if (next === tournament.swiss_wins_to_advance) return;
+		if (thresholdError) return;
 		commit({ swiss_wins_to_advance: next });
 	}
 
@@ -95,24 +116,14 @@
 		}
 		swissLossesToEliminate = next;
 		if (next === tournament.swiss_losses_to_eliminate) return;
+		if (thresholdError) return;
 		commit({ swiss_losses_to_eliminate: next });
-	}
-
-	function commitAdvanceCount() {
-		const next = clampToRange(swissAdvanceCount, 1, 64);
-		if (next === null) {
-			swissAdvanceCount = tournament.swiss_advance_count ?? 1;
-			return;
-		}
-		swissAdvanceCount = next;
-		if (next === (tournament.swiss_advance_count ?? 1)) return;
-		commit({ swiss_advance_count: next });
 	}
 </script>
 
 <section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
 	<header class="mb-3 flex items-baseline justify-between">
-		<h2 class="text-sm font-bold text-tan">Configuration</h2>
+		<h2 class="text-sm font-bold text-tan">Swiss configuration</h2>
 		{#if status.kind === "saving"}
 			<span class="text-xs text-tan opacity-60">Saving…</span>
 		{:else if status.kind === "saved"}
@@ -122,69 +133,53 @@
 		{/if}
 	</header>
 
-	<div class="grid grid-cols-1 gap-3 text-xs text-tan lg:grid-cols-2">
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
-			<h3 class="mb-2 text-xs uppercase text-tan opacity-70">Swiss</h3>
-			<div class="flex flex-col gap-3">
-				<label class="flex flex-col gap-1">
-					<span>Max rounds</span>
-					<input
-						type="number"
-						min="1"
-						max="20"
-						bind:value={swissMaxRounds}
-						onblur={commitMaxRounds}
-						class="rounded border border-black bg-[#35302b] p-1.5"
-					/>
-				</label>
-				<label class="flex flex-col gap-1">
-					<span>Wins to advance</span>
-					<input
-						type="number"
-						min="1"
-						max="20"
-						bind:value={swissWinsToAdvance}
-						onblur={commitWinsToAdvance}
-						class="rounded border border-black bg-[#35302b] p-1.5"
-					/>
-				</label>
-				<label class="flex flex-col gap-1">
-					<span>Losses to eliminate</span>
-					<input
-						type="number"
-						min="1"
-						max="20"
-						bind:value={swissLossesToEliminate}
-						onblur={commitLossesToEliminate}
-						class="rounded border border-black bg-[#35302b] p-1.5"
-					/>
-				</label>
-			</div>
+	<div
+		class="rounded-lg p-3 text-xs text-tan"
+		style="background-color: #35302B;"
+	>
+		<div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
+			<label class="flex flex-col gap-1">
+				<span>Max rounds</span>
+				<input
+					type="number"
+					min="1"
+					max="20"
+					bind:value={swissMaxRounds}
+					onblur={commitMaxRounds}
+					class="rounded border border-black bg-[#35302b] p-1.5"
+				/>
+			</label>
+			<label class="flex flex-col gap-1">
+				<span>Wins to advance</span>
+				<input
+					type="number"
+					min="1"
+					max="20"
+					bind:value={swissWinsToAdvance}
+					onblur={commitWinsToAdvance}
+					class="rounded border border-black bg-[#35302b] p-1.5"
+				/>
+			</label>
+			<label class="flex flex-col gap-1">
+				<span>Losses to eliminate</span>
+				<input
+					type="number"
+					min="1"
+					max="20"
+					bind:value={swissLossesToEliminate}
+					onblur={commitLossesToEliminate}
+					class="rounded border border-black bg-[#35302b] p-1.5"
+				/>
+			</label>
 		</div>
-
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
-			<h3 class="mb-2 text-xs uppercase text-tan opacity-70">Championship</h3>
-			<div class="flex flex-col gap-3">
-				<label class="flex flex-col gap-1">
-					<span>Advancers per division</span>
-					<input
-						type="number"
-						min="1"
-						max="64"
-						bind:value={swissAdvanceCount}
-						onblur={commitAdvanceCount}
-						class="rounded border border-black bg-[#35302b] p-1.5"
-					/>
-					<span
-						class="text-[10px]"
-						class:text-red-400={exceedsCap}
-						class:text-tan={!exceedsCap}
-						class:opacity-60={!exceedsCap}
-					>
-						Max {smallerDiv}
-					</span>
-				</label>
-			</div>
-		</div>
+		{#if thresholdError}
+			<p class="mt-2 text-[11px] text-red-400">{thresholdError}</p>
+		{:else if expectedQualifiers}
+			<p class="mt-2 text-[11px] text-tan opacity-60">
+				With {divACount + divBCount} slots, expect roughly {expectedQualifiers.low}–{expectedQualifiers.high}
+				qualifiers reaching the championship bracket. Anyone hitting the win threshold
+				advances; tiebreakers only seed the bracket.
+			</p>
+		{/if}
 	</div>
 </section>

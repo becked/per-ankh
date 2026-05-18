@@ -38,17 +38,26 @@
 	// svelte-ignore state_referenced_locally
 	let swissLossesToEliminate = $state(tournament.swiss_losses_to_eliminate);
 	// svelte-ignore state_referenced_locally
-	let swissAdvanceCount = $state(tournament.swiss_advance_count ?? 0);
-	// svelte-ignore state_referenced_locally
 	let allowedMapScripts = $state<string[]>([...tournament.allowed_map_scripts]);
 
 	let busy = $state(false);
 	let banner = $state<{ kind: "ok" | "err"; message: string } | null>(null);
 
 	const swissConfigLocked = $derived(tournament.status !== "setup");
-	const advanceCountLocked = $derived(
-		tournament.status === "championship" || tournament.status === "complete",
-	);
+
+	// FSM-consistency check. Mirrors validateSwissThresholds in
+	// cloud/src/tournament/admin.ts — the server still validates, this is
+	// just inline feedback so the save button shows why it's disabled.
+	const thresholdError = $derived.by(() => {
+		if (swissConfigLocked) return null;
+		if (swissWinsToAdvance > swissMaxRounds) {
+			return `Wins to advance (${swissWinsToAdvance}) cannot exceed max rounds (${swissMaxRounds}).`;
+		}
+		if (swissWinsToAdvance + swissLossesToEliminate > swissMaxRounds + 1) {
+			return `Wins to advance + losses to eliminate (${swissWinsToAdvance + swissLossesToEliminate}) must be ≤ max rounds + 1 (${swissMaxRounds + 1}).`;
+		}
+		return null;
+	});
 
 	const unaddedGroups = $derived(unaddedMapScriptsByDlc(allowedMapScripts));
 
@@ -83,10 +92,6 @@
 			if (swissLossesToEliminate !== tournament.swiss_losses_to_eliminate)
 				patch.swiss_losses_to_eliminate = swissLossesToEliminate;
 		}
-		if (!advanceCountLocked) {
-			if (swissAdvanceCount !== (tournament.swiss_advance_count ?? 0))
-				patch.swiss_advance_count = swissAdvanceCount;
-		}
 		const oldScripts = tournament.allowed_map_scripts;
 		const scriptsChanged =
 			allowedMapScripts.length !== oldScripts.length ||
@@ -120,7 +125,11 @@
 	}
 
 	const canSave = $derived(
-		!busy && name.trim() && divisionAName.trim() && divisionBName.trim(),
+		!busy &&
+			name.trim() &&
+			divisionAName.trim() &&
+			divisionBName.trim() &&
+			thresholdError === null,
 	);
 </script>
 
@@ -217,24 +226,10 @@
 				/>
 			</label>
 		</div>
+		{#if thresholdError}
+			<p class="mt-2 text-xs text-red-400">{thresholdError}</p>
+		{/if}
 	</fieldset>
-
-	<label class="flex flex-col gap-1">
-		<span>
-			Championship advancers per division
-			{#if advanceCountLocked}
-				<span class="ml-1 opacity-70">— locked after transition</span>
-			{/if}
-		</span>
-		<input
-			type="number"
-			min="1"
-			max="64"
-			bind:value={swissAdvanceCount}
-			disabled={advanceCountLocked}
-			class="rounded border border-black bg-[#35302b] p-1.5 disabled:opacity-50"
-		/>
-	</label>
 
 	<div class="flex flex-col gap-2">
 		<span>Allowed map scripts</span>

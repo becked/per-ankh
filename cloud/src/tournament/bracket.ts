@@ -1,91 +1,83 @@
 // Championship bracket construction.
 //
-// Inputs: ranked advancer list per division (top-N from each, where N is
-// the tournament's swiss_advance_count). Output: cross-paired round-1
-// matches with championship_seed assignments.
+// Input: a flat list of qualifier slot IDs in ranked order (seed 1 first).
+// Output: a list of round-1 matches, with byes for non-power-of-2 counts.
 //
-// Seeding scheme: championship_seed 1 = A_rank_1, seed 2 = B_rank_N,
-// seed 3 = A_rank_2, seed 4 = B_rank_{N-1}, ... Round-1 matches pair
-// adjacent seeds (1 vs 2, 3 vs 4, ...), making round 1 entirely
-// cross-division. Subsequent rounds use standard winner-progression:
-// winner of match 2i-1 faces winner of match 2i.
+// Bracket size = next power of 2 ≥ qualifierCount. Phantom seeds
+// (qualifierCount+1..bracketSize) cause their R1 opponent to receive a
+// bye (status='bye', winner_slot_id=slot_a_id at insert time).
 //
-// Also exports advanceCountSuggestion for the start-swiss handler. The
-// formula picks the largest power-of-2 ≤ floor(min(div_a, div_b) / 2) so
-// the championship bracket is always a clean power of 2 (no byes needed
-// at the championship phase).
+// Seeding follows standard 1-vs-N tournament order: (1, N), (2, N-1), ...
+// arranged so adjacent R1 matches feed into the same R2 match. This means
+// the top seed gets the lowest real opponent in R1 (often a bye), and the
+// top two seeds can only meet in the final.
+//
+// `buildChampionshipFollowupRound` is unchanged: R2+ pair adjacent winners
+// (winner of match 2i-1 faces winner of match 2i). That works for any R1
+// pairing order, including standard 1-vs-N.
 
-export function largestPowerOfTwoAtMost(n: number): number {
-	if (n < 1) return 0;
+export function largestPowerOfTwoAtLeast(n: number): number {
+	if (n < 1) return 1;
 	let p = 1;
-	while (p * 2 <= n) p *= 2;
+	while (p < n) p *= 2;
 	return p;
-}
-
-export function advanceCountSuggestion(
-	divACount: number,
-	divBCount: number,
-): number {
-	const minDiv = Math.min(divACount, divBCount);
-	return largestPowerOfTwoAtMost(Math.floor(minDiv / 2));
-}
-
-export interface ChampionshipSeed {
-	championship_seed: number; // 1-based
-	source_division: "A" | "B";
-	source_rank: number; // 1-based rank within the division
 }
 
 export interface ChampionshipMatchTemplate {
 	match_index: number; // 1-based within round
 	seed_a: number;
 	seed_b: number;
+	is_bye: boolean; // seed_b is a phantom; seed_a auto-advances
 }
 
-export function buildChampionshipSeeds(
-	advanceCount: number,
-	divARanked: number, // count of advancers from div A (should equal advanceCount)
-	divBRanked: number,
-): ChampionshipSeed[] {
-	if (divARanked !== advanceCount || divBRanked !== advanceCount) {
-		throw new Error(
-			`Expected ${advanceCount} advancers from each division; got A=${divARanked}, B=${divBRanked}`,
-		);
-	}
-	const seeds: ChampionshipSeed[] = [];
-	for (let i = 0; i < advanceCount; i++) {
-		seeds.push({
-			championship_seed: 2 * i + 1,
-			source_division: "A",
-			source_rank: i + 1,
-		});
-		seeds.push({
-			championship_seed: 2 * i + 2,
-			source_division: "B",
-			source_rank: advanceCount - i,
-		});
-	}
-	return seeds;
+export interface ChampionshipRound1 {
+	bracket_size: number;
+	bye_count: number;
+	matches: ChampionshipMatchTemplate[];
 }
 
-// Round 1 of the championship: pair adjacent seeds (1-2, 3-4, ...).
+// Build standard tournament seed pairings for a power-of-2 bracket.
+// For N=2: [(1, 2)].
+// For N=4: [(1, 4), (2, 3)] — top seed meets bottom seed; second meets third.
+// For N=8: [(1, 8), (4, 5), (2, 7), (3, 6)] — top half then bottom half.
+// Recurrence: for each pair (a, b) at size N/2, emit (a, N+1-a), (b, N+1-b)
+// at size N. Yields the order where adjacent R1 matches feed into the same
+// R2 match.
+export function standardBracketPairs(n: number): Array<[number, number]> {
+	if (n < 2 || (n & (n - 1)) !== 0) {
+		throw new Error(`Bracket size must be a power of 2 ≥ 2; got ${n}`);
+	}
+	if (n === 2) return [[1, 2]];
+	const half = standardBracketPairs(n / 2);
+	const result: Array<[number, number]> = [];
+	for (const [a, b] of half) {
+		result.push([a, n + 1 - a]);
+		result.push([b, n + 1 - b]);
+	}
+	return result;
+}
+
 export function buildChampionshipRound1(
-	totalSeats: number,
-): ChampionshipMatchTemplate[] {
-	if (totalSeats % 2 !== 0) {
+	qualifierCount: number,
+): ChampionshipRound1 {
+	if (qualifierCount < 2) {
 		throw new Error(
-			`Championship requires an even seat count; got ${totalSeats}`,
+			`Championship requires at least 2 qualifiers; got ${qualifierCount}`,
 		);
 	}
-	const matches: ChampionshipMatchTemplate[] = [];
-	for (let i = 0; i < totalSeats / 2; i++) {
-		matches.push({
-			match_index: i + 1,
-			seed_a: 2 * i + 1,
-			seed_b: 2 * i + 2,
-		});
-	}
-	return matches;
+	const bracket_size = largestPowerOfTwoAtLeast(qualifierCount);
+	const pairs = standardBracketPairs(bracket_size);
+	const matches: ChampionshipMatchTemplate[] = pairs.map(([a, b], i) => ({
+		match_index: i + 1,
+		seed_a: a,
+		seed_b: b,
+		// seed_b > qualifierCount means seed_b is a phantom → bye for seed_a.
+		// (In standardBracketPairs the larger seed is always the second of each
+		// pair, so checking seed_b is sufficient.)
+		is_bye: b > qualifierCount,
+	}));
+	const bye_count = matches.filter((m) => m.is_bye).length;
+	return { bracket_size, bye_count, matches };
 }
 
 // Subsequent rounds: winner of match 2i-1 faces winner of match 2i. We don't

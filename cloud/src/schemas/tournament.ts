@@ -109,9 +109,6 @@ export const PatchTournamentSchema = v.object({
 	division_b_name: v.optional(
 		v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(64)),
 	),
-	swiss_advance_count: v.optional(
-		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(64)),
-	),
 	swiss_wins_to_advance: v.optional(
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
 	),
@@ -196,15 +193,17 @@ export const PatchMatchSchema = v.object({
 	notes: v.optional(v.pipe(v.string(), v.maxLength(2000))),
 });
 
-// Optional override body for /transition-championship. If admin provides
-// explicit ranking, the handler uses it instead of the cascade. Used to
-// resolve ties that the wins → MB → Solkoff cascade can't.
+// Optional override body for /transition-championship. If provided, the
+// handler uses this flat ordered list as the bracket seed order, bypassing
+// the auto-promote-by-status logic entirely. The first slot becomes seed 1,
+// the second seed 2, etc.
+//
+// Used to (a) resolve full-cascade ties at any seed, and (b) promote
+// non-clinched slots in the underqualifier case (combined qualifier count
+// from auto-promotion is < 2).
 export const TransitionChampionshipSchema = v.object({
 	override_ranks: v.optional(
-		v.object({
-			A: v.array(v.pipe(v.string(), v.regex(nanoid21Regex))),
-			B: v.array(v.pipe(v.string(), v.regex(nanoid21Regex))),
-		}),
+		v.array(v.pipe(v.string(), v.regex(nanoid21Regex))),
 	),
 });
 

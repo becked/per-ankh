@@ -261,11 +261,18 @@ describe("auto-advance", () => {
 
 	it("stops auto-generating Swiss rounds at swiss_max_rounds", async () => {
 		const t = await makeTournament({ slotsPerDivision: 4 });
+		// Lower all three thresholds together — FSM consistency rule
+		// (wins + losses ≤ max_rounds + 1) blocks single-field patches
+		// against the migration defaults (3 / 3 / 5).
 		await expectOk(
 			await request.patch({
 				path: `/v1/tournaments/${t.tournamentId}`,
 				as: t.admin,
-				body: { swiss_max_rounds: 1 },
+				body: {
+					swiss_max_rounds: 1,
+					swiss_wins_to_advance: 1,
+					swiss_losses_to_eliminate: 1,
+				},
 			}),
 		);
 		await expectOk(

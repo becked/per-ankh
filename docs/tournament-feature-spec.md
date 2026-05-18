@@ -96,18 +96,17 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 ### Swiss Qualifier
 
 - Open registration until a stated deadline.
-- Two divisions, **Western** and **Eastern**, roughly aligned to North American and European time zones. Division preference at signup; admin makes final assignments.
+- Two divisions, admin-named per tournament (default `Division A` / `Division B`). Divisions exist **purely as a parallelization mechanism** so Swiss rounds can run in smaller pools and finish faster — they carry no competitive significance once Swiss ends.
 - Within each division: round 1 is paired by admin choice (typically random or seeded by something external like rating). Subsequent rounds bucket players by W-L record and pair within bucket, avoiding rematches.
-- Each player plays until they reach **3 wins** (advance to championship) or **3 losses** (eliminated). Hard cap of **5 rounds**.
-- Player counts are assumed even within each division (no byes). The schema permits byes, but the MVP UX assumes none.
-- When more 3-W players exist than championship slots can hold, a **tiebreaker cascade** (see §6) decides advancement.
+- Each player plays until they reach `swiss_wins_to_advance` wins (status flips to `advanced`; they sit out remaining Swiss rounds and qualify for the championship bracket) or `swiss_losses_to_eliminate` losses (status flips to `eliminated`). Hard cap of `swiss_max_rounds` rounds.
+- FSM consistency requires `swiss_wins_to_advance ≤ swiss_max_rounds` and `swiss_wins_to_advance + swiss_losses_to_eliminate ≤ swiss_max_rounds + 1`. Validated on create + patch.
 
 ### Championship Bracket
 
-- Single-elimination, ~4–5 rounds depending on advancement count.
-- No divisions. Initial seeding cross-pairs divisions: top-rated from one against bottom-rated from the other, where "rated" means the cascade rank from §6.
-- Advancement counts per division are assumed even (e.g., top 4 from each → 8-player bracket).
-- A single loss eliminates a player. The Grand Finals produces the champion.
+- **Every player who reaches `swiss_wins_to_advance` qualifies.** No cutoff, no per-division top-N. The tiebreaker cascade (§6) is used only for bracket seeding, never for filtering.
+- All qualifiers from both divisions are ranked into a single combined list using the cascade. Bracket size is the next power of 2 ≥ qualifier count; standard 1-vs-N seeding (seed 1 plays the lowest-ranked qualifier, etc.). When qualifier count isn't a power of 2, top seeds receive round-1 byes.
+- Single elimination. The Grand Finals produces the champion.
+- Underqualifier edge case: if fewer than 2 players hit `swiss_wins_to_advance`, the transition handler returns `INSUFFICIENT_QUALIFIERS` and the admin must use `override_ranks` (a flat ordered list of slot IDs) to manually seed the bracket.
 
 ---
 
@@ -120,6 +119,7 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 > - `tournaments.status` enum is `'setup' | 'swiss' | 'championship' | 'complete'` — the spec's `'signups'` is `'setup'` in code.
 > - `tournament_slots` stores `swiss_seed`, `discord_username`, `discord_id`, `user_id` instead of the spec's `current_user_id` / `swiss_wins` / `swiss_losses` / `swiss_status` fields. W/L is computed on read from `tournament_matches`, so substitution naturally transfers history with no derived-state drift.
 > - Always 2 divisions; names admin-configurable per tournament (`division_a_name`, `division_b_name`).
+> - `swiss_advance_count` column dropped in migration 0014. The old "top-N per division advances" cutoff is gone — qualification is purely "did you reach `swiss_wins_to_advance`." Tiebreakers (§6) now only seed the bracket, never filter it.
 
 ### Slot-based bracket model
 
@@ -142,7 +142,6 @@ CREATE TABLE tournaments (
   description TEXT,
   status TEXT NOT NULL,                       -- 'signups' | 'swiss' | 'championship' | 'complete'
   signup_deadline TEXT,                       -- ISO 8601, NULL until set
-  swiss_advance_count INTEGER NOT NULL DEFAULT 4,  -- top-N per division → championship
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   updated_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
@@ -508,107 +507,124 @@ After completion, all admin-mutating endpoints return 409 Conflict. Read endpoin
 
 ## 6. Tiebreaker Cascade
 
-The Old World tournament's "advance at 3 wins" stop creates uneven game counts among advancers (a 3-0 player has 3 opponents; a 3-2 player has 5). Median-Buchholz alone is too thin a signal in that regime, so this spec uses a cascading tiebreaker matching [Challonge's Swiss defaults](https://kb.challonge.com/en/article/learn-about-challonge-competition-formats-1f8j1cf/) (with their game-points layers omitted, since OW matches are single games rather than best-of-three).
+**The cascade only seeds the championship bracket — it never filters who qualifies.** Anyone who reaches `swiss_wins_to_advance` is in. The cascade decides their seed within the combined bracket.
+
+This rules out the surprise mode where a 3-0 player was cut by Buchholz in favor of a 3-2 player with a tougher schedule. That outcome shipped in Sion's tournament (May 2026) and prompted migration 0014 which dropped the cutoff column entirely.
 
 ### Cascade order
 
-1. **Wins** — `swiss_wins`, descending. Already the cut criterion; included in the comparator for completeness.
-2. **Median-Buchholz** — sum of opponents' wins, dropping the highest and lowest opponent score. Standard short-tournament strength-of-schedule.
-3. **Solkoff** — sum of opponents' wins with no drops (full Buchholz). Catches cases where Median-Buchholz drops too aggressively.
-4. **Head-to-head** — when comparing exactly two tied slots that played each other, the winner of that match ranks higher. Undefined (skip to next level) if they didn't play or if the comparison involves >2 still-tied slots in a cycle.
-5. **Admin choice** — final fallback. The standings endpoint surfaces still-tied slots; the admin makes the call. Recorded as a row in `tournament_admins`-attributable audit (via the `events` table) when invoked.
+1. **Match wins** — descending.
+2. **Head-to-head (H2H)** — sum of wins against other players in the still-tied subset. Only fires between players who share the same win count. Pairwise — needs the tied set defined first — so the ranker computes it tier-by-tier, not as a flat comparator.
+3. **Buchholz cut-1** — sum of opponents' final win counts, with the single lowest opponent dropped. Falls back to the full sum (Solkoff) when the player has ≤1 real opponent. Byes are excluded entirely from the opponent list.
+4. **Cumulative (Harkness)** — sum of running win count across rounds. Rewards early dominance: a player at 3-0 after R3 carries those 3 wins through R4 and R5 (they sit out the remaining rounds), so they outscore a 3-0-by-R5 player on this tier.
+5. **Admin override** — if the cascade leaves a tie at any seed, the admin uses `override_ranks` (a flat ordered list of slot IDs) to specify the bracket seed order explicitly.
 
-All values are computed on demand from `tournament_matches` + `tournament_slots`. None are stored.
-
-### Pairwise comparator
-
-```ts
-function compareSlots(
-	a: TournamentSlot,
-	b: TournamentSlot,
-	ctx: { matches: TournamentMatch[]; slots: Map<string, TournamentSlot> },
-): number {
-	// 1. Wins (descending)
-	if (a.swiss_wins !== b.swiss_wins) return b.swiss_wins - a.swiss_wins;
-
-	// 2. Median-Buchholz (descending)
-	const mbA = computeMedianBuchholz(a.slot_id, ctx);
-	const mbB = computeMedianBuchholz(b.slot_id, ctx);
-	if (mbA !== mbB) return mbB - mbA;
-
-	// 3. Solkoff / Full Buchholz (descending)
-	const sA = computeSolkoff(a.slot_id, ctx);
-	const sB = computeSolkoff(b.slot_id, ctx);
-	if (sA !== sB) return sB - sA;
-
-	// 4. Head-to-head: winner ranks first
-	const h2h = headToHead(a.slot_id, b.slot_id, ctx.matches);
-	if (h2h !== 0) return h2h;
-
-	// 5. Comparator returns 0 (still tied); caller resolves manually
-	return 0;
-}
-```
+All values are computed on demand from `tournament_matches`. None are stored.
 
 ### Component computations
 
 ```ts
-function computeMedianBuchholz(slotId: string, ctx: Ctx): number {
-	const opponentWins = collectOpponentWins(slotId, ctx).sort((a, b) => a - b);
-	if (opponentWins.length <= 2) return opponentWins.reduce((a, b) => a + b, 0);
-	return opponentWins.slice(1, -1).reduce((a, b) => a + b, 0);
+// Buchholz cut-1: sort opponent wins ascending, drop the single lowest, sum.
+// For ≤1 opponent, no trim.
+function computeBuchholzCut1(opponentWins: number[]): number {
+	if (opponentWins.length <= 1) return opponentWins.reduce((a, b) => a + b, 0);
+	const sorted = [...opponentWins].sort((a, b) => a - b);
+	return sorted.slice(1).reduce((a, b) => a + b, 0);
 }
 
-function computeSolkoff(slotId: string, ctx: Ctx): number {
-	return collectOpponentWins(slotId, ctx).reduce((a, b) => a + b, 0);
-}
-
-function collectOpponentWins(slotId: string, ctx: Ctx): number[] {
-	const opponentIds: string[] = [];
-	for (const m of ctx.matches) {
-		if (m.slot_a_id === slotId && m.slot_b_id) opponentIds.push(m.slot_b_id);
-		else if (m.slot_b_id === slotId) opponentIds.push(m.slot_a_id);
-	}
-	return opponentIds.map((id) => ctx.slots.get(id)?.swiss_wins ?? 0);
-}
-
-function headToHead(
-	slotA: string,
-	slotB: string,
-	matches: TournamentMatch[],
+// Cumulative: walk each round from 1..maxRounds. Maintain a running W counter;
+// add the W count to the total at every round (including rounds the player
+// didn't play, which carries forward their clinched count).
+function computeCumulative(
+	slotId: string,
+	matches: MatchRef[],
+	maxRounds: number,
 ): number {
+	const byRound = new Map<number, MatchRef>();
 	for (const m of matches) {
-		const isAB = m.slot_a_id === slotA && m.slot_b_id === slotB;
-		const isBA = m.slot_a_id === slotB && m.slot_b_id === slotA;
-		if (!isAB && !isBA) continue;
-		if (m.winner_slot_id === slotA) return -1; // a ranks first
-		if (m.winner_slot_id === slotB) return 1;
+		if (m.slot_a_id !== slotId && m.slot_b_id !== slotId) continue;
+		byRound.set(m.round_number, m);
 	}
-	return 0; // didn't play, or no winner recorded
+	let runningWins = 0;
+	let total = 0;
+	for (let r = 1; r <= maxRounds; r++) {
+		const m = byRound.get(r);
+		if (m && m.status !== "pending") {
+			if (m.status === "bye") runningWins++;
+			else if (m.winner_slot_id === slotId) runningWins++;
+		}
+		total += runningWins;
+	}
+	return total;
+}
+
+// Pairwise H2H against the tied subset.
+function computePairwiseH2H(
+	slotId: string,
+	tiedIds: ReadonlySet<string>,
+	matches: MatchRef[],
+): number {
+	let h2h = 0;
+	for (const m of matches) {
+		if (m.status === "pending" || m.status === "bye") continue;
+		if (m.winner_slot_id !== slotId) continue;
+		const opponentId = m.slot_a_id === slotId ? m.slot_b_id : m.slot_a_id;
+		if (opponentId && tiedIds.has(opponentId)) h2h++;
+	}
+	return h2h;
 }
 ```
+
+### Ranking algorithm
+
+`rankStandings(standings, matches)` runs a multi-pass group-and-sub-group:
+
+1. Group by wins (desc).
+2. Within each group of size ≥ 2: compute pairwise H2H against the current tied set, sub-group by H2H.
+3. Within each remaining group of size ≥ 2: sub-group by Buchholz cut-1.
+4. Within each remaining group of size ≥ 2: sub-group by cumulative.
+
+Slots that share every tier value share a rank and list each other in `tied_with`. The transition handler reports any rank-1 tie as a 409 so the admin can disambiguate via `override_ranks`.
 
 ### Application
 
-Used during the Swiss → championship transition (§5.9) only when more slots reached 3 wins than `tournaments.swiss_advance_count` allows. The transition endpoint sorts all 3-W slots in a division using `compareSlots` and takes the top N. If the comparator returns 0 between a slot inside the cutoff and a slot outside it (i.e. fully tied through every level except admin choice), the endpoint returns 409 Conflict with the tied slot IDs in the response; the admin must call a separate `POST /v1/tournaments/:id/resolve-tie` endpoint specifying the resolution before re-running the transition.
+Used at the Swiss → championship transition (§5.9). The handler:
+
+1. Computes standings across **all swiss-phase slots from both divisions combined**.
+2. Filters to those with status `advanced` (status reflects whether the player hit `swiss_wins_to_advance`).
+3. The filtered list, in cascade order, becomes the bracket seed order (seed 1, 2, 3, …).
+4. If fewer than 2 qualifiers exist, returns 409 `INSUFFICIENT_QUALIFIERS` with the near-qualifier list so the admin can pick an `override_ranks` set.
 
 ### Standings endpoint
 
-`GET /v1/tournaments/:id/standings` returns per-slot:
+`GET /v1/tournaments/:id/standings` returns:
 
 ```ts
 {
+	tournament_id: string;
+	divisions: {
+		A: { name: string; standings: SlotStanding[] };
+		B: { name: string; standings: SlotStanding[] };
+	};
+	// Present from 'swiss' phase onward. Combined-rank order across both divisions.
+	combined_qualifier_ranking?: CombinedQualifier[];
+}
+
+interface SlotStanding {
 	slot_id: string;
-	current_user_id: string | null;
-	swiss_wins: number;
-	swiss_losses: number;
-	median_buchholz: number;
-	solkoff: number;
-	swiss_status: "active" | "advanced" | "eliminated";
+	rank: number;
+	tied_with: string[];
+	wins: number;
+	losses: number;
+	status: "active" | "advanced" | "eliminated";
+	h2h: number; // computed against the slot's current tied set (0 if not tied)
+	buchholz_cut1: number;
+	cumulative: number;
+	discord_username: string | null;
+	user_id: string | null;
+	swiss_seed: number | null;
 }
 ```
-
-Head-to-head is not returned (it's pairwise, not a per-slot scalar) but the matches list is already available via `GET /v1/tournaments/:id/matches` for clients that want to surface head-to-head context.
 
 ---
 

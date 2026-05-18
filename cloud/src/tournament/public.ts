@@ -244,7 +244,6 @@ export async function handleTournamentDetail(
 			status: tournament.status,
 			division_a_name: tournament.division_a_name,
 			division_b_name: tournament.division_b_name,
-			swiss_advance_count: tournament.swiss_advance_count,
 			swiss_wins_to_advance: tournament.swiss_wins_to_advance,
 			swiss_losses_to_eliminate: tournament.swiss_losses_to_eliminate,
 			swiss_max_rounds: tournament.swiss_max_rounds,
@@ -320,12 +319,16 @@ async function computeStandingsResponse(
 
 	const swissSlots = slotRows.filter((s) => s.phase === "swiss");
 	const swissMatches = matchRowsAll.filter((m) => m.round.phase === "swiss");
+	const swissMatchRefs = swissMatches.map((m) =>
+		matchRowToRef(m.match, m.round),
+	);
 	const slotIdentity = new Map<
 		string,
 		{
 			discord_username: string | null;
 			user_id: string | null;
 			swiss_seed: number | null;
+			division: "A" | "B" | null;
 		}
 	>();
 	for (const s of swissSlots) {
@@ -333,6 +336,7 @@ async function computeStandingsResponse(
 			discord_username: s.discord_username,
 			user_id: s.user_id,
 			swiss_seed: s.swiss_seed,
+			division: s.division,
 		});
 	}
 
@@ -353,19 +357,23 @@ async function computeStandingsResponse(
 		const divSlots = swissSlots
 			.filter((s) => s.division === division)
 			.map(slotRowToRef);
-		const divMatches = swissMatches
-			.filter((m) => m.round.division === division)
-			.map((m) => matchRowToRef(m.match, m.round));
+		const divMatches = swissMatchRefs.filter((m) => m.division === division);
 		const standings = computeStandings(divSlots, divMatches, config);
-		const ranked = rankStandings(standings);
-		const enriched = ranked.map((r) => ({
-			...r,
-			...(slotIdentity.get(r.slot_id) ?? {
+		const ranked = rankStandings(standings, divMatches);
+		const enriched = ranked.map((r) => {
+			const id = slotIdentity.get(r.slot_id) ?? {
 				discord_username: null,
 				user_id: null,
 				swiss_seed: null,
-			}),
-		}));
+				division: null,
+			};
+			// Strip `division` — division grouping is communicated by the
+			// containing key in the response, not by a per-row field. The
+			// combined_qualifier_ranking attaches division per row separately.
+			const { division: _div, ...identity } = id;
+			void _div;
+			return { ...r, ...identity };
+		});
 		// Within a rank group, sort by swiss_seed asc for stable display
 		// order. The rank itself isn't changed — this is purely cosmetic so
 		// admin slot tables (and public standings during setup, when
@@ -376,12 +384,58 @@ async function computeStandingsResponse(
 		});
 		byDivision[division] = enriched;
 	}
+
+	// Combined qualifier preview: only meaningful from swiss-phase onward.
+	// For setup-phase tournaments there are no matches yet, so the cascade
+	// is degenerate. Skip the field entirely until status='swiss'.
+	let combined_qualifier_ranking:
+		| Array<{
+				slot_id: string;
+				rank: number;
+				wins: number;
+				losses: number;
+				status: "active" | "advanced" | "eliminated";
+				h2h: number;
+				buchholz_cut1: number;
+				cumulative: number;
+				division: "A" | "B" | null;
+				discord_username: string | null;
+				swiss_seed: number | null;
+		  }>
+		| undefined = undefined;
+	if (tournament.status !== "setup") {
+		const allSwissSlotRefs = swissSlots.map(slotRowToRef);
+		const standings = computeStandings(
+			allSwissSlotRefs,
+			swissMatchRefs,
+			config,
+		);
+		const ranked = rankStandings(standings, swissMatchRefs);
+		combined_qualifier_ranking = ranked.map((r) => {
+			const id = slotIdentity.get(r.slot_id);
+			return {
+				slot_id: r.slot_id,
+				rank: r.rank,
+				wins: r.wins,
+				losses: r.losses,
+				status: r.status,
+				h2h: r.h2h,
+				buchholz_cut1: r.buchholz_cut1,
+				cumulative: r.cumulative,
+				division: id?.division ?? null,
+				discord_username: id?.discord_username ?? null,
+				swiss_seed: id?.swiss_seed ?? null,
+			};
+		});
+	}
+
 	return {
 		tournament_id: tournament.tournament_id,
 		divisions: {
 			A: { name: tournament.division_a_name, standings: byDivision.A },
 			B: { name: tournament.division_b_name, standings: byDivision.B },
 		},
+		combined_qualifier_ranking,
 	};
 }
 

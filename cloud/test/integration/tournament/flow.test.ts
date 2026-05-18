@@ -134,27 +134,44 @@ describe("tournament flow", () => {
 		}
 	});
 
-	it("rejects /start when swiss_advance_count exceeds the smaller division's size (#9)", async () => {
-		// Override swiss_advance_count to 5 while only 4 slots per division
-		// exist. /start must reject up-front rather than letting the
-		// tournament run to completion and then fail at transition.
+	it("rejects PATCH that violates FSM threshold consistency", async () => {
+		// FSM rule: swiss_wins_to_advance + swiss_losses_to_eliminate ≤
+		// swiss_max_rounds + 1. Otherwise a player alternating W-L can
+		// finish max_rounds without hitting either threshold, ending Swiss
+		// with status='active' and no resolution.
 		const t = await makeTournament({ slotsPerDivision: 4 });
-		await expectOk(
-			await request.patch({
-				path: `/v1/tournaments/${t.tournamentId}`,
-				as: t.admin,
-				body: { swiss_advance_count: 5 },
-			}),
-		);
 
-		const res = await request.post({
-			path: `/v1/tournaments/${t.tournamentId}/start`,
+		const res = await request.patch({
+			path: `/v1/tournaments/${t.tournamentId}`,
 			as: t.admin,
+			body: {
+				swiss_wins_to_advance: 4,
+				swiss_losses_to_eliminate: 3,
+				swiss_max_rounds: 5,
+			},
 		});
 
 		await expectErrorCode(res, {
-			status: 409,
-			code: "ADVANCE_COUNT_TOO_LARGE",
+			status: 400,
+			code: "INVALID_THRESHOLDS",
+		});
+	});
+
+	it("rejects PATCH when wins_to_advance exceeds max_rounds", async () => {
+		const t = await makeTournament({ slotsPerDivision: 4 });
+
+		const res = await request.patch({
+			path: `/v1/tournaments/${t.tournamentId}`,
+			as: t.admin,
+			body: {
+				swiss_wins_to_advance: 10,
+				swiss_max_rounds: 5,
+			},
+		});
+
+		await expectErrorCode(res, {
+			status: 400,
+			code: "INVALID_THRESHOLDS",
 		});
 	});
 
