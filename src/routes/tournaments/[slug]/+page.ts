@@ -1,8 +1,15 @@
-import { error } from "@sveltejs/kit";
+import { error, redirect } from "@sveltejs/kit";
 import { ApiError, cloudApi } from "$lib/api-cloud";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = async ({ params, fetch }) => {
+export const load: PageLoad = async ({ params, fetch, url }) => {
+	// Anonymous visitors bounce to login with ?next= so a shared tournament
+	// URL works as a "log in to see this" entry point, matching /tournaments
+	// and /dashboard. After login they land back here.
+	const me = await cloudApi.getMe({ fetch });
+	if (!me) {
+		throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
+	}
 	let tournament;
 	try {
 		tournament = await cloudApi.getTournament(params.slug, { fetch });
