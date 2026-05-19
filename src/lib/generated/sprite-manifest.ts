@@ -103,10 +103,15 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"crests/CREST_TRIBE_VANDALS":
 		"/sprites/crests/CREST_TRIBE_VANDALS.9f24d9b7.png",
 	"icons/ACHIEVEMENT_WIN": "/sprites/icons/ACHIEVEMENT_WIN.5cff6493.png",
+	"icons/CITY_FOUNDED": "/sprites/icons/CITY_FOUNDED.beccf97f.png",
+	"icons/GAME_HELP": "/sprites/icons/GAME_HELP.113586dd.png",
 	"icons/IMPROVEMENT_FINISHED":
 		"/sprites/icons/IMPROVEMENT_FINISHED.f131e64d.png",
 	"icons/MAP_OVERVIEW": "/sprites/icons/MAP_OVERVIEW.5c63299a.png",
 	"icons/MILITARY": "/sprites/icons/MILITARY.cad1b950.png",
+	"icons/MULTIPLAYER": "/sprites/icons/MULTIPLAYER.4f62ad02.png",
+	"icons/PLAYER_DIPLOMACY": "/sprites/icons/PLAYER_DIPLOMACY.d8f52750.png",
+	"icons/STATS": "/sprites/icons/STATS.ec506166.png",
 	"icons/TURN": "/sprites/icons/TURN.7b8cdd83.png",
 	"icons/VICTORY_NORMAL": "/sprites/icons/VICTORY_NORMAL.5f8bfc26.png",
 	"laws/LAW_ACADEMIA": "/sprites/laws/LAW_ACADEMIA.fe2a5646.png",

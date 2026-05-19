@@ -43,6 +43,7 @@ import {
 	handleGameDownload,
 	handleGameList,
 	handleGamePatch,
+	handlePublicRecentGames,
 	handleGameUpload,
 } from "./games";
 import type { GamesEnv } from "./games";
@@ -626,6 +627,12 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/games" },
 		route: "GET /v1/games",
 		handler: (r, e) => handleGameList(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/games/public-recent" },
+		route: "GET /v1/games/public-recent",
+		handler: (r, e) => handlePublicRecentGames(r, e),
 	},
 	{
 		method: "GET",

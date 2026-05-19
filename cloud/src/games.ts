@@ -1616,6 +1616,218 @@ export async function handleGameList(
 	return jsonResponse({ games, total: total?.count ?? 0 }, 200, cors);
 }
 
+// GET /v1/games/public-recent — anonymous, IP-rate-limited list of the most
+// recent is_public=1 games across all users. Used to populate the marketing
+// home page (src/routes/+page.svelte) with a discovery feed. Each row carries
+// the human player roster + their per-turn legitimacy series so the home
+// cards can render an in-place VP sparkline without N follow-up fetches.
+//
+// PII stance mirrors anonymous /v1/games/:id: only display_name (already
+// public on /games/[id] pages) and player_name (the in-game character) are
+// returned. No online_ids, no email.
+export async function handlePublicRecentGames(
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	// Rate limit: share the anon_read bucket — same logical category as the
+	// public game-detail read. Scrapers are exempted by UA. Untrusted IP
+	// (CF-RAY missing) falls into a shared "untrusted" bucket so a
+	// misconfigured topology can't silently disable enforcement.
+	const ip = getClientIp(request) ?? "untrusted";
+	const ua = request.headers.get("User-Agent");
+	if (!isScraperUA(ua)) {
+		const count = await countEventsSince(
+			env.SHARE_DB,
+			"anon_read",
+			"ip_address",
+			ip,
+		);
+		if (count >= ANON_READS_PER_HOUR) {
+			return errorResponse(
+				"Rate limit exceeded. Try again later.",
+				429,
+				cors,
+				"RATE_LIMIT",
+			);
+		}
+		// Fire-and-forget — a logging hiccup mustn't 500 a public list.
+		env.SHARE_DB.prepare(
+			`INSERT INTO events (event_type, ip_address) VALUES ('anon_read', ?)`,
+		)
+			.bind(ip)
+			.run()
+			.catch(() => {});
+	}
+
+	const PUBLIC_RECENT_LIMIT = 20;
+
+	// Latest public games + uploader display name.
+	const gameRows = await env.SHARE_DB.prepare(
+		`SELECT g.game_id, g.game_name, g.user_nation, g.user_won,
+		        g.winner_nation, g.winner_name, g.victory_type,
+		        g.map_size, g.map_class, g.total_turns,
+		        g.save_date, g.created_at,
+		        u.display_name AS uploader_display_name
+		 FROM games g
+		 JOIN users u ON g.user_id = u.user_id
+		 WHERE g.is_public = 1
+		 ORDER BY g.created_at DESC
+		 LIMIT ?`,
+	)
+		.bind(PUBLIC_RECENT_LIMIT)
+		.all<{
+			game_id: string;
+			game_name: string | null;
+			user_nation: string | null;
+			user_won: number | null;
+			winner_nation: string | null;
+			winner_name: string | null;
+			victory_type: string | null;
+			map_size: string | null;
+			map_class: string | null;
+			total_turns: number;
+			save_date: string | null;
+			created_at: string;
+			uploader_display_name: string;
+		}>();
+
+	const games = gameRows.results ?? [];
+	if (games.length === 0) {
+		return jsonResponse({ games: [] }, 200, cors);
+	}
+
+	const gameIds = games.map((g) => g.game_id);
+	const placeholders = gameIds.map(() => "?").join(", ");
+
+	// Human player summaries for every game in the list. AI players are
+	// excluded server-side — the sparkline only renders humans.
+	//
+	// cities_total / techs_completed / laws_count + is_winner power the
+	// home's Nations-card-style featured-player block, mirroring the
+	// Overview tab's per-player card.
+	const playerRows = await env.SHARE_DB.prepare(
+		`SELECT game_id, player_index, player_name, nation, is_uploader,
+		        is_winner, final_points, cities_total, techs_completed, laws_count
+		 FROM player_summaries
+		 WHERE game_id IN (${placeholders}) AND is_human = 1
+		 ORDER BY game_id, player_index`,
+	)
+		.bind(...gameIds)
+		.all<{
+			game_id: string;
+			player_index: number;
+			player_name: string;
+			nation: string | null;
+			is_uploader: number;
+			is_winner: number;
+			final_points: number | null;
+			cities_total: number | null;
+			techs_completed: number | null;
+			laws_count: number | null;
+		}>();
+
+	// Per-turn legitimacy (in-app "VP") for human players only. Joining
+	// against player_summaries keeps the AI rows out of the result set so
+	// the payload stays small.
+	const seriesRows = await env.SHARE_DB.prepare(
+		`SELECT gpt.game_id, gpt.player_index, gpt.turn, gpt.legitimacy
+		 FROM game_player_turn gpt
+		 JOIN player_summaries ps
+		   ON gpt.game_id = ps.game_id AND gpt.player_index = ps.player_index
+		 WHERE gpt.game_id IN (${placeholders}) AND ps.is_human = 1
+		 ORDER BY gpt.game_id, gpt.player_index, gpt.turn`,
+	)
+		.bind(...gameIds)
+		.all<{
+			game_id: string;
+			player_index: number;
+			turn: number;
+			legitimacy: number | null;
+		}>();
+
+	// Index series rows by (game_id, player_index) so the assembly loop
+	// stays O(N) instead of N² scans.
+	const seriesByPlayer = new Map<
+		string,
+		Array<{ turn: number; vp: number | null }>
+	>();
+	for (const r of seriesRows.results ?? []) {
+		const key = `${r.game_id}:${r.player_index}`;
+		let arr = seriesByPlayer.get(key);
+		if (!arr) {
+			arr = [];
+			seriesByPlayer.set(key, arr);
+		}
+		arr.push({ turn: r.turn, vp: r.legitimacy });
+	}
+
+	const playersByGame = new Map<
+		string,
+		Array<{
+			player_index: number;
+			player_name: string;
+			nation: string | null;
+			is_uploader: boolean;
+			is_winner: boolean;
+			final_points: number | null;
+			cities_total: number | null;
+			techs_completed: number | null;
+			laws_count: number | null;
+			vp_series: Array<{ turn: number; vp: number | null }>;
+		}>
+	>();
+	for (const r of playerRows.results ?? []) {
+		let arr = playersByGame.get(r.game_id);
+		if (!arr) {
+			arr = [];
+			playersByGame.set(r.game_id, arr);
+		}
+		arr.push({
+			player_index: r.player_index,
+			player_name: r.player_name,
+			nation: r.nation,
+			is_uploader: r.is_uploader === 1,
+			is_winner: r.is_winner === 1,
+			final_points: r.final_points,
+			cities_total: r.cities_total,
+			techs_completed: r.techs_completed,
+			laws_count: r.laws_count,
+			vp_series: seriesByPlayer.get(`${r.game_id}:${r.player_index}`) ?? [],
+		});
+	}
+
+	const responseGames = games.map((g) => ({
+		game_id: g.game_id,
+		game_name: g.game_name,
+		user_nation: g.user_nation,
+		user_won: coerceD1Bool(g.user_won),
+		winner_nation: g.winner_nation,
+		winner_name: g.winner_name,
+		victory_type: g.victory_type,
+		map_size: g.map_size,
+		map_class: g.map_class,
+		total_turns: g.total_turns,
+		save_date: g.save_date,
+		created_at: g.created_at,
+		uploader_display_name: g.uploader_display_name,
+		players: playersByGame.get(g.game_id) ?? [],
+	}));
+
+	// Public cache: 60s edge, 5min browser. Short TTL keeps newly uploaded
+	// public games surfacing on the home page within a minute.
+	return new Response(JSON.stringify({ games: responseGames }), {
+		status: 200,
+		headers: {
+			"Content-Type": "application/json",
+			"Cache-Control": "public, max-age=300, s-maxage=60",
+			...cors,
+			Vary: "Origin",
+		},
+	});
+}
+
 export async function handleGameDetail(
 	gameId: string,
 	request: Request,

@@ -247,19 +247,17 @@
 		wrapper so the layer doesn't capture clicks meant for the hamburger
 		when the two overlap at narrow widths; pointer-events-auto on the
 		anchor itself so the wordmark stays clickable.
-	-->
-	<!--
-		Logged-out viewers (anonymous on a public game share) get the
-		marketing landing; logged-in users get their dashboard. Sending
-		anon users to /dashboard would trigger SvelteKit's hover-preload
-		of its load function, hitting /v1/stats, /v1/games, /v1/collections
-		and producing 401s in the console — visible noise with no UX win.
+
+		Always routes to / — the home page is the public discovery surface
+		(recent saves, active tournaments) and is served to signed-in and
+		signed-out viewers alike. Signed-in users can still jump to their
+		personal dashboard via the hamburger menu.
 	-->
 	<div class="pointer-events-none absolute left-1/2 -translate-x-1/2">
 		<a
-			href={resolve(user ? "/dashboard" : "/")}
+			href={resolve("/")}
 			class="pointer-events-auto block cursor-pointer transition-opacity hover:opacity-80"
-			aria-label={user ? "Per Ankh — go to dashboard" : "Per Ankh — home"}
+			aria-label="Per Ankh — home"
 		>
 			<div
 				class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"

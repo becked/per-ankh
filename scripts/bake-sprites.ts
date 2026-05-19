@@ -11,6 +11,12 @@
 //   other/VICTORY_Normal.png                     → icons/VICTORY_NORMAL.png
 //   other/MAP_OVERVIEW_Normal.png                → icons/MAP_OVERVIEW.png
 //   other/Cycle_Normal_EndTurn.png               → icons/TURN.png
+//   other/STATS_Normal.png                       → icons/STATS.png
+//   other/GAME_HELP.png                          → icons/GAME_HELP.png
+//   other/MultiplayerLogo.png                    → icons/MULTIPLAYER.png
+//   events_images/TURN_SUMMARY_PLAYER_DIPLOMACY.png → icons/PLAYER_DIPLOMACY.png
+//   city/CITY_FOUNDED.png                        → icons/CITY_FOUNDED.png
+//   achievements/ACHIEVEMENT_WIN.png             → icons/ACHIEVEMENT_WIN.png
 //
 // OUTPUT:
 //   static/sprites/<category>/<basename>.<hash>.png
@@ -87,6 +93,26 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	{
 		source: "achievements/ACHIEVEMENT_WIN.png",
 		target: "ACHIEVEMENT_WIN.png",
+	},
+	{
+		source: "city/CITY_FOUNDED.png",
+		target: "CITY_FOUNDED.png",
+	},
+	{
+		source: "other/STATS_Normal.png",
+		target: "STATS.png",
+	},
+	{
+		source: "other/GAME_HELP.png",
+		target: "GAME_HELP.png",
+	},
+	{
+		source: "other/MultiplayerLogo.png",
+		target: "MULTIPLAYER.png",
+	},
+	{
+		source: "events_images/TURN_SUMMARY_PLAYER_DIPLOMACY.png",
+		target: "PLAYER_DIPLOMACY.png",
 	},
 ];
 

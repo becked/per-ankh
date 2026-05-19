@@ -71,6 +71,43 @@ export interface GameListResponse {
 	total: number;
 }
 
+// Wire shape for GET /v1/games/public-recent — the marketing home's
+// discovery feed. Includes the uploader's display name + a sparkline-ready
+// per-turn legitimacy ("VP") series for each human player.
+export interface PublicRecentPlayer {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+	is_uploader: boolean;
+	is_winner: boolean;
+	final_points: number | null;
+	cities_total: number | null;
+	techs_completed: number | null;
+	laws_count: number | null;
+	vp_series: Array<{ turn: number; vp: number | null }>;
+}
+
+export interface PublicRecentGame {
+	game_id: string;
+	game_name: string | null;
+	user_nation: string | null;
+	user_won: boolean | null;
+	winner_nation: string | null;
+	winner_name: string | null;
+	victory_type: string | null;
+	map_size: string | null;
+	map_class: string | null;
+	total_turns: number;
+	save_date: string | null;
+	created_at: string;
+	uploader_display_name: string;
+	players: PublicRecentPlayer[];
+}
+
+export interface PublicRecentGamesResponse {
+	games: PublicRecentGame[];
+}
+
 // Worker response for POST /v1/games. First-time uploads get 201 with the
 // minimal shape; re-imports (file_hash collision + newer parser_version)
 // get 200 with `reimported: true` plus the version pair, so the client can
@@ -374,6 +411,16 @@ export const cloudApi = {
 	getStats: async (opts?: CallOpts): Promise<StatsResponse> => {
 		const res = await request("/stats", opts);
 		return res.json() as Promise<StatsResponse>;
+	},
+
+	// Anonymous discovery feed for the marketing home (/). Returns the 20
+	// most recent is_public=1 games + uploader display name + human-player
+	// per-turn legitimacy series for the home page's sparkline cards.
+	listPublicRecent: async (
+		opts?: CallOpts,
+	): Promise<PublicRecentGamesResponse> => {
+		const res = await request("/games/public-recent", opts);
+		return res.json() as Promise<PublicRecentGamesResponse>;
 	},
 
 	// --- Collections ---

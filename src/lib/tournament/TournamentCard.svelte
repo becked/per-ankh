@@ -2,10 +2,17 @@
 	import { resolve } from "$app/paths";
 	import type { TournamentListItem } from "$lib/api-cloud";
 
+	// `compact` shrinks padding and font sizes for the home page's narrow
+	// right sidebar; default sizing is for the /tournaments listing.
 	let {
 		tournament,
 		enrolled = false,
-	}: { tournament: TournamentListItem; enrolled?: boolean } = $props();
+		compact = false,
+	}: {
+		tournament: TournamentListItem;
+		enrolled?: boolean;
+		compact?: boolean;
+	} = $props();
 
 	const statusLabel = $derived(
 		{
@@ -44,15 +51,23 @@
 
 <a
 	href={resolve("/tournaments/[slug]", { slug: tournament.slug })}
-	class="block rounded border-2 border-black bg-blue-gray p-4 transition-colors hover:border-orange"
+	class="block rounded transition-colors hover:bg-[#3e3833] {compact
+		? 'p-2'
+		: 'p-4'}"
+	style="background-color: #2a2622;"
 >
-	<div class="flex items-baseline justify-between gap-2">
-		<h3 class="truncate text-base font-bold text-tan">{tournament.name}</h3>
-		<span class="whitespace-nowrap text-xs uppercase {badgeColor}">
-			{badgeLabel}
-		</span>
-	</div>
-	<p class="mt-1 truncate text-xs text-tan opacity-70">
-		/tournaments/{tournament.slug}
+	<h3
+		class="truncate font-bold text-[#DBDEE3] {compact
+			? 'text-xs'
+			: 'text-base'}"
+	>
+		{tournament.name}
+	</h3>
+	<p
+		class="mt-0.5 truncate uppercase {badgeColor} {compact
+			? 'text-[10px]'
+			: 'text-xs'}"
+	>
+		{badgeLabel}
 	</p>
 </a>
