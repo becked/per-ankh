@@ -34,7 +34,9 @@
 	onMount(async () => {
 		const me = await cloudApi.getMe();
 		if (!me) {
-			await goto(resolve("/?next=/upload"), { replaceState: true });
+			const next = encodeURIComponent(page.url.pathname);
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic next-query construction; resolve()'s branded types don't admit dynamic search strings
+			await goto(`/?next=${next}`, { replaceState: true });
 			return;
 		}
 		// In observer mode, load the match + standings so we can show "Slot A

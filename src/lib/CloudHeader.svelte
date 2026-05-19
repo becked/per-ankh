@@ -99,14 +99,12 @@
 			// request will surface that. Don't strand the user.
 			console.warn("Logout request failed:", err);
 		}
-		// Full page reload, not invalidateAll + goto. Reasons:
-		//   1. CloudHeader lives in the layout and stays mounted across
-		//      same-app navigations, so `signingOut` would never reset.
-		//   2. `/+page.ts` redirects authenticated users to /dashboard,
-		//      so a soft navigation to / can bounce right back if the
-		//      cookie clear hasn't fully propagated to the next fetch.
-		// A hard reload re-runs SSR from scratch with whatever cookies
-		// the browser jar actually contains, destroying this component.
+		// Full page reload, not invalidateAll + goto. CloudHeader lives in
+		// the layout and stays mounted across same-app navigations, so
+		// `signingOut` would never reset on a soft nav. A hard reload also
+		// re-runs SSR from scratch with whatever cookies the browser jar
+		// actually contains, so the layout user load can't race the cookie
+		// clear and render a stale signed-in header.
 		window.location.assign(resolve("/"));
 	}
 

@@ -67,11 +67,11 @@ interface OAuthPending {
 	invite_code: string | null;
 }
 
-const DEFAULT_NEXT = "/dashboard";
+const DEFAULT_NEXT = "/";
 
 // Server-side mirror of src/lib/utils/safe-next.ts. Anything that isn't a
-// relative same-origin path collapses to /dashboard, neutralizing
-// open-redirect attempts via `?next=...`.
+// relative same-origin path collapses to /, neutralizing open-redirect
+// attempts via `?next=...`.
 function safeNext(raw: unknown): string {
 	if (typeof raw !== "string" || !raw) return DEFAULT_NEXT;
 	let decoded: string;
