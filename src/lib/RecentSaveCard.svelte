@@ -224,22 +224,39 @@
 			</p>
 		</div>
 
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
-				<SpriteIcon
-					category="crests"
-					value="TRIBE_REBELS"
-					size={10}
-					alt="Difficulty"
-				/>
-				Difficulty
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">
-				{game.difficulty ? formatEnum(game.difficulty, "DIFFICULTY_") : "—"}
-			</p>
-		</div>
+		{#if game.players.length > 1}
+			<div class="rounded p-2" style="background-color: #2a2622;">
+				<p
+					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+				>
+					<SpriteIcon
+						category="icons"
+						value="MULTIPLAYER"
+						size={10}
+						alt="Multiplayer"
+					/>
+					Multiplayer
+				</p>
+				<p class="truncate text-sm font-bold text-[#DBDEE3]">Multiplayer</p>
+			</div>
+		{:else}
+			<div class="rounded p-2" style="background-color: #2a2622;">
+				<p
+					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+				>
+					<SpriteIcon
+						category="crests"
+						value="TRIBE_REBELS"
+						size={10}
+						alt="Difficulty"
+					/>
+					Difficulty
+				</p>
+				<p class="truncate text-sm font-bold text-[#DBDEE3]">
+					{game.difficulty ? formatEnum(game.difficulty, "DIFFICULTY_") : "—"}
+				</p>
+			</div>
+		{/if}
 	</div>
 
 	<!-- Featured-player stats: Cities / Techs / Laws / VP / Turns. Same box style
