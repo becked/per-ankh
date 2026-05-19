@@ -1838,13 +1838,19 @@ export async function handleGameDetail(
 	const session = await sessionFromRequest(env, request);
 
 	const row = await env.SHARE_DB.prepare(
-		"SELECT user_id, is_public, user_nation FROM games WHERE game_id = ?",
+		`SELECT g.user_id, g.is_public, g.user_nation, g.user_won,
+		        u.display_name AS user_display_name
+		 FROM games g
+		 JOIN users u ON g.user_id = u.user_id
+		 WHERE g.game_id = ?`,
 	)
 		.bind(gameId)
 		.first<{
 			user_id: string;
 			is_public: number;
 			user_nation: string | null;
+			user_won: number | null;
+			user_display_name: string;
 		}>();
 	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
 
@@ -1915,16 +1921,24 @@ export async function handleGameDetail(
 	// Parse, transform, re-serialize. Owner gets an `is_public` flag
 	// injected for the visibility toggle's initial state; anonymous viewers
 	// get the blob with online_id stripped (PII protection — see
-	// stripOnlineIds). Both get `user_nation` (the uploader's picked nation,
-	// or null in observer mode) so the detail view can label the H1 with
-	// the uploader's choice instead of falling back to the alphabetical-
-	// first-human heuristic. FullGameData is a looseObject schema so the
-	// extra top-level fields are non-breaking.
+	// stripOnlineIds). Everyone gets the uploader's identity triple
+	// (user_nation, user_won, user_display_name) so the detail view can
+	// surface "becked won as Tamil" even when the save's winner_name is
+	// the empty string (Old World writes "" for solo games where the
+	// player didn't customize their leader name). display_name is the same
+	// public identity already returned by /v1/games/public-recent — no
+	// new PII. FullGameData is a looseObject schema so the extra top-level
+	// fields are non-breaking.
 	const parsed = JSON.parse(new TextDecoder().decode(decompressed)) as unknown;
 	const baseBlob = isOwner
 		? { ...(parsed as Record<string, unknown>), is_public: isPublic }
 		: (stripOnlineIds(parsed) as Record<string, unknown>);
-	const transformed = { ...baseBlob, user_nation: row.user_nation };
+	const transformed = {
+		...baseBlob,
+		user_nation: row.user_nation,
+		user_won: coerceD1Bool(row.user_won),
+		user_display_name: row.user_display_name,
+	};
 	const bodyText = JSON.stringify(transformed);
 
 	// Vary: Cookie keeps the public-cache key correct. Scrapers send no

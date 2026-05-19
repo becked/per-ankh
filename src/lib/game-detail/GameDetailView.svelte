@@ -61,6 +61,8 @@
 		onMapTurnChange,
 		selectedMapTurn = null,
 		userNation = null,
+		userDisplayName = null,
+		userWon = null,
 		headerActions,
 		preTabs,
 		mapMissingMessage,
@@ -90,6 +92,14 @@
 		// cloud uploads. Null when the uploader picked Observer, or for
 		// legacy callers (the frozen web/ viewer) that don't pass the prop.
 		userNation?: string | null;
+		// Uploader's Discord display_name + their user_won flag, both from
+		// the games row + users JOIN. Together they let the winner card and
+		// the uploader's nation card show the user's identity ("becked")
+		// when the save's leader-name field is empty — Old World writes ""
+		// for solo games whose player never set a custom leader name. Both
+		// are optional/null for legacy callers and observer-mode uploads.
+		userDisplayName?: string | null;
+		userWon?: boolean | null;
 		headerActions?: Snippet;
 		preTabs?: Snippet;
 		mapMissingMessage?: Snippet;
@@ -223,7 +233,12 @@
 				Winner
 			</p>
 			<p class="text-lg font-bold" style="color: #DBDEE3;">
-				{#if gameDetails.winner_civilization}
+				{#if userWon && userDisplayName && gameDetails.winner_civilization}
+					{userDisplayName} ({formatEnum(
+						gameDetails.winner_civilization,
+						"NATION_",
+					)})
+				{:else if gameDetails.winner_civilization}
 					{#if gameDetails.winner_name}
 						{gameDetails.winner_name} ({formatEnum(
 							gameDetails.winner_civilization,
@@ -392,6 +407,7 @@
 			{gameReligions}
 			{playerWonders}
 			{userNation}
+			{userDisplayName}
 		/>
 	</Tabs.Content>
 

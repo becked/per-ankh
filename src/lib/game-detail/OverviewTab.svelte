@@ -33,6 +33,7 @@
 		gameReligions,
 		playerWonders,
 		userNation = null,
+		userDisplayName = null,
 	}: {
 		gameDetails: GameDetails;
 		playerHistory: PlayerHistory[];
@@ -50,6 +51,10 @@
 		// first-human heuristic (correct for single-human legacy shares
 		// from the frozen web/ viewer, wrong for multi-human cloud saves).
 		userNation?: string | null;
+		// Uploader's Discord display_name (cloud-only). Used as the player
+		// label for the uploader's nation card when the save itself has no
+		// leader name — Old World writes "" for unnamed solo games.
+		userDisplayName?: string | null;
 	} = $props();
 
 	const UNIT_CLASS_ABBREV: Record<UnitClass, string> = {
@@ -110,13 +115,21 @@
 					.filter((w) => w.nation === p.nation)
 					.map((w) => ({ wonder: w.wonder, completed_turn: w.completed_turn }));
 
+				const isSaveOwner = userNation
+					? p.nation === userNation
+					: p === gameDetails.players.find((pl) => pl.is_human);
+				// Fall back to the uploader's Discord display_name on the
+				// save-owner card when Old World wrote no leader name (common
+				// for solo games where the player didn't customize names).
+				const playerName =
+					isSaveOwner && !p.player_name && userDisplayName
+						? userDisplayName
+						: p.player_name;
 				return {
-					playerName: p.player_name,
+					playerName,
 					nation: p.nation,
 					isHuman: p.is_human,
-					isSaveOwner: userNation
-						? p.nation === userNation
-						: p === gameDetails.players.find((pl) => pl.is_human),
+					isSaveOwner,
 					isWinner: p.nation === gameDetails.winner_civilization,
 					finalVP: lastPoint?.points ?? null,
 					finalMilitary: lastPoint?.military_power ?? null,

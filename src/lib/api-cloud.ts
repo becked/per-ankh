@@ -290,20 +290,30 @@ export const cloudApi = {
 		return res.json() as Promise<GameListResponse>;
 	},
 
-	// Owner GET — returns the blob with `is_public` and `user_nation`
-	// injected by the Worker. `is_public` drives the visibility toggle's
-	// initial state; `user_nation` is the uploader's picked nation (null in
-	// observer mode) and lets the detail view label the page with the
-	// uploader's choice instead of the alphabetical-first-human heuristic.
+	// Owner GET — returns the blob with `is_public` and the uploader-identity
+	// triple (`user_nation`, `user_won`, `user_display_name`) injected by the
+	// Worker. `is_public` drives the visibility toggle's initial state; the
+	// uploader fields let the detail view surface "becked (Tamil)" even when
+	// the save itself has an empty winner_name.
 	getGame: async (
 		id: string,
 		opts?: CallOpts,
 	): Promise<
-		FullGameData & { is_public?: boolean; user_nation?: string | null }
+		FullGameData & {
+			is_public?: boolean;
+			user_nation?: string | null;
+			user_won?: boolean | null;
+			user_display_name?: string | null;
+		}
 	> => {
 		const res = await request(`/games/${id}`, opts);
 		return res.json() as Promise<
-			FullGameData & { is_public?: boolean; user_nation?: string | null }
+			FullGameData & {
+				is_public?: boolean;
+				user_nation?: string | null;
+				user_won?: boolean | null;
+				user_display_name?: string | null;
+			}
 		>;
 	},
 
@@ -314,7 +324,13 @@ export const cloudApi = {
 	getPublicGame: async (
 		id: string,
 		opts?: CallOpts,
-	): Promise<FullGameData & { user_nation?: string | null }> => {
+	): Promise<
+		FullGameData & {
+			user_nation?: string | null;
+			user_won?: boolean | null;
+			user_display_name?: string | null;
+		}
+	> => {
 		const f = opts?.fetch ?? fetch;
 		const headers = new Headers();
 		// No credentials: include — anonymous read.
@@ -326,7 +342,11 @@ export const cloudApi = {
 			throw new ApiError(res.status, null, res.statusText);
 		}
 		return res.json() as Promise<
-			FullGameData & { user_nation?: string | null }
+			FullGameData & {
+				user_nation?: string | null;
+				user_won?: boolean | null;
+				user_display_name?: string | null;
+			}
 		>;
 	},
 

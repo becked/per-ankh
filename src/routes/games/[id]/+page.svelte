@@ -83,6 +83,8 @@
 				gameReligions={game.game_religions}
 				playerWonders={game.player_wonders}
 				userNation={game.user_nation ?? null}
+				userDisplayName={game.user_display_name ?? null}
+				userWon={game.user_won ?? null}
 				{mapTiles}
 				{selectedMapTurn}
 				onMapTurnChange={handleMapTurnChange}
