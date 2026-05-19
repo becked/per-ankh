@@ -55,7 +55,7 @@
 - (cloud) tighten header menu and clarify Upload label — [7aeb9a8](https://github.com/becked/per-ankh/commit/7aeb9a844da13438fd05f4dcffa15c7f2c736804)
 - (cloud) hieroglyph parade band on upload surfaces — [198f5ff](https://github.com/becked/per-ankh/commit/198f5ff15e3286884ec515dad70d286436edd8f8)
 - content-hash atlas and sprite assets for immutable caching — [373ce65](https://github.com/becked/per-ankh/commit/373ce65de7693a37f7c2806a3b4d3f6a19536795)
-- (cloud) redirect /share/* to legacy.per-ankh.app — [b49400d](https://github.com/becked/per-ankh/commit/b49400d863f3731a70ad4c091c041a846cf54246)
+- (cloud) redirect /share/\* to legacy.per-ankh.app — [b49400d](https://github.com/becked/per-ankh/commit/b49400d863f3731a70ad4c091c041a846cf54246)
 - (cloud) redirect signed-in visitors at / to /dashboard — [dedeef1](https://github.com/becked/per-ankh/commit/dedeef17e4d653f51cd9954bdbc3ce6dcee48aaf)
 - (prod) add ./per-ankh prod deploy & preflight CLI — [25bec18](https://github.com/becked/per-ankh/commit/25bec1883ba6fa2138881f319e1c06bed0a85a18)
 - (ui) add collection button to game detail actions — [e4a2b97](https://github.com/becked/per-ankh/commit/e4a2b97c40c783ac2d022bdb17afe0e760cffcce)

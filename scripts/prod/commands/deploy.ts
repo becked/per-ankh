@@ -1,5 +1,5 @@
-// `./per-ankh prod deploy` — full deploy: preflight → migrate → worker →
-// frontend → smoke. Each step aborts on failure.
+// `./per-ankh prod deploy` — full deploy: preflight → changelog → migrate →
+// worker → frontend → smoke. Each step aborts on failure.
 
 import { runAllChecks } from "./preflight";
 import { blockingFailures } from "../types";
@@ -12,6 +12,7 @@ import { runSmokeProbes } from "../deploy/smoke";
 import { printResults } from "../results";
 import { bold, dim, info, ok, warn } from "../../lib/format";
 import { confirmYesNo } from "../../lib/confirm";
+import { runChangelog } from "../changelog/run";
 
 export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	// ─── 1. Preflight ────────────────────────────────────────────────────
@@ -32,12 +33,22 @@ export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	const mig = await listPendingMigrations();
 	const pending = mig.pending;
 
+	// Preview-only run so the plan summary can show what the changelog step
+	// will record. Re-run after confirm with write=true; the second pass
+	// uses HEAD-at-that-moment which is what actually gets tagged.
+	const changelogPreview = opts.skipChangelog
+		? null
+		: await runChangelog({ write: false, edit: false });
+
 	process.stdout.write(`\n${bold("Deploy plan")}\n`);
 	process.stdout.write(`${"─".repeat(33)}\n`);
 	process.stdout.write(
 		`  Migrations: ${pending.length === 0 ? "none pending" : `${pending.length} pending`}\n`,
 	);
 	for (const m of pending) process.stdout.write(`    ${m}\n`);
+	process.stdout.write(
+		`  Changelog:  ${changelogSummary(opts, changelogPreview)}\n`,
+	);
 	process.stdout.write(
 		`  Worker:     ${opts.skipWorker ? dim("(skipped)") : "deploy"}\n`,
 	);
@@ -62,21 +73,31 @@ export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 		}
 	}
 
-	// ─── 3. Migrate ──────────────────────────────────────────────────────
+	// ─── 3. Changelog ────────────────────────────────────────────────────
+	if (!opts.skipChangelog && changelogPreview && !changelogPreview.skipped) {
+		info("Writing changelog and tagging deploy...");
+		const result = await runChangelog({
+			write: true,
+			edit: opts.editChangelog,
+		});
+		ok(`Changelog committed and tagged deploy/${result.stamp}.`);
+	}
+
+	// ─── 4. Migrate ──────────────────────────────────────────────────────
 	if (pending.length > 0) {
 		info(`Applying ${pending.length} migration(s)...`);
 		await applyRemoteMigrations();
 		ok("Migrations applied.");
 	}
 
-	// ─── 4. Worker ───────────────────────────────────────────────────────
+	// ─── 5. Worker ───────────────────────────────────────────────────────
 	if (!opts.skipWorker) {
 		info("Deploying API Worker...");
 		await deployWorker();
 		ok("Worker deployed.");
 	}
 
-	// ─── 5. Frontend ─────────────────────────────────────────────────────
+	// ─── 6. Frontend ─────────────────────────────────────────────────────
 	if (!opts.skipFrontend) {
 		info("Building frontend...");
 		await buildFrontend();
@@ -86,7 +107,7 @@ export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 		ok("Frontend deployed.");
 	}
 
-	// ─── 6. Smoke ────────────────────────────────────────────────────────
+	// ─── 7. Smoke ────────────────────────────────────────────────────────
 	if (!opts.skipSmoke) {
 		info("Running smoke probes...");
 		const probes = await runSmokeProbes();
@@ -110,4 +131,17 @@ export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	}
 
 	ok("Deploy complete.");
+}
+
+function changelogSummary(
+	opts: ProdOpts,
+	preview: Awaited<ReturnType<typeof runChangelog>> | null,
+): string {
+	if (opts.skipChangelog) return dim("(skipped)");
+	if (!preview) return dim("(skipped)");
+	if (preview.skipped) {
+		return `no commits since ${preview.since} ${dim("(skip)")}`;
+	}
+	const editNote = opts.editChangelog ? dim(" (edit before commit)") : "";
+	return `${preview.commits.length} commits → deploy/${preview.stamp}${editNote}`;
 }

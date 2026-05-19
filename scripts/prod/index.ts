@@ -8,6 +8,7 @@ import * as deploy from "./commands/deploy";
 import * as migrate from "./commands/migrate";
 import * as smoke from "./commands/smoke";
 import * as status from "./commands/status";
+import * as changelog from "./commands/changelog";
 
 function printHelp(): void {
 	process.stdout.write(
@@ -19,10 +20,11 @@ function printHelp(): void {
 			"",
 			"Commands:",
 			"  preflight     Run every safety check, exit non-zero on any failure.",
-			"  deploy        Full deploy: preflight → migrate → worker → frontend → smoke.",
+			"  deploy        Full deploy: preflight → changelog → migrate → worker → frontend → smoke.",
 			"  migrate       Apply pending D1 migrations (with confirm + preview).",
 			"  smoke         Live HTTP probes against per-ankh.app, api, legacy.",
 			"  status        Show local git, deployed versions, secrets, pending migrations.",
+			"  changelog     Preview (default) or --write the deploy changelog entry.",
 			"",
 			"Global flags:",
 			"  --dry-run         Run checks + print plan; skip side effects.",
@@ -33,6 +35,8 @@ function printHelp(): void {
 			"  --skip-worker     Skip the API Worker deploy step.",
 			"  --skip-frontend   Skip the frontend build + deploy step.",
 			"  --skip-smoke      Skip post-deploy smoke probes.",
+			"  --skip-changelog  Skip changelog generation during deploy.",
+			"  --edit-changelog  Open $EDITOR on the changelog before committing.",
 			"  --json            Machine-readable output for preflight/smoke/status.",
 			"",
 		].join("\n"),
@@ -50,6 +54,8 @@ function parseProdOpts(argv: string[]): { opts: ProdOpts; rest: string[] } {
 		skipWorker: false,
 		skipFrontend: false,
 		skipSmoke: false,
+		skipChangelog: false,
+		editChangelog: false,
 	};
 	const rest: string[] = [];
 	for (const a of argv) {
@@ -81,6 +87,12 @@ function parseProdOpts(argv: string[]): { opts: ProdOpts; rest: string[] } {
 			case "--skip-smoke":
 				opts.skipSmoke = true;
 				break;
+			case "--skip-changelog":
+				opts.skipChangelog = true;
+				break;
+			case "--edit-changelog":
+				opts.editChangelog = true;
+				break;
 			default:
 				rest.push(a);
 		}
@@ -104,6 +116,8 @@ export async function main(argv: string[]): Promise<void> {
 			return smoke.run(subArgs, opts);
 		case "status":
 			return status.run(subArgs, opts);
+		case "changelog":
+			return changelog.run(subArgs, opts);
 		case undefined:
 		case "help":
 		case "--help":

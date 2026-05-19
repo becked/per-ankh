@@ -28,6 +28,8 @@ export interface ProdOpts {
 	skipWorker: boolean;
 	skipFrontend: boolean;
 	skipSmoke: boolean;
+	skipChangelog: boolean;
+	editChangelog: boolean;
 }
 
 export function blockingFailures(results: CheckResult[]): CheckResult[] {

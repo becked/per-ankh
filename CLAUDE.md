@@ -203,13 +203,18 @@ Add `--json` to any read command for pipeable output; add `--yes` to skip confir
 ```bash
 ./per-ankh prod preflight   # All safety checks (git, lint, check, format, audit, secret leak scan,
                             #   [vars] vs secrets hygiene, required-secret presence, pending migrations)
-./per-ankh prod deploy      # preflight → migrate → worker → frontend → smoke (with confirm)
+./per-ankh prod deploy      # preflight → changelog → migrate → worker → frontend → smoke (with confirm)
 ./per-ankh prod migrate     # Apply pending D1 migrations (with confirm + preview)
 ./per-ankh prod smoke       # GET probes against per-ankh.app, api.per-ankh.app/v1/auth/me, legacy
 ./per-ankh prod status      # Local git, deployed worker versions, secrets, pending migrations
+./per-ankh prod changelog   # Preview the next changelog entry; --write to persist + tag
 ```
 
-Flags: `--dry-run`, `--yes`, `--allow-dirty`, `--allow-branch`, `--skip-checks`, `--skip-worker`, `--skip-frontend`, `--skip-smoke`, `--json`. Preflight blocks on uncommitted changes, off-main, behind origin, secret leaks, `[vars]` keys with secret-shaped names, missing prod secrets on the Worker, format/lint/typecheck/audit failures. Functional smoke (OAuth flow, upload, share visibility) stays manual — see deploy plan §5.
+Flags: `--dry-run`, `--yes`, `--allow-dirty`, `--allow-branch`, `--skip-checks`, `--skip-worker`, `--skip-frontend`, `--skip-smoke`, `--skip-changelog`, `--edit-changelog`, `--json`. Preflight blocks on uncommitted changes, off-main, behind origin, secret leaks, `[vars]` keys with secret-shaped names, missing prod secrets on the Worker, format/lint/typecheck/audit failures. Functional smoke (OAuth flow, upload, share visibility) stays manual — see deploy plan §5.
+
+### Changelog & deploy stamps
+
+Each `prod deploy` generates a new entry in `CHANGELOG.md` from the conventional-commit log since the last `deploy/*` tag, groups it by `feat`/`fix`/`perf`/other, bumps `package.json` `version` to a calver stamp (`YYYY-MM-DD-<shortsha>`), commits as `chore(release): deploy <stamp>`, and tags `deploy/<stamp>`. The deploy script does **not** push to GitHub — the next deploy finds the previous `deploy/*` tag locally via `git describe`, so pushing is optional bookkeeping (handy for a GitHub-visible deploy history, but not load-bearing). Use `--edit-changelog` to open `$EDITOR` on the file before the commit lands, `--skip-changelog` to bypass entirely, or run `./per-ankh prod changelog` standalone to preview without writing. If there are no new commits since the last deploy tag, the changelog step skips silently.
 
 **Never run a prod-targeting command without a specific ask from the user.** This covers every `./per-ankh prod <sub>` subcommand (including read-only ones like `preflight`, `status`, and `smoke`) and any direct `wrangler` / `npx wrangler` call against the live worker, D1, R2, or KV. These commands authenticate against the user's Cloudflare account — on this machine that triggers a 1Password prompt — and can hit prod resources even when nominally read-only. If something appears to need prod state, ask first.
 
