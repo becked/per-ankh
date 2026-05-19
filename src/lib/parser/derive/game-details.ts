@@ -1,10 +1,9 @@
 // derive/game-details.ts — port of get_game_details (match_data.rs:10–75).
 //
 // Combines match metadata + the resolved winner (player_name, nation, victory
-// type) + a player roster. The Rust query also pulls difficulty from the
-// save-owner's player row; we mirror that — the parser's Player type carries
-// `difficulty` but it's a per-player attribute, so we use the save-owner's
-// value (or null if no save_owner is flagged at parse time).
+// type) + a player roster. Difficulty is sourced from the root-level
+// `@_Difficulty` attribute (game-wide setting); the per-player attribute is
+// the same value mirrored onto each player record.
 //
 // `match_id` is a desktop-DB artifact; for the cloud blob we populate 0 and
 // flag the divergence here. Frontend tab components don't use match_id.
@@ -21,8 +20,6 @@ export function deriveGameDetails(
 	const winnerPlayer = winner
 		? players.find((p) => p.xmlId === winner.winner_player_xml_id)
 		: undefined;
-
-	const saveOwner = players.find((p) => p.isSaveOwner);
 
 	const playerInfos: PlayerInfo[] = players
 		.map((p) => ({
@@ -45,7 +42,7 @@ export function deriveGameDetails(
 		map_class: metadata.map_class,
 		game_mode: metadata.game_mode,
 		opponent_level: metadata.opponent_level,
-		difficulty: saveOwner?.difficulty ?? null,
+		difficulty: metadata.difficulty,
 		victory_conditions: metadata.victory_conditions,
 		enabled_mods: metadata.enabled_mods,
 		enabled_dlc: metadata.enabled_dlc,

@@ -178,6 +178,10 @@ Lives under `cloud/`. Handlers in `cloud/src/`, validation via Valibot in `cloud
 - Apply remote: `(cd cloud && npm run migrate:remote)`.
 - Always rehearse a new migration on a throwaway D1 before running it on production.
 
+### Bumping `PARSER_VERSION`
+
+When you bump `PARSER_VERSION` in `src/lib/parser/types.ts`, also add the new string to `KNOWN_PARSER_VERSIONS` in `cloud/src/schemas/game.ts` with a one-line changelog entry above the set. The Worker rejects unknown versions with `INVALID_BLOB: Unknown parser_version`, so a frontend that ships ahead of the Worker breaks all uploads. Deploy ordering: Worker first, frontend second.
+
 ### Cloud Admin CLI
 
 `./per-ankh admin` is the operator CLI for the live app — covers both the cloud-rewrite world (users, games, events) and the frozen legacy share world. Implementation lives under `scripts/admin/`. Calls `wrangler` directly (no API key — relies on `wrangler login`). Run `./per-ankh admin --help` for the full list. Common usage:

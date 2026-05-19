@@ -44,6 +44,9 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         cloud tech_events PK can't accept duplicates)
 // 2.4.0 — winner detection for legacy <WinnerTeam>/<WinnerVictory> XML
 //         format (older OW versions); adds `match_metadata.game_over`.
+// 2.4.1 — game_details.difficulty sourced from root <Root @_Difficulty>
+//         (was always null because the save-owner detection pass that
+//         the previous per-player source depended on doesn't exist).
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -51,6 +54,7 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.3.0",
 	"2.3.1",
 	"2.4.0",
+	"2.4.1",
 ]);
 
 // ----- Reusable atoms -----
