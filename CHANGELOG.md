@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-05-19-136db32] - 2026-05-19
+
+### Features
+
+- (prod) auto-generate changelog entries and deploy/* tags on deploy — [05b8f81](https://github.com/becked/per-ankh/commit/05b8f817f1b5c4b03e59b189658572b536df152e)
+- (games) owner-editable save titles + server-side nation fallback — [136db32](https://github.com/becked/per-ankh/commit/136db32cd75138bd0a41fa57232014644a3453cb)
+
 ## [2026-05-19-512851d] - 2026-05-19
 
 ### Features
