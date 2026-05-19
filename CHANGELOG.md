@@ -1,5 +1,26 @@
 # Changelog
 
+## [2026-05-19-f89faa7] - 2026-05-19
+
+### Features
+
+- (home) replace prose hero with bulleted feature list — [5a0e946](https://github.com/becked/per-ankh/commit/5a0e94681e13f732085a13c28db6765791964657)
+- (home) add Difficulty to recent-game cards — [af7a312](https://github.com/becked/per-ankh/commit/af7a31296aceffc6c528ed1b5cd4c581d1d85284)
+- (account) add Reparse-all button to user settings — [2a5551f](https://github.com/becked/per-ankh/commit/2a5551f5ce199dcc660be53961a8b52c13f151cb)
+- (admin) /admin/reparse page for global parser sweeps — [9e36e4d](https://github.com/becked/per-ankh/commit/9e36e4dde984321e4ec0e9e50dd778a49825d083)
+- (home) show Multiplayer label on MP game cards — [e6fca12](https://github.com/becked/per-ankh/commit/e6fca121d0f5f91f9a0979ac375a6cb6a2e0431c)
+
+### Fixes
+
+- (parser) source difficulty from root XML attribute — [c955f2b](https://github.com/becked/per-ankh/commit/c955f2b28bd95bad8c30db8264113e71598d7d76)
+- (reimport) give the reparse modal a border like other popups — [6f722a9](https://github.com/becked/per-ankh/commit/6f722a99430d5566e4485f866b811e951dd28afe)
+- (reimport) preserve tournament link and lock uploader on reparse — [c2f3c8c](https://github.com/becked/per-ankh/commit/c2f3c8c5f968ff4c0f9171300f9c7aac09d40389)
+- (parser) source difficulty from per-player <Difficulty> array — [9970489](https://github.com/becked/per-ankh/commit/99704897ec69eee36853dcb7fb05db88691b0992)
+
+### Other
+
+- (format) apply prettier — [f89faa7](https://github.com/becked/per-ankh/commit/f89faa79f8a36193aced6b3648f17182cc0a6d6c)
+
 ## [2026-05-19-136db32] - 2026-05-19
 
 ### Features
