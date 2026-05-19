@@ -93,9 +93,15 @@
 				<div class="rounded-lg p-4" style="background-color: #2a2622;">
 					<h1 class="mb-2 text-2xl font-bold text-tan">Per Ankh</h1>
 					<p class="text-xs leading-relaxed text-tan opacity-90">
-						Parse your Old World save files and turn them into interactive
-						charts, an explorable hex-tile map, and shareable game pages.
+						Parse Old World Save Files
 					</p>
+					<ul
+						class="mt-2 list-disc pl-4 text-xs leading-relaxed text-tan opacity-90"
+					>
+						<li>Interactive charts</li>
+						<li>Explorable map</li>
+						<li>Share saves</li>
+					</ul>
 					<div class="mt-3 space-y-2">
 						{#each SCREENSHOTS as shot (shot.src)}
 							<img
