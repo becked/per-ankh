@@ -223,11 +223,15 @@
 				Winner
 			</p>
 			<p class="text-lg font-bold" style="color: #DBDEE3;">
-				{#if gameDetails.winner_name && gameDetails.winner_civilization}
-					{gameDetails.winner_name} ({formatEnum(
-						gameDetails.winner_civilization,
-						"NATION_",
-					)})
+				{#if gameDetails.winner_civilization}
+					{#if gameDetails.winner_name}
+						{gameDetails.winner_name} ({formatEnum(
+							gameDetails.winner_civilization,
+							"NATION_",
+						)})
+					{:else}
+						{formatEnum(gameDetails.winner_civilization, "NATION_")}
+					{/if}
 				{:else}
 					-
 				{/if}
