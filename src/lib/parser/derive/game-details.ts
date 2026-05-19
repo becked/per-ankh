@@ -1,9 +1,10 @@
 // derive/game-details.ts — port of get_game_details (match_data.rs:10–75).
 //
 // Combines match metadata + the resolved winner (player_name, nation, victory
-// type) + a player roster. Difficulty is sourced from the root-level
-// `@_Difficulty` attribute (game-wide setting); the per-player attribute is
-// the same value mirrored onto each player record.
+// type) + a player roster. The headline `difficulty` field carries the save
+// owner's tier (already derived in MatchMetadata); each PlayerInfo also
+// carries its own `difficulty` so the Settings tab can render a per-human
+// breakdown when human players are on different tiers.
 //
 // `match_id` is a desktop-DB artifact; for the cloud blob we populate 0 and
 // flag the divergence here. Frontend tab components don't use match_id.
@@ -28,6 +29,7 @@ export function deriveGameDetails(
 			is_human: p.isHuman,
 			legitimacy: p.legitimacy,
 			state_religion: p.stateReligion,
+			difficulty: p.difficulty,
 		}))
 		.sort((a, b) => strCmp(a.player_name, b.player_name));
 

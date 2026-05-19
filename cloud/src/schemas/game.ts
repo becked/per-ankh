@@ -47,6 +47,10 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 // 2.4.1 — game_details.difficulty sourced from root <Root @_Difficulty>
 //         (was always null because the save-owner detection pass that
 //         the previous per-player source depended on doesn't exist).
+// 2.5.0 — game_details.difficulty + per-player PlayerInfo.difficulty
+//         sourced from <Difficulty>/<PlayerDifficulty> positional array;
+//         isSaveOwner correctly set from <?ActivePlayer?> PI (with
+//         single-human-roster fallback).
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -55,6 +59,7 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.3.1",
 	"2.4.0",
 	"2.4.1",
+	"2.5.0",
 ]);
 
 // ----- Reusable atoms -----
@@ -73,6 +78,11 @@ const PlayerInfoSchema = v.object({
 	is_human: v.boolean(),
 	legitimacy: v.nullable(v.number()),
 	state_religion: v.nullable(v.string()),
+	// Added in PARSER_VERSION 2.5.0. `v.optional` (rather than required)
+	// tolerates the deploy gap where the Worker is updated but the frontend
+	// still emits ≤2.4.1 blobs, and keeps older R2 blobs passing if they're
+	// ever re-validated.
+	difficulty: v.optional(v.nullable(v.string())),
 });
 
 const GameDetailsSchema = v.object({

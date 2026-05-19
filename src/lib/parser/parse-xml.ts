@@ -50,6 +50,30 @@ const xmlParser = new XMLParser({
 });
 
 /**
+ * Extract the player_index from the `<?ActivePlayer N?>` processing
+ * instruction at the top of an Old World save XML, when present. Returns
+ * `null` if the PI is absent — older OW versions and some tournament
+ * submissions don't emit it. Scans only the leading bytes of the file,
+ * since the PI always appears immediately after the `<?xml ... ?>` line.
+ *
+ * Done as a raw-string regex (rather than via fast-xml-parser's PI
+ * support) because the PI body `<?ActivePlayer 0?>` has no
+ * `key="value"` attribute syntax, which would require awkward parsing
+ * of fast-xml-parser's text-node representation.
+ */
+const ACTIVE_PLAYER_PI_RE = /<\?ActivePlayer\s+(\d+)\s*\?>/;
+
+export function parseActivePlayerIndex(xml: string): number | null {
+	// The PI lives in the header; scanning the whole file would be wasteful
+	// on multi-megabyte saves.
+	const head = xml.slice(0, 512);
+	const m = ACTIVE_PLAYER_PI_RE.exec(head);
+	if (!m) return null;
+	const n = parseInt(m[1], 10);
+	return Number.isNaN(n) ? null : n;
+}
+
+/**
  * Parse an Old World save XML string and return the root element's contents
  * (i.e. the children of `<Root>...</Root>`), matching the level the Rust
  * parser sees via `doc.root_element()`.

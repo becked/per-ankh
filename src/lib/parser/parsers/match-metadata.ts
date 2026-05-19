@@ -74,7 +74,12 @@ export function parseMatchMetadata(
 		map_size: optAttrStr(root["@_MapSize"]),
 		map_class: optAttrStr(root["@_MapClass"]),
 		game_mode: optAttrStr(root["@_GameMode"]),
-		difficulty: optAttrStr(root["@_Difficulty"]),
+		// Difficulty is per-player in the save (`<Difficulty><PlayerDifficulty>`);
+		// the match-level "Difficulty" stamp is the save owner's tier, set by
+		// parsePlayers via the <?ActivePlayer N?> PI or the single-human fallback.
+		// Returns null when no save owner could be identified (observer upload
+		// of multi-human MP without the PI).
+		difficulty: players.find((p) => p.isSaveOwner)?.difficulty ?? null,
 		opponent_level: optAttrStr(root["@_OpponentLevel"]),
 		victory_conditions: victoryConditions,
 		enabled_mods: enabledMods,

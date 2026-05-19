@@ -17,7 +17,7 @@
 /// <reference lib="webworker" />
 
 import { ParseError, extractXmlFromZip } from "./extract-zip.js";
-import { parseSaveXml } from "./parse-xml.js";
+import { parseActivePlayerIndex, parseSaveXml } from "./parse-xml.js";
 import { extractAllGameData } from "./parsers/index.js";
 import type { FullGameData } from "./types.js";
 import { validateCompletedGame } from "./validation.js";
@@ -67,13 +67,14 @@ ctx.onmessage = (e: MessageEvent<ParseRequest>) => {
 			percent: 15,
 		} satisfies ParseProgress);
 		const root = parseSaveXml(xml);
+		const activePlayerIndex = parseActivePlayerIndex(xml);
 
 		ctx.postMessage({
 			type: "progress",
 			phase: "Extracting game data",
 			percent: 30,
 		} satisfies ParseProgress);
-		const gameData = extractAllGameData(root);
+		const gameData = extractAllGameData(root, activePlayerIndex);
 
 		validateCompletedGame(gameData);
 

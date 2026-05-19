@@ -39,7 +39,11 @@ export interface Player {
 	tribeMercenariesHired: number;
 }
 
-export function parsePlayers(root: Record<string, unknown>): Player[] {
+export function parsePlayers(
+	root: Record<string, unknown>,
+	activePlayerIndex: number | null,
+): Player[] {
+	const playerDifficulties = parsePlayerDifficulties(root);
 	const players: Player[] = [];
 
 	for (const node of asArray(root.Player) as unknown[]) {
@@ -65,13 +69,11 @@ export function parsePlayers(root: Record<string, unknown>): Player[] {
 			dynasty: optAttrStr(node["@_Dynasty"]),
 			teamId: optAttrStr(node["@_Team"]),
 			isHuman,
-			// Pure-parser output; the save-owner detection pass overwrites this
-			// downstream. Rust dump emits false here too.
 			isSaveOwner: false,
 			onlineId,
 			email: optAttrStr(node["@_Email"]),
 			aiControlledToTurn,
-			difficulty: optAttrStr(node["@_Difficulty"]),
+			difficulty: playerDifficulties[xmlId] ?? null,
 			lastTurnCompleted: optInt(node.LastTurnCompleted),
 			// Rust bool::from_str accepts only "true"/"false" exactly.
 			turnEnded: optStr(node.TurnEnded) === "true",
@@ -90,7 +92,55 @@ export function parsePlayers(root: Record<string, unknown>): Player[] {
 		});
 	}
 
+	resolveSaveOwner(players, activePlayerIndex);
 	return players;
+}
+
+/**
+ * Pull per-player difficulty tiers from `<Difficulty><PlayerDifficulty>…
+ * </PlayerDifficulty>…</Difficulty>`. The returned array is positional —
+ * `result[playerXmlId]` is that player's tier (or `null` if the element is
+ * missing or malformed). The `<PlayerDifficulty>` element is NOT in
+ * ALWAYS_ARRAY_TAGS, so fast-xml-parser already coerces multiple siblings
+ * to an array of text-only strings; asArray normalizes the single-child case.
+ */
+function parsePlayerDifficulties(
+	root: Record<string, unknown>,
+): (string | null)[] {
+	const difficultyElem = root.Difficulty;
+	if (!isElement(difficultyElem)) return [];
+	const out: (string | null)[] = [];
+	for (const child of asArray(difficultyElem.PlayerDifficulty) as unknown[]) {
+		out.push(typeof child === "string" && child !== "" ? child : null);
+	}
+	return out;
+}
+
+/**
+ * Identify which player owns the save and set `isSaveOwner = true` on
+ * exactly one (or none). Resolution order:
+ *   1. `<?ActivePlayer N?>` PI value (when present) — N is the player_index
+ *      of whoever's perspective the file was saved from.
+ *   2. Single human in the roster — natural fallback for SP saves and any
+ *      MP save where exactly one human exists.
+ *   3. Neither — observer upload of multi-human MP without the PI. No
+ *      save owner is identified; the headline difficulty falls back to null.
+ */
+function resolveSaveOwner(
+	players: Player[],
+	activePlayerIndex: number | null,
+): void {
+	if (activePlayerIndex !== null) {
+		const owner = players.find((p) => p.xmlId === activePlayerIndex);
+		if (owner) {
+			owner.isSaveOwner = true;
+			return;
+		}
+	}
+	const humans = players.filter((p) => p.isHuman);
+	if (humans.length === 1) {
+		humans[0].isSaveOwner = true;
+	}
 }
 
 export function playerToRow(p: Player): Record<string, unknown> {

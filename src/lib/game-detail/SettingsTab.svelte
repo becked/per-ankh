@@ -13,6 +13,24 @@
 		dlcList: string;
 		modsList: string;
 	} = $props();
+
+	// Per-human difficulty breakdown. AI rows in single-player carry the AI
+	// baseline tier (e.g. STRONG when the human is on GLORIOUS), which isn't
+	// player-chosen — include only humans in the divergence check.
+	const showBreakdown = $derived(
+		new Set(
+			gameDetails.players
+				.filter((p) => p.is_human)
+				.map((p) => p.difficulty)
+				.filter((d): d is string => d != null),
+		).size > 1,
+	);
+	const showDifficultySection = $derived(
+		gameDetails.difficulty != null || showBreakdown,
+	);
+	const humansWithDifficulty = $derived(
+		gameDetails.players.filter((p) => p.is_human && p.difficulty != null),
+	);
 </script>
 
 <div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
@@ -33,7 +51,7 @@
 				>
 			</div>
 		{/if}
-		{#if gameDetails.game_mode || gameDetails.difficulty}
+		{#if gameDetails.game_mode || showDifficultySection}
 			<div
 				class="flex flex-col gap-3 rounded-lg p-3"
 				style="background-color: #35302B;"
@@ -44,12 +62,23 @@
 						<span class="text-base text-tan">{gameDetails.game_mode}</span>
 					</div>
 				{/if}
-				{#if gameDetails.difficulty}
+				{#if showDifficultySection}
 					<div class="flex flex-col gap-1">
 						<span class="text-sm font-bold text-brown">Difficulty:</span>
-						<span class="text-base text-tan"
-							>{formatEnum(gameDetails.difficulty, "DIFFICULTY_")}</span
-						>
+						{#if gameDetails.difficulty}
+							<span class="text-base text-tan"
+								>{formatEnum(gameDetails.difficulty, "DIFFICULTY_")}</span
+							>
+						{/if}
+						{#if showBreakdown}
+							<ul class="m-0 list-none p-0 text-base text-tan">
+								{#each humansWithDifficulty as p (p.player_name)}
+									<li>
+										{p.player_name}: {formatEnum(p.difficulty, "DIFFICULTY_")}
+									</li>
+								{/each}
+							</ul>
+						{/if}
 					</div>
 				{/if}
 			</div>

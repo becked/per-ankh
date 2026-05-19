@@ -110,9 +110,10 @@ import {
 
 export function extractAllGameData(
 	root: Record<string, unknown>,
+	activePlayerIndex: number | null,
 ): FullGameData {
 	// 1. Parse all entities. Order matches the parity dump's PARSERS map.
-	const players = parsePlayers(root);
+	const players = parsePlayers(root, activePlayerIndex);
 	const characters = parseCharacters(root);
 	const characterTraits = parseCharacterTraits(root);
 	const characterRelationships = parseCharacterRelationships(root);
