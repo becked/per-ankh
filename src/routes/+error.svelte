@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { page } from "$app/state";
+	import { resolve } from "$app/paths";
+	import { browser } from "$app/environment";
 
 	const status = $derived(page.status);
 	const message = $derived(page.error?.message ?? "");
@@ -17,6 +19,18 @@
 						? "Something went wrong"
 						: "Error",
 	);
+
+	// Only offer "Go back" when this tab has a prior history entry —
+	// fresh tabs / direct URL hits have history.length === 1 and
+	// history.back() would no-op. Read on the client only.
+	let canGoBack = $state(false);
+	$effect(() => {
+		if (browser) canGoBack = history.length > 1;
+	});
+
+	function goBack() {
+		history.back();
+	}
 </script>
 
 <main class="flex flex-1 items-center justify-center p-4">
@@ -29,12 +43,23 @@
 				{message || "The page you were looking for isn't here."}
 			</p>
 
-			<a
-				href="/dashboard"
-				class="block w-full rounded border border-brown px-3 py-1.5 text-center text-xs font-semibold text-tan transition-colors hover:bg-brown"
-			>
-				Back to dashboard
-			</a>
+			<div class="flex flex-col gap-2">
+				{#if canGoBack}
+					<button
+						type="button"
+						onclick={goBack}
+						class="block w-full rounded border border-brown px-3 py-1.5 text-center text-xs font-semibold text-tan transition-colors hover:bg-brown"
+					>
+						Go back
+					</button>
+				{/if}
+				<a
+					href={resolve("/")}
+					class="block w-full rounded border border-brown px-3 py-1.5 text-center text-xs font-semibold text-tan transition-colors hover:bg-brown"
+				>
+					Back to home
+				</a>
+			</div>
 		</div>
 	</div>
 </main>
