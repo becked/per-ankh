@@ -152,11 +152,11 @@
 		</span>
 	</div>
 
-	<!-- Game header stats: Player / Winner / Victory Type / Map.
+	<!-- Game header stats: Player / Winner / Victory Type / Map / Difficulty.
 	     Mirrors the row at the top of GameDetailView (Turns lives on the
 	     featured-player row below). Inner boxes use the section bg color
 	     so they sit visually "inside" the card. -->
-	<div class="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-4">
+	<div class="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
 		<div class="rounded p-2" style="background-color: #2a2622;">
 			<p
 				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
@@ -221,6 +221,23 @@
 					: game.map_size
 						? formatEnum(game.map_size, "MAPSIZE_")
 						: "—"}
+			</p>
+		</div>
+
+		<div class="rounded p-2" style="background-color: #2a2622;">
+			<p
+				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+			>
+				<SpriteIcon
+					category="crests"
+					value="TRIBE_REBELS"
+					size={10}
+					alt="Difficulty"
+				/>
+				Difficulty
+			</p>
+			<p class="truncate text-sm font-bold text-[#DBDEE3]">
+				{game.difficulty ? formatEnum(game.difficulty, "DIFFICULTY_") : "—"}
 			</p>
 		</div>
 	</div>

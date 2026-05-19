@@ -104,6 +104,7 @@ export interface PublicRecentGame {
 	victory_type: string | null;
 	map_size: string | null;
 	map_class: string | null;
+	difficulty: string | null;
 	total_turns: number;
 	save_date: string | null;
 	created_at: string;

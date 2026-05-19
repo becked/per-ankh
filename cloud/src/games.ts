@@ -1750,7 +1750,7 @@ export async function handlePublicRecentGames(
 		        )) AS user_nation,
 		        g.user_won,
 		        g.winner_nation, g.winner_name, g.victory_type,
-		        g.map_size, g.map_class, g.total_turns,
+		        g.map_size, g.map_class, g.difficulty, g.total_turns,
 		        g.save_date, g.created_at,
 		        u.display_name AS uploader_display_name,
 		        u.discord_id AS uploader_discord_id,
@@ -1773,6 +1773,7 @@ export async function handlePublicRecentGames(
 			victory_type: string | null;
 			map_size: string | null;
 			map_class: string | null;
+			difficulty: string | null;
 			total_turns: number;
 			save_date: string | null;
 			created_at: string;
@@ -1897,6 +1898,7 @@ export async function handlePublicRecentGames(
 		victory_type: g.victory_type,
 		map_size: g.map_size,
 		map_class: g.map_class,
+		difficulty: g.difficulty,
 		total_turns: g.total_turns,
 		save_date: g.save_date,
 		created_at: g.created_at,
