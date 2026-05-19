@@ -4,18 +4,9 @@
 	import { page } from "$app/state";
 	import CloudHeader from "$lib/CloudHeader.svelte";
 	import { PUBLIC_ORIGIN, type PageMeta } from "$lib/page-meta";
-	import { tournamentNotices } from "$lib/stores/tournamentNotice";
-	import TournamentBanner from "$lib/tournament/TournamentBanner.svelte";
 	import type { LayoutData } from "./$types";
 
 	let { data, children }: { data: LayoutData; children: Snippet } = $props();
-
-	// Push the SSR-fetched tournament notices into the module-scoped store
-	// so TournamentBanner reads them. Re-runs on navigation; the store value
-	// is the source of truth for the dismiss optimistic update.
-	$effect(() => {
-		tournamentNotices.set(data.tournamentNotices ?? []);
-	});
 
 	// Cloud header is shown on every route except the OAuth callback —
 	// /auth/* keeps the stripped chrome so the round-trip feels visually
@@ -65,7 +56,6 @@
 			myTournaments={data.myTournaments}
 			adminTournaments={data.adminTournaments}
 		/>
-		<TournamentBanner />
 		{@render children()}
 	</div>
 {:else}

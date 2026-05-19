@@ -561,16 +561,6 @@ export const cloudApi = {
 		return res.json() as Promise<{ matches: MyMatchEntry[] }>;
 	},
 
-	dismissTournamentBanner: async (
-		tournamentId: string,
-		opts?: CallOpts,
-	): Promise<void> => {
-		await request(`/users/me/tournaments/${tournamentId}/dismiss-banner`, {
-			...opts,
-			method: "POST",
-		});
-	},
-
 	// --- Tournaments (create — any signed-in user) ---
 	createTournament: async (
 		body: CreateTournamentBody,

@@ -50,7 +50,7 @@
 				tournament.tournament_id,
 				selectedDivision,
 			);
-			// Refresh layout-level myTournaments (drives the enrollment banner)
+			// Refresh layout-level myTournaments (drives the header dropdown)
 			// and the page-level tournament detail (viewer_slot, slot list).
 			await invalidateAll();
 			onSignedUp?.();
