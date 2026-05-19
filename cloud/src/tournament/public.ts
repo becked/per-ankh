@@ -5,6 +5,7 @@
 // once the beta lifts, removing requireBetaOr404 from each handler
 // restores anonymous access.
 
+import { buildAvatarUrl } from "../auth";
 import { sessionFromRequest, type SessionData } from "../session";
 import {
 	cloudCorsHeaders,
@@ -160,7 +161,9 @@ export async function handleTournamentList(
 
 	const stmt = env.SHARE_DB.prepare(
 		`SELECT t.tournament_id, t.slug, t.name, t.status, t.signups_open,
-		        t.created_at, t.updated_at
+		        t.created_at, t.updated_at,
+		        t.swiss_wins_to_advance, t.swiss_losses_to_eliminate,
+		        t.swiss_max_rounds, t.allowed_map_scripts
 		 FROM tournaments t
 		 LEFT JOIN tournament_admins ta
 		   ON ta.tournament_id = t.tournament_id AND ta.user_id = ?
@@ -176,16 +179,201 @@ export async function handleTournamentList(
 		signups_open: number;
 		created_at: string;
 		updated_at: string;
+		swiss_wins_to_advance: number;
+		swiss_losses_to_eliminate: number;
+		swiss_max_rounds: number;
+		allowed_map_scripts: string;
 	}>();
 
+	const baseRows = res.results ?? [];
+	const ids = baseRows.map((r) => r.tournament_id);
+	const aggregates = await loadListAggregates(env, ids);
+
 	// Normalize SQLite's INTEGER 0/1 to a boolean for the JSON response so
-	// the frontend can treat it as a plain bool.
-	const tournaments = (res.results ?? []).map((t) => ({
-		...t,
-		signups_open: t.signups_open === 1,
-	}));
+	// the frontend can treat it as a plain bool. Map pool size is derived
+	// from the JSON column at the worker so the client doesn't have to
+	// re-parse it just to count entries.
+	const tournaments = baseRows.map((t) => {
+		let mapPoolSize = 0;
+		try {
+			const parsed = JSON.parse(t.allowed_map_scripts);
+			if (Array.isArray(parsed)) mapPoolSize = parsed.length;
+		} catch {
+			// Tournament with corrupt JSON shows zero — same leniency the
+			// detail handler applies to allowed_map_scripts.
+		}
+		const slotCounts = aggregates.slotCounts.get(t.tournament_id) ?? {
+			swiss: 0,
+			championship: 0,
+		};
+		// Player count reflects the phase the tournament is currently in:
+		//   - championship/complete → bracket size
+		//   - setup/swiss → signed-up swiss roster
+		const playerCount =
+			t.status === "championship" || t.status === "complete"
+				? slotCounts.championship || slotCounts.swiss
+				: slotCounts.swiss;
+		return {
+			tournament_id: t.tournament_id,
+			slug: t.slug,
+			name: t.name,
+			status: t.status,
+			signups_open: t.signups_open === 1,
+			created_at: t.created_at,
+			updated_at: t.updated_at,
+			swiss_wins_to_advance: t.swiss_wins_to_advance,
+			swiss_losses_to_eliminate: t.swiss_losses_to_eliminate,
+			swiss_max_rounds: t.swiss_max_rounds,
+			map_pool_size: mapPoolSize,
+			player_count: playerCount,
+			active_round: aggregates.activeRounds.get(t.tournament_id) ?? null,
+			champion: aggregates.champions.get(t.tournament_id) ?? null,
+		};
+	});
 
 	return jsonResponse({ tournaments, limit, offset }, 200, cors);
+}
+
+interface ListAggregates {
+	slotCounts: Map<string, { swiss: number; championship: number }>;
+	activeRounds: Map<
+		string,
+		{ round_number: number; matches_total: number; matches_reported: number }
+	>;
+	champions: Map<string, { display_name: string; avatar_url: string | null }>;
+}
+
+// Fan out batched aggregates for the listed tournaments. Bounded by
+// LIST_LIMIT_MAX (100) so the IN (...) expansions stay safe; each query
+// hits an existing index on tournament_id. Issued in parallel since none
+// of them depend on each other.
+async function loadListAggregates(
+	env: TournamentPublicEnv,
+	ids: string[],
+): Promise<ListAggregates> {
+	if (ids.length === 0) {
+		return {
+			slotCounts: new Map(),
+			activeRounds: new Map(),
+			champions: new Map(),
+		};
+	}
+	const placeholders = ids.map(() => "?").join(",");
+
+	const [slotsRes, roundsRes, championsRes] = await Promise.all([
+		env.SHARE_DB.prepare(
+			`SELECT tournament_id, phase, COUNT(*) AS count
+			 FROM tournament_slots
+			 WHERE tournament_id IN (${placeholders})
+			 GROUP BY tournament_id, phase`,
+		)
+			.bind(...ids)
+			.all<{ tournament_id: string; phase: string; count: number }>(),
+		// "Active round" = the highest-numbered round in the tournament's
+		// current phase (whatever phase the tournament's status names). For
+		// swiss this aggregates across divisions A+B; the client renders a
+		// single counter rather than separate per-division progress.
+		env.SHARE_DB.prepare(
+			`SELECT r.tournament_id,
+			        r.round_number,
+			        COUNT(m.match_id) AS matches_total,
+			        SUM(CASE WHEN m.status != 'pending' THEN 1 ELSE 0 END) AS matches_reported
+			 FROM tournament_rounds r
+			 JOIN tournaments t ON t.tournament_id = r.tournament_id
+			 LEFT JOIN tournament_matches m ON m.round_id = r.round_id
+			 WHERE r.tournament_id IN (${placeholders})
+			   AND t.status IN ('swiss','championship')
+			   AND r.phase = t.status
+			   AND r.round_number = (
+			     SELECT MAX(round_number) FROM tournament_rounds r2
+			     WHERE r2.tournament_id = r.tournament_id AND r2.phase = t.status
+			   )
+			 GROUP BY r.tournament_id, r.round_number`,
+		)
+			.bind(...ids)
+			.all<{
+				tournament_id: string;
+				round_number: number;
+				matches_total: number;
+				matches_reported: number;
+			}>(),
+		// Champion = the winner of the final championship match (the round
+		// with the highest round_number where status='complete' and exactly
+		// one match exists). Joining through tournament_slots → users picks
+		// up the Discord display_name + avatar for the card. Slots whose
+		// user_id is still null (admin-set but unclaimed) fall back to the
+		// stored discord_username and have no avatar. avatar_url is built in
+		// JS from (discord_id, avatar_hash) since the column isn't stored.
+		env.SHARE_DB.prepare(
+			`SELECT r.tournament_id,
+			        COALESCE(u.display_name, s.discord_username) AS display_name,
+			        u.discord_id,
+			        u.avatar_hash
+			 FROM tournament_rounds r
+			 JOIN tournaments t ON t.tournament_id = r.tournament_id
+			 JOIN tournament_matches m ON m.round_id = r.round_id
+			   AND m.winner_slot_id IS NOT NULL
+			 JOIN tournament_slots s ON s.slot_id = m.winner_slot_id
+			 LEFT JOIN users u ON u.user_id = s.user_id
+			 WHERE r.tournament_id IN (${placeholders})
+			   AND t.status = 'complete'
+			   AND r.phase = 'championship'
+			   AND r.round_number = (
+			     SELECT MAX(round_number) FROM tournament_rounds r2
+			     WHERE r2.tournament_id = r.tournament_id AND r2.phase = 'championship'
+			   )`,
+		)
+			.bind(...ids)
+			.all<{
+				tournament_id: string;
+				display_name: string | null;
+				discord_id: string | null;
+				avatar_hash: string | null;
+			}>(),
+	]);
+
+	const slotCounts = new Map<string, { swiss: number; championship: number }>();
+	for (const row of slotsRes.results ?? []) {
+		const entry = slotCounts.get(row.tournament_id) ?? {
+			swiss: 0,
+			championship: 0,
+		};
+		if (row.phase === "swiss") entry.swiss = row.count;
+		else if (row.phase === "championship") entry.championship = row.count;
+		slotCounts.set(row.tournament_id, entry);
+	}
+
+	const activeRounds = new Map<
+		string,
+		{ round_number: number; matches_total: number; matches_reported: number }
+	>();
+	for (const row of roundsRes.results ?? []) {
+		activeRounds.set(row.tournament_id, {
+			round_number: row.round_number,
+			matches_total: row.matches_total ?? 0,
+			matches_reported: row.matches_reported ?? 0,
+		});
+	}
+
+	const champions = new Map<
+		string,
+		{ display_name: string; avatar_url: string | null }
+	>();
+	for (const row of championsRes.results ?? []) {
+		if (!row.display_name) continue;
+		// Build the avatar URL only when we have a Discord ID (i.e., the
+		// winner's slot has been claimed by a logged-in user). Unclaimed
+		// slots fall back to the stored discord_username with no avatar.
+		const avatar_url = row.discord_id
+			? buildAvatarUrl(row.discord_id, row.avatar_hash)
+			: null;
+		champions.set(row.tournament_id, {
+			display_name: row.display_name,
+			avatar_url,
+		});
+	}
+
+	return { slotCounts, activeRounds, champions };
 }
 
 export async function handleTournamentDetail(

@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { autohideScroll } from "$lib/actions/autohideScroll";
-	import TournamentCard from "$lib/tournament/TournamentCard.svelte";
+	import TournamentRowCard from "$lib/tournament/TournamentRowCard.svelte";
 	import TournamentCreateModal from "$lib/tournament/TournamentCreateModal.svelte";
 	import type { PageData } from "./$types";
 
@@ -66,9 +66,9 @@
 							>
 								Open for signups
 							</h2>
-							<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+							<div class="space-y-3">
 								{#each open as t (t.tournament_id)}
-									<TournamentCard
+									<TournamentRowCard
 										tournament={t}
 										enrolled={enrolledIds.has(t.tournament_id)}
 									/>
@@ -83,9 +83,9 @@
 							>
 								Active
 							</h2>
-							<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+							<div class="space-y-3">
 								{#each active as t (t.tournament_id)}
-									<TournamentCard
+									<TournamentRowCard
 										tournament={t}
 										enrolled={enrolledIds.has(t.tournament_id)}
 									/>
@@ -100,9 +100,9 @@
 							>
 								Past
 							</h2>
-							<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+							<div class="space-y-3">
 								{#each completed as t (t.tournament_id)}
-									<TournamentCard tournament={t} />
+									<TournamentRowCard tournament={t} />
 								{/each}
 							</div>
 						</section>

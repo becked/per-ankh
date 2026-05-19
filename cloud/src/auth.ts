@@ -121,7 +121,10 @@ function oauthKey(id: string): string {
 // Build the public avatar URL from the stored hash. Default avatar
 // (animated_id >> 22) % 6 used when the user has no custom avatar.
 // Spec §5 step 12.
-function buildAvatarUrl(discordId: string, avatarHash: string | null): string {
+export function buildAvatarUrl(
+	discordId: string,
+	avatarHash: string | null,
+): string {
 	if (avatarHash) {
 		const ext = avatarHash.startsWith("a_") ? "gif" : "png";
 		return `https://cdn.discordapp.com/avatars/${discordId}/${avatarHash}.${ext}`;

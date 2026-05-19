@@ -35,8 +35,20 @@ describe("public read handlers", () => {
 				slug: string;
 				name: string;
 				status: string;
+				signups_open: boolean;
 				created_at: string;
 				updated_at: string;
+				swiss_wins_to_advance: number;
+				swiss_losses_to_eliminate: number;
+				swiss_max_rounds: number;
+				map_pool_size: number;
+				player_count: number;
+				active_round: {
+					round_number: number;
+					matches_total: number;
+					matches_reported: number;
+				} | null;
+				champion: { display_name: string; avatar_url: string | null } | null;
 			}>;
 			limit: number;
 			offset: number;
@@ -53,6 +65,15 @@ describe("public read handlers", () => {
 		expect(row?.status).toBe("setup");
 		expect(typeof row?.created_at).toBe("string");
 		expect(typeof row?.updated_at).toBe("string");
+		// New aggregate fields the /tournaments list card relies on. Setup-phase
+		// tournament with no rounds yet → no active round and no champion.
+		expect(row?.map_pool_size).toBe(2); // makeTournament defaults to 2 maps
+		expect(row?.player_count).toBe(8); // 4 slots × 2 divisions
+		expect(row?.active_round).toBeNull();
+		expect(row?.champion).toBeNull();
+		expect(typeof row?.swiss_wins_to_advance).toBe("number");
+		expect(typeof row?.swiss_losses_to_eliminate).toBe("number");
+		expect(typeof row?.swiss_max_rounds).toBe("number");
 	});
 
 	it("GET /v1/tournaments/:slug returns the full tournament detail shape", async () => {

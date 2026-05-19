@@ -852,6 +852,34 @@ export interface TournamentListItem {
 	signups_open: boolean;
 	created_at: string;
 	updated_at: string;
+	// Swiss-phase config, mirrored from the tournaments row so the list card
+	// can render a "Format" stat box without a second round-trip.
+	swiss_wins_to_advance: number;
+	swiss_losses_to_eliminate: number;
+	swiss_max_rounds: number;
+	// Length of the tournament's allowed_map_scripts JSON array, parsed at
+	// the worker. Zero when the JSON is corrupt (matches the detail page's
+	// public-read leniency for the same column).
+	map_pool_size: number;
+	// Slot count for the tournament's current phase: championship/complete
+	// → bracket size; setup/swiss → swiss signups.
+	player_count: number;
+	// Aggregated match progress for the highest-numbered round in the
+	// tournament's current phase. Null for setup/complete tournaments and
+	// for in-flight tournaments whose latest round has no matches yet.
+	active_round: {
+		round_number: number;
+		matches_total: number;
+		matches_reported: number;
+	} | null;
+	// Champion identity for completed tournaments. Pulls the winner of the
+	// final championship match through tournament_slots → users. Null for
+	// any non-complete tournament or when the final match has no winner
+	// recorded yet.
+	champion: {
+		display_name: string;
+		avatar_url: string | null;
+	} | null;
 }
 
 export interface TournamentListResponse {
