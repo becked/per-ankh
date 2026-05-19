@@ -10,5 +10,6 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (!user) {
 		throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
 	}
-	return { user };
+	const { games } = await cloudApi.listGames({ fetch });
+	return { user, games };
 };

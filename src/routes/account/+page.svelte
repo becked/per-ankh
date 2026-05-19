@@ -1,13 +1,20 @@
 <script lang="ts">
-	import { goto } from "$app/navigation";
+	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { cloudApi } from "$lib/api-cloud";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
+	import { PARSER_VERSION } from "$lib/parser/types";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
 
 	let loggingOut = $state(false);
+	let reparseOpen = $state(false);
+
+	const outOfDateGames = $derived(
+		data.games.filter((g) => g.parser_version !== PARSER_VERSION),
+	);
 
 	async function handleLogout() {
 		loggingOut = true;
@@ -20,6 +27,11 @@
 			console.warn("Logout request failed:", err);
 		}
 		await goto(resolve("/"), { replaceState: true });
+	}
+
+	async function onReparseClose(didReparse: boolean) {
+		reparseOpen = false;
+		if (didReparse) await invalidateAll();
 	}
 </script>
 
@@ -59,6 +71,31 @@
 					>
 				</div>
 
+				<!-- Maintenance: reparse outdated games. Always rendered so the
+				     button is discoverable; disabled when nothing is out of date. -->
+				<div class="mt-4 border-t border-brown/40 pt-3">
+					<div class="mb-2 text-xs font-bold text-gray-400">Maintenance</div>
+					<div class="mb-2 text-xs text-tan">
+						{#if outOfDateGames.length === 0}
+							All games are on the current parser version.
+						{:else}
+							{outOfDateGames.length}
+							{outOfDateGames.length === 1 ? "game" : "games"} on an older parser
+							version.
+						{/if}
+					</div>
+					<button
+						type="button"
+						onclick={() => (reparseOpen = true)}
+						disabled={outOfDateGames.length === 0}
+						class="rounded bg-brown px-3 py-1 text-xs text-tan hover:bg-orange disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-brown"
+					>
+						{outOfDateGames.length === 0
+							? "All games up to date"
+							: `Reparse ${outOfDateGames.length} ${outOfDateGames.length === 1 ? "game" : "games"}`}
+					</button>
+				</div>
+
 				<div class="mt-3">
 					<button
 						type="button"
@@ -73,3 +110,7 @@
 		</div>
 	</div>
 </main>
+
+{#if reparseOpen}
+	<BulkReparseModal games={outOfDateGames} onClose={onReparseClose} />
+{/if}
