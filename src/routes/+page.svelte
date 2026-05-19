@@ -167,10 +167,6 @@
 						</div>
 					{:else}
 						<h2 class="text-sm font-bold text-tan">Sign in</h2>
-						<p class="mt-1 text-[11px] text-tan opacity-70">
-							Discord login. Uploads stay private by default — flip a toggle to
-							share.
-						</p>
 						{#if !hasSeenBefore}
 							<label class="mt-2 block">
 								<span class="mb-1 block text-[11px] text-tan">
