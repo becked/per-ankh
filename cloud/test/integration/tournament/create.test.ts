@@ -23,7 +23,7 @@ function uniqueSlug(prefix: string): string {
 
 interface CreateBody {
 	name: string;
-	allowed_map_scripts: string[];
+	allowed_map_scripts?: string[];
 	slug?: string;
 	description?: string;
 	division_a_name?: string;
@@ -188,7 +188,7 @@ describe("POST /v1/tournaments — validation", () => {
 		await expectErrorCode(res, { status: 400, code: "SLUG_RESERVED" });
 	});
 
-	it("rejects an empty map list", async () => {
+	it("accepts an empty map list (admin configures maps on the tournament page)", async () => {
 		const user = await makeUser();
 		const res = await request.post({
 			path: "/v1/tournaments",
@@ -199,7 +199,22 @@ describe("POST /v1/tournaments — validation", () => {
 				allowed_map_scripts: [],
 			} satisfies CreateBody,
 		});
-		await expectErrorCode(res, { status: 400, code: "INVALID_BODY" });
+		const body = await expectOk<TournamentResponse>(res);
+		expect(body.tournament.allowed_map_scripts).toEqual([]);
+	});
+
+	it("accepts a body that omits allowed_map_scripts entirely", async () => {
+		const user = await makeUser();
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: user,
+			body: {
+				slug: uniqueSlug("nomapsfield"),
+				name: "Omitted maps",
+			} satisfies CreateBody,
+		});
+		const body = await expectOk<TournamentResponse>(res);
+		expect(body.tournament.allowed_map_scripts).toEqual([]);
 	});
 
 	it("rejects a non-canonical map_script value", async () => {

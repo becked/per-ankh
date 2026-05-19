@@ -257,12 +257,11 @@ export class MapConfigError extends Error {
 }
 
 // Parse the JSON-encoded allowed_map_scripts column. Throws MapConfigError
-// on any corruption (bad JSON, wrong shape, empty array). The schema
-// (PatchTournamentSchema) and CLI (tournament create) both enforce
-// non-empty arrays at write time, so reaching this throw means
-// direct-DB-edit corruption — surface it clearly rather than silently
-// returning [] and tripping a downstream "allowedMaps must be non-empty"
-// 500 from assignMap with a misleading message.
+// on shape corruption (bad JSON, not a string array). An empty array is a
+// legitimate state during status='setup' (create accepts the field as
+// optional so the public modal can omit it), so empty is returned rather
+// than thrown. Match-generation call sites are gated by handleStartTournament,
+// which rejects empty before any transition out of 'setup'.
 export function parseAllowedMaps(t: TournamentRow): string[] {
 	let parsed: unknown;
 	try {
@@ -275,11 +274,6 @@ export function parseAllowedMaps(t: TournamentRow): string[] {
 	if (!Array.isArray(parsed) || !parsed.every((s) => typeof s === "string")) {
 		throw new MapConfigError(
 			`allowed_map_scripts must be a JSON array of strings for tournament ${t.tournament_id}`,
-		);
-	}
-	if (parsed.length === 0) {
-		throw new MapConfigError(
-			`allowed_map_scripts is empty for tournament ${t.tournament_id}`,
 		);
 	}
 	return parsed;

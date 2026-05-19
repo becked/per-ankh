@@ -53,6 +53,15 @@ const AllowedMapScriptsSchema = v.pipe(
 	v.maxLength(64),
 );
 
+// Create-only variant: the public modal asks for name + description only,
+// so the array is optional and may be empty at create time. The
+// setup → swiss FSM transition (handleStartTournament) enforces non-empty
+// before any match generation can happen.
+const CreateAllowedMapScriptsSchema = v.pipe(
+	v.array(StrictMapScriptSchema),
+	v.maxLength(64),
+);
+
 // Shape-only schema for the map_script_options column. Keys are MAPCLASS
 // strings; values are objects keyed by MAP_OPTIONS_* option zType, with
 // either a string (select choice) or boolean (toggle) value.
@@ -94,7 +103,7 @@ export const CreateTournamentSchema = v.object({
 	swiss_max_rounds: v.optional(
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
 	),
-	allowed_map_scripts: AllowedMapScriptsSchema,
+	allowed_map_scripts: v.optional(CreateAllowedMapScriptsSchema),
 	map_script_options: v.optional(MapScriptOptionsSchema),
 });
 

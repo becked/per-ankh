@@ -321,11 +321,13 @@ async function parseJsonBody<T>(
 	return { ok: true, body: result.output };
 }
 
-// Wrap parseAllowedMaps so the corrupted-config case becomes an explicit
+// Wrap parseAllowedMaps so JSON-shape corruption becomes an explicit
 // 500 with MAP_CONFIG_INVALID rather than propagating into assignMap as a
-// misleading "allowedMaps must be non-empty" 500. Reachable only via
-// direct-DB tampering — the write paths (PATCH schema + CLI create) both
-// enforce a non-empty string array.
+// misleading 500. Reachable only via direct-DB tampering — schema-validated
+// writes always produce a JSON array of canonical strings. Empty arrays
+// are legal (admin can create a tournament without map scripts and pick
+// them later); the setup → swiss transition rejects empty separately
+// with MAP_CONFIG_EMPTY.
 function parseAllowedMapsOrError(
 	tournament: TournamentRow,
 	cors: Record<string, string>,
@@ -514,7 +516,12 @@ export async function handleCreateTournament(
 	const divA = input.division_a_name?.trim() ?? "Division A";
 	const divB = input.division_b_name?.trim() ?? "Division B";
 	const description = input.description?.trim() || null;
-	const allowedMapsJson = JSON.stringify(input.allowed_map_scripts);
+	// allowed_map_scripts is optional on create — the public modal asks for
+	// name + description only, leaving map-script selection to the
+	// tournament settings page. Empty here is legal in 'setup'; the
+	// setup → swiss transition enforces non-empty before match generation.
+	const allowedMapScripts = input.allowed_map_scripts ?? [];
+	const allowedMapsJson = JSON.stringify(allowedMapScripts);
 	// Migration defaults: 5 / 3 / 3. Mirror them here so the API returns
 	// the actual stored values without a re-load round-trip on the
 	// happy path (we still re-load below to get created_at/updated_at).
@@ -538,7 +545,7 @@ export async function handleCreateTournament(
 	if (input.map_script_options) {
 		const valid = validateMapScriptOptions(
 			input.map_script_options as MapScriptOptions,
-			input.allowed_map_scripts,
+			allowedMapScripts,
 		);
 		if (!valid.ok) {
 			return errorResponse(valid.message, 400, cors, "MAP_OPTIONS_INVALID");
@@ -547,7 +554,7 @@ export async function handleCreateTournament(
 	}
 	mapScriptOptions = reconcileMapScriptOptions(
 		mapScriptOptions,
-		input.allowed_map_scripts,
+		allowedMapScripts,
 	);
 	const mapScriptOptionsJson = JSON.stringify(mapScriptOptions);
 
@@ -630,7 +637,7 @@ export async function handleCreateTournament(
 				swiss_wins_to_advance: created.swiss_wins_to_advance,
 				swiss_losses_to_eliminate: created.swiss_losses_to_eliminate,
 				swiss_max_rounds: created.swiss_max_rounds,
-				allowed_map_scripts: input.allowed_map_scripts,
+				allowed_map_scripts: allowedMapScripts,
 				map_script_options: mapScriptOptions,
 				slot_counts: { swiss: 0, championship: 0 },
 				is_viewer_admin: true,
@@ -1224,6 +1231,18 @@ export async function handleStartTournament(
 	const mapsResult = parseAllowedMapsOrError(tournament, cors);
 	if (!mapsResult.ok) return mapsResult.response;
 	const allowedMaps = mapsResult.maps;
+	// Empty is legal during status='setup' (create no longer requires the
+	// field) but match generation needs at least one map. Block the
+	// transition with a clear error rather than letting assignMap throw
+	// "allowedMaps must be non-empty" as an opaque 500.
+	if (allowedMaps.length === 0) {
+		return errorResponse(
+			"Configure at least one map script before starting the tournament",
+			409,
+			cors,
+			"MAP_CONFIG_EMPTY",
+		);
+	}
 
 	const statements: D1PreparedStatement[] = [
 		env.SHARE_DB.prepare(

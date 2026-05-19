@@ -954,14 +954,16 @@ export interface PatchTournamentBody {
 	signups_open?: boolean;
 }
 
-// Mirrors cloud/src/schemas/tournament.ts:CreateTournamentSchema. Only
-// name + allowed_map_scripts are required; the public UI omits `slug`
-// and lets the server derive one from `name`, while the admin CLI sends
-// an explicit slug. Everything else falls back to the SQL defaults in
-// cloud/migrations/0006_tournaments.sql.
+// Mirrors cloud/src/schemas/tournament.ts:CreateTournamentSchema. `name`
+// is the only required field — the public modal asks for name +
+// description only and lets the server derive `slug` and apply SQL
+// defaults from cloud/migrations/0006_tournaments.sql for everything
+// else. `allowed_map_scripts` may be omitted at create time; the
+// setup → swiss transition enforces non-empty before match generation.
+// The admin CLI uses the same shape and passes a richer payload.
 export interface CreateTournamentBody {
 	name: string;
-	allowed_map_scripts: string[];
+	allowed_map_scripts?: string[];
 	slug?: string;
 	description?: string;
 	division_a_name?: string;
