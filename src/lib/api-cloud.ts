@@ -36,6 +36,10 @@ export interface UserMe {
 	// fetches for non-beta users. Not load-bearing for security — the
 	// worker re-checks on every tournament endpoint.
 	is_beta: boolean;
+	// True iff the user's discord_id matches the ADMIN_DISCORD_ID secret on
+	// the Worker. Gates the /admin/* SvelteKit routes. Not load-bearing for
+	// security — the worker re-checks on every admin endpoint.
+	is_admin: boolean;
 }
 
 export interface GameListItem {
@@ -72,6 +76,20 @@ export interface CollectionsListResponse {
 export interface GameListResponse {
 	games: GameListItem[];
 	total: number;
+}
+
+// Admin view: same shape as GameListItem plus the owning user's user_id and
+// display_name. Returned by GET /v1/admin/games/out-of-date.
+export interface AdminGameListItem
+	extends Omit<GameListItem, "is_public" | "collection_id"> {
+	user_id: string;
+	owner_display_name: string;
+	is_public: boolean;
+	collection_id: number | null;
+}
+
+export interface AdminGameListResponse {
+	games: AdminGameListItem[];
 }
 
 // Wire shape for GET /v1/games/public-recent — the marketing home's
@@ -444,6 +462,54 @@ export const cloudApi = {
 
 	deleteGame: async (id: string, opts?: CallOpts): Promise<void> => {
 		await request(`/games/${id}`, { ...opts, method: "DELETE" });
+	},
+
+	// --- Admin (site-admin only; non-admin requests get 404) ---
+
+	adminListOutOfDate: async (
+		currentVersion: string,
+		opts?: CallOpts,
+	): Promise<AdminGameListResponse> => {
+		const res = await request(
+			`/admin/games/out-of-date?version=${encodeURIComponent(currentVersion)}`,
+			opts,
+		);
+		return res.json() as Promise<AdminGameListResponse>;
+	},
+
+	adminDownloadGame: async (
+		id: string,
+		opts?: CallOpts,
+	): Promise<{ blob: Blob; filename: string }> => {
+		const res = await request(`/admin/games/${id}/download`, opts);
+		const blob = await res.blob();
+		const cd = res.headers.get("content-disposition") ?? "";
+		const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
+		const asciiMatch = cd.match(/filename="([^"]+)"/);
+		let filename = `${id}.zip`;
+		if (utf8Match) {
+			try {
+				filename = decodeURIComponent(utf8Match[1]);
+			} catch {
+				if (asciiMatch) filename = asciiMatch[1];
+			}
+		} else if (asciiMatch) {
+			filename = asciiMatch[1];
+		}
+		return { blob, filename };
+	},
+
+	adminReparseUpload: async (
+		userId: string,
+		formData: FormData,
+		opts?: CallOpts,
+	): Promise<UploadGameResponse> => {
+		const res = await request(`/admin/games/${userId}/reparse-upload`, {
+			...opts,
+			method: "POST",
+			body: formData,
+		});
+		return res.json() as Promise<UploadGameResponse>;
 	},
 
 	getMyOnlineIds: async (opts?: CallOpts): Promise<string[]> => {

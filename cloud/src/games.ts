@@ -28,7 +28,8 @@ import {
 	sha256Hex,
 } from "./util";
 import { sessionFromRequest } from "./session";
-import type { SessionEnv } from "./session";
+import type { SessionData, SessionEnv } from "./session";
+import { isSiteAdmin } from "./admin";
 import { buildAvatarUrl } from "./auth";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
@@ -821,60 +822,83 @@ async function linkTournamentMatch(
 
 // ---------- Handlers ----------
 
+// Admin override for handleGameUpload. When set, the upload runs against
+// `targetUserId` instead of the session user, rate limits are skipped, and
+// the audit event uses event_type='admin_reimport' with `actingAdminUserId`
+// stashed in metadata. Set only by handleAdminReparseUpload after
+// isSiteAdmin succeeds.
+export interface AdminUploadOverride {
+	targetUserId: string;
+	actingAdminUserId: string;
+}
+
 export async function handleGameUpload(
 	request: Request,
 	env: GamesEnv,
+	adminOverride?: AdminUploadOverride,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 
-	const session = await sessionFromRequest(env, request);
-	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
-	const userId = session.data.user_id;
+	let userId: string;
+	let sessionData: SessionData | null;
+	if (adminOverride) {
+		userId = adminOverride.targetUserId;
+		sessionData = null;
+	} else {
+		const session = await sessionFromRequest(env, request);
+		if (!session)
+			return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+		userId = session.data.user_id;
+		sessionData = session.data;
+	}
 	const ip = getClientIp(request);
 
 	// Rate limits (per-user, per-IP, global). Counts uploads + re-imports
 	// together — re-imports are the same R2/D1 work as a fresh upload.
-	if (
-		(await countEventsSince(
-			env.SHARE_DB,
-			UPLOAD_EVENT_TYPES,
-			"user_id",
-			userId,
-		)) >= parseInt(env.PER_USER_UPLOADS_PER_HOUR)
-	) {
-		return errorResponse(
-			"Per-user upload limit exceeded",
-			429,
-			cors,
-			"RATE_LIMIT_USER",
-		);
-	}
-	if (
-		ip &&
-		(await countEventsSince(
-			env.SHARE_DB,
-			UPLOAD_EVENT_TYPES,
-			"ip_address",
-			ip,
-		)) >= parseInt(env.PER_IP_UPLOADS_PER_HOUR)
-	) {
-		return errorResponse(
-			"Per-IP upload limit exceeded",
-			429,
-			cors,
-			"RATE_LIMIT_IP",
-		);
-	}
-	if (
-		(await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, null, null)) >=
-		parseInt(env.GLOBAL_UPLOADS_PER_HOUR)
-	) {
-		return errorResponse(
-			"Global upload limit exceeded",
-			429,
-			cors,
-			"RATE_LIMIT_GLOBAL",
-		);
+	// Skipped on admin overrides — admin sweeps shouldn't trip user caps.
+	if (!adminOverride) {
+		if (
+			(await countEventsSince(
+				env.SHARE_DB,
+				UPLOAD_EVENT_TYPES,
+				"user_id",
+				userId,
+			)) >= parseInt(env.PER_USER_UPLOADS_PER_HOUR)
+		) {
+			return errorResponse(
+				"Per-user upload limit exceeded",
+				429,
+				cors,
+				"RATE_LIMIT_USER",
+			);
+		}
+		if (
+			ip &&
+			(await countEventsSince(
+				env.SHARE_DB,
+				UPLOAD_EVENT_TYPES,
+				"ip_address",
+				ip,
+			)) >= parseInt(env.PER_IP_UPLOADS_PER_HOUR)
+		) {
+			return errorResponse(
+				"Per-IP upload limit exceeded",
+				429,
+				cors,
+				"RATE_LIMIT_IP",
+			);
+		}
+		if (
+			(await countEventsSince(env.SHARE_DB, UPLOAD_EVENT_TYPES, null, null)) >=
+			parseInt(env.GLOBAL_UPLOADS_PER_HOUR)
+		) {
+			return errorResponse(
+				"Global upload limit exceeded",
+				429,
+				cors,
+				"RATE_LIMIT_GLOBAL",
+			);
+		}
 	}
 
 	// Parse multipart
@@ -982,11 +1006,24 @@ export async function handleGameUpload(
 		is_admin_override: boolean;
 	} | null = null;
 	if (tournamentMatchId !== null) {
+		// Admin reparse uploads can't carry a new tournament_match_id — the
+		// reparse path is for refreshing an existing game's blob, not creating
+		// or relinking tournament matches. Tournament linkage from the
+		// original upload is preserved by the (user_id, file_hash) collision
+		// branch below.
+		if (adminOverride) {
+			return errorResponse(
+				"tournament_match_id not allowed on admin reparse",
+				400,
+				cors,
+				"INVALID_FORM",
+			);
+		}
 		// Beta gate before the match lookup — a non-beta user with a
 		// guessed match ID gets the same 404 they'd get on the tournament
 		// list, not a "match not found" that hints the feature exists.
 		try {
-			await requireTournamentBeta(env, session.data);
+			await requireTournamentBeta(env, sessionData!);
 		} catch (e) {
 			if (e instanceof AuthzError) {
 				return errorResponse(e.message, e.status, cors, e.code);
@@ -1035,7 +1072,7 @@ export async function handleGameUpload(
 		if (!isParticipant) {
 			const isAdmin = await isTournamentAdmin(
 				env,
-				session.data,
+				sessionData!,
 				match.tournament_id,
 			);
 			if (!isAdmin) {
@@ -1565,14 +1602,20 @@ export async function handleGameUpload(
 
 	// Audit log — distinct event_type for re-imports so admin tooling
 	// (./per-ankh admin events --type reimport) can filter cleanly. Both
-	// types count toward upload rate limits (UPLOAD_EVENT_TYPES).
+	// regular types count toward upload rate limits (UPLOAD_EVENT_TYPES);
+	// admin_reimport does not (admin sweeps shouldn't trip user caps).
+	const auditEventType = adminOverride
+		? "admin_reimport"
+		: isReimport
+			? "reimport"
+			: "upload";
 	try {
 		await env.SHARE_DB.prepare(
 			`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
 			 VALUES (?, ?, ?, ?, ?)`,
 		)
 			.bind(
-				isReimport ? "reimport" : "upload",
+				auditEventType,
 				gameId,
 				userId,
 				ip,
@@ -1587,12 +1630,15 @@ export async function handleGameUpload(
 								to_version: blob.parser_version,
 							}
 						: {}),
+					...(adminOverride
+						? { acting_user_id: adminOverride.actingAdminUserId }
+						: {}),
 				}),
 			)
 			.run();
 	} catch (e) {
 		logError("audit_event_log_failed", e, {
-			event_type: isReimport ? "reimport" : "upload",
+			event_type: auditEventType,
 			game_id: gameId,
 		});
 	}
@@ -2442,5 +2488,138 @@ export async function handleGameDownload(
 			Vary: "Cookie, Origin",
 			"Access-Control-Expose-Headers": "Content-Disposition",
 		},
+	});
+}
+
+// ---------- Admin handlers ----------
+//
+// Gated by isSiteAdmin (Discord-ID match against ADMIN_DISCORD_ID secret).
+// Failure returns 404 (not 403) so endpoint existence doesn't leak to
+// non-admins. Used by /admin/reparse to drive a bulk re-parse over every
+// out-of-date game across all users.
+
+export async function handleAdminListOutOfDate(
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!(await isSiteAdmin(env, session))) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+	const url = new URL(request.url);
+	const version = url.searchParams.get("version");
+	if (!version) {
+		return errorResponse(
+			"Missing 'version' query param",
+			400,
+			cors,
+			"INVALID_QUERY",
+		);
+	}
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT g.game_id, g.user_id, g.game_name, g.display_name, g.save_date,
+		        g.total_turns, g.user_nation, g.user_won, g.winner_nation,
+		        g.victory_type, g.map_size, g.is_public, g.collection_id,
+		        g.created_at, g.parser_version,
+		        u.display_name AS owner_display_name
+		 FROM games g
+		 JOIN users u ON g.user_id = u.user_id
+		 WHERE g.parser_version != ?
+		 ORDER BY g.created_at DESC`,
+	)
+		.bind(version)
+		.all<{
+			game_id: string;
+			user_id: string;
+			game_name: string | null;
+			display_name: string | null;
+			save_date: string | null;
+			total_turns: number;
+			user_nation: string | null;
+			user_won: number | null;
+			winner_nation: string | null;
+			victory_type: string | null;
+			map_size: string | null;
+			is_public: number;
+			collection_id: number | null;
+			created_at: string;
+			parser_version: string;
+			owner_display_name: string;
+		}>();
+	const games = (rows.results ?? []).map((r) => ({
+		game_id: r.game_id,
+		user_id: r.user_id,
+		owner_display_name: r.owner_display_name,
+		game_name: r.game_name,
+		display_name: r.display_name,
+		save_date: r.save_date,
+		total_turns: r.total_turns,
+		user_nation: r.user_nation,
+		user_won: coerceD1Bool(r.user_won),
+		winner_nation: r.winner_nation,
+		victory_type: r.victory_type,
+		map_size: r.map_size,
+		is_public: r.is_public === 1,
+		collection_id: r.collection_id,
+		created_at: r.created_at,
+		parser_version: r.parser_version,
+	}));
+	return jsonResponse({ games }, 200, cors);
+}
+
+export async function handleAdminDownload(
+	gameId: string,
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!(await isSiteAdmin(env, session))) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+	const row = await env.SHARE_DB.prepare(
+		"SELECT game_name, display_name FROM games WHERE game_id = ?",
+	)
+		.bind(gameId)
+		.first<{ game_name: string | null; display_name: string | null }>();
+	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
+
+	const obj = await env.SHARE_BUCKET.get(`saves/${gameId}.zip`);
+	if (!obj) return errorResponse("Save missing", 404, cors, "BLOB_MISSING");
+
+	const filename = buildSaveFilename(row.display_name ?? row.game_name, gameId);
+	return new Response(obj.body, {
+		status: 200,
+		headers: {
+			"Content-Type": "application/zip",
+			"Content-Length": String(obj.size),
+			"Content-Disposition": buildContentDisposition(filename),
+			"Cache-Control": "private, max-age=0",
+			...cors,
+			Vary: "Cookie, Origin",
+			"Access-Control-Expose-Headers": "Content-Disposition",
+		},
+	});
+}
+
+export async function handleAdminReparseUpload(
+	targetUserId: string,
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!(await isSiteAdmin(env, session))) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+	// session is guaranteed non-null since isSiteAdmin returns false for null
+	// sessions; satisfy the type checker.
+	if (!session) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+	return handleGameUpload(request, env, {
+		targetUserId,
+		actingAdminUserId: session.data.user_id,
 	});
 }

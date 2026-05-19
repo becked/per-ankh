@@ -32,6 +32,7 @@ import {
 	sessionFromRequest,
 } from "./session";
 import type { SessionEnv } from "./session";
+import { isSiteAdmin } from "./admin";
 import { logError } from "./log";
 
 export interface AuthEnv extends SessionEnv {
@@ -657,6 +658,10 @@ export async function handleMe(
 		.bind(row.user_id)
 		.first<{ ok: number }>();
 
+	// is_admin gates the /admin/* SvelteKit routes. Not load-bearing for
+	// authz either — every admin endpoint re-checks via isSiteAdmin.
+	const admin = await isSiteAdmin(env, session);
+
 	return jsonResponse(
 		{
 			user_id: row.user_id,
@@ -669,6 +674,7 @@ export async function handleMe(
 			discord_username: session.data.discord_username,
 			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
 			is_beta: beta !== null,
+			is_admin: admin,
 		},
 		200,
 		cors,

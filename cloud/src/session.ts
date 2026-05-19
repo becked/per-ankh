@@ -13,6 +13,10 @@ import { isSecureRequest, parseCookies } from "./util";
 
 export interface SessionEnv {
 	SESSIONS_KV: KVNamespace;
+	// Optional Discord ID of the site admin. Set via `wrangler secret put
+	// ADMIN_DISCORD_ID` in prod and `cloud/.dev.vars` locally. When unset,
+	// isSiteAdmin returns false for everyone — admin endpoints are dark.
+	ADMIN_DISCORD_ID?: string;
 }
 
 export interface SessionData {

@@ -25,6 +25,7 @@
 		cloudApi,
 		ApiError,
 		DuplicateUploadError,
+		type AdminGameListItem,
 		type GameListItem,
 	} from "$lib/api-cloud";
 	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
@@ -42,16 +43,24 @@
 		gameId: string;
 		gameName: string;
 		userNation: string | null;
+		// Only populated when adminMode=true — the target owner for the
+		// admin-on-behalf-of upload endpoint.
+		userId?: string;
 		status: RowStatus;
 	}
 
 	let {
 		games,
 		onClose,
+		adminMode = false,
 	}: {
-		games: GameListItem[];
+		games: GameListItem[] | AdminGameListItem[];
 		// eslint-disable-next-line no-unused-vars -- callback type parameter name is documentation
 		onClose: (didReparse: boolean) => void;
+		// When true, downloads + uploads go through the admin endpoints and
+		// the upload uses each row's user_id as the target owner instead of
+		// the session user.
+		adminMode?: boolean;
 	} = $props();
 
 	type Phase = "idle" | "running" | "done";
@@ -66,6 +75,7 @@
 			gameId: g.game_id,
 			gameName: g.game_name ?? "Unnamed game",
 			userNation: g.user_nation,
+			userId: "user_id" in g ? g.user_id : undefined,
 			status: { kind: "queued" },
 		})),
 	);
@@ -102,7 +112,9 @@
 		let rawZip: ArrayBuffer;
 		let fileName: string;
 		try {
-			const dl = await cloudApi.downloadGame(row.gameId);
+			const dl = adminMode
+				? await cloudApi.adminDownloadGame(row.gameId)
+				: await cloudApi.downloadGame(row.gameId);
 			rawZip = await dl.blob.arrayBuffer();
 			fileName = dl.filename;
 		} catch (err) {
@@ -175,7 +187,10 @@
 				fileName,
 			);
 			form.append("uploader_player_index", JSON.stringify(uploaderIndex));
-			const res = await cloudApi.uploadGame(form);
+			const res =
+				adminMode && row.userId
+					? await cloudApi.adminReparseUpload(row.userId, form)
+					: await cloudApi.uploadGame(form);
 			setStatus(row.gameId, {
 				kind: "done",
 				reimported: res.reimported === true,

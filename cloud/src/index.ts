@@ -40,6 +40,9 @@ import type { AuthEnv } from "./auth";
 import {
 	handleGameDelete,
 	handleGameDetail,
+	handleAdminDownload,
+	handleAdminListOutOfDate,
+	handleAdminReparseUpload,
 	handleGameDownload,
 	handleGameList,
 	handleGamePatch,
@@ -669,6 +672,34 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
 		route: "DELETE /v1/games/:id",
 		handler: (r, e, m) => handleGameDelete(m![1], r, e),
+	},
+
+	// Site-admin: bulk reparse across all users. Gated by ADMIN_DISCORD_ID
+	// secret inside each handler; failures return 404 to avoid leaking the
+	// endpoints' existence.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/admin/games/out-of-date" },
+		route: "GET /v1/admin/games/out-of-date",
+		handler: (r, e) => handleAdminListOutOfDate(r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/admin\/games\/([A-Za-z0-9_-]{21})\/download$/,
+		},
+		route: "GET /v1/admin/games/:id/download",
+		handler: (r, e, m) => handleAdminDownload(m![1], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/admin\/games\/([A-Za-z0-9_-]{21})\/reparse-upload$/,
+		},
+		route: "POST /v1/admin/games/:user_id/reparse-upload",
+		handler: (r, e, m) => handleAdminReparseUpload(m![1], r, e),
 	},
 
 	// Cloud rewrite: /v1/collections
