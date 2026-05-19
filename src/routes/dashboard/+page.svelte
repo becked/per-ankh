@@ -1,6 +1,5 @@
 <script lang="ts">
 	import type { ECElementEvent, EChartsOption } from "echarts";
-	import { resolve } from "$app/paths";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
@@ -308,43 +307,6 @@
 					</div>
 				</div>
 			</div>
-
-			{#if data.myTournaments.length > 0}
-				<section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
-					<h2 class="mb-3 text-sm font-bold text-tan">My Tournaments</h2>
-					<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-						{#each data.myTournaments as t (t.tournament_id)}
-							{@const pendingMatches = data.myMatches.filter(
-								(m) =>
-									m.tournament_id === t.tournament_id && m.status === "pending",
-							)}
-							<a
-								href={resolve("/tournaments/[slug]", { slug: t.slug })}
-								class="block rounded border-2 border-black bg-blue-gray p-3 transition-colors hover:border-orange"
-							>
-								<div class="flex items-baseline justify-between gap-2">
-									<span class="truncate text-sm font-bold text-tan"
-										>{t.name}</span
-									>
-									<span class="text-[10px] uppercase text-orange"
-										>{t.status}</span
-									>
-								</div>
-								<p class="mt-1 text-xs text-tan opacity-70">
-									{#if pendingMatches.length > 0}
-										{pendingMatches.length} pending match{pendingMatches.length ===
-										1
-											? ""
-											: "es"}
-									{:else}
-										No pending matches
-									{/if}
-								</p>
-							</a>
-						{/each}
-					</div>
-				</section>
-			{/if}
 
 			{#if stats.nations.length > 0 || calendarChartOption}
 				<div
