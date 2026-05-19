@@ -276,12 +276,13 @@
 		{#if user}
 			<a
 				href={resolve("/upload")}
-				class="rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange {searchVisible
+				class="inline-flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-xs font-semibold text-tan transition-colors hover:border-orange hover:text-orange {searchVisible
 					? ''
 					: 'invisible'}"
 				aria-label="Upload saves"
 				title="Upload saves"
 			>
+				<span>Upload</span>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
 					class="h-3.5 w-3.5"
