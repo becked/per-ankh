@@ -1,12 +1,47 @@
 // Security headers emitted on every SSR'd response.
 //
-// CSP is configured separately via `kit.csp` in svelte.config.js so
-// SvelteKit can inject hashes for its inline hydration script. Other
-// hardening — XFO, Referrer-Policy, Permissions-Policy, X-Content-Type-
-// Options — applies regardless of the request type.
+// CSP is configured in svelte.config.js with PRODUCTION values so
+// SvelteKit can inject hashes for its inline hydration script. In dev
+// we widen the emitted CSP header here (see patchCspForDev below) —
+// `dev` from `$app/environment` is the reliable signal; the dev branch
+// in svelte.config.js itself can't be trusted because that file is
+// loaded in a context where neither process.argv nor process.env is
+// what we expect.
+//
+// Other hardening — XFO, Referrer-Policy, Permissions-Policy, X-Content-
+// Type-Options — applies regardless of the request type.
 
 import type { Handle, HandleFetch } from "@sveltejs/kit";
 import { dev } from "$app/environment";
+
+const DEV_API_ORIGIN = "http://localhost:8787";
+const DEV_REPORT_URI = `${DEV_API_ORIGIN}/v1/csp-report`;
+
+// Rewrite the production CSP header SvelteKit emits to the variant we
+// need in `vite dev`: add the wrangler-dev API origin to connect-src
+// (cross-origin fetches from :1420 → :8787) and swap report-uri to the
+// dev worker. Idempotent — re-running on an already-patched header is a
+// no-op.
+function patchCspForDev(header: string): string {
+	const directives = new Map<string, string[]>();
+	for (const part of header.split(";")) {
+		const trimmed = part.trim();
+		if (!trimmed) continue;
+		const [name, ...values] = trimmed.split(/\s+/);
+		directives.set(name, values);
+	}
+	const connectSrc = directives.get("connect-src") ?? [];
+	if (!connectSrc.includes(DEV_API_ORIGIN)) {
+		connectSrc.push(DEV_API_ORIGIN);
+		directives.set("connect-src", connectSrc);
+	}
+	if (directives.has("report-uri")) {
+		directives.set("report-uri", [DEV_REPORT_URI]);
+	}
+	return [...directives.entries()]
+		.map(([name, values]) => `${name} ${values.join(" ")}`)
+		.join("; ");
+}
 
 // Headers from server-side fetches in load() that we need to read in
 // our API client. By default SvelteKit filters all response headers from
@@ -72,6 +107,11 @@ export const handle: Handle = async ({ event, resolve }) => {
 		filterSerializedResponseHeaders: (name) =>
 			ALLOWED_RESPONSE_HEADERS.has(name.toLowerCase()),
 	});
+
+	if (dev) {
+		const csp = response.headers.get("content-security-policy");
+		if (csp) response.headers.set("content-security-policy", patchCspForDev(csp));
+	}
 
 	response.headers.set("X-Content-Type-Options", "nosniff");
 	// Block iframe embedding entirely. Public game cards work without

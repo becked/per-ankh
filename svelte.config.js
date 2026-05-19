@@ -9,24 +9,17 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // hashes change too frequently to enumerate. Tighten only after CSP-report
 // data shows it's safe.
 //
-// In `vite dev` the cloud Worker runs on http://localhost:8787 and the
-// frontend on http://localhost:1420 — two different origins, so
-// client-side fetches need localhost whitelisted in connect-src.
-// Production CSP stays tight (only api.per-ankh.app).
-//
-// Detection: `PER_ANKH_DEV=1` is set by the dev wrapper (scripts/per-ankh.ts)
-// on the vite child process, plus by `npm run dev` via package.json's "dev"
-// script. We previously sniffed process.argv for "dev", but that turned out
-// to be unreliable — depending on how Node/tsx/Vite loads svelte.config.js
-// (esbuild-bundle-then-import, ESM loader, worker thread, etc.) the argv
-// available at config load time can be stripped down to just the node
-// binary. An explicit env var is reliable across all of those.
-//
-// We don't use NODE_ENV because that's set by Vite *after* the CLI loads,
-// and any value inherited from the shell (e.g. an exported
-// `NODE_ENV=production` from a deploy session) wins at svelte.config
-// load time — silently shipping a dev CSP without the localhost entry
-// and breaking every cloudApi call in the browser.
+// CSP here describes the PRODUCTION policy. In `vite dev` the cloud
+// Worker runs on http://localhost:8787 (a different origin from the
+// frontend on :1420), so the dev CSP additionally needs localhost:8787
+// in connect-src and the dev report endpoint. That delta is applied at
+// SSR time by src/hooks.server.ts using `$app/environment`'s `dev`
+// import. We tried detecting dev here (first via process.argv, then via
+// PER_ANKH_DEV) and both were unreliable — `svelte.config.js` is loaded
+// in a context where `process.env` and `process.argv` aren't what we
+// expect, so the dev branch silently never fires. `dev` from
+// `$app/environment` is the source of truth Vite sets per session and
+// works correctly at request time.
 //
 // `cloudflareinsights.com` is the POST target for the Cloudflare Web
 // Analytics beacon (the script itself loads from
@@ -34,22 +27,12 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // Cloudflare auto-injects the beacon when Web Analytics is enabled on
 // the Worker; without both directives the script loads-and-blocks and
 // the beacon submission fails.
-const isDev = process.env.PER_ANKH_DEV === "1";
-const connectSrc = [
-	"self",
-	"https://api.per-ankh.app",
-	"https://cloudflareinsights.com",
-];
-if (isDev) connectSrc.push("http://localhost:8787");
-
-// Violation reports go to the API Worker. Sending to both the legacy
-// `report-uri` and the modern `report-to` (group declared via the
-// Report-To header set in src/hooks.server.ts) maximizes coverage —
-// older browsers honor only `report-uri`, newer browsers prefer
-// `report-to` but fall back. The endpoint accepts both formats.
-const cspReportUri = isDev
-	? "http://localhost:8787/v1/csp-report"
-	: "https://api.per-ankh.app/v1/csp-report";
+//
+// `report-uri` is the legacy violation-report endpoint; `report-to`
+// names the modern endpoint group declared in the Report-To header set
+// in src/hooks.server.ts. Older browsers honor only `report-uri`,
+// newer browsers prefer `report-to` but fall back. The Worker accepts
+// both formats.
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -63,12 +46,16 @@ const config = {
 				"script-src": ["self", "https://static.cloudflareinsights.com"],
 				"style-src": ["self", "unsafe-inline"],
 				"img-src": ["self", "data:", "https://cdn.discordapp.com"],
-				"connect-src": connectSrc,
+				"connect-src": [
+					"self",
+					"https://api.per-ankh.app",
+					"https://cloudflareinsights.com",
+				],
 				"font-src": ["self"],
 				"object-src": ["none"],
 				"frame-ancestors": ["none"],
 				"base-uri": ["self"],
-				"report-uri": [cspReportUri],
+				"report-uri": ["https://api.per-ankh.app/v1/csp-report"],
 				"report-to": ["csp-endpoint"],
 			},
 		},
