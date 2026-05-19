@@ -110,7 +110,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	if (dev) {
 		const csp = response.headers.get("content-security-policy");
-		if (csp) response.headers.set("content-security-policy", patchCspForDev(csp));
+		if (csp)
+			response.headers.set("content-security-policy", patchCspForDev(csp));
 	}
 
 	response.headers.set("X-Content-Type-Options", "nosniff");

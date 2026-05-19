@@ -144,7 +144,9 @@ describe("GET /v1/users/search — matching", () => {
 			as: caller,
 		});
 		const body = await expectOk<SearchResponse>(res);
-		expect(body.users.find((u) => u.user_id === "noHandleUser0000000001")).toBeUndefined();
+		expect(
+			body.users.find((u) => u.user_id === "noHandleUser0000000001"),
+		).toBeUndefined();
 	});
 
 	it("does NOT match by substring or suffix", async () => {
