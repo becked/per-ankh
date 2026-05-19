@@ -29,6 +29,7 @@ import {
 } from "./util";
 import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
+import { buildAvatarUrl } from "./auth";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
 import {
@@ -1669,7 +1670,9 @@ export async function handlePublicRecentGames(
 		        g.winner_nation, g.winner_name, g.victory_type,
 		        g.map_size, g.map_class, g.total_turns,
 		        g.save_date, g.created_at,
-		        u.display_name AS uploader_display_name
+		        u.display_name AS uploader_display_name,
+		        u.discord_id AS uploader_discord_id,
+		        u.avatar_hash AS uploader_avatar_hash
 		 FROM games g
 		 JOIN users u ON g.user_id = u.user_id
 		 WHERE g.is_public = 1
@@ -1691,6 +1694,8 @@ export async function handlePublicRecentGames(
 			save_date: string | null;
 			created_at: string;
 			uploader_display_name: string;
+			uploader_discord_id: string;
+			uploader_avatar_hash: string | null;
 		}>();
 
 	const games = gameRows.results ?? [];
@@ -1812,6 +1817,10 @@ export async function handlePublicRecentGames(
 		save_date: g.save_date,
 		created_at: g.created_at,
 		uploader_display_name: g.uploader_display_name,
+		uploader_avatar_url: buildAvatarUrl(
+			g.uploader_discord_id,
+			g.uploader_avatar_hash,
+		),
 		players: playersByGame.get(g.game_id) ?? [],
 	}));
 

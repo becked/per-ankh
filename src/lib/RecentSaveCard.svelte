@@ -46,10 +46,6 @@
 				.sort((a, b) => (b.final_points ?? 0) - (a.final_points ?? 0))[0] ??
 			null,
 	);
-	const headerColor = $derived(
-		featured?.nation ? playerColor(featured.nation, 0) : "var(--color-tan)",
-	);
-
 	// "Player" stat box = uploader's picked nation, falling back to the
 	// first human player. Matches the `humanNation` derivation in the
 	// game-detail header so anonymous viewers see the same identity.
@@ -137,11 +133,13 @@
 	     treatment that the "Winner" badge previously used. -->
 	<div class="mb-2 flex items-center justify-between gap-2">
 		<div class="flex min-w-0 items-center gap-1.5">
-			<SpriteIcon
-				category="icons"
-				value="PLAYER_DIPLOMACY"
-				size={16}
-				alt="Player"
+			<img
+				src={game.uploader_avatar_url}
+				alt=""
+				class="h-5 w-5 shrink-0 rounded-full"
+				width="20"
+				height="20"
+				loading="lazy"
 			/>
 			<span class="truncate text-lg font-bold text-white">
 				{game.uploader_display_name}
@@ -152,40 +150,6 @@
 		>
 			{subtitleDate}
 		</span>
-	</div>
-
-	<!-- Featured player header: crest + name + (nation), sized to match
-	     the stat-box rows below. -->
-	<div class="mb-3 flex items-center gap-1.5">
-		{#if featured?.nation}
-			<SpriteIcon
-				category="crests"
-				value={featured.nation}
-				size={10}
-				alt={formatEnum(featured.nation, "NATION_")}
-			/>
-		{/if}
-		<div class="min-w-0 flex-1">
-			{#if featured}
-				<div class="flex items-center gap-1">
-					<span
-						class="truncate text-sm font-bold"
-						style="color: {headerColor};"
-					>
-						{featured.player_name}
-					</span>
-					{#if featured.nation}
-						<span class="truncate text-sm text-gray-400">
-							({formatEnum(featured.nation, "NATION_")})
-						</span>
-					{/if}
-				</div>
-			{:else}
-				<span class="truncate text-lg font-bold text-tan">
-					{game.game_name || `Game · ${game.total_turns} turns`}
-				</span>
-			{/if}
-		</div>
 	</div>
 
 	<!-- Game header stats: Player / Winner / Victory Type / Map.

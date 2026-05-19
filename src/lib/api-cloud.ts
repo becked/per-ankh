@@ -101,6 +101,7 @@ export interface PublicRecentGame {
 	save_date: string | null;
 	created_at: string;
 	uploader_display_name: string;
+	uploader_avatar_url: string;
 	players: PublicRecentPlayer[];
 }
 
