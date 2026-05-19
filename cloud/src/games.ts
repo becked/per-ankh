@@ -1297,7 +1297,7 @@ export async function handleGameUpload(
 	//     overwrite the R2 blob with the new gzipped JSON. ZIP bytes match
 	//     by hash so the ZIP put is idempotent.
 	const existing = await env.SHARE_DB.prepare(
-		`SELECT game_id, parser_version, created_at, is_public, collection_id, display_name
+		`SELECT game_id, parser_version, created_at, is_public, collection_id, display_name, user_nation
 		 FROM games WHERE user_id = ? AND file_hash = ?`,
 	)
 		.bind(userId, fileHash)
@@ -1308,6 +1308,7 @@ export async function handleGameUpload(
 			is_public: number;
 			collection_id: number | null;
 			display_name: string | null;
+			user_nation: string | null;
 		}>();
 
 	let isReimport = false;
@@ -1317,6 +1318,10 @@ export async function handleGameUpload(
 	let existingParserVersion: string | undefined;
 	let collectionId: number | null;
 	let gameId: string;
+	// Tournament-link IDs captured during the re-import dedup branch so the
+	// batch below can restore game_id on each match after the BEFORE DELETE
+	// trigger from migration 0013 nulls them out via INSERT OR REPLACE.
+	let linkedMatchIds: { match_id: string }[] = [];
 	if (existing) {
 		const cmp = compareSemver(blob.parser_version, existing.parser_version);
 		if (cmp <= 0) {
@@ -1384,6 +1389,38 @@ export async function handleGameUpload(
 		// Preserve the user's manual collection placement across re-imports.
 		// Without this the INSERT OR REPLACE would null collection_id.
 		collectionId = existing.collection_id;
+
+		// Tournament re-link guard. The BEFORE DELETE trigger from migration
+		// 0013 nulls tournament_matches.game_id when the existing games row
+		// is REPLACEd; an explicit UPDATE appended to the batch restores it.
+		// Lock the uploader's nation against the value the match's slot
+		// mapping already records — applies to all tournament-linked games,
+		// including completed tournaments (the slot mapping is historical
+		// record once a match is reported).
+		linkedMatchIds =
+			(
+				await env.SHARE_DB.prepare(
+					`SELECT match_id FROM tournament_matches WHERE game_id = ?`,
+				)
+					.bind(gameId)
+					.all<{ match_id: string }>()
+			).results ?? [];
+
+		if (linkedMatchIds.length > 0) {
+			const newUploaderNation =
+				uploaderIndex !== null
+					? (roster.find((p) => p.player_index === uploaderIndex)?.nation ??
+						null)
+					: null;
+			if (newUploaderNation !== existing.user_nation) {
+				return errorResponse(
+					"Cannot change the uploader on a save linked to a tournament match. Re-pick the same player that was originally uploaded.",
+					409,
+					cors,
+					"UPLOADER_LOCKED_TOURNAMENT",
+				);
+			}
+		}
 	} else {
 		gameId = nanoid(21);
 		// First upload: land in the user's Personal (is_default=1) collection.
@@ -1463,6 +1500,19 @@ export async function handleGameUpload(
 		...techStmts,
 		...lawStmts,
 	];
+
+	// Restore tournament_matches.game_id for any matches that referenced this
+	// game before the INSERT OR REPLACE nulled them via the BEFORE DELETE
+	// trigger. Empty on first-upload paths and on re-imports of unlinked
+	// games. Ordering within the batch guarantees the new games row exists
+	// (FK target) before the UPDATE runs.
+	for (const m of linkedMatchIds) {
+		allStatements.push(
+			env.SHARE_DB.prepare(
+				`UPDATE tournament_matches SET game_id = ? WHERE match_id = ?`,
+			).bind(gameId, m.match_id),
+		);
+	}
 
 	try {
 		await env.SHARE_DB.batch(allStatements);

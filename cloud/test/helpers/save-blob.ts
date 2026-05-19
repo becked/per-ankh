@@ -25,6 +25,11 @@ export interface UploadFixtureOpts {
 	// Defaults to "0" (player_index of the first human). Pass null
 	// to send the observer-mode sentinel. Pass a number to override.
 	readonly uploaderIndex?: number | null;
+	// Override the blob's parser_version. Defaults to PARSER_VERSION
+	// below. Must be in KNOWN_PARSER_VERSIONS (cloud/src/schemas/game.ts)
+	// — bump those when adding a new value. Used by reimport tests that
+	// need to produce a newer version than an earlier upload.
+	readonly parserVersion?: string;
 }
 
 export async function buildUploadFormData(
@@ -32,7 +37,7 @@ export async function buildUploadFormData(
 ): Promise<FormData> {
 	const nonce = opts.nonce ?? nanoid(16);
 
-	const blob = buildMinimalGameBlob(opts.winnerIndex);
+	const blob = buildMinimalGameBlob(opts.winnerIndex, opts.parserVersion);
 	const jsonBytes = new TextEncoder().encode(JSON.stringify(blob));
 	const gzippedJson = await gzip(jsonBytes);
 
@@ -61,10 +66,13 @@ export async function buildUploadFormData(
 	return form;
 }
 
-function buildMinimalGameBlob(winnerIndex: 0 | 1): Record<string, unknown> {
+function buildMinimalGameBlob(
+	winnerIndex: 0 | 1,
+	parserVersion?: string,
+): Record<string, unknown> {
 	return {
 		version: 2,
-		parser_version: PARSER_VERSION,
+		parser_version: parserVersion ?? PARSER_VERSION,
 		created_at: new Date().toISOString(),
 		match_metadata: {
 			xml_game_id: nanoid(12),
