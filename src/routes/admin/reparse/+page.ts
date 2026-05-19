@@ -13,6 +13,8 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (!user.is_admin) {
 		throw error(404, "Not found");
 	}
-	const { games } = await cloudApi.adminListOutOfDate(PARSER_VERSION, { fetch });
+	const { games } = await cloudApi.adminListOutOfDate(PARSER_VERSION, {
+		fetch,
+	});
 	return { user, games };
 };

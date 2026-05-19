@@ -80,8 +80,10 @@ export interface GameListResponse {
 
 // Admin view: same shape as GameListItem plus the owning user's user_id and
 // display_name. Returned by GET /v1/admin/games/out-of-date.
-export interface AdminGameListItem
-	extends Omit<GameListItem, "is_public" | "collection_id"> {
+export interface AdminGameListItem extends Omit<
+	GameListItem,
+	"is_public" | "collection_id"
+> {
 	user_id: string;
 	owner_display_name: string;
 	is_public: boolean;

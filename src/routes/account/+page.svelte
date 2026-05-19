@@ -73,7 +73,7 @@
 
 				<!-- Maintenance: reparse outdated games. Always rendered so the
 				     button is discoverable; disabled when nothing is out of date. -->
-				<div class="mt-4 border-t border-brown/40 pt-3">
+				<div class="border-brown/40 mt-4 border-t pt-3">
 					<div class="mb-2 text-xs font-bold text-gray-400">Maintenance</div>
 					<div class="mb-2 text-xs text-tan">
 						{#if outOfDateGames.length === 0}

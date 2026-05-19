@@ -8,9 +8,7 @@
 
 	let reparseOpen = $state(false);
 
-	const ownerCount = $derived(
-		new Set(data.games.map((g) => g.user_id)).size,
-	);
+	const ownerCount = $derived(new Set(data.games.map((g) => g.user_id)).size);
 
 	async function onReparseClose(didReparse: boolean) {
 		reparseOpen = false;
@@ -30,7 +28,8 @@
 				<p class="mb-3 text-xs text-tan">
 					Reparse every game whose stored parser version is older than the
 					current build. Downloads, parses, and re-uploads each game in this
-					browser tab. Audited as <code class="text-orange">admin_reimport</code>.
+					browser tab. Audited as <code class="text-orange">admin_reimport</code
+					>.
 				</p>
 				<div class="mb-3 text-sm text-tan">
 					{#if data.games.length === 0}
@@ -45,7 +44,7 @@
 					type="button"
 					onclick={() => (reparseOpen = true)}
 					disabled={data.games.length === 0}
-					class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
+					class="hover:bg-orange/80 rounded bg-orange px-3 py-1 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
 				>
 					{data.games.length === 0
 						? "Nothing to reparse"
