@@ -208,11 +208,17 @@ export type UploaderPlayerIndex = v.InferOutput<
 
 // ----- PATCH /v1/games/:id body -----
 //
-// Both fields are optional but at least one is required. is_public toggles
-// the public-share flag (rate-limited 60/hr/user via the visibility_change
-// audit event). collection_id moves the game between user-owned collections
-// (or null to leave it uncategorized — currently unused by the UI but the
-// shape is permissive for forward-compat).
+// All fields are optional but at least one is required.
+//   - is_public toggles the public-share flag (rate-limited 60/hr/user via
+//     the visibility_change audit event).
+//   - collection_id moves the game between user-owned collections (or null
+//     to leave it uncategorized — currently unused by the UI but the shape
+//     is permissive for forward-compat).
+//   - display_name is the owner's renamed title for the save. Pass a string
+//     to set, or null to clear and fall back to the save's original
+//     game_name. Empty / whitespace-only strings are rejected (use null).
+
+export const GAME_DISPLAY_NAME_MAX = 120;
 
 export const GamePatchSchema = v.pipe(
 	v.object({
@@ -220,10 +226,23 @@ export const GamePatchSchema = v.pipe(
 		collection_id: v.optional(
 			v.nullable(v.pipe(v.number(), v.integer(), v.minValue(1))),
 		),
+		display_name: v.optional(
+			v.nullable(
+				v.pipe(
+					v.string(),
+					v.trim(),
+					v.minLength(1, "Name cannot be empty"),
+					v.maxLength(GAME_DISPLAY_NAME_MAX, "Name too long"),
+				),
+			),
+		),
 	}),
 	v.check(
-		(o) => o.is_public !== undefined || o.collection_id !== undefined,
-		"At least one of is_public, collection_id required",
+		(o) =>
+			o.is_public !== undefined ||
+			o.collection_id !== undefined ||
+			o.display_name !== undefined,
+		"At least one of is_public, collection_id, display_name required",
 	),
 );
 

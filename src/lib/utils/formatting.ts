@@ -80,15 +80,18 @@ export function formatDate(dateStr: string | null | undefined): string {
 /**
  * Formats a game title for display, using intelligent fallbacks.
  *
- * Rules:
- * 1. If game has a real name (not "GameN" pattern), use it
- * 2. Otherwise, show "{Nation} - {Turns} turns"
- * 3. Fallback to just nation, just turns, or "Game {ID}"
+ * Rules (first match wins):
+ * 1. Owner-set display_name (always wins — the user explicitly chose this).
+ * 2. game_name from the save, if it's a real name (not the "GameN" pattern
+ *    Old World writes when the player never customized the name).
+ * 3. "{Nation} - {Turns} turns"
+ * 4. Just nation, just turns, or "Game {ID}".
  *
- * @param game - Game data containing name, nation, turns, and ID
+ * @param game - Game data containing optional display_name, save name, nation, turns, and ID
  * @returns Formatted game title string
  *
  * @example
+ * formatGameTitle({ display_name: "MP vs Joe", ... }) // returns "MP vs Joe"
  * formatGameTitle({ game_name: "My Epic Campaign", ... }) // returns "My Epic Campaign"
  * formatGameTitle({ game_name: "Game 5", save_owner_nation: "NATION_ROME", total_turns: 100, ... }) // returns "Rome - 100 turns"
  * formatGameTitle({ game_name: null, save_owner_nation: "NATION_EGYPT", total_turns: null, match_id: 3 }) // returns "Egypt"
@@ -146,11 +149,18 @@ export function stripMarkup(text: string | null | undefined): string {
 }
 
 export function formatGameTitle(game: {
+	display_name?: string | null;
 	game_name: string | null;
 	save_owner_nation: string | null;
 	total_turns: number | null;
 	match_id: number;
 }): string {
+	// Owner-set rename always wins, even if it happens to match the
+	// auto-generated "GameN" pattern — the user explicitly chose this.
+	if (game.display_name != null && game.display_name.trim() !== "") {
+		return game.display_name;
+	}
+
 	// Check if game_name is a real name (not auto-generated "Game{number}")
 	const isRealName =
 		game.game_name != null &&

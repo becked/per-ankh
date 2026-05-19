@@ -13,7 +13,10 @@ import type { PageLoad } from "./$types";
 // Build the OG/Twitter description from match metadata. Same shape that
 // used to live inline in +page.svelte's <svelte:head>; moved here so
 // social-link unfurls work without the page mounting.
-function buildMeta(game: { game_details: Record<string, unknown> }): PageMeta {
+function buildMeta(game: {
+	game_details: Record<string, unknown>;
+	display_name?: string | null;
+}): PageMeta {
 	const gd = game.game_details as {
 		game_name?: string | null;
 		winner_civilization?: string | null;
@@ -34,7 +37,9 @@ function buildMeta(game: { game_details: Record<string, unknown> }): PageMeta {
 	if (gd.total_turns != null) parts.push(`turn ${gd.total_turns}`);
 	const description =
 		parts.length > 0 ? parts.join(", ") : "An Old World save game on Per-Ankh.";
-	const gameName = gd.game_name ?? "Old World game";
+	// Prefer the owner's renamed title for the social-share title so
+	// unfurled links match what the user sees in the app.
+	const gameName = game.display_name ?? gd.game_name ?? "Old World game";
 	return { title: `${gameName} — Per-Ankh`, description };
 }
 

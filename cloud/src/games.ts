@@ -291,6 +291,9 @@ interface GameRowInputs {
 	// instead of resetting them from defaults.
 	createdAtOverride?: string;
 	isPublicOverride?: boolean;
+	// On re-import, preserve the owner's renamed title across the
+	// INSERT OR REPLACE. NULL is a valid value (never renamed).
+	displayNameOverride?: string | null;
 }
 
 function buildGameRow(inp: GameRowInputs): {
@@ -307,6 +310,7 @@ function buildGameRow(inp: GameRowInputs): {
 		collectionId,
 		createdAtOverride,
 		isPublicOverride,
+		displayNameOverride,
 	} = inp;
 	const md = blob.match_metadata;
 	const gd = blob.game_details as {
@@ -331,9 +335,10 @@ function buildGameRow(inp: GameRowInputs): {
 		isPublicOverride === undefined ? 0 : isPublicOverride ? 1 : 0;
 
 	// On re-import, REPLACE the games row (cascades child deletes), preserve
-	// created_at, is_public, and collection_id, and bump updated_at to now.
-	// On first upload, rely on column defaults for created_at/updated_at and
-	// is_public=FALSE; collection_id is the user's Personal default.
+	// created_at, is_public, collection_id, and the owner's renamed
+	// display_name, and bump updated_at to now. On first upload, rely on
+	// column defaults for created_at/updated_at and is_public=FALSE;
+	// collection_id is the user's Personal default; display_name is NULL.
 	if (createdAtOverride !== undefined) {
 		return {
 			sql: `INSERT OR REPLACE INTO games (
@@ -345,8 +350,9 @@ function buildGameRow(inp: GameRowInputs): {
 				is_public,
 				blob_version, blob_size_bytes, parser_version,
 				collection_id,
+				display_name,
 				created_at, updated_at
-			) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?, ?, datetime('now'))`,
+			) VALUES (?,?,?,?,?, ?,?,?,?,?, ?,?, ?,?,?, ?,?, ?, ?,?,?, ?, ?, ?, datetime('now'))`,
 			bindings: [
 				gameId,
 				userId,
@@ -370,6 +376,7 @@ function buildGameRow(inp: GameRowInputs): {
 				blobSize,
 				blob.parser_version,
 				collectionId,
+				displayNameOverride ?? null,
 				createdAtOverride,
 			],
 		};
@@ -1290,7 +1297,7 @@ export async function handleGameUpload(
 	//     overwrite the R2 blob with the new gzipped JSON. ZIP bytes match
 	//     by hash so the ZIP put is idempotent.
 	const existing = await env.SHARE_DB.prepare(
-		`SELECT game_id, parser_version, created_at, is_public, collection_id
+		`SELECT game_id, parser_version, created_at, is_public, collection_id, display_name
 		 FROM games WHERE user_id = ? AND file_hash = ?`,
 	)
 		.bind(userId, fileHash)
@@ -1300,11 +1307,13 @@ export async function handleGameUpload(
 			created_at: string;
 			is_public: number;
 			collection_id: number | null;
+			display_name: string | null;
 		}>();
 
 	let isReimport = false;
 	let existingCreatedAt: string | undefined;
 	let existingIsPublic: boolean | undefined;
+	let existingDisplayName: string | null | undefined;
 	let existingParserVersion: string | undefined;
 	let collectionId: number | null;
 	let gameId: string;
@@ -1370,6 +1379,7 @@ export async function handleGameUpload(
 		gameId = existing.game_id;
 		existingCreatedAt = existing.created_at;
 		existingIsPublic = existing.is_public === 1;
+		existingDisplayName = existing.display_name;
 		existingParserVersion = existing.parser_version;
 		// Preserve the user's manual collection placement across re-imports.
 		// Without this the INSERT OR REPLACE would null collection_id.
@@ -1434,6 +1444,7 @@ export async function handleGameUpload(
 		collectionId,
 		createdAtOverride: existingCreatedAt,
 		isPublicOverride: existingIsPublic,
+		displayNameOverride: existingDisplayName,
 	});
 	const summaryStmts = buildSummaryStatements(env.SHARE_DB, {
 		gameId,
@@ -1595,9 +1606,22 @@ export async function handleGameList(
 	// rendering produces contiguous month buckets. Without this the desktop
 	// CloudGameSidebar groups break when games are uploaded out of save-date
 	// order. created_at is the tiebreak for games sharing a save_date.
+	// COALESCE(g.user_nation, …): when the uploader didn't pick a nation
+	// (observer-mode uploads, older rows pre-dating user_nation capture),
+	// fall back to the first human player's nation so the sidebar's
+	// formatGameTitle produces the same "{Nation} - {N} turns" string as the
+	// game-detail header. Without this fallback the sidebar collapses to
+	// "Turn {N}" while the header derives the nation client-side from the
+	// players list — see the matching COALESCE in handleGameDetail and
+	// handlePublicRecentGames.
 	const rows = await env.SHARE_DB.prepare(
-		`SELECT game_id, game_name, save_date, total_turns,
-		        user_nation, user_won, winner_nation, victory_type,
+		`SELECT game_id, game_name, display_name, save_date, total_turns,
+		        COALESCE(user_nation, (
+		            SELECT ps.nation FROM player_summaries ps
+		            WHERE ps.game_id = games.game_id AND ps.is_human = 1
+		            ORDER BY ps.player_index ASC LIMIT 1
+		        )) AS user_nation,
+		        user_won, winner_nation, victory_type,
 		        map_size, is_public, collection_id, created_at, parser_version
 		 FROM games WHERE ${where}
 		 ORDER BY save_date DESC NULLS LAST, created_at DESC
@@ -1664,9 +1688,17 @@ export async function handlePublicRecentGames(
 
 	const PUBLIC_RECENT_LIMIT = 20;
 
-	// Latest public games + uploader display name.
+	// Latest public games + uploader display name. COALESCE(g.user_nation, …)
+	// supplies a usable nation for observer-mode uploads so the home cards'
+	// player crest matches the game-detail header — see listGames.
 	const gameRows = await env.SHARE_DB.prepare(
-		`SELECT g.game_id, g.game_name, g.user_nation, g.user_won,
+		`SELECT g.game_id, g.game_name, g.display_name,
+		        COALESCE(g.user_nation, (
+		            SELECT ps.nation FROM player_summaries ps
+		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
+		            ORDER BY ps.player_index ASC LIMIT 1
+		        )) AS user_nation,
+		        g.user_won,
 		        g.winner_nation, g.winner_name, g.victory_type,
 		        g.map_size, g.map_class, g.total_turns,
 		        g.save_date, g.created_at,
@@ -1683,6 +1715,7 @@ export async function handlePublicRecentGames(
 		.all<{
 			game_id: string;
 			game_name: string | null;
+			display_name: string | null;
 			user_nation: string | null;
 			user_won: number | null;
 			winner_nation: string | null;
@@ -1806,6 +1839,7 @@ export async function handlePublicRecentGames(
 	const responseGames = games.map((g) => ({
 		game_id: g.game_id,
 		game_name: g.game_name,
+		display_name: g.display_name,
 		user_nation: g.user_nation,
 		user_won: coerceD1Bool(g.user_won),
 		winner_nation: g.winner_nation,
@@ -1846,8 +1880,17 @@ export async function handleGameDetail(
 
 	const session = await sessionFromRequest(env, request);
 
+	// COALESCE(g.user_nation, …): see listGames for the rationale — same
+	// fallback so the H1 title and sidebar agree on a save's nation when the
+	// uploader didn't pick one. The header also drops its client-side
+	// players-array fallback now that this query supplies a usable value.
 	const row = await env.SHARE_DB.prepare(
-		`SELECT g.user_id, g.is_public, g.user_nation, g.user_won,
+		`SELECT g.user_id, g.is_public, g.display_name, g.user_won,
+		        COALESCE(g.user_nation, (
+		            SELECT ps.nation FROM player_summaries ps
+		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
+		            ORDER BY ps.player_index ASC LIMIT 1
+		        )) AS user_nation,
 		        u.display_name AS user_display_name
 		 FROM games g
 		 JOIN users u ON g.user_id = u.user_id
@@ -1857,6 +1900,7 @@ export async function handleGameDetail(
 		.first<{
 			user_id: string;
 			is_public: number;
+			display_name: string | null;
 			user_nation: string | null;
 			user_won: number | null;
 			user_display_name: string;
@@ -1947,6 +1991,7 @@ export async function handleGameDetail(
 		user_nation: row.user_nation,
 		user_won: coerceD1Bool(row.user_won),
 		user_display_name: row.user_display_name,
+		display_name: row.display_name,
 	};
 	const bodyText = JSON.stringify(transformed);
 
@@ -2023,7 +2068,7 @@ export async function handleGamePatch(
 			"INVALID_BODY",
 		);
 	}
-	const { is_public, collection_id } = validation.output;
+	const { is_public, collection_id, display_name } = validation.output;
 
 	// Rate-limit only when is_public is being changed. A pure collection
 	// move shouldn't burn the user's hourly toggle budget.
@@ -2126,11 +2171,33 @@ export async function handleGamePatch(
 		}
 	}
 
+	if (display_name !== undefined) {
+		await env.SHARE_DB.prepare(
+			"UPDATE games SET display_name = ?, updated_at = datetime('now') WHERE game_id = ?",
+		)
+			.bind(display_name, gameId)
+			.run();
+		try {
+			await env.SHARE_DB.prepare(
+				`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+				 VALUES ('name_change', ?, ?, ?, ?)`,
+			)
+				.bind(gameId, userId, ip, JSON.stringify({ display_name }))
+				.run();
+		} catch (e) {
+			logError("audit_event_log_failed", e, {
+				event_type: "name_change",
+				game_id: gameId,
+			});
+		}
+	}
+
 	return jsonResponse(
 		{
 			game_id: gameId,
 			...(is_public !== undefined ? { is_public } : {}),
 			...(collection_id !== undefined ? { collection_id } : {}),
+			...(display_name !== undefined ? { display_name } : {}),
 		},
 		200,
 		cors,
@@ -2240,10 +2307,15 @@ export async function handleGameDownload(
 	const userId = session.data.user_id;
 
 	const row = await env.SHARE_DB.prepare(
-		"SELECT user_id, is_public, game_name FROM games WHERE game_id = ?",
+		"SELECT user_id, is_public, game_name, display_name FROM games WHERE game_id = ?",
 	)
 		.bind(gameId)
-		.first<{ user_id: string; is_public: number; game_name: string | null }>();
+		.first<{
+			user_id: string;
+			is_public: number;
+			game_name: string | null;
+			display_name: string | null;
+		}>();
 	if (!row) return errorResponse("Not found", 404, cors, "NOT_FOUND");
 
 	const isOwner = row.user_id === userId;
@@ -2282,7 +2354,10 @@ export async function handleGameDownload(
 	const obj = await env.SHARE_BUCKET.get(`saves/${gameId}.zip`);
 	if (!obj) return errorResponse("Save missing", 404, cors, "BLOB_MISSING");
 
-	const filename = buildSaveFilename(row.game_name, gameId);
+	// Prefer the owner's renamed title for the downloaded filename so the
+	// .zip matches what they see in the UI; fall back to the save's original
+	// game_name (which is what Old World wrote into the file).
+	const filename = buildSaveFilename(row.display_name ?? row.game_name, gameId);
 
 	// Audit event — fire-and-forget so a logging hiccup doesn't 500 the
 	// download. Caught + logged in case of error.

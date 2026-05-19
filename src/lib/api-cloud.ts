@@ -41,6 +41,9 @@ export interface UserMe {
 export interface GameListItem {
 	game_id: string;
 	game_name: string | null;
+	// Owner's renamed title for the save (null = never renamed; fall back to
+	// game_name and then the nation/turns derivation via formatGameTitle).
+	display_name: string | null;
 	save_date: string | null;
 	total_turns: number;
 	user_nation: string | null;
@@ -90,6 +93,10 @@ export interface PublicRecentPlayer {
 export interface PublicRecentGame {
 	game_id: string;
 	game_name: string | null;
+	// Owner's renamed title (null = never renamed). RecentSaveCard doesn't
+	// surface a formatted title today, but exposing it on the wire keeps
+	// future home-page consumers consistent with the sidebar/header.
+	display_name: string | null;
 	user_nation: string | null;
 	user_won: boolean | null;
 	winner_nation: string | null;
@@ -305,6 +312,7 @@ export const cloudApi = {
 			user_nation?: string | null;
 			user_won?: boolean | null;
 			user_display_name?: string | null;
+			display_name?: string | null;
 		}
 	> => {
 		const res = await request(`/games/${id}`, opts);
@@ -314,6 +322,7 @@ export const cloudApi = {
 				user_nation?: string | null;
 				user_won?: boolean | null;
 				user_display_name?: string | null;
+				display_name?: string | null;
 			}
 		>;
 	},
@@ -330,6 +339,7 @@ export const cloudApi = {
 			user_nation?: string | null;
 			user_won?: boolean | null;
 			user_display_name?: string | null;
+			display_name?: string | null;
 		}
 	> => {
 		const f = opts?.fetch ?? fetch;
@@ -347,6 +357,7 @@ export const cloudApi = {
 				user_nation?: string | null;
 				user_won?: boolean | null;
 				user_display_name?: string | null;
+				display_name?: string | null;
 			}
 		>;
 	},
@@ -363,6 +374,28 @@ export const cloudApi = {
 			body: JSON.stringify({ is_public: isPublic }),
 		});
 		return res.json() as Promise<{ game_id: string; is_public: boolean }>;
+	},
+
+	// Rename (or clear) the owner-editable display title. Pass a trimmed,
+	// non-empty string to set; pass null to clear (formatGameTitle then falls
+	// back to the save's original game_name and ultimately the nation/turns
+	// derivation). Empty / whitespace strings are rejected by the worker —
+	// the caller should normalize to `null` before calling.
+	renameGame: async (
+		id: string,
+		displayName: string | null,
+		opts?: CallOpts,
+	): Promise<{ game_id: string; display_name: string | null }> => {
+		const res = await request(`/games/${id}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ display_name: displayName }),
+		});
+		return res.json() as Promise<{
+			game_id: string;
+			display_name: string | null;
+		}>;
 	},
 
 	// Download the raw save .zip for a game. Auth required (any logged-in

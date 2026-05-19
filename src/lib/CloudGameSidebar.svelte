@@ -86,6 +86,11 @@
 	let showNewCollectionInput = $state(false);
 	let newCollectionName = $state("");
 	let createError = $state<string | null>(null);
+	// Rename affordance state — separate from the new-collection input so a
+	// user can move-then-rename in one menu open without state crosstalk.
+	let showRenameInput = $state(false);
+	let renameValue = $state("");
+	let renameError = $state<string | null>(null);
 
 	function handleFilterChange(e: Event) {
 		const value = (e.target as HTMLSelectElement).value;
@@ -115,6 +120,9 @@
 		showNewCollectionInput = false;
 		newCollectionName = "";
 		createError = null;
+		showRenameInput = false;
+		renameValue = "";
+		renameError = null;
 	}
 
 	function closeContextMenu() {
@@ -122,6 +130,9 @@
 		showNewCollectionInput = false;
 		newCollectionName = "";
 		createError = null;
+		showRenameInput = false;
+		renameValue = "";
+		renameError = null;
 	}
 
 	async function moveToCollection(collectionId: number) {
@@ -136,6 +147,35 @@
 			console.error("Failed to move game:", err);
 		}
 		closeContextMenu();
+	}
+
+	function openRenameInput() {
+		if (!contextMenu) return;
+		renameValue =
+			contextMenu.game.display_name ?? contextMenu.game.game_name ?? "";
+		renameError = null;
+		showRenameInput = true;
+	}
+
+	async function submitRename() {
+		if (!contextMenu) return;
+		const trimmed = renameValue.trim();
+		// Empty input = clear the rename (null to the worker). Matches the
+		// "Reset to original" behavior on the H1 pencil affordance.
+		const value: string | null = trimmed === "" ? null : trimmed;
+		renameError = null;
+		try {
+			await cloudApi.renameGame(contextMenu.game.game_id, value);
+			await invalidateAll();
+			closeContextMenu();
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 400) {
+				renameError = err.message || "Invalid name";
+				return;
+			}
+			console.error("Failed to rename game:", err);
+			renameError = "Failed to rename";
+		}
 	}
 
 	async function createAndMoveToCollection() {
@@ -182,9 +222,12 @@
 
 	// formatGameTitle expects desktop fields; adapt for cloud shape. The
 	// `match_id: 0` fallback only fires if game_name + nation + total_turns
-	// are all missing — degenerate save in practice.
+	// are all missing — degenerate save in practice. display_name is the
+	// owner's rename (null = never renamed); formatGameTitle prefers it over
+	// the save's original name.
 	function titleFor(g: GameListItem): string {
 		return formatGameTitle({
+			display_name: g.display_name,
 			game_name: g.game_name,
 			save_owner_nation: g.user_nation,
 			total_turns: g.total_turns,
@@ -396,6 +439,66 @@
 		role="menu"
 		tabindex="-1"
 	>
+		<!-- Rename: lives above "Move to Collection" so the most-disruptive
+		     destructive-ish action (changing the visible title) is the first
+		     option a user sees. Inline-input pattern mirrors the
+		     "+ New Collection..." affordance below. -->
+		{#if showRenameInput}
+			<div class="border-b border-black p-2">
+				<!-- svelte-ignore a11y_autofocus -->
+				<input
+					type="text"
+					bind:value={renameValue}
+					placeholder="Save title"
+					maxlength={120}
+					autofocus
+					class="w-full rounded border border-[#4a433b] bg-[#35302b] px-2 py-1 text-sm text-tan placeholder:text-[#c5c3c2] focus:border-[#5a524a] focus:outline-none"
+					onkeydown={(e) => {
+						if (e.key === "Enter") submitRename();
+						if (e.key === "Escape") {
+							showRenameInput = false;
+							renameValue = "";
+							renameError = null;
+						}
+					}}
+				/>
+				{#if renameError}
+					<p class="mt-1 text-[10px] text-orange">{renameError}</p>
+				{/if}
+				<p class="mt-1 text-[10px] text-tan opacity-70">
+					Leave blank to reset to the save's original title.
+				</p>
+				<div class="mt-1 flex gap-1">
+					<button
+						type="button"
+						class="flex-1 rounded bg-[#35302b] px-2 py-1 text-xs text-tan transition-colors hover:bg-[#453e37]"
+						onclick={() => {
+							showRenameInput = false;
+							renameValue = "";
+							renameError = null;
+						}}
+					>
+						Cancel
+					</button>
+					<button
+						type="button"
+						class="flex-1 rounded bg-[#ab9978] px-2 py-1 text-xs text-black transition-colors hover:bg-[#9a8a6c]"
+						onclick={submitRename}
+					>
+						Save
+					</button>
+				</div>
+			</div>
+		{:else}
+			<button
+				type="button"
+				class="w-full border-b border-black px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+				onclick={openRenameInput}
+			>
+				Rename…
+			</button>
+		{/if}
+
 		<div class="border-b border-black px-3 py-2 text-sm text-white">
 			Move to Collection
 		</div>

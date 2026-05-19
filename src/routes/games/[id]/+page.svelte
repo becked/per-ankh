@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { page } from "$app/state";
+	import { invalidateAll } from "$app/navigation";
 	import type { PageData } from "./$types";
 	import type { MapTile } from "$lib/types/MapTile";
 	import { GameDetailView } from "$lib/game-detail";
@@ -12,6 +13,7 @@
 	import ReimportButton from "$lib/ReimportButton.svelte";
 	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
 	import GameActions from "$lib/GameActions.svelte";
+	import { cloudApi, ApiError } from "$lib/api-cloud";
 
 	let { data }: { data: PageData } = $props();
 	const game = $derived(data.game);
@@ -60,6 +62,22 @@
 		selectedMapTurn = turn;
 		mapTiles = reconstructMapTiles(game, turn);
 	}
+
+	// Owner-only rename hook plumbed into GameDetailView. The component owns
+	// the inline edit UX; we own the API call + cache refresh + error
+	// translation. Throwing here propagates the inline error into the
+	// component's `renameError` slot.
+	async function handleRename(value: string | null): Promise<void> {
+		try {
+			await cloudApi.renameGame(gameId, value);
+			await invalidateAll();
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 400) {
+				throw new Error(err.message || "Invalid name");
+			}
+			throw err instanceof Error ? err : new Error("Failed to rename");
+		}
+	}
 </script>
 
 <div class="flex flex-1 overflow-hidden">
@@ -85,6 +103,9 @@
 				userNation={game.user_nation ?? null}
 				userDisplayName={game.user_display_name ?? null}
 				userWon={game.user_won ?? null}
+				displayName={game.display_name ?? null}
+				{isOwner}
+				onRename={isOwner ? handleRename : null}
 				{mapTiles}
 				{selectedMapTurn}
 				onMapTurnChange={handleMapTurnChange}
