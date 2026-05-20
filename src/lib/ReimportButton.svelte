@@ -104,7 +104,7 @@
 		aria-modal="true"
 		aria-label="Re-import game"
 	>
-		<div class="w-full max-w-lg rounded border-2 border-brown bg-[#2a2622] p-6">
+		<div class="w-full max-w-lg rounded border-2 border-black bg-[#2a2622] p-6">
 			<HieroglyphParade active={paradeActive} />
 			<UploadModal
 				prefilled={{ rawZip: status.rawZip, fileName: status.fileName }}

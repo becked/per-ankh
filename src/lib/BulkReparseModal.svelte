@@ -239,7 +239,7 @@
 	aria-modal="true"
 	aria-label="Reparse all games"
 >
-	<div class="w-full max-w-2xl rounded border-2 border-brown bg-[#2a2622] p-6">
+	<div class="w-full max-w-2xl rounded border-2 border-black bg-[#2a2622] p-6">
 		<HieroglyphParade active={phase === "running"} />
 		<div class="mb-4 mt-4 flex items-center justify-between">
 			<h2 class="font-serif text-xl text-tan">
