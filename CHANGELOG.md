@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-05-19-0d6f73b] - 2026-05-19
+
+### Features
+
+- (home) include AI players in recent-game card sparklines — [a1b1f31](https://github.com/becked/per-ankh/commit/a1b1f31f8d5a0e17cf3a60d5a4b48e2ef8dc953e)
+- (home) add game title to recent-save cards and fix MP detection — [0d6f73b](https://github.com/becked/per-ankh/commit/0d6f73bb3cc1da452d3d13a9668faa276413f3c6)
+
+### Other
+
+- (home) remove Discord login blurb from sign-in card — [6955e14](https://github.com/becked/per-ankh/commit/6955e14a0f23e179b1aa8354fa1d39450f779710)
+- (modal) swap red bulk-reparse/reimport border for black to match other modals — [ac11b67](https://github.com/becked/per-ankh/commit/ac11b67e331d8d7263461dca2670505324767c10)
+
 ## [2026-05-19-f89faa7] - 2026-05-19
 
 ### Features
