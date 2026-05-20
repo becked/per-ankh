@@ -34,10 +34,10 @@
 		}),
 	);
 
-	// Card spotlights one human: the winner if one exists, otherwise the
-	// human with the highest final_points (the leader). Mirrors the
-	// per-player Nations card on the Overview tab. Falls back to null
-	// when no humans are tracked at all (degenerate observer upload).
+	// Card spotlights one player: the winner if one exists, otherwise the
+	// player with the highest final_points (the leader). Considers AI as
+	// well as humans — the roster now includes both. Mirrors the
+	// per-player Nations card on the Overview tab.
 	type Featured = (typeof orderedPlayers)[number] | null;
 	const featured = $derived<Featured>(
 		orderedPlayers.find((p) => p.is_winner) ??
@@ -47,8 +47,9 @@
 			null,
 	);
 	// "Player" stat box = uploader's picked nation, falling back to the
-	// first human player. Matches the `humanNation` derivation in the
-	// game-detail header so anonymous viewers see the same identity.
+	// uploader's player row, then the first player in the roster. Matches
+	// the `humanNation` derivation in the game-detail header so anonymous
+	// viewers see the same identity.
 	const humanNation = $derived(
 		game.user_nation ??
 			game.players.find((p) => p.is_uploader)?.nation ??

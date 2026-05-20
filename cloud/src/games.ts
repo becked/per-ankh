@@ -1740,8 +1740,9 @@ export async function handleGameList(
 // GET /v1/games/public-recent — anonymous, IP-rate-limited list of the most
 // recent is_public=1 games across all users. Used to populate the marketing
 // home page (src/routes/+page.svelte) with a discovery feed. Each row carries
-// the human player roster + their per-turn legitimacy series so the home
-// cards can render an in-place VP sparkline without N follow-up fetches.
+// the full player roster (humans + AI) and their per-turn legitimacy series
+// so the home cards can render an in-place VP sparkline without N follow-up
+// fetches.
 //
 // PII stance mirrors anonymous /v1/games/:id: only display_name (already
 // public on /games/[id] pages) and player_name (the in-game character) are
@@ -1836,8 +1837,9 @@ export async function handlePublicRecentGames(
 	const gameIds = games.map((g) => g.game_id);
 	const placeholders = gameIds.map(() => "?").join(", ");
 
-	// Human player summaries for every game in the list. AI players are
-	// excluded server-side — the sparkline only renders humans.
+	// Player summaries for every game in the list — humans AND AI. The
+	// sparkline renders every nation; AI lines fill in the picture of how
+	// the game played out, not just the human seats.
 	//
 	// cities_total / techs_completed / laws_count + is_winner power the
 	// home's Nations-card-style featured-player block, mirroring the
@@ -1846,7 +1848,7 @@ export async function handlePublicRecentGames(
 		`SELECT game_id, player_index, player_name, nation, is_uploader,
 		        is_winner, final_points, cities_total, techs_completed, laws_count
 		 FROM player_summaries
-		 WHERE game_id IN (${placeholders}) AND is_human = 1
+		 WHERE game_id IN (${placeholders})
 		 ORDER BY game_id, player_index`,
 	)
 		.bind(...gameIds)
@@ -1863,16 +1865,12 @@ export async function handlePublicRecentGames(
 			laws_count: number | null;
 		}>();
 
-	// Per-turn legitimacy (in-app "VP") for human players only. Joining
-	// against player_summaries keeps the AI rows out of the result set so
-	// the payload stays small.
+	// Per-turn legitimacy (in-app "VP") for every player — humans and AI.
 	const seriesRows = await env.SHARE_DB.prepare(
-		`SELECT gpt.game_id, gpt.player_index, gpt.turn, gpt.legitimacy
-		 FROM game_player_turn gpt
-		 JOIN player_summaries ps
-		   ON gpt.game_id = ps.game_id AND gpt.player_index = ps.player_index
-		 WHERE gpt.game_id IN (${placeholders}) AND ps.is_human = 1
-		 ORDER BY gpt.game_id, gpt.player_index, gpt.turn`,
+		`SELECT game_id, player_index, turn, legitimacy
+		 FROM game_player_turn
+		 WHERE game_id IN (${placeholders})
+		 ORDER BY game_id, player_index, turn`,
 	)
 		.bind(...gameIds)
 		.all<{
