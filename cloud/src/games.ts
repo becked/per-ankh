@@ -1845,7 +1845,7 @@ export async function handlePublicRecentGames(
 	// home's Nations-card-style featured-player block, mirroring the
 	// Overview tab's per-player card.
 	const playerRows = await env.SHARE_DB.prepare(
-		`SELECT game_id, player_index, player_name, nation, is_uploader,
+		`SELECT game_id, player_index, player_name, nation, is_human, is_uploader,
 		        is_winner, final_points, cities_total, techs_completed, laws_count
 		 FROM player_summaries
 		 WHERE game_id IN (${placeholders})
@@ -1857,6 +1857,7 @@ export async function handlePublicRecentGames(
 			player_index: number;
 			player_name: string;
 			nation: string | null;
+			is_human: number;
 			is_uploader: number;
 			is_winner: number;
 			final_points: number | null;
@@ -1902,6 +1903,7 @@ export async function handlePublicRecentGames(
 			player_index: number;
 			player_name: string;
 			nation: string | null;
+			is_human: boolean;
 			is_uploader: boolean;
 			is_winner: boolean;
 			final_points: number | null;
@@ -1921,6 +1923,7 @@ export async function handlePublicRecentGames(
 			player_index: r.player_index,
 			player_name: r.player_name,
 			nation: r.nation,
+			is_human: r.is_human === 1,
 			is_uploader: r.is_uploader === 1,
 			is_winner: r.is_winner === 1,
 			final_points: r.final_points,

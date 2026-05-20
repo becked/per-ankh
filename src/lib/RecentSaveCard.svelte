@@ -7,6 +7,7 @@
 	import {
 		formatEnum,
 		formatDate,
+		formatGameTitle,
 		formatMapClass,
 	} from "$lib/utils/formatting";
 	import {
@@ -117,10 +118,28 @@
 		orderedPlayers.some((p) => p.vp_series.length > 0),
 	);
 
+	// MP = >1 human seat. Counting all players reads as MP for every save
+	// once AI is in the roster (which it is, for the sparkline).
+	const isMultiplayer = $derived(
+		game.players.filter((p) => p.is_human).length > 1,
+	);
+
 	const subtitleDate = $derived(
 		game.save_date && formatDate(game.save_date) !== "Unknown"
 			? formatDate(game.save_date)
 			: formatDate(game.created_at),
+	);
+
+	// match_id: 0 is only consulted if game_name + nation + total_turns are
+	// all missing — degenerate save in practice. Mirrors CloudGameSidebar.
+	const gameTitle = $derived(
+		formatGameTitle({
+			display_name: game.display_name,
+			game_name: game.game_name,
+			save_owner_nation: game.user_nation,
+			total_turns: game.total_turns,
+			match_id: 0,
+		}),
 	);
 </script>
 
@@ -129,11 +148,12 @@
 	class="block rounded-lg p-3 transition-colors hover:bg-[#3e3833]"
 	style="background-color: #35302b;"
 >
-	<!-- Discovery row: multiplayer icon + uploader (left, the card's
-	     primary title) + save date (right). Date pill reuses the amber
-	     treatment that the "Winner" badge previously used. -->
-	<div class="mb-2 flex items-center justify-between gap-2">
-		<div class="flex min-w-0 items-center gap-1.5">
+	<!-- Discovery row: uploader (left) + game title (center) + save date
+	     (right). Equal-flex side columns keep the title visually centered
+	     even when the uploader name or date pill grow. Date pill reuses
+	     the amber treatment that the "Winner" badge previously used. -->
+	<div class="mb-2 flex items-center gap-2">
+		<div class="flex min-w-0 flex-1 items-center gap-1.5">
 			<img
 				src={game.uploader_avatar_url}
 				alt=""
@@ -147,10 +167,17 @@
 			</span>
 		</div>
 		<span
-			class="shrink-0 rounded bg-amber-700/40 px-1.5 py-0.5 text-xs text-amber-300"
+			class="min-w-0 flex-1 truncate text-center text-lg font-bold text-tan"
 		>
-			{subtitleDate}
+			{gameTitle}
 		</span>
+		<div class="flex flex-1 justify-end">
+			<span
+				class="shrink-0 rounded bg-amber-700/40 px-1.5 py-0.5 text-xs text-amber-300"
+			>
+				{subtitleDate}
+			</span>
+		</div>
 	</div>
 
 	<!-- Game header stats: Player / Winner / Victory Type / Map / Difficulty.
@@ -225,7 +252,7 @@
 			</p>
 		</div>
 
-		{#if game.players.length > 1}
+		{#if isMultiplayer}
 			<div class="rounded p-2" style="background-color: #2a2622;">
 				<p
 					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"

@@ -101,6 +101,7 @@ export interface PublicRecentPlayer {
 	player_index: number;
 	player_name: string;
 	nation: string | null;
+	is_human: boolean;
 	is_uploader: boolean;
 	is_winner: boolean;
 	final_points: number | null;
