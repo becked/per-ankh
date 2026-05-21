@@ -288,6 +288,7 @@ Deploy the Worker schema change before releasing the frontend that depends on it
 
 ## Development Principles
 
+- **Optimize for the app, not for developer time.** Dev time and diff size are not constraints. Never recommend an approach on the grounds that it's "less work," "a smaller change," "less refactoring," "faster to ship," or "avoids touching X." When weighing options, evaluate them only on code-quality axes: consistency, conceptual coherence, fewer special cases, fewer mental models, clarity at the point of read. If a cleaner approach takes substantially more work, it is still the recommended approach by default. The goal is a great app, not an efficient implementation session.
 - **YAGNI.** Implement what's needed now, not what might be useful later.
 - **DRY.** Reuse existing patterns; extract shared logic.
 - **Atomic commits.** One logical change per commit. (But be pragmatic, no git jujitsu just to follow this principle.)
