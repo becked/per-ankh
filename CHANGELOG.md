@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-05-20-77b55a4] - 2026-05-20
+
+### Features
+
+- (dashboard) server-paginated sidebar with URL-driven filters — [77b55a4](https://github.com/becked/per-ankh/commit/77b55a430cf2ae05f59720e01386f21c0753cb08)
+
+### Other
+
+- (claude) codify "optimize for the app, not dev time" principle — [e0b8c7f](https://github.com/becked/per-ankh/commit/e0b8c7f9a8c258b75a3b320cf35838cfef00ad6d)
+
 ## [2026-05-19-0d6f73b] - 2026-05-19
 
 ### Features
