@@ -91,15 +91,18 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 	// (ownership requires a session), so the listGames 401 path is gone.
 	// Other errors propagate so real outages aren't masked.
 	let games: GameListItem[] | undefined;
+	let gamesTotal = 0;
 	let collections: CollectionInfo[] | undefined;
 	let publicCount = 0;
+	const SIDEBAR_PAGE_SIZE = 50;
 	if (isOwner) {
 		try {
 			const [gamesRes, collectionsRes] = await Promise.all([
-				cloudApi.listGames({ fetch }),
+				cloudApi.listGames({ fetch, limit: SIDEBAR_PAGE_SIZE, offset: 0 }),
 				cloudApi.listCollections({ fetch }),
 			]);
 			games = gamesRes.games;
+			gamesTotal = gamesRes.total;
 			collections = collectionsRes.collections;
 			publicCount = collectionsRes.public_count;
 		} catch (err) {
@@ -123,6 +126,8 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		game,
 		isOwner,
 		games,
+		gamesTotal,
+		gamesPageSize: SIDEBAR_PAGE_SIZE,
 		collections,
 		publicCount,
 		tournamentLink,

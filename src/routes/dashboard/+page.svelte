@@ -1,5 +1,8 @@
 <script lang="ts">
 	import type { ECElementEvent, EChartsOption } from "echarts";
+	import { get } from "svelte/store";
+	import { goto } from "$app/navigation";
+	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
@@ -11,6 +14,7 @@
 		getCivilizationColor,
 		getNationColor,
 	} from "$lib/config";
+	import { searchQuery } from "$lib/stores/search";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -37,18 +41,33 @@
 		stats.win_rate != null ? Math.round(stats.win_rate * 100) : null,
 	);
 
-	// Cross-filter state for the sidebar. Clicking a nation bar or calendar
-	// day toggles the corresponding filter; clicking the same value again
-	// clears it. Both filters are independent and combine.
-	let selectedNation = $state<string | null>(null);
-	let selectedDate = $state<string | null>(null);
+	// Cross-filter state lives in the URL (?nation=, ?date=) so a chart
+	// click is shareable, browser back/forward restores the prior filter,
+	// and the +page.ts load() can ask the worker for the filtered slice.
+	const selectedNation = $derived(data.selectedNation);
+	const selectedDate = $derived(data.selectedDate);
+
+	// Toggle a single URL search param: same value → remove, different → set.
+	// replaceState avoids polluting history with chart-click ticks; noScroll
+	// keeps the dashboard scroll position when only the sidebar updates.
+	async function toggleSearchParam(key: string, value: string | null) {
+		const next = new URL(page.url);
+		const current = next.searchParams.get(key);
+		if (value === null || current === value) {
+			next.searchParams.delete(key);
+		} else {
+			next.searchParams.set(key, value);
+		}
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
+		await goto(next, { replaceState: true, keepFocus: true, noScroll: true });
+	}
 
 	function handleNationClick(params: ECElementEvent) {
 		if (params.componentType !== "series" || params.seriesType !== "bar")
 			return;
 		const nation = stats.nations[params.dataIndex]?.nation;
 		if (!nation) return;
-		selectedNation = selectedNation === nation ? null : nation;
+		void toggleSearchParam("nation", nation);
 	}
 
 	function handleCalendarClick(params: ECElementEvent) {
@@ -58,8 +77,46 @@
 		const value = params.value as [string, string, string] | undefined;
 		const date = value?.[0];
 		if (!date) return;
-		selectedDate = selectedDate === date ? null : date;
+		void toggleSearchParam("date", date);
 	}
+
+	// Sync the global search store from the URL on every load() run so a
+	// shareable link with ?q=… populates the header input. The reverse
+	// direction (input → URL) is the debounced effect below.
+	//
+	// CRITICAL: read the store via `get()` (non-reactive) instead of `$searchQuery`
+	// so this effect only tracks `data.searchValue`. Reading the store
+	// reactively here would create a feedback loop — every keystroke
+	// updates the store, this effect re-runs, the comparison still finds
+	// `data.searchValue` (the URL hasn't updated yet) different from the
+	// store value the user just typed, and the effect overwrites the
+	// in-flight keystroke with "". The user can't type anything.
+	$effect(() => {
+		const next = data.searchValue;
+		if (next !== get(searchQuery)) searchQuery.set(next);
+	});
+
+	// Debounce search-input writes to the URL so a fast typist doesn't fire
+	// a request per keystroke. 300ms is the standard "search-as-you-type"
+	// feel; the AbortController in the sidebar handles in-flight cancellation
+	// when a later keystroke supersedes an earlier one.
+	let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null;
+	$effect(() => {
+		const current = $searchQuery;
+		// Skip the initial run when store matches URL (avoids a no-op goto).
+		if (current === data.searchValue) return;
+		if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+		searchDebounceTimer = setTimeout(() => {
+			const next = new URL(page.url);
+			if (current.trim() === "") next.searchParams.delete("q");
+			else next.searchParams.set("q", current.trim());
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
+			void goto(next, { replaceState: true, keepFocus: true, noScroll: true });
+		}, 300);
+		return () => {
+			if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+		};
+	});
 
 	const chartOption = $derived<EChartsOption>({
 		...CHART_THEME,
@@ -336,13 +393,16 @@
 	</main>
 
 	<CloudGameSidebar
-		games={data.games}
+		initialGames={data.games}
+		total={data.gamesTotal}
+		pageSize={data.pageSize}
 		collections={data.collections}
 		publicCount={data.publicCount}
 		currentGameId={null}
+		activeFilter={data.activeFilter}
 		{selectedNation}
 		{selectedDate}
-		onClearNationFilter={() => (selectedNation = null)}
-		onClearDateFilter={() => (selectedDate = null)}
+		onClearNationFilter={() => toggleSearchParam("nation", null)}
+		onClearDateFilter={() => toggleSearchParam("date", null)}
 	/>
 </div>

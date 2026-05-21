@@ -158,10 +158,13 @@
 
 	{#if isOwner && data.games}
 		<CloudGameSidebar
-			games={data.games}
+			initialGames={data.games}
+			total={data.gamesTotal}
+			pageSize={data.gamesPageSize}
 			collections={data.collections ?? []}
 			publicCount={data.publicCount}
 			currentGameId={gameId}
+			activeFilter="all"
 		/>
 	{/if}
 </div>

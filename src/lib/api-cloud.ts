@@ -197,6 +197,20 @@ export interface CallOpts {
 	// event.fetch won't auto-forward). Production uses the auto-forward
 	// path between per-ankh.app and api.per-ankh.app.
 	cookie?: string;
+	// Caller-supplied abort signal. Lets the sidebar cancel an in-flight
+	// next-page fetch when filters change so a stale response can't
+	// overwrite the fresh accumulated array.
+	signal?: AbortSignal;
+}
+
+export interface ListGamesOpts extends CallOpts {
+	limit?: number;
+	offset?: number;
+	collectionId?: number;
+	filter?: "public";
+	q?: string;
+	nation?: string;
+	date?: string;
 }
 
 async function request(
@@ -315,8 +329,23 @@ export const cloudApi = {
 	},
 
 	// --- Games ---
-	listGames: async (opts?: CallOpts): Promise<GameListResponse> => {
-		const res = await request("/games", opts);
+	listGames: async (opts?: ListGamesOpts): Promise<GameListResponse> => {
+		const params = new URLSearchParams();
+		if (opts?.limit != null) params.set("limit", String(opts.limit));
+		if (opts?.offset != null) params.set("offset", String(opts.offset));
+		if (opts?.collectionId != null) {
+			params.set("collection_id", String(opts.collectionId));
+		}
+		if (opts?.filter) params.set("filter", opts.filter);
+		if (opts?.q) params.set("q", opts.q);
+		if (opts?.nation) params.set("nation", opts.nation);
+		if (opts?.date) params.set("date", opts.date);
+		const qs = params.toString();
+		const res = await request(`/games${qs ? `?${qs}` : ""}`, {
+			fetch: opts?.fetch,
+			cookie: opts?.cookie,
+			signal: opts?.signal,
+		});
 		return res.json() as Promise<GameListResponse>;
 	},
 

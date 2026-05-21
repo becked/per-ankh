@@ -1672,7 +1672,7 @@ export async function handleGameList(
 	const url = new URL(request.url);
 	const limit = Math.min(
 		parseInt(url.searchParams.get("limit") ?? "50", 10) || 50,
-		200,
+		500,
 	);
 	const offset = Math.max(
 		parseInt(url.searchParams.get("offset") ?? "0", 10) || 0,
@@ -1689,6 +1689,19 @@ export async function handleGameList(
 			? parseInt(collectionIdParam, 10)
 			: null;
 
+	// Server-side search + cross-filter. All optional; combine with AND so the
+	// sidebar's chart-driven nation/date chips compose with the search input
+	// and the collection dropdown. Empty strings are treated as absent.
+	const qRaw = url.searchParams.get("q");
+	const q = qRaw && qRaw.trim().length > 0 ? qRaw.trim() : null;
+	const nationRaw = url.searchParams.get("nation");
+	const nation =
+		nationRaw && /^[A-Z_]+$/.test(nationRaw) && nationRaw.length <= 64
+			? nationRaw
+			: null;
+	const dateRaw = url.searchParams.get("date");
+	const date = dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null;
+
 	let where = "user_id = ?";
 	const bindings: (string | number)[] = [userId];
 	if (filter === "public") {
@@ -1696,6 +1709,28 @@ export async function handleGameList(
 	} else if (collectionId !== null) {
 		where += " AND collection_id = ?";
 		bindings.push(collectionId);
+	}
+	if (q !== null) {
+		// LIKE matches `%` (any run) and `_` (one char); escape user input so a
+		// search for "100%" doesn't match everything. ESCAPE '\\' opts the
+		// pattern into backslash-escaping. LOWER both sides for
+		// case-insensitive substring match without depending on D1 collation.
+		const escaped = q.replace(/[\\%_]/g, (c) => `\\${c}`);
+		const likePattern = `%${escaped.toLowerCase()}%`;
+		where +=
+			" AND (LOWER(game_name) LIKE ? ESCAPE '\\' OR LOWER(display_name) LIKE ? ESCAPE '\\')";
+		bindings.push(likePattern, likePattern);
+	}
+	if (nation !== null) {
+		// Filter on the raw user_nation column (not the COALESCE'd fallback)
+		// so chip clicks line up with the stats chart's buckets, which group
+		// on `user_nation IS NOT NULL` (cloud/src/stats.ts).
+		where += " AND user_nation = ?";
+		bindings.push(nation);
+	}
+	if (date !== null) {
+		where += " AND substr(save_date, 1, 10) = ?";
+		bindings.push(date);
 	}
 
 	// Sort by save_date (in-game date) so the sidebar's month-grouped

@@ -1,13 +1,15 @@
 <script lang="ts">
 	// Sidebar listing the user's games (loaded by /dashboard/+page.ts).
-	//   - Data comes in as props; refresh is `invalidateAll()`.
-	//   - Field shape: game_id (string), user_nation/user_won.
-	//   - Filtering/searching is client-side over the props array. The
-	//     server cap on listGames is 200 — switch to server-side if a user
-	//     ever exceeds that ceiling.
-	//   - "Public (N)" pseudo-filter surfaces games where is_public is set.
+	//   - Filter state (collection, search, nation, date) lives in the URL
+	//     search params; the load() function passes the first page in via
+	//     `initialGames` + `total`. Switching filters re-runs load() via
+	//     goto(), which resets `accumulated` from the new initialGames.
+	//   - Pagination is server-side with infinite scroll: an
+	//     IntersectionObserver on a sentinel below the list triggers
+	//     `loadMore()` to fetch the next page until accumulated.length === total.
 
 	import { goto, invalidateAll } from "$app/navigation";
+	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import {
 		cloudApi,
@@ -22,7 +24,6 @@
 		MIN_WIDTH,
 		MAX_WIDTH,
 	} from "$lib/stores/sidebarWidth";
-	import { searchQuery } from "$lib/stores/search";
 	import {
 		formatGameTitle,
 		formatDate,
@@ -30,13 +31,20 @@
 	} from "$lib/utils/formatting";
 
 	interface Props {
-		games: GameListItem[];
+		initialGames: GameListItem[];
+		total: number;
+		pageSize: number;
 		collections: CollectionInfo[];
 		publicCount: number;
 		currentGameId: string | null;
-		// Cross-filter state from the dashboard charts. Both narrow the visible
-		// list; combine when both are set. Sidebar renders a chip per active
-		// filter and calls the matching clear callback when the user dismisses.
+		// Resolved active filter from the dashboard load(). "all" hides the
+		// public/collection filter; "public" surfaces the user's public set;
+		// a number selects a specific collection_id.
+		activeFilter: "all" | "public" | number;
+		// Cross-filter state from the dashboard charts (sourced from URL).
+		// Both narrow the visible list; combine when both are set. Sidebar
+		// renders a chip per active filter and calls the matching clear
+		// callback when the user dismisses.
 		selectedNation?: string | null;
 		selectedDate?: string | null;
 		onClearNationFilter?: () => void;
@@ -44,10 +52,13 @@
 	}
 
 	let {
-		games,
+		initialGames,
+		total,
+		pageSize,
 		collections,
 		publicCount,
 		currentGameId,
+		activeFilter,
 		selectedNation = null,
 		selectedDate = null,
 		onClearNationFilter,
@@ -76,8 +87,28 @@
 		document.removeEventListener("mousemove", onDrag);
 	}
 
-	// "all" | "public" | <collection_id>
-	let activeFilter = $state<"all" | "public" | number>("all");
+	// Accumulated rows for infinite scroll. Resets whenever load() runs and
+	// gives us a fresh `initialGames` (collection switch, search/nation/date
+	// change). Tracked in a $effect that re-reads the prop on every change so
+	// a same-length refetch (e.g. switching to a filter that happens to
+	// return the same count) still resets the array.
+	let accumulated = $state<GameListItem[]>([]);
+	let loadingMore = $state(false);
+	let loadAbort: AbortController | null = null;
+	$effect(() => {
+		const fresh = initialGames;
+		if (loadAbort) loadAbort.abort();
+		loadAbort = null;
+		accumulated = fresh;
+	});
+	const hasMore = $derived(accumulated.length < total);
+
+	// String form of activeFilter so it matches the (string) value attributes
+	// on the <option>s. Numbers go through String() because <option value=N>
+	// renders the attribute as a string in the DOM.
+	const selectValue = $derived(
+		activeFilter === "all" ? "all" : String(activeFilter),
+	);
 
 	// Context menu state.
 	let contextMenu = $state<{ x: number; y: number; game: GameListItem } | null>(
@@ -92,12 +123,75 @@
 	let renameValue = $state("");
 	let renameError = $state<string | null>(null);
 
-	function handleFilterChange(e: Event) {
+	async function handleFilterChange(e: Event) {
 		const value = (e.target as HTMLSelectElement).value;
-		if (value === "all") activeFilter = "all";
-		else if (value === "public") activeFilter = "public";
-		else activeFilter = Number(value);
+		const next = new URL(page.url);
+		// "all" clears both filter modes. ?filter=public and ?collection_id=N
+		// are mutually exclusive on the worker side, so clear the other.
+		next.searchParams.delete("filter");
+		next.searchParams.delete("collection_id");
+		if (value === "public") next.searchParams.set("filter", "public");
+		else if (value !== "all") next.searchParams.set("collection_id", value);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
+		await goto(next, { replaceState: true, keepFocus: true, noScroll: true });
 	}
+
+	async function loadMore() {
+		if (loadingMore || !hasMore) return;
+		loadingMore = true;
+		if (loadAbort) loadAbort.abort();
+		loadAbort = new AbortController();
+		const signal = loadAbort.signal;
+		// Read filters live from the URL so a fetch initiated near a
+		// filter-change boundary uses the latest set (the prop-driven values
+		// are a frame behind the URL during the goto → load() round-trip).
+		const params = page.url.searchParams;
+		const collectionIdRaw = params.get("collection_id");
+		const collectionId =
+			collectionIdRaw && /^\d+$/.test(collectionIdRaw)
+				? Number(collectionIdRaw)
+				: undefined;
+		const filterParam =
+			params.get("filter") === "public" ? "public" : undefined;
+		try {
+			const res = await cloudApi.listGames({
+				limit: pageSize,
+				offset: accumulated.length,
+				collectionId,
+				filter: filterParam,
+				q: params.get("q") ?? undefined,
+				nation: params.get("nation") ?? undefined,
+				date: params.get("date") ?? undefined,
+				signal,
+			});
+			if (signal.aborted) return;
+			accumulated = [...accumulated, ...res.games];
+		} catch (err) {
+			if (err instanceof DOMException && err.name === "AbortError") return;
+			if (err instanceof ApiError) {
+				console.error("Failed to load more games:", err);
+			} else {
+				throw err;
+			}
+		} finally {
+			if (!signal.aborted) loadingMore = false;
+		}
+	}
+
+	let sentinel: HTMLDivElement | null = $state(null);
+	$effect(() => {
+		if (!sentinel) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (entry.isIntersecting) void loadMore();
+				}
+			},
+			{ rootMargin: "200px" },
+		);
+		observer.observe(sentinel);
+		return () => observer.disconnect();
+	});
 
 	function handleContextMenu(e: MouseEvent, game: GameListItem) {
 		e.preventDefault();
@@ -235,43 +329,6 @@
 		});
 	}
 
-	// First filter by collection/public, then by chart cross-filters
-	// (nation + save date), then by search query.
-	const filteredGames = $derived.by(() => {
-		let result = games;
-		if (activeFilter === "public") {
-			result = result.filter((g) => g.is_public);
-		} else if (typeof activeFilter === "number") {
-			result = result.filter((g) => g.collection_id === activeFilter);
-		}
-
-		if (selectedNation) {
-			result = result.filter((g) => g.user_nation === selectedNation);
-		}
-		if (selectedDate) {
-			// stats.save_dates uses YYYY-MM-DD; GameListItem.save_date is full
-			// ISO 8601, so compare against the leading day component.
-			result = result.filter(
-				(g) =>
-					g.save_date != null && g.save_date.substring(0, 10) === selectedDate,
-			);
-		}
-
-		const query = $searchQuery.trim().toLowerCase();
-		if (!query) return result;
-
-		return result.filter((game) => {
-			const title = titleFor(game).toLowerCase();
-			const nation = game.user_nation
-				? formatEnum(game.user_nation, "NATION_").toLowerCase()
-				: "";
-			const date = formatGameSubtitle(game).toLowerCase();
-			return (
-				title.includes(query) || nation.includes(query) || date.includes(query)
-			);
-		});
-	});
-
 	function getMonthKey(game: GameListItem): string {
 		if (!game.save_date) return "unknown";
 		const date = new Date(game.save_date);
@@ -293,7 +350,7 @@
 	const groupedGames = $derived.by(() => {
 		const groups: GameGroup[] = [];
 		let currentKey = "";
-		for (const game of filteredGames) {
+		for (const game of accumulated) {
 			const key = getMonthKey(game);
 			if (key !== currentKey) {
 				groups.push({ monthKey: key, label: formatMonthLabel(key), games: [] });
@@ -331,9 +388,16 @@
 
 	<!-- Collection filter dropdown -->
 	<div class="border-b border-black px-2 pb-1 pt-2">
+		<!--
+			Svelte 5's one-way `value=` binding on a <select> doesn't reliably
+			re-apply when the options array changes around it (collections come
+			in async via load()). Force option values to string and use the
+			derived selectValue so a goto()-driven activeFilter change picks
+			the right option after the re-render.
+		-->
 		<select
 			class="w-full cursor-pointer rounded border border-black bg-[#35302b] p-1.5 text-xs text-tan"
-			value={activeFilter === "all" ? "all" : String(activeFilter)}
+			value={selectValue}
 			onchange={handleFilterChange}
 		>
 			<option value="all">All Collections</option>
@@ -341,7 +405,7 @@
 				<option value="public">Public ({publicCount})</option>
 			{/if}
 			{#each collections as c (c.collection_id)}
-				<option value={c.collection_id}>
+				<option value={String(c.collection_id)}>
 					{c.name} ({c.game_count})
 				</option>
 			{/each}
@@ -379,49 +443,53 @@
 		class="sidebar-content cloud-scroll flex-1 overflow-y-auto px-2 pb-2 pt-2"
 		use:autohideScroll
 	>
-		{#if filteredGames.length === 0}
-			<div class="p-4 text-center text-tan">
-				{$searchQuery ? "No games match your search" : "No games found"}
-			</div>
+		{#if accumulated.length === 0}
+			<div class="p-4 text-center text-tan">No games found</div>
 		{:else}
-			{#key $searchQuery}
-				{#each groupedGames as group (group.monthKey)}
-					<div class="month-separator my-2 flex items-center gap-1.5 px-1">
-						<div class="separator-line h-px flex-1 bg-tan opacity-50"></div>
-						<span class="whitespace-nowrap text-[9px] text-tan"
-							>{group.label}</span
-						>
-						<div class="separator-line h-px flex-1 bg-tan opacity-50"></div>
-					</div>
+			{#each groupedGames as group (group.monthKey)}
+				<div class="month-separator my-2 flex items-center gap-1.5 px-1">
+					<div class="separator-line h-px flex-1 bg-tan opacity-50"></div>
+					<span class="whitespace-nowrap text-[9px] text-tan"
+						>{group.label}</span
+					>
+					<div class="separator-line h-px flex-1 bg-tan opacity-50"></div>
+				</div>
 
-					{#each group.games as game (game.game_id)}
-						{@const isActive = currentGameId === game.game_id}
-						<button
-							class="game-list-item {isActive
-								? 'active'
-								: ''} mb-0.5 w-full cursor-pointer rounded-lg border-2 p-1.5 text-left transition-all duration-200 {isActive
-								? ''
-								: 'border-black hover:translate-x-0.5 hover:border-orange'} relative"
-							type="button"
-							onclick={() => navigateToGame(game.game_id)}
-							oncontextmenu={(e) => handleContextMenu(e, game)}
-						>
-							{#if game.user_won === true}
-								<span class="trophy-badge" title="Victory">🏆</span>
-							{/if}
-							<div class="mb-0.5 text-xs font-semibold text-black">
-								{titleFor(game)}
-							</div>
-							<div class="date-badge">{formatGameSubtitle(game)}</div>
-							{#if game.user_nation}
-								<span class="nation-badge"
-									>{formatEnum(game.user_nation, "NATION_")}</span
-								>
-							{/if}
-						</button>
-					{/each}
+				{#each group.games as game (game.game_id)}
+					{@const isActive = currentGameId === game.game_id}
+					<button
+						class="game-list-item {isActive
+							? 'active'
+							: ''} mb-0.5 w-full cursor-pointer rounded-lg border-2 p-1.5 text-left transition-all duration-200 {isActive
+							? ''
+							: 'border-black hover:translate-x-0.5 hover:border-orange'} relative"
+						type="button"
+						onclick={() => navigateToGame(game.game_id)}
+						oncontextmenu={(e) => handleContextMenu(e, game)}
+					>
+						{#if game.user_won === true}
+							<span class="trophy-badge" title="Victory">🏆</span>
+						{/if}
+						<div class="mb-0.5 text-xs font-semibold text-black">
+							{titleFor(game)}
+						</div>
+						<div class="date-badge">{formatGameSubtitle(game)}</div>
+						{#if game.user_nation}
+							<span class="nation-badge"
+								>{formatEnum(game.user_nation, "NATION_")}</span
+							>
+						{/if}
+					</button>
 				{/each}
-			{/key}
+			{/each}
+			{#if hasMore}
+				<div
+					bind:this={sentinel}
+					class="py-2 text-center text-[10px] text-tan opacity-70"
+				>
+					{loadingMore ? "Loading…" : ""}
+				</div>
+			{/if}
 		{/if}
 	</div>
 </aside>
