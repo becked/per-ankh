@@ -24,6 +24,7 @@
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",
 		"bake:screenshots": "node scripts/capture-home-screenshots.mjs",
+		"ux:review": "node scripts/capture-ux-review.mjs",
 		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:map-options && npm run bake:law-classes && npm run bake:finalize"
 	},
 	"license": "MIT",
