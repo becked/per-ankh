@@ -3,7 +3,7 @@ import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { EChartsOption } from "echarts";
 import { formatEnum } from "$lib/utils/formatting";
-import { CHART_THEME, getChartColor, getCivilizationColor } from "$lib/config";
+import { CHART_THEME, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -564,18 +564,10 @@ export function toggleSort(table: TableState, columnKey: string): void {
 	}
 }
 
-export function getPlayerColor(
-	nation: string | null | undefined,
-	fallbackIndex: number,
-): string {
-	if (nation) {
-		// Strip "NATION_" prefix if present (database stores as "NATION_CARTHAGE" but color map expects "CARTHAGE")
-		const cleanNation = nation.replace(/^NATION_/, "");
-		const nationColor = getCivilizationColor(cleanNation);
-		if (nationColor) return nationColor;
-	}
-	return getChartColor(fallbackIndex);
-}
+// Nation series color with palette fallback. Aliased to the shared config
+// helper so game-detail and the aggregate-stats charts color a nation
+// identically.
+export const getPlayerColor = getNationChartColor;
 
 export function createDefaultSelection(
 	players: { nation: string | null }[],

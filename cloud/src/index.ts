@@ -54,8 +54,6 @@ import { handleCollectionCreate, handleCollectionsList } from "./collections";
 import type { CollectionsEnv } from "./collections";
 import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
 import type { OnlineIdsEnv } from "./online-ids";
-import { handleStats } from "./stats";
-import type { StatsEnv } from "./stats";
 import { handleCspReport } from "./csp";
 import {
 	handleGameTournamentLink,
@@ -76,7 +74,8 @@ import {
 	handleTournamentSignup,
 	handleTournamentWithdraw,
 } from "./tournament/player";
-import { handleUserSearch } from "./users";
+import { handleUserStats } from "./stats/handlers";
+import { handleUserProfile, handleUserSearch } from "./users";
 import type { TournamentPlayerEnv } from "./tournament/player";
 import {
 	handleBulkCreateSlots,
@@ -98,7 +97,6 @@ interface Env
 		GamesEnv,
 		CollectionsEnv,
 		OnlineIdsEnv,
-		StatsEnv,
 		TournamentPublicEnv,
 		TournamentPlayerEnv,
 		TournamentAdminEnv {
@@ -730,14 +728,6 @@ const ROUTES: RouteSpec[] = [
 		handler: (r, e, m) => handleRemoveOnlineId(decodeURIComponent(m![1]), r, e),
 	},
 
-	// Cloud rewrite: /v1/stats
-	{
-		method: "GET",
-		match: { kind: "path", path: "/v1/stats" },
-		route: "GET /v1/stats",
-		handler: (r, e) => handleStats(r, e),
-	},
-
 	// CSP violation reports — unauthenticated; the browser POSTs here
 	// directly when the page's CSP triggers. See cloud/src/csp.ts.
 	{
@@ -938,6 +928,25 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/users/search",
 		handler: (r, e) => handleUserSearch(r, e),
 	},
+	// Public user profile. Regex match — the 21-char constraint distinguishes
+	// nanoid user_ids from the other /v1/users/{search,me,…} routes above.
+	{
+		method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/users\/([A-Za-z0-9_-]{21})$/ },
+		route: "GET /v1/users/:user_id",
+		handler: (r, e, m) => handleUserProfile(m![1], r, e),
+	},
+	// User-corpus aggregate stats — public, owner sees their own private
+	// games included, visitor / anon sees public-only.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/users\/([A-Za-z0-9_-]{21})\/stats$/,
+		},
+		route: "GET /v1/users/:user_id/stats",
+		handler: (r, e, m) => handleUserStats(m![1], r, e),
+	},
 	// User-facing tournament endpoints
 	{
 		method: "GET",
@@ -1001,7 +1010,6 @@ function isCloudPath(pathname: string): boolean {
 		pathname.startsWith("/v1/games/") ||
 		pathname === "/v1/collections" ||
 		pathname.startsWith("/v1/users/") ||
-		pathname === "/v1/stats" ||
 		pathname === "/v1/csp-report" ||
 		pathname === "/v1/tournaments" ||
 		pathname.startsWith("/v1/tournaments/")

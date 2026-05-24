@@ -21,6 +21,7 @@
 
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
+	import { page } from "$app/state";
 	import ParserWorker from "$lib/parser/worker?worker";
 	import type { PlayerRosterEntry } from "$lib/parser/types";
 	import {
@@ -109,8 +110,9 @@
 		slotALabel?: string;
 		slotBLabel?: string;
 		// Where the Done button navigates after a finished upload session.
-		// Defaults to /dashboard. Tournament upload flows pass the match
-		// page so the admin/player returns to the match they were on.
+		// Defaults to the uploader's profile page. Tournament upload flows
+		// pass the match page so the admin/player returns to the match
+		// they were on.
 		doneRedirect?: string;
 	} = $props();
 
@@ -430,8 +432,14 @@
 	}
 
 	function navigateDone() {
+		// Default destination is the uploader's profile (their library +
+		// stats). The /upload route already gates on a session, so
+		// page.data.user is set here; the resolve("/") fallback is
+		// purely defensive.
+		const userId = page.data.user?.user_id;
+		const fallback = userId ? resolve(`/users/${userId}`) : resolve("/");
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- doneRedirect is produced by the parent via resolve(); lint can't see through the prop
-		void goto(doneRedirect ?? resolve("/dashboard"));
+		void goto(doneRedirect ?? fallback);
 	}
 </script>
 

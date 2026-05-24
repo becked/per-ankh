@@ -5,6 +5,7 @@
 // Configure via VITE_API_URL (see .env.example).
 
 import type { FullGameData } from "$lib/parser/types";
+import type { ChartBundle, UserScope } from "$lib/stats/types";
 
 const DEFAULT_API_BASE = "https://api.per-ankh.app/v1";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE) as string;
@@ -19,6 +20,24 @@ export interface UserSearchResult {
 	discord_id: string;
 	discord_username: string;
 	display_name: string;
+}
+
+// Public profile fields returned by GET /v1/users/:user_id. No-auth read;
+// used by the /users/[user_id] page to render the chrome when a visitor
+// views someone else's library.
+export interface UserProfile {
+	user_id: string;
+	display_name: string;
+	avatar_url: string;
+	// All-time stats for the profile-header card — over ALL the user's
+	// saves (visibility-scoped to the viewer), independent of the scope
+	// selector on the page.
+	summary: {
+		total_games: number;
+		win_rate: number | null;
+		favorite_nation: string | null;
+		favorite_day_of_week: number | null;
+	};
 }
 
 export interface UserMe {
@@ -68,9 +87,19 @@ export interface CollectionInfo {
 	game_count: number;
 }
 
+// Per-scope game counts for the home-page scope selector, shown on each
+// built-in option the way collections show their own counts.
+export interface ScopeCounts {
+	all: number;
+	public: number;
+	vs_ai: number;
+	mp: number;
+	tournament: number;
+}
+
 export interface CollectionsListResponse {
 	collections: CollectionInfo[];
-	public_count: number;
+	scope_counts: ScopeCounts;
 }
 
 export interface GameListResponse {
@@ -150,17 +179,6 @@ export interface UploadGameResponse {
 	to_version?: string;
 }
 
-// Cross-game stats for the cloud /dashboard. Mirrors desktop GameStatistics
-// + SaveDateEntry shapes so the same chart-building helpers render both.
-export interface StatsResponse {
-	total_games: number;
-	nations: Array<{ nation: string; games_played: number }>;
-	save_dates: Array<{ date: string; nation: string | null }>;
-	win_rate: number | null;
-	games_with_outcome: number;
-	favorite_day_of_week: number | null; // 0=Sunday..6=Saturday
-}
-
 export class ApiError extends Error {
 	constructor(
 		public status: number,
@@ -204,13 +222,21 @@ export interface CallOpts {
 }
 
 export interface ListGamesOpts extends CallOpts {
+	// Target user. Omitted → session user (legacy callers). When set ≠
+	// session user, the Worker restricts results to is_public=1.
+	userId?: string;
 	limit?: number;
 	offset?: number;
-	collectionId?: number;
-	filter?: "public";
+	// Scope row: a single selection ("all"/"public"/"vs_ai"/"mp"/
+	// "tournament"/<collection_id>). The same scope drives the stats
+	// bundle, so the Games tab and the charts stay in sync. Omitted → "all".
+	scope?: UserScope;
 	q?: string;
 	nation?: string;
+	result?: "win" | "loss";
 	date?: string;
+	// Games-tab sort key, e.g. "date_desc", "turns_asc", "name_asc".
+	sort?: string;
 }
 
 async function request(
@@ -331,15 +357,17 @@ export const cloudApi = {
 	// --- Games ---
 	listGames: async (opts?: ListGamesOpts): Promise<GameListResponse> => {
 		const params = new URLSearchParams();
+		if (opts?.userId) params.set("user_id", opts.userId);
 		if (opts?.limit != null) params.set("limit", String(opts.limit));
 		if (opts?.offset != null) params.set("offset", String(opts.offset));
-		if (opts?.collectionId != null) {
-			params.set("collection_id", String(opts.collectionId));
+		if (opts?.scope != null && opts.scope !== "all") {
+			params.set("scope", String(opts.scope));
 		}
-		if (opts?.filter) params.set("filter", opts.filter);
 		if (opts?.q) params.set("q", opts.q);
 		if (opts?.nation) params.set("nation", opts.nation);
+		if (opts?.result) params.set("result", opts.result);
 		if (opts?.date) params.set("date", opts.date);
+		if (opts?.sort) params.set("sort", opts.sort);
 		const qs = params.toString();
 		const res = await request(`/games${qs ? `?${qs}` : ""}`, {
 			fetch: opts?.fetch,
@@ -347,6 +375,21 @@ export const cloudApi = {
 			signal: opts?.signal,
 		});
 		return res.json() as Promise<GameListResponse>;
+	},
+
+	// Public profile lookup. Returns null on 404 so the /users/[user_id]
+	// page can render its own not-found view without exceptions.
+	getUserProfile: async (
+		userId: string,
+		opts?: CallOpts,
+	): Promise<UserProfile | null> => {
+		try {
+			const res = await request(`/users/${userId}`, opts);
+			return res.json() as Promise<UserProfile>;
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 404) return null;
+			throw err;
+		}
 	},
 
 	// Owner GET — returns the blob with `is_public` and the uploader-identity
@@ -561,9 +604,21 @@ export const cloudApi = {
 	},
 
 	// --- Stats ---
-	getStats: async (opts?: CallOpts): Promise<StatsResponse> => {
-		const res = await request("/stats", opts);
-		return res.json() as Promise<StatsResponse>;
+	// Aggregate ChartBundle for the user corpus — feeds Overview + Stats.
+	// Owner sees private+public; visitor / anon sees public-only. Scoped
+	// by the single scope selection (the scope row). Worker caches per
+	// (user_id, viewerScope, scope); first-after-mutation is a miss, then
+	// cached for subsequent reads.
+	getUserStats: async (
+		userId: string,
+		opts?: CallOpts & { scope?: UserScope },
+	): Promise<ChartBundle> => {
+		const qs =
+			opts?.scope != null && opts.scope !== "all"
+				? `?scope=${encodeURIComponent(String(opts.scope))}`
+				: "";
+		const res = await request(`/users/${userId}/stats${qs}`, opts);
+		return res.json() as Promise<ChartBundle>;
 	},
 
 	// Anonymous discovery feed for the marketing home (/). Returns the 20
@@ -578,9 +633,10 @@ export const cloudApi = {
 
 	// --- Collections ---
 	listCollections: async (
-		opts?: CallOpts,
+		opts?: CallOpts & { userId?: string },
 	): Promise<CollectionsListResponse> => {
-		const res = await request("/collections", opts);
+		const qs = opts?.userId ? `?user_id=${opts.userId}` : "";
+		const res = await request(`/collections${qs}`, opts);
 		return res.json() as Promise<CollectionsListResponse>;
 	},
 

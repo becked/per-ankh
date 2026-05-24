@@ -1,8 +1,8 @@
 // Marketing landing + discovery feed — served to everyone, signed in or
 // out. Loads the active tournaments list (public read) and the most
 // recent shared saves (anonymous endpoint). Signed-in users see the
-// same page; the login card swaps to a "Go to dashboard" CTA in the
-// component.
+// same page; the login card swaps to a "Go to library" CTA pointing
+// at their /users/[user_id] profile.
 import { cloudApi } from "$lib/api-cloud";
 import type { PageLoad } from "./$types";
 

@@ -4,8 +4,7 @@
 	// hieroglyph wordmark, search right. Auth-aware via the `user` prop.
 
 	import { resolve } from "$app/paths";
-	import { page } from "$app/state";
-	import SearchInput from "$lib/SearchInput.svelte";
+	import HeaderGameSearch from "$lib/users/HeaderGameSearch.svelte";
 	import AboutModal from "$lib/AboutModal.svelte";
 	import {
 		cloudApi,
@@ -13,8 +12,6 @@
 		type MyTournamentEntry,
 		type UserMe,
 	} from "$lib/api-cloud";
-	import { searchQuery } from "$lib/stores/search";
-	import { sidebarWidth } from "$lib/stores/sidebarWidth";
 
 	let {
 		user,
@@ -64,17 +61,6 @@
 	let isMenuOpen = $state(false);
 	let isAboutModalOpen = $state(false);
 	let signingOut = $state(false);
-
-	// Search box has somewhere to act on /dashboard and /games/* — but only
-	// when the games sidebar is mounted. On /games/[id] the sidebar is
-	// hidden for non-owners, so the search input has nothing to filter.
-	// Keep it mounted everywhere so the store value survives navigation;
-	// just hide the input visually when the current route can't react.
-	const searchVisible = $derived(
-		page.url.pathname === "/dashboard" ||
-			page.url.pathname === "/games" ||
-			(page.url.pathname.startsWith("/games/") && page.data.isOwner === true),
-	);
 
 	function toggleMenu() {
 		isMenuOpen = !isMenuOpen;
@@ -153,25 +139,7 @@
 				class="absolute left-0 z-50 mt-2 w-40 rounded border-2 border-black bg-blue-gray shadow-lg"
 			>
 				{#if user}
-					<div class="flex items-center gap-2 border-b border-black px-3 py-2">
-						<img
-							src={user.avatar_url}
-							alt=""
-							class="h-6 w-6 rounded-full"
-							width="24"
-							height="24"
-						/>
-						<span class="truncate text-xs text-tan">{user.display_name}</span>
-					</div>
-					<a
-						href={resolve("/dashboard")}
-						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						onclick={closeMenu}
-					>
-						Dashboard
-					</a>
 					{#if user.is_beta}
-						<div class="border-t border-black"></div>
 						<a
 							href={resolve("/tournaments")}
 							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
@@ -194,8 +162,8 @@
 									>{/if}
 							</a>
 						{/each}
+						<div class="border-t border-black"></div>
 					{/if}
-					<div class="border-t border-black"></div>
 					<a
 						href={resolve("/account")}
 						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
@@ -276,19 +244,16 @@
 	</div>
 
 	<!--
-		Right: upload shortcut + search input bound to the global searchQuery
-		store. Search is visible only on routes where the games sidebar is
-		mounted, but stays in the DOM so the bound value survives navigation.
-		Upload icon mirrors the "Upload saves" menu entry and only shows for
-		signed-in users.
+		Right: upload shortcut + navigational game search (HeaderGameSearch),
+		shown only for signed-in users — it searches the viewer's own games
+		and navigates to the picked game. Upload icon mirrors the "Upload
+		saves" menu entry and only shows for signed-in users.
 	-->
 	<div class="flex flex-shrink-0 items-center gap-2">
 		{#if user}
 			<a
 				href={resolve("/upload")}
-				class="inline-flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-xs font-semibold text-tan transition-colors hover:border-orange hover:text-orange {searchVisible
-					? ''
-					: 'invisible'}"
+				class="inline-flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-xs font-semibold text-tan transition-colors hover:border-orange hover:text-orange"
 				aria-label="Upload saves"
 				title="Upload saves"
 			>
@@ -310,13 +275,25 @@
 				</svg>
 			</a>
 		{/if}
-		<SearchInput
-			bind:value={$searchQuery}
-			variant="dark"
-			placeholder="Search games"
-			class="-mr-4 flex-shrink-0 pl-1 pr-2 {searchVisible ? '' : 'invisible'}"
-			style="width: {$sidebarWidth}px"
-		/>
+		{#if user}
+			<!-- Navigational search over the signed-in user's own games. -->
+			<HeaderGameSearch {user} class="w-56 flex-shrink-0" />
+			<!-- Avatar (profile link) sits to the right of the search. -->
+			<a
+				href={resolve(`/users/${user.user_id}`)}
+				class="flex-shrink-0"
+				aria-label="Your profile"
+				title="Your profile"
+			>
+				<img
+					src={user.avatar_url}
+					alt=""
+					class="h-7 w-7 rounded-full border border-black transition-opacity hover:opacity-80"
+					width="28"
+					height="28"
+				/>
+			</a>
+		{/if}
 	</div>
 </header>
 

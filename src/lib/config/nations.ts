@@ -8,6 +8,8 @@
  * represent minor factions that players interact with throughout the game.
  */
 
+import { getChartColor } from "./charts";
+
 /**
  * Color palette for Old World nations
  *
@@ -90,6 +92,27 @@ export function getTribeColor(tribe: string): string | undefined {
  */
 export function getCivilizationColor(civilization: string): string | undefined {
 	return getNationColor(civilization) ?? getTribeColor(civilization);
+}
+
+/**
+ * Color for a nation in a chart series: the nation's civilization color,
+ * or a palette color by index when the nation is unknown/missing. Strips
+ * the `NATION_` prefix the backend stores. Single source of truth shared
+ * by the game-detail and aggregate-stats charts so a nation renders in
+ * the same color everywhere.
+ *
+ * @param nation - Nation key, with or without the `NATION_` prefix
+ * @param fallbackIndex - Series index used for the palette fallback
+ */
+export function getNationChartColor(
+	nation: string | null | undefined,
+	fallbackIndex: number,
+): string {
+	if (nation) {
+		const color = getCivilizationColor(nation.replace(/^NATION_/, ""));
+		if (color) return color;
+	}
+	return getChartColor(fallbackIndex);
 }
 
 /**

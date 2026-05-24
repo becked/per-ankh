@@ -62,6 +62,12 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.5.0",
 ]);
 
+// The latest accepted version. Echoed back on stats responses and
+// embedded in stats cache keys so a parser bump (after the matching
+// extraction code lands) naturally orphans every old entry. Bump in
+// lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
+export const CURRENT_PARSER_VERSION = "2.5.0";
+
 // ----- Reusable atoms -----
 
 const PlayerRosterEntrySchema = v.object({

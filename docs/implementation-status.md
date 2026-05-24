@@ -1,4 +1,4 @@
-# XML Parser Implementation Status
+/# XML Parser Implementation Status
 
 > **Historical document — pre-rewrite (Tauri/Rust/DuckDB era).** This
 > file was written 2025-11-05, before the project was rewritten as a

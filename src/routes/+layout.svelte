@@ -11,8 +11,8 @@
 	// Cloud header is shown on every route except the OAuth callback —
 	// /auth/* keeps the stripped chrome so the round-trip feels visually
 	// continuous. The home page (/) now uses the full header so signed-in
-	// visitors can navigate from the discovery feed back to /dashboard,
-	// /upload, etc.
+	// visitors can navigate from the discovery feed back to their
+	// profile, /upload, etc.
 	const showCloudHeader = $derived(!page.url.pathname.startsWith("/auth/"));
 
 	// Single source of truth for OG / Twitter metadata. Pages override by

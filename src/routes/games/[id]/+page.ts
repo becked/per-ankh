@@ -4,7 +4,6 @@ import {
 	ApiError,
 	UnauthorizedError,
 	type CollectionInfo,
-	type GameListItem,
 } from "$lib/api-cloud";
 import type { PageMeta } from "$lib/page-meta";
 import { formatEnum } from "$lib/utils/formatting";
@@ -85,26 +84,17 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 
 	const isOwner = "is_public" in game;
 
-	// Sidebar data — only meaningful when the viewer owns this game.
-	// Non-owners (anonymous or signed-in guests on a public game) don't
-	// see the sidebar, so skip the fetches. Anonymous owners can't exist
-	// (ownership requires a session), so the listGames 401 path is gone.
-	// Other errors propagate so real outages aren't masked.
-	let games: GameListItem[] | undefined;
-	let gamesTotal = 0;
+	// Collections power the owner's move-to-collection action. Only
+	// meaningful when the viewer owns this game; non-owners don't see the
+	// action. Anonymous owners can't exist (ownership requires a session),
+	// so the 401 path is gone. Other errors propagate so real outages
+	// aren't masked. (The games list is no longer loaded here — the
+	// per-game sidebar was removed; browsing lives on /users/[id]?tab=games.)
 	let collections: CollectionInfo[] | undefined;
-	let publicCount = 0;
-	const SIDEBAR_PAGE_SIZE = 50;
 	if (isOwner) {
 		try {
-			const [gamesRes, collectionsRes] = await Promise.all([
-				cloudApi.listGames({ fetch, limit: SIDEBAR_PAGE_SIZE, offset: 0 }),
-				cloudApi.listCollections({ fetch }),
-			]);
-			games = gamesRes.games;
-			gamesTotal = gamesRes.total;
+			const collectionsRes = await cloudApi.listCollections({ fetch });
 			collections = collectionsRes.collections;
-			publicCount = collectionsRes.public_count;
 		} catch (err) {
 			if (!(err instanceof UnauthorizedError)) throw err;
 		}
@@ -125,11 +115,7 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 	return {
 		game,
 		isOwner,
-		games,
-		gamesTotal,
-		gamesPageSize: SIDEBAR_PAGE_SIZE,
 		collections,
-		publicCount,
 		tournamentLink,
 		meta: buildMeta(game),
 	};

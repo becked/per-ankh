@@ -11,7 +11,6 @@
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { resolve } from "$app/paths";
 	import ReimportButton from "$lib/ReimportButton.svelte";
-	import CloudGameSidebar from "$lib/CloudGameSidebar.svelte";
 	import GameActions from "$lib/GameActions.svelte";
 	import { cloudApi, ApiError } from "$lib/api-cloud";
 
@@ -86,6 +85,16 @@
 			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
+			{#if isOwner && page.data.user}
+				<a
+					href="{resolve('/users/[user_id]', {
+						user_id: page.data.user.user_id,
+					})}?tab=games"
+					class="mb-3 inline-flex items-center gap-1 text-xs text-tan opacity-70 transition-opacity hover:opacity-100"
+				>
+					← Back to games
+				</a>
+			{/if}
 			<GameDetailView
 				gameDetails={game.game_details}
 				playerHistory={game.player_history}
@@ -111,13 +120,17 @@
 				onMapTurnChange={handleMapTurnChange}
 			>
 				{#snippet headerActions()}
+					<!--
+						currentCollectionId is omitted: with the sidebar gone we no
+						longer load the games list here, so the "already in this
+						collection" checkmark is unavailable. The move action still
+						works; the Games-tab row menu shows the indicator instead.
+					-->
 					<GameActions
 						{gameId}
 						{isOwner}
 						bind:isPublic
 						collections={data.collections ?? []}
-						currentCollectionId={data.games?.find((g) => g.game_id === gameId)
-							?.collection_id ?? null}
 					/>
 				{/snippet}
 				{#snippet preTabs()}
@@ -155,16 +168,4 @@
 			</GameDetailView>
 		</div>
 	</main>
-
-	{#if isOwner && data.games}
-		<CloudGameSidebar
-			initialGames={data.games}
-			total={data.gamesTotal}
-			pageSize={data.gamesPageSize}
-			collections={data.collections ?? []}
-			publicCount={data.publicCount}
-			currentGameId={gameId}
-			activeFilter="all"
-		/>
-	{/if}
 </div>

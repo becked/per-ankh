@@ -1,10 +1,8 @@
-// User search for the tournament admin's slot-creation autocomplete.
+// User-table-shaped endpoints: search (tournament admin autocomplete)
+// and public profile (the /users/[user_id] page chrome).
 //
-// Scope: only `GET /v1/users/search` lives here today. The endpoint is
-// generic enough that future user-facing surfaces (e.g. mention picker,
-// admin grant flow) can reuse it without piggybacking on a tournament-
-// scoped handler. Anything more user-table-shaped that grows beyond a
-// few hundred lines can split into its own subdir.
+// Anything more user-table-shaped that grows beyond a few hundred lines
+// can split into its own subdir.
 //
 // Auth model mirrors the rest of the beta surface:
 //   1. session required (anonymous → 404, not 401 — keeps the surface
@@ -19,6 +17,7 @@
 // avatar, or timestamps. Result cap defaults to 10, max 20.
 
 import * as v from "valibot";
+import { buildAvatarUrl } from "./auth";
 import { countEventsSince } from "./games";
 import { logError } from "./log";
 import { UserSearchQuerySchema } from "./schemas/tournament";
@@ -146,4 +145,91 @@ export async function handleUserSearch(
 		}>();
 
 	return jsonResponse({ users: rows.results ?? [] }, 200, cors);
+}
+
+// GET /v1/users/:user_id — public user profile.
+//
+// Returns identity fields the /users/[user_id] profile page needs to
+// render its chrome (display name + avatar). No auth, no beta gate;
+// 404 if the user doesn't exist.
+export interface UserProfileEnv extends SessionEnv {
+	SHARE_DB: D1Database;
+	ALLOWED_ORIGINS: string;
+}
+
+interface UserProfileRow {
+	user_id: string;
+	discord_id: string;
+	display_name: string;
+	avatar_hash: string | null;
+}
+
+export async function handleUserProfile(
+	userId: string,
+	request: Request,
+	env: UserProfileEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const row = await env.SHARE_DB.prepare(
+		"SELECT user_id, discord_id, display_name, avatar_hash FROM users WHERE user_id = ?",
+	)
+		.bind(userId)
+		.first<UserProfileRow>();
+
+	if (!row) {
+		return errorResponse("User not found", 404, cors, "NOT_FOUND");
+	}
+
+	// All-time profile summary for the profile-header card. Deliberately
+	// over ALL the user's saves (no collection / game-type scope) — the
+	// header sits above the scope selector and shouldn't move with it.
+	// Visibility-scoped only: owner sees private+public, others public-only.
+	const session = await sessionFromRequest(env, request);
+	const vis = session?.data.user_id === userId ? "" : " AND is_public = 1";
+	const [countsRow, nationRow, dayRow] = await Promise.all([
+		env.SHARE_DB.prepare(
+			`SELECT COUNT(*) AS total,
+			        CAST(SUM(CASE WHEN user_won = 1 THEN 1 ELSE 0 END) AS REAL)
+			          / NULLIF(SUM(CASE WHEN user_won IS NOT NULL THEN 1 ELSE 0 END), 0)
+			          AS win_rate
+			 FROM games WHERE user_id = ?${vis}`,
+		)
+			.bind(userId)
+			.first<{ total: number; win_rate: number | null }>(),
+		env.SHARE_DB.prepare(
+			`SELECT user_nation FROM games
+			 WHERE user_id = ? AND user_nation IS NOT NULL${vis}
+			 GROUP BY user_nation
+			 ORDER BY COUNT(*) DESC, user_nation ASC
+			 LIMIT 1`,
+		)
+			.bind(userId)
+			.first<{ user_nation: string }>(),
+		env.SHARE_DB.prepare(
+			`SELECT CAST(strftime('%w', save_date) AS INTEGER) AS weekday
+			 FROM games WHERE user_id = ? AND save_date IS NOT NULL${vis}
+			 GROUP BY weekday
+			 ORDER BY COUNT(*) DESC, weekday ASC
+			 LIMIT 1`,
+		)
+			.bind(userId)
+			.first<{ weekday: number | null }>(),
+	]);
+
+	return jsonResponse(
+		{
+			user_id: row.user_id,
+			display_name: row.display_name,
+			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
+			summary: {
+				total_games: countsRow?.total ?? 0,
+				win_rate: countsRow?.win_rate ?? null,
+				favorite_nation: nationRow?.user_nation ?? null,
+				favorite_day_of_week: dayRow?.weekday ?? null,
+			},
+		},
+		200,
+		cors,
+	);
 }

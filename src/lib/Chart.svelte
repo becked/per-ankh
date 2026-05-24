@@ -1,6 +1,20 @@
+<script module lang="ts">
+	import * as echarts from "echarts";
+
+	// Register once: ECharts' default axis-label color is a grey that's hard to
+	// read on our dark background, so default every axis's labels to white. The
+	// rest of the styling comes from CHART_THEME spread into each option.
+	const AXIS_LABEL = { axisLabel: { color: "#FFFFFF" } };
+	echarts.registerTheme("perankh", {
+		categoryAxis: AXIS_LABEL,
+		valueAxis: AXIS_LABEL,
+		logAxis: AXIS_LABEL,
+		timeAxis: AXIS_LABEL,
+	});
+</script>
+
 <script lang="ts">
 	import { onMount, tick } from "svelte";
-	import * as echarts from "echarts";
 	import type { ECElementEvent, EChartsOption } from "echarts";
 
 	let {
@@ -31,7 +45,7 @@
 
 			// Initialize chart if not already done
 			if (!chart) {
-				chart = echarts.init(chartContainer);
+				chart = echarts.init(chartContainer, "perankh");
 				chart.setOption(option);
 				// Read onItemClick at click time so prop updates take effect
 				// without needing to rebind the listener.

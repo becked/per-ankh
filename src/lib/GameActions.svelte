@@ -165,7 +165,14 @@
 		deleting = true;
 		try {
 			await cloudApi.deleteGame(gameId);
-			await goto(resolve("/dashboard"), { replaceState: true });
+			// Owner-only action — page.data.user is set here. Redirect
+			// to their profile (the previous /dashboard equivalent).
+			const userId = page.data.user?.user_id;
+			if (userId) {
+				await goto(resolve(`/users/${userId}`), { replaceState: true });
+			} else {
+				await goto(resolve("/"), { replaceState: true });
+			}
 		} catch (err) {
 			deleting = false;
 			closePopover();

@@ -153,10 +153,10 @@
 						</div>
 						<div class="mt-4 flex gap-1.5">
 							<a
-								href={resolve("/dashboard")}
+								href={resolve(`/users/${user.user_id}`)}
 								class="border-tan/40 flex-1 rounded border px-2 py-1.5 text-center text-xs text-tan hover:border-orange hover:text-orange"
 							>
-								Dashboard
+								Library
 							</a>
 							<a
 								href={resolve("/upload")}

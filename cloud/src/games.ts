@@ -28,6 +28,7 @@ import {
 	sha256Hex,
 } from "./util";
 import { sessionFromRequest } from "./session";
+import { buildUserScopeWhere, parseScopeParam } from "./games-scope";
 import type { SessionData, SessionEnv } from "./session";
 import { isSiteAdmin } from "./admin";
 import { buildAvatarUrl } from "./auth";
@@ -43,6 +44,7 @@ import {
 	buildSummaryGameContext,
 	derivePlayerSummary,
 } from "./derive-player-summary";
+import { invalidateStatsCache } from "./stats/cache";
 
 export interface GamesEnv extends SessionEnv {
 	SHARE_BUCKET: R2Bucket;
@@ -1643,6 +1645,9 @@ export async function handleGameUpload(
 		});
 	}
 
+	// Stats cache invalidation — the uploader's bundle shifts.
+	await invalidateStatsCache(env, { kind: "user", user_id: userId });
+
 	if (isReimport) {
 		return jsonResponse(
 			{
@@ -1659,6 +1664,27 @@ export async function handleGameUpload(
 	return jsonResponse({ game_id: gameId, url: `/games/${gameId}` }, 201, cors);
 }
 
+// Whitelist of Games-tab sort orders → ORDER BY clause. Never interpolate
+// the raw param; an unknown value falls back to the date default. Every
+// clause ends with created_at DESC for a deterministic tiebreak.
+const GAME_LIST_ORDER: Record<string, string> = {
+	date_desc: "save_date DESC NULLS LAST, created_at DESC",
+	date_asc: "save_date ASC NULLS LAST, created_at DESC",
+	turns_desc: "total_turns DESC NULLS LAST, created_at DESC",
+	turns_asc: "total_turns ASC NULLS LAST, created_at DESC",
+	nation_asc: "user_nation ASC NULLS LAST, created_at DESC",
+	nation_desc: "user_nation DESC NULLS LAST, created_at DESC",
+	name_asc: "COALESCE(display_name, game_name) ASC NULLS LAST, created_at DESC",
+	name_desc:
+		"COALESCE(display_name, game_name) DESC NULLS LAST, created_at DESC",
+	result_desc: "user_won DESC NULLS LAST, created_at DESC",
+	result_asc: "user_won ASC NULLS LAST, created_at DESC",
+};
+
+function resolveGameListOrder(raw: string | null): string {
+	return (raw && GAME_LIST_ORDER[raw]) || GAME_LIST_ORDER.date_desc;
+}
+
 export async function handleGameList(
 	request: Request,
 	env: GamesEnv,
@@ -1666,10 +1692,29 @@ export async function handleGameList(
 	const cors = cloudCorsHeaders(env, request);
 
 	const session = await sessionFromRequest(env, request);
-	if (!session) return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
-	const userId = session.data.user_id;
-
 	const url = new URL(request.url);
+
+	// ?user_id selects whose library to list. When omitted, falls back to
+	// the session user (preserves legacy callers like the no-arg
+	// listGames() from /account). When present and ≠ session user, the
+	// viewer is a visitor or anon — restrict to is_public=1.
+	const targetParam = url.searchParams.get("user_id");
+	let targetUserId: string;
+	let viewerOwnsTarget: boolean;
+	if (targetParam !== null) {
+		if (!/^[A-Za-z0-9_-]{21}$/.test(targetParam)) {
+			return errorResponse("Invalid user_id", 400, cors, "INVALID_USER_ID");
+		}
+		targetUserId = targetParam;
+		viewerOwnsTarget = session?.data.user_id === targetUserId;
+	} else {
+		if (!session) {
+			return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+		}
+		targetUserId = session.data.user_id;
+		viewerOwnsTarget = true;
+	}
+
 	const limit = Math.min(
 		parseInt(url.searchParams.get("limit") ?? "50", 10) || 50,
 		500,
@@ -1679,19 +1724,15 @@ export async function handleGameList(
 		0,
 	);
 
-	// Optional filters. ?filter=public takes precedence over ?collection_id
-	// when both are passed; the dashboard sidebar only ever sends one at a
-	// time, so resolution order is mostly defensive.
-	const filter = url.searchParams.get("filter");
-	const collectionIdParam = url.searchParams.get("collection_id");
-	const collectionId =
-		collectionIdParam !== null && /^\d+$/.test(collectionIdParam)
-			? parseInt(collectionIdParam, 10)
-			: null;
+	// Scope: the single selection the home-page scope row drives (and that
+	// resolveUserCorpus applies to the stats bundle), so the table and the
+	// aggregates agree on the in-scope set. Identity visibility (visitor →
+	// is_public=1) is folded into the shared predicate via viewerOwnsTarget.
+	const scopeSelection = parseScopeParam(url.searchParams.get("scope"));
 
-	// Server-side search + cross-filter. All optional; combine with AND so the
-	// sidebar's chart-driven nation/date chips compose with the search input
-	// and the collection dropdown. Empty strings are treated as absent.
+	// Server-side search + structured chips. All optional; combine with
+	// AND so the Games-tab free-text search composes with the nation /
+	// result / date chips. Empty strings are treated as absent.
 	const qRaw = url.searchParams.get("q");
 	const q = qRaw && qRaw.trim().length > 0 ? qRaw.trim() : null;
 	const nationRaw = url.searchParams.get("nation");
@@ -1701,15 +1742,15 @@ export async function handleGameList(
 			: null;
 	const dateRaw = url.searchParams.get("date");
 	const date = dateRaw && /^\d{4}-\d{2}-\d{2}$/.test(dateRaw) ? dateRaw : null;
+	const resultRaw = url.searchParams.get("result");
+	const result = resultRaw === "win" || resultRaw === "loss" ? resultRaw : null;
 
-	let where = "user_id = ?";
-	const bindings: (string | number)[] = [userId];
-	if (filter === "public") {
-		where += " AND is_public = 1";
-	} else if (collectionId !== null) {
-		where += " AND collection_id = ?";
-		bindings.push(collectionId);
-	}
+	const scope = buildUserScopeWhere({
+		scope: scopeSelection,
+		viewerOwnsTarget,
+	});
+	let where = `user_id = ?${scope.clause}`;
+	const bindings: (string | number)[] = [targetUserId, ...scope.binds];
 	if (q !== null) {
 		// LIKE matches `%` (any run) and `_` (one char); escape user input so a
 		// search for "100%" doesn't match everything. ESCAPE '\\' opts the
@@ -1717,9 +1758,13 @@ export async function handleGameList(
 		// case-insensitive substring match without depending on D1 collation.
 		const escaped = q.replace(/[\\%_]/g, (c) => `\\${c}`);
 		const likePattern = `%${escaped.toLowerCase()}%`;
+		// Match the game title (game_name / owner rename) and the nation.
+		// user_nation is the raw enum (e.g. NATION_MAURYA), so a search for
+		// "maurya" matches via substring — searching by nation is the common
+		// case when a save was never given a custom name.
 		where +=
-			" AND (LOWER(game_name) LIKE ? ESCAPE '\\' OR LOWER(display_name) LIKE ? ESCAPE '\\')";
-		bindings.push(likePattern, likePattern);
+			" AND (LOWER(game_name) LIKE ? ESCAPE '\\' OR LOWER(display_name) LIKE ? ESCAPE '\\' OR LOWER(user_nation) LIKE ? ESCAPE '\\')";
+		bindings.push(likePattern, likePattern, likePattern);
 	}
 	if (nation !== null) {
 		// Filter on the raw user_nation column (not the COALESCE'd fallback)
@@ -1732,19 +1777,22 @@ export async function handleGameList(
 		where += " AND substr(save_date, 1, 10) = ?";
 		bindings.push(date);
 	}
+	if (result !== null) {
+		// Win/loss chip. Observer-mode uploads (user_won NULL) match
+		// neither and are excluded from both buckets.
+		where += " AND user_won = ?";
+		bindings.push(result === "win" ? 1 : 0);
+	}
 
-	// Sort by save_date (in-game date) so the sidebar's month-grouped
-	// rendering produces contiguous month buckets. Without this the desktop
-	// CloudGameSidebar groups break when games are uploaded out of save-date
-	// order. created_at is the tiebreak for games sharing a save_date.
-	// COALESCE(g.user_nation, …): when the uploader didn't pick a nation
+	// Sort. Default save_date DESC so the Games-tab month-grouped rendering
+	// produces contiguous month buckets (month dividers are only shown for
+	// date sorts). created_at is the deterministic tiebreak in every mode.
+	// COALESCE(user_nation, …): when the uploader didn't pick a nation
 	// (observer-mode uploads, older rows pre-dating user_nation capture),
-	// fall back to the first human player's nation so the sidebar's
-	// formatGameTitle produces the same "{Nation} - {N} turns" string as the
-	// game-detail header. Without this fallback the sidebar collapses to
-	// "Turn {N}" while the header derives the nation client-side from the
-	// players list — see the matching COALESCE in handleGameDetail and
-	// handlePublicRecentGames.
+	// fall back to the first human player's nation so formatGameTitle
+	// produces the same "{Nation} - {N} turns" string as the game-detail
+	// header — see the matching COALESCE in handleGameDetail.
+	const orderBy = resolveGameListOrder(url.searchParams.get("sort"));
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT game_id, game_name, display_name, save_date, total_turns,
 		        COALESCE(user_nation, (
@@ -1755,7 +1803,7 @@ export async function handleGameList(
 		        user_won, winner_nation, victory_type,
 		        map_size, is_public, collection_id, created_at, parser_version
 		 FROM games WHERE ${where}
-		 ORDER BY save_date DESC NULLS LAST, created_at DESC
+		 ORDER BY ${orderBy}
 		 LIMIT ? OFFSET ?`,
 	)
 		.bind(...bindings, limit, offset)
@@ -2326,6 +2374,12 @@ export async function handleGamePatch(
 		}
 	}
 
+	// Stats cache invalidation. is_public is the field that actually
+	// shifts the public-scope bundle, but invalidating unconditionally
+	// keeps the call site simple and the KV churn is negligible
+	// (rename/move both delete the bundle and the next read recomputes).
+	await invalidateStatsCache(env, { kind: "user", user_id: userId });
+
 	return jsonResponse(
 		{
 			game_id: gameId,
@@ -2359,22 +2413,23 @@ export async function handleGameDelete(
 		return errorResponse("Forbidden", 403, cors, "FORBIDDEN");
 	}
 
-	// Tournament lockout: same shape as handleGamePatch. Refuse to delete a
-	// save that's linked to an active tournament match — without this guard,
-	// the R2 deletes below succeed but the D1 DELETE aborts on the
-	// tournament_matches.game_id FK, leaving the games row with no R2 backing.
-	// Once the tournament reaches 'complete', the trigger in migration 0013
-	// nulls the match's game_id so the DELETE proceeds cleanly.
-	const link = await env.SHARE_DB.prepare(
-		`SELECT 1 FROM tournament_matches m
+	// Tournament linkage: the status of any tournament this game is linked
+	// to. Active linkage blocks the delete (mirrors handleGamePatch —
+	// without this guard, the D1 DELETE aborts on the
+	// tournament_matches.game_id FK while the R2 deletes have already
+	// succeeded). Once a tournament reaches 'complete', migration 0013's
+	// trigger nulls the match's game_id so the DELETE proceeds cleanly.
+	const linkRows = await env.SHARE_DB.prepare(
+		`SELECT DISTINCT t.status
+		 FROM tournament_matches m
 		 JOIN tournament_rounds r ON r.round_id = m.round_id
 		 JOIN tournaments t ON t.tournament_id = r.tournament_id
-		 WHERE m.game_id = ? AND t.status != 'complete'
-		 LIMIT 1`,
+		 WHERE m.game_id = ?`,
 	)
 		.bind(gameId)
-		.first();
-	if (link) {
+		.all<{ status: string }>();
+	const tournamentLinks = linkRows.results ?? [];
+	if (tournamentLinks.some((t) => t.status !== "complete")) {
 		return errorResponse(
 			"Game is linked to an active tournament match",
 			409,
@@ -2411,6 +2466,9 @@ export async function handleGameDelete(
 			game_id: gameId,
 		});
 	}
+
+	// Stats cache invalidation — the owner's bundle drops a game.
+	await invalidateStatsCache(env, { kind: "user", user_id: userId });
 
 	return new Response(null, { status: 204, headers: cors });
 }

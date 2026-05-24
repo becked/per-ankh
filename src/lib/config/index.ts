@@ -17,6 +17,7 @@ export {
 	getNationColor,
 	getTribeColor,
 	getCivilizationColor,
+	getNationChartColor,
 	type NationKey,
 	type TribeKey,
 } from "./nations";
