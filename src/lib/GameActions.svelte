@@ -206,7 +206,7 @@
 				aria-haspopup="dialog"
 				aria-expanded={openPopover === "lock"}
 				title={isPublic ? "Currently Public" : "Currently Private"}
-				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+				class="action-trigger flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 			>
 				{#if isPublic}
 					<svg
@@ -224,6 +224,7 @@
 							d="M13.5 10.5V6.75a4.5 4.5 0 119 0v3.75M3.75 21.75h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H3.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
 						/>
 					</svg>
+					<span class="text-xs">Public</span>
 				{:else}
 					<svg
 						xmlns="http://www.w3.org/2000/svg"
@@ -240,6 +241,7 @@
 							d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
 						/>
 					</svg>
+					<span class="text-xs">Private</span>
 				{/if}
 			</button>
 
