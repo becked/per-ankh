@@ -7,12 +7,35 @@
 	import RecentSaveCard from "$lib/RecentSaveCard.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import TournamentCard from "$lib/tournament/TournamentCard.svelte";
+	import { formatEnum } from "$lib/utils/formatting";
 	import { safeNext } from "$lib/utils/safe-next";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
 
 	const user = $derived(page.data.user);
+
+	// All-time stats for the signed-in viewer's right-rail card. Mirrors the
+	// profile page's identity-card boxes; null when signed out or the
+	// best-effort profile fetch failed (boxes are simply hidden then).
+	const summary = $derived(data.profileSummary);
+	const DAY_NAMES = [
+		"Sunday",
+		"Monday",
+		"Tuesday",
+		"Wednesday",
+		"Thursday",
+		"Friday",
+		"Saturday",
+	];
+	const favoriteDay = $derived(
+		summary?.favorite_day_of_week != null
+			? DAY_NAMES[summary.favorite_day_of_week]
+			: null,
+	);
+	const winRatePct = $derived(
+		summary?.win_rate != null ? Math.round(summary.win_rate * 100) : null,
+	);
 
 	// "Active" on the home page = anything not complete. The tournaments
 	// listing already separates "Open for signups" + "Active" + "Past";
@@ -90,8 +113,8 @@
 		<div class="grid gap-4 lg:grid-cols-12">
 			<!-- Left: about + screenshots -->
 			<aside class="lg:col-span-2">
-				<div class="rounded-lg p-4" style="background-color: #2a2622;">
-					<h1 class="mb-2 text-2xl font-bold text-tan">Per Ankh</h1>
+				<div class="rounded-lg p-4" style="background-color: #35302B;">
+					<h1 class="mb-2 text-2xl font-bold text-gray-200">Per Ankh</h1>
 					<p class="text-xs leading-relaxed text-tan opacity-90">
 						Parse Old World Save Files
 					</p>
@@ -115,12 +138,12 @@
 				</div>
 			</aside>
 
-			<!-- Center: recently shared saves (the dominant list) -->
-			<section
-				class="rounded-lg p-4 lg:col-span-8"
-				style="background-color: #2a2622;"
-			>
-				<h2 class="mb-3 text-sm font-bold text-tan">Recent games</h2>
+			<!--
+				Center: recently shared saves (the dominant list). No wrapper
+				panel — the #35302b RecentSaveCards float directly on the page
+				background, matching the tournaments-listing pattern.
+			-->
+			<section class="lg:col-span-8">
 				{#if data.recentGames.length === 0}
 					<p class="text-sm text-tan opacity-70">
 						No public saves yet. Be the first — upload a save and toggle
@@ -137,8 +160,13 @@
 
 			<!-- Right: profile (welcome / sign-in) + active tournaments -->
 			<aside class="space-y-3 lg:col-span-2">
-				<div class="rounded-lg p-3" style="background-color: #2a2622;">
-					{#if user}
+				{#if user}
+					<!-- Whole card links to the viewer's own profile/library. -->
+					<a
+						href={resolve(`/users/${user.user_id}`)}
+						class="block rounded-lg p-3 transition-colors hover:bg-[#3e3833]"
+						style="background-color: #35302B;"
+					>
 						<div class="flex items-center gap-2">
 							<img
 								src={user.avatar_url}
@@ -151,22 +179,75 @@
 								{user.display_name}
 							</p>
 						</div>
-						<div class="mt-4 flex gap-1.5">
-							<a
-								href={resolve(`/users/${user.user_id}`)}
-								class="border-tan/40 flex-1 rounded border px-2 py-1.5 text-center text-xs text-tan hover:border-orange hover:text-orange"
-							>
-								Library
-							</a>
-							<a
-								href={resolve("/upload")}
-								class="border-tan/40 flex-1 rounded border px-2 py-1.5 text-center text-xs text-tan hover:border-orange hover:text-orange"
-							>
-								Upload
-							</a>
-						</div>
-					{:else}
-						<h2 class="text-sm font-bold text-tan">Sign in</h2>
+
+						{#if summary}
+							<!-- All-time stat boxes, mirroring the profile identity card. -->
+							<div class="mt-3 grid grid-cols-2 gap-1.5">
+								<div
+									class="rounded px-2 py-1"
+									style="background-color: #2a2622;"
+								>
+									<p class="mb-0.5 text-[10px] font-bold text-gray-400">
+										Saves
+									</p>
+									<p class="text-[10px] font-bold text-tan">
+										{summary.total_games}
+									</p>
+								</div>
+
+								<div
+									class="rounded px-2 py-1"
+									style="background-color: #2a2622;"
+								>
+									<p class="mb-0.5 text-[10px] font-bold text-gray-400">
+										Win Rate
+									</p>
+									<p class="text-[10px] font-bold text-tan">
+										{#if winRatePct != null}{winRatePct}%{:else}—{/if}
+									</p>
+								</div>
+
+								<div
+									class="rounded px-2 py-1"
+									style="background-color: #2a2622;"
+								>
+									<p
+										class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+									>
+										{#if summary.favorite_nation}
+											<SpriteIcon
+												category="crests"
+												value={summary.favorite_nation}
+												size={10}
+												alt={formatEnum(summary.favorite_nation, "NATION_")}
+											/>
+										{/if}
+										Favorite Nation
+									</p>
+									<p class="text-[10px] font-bold text-tan">
+										{summary.favorite_nation
+											? formatEnum(summary.favorite_nation, "NATION_")
+											: "—"}
+									</p>
+								</div>
+
+								<div
+									class="rounded px-2 py-1"
+									style="background-color: #2a2622;"
+								>
+									<p class="mb-0.5 text-[10px] font-bold text-gray-400">
+										Favorite Day
+									</p>
+									<p class="text-[10px] font-bold text-tan">
+										{favoriteDay ?? "—"}
+									</p>
+								</div>
+							</div>
+						{/if}
+					</a>
+				{:else}
+					<div class="rounded-lg p-3" style="background-color: #35302B;">
+						<h2 class="text-sm font-bold text-gray-200">Sign in</h2>
 						{#if !hasSeenBefore}
 							<label class="mt-2 block">
 								<span class="mb-1 block text-[11px] text-tan">
@@ -193,14 +274,14 @@
 						{#if error}
 							<p class="mt-2 text-[11px] text-red-400">{error}</p>
 						{/if}
-					{/if}
-				</div>
+					</div>
+				{/if}
 
 				{#if activeTournaments.length > 0}
 					<div class="rounded-lg p-3" style="background-color: #35302b;">
 						<a
 							href={resolve("/tournaments")}
-							class="mb-2 flex items-center gap-1.5 text-sm font-bold text-tan hover:text-orange"
+							class="mb-2 flex items-center gap-1.5 text-sm font-bold text-gray-200 hover:text-orange"
 						>
 							<SpriteIcon
 								category="icons"
