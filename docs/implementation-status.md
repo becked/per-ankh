@@ -1,4 +1,4 @@
-/# XML Parser Implementation Status
+# XML Parser Implementation Status
 
 > **Historical document — pre-rewrite (Tauri/Rust/DuckDB era).** This
 > file was written 2025-11-05, before the project was rewritten as a
@@ -10,6 +10,11 @@
 > below, and `docs/unit-location-in-xml.md`). The current TypeScript
 > parser at `src/lib/parser/parsers/units.ts` parses per-unit data from
 > `<Tile>/<Unit>` and is shipped.
+>
+> The time-series and charting milestones sketched below (M3/M4) were
+> ultimately delivered by the cloud rewrite as the aggregate-statistics
+> surface — see **`docs/aggregate-statistics.md`** for the as-shipped
+> feature.
 
 **Last Updated**: 2025-11-05
 **Current Phase**: Milestone 2 (Core Entities) - 100% Complete ✅
