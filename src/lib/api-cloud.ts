@@ -59,6 +59,11 @@ export interface UserMe {
 	// the Worker. Gates the /admin/* SvelteKit routes. Not load-bearing for
 	// security — the worker re-checks on every admin endpoint.
 	is_admin: boolean;
+	// Default visibility applied to the user's newly uploaded saves. TRUE =
+	// public by default (the product default); FALSE = the user opted into
+	// private-by-default. Re-imports preserve the existing game's visibility
+	// and tournament uploads are forced public regardless.
+	default_game_public: boolean;
 }
 
 export interface GameListItem {
@@ -352,6 +357,21 @@ export const cloudApi = {
 
 	logout: async (opts?: CallOpts): Promise<void> => {
 		await request("/auth/logout", { ...opts, method: "POST" });
+	},
+
+	// Update account preferences. Currently just the default visibility for
+	// new uploads; returns the persisted value so callers can reconcile.
+	updateSettings: async (
+		settings: { default_game_public: boolean },
+		opts?: CallOpts,
+	): Promise<{ default_game_public: boolean }> => {
+		const res = await request("/auth/settings", {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(settings),
+		});
+		return res.json() as Promise<{ default_game_public: boolean }>;
 	},
 
 	// --- Games ---

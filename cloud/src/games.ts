@@ -334,14 +334,19 @@ function buildGameRow(inp: GameRowInputs): {
 		userWon = winner ? winner.winner_player_xml_id === uploaderIndex : null;
 	}
 
+	// isPublicOverride is always supplied by the upload handler now: the
+	// preserved value on re-import, the uploader's default-visibility
+	// preference on first upload. The `=== undefined ? 0` arm only guards
+	// hypothetical callers that omit it (none today) — fall back to private.
 	const isPublic =
 		isPublicOverride === undefined ? 0 : isPublicOverride ? 1 : 0;
 
 	// On re-import, REPLACE the games row (cascades child deletes), preserve
 	// created_at, is_public, collection_id, and the owner's renamed
 	// display_name, and bump updated_at to now. On first upload, rely on
-	// column defaults for created_at/updated_at and is_public=FALSE;
-	// collection_id is the user's Personal default; display_name is NULL.
+	// column defaults for created_at/updated_at; is_public comes from the
+	// uploader's preference (isPublicOverride); collection_id is the user's
+	// Personal default; display_name is NULL.
 	if (createdAtOverride !== undefined) {
 		return {
 			sql: `INSERT OR REPLACE INTO games (
@@ -1352,7 +1357,11 @@ export async function handleGameUpload(
 
 	let isReimport = false;
 	let existingCreatedAt: string | undefined;
-	let existingIsPublic: boolean | undefined;
+	// is_public to write on the games row: on re-import the existing row's
+	// preserved value; on first upload the uploader's default-visibility
+	// preference (users.default_game_public). Threaded to buildGameRow as
+	// isPublicOverride.
+	let isPublicForUpload: boolean | undefined;
 	let existingDisplayName: string | null | undefined;
 	let existingParserVersion: string | undefined;
 	let collectionId: number | null;
@@ -1422,7 +1431,7 @@ export async function handleGameUpload(
 		isReimport = true;
 		gameId = existing.game_id;
 		existingCreatedAt = existing.created_at;
-		existingIsPublic = existing.is_public === 1;
+		isPublicForUpload = existing.is_public === 1;
 		existingDisplayName = existing.display_name;
 		existingParserVersion = existing.parser_version;
 		// Preserve the user's manual collection placement across re-imports.
@@ -1471,6 +1480,18 @@ export async function handleGameUpload(
 			.bind(userId)
 			.first<{ collection_id: number }>();
 		collectionId = def?.collection_id ?? null;
+
+		// First upload visibility follows the uploader's preference
+		// (users.default_game_public, default TRUE). Tournament uploads are
+		// forced public downstream regardless, so this only governs ordinary
+		// uploads. Missing row (shouldn't happen for an authenticated user)
+		// falls back to public, matching the column default.
+		const pref = await env.SHARE_DB.prepare(
+			"SELECT default_game_public FROM users WHERE user_id = ?",
+		)
+			.bind(userId)
+			.first<{ default_game_public: number }>();
+		isPublicForUpload = pref?.default_game_public !== 0;
 	}
 
 	// R2 keys
@@ -1508,7 +1529,8 @@ export async function handleGameUpload(
 	// child tables (player_summaries, game_player_turn, tech_events,
 	// law_events) so the fresh child INSERTs in this batch land into a
 	// cleared slate. created_at and is_public are preserved from the
-	// existing row.
+	// existing row; a first upload instead seeds is_public from the
+	// uploader's default-visibility preference (see isPublicForUpload).
 	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
 	const gameRow = buildGameRow({
 		gameId,
@@ -1519,7 +1541,7 @@ export async function handleGameUpload(
 		uploaderIndex,
 		collectionId,
 		createdAtOverride: existingCreatedAt,
-		isPublicOverride: existingIsPublic,
+		isPublicOverride: isPublicForUpload,
 		displayNameOverride: existingDisplayName,
 	});
 	const summaryStmts = buildSummaryStatements(env.SHARE_DB, {

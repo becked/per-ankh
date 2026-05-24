@@ -14,6 +14,8 @@
 //   POST /v1/auth/logout    → delete session + clear cookie
 
 import { nanoid } from "nanoid";
+import * as v from "valibot";
+import { UserSettingsSchema } from "./schemas/user";
 import {
 	base64UrlEncode,
 	cloudCorsHeaders,
@@ -638,10 +640,10 @@ export async function handleMe(
 	}
 
 	const row = await env.SHARE_DB.prepare(
-		"SELECT user_id, discord_id, display_name, avatar_hash FROM users WHERE user_id = ?",
+		"SELECT user_id, discord_id, display_name, avatar_hash, default_game_public FROM users WHERE user_id = ?",
 	)
 		.bind(session.data.user_id)
-		.first<UserRow>();
+		.first<UserRow & { default_game_public: number }>();
 
 	if (!row) {
 		// Session points at a deleted user — clean up and 401.
@@ -675,10 +677,51 @@ export async function handleMe(
 			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
 			is_beta: beta !== null,
 			is_admin: admin,
+			// Per-user default visibility for new uploads. Stored as 0/1 in
+			// D1; surfaced as a boolean so the account page can render the
+			// toggle without re-fetching.
+			default_game_public: row.default_game_public === 1,
 		},
 		200,
 		cors,
 	);
+}
+
+export async function handleSettings(
+	request: Request,
+	env: AuthEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+
+	let parsed: unknown;
+	try {
+		parsed = await request.json();
+	} catch {
+		return errorResponse("Invalid JSON body", 400, cors, "INVALID_JSON");
+	}
+	const validation = v.safeParse(UserSettingsSchema, parsed);
+	if (!validation.success) {
+		return errorResponse(
+			`Invalid body: ${validation.issues[0]?.message ?? "unknown"}`,
+			400,
+			cors,
+			"INVALID_BODY",
+		);
+	}
+	const { default_game_public } = validation.output;
+
+	await env.SHARE_DB.prepare(
+		"UPDATE users SET default_game_public = ? WHERE user_id = ?",
+	)
+		.bind(default_game_public ? 1 : 0, session.data.user_id)
+		.run();
+
+	return jsonResponse({ default_game_public }, 200, cors);
 }
 
 export async function handleLogout(

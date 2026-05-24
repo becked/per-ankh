@@ -35,6 +35,7 @@ import {
 	handleDiscordStart,
 	handleLogout,
 	handleMe,
+	handleSettings,
 } from "./auth";
 import type { AuthEnv } from "./auth";
 import {
@@ -608,6 +609,12 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/auth/me" },
 		route: "GET /v1/auth/me",
 		handler: (r, e) => handleMe(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/settings" },
+		route: "POST /v1/auth/settings",
+		handler: (r, e) => handleSettings(r, e),
 	},
 	{
 		method: "POST",
