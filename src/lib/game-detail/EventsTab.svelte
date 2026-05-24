@@ -4,11 +4,19 @@
 	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { EChartsOption } from "echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
-	import SearchInput from "$lib/SearchInput.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
-	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
+	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import {
+		type TableState,
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+		getPlayerColor,
+		toggleSort,
+	} from "./helpers";
 
 	let {
 		eventLogs,
@@ -273,134 +281,99 @@
 </div>
 
 <!-- Event Logs Table -->
-<div class="rounded-lg p-4" style="background-color: #2a2622;">
-	<h3 class="mb-4 mt-0 font-bold text-tan">Event Logs</h3>
-	{#if processedEventLogs.length === 0}
-		<p class="p-8 text-center italic text-brown">No event logs recorded</p>
-	{:else}
-		<!-- Filters -->
-		<div class="mb-4 flex flex-wrap items-end gap-3">
-			<!-- Combined Log Type and Player Filter -->
-			<Select.Root type="multiple" bind:value={tableState.filters}>
-				<Select.Trigger
-					class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
-					style="background-color: #201a13;"
-				>
-					<div
-						class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+{#if processedEventLogs.length === 0}
+	<p class="p-8 text-center italic text-tan">No event logs recorded</p>
+{:else}
+	<h3 class="mb-2 mt-0 font-bold text-tan">Event Logs</h3>
+	<div class={TABLE_FRAME_CLASS}>
+		<TableFilterColumn
+			bind:search={tableState.search}
+			count={`${filteredEventLogs?.length ?? 0} / ${processedEventLogs.length} events`}
+			chips={tableState.filters.map((f) =>
+				f.startsWith("logtype:")
+					? formatEnum(f.replace("logtype:", ""), "")
+					: f.replace("player:", ""),
+			)}
+		>
+			{#snippet filters()}
+				<!-- Combined Log Type and Player Filter -->
+				<Select.Root type="multiple" bind:value={tableState.filters}>
+					<Select.Trigger
+						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-4 w-4 text-brown"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
+						<span class="truncate">Filter</span>
+						<span class="ml-2 text-tan opacity-60">▼</span>
+					</Select.Trigger>
+					<Select.Portal>
+						<Select.Content
+							class="z-50 max-h-64 overflow-y-auto rounded bg-[#241f1b] shadow-lg"
 						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M3 4h18M5 8h14M7 12h10M9 16h6"
-							/>
-						</svg>
-					</div>
-					<span class="truncate">Filter</span>
-					<span class="ml-2">▼</span>
-				</Select.Trigger>
-				<Select.Portal>
-					<Select.Content
-						class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
-					>
-						<Select.Viewport>
-							<!-- Players Group (only show if player column is visible) -->
-							{#if showPlayerColumn && uniquePlayers.length > 0}
-								<Select.Group>
-									<Select.GroupHeading
-										class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
-									>
-										Players
-									</Select.GroupHeading>
-									{#each uniquePlayers as player (player)}
-										<Select.Item
-											value={`player:${player}`}
-											label={player}
-											class="hover:bg-brown/30 data-[highlighted]:bg-brown/30 flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan"
+							<Select.Viewport>
+								<!-- Players Group (only show if player column is visible) -->
+								{#if showPlayerColumn && uniquePlayers.length > 0}
+									<Select.Group>
+										<Select.GroupHeading
+											class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
 										>
-											{#snippet children({ selected })}
-												{player}
-												{#if selected}
-													<span class="font-bold text-orange">✓</span>
-												{/if}
-											{/snippet}
-										</Select.Item>
-									{/each}
-								</Select.Group>
-							{/if}
+											Players
+										</Select.GroupHeading>
+										{#each uniquePlayers as player (player)}
+											<Select.Item
+												value={`player:${player}`}
+												label={player}
+												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+											>
+												{#snippet children({ selected })}
+													{player}
+													{#if selected}
+														<span class="font-bold text-orange">✓</span>
+													{/if}
+												{/snippet}
+											</Select.Item>
+										{/each}
+									</Select.Group>
+								{/if}
 
-							<!-- Log Types Group -->
-							{#if uniqueLogTypes.length > 0}
-								<Select.Group>
-									<Select.GroupHeading
-										class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown {showPlayerColumn &&
-										uniquePlayers.length > 0
-											? 'border-t border-[#2a2622]'
-											: ''}"
-									>
-										Log Types
-									</Select.GroupHeading>
-									{#each uniqueLogTypes as logType (logType)}
-										<Select.Item
-											value={`logtype:${logType}`}
-											label={formatEnum(logType, "")}
-											class="hover:bg-brown/30 data-[highlighted]:bg-brown/30 flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan"
+								<!-- Log Types Group -->
+								{#if uniqueLogTypes.length > 0}
+									<Select.Group>
+										<Select.GroupHeading
+											class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan {showPlayerColumn &&
+											uniquePlayers.length > 0
+												? 'border-t border-[#2a2622]'
+												: ''}"
 										>
-											{#snippet children({ selected })}
-												{formatEnum(logType, "")}
-												{#if selected}
-													<span class="font-bold text-orange">✓</span>
-												{/if}
-											{/snippet}
-										</Select.Item>
-									{/each}
-								</Select.Group>
-							{/if}
-						</Select.Viewport>
-					</Select.Content>
-				</Select.Portal>
-			</Select.Root>
+											Log Types
+										</Select.GroupHeading>
+										{#each uniqueLogTypes as logType (logType)}
+											<Select.Item
+												value={`logtype:${logType}`}
+												label={formatEnum(logType, "")}
+												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+											>
+												{#snippet children({ selected })}
+													{formatEnum(logType, "")}
+													{#if selected}
+														<span class="font-bold text-orange">✓</span>
+													{/if}
+												{/snippet}
+											</Select.Item>
+										{/each}
+									</Select.Group>
+								{/if}
+							</Select.Viewport>
+						</Select.Content>
+					</Select.Portal>
+				</Select.Root>
+			{/snippet}
+		</TableFilterColumn>
 
-			<!-- Description search -->
-			<SearchInput
-				bind:value={tableState.search}
-				variant="field"
-				class="w-96"
-			/>
-
-			<!-- Selected filter chips -->
-			{#if tableState.filters.length > 0}
-				<div class="flex flex-wrap gap-1">
-					{#each tableState.filters as filter (filter)}
-						<span class="rounded bg-brown px-2 py-1 text-xs text-white">
-							{filter.startsWith("logtype:")
-								? formatEnum(filter.replace("logtype:", ""), "")
-								: filter.replace("player:", "")}
-						</span>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Results count -->
-			<span class="ml-auto text-sm text-brown">
-				{filteredEventLogs?.length ?? 0} / {processedEventLogs.length} events
-			</span>
-		</div>
-
-		<div class="min-h-[36rem] rounded-lg" style="background-color: #35302B;">
-			<table class="w-full">
+		<div class="min-w-0 flex-1 overflow-x-auto">
+			<table class={TABLE_CLASS}>
 				<thead>
 					<tr>
 						<th
-							class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l"
 							onclick={() => toggleSort(tableState, "turn")}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -413,7 +386,7 @@
 							</span>
 						</th>
 						<th
-							class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+							class={TABLE_HEADER_TH_CLASS}
 							onclick={() => toggleSort(tableState, "log_type")}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -427,7 +400,7 @@
 						</th>
 						{#if showPlayerColumn}
 							<th
-								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+								class={TABLE_HEADER_TH_CLASS}
 								onclick={() => toggleSort(tableState, "player_name")}
 							>
 								<span class="inline-flex items-center gap-1">
@@ -441,7 +414,7 @@
 							</th>
 						{/if}
 						<th
-							class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+							class="{TABLE_HEADER_TH_CLASS} rounded-r-lg border-r"
 							onclick={() => toggleSort(tableState, "description")}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -457,27 +430,23 @@
 				</thead>
 				<tbody>
 					{#each filteredEventLogs ?? [] as log (log.log_id)}
-						<tr class="transition-colors duration-200">
-							<td class="border-b border-[#2a2622] p-3 text-left text-tan"
-								>{log.turn}</td
-							>
-							<td class="border-b border-[#2a2622] p-3 text-left text-tan">
+						<tr class="group">
+							<td class="{TABLE_CELL_TD_CLASS} rounded-l-lg">{log.turn}</td>
+							<td class={TABLE_CELL_TD_CLASS}>
 								{formatEnum(log.log_type, "")}
 							</td>
 							{#if showPlayerColumn}
-								<td class="border-b border-[#2a2622] p-3 text-left text-tan"
-									>{log.player_name ?? ""}</td
-								>
+								<td class={TABLE_CELL_TD_CLASS}>{log.player_name ?? ""}</td>
 							{/if}
-							<td class="border-b border-[#2a2622] p-3 text-left text-tan"
-								>{log.description || "—"}</td
-							>
+							<td class="{TABLE_CELL_TD_CLASS} rounded-r-lg">
+								{log.description || "—"}
+							</td>
 						</tr>
 					{:else}
 						<tr>
 							<td
 								colspan={showPlayerColumn ? 4 : 3}
-								class="p-8 text-center text-brown italic"
+								class="p-8 text-center italic text-tan"
 							>
 								No events match filters
 							</td>
@@ -486,5 +455,5 @@
 				</tbody>
 			</table>
 		</div>
-	{/if}
-</div>
+	</div>
+{/if}

@@ -85,16 +85,6 @@
 			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
-			{#if isOwner && page.data.user}
-				<a
-					href="{resolve('/users/[user_id]', {
-						user_id: page.data.user.user_id,
-					})}?tab=games"
-					class="mb-3 inline-flex items-center gap-1 text-xs text-tan opacity-70 transition-opacity hover:opacity-100"
-				>
-					← Back to games
-				</a>
-			{/if}
 			<GameDetailView
 				gameDetails={game.game_details}
 				playerHistory={game.player_history}
@@ -136,9 +126,9 @@
 				{#snippet preTabs()}
 					{#if isReimportAvailable}
 						<div
-							class="bg-orange/10 mb-4 flex items-center justify-between rounded border border-orange px-4 py-2"
+							class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
 						>
-							<p class="text-xs text-tan">
+							<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
 								This game was parsed with an older version ({game.parser_version}).
 								Click Reparse for the latest version ({PARSER_VERSION}).
 							</p>
@@ -147,21 +137,23 @@
 					{/if}
 					{#if data.tournamentLink}
 						<div
-							class="bg-orange/10 mb-4 rounded border border-orange px-4 py-2 text-xs text-tan"
+							class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
 						>
-							<a
-								class="font-bold text-orange hover:underline"
-								href="{resolve('/tournaments/[slug]', {
-									slug: data.tournamentLink.tournament.slug,
-								})}?match={data.tournamentLink.match.match_id}"
-							>
-								{data.tournamentLink.tournament.name}
-							</a>
-							<span class="opacity-80">
-								— Round {data.tournamentLink.match.round_number}: {data
-									.tournamentLink.match.slot_a_username ?? "—"} vs
-								{data.tournamentLink.match.slot_b_username ?? "—"}
-							</span>
+							<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
+								<a
+									class="font-bold text-tan hover:text-orange hover:underline"
+									href="{resolve('/tournaments/[slug]', {
+										slug: data.tournamentLink.tournament.slug,
+									})}?match={data.tournamentLink.match.match_id}"
+								>
+									{data.tournamentLink.tournament.name}
+								</a>
+								<span class="opacity-80">
+									— Round {data.tournamentLink.match.round_number}: {data
+										.tournamentLink.match.slot_a_username ?? "—"} vs
+									{data.tournamentLink.match.slot_b_username ?? "—"}
+								</span>
+							</p>
 						</div>
 					{/if}
 				{/snippet}

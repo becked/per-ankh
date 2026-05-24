@@ -20,50 +20,52 @@
 	} = $props();
 
 	let yieldMode = $state<YieldMode>("rate");
+
+	// Shared toggle-item tokens (matches the aggregate-stats YieldsStatsPanel).
+	const itemClass =
+		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-[#2a2622] data-[state=on]:bg-[#35302B]";
 </script>
 
-<div class="mb-4 flex items-center">
-	<ToggleGroup.Root
-		type="single"
-		value={yieldMode}
-		onValueChange={(v) => {
-			if (v) yieldMode = v as YieldMode;
-		}}
-		class="flex rounded border border-tan"
+<div class="rounded-lg p-4" style="background-color: #2a2622;">
+	<div
+		class="sticky top-1 z-10 -ml-4 mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
 	>
-		<ToggleGroup.Item
-			value="rate"
-			class="rounded-l px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-[#2a2622] data-[state=on]:bg-[#35302B]"
+		<ToggleGroup.Root
+			type="single"
+			value={yieldMode}
+			onValueChange={(v) => {
+				if (v) yieldMode = v as YieldMode;
+			}}
+			class="flex overflow-hidden rounded"
 		>
-			Per Turn
-		</ToggleGroup.Item>
-		<ToggleGroup.Item
-			value="cumulative"
-			class="rounded-r border-l border-tan px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-[#2a2622] data-[state=on]:bg-[#35302B]"
-		>
-			Cumulative
-		</ToggleGroup.Item>
-	</ToggleGroup.Root>
-</div>
+			<ToggleGroup.Item value="rate" class="rounded-l {itemClass}">
+				Per Turn
+			</ToggleGroup.Item>
+			<ToggleGroup.Item value="cumulative" class="rounded-r {itemClass}">
+				Cumulative
+			</ToggleGroup.Item>
+		</ToggleGroup.Root>
+	</div>
 
-{#if allYields.length === 0}
-	<p class="p-8 text-center italic text-brown">No yield data available</p>
-{:else}
-	{#each YIELD_CHART_CONFIG as config (config.yieldType)}
-		{@const chartOption = createYieldChartOption(
-			allYields,
-			config.yieldType,
-			config.title,
-			config.yAxisLabel,
-			chartFilters[config.filterKey],
-			yieldMode,
-		)}
-		{#if chartOption}
-			<ChartContainer
-				option={chartOption}
-				height="400px"
-				title={config.title}
-			/>
-		{/if}
-	{/each}
-{/if}
+	{#if allYields.length === 0}
+		<p class="p-8 text-center italic text-tan">No yield data available</p>
+	{:else}
+		{#each YIELD_CHART_CONFIG as config (config.yieldType)}
+			{@const chartOption = createYieldChartOption(
+				allYields,
+				config.yieldType,
+				config.title,
+				config.yAxisLabel,
+				chartFilters[config.filterKey],
+				yieldMode,
+			)}
+			{#if chartOption}
+				<ChartContainer
+					option={chartOption}
+					height="400px"
+					title={config.title}
+				/>
+			{/if}
+		{/each}
+	{/if}
+</div>

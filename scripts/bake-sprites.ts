@@ -114,6 +114,12 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 		source: "events_images/TURN_SUMMARY_PLAYER_DIPLOMACY.png",
 		target: "PLAYER_DIPLOMACY.png",
 	},
+	// City culture-level icons (used by the Cities-tab Culture column). Names
+	// match the culture.xml zIconName values; copied 1:1 from other/.
+	{ source: "other/CULTURE_WEAK.png", target: "CULTURE_WEAK.png" },
+	{ source: "other/CULTURE_DEVELOPING.png", target: "CULTURE_DEVELOPING.png" },
+	{ source: "other/CULTURE_STRONG.png", target: "CULTURE_STRONG.png" },
+	{ source: "other/CULTURE_LEGENDARY.png", target: "CULTURE_LEGENDARY.png" },
 ];
 
 function contentHash(buf: Buffer): string {

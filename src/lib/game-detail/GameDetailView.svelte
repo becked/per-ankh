@@ -258,6 +258,12 @@
 	const modsList = $derived(
 		gameDetails.enabled_mods?.split("+").join(", ") ?? "None",
 	);
+
+	// Tab triggers styled as chip-bar pills, matching the aggregate-stats
+	// subtabs (src/lib/stats/StatsView.svelte): borderless, fill-based state
+	// (active = #35302B, inactive = #2a2622) inside a floating tray.
+	const triggerClass =
+		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622]";
 </script>
 
 <!-- Header -->
@@ -465,93 +471,38 @@
 <!-- Tabs -->
 <Tabs.Root bind:value={activeTab}>
 	<!-- Tab Navigation -->
-	<Tabs.List class="flex">
-		<Tabs.Trigger
-			value="overview"
-			class="cursor-pointer rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Overview
-		</Tabs.Trigger>
+	<Tabs.List
+		class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+	>
+		<Tabs.Trigger value="overview" class={triggerClass}>Overview</Tabs.Trigger>
 
 		<!-- Timeline tab hidden pending redesign
-		<Tabs.Trigger
-			value="timeline"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Timeline
-		</Tabs.Trigger>
+		<Tabs.Trigger value="timeline" class={triggerClass}>Timeline</Tabs.Trigger>
 		-->
 
-		<Tabs.Trigger
-			value="events"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Events
-		</Tabs.Trigger>
+		<Tabs.Trigger value="events" class={triggerClass}>Events</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="laws"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Laws
-		</Tabs.Trigger>
+		<Tabs.Trigger value="laws" class={triggerClass}>Laws</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="techs"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Techs
-		</Tabs.Trigger>
+		<Tabs.Trigger value="techs" class={triggerClass}>Techs</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="economics"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Yields
-		</Tabs.Trigger>
+		<Tabs.Trigger value="economics" class={triggerClass}>Yields</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="military"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Military
-		</Tabs.Trigger>
+		<Tabs.Trigger value="military" class={triggerClass}>Military</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="cities"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Cities
-		</Tabs.Trigger>
+		<Tabs.Trigger value="cities" class={triggerClass}>Cities</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="improvements"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
+		<Tabs.Trigger value="improvements" class={triggerClass}>
 			Improvements
 		</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="map"
-			class="cursor-pointer border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Map
-		</Tabs.Trigger>
+		<Tabs.Trigger value="map" class={triggerClass}>Map</Tabs.Trigger>
 
-		<Tabs.Trigger
-			value="settings"
-			class="cursor-pointer rounded-tr-lg border-2 border-b-0 border-black px-3 py-2 text-sm font-bold transition-all duration-200 hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622] data-[state=active]:text-tan data-[state=inactive]:text-tan"
-		>
-			Settings
-		</Tabs.Trigger>
+		<Tabs.Trigger value="settings" class={triggerClass}>Settings</Tabs.Trigger>
 	</Tabs.List>
 
 	<!-- Tab Content: Overview -->
-	<Tabs.Content
-		value="overview"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="overview" class="tab-pane min-h-[400px]">
 		<OverviewTab
 			{gameDetails}
 			{playerHistory}
@@ -572,7 +523,7 @@
 	<!-- Timeline tab hidden pending redesign
 	<Tabs.Content
 		value="timeline"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
+		class="tab-pane min-h-[400px] rounded-lg p-8"
 		style="background-color: #35302B;"
 	>
 		<TimelineTab
@@ -591,11 +542,7 @@
 	-->
 
 	<!-- Tab Content: Events -->
-	<Tabs.Content
-		value="events"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="events" class="tab-pane min-h-[400px]">
 		<EventsTab
 			{eventLogs}
 			{playerHistory}
@@ -608,11 +555,7 @@
 	</Tabs.Content>
 
 	<!-- Tab Content: Laws -->
-	<Tabs.Content
-		value="laws"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="laws" class="tab-pane min-h-[400px]">
 		<LawsTab
 			{lawAdoptionHistory}
 			{currentLaws}
@@ -622,11 +565,7 @@
 	</Tabs.Content>
 
 	<!-- Tab Content: Techs -->
-	<Tabs.Content
-		value="techs"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="techs" class="tab-pane min-h-[400px]">
 		<TechsTab
 			{techDiscoveryHistory}
 			{completedTechs}
@@ -636,20 +575,12 @@
 	</Tabs.Content>
 
 	<!-- Tab Content: Yields -->
-	<Tabs.Content
-		value="economics"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="economics" class="tab-pane min-h-[400px]">
 		<YieldsTab {allYields} bind:chartFilters />
 	</Tabs.Content>
 
 	<!-- Tab Content: Military -->
-	<Tabs.Content
-		value="military"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="military" class="tab-pane min-h-[400px]">
 		<MilitaryTab
 			{gameDetails}
 			{playerHistory}
@@ -660,11 +591,7 @@
 	</Tabs.Content>
 
 	<!-- Tab Content: Cities -->
-	<Tabs.Content
-		value="cities"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="cities" class="tab-pane min-h-[400px]">
 		<CitiesTab
 			{cityStatistics}
 			bind:tableState={tables.cities}
@@ -673,19 +600,14 @@
 	</Tabs.Content>
 
 	<!-- Tab Content: Improvements -->
-	<Tabs.Content
-		value="improvements"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="improvements" class="tab-pane min-h-[400px]">
 		<ImprovementsTab {improvementData} bind:tableState={tables.improvements} />
 	</Tabs.Content>
 
 	<!-- Tab Content: Map -->
 	<Tabs.Content
 		value="map"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
+		class="tab-pane min-h-[400px] rounded-lg bg-blue-gray p-4"
 	>
 		<MapTab
 			{mapTiles}
@@ -698,11 +620,7 @@
 	</Tabs.Content>
 
 	<!-- Tab Content: Settings -->
-	<Tabs.Content
-		value="settings"
-		class="tab-pane min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
-	>
+	<Tabs.Content value="settings" class="tab-pane min-h-[400px]">
 		<SettingsTab {gameDetails} {victoryConditions} {dlcList} {modsList} />
 	</Tabs.Content>
 </Tabs.Root>

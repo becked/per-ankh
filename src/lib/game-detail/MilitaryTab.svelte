@@ -5,13 +5,18 @@
 	import type { EChartsOption } from "echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import Chart from "$lib/Chart.svelte";
-	import SearchInput from "$lib/SearchInput.svelte";
-	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
+	import SpriteIcon from "./SpriteIcon.svelte";
+	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import NationFilterSelect from "./NationFilterSelect.svelte";
 	import {
 		type TableState,
 		type UnitClass,
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
 		getPlayerColor,
 		toggleSort,
 		classifyUnit,
@@ -225,128 +230,60 @@
 	});
 </script>
 
-<!-- Military Power Chart -->
-{#if militaryChartOption}
-	<ChartContainer
-		option={militaryChartOption}
-		height="400px"
-		title="Military Power"
-	/>
-{/if}
+{#if militaryChartOption || armyPieCharts.length > 0}
+	<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
+		<!-- Military Power Chart -->
+		{#if militaryChartOption}
+			<ChartContainer
+				option={militaryChartOption}
+				height="400px"
+				title="Military Power"
+			/>
+		{/if}
 
-<!-- Army Composition Pie Charts -->
-{#if armyPieCharts.length > 0}
-	<div
-		class="mb-6 grid gap-4"
-		style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));"
-	>
-		{#each armyPieCharts as chart (chart.nation)}
-			<div class="overflow-hidden rounded-lg">
-				<Chart option={chart.pieOption} height="200px" />
+		<!-- Army Composition Pie Charts -->
+		{#if armyPieCharts.length > 0}
+			<div
+				class="{militaryChartOption ? 'mt-4 ' : ''}grid gap-4"
+				style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));"
+			>
+				{#each armyPieCharts as chart (chart.nation)}
+					<div class="overflow-hidden rounded-lg">
+						<Chart option={chart.pieOption} height="200px" />
+					</div>
+				{/each}
 			</div>
-		{/each}
+		{/if}
 	</div>
 {/if}
 
 <!-- Units Produced Table -->
 {#if unitsProduced.length > 0}
-	<div class="mt-6 rounded-lg p-4" style="background-color: #2a2622;">
-		<h3 class="mb-4 font-bold text-tan">Units Produced</h3>
-
-		<!-- Controls row -->
-		<div class="mb-4 flex flex-wrap items-end gap-3">
-			<!-- Filter dropdown -->
-			<Select.Root type="multiple" bind:value={tableState.filters}>
-				<Select.Trigger
-					class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
-					style="background-color: #201a13;"
-				>
-					<div
-						class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-4 w-4 text-brown"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M3 4h18M5 8h14M7 12h10M9 16h6"
-							/>
-						</svg>
-					</div>
-					<span class="truncate">Filter</span>
-					<span class="ml-2">▼</span>
-				</Select.Trigger>
-				<Select.Portal>
-					<Select.Content
-						class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
-					>
-						<Select.Viewport>
-							{#if uniqueUnitNations.length > 0}
-								<Select.Group>
-									<Select.GroupHeading
-										class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
-									>
-										Nations
-									</Select.GroupHeading>
-									{#each uniqueUnitNations as nation (nation)}
-										<Select.Item
-											value={`nation:${nation}`}
-											label={formatEnum(nation, "NATION_")}
-											class="hover:bg-brown/30 data-[highlighted]:bg-brown/30 flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan"
-										>
-											{#snippet children({ selected })}
-												{formatEnum(nation, "NATION_")}
-												{#if selected}
-													<span class="font-bold text-orange">✓</span>
-												{/if}
-											{/snippet}
-										</Select.Item>
-									{/each}
-								</Select.Group>
-							{/if}
-						</Select.Viewport>
-					</Select.Content>
-				</Select.Portal>
-			</Select.Root>
-
-			<!-- Search -->
-			<SearchInput
-				bind:value={tableState.search}
-				placeholder="Search units"
-				variant="field"
-				class="w-64"
-			/>
-
-			<!-- Selected filter chips -->
-			{#if tableState.filters.length > 0}
-				<div class="flex flex-wrap gap-1">
-					{#each tableState.filters as filter (filter)}
-						<span class="rounded bg-brown px-2 py-1 text-xs text-white">
-							{formatEnum(filter.replace("nation:", ""), "NATION_")}
-						</span>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Results count -->
-			<span class="ml-auto text-sm text-brown">
-				{unitPivotData.length} unit types
-			</span>
-		</div>
+	<h3 class="mb-2 font-bold text-tan">Units Produced</h3>
+	<div class={TABLE_FRAME_CLASS}>
+		<TableFilterColumn
+			bind:search={tableState.search}
+			count={`${unitPivotData.length} unit types`}
+			chips={selectedUnitNations.map((n) => formatEnum(n, "NATION_"))}
+		>
+			{#snippet filters()}
+				<NationFilterSelect
+					nations={uniqueUnitNations}
+					bind:value={tableState.filters}
+				/>
+			{/snippet}
+		</TableFilterColumn>
 
 		<!-- Units Pivot Table -->
-		<div class="rounded-lg" style="background-color: #35302B;">
-			<table class="w-full">
+		<div class="min-w-0 flex-1 overflow-x-auto">
+			<table class={TABLE_CLASS}>
 				<thead>
 					<tr>
 						<th
-							class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedUnitNations.length ===
+							0
+								? 'rounded-r-lg border-r'
+								: ''}"
 							onclick={() => toggleSort(tableState, "unit_type")}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -360,10 +297,19 @@
 						</th>
 						{#each displayedUnitNations as nation (nation)}
 							<th
-								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-right font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+								class="{TABLE_HEADER_TH_CLASS} !text-right {displayedUnitNations.length ===
+								1
+									? 'rounded-r-lg border-r'
+									: ''}"
 								onclick={() => toggleSort(tableState, `nation:${nation}`)}
 							>
-								<span class="inline-flex items-center justify-end gap-1">
+								<span class="inline-flex items-center justify-end gap-1.5">
+									<SpriteIcon
+										category="crests"
+										value={nation}
+										size={14}
+										alt={formatEnum(nation, "NATION_")}
+									/>
 									{formatEnum(nation, "NATION_")}
 									{#if tableState.sortColumn === `nation:${nation}`}
 										<span class="text-orange">
@@ -375,7 +321,7 @@
 						{/each}
 						{#if displayedUnitNations.length > 1}
 							<th
-								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-right font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+								class="{TABLE_HEADER_TH_CLASS} rounded-r-lg border-r !text-right"
 								onclick={() => toggleSort(tableState, "total")}
 							>
 								<span class="inline-flex items-center justify-end gap-1">
@@ -392,22 +338,28 @@
 				</thead>
 				<tbody>
 					{#each unitPivotData as row (row.unit_type)}
-						<tr class="hover:bg-brown/10">
+						<tr class="group">
 							<td
-								class="whitespace-nowrap border-b border-[#2a2622] p-3 text-left text-tan"
+								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedUnitNations.length ===
+								0
+									? 'rounded-r-lg'
+									: ''}"
 							>
 								{formatEnum(row.unit_type, "UNIT_")}
 							</td>
 							{#each displayedUnitNations as nation (nation)}
 								<td
-									class="whitespace-nowrap border-b border-[#2a2622] p-3 text-right text-tan"
+									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-right {displayedUnitNations.length ===
+									1
+										? 'rounded-r-lg'
+										: ''}"
 								>
 									{row.counts[nation] ?? 0}
 								</td>
 							{/each}
 							{#if displayedUnitNations.length > 1}
 								<td
-									class="whitespace-nowrap border-b border-[#2a2622] p-3 text-right font-bold text-tan"
+									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-r-lg !text-right font-bold"
 								>
 									{row.total}
 								</td>
@@ -417,7 +369,7 @@
 						<tr>
 							<td
 								colspan={displayedUnitNations.length + 2}
-								class="p-8 text-center text-brown italic"
+								class="p-8 text-center italic text-tan"
 							>
 								No units match search
 							</td>
@@ -428,7 +380,7 @@
 		</div>
 	</div>
 {:else}
-	<p class="p-8 text-center italic text-brown">
+	<p class="p-8 text-center italic text-tan">
 		No unit production data available
 	</p>
 {/if}

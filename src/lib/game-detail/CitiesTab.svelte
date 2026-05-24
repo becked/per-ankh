@@ -1,14 +1,27 @@
 <script lang="ts">
 	import type { CityStatistics } from "$lib/types/CityStatistics";
-	import SearchInput from "$lib/SearchInput.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { getCivilizationColor } from "$lib/config";
+	import SpriteIcon from "./SpriteIcon.svelte";
+	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import NationFilterSelect from "./NationFilterSelect.svelte";
 	import {
 		type TableState,
 		CITY_COLUMNS,
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
 		formatCityCell,
 		toggleSort,
 	} from "./helpers";
+
+	// Nation accent color for the Nation cell, mirroring the games table.
+	function nationColor(nation: string | null): string | undefined {
+		if (!nation) return undefined;
+		return getCivilizationColor(nation.replace(/^NATION_/, "")) ?? undefined;
+	}
 
 	let {
 		cityStatistics,
@@ -119,141 +132,74 @@
 </script>
 
 {#if cityStatistics.cities.length === 0}
-	<p class="p-8 text-center italic text-brown">No cities found</p>
+	<p class="p-8 text-center italic text-tan">No cities found</p>
 {:else}
-	<div class="rounded-lg p-4" style="background-color: #2a2622;">
-		<!-- Table Controls -->
-		<div class="mb-4 flex flex-wrap items-end gap-3">
-			<!-- Filter dropdown -->
-			<Select.Root type="multiple" bind:value={tableState.filters}>
-				<Select.Trigger
-					class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
-					style="background-color: #201a13;"
+	<!--
+		Two-column layout mirroring the player games table: filters + search
+		stacked in a left column, the data table on the right.
+	-->
+	<div class={TABLE_FRAME_CLASS}>
+		<TableFilterColumn
+			bind:search={tableState.search}
+			count={`${filteredSortedCities.length} / ${cityStatistics.cities.length} cities`}
+			chips={selectedCityNations.map((n) => formatEnum(n, "NATION_"))}
+		>
+			{#snippet filters()}
+				<NationFilterSelect
+					nations={uniqueCityNations}
+					bind:value={tableState.filters}
+				/>
+
+				<!-- Column visibility (Cities-specific) -->
+				<Select.Root
+					type="multiple"
+					value={selectedColumnKeys}
+					onValueChange={handleColumnVisibilityChange}
 				>
-					<div
-						class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
+					<Select.Trigger
+						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
 					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-4 w-4 text-brown"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
+						<span class="truncate">Columns</span>
+						<span class="ml-2 text-tan opacity-60">▼</span>
+					</Select.Trigger>
+					<Select.Portal>
+						<Select.Content
+							class="z-50 max-h-80 overflow-y-auto rounded bg-[#241f1b] shadow-lg"
 						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M3 4h18M5 8h14M7 12h10M9 16h6"
-							/>
-						</svg>
-					</div>
-					<span class="truncate">Filter</span>
-					<span class="ml-2">▼</span>
-				</Select.Trigger>
-				<Select.Portal>
-					<Select.Content
-						class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
-					>
-						<Select.Viewport>
-							{#if uniqueCityNations.length > 0}
-								<Select.Group>
-									<Select.GroupHeading
-										class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
+							<Select.Viewport>
+								{#each CITY_COLUMNS as column (column.key)}
+									<Select.Item
+										value={column.key}
+										label={column.label}
+										class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
 									>
-										Nations
-									</Select.GroupHeading>
-									{#each uniqueCityNations as nation (nation)}
-										<Select.Item
-											value={`nation:${nation}`}
-											label={formatEnum(nation, "NATION_")}
-											class="hover:bg-brown/30 data-[highlighted]:bg-brown/30 flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan"
-										>
-											{#snippet children({ selected })}
-												{formatEnum(nation, "NATION_")}
-												{#if selected}
-													<span class="font-bold text-orange">✓</span>
-												{/if}
-											{/snippet}
-										</Select.Item>
-									{/each}
-								</Select.Group>
-							{/if}
-						</Select.Viewport>
-					</Select.Content>
-				</Select.Portal>
-			</Select.Root>
+										{#snippet children({ selected })}
+											<span>{column.label}</span>
+											{#if selected}
+												<span class="font-bold text-orange">✓</span>
+											{/if}
+										{/snippet}
+									</Select.Item>
+								{/each}
+							</Select.Viewport>
+						</Select.Content>
+					</Select.Portal>
+				</Select.Root>
+			{/snippet}
+		</TableFilterColumn>
 
-			<!-- Search -->
-			<SearchInput
-				bind:value={tableState.search}
-				placeholder="Search"
-				variant="field"
-				class="w-64"
-			/>
-
-			<!-- Selected filter chips -->
-			{#if tableState.filters.length > 0}
-				<div class="flex flex-wrap gap-1">
-					{#each tableState.filters as filter (filter)}
-						<span class="rounded bg-brown px-2 py-1 text-xs text-white">
-							{formatEnum(filter.replace("nation:", ""), "NATION_")}
-						</span>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Column Visibility Dropdown -->
-			<Select.Root
-				type="multiple"
-				value={selectedColumnKeys}
-				onValueChange={handleColumnVisibilityChange}
-			>
-				<Select.Trigger
-					class="flex items-center gap-2 rounded px-4 py-2 text-sm text-tan"
-					style="background-color: #201a13;"
-				>
-					<span>Columns</span>
-					<span class="text-brown">▼</span>
-				</Select.Trigger>
-				<Select.Portal>
-					<Select.Content
-						class="z-50 max-h-80 overflow-y-auto rounded bg-[#201a13] shadow-lg"
-					>
-						<Select.Viewport>
-							{#each CITY_COLUMNS as column (column.key)}
-								<Select.Item
-									value={column.key}
-									label={column.label}
-									class="hover:bg-brown/30 data-[highlighted]:bg-brown/30 flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan"
-								>
-									{#snippet children({ selected })}
-										<span>{column.label}</span>
-										{#if selected}
-											<span class="font-bold text-orange">✓</span>
-										{/if}
-									{/snippet}
-								</Select.Item>
-							{/each}
-						</Select.Viewport>
-					</Select.Content>
-				</Select.Portal>
-			</Select.Root>
-
-			<!-- Results count -->
-			<span class="ml-auto text-sm text-brown">
-				{filteredSortedCities.length} / {cityStatistics.cities.length} cities
-			</span>
-		</div>
-
-		<!-- City Details Table -->
-		<div class="rounded-lg" style="background-color: #35302B;">
-			<table class="w-full">
+		<!-- Right: City Details Table -->
+		<div class="min-w-0 flex-1 overflow-x-auto">
+			<table class={TABLE_CLASS}>
 				<thead>
 					<tr>
-						{#each visibleCityColumns as column (column.key)}
+						{#each visibleCityColumns as column, i (column.key)}
 							<th
-								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+								class="{TABLE_HEADER_TH_CLASS} {i === 0
+									? 'rounded-l-lg border-l'
+									: ''} {i === visibleCityColumns.length - 1
+									? 'rounded-r-lg border-r'
+									: ''}"
 								onclick={() => toggleSort(tableState, column.key)}
 							>
 								<span class="inline-flex items-center gap-1">
@@ -270,15 +216,41 @@
 				</thead>
 				<tbody>
 					{#each filteredSortedCities as city (city.city_id)}
-						<tr class="hover:bg-brown/20 transition-colors duration-200">
-							{#each visibleCityColumns as column (column.key)}
+						<tr class="group">
+							{#each visibleCityColumns as column, i (column.key)}
+								{@const iconValue = column.iconCategory
+									? column.iconValue
+										? column.iconValue(city)
+										: column.getValue(city)
+									: null}
 								<td
-									class="border-b border-[#2a2622] p-3 text-left text-tan {column.key ===
-									'city_name'
+									class="{TABLE_CELL_TD_CLASS} {i === 0
+										? 'rounded-l-lg'
+										: ''} {i === visibleCityColumns.length - 1
+										? 'rounded-r-lg'
+										: ''} {column.key === 'city_name'
 										? 'font-bold'
 										: ''} whitespace-nowrap"
+									style={column.key === "owner_nation" &&
+									nationColor(city.owner_nation)
+										? `color: ${nationColor(city.owner_nation)}`
+										: undefined}
 								>
-									{formatCityCell(column, city)}
+									{#if column.iconCategory}
+										<span class="inline-flex items-center gap-1.5">
+											{#if iconValue != null}
+												<SpriteIcon
+													category={column.iconCategory}
+													value={String(iconValue)}
+													size={16}
+													alt=""
+												/>
+											{/if}
+											{formatCityCell(column, city)}
+										</span>
+									{:else}
+										{formatCityCell(column, city)}
+									{/if}
 								</td>
 							{/each}
 						</tr>
@@ -286,7 +258,7 @@
 						<tr>
 							<td
 								colspan={visibleCityColumns.length}
-								class="p-8 text-center text-brown italic"
+								class="p-8 text-center italic text-tan"
 							>
 								No cities match search
 							</td>

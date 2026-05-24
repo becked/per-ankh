@@ -1043,6 +1043,29 @@
 		return result;
 	});
 
+	// Map's intrinsic aspect ratio (pixel width / height of the hex extent,
+	// incl. one cell of margin) — used to size the embedded map container so it
+	// fills with no letterboxing. Null until tiles/manifest are ready.
+	const mapAspectRatio = $derived.by(() => {
+		if (tiles.length === 0) return null;
+		let minPx = Infinity,
+			maxPx = -Infinity,
+			minPy = Infinity,
+			maxPy = -Infinity;
+		for (const tile of tiles) {
+			const [px, py] = hexToPixel(tile.x, tile.y);
+			minPx = Math.min(minPx, px);
+			maxPx = Math.max(maxPx, px);
+			minPy = Math.min(minPy, py);
+			maxPy = Math.max(maxPy, py);
+		}
+		const cellW = improvementsBaseManifest?.cellWidth ?? 211;
+		const cellH = improvementsBaseManifest?.cellHeight ?? 167;
+		const w = maxPx - minPx + cellW;
+		const h = maxPy - minPy + cellH;
+		return h > 0 ? w / h : null;
+	});
+
 	/**
 	 * Calculate initial view state to fit the map in the canvas.
 	 */
@@ -1952,13 +1975,15 @@
 	</div>
 {/snippet}
 
-<div class="flex flex-col gap-4">
+<div class="flex flex-col gap-3 rounded-lg bg-[#1a1510] p-3">
 	<!-- Layer toggles + turn controls + expand button -->
 	{@render controlsBar("expand")}
 
 	<div
 		class="sprite-map-container"
-		style="height: {height};"
+		style={mapAspectRatio
+			? `aspect-ratio: ${mapAspectRatio}; max-height: 75vh;`
+			: `height: ${height};`}
 		bind:this={containerEl}
 	>
 		<canvas

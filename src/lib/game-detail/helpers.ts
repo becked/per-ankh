@@ -52,6 +52,13 @@ export type CityColumn = {
 	getValue: (city: CityInfo) => string | number | boolean | null;
 	format?: (value: string | number | boolean | null, city: CityInfo) => string;
 	sortValue?: (city: CityInfo) => string | number;
+	// When set, the cell prefixes a SpriteIcon resolved from the raw getValue()
+	// enum (e.g. "crests" for NATION_*/FAMILY_*, "culture" for CULTURE_*).
+	iconCategory?: SpriteCategory;
+	// Overrides the icon's enum value (defaults to getValue()). Used by Family
+	// to fall back from the per-family crest to the archetype crest. Returning
+	// null renders no icon.
+	iconValue?: (city: CityInfo) => string | null;
 };
 
 export type YieldMode = "rate" | "cumulative";
@@ -189,6 +196,18 @@ export const YIELD_CHART_CONFIG: YieldChartConfig[] = [
 	},
 ];
 
+// ─── Shared data-table styling (game-detail data tabs) ───────────────
+// Visual tokens matching the player games table: a dark blue-gray frame
+// holding #2a2622 rounded card rows under a #241f1b toolbar-style header
+// bar. Round the first/last cell of each row inline with
+// `rounded-l-lg border-l` / `rounded-r-lg border-r`.
+export const TABLE_FRAME_CLASS = "flex gap-4 rounded-lg bg-blue-gray p-3";
+export const TABLE_CLASS = "w-full border-separate border-spacing-y-1.5";
+export const TABLE_HEADER_TH_CLASS =
+	"sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap border-y border-[#2a2622] bg-[#241f1b] px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg transition-colors hover:text-orange";
+export const TABLE_CELL_TD_CLASS =
+	"bg-[#2a2622] p-3 text-left text-tan transition-colors duration-200 group-hover:bg-[#3e362f]";
+
 // Column order: Nation, Name, Family, Founded, Culture, Specialists, Growth, Population, Tiles Bought
 // Default visible: Nation, Name, Family, Founded, Culture
 export const CITY_COLUMNS: CityColumn[] = [
@@ -198,6 +217,7 @@ export const CITY_COLUMNS: CityColumn[] = [
 		defaultVisible: true,
 		getValue: (c) => c.owner_nation,
 		format: (v) => formatEnum(v as string | null, "NATION_"),
+		iconCategory: "crests",
 	},
 	{
 		key: "city_name",
@@ -215,6 +235,15 @@ export const CITY_COLUMNS: CityColumn[] = [
 		defaultVisible: true,
 		getValue: (c) => c.family,
 		format: (v) => formatEnum(v as string | null, "FAMILY_"),
+		iconCategory: "crests",
+		// Per-family crest art ships for only a few families; fall back to the
+		// always-available archetype crest derived from family_class.
+		iconValue: (c) =>
+			c.family && getSpritePath("crests", c.family)
+				? c.family
+				: c.family_class
+					? c.family_class.replace("FAMILYCLASS_", "ARCHETYPE_")
+					: null,
 	},
 	{
 		key: "founded_turn",
@@ -229,6 +258,7 @@ export const CITY_COLUMNS: CityColumn[] = [
 		getValue: (c) => c.culture_level,
 		format: (v) => formatEnum(v as string | null, "CULTURE_"),
 		sortValue: (c) => c.culture_level ?? "",
+		iconCategory: "icons",
 	},
 	{
 		key: "specialist_count",

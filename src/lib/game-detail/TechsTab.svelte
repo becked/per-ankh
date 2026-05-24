@@ -3,12 +3,21 @@
 	import type { PlayerTech } from "$lib/types/PlayerTech";
 	import type { EChartsOption } from "echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
-	import SearchInput from "$lib/SearchInput.svelte";
-	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { TECH_NAMES } from "$lib/generated/tech-names";
 	import { CHART_THEME } from "$lib/config";
-	import { type TableState, getPlayerColor, toggleSort } from "./helpers";
+	import SpriteIcon from "./SpriteIcon.svelte";
+	import TableFilterColumn from "./TableFilterColumn.svelte";
+	import NationFilterSelect from "./NationFilterSelect.svelte";
+	import {
+		type TableState,
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+		getPlayerColor,
+		toggleSort,
+	} from "./helpers";
 
 	let {
 		techDiscoveryHistory,
@@ -181,13 +190,15 @@
 </script>
 
 {#if techDiscoveryChartOption}
-	<ChartContainer
-		option={techDiscoveryChartOption}
-		height="400px"
-		title="Tech Discovery Over Time"
-	/>
+	<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
+		<ChartContainer
+			option={techDiscoveryChartOption}
+			height="400px"
+			title="Tech Discovery Over Time"
+		/>
+	</div>
 {:else if techDiscoveryHistory.length === 0}
-	<p class="p-8 text-center italic text-brown">
+	<p class="p-8 text-center italic text-tan">
 		No tech discovery data available
 	</p>
 {/if}
@@ -195,106 +206,35 @@
 <!-- Completed Technologies Table -->
 {#if completedTechs.length === 0}
 	<div class="mt-8">
-		<p class="p-8 text-center italic text-brown">
+		<p class="p-8 text-center italic text-tan">
 			No technologies data available
 		</p>
 	</div>
 {:else}
-	<div class="mt-4 rounded-lg p-4" style="background-color: #2a2622;">
-		<!-- Controls row -->
-		<div class="mb-4 flex flex-wrap items-end gap-3">
-			<!-- Filter dropdown -->
-			<Select.Root type="multiple" bind:value={tableState.filters}>
-				<Select.Trigger
-					class="relative flex w-32 items-center justify-between rounded py-2 pl-9 pr-8 text-sm text-tan"
-					style="background-color: #201a13;"
-				>
-					<div
-						class="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-4 w-4 text-brown"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								stroke-width="2"
-								d="M3 4h18M5 8h14M7 12h10M9 16h6"
-							/>
-						</svg>
-					</div>
-					<span class="truncate">Filter</span>
-					<span class="ml-2">▼</span>
-				</Select.Trigger>
-				<Select.Portal>
-					<Select.Content
-						class="z-50 max-h-64 overflow-y-auto rounded bg-[#201a13] shadow-lg"
-					>
-						<Select.Viewport>
-							{#if uniqueTechNations.length > 0}
-								<Select.Group>
-									<Select.GroupHeading
-										class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-brown"
-									>
-										Nations
-									</Select.GroupHeading>
-									{#each uniqueTechNations as nation (nation)}
-										<Select.Item
-											value={`nation:${nation}`}
-											label={formatEnum(nation, "NATION_")}
-											class="hover:bg-brown/30 data-[highlighted]:bg-brown/30 flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan"
-										>
-											{#snippet children({ selected })}
-												{formatEnum(nation, "NATION_")}
-												{#if selected}
-													<span class="font-bold text-orange">✓</span>
-												{/if}
-											{/snippet}
-										</Select.Item>
-									{/each}
-								</Select.Group>
-							{/if}
-						</Select.Viewport>
-					</Select.Content>
-				</Select.Portal>
-			</Select.Root>
-
-			<!-- Search -->
-			<SearchInput
-				bind:value={tableState.search}
-				placeholder="Search technologies"
-				variant="field"
-				class="w-64"
-			/>
-
-			<!-- Selected filter chips -->
-			{#if tableState.filters.length > 0}
-				<div class="flex flex-wrap gap-1">
-					{#each tableState.filters as filter (filter)}
-						<span class="rounded bg-brown px-2 py-1 text-xs text-white">
-							{formatEnum(filter.replace("nation:", ""), "NATION_")}
-						</span>
-					{/each}
-				</div>
-			{/if}
-
-			<!-- Results count -->
-			<span class="ml-auto text-sm text-brown">
-				{techPivotData.length} technologies
-			</span>
-		</div>
+	<div class={TABLE_FRAME_CLASS}>
+		<TableFilterColumn
+			bind:search={tableState.search}
+			count={`${techPivotData.length} technologies`}
+			chips={selectedTechNations.map((n) => formatEnum(n, "NATION_"))}
+		>
+			{#snippet filters()}
+				<NationFilterSelect
+					nations={uniqueTechNations}
+					bind:value={tableState.filters}
+				/>
+			{/snippet}
+		</TableFilterColumn>
 
 		<!-- Technologies pivot table -->
-		<div class="rounded-lg" style="background-color: #35302B;">
-			<table class="w-full">
+		<div class="min-w-0 flex-1 overflow-x-auto">
+			<table class={TABLE_CLASS}>
 				<thead>
 					<tr>
 						<th
-							class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-left font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedTechNations.length ===
+							0
+								? 'rounded-r-lg border-r'
+								: ''}"
 							onclick={() => toggleSort(tableState, "tech")}
 						>
 							<span class="inline-flex items-center gap-1">
@@ -306,12 +246,21 @@
 								{/if}
 							</span>
 						</th>
-						{#each displayedTechNations as nation (nation)}
+						{#each displayedTechNations as nation, i (nation)}
 							<th
-								class="hover:bg-brown/20 sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap bg-[#35302B] p-3 text-center font-bold text-brown shadow-[inset_0_-2px_0_#2a2622]"
+								class="{TABLE_HEADER_TH_CLASS} !text-center {i ===
+								displayedTechNations.length - 1
+									? 'rounded-r-lg border-r'
+									: ''}"
 								onclick={() => toggleSort(tableState, `nation:${nation}`)}
 							>
-								<span class="inline-flex items-center justify-center gap-1">
+								<span class="inline-flex items-center justify-center gap-1.5">
+									<SpriteIcon
+										category="crests"
+										value={nation}
+										size={14}
+										alt={formatEnum(nation, "NATION_")}
+									/>
 									{formatEnum(nation, "NATION_")}
 									{#if tableState.sortColumn === `nation:${nation}`}
 										<span class="text-orange">
@@ -325,15 +274,21 @@
 				</thead>
 				<tbody>
 					{#each techPivotData as row (row.tech)}
-						<tr class="hover:bg-brown/10">
+						<tr class="group">
 							<td
-								class="whitespace-nowrap border-b border-[#2a2622] p-3 text-left text-tan"
+								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedTechNations.length ===
+								0
+									? 'rounded-r-lg'
+									: ''}"
 							>
 								{TECH_NAMES[row.tech] ?? formatEnum(row.tech, "TECH_")}
 							</td>
-							{#each displayedTechNations as nation (nation)}
+							{#each displayedTechNations as nation, i (nation)}
 								<td
-									class="whitespace-nowrap border-b border-[#2a2622] p-3 text-center text-tan"
+									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-center {i ===
+									displayedTechNations.length - 1
+										? 'rounded-r-lg'
+										: ''}"
 								>
 									{row.turns[nation] != null ? row.turns[nation] : "—"}
 								</td>
@@ -343,7 +298,7 @@
 						<tr>
 							<td
 								colspan={displayedTechNations.length + 1}
-								class="p-8 text-center text-brown italic"
+								class="p-8 text-center italic text-tan"
 							>
 								No technologies match search
 							</td>
