@@ -25,6 +25,9 @@
 	import TournamentMapsPanel from "$lib/tournament/TournamentMapsPanel.svelte";
 	import TournamentOverviewPanel from "$lib/tournament/TournamentOverviewPanel.svelte";
 	import TournamentSettingsModal from "$lib/tournament/TournamentSettingsModal.svelte";
+	import { confirmDialog } from "$lib/ui/confirm";
+	import RadioGroup from "$lib/ui/RadioGroup.svelte";
+	import RadioItem from "$lib/ui/RadioItem.svelte";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -246,7 +249,15 @@
 	}
 
 	async function deleteSlot(slotId: string) {
-		if (!confirm(`Delete slot ${slotLabelFor(slotId)}?`)) return;
+		if (
+			!(await confirmDialog({
+				title: "Delete slot",
+				message: `Delete slot ${slotLabelFor(slotId)}?`,
+				confirmLabel: "Delete",
+				destructive: true,
+			}))
+		)
+			return;
 		await withBusy(
 			() => cloudApi.deleteSlot(data.tournament.tournament_id, slotId),
 			"Deleted slot",
@@ -387,9 +398,12 @@
 
 	async function startTournament() {
 		if (
-			!confirm(
-				"Start the tournament? Locks the slot list and generates Round 1 for both divisions.",
-			)
+			!(await confirmDialog({
+				title: "Start tournament",
+				message:
+					"Start the tournament? Locks the slot list and generates Round 1 for both divisions.",
+				confirmLabel: "Start",
+			}))
 		)
 			return;
 		await withBusy(
@@ -402,13 +416,12 @@
 	let tiebreakerInfoOpen = $state(false);
 
 	async function withdraw() {
-		// Plain confirm() — matches the deleteSlot pattern. Non-technical
-		// players have seen the OS prompt a thousand times; bespoke modal
-		// for a one-action dialog would just be more surface area.
 		if (
-			!confirm(
-				`Withdraw from ${data.tournament.name}? You can sign up again any time before it starts.`,
-			)
+			!(await confirmDialog({
+				title: "Withdraw",
+				message: `Withdraw from ${data.tournament.name}? You can sign up again any time before it starts.`,
+				confirmLabel: "Withdraw",
+			}))
 		) {
 			return;
 		}
@@ -614,27 +627,24 @@
 										/>
 									</div>
 								</label>
-								<fieldset class="text-xs text-tan">
-									<legend>Division</legend>
-									<div class="mt-1 flex gap-3">
+								<div class="text-xs text-tan">
+									<span class="block">Division</span>
+									<RadioGroup
+										value={newSlotDivision}
+										onChange={(v) => (newSlotDivision = v as Division)}
+										ariaLabel="Division"
+										class="mt-1 flex gap-3"
+									>
 										<label class="flex cursor-pointer items-center gap-1">
-											<input
-												type="radio"
-												value="A"
-												bind:group={newSlotDivision}
-											/>
+											<RadioItem value="A" />
 											{data.tournament.division_a_name}
 										</label>
 										<label class="flex cursor-pointer items-center gap-1">
-											<input
-												type="radio"
-												value="B"
-												bind:group={newSlotDivision}
-											/>
+											<RadioItem value="B" />
 											{data.tournament.division_b_name}
 										</label>
-									</div>
-								</fieldset>
+									</RadioGroup>
+								</div>
 								<button
 									type="button"
 									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"

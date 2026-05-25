@@ -25,6 +25,8 @@
 	import type { WorkerMessage } from "$lib/parser/worker";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import { formatEnum } from "$lib/utils/formatting";
+	import RadioGroup from "$lib/ui/RadioGroup.svelte";
+	import RadioItem from "$lib/ui/RadioItem.svelte";
 
 	// Pre-filled mode is the entry point for re-import. The owner's already
 	// fetched the raw ZIP from R2 (see ReimportButton.svelte) — we skip the
@@ -56,6 +58,13 @@
 	} = $props();
 
 	const OBSERVER: null = null;
+	// bits-ui RadioGroup is string-only; this sentinel maps to OBSERVER (null).
+	const OBSERVER_RADIO = "__observer__";
+	const radioValue = (selected: number | null): string =>
+		selected === null ? OBSERVER_RADIO : String(selected);
+	function selectFromRadio(v: string): void {
+		selectPlayer(v === OBSERVER_RADIO ? null : Number(v));
+	}
 
 	type Status =
 		| { kind: "idle" }
@@ -305,60 +314,49 @@
 				a friend's game).
 			{/if}
 		</p>
-		<ul class="mb-4 space-y-2">
+		<RadioGroup
+			value={radioValue(status.selected)}
+			onChange={selectFromRadio}
+			ariaLabel="Uploading player"
+			class="mb-4 block space-y-2"
+		>
 			{#each status.humans as human (human.player_index)}
-				<li>
-					<label
-						class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
-						style="background-color: #35302B;"
-					>
-						<input
-							type="radio"
-							name="uploader-pick"
-							checked={status.selected === human.player_index}
-							onchange={() => selectPlayer(human.player_index)}
-						/>
-						<div class="flex-1 text-sm text-tan">
-							<div class="font-bold" style="color: #DBDEE3;">
-								{human.player_name ||
-									formatEnum(human.nation, "NATION_") ||
-									"—"}
-							</div>
-							{#if human.player_name}
-								<div class="text-xs text-gray-400">
-									{formatEnum(human.nation, "NATION_") ?? "—"}
-									{#if human.online_id}
-										<span class="ml-2 font-mono">
-											id:{human.online_id.slice(0, 8)}…
-										</span>
-									{/if}
-								</div>
-							{:else if human.online_id}
-								<div class="font-mono text-xs text-gray-400">
-									id:{human.online_id.slice(0, 8)}…
-								</div>
-							{/if}
-						</div>
-					</label>
-				</li>
-			{/each}
-			<li>
 				<label
 					class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
 					style="background-color: #35302B;"
 				>
-					<input
-						type="radio"
-						name="uploader-pick"
-						checked={status.selected === null}
-						onchange={() => selectPlayer(null)}
-					/>
+					<RadioItem value={String(human.player_index)} />
 					<div class="flex-1 text-sm text-tan">
-						<div class="font-bold" style="color: #DBDEE3;">Observer</div>
+						<div class="font-bold" style="color: #DBDEE3;">
+							{human.player_name || formatEnum(human.nation, "NATION_") || "—"}
+						</div>
+						{#if human.player_name}
+							<div class="text-xs text-gray-400">
+								{formatEnum(human.nation, "NATION_") ?? "—"}
+								{#if human.online_id}
+									<span class="ml-2 font-mono">
+										id:{human.online_id.slice(0, 8)}…
+									</span>
+								{/if}
+							</div>
+						{:else if human.online_id}
+							<div class="font-mono text-xs text-gray-400">
+								id:{human.online_id.slice(0, 8)}…
+							</div>
+						{/if}
 					</div>
 				</label>
-			</li>
-		</ul>
+			{/each}
+			<label
+				class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
+				style="background-color: #35302B;"
+			>
+				<RadioItem value={OBSERVER_RADIO} />
+				<div class="flex-1 text-sm text-tan">
+					<div class="font-bold" style="color: #DBDEE3;">Observer</div>
+				</div>
+			</label>
+		</RadioGroup>
 		<div class="flex justify-between">
 			<button
 				type="button"

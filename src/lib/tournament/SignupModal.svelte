@@ -13,6 +13,8 @@
 		type TournamentDetail,
 		type UserMe,
 	} from "$lib/api-cloud";
+	import RadioGroup from "$lib/ui/RadioGroup.svelte";
+	import RadioItem from "$lib/ui/RadioItem.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -143,33 +145,28 @@
 			</div>
 		{/if}
 
-		<fieldset class="mb-4 flex flex-col gap-2 text-xs text-tan">
-			<legend class="sr-only">Division</legend>
+		<RadioGroup
+			value={selectedDivision ?? ""}
+			onChange={(v) => (selectedDivision = v as Division)}
+			disabled={busy}
+			ariaLabel="Division"
+			class="mb-4 flex flex-col gap-2 text-xs text-tan"
+		>
 			<label
 				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2 transition-colors hover:border-orange"
 				class:border-orange={selectedDivision === "A"}
 			>
-				<input
-					type="radio"
-					value="A"
-					bind:group={selectedDivision}
-					disabled={busy}
-				/>
+				<RadioItem value="A" disabled={busy} />
 				<span>{divisionLabel("A")}</span>
 			</label>
 			<label
 				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2 transition-colors hover:border-orange"
 				class:border-orange={selectedDivision === "B"}
 			>
-				<input
-					type="radio"
-					value="B"
-					bind:group={selectedDivision}
-					disabled={busy}
-				/>
+				<RadioItem value="B" disabled={busy} />
 				<span>{divisionLabel("B")}</span>
 			</label>
-		</fieldset>
+		</RadioGroup>
 
 		<p class="mb-4 text-[11px] text-tan opacity-60">
 			Signed in as <span class="font-mono text-tan opacity-90"

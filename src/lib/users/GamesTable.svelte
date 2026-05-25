@@ -14,6 +14,8 @@
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import SearchInput from "$lib/SearchInput.svelte";
 	import DateFilter from "./DateFilter.svelte";
+	import Select from "$lib/ui/Select.svelte";
+	import type { SelectOption } from "$lib/ui/types";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import { getCivilizationColor } from "$lib/config";
 	import { formatDate, formatEnum } from "$lib/utils/formatting";
@@ -99,6 +101,20 @@
 		{ value: "result_desc", label: "Wins first" },
 	];
 	const isDateSort = $derived(sort.startsWith("date"));
+
+	// --- Filter option lists (for the styled Select) ------------------
+	const RESULT_OPTIONS: SelectOption[] = [
+		{ value: "", label: "Any result" },
+		{ value: "win", label: "Win" },
+		{ value: "loss", label: "Loss" },
+	];
+	const nationSelectOptions = $derived<SelectOption[]>([
+		{ value: "", label: "All nations" },
+		...nationOptions.map((n) => ({
+			value: n,
+			label: formatEnum(n, "NATION_"),
+		})),
+	]);
 
 	// --- Infinite scroll (ported from CloudGameSidebar) ---------------
 	let accumulated = $state<GameListItem[]>([]);
@@ -236,30 +252,21 @@
 				class="w-full"
 			/>
 
-			<select
-				class="w-full cursor-pointer rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+			<Select
 				value={nation ?? ""}
-				onchange={(e) =>
-					setParam("nation", (e.target as HTMLSelectElement).value || null)}
-				aria-label="Filter by nation"
-			>
-				<option value="">All nations</option>
-				{#each nationOptions as n (n)}
-					<option value={n}>{formatEnum(n, "NATION_")}</option>
-				{/each}
-			</select>
+				onChange={(v) => setParam("nation", v)}
+				options={nationSelectOptions}
+				ariaLabel="Filter by nation"
+				class="w-full"
+			/>
 
-			<select
-				class="w-full cursor-pointer rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+			<Select
 				value={result ?? ""}
-				onchange={(e) =>
-					setParam("result", (e.target as HTMLSelectElement).value || null)}
-				aria-label="Filter by result"
-			>
-				<option value="">Any result</option>
-				<option value="win">Win</option>
-				<option value="loss">Loss</option>
-			</select>
+				onChange={(v) => setParam("result", v)}
+				options={RESULT_OPTIONS}
+				ariaLabel="Filter by result"
+				class="w-full"
+			/>
 
 			<DateFilter value={date} onChange={(v) => setParam("date", v)} />
 		</div>
@@ -387,15 +394,12 @@
 		>
 			&nbsp;
 		</div>
-		<select
-			class="w-full cursor-pointer rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+		<Select
 			value={sort}
-			onchange={(e) => setParam("sort", (e.target as HTMLSelectElement).value)}
-			aria-label="Sort"
-		>
-			{#each SORT_OPTIONS as o (o.value)}
-				<option value={o.value}>{o.label}</option>
-			{/each}
-		</select>
+			onChange={(v) => setParam("sort", v ?? "date_desc")}
+			options={SORT_OPTIONS}
+			ariaLabel="Sort"
+			class="w-full"
+		/>
 	</aside>
 </div>

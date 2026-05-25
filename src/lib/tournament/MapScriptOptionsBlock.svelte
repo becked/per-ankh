@@ -12,6 +12,8 @@
 		optionDef,
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
+	import Checkbox from "$lib/ui/Checkbox.svelte";
+	import Select from "$lib/ui/Select.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -80,31 +82,25 @@
 		{#each scriptOptions as option (option)}
 			{@const def = optionDef(option)}
 			{#if def}
-				<label class="flex items-center justify-between gap-2 text-xs text-tan">
+				<div class="flex items-center justify-between gap-2 text-xs text-tan">
 					<span class="opacity-80">{mapOptionLabel(option)}</span>
 					{#if def.kind === "toggle"}
-						<input
-							type="checkbox"
+						<Checkbox
 							checked={currentValue(option) === true}
 							disabled={status.kind === "saving"}
-							onchange={(e) =>
-								setOption(option, (e.target as HTMLInputElement).checked)}
-							class="themed-checkbox"
+							onCheckedChange={(c) => setOption(option, c)}
 						/>
 					{:else}
-						<select
-							value={currentValue(option)}
+						<Select
+							value={String(currentValue(option) ?? "")}
+							onChange={(v) => v != null && setOption(option, v)}
+							options={def.choices}
 							disabled={status.kind === "saving"}
-							onchange={(e) =>
-								setOption(option, (e.target as HTMLSelectElement).value)}
-							class="min-w-[10rem] rounded border border-black bg-[#2a2622] p-1 text-xs text-tan disabled:opacity-50"
-						>
-							{#each def.choices as choice (choice.value)}
-								<option value={choice.value}>{choice.label}</option>
-							{/each}
-						</select>
+							ariaLabel={mapOptionLabel(option)}
+							class="min-w-[10rem]"
+						/>
 					{/if}
-				</label>
+				</div>
 			{/if}
 		{/each}
 		{#if status.kind === "saving"}
@@ -116,42 +112,3 @@
 		{/if}
 	{/if}
 </div>
-
-<style>
-	.themed-checkbox {
-		appearance: none;
-		width: 16px;
-		height: 16px;
-		border: 2px solid var(--color-tan);
-		border-radius: 3px;
-		background: transparent;
-		cursor: pointer;
-		position: relative;
-		flex-shrink: 0;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease;
-	}
-	.themed-checkbox:checked {
-		background: var(--color-orange);
-		border-color: var(--color-orange);
-	}
-	.themed-checkbox:checked::after {
-		content: "";
-		position: absolute;
-		left: 3px;
-		top: -1px;
-		width: 5px;
-		height: 10px;
-		border: solid #1a1a1a;
-		border-width: 0 2px 2px 0;
-		transform: rotate(45deg);
-	}
-	.themed-checkbox:disabled {
-		opacity: 0.5;
-		cursor: default;
-	}
-	.themed-checkbox:not(:disabled):hover {
-		border-color: var(--color-orange);
-	}
-</style>

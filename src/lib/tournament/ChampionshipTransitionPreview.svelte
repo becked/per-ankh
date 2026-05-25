@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { CombinedQualifier, TournamentDetail } from "$lib/api-cloud";
+	import Checkbox from "$lib/ui/Checkbox.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -265,10 +266,10 @@
 								{@const idx = manualOrder.indexOf(c.slot_id)}
 								<tr class="border-b border-black border-opacity-30">
 									<td class="py-1 pr-2">
-										<input
-											type="checkbox"
+										<Checkbox
 											checked={idx >= 0}
-											onchange={() => toggleSlot(c.slot_id)}
+											onCheckedChange={() => toggleSlot(c.slot_id)}
+											ariaLabel={`Include ${c.discord_username ?? c.slot_id.slice(0, 6)}`}
 										/>
 									</td>
 									<td class="py-1 pr-2 font-mono">{idx >= 0 ? idx + 1 : "—"}</td

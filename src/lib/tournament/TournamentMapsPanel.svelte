@@ -12,6 +12,7 @@
 		mapOptionChoiceLabel,
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
+	import Select from "$lib/ui/Select.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -30,6 +31,12 @@
 	>({ kind: "idle" });
 
 	const unaddedGroups = $derived(unaddedMapScriptsByDlc(allowedMapScripts));
+	const mapScriptGroups = $derived(
+		unaddedGroups.map((g) => ({
+			heading: DLC_GROUP_LABELS[g.dlc],
+			options: g.entries.map((e) => ({ value: e.value, label: e.label })),
+		})),
+	);
 
 	// Track which scripts have their options expanded. Local-only state;
 	// resets on remount, intentional (no per-user persistence needed).
@@ -184,27 +191,19 @@
 				{/each}
 			</ul>
 		{/if}
-		<select
+		<Select
 			value=""
-			onchange={(e) => {
-				const target = e.target as HTMLSelectElement;
-				addMapScript(target.value);
-				target.value = "";
+			onChange={(v) => {
+				if (v) addMapScript(v);
 			}}
+			options={mapScriptGroups}
+			resetAfterSelect
+			placeholder={unaddedGroups.length === 0
+				? "All known maps added"
+				: "Add a map…"}
 			disabled={status.kind === "saving" || unaddedGroups.length === 0}
-			class="mt-1 rounded border border-black bg-[#35302b] p-1.5 disabled:opacity-50"
-			aria-label="Add map script"
-		>
-			<option value="" disabled>
-				{unaddedGroups.length === 0 ? "All known maps added" : "Add a map…"}
-			</option>
-			{#each unaddedGroups as group (group.dlc)}
-				<optgroup label={DLC_GROUP_LABELS[group.dlc]}>
-					{#each group.entries as entry (entry.value)}
-						<option value={entry.value}>{entry.label}</option>
-					{/each}
-				</optgroup>
-			{/each}
-		</select>
+			ariaLabel="Add map script"
+			class="mt-1"
+		/>
 	</div>
 </section>

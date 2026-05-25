@@ -6,6 +6,7 @@
 		type PatchTournamentBody,
 		type TournamentDetail,
 	} from "$lib/api-cloud";
+	import Checkbox from "$lib/ui/Checkbox.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -148,16 +149,13 @@
 		class="mb-4 rounded-lg p-3 text-xs text-tan"
 		style="background-color: #35302B;"
 	>
-		<label class="flex cursor-pointer items-center gap-2">
-			<input
-				type="checkbox"
-				checked={signupsOpen}
-				onchange={(e) =>
-					commitSignupsOpen((e.target as HTMLInputElement).checked)}
-				disabled={status.kind === "saving"}
-			/>
+		<Checkbox
+			checked={signupsOpen}
+			onCheckedChange={(c) => commitSignupsOpen(c)}
+			disabled={status.kind === "saving"}
+		>
 			<span>Open for signups</span>
-		</label>
+		</Checkbox>
 		<p class="mt-1 text-[11px] text-tan opacity-60">
 			When open, any signed-in player can sign up. Closes automatically when you
 			start the tournament.
@@ -181,7 +179,7 @@
 					max="20"
 					bind:value={swissMaxRounds}
 					onblur={commitMaxRounds}
-					class="rounded border border-black bg-[#35302b] p-1.5"
+					class="no-spinner rounded border border-black bg-[#35302b] p-1.5"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -192,7 +190,7 @@
 					max="20"
 					bind:value={swissWinsToAdvance}
 					onblur={commitWinsToAdvance}
-					class="rounded border border-black bg-[#35302b] p-1.5"
+					class="no-spinner rounded border border-black bg-[#35302b] p-1.5"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -203,7 +201,7 @@
 					max="20"
 					bind:value={swissLossesToEliminate}
 					onblur={commitLossesToEliminate}
-					class="rounded border border-black bg-[#35302b] p-1.5"
+					class="no-spinner rounded border border-black bg-[#35302b] p-1.5"
 				/>
 			</label>
 		</div>

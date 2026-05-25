@@ -32,6 +32,11 @@
 	} from "$lib/parser/upload-helpers";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import { formatEnum } from "$lib/utils/formatting";
+	import RadioGroup from "$lib/ui/RadioGroup.svelte";
+	import RadioItem from "$lib/ui/RadioItem.svelte";
+
+	// bits-ui RadioGroup is string-only; this sentinel maps to observer (null).
+	const OBSERVER_RADIO = "__observer__";
 
 	const MAX_FILES = 25;
 	const UPLOAD_CONCURRENCY = 3;
@@ -526,34 +531,33 @@
 							<p class="text-xs text-gray-400">
 								{slotALabel ?? "Slot A"} played as:
 							</p>
-							<ul class="mt-1 space-y-1">
+							<RadioGroup
+								value={ready.slotAPlayerIndex === null
+									? ""
+									: String(ready.slotAPlayerIndex)}
+								onChange={(v) => selectSlotAPlayer(row, Number(v))}
+								disabled={phase !== "picking"}
+								ariaLabel="Slot A player"
+								class="mt-1 block space-y-1"
+							>
 								{#each ready.humans as human (human.player_index)}
-									<li>
-										<label
-											class="flex cursor-pointer items-center gap-2 text-sm text-tan"
-										>
-											<input
-												type="radio"
-												name={`slot-A-${row.id}`}
-												disabled={phase !== "picking"}
-												checked={ready.slotAPlayerIndex === human.player_index}
-												onchange={() =>
-													selectSlotAPlayer(row, human.player_index)}
-											/>
-											<span class="font-bold">
-												{human.player_name ||
-													formatEnum(human.nation, "NATION_") ||
-													"—"}
+									<label
+										class="flex cursor-pointer items-center gap-2 text-sm text-tan"
+									>
+										<RadioItem value={String(human.player_index)} />
+										<span class="font-bold">
+											{human.player_name ||
+												formatEnum(human.nation, "NATION_") ||
+												"—"}
+										</span>
+										{#if human.player_name}
+											<span class="text-xs text-gray-400">
+												{formatEnum(human.nation, "NATION_") ?? "—"}
 											</span>
-											{#if human.player_name}
-												<span class="text-xs text-gray-400">
-													{formatEnum(human.nation, "NATION_") ?? "—"}
-												</span>
-											{/if}
-										</label>
-									</li>
+										{/if}
+									</label>
 								{/each}
-							</ul>
+							</RadioGroup>
 							{#if ready.slotBPlayerIndex !== null}
 								{@const slotBHuman = ready.humans.find(
 									(h) => h.player_index === ready.slotBPlayerIndex,
@@ -570,47 +574,40 @@
 							{/if}
 						{:else}
 							<p class="mb-2 text-xs font-bold text-gray-400">Choose player</p>
-							<ul class="space-y-1">
+							<RadioGroup
+								value={ready.selected === null
+									? OBSERVER_RADIO
+									: String(ready.selected)}
+								onChange={(v) =>
+									selectFor(row, v === OBSERVER_RADIO ? null : Number(v))}
+								disabled={phase !== "picking"}
+								ariaLabel="Uploading player"
+								class="block space-y-1"
+							>
 								{#each ready.humans as human (human.player_index)}
-									<li>
-										<label
-											class="flex cursor-pointer items-center gap-2 text-sm text-tan"
-										>
-											<input
-												type="radio"
-												name={`uploader-${row.id}`}
-												disabled={phase !== "picking"}
-												checked={ready.selected === human.player_index}
-												onchange={() => selectFor(row, human.player_index)}
-											/>
-											<span class="font-bold">
-												{human.player_name ||
-													formatEnum(human.nation, "NATION_") ||
-													"—"}
-											</span>
-											{#if human.player_name}
-												<span class="text-xs text-gray-400">
-													{formatEnum(human.nation, "NATION_") ?? "—"}
-												</span>
-											{/if}
-										</label>
-									</li>
-								{/each}
-								<li>
 									<label
 										class="flex cursor-pointer items-center gap-2 text-sm text-tan"
 									>
-										<input
-											type="radio"
-											name={`uploader-${row.id}`}
-											disabled={phase !== "picking"}
-											checked={ready.selected === null}
-											onchange={() => selectFor(row, null)}
-										/>
-										<span class="font-bold">Observer</span>
+										<RadioItem value={String(human.player_index)} />
+										<span class="font-bold">
+											{human.player_name ||
+												formatEnum(human.nation, "NATION_") ||
+												"—"}
+										</span>
+										{#if human.player_name}
+											<span class="text-xs text-gray-400">
+												{formatEnum(human.nation, "NATION_") ?? "—"}
+											</span>
+										{/if}
 									</label>
-								</li>
-							</ul>
+								{/each}
+								<label
+									class="flex cursor-pointer items-center gap-2 text-sm text-tan"
+								>
+									<RadioItem value={OBSERVER_RADIO} />
+									<span class="font-bold">Observer</span>
+								</label>
+							</RadioGroup>
 						{/if}
 					{:else if row.status.kind === "uploaded"}
 						<a

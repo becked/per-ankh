@@ -17,6 +17,7 @@
 		getPlayerColor,
 	} from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
+	import Checkbox from "$lib/ui/Checkbox.svelte";
 
 	let {
 		gameDetails,
@@ -420,12 +421,10 @@
 		{#each Object.entries(CATEGORY_LABELS) as [key, label] (key)}
 			{@const category = key as TimelineCategory}
 			{@const sprite = CATEGORY_SPRITES[category]}
-			<label class="flex cursor-pointer items-center gap-1.5 text-sm">
-				<input
-					type="checkbox"
-					bind:checked={categoryFilters[category]}
-					class="accent-brown"
-				/>
+			<Checkbox
+				bind:checked={categoryFilters[category]}
+				labelClass="gap-1.5 text-sm"
+			>
 				<SpriteIcon
 					category={sprite.category}
 					value={sprite.value}
@@ -433,18 +432,13 @@
 					alt={label}
 				/>
 				<span class="text-gray-300">{label}</span>
-			</label>
+			</Checkbox>
 		{/each}
 
 		<div class="ml-auto">
-			<label class="flex cursor-pointer items-center gap-1.5 text-sm">
-				<input
-					type="checkbox"
-					bind:checked={showMetrics}
-					class="accent-brown"
-				/>
+			<Checkbox bind:checked={showMetrics} labelClass="gap-1.5 text-sm">
 				<span class="text-gray-300">Show Metrics</span>
-			</label>
+			</Checkbox>
 		</div>
 	</div>
 

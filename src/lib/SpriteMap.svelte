@@ -11,6 +11,7 @@
 	} from "$lib/generated/atlas-manifest";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import MapTooltip from "$lib/MapTooltip.svelte";
+	import Checkbox from "$lib/ui/Checkbox.svelte";
 
 	// Hex geometry from atlas reference (pointy-top, matching sprite masks).
 	// Atlases are pre-baked by scripts/bake-terrain-3d.ts (terrain),
@@ -1764,14 +1765,12 @@
 {#snippet controlsBar(trailingBtn: "expand" | "close" | "none")}
 	<div class="flex flex-wrap items-center gap-4 text-sm">
 		<div class="flex items-center gap-3">
-			<label class="marker-toggle">
-				<input type="checkbox" bind:checked={showPolitical} />
-				<span class="marker-label">Political</span>
-			</label>
-			<label class="marker-toggle">
-				<input type="checkbox" bind:checked={showReligion} />
-				<span class="marker-label">Religion</span>
-			</label>
+			<Checkbox bind:checked={showPolitical} labelClass="gap-1.5">
+				<span class="select-none text-tan">Political</span>
+			</Checkbox>
+			<Checkbox bind:checked={showReligion} labelClass="gap-1.5">
+				<span class="select-none text-tan">Religion</span>
+			</Checkbox>
 		</div>
 
 		<div class="ml-auto flex items-center gap-6">
@@ -2136,56 +2135,6 @@
 	.zoom-btn:disabled {
 		opacity: 0.4;
 		cursor: not-allowed;
-	}
-
-	.marker-toggle {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		cursor: pointer;
-	}
-
-	.marker-toggle input[type="checkbox"] {
-		appearance: none;
-		width: 14px;
-		height: 14px;
-		border: 2px solid var(--color-tan);
-		border-radius: 3px;
-		background: transparent;
-		cursor: pointer;
-		position: relative;
-		transition:
-			background 0.15s ease,
-			border-color 0.15s ease;
-	}
-
-	.marker-toggle input[type="checkbox"]:checked {
-		background: var(--color-tan);
-	}
-
-	.marker-toggle input[type="checkbox"]:checked::after {
-		content: "";
-		position: absolute;
-		left: 3px;
-		top: 0px;
-		width: 4px;
-		height: 8px;
-		border: solid #1a1a1a;
-		border-width: 0 2px 2px 0;
-		transform: rotate(45deg);
-	}
-
-	.marker-toggle:hover input[type="checkbox"] {
-		border-color: white;
-	}
-
-	.marker-label {
-		color: var(--color-tan);
-		user-select: none;
-	}
-
-	.marker-toggle:hover .marker-label {
-		color: white;
 	}
 
 	.turn-slider {

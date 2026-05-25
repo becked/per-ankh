@@ -6,6 +6,7 @@
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
 	import { PARSER_VERSION } from "$lib/parser/types";
+	import { toast } from "$lib/ui/toast";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -54,7 +55,7 @@
 			await cloudApi.updateSettings({ default_game_public: next });
 		} catch (err) {
 			defaultPublic = prev;
-			alert(
+			toast.error(
 				`Settings update failed: ${err instanceof Error ? err.message : err}`,
 			);
 		} finally {

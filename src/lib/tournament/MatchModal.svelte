@@ -8,7 +8,6 @@
 		type UserMe,
 	} from "$lib/api-cloud";
 	import { invalidateAll } from "$app/navigation";
-	import { autofocus } from "$lib/actions/autofocus";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		effectiveOptionValue,
@@ -16,6 +15,8 @@
 		mapOptionLabel,
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
+	import Select from "$lib/ui/Select.svelte";
+	import type { SelectOption } from "$lib/ui/types";
 
 	interface Props {
 		match: TournamentMatch;
@@ -107,6 +108,25 @@
 		if (!current || allowed.includes(current)) return allowed;
 		return [current, ...allowed];
 	});
+
+	// --- Styled-Select option lists (retro edit mode) -----------------
+	const mapSelectOptions = $derived<SelectOption[]>(
+		mapScriptOptions.map((script) => ({
+			value: script,
+			label: tournament.allowed_map_scripts.includes(script)
+				? mapScriptLabel(script)
+				: `${mapScriptLabel(script)} (no longer allowed)`,
+		})),
+	);
+	const winnerOptions = $derived<SelectOption[]>([
+		{ value: match.slot_a_id, label: slotALabel },
+		...(match.slot_b_id ? [{ value: match.slot_b_id, label: slotBLabel }] : []),
+	]);
+	const RETRO_STATUS_OPTIONS: SelectOption[] = [
+		{ value: "complete", label: "complete" },
+		{ value: "forfeit", label: "forfeit" },
+		{ value: "pending", label: "pending" },
+	];
 
 	async function withBusy<T>(
 		op: () => Promise<T>,
@@ -339,22 +359,14 @@
 							<h3 class="text-xs font-bold text-tan">Change map</h3>
 							<label class="text-xs text-tan">
 								Map
-								<select
-									bind:value={mapScriptInput}
-									use:autofocus
-									class="mt-1 block w-full rounded border border-black bg-[#2a2622] p-1.5 text-xs text-tan"
-								>
-									<option value="">(no map set)</option>
-									{#each mapScriptOptions as script (script)}
-										{@const allowed =
-											tournament.allowed_map_scripts.includes(script)}
-										<option value={script}>
-											{mapScriptLabel(script)}{allowed
-												? ""
-												: " (no longer allowed)"}
-										</option>
-									{/each}
-								</select>
+								<Select
+									value={mapScriptInput}
+									onChange={(v) => (mapScriptInput = v ?? "")}
+									options={mapSelectOptions}
+									placeholder="(no map set)"
+									ariaLabel="Map"
+									class="mt-1 w-full"
+								/>
 							</label>
 							<div class="flex justify-end gap-2">
 								<button
@@ -380,36 +392,29 @@
 							<h3 class="text-xs font-bold text-tan">{retroEditLabel}</h3>
 							<label class="text-xs text-tan">
 								Winner
-								<select
-									value={retroWinnerSlotId}
-									onchange={(e) =>
-										(retroWinnerSlotId =
-											(e.target as HTMLSelectElement).value || null)}
+								<Select
+									value={retroWinnerSlotId ?? ""}
+									onChange={(v) => (retroWinnerSlotId = v)}
+									options={winnerOptions}
+									placeholder="Select winner"
 									disabled={retroStatus === "pending"}
-									class="mt-1 block w-full rounded border border-black bg-[#2a2622] p-1.5 text-xs text-tan disabled:opacity-50"
-								>
-									<option value={match.slot_a_id}>{slotALabel}</option>
-									{#if match.slot_b_id}
-										<option value={match.slot_b_id}>{slotBLabel}</option>
-									{/if}
-								</select>
+									ariaLabel="Winner"
+									class="mt-1 w-full"
+								/>
 							</label>
 							<label class="text-xs text-tan">
 								Status
-								<select
+								<Select
 									value={retroStatus}
-									onchange={(e) => {
-										const v = (e.target as HTMLSelectElement)
-											.value as typeof retroStatus;
-										retroStatus = v;
-										if (v === "pending") retroWinnerSlotId = null;
+									onChange={(v) => {
+										const s = (v ?? "complete") as typeof retroStatus;
+										retroStatus = s;
+										if (s === "pending") retroWinnerSlotId = null;
 									}}
-									class="mt-1 block w-full rounded border border-black bg-[#2a2622] p-1.5 text-xs text-tan"
-								>
-									<option value="complete">complete</option>
-									<option value="forfeit">forfeit</option>
-									<option value="pending">pending</option>
-								</select>
+									options={RETRO_STATUS_OPTIONS}
+									ariaLabel="Status"
+									class="mt-1 w-full"
+								/>
 							</label>
 							<div class="flex justify-end gap-2">
 								<button

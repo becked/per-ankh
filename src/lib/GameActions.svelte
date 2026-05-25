@@ -23,6 +23,7 @@
 		UnauthorizedError,
 		type CollectionInfo,
 	} from "$lib/api-cloud";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		gameId: string;
@@ -97,7 +98,7 @@
 			await invalidateAll();
 			closePopover();
 		} catch (err) {
-			alert(`Move failed: ${err instanceof Error ? err.message : err}`);
+			toast.error(`Move failed: ${err instanceof Error ? err.message : err}`);
 		} finally {
 			moving = false;
 		}
@@ -135,7 +136,7 @@
 			await cloudApi.toggleVisibility(gameId, next);
 		} catch (err) {
 			isPublic = prev;
-			alert(
+			toast.error(
 				`Visibility update failed: ${err instanceof Error ? err.message : err}`,
 			);
 		} finally {
@@ -193,10 +194,12 @@
 				return;
 			}
 			if (err instanceof ApiError && err.status === 429) {
-				alert("Too many downloads. Try again in an hour.");
+				toast.error("Too many downloads. Try again in an hour.");
 				return;
 			}
-			alert(`Download failed: ${err instanceof Error ? err.message : err}`);
+			toast.error(
+				`Download failed: ${err instanceof Error ? err.message : err}`,
+			);
 		} finally {
 			downloading = false;
 		}
@@ -218,7 +221,7 @@
 		} catch (err) {
 			deleting = false;
 			closePopover();
-			alert(`Delete failed: ${err instanceof Error ? err.message : err}`);
+			toast.error(`Delete failed: ${err instanceof Error ? err.message : err}`);
 		}
 	}
 
