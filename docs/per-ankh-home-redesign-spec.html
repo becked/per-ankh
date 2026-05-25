@@ -1,990 +1,1998 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Per Ankh — Home Page Redesign Build Spec</title>
-<style>
-  :root {
-    --bg: #1a1714;
-    --bg-2: #221e1a;
-    --panel: #2a251f;
-    --panel-2: #322c25;
-    --line: #3d362d;
-    --line-2: #4a4136;
-    --ink: #f3ede2;
-    --ink-2: #b8ad9c;
-    --ink-3: #7d7468;
-    --amber: #e8a838;
-    --amber-soft: #c89030;
-    --green: #6bbf3e;
-    --red: #d9534f;
-    --win-bg: #2a3a24;
-    --win-ink: #8fcc6a;
-    --loss-bg: #3a2622;
-    --loss-ink: #d98c87;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  html { scroll-behavior: smooth; }
-  body {
-    background: var(--bg);
-    color: var(--ink);
-    font-family: "Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
-    line-height: 1.62;
-    -webkit-font-smoothing: antialiased;
-  }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 0 28px; }
-
-  /* ---------- masthead ---------- */
-  header.mast {
-    border-bottom: 1px solid var(--line);
-    background: linear-gradient(180deg, #221e1a 0%, var(--bg) 100%);
-  }
-  .mast-inner { padding: 56px 0 44px; }
-  .ankh-mark { display: inline-flex; align-items: center; gap: 11px; margin-bottom: 20px; }
-  .ankh-mark svg { width: 28px; height: 28px; }
-  .ankh-mark span {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    font-weight: 700; font-size: 18px;
-  }
-  .kicker {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: 12px; letter-spacing: 0.2em; text-transform: uppercase;
-    color: var(--amber); margin-bottom: 16px;
-  }
-  h1 {
-    font-size: 42px; line-height: 1.1; font-weight: 600;
-    letter-spacing: -0.015em; margin-bottom: 14px;
-  }
-  .standfirst { font-size: 18px; color: var(--ink-2); max-width: 600px; }
-  .meta-row {
-    margin-top: 26px; padding-top: 20px; border-top: 1px solid var(--line);
-    display: flex; flex-wrap: wrap; gap: 26px;
-    font-family: "Helvetica Neue", Arial, sans-serif; font-size: 12.5px;
-    color: var(--ink-3);
-  }
-  .meta-row b { color: var(--ink-2); font-weight: 500; }
-
-  /* ---------- table of contents ---------- */
-  nav.toc {
-    background: var(--bg-2); border-bottom: 1px solid var(--line);
-  }
-  nav.toc .wrap { padding-top: 18px; padding-bottom: 18px; }
-  nav.toc ol {
-    list-style: none; display: flex; flex-wrap: wrap; gap: 4px 26px;
-    font-family: "Helvetica Neue", Arial, sans-serif; font-size: 13px;
-    counter-reset: toc;
-  }
-  nav.toc li { counter-increment: toc; }
-  nav.toc a { color: var(--ink-2); text-decoration: none; }
-  nav.toc a::before {
-    content: counter(toc, decimal-leading-zero) "  ";
-    color: var(--amber-soft); font-weight: 700;
-  }
-  nav.toc a:hover { color: var(--amber); }
-
-  /* ---------- section scaffolding ---------- */
-  section { padding: 50px 0; border-bottom: 1px solid var(--line); }
-  section:last-of-type { border-bottom: none; }
-  .sec-num {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: 12px; letter-spacing: 0.16em; color: var(--amber-soft);
-    margin-bottom: 12px;
-  }
-  h2 {
-    font-size: 29px; font-weight: 600; letter-spacing: -0.01em;
-    margin-bottom: 14px; line-height: 1.15;
-  }
-  h3 {
-    font-size: 19px; font-weight: 600; margin: 30px 0 9px;
-    color: var(--ink);
-  }
-  h4 {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: 13px; letter-spacing: 0.04em; text-transform: uppercase;
-    color: var(--amber-soft); margin: 24px 0 8px;
-  }
-  p { margin-bottom: 13px; color: var(--ink-2); font-size: 16px; }
-  p.lead { font-size: 17.5px; color: var(--ink); }
-  strong { color: var(--ink); font-weight: 600; }
-  code {
-    font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
-    font-size: 13px; background: var(--panel); color: var(--amber);
-    padding: 1.5px 6px; border-radius: 4px;
-  }
-
-  ul.spec, ol.spec { margin: 6px 0 16px; padding-left: 0; list-style: none; }
-  ul.spec li, ol.spec li {
-    position: relative; padding-left: 24px; margin-bottom: 8px;
-    color: var(--ink-2); font-size: 15.5px;
-  }
-  ul.spec li::before {
-    content: ""; position: absolute; left: 6px; top: 10px;
-    width: 5px; height: 5px; background: var(--amber-soft);
-    border-radius: 50%;
-  }
-  ol.spec { counter-reset: step; }
-  ol.spec li { counter-increment: step; }
-  ol.spec li::before {
-    content: counter(step); position: absolute; left: 0; top: 1px;
-    font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 700;
-    font-size: 11px; color: var(--bg); background: var(--amber-soft);
-    width: 16px; height: 16px; border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-  }
-  ul.spec li b, ol.spec li b { color: var(--ink); font-weight: 600; }
-
-  /* ---------- requirement blocks ---------- */
-  .req {
-    background: var(--bg-2); border: 1px solid var(--line-2);
-    border-radius: 7px; margin: 16px 0; overflow: hidden;
-  }
-  .req-head {
-    display: flex; align-items: center; gap: 10px;
-    padding: 11px 18px; background: var(--panel);
-    border-bottom: 1px solid var(--line);
-  }
-  .req-head .rid {
-    font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 700;
-    font-size: 11.5px; color: var(--bg); background: var(--amber);
-    padding: 3px 9px; border-radius: 4px; letter-spacing: 0.03em;
-  }
-  .req-head .rtitle { font-size: 16px; font-weight: 600; }
-  .req-body { padding: 14px 18px 16px; }
-  .req-body p { font-size: 15px; margin-bottom: 9px; }
-  .req-body p:last-child { margin-bottom: 0; }
-  .req-body ul.spec { margin-bottom: 4px; }
-
-  /* ---------- callout ---------- */
-  .note {
-    background: var(--bg-2); border-left: 3px solid var(--amber);
-    border-radius: 0 6px 6px 0; padding: 14px 20px; margin: 16px 0;
-  }
-  .note .nt {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--amber); margin-bottom: 6px;
-  }
-  .note p { font-size: 14.5px; margin-bottom: 0; }
-
-  .scope-flag {
-    background: var(--bg-2); border: 1px dashed var(--line-2);
-    border-radius: 6px; padding: 13px 18px; margin: 16px 0;
-  }
-  .scope-flag .sf {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase;
-    color: var(--ink-3); margin-bottom: 6px;
-  }
-  .scope-flag p { font-size: 14.5px; margin-bottom: 0; }
-  .scope-flag p b { color: var(--green); }
-
-  /* ---------- tables ---------- */
-  table.data {
-    width: 100%; border-collapse: collapse; margin: 14px 0 18px;
-    font-family: "Helvetica Neue", Arial, sans-serif; font-size: 14px;
-  }
-  table.data th {
-    text-align: left; font-size: 11px; letter-spacing: 0.05em;
-    text-transform: uppercase; color: var(--amber-soft);
-    font-weight: 600; padding: 9px 12px;
-    border-bottom: 1.5px solid var(--line-2);
-  }
-  table.data td {
-    padding: 10px 12px; border-bottom: 1px solid var(--line);
-    color: var(--ink-2); vertical-align: top;
-  }
-  table.data tr:last-child td { border-bottom: none; }
-  table.data td b { color: var(--ink); font-weight: 600; }
-  table.data code { font-size: 12.5px; }
-
-  /* ---------- mockup frame ---------- */
-  figure {
-    margin: 26px 0 8px;
-    background: var(--bg-2);
-    border: 1px solid var(--line-2);
-    border-radius: 9px; overflow: hidden;
-  }
-  .browser-bar {
-    display: flex; align-items: center; gap: 7px;
-    padding: 9px 13px; background: var(--panel);
-    border-bottom: 1px solid var(--line);
-  }
-  .dot { width: 10px; height: 10px; border-radius: 50%; }
-  .dot.r { background: #d9534f; } .dot.y { background: #e8a838; } .dot.g { background: #6bbf3e; }
-  .browser-bar .url {
-    margin-left: 9px; font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: 11px; color: var(--ink-3);
-    background: var(--bg); padding: 4px 11px; border-radius: 5px;
-  }
-  .mock { padding: 16px; background: var(--bg); }
-  figcaption {
-    font-family: "Helvetica Neue", Arial, sans-serif;
-    font-size: 12px; color: var(--ink-3); padding: 4px 4px 0;
-    margin-bottom: 22px;
-  }
-  figcaption b { color: var(--ink-2); font-weight: 500; }
-
-  /* ---------- mockup interior ---------- */
-  .ui { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
-  .app-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding: 10px 13px; background: var(--bg-2);
-    border: 1px solid var(--line); border-radius: 7px;
-  }
-  .app-head .brand { display: flex; align-items: center; gap: 7px; font-weight: 700; font-size: 13.5px; }
-  .app-head .brand svg { width: 16px; height: 16px; }
-  .hgroup { display: flex; align-items: center; gap: 7px; }
-  .pill {
-    font-size: 11px; color: var(--ink-2);
-    border: 1px solid var(--line-2); padding: 6px 10px; border-radius: 6px;
-    display: inline-flex; align-items: center; gap: 5px;
-  }
-  .pill.search { color: var(--ink-3); min-width: 190px; }
-  .micro-note { font-size: 10px; color: var(--ink-3); margin: 5px 3px 0; }
-
-  .scope-row { display: flex; align-items: center; gap: 10px; margin: 11px 0 8px; }
-  .selector {
-    display: flex; align-items: center; gap: 7px;
-    padding: 7px 11px; background: var(--bg-2);
-    border: 1px solid var(--line-2); border-radius: 6px;
-    font-size: 12px; font-weight: 500;
-  }
-  .selector .chev { color: var(--ink-3); font-size: 9px; }
-  .scope-row .count { font-size: 11px; color: var(--ink-3); }
-  .scope-row .right-note { margin-left: auto; font-size: 10px; color: var(--ink-3); }
-
-  .tabs {
-    display: flex; gap: 2px; border-bottom: 1px solid var(--line-2);
-    margin-bottom: 13px;
-  }
-  .tab {
-    font-size: 12px; padding: 8px 13px; color: var(--ink-3);
-    border-bottom: 2px solid transparent; margin-bottom: -1px;
-  }
-  .tab.active { color: var(--ink); font-weight: 600; border-bottom-color: var(--amber); }
-
-  .metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 9px; margin-bottom: 11px; }
-  .metric { background: var(--bg-2); border-radius: 6px; padding: 10px 11px; }
-  .metric .ml { font-size: 10px; color: var(--ink-3); margin-bottom: 3px; }
-  .metric .mv { font-size: 18px; font-weight: 700; }
-  .metric .mv.amber { color: var(--amber); }
-
-  .ph {
-    border: 1px dashed var(--line-2); border-radius: 6px;
-    background: var(--bg-2); display: flex; align-items: center;
-    justify-content: center; flex-direction: column; gap: 5px;
-    color: var(--ink-3); font-size: 11px; text-align: center;
-  }
-
-  /* search dropdown mock */
-  .search-mock { position: relative; }
-  .search-box {
-    display: flex; align-items: center; gap: 7px;
-    padding: 8px 11px; background: var(--bg-2);
-    border: 1px solid var(--amber-soft); border-radius: 6px 6px 0 0;
-    font-size: 12px; color: var(--ink);
-  }
-  .search-box .cursor { color: var(--ink-3); }
-  .results {
-    border: 1px solid var(--amber-soft); border-top: none;
-    border-radius: 0 0 6px 6px; background: var(--bg-2); overflow: hidden;
-  }
-  .result-row {
-    display: flex; align-items: center; gap: 9px;
-    padding: 8px 11px; font-size: 12px;
-    border-bottom: 1px solid var(--line);
-  }
-  .result-row:last-child { border-bottom: none; }
-  .result-row .rname { color: var(--ink); font-weight: 600; flex: 1; }
-  .result-row .rname mark { background: rgba(232,168,56,0.25); color: var(--amber); padding: 0 1px; }
-  .result-row .rmeta { font-size: 10.5px; color: var(--ink-3); }
-  .result-row .rcoll {
-    font-size: 9.5px; color: var(--ink-3);
-    border: 1px solid var(--line-2); padding: 2px 6px; border-radius: 4px;
-  }
-
-  /* games tab */
-  .filters { display: flex; align-items: center; gap: 6px; margin-bottom: 10px; flex-wrap: wrap; }
-  .ftext {
-    display: flex; align-items: center; gap: 6px;
-    font-size: 11px; color: var(--ink-3);
-    border: 1px solid var(--line-2); padding: 6px 10px; border-radius: 6px;
-    min-width: 150px;
-  }
-  .chip {
-    font-size: 10.5px; color: var(--ink-2);
-    border: 1px solid var(--line-2); padding: 5px 9px; border-radius: 6px;
-  }
-  .chip.active { border-color: var(--amber-soft); color: var(--amber); }
-  .chip.sort { margin-left: auto; }
-  table.games {
-    width: 100%; border-collapse: collapse;
-    background: var(--bg-2); border: 1px solid var(--line);
-    border-radius: 6px; overflow: hidden; font-size: 11.5px;
-  }
-  table.games th {
-    text-align: left; font-size: 9.5px; letter-spacing: 0.04em;
-    color: var(--ink-3); font-weight: 500; text-transform: uppercase;
-    padding: 7px 12px; background: var(--panel);
-    border-bottom: 1px solid var(--line);
-  }
-  table.games td {
-    padding: 8px 12px; border-bottom: 1px solid var(--line);
-    color: var(--ink-2);
-  }
-  table.games tr:last-child td { border-bottom: none; }
-  table.games td.name { color: var(--ink); font-weight: 600; }
-  .badge { font-size: 9.5px; padding: 2px 7px; border-radius: 5px; font-weight: 600; }
-  .badge.win { background: var(--win-bg); color: var(--win-ink); }
-  .badge.loss { background: var(--loss-bg); color: var(--loss-ink); }
-
-  /* dropdown mock (collection) */
-  .dd {
-    width: 230px; border: 1px solid var(--line-2);
-    border-radius: 6px; overflow: hidden; background: var(--bg-2);
-  }
-  .dd-trigger {
-    display: flex; align-items: center; gap: 7px;
-    padding: 8px 11px; background: var(--panel);
-    border-bottom: 1px solid var(--line); font-size: 12px; font-weight: 500;
-  }
-  .dd-trigger .chev { margin-left: auto; color: var(--ink-3); font-size: 9px; }
-  .dd-item {
-    display: flex; align-items: center; gap: 7px;
-    padding: 7px 11px; font-size: 12px; color: var(--ink-2);
-  }
-  .dd-item .c { margin-left: auto; font-size: 10px; color: var(--ink-3); }
-  .dd-item.sel { background: rgba(232,168,56,0.12); color: var(--amber); }
-  .dd-item.sel .c { color: var(--amber); }
-  .dd-item.indent { padding-left: 24px; }
-  .dd-group {
-    font-size: 9px; letter-spacing: 0.07em; color: var(--ink-3);
-    padding: 7px 11px 3px;
-  }
-  .dd-divider { border-top: 1px solid var(--line); }
-
-  /* stats sub-nav mock */
-  .subnav { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 11px; }
-  .subtab {
-    font-size: 10.5px; padding: 5px 10px; border-radius: 5px;
-    color: var(--ink-3); border: 1px solid var(--line);
-  }
-  .subtab.active { color: var(--amber); border-color: var(--amber-soft); background: rgba(232,168,56,0.08); }
-
-  /* phase list */
-  .phase { display: flex; gap: 14px; padding: 15px 0; border-bottom: 1px solid var(--line); }
-  .phase:last-child { border-bottom: none; }
-  .phase .pnum {
-    flex-shrink: 0; width: 34px; height: 34px; border-radius: 50%;
-    border: 1px solid var(--amber-soft); color: var(--amber);
-    display: flex; align-items: center; justify-content: center;
-    font-family: "Helvetica Neue", Arial, sans-serif; font-weight: 700; font-size: 13px;
-  }
-  .phase .pbody h4 { margin: 0 0 4px; color: var(--ink); font-size: 15.5px; text-transform: none; letter-spacing: 0; }
-  .phase .pbody p { font-size: 14px; margin-bottom: 0; }
-
-  footer {
-    padding: 36px 0 54px; text-align: center;
-    color: var(--ink-3); font-size: 12px;
-    font-family: "Helvetica Neue", Arial, sans-serif;
-  }
-  footer .ankh-foot { font-size: 17px; color: var(--amber-soft); margin-bottom: 7px; }
-
-  @media (max-width: 680px) {
-    .wrap { padding: 0 18px; }
-    h1 { font-size: 31px; }
-    h2 { font-size: 23px; }
-    .metrics { grid-template-columns: repeat(2,1fr); }
-    table.games th:nth-child(3), table.games td:nth-child(3) { display: none; }
-    nav.toc ol { gap: 4px 16px; }
-  }
-</style>
-</head>
-<body>
-
-<!-- ===================== MASTHEAD ===================== -->
-<header class="mast">
-  <div class="wrap mast-inner">
-    <div class="ankh-mark">
-      <svg viewBox="0 0 24 32" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <ellipse cx="12" cy="7" rx="6" ry="7" stroke="#e8a838" stroke-width="2.4"/>
-        <line x1="12" y1="14" x2="12" y2="31" stroke="#e8a838" stroke-width="2.4"/>
-        <line x1="4" y1="19" x2="20" y2="19" stroke="#e8a838" stroke-width="2.4"/>
-      </svg>
-      <span>Per Ankh</span>
-    </div>
-    <div class="kicker">Build Specification</div>
-    <h1>Home page redesign — stats, tabs &amp; search</h1>
-    <p class="standfirst">Specification for restructuring the user home page (<code>/users/[user_id]</code>) into a tabbed layout with collection-scoped statistics, a two-search model, and removal of the persistent games sidebar.</p>
-    <div class="meta-row">
-      <span><b>Status:</b> Approved for build</span>
-      <span><b>Surface:</b> <code>/users/[user_id]</code>, <code>/games/[id]</code></span>
-      <span><b>Version:</b> v1</span>
-    </div>
-  </div>
-</header>
-
-<!-- ===================== TOC ===================== -->
-<nav class="toc">
-  <div class="wrap">
-    <ol>
-      <li><a href="#overview">Overview &amp; scope</a></li>
-      <li><a href="#layout">Page layout &amp; tabs</a></li>
-      <li><a href="#scope">Collection scope &amp; caching</a></li>
-      <li><a href="#search">Search model</a></li>
-      <li><a href="#games">Games tab</a></li>
-      <li><a href="#stats">Stats tab</a></li>
-      <li><a href="#sidebar">Sidebar removal</a></li>
-      <li><a href="#routing">Routing &amp; URL state</a></li>
-      <li><a href="#phases">Build phases</a></li>
-    </ol>
-  </div>
-</nav>
-
-<!-- ===================== 1. OVERVIEW ===================== -->
-<section id="overview">
-  <div class="wrap">
-    <div class="sec-num">01</div>
-    <h2>Overview &amp; scope</h2>
-    <p class="lead">The user home page becomes a tabbed surface. A collection selector sits above the tab bar and scopes every tab. Statistics are computed and cached per collection. The persistent games sidebar is removed; the games list becomes a tab.</p>
-
-    <h4>In scope for v1</h4>
-    <ul class="spec">
-      <li>Three-tab home layout: <b>Overview</b>, <b>Stats</b>, <b>Games</b>.</li>
-      <li>Collection selector as the scope control for all three tabs.</li>
-      <li>Per-collection cached stats aggregate.</li>
-      <li>Two distinct search affordances: a global <b>header search</b> and a local <b>Games-tab search</b>.</li>
-      <li>Removal of the persistent <code>CloudGameSidebar</code> from both the home page and game-detail.</li>
-    </ul>
-
-    <h4>Out of scope for v1</h4>
-    <ul class="spec">
-      <li>Save-search-as-collection.</li>
-      <li>Header search across other users' public corpora — v1 header search covers the signed-in user's own games only.</li>
-      <li>Per-collection public/private visibility as a data concept.</li>
-      <li>Standalone Timeline or Nations top-level tabs.</li>
-    </ul>
-  </div>
-</section>
-
-<!-- ===================== 2. LAYOUT ===================== -->
-<section id="layout">
-  <div class="wrap">
-    <div class="sec-num">02</div>
-    <h2>Page layout &amp; tabs</h2>
-    <p class="lead">Top to bottom: app header, collection scope row, tab bar, full-width tab content. No persistent side rail.</p>
-
-    <figure>
-      <div class="browser-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="url">perankh.app/users/me?tab=overview</span>
-      </div>
-      <div class="mock ui">
-        <div class="app-head">
-          <div class="brand">
-            <svg viewBox="0 0 24 32" fill="none"><ellipse cx="12" cy="7" rx="5.5" ry="6.5" stroke="#e8a838" stroke-width="2.4"/><line x1="12" y1="13.5" x2="12" y2="30" stroke="#e8a838" stroke-width="2.4"/><line x1="5" y1="18" x2="19" y2="18" stroke="#e8a838" stroke-width="2.4"/></svg>
-            Per Ankh
-          </div>
-          <div class="hgroup">
-            <span class="pill">&#8593; Upload</span>
-            <span class="pill search">&#9906; Find a game&hellip;</span>
-          </div>
-        </div>
-        <div class="micro-note" style="text-align:right;">header search — global over your games, opens results dropdown, click navigates</div>
-
-        <div class="scope-row">
-          <span class="selector">&#128193; All collections <span class="chev">&#9660;</span></span>
-          <span class="count">59 saves</span>
-          <span class="right-note">collection scope &middot; drives every tab below</span>
-        </div>
-
-        <div class="tabs">
-          <div class="tab active">Overview</div>
-          <div class="tab">Stats</div>
-          <div class="tab">Games</div>
-        </div>
-
-        <div class="metrics">
-          <div class="metric"><div class="ml">Saves</div><div class="mv">59</div></div>
-          <div class="metric"><div class="ml">Win rate</div><div class="mv amber">78%</div></div>
-          <div class="metric"><div class="ml">Avg turns</div><div class="mv">104</div></div>
-          <div class="metric"><div class="ml">Top nation</div><div class="mv">Maurya</div></div>
-        </div>
-        <div class="ph" style="height:84px;">
-          <span style="font-size:16px;">&#128202;</span>
-          <span>Overview tab content — summary tiles + activity heatmap, collection-scoped</span>
-        </div>
-      </div>
-    </figure>
-    <figcaption><b>Mockup 1.</b> Home layout. Header, scope row, three peer tabs, full-width content.</figcaption>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">L1</span><span class="rtitle">Header</span></div>
-      <div class="req-body">
-        <p>Persistent across all tabs and across game-detail. Contains: brand/logo (links to the user's own home), Upload action, and the global header search input. Header search behavior is specified in section 04.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">L2</span><span class="rtitle">Scope row</span></div>
-      <div class="req-body">
-        <p>A dedicated row directly below the header and directly above the tab bar. Contains the collection selector (left) and the save count for the selected collection. The selector's value scopes all three tabs. Specified in section 03.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">L3</span><span class="rtitle">Tab bar</span></div>
-      <div class="req-body">
-        <p>Three tabs: <b>Overview</b>, <b>Stats</b>, <b>Games</b>. Overview is the default. The active tab is reflected in the URL (section 08). Tab content renders full-width below the bar.</p>
-        <ul class="spec">
-          <li><b>Overview</b> — summary metric tiles and the activity heatmap, scoped to the selected collection.</li>
-          <li><b>Stats</b> — the full chart catalog with internal sub-navigation. Specified in section 06.</li>
-          <li><b>Games</b> — the games list as a sortable, filterable table. Specified in section 05.</li>
-        </ul>
-      </div>
-    </div>
-
-    <div class="scope-flag">
-      <div class="sf">Tab content rule</div>
-      <p>Every tab reflects the collection selected in the scope row. Changing the collection re-renders all tab content. <b>No tab has its own independent scope control.</b></p>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 3. COLLECTION SCOPE ===================== -->
-<section id="scope">
-  <div class="wrap">
-    <div class="sec-num">03</div>
-    <h2>Collection scope &amp; caching</h2>
-    <p class="lead">The collection selector is the single scope control. Its value is the cache key dimension for statistics.</p>
-
-    <h3>Collection selector</h3>
-    <figure>
-      <div class="browser-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="url">perankh.app/users/me?tab=stats</span>
-      </div>
-      <div class="mock ui">
-        <div class="dd">
-          <div class="dd-trigger">&#128193; All collections <span class="chev">&#9650;</span></div>
-          <div class="dd-item sel">&#10003; All collections <span class="c">59</span></div>
-          <div class="dd-item">&#9673; Public <span class="c">12</span></div>
-          <div class="dd-group dd-divider">MY COLLECTIONS</div>
-          <div class="dd-item indent">Maurya runs <span class="c">22</span></div>
-          <div class="dd-item indent">Sub-100 turn wins <span class="c">9</span></div>
-          <div class="dd-item indent">Experiments <span class="c">6</span></div>
-        </div>
-      </div>
-    </figure>
-    <figcaption><b>Mockup 2.</b> Collection selector. Mirrors the current data model — no new visibility concept is introduced.</figcaption>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">S1</span><span class="rtitle">Selector contents</span></div>
-      <div class="req-body">
-        <p>The selector lists, in order:</p>
-        <ul class="spec">
-          <li><b>All collections</b> — the user's entire corpus. Default selection.</li>
-          <li><b>Public</b> — a virtual filter: the subset of the user's games where <code>is_public = true</code>. This is a derived view, not a stored collection.</li>
-          <li><b>My collections</b> — the user's owner-organizational collections, listed under a group label.</li>
-        </ul>
-        <p>Each entry shows a count of games. <code>is_public</code> is a per-game field; there is no per-collection visibility concept and none is added.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">S2</span><span class="rtitle">Cache key</span></div>
-      <div class="req-body">
-        <p>The stats aggregate is cached on the key <code>(user_id, scope, collection_id)</code>, extending the existing <code>cloud/src/stats/cache.ts</code> model. <code>scope</code> distinguishes <code>all</code> / <code>public</code> / <code>collection</code>; <code>collection_id</code> is populated only when <code>scope = collection</code>.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">S3</span><span class="rtitle">Invalidation</span></div>
-      <div class="req-body">
-        <p>A new save upload invalidates the <code>all</code> aggregate, the <code>public</code> aggregate if the save is public, and the aggregate for any collection the save is added to. Moving a save between collections invalidates both affected collection aggregates.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">S4</span><span class="rtitle">Switching collections</span></div>
-      <div class="req-body">
-        <p>Selecting a collection triggers a single fetch of that collection's cached aggregate. The active tab re-renders from that one payload. Switching collections does not issue per-chart requests.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 4. SEARCH ===================== -->
-<section id="search">
-  <div class="wrap">
-    <div class="sec-num">04</div>
-    <h2>Search model</h2>
-    <p class="lead">Two search affordances with separate jobs. Header search finds one game and navigates to it. Games-tab search narrows the games list in place.</p>
-
-    <table class="data">
-      <thead><tr><th></th><th>Header search</th><th>Games-tab search</th></tr></thead>
-      <tbody>
-        <tr><td><b>Job</b></td><td>Find one game, go to it</td><td>Narrow the games list, view the set</td></tr>
-        <tr><td><b>Location</b></td><td>App header, all tabs</td><td>Games-tab filter row</td></tr>
-        <tr><td><b>Corpus</b></td><td>All of the user's own games</td><td>Games within the selected collection</td></tr>
-        <tr><td><b>Output</b></td><td>Results dropdown</td><td>Filtered table rows</td></tr>
-        <tr><td><b>On select</b></td><td><code>goto</code> the game's detail page</td><td>n/a — table updates live</td></tr>
-        <tr><td><b>Collection scope</b></td><td>Ignores it</td><td>Respects it</td></tr>
-      </tbody>
-    </table>
-
-    <h3>Header search</h3>
-    <figure>
-      <div class="browser-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="url">perankh.app/users/me?tab=overview</span>
-      </div>
-      <div class="mock ui">
-        <div class="search-mock" style="max-width:330px; margin-left:auto;">
-          <div class="search-box">&#9906; <span>maur</span><span class="cursor">|</span></div>
-          <div class="results">
-            <div class="result-row"><span class="rname"><mark>Maur</mark>ya &mdash; 124 turns</span><span class="rcoll">Maurya runs</span><span class="rmeta">May 13</span></div>
-            <div class="result-row"><span class="rname"><mark>Maur</mark>ya &mdash; 86 turns</span><span class="rcoll">Maurya runs</span><span class="rmeta">May 2</span></div>
-            <div class="result-row"><span class="rname"><mark>Maur</mark>ya &mdash; 143 turns</span><span class="rcoll">&mdash;</span><span class="rmeta">Apr 29</span></div>
-          </div>
-        </div>
-      </div>
-    </figure>
-    <figcaption><b>Mockup 3.</b> Header search with results dropdown. Each row navigates to that game on click.</figcaption>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">H1</span><span class="rtitle">Matching</span></div>
-      <div class="req-body">
-        <p>Case-insensitive substring match against game <b>name</b> and <b>nation</b>, across all of the signed-in user's own games regardless of collection and regardless of <code>is_public</code>.</p>
-        <p>v1 corpus is the user's own games only. Other users' public games are not searched.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">H2</span><span class="rtitle">Results dropdown</span></div>
-      <div class="req-body">
-        <p>Input opens a dropdown of matching games below it. Each row shows the game name (matched substring highlighted), the nation, the game date, and — for games in a collection — the collection name. Cap the list at a fixed count (e.g. 8) with the closest matches first.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">H3</span><span class="rtitle">Navigation</span></div>
-      <div class="req-body">
-        <p>Clicking a result <code>goto</code>s that game's detail page (<code>/games/[id]</code>). Selecting a result <b>does not</b> change the collection selected in the scope row. Header search is purely navigational and never alters tab scope.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">H4</span><span class="rtitle">Empty &amp; no-match states</span></div>
-      <div class="req-body">
-        <p>Empty input: no dropdown. Input with no matches: dropdown shows a single "No games match" row. Matching is debounced.</p>
-      </div>
-    </div>
-
-    <h3>Games-tab search</h3>
-    <div class="req">
-      <div class="req-head"><span class="rid">G-S1</span><span class="rtitle">Free-text input</span></div>
-      <div class="req-body">
-        <p>A free-text input in the Games-tab filter row, alongside the structured filter chips. Case-insensitive substring match against game name and nation, restricted to games in the currently selected collection.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">G-S2</span><span class="rtitle">Combination with chips</span></div>
-      <div class="req-body">
-        <p>Free-text and structured chips (Nation, Result, Date) combine with <b>AND</b>. A row is shown only if it matches the free-text term and satisfies every active chip.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">G-S3</span><span class="rtitle">Output</span></div>
-      <div class="req-body">
-        <p>Output is the filtered set of table rows, updated live. Games-tab search produces no dropdown and performs no navigation.</p>
-      </div>
-    </div>
-
-    <div class="note">
-      <div class="nt">Visual distinction</div>
-      <p>The two inputs must not look interchangeable. Header search: placeholder "Find a game&hellip;", produces a dropdown. Games-tab search: placeholder "Filter these games&hellip;", sits in the filter row, produces table rows.</p>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 5. GAMES TAB ===================== -->
-<section id="games">
-  <div class="wrap">
-    <div class="sec-num">05</div>
-    <h2>Games tab</h2>
-    <p class="lead">The games list as a full-width sortable table with a free-text filter, structured chips, and a sort control. Absorbs the browsing role of the removed sidebar.</p>
-
-    <figure>
-      <div class="browser-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="url">perankh.app/users/me?tab=games</span>
-      </div>
-      <div class="mock ui">
-        <div class="scope-row" style="margin-top:0;">
-          <span class="selector">&#128193; All collections <span class="chev">&#9660;</span></span>
-          <span class="count">59 saves</span>
-        </div>
-        <div class="tabs">
-          <div class="tab">Overview</div>
-          <div class="tab">Stats</div>
-          <div class="tab active">Games</div>
-        </div>
-        <div class="filters">
-          <span class="ftext">&#9906; Filter these games&hellip;</span>
-          <span class="chip">Nation &#9660;</span>
-          <span class="chip active">Result: Win &#10005;</span>
-          <span class="chip">Date &#9660;</span>
-          <span class="chip sort">Sort: Newest &#9660;</span>
-        </div>
-        <table class="games">
-          <thead><tr><th>Game</th><th>Nation</th><th>Turns</th><th>Result</th><th>Date</th></tr></thead>
-          <tbody>
-            <tr><td class="name">aran vs siontific</td><td>Kush</td><td>98</td><td><span class="badge win">Win</span></td><td>May 17</td></tr>
-            <tr><td class="name">Maurya &mdash; 124 turns</td><td>Maurya</td><td>124</td><td><span class="badge win">Win</span></td><td>May 13</td></tr>
-            <tr><td class="name">Tamil &mdash; 130 turns</td><td>Tamil</td><td>130</td><td><span class="badge win">Win</span></td><td>Apr 18</td></tr>
-            <tr><td class="name">RiseOfCarthage &mdash; GameFour</td><td>Carthage</td><td>112</td><td><span class="badge win">Win</span></td><td>Apr 6</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </figure>
-    <figcaption><b>Mockup 4.</b> Games tab. Free-text filter and chips on the left, sort on the right, sortable table below.</figcaption>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">G1</span><span class="rtitle">Table columns</span></div>
-      <div class="req-body">
-        <p>Columns: Game name, Nation, Turns, Result, Date. Each column header is a sort control. One active sort at a time, ascending/descending toggle.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">G2</span><span class="rtitle">Filter row</span></div>
-      <div class="req-body">
-        <p>Contains the free-text filter input (G-S1), structured chips for Nation, Result and Date, and a Sort control. Chips and free-text combine with AND (G-S2). The Sort control is independent of filtering.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">G3</span><span class="rtitle">Row navigation</span></div>
-      <div class="req-body">
-        <p>Clicking a row navigates to that game's detail page. This is the path used to move between games now that the sidebar is removed (section 07).</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">G4</span><span class="rtitle">Migrated sidebar machinery</span></div>
-      <div class="req-body">
-        <p>The following move from <code>CloudGameSidebar</code> into the Games-tab table:</p>
-        <ul class="spec">
-          <li><b>Rename / move-to-collection</b> — the current right-click context menu becomes a per-row hover action menu.</li>
-          <li><b>Month dividers</b> — rendered as group header rows, shown only when the active sort is by date.</li>
-          <li><b>Infinite scroll / pagination</b> — retained for the table body.</li>
-        </ul>
-        <p>The drag-to-resize width handle is not migrated; it has no purpose in a full-width tab.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">G5</span><span class="rtitle">List / grid toggle</span></div>
-      <div class="req-body">
-        <p>A view toggle switches the table for a card-grid view of the same filtered, sorted set. Table is the default.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 6. STATS TAB ===================== -->
-<section id="stats">
-  <div class="wrap">
-    <div class="sec-num">06</div>
-    <h2>Stats tab</h2>
-    <p class="lead">A single tab housing the full chart catalog. Internal sub-navigation moves between categories. All charts reflect the selected collection.</p>
-
-    <figure>
-      <div class="browser-bar">
-        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="url">perankh.app/users/me?tab=stats</span>
-      </div>
-      <div class="mock ui">
-        <div class="scope-row" style="margin-top:0;">
-          <span class="selector">&#128193; Maurya runs <span class="chev">&#9660;</span></span>
-          <span class="count">22 saves</span>
-          <span class="right-note">&#9889; cached aggregate</span>
-        </div>
-        <div class="tabs">
-          <div class="tab">Overview</div>
-          <div class="tab active">Stats</div>
-          <div class="tab">Games</div>
-        </div>
-        <div class="subnav">
-          <span class="subtab active">Summary</span>
-          <span class="subtab">Nations</span>
-          <span class="subtab">Families</span>
-          <span class="subtab">Rulers</span>
-          <span class="subtab">Yields</span>
-          <span class="subtab">Laws</span>
-          <span class="subtab">Cities</span>
-          <span class="subtab">Tech</span>
-        </div>
-        <div class="metrics">
-          <div class="metric"><div class="ml">Games</div><div class="mv">22</div></div>
-          <div class="metric"><div class="ml">Win rate</div><div class="mv amber">86%</div></div>
-          <div class="metric"><div class="ml">Avg turns</div><div class="mv">97</div></div>
-          <div class="metric"><div class="ml">Fastest win</div><div class="mv">31</div></div>
-        </div>
-        <div class="ph" style="height:78px;">
-          <span style="font-size:15px;">&#128200;</span>
-          <span>charts for the active sub-nav category — from the existing ChartBundle</span>
-        </div>
-      </div>
-    </figure>
-    <figcaption><b>Mockup 5.</b> Stats tab. Sub-nav selects a category; charts come from the existing ChartBundle, scoped to the collection.</figcaption>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">ST1</span><span class="rtitle">Catalog &amp; sub-nav</span></div>
-      <div class="req-body">
-        <p>The Stats tab houses the existing <code>ChartBundle</code> catalog — 22 chart specs across 8 categories: Summary, Nations, Families, Rulers, Yields, Laws, Cities, Tech. An internal sub-navigation control selects the active category. Categories are not promoted to top-level tabs.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">ST2</span><span class="rtitle">Collection scoping</span></div>
-      <div class="req-body">
-        <p>Every chart and metric in the tab is computed from the selected collection's cached aggregate (section 03). The existing <code>ChartBundle</code> is wired to the collection dimension; chart specs themselves are unchanged.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">ST3</span><span class="rtitle">Staleness indicator</span></div>
-      <div class="req-body">
-        <p>When a tab is rendering a cached aggregate, show a small indicator (e.g. "cached aggregate") in the scope row, so a briefly-stale stat after a new upload is expected rather than surprising.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">ST4</span><span class="rtitle">Chart cross-filter</span></div>
-      <div class="req-body">
-        <p>Clicking a data element in a chart (e.g. a nation bar) switches to the <b>Games tab</b> with the corresponding structured filter applied (e.g. <code>nation=</code>). This replaces the former chart-click-narrows-sidebar interaction. The chart click does not change the collection scope.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 7. SIDEBAR REMOVAL ===================== -->
-<section id="sidebar">
-  <div class="wrap">
-    <div class="sec-num">07</div>
-    <h2>Sidebar removal</h2>
-    <p class="lead">The persistent <code>CloudGameSidebar</code> is removed from both the home page and game-detail. No replacement rail is added.</p>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">SB1</span><span class="rtitle">Home page</span></div>
-      <div class="req-body">
-        <p><code>CloudGameSidebar</code> is removed from <code>/users/[user_id]</code>. Its browsing function is served by the Games tab (section 05).</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">SB2</span><span class="rtitle">Game-detail</span></div>
-      <div class="req-body">
-        <p><code>CloudGameSidebar</code> is removed from <code>/games/[id]</code>. To move between games, the user returns to the Games tab. Game-detail retains a back affordance to the Games tab. No pinned library list and no jump-to-game control is added in v1.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">SB3</span><span class="rtitle">Preserved capabilities</span></div>
-      <div class="req-body">
-        <p>Rename, move-to-collection, month dividers and infinite scroll are preserved by migration into the Games-tab table (G4). The drag-to-resize handle is dropped.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 8. ROUTING ===================== -->
-<section id="routing">
-  <div class="wrap">
-    <div class="sec-num">08</div>
-    <h2>Routing &amp; URL state</h2>
-    <p class="lead">The home page stays under <code>/users/[user_id]</code> so visitors can view other users' public corpora. Tab and scope state live in query parameters.</p>
-
-    <table class="data">
-      <thead><tr><th>Parameter</th><th>Values</th><th>Meaning</th></tr></thead>
-      <tbody>
-        <tr><td><code>tab</code></td><td><code>overview</code> &middot; <code>stats</code> &middot; <code>games</code></td><td>Active tab. Defaults to <code>overview</code>.</td></tr>
-        <tr><td><code>collection</code></td><td><code>all</code> &middot; <code>public</code> &middot; collection id</td><td>Selected scope. Defaults to <code>all</code>.</td></tr>
-        <tr><td><code>category</code></td><td>Stats sub-nav category</td><td>Active Stats category. Applies when <code>tab=stats</code>.</td></tr>
-        <tr><td><code>nation</code>, <code>result</code>, <code>date</code>, <code>q</code></td><td>filter values</td><td>Games-tab chips and free-text. Apply when <code>tab=games</code>.</td></tr>
-      </tbody>
-    </table>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">R1</span><span class="rtitle">URL pattern</span></div>
-      <div class="req-body">
-        <p>Tab state uses the query-parameter pattern <code>/users/[user_id]?tab=stats</code>, consistent with the existing game-detail <code>?tab=</code> pattern. No top-level route rename.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">R2</span><span class="rtitle">Cross-filter target</span></div>
-      <div class="req-body">
-        <p>A chart cross-filter click (ST4) navigates to <code>?tab=games</code> with the relevant filter parameter set, e.g. <code>?tab=games&amp;nation=Maurya</code>.</p>
-      </div>
-    </div>
-
-    <div class="req">
-      <div class="req-head"><span class="rid">R3</span><span class="rtitle">Visitor view</span></div>
-      <div class="req-body">
-        <p>When the viewer is not the owner, the home page renders the owner's public corpus. Header search (H1), upload, and per-row management actions (G4) are owner-only.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- ===================== 9. PHASES ===================== -->
-<section id="phases">
-  <div class="wrap">
-    <div class="sec-num">09</div>
-    <h2>Build phases</h2>
-    <p class="lead">A suggested sequence. Each phase is independently shippable.</p>
-
-    <div class="phase">
-      <div class="pnum">1</div>
-      <div class="pbody">
-        <h4>Layout &amp; navigation restructure</h4>
-        <p>Header with collection scope row and tab bar. Overview and Games tabs. Games tab as a sortable table with chips, free-text filter and migrated sidebar machinery. Remove <code>CloudGameSidebar</code> from both surfaces. Routing per section 08.</p>
-      </div>
-    </div>
-    <div class="phase">
-      <div class="pnum">2</div>
-      <div class="pbody">
-        <h4>Header search</h4>
-        <p>Header search input, substring matching over the user's own games, results dropdown, navigation on select. Per section 04.</p>
-      </div>
-    </div>
-    <div class="phase">
-      <div class="pnum">3</div>
-      <div class="pbody">
-        <h4>Collection-scoped stats</h4>
-        <p>Extend the cache key with <code>collection_id</code>; wire invalidation. Stats tab with sub-nav over the existing <code>ChartBundle</code>, scoped to the selected collection. Staleness indicator.</p>
-      </div>
-    </div>
-    <div class="phase">
-      <div class="pnum">4</div>
-      <div class="pbody">
-        <h4>Chart cross-filter</h4>
-        <p>Chart data-element clicks navigate to the Games tab with the corresponding filter applied. Per ST4 and R2.</p>
-      </div>
-    </div>
-  </div>
-</section>
-
-<footer>
-  <div class="ankh-foot">&#9765;</div>
-  <div>Per Ankh — Home Page Redesign &middot; Build Specification v1</div>
-</footer>
-
-</body>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Per Ankh — Home Page Redesign Build Spec</title>
+		<style>
+			:root {
+				--bg: #1a1714;
+				--bg-2: #221e1a;
+				--panel: #2a251f;
+				--panel-2: #322c25;
+				--line: #3d362d;
+				--line-2: #4a4136;
+				--ink: #f3ede2;
+				--ink-2: #b8ad9c;
+				--ink-3: #7d7468;
+				--amber: #e8a838;
+				--amber-soft: #c89030;
+				--green: #6bbf3e;
+				--red: #d9534f;
+				--win-bg: #2a3a24;
+				--win-ink: #8fcc6a;
+				--loss-bg: #3a2622;
+				--loss-ink: #d98c87;
+			}
+			* {
+				box-sizing: border-box;
+				margin: 0;
+				padding: 0;
+			}
+			html {
+				scroll-behavior: smooth;
+			}
+			body {
+				background: var(--bg);
+				color: var(--ink);
+				font-family:
+					"Iowan Old Style", "Palatino Linotype", Palatino, "Book Antiqua",
+					Georgia, serif;
+				line-height: 1.62;
+				-webkit-font-smoothing: antialiased;
+			}
+			.wrap {
+				max-width: 880px;
+				margin: 0 auto;
+				padding: 0 28px;
+			}
+
+			/* ---------- masthead ---------- */
+			header.mast {
+				border-bottom: 1px solid var(--line);
+				background: linear-gradient(180deg, #221e1a 0%, var(--bg) 100%);
+			}
+			.mast-inner {
+				padding: 56px 0 44px;
+			}
+			.ankh-mark {
+				display: inline-flex;
+				align-items: center;
+				gap: 11px;
+				margin-bottom: 20px;
+			}
+			.ankh-mark svg {
+				width: 28px;
+				height: 28px;
+			}
+			.ankh-mark span {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-weight: 700;
+				font-size: 18px;
+			}
+			.kicker {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 12px;
+				letter-spacing: 0.2em;
+				text-transform: uppercase;
+				color: var(--amber);
+				margin-bottom: 16px;
+			}
+			h1 {
+				font-size: 42px;
+				line-height: 1.1;
+				font-weight: 600;
+				letter-spacing: -0.015em;
+				margin-bottom: 14px;
+			}
+			.standfirst {
+				font-size: 18px;
+				color: var(--ink-2);
+				max-width: 600px;
+			}
+			.meta-row {
+				margin-top: 26px;
+				padding-top: 20px;
+				border-top: 1px solid var(--line);
+				display: flex;
+				flex-wrap: wrap;
+				gap: 26px;
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 12.5px;
+				color: var(--ink-3);
+			}
+			.meta-row b {
+				color: var(--ink-2);
+				font-weight: 500;
+			}
+
+			/* ---------- table of contents ---------- */
+			nav.toc {
+				background: var(--bg-2);
+				border-bottom: 1px solid var(--line);
+			}
+			nav.toc .wrap {
+				padding-top: 18px;
+				padding-bottom: 18px;
+			}
+			nav.toc ol {
+				list-style: none;
+				display: flex;
+				flex-wrap: wrap;
+				gap: 4px 26px;
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 13px;
+				counter-reset: toc;
+			}
+			nav.toc li {
+				counter-increment: toc;
+			}
+			nav.toc a {
+				color: var(--ink-2);
+				text-decoration: none;
+			}
+			nav.toc a::before {
+				content: counter(toc, decimal-leading-zero) "  ";
+				color: var(--amber-soft);
+				font-weight: 700;
+			}
+			nav.toc a:hover {
+				color: var(--amber);
+			}
+
+			/* ---------- section scaffolding ---------- */
+			section {
+				padding: 50px 0;
+				border-bottom: 1px solid var(--line);
+			}
+			section:last-of-type {
+				border-bottom: none;
+			}
+			.sec-num {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 12px;
+				letter-spacing: 0.16em;
+				color: var(--amber-soft);
+				margin-bottom: 12px;
+			}
+			h2 {
+				font-size: 29px;
+				font-weight: 600;
+				letter-spacing: -0.01em;
+				margin-bottom: 14px;
+				line-height: 1.15;
+			}
+			h3 {
+				font-size: 19px;
+				font-weight: 600;
+				margin: 30px 0 9px;
+				color: var(--ink);
+			}
+			h4 {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 13px;
+				letter-spacing: 0.04em;
+				text-transform: uppercase;
+				color: var(--amber-soft);
+				margin: 24px 0 8px;
+			}
+			p {
+				margin-bottom: 13px;
+				color: var(--ink-2);
+				font-size: 16px;
+			}
+			p.lead {
+				font-size: 17.5px;
+				color: var(--ink);
+			}
+			strong {
+				color: var(--ink);
+				font-weight: 600;
+			}
+			code {
+				font-family: "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
+				font-size: 13px;
+				background: var(--panel);
+				color: var(--amber);
+				padding: 1.5px 6px;
+				border-radius: 4px;
+			}
+
+			ul.spec,
+			ol.spec {
+				margin: 6px 0 16px;
+				padding-left: 0;
+				list-style: none;
+			}
+			ul.spec li,
+			ol.spec li {
+				position: relative;
+				padding-left: 24px;
+				margin-bottom: 8px;
+				color: var(--ink-2);
+				font-size: 15.5px;
+			}
+			ul.spec li::before {
+				content: "";
+				position: absolute;
+				left: 6px;
+				top: 10px;
+				width: 5px;
+				height: 5px;
+				background: var(--amber-soft);
+				border-radius: 50%;
+			}
+			ol.spec {
+				counter-reset: step;
+			}
+			ol.spec li {
+				counter-increment: step;
+			}
+			ol.spec li::before {
+				content: counter(step);
+				position: absolute;
+				left: 0;
+				top: 1px;
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-weight: 700;
+				font-size: 11px;
+				color: var(--bg);
+				background: var(--amber-soft);
+				width: 16px;
+				height: 16px;
+				border-radius: 50%;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+			}
+			ul.spec li b,
+			ol.spec li b {
+				color: var(--ink);
+				font-weight: 600;
+			}
+
+			/* ---------- requirement blocks ---------- */
+			.req {
+				background: var(--bg-2);
+				border: 1px solid var(--line-2);
+				border-radius: 7px;
+				margin: 16px 0;
+				overflow: hidden;
+			}
+			.req-head {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				padding: 11px 18px;
+				background: var(--panel);
+				border-bottom: 1px solid var(--line);
+			}
+			.req-head .rid {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-weight: 700;
+				font-size: 11.5px;
+				color: var(--bg);
+				background: var(--amber);
+				padding: 3px 9px;
+				border-radius: 4px;
+				letter-spacing: 0.03em;
+			}
+			.req-head .rtitle {
+				font-size: 16px;
+				font-weight: 600;
+			}
+			.req-body {
+				padding: 14px 18px 16px;
+			}
+			.req-body p {
+				font-size: 15px;
+				margin-bottom: 9px;
+			}
+			.req-body p:last-child {
+				margin-bottom: 0;
+			}
+			.req-body ul.spec {
+				margin-bottom: 4px;
+			}
+
+			/* ---------- callout ---------- */
+			.note {
+				background: var(--bg-2);
+				border-left: 3px solid var(--amber);
+				border-radius: 0 6px 6px 0;
+				padding: 14px 20px;
+				margin: 16px 0;
+			}
+			.note .nt {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 11px;
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+				color: var(--amber);
+				margin-bottom: 6px;
+			}
+			.note p {
+				font-size: 14.5px;
+				margin-bottom: 0;
+			}
+
+			.scope-flag {
+				background: var(--bg-2);
+				border: 1px dashed var(--line-2);
+				border-radius: 6px;
+				padding: 13px 18px;
+				margin: 16px 0;
+			}
+			.scope-flag .sf {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 11px;
+				letter-spacing: 0.14em;
+				text-transform: uppercase;
+				color: var(--ink-3);
+				margin-bottom: 6px;
+			}
+			.scope-flag p {
+				font-size: 14.5px;
+				margin-bottom: 0;
+			}
+			.scope-flag p b {
+				color: var(--green);
+			}
+
+			/* ---------- tables ---------- */
+			table.data {
+				width: 100%;
+				border-collapse: collapse;
+				margin: 14px 0 18px;
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 14px;
+			}
+			table.data th {
+				text-align: left;
+				font-size: 11px;
+				letter-spacing: 0.05em;
+				text-transform: uppercase;
+				color: var(--amber-soft);
+				font-weight: 600;
+				padding: 9px 12px;
+				border-bottom: 1.5px solid var(--line-2);
+			}
+			table.data td {
+				padding: 10px 12px;
+				border-bottom: 1px solid var(--line);
+				color: var(--ink-2);
+				vertical-align: top;
+			}
+			table.data tr:last-child td {
+				border-bottom: none;
+			}
+			table.data td b {
+				color: var(--ink);
+				font-weight: 600;
+			}
+			table.data code {
+				font-size: 12.5px;
+			}
+
+			/* ---------- mockup frame ---------- */
+			figure {
+				margin: 26px 0 8px;
+				background: var(--bg-2);
+				border: 1px solid var(--line-2);
+				border-radius: 9px;
+				overflow: hidden;
+			}
+			.browser-bar {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				padding: 9px 13px;
+				background: var(--panel);
+				border-bottom: 1px solid var(--line);
+			}
+			.dot {
+				width: 10px;
+				height: 10px;
+				border-radius: 50%;
+			}
+			.dot.r {
+				background: #d9534f;
+			}
+			.dot.y {
+				background: #e8a838;
+			}
+			.dot.g {
+				background: #6bbf3e;
+			}
+			.browser-bar .url {
+				margin-left: 9px;
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 11px;
+				color: var(--ink-3);
+				background: var(--bg);
+				padding: 4px 11px;
+				border-radius: 5px;
+			}
+			.mock {
+				padding: 16px;
+				background: var(--bg);
+			}
+			figcaption {
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-size: 12px;
+				color: var(--ink-3);
+				padding: 4px 4px 0;
+				margin-bottom: 22px;
+			}
+			figcaption b {
+				color: var(--ink-2);
+				font-weight: 500;
+			}
+
+			/* ---------- mockup interior ---------- */
+			.ui {
+				font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+			}
+			.app-head {
+				display: flex;
+				align-items: center;
+				justify-content: space-between;
+				padding: 10px 13px;
+				background: var(--bg-2);
+				border: 1px solid var(--line);
+				border-radius: 7px;
+			}
+			.app-head .brand {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				font-weight: 700;
+				font-size: 13.5px;
+			}
+			.app-head .brand svg {
+				width: 16px;
+				height: 16px;
+			}
+			.hgroup {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+			}
+			.pill {
+				font-size: 11px;
+				color: var(--ink-2);
+				border: 1px solid var(--line-2);
+				padding: 6px 10px;
+				border-radius: 6px;
+				display: inline-flex;
+				align-items: center;
+				gap: 5px;
+			}
+			.pill.search {
+				color: var(--ink-3);
+				min-width: 190px;
+			}
+			.micro-note {
+				font-size: 10px;
+				color: var(--ink-3);
+				margin: 5px 3px 0;
+			}
+
+			.scope-row {
+				display: flex;
+				align-items: center;
+				gap: 10px;
+				margin: 11px 0 8px;
+			}
+			.selector {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				padding: 7px 11px;
+				background: var(--bg-2);
+				border: 1px solid var(--line-2);
+				border-radius: 6px;
+				font-size: 12px;
+				font-weight: 500;
+			}
+			.selector .chev {
+				color: var(--ink-3);
+				font-size: 9px;
+			}
+			.scope-row .count {
+				font-size: 11px;
+				color: var(--ink-3);
+			}
+			.scope-row .right-note {
+				margin-left: auto;
+				font-size: 10px;
+				color: var(--ink-3);
+			}
+
+			.tabs {
+				display: flex;
+				gap: 2px;
+				border-bottom: 1px solid var(--line-2);
+				margin-bottom: 13px;
+			}
+			.tab {
+				font-size: 12px;
+				padding: 8px 13px;
+				color: var(--ink-3);
+				border-bottom: 2px solid transparent;
+				margin-bottom: -1px;
+			}
+			.tab.active {
+				color: var(--ink);
+				font-weight: 600;
+				border-bottom-color: var(--amber);
+			}
+
+			.metrics {
+				display: grid;
+				grid-template-columns: repeat(4, 1fr);
+				gap: 9px;
+				margin-bottom: 11px;
+			}
+			.metric {
+				background: var(--bg-2);
+				border-radius: 6px;
+				padding: 10px 11px;
+			}
+			.metric .ml {
+				font-size: 10px;
+				color: var(--ink-3);
+				margin-bottom: 3px;
+			}
+			.metric .mv {
+				font-size: 18px;
+				font-weight: 700;
+			}
+			.metric .mv.amber {
+				color: var(--amber);
+			}
+
+			.ph {
+				border: 1px dashed var(--line-2);
+				border-radius: 6px;
+				background: var(--bg-2);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				flex-direction: column;
+				gap: 5px;
+				color: var(--ink-3);
+				font-size: 11px;
+				text-align: center;
+			}
+
+			/* search dropdown mock */
+			.search-mock {
+				position: relative;
+			}
+			.search-box {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				padding: 8px 11px;
+				background: var(--bg-2);
+				border: 1px solid var(--amber-soft);
+				border-radius: 6px 6px 0 0;
+				font-size: 12px;
+				color: var(--ink);
+			}
+			.search-box .cursor {
+				color: var(--ink-3);
+			}
+			.results {
+				border: 1px solid var(--amber-soft);
+				border-top: none;
+				border-radius: 0 0 6px 6px;
+				background: var(--bg-2);
+				overflow: hidden;
+			}
+			.result-row {
+				display: flex;
+				align-items: center;
+				gap: 9px;
+				padding: 8px 11px;
+				font-size: 12px;
+				border-bottom: 1px solid var(--line);
+			}
+			.result-row:last-child {
+				border-bottom: none;
+			}
+			.result-row .rname {
+				color: var(--ink);
+				font-weight: 600;
+				flex: 1;
+			}
+			.result-row .rname mark {
+				background: rgba(232, 168, 56, 0.25);
+				color: var(--amber);
+				padding: 0 1px;
+			}
+			.result-row .rmeta {
+				font-size: 10.5px;
+				color: var(--ink-3);
+			}
+			.result-row .rcoll {
+				font-size: 9.5px;
+				color: var(--ink-3);
+				border: 1px solid var(--line-2);
+				padding: 2px 6px;
+				border-radius: 4px;
+			}
+
+			/* games tab */
+			.filters {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				margin-bottom: 10px;
+				flex-wrap: wrap;
+			}
+			.ftext {
+				display: flex;
+				align-items: center;
+				gap: 6px;
+				font-size: 11px;
+				color: var(--ink-3);
+				border: 1px solid var(--line-2);
+				padding: 6px 10px;
+				border-radius: 6px;
+				min-width: 150px;
+			}
+			.chip {
+				font-size: 10.5px;
+				color: var(--ink-2);
+				border: 1px solid var(--line-2);
+				padding: 5px 9px;
+				border-radius: 6px;
+			}
+			.chip.active {
+				border-color: var(--amber-soft);
+				color: var(--amber);
+			}
+			.chip.sort {
+				margin-left: auto;
+			}
+			table.games {
+				width: 100%;
+				border-collapse: collapse;
+				background: var(--bg-2);
+				border: 1px solid var(--line);
+				border-radius: 6px;
+				overflow: hidden;
+				font-size: 11.5px;
+			}
+			table.games th {
+				text-align: left;
+				font-size: 9.5px;
+				letter-spacing: 0.04em;
+				color: var(--ink-3);
+				font-weight: 500;
+				text-transform: uppercase;
+				padding: 7px 12px;
+				background: var(--panel);
+				border-bottom: 1px solid var(--line);
+			}
+			table.games td {
+				padding: 8px 12px;
+				border-bottom: 1px solid var(--line);
+				color: var(--ink-2);
+			}
+			table.games tr:last-child td {
+				border-bottom: none;
+			}
+			table.games td.name {
+				color: var(--ink);
+				font-weight: 600;
+			}
+			.badge {
+				font-size: 9.5px;
+				padding: 2px 7px;
+				border-radius: 5px;
+				font-weight: 600;
+			}
+			.badge.win {
+				background: var(--win-bg);
+				color: var(--win-ink);
+			}
+			.badge.loss {
+				background: var(--loss-bg);
+				color: var(--loss-ink);
+			}
+
+			/* dropdown mock (collection) */
+			.dd {
+				width: 230px;
+				border: 1px solid var(--line-2);
+				border-radius: 6px;
+				overflow: hidden;
+				background: var(--bg-2);
+			}
+			.dd-trigger {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				padding: 8px 11px;
+				background: var(--panel);
+				border-bottom: 1px solid var(--line);
+				font-size: 12px;
+				font-weight: 500;
+			}
+			.dd-trigger .chev {
+				margin-left: auto;
+				color: var(--ink-3);
+				font-size: 9px;
+			}
+			.dd-item {
+				display: flex;
+				align-items: center;
+				gap: 7px;
+				padding: 7px 11px;
+				font-size: 12px;
+				color: var(--ink-2);
+			}
+			.dd-item .c {
+				margin-left: auto;
+				font-size: 10px;
+				color: var(--ink-3);
+			}
+			.dd-item.sel {
+				background: rgba(232, 168, 56, 0.12);
+				color: var(--amber);
+			}
+			.dd-item.sel .c {
+				color: var(--amber);
+			}
+			.dd-item.indent {
+				padding-left: 24px;
+			}
+			.dd-group {
+				font-size: 9px;
+				letter-spacing: 0.07em;
+				color: var(--ink-3);
+				padding: 7px 11px 3px;
+			}
+			.dd-divider {
+				border-top: 1px solid var(--line);
+			}
+
+			/* stats sub-nav mock */
+			.subnav {
+				display: flex;
+				gap: 4px;
+				flex-wrap: wrap;
+				margin-bottom: 11px;
+			}
+			.subtab {
+				font-size: 10.5px;
+				padding: 5px 10px;
+				border-radius: 5px;
+				color: var(--ink-3);
+				border: 1px solid var(--line);
+			}
+			.subtab.active {
+				color: var(--amber);
+				border-color: var(--amber-soft);
+				background: rgba(232, 168, 56, 0.08);
+			}
+
+			/* phase list */
+			.phase {
+				display: flex;
+				gap: 14px;
+				padding: 15px 0;
+				border-bottom: 1px solid var(--line);
+			}
+			.phase:last-child {
+				border-bottom: none;
+			}
+			.phase .pnum {
+				flex-shrink: 0;
+				width: 34px;
+				height: 34px;
+				border-radius: 50%;
+				border: 1px solid var(--amber-soft);
+				color: var(--amber);
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				font-family: "Helvetica Neue", Arial, sans-serif;
+				font-weight: 700;
+				font-size: 13px;
+			}
+			.phase .pbody h4 {
+				margin: 0 0 4px;
+				color: var(--ink);
+				font-size: 15.5px;
+				text-transform: none;
+				letter-spacing: 0;
+			}
+			.phase .pbody p {
+				font-size: 14px;
+				margin-bottom: 0;
+			}
+
+			footer {
+				padding: 36px 0 54px;
+				text-align: center;
+				color: var(--ink-3);
+				font-size: 12px;
+				font-family: "Helvetica Neue", Arial, sans-serif;
+			}
+			footer .ankh-foot {
+				font-size: 17px;
+				color: var(--amber-soft);
+				margin-bottom: 7px;
+			}
+
+			@media (max-width: 680px) {
+				.wrap {
+					padding: 0 18px;
+				}
+				h1 {
+					font-size: 31px;
+				}
+				h2 {
+					font-size: 23px;
+				}
+				.metrics {
+					grid-template-columns: repeat(2, 1fr);
+				}
+				table.games th:nth-child(3),
+				table.games td:nth-child(3) {
+					display: none;
+				}
+				nav.toc ol {
+					gap: 4px 16px;
+				}
+			}
+		</style>
+	</head>
+	<body>
+		<!-- ===================== MASTHEAD ===================== -->
+		<header class="mast">
+			<div class="wrap mast-inner">
+				<div class="ankh-mark">
+					<svg
+						viewBox="0 0 24 32"
+						fill="none"
+						xmlns="http://www.w3.org/2000/svg"
+					>
+						<ellipse
+							cx="12"
+							cy="7"
+							rx="6"
+							ry="7"
+							stroke="#e8a838"
+							stroke-width="2.4"
+						/>
+						<line
+							x1="12"
+							y1="14"
+							x2="12"
+							y2="31"
+							stroke="#e8a838"
+							stroke-width="2.4"
+						/>
+						<line
+							x1="4"
+							y1="19"
+							x2="20"
+							y2="19"
+							stroke="#e8a838"
+							stroke-width="2.4"
+						/>
+					</svg>
+					<span>Per Ankh</span>
+				</div>
+				<div class="kicker">Build Specification</div>
+				<h1>Home page redesign — stats, tabs &amp; search</h1>
+				<p class="standfirst">
+					Specification for restructuring the user home page
+					(<code>/users/[user_id]</code>) into a tabbed layout with
+					collection-scoped statistics, a two-search model, and removal of the
+					persistent games sidebar.
+				</p>
+				<div class="meta-row">
+					<span><b>Status:</b> Approved for build</span>
+					<span
+						><b>Surface:</b> <code>/users/[user_id]</code>,
+						<code>/games/[id]</code></span
+					>
+					<span><b>Version:</b> v1</span>
+				</div>
+			</div>
+		</header>
+
+		<!-- ===================== TOC ===================== -->
+		<nav class="toc">
+			<div class="wrap">
+				<ol>
+					<li><a href="#overview">Overview &amp; scope</a></li>
+					<li><a href="#layout">Page layout &amp; tabs</a></li>
+					<li><a href="#scope">Collection scope &amp; caching</a></li>
+					<li><a href="#search">Search model</a></li>
+					<li><a href="#games">Games tab</a></li>
+					<li><a href="#stats">Stats tab</a></li>
+					<li><a href="#sidebar">Sidebar removal</a></li>
+					<li><a href="#routing">Routing &amp; URL state</a></li>
+					<li><a href="#phases">Build phases</a></li>
+				</ol>
+			</div>
+		</nav>
+
+		<!-- ===================== 1. OVERVIEW ===================== -->
+		<section id="overview">
+			<div class="wrap">
+				<div class="sec-num">01</div>
+				<h2>Overview &amp; scope</h2>
+				<p class="lead">
+					The user home page becomes a tabbed surface. A collection selector
+					sits above the tab bar and scopes every tab. Statistics are computed
+					and cached per collection. The persistent games sidebar is removed;
+					the games list becomes a tab.
+				</p>
+
+				<h4>In scope for v1</h4>
+				<ul class="spec">
+					<li>
+						Three-tab home layout: <b>Overview</b>, <b>Stats</b>, <b>Games</b>.
+					</li>
+					<li>Collection selector as the scope control for all three tabs.</li>
+					<li>Per-collection cached stats aggregate.</li>
+					<li>
+						Two distinct search affordances: a global <b>header search</b> and a
+						local <b>Games-tab search</b>.
+					</li>
+					<li>
+						Removal of the persistent <code>CloudGameSidebar</code> from both
+						the home page and game-detail.
+					</li>
+				</ul>
+
+				<h4>Out of scope for v1</h4>
+				<ul class="spec">
+					<li>Save-search-as-collection.</li>
+					<li>
+						Header search across other users' public corpora — v1 header search
+						covers the signed-in user's own games only.
+					</li>
+					<li>Per-collection public/private visibility as a data concept.</li>
+					<li>Standalone Timeline or Nations top-level tabs.</li>
+				</ul>
+			</div>
+		</section>
+
+		<!-- ===================== 2. LAYOUT ===================== -->
+		<section id="layout">
+			<div class="wrap">
+				<div class="sec-num">02</div>
+				<h2>Page layout &amp; tabs</h2>
+				<p class="lead">
+					Top to bottom: app header, collection scope row, tab bar, full-width
+					tab content. No persistent side rail.
+				</p>
+
+				<figure>
+					<div class="browser-bar">
+						<span class="dot r"></span><span class="dot y"></span
+						><span class="dot g"></span>
+						<span class="url">perankh.app/users/me?tab=overview</span>
+					</div>
+					<div class="mock ui">
+						<div class="app-head">
+							<div class="brand">
+								<svg viewBox="0 0 24 32" fill="none">
+									<ellipse
+										cx="12"
+										cy="7"
+										rx="5.5"
+										ry="6.5"
+										stroke="#e8a838"
+										stroke-width="2.4"
+									/>
+									<line
+										x1="12"
+										y1="13.5"
+										x2="12"
+										y2="30"
+										stroke="#e8a838"
+										stroke-width="2.4"
+									/>
+									<line
+										x1="5"
+										y1="18"
+										x2="19"
+										y2="18"
+										stroke="#e8a838"
+										stroke-width="2.4"
+									/>
+								</svg>
+								Per Ankh
+							</div>
+							<div class="hgroup">
+								<span class="pill">&#8593; Upload</span>
+								<span class="pill search">&#9906; Find a game&hellip;</span>
+							</div>
+						</div>
+						<div class="micro-note" style="text-align: right">
+							header search — global over your games, opens results dropdown,
+							click navigates
+						</div>
+
+						<div class="scope-row">
+							<span class="selector"
+								>&#128193; All collections
+								<span class="chev">&#9660;</span></span
+							>
+							<span class="count">59 saves</span>
+							<span class="right-note"
+								>collection scope &middot; drives every tab below</span
+							>
+						</div>
+
+						<div class="tabs">
+							<div class="tab active">Overview</div>
+							<div class="tab">Stats</div>
+							<div class="tab">Games</div>
+						</div>
+
+						<div class="metrics">
+							<div class="metric">
+								<div class="ml">Saves</div>
+								<div class="mv">59</div>
+							</div>
+							<div class="metric">
+								<div class="ml">Win rate</div>
+								<div class="mv amber">78%</div>
+							</div>
+							<div class="metric">
+								<div class="ml">Avg turns</div>
+								<div class="mv">104</div>
+							</div>
+							<div class="metric">
+								<div class="ml">Top nation</div>
+								<div class="mv">Maurya</div>
+							</div>
+						</div>
+						<div class="ph" style="height: 84px">
+							<span style="font-size: 16px">&#128202;</span>
+							<span
+								>Overview tab content — summary tiles + activity heatmap,
+								collection-scoped</span
+							>
+						</div>
+					</div>
+				</figure>
+				<figcaption>
+					<b>Mockup 1.</b> Home layout. Header, scope row, three peer tabs,
+					full-width content.
+				</figcaption>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">L1</span><span class="rtitle">Header</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Persistent across all tabs and across game-detail. Contains:
+							brand/logo (links to the user's own home), Upload action, and the
+							global header search input. Header search behavior is specified in
+							section 04.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">L2</span><span class="rtitle">Scope row</span>
+					</div>
+					<div class="req-body">
+						<p>
+							A dedicated row directly below the header and directly above the
+							tab bar. Contains the collection selector (left) and the save
+							count for the selected collection. The selector's value scopes all
+							three tabs. Specified in section 03.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">L3</span><span class="rtitle">Tab bar</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Three tabs: <b>Overview</b>, <b>Stats</b>, <b>Games</b>. Overview
+							is the default. The active tab is reflected in the URL (section
+							08). Tab content renders full-width below the bar.
+						</p>
+						<ul class="spec">
+							<li>
+								<b>Overview</b> — summary metric tiles and the activity heatmap,
+								scoped to the selected collection.
+							</li>
+							<li>
+								<b>Stats</b> — the full chart catalog with internal
+								sub-navigation. Specified in section 06.
+							</li>
+							<li>
+								<b>Games</b> — the games list as a sortable, filterable table.
+								Specified in section 05.
+							</li>
+						</ul>
+					</div>
+				</div>
+
+				<div class="scope-flag">
+					<div class="sf">Tab content rule</div>
+					<p>
+						Every tab reflects the collection selected in the scope row.
+						Changing the collection re-renders all tab content.
+						<b>No tab has its own independent scope control.</b>
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- ===================== 3. COLLECTION SCOPE ===================== -->
+		<section id="scope">
+			<div class="wrap">
+				<div class="sec-num">03</div>
+				<h2>Collection scope &amp; caching</h2>
+				<p class="lead">
+					The collection selector is the single scope control. Its value is the
+					cache key dimension for statistics.
+				</p>
+
+				<h3>Collection selector</h3>
+				<figure>
+					<div class="browser-bar">
+						<span class="dot r"></span><span class="dot y"></span
+						><span class="dot g"></span>
+						<span class="url">perankh.app/users/me?tab=stats</span>
+					</div>
+					<div class="mock ui">
+						<div class="dd">
+							<div class="dd-trigger">
+								&#128193; All collections <span class="chev">&#9650;</span>
+							</div>
+							<div class="dd-item sel">
+								&#10003; All collections <span class="c">59</span>
+							</div>
+							<div class="dd-item">
+								&#9673; Public <span class="c">12</span>
+							</div>
+							<div class="dd-group dd-divider">MY COLLECTIONS</div>
+							<div class="dd-item indent">
+								Maurya runs <span class="c">22</span>
+							</div>
+							<div class="dd-item indent">
+								Sub-100 turn wins <span class="c">9</span>
+							</div>
+							<div class="dd-item indent">
+								Experiments <span class="c">6</span>
+							</div>
+						</div>
+					</div>
+				</figure>
+				<figcaption>
+					<b>Mockup 2.</b> Collection selector. Mirrors the current data model —
+					no new visibility concept is introduced.
+				</figcaption>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">S1</span
+						><span class="rtitle">Selector contents</span>
+					</div>
+					<div class="req-body">
+						<p>The selector lists, in order:</p>
+						<ul class="spec">
+							<li>
+								<b>All collections</b> — the user's entire corpus. Default
+								selection.
+							</li>
+							<li>
+								<b>Public</b> — a virtual filter: the subset of the user's games
+								where <code>is_public = true</code>. This is a derived view, not
+								a stored collection.
+							</li>
+							<li>
+								<b>My collections</b> — the user's owner-organizational
+								collections, listed under a group label.
+							</li>
+						</ul>
+						<p>
+							Each entry shows a count of games. <code>is_public</code> is a
+							per-game field; there is no per-collection visibility concept and
+							none is added.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">S2</span><span class="rtitle">Cache key</span>
+					</div>
+					<div class="req-body">
+						<p>
+							The stats aggregate is cached on the key
+							<code>(user_id, scope, collection_id)</code>, extending the
+							existing <code>cloud/src/stats/cache.ts</code> model.
+							<code>scope</code> distinguishes <code>all</code> /
+							<code>public</code> / <code>collection</code>;
+							<code>collection_id</code> is populated only when
+							<code>scope = collection</code>.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">S3</span><span class="rtitle">Invalidation</span>
+					</div>
+					<div class="req-body">
+						<p>
+							A new save upload invalidates the <code>all</code> aggregate, the
+							<code>public</code> aggregate if the save is public, and the
+							aggregate for any collection the save is added to. Moving a save
+							between collections invalidates both affected collection
+							aggregates.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">S4</span
+						><span class="rtitle">Switching collections</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Selecting a collection triggers a single fetch of that
+							collection's cached aggregate. The active tab re-renders from that
+							one payload. Switching collections does not issue per-chart
+							requests.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ===================== 4. SEARCH ===================== -->
+		<section id="search">
+			<div class="wrap">
+				<div class="sec-num">04</div>
+				<h2>Search model</h2>
+				<p class="lead">
+					Two search affordances with separate jobs. Header search finds one
+					game and navigates to it. Games-tab search narrows the games list in
+					place.
+				</p>
+
+				<table class="data">
+					<thead>
+						<tr>
+							<th></th>
+							<th>Header search</th>
+							<th>Games-tab search</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><b>Job</b></td>
+							<td>Find one game, go to it</td>
+							<td>Narrow the games list, view the set</td>
+						</tr>
+						<tr>
+							<td><b>Location</b></td>
+							<td>App header, all tabs</td>
+							<td>Games-tab filter row</td>
+						</tr>
+						<tr>
+							<td><b>Corpus</b></td>
+							<td>All of the user's own games</td>
+							<td>Games within the selected collection</td>
+						</tr>
+						<tr>
+							<td><b>Output</b></td>
+							<td>Results dropdown</td>
+							<td>Filtered table rows</td>
+						</tr>
+						<tr>
+							<td><b>On select</b></td>
+							<td><code>goto</code> the game's detail page</td>
+							<td>n/a — table updates live</td>
+						</tr>
+						<tr>
+							<td><b>Collection scope</b></td>
+							<td>Ignores it</td>
+							<td>Respects it</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<h3>Header search</h3>
+				<figure>
+					<div class="browser-bar">
+						<span class="dot r"></span><span class="dot y"></span
+						><span class="dot g"></span>
+						<span class="url">perankh.app/users/me?tab=overview</span>
+					</div>
+					<div class="mock ui">
+						<div
+							class="search-mock"
+							style="max-width: 330px; margin-left: auto"
+						>
+							<div class="search-box">
+								&#9906; <span>maur</span><span class="cursor">|</span>
+							</div>
+							<div class="results">
+								<div class="result-row">
+									<span class="rname"
+										><mark>Maur</mark>ya &mdash; 124 turns</span
+									><span class="rcoll">Maurya runs</span
+									><span class="rmeta">May 13</span>
+								</div>
+								<div class="result-row">
+									<span class="rname"><mark>Maur</mark>ya &mdash; 86 turns</span
+									><span class="rcoll">Maurya runs</span
+									><span class="rmeta">May 2</span>
+								</div>
+								<div class="result-row">
+									<span class="rname"
+										><mark>Maur</mark>ya &mdash; 143 turns</span
+									><span class="rcoll">&mdash;</span
+									><span class="rmeta">Apr 29</span>
+								</div>
+							</div>
+						</div>
+					</div>
+				</figure>
+				<figcaption>
+					<b>Mockup 3.</b> Header search with results dropdown. Each row
+					navigates to that game on click.
+				</figcaption>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">H1</span><span class="rtitle">Matching</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Case-insensitive substring match against game <b>name</b> and
+							<b>nation</b>, across all of the signed-in user's own games
+							regardless of collection and regardless of <code>is_public</code>.
+						</p>
+						<p>
+							v1 corpus is the user's own games only. Other users' public games
+							are not searched.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">H2</span
+						><span class="rtitle">Results dropdown</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Input opens a dropdown of matching games below it. Each row shows
+							the game name (matched substring highlighted), the nation, the
+							game date, and — for games in a collection — the collection name.
+							Cap the list at a fixed count (e.g. 8) with the closest matches
+							first.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">H3</span><span class="rtitle">Navigation</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Clicking a result <code>goto</code>s that game's detail page
+							(<code>/games/[id]</code>). Selecting a result
+							<b>does not</b> change the collection selected in the scope row.
+							Header search is purely navigational and never alters tab scope.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">H4</span
+						><span class="rtitle">Empty &amp; no-match states</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Empty input: no dropdown. Input with no matches: dropdown shows a
+							single "No games match" row. Matching is debounced.
+						</p>
+					</div>
+				</div>
+
+				<h3>Games-tab search</h3>
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G-S1</span
+						><span class="rtitle">Free-text input</span>
+					</div>
+					<div class="req-body">
+						<p>
+							A free-text input in the Games-tab filter row, alongside the
+							structured filter chips. Case-insensitive substring match against
+							game name and nation, restricted to games in the currently
+							selected collection.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G-S2</span
+						><span class="rtitle">Combination with chips</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Free-text and structured chips (Nation, Result, Date) combine with
+							<b>AND</b>. A row is shown only if it matches the free-text term
+							and satisfies every active chip.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G-S3</span><span class="rtitle">Output</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Output is the filtered set of table rows, updated live. Games-tab
+							search produces no dropdown and performs no navigation.
+						</p>
+					</div>
+				</div>
+
+				<div class="note">
+					<div class="nt">Visual distinction</div>
+					<p>
+						The two inputs must not look interchangeable. Header search:
+						placeholder "Find a game&hellip;", produces a dropdown. Games-tab
+						search: placeholder "Filter these games&hellip;", sits in the filter
+						row, produces table rows.
+					</p>
+				</div>
+			</div>
+		</section>
+
+		<!-- ===================== 5. GAMES TAB ===================== -->
+		<section id="games">
+			<div class="wrap">
+				<div class="sec-num">05</div>
+				<h2>Games tab</h2>
+				<p class="lead">
+					The games list as a full-width sortable table with a free-text filter,
+					structured chips, and a sort control. Absorbs the browsing role of the
+					removed sidebar.
+				</p>
+
+				<figure>
+					<div class="browser-bar">
+						<span class="dot r"></span><span class="dot y"></span
+						><span class="dot g"></span>
+						<span class="url">perankh.app/users/me?tab=games</span>
+					</div>
+					<div class="mock ui">
+						<div class="scope-row" style="margin-top: 0">
+							<span class="selector"
+								>&#128193; All collections
+								<span class="chev">&#9660;</span></span
+							>
+							<span class="count">59 saves</span>
+						</div>
+						<div class="tabs">
+							<div class="tab">Overview</div>
+							<div class="tab">Stats</div>
+							<div class="tab active">Games</div>
+						</div>
+						<div class="filters">
+							<span class="ftext">&#9906; Filter these games&hellip;</span>
+							<span class="chip">Nation &#9660;</span>
+							<span class="chip active">Result: Win &#10005;</span>
+							<span class="chip">Date &#9660;</span>
+							<span class="chip sort">Sort: Newest &#9660;</span>
+						</div>
+						<table class="games">
+							<thead>
+								<tr>
+									<th>Game</th>
+									<th>Nation</th>
+									<th>Turns</th>
+									<th>Result</th>
+									<th>Date</th>
+								</tr>
+							</thead>
+							<tbody>
+								<tr>
+									<td class="name">aran vs siontific</td>
+									<td>Kush</td>
+									<td>98</td>
+									<td><span class="badge win">Win</span></td>
+									<td>May 17</td>
+								</tr>
+								<tr>
+									<td class="name">Maurya &mdash; 124 turns</td>
+									<td>Maurya</td>
+									<td>124</td>
+									<td><span class="badge win">Win</span></td>
+									<td>May 13</td>
+								</tr>
+								<tr>
+									<td class="name">Tamil &mdash; 130 turns</td>
+									<td>Tamil</td>
+									<td>130</td>
+									<td><span class="badge win">Win</span></td>
+									<td>Apr 18</td>
+								</tr>
+								<tr>
+									<td class="name">RiseOfCarthage &mdash; GameFour</td>
+									<td>Carthage</td>
+									<td>112</td>
+									<td><span class="badge win">Win</span></td>
+									<td>Apr 6</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</figure>
+				<figcaption>
+					<b>Mockup 4.</b> Games tab. Free-text filter and chips on the left,
+					sort on the right, sortable table below.
+				</figcaption>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G1</span><span class="rtitle">Table columns</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Columns: Game name, Nation, Turns, Result, Date. Each column
+							header is a sort control. One active sort at a time,
+							ascending/descending toggle.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G2</span><span class="rtitle">Filter row</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Contains the free-text filter input (G-S1), structured chips for
+							Nation, Result and Date, and a Sort control. Chips and free-text
+							combine with AND (G-S2). The Sort control is independent of
+							filtering.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G3</span
+						><span class="rtitle">Row navigation</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Clicking a row navigates to that game's detail page. This is the
+							path used to move between games now that the sidebar is removed
+							(section 07).
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G4</span
+						><span class="rtitle">Migrated sidebar machinery</span>
+					</div>
+					<div class="req-body">
+						<p>
+							The following move from <code>CloudGameSidebar</code> into the
+							Games-tab table:
+						</p>
+						<ul class="spec">
+							<li>
+								<b>Rename / move-to-collection</b> — the current right-click
+								context menu becomes a per-row hover action menu.
+							</li>
+							<li>
+								<b>Month dividers</b> — rendered as group header rows, shown
+								only when the active sort is by date.
+							</li>
+							<li>
+								<b>Infinite scroll / pagination</b> — retained for the table
+								body.
+							</li>
+						</ul>
+						<p>
+							The drag-to-resize width handle is not migrated; it has no purpose
+							in a full-width tab.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">G5</span
+						><span class="rtitle">List / grid toggle</span>
+					</div>
+					<div class="req-body">
+						<p>
+							A view toggle switches the table for a card-grid view of the same
+							filtered, sorted set. Table is the default.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ===================== 6. STATS TAB ===================== -->
+		<section id="stats">
+			<div class="wrap">
+				<div class="sec-num">06</div>
+				<h2>Stats tab</h2>
+				<p class="lead">
+					A single tab housing the full chart catalog. Internal sub-navigation
+					moves between categories. All charts reflect the selected collection.
+				</p>
+
+				<figure>
+					<div class="browser-bar">
+						<span class="dot r"></span><span class="dot y"></span
+						><span class="dot g"></span>
+						<span class="url">perankh.app/users/me?tab=stats</span>
+					</div>
+					<div class="mock ui">
+						<div class="scope-row" style="margin-top: 0">
+							<span class="selector"
+								>&#128193; Maurya runs <span class="chev">&#9660;</span></span
+							>
+							<span class="count">22 saves</span>
+							<span class="right-note">&#9889; cached aggregate</span>
+						</div>
+						<div class="tabs">
+							<div class="tab">Overview</div>
+							<div class="tab active">Stats</div>
+							<div class="tab">Games</div>
+						</div>
+						<div class="subnav">
+							<span class="subtab active">Summary</span>
+							<span class="subtab">Nations</span>
+							<span class="subtab">Families</span>
+							<span class="subtab">Rulers</span>
+							<span class="subtab">Yields</span>
+							<span class="subtab">Laws</span>
+							<span class="subtab">Cities</span>
+							<span class="subtab">Tech</span>
+						</div>
+						<div class="metrics">
+							<div class="metric">
+								<div class="ml">Games</div>
+								<div class="mv">22</div>
+							</div>
+							<div class="metric">
+								<div class="ml">Win rate</div>
+								<div class="mv amber">86%</div>
+							</div>
+							<div class="metric">
+								<div class="ml">Avg turns</div>
+								<div class="mv">97</div>
+							</div>
+							<div class="metric">
+								<div class="ml">Fastest win</div>
+								<div class="mv">31</div>
+							</div>
+						</div>
+						<div class="ph" style="height: 78px">
+							<span style="font-size: 15px">&#128200;</span>
+							<span
+								>charts for the active sub-nav category — from the existing
+								ChartBundle</span
+							>
+						</div>
+					</div>
+				</figure>
+				<figcaption>
+					<b>Mockup 5.</b> Stats tab. Sub-nav selects a category; charts come
+					from the existing ChartBundle, scoped to the collection.
+				</figcaption>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">ST1</span
+						><span class="rtitle">Catalog &amp; sub-nav</span>
+					</div>
+					<div class="req-body">
+						<p>
+							The Stats tab houses the existing <code>ChartBundle</code> catalog
+							— 22 chart specs across 8 categories: Summary, Nations, Families,
+							Rulers, Yields, Laws, Cities, Tech. An internal sub-navigation
+							control selects the active category. Categories are not promoted
+							to top-level tabs.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">ST2</span
+						><span class="rtitle">Collection scoping</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Every chart and metric in the tab is computed from the selected
+							collection's cached aggregate (section 03). The existing
+							<code>ChartBundle</code> is wired to the collection dimension;
+							chart specs themselves are unchanged.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">ST3</span
+						><span class="rtitle">Staleness indicator</span>
+					</div>
+					<div class="req-body">
+						<p>
+							When a tab is rendering a cached aggregate, show a small indicator
+							(e.g. "cached aggregate") in the scope row, so a briefly-stale
+							stat after a new upload is expected rather than surprising.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">ST4</span
+						><span class="rtitle">Chart cross-filter</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Clicking a data element in a chart (e.g. a nation bar) switches to
+							the <b>Games tab</b> with the corresponding structured filter
+							applied (e.g. <code>nation=</code>). This replaces the former
+							chart-click-narrows-sidebar interaction. The chart click does not
+							change the collection scope.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ===================== 7. SIDEBAR REMOVAL ===================== -->
+		<section id="sidebar">
+			<div class="wrap">
+				<div class="sec-num">07</div>
+				<h2>Sidebar removal</h2>
+				<p class="lead">
+					The persistent <code>CloudGameSidebar</code> is removed from both the
+					home page and game-detail. No replacement rail is added.
+				</p>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">SB1</span><span class="rtitle">Home page</span>
+					</div>
+					<div class="req-body">
+						<p>
+							<code>CloudGameSidebar</code> is removed from
+							<code>/users/[user_id]</code>. Its browsing function is served by
+							the Games tab (section 05).
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">SB2</span><span class="rtitle">Game-detail</span>
+					</div>
+					<div class="req-body">
+						<p>
+							<code>CloudGameSidebar</code> is removed from
+							<code>/games/[id]</code>. To move between games, the user returns
+							to the Games tab. Game-detail retains a back affordance to the
+							Games tab. No pinned library list and no jump-to-game control is
+							added in v1.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">SB3</span
+						><span class="rtitle">Preserved capabilities</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Rename, move-to-collection, month dividers and infinite scroll are
+							preserved by migration into the Games-tab table (G4). The
+							drag-to-resize handle is dropped.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ===================== 8. ROUTING ===================== -->
+		<section id="routing">
+			<div class="wrap">
+				<div class="sec-num">08</div>
+				<h2>Routing &amp; URL state</h2>
+				<p class="lead">
+					The home page stays under <code>/users/[user_id]</code> so visitors
+					can view other users' public corpora. Tab and scope state live in
+					query parameters.
+				</p>
+
+				<table class="data">
+					<thead>
+						<tr>
+							<th>Parameter</th>
+							<th>Values</th>
+							<th>Meaning</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>tab</code></td>
+							<td>
+								<code>overview</code> &middot; <code>stats</code> &middot;
+								<code>games</code>
+							</td>
+							<td>Active tab. Defaults to <code>overview</code>.</td>
+						</tr>
+						<tr>
+							<td><code>collection</code></td>
+							<td>
+								<code>all</code> &middot; <code>public</code> &middot;
+								collection id
+							</td>
+							<td>Selected scope. Defaults to <code>all</code>.</td>
+						</tr>
+						<tr>
+							<td><code>category</code></td>
+							<td>Stats sub-nav category</td>
+							<td>
+								Active Stats category. Applies when <code>tab=stats</code>.
+							</td>
+						</tr>
+						<tr>
+							<td>
+								<code>nation</code>, <code>result</code>, <code>date</code>,
+								<code>q</code>
+							</td>
+							<td>filter values</td>
+							<td>
+								Games-tab chips and free-text. Apply when
+								<code>tab=games</code>.
+							</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">R1</span><span class="rtitle">URL pattern</span>
+					</div>
+					<div class="req-body">
+						<p>
+							Tab state uses the query-parameter pattern
+							<code>/users/[user_id]?tab=stats</code>, consistent with the
+							existing game-detail <code>?tab=</code> pattern. No top-level
+							route rename.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">R2</span
+						><span class="rtitle">Cross-filter target</span>
+					</div>
+					<div class="req-body">
+						<p>
+							A chart cross-filter click (ST4) navigates to
+							<code>?tab=games</code> with the relevant filter parameter set,
+							e.g. <code>?tab=games&amp;nation=Maurya</code>.
+						</p>
+					</div>
+				</div>
+
+				<div class="req">
+					<div class="req-head">
+						<span class="rid">R3</span><span class="rtitle">Visitor view</span>
+					</div>
+					<div class="req-body">
+						<p>
+							When the viewer is not the owner, the home page renders the
+							owner's public corpus. Header search (H1), upload, and per-row
+							management actions (G4) are owner-only.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<!-- ===================== 9. PHASES ===================== -->
+		<section id="phases">
+			<div class="wrap">
+				<div class="sec-num">09</div>
+				<h2>Build phases</h2>
+				<p class="lead">
+					A suggested sequence. Each phase is independently shippable.
+				</p>
+
+				<div class="phase">
+					<div class="pnum">1</div>
+					<div class="pbody">
+						<h4>Layout &amp; navigation restructure</h4>
+						<p>
+							Header with collection scope row and tab bar. Overview and Games
+							tabs. Games tab as a sortable table with chips, free-text filter
+							and migrated sidebar machinery. Remove
+							<code>CloudGameSidebar</code> from both surfaces. Routing per
+							section 08.
+						</p>
+					</div>
+				</div>
+				<div class="phase">
+					<div class="pnum">2</div>
+					<div class="pbody">
+						<h4>Header search</h4>
+						<p>
+							Header search input, substring matching over the user's own games,
+							results dropdown, navigation on select. Per section 04.
+						</p>
+					</div>
+				</div>
+				<div class="phase">
+					<div class="pnum">3</div>
+					<div class="pbody">
+						<h4>Collection-scoped stats</h4>
+						<p>
+							Extend the cache key with <code>collection_id</code>; wire
+							invalidation. Stats tab with sub-nav over the existing
+							<code>ChartBundle</code>, scoped to the selected collection.
+							Staleness indicator.
+						</p>
+					</div>
+				</div>
+				<div class="phase">
+					<div class="pnum">4</div>
+					<div class="pbody">
+						<h4>Chart cross-filter</h4>
+						<p>
+							Chart data-element clicks navigate to the Games tab with the
+							corresponding filter applied. Per ST4 and R2.
+						</p>
+					</div>
+				</div>
+			</div>
+		</section>
+
+		<footer>
+			<div class="ankh-foot">&#9765;</div>
+			<div>Per Ankh — Home Page Redesign &middot; Build Specification v1</div>
+		</footer>
+	</body>
 </html>
