@@ -1,5 +1,64 @@
 # Changelog
 
+## [2026-05-25-609062e] - 2026-05-25
+
+### Features
+
+- (users) user profile with scoped library + aggregate stats — [cc9fcd0](https://github.com/becked/per-ankh/commit/cc9fcd0bd268be9009e9f1bb8a76d7467c2e8a43)
+- (home) link profile card to library, add stat boxes and dark-theme panels — [9e79aff](https://github.com/becked/per-ankh/commit/9e79aff33795e807f69b00e0de7c79ac5f26ac7b)
+- (game-detail) restyle tabs and tables to the games-table theme — [1cc6661](https://github.com/becked/per-ankh/commit/1cc6661228e82e7476d23779babb59090f4c9624)
+- (scripts) anonymous UX-review screenshot walkthrough — [e71c974](https://github.com/becked/per-ankh/commit/e71c9744aa8159bceda6c32a9fedbe67642ef063)
+- (game-detail) label the visibility toggle Public/Private — [c425c74](https://github.com/becked/per-ankh/commit/c425c74cfe813f6e41a548e85ff0d0c5a3be0de8)
+- (account) public-by-default uploads with per-user override — [3fce53e](https://github.com/becked/per-ankh/commit/3fce53e4c7b6c6a67e794469bc02efa4bccabf01)
+- (home) rework header and home page for signed-out discovery — [d0b7234](https://github.com/becked/per-ankh/commit/d0b7234fbf7928ff6bf728fa7146e1fc036882d1)
+- (nav) add breadcrumb trail to game, tournament, and user pages — [4f12f25](https://github.com/becked/per-ankh/commit/4f12f25d2b9071df262e0b9c7892f1177a923535)
+- (scripts) UX review as navigable folder bundle with auth + responsive passes — [68a2fe8](https://github.com/becked/per-ankh/commit/68a2fe886eff084600e4abeea1d922ce96ba9203)
+- (settings) match overview card styling and add nation/religion icons — [e12e39f](https://github.com/becked/per-ankh/commit/e12e39f152154d76e642912cbe1cb255c28b9093)
+- (game-detail) drop red from upload date, Turn label, and map status — [2639620](https://github.com/becked/per-ankh/commit/2639620dead4131afcd5f115e35625c4bdff056e)
+- (users) replace native date filter with styled bits-ui date picker — [5048571](https://github.com/becked/per-ankh/commit/504857183f71b83a1b92f4d280041fb667281488)
+- (ui) add shared styled UI primitives (select, checkbox, radio, toast, confirm) — [d3787d2](https://github.com/becked/per-ankh/commit/d3787d2a78d55854b0f6a97770ec1b4530823120)
+- (home) add Discord sign-in CTA and saves heading to anon hero — [546d2e3](https://github.com/becked/per-ankh/commit/546d2e32f4871d58fdf9b4762caf1f1eb45a8ceb)
+- (header) left-align wordmark, move menu right, collapse search to icon — [52a69b4](https://github.com/becked/per-ankh/commit/52a69b491f5b38fb1f466d278f0a398b9c31f11e)
+- (upload) redesign nation picker as cards in the dark UI scheme — [c7609f9](https://github.com/becked/per-ankh/commit/c7609f96b26885e37f0c74ba66700f96b022653c)
+- (upload) return to the originating page after upload — [3ca856c](https://github.com/becked/per-ankh/commit/3ca856c4b3a748b646d2a74bcbe2fd0e62122e75)
+- (tournament) surface Mirror as a per-script map option — [4f99b98](https://github.com/becked/per-ankh/commit/4f99b9815d0fcbac02cadf6e92c293e1dea7fbe2)
+- (tournament) model the map pool as instances with per-map options — [a5b2e7b](https://github.com/becked/per-ankh/commit/a5b2e7b9446d080bf44d43e45012103fbfc60d46)
+- (tournament) rebuild bracket-seeding cascade as 6 tiers — [6d28aff](https://github.com/becked/per-ankh/commit/6d28aff3bef0c344d0239630422ce22069d04b65)
+- (tournament) seed round-1 Swiss pairing by swiss seed — [87fc065](https://github.com/becked/per-ankh/commit/87fc06597e0d021821c6de20e55ae875e15845c4)
+- (tournament) always-available guide and header cleanup — [0fab4d1](https://github.com/becked/per-ankh/commit/0fab4d109a580ea3dd61504edd38793b5b6bb40c)
+- (tournament) drop the per-division help icons — [75ed878](https://github.com/becked/per-ankh/commit/75ed878f4020d6f9377df742e231feb461988b97)
+- (auth) remove invite-code gate, open sign-up to all — [54b55e2](https://github.com/becked/per-ankh/commit/54b55e2280b09a0d73e3408a1d52cb1cd1c0353d)
+- (tournament) redesign match modal, bracket map labels, and settings maps panel — [a84b51e](https://github.com/becked/per-ankh/commit/a84b51e4683db08a5cb2bf2f93d95673a98f48a7)
+- (tournament) align championship bracket UI with Swiss redesign — [cfa2163](https://github.com/becked/per-ankh/commit/cfa2163be70fe6528ca3dcf9245620cccf5a816f)
+- (tournament) move status chip below the nav trail, label it — [f1c2252](https://github.com/becked/per-ankh/commit/f1c2252ffc43e14b99f0d167174ad1a3fbecc63f)
+- (tournament) redesign detail header with per-status hero strips — [a248b02](https://github.com/becked/per-ankh/commit/a248b028aff7d41ac1851fd08e710ff0f0240ecd)
+- (tournament) render full championship bracket with TBD placeholders — [522ddf1](https://github.com/becked/per-ankh/commit/522ddf15236156faa089910220c24945729af98a)
+- (tournament) anti-repeat maps by base script, not pool instance — [d4015d1](https://github.com/becked/per-ankh/commit/d4015d10fac11212d3d4bfad89b1c3146804104e)
+- (tournament) move the guide from a modal into a paneled page — [cf4d0c0](https://github.com/becked/per-ankh/commit/cf4d0c007035c019c395126b29bbda1886419dde)
+- (tournament) show player avatars in front of names — [7d18417](https://github.com/becked/per-ankh/commit/7d184172dd82bed28b6ca2dbb791f4ec1d2036eb)
+- (tournament) replace modals with bits-ui popovers — [eb057e5](https://github.com/becked/per-ankh/commit/eb057e5fecb2cc374e5f42787e7250d6f56cd237)
+- (tournament) lead map names with aspect ratio before size — [861a095](https://github.com/becked/per-ankh/commit/861a095ef86e3aa03208c35e40d7516df95e515c)
+- (tournament) let admins add maps to a running tournament — [7a67145](https://github.com/becked/per-ankh/commit/7a671454de0f5be33658ba90e156ca87aa9a31b1)
+
+### Fixes
+
+- (about-modal) neutral Close button and close-on-outside-click — [605abf2](https://github.com/becked/per-ankh/commit/605abf22eb5d77f4bf513b9b3c0b64f806fbf989)
+
+### Other
+
+- (tournament) propose losses-asc as seeding tier 1 — [3de6aaa](https://github.com/becked/per-ankh/commit/3de6aaac7a1145b26750c0237ea7615f5717bbdc)
+- (stats) consolidate aggregate-stats session docs into one — [8b5b7d0](https://github.com/becked/per-ankh/commit/8b5b7d0c9299750fe90200697ba2cdf2328d2db3)
+- point historical parser-status doc at aggregate-statistics.md — [520a006](https://github.com/becked/per-ankh/commit/520a00644a6567b45c91fad0092f18fbc2e4bc8b)
+- (ux-review) add 10-expert panel findings artifact — [55aee7c](https://github.com/becked/per-ankh/commit/55aee7c764904f0b581d0a361ff70b5e08f8eb19)
+- replace native browser chrome with styled ui primitives — [8463400](https://github.com/becked/per-ankh/commit/8463400a8cacc5ab6d8ddd1c9f82d7e3b2eeb8a2)
+- (tournament) align pages with dark-theme UX conventions — [30d309a](https://github.com/becked/per-ankh/commit/30d309af7bda16afe07f18932e6e35b68a931851)
+- (ux-review) regenerate UX review report (2026-05-25) — [fdf3c0a](https://github.com/becked/per-ankh/commit/fdf3c0a1b77874a1c00508c66e05c5d1e25ad8ec)
+- reformat aggregate-statistics.md — [94dc83c](https://github.com/becked/per-ankh/commit/94dc83c00a809753085b2bc5cd0e261f94621824)
+- revise per-ankh home redesign spec — [5c4092a](https://github.com/becked/per-ankh/commit/5c4092a9d0bc34b1060e90ad6763e3ef77ca2423)
+- add local tournament data investigation recipe to CLAUDE.md — [7189d9f](https://github.com/becked/per-ankh/commit/7189d9f441bc04e39b8239a3a221926d4444a69c)
+- (tournament) apply prettier formatting to guide page — [775b3dd](https://github.com/becked/per-ankh/commit/775b3dd39db7cecdfee7c60fb8d9f129b10c8d9f)
+- (deps) bump @sveltejs/kit to 2.61.1 — [609062e](https://github.com/becked/per-ankh/commit/609062e850fad6bfa4c4863fe6fbaded7085291b)
+
 ## [2026-05-20-77b55a4] - 2026-05-20
 
 ### Features
