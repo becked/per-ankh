@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Per-Ankh — UX Review</title>
+<style>
+	:root { color-scheme: dark; }
+	* { box-sizing: border-box; }
+	body { margin: 0; font: 14px/1.5 system-ui, -apple-system, sans-serif;
+		background: #1c1916; color: #e7ddcf; display: flex; height: 100vh; overflow: hidden; }
+	#sidebar { width: 280px; flex: none; overflow-y: auto; background: #15120f;
+		border-right: 1px solid #000; padding: .75rem; }
+	#sidebar h1 { font-size: 1rem; margin: 0 0 .25rem; }
+	#sidebar .meta { font-size: .72rem; color: #a99c87; margin-bottom: .75rem; line-height: 1.4; }
+	.group { font-size: .8rem; font-weight: 700; color: #f0e7d8; text-transform: uppercase;
+		letter-spacing: .04em; margin: 1rem 0 .35rem; border-bottom: 1px solid #4a423a; padding-bottom: .2rem; }
+	.page-grp { margin: .25rem 0; }
+	.page-grp > summary { cursor: pointer; font-weight: 600; color: #cdbfa8; padding: .2rem .25rem;
+		list-style: none; font-size: .82rem; }
+	.page-grp > summary::-webkit-details-marker { display: none; }
+	.page-grp > summary:hover { color: #fff; }
+	.leaf { display: block; width: 100%; text-align: left; background: none; border: none;
+		color: #cdbfa8; padding: .2rem .25rem .2rem 1.1rem; font-size: .8rem; cursor: pointer;
+		border-radius: 4px; }
+	.leaf:hover { background: #2a2622; color: #fff; }
+	.leaf.active { background: #3a322a; color: #fff; }
+	.leaf.err { color: #ffb4a8; }
+	#main { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; }
+	#hdr h2 { margin: 0 0 .15rem; font-size: 1.1rem; }
+	#hdr .route { color: #a99c87; font-size: .82rem; }
+	#hdr .state { display: inline-block; margin-left: .5rem; font-size: .7rem; padding: .05rem .4rem;
+		border: 1px solid #4a423a; border-radius: 3px; color: #b9ad97; }
+	#bps { margin: .75rem 0; display: flex; gap: .4rem; }
+	#bps button { font-size: .78rem; color: #e7ddcf; background: #241f1b; border: 1px solid #4a423a;
+		border-radius: 4px; padding: .2rem .6rem; cursor: pointer; }
+	#bps button.active { background: #6b5d4a; border-color: #6b5d4a; color: #fff; }
+	#bps button:disabled { opacity: .35; cursor: default; }
+	#stage img { max-width: 100%; height: auto; display: block; border: 1px solid #000;
+		border-radius: 6px; background: #000; cursor: zoom-in; }
+	#stage .err { color: #ffb4a8; padding: .75rem; border: 1px solid #5a2b25; border-radius: 6px;
+		background: #2a1714; }
+	#stage pre.redir { font-size: .82rem; color: #b9ad97; padding: .75rem; margin: 0;
+		border: 1px solid #4a423a; border-radius: 6px; background: #221e1a; white-space: pre-wrap; }
+	#lightbox { position: fixed; inset: 0; background: rgba(0,0,0,.92); display: none;
+		overflow: auto; cursor: zoom-out; z-index: 10; }
+	#lightbox.open { display: block; }
+	#lightbox img { display: block; margin: 0 auto; }
+	#lightbox img.fit { max-width: 100%; max-height: 100vh; cursor: zoom-in; }
+	#lightbox img.full { max-width: none; cursor: zoom-out; }
+</style>
+</head>
+<body>
+<aside id="sidebar">
+	<h1>UX Review</h1>
+	<div class="meta">
+		2026-05-25T00:52:25.703Z<br />
+		base http://localhost:1420<br />
+		signed in as <code>.becked</code>
+	</div>
+	<nav id="tree"></nav>
+</aside>
+<main id="main">
+	<div id="hdr"></div>
+	<div id="bps"></div>
+	<div id="stage"></div>
+</main>
+<div id="lightbox"><img alt="" /></div>
+<script>
+const DATA = {"breakpoints":[{"id":"desktop","label":"Desktop","width":1440,"height":900},{"id":"tablet","label":"Tablet","width":768,"height":1024},{"id":"mobile","label":"Mobile","width":390,"height":844}],"screens":[{"id":"anon__home","pass":"anon","page":"home","tab":null,"title":"Home","route":"/","state":"visitor","shots":{"desktop":"shots/anon__home__desktop.jpg","tablet":"shots/anon__home__tablet.jpg","mobile":"shots/anon__home__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__overview","pass":"anon","page":"game-detail","tab":"Overview","title":"Overview","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__overview__desktop.jpg","tablet":"shots/anon__game-detail__overview__tablet.jpg","mobile":"shots/anon__game-detail__overview__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__events","pass":"anon","page":"game-detail","tab":"Events","title":"Events","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__events__desktop.jpg","tablet":"shots/anon__game-detail__events__tablet.jpg","mobile":"shots/anon__game-detail__events__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__laws","pass":"anon","page":"game-detail","tab":"Laws","title":"Laws","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__laws__desktop.jpg","tablet":"shots/anon__game-detail__laws__tablet.jpg","mobile":"shots/anon__game-detail__laws__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__techs","pass":"anon","page":"game-detail","tab":"Techs","title":"Techs","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__techs__desktop.jpg","tablet":"shots/anon__game-detail__techs__tablet.jpg","mobile":"shots/anon__game-detail__techs__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__yields","pass":"anon","page":"game-detail","tab":"Yields","title":"Yields","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__yields__desktop.jpg","tablet":"shots/anon__game-detail__yields__tablet.jpg","mobile":"shots/anon__game-detail__yields__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__military","pass":"anon","page":"game-detail","tab":"Military","title":"Military","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__military__desktop.jpg","tablet":"shots/anon__game-detail__military__tablet.jpg","mobile":"shots/anon__game-detail__military__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__cities","pass":"anon","page":"game-detail","tab":"Cities","title":"Cities","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__cities__desktop.jpg","tablet":"shots/anon__game-detail__cities__tablet.jpg","mobile":"shots/anon__game-detail__cities__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__improvements","pass":"anon","page":"game-detail","tab":"Improvements","title":"Improvements","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__improvements__desktop.jpg","tablet":"shots/anon__game-detail__improvements__tablet.jpg","mobile":"shots/anon__game-detail__improvements__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__map","pass":"anon","page":"game-detail","tab":"Map","title":"Map","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__map__desktop.jpg","tablet":"shots/anon__game-detail__map__tablet.jpg","mobile":"shots/anon__game-detail__map__mobile.jpg"},"errors":{}},{"id":"anon__game-detail__settings","pass":"anon","page":"game-detail","tab":"Settings","title":"Settings","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"visitor","shots":{"desktop":"shots/anon__game-detail__settings__desktop.jpg","tablet":"shots/anon__game-detail__settings__tablet.jpg","mobile":"shots/anon__game-detail__settings__mobile.jpg"},"errors":{}},{"id":"anon__user-profile__overview","pass":"anon","page":"user-profile","tab":"Overview","title":"Overview","route":"/users/xuWIHsyF2uC7ybDPjqd1G?tab=overview","state":"visitor","shots":{"desktop":"shots/anon__user-profile__overview__desktop.jpg","tablet":"shots/anon__user-profile__overview__tablet.jpg","mobile":"shots/anon__user-profile__overview__mobile.jpg"},"errors":{}},{"id":"anon__user-profile__games","pass":"anon","page":"user-profile","tab":"Games","title":"Games","route":"/users/xuWIHsyF2uC7ybDPjqd1G?tab=games","state":"visitor","shots":{"desktop":"shots/anon__user-profile__games__desktop.jpg","tablet":"shots/anon__user-profile__games__tablet.jpg","mobile":"shots/anon__user-profile__games__mobile.jpg"},"errors":{}},{"id":"anon__user-profile__stats","pass":"anon","page":"user-profile","tab":"Stats","title":"Stats","route":"/users/xuWIHsyF2uC7ybDPjqd1G?tab=stats","state":"visitor","shots":{"desktop":"shots/anon__user-profile__stats__desktop.jpg","tablet":"shots/anon__user-profile__stats__tablet.jpg","mobile":"shots/anon__user-profile__stats__mobile.jpg"},"errors":{}},{"id":"auth__home","pass":"auth","page":"home","tab":null,"title":"Home","route":"/","state":"signed in","shots":{"desktop":"shots/auth__home__desktop.jpg","tablet":"shots/auth__home__tablet.jpg","mobile":"shots/auth__home__mobile.jpg"},"errors":{}},{"id":"auth__user-profile__overview","pass":"auth","page":"user-profile","tab":"Overview","title":"Overview","route":"/users/xuWIHsyF2uC7ybDPjqd1G?tab=overview","state":"owner","shots":{"desktop":"shots/auth__user-profile__overview__desktop.jpg","tablet":"shots/auth__user-profile__overview__tablet.jpg","mobile":"shots/auth__user-profile__overview__mobile.jpg"},"errors":{}},{"id":"auth__user-profile__games","pass":"auth","page":"user-profile","tab":"Games","title":"Games","route":"/users/xuWIHsyF2uC7ybDPjqd1G?tab=games","state":"owner","shots":{"desktop":"shots/auth__user-profile__games__desktop.jpg","tablet":"shots/auth__user-profile__games__tablet.jpg","mobile":"shots/auth__user-profile__games__mobile.jpg"},"errors":{}},{"id":"auth__user-profile__stats","pass":"auth","page":"user-profile","tab":"Stats","title":"Stats","route":"/users/xuWIHsyF2uC7ybDPjqd1G?tab=stats","state":"owner","shots":{"desktop":"shots/auth__user-profile__stats__desktop.jpg","tablet":"shots/auth__user-profile__stats__tablet.jpg","mobile":"shots/auth__user-profile__stats__mobile.jpg"},"errors":{}},{"id":"auth__account","pass":"auth","page":"account","tab":null,"title":"Account","route":"/account","state":"owner","shots":{"desktop":"shots/auth__account__desktop.jpg","tablet":"shots/auth__account__tablet.jpg","mobile":"shots/auth__account__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__overview","pass":"auth","page":"game-detail","tab":"Overview","title":"Overview","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__overview__desktop.jpg","tablet":"shots/auth__game-detail__overview__tablet.jpg","mobile":"shots/auth__game-detail__overview__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__events","pass":"auth","page":"game-detail","tab":"Events","title":"Events","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__events__desktop.jpg","tablet":"shots/auth__game-detail__events__tablet.jpg","mobile":"shots/auth__game-detail__events__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__laws","pass":"auth","page":"game-detail","tab":"Laws","title":"Laws","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__laws__desktop.jpg","tablet":"shots/auth__game-detail__laws__tablet.jpg","mobile":"shots/auth__game-detail__laws__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__techs","pass":"auth","page":"game-detail","tab":"Techs","title":"Techs","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__techs__desktop.jpg","tablet":"shots/auth__game-detail__techs__tablet.jpg","mobile":"shots/auth__game-detail__techs__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__yields","pass":"auth","page":"game-detail","tab":"Yields","title":"Yields","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__yields__desktop.jpg","tablet":"shots/auth__game-detail__yields__tablet.jpg","mobile":"shots/auth__game-detail__yields__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__military","pass":"auth","page":"game-detail","tab":"Military","title":"Military","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__military__desktop.jpg","tablet":"shots/auth__game-detail__military__tablet.jpg","mobile":"shots/auth__game-detail__military__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__cities","pass":"auth","page":"game-detail","tab":"Cities","title":"Cities","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__cities__desktop.jpg","tablet":"shots/auth__game-detail__cities__tablet.jpg","mobile":"shots/auth__game-detail__cities__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__improvements","pass":"auth","page":"game-detail","tab":"Improvements","title":"Improvements","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__improvements__desktop.jpg","tablet":"shots/auth__game-detail__improvements__tablet.jpg","mobile":"shots/auth__game-detail__improvements__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__map","pass":"auth","page":"game-detail","tab":"Map","title":"Map","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__map__desktop.jpg","tablet":"shots/auth__game-detail__map__tablet.jpg","mobile":"shots/auth__game-detail__map__mobile.jpg"},"errors":{}},{"id":"auth__game-detail__settings","pass":"auth","page":"game-detail","tab":"Settings","title":"Settings","route":"/games/P5J5b0oR1IYan3cBtW2zt","state":"owner","shots":{"desktop":"shots/auth__game-detail__settings__desktop.jpg","tablet":"shots/auth__game-detail__settings__tablet.jpg","mobile":"shots/auth__game-detail__settings__mobile.jpg"},"errors":{}},{"id":"auth__tournaments","pass":"auth","page":"tournaments","tab":null,"title":"Tournaments","route":"/tournaments","state":"signed in","shots":{"desktop":"shots/auth__tournaments__desktop.jpg","tablet":"shots/auth__tournaments__tablet.jpg","mobile":"shots/auth__tournaments__mobile.jpg"},"errors":{}},{"id":"auth__tournament-detail","pass":"auth","page":"tournament-detail","tab":null,"title":"Tournament: test-03","route":"/tournaments/test-03","state":"signed in","shots":{"desktop":"shots/auth__tournament-detail__desktop.jpg","tablet":"shots/auth__tournament-detail__tablet.jpg","mobile":"shots/auth__tournament-detail__mobile.jpg"},"errors":{}},{"id":"auth__admin-reparse","pass":"auth","page":"admin-reparse","tab":null,"title":"Admin · reparse","route":"/admin/reparse","state":"admin","shots":{"desktop":"shots/auth__admin-reparse__desktop.jpg","tablet":"shots/auth__admin-reparse__tablet.jpg","mobile":"shots/auth__admin-reparse__mobile.jpg"},"errors":{}},{"id":"auth__redirects","pass":"auth","page":"redirects","tab":null,"title":"Redirect routes","route":"(verification)","state":"—","shots":{},"errors":{},"note":"/dashboard → /users/xuWIHsyF2uC7ybDPjqd1G  (→ /users/[id] (signed in) · /?next= (anon))\n/games → /users/xuWIHsyF2uC7ybDPjqd1G  (→ /dashboard → profile)\n/auth/callback → /auth/callback  (OAuth landing (not renderable))"}]};
+const PASS_LABEL = {
+	anon: "Anonymous (signed out)",
+	auth: "Signed in (.becked)",
+};
+const PAGE_LABEL = {"home":"Home","game-detail":"Game detail","user-profile":"User profile","account":"Account","tournaments":"Tournaments","tournament-detail":"Tournament detail","admin-reparse":"Admin · reparse","redirects":"Redirect routes"};
+const order = DATA.screens.map((s) => s.id);
+let curId = order[0];
+let curBp = DATA.breakpoints[0].id;
+
+function byId(id) { return DATA.screens.find((s) => s.id === id); }
+
+function buildTree() {
+	const tree = document.getElementById("tree");
+	let passEl = null, pageEl = null, lastPass = null, lastPage = null;
+	for (const s of DATA.screens) {
+		if (s.pass !== lastPass) {
+			const h = document.createElement("div");
+			h.className = "group"; h.textContent = PASS_LABEL[s.pass] || s.pass;
+			tree.appendChild(h); lastPass = s.pass; lastPage = null;
+		}
+		if (s.page !== lastPage) {
+			pageEl = document.createElement("details");
+			pageEl.className = "page-grp"; pageEl.open = true;
+			const sum = document.createElement("summary");
+			sum.textContent = PAGE_LABEL[s.page] || s.page;
+			pageEl.appendChild(sum); tree.appendChild(pageEl); lastPage = s.page;
+		}
+		const btn = document.createElement("button");
+		btn.className = "leaf"; btn.dataset.id = s.id;
+		btn.textContent = s.tab || (PAGE_LABEL[s.page] || s.page);
+		const hasShot = s.shots && Object.keys(s.shots).length > 0;
+		if (!hasShot && !s.note) btn.classList.add("err");
+		btn.onclick = () => select(s.id);
+		pageEl.appendChild(btn);
+	}
+}
+
+function render() {
+	const s = byId(curId);
+	document.querySelectorAll(".leaf").forEach((b) =>
+		b.classList.toggle("active", b.dataset.id === curId));
+	const hdr = document.getElementById("hdr");
+	hdr.innerHTML = '<h2>' + esc(PAGE_LABEL[s.page] || s.page) +
+		(s.tab ? ' · ' + esc(s.tab) : '') + '</h2>' +
+		'<span class="route">' + esc(s.route) + '</span>' +
+		'<span class="state">' + esc(s.state) + '</span>';
+
+	const bps = document.getElementById("bps");
+	bps.innerHTML = "";
+	if (s.note) { bps.style.display = "none"; } else {
+		bps.style.display = "flex";
+		for (const b of DATA.breakpoints) {
+			const has = s.shots && s.shots[b.id];
+			const btn = document.createElement("button");
+			btn.textContent = b.label + " · " + b.width;
+			btn.disabled = !has;
+			btn.classList.toggle("active", b.id === curBp);
+			btn.onclick = () => { curBp = b.id; render(); };
+			bps.appendChild(btn);
+		}
+	}
+
+	const stage = document.getElementById("stage");
+	if (s.note) {
+		stage.innerHTML = '<pre class="redir">' + esc(s.note) + '</pre>';
+	} else if (s.shots && s.shots[curBp]) {
+		const img = document.createElement("img");
+		img.src = s.shots[curBp]; img.alt = s.id + " " + curBp;
+		img.onclick = () => openLightbox(s.shots[curBp]);
+		stage.innerHTML = ""; stage.appendChild(img);
+	} else {
+		const msg = (s.errors && s.errors[curBp]) || "No capture at this breakpoint.";
+		stage.innerHTML = '<div class="err">⚠ ' + esc(msg) + '</div>';
+	}
+}
+
+function select(id) {
+	curId = id;
+	const s = byId(id);
+	if (!(s.shots && s.shots[curBp])) {
+		const first = s.shots && Object.keys(s.shots)[0];
+		if (first) curBp = first;
+	}
+	render();
+}
+
+function openLightbox(src) {
+	const lb = document.getElementById("lightbox");
+	const img = lb.querySelector("img");
+	img.src = src; img.className = "fit";
+	lb.classList.add("open");
+}
+document.getElementById("lightbox").onclick = (e) => {
+	if (e.target.tagName === "IMG") { e.target.classList.toggle("fit"); e.target.classList.toggle("full"); }
+	else document.getElementById("lightbox").classList.remove("open");
+};
+document.addEventListener("keydown", (e) => {
+	if (e.key === "Escape") document.getElementById("lightbox").classList.remove("open");
+	if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+		const i = order.indexOf(curId);
+		const ni = e.key === "ArrowDown" ? Math.min(order.length - 1, i + 1) : Math.max(0, i - 1);
+		select(order[ni]); e.preventDefault();
+	}
+});
+function esc(s){return String(s).replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));}
+buildTree(); render();
+</script>
+</body>
+</html>
