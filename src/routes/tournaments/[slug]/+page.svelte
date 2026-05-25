@@ -793,19 +793,8 @@
 						{@const divisionData = data.standings.divisions[division]}
 						{#if divisionData.standings.length > 0}
 							<section class="mb-8">
-								<h2
-									class="mb-3 flex items-baseline gap-2 text-lg font-bold text-tan"
-								>
-									<span>{divisionData.name}</span>
-									<button
-										type="button"
-										class="rounded border border-black border-opacity-50 px-1.5 text-[11px] font-normal text-tan opacity-60 transition-opacity hover:opacity-100"
-										onclick={() => (guideOpen = true)}
-										aria-label="How the tournament works"
-										title="How the tournament works"
-									>
-										?
-									</button>
+								<h2 class="mb-3 text-lg font-bold text-tan">
+									{divisionData.name}
 								</h2>
 								<div class="space-y-3">
 									<SwissFlowBracket
