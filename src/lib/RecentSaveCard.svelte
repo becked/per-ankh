@@ -100,7 +100,7 @@
 							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${p.seriesName}: ${p.value[1]}`,
 					)
 					.join("<br/>");
-				return `Turn ${turn}<br/>${rows}`;
+				return `Victory Points (VP)<br/>Turn ${turn}<br/>${rows}`;
 			},
 		},
 		series: orderedPlayers.map((p, i) => ({

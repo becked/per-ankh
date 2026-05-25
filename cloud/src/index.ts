@@ -42,7 +42,9 @@ import {
 	handleGameDelete,
 	handleGameDetail,
 	handleAdminDownload,
+	handleAdminListAllGames,
 	handleAdminListOutOfDate,
+	handleAdminReindex,
 	handleAdminReparseUpload,
 	handleGameDownload,
 	handleGameList,
@@ -687,6 +689,21 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/admin/games/out-of-date" },
 		route: "GET /v1/admin/games/out-of-date",
 		handler: (r, e) => handleAdminListOutOfDate(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/admin/games/all" },
+		route: "GET /v1/admin/games/all",
+		handler: (r, e) => handleAdminListAllGames(r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/admin\/games\/([A-Za-z0-9_-]{21})\/reindex$/,
+		},
+		route: "POST /v1/admin/games/:id/reindex",
+		handler: (r, e, m) => handleAdminReindex(m![1], r, e),
 	},
 	{
 		method: "GET",

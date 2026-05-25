@@ -128,9 +128,20 @@ export interface AdminGameListResponse {
 	games: AdminGameListItem[];
 }
 
+// Minimal id + display label per game. Returned by GET /v1/admin/games/all,
+// which drives the reindex sweep.
+export interface AdminGameIdListItem {
+	game_id: string;
+	game_name: string | null;
+}
+
+export interface AdminGameIdListResponse {
+	games: AdminGameIdListItem[];
+}
+
 // Wire shape for GET /v1/games/public-recent — the marketing home's
 // discovery feed. Includes the uploader's display name + a sparkline-ready
-// per-turn legitimacy ("VP") series for each human player.
+// per-turn victory-points series (`vp_series`) for each player.
 export interface PublicRecentPlayer {
 	player_index: number;
 	player_name: string;
@@ -605,6 +616,28 @@ export const cloudApi = {
 			body: formData,
 		});
 		return res.json() as Promise<UploadGameResponse>;
+	},
+
+	// Every game's id + display label, for the admin reindex sweep.
+	adminListAllGames: async (
+		opts?: CallOpts,
+	): Promise<AdminGameIdListResponse> => {
+		const res = await request("/admin/games/all", opts);
+		return res.json() as Promise<AdminGameIdListResponse>;
+	},
+
+	// Rebuild a single game's derived D1 tables from its stored R2 blob —
+	// no re-parse, games row untouched. Backfills child-table columns added
+	// after upload (e.g. game_player_turn.points).
+	adminReindexGame: async (
+		id: string,
+		opts?: CallOpts,
+	): Promise<{ reindexed: boolean }> => {
+		const res = await request(`/admin/games/${id}/reindex`, {
+			...opts,
+			method: "POST",
+		});
+		return res.json() as Promise<{ reindexed: boolean }>;
 	},
 
 	getMyOnlineIds: async (opts?: CallOpts): Promise<string[]> => {

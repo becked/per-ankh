@@ -97,12 +97,14 @@ export function isScraperUA(ua: string | null): boolean {
 
 // D1 caps bound parameters at 100 per query (much tighter than standalone
 // SQLite's 999). Multi-row INSERTs chunked so N_rows × N_cols ≤ 99 to
-// leave headroom. The trade-off vs the ex-990 cap is more statements per
-// upload (~530 GPT statements for a 200-turn 8-player game), all bundled
-// into one db.batch() call so it remains a single transaction.
+// leave headroom, all bundled into one db.batch() call so an upload/reindex
+// remains a single transaction. GPT_COLS MUST equal the length of the
+// `columns` array in buildGamePlayerTurnStatements — if they drift, chunks
+// overshoot the param cap and every insert fails with "too many SQL
+// variables".
 const D1_MAX_PARAMS = 99;
-const GPT_COLS = 33;
-const GPT_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / GPT_COLS); // 3
+const GPT_COLS = 34; // 3 keys + 14 yields × 2 + military_power + legitimacy + points
+const GPT_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / GPT_COLS); // 2
 const TECH_LAW_ROWS_PER_INSERT = Math.floor(D1_MAX_PARAMS / 4); // 24
 
 // ---------- Rate limit checks (D1 events table) ----------
@@ -501,7 +503,8 @@ function buildSummaryStatements(
 //
 // Pivot into rows keyed by (player_index, turn). Each yield entry fills two
 // columns per turn (rate → *_per_turn, cumulative → *_cumulative). Each
-// player_history point fills military_power + legitimacy.
+// player_history point fills points (per-turn victory points) +
+// military_power + legitimacy.
 //
 // Yield name mapping: XML `YIELD_FOOD` → `food` → columns `food_per_turn`
 // and `food_cumulative`.
@@ -548,6 +551,7 @@ function buildGamePlayerTurnStatements(
 		player_id: number;
 		history: Array<{
 			turn: number;
+			points: number | null;
 			military_power: number | null;
 			legitimacy: number | null;
 		}>;
@@ -556,6 +560,7 @@ function buildGamePlayerTurnStatements(
 	for (const entry of playerHistory) {
 		for (const point of entry.history) {
 			const row = ensureRow(entry.player_id, point.turn);
+			if (point.points !== null) row.points = point.points;
 			if (point.military_power !== null)
 				row.military_power = point.military_power;
 			if (point.legitimacy !== null) row.legitimacy = point.legitimacy;
@@ -599,6 +604,7 @@ function buildGamePlayerTurnStatements(
 		"maintenance_cumulative",
 		"military_power",
 		"legitimacy",
+		"points",
 	];
 
 	const allRows = Array.from(rowsByKey.values());
@@ -1971,9 +1977,9 @@ export async function handlePublicRecentGames(
 			laws_count: number | null;
 		}>();
 
-	// Per-turn legitimacy (in-app "VP") for every player — humans and AI.
+	// Per-turn victory points for every player — humans and AI.
 	const seriesRows = await env.SHARE_DB.prepare(
-		`SELECT game_id, player_index, turn, legitimacy
+		`SELECT game_id, player_index, turn, points
 		 FROM game_player_turn
 		 WHERE game_id IN (${placeholders})
 		 ORDER BY game_id, player_index, turn`,
@@ -1983,23 +1989,25 @@ export async function handlePublicRecentGames(
 			game_id: string;
 			player_index: number;
 			turn: number;
-			legitimacy: number | null;
+			points: number | null;
 		}>();
 
 	// Index series rows by (game_id, player_index) so the assembly loop
-	// stays O(N) instead of N² scans.
-	const seriesByPlayer = new Map<
-		string,
-		Array<{ turn: number; vp: number | null }>
-	>();
+	// stays O(N) instead of N² scans. Skip NULL points: games uploaded
+	// before the points ingest (and not yet reindexed via /admin/reindex)
+	// have rows with NULL points — emitting them would draw a flat-zero
+	// line. Dropping them leaves vp_series empty so the card's hasSparkline
+	// guard hides the chart until the game is backfilled.
+	const seriesByPlayer = new Map<string, Array<{ turn: number; vp: number }>>();
 	for (const r of seriesRows.results ?? []) {
+		if (r.points === null) continue;
 		const key = `${r.game_id}:${r.player_index}`;
 		let arr = seriesByPlayer.get(key);
 		if (!arr) {
 			arr = [];
 			seriesByPlayer.set(key, arr);
 		}
-		arr.push({ turn: r.turn, vp: r.legitimacy });
+		arr.push({ turn: r.turn, vp: r.points });
 	}
 
 	const playersByGame = new Map<
@@ -2741,4 +2749,144 @@ export async function handleAdminReparseUpload(
 		targetUserId,
 		actingAdminUserId: session.data.user_id,
 	});
+}
+
+// List every game's id + display label, for the admin reindex sweep. Unlike
+// the reparse list (which filters by stale parser_version), reindex applies
+// to all games — re-running the D1 pivot from each blob is idempotent.
+export async function handleAdminListAllGames(
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!(await isSiteAdmin(env, session))) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT game_id, game_name, display_name
+		 FROM games
+		 ORDER BY created_at DESC`,
+	).all<{
+		game_id: string;
+		game_name: string | null;
+		display_name: string | null;
+	}>();
+	const games = (rows.results ?? []).map((r) => ({
+		game_id: r.game_id,
+		game_name: r.display_name ?? r.game_name,
+	}));
+	return jsonResponse({ games }, 200, cors);
+}
+
+// Reindex a single game from its stored R2 blob — re-runs the D1 pivot
+// (player_summaries, game_player_turn, tech_events, law_events) without
+// re-parsing or touching R2. Unlike the reparse path (which goes through
+// handleGameUpload + INSERT OR REPLACE on the games row), this leaves the
+// games row — created_at, is_public, display_name, user_nation/won — entirely
+// untouched: it deletes and rebuilds only the derived child rows. Used to
+// backfill columns added to the child tables after a game was uploaded (e.g.
+// game_player_turn.points). Audited as 'admin_reindex'.
+export async function handleAdminReindex(
+	gameId: string,
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!(await isSiteAdmin(env, session))) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+	if (!session) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+
+	// Confirm the game exists and capture its owner + winner for the rebuild
+	// and the audit trail.
+	const gameRow = await env.SHARE_DB.prepare(
+		"SELECT user_id FROM games WHERE game_id = ?",
+	)
+		.bind(gameId)
+		.first<{ user_id: string }>();
+	if (!gameRow) return errorResponse("Not found", 404, cors, "NOT_FOUND");
+
+	// Recover the uploader's player_index from the existing summaries so the
+	// rebuilt is_uploader flags match the original upload. Observer uploads
+	// have no is_uploader row → uploaderIndex stays null.
+	const uploaderRow = await env.SHARE_DB.prepare(
+		"SELECT player_index FROM player_summaries WHERE game_id = ? AND is_uploader = 1",
+	)
+		.bind(gameId)
+		.first<{ player_index: number }>();
+	const uploaderIndex = uploaderRow?.player_index ?? null;
+
+	// Read + decompress the parsed blob (same path as the detail endpoint).
+	const obj = await env.SHARE_BUCKET.get(`games/${gameId}.json.gz`);
+	if (!obj) return errorResponse("Blob missing", 404, cors, "BLOB_MISSING");
+	const decompressed = await decompressWithLimit(
+		await obj.arrayBuffer(),
+		MAX_BLOB_DECOMPRESSED,
+	);
+	const blob = JSON.parse(
+		new TextDecoder().decode(decompressed),
+	) as FullGameData;
+
+	const winnerIndex = blob.match_metadata.winner?.winner_player_xml_id ?? null;
+
+	// Delete-then-rebuild all derived child tables in a single batch. The
+	// games row is never INSERT OR REPLACEd, so its ON DELETE CASCADE doesn't
+	// fire — these explicit DELETEs are what clear the prior child rows.
+	const statements: D1PreparedStatement[] = [
+		env.SHARE_DB.prepare("DELETE FROM player_summaries WHERE game_id = ?").bind(
+			gameId,
+		),
+		env.SHARE_DB.prepare("DELETE FROM game_player_turn WHERE game_id = ?").bind(
+			gameId,
+		),
+		env.SHARE_DB.prepare("DELETE FROM tech_events WHERE game_id = ?").bind(
+			gameId,
+		),
+		env.SHARE_DB.prepare("DELETE FROM law_events WHERE game_id = ?").bind(
+			gameId,
+		),
+		...buildSummaryStatements(env.SHARE_DB, {
+			gameId,
+			blob,
+			uploaderIndex,
+			winnerIndex,
+		}),
+		...buildGamePlayerTurnStatements(env.SHARE_DB, gameId, blob),
+		...buildTechEventStatements(env.SHARE_DB, gameId, blob),
+		...buildLawEventStatements(env.SHARE_DB, gameId, blob),
+	];
+
+	try {
+		await env.SHARE_DB.batch(statements);
+	} catch (e) {
+		logError("admin_reindex_failed", e, { game_id: gameId });
+		return errorResponse("Reindex failed", 500, cors, "REINDEX_FAILED");
+	}
+
+	const ip = getClientIp(request);
+	try {
+		await env.SHARE_DB.prepare(
+			`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+			 VALUES (?, ?, ?, ?, ?)`,
+		)
+			.bind(
+				"admin_reindex",
+				gameId,
+				gameRow.user_id,
+				ip,
+				JSON.stringify({ acting_user_id: session.data.user_id }),
+			)
+			.run();
+	} catch (e) {
+		logError("audit_event_log_failed", e, {
+			event_type: "admin_reindex",
+			game_id: gameId,
+		});
+	}
+
+	return jsonResponse({ reindexed: true }, 200, cors);
 }

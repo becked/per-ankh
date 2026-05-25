@@ -207,8 +207,9 @@
 		(gameData?.player_history ?? []).some((p) => p.history.length > 0),
 	);
 
-	// Per-turn legitimacy series per player — mirrors the home-page
-	// RecentSaveCard sparkline (which also plots legitimacy).
+	// Per-turn victory-points series per player — mirrors the home-page
+	// RecentSaveCard sparkline. Sourced directly from the blob's
+	// player_history (which carries `points`), so no reindex is needed here.
 	const sparklineOption = $derived<EChartsOption>({
 		animation: false,
 		backgroundColor: "transparent",
@@ -237,7 +238,7 @@
 							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${p.seriesName}: ${p.value[1]}`,
 					)
 					.join("<br/>");
-				return `Turn ${turn}<br/>${rows}`;
+				return `Victory Points (VP)<br/>Turn ${turn}<br/>${rows}`;
 			},
 		},
 		series: (gameData?.player_history ?? []).map((p, i) => ({
@@ -247,7 +248,7 @@
 			smooth: true,
 			sampling: "lttb",
 			lineStyle: { width: 1.5, color: playerColor(p.nation, i) },
-			data: p.history.map((pt) => [pt.turn, pt.legitimacy ?? 0]),
+			data: p.history.map((pt) => [pt.turn, pt.points ?? 0]),
 		})),
 	});
 

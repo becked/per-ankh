@@ -13,8 +13,11 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (!user.is_admin) {
 		throw error(404, "Not found");
 	}
-	const { games } = await cloudApi.adminListOutOfDate(PARSER_VERSION, {
-		fetch,
-	});
-	return { user, games };
+	// Reparse acts on games whose parser is older than this build; reindex
+	// acts on every game (re-running the D1 pivot from the blob is idempotent).
+	const [{ games: outOfDateGames }, { games: allGames }] = await Promise.all([
+		cloudApi.adminListOutOfDate(PARSER_VERSION, { fetch }),
+		cloudApi.adminListAllGames({ fetch }),
+	]);
+	return { user, outOfDateGames, allGames };
 };
