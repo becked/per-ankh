@@ -8,17 +8,29 @@
 		type UserMe,
 	} from "$lib/api-cloud";
 	import { invalidateAll } from "$app/navigation";
+	import type { EChartsOption } from "echarts";
+	import type { FullGameData } from "$lib/parser/types";
+	import Chart from "$lib/Chart.svelte";
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+	import {
+		CHART_THEME,
+		getChartColor,
+		getCivilizationColor,
+	} from "$lib/config";
+	import { formatEnum } from "$lib/utils/formatting";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		effectiveOptionValue,
+		mapFullName,
 		mapOptionChoiceLabel,
-		mapOptionLabel,
-		optionsForScript,
 		poolEntryById,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
 	import { toast } from "$lib/ui/toast";
 	import type { SelectOption } from "$lib/ui/types";
+
+	const MAP_ICON = SPRITE_MANIFEST["icons/MAP_OVERVIEW"];
 
 	interface Props {
 		match: TournamentMatch;
@@ -62,29 +74,30 @@
 			? (slotLabels[match.winner_slot_id] ?? null)
 			: null,
 	);
-	const mapName = $derived(
-		match.map_script ? mapScriptLabel(match.map_script) : null,
-	);
+	// The slot that didn't win — used for the dimmed half of the title.
+	const loserLabel = $derived.by(() => {
+		if (match.winner_slot_id === null) return null;
+		const loserId =
+			match.winner_slot_id === match.slot_a_id
+				? match.slot_b_id
+				: match.slot_a_id;
+		if (loserId === null) return "Bye";
+		return slotLabels[loserId] ?? "—";
+	});
 
 	// The map_pool instance this match was assigned, resolved from its id.
 	const matchEntry = $derived(
 		poolEntryById(tournament.map_pool, match.map_pool_id),
 	);
-
-	// Read-only list of (option, value) pairs for the match's assigned instance,
-	// used in the body to communicate hosting config to players. Empty when the
-	// match has no instance (bye) or the script has no applicable options.
-	const matchMapOptions = $derived.by(() => {
-		if (!matchEntry) return [];
-		return optionsForScript(matchEntry.script).map((option) => ({
-			option,
-			label: mapOptionLabel(option),
-			value: mapOptionChoiceLabel(
-				option,
-				effectiveOptionValue(matchEntry.options, option),
-			),
-		}));
-	});
+	// Full map name in our format ("Duel Continent Mirror …"), falling back to
+	// the bare script label if the instance is no longer in the pool.
+	const mapName = $derived(
+		match.map_script
+			? matchEntry
+				? mapFullName(matchEntry.options, matchEntry.script)
+				: mapScriptLabel(match.map_script)
+			: null,
+	);
 
 	const isParticipant = $derived(
 		user !== null &&
@@ -101,6 +114,108 @@
 	const retroEditLabel = $derived(
 		match.status === "pending" ? "Set result" : "Edit result",
 	);
+	const hasSecondaryActions = $derived(
+		canUploadAsParticipant || canUploadAsObserver || canEditMap || canRetroEdit,
+	);
+
+	// Status chip styling: completed/bye reads as a "done" amber pill, anything
+	// else (pending) as a muted neutral pill.
+	const statusChipClass = $derived(
+		match.status === "complete" || match.status === "bye"
+			? "border-amber-300 bg-amber-700/40 text-amber-300"
+			: "border-[#4a433b] text-tan opacity-70",
+	);
+
+	// Lazily load the match's game blob (all tournament games are public) so the
+	// card can show victory type, turns, and the legitimacy sparkline. Winner is
+	// taken from the match record, NOT the save: an admin can retro-edit the
+	// result to something the save itself wouldn't agree with.
+	let gameData = $state<FullGameData | null>(null);
+	let gameLoading = $state(false);
+	$effect(() => {
+		const gid = match.game_id;
+		gameData = null;
+		if (!gid) return;
+		gameLoading = true;
+		let cancelled = false;
+		cloudApi
+			.getPublicGame(gid)
+			.then((g) => {
+				if (!cancelled) gameData = g;
+			})
+			.catch(() => {
+				if (!cancelled) gameData = null;
+			})
+			.finally(() => {
+				if (!cancelled) gameLoading = false;
+			});
+		return () => {
+			cancelled = true;
+		};
+	});
+
+	const victoryType = $derived(
+		gameData?.game_details.winner_victory_type
+			? formatEnum(gameData.game_details.winner_victory_type, "VICTORY_")
+			: null,
+	);
+	const totalTurns = $derived(gameData?.game_details.total_turns ?? null);
+
+	function playerColor(nation: string | null, idx: number): string {
+		if (nation) {
+			const c = getCivilizationColor(nation.replace(/^NATION_/, ""));
+			if (c) return c;
+		}
+		return getChartColor(idx);
+	}
+
+	const hasSparkline = $derived(
+		(gameData?.player_history ?? []).some((p) => p.history.length > 0),
+	);
+
+	// Per-turn legitimacy series per player — mirrors the home-page
+	// RecentSaveCard sparkline (which also plots legitimacy).
+	const sparklineOption = $derived<EChartsOption>({
+		animation: false,
+		backgroundColor: "transparent",
+		grid: { left: 4, right: 4, top: 4, bottom: 4 },
+		xAxis: {
+			type: "value",
+			show: false,
+			min: 0,
+			max: totalTurns && totalTurns > 0 ? totalTurns : undefined,
+		},
+		yAxis: { type: "value", show: false, min: 0 },
+		tooltip: {
+			...CHART_THEME.tooltip,
+			trigger: "axis",
+			formatter: (params: unknown) => {
+				const arr = params as Array<{
+					seriesName: string;
+					value: [number, number];
+					color: string;
+				}>;
+				if (!arr.length) return "";
+				const turn = arr[0].value[0];
+				const rows = arr
+					.map(
+						(p) =>
+							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${p.seriesName}: ${p.value[1]}`,
+					)
+					.join("<br/>");
+				return `Turn ${turn}<br/>${rows}`;
+			},
+		},
+		series: (gameData?.player_history ?? []).map((p, i) => ({
+			name: `${p.player_name}${p.nation ? ` (${formatEnum(p.nation, "NATION_")})` : ""}`,
+			type: "line",
+			showSymbol: false,
+			smooth: true,
+			sampling: "lttb",
+			lineStyle: { width: 1.5, color: playerColor(p.nation, i) },
+			data: p.history.map((pt) => [pt.turn, pt.legitimacy ?? 0]),
+		})),
+	});
 
 	// Short label that disambiguates instances of the same script by their
 	// aspect + size (e.g. "Continent · Wide Duel").
@@ -119,16 +234,13 @@
 		return `${mapScriptLabel(e.script)} · ${aspect} ${size}`;
 	}
 
-	// Map-instance dropdown: one option per map_pool entry. If the match's
-	// current instance is somehow absent from the pool, keep it as the first
-	// option so admin can see what's set.
-	const mapSelectOptions = $derived<SelectOption[]>([
-		...(matchEntry ? [] : []),
-		...tournament.map_pool.map((e) => ({
+	// Map-instance dropdown: one option per map_pool entry.
+	const mapSelectOptions = $derived<SelectOption[]>(
+		tournament.map_pool.map((e) => ({
 			value: e.id,
 			label: instanceLabel(e),
 		})),
-	]);
+	);
 	const winnerOptions = $derived<SelectOption[]>([
 		{ value: match.slot_a_id, label: slotALabel },
 		...(match.slot_b_id ? [{ value: match.slot_b_id, label: slotBLabel }] : []),
@@ -198,12 +310,6 @@
 		if (ok !== null) editMode = "none";
 	}
 
-	function statusBadgeClass(status: string): string {
-		if (status === "complete" || status === "bye") return "text-orange";
-		if (status === "in_progress") return "text-orange opacity-80";
-		return "text-tan opacity-60";
-	}
-
 	function onKeydown(e: KeyboardEvent) {
 		if (e.key === "Escape" && !busy) {
 			e.preventDefault();
@@ -231,36 +337,37 @@
 		<header class="mb-3 flex items-start justify-between gap-3">
 			<div class="min-w-0 flex-1">
 				<h2 id="match-modal-title" class="truncate text-lg font-bold text-tan">
-					<span class:text-orange={match.winner_slot_id === match.slot_a_id}>
-						{slotALabel}
-					</span>
-					<span class="opacity-60">vs</span>
-					<span class:text-orange={match.winner_slot_id === match.slot_b_id}>
-						{slotBLabel}
-					</span>
+					{#if winnerLabel}
+						<span>{winnerLabel}</span>
+						<span class="opacity-50">v</span>
+						<span class="opacity-50">{loserLabel}</span>
+					{:else}
+						<span>{slotALabel}</span>
+						<span class="opacity-50">v</span>
+						<span>{slotBLabel}</span>
+					{/if}
 				</h2>
-				<p class="mt-1 text-xs text-tan opacity-70">
-					{#if match.phase === "championship"}
-						Championship
-					{:else if match.division}
-						{match.division === "A"
-							? tournament.division_a_name
-							: tournament.division_b_name}
-					{/if}
-					{#if match.round_number}
-						· Round {match.round_number}
-					{/if}
-					{#if mapName}
-						· {mapName}
-					{/if}
-					<span class="ml-2 {statusBadgeClass(match.status)}">
+				<div
+					class="mt-1 flex items-center justify-between gap-3 text-xs text-tan"
+				>
+					<span class="opacity-70">
+						{#if match.phase === "championship"}
+							Championship
+						{:else if match.division}
+							{match.division === "A"
+								? tournament.division_a_name
+								: tournament.division_b_name}
+						{/if}
+						{#if match.round_number}
+							· Round {match.round_number}
+						{/if}
+					</span>
+					<span
+						class="shrink-0 rounded-full border px-2 py-0.5 text-[11px] {statusChipClass}"
+					>
 						{match.status}
 					</span>
-					{#if winnerLabel}
-						· winner:
-						<span class="text-orange">{winnerLabel}</span>
-					{/if}
-				</p>
+				</div>
 			</div>
 			<button
 				type="button"
@@ -286,163 +393,284 @@
 		</header>
 
 		<div class="flex flex-col gap-3">
-			{#if matchMapOptions.length > 0}
-				<dl
-					class="grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5 rounded-lg p-3 text-xs text-tan"
-					style="background-color: #35302B;"
-				>
-					{#each matchMapOptions as opt (opt.option)}
-						<dt class="opacity-70">{opt.label}</dt>
-						<dd class="text-orange">{opt.value}</dd>
-					{/each}
-				</dl>
-			{/if}
-
-			{#if canUploadAsParticipant || canUploadAsObserver}
-				<div
-					class="flex flex-wrap items-center gap-2 rounded-lg p-3"
-					style="background-color: #35302B;"
-				>
-					{#if canUploadAsParticipant}
-						<a
-							class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors"
-							href="{resolve(
-								'/upload',
-							)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}"
-						>
-							Upload save
-						</a>
-					{/if}
-					{#if canUploadAsObserver}
-						<a
-							class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-							href="{resolve(
-								'/upload',
-							)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}&observer=1"
-						>
-							Upload save (observer)
-						</a>
-					{/if}
-				</div>
-			{/if}
-
-			{#if canEditMap || canRetroEdit}
-				<div class="rounded-lg p-3" style="background-color: #35302B;">
-					{#if editMode === "none"}
-						<div class="flex flex-wrap gap-2">
-							{#if canEditMap}
-								<button
-									type="button"
-									class="rounded border border-black px-2 py-1 text-xs text-tan hover:bg-[#2a2622] disabled:opacity-50"
-									onclick={openMapEdit}
-									disabled={busy}
-								>
-									Change map
-								</button>
-							{/if}
-							{#if canRetroEdit}
-								<button
-									type="button"
-									class="rounded border border-black px-2 py-1 text-xs text-tan hover:bg-[#2a2622] disabled:opacity-50"
-									onclick={openRetroEdit}
-									disabled={busy}
-								>
-									{retroEditLabel}
-								</button>
-							{/if}
-						</div>
-					{:else if editMode === "map"}
-						<div class="flex flex-col gap-2">
-							<h3 class="text-xs font-bold text-tan">Change map</h3>
-							<label class="text-xs text-tan">
-								Map
-								<Select
-									value={mapPoolIdInput}
-									onChange={(v) => (mapPoolIdInput = v ?? "")}
-									options={mapSelectOptions}
-									placeholder="(no map set)"
-									ariaLabel="Map"
-									class="mt-1 w-full"
-								/>
-							</label>
-							<div class="flex justify-end gap-2">
-								<button
-									type="button"
-									class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-									onclick={() => (editMode = "none")}
-									disabled={busy}
-								>
-									Cancel
-								</button>
-								<button
-									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
-									onclick={saveMapEdit}
-									disabled={busy}
-								>
-									Save
-								</button>
-							</div>
-						</div>
-					{:else if editMode === "retro"}
-						<div class="flex flex-col gap-2">
-							<h3 class="text-xs font-bold text-tan">{retroEditLabel}</h3>
-							<label class="text-xs text-tan">
-								Winner
-								<Select
-									value={retroWinnerSlotId ?? ""}
-									onChange={(v) => (retroWinnerSlotId = v)}
-									options={winnerOptions}
-									placeholder="Select winner"
-									disabled={retroStatus === "pending"}
-									ariaLabel="Winner"
-									class="mt-1 w-full"
-								/>
-							</label>
-							<label class="text-xs text-tan">
-								Status
-								<Select
-									value={retroStatus}
-									onChange={(v) => {
-										const s = (v ?? "complete") as typeof retroStatus;
-										retroStatus = s;
-										if (s === "pending") retroWinnerSlotId = null;
-									}}
-									options={RETRO_STATUS_OPTIONS}
-									ariaLabel="Status"
-									class="mt-1 w-full"
-								/>
-							</label>
-							<div class="flex justify-end gap-2">
-								<button
-									type="button"
-									class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-									onclick={() => (editMode = "none")}
-									disabled={busy}
-								>
-									Cancel
-								</button>
-								<button
-									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
-									onclick={saveRetroEdit}
-									disabled={busy}
-								>
-									Save
-								</button>
-							</div>
-						</div>
-					{/if}
+			{#if mapName}
+				<div class="flex items-center gap-1.5 text-sm text-tan" title={mapName}>
+					<img src={MAP_ICON} alt="" class="h-4 w-4 shrink-0 opacity-80" />
+					<span class="truncate">{mapName}</span>
 				</div>
 			{/if}
 
 			{#if match.game_id}
-				<a
-					class="rounded-lg p-3 text-xs text-orange transition-colors hover:bg-[#35302B]"
-					href={resolve("/games/[id]", { id: match.game_id })}
+				<div class="rounded-lg p-3" style="background-color: #35302b;">
+					{#if gameLoading && !gameData}
+						<p class="text-xs text-tan opacity-60">Loading game…</p>
+					{:else if gameData}
+						<div class="mb-2 grid grid-cols-3 gap-2">
+							<div class="rounded p-2" style="background-color: #2a2622;">
+								<p
+									class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+								>
+									<SpriteIcon
+										category="icons"
+										value="ACHIEVEMENT_WIN"
+										size={10}
+										alt="Winner"
+									/>
+									Winner
+								</p>
+								<p class="truncate text-sm font-bold text-[#DBDEE3]">
+									{winnerLabel ?? "—"}
+								</p>
+							</div>
+							<div class="rounded p-2" style="background-color: #2a2622;">
+								<p
+									class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+								>
+									<SpriteIcon
+										category="icons"
+										value="VICTORY_NORMAL"
+										size={10}
+										alt="Victory Type"
+									/>
+									Victory Type
+								</p>
+								<p class="truncate text-sm font-bold text-[#DBDEE3]">
+									{victoryType ?? "—"}
+								</p>
+							</div>
+							<div class="rounded p-2" style="background-color: #2a2622;">
+								<p
+									class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+								>
+									<SpriteIcon
+										category="icons"
+										value="TURN"
+										size={10}
+										alt="Turns"
+									/>
+									Turns
+								</p>
+								<p class="truncate text-sm font-bold text-[#DBDEE3]">
+									{totalTurns ?? "—"}
+								</p>
+							</div>
+						</div>
+						{#if hasSparkline}
+							<div class="rounded p-1" style="background-color: #211a12;">
+								<Chart option={sparklineOption} height="60px" />
+							</div>
+						{/if}
+					{/if}
+				</div>
+			{:else}
+				<div class="rounded-lg p-3" style="background-color: #35302b;">
+					<div class="rounded p-2" style="background-color: #2a2622;">
+						<p
+							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+						>
+							<SpriteIcon
+								category="icons"
+								value="ACHIEVEMENT_WIN"
+								size={10}
+								alt="Winner"
+							/>
+							Winner
+						</p>
+						<p class="truncate text-sm font-bold text-[#DBDEE3]">
+							{winnerLabel ?? "—"}
+						</p>
+					</div>
+				</div>
+			{/if}
+
+			{#if editMode === "none"}
+				{#if hasSecondaryActions}
+					<div class="flex flex-wrap gap-2">
+						{#if canUploadAsParticipant}
+							<a
+								class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange"
+								href="{resolve(
+									'/upload',
+								)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"
+									/>
+								</svg>
+								Upload save
+							</a>
+						{/if}
+						{#if canUploadAsObserver}
+							<a
+								class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange"
+								href="{resolve(
+									'/upload',
+								)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}&observer=1"
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"
+									/>
+								</svg>
+								{match.game_id ? "Replace save" : "Upload save (observer)"}
+							</a>
+						{/if}
+						{#if canEditMap}
+							<button
+								type="button"
+								class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+								onclick={openMapEdit}
+								disabled={busy}
+							>
+								Change map
+							</button>
+						{/if}
+						{#if canRetroEdit}
+							<button
+								type="button"
+								class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+								onclick={openRetroEdit}
+								disabled={busy}
+							>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									class="h-4 w-4"
+									fill="none"
+									viewBox="0 0 24 24"
+									stroke="currentColor"
+									stroke-width="2"
+									aria-hidden="true"
+								>
+									<path
+										stroke-linecap="round"
+										stroke-linejoin="round"
+										d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+									/>
+								</svg>
+								{retroEditLabel}
+							</button>
+						{/if}
+					</div>
+				{/if}
+
+				{#if match.game_id}
+					<div class="flex justify-end border-t border-[#4a433b] pt-3">
+						<a
+							class="rounded-lg border border-amber-300 bg-amber-700/40 px-4 py-2 text-sm text-amber-300 transition-colors hover:bg-amber-700/50"
+							href={resolve("/games/[id]", { id: match.game_id })}
+						>
+							View full game
+						</a>
+					</div>
+				{/if}
+			{:else if editMode === "map"}
+				<div
+					class="flex flex-col gap-2 rounded-lg p-3"
+					style="background-color: #35302b;"
 				>
-					View full game →
-				</a>
+					<h3 class="text-xs font-bold text-tan">Change map</h3>
+					<label class="text-xs text-tan">
+						Map
+						<Select
+							value={mapPoolIdInput}
+							onChange={(v) => (mapPoolIdInput = v ?? "")}
+							options={mapSelectOptions}
+							placeholder="(no map set)"
+							ariaLabel="Map"
+							class="mt-1 w-full"
+						/>
+					</label>
+					<div class="flex justify-end gap-2">
+						<button
+							type="button"
+							class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+							onclick={() => (editMode = "none")}
+							disabled={busy}
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
+							onclick={saveMapEdit}
+							disabled={busy}
+						>
+							Save
+						</button>
+					</div>
+				</div>
+			{:else if editMode === "retro"}
+				<div
+					class="flex flex-col gap-2 rounded-lg p-3"
+					style="background-color: #35302b;"
+				>
+					<h3 class="text-xs font-bold text-tan">{retroEditLabel}</h3>
+					<label class="text-xs text-tan">
+						Winner
+						<Select
+							value={retroWinnerSlotId ?? ""}
+							onChange={(v) => (retroWinnerSlotId = v)}
+							options={winnerOptions}
+							placeholder="Select winner"
+							disabled={retroStatus === "pending"}
+							ariaLabel="Winner"
+							class="mt-1 w-full"
+						/>
+					</label>
+					<label class="text-xs text-tan">
+						Status
+						<Select
+							value={retroStatus}
+							onChange={(v) => {
+								const s = (v ?? "complete") as typeof retroStatus;
+								retroStatus = s;
+								if (s === "pending") retroWinnerSlotId = null;
+							}}
+							options={RETRO_STATUS_OPTIONS}
+							ariaLabel="Status"
+							class="mt-1 w-full"
+						/>
+					</label>
+					<div class="flex justify-end gap-2">
+						<button
+							type="button"
+							class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+							onclick={() => (editMode = "none")}
+							disabled={busy}
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
+							onclick={saveRetroEdit}
+							disabled={busy}
+						>
+							Save
+						</button>
+					</div>
+				</div>
 			{/if}
 		</div>
 	</div>

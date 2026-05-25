@@ -5,11 +5,14 @@
 		SlotStanding,
 		TournamentMatch,
 	} from "$lib/api-cloud";
+	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
+		mapFullName,
 		poolEntryById,
-		summarizeOptions,
 	} from "$lib/tournament/map-script-options";
+
+	const MAP_ICON = SPRITE_MANIFEST["icons/MAP_OVERVIEW"];
 
 	type Props = {
 		winsToAdvance: number;
@@ -224,10 +227,6 @@
 						{#each b.matches as m (m.match_id)}
 							{@const aWon = m.winner_slot_id === m.slot_a_id}
 							{@const bWon = m.winner_slot_id === m.slot_b_id}
-							{@const aPick = m.pick_order_winner_slot_id === m.slot_a_id}
-							{@const bPick =
-								m.pick_order_winner_slot_id != null &&
-								m.pick_order_winner_slot_id === m.slot_b_id}
 							<a
 								class="match"
 								href="{resolve('/tournaments/[slug]', {
@@ -239,30 +238,22 @@
 									<span class="slot" class:winner={aWon}>
 										{slotLabel(m.slot_a_id)}
 									</span>
-									{#if aPick}
-										<span class="pick-label">First pick</span>
-									{/if}
-									{#if m.map_script}
-										{@const entry = poolEntryById(mapPool, m.map_pool_id)}
-										{@const optsSummary = entry
-											? summarizeOptions(entry.options, entry.script)
-											: ""}
-										<span
-											class="map-label"
-											title={optsSummary || mapScriptLabel(m.map_script)}
-										>
-											{mapScriptLabel(m.map_script)}
-										</span>
-									{/if}
 								</div>
 								<div class="match-row">
 									<span class="slot" class:winner={bWon}>
 										{slotLabel(m.slot_b_id)}
 									</span>
-									{#if bPick}
-										<span class="pick-label">First pick</span>
-									{/if}
 								</div>
+								{#if m.map_script}
+									{@const entry = poolEntryById(mapPool, m.map_pool_id)}
+									{@const mapName = entry
+										? mapFullName(entry.options, entry.script)
+										: mapScriptLabel(m.map_script)}
+									<div class="map-row" title={mapName}>
+										<img class="map-icon" src={MAP_ICON} alt="" />
+										<span class="map-name">{mapName}</span>
+									</div>
+								{/if}
 							</a>
 						{/each}
 					</div>
@@ -415,21 +406,30 @@
 		font-weight: 700;
 	}
 
-	.pick-label {
-		flex-shrink: 0;
-		font-size: 0.55rem;
-		opacity: 0.55;
-		font-family: ui-monospace, monospace;
-		color: var(--color-tan, #e8d8b8);
+	.map-row {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		min-width: 0;
+		margin-top: 0.15rem;
 	}
 
-	.map-label {
+	.map-icon {
 		flex-shrink: 0;
-		font-size: 0.55rem;
-		opacity: 0.55;
-		font-family: ui-monospace, monospace;
-		color: var(--color-tan, #e8d8b8);
+		width: 0.8rem;
+		height: 0.8rem;
+		object-fit: contain;
+		opacity: 0.7;
+	}
+
+	.map-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
 		white-space: nowrap;
+		font-size: 0.6rem;
+		opacity: 0.6;
+		color: var(--color-tan, #e8d8b8);
 	}
 
 	.gutter {

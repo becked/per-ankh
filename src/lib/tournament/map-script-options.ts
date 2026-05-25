@@ -8,6 +8,7 @@ import {
 	type MapOptionDef,
 } from "$lib/generated/map-option-defs";
 import { MAP_SCRIPT_OPTIONS } from "$lib/generated/map-script-options";
+import { mapScriptLabel } from "$lib/tournament/map-scripts";
 import { formatEnum } from "$lib/utils/formatting";
 
 // Find a map_pool entry by id. Returns undefined for a null/unknown id (e.g.
@@ -85,6 +86,57 @@ export function defaultsForScript(
 		if (def) out[opt] = def.default;
 	}
 	return out;
+}
+
+// Options whose effective value differs from the XML default, as label/value
+// pairs in display order. Used by the read-only pool summary to surface only
+// the settings an organizer deliberately changed. Options not in the baked
+// manifest are skipped (no default to compare against).
+export function nonDefaultOptions(
+	options: Record<string, string | boolean> | undefined,
+	script: string,
+): { option: string; label: string; value: string }[] {
+	const out: { option: string; label: string; value: string }[] = [];
+	for (const opt of optionsForScript(script)) {
+		const def = MAP_OPTION_DEFS[opt];
+		if (!def) continue;
+		const value = effectiveOptionValue(options, opt);
+		if (value === def.default) continue;
+		out.push({
+			option: opt,
+			label: mapOptionLabel(opt),
+			value: mapOptionChoiceLabel(opt, value),
+		});
+	}
+	return out;
+}
+
+// Full descriptive name of a map instance, as bare space-joined words:
+// "<size> <script> <non-default option values>" — e.g. "Duel Continent Mirror
+// Large Water". Size always leads; the script name follows; then every option
+// whose value differs from its XML default, in manifest order. Toggles render
+// as their option label (they default off, so a non-default toggle is on);
+// selects render as the chosen value's label. Aspect ratio is just another
+// option here, so it appears only when non-default.
+export function mapFullName(
+	options: Record<string, string | boolean> | undefined,
+	script: string,
+): string {
+	const parts: string[] = [
+		mapOptionChoiceLabel("MAPSIZE", effectiveOptionValue(options, "MAPSIZE")),
+		mapScriptLabel(script),
+	];
+	for (const opt of optionsForScript(script)) {
+		if (opt === "MAPSIZE") continue; // already the leading size word
+		const def = MAP_OPTION_DEFS[opt];
+		if (!def) continue;
+		const value = effectiveOptionValue(options, opt);
+		if (value === def.default) continue; // only non-default settings
+		parts.push(
+			def.kind === "toggle" ? def.label : mapOptionChoiceLabel(opt, value),
+		);
+	}
+	return parts.join(" ");
 }
 
 // Compact human-readable summary of an instance's options, one "Label: Value"

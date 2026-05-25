@@ -10,11 +10,14 @@
 
 	interface Props {
 		tournament: TournamentDetail;
+		// When false the form renders read-only: inputs disabled, Save hidden.
+		// Non-admins can open settings but cannot change anything.
+		canEdit?: boolean;
 		onSaved?: () => void;
 		onCancel?: () => void;
 	}
 
-	let { tournament, onSaved, onCancel }: Props = $props();
+	let { tournament, canEdit = true, onSaved, onCancel }: Props = $props();
 
 	// Local edit state. Module-scope init from props is enough — both callers
 	// either remount on open (modal) or remount via invalidateAll() (inline
@@ -113,7 +116,8 @@
 		<input
 			type="text"
 			bind:value={name}
-			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+			disabled={!canEdit}
+			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 		/>
 	</label>
 
@@ -122,7 +126,8 @@
 		<textarea
 			bind:value={description}
 			rows="2"
-			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+			disabled={!canEdit}
+			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 		></textarea>
 	</label>
 
@@ -132,7 +137,8 @@
 			<input
 				type="text"
 				bind:value={divisionAName}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				disabled={!canEdit}
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 			/>
 		</label>
 		<label class="flex flex-col gap-1">
@@ -140,14 +146,15 @@
 			<input
 				type="text"
 				bind:value={divisionBName}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				disabled={!canEdit}
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 			/>
 		</label>
 	</div>
 
 	<fieldset
 		class="rounded border border-black border-opacity-50 p-3"
-		disabled={swissConfigLocked}
+		disabled={swissConfigLocked || !canEdit}
 	>
 		<legend class="px-1 text-xs opacity-70">
 			Swiss configuration
@@ -201,15 +208,17 @@
 			onclick={onCancel}
 			disabled={busy}
 		>
-			Cancel
+			{canEdit ? "Cancel" : "Close"}
 		</button>
 	{/if}
-	<button
-		type="button"
-		class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-		onclick={save}
-		disabled={!canSave}
-	>
-		Save
-	</button>
+	{#if canEdit}
+		<button
+			type="button"
+			class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+			onclick={save}
+			disabled={!canSave}
+		>
+			Save
+		</button>
+	{/if}
 </div>

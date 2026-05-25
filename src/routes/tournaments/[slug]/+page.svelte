@@ -494,32 +494,34 @@
 						</div>
 					{/if}
 
-					{#if isAdmin}
+					{#if isAdmin || data.tournament.status !== "setup"}
 						<div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-							{#if data.tournament.status === "setup"}
-								<button
-									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-									onclick={startTournament}
-									disabled={busy || !startReady}
-									title={startReady
-										? ""
-										: "Add at least one player to each division to start"}
-								>
-									Start Tournament
-								</button>
-							{:else if data.tournament.status === "swiss"}
-								<button
-									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-									onclick={() => (transitionPreviewOpen = true)}
-									disabled={busy || !transitionReady}
-									title={transitionReady
-										? ""
-										: "All swiss rounds must finish before championship can start"}
-								>
-									Transition to Championship
-								</button>
+							{#if isAdmin}
+								{#if data.tournament.status === "setup"}
+									<button
+										type="button"
+										class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+										onclick={startTournament}
+										disabled={busy || !startReady}
+										title={startReady
+											? ""
+											: "Add at least one player to each division to start"}
+									>
+										Start Tournament
+									</button>
+								{:else if data.tournament.status === "swiss"}
+									<button
+										type="button"
+										class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+										onclick={() => (transitionPreviewOpen = true)}
+										disabled={busy || !transitionReady}
+										title={transitionReady
+											? ""
+											: "All swiss rounds must finish before championship can start"}
+									>
+										Transition to Championship
+									</button>
+								{/if}
 							{/if}
 							{#if data.tournament.status !== "setup"}
 								<button
@@ -793,9 +795,27 @@
 						{@const divisionData = data.standings.divisions[division]}
 						{#if divisionData.standings.length > 0}
 							<section class="mb-8">
-								<h2 class="mb-3 text-lg font-bold text-tan">
+								<h2 class="mb-1 text-lg font-bold text-tan">
 									{divisionData.name}
 								</h2>
+								<p
+									class="mb-3 flex items-center gap-1.5 text-xs text-tan opacity-70"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-3.5 w-3.5 shrink-0"
+										viewBox="0 0 20 20"
+										fill="currentColor"
+										aria-hidden="true"
+									>
+										<path
+											fill-rule="evenodd"
+											d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+											clip-rule="evenodd"
+										/>
+									</svg>
+									Second player listed gets first pick
+								</p>
 								<div class="space-y-3">
 									<SwissFlowBracket
 										winsToAdvance={data.tournament.swiss_wins_to_advance}
