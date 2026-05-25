@@ -20,7 +20,7 @@
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
-	import TiebreakerInfoModal from "$lib/tournament/TiebreakerInfoModal.svelte";
+	import TournamentGuideModal from "$lib/tournament/TournamentGuideModal.svelte";
 	import TournamentConfigurationPanel from "$lib/tournament/TournamentConfigurationPanel.svelte";
 	import TournamentMapsPanel from "$lib/tournament/TournamentMapsPanel.svelte";
 	import TournamentOverviewPanel from "$lib/tournament/TournamentOverviewPanel.svelte";
@@ -412,18 +412,13 @@
 	}
 
 	let transitionPreviewOpen = $state(false);
-	let tiebreakerInfoOpen = $state(false);
+	let guideOpen = $state(false);
+	let signedUpOpen = $state(false);
 
+	// Invoked from the "Signed up" popup, whose explicit Withdraw button is the
+	// deliberate confirmation — no extra confirm dialog needed.
 	async function withdraw() {
-		if (
-			!(await confirmDialog({
-				title: "Withdraw",
-				message: `Withdraw from ${data.tournament.name}? You can sign up again any time before it starts.`,
-				confirmLabel: "Withdraw",
-			}))
-		) {
-			return;
-		}
+		signedUpOpen = false;
 		await withBusy(
 			() => cloudApi.withdrawFromTournament(data.tournament.tournament_id),
 			"Withdrew from tournament",
@@ -453,11 +448,32 @@
 				<header class="mb-6">
 					<div class="flex items-baseline justify-between gap-3">
 						<Breadcrumb {crumbs} class="min-w-0" />
-						<span
-							class="whitespace-nowrap rounded bg-[#2a2622] px-2 py-0.5 text-xs uppercase tracking-wide text-tan opacity-80"
-						>
-							{data.tournament.status}
-						</span>
+						<div class="flex flex-shrink-0 items-center gap-2">
+							<button
+								type="button"
+								class="whitespace-nowrap rounded border border-tan px-2 py-0.5 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
+								onclick={() => (guideOpen = true)}
+								aria-label="How the tournament works"
+								title="How the tournament works"
+							>
+								Guide
+							</button>
+							{#if viewerSlot}
+								<button
+									type="button"
+									class="whitespace-nowrap rounded border border-tan px-2 py-0.5 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
+									onclick={() => (signedUpOpen = true)}
+									title="You're signed up"
+								>
+									Signed up
+								</button>
+							{/if}
+							<span
+								class="whitespace-nowrap rounded bg-[#2a2622] px-2 py-0.5 text-xs uppercase tracking-wide text-tan opacity-80"
+							>
+								{data.tournament.status}
+							</span>
+						</div>
 					</div>
 					{#if data.tournament.description}
 						<p class="mt-2 text-sm text-tan opacity-80">
@@ -469,7 +485,7 @@
 						<div class="mt-3 flex flex-wrap items-center justify-end gap-2">
 							<button
 								type="button"
-								class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+								class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 								onclick={() => (signupModalOpen = true)}
 								disabled={busy}
 							>
@@ -478,39 +494,12 @@
 						</div>
 					{/if}
 
-					{#if viewerSlot}
-						<div
-							class="mt-3 flex flex-wrap items-center justify-between gap-2 rounded border border-orange border-opacity-50 px-3 py-2"
-							style="background-color: #2a2622;"
-							role="status"
-						>
-							<span class="text-xs text-tan">
-								<span class="text-orange">✓</span> You're signed up —
-								<span class="font-bold"
-									>{viewerSlot.division === "A"
-										? data.tournament.division_a_name
-										: data.tournament.division_b_name}</span
-								>
-							</span>
-							{#if data.tournament.status === "setup"}
-								<button
-									type="button"
-									class="text-xs text-tan underline opacity-70 transition-colors hover:text-red-400 hover:opacity-100 disabled:opacity-30"
-									onclick={withdraw}
-									disabled={busy}
-								>
-									Withdraw
-								</button>
-							{/if}
-						</div>
-					{/if}
-
 					{#if isAdmin}
 						<div class="mt-3 flex flex-wrap items-center justify-end gap-2">
 							{#if data.tournament.status === "setup"}
 								<button
 									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 									onclick={startTournament}
 									disabled={busy || !startReady}
 									title={startReady
@@ -522,7 +511,7 @@
 							{:else if data.tournament.status === "swiss"}
 								<button
 									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 									onclick={() => (transitionPreviewOpen = true)}
 									disabled={busy || !transitionReady}
 									title={transitionReady
@@ -633,7 +622,7 @@
 								</div>
 								<button
 									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 									onclick={addSlot}
 									disabled={busy || !newSlotUsername.trim()}
 								>
@@ -811,9 +800,9 @@
 									<button
 										type="button"
 										class="rounded border border-black border-opacity-50 px-1.5 text-[11px] font-normal text-tan opacity-60 transition-opacity hover:opacity-100"
-										onclick={() => (tiebreakerInfoOpen = true)}
-										aria-label="How tiebreakers and qualification work"
-										title="How tiebreakers and qualification work"
+										onclick={() => (guideOpen = true)}
+										aria-label="How the tournament works"
+										title="How the tournament works"
 									>
 										?
 									</button>
@@ -885,6 +874,70 @@
 	/>
 {/if}
 
-{#if tiebreakerInfoOpen}
-	<TiebreakerInfoModal onClose={() => (tiebreakerInfoOpen = false)} />
+{#if guideOpen}
+	<TournamentGuideModal onClose={() => (guideOpen = false)} />
+{/if}
+
+{#if signedUpOpen && viewerSlot}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
+		onclick={() => (signedUpOpen = false)}
+		role="presentation"
+	>
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<div
+			class="w-full max-w-sm rounded-lg border-2 border-black bg-blue-gray p-5 shadow-lg"
+			onclick={(e) => e.stopPropagation()}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="signed-up-title"
+			tabindex="-1"
+		>
+			<header class="mb-3 flex items-start justify-between gap-3">
+				<h2 id="signed-up-title" class="text-lg font-bold text-tan">
+					You're signed up
+				</h2>
+				<button
+					type="button"
+					class="text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100"
+					onclick={() => (signedUpOpen = false)}
+					aria-label="Close"
+				>
+					✕
+				</button>
+			</header>
+			<p class="text-xs text-tan">
+				Division:
+				<span class="font-bold"
+					>{viewerSlot.division === "A"
+						? data.tournament.division_a_name
+						: data.tournament.division_b_name}</span
+				>
+			</p>
+			{#if data.tournament.status === "setup"}
+				<p class="mt-2 text-xs text-tan opacity-80">
+					You can withdraw any time before the tournament starts.
+				</p>
+			{/if}
+			<div class="mt-4 flex justify-end gap-2">
+				{#if data.tournament.status === "setup"}
+					<button
+						type="button"
+						class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+						onclick={withdraw}
+						disabled={busy}
+					>
+						Withdraw
+					</button>
+				{/if}
+				<button
+					type="button"
+					class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+					onclick={() => (signedUpOpen = false)}
+				>
+					Close
+				</button>
+			</div>
+		</div>
+	</div>
 {/if}

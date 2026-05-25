@@ -305,7 +305,7 @@
 				>
 					{#if canUploadAsParticipant}
 						<a
-							class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan transition-colors"
+							class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors"
 							href="{resolve(
 								'/upload',
 							)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}"
@@ -376,7 +376,7 @@
 								</button>
 								<button
 									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1 text-xs text-tan disabled:opacity-50"
+									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
 									onclick={saveMapEdit}
 									disabled={busy}
 								>
@@ -424,7 +424,7 @@
 								</button>
 								<button
 									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1 text-xs text-tan disabled:opacity-50"
+									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
 									onclick={saveRetroEdit}
 									disabled={busy}
 								>
