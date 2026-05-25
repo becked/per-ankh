@@ -1,0 +1,688 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Per-Ankh — UX Review · Expert Panel Findings</title>
+<style>
+	:root { color-scheme: dark; }
+	* { box-sizing: border-box; }
+	body { margin: 0; font: 15px/1.6 system-ui, -apple-system, sans-serif;
+		background: #1c1916; color: #e7ddcf; }
+	a { color: #cdbfa8; }
+	a:hover { color: #fff; }
+	.wrap { max-width: 1100px; margin: 0 auto; padding: 2rem 1.5rem 5rem; }
+	header.page { border-bottom: 1px solid #4a423a; padding-bottom: 1.25rem; margin-bottom: 1.5rem; }
+	header.page h1 { font-size: 1.6rem; margin: 0 0 .35rem; color: #f0e7d8; }
+	header.page .meta { color: #a99c87; font-size: .85rem; line-height: 1.5; }
+	header.page .meta code { color: #cdbfa8; }
+	nav.top { font-size: .85rem; margin-bottom: 1rem; }
+	h2 { font-size: 1.2rem; color: #f0e7d8; margin: 2.25rem 0 .5rem; border-bottom: 1px solid #4a423a;
+		padding-bottom: .3rem; }
+	h2 .count { font-size: .8rem; color: #a99c87; font-weight: 400; }
+	p.lead { color: #cdbfa8; margin: .25rem 0 1rem; }
+	.callout { background: #15120f; border: 1px solid #4a423a; border-radius: 8px; padding: 1rem 1.25rem;
+		margin: 1rem 0; }
+	.callout h3 { margin: 0 0 .4rem; font-size: .95rem; color: #f0e7d8; }
+	.callout ul { margin: .35rem 0 0; padding-left: 1.2rem; }
+	.callout li { margin: .2rem 0; }
+
+	table { width: 100%; border-collapse: collapse; margin: .75rem 0 1.5rem; font-size: .9rem; }
+	thead th { text-align: left; font-size: .72rem; text-transform: uppercase; letter-spacing: .04em;
+		color: #a99c87; border-bottom: 1px solid #4a423a; padding: .4rem .55rem; font-weight: 700; }
+	tbody td { border-bottom: 1px solid #2a2622; padding: .6rem .55rem; vertical-align: top; }
+	tbody tr:hover { background: #211a12; }
+	td.num { color: #a99c87; font-variant-numeric: tabular-nums; white-space: nowrap; width: 1.5rem; }
+	td.issue { width: 30%; }
+	td.issue strong { color: #f0e7d8; }
+	td.experts { width: 13%; font-size: .82rem; color: #b9ad97; }
+	td.where { width: 17%; font-size: .8rem; line-height: 1.7; }
+	td.fix { width: 38%; color: #cdbfa8; }
+	.tag { display: inline-block; font-size: .68rem; padding: .03rem .35rem; border-radius: 3px;
+		border: 1px solid #4a423a; color: #b9ad97; white-space: nowrap; margin: 0 .15rem .15rem 0; }
+	.tag.shot { background: #241f1b; }
+	.tag.shot:hover { background: #3a322a; color: #fff; }
+	.ok { color: #8fb98a; font-size: .72rem; white-space: nowrap; }
+	.warn { color: #d99; font-size: .72rem; white-space: nowrap; }
+
+	.sev { display: inline-block; width: .7rem; height: .7rem; border-radius: 2px; margin-right: .4rem;
+		vertical-align: middle; }
+	.sev-high { background: #c0705f; }
+	.sev-med { background: #c9a86b; }
+	.sev-low { background: #6b7d6b; }
+	h2.high { border-color: #c0705f; }
+	h2.med { border-color: #c9a86b; }
+	h2.low { border-color: #6b7d6b; }
+
+	details.expert { border: 1px solid #4a423a; border-radius: 8px; margin: .6rem 0; background: #15120f; }
+	details.expert > summary { cursor: pointer; padding: .7rem 1rem; font-weight: 600; color: #f0e7d8;
+		list-style: none; }
+	details.expert > summary::-webkit-details-marker { display: none; }
+	details.expert > summary::before { content: "▸ "; color: #a99c87; }
+	details.expert[open] > summary::before { content: "▾ "; }
+	details.expert > summary .lens { font-weight: 400; color: #a99c87; font-size: .85rem; }
+	details.expert .body { padding: 0 1.25rem 1rem; border-top: 1px solid #2a2622; }
+	details.expert .finding { margin: .9rem 0; }
+	details.expert .finding .ttl { color: #f0e7d8; font-weight: 600; }
+	details.expert .finding .sub { color: #a99c87; font-size: .82rem; margin: .1rem 0 .25rem; }
+	details.expert .finding p { margin: .2rem 0; }
+	.status-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: .4rem; }
+	.status-grid div { font-size: .85rem; padding: .35rem .6rem; background: #15120f; border: 1px solid #4a423a;
+		border-radius: 5px; }
+	footer { margin-top: 3rem; color: #a99c87; font-size: .8rem; border-top: 1px solid #4a423a; padding-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<nav class="top"><a href="index.html">← Screenshot viewer (index.html)</a></nav>
+
+<header class="page">
+	<h1>UX Review — Expert Panel Findings</h1>
+	<div class="meta">
+		Ten-expert design panel (Rams · Ive · Norman · Nielsen · Wroblewski · Krug · Au · Garrett · Hall · Levey),
+		run against the desktop screenshot bundle.<br />
+		Scope: <strong>desktop only</strong> (1440×900), 32 screens across the anonymous and signed-in passes,
+		based on game <code>P5J5b0oR1IYan3cBtW2zt</code>. Visual review — no source code was read; findings cite a
+		screen, not a file. Suggested fixes are design-level and stay within the existing warm-dark theme
+		(no palette, font, or motion changes).<br />
+		Capture generated <code>2026-05-25</code> · review compiled <code>2026-05-24</code>.
+	</div>
+</header>
+
+<p class="lead">Findings raised by multiple experts carry more weight. Each row notes who flagged it, the
+screen(s) involved (click to open the shot), and whether I independently confirmed the claim against the
+screenshot (<span class="ok">✓ verified</span>) or am reporting it as a single expert's read
+(<span class="warn">⚠ not re-checked</span>).</p>
+
+<div class="callout">
+	<h3>Expert consensus — themes raised independently by many of the panel</h3>
+	<ul>
+		<li><strong>Color carries player identity, but nothing labels it (7 of 10).</strong> Every two-player
+			chart, the Overview "Key Metrics" bars, and the Map outlines distinguish the two nations with a
+			white vs. gold pairing and <em>no legend anywhere</em>. The app's core analytical payload — "which
+			line is mine?" — is left to inference.</li>
+		<li><strong>Red is spent on inert text (≈7 of 10).</strong> The Settings tab's labels and the
+			game-detail date stamp use the alarm-red that's otherwise reserved for the delete action — reading
+			as a warning where none exists.</li>
+		<li><strong>Restated chrome pushes the data below the fold (Ive, Krug, Hall, Wroblewski, Garrett).</strong>
+			The tall five-card summary repeats on every game-detail tab; tournament phase is stated three ways;
+			the profile summary is duplicated between home and profile.</li>
+		<li><strong>Unlabeled / icon-only controls (Norman, Nielsen, Krug, Wroblewski, Garrett).</strong> The
+			owner toolbar — including a destructive Delete — is bare icons; the header search is an empty box;
+			primary navigation hides behind a hamburger on a wide desktop.</li>
+	</ul>
+</div>
+
+<!-- ===================== HIGH ===================== -->
+<h2 class="high"><span class="sev sev-high"></span>High impact <span class="count">— comprehension- or task-breaking, or broad consensus</span></h2>
+<table>
+<thead><tr><th>#</th><th>Issue</th><th>Expert(s)</th><th>Screen(s)</th><th>Suggested fix</th></tr></thead>
+<tbody>
+<tr>
+	<td class="num">1</td>
+	<td class="issue"><strong>Charts, Key-Metrics bars, and the Map encode the two players by color with no legend or labels.</strong>
+		Two-player line charts use a white line and a gold line; the Overview metric bars pair a white bar over a
+		gold bar; the Map outlines territories white vs. gold. Nowhere is there a key tying a color to a nation.
+		<div class="ok">✓ verified — Events, Overview, Map</div></td>
+	<td class="experts">Rams, Ive, Norman, Nielsen, Garrett, Hall, Levey</td>
+	<td class="where">
+		<a class="tag shot" href="shots/anon__game-detail__events__desktop.jpg">events</a>
+		<a class="tag shot" href="shots/auth__game-detail__overview__desktop.jpg">overview</a>
+		<a class="tag shot" href="shots/auth__game-detail__yields__desktop.jpg">yields</a>
+		<a class="tag shot" href="shots/auth__game-detail__map__desktop.jpg">map</a></td>
+	<td class="fix">Add a small persistent legend (swatch + nation name) to every multi-series chart, each Key-Metrics
+		card, and the Map — reusing the nation colors already applied to the games-table nation names. Consider a
+		non-color backup cue (solid vs. dashed line) for where the two lines overlap.</td>
+</tr>
+<tr>
+	<td class="num">2</td>
+	<td class="issue"><strong>Signed-in Map renders only territory outlines — the hex terrain is missing.</strong>
+		The anonymous Map shows the full hex map; the signed-in capture of the same map shows the white/gold
+		outlines floating over an empty dark canvas, with no loading or error state.
+		<div class="ok">✓ verified — compared anon vs auth map</div></td>
+	<td class="experts">Nielsen <span style="color:#a99c87">(+ verified)</span></td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__game-detail__map__desktop.jpg">auth map</a>
+		<a class="tag shot" href="shots/anon__game-detail__map__desktop.jpg">anon map</a></td>
+	<td class="fix">Investigate why the tile atlas doesn't render in the signed-in view (load-timing or fetch
+		difference between states is the likely cause). Regardless of cause, show an explicit loading placeholder
+		and a recoverable error in the map frame so an empty map never reads as "the content."</td>
+</tr>
+<tr>
+	<td class="num">3</td>
+	<td class="issue"><strong>The "Events" tab contains no events.</strong> It shows "Victory Points" and
+		"Legitimacy" line charts — time-series scores, not a log of what happened. The label mis-predicts its
+		content, costing a wrong click and eroding trust in the rest of the tab strip.
+		<div class="ok">✓ verified — Events tab</div></td>
+	<td class="experts">Rams, Ive, Krug, Wroblewski, Hall</td>
+	<td class="where">
+		<a class="tag shot" href="shots/anon__game-detail__events__desktop.jpg">events</a></td>
+	<td class="fix">Rename the tab to match the content ("Progress", "Scores", or "Trends"), or move these charts
+		under a truthful heading and reserve "Events" for an actual event timeline if one exists.</td>
+</tr>
+<tr>
+	<td class="num">4</td>
+	<td class="issue"><strong>Owner action toolbar is unlabeled icons, with a destructive Delete beside benign
+		actions.</strong> The pencil / folder / download / trash row has no labels; Delete sits flush against
+		download/move at equal weight, and the "Public" pill's toggle-vs-status role is ambiguous.
+		<div class="ok">✓ verified — toolbar on game-detail header</div></td>
+	<td class="experts">Norman, Nielsen, Krug, Wroblewski, Garrett</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__game-detail__overview__desktop.jpg">overview</a>
+		<a class="tag shot" href="shots/auth__game-detail__settings__desktop.jpg">settings</a></td>
+	<td class="fix">Add tooltips/labels to all four icons; visually separate Delete (gap or overflow "…" menu) and
+		require a confirmation step; label the visibility control so both its state and its toggle-ability are
+		clear (e.g. "Visibility: Public ⇄").</td>
+</tr>
+</tbody>
+</table>
+
+<!-- ===================== MEDIUM ===================== -->
+<h2 class="med"><span class="sev sev-med"></span>Medium impact <span class="count">— inconsistency / unpolished, or 2+ experts</span></h2>
+<table>
+<thead><tr><th>#</th><th>Issue</th><th>Expert(s)</th><th>Screen(s)</th><th>Suggested fix</th></tr></thead>
+<tbody>
+<tr>
+	<td class="num">5</td>
+	<td class="issue"><strong>Settings tab renders every field label and the Players table headers in red.</strong>
+		"Map Size / Game Mode / Victory Conditions / DLC Enabled" and the table headers are saturated red — the
+		alarm color — while equivalent labels on every other tab are muted tan. (Likely an accidental
+		<code>--color-brown</code> token application.)
+		<div class="ok">✓ verified — Settings tab</div></td>
+	<td class="experts">Rams, Ive, Norman, Nielsen, Au, Garrett, Hall</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__game-detail__settings__desktop.jpg">settings</a></td>
+	<td class="fix">Recolor these labels and headers to the muted-tan label token used on the other tabs. Reserve red
+		for destructive/error states only. Quick, high-consensus win.</td>
+</tr>
+<tr>
+	<td class="num">6</td>
+	<td class="issue"><strong>Tournament grouping contradicts the cards' own badges, and phase is stated three
+		times.</strong> Test 05 and Test 04 sit under the "ACTIVE" heading while their badge and Phase field both
+		read "Setup". Each card also shows status in the section heading, a corner badge, and a "Phase" tile.
+		<div class="ok">✓ verified — Tournaments list</div></td>
+	<td class="experts">Rams, Ive, Norman, Nielsen, Garrett, Hall</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__tournaments__desktop.jpg">tournaments</a></td>
+	<td class="fix">Derive group membership from the same status the badge shows (a Setup tournament belongs in a
+		Setup/Draft group, not Active). Drop the redundant "Phase" tile since the badge already carries it, and
+		reclaim that slot. Consider ordering by user relevance (tournaments you're in → active → open → past).</td>
+</tr>
+<tr>
+	<td class="num">7</td>
+	<td class="issue"><strong>The game-detail summary strip is tall, and repeats on every tab.</strong> The
+		five-card Player/Winner/Victory/Map/Turns band plus breadcrumb and tab bar consume ~290px before any tab
+		content; on the Map and chart tabs the actual data opens below the fold. The five facts would fit one
+		compact line.
+		<div class="ok">✓ verified — repeats across game-detail tabs</div></td>
+	<td class="experts">Ive, Krug, Hall, Wroblewski</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__game-detail__overview__desktop.jpg">overview</a>
+		<a class="tag shot" href="shots/auth__game-detail__map__desktop.jpg">map</a></td>
+	<td class="fix">Collapse the five cards into one slim metadata row (icon + value, thin dividers) so it stays as
+		persistent context across tabs without owning the most valuable vertical space.</td>
+</tr>
+<tr>
+	<td class="num">8</td>
+	<td class="issue"><strong>Primary navigation hides behind a hamburger on a wide desktop.</strong> Top-level
+		destinations (Browse/Games, Tournaments, Account) aren't visible; the header has ample empty horizontal
+		room. A signed-out visitor on the home page can't discover what sections exist without clicking the icon.
+		<div class="ok">✓ verified — header on every screen</div></td>
+	<td class="experts">Norman, Krug, Garrett</td>
+	<td class="where">
+		<a class="tag shot" href="shots/anon__home__desktop.jpg">anon home</a>
+		<a class="tag shot" href="shots/auth__home__desktop.jpg">auth home</a></td>
+	<td class="fix">Surface the core destinations as inline header links on desktop; keep the hamburger as the
+		narrow-viewport fallback. The space between the wordmark and the Upload/search cluster is unused.</td>
+</tr>
+<tr>
+	<td class="num">9</td>
+	<td class="issue"><strong>The game-detail date stamp is alarm-red (and low-contrast).</strong> The upload date
+		(top-right, e.g. "2025-10-18") is the only red text on most tabs, grouped visually with the action icons
+		though it isn't an action; small red on dark brown is also a weak-contrast pairing. The Map's "Turn" label
+		is red too.
+		<div class="ok">✓ verified — game-detail header, map</div></td>
+	<td class="experts">Rams, Ive, Krug, Au, Levey</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__game-detail__overview__desktop.jpg">overview</a>
+		<a class="tag shot" href="shots/auth__game-detail__map__desktop.jpg">map</a></td>
+	<td class="fix">Render the date (and the Turn label) in the muted tan used for other secondary metadata, with an
+		"Uploaded" caption; keep red strictly for destructive/critical affordances.</td>
+</tr>
+<tr>
+	<td class="num">10</td>
+	<td class="issue"><strong>The Stats page stacks three rows of near-identical pills.</strong> Section tabs
+		(Overview/Games/Stats), category tabs (Yields/Nations/Families/Laws/Cities/Tech), and chart-mode tabs
+		(Per Turn / Cumulative / P25–P75 band / Game count) all share the same pill styling, so three nesting
+		levels read as one undifferentiated wall of buttons.
+		<div class="ok">✓ verified — Stats tab</div></td>
+	<td class="experts">Ive, Krug, Wroblewski, Levey</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__user-profile__stats__desktop.jpg">stats</a></td>
+	<td class="fix">Differentiate the levels: keep the section nav as the strongest treatment, render the category
+		level lighter, and make the chart-mode row a compact segmented control attached to the chart (or prefix a
+		small "View:" label) so the hierarchy reads at a glance.</td>
+</tr>
+<tr>
+	<td class="num">11</td>
+	<td class="issue"><strong>The header search is an empty, unlabeled box — and is absent for anonymous
+		visitors.</strong> The signed-in search field shows only a magnifier, no placeholder, so its scope is
+		unclear; the anonymous header drops search entirely, exactly for the audience doing public-game discovery.
+		<div class="ok">✓ verified — anon vs auth headers</div></td>
+	<td class="experts">Rams, Ive, Nielsen, Wroblewski, Krug, Hall, Levey</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__home__desktop.jpg">auth home</a>
+		<a class="tag shot" href="shots/anon__home__desktop.jpg">anon home</a></td>
+	<td class="fix">Add placeholder text naming the scope ("Search games…") and a programmatic label; expose the
+		search field to anonymous visitors scoped to public games.</td>
+</tr>
+<tr>
+	<td class="num">12</td>
+	<td class="issue"><strong>Native OS form controls break the theme.</strong> The tournament "Open for signups"
+		control is a bright-blue system checkbox; "Add a map…" is a native select; the games filter uses a white
+		native date picker — all clashing with the styled tan controls used elsewhere (Filter / Columns / All
+		games pills).
+		<div class="ok">✓ verified — tournament-detail, games filter</div></td>
+	<td class="experts">Au</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__tournament-detail__desktop.jpg">tournament-detail</a>
+		<a class="tag shot" href="shots/auth__user-profile__games__desktop.jpg">profile games</a></td>
+	<td class="fix">Route checkboxes, selects, and date inputs through the existing styled control vocabulary; use
+		the tan/gold accent for checkboxes rather than system blue.</td>
+</tr>
+<tr>
+	<td class="num">13</td>
+	<td class="issue"><strong>Improvements table shows duplicate rows that read as a bug.</strong> "Baths" appears
+		as three separate rows (totals 1, 2, 1) and "Courthouse" as three (3, 4, 2), with identical names and no
+		distinguishing column to explain the repetition.
+		<div class="ok">✓ verified — Improvements tab</div></td>
+	<td class="experts">Ive</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__game-detail__improvements__desktop.jpg">improvements</a></td>
+	<td class="fix">Aggregate same-named improvements into one row, or surface the distinguishing attribute
+		(tier/level/era) as a visible column so the repetition is self-explanatory.</td>
+</tr>
+<tr>
+	<td class="num">14</td>
+	<td class="issue"><strong>Summary stats use three densities, and the profile chips look like buttons.</strong>
+		The same "at-a-glance" stats appear as large bordered cards (game-detail), tight chips inline in the
+		profile breadcrumb, and a third density in the home sidebar. The profile chips share the raised pill look
+		of the adjacent tab buttons but aren't interactive.
+		<div class="ok">✓ verified — profile header vs game-detail cards</div></td>
+	<td class="experts">Au, Garrett, Wroblewski</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__user-profile__games__desktop.jpg">profile games</a>
+		<a class="tag shot" href="shots/auth__game-detail__overview__desktop.jpg">overview</a></td>
+	<td class="fix">Define one stat-tile component (and a single "compact" variant) and reuse it across profile
+		header, home sidebar, and game-detail. Flatten the static stat chips so they don't read as clickable next
+		to the real tab controls.</td>
+</tr>
+<tr>
+	<td class="num">15</td>
+	<td class="issue"><strong>Small secondary labels are low-contrast.</strong> The muted-gray uppercase labels
+		("Player", "Winner", "Saves", "Win Rate", "Phase"…) sit only slightly above the card background — the
+		lowest-contrast, smallest text on the page, and pervasive.
+		<div class="ok">✓ verified — cards across home / profile / game-detail</div></td>
+	<td class="experts">Levey</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__home__desktop.jpg">home</a>
+		<a class="tag shot" href="shots/auth__game-detail__overview__desktop.jpg">overview</a></td>
+	<td class="fix">Lift the label color to a warmer mid-tan that clears WCAG AA against the card surface; keep them
+		visually secondary via size/weight rather than via crushed contrast.</td>
+</tr>
+</tbody>
+</table>
+
+<!-- ===================== LOW ===================== -->
+<h2 class="low"><span class="sev sev-low"></span>Low impact <span class="count">— minor refinement / single expert / edge case</span></h2>
+<table>
+<thead><tr><th>#</th><th>Issue</th><th>Expert(s)</th><th>Screen(s)</th><th>Suggested fix</th></tr></thead>
+<tbody>
+<tr>
+	<td class="num">16</td>
+	<td class="issue"><strong>Anonymous home buries the first action.</strong> The hero's three items
+		(Interactive charts / Explorable map / Share saves) are static labels, not a call-to-action; the only
+		action is a small "Login". The game grid below has no heading ("Recent public games") to frame it as
+		examples, and repeats "becked" on every card.
+		<div class="ok">✓ verified — anon home</div></td>
+	<td class="experts">Wroblewski, Krug, Hall</td>
+	<td class="where"><a class="tag shot" href="shots/anon__home__desktop.jpg">anon home</a></td>
+	<td class="fix">Add a primary action in the hero ("Log in to start" / "Upload a save"); add a section heading
+		above the grid; demote the repeated uploader chip so the game title wins the scan.</td>
+</tr>
+<tr>
+	<td class="num">17</td>
+	<td class="issue"><strong>"Favorite Day: Saturday" gets headline weight.</strong> It sits co-equal with Saves
+		and Win Rate in the profile/home stat strip — and on the public profile — despite answering no question a
+		player has.
+		<div class="ok">✓ verified — profile / home stats</div></td>
+	<td class="experts">Hall</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__user-profile__games__desktop.jpg">profile</a>
+		<a class="tag shot" href="shots/auth__home__desktop.jpg">home</a></td>
+	<td class="fix">Drop it from the headline strip or demote it into the Stats tab as a minor curiosity; reserve
+		the headline slots for play-relevant facts.</td>
+</tr>
+<tr>
+	<td class="num">18</td>
+	<td class="issue"><strong>Empty/zero states render as bare "—" or an empty chart band.</strong> Setup
+		tournaments show "—" for Players/Maps; the "Babylonia" home card shows an empty chart area where others
+		show a curve — both read as errors rather than intentional "nothing yet".
+		<div class="ok">✓ verified — tournaments, anon home</div></td>
+	<td class="experts">Ive, Hall</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__tournaments__desktop.jpg">tournaments</a>
+		<a class="tag shot" href="shots/anon__home__desktop.jpg">anon home</a></td>
+	<td class="fix">Replace bare "—" with a short intent phrase ("No players yet"); omit the chart region for games
+		without turn-series data or show a one-line "No turn-series data". Use "0" vs "—" consistently.</td>
+</tr>
+<tr>
+	<td class="num">19</td>
+	<td class="issue"><strong>Breadcrumb parent changes with auth state for the same game.</strong> Signed out shows
+		"Home › becked › Mojo vs AUro"; signed in shows "Home › Tournaments › Test 01 › Mojo vs AUro" — the trail
+		reflects who's looking, not where the item lives.
+		<div class="ok">✓ verified — anon vs auth game-detail</div></td>
+	<td class="experts">Garrett</td>
+	<td class="where">
+		<a class="tag shot" href="shots/anon__game-detail__overview__desktop.jpg">anon</a>
+		<a class="tag shot" href="shots/auth__game-detail__overview__desktop.jpg">auth</a></td>
+	<td class="fix">Pick a canonical parent for a tournament game and show it consistently; if both contexts matter,
+		surface uploader and tournament as distinct labeled facets rather than swapping the single trail.</td>
+</tr>
+<tr>
+	<td class="num">20</td>
+	<td class="issue"><strong>First month group in the games table is unlabeled.</strong> Rows appear before the
+		first "APR 2026" divider, so the most-recent (May) rows float without a header while older groups get one.
+		<div class="ok">✓ verified — profile games</div></td>
+	<td class="experts">Garrett</td>
+	<td class="where"><a class="tag shot" href="shots/auth__user-profile__games__desktop.jpg">profile games</a></td>
+	<td class="fix">Label the first group too (e.g. "MAY 2026") so every row sits under a month header.</td>
+</tr>
+<tr>
+	<td class="num">21</td>
+	<td class="issue"><strong>Page-title treatment is inconsistent across top-level pages.</strong> Tournaments has
+		a body H1; Account and the user profile open with no heading (tabs/breadcrumb only); Admin's title lives
+		inside a card.
+		<div class="ok">✓ verified — account, tournaments</div></td>
+	<td class="experts">Au</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__account__desktop.jpg">account</a>
+		<a class="tag shot" href="shots/auth__tournaments__desktop.jpg">tournaments</a></td>
+	<td class="fix">Establish one page-header rule (breadcrumb, then a single H1 at a fixed size/weight) and apply
+		it to Tournaments, Account, Profile, and Admin alike.</td>
+</tr>
+<tr>
+	<td class="num">22</td>
+	<td class="issue"><strong>Account and Admin content floats in a large empty canvas.</strong> A narrow card sits
+		high on the page over a mostly-blank 1440×900 viewport, reading as unfinished rather than minimal. The raw
+		Discord ID is shown as an unexplained numeric string.
+		<div class="ok">✓ verified — account</div></td>
+	<td class="experts">Rams, Nielsen</td>
+	<td class="where">
+		<a class="tag shot" href="shots/auth__account__desktop.jpg">account</a>
+		<a class="tag shot" href="shots/auth__admin-reparse__desktop.jpg">admin</a></td>
+	<td class="fix">Center and constrain the content column to a comfortable reading width (matching the
+		game-detail / tournament-detail container). Hide the raw Discord ID behind a "technical details" affordance
+		or pair it with a copy control + explanation.</td>
+</tr>
+<tr>
+	<td class="num">23</td>
+	<td class="issue"><strong>Home/profile chart thumbnails use different series colors than the detail charts.</strong>
+		The home mini-charts render red / blue / pink line pairs, while the game-detail charts use white/gold —
+		so the same "two players over time" idea looks different depending on where you are.
+		<div class="ok">✓ verified — anon home vs detail charts</div></td>
+	<td class="experts">(compiler observation)</td>
+	<td class="where">
+		<a class="tag shot" href="shots/anon__home__desktop.jpg">anon home</a>
+		<a class="tag shot" href="shots/auth__game-detail__events__desktop.jpg">events</a></td>
+	<td class="fix">Settle on one series-color rule (ideally the nation-color mapping from finding #1) and apply it
+		to both the thumbnails and the full charts.</td>
+</tr>
+<tr>
+	<td class="num">24</td>
+	<td class="issue"><strong>Disabled button reads like an active CTA.</strong> The admin "Nothing to reparse"
+		button keeps a saturated gold fill, only slightly muted, so its disabled state isn't obvious.
+		<div class="warn">⚠ not re-checked at pixel level</div></td>
+	<td class="experts">Au, Levey</td>
+	<td class="where"><a class="tag shot" href="shots/auth__admin-reparse__desktop.jpg">admin</a></td>
+	<td class="fix">Give disabled controls a distinctly de-emphasized treatment (lower opacity / desaturated outline)
+		applied consistently wherever buttons disable.</td>
+</tr>
+<tr>
+	<td class="num">25</td>
+	<td class="issue"><strong>Profile activity heatmap likely has no legend.</strong> The calendar heatmap is
+		reported to color cells by nation (not intensity), which a viewer expecting a typical activity heatmap
+		would misread, with no key.
+		<div class="warn">⚠ reported — profile overview not independently re-checked</div></td>
+	<td class="experts">Rams, Nielsen</td>
+	<td class="where"><a class="tag shot" href="shots/auth__user-profile__overview__desktop.jpg">profile overview</a></td>
+	<td class="fix">Add a one-line key clarifying that cell color = nation played, tied to the same nation colors as
+		the bars and (per #1) the charts.</td>
+</tr>
+</tbody>
+</table>
+
+<!-- ===================== WHAT'S WORKING ===================== -->
+<h2>What's already working</h2>
+<p class="lead">Several screens are the standard the rest should be pulled up to, and were repeatedly praised:</p>
+<div class="callout">
+	<ul>
+		<li>The <strong>user-profile games table</strong> — nation-colored names, Win/Loss pills, per-row chevron
+			affordance, themed filters. (<a href="shots/auth__user-profile__games__desktop.jpg">shot</a>)</li>
+		<li>The <strong>full-size line charts</strong> (Victory Points, Science, Military) — clean grids, honest
+			flat backgrounds — once a legend is added (finding #1).</li>
+		<li><strong>Breadcrumbs</strong> are present and accurate on detail pages, giving good "where am I" support.</li>
+		<li>The <strong>permission gating</strong> reads correctly: anonymous viewers see the full analytics but
+			not the owner toolbar.</li>
+	</ul>
+</div>
+
+<!-- ===================== PER-EXPERT ===================== -->
+<h2>Per-expert reviews</h2>
+<p class="lead">Each expert reviewed independently through their own lens. Their individual findings are below
+(lightly condensed); the tables above are the deduplicated synthesis.</p>
+
+<details class="expert">
+	<summary>Dieter Rams <span class="lens">— 10 Principles of Good Design</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Multi-player charts have no legend</div>
+			<div class="sub">events, yields, laws, military, overview · Principle 4 (understandable), 8 (thorough)</div>
+			<p>White and gold series with no key; Key Metrics bars likewise unlabeled. The reader must infer the
+			color↔player mapping that is never stated.</p></div>
+		<div class="finding"><div class="ttl">High — The "Events" tab contains no events</div>
+			<div class="sub">events · Principle 6 (honest), 4 (understandable)</div>
+			<p>Shows Victory Points / Legitimacy charts; rename to match content.</p></div>
+		<div class="finding"><div class="ttl">Medium — Settings uses red field labels found nowhere else</div>
+			<div class="sub">settings · Principle 5 (unobtrusive), 8 (thorough)</div></div>
+		<div class="finding"><div class="ttl">Medium — Tournament headings and badges contradict each other</div>
+			<div class="sub">tournaments · Principle 4, 8 — state asserted in three places, one disagrees</div></div>
+		<div class="finding"><div class="ttl">Medium — Map lacks a legend and shows only outlines</div>
+			<div class="sub">map · Principle 4, 2</div></div>
+		<div class="finding"><div class="ttl">Medium — Account/Admin float in empty space</div>
+			<div class="sub">account, admin · Principle 8, 3 — center and constrain the column</div></div>
+		<div class="finding"><div class="ttl">Low — Activity heatmap has no value legend; red date stamp; bare search field</div>
+			<div class="sub">profile overview, game-detail header, header search</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Jony Ive <span class="lens">— Relentless simplification, precision, material honesty</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Red spent on inert text</div>
+			<div class="sub">settings, plus date stamp · Material Honesty / Form Follows Intent</div>
+			<p>Note: the panel compiler verified that the game-detail <em>summary-card</em> labels are muted gray, not
+			red — so the red issue is scoped to the Settings tab labels/headers, the date stamp, and the Map "Turn"
+			label, not all card labels.</p></div>
+		<div class="finding"><div class="ttl">High — Duplicate rows in the Improvements table read as a bug</div>
+			<div class="sub">improvements · Precision in Every Detail</div></div>
+		<div class="finding"><div class="ttl">Medium — Tournament grouping contradicts its badges</div>
+			<div class="sub">tournaments · Form Follows Intent</div></div>
+		<div class="finding"><div class="ttl">Medium — The "Events" tab does not contain events</div>
+			<div class="sub">events</div></div>
+		<div class="finding"><div class="ttl">Medium — Three identical "tab" treatments compete on the stats screens</div>
+			<div class="sub">stats · Precision / Quiet Confidence</div></div>
+		<div class="finding"><div class="ttl">Medium — Five-up summary strip wastes prime real estate; signed-in home begins headless</div>
+			<div class="sub">game-detail, home</div></div>
+		<div class="finding"><div class="ttl">Low — Two search styles; red unanchored date; inconsistent empty-cell conventions</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Don Norman <span class="lens">— Affordances, signifiers, feedback, mapping</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Charts have no legend: the core conceptual model is broken</div>
+			<div class="sub">all chart tabs, stats · Mapping &amp; Conceptual Model</div></div>
+		<div class="finding"><div class="ttl">High — Map encodes nations by color but never says which is which</div>
+			<div class="sub">map · Mapping &amp; Discoverability</div></div>
+		<div class="finding"><div class="ttl">High — Unlabeled icon toolbar performs consequential (destructive) actions</div>
+			<div class="sub">game-detail · Affordances/Signifiers + Constraints (error prevention)</div></div>
+		<div class="finding"><div class="ttl">Medium — Home cards look interactive but give no signifier of where they lead</div>
+			<div class="sub">home · the games table's row chevron exists but isn't applied to cards</div></div>
+		<div class="finding"><div class="ttl">Medium — Hamburger is the only nav on a wide desktop canvas</div>
+			<div class="sub">all screens · Discoverability</div></div>
+		<div class="finding"><div class="ttl">Medium — Tournament badges inconsistent; grouping doesn't map to them</div></div>
+		<div class="finding"><div class="ttl">Low — Settings labels use the danger-red token; "Public" pill status-vs-action ambiguity</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Jakob Nielsen <span class="lens">— 10 Usability Heuristics</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Charts never identify which color is which nation</div>
+			<div class="sub">overview, events, yields, military, map · #6 Recognition over recall, #4 Consistency</div>
+			<p>Tables label nations with icon + name; the charts omit it.</p></div>
+		<div class="finding"><div class="ttl">High — Signed-in Map renders blank with no status indication</div>
+			<div class="sub">map · #1 Visibility of system status (#9 if it's an error)</div></div>
+		<div class="finding"><div class="ttl">Medium — Icon-only toolbar incl. destructive delete</div>
+			<div class="sub">game-detail · #5 Error prevention, #6 Recognition</div></div>
+		<div class="finding"><div class="ttl">Medium — Tournament grouping contradicts per-card phase</div>
+			<div class="sub">tournaments · #1, #4</div></div>
+		<div class="finding"><div class="ttl">Medium — Heatmap + bars color-coded by nation with no key</div>
+			<div class="sub">profile overview · #6, #2</div></div>
+		<div class="finding"><div class="ttl">Low — Settings label color; anon home lacks search; raw Discord ID</div></div>
+		<div class="finding"><div class="ttl">Positive</div>
+			<div class="sub">Breadcrumbs accurate; tabular tabs label nations; tournament signup shows clear status + a "Withdraw" exit.</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Luke Wroblewski <span class="lens">— Content priority, progressive disclosure, density</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Signed-out home buries the call to action</div>
+			<div class="sub">anon home · Content Priority</div></div>
+		<div class="finding"><div class="ttl">High — "Events" label breaks information scent</div>
+			<div class="sub">events</div></div>
+		<div class="finding"><div class="ttl">Medium — Game-detail dumps full complexity at once (no progressive disclosure)</div>
+			<div class="sub">game-detail · 11-tab strip + dense Overview</div></div>
+		<div class="finding"><div class="ttl">Medium — Icon action cluster is cramped and unlabeled (delete adjacent to benign actions)</div>
+			<div class="sub">game-detail · target sizing/spacing</div></div>
+		<div class="finding"><div class="ttl">Medium — Profile header crams stats into a tiny strip competing with three tab rows</div>
+			<div class="sub">profile</div></div>
+		<div class="finding"><div class="ttl">Low — Card stat blocks won't narrow gracefully; "Favorite Day" over-weighted; bare search field</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Steve Krug <span class="lens">— Don't Make Me Think; the Trunk Test</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — "Events" tab shows charts, not events</div>
+			<div class="sub">events · self-evidence</div></div>
+		<div class="finding"><div class="ttl">High — Game-detail action icons are unlabeled and cryptic</div>
+			<div class="sub">game-detail · obviousness of what's clickable / what each does</div></div>
+		<div class="finding"><div class="ttl">High — Anonymous home never says what a card is or that it's clickable</div>
+			<div class="sub">anon home · Trunk Test + scanning</div></div>
+		<div class="finding"><div class="ttl">Medium — No search for signed-out users; hamburger-only global nav; summary cards duplicate page info</div></div>
+		<div class="finding"><div class="ttl">Medium — Stats sub-nav stacks three unlabeled pill rows</div></div>
+		<div class="finding"><div class="ttl">Low — Repeated "becked" per card; alert-red date; inconsistent tournament status vocabulary</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Irene Au <span class="lens">— Design systems, type scale, spacing</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Settings tab abandons the label color used everywhere else (the avoid-red)</div>
+			<div class="sub">settings · Consistency Across Surfaces</div></div>
+		<div class="finding"><div class="ttl">High — Form controls fall back to native OS widgets (blue checkboxes, white date picker, native selects)</div>
+			<div class="sub">profile games, tournament-detail, map · Design Systems, Not Pages</div></div>
+		<div class="finding"><div class="ttl">High — Summary-stat data uses three different patterns/densities for the same job</div>
+			<div class="sub">profile vs game-detail vs home sidebar</div></div>
+		<div class="finding"><div class="ttl">Medium — Page-title treatment inconsistent; breadcrumb row carries two different payloads</div></div>
+		<div class="finding"><div class="ttl">Medium — Chart-plus-table tabs don't align the sidebar to a shared grid</div>
+			<div class="sub">cities/improvements vs laws/techs</div></div>
+		<div class="finding"><div class="ttl">Low — Disabled button reads as a CTA; game-detail date color inconsistent with card dates</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Jesse James Garrett <span class="lens">— The Five Planes</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Charts identify series by color, but no chart names who is who</div>
+			<div class="sub">chart tabs, profile · Skeleton failing to serve Scope</div></div>
+		<div class="finding"><div class="ttl">High — Key Metrics bars: no nation labels (and rescaled per metric, so they only compare within a metric)</div>
+			<div class="sub">overview · Skeleton (information design)</div></div>
+		<div class="finding"><div class="ttl">High — Hamburger is the only path to primary navigation</div>
+			<div class="sub">all screens · Structure / Skeleton (navigation)</div></div>
+		<div class="finding"><div class="ttl">Medium — Unlabeled destructive toolbar cluster; profile stats styled like buttons but inert</div></div>
+		<div class="finding"><div class="ttl">Medium — Tournament grouping order + status vocabulary; map controls split across three corners</div></div>
+		<div class="finding"><div class="ttl">Low — Breadcrumb parent changes by auth state; Settings red headings; first games-table group unlabeled</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Erika Hall <span class="lens">— Research-driven, anti-design-theater, edge states</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — The "Events" tab does not show events</div>
+			<div class="sub">events · a navigation label is a promise about content</div></div>
+		<div class="finding"><div class="ttl">High — Signed-in home duplicates the profile summary card</div>
+			<div class="sub">home vs profile · decide what the home is for</div></div>
+		<div class="finding"><div class="ttl">High — "Favorite Day" is a vanity metric presented as a peer of Win Rate (and on the public profile)</div></div>
+		<div class="finding"><div class="ttl">Medium — Game-detail header eats ~30% of every tab; cities/improvements sidebar is mostly empty on small N</div></div>
+		<div class="finding"><div class="ttl">Medium — Repeated "becked" attribution per card; tournament phase stated three times; bare "—" empty states</div></div>
+		<div class="finding"><div class="ttl">Low — Settings red labels; anon Settings exposes deep config; search gated behind login</div></div>
+	</div>
+</details>
+
+<details class="expert">
+	<summary>Yael Levey <span class="lens">— Accessibility, contrast, inclusivity</span></summary>
+	<div class="body">
+		<div class="finding"><div class="ttl">High — Two-player charts encode identity by color alone, with no labels</div>
+			<div class="sub">chart tabs · color-only encoding</div>
+			<p>Note: the panel compiler checked the actual shots — white vs. gold are distinguishable (not "nearly
+			identical"); the real defect is the absence of labels and the difficulty where lines overlap. Adding a
+			legend + a non-color cue (dash/marker) resolves it for everyone.</p></div>
+		<div class="finding"><div class="ttl">High — Map distinguishes nations by outline color only</div>
+			<div class="sub">map · color-only meaning</div></div>
+		<div class="finding"><div class="ttl">High — Red date stamp on dark brown — low contrast + reads as an error</div>
+			<div class="sub">game-detail header · WCAG AA + emotional design</div></div>
+		<div class="finding"><div class="ttl">Medium — Low-contrast small card labels; faint active/inactive tab states with no visible focus cue; unlabeled search</div></div>
+		<div class="finding"><div class="ttl">Medium — Key Metrics bars are color-only (no nation label)</div></div>
+		<div class="finding"><div class="ttl">Low — Disabled button contrast; dim secondary-column text in dense tables</div></div>
+	</div>
+</details>
+
+<!-- ===================== STATUS ===================== -->
+<h2>Panel status</h2>
+<div class="status-grid">
+	<div>✓ Dieter Rams — completed</div>
+	<div>✓ Jony Ive — completed</div>
+	<div>✓ Don Norman — completed</div>
+	<div>✓ Jakob Nielsen — completed</div>
+	<div>✓ Luke Wroblewski — completed</div>
+	<div>✓ Steve Krug — completed</div>
+	<div>✓ Irene Au — completed</div>
+	<div>✓ Jesse James Garrett — completed</div>
+	<div>✓ Erika Hall — completed</div>
+	<div>✓ Yael Levey — completed</div>
+</div>
+
+<footer>
+	10 of 10 experts completed. Synthesis deduplicated across lenses; load-bearing factual claims were
+	re-checked against the screenshots (12 of the 32 desktop shots opened directly, covering every distinct
+	screen type and all High/Medium findings). Two single-expert claims (#24 disabled button, #25 heatmap
+	legend) are flagged as not independently re-checked at pixel level.
+</footer>
+
+</div>
+</body>
+</html>
