@@ -1,16 +1,18 @@
 // `./per-ankh admin games [--limit] [--user <id>]` — list recent cloud games.
 // `./per-ankh admin game <id>` — full detail for one game.
 
-import { d1Batch, d1Query, sqlStr } from "../wrangler";
+import { d1Batch, d1Exec, d1Query, r2DeleteMany, sqlStr } from "../wrangler";
 import {
 	type Column,
 	emdash,
 	formatBytes,
 	formatDate,
 	info,
+	ok,
 	printCount,
 	printDetail,
 	printTable,
+	warn,
 } from "../../lib/format";
 import {
 	type CommandOpts,
@@ -19,6 +21,7 @@ import {
 	parseFlags,
 	printJson,
 } from "../../lib/cli";
+import { confirmTyping } from "../../lib/confirm";
 
 interface GameListRow {
 	game_id: string;
@@ -191,4 +194,145 @@ export async function runDetail(
 		["Updated", formatDate(game.updated_at)],
 		["R2 keys", `games/${game.game_id}.json.gz, saves/${game.game_id}.zip`],
 	]);
+}
+
+// ─── shared delete helper ──────────────────────────────────────────────────
+//
+// Deletes the given games and their R2 blobs (parsed blob + raw save ZIP).
+// The D1 cascade handles player_summaries, game_player_turn, tech_events, and
+// law_events. Callers own the confirmation prompt, the audit-event row, and
+// the final summary line. Shared by `delete-game`, `purge-games`, and
+// `nuke-user`.
+export async function deleteGames(gameIds: string[]): Promise<void> {
+	if (gameIds.length === 0) return;
+
+	const keys: string[] = [];
+	for (const id of gameIds) {
+		keys.push(`games/${id}.json.gz`);
+		keys.push(`saves/${id}.zip`);
+	}
+	info(`Deleting ${keys.length} R2 object(s)...`);
+	const r2Summary = await r2DeleteMany(keys);
+	info(
+		`R2: ok=${r2Summary.ok} missing=${r2Summary.missing} failed=${r2Summary.failed}`,
+	);
+	for (const err of r2Summary.errors.slice(0, 5)) warn(err);
+
+	info(`Deleting ${gameIds.length} game(s) from D1...`);
+	const idList = gameIds.map(sqlStr).join(", ");
+	await d1Exec(`DELETE FROM games WHERE game_id IN (${idList})`);
+}
+
+// ─── delete-game (single game; account untouched) ──────────────────────────
+
+export async function runDelete(
+	argv: string[],
+	opts: CommandOpts,
+): Promise<void> {
+	const { positional } = parseFlags(argv);
+	const gameId = positional[0];
+	if (!gameId) {
+		throw new Error("Usage: ./per-ankh admin delete-game <game_id>");
+	}
+
+	const rows = await d1Query<{
+		game_id: string;
+		user_id: string;
+		game_name: string | null;
+		total_turns: number;
+		display_name: string | null;
+	}>(`
+		SELECT g.game_id, g.user_id, g.game_name, g.total_turns, u.display_name
+		FROM games g LEFT JOIN users u ON u.user_id = g.user_id
+		WHERE g.game_id = ${sqlStr(gameId)}
+	`);
+	const game = rows[0];
+	if (!game) {
+		throw new Error(`Game not found: ${gameId}`);
+	}
+
+	if (!opts.yes) {
+		const yes = await confirmTyping(
+			`DELETE GAME: ${emdash(game.game_name)} (${game.game_id})\n` +
+				`  Owner: ${emdash(game.display_name)} (${game.user_id})\n` +
+				`  Turns: ${game.total_turns}\n` +
+				`  Deletes the game row (+ cascades) and R2 blobs. The account stays.`,
+			"delete",
+		);
+		if (!yes) {
+			info("Cancelled.");
+			return;
+		}
+	}
+
+	await deleteGames([game.game_id]);
+
+	const metadata = JSON.stringify({ game_name: game.game_name });
+	await d1Exec(`
+		INSERT INTO events (event_type, user_id, game_id, metadata)
+		VALUES ('delete_game', ${sqlStr(game.user_id)}, ${sqlStr(game.game_id)}, ${sqlStr(metadata)})
+	`);
+
+	ok(`Deleted game ${game.game_id}.`);
+}
+
+// ─── purge-games (all of one user's games; account untouched) ──────────────
+
+export async function runPurge(
+	argv: string[],
+	opts: CommandOpts,
+): Promise<void> {
+	const { flags } = parseFlags(argv);
+	const userId = flagString(flags, "user");
+	if (!userId) {
+		throw new Error("Usage: ./per-ankh admin purge-games --user <user_id>");
+	}
+
+	const userRows = await d1Query<{
+		user_id: string;
+		display_name: string | null;
+	}>(
+		`SELECT user_id, display_name FROM users WHERE user_id = ${sqlStr(userId)}`,
+	);
+	const user = userRows[0];
+	if (!user) {
+		throw new Error(`User not found: ${userId}`);
+	}
+
+	const gameRows = await d1Query<{ game_id: string }>(
+		`SELECT game_id FROM games WHERE user_id = ${sqlStr(userId)}`,
+	);
+	const gameIds = gameRows.map((r) => r.game_id);
+	if (gameIds.length === 0) {
+		info("User has no games.");
+		return;
+	}
+
+	if (!opts.yes) {
+		const yes = await confirmTyping(
+			`PURGE GAMES: ${emdash(user.display_name)} (${userId})\n` +
+				`  Delete ${gameIds.length} game(s) + their R2 blobs (json.gz + zip).\n` +
+				`  The account, collections, and online_ids stay.`,
+			"purge",
+		);
+		if (!yes) {
+			info("Cancelled.");
+			return;
+		}
+	}
+
+	await deleteGames(gameIds);
+
+	const metadata = JSON.stringify({
+		display_name: user.display_name,
+		games_deleted: gameIds.length,
+	});
+	await d1Exec(`
+		INSERT INTO events (event_type, user_id, metadata)
+		VALUES ('purge_games', ${sqlStr(userId)}, ${sqlStr(metadata)})
+	`);
+
+	ok(
+		`Purged ${gameIds.length} game(s) from ${emdash(user.display_name)} (${userId}).`,
+	);
 }

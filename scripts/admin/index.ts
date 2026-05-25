@@ -29,6 +29,8 @@ function printHelp(): void {
 			"  user <user_id>                   Show one user's detail",
 			"  games [--limit N] [--user U]     List recent cloud games",
 			"  game <game_id>                   Show one game's detail",
+			"  delete-game <game_id>            Delete one game (D1 + R2); account stays",
+			"  purge-games --user <user_id>     Delete all of a user's games; account stays",
 			"  events [--type T] [--user U] [--share S] [--limit N]   Audit log",
 			"",
 			"Legacy shares (frozen-but-served):",
@@ -103,6 +105,10 @@ export async function main(argv: string[]): Promise<void> {
 			return games.runList(subArgs, opts);
 		case "game":
 			return games.runDetail(subArgs, opts);
+		case "delete-game":
+			return games.runDelete(subArgs, opts);
+		case "purge-games":
+			return games.runPurge(subArgs, opts);
 		case "events":
 			return events.run(subArgs, opts);
 		case "shares":

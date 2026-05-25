@@ -4,6 +4,7 @@
 //                          blobs, and the user record itself
 
 import { d1Exec, d1Query, r2DeleteMany, sqlStr } from "../wrangler";
+import { deleteGames } from "./games";
 import { confirmNuke } from "../../lib/confirm";
 import {
 	type Column,
@@ -247,20 +248,7 @@ export async function runNukeUser(
 	}
 
 	if (gameCount > 0) {
-		const keys: string[] = [];
-		for (const g of gameRows) {
-			keys.push(`games/${g.game_id}.json.gz`);
-			keys.push(`saves/${g.game_id}.zip`);
-		}
-		info(`Deleting ${keys.length} R2 object(s)...`);
-		const r2Summary = await r2DeleteMany(keys);
-		info(
-			`R2: ok=${r2Summary.ok} missing=${r2Summary.missing} failed=${r2Summary.failed}`,
-		);
-		for (const err of r2Summary.errors.slice(0, 5)) warn(err);
-
-		info(`Deleting ${gameCount} game(s) from D1...`);
-		await d1Exec(`DELETE FROM games WHERE user_id = ${sqlStr(userId)}`);
+		await deleteGames(gameRows.map((g) => g.game_id));
 	} else {
 		info("User has no games.");
 	}
