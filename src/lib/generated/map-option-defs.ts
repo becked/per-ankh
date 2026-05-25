@@ -376,6 +376,11 @@ export const MAP_OPTION_DEFS: Readonly<Record<string, MapOptionDef>> = {
 		label: "King of the Hill",
 		default: false,
 	},
+	MAP_OPTIONS_SINGLE_MIRROR: {
+		kind: "toggle",
+		label: "Mirror Map",
+		default: false,
+	},
 	MAP_OPTIONS_SINGLE_POINT_SYMMETRY: {
 		kind: "toggle",
 		label: "Point Symmetry",

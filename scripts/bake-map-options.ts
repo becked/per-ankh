@@ -137,6 +137,43 @@ const ADD_OPTION_RE =
 interface ScriptDecl {
 	mapclass: string;
 	options: string[]; // ordered, de-duplicated
+	// Raw return expression of the script's static AllowMirror() method, or
+	// null if it declares none. Resolved (following delegations) in main() to
+	// decide whether the Mirror toggle applies to this script. See MIRROR_OPTION.
+	allowMirrorExpr: string | null;
+}
+
+// Real option zType for the Mirror lobby toggle. Unlike normal options it is
+// never registered via an options.Add(...) call — DefaultMapScript applies it
+// to every script whose static AllowMirror() returns true (and only at
+// NumTeams == 2, i.e. the 1v1 tournament case). We surface it per-script by
+// parsing that method, then let the normal singleEntries pass emit its toggle
+// def (Mirror is in mapOptionsSingle.xml and MP-valid).
+const MIRROR_OPTION = "MAP_OPTIONS_SINGLE_MIRROR";
+
+// Captures the return expression of a script's AllowMirror() method. Every
+// script's body is a single `return <expr>;` where <expr> is `true`, `false`,
+// or a delegation like `MapScriptSeaside.AllowMirror()`.
+const ALLOW_MIRROR_RE =
+	/public static (?:new )?bool AllowMirror\(\)\s*\{\s*return\s+([^;]+);/;
+
+function parseAllowMirrorExpr(src: string): string | null {
+	const m = src.match(ALLOW_MIRROR_RE);
+	return m ? m[1].trim() : null;
+}
+
+// Distinct option zTypes registered via options.Add(...) calls, in source
+// order. Shared by per-script and global (DefaultMapScript) parsing.
+function parseOptionAdds(src: string): string[] {
+	const seen = new Set<string>();
+	const options: string[] = [];
+	for (const m of src.matchAll(ADD_OPTION_RE)) {
+		const zType = m[2];
+		if (seen.has(zType)) continue;
+		seen.add(zType);
+		options.push(zType);
+	}
+	return options;
 }
 
 // Translate a C# filename (without extension) into its MAPCLASS_* identifier.
@@ -165,28 +202,15 @@ async function parseScriptFile(
 	const mapclass = mapclassForFile(basename);
 	if (!mapclass) return null;
 	const src = await readFile(path, "utf-8");
-	const seen = new Set<string>();
-	const options: string[] = [];
-	for (const m of src.matchAll(ADD_OPTION_RE)) {
-		const zType = m[2];
-		if (seen.has(zType)) continue;
-		seen.add(zType);
-		options.push(zType);
-	}
-	return { mapclass, options };
+	return {
+		mapclass,
+		options: parseOptionAdds(src),
+		allowMirrorExpr: parseAllowMirrorExpr(src),
+	};
 }
 
 async function parseGlobalOptions(path: string): Promise<string[]> {
-	const src = await readFile(path, "utf-8");
-	const seen = new Set<string>();
-	const options: string[] = [];
-	for (const m of src.matchAll(ADD_OPTION_RE)) {
-		const zType = m[2];
-		if (seen.has(zType)) continue;
-		seen.add(zType);
-		options.push(zType);
-	}
-	return options;
+	return parseOptionAdds(await readFile(path, "utf-8"));
 }
 
 async function main(): Promise<void> {
@@ -276,6 +300,46 @@ async function main(): Promise<void> {
 			"bake-map-options: DefaultMapScript.cs yielded zero options.Add() calls. " +
 				"Did Mohawk refactor how options are registered? Re-check ADD_OPTION_RE.",
 		);
+	}
+
+	// ─── Mirror (conditional lobby toggle) ───────────────────────────
+	// Mirror is applied by DefaultMapScript only to scripts whose static
+	// AllowMirror() returns true. Some scripts delegate (e.g. Bay returns
+	// MapScriptSeaside.AllowMirror()), so resolve transitively. Append
+	// MIRROR_OPTION to the qualifying scripts so it lands in `registered`
+	// below and the singleEntries pass emits its toggle def.
+	const allowMirrorByBasename = new Map<string, string>();
+	for (const d of scriptDecls) {
+		if (d.allowMirrorExpr) {
+			allowMirrorByBasename.set(
+				d.mapclass.replace(/^MAPCLASS_/, ""),
+				d.allowMirrorExpr,
+			);
+		}
+	}
+	const resolveAllowMirror = (
+		basename: string,
+		seen: Set<string> = new Set(),
+	): boolean => {
+		if (seen.has(basename)) return false; // delegation cycle guard
+		seen.add(basename);
+		const expr = allowMirrorByBasename.get(basename);
+		if (!expr) return false;
+		if (expr === "true") return true;
+		if (expr === "false") return false;
+		const delegate = expr.match(/^(\w+)\.AllowMirror\(\)$/);
+		if (delegate) return resolveAllowMirror(delegate[1], seen);
+		console.warn(
+			`bake-map-options: unrecognized AllowMirror() body for ${basename}: ` +
+				`"${expr}" — treating as Mirror-disallowed.`,
+		);
+		return false;
+	};
+	for (const d of scriptDecls) {
+		const basename = d.mapclass.replace(/^MAPCLASS_/, "");
+		if (resolveAllowMirror(basename) && !d.options.includes(MIRROR_OPTION)) {
+			d.options.push(MIRROR_OPTION);
+		}
 	}
 
 	// ─── Build the canonical zType set (registered by any script + globals) ──
