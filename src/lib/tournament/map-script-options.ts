@@ -112,22 +112,27 @@ export function nonDefaultOptions(
 }
 
 // Full descriptive name of a map instance, as bare space-joined words:
-// "<size> <script> <non-default option values>" — e.g. "Duel Continent Mirror
-// Large Water". Size always leads; the script name follows; then every option
-// whose value differs from its XML default, in manifest order. Toggles render
-// as their option label (they default off, so a non-default toggle is on);
-// selects render as the chosen value's label. Aspect ratio is just another
-// option here, so it appears only when non-default.
+// "<aspect> <size> <script> <non-default option values>" — e.g. "Square Duel
+// Continent Mirror Map". Aspect ratio always leads, then size, then the script
+// name; then every remaining option whose value differs from its XML default,
+// in manifest order. Aspect and size always render their current value (even
+// at default); toggles render as their option label (they default off, so a
+// non-default toggle is on); selects render as the chosen value's label.
 export function mapFullName(
 	options: Record<string, string | boolean> | undefined,
 	script: string,
 ): string {
 	const parts: string[] = [
+		mapOptionChoiceLabel(
+			"MAPASPECTRATIO",
+			effectiveOptionValue(options, "MAPASPECTRATIO"),
+		),
 		mapOptionChoiceLabel("MAPSIZE", effectiveOptionValue(options, "MAPSIZE")),
 		mapScriptLabel(script),
 	];
 	for (const opt of optionsForScript(script)) {
-		if (opt === "MAPSIZE") continue; // already the leading size word
+		// aspect ratio and size are already the leading words
+		if (opt === "MAPSIZE" || opt === "MAPASPECTRATIO") continue;
 		const def = MAP_OPTION_DEFS[opt];
 		if (!def) continue;
 		const value = effectiveOptionValue(options, opt);
