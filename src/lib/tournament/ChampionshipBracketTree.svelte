@@ -55,6 +55,13 @@
 		return s.discord_username ?? `seed ${s.championship_seed ?? "?"}`;
 	}
 
+	// Slot text for display. An empty slot in a placeholder (not-yet-generated)
+	// match reads "TBD" — its player isn't known until the feeder match decides.
+	function slotDisplay(slotId: string | null, isPlaceholder: boolean): string {
+		if (slotId) return slotLabel(slotId);
+		return isPlaceholder ? "TBD" : "—";
+	}
+
 	function roundTitle(roundNumber: number, totalRounds: number): string {
 		if (roundNumber === totalRounds) return "Final";
 		if (roundNumber === totalRounds - 1) return "Semifinal";
@@ -76,12 +83,102 @@
 		top: number;
 		centerY: number;
 		status: string;
+		is_placeholder: boolean;
 	};
 
-	const layout = $derived.by(() => {
-		const rounds = [...bracket.rounds].sort(
+	// A match in the bracket model: either a real DB match or a synthesized
+	// placeholder standing in for a future round.
+	type BracketMatch = {
+		match_id: string; // real match_id, or a synthetic key for placeholders
+		slot_a_id: string | null;
+		slot_b_id: string | null;
+		winner_slot_id: string | null;
+		map_pool_id: string | null;
+		map_script: string | null;
+		status: string;
+		is_placeholder: boolean;
+	};
+
+	type BracketRoundModel = {
+		round_id: string;
+		round_number: number;
+		matches: BracketMatch[];
+	};
+
+	// The championship's full round structure, including rounds the backend
+	// hasn't generated yet. Future rounds are materialized lazily server-side
+	// (a round is only created once the prior round completes), so to render
+	// the complete bracket we synthesize the missing rounds here.
+	//
+	// Bracket depth is fixed by round 1's match count: R1 holds bracket_size/2
+	// matches and the field halves each round down to a single final, so
+	// totalRounds = log2(r1Count) + 1. bracket_size is always a power of two,
+	// so r1Count is too and the log is exact.
+	//
+	// A synthesized match pre-fills a slot only when its feeder match already
+	// has a winner (a completed match or a bye); otherwise the slot stays null
+	// and renders as "TBD". Synthesized matches never carry a winner of their
+	// own, so prefill only ever propagates outward from real, decided matches.
+	const fullRounds = $derived.by<BracketRoundModel[]>(() => {
+		const real = [...bracket.rounds].sort(
 			(a, b) => a.round_number - b.round_number,
 		);
+		if (real.length === 0) return [];
+
+		const model: BracketRoundModel[] = real.map((r) => ({
+			round_id: r.round_id,
+			round_number: r.round_number,
+			matches: r.matches.map((m) => ({
+				match_id: m.match_id,
+				slot_a_id: m.slot_a_id,
+				slot_b_id: m.slot_b_id,
+				winner_slot_id: m.winner_slot_id,
+				map_pool_id: m.map_pool_id,
+				map_script: m.map_script,
+				status: m.status,
+				is_placeholder: false,
+			})),
+		}));
+
+		const r1Count = model[0].matches.length;
+		const totalRounds = Math.round(Math.log2(r1Count)) + 1;
+
+		// Append synthesized rounds until the bracket reaches full depth. Round
+		// numbers are contiguous from 1, so the next round's number is always
+		// the current model length + 1, and its feeder is the prior round.
+		for (
+			let roundNumber = model.length + 1;
+			roundNumber <= totalRounds;
+			roundNumber++
+		) {
+			const prior = model[roundNumber - 2];
+			const matches: BracketMatch[] = [];
+			for (let k = 0; k < prior.matches.length / 2; k++) {
+				const feederA = prior.matches[2 * k];
+				const feederB = prior.matches[2 * k + 1];
+				matches.push({
+					match_id: `placeholder-r${roundNumber}-m${k}`,
+					slot_a_id: feederA?.winner_slot_id ?? null,
+					slot_b_id: feederB?.winner_slot_id ?? null,
+					winner_slot_id: null,
+					map_pool_id: null,
+					map_script: null,
+					status: "pending",
+					is_placeholder: true,
+				});
+			}
+			model.push({
+				round_id: `placeholder-round-${roundNumber}`,
+				round_number: roundNumber,
+				matches,
+			});
+		}
+
+		return model;
+	});
+
+	const layout = $derived.by(() => {
+		const rounds = fullRounds;
 		if (rounds.length === 0) {
 			return {
 				matches: [] as PositionedMatch[],
@@ -118,6 +215,7 @@
 					top,
 					centerY,
 					status: m.status,
+					is_placeholder: m.is_placeholder,
 				});
 				centersByRound[rIdx][kIdx] = centerY;
 			});
@@ -161,13 +259,13 @@
 			style:height="{layout.height + 32}px"
 		>
 			<div class="round-headers" style:width="{layout.width}px">
-				{#each bracket.rounds as round, i (round.round_id)}
+				{#each fullRounds as round, i (round.round_id)}
 					<div
 						class="round-header"
 						style:left="{i * (MATCH_W + COL_GAP)}px"
 						style:width="{MATCH_W}px"
 					>
-						{roundTitle(round.round_number, bracket.rounds.length)}
+						{roundTitle(round.round_number, fullRounds.length)}
 					</div>
 				{/each}
 			</div>
@@ -187,45 +285,71 @@
 				</svg>
 
 				{#each layout.matches as m (m.match_id)}
-					{@const aWon =
-						m.winner_slot_id === m.slot_a_id && m.winner_slot_id !== null}
-					{@const bWon =
-						m.winner_slot_id === m.slot_b_id && m.winner_slot_id !== null}
-					<a
-						class="match"
-						class:decided={m.status === "complete" || m.status === "forfeit"}
-						class:bye={m.status === "bye"}
-						href="{resolve('/tournaments/[slug]', {
-							slug: tournamentSlug,
-						})}?match={m.match_id}"
-						onclick={(e) => handleMatchClick(m.match_id, e)}
-						style:left="{m.left}px"
-						style:top="{m.top}px"
-						style:width="{MATCH_W}px"
-						style:height="{MATCH_H}px"
-					>
-						<div class="slot" class:winner={aWon}>
-							{slotLabel(m.slot_a_id)}
+					<!-- Real matches link to their match modal; placeholder matches
+					     (future rounds the backend hasn't generated yet) aren't
+					     clickable, so they render as a plain, non-interactive box.
+					     Both share the same inner layout via the matchBody snippet. -->
+					{#if m.is_placeholder}
+						<div
+							class="match placeholder"
+							style:left="{m.left}px"
+							style:top="{m.top}px"
+							style:width="{MATCH_W}px"
+							style:height="{MATCH_H}px"
+						>
+							{@render matchBody(m)}
 						</div>
-						<div class="slot" class:winner={bWon}>
-							{m.status === "bye" ? "BYE" : slotLabel(m.slot_b_id)}
-						</div>
-						{#if m.map_script}
-							{@const entry = poolEntryById(mapPool, m.map_pool_id)}
-							{@const mapName = entry
-								? mapFullName(entry.options, entry.script)
-								: mapScriptLabel(m.map_script)}
-							<div class="map-row" title={mapName}>
-								<img class="map-icon" src={MAP_ICON} alt="" />
-								<span class="map-name">{mapName}</span>
-							</div>
-						{/if}
-					</a>
+					{:else}
+						<a
+							class="match"
+							class:decided={m.status === "complete" || m.status === "forfeit"}
+							class:bye={m.status === "bye"}
+							href="{resolve('/tournaments/[slug]', {
+								slug: tournamentSlug,
+							})}?match={m.match_id}"
+							onclick={(e) => handleMatchClick(m.match_id, e)}
+							style:left="{m.left}px"
+							style:top="{m.top}px"
+							style:width="{MATCH_W}px"
+							style:height="{MATCH_H}px"
+						>
+							{@render matchBody(m)}
+						</a>
+					{/if}
 				{/each}
 			</div>
 		</div>
 	</div>
 {/if}
+
+{#snippet matchBody(m: PositionedMatch)}
+	{@const aWon = m.winner_slot_id === m.slot_a_id && m.winner_slot_id !== null}
+	{@const bWon = m.winner_slot_id === m.slot_b_id && m.winner_slot_id !== null}
+	<div
+		class="slot"
+		class:winner={aWon}
+		class:tbd={m.is_placeholder && !m.slot_a_id}
+	>
+		{slotDisplay(m.slot_a_id, m.is_placeholder)}
+	</div>
+	<div
+		class="slot"
+		class:winner={bWon}
+		class:tbd={m.is_placeholder && !m.slot_b_id}
+	>
+		{m.status === "bye" ? "BYE" : slotDisplay(m.slot_b_id, m.is_placeholder)}
+	</div>
+	{#if m.map_script}
+		{@const entry = poolEntryById(mapPool, m.map_pool_id)}
+		{@const mapName = entry
+			? mapFullName(entry.options, entry.script)
+			: mapScriptLabel(m.map_script)}
+		<div class="map-row" title={mapName}>
+			<img class="map-icon" src={MAP_ICON} alt="" />
+			<span class="map-name">{mapName}</span>
+		</div>
+	{/if}
+{/snippet}
 
 <style>
 	.empty {
@@ -305,6 +429,19 @@
 		opacity: 1;
 	}
 
+	/* Placeholder matches stand in for rounds the backend hasn't generated
+	   yet. A dashed border + flatter background marks them as not-yet-live
+	   without dimming the whole box, so any already-known advancer stays
+	   legible (TBD slots are muted separately via .slot.tbd). */
+	.match.placeholder {
+		background-color: #2b2723;
+		border-style: dashed;
+		cursor: default;
+	}
+	.match.placeholder:hover {
+		background-color: #2b2723;
+	}
+
 	.slot {
 		flex: 1;
 		display: flex;
@@ -324,6 +461,12 @@
 	.slot.winner {
 		color: var(--color-orange, #d97706);
 		font-weight: 700;
+	}
+
+	/* An undetermined slot in a placeholder match. */
+	.slot.tbd {
+		color: rgba(232, 216, 184, 0.4);
+		font-style: italic;
 	}
 
 	.map-row {
