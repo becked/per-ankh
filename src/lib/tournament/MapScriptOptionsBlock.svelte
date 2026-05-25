@@ -14,6 +14,7 @@
 	} from "$lib/tournament/map-script-options";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 	import Select from "$lib/ui/Select.svelte";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -34,31 +35,28 @@
 		$state.snapshot(tournament.map_script_options),
 	);
 
-	let status = $state<
-		| { kind: "idle" }
-		| { kind: "saving" }
-		| { kind: "saved" }
-		| { kind: "err"; message: string }
-	>({ kind: "idle" });
+	let saving = $state(false);
 
 	const scriptOptions = $derived(optionsForScript(script));
 
 	async function commit(next: MapScriptOptions) {
-		status = { kind: "saving" };
+		saving = true;
 		try {
 			await cloudApi.patchTournament(tournament.tournament_id, {
 				map_script_options: next,
 			});
 			await invalidateAll();
-			status = { kind: "saved" };
+			toast.info("Saved");
 		} catch (err) {
 			let message = "Save failed";
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			status = { kind: "err", message };
+			toast.error(message);
 			// Roll back to server state.
 			working = $state.snapshot(tournament.map_script_options);
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -87,7 +85,7 @@
 					{#if def.kind === "toggle"}
 						<Checkbox
 							checked={currentValue(option) === true}
-							disabled={status.kind === "saving"}
+							disabled={saving}
 							onCheckedChange={(c) => setOption(option, c)}
 						/>
 					{:else}
@@ -95,7 +93,7 @@
 							value={String(currentValue(option) ?? "")}
 							onChange={(v) => v != null && setOption(option, v)}
 							options={def.choices}
-							disabled={status.kind === "saving"}
+							disabled={saving}
 							ariaLabel={mapOptionLabel(option)}
 							class="min-w-[10rem]"
 						/>
@@ -103,12 +101,5 @@
 				</div>
 			{/if}
 		{/each}
-		{#if status.kind === "saving"}
-			<span class="self-end text-[10px] text-tan opacity-60">Saving…</span>
-		{:else if status.kind === "saved"}
-			<span class="self-end text-[10px] text-orange opacity-80">Saved</span>
-		{:else if status.kind === "err"}
-			<span class="self-end text-[10px] text-red-400">{status.message}</span>
-		{/if}
 	{/if}
 </div>

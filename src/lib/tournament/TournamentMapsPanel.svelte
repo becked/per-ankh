@@ -13,6 +13,7 @@
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -23,12 +24,7 @@
 	// svelte-ignore state_referenced_locally
 	let allowedMapScripts = $state<string[]>([...tournament.allowed_map_scripts]);
 
-	let status = $state<
-		| { kind: "idle" }
-		| { kind: "saving" }
-		| { kind: "saved" }
-		| { kind: "err"; message: string }
-	>({ kind: "idle" });
+	let saving = $state(false);
 
 	const unaddedGroups = $derived(unaddedMapScriptsByDlc(allowedMapScripts));
 	const mapScriptGroups = $derived(
@@ -46,21 +42,23 @@
 	}
 
 	async function commit(next: string[]) {
-		status = { kind: "saving" };
+		saving = true;
 		try {
 			await cloudApi.patchTournament(tournament.tournament_id, {
 				allowed_map_scripts: next,
 			});
 			await invalidateAll();
-			status = { kind: "saved" };
+			toast.info("Saved");
 		} catch (err) {
 			let message = "Save failed";
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			status = { kind: "err", message };
+			toast.error(message);
 			// Roll back optimistic state so the visible list matches the server.
 			allowedMapScripts = [...tournament.allowed_map_scripts];
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -79,16 +77,7 @@
 </script>
 
 <section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
-	<header class="mb-3 flex items-baseline justify-between">
-		<h2 class="text-sm font-bold text-tan">Maps</h2>
-		{#if status.kind === "saving"}
-			<span class="text-xs text-tan opacity-60">Saving…</span>
-		{:else if status.kind === "saved"}
-			<span class="text-xs text-orange opacity-80">Saved</span>
-		{:else if status.kind === "err"}
-			<span class="text-xs text-red-400">{status.message}</span>
-		{/if}
-	</header>
+	<h2 class="mb-3 text-sm font-bold text-tan">Maps</h2>
 
 	<div class="flex flex-col gap-2 text-xs text-tan">
 		{#if allowedMapScripts.length === 0}
@@ -162,7 +151,7 @@
 								type="button"
 								class="flex shrink-0 items-center justify-center border-l border-black px-3 text-tan opacity-60 transition-colors hover:bg-[#3d3832] hover:text-red-400 hover:opacity-100 disabled:opacity-30"
 								onclick={() => removeMapScript(script)}
-								disabled={status.kind === "saving"}
+								disabled={saving}
 								aria-label="Remove {mapScriptLabel(script)}"
 							>
 								<svg
@@ -201,7 +190,7 @@
 			placeholder={unaddedGroups.length === 0
 				? "All known maps added"
 				: "Add a map…"}
-			disabled={status.kind === "saving" || unaddedGroups.length === 0}
+			disabled={saving || unaddedGroups.length === 0}
 			ariaLabel="Add map script"
 			class="mt-1"
 		/>

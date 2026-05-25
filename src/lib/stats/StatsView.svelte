@@ -138,7 +138,7 @@
 							/>
 						{/if}
 					{:else}
-						<p class="p-8 text-center italic text-brown">
+						<p class="p-8 text-center italic text-tan opacity-60">
 							{spec.emptyMessage?.(bundle) ?? "Not enough data."}
 						</p>
 					{/if}

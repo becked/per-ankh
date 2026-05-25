@@ -12,6 +12,7 @@
 		unaddedMapScriptsByDlc,
 	} from "$lib/tournament/map-scripts";
 	import Select from "$lib/ui/Select.svelte";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -42,7 +43,6 @@
 	let allowedMapScripts = $state<string[]>([...tournament.allowed_map_scripts]);
 
 	let busy = $state(false);
-	let banner = $state<{ kind: "ok" | "err"; message: string } | null>(null);
 
 	const swissConfigLocked = $derived(tournament.status !== "setup");
 
@@ -114,18 +114,17 @@
 			return;
 		}
 		busy = true;
-		banner = null;
 		try {
 			await cloudApi.patchTournament(tournament.tournament_id, patch);
 			await invalidateAll();
-			banner = { kind: "ok", message: "Saved" };
+			toast.info("Saved");
 			onSaved?.();
 		} catch (err) {
 			let message = "Save failed";
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			banner = { kind: "err", message };
+			toast.error(message);
 		} finally {
 			busy = false;
 		}
@@ -140,26 +139,13 @@
 	);
 </script>
 
-{#if banner}
-	<div
-		class="mb-3 rounded border px-3 py-2 text-sm"
-		class:border-orange={banner.kind === "ok"}
-		class:text-orange={banner.kind === "ok"}
-		class:border-red-500={banner.kind === "err"}
-		class:text-red-400={banner.kind === "err"}
-		role="status"
-	>
-		{banner.message}
-	</div>
-{/if}
-
 <div class="flex flex-col gap-3 text-xs text-tan">
 	<label class="flex flex-col gap-1">
 		<span>Name</span>
 		<input
 			type="text"
 			bind:value={name}
-			class="rounded border border-black bg-[#35302b] p-1.5"
+			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 		/>
 	</label>
 
@@ -168,7 +154,7 @@
 		<textarea
 			bind:value={description}
 			rows="2"
-			class="rounded border border-black bg-[#35302b] p-1.5"
+			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 		></textarea>
 	</label>
 
@@ -178,7 +164,7 @@
 			<input
 				type="text"
 				bind:value={divisionAName}
-				class="rounded border border-black bg-[#35302b] p-1.5"
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 			/>
 		</label>
 		<label class="flex flex-col gap-1">
@@ -186,7 +172,7 @@
 			<input
 				type="text"
 				bind:value={divisionBName}
-				class="rounded border border-black bg-[#35302b] p-1.5"
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 			/>
 		</label>
 	</div>
@@ -209,7 +195,7 @@
 					min="1"
 					max="20"
 					bind:value={swissMaxRounds}
-					class="no-spinner rounded border border-black bg-[#35302b] p-1.5 disabled:opacity-50"
+					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -219,7 +205,7 @@
 					min="1"
 					max="20"
 					bind:value={swissWinsToAdvance}
-					class="no-spinner rounded border border-black bg-[#35302b] p-1.5 disabled:opacity-50"
+					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -229,7 +215,7 @@
 					min="1"
 					max="20"
 					bind:value={swissLossesToEliminate}
-					class="no-spinner rounded border border-black bg-[#35302b] p-1.5 disabled:opacity-50"
+					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 				/>
 			</label>
 		</div>
@@ -286,7 +272,7 @@
 	{#if onCancel}
 		<button
 			type="button"
-			class="rounded border border-brown px-3 py-1.5 text-xs text-tan transition-colors hover:bg-brown disabled:opacity-50"
+			class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 			onclick={onCancel}
 			disabled={busy}
 		>

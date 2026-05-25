@@ -6,6 +6,7 @@
 		type PatchTournamentBody,
 		type TournamentDetail,
 	} from "$lib/api-cloud";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -22,26 +23,18 @@
 	// svelte-ignore state_referenced_locally
 	let divisionBName = $state(tournament.division_b_name);
 
-	let status = $state<
-		| { kind: "idle" }
-		| { kind: "saving" }
-		| { kind: "saved" }
-		| { kind: "err"; message: string }
-	>({ kind: "idle" });
-
 	async function commit(patch: PatchTournamentBody) {
 		if (Object.keys(patch).length === 0) return;
-		status = { kind: "saving" };
 		try {
 			await cloudApi.patchTournament(tournament.tournament_id, patch);
 			await invalidateAll();
-			status = { kind: "saved" };
+			toast.info("Saved");
 		} catch (err) {
 			let message = "Save failed";
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			status = { kind: "err", message };
+			toast.error(message);
 		}
 	}
 
@@ -83,16 +76,7 @@
 </script>
 
 <section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
-	<header class="mb-3 flex items-baseline justify-between">
-		<h2 class="text-sm font-bold text-tan">Overview</h2>
-		{#if status.kind === "saving"}
-			<span class="text-xs text-tan opacity-60">Saving…</span>
-		{:else if status.kind === "saved"}
-			<span class="text-xs text-orange opacity-80">Saved</span>
-		{:else if status.kind === "err"}
-			<span class="text-xs text-red-400">{status.message}</span>
-		{/if}
-	</header>
+	<h2 class="mb-3 text-sm font-bold text-tan">Overview</h2>
 
 	<div class="flex flex-col gap-3 text-xs text-tan">
 		<label class="flex flex-col gap-1">
@@ -101,7 +85,7 @@
 				type="text"
 				bind:value={name}
 				onblur={commitName}
-				class="rounded border border-black bg-[#35302b] p-1.5"
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 			/>
 		</label>
 
@@ -111,7 +95,7 @@
 				bind:value={description}
 				onblur={commitDescription}
 				rows="2"
-				class="rounded border border-black bg-[#35302b] p-1.5"
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 			></textarea>
 		</label>
 
@@ -121,7 +105,7 @@
 				type="text"
 				bind:value={divisionAName}
 				onblur={commitDivisionA}
-				class="rounded border border-black bg-[#35302b] p-1.5"
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 			/>
 		</label>
 		<label class="flex flex-col gap-1">
@@ -130,7 +114,7 @@
 				type="text"
 				bind:value={divisionBName}
 				onblur={commitDivisionB}
-				class="rounded border border-black bg-[#35302b] p-1.5"
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 			/>
 		</label>
 	</div>

@@ -26,6 +26,7 @@
 	import TournamentOverviewPanel from "$lib/tournament/TournamentOverviewPanel.svelte";
 	import TournamentSettingsModal from "$lib/tournament/TournamentSettingsModal.svelte";
 	import { confirmDialog } from "$lib/ui/confirm";
+	import { toast } from "$lib/ui/toast";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
 	import type { PageData } from "./$types";
@@ -147,10 +148,9 @@
 		if (openMatchId && !currentMatch) closeMatch();
 	});
 
-	// --- Admin action surface: busy/banner + lifecycle gates + handlers.
+	// --- Admin action surface: busy gate + toast feedback + handlers.
 
 	let busy = $state(false);
-	let banner = $state<{ kind: "ok" | "err"; message: string } | null>(null);
 	let settingsOpen = $state(false);
 
 	const slotsA = $derived(data.standings.divisions.A.standings);
@@ -187,10 +187,9 @@
 		successMessage?: string,
 	): Promise<T | null> {
 		busy = true;
-		banner = null;
 		try {
 			const out = await op();
-			if (successMessage) banner = { kind: "ok", message: successMessage };
+			if (successMessage) toast.info(successMessage);
 			await invalidateAll();
 			return out;
 		} catch (err) {
@@ -198,7 +197,7 @@
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			banner = { kind: "err", message };
+			toast.error(message);
 			return null;
 		} finally {
 			busy = false;
@@ -450,12 +449,12 @@
 			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
-			<div>
+			<div class="mx-auto max-w-screen-2xl">
 				<header class="mb-6">
 					<div class="flex items-baseline justify-between gap-3">
 						<Breadcrumb {crumbs} class="min-w-0" />
 						<span
-							class="whitespace-nowrap rounded border border-orange px-2 py-0.5 text-xs uppercase text-orange"
+							class="whitespace-nowrap rounded bg-[#2a2622] px-2 py-0.5 text-xs uppercase tracking-wide text-tan opacity-80"
 						>
 							{data.tournament.status}
 						</span>
@@ -536,7 +535,7 @@
 							{#if data.tournament.status !== "setup"}
 								<button
 									type="button"
-									class="rounded border border-brown px-3 py-1.5 text-xs text-tan transition-colors hover:bg-brown disabled:opacity-50"
+									class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 									onclick={() => (settingsOpen = true)}
 									disabled={busy || openMatchId !== null}
 									aria-label="Tournament settings"
@@ -569,19 +568,6 @@
 						</div>
 					{/if}
 				</header>
-
-				{#if banner}
-					<div
-						class="mb-4 rounded border px-3 py-2 text-sm"
-						class:border-orange={banner.kind === "ok"}
-						class:text-orange={banner.kind === "ok"}
-						class:border-red-500={banner.kind === "err"}
-						class:text-red-400={banner.kind === "err"}
-						role="status"
-					>
-						{banner.message}
-					</div>
-				{/if}
 
 				{#if data.tournament.status === "setup"}
 					{#if isAdmin}

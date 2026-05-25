@@ -102,7 +102,7 @@
 							style="background-color: #2a2622;"
 						>
 							<p class="mb-0.5 text-[10px] font-bold text-gray-400">Saves</p>
-							<p class="text-[10px] font-bold text-tan">
+							<p class="text-[10px] font-bold text-[#DBDEE3]">
 								{summary.total_games}
 							</p>
 						</div>
@@ -112,7 +112,7 @@
 							style="background-color: #2a2622;"
 						>
 							<p class="mb-0.5 text-[10px] font-bold text-gray-400">Win Rate</p>
-							<p class="text-[10px] font-bold text-tan">
+							<p class="text-[10px] font-bold text-[#DBDEE3]">
 								{#if winRatePct != null}{winRatePct}%{:else}—{/if}
 							</p>
 						</div>
@@ -134,7 +134,7 @@
 								{/if}
 								Favorite Nation
 							</p>
-							<p class="text-[10px] font-bold text-tan">
+							<p class="text-[10px] font-bold text-[#DBDEE3]">
 								{summary.favorite_nation
 									? formatEnum(summary.favorite_nation, "NATION_")
 									: "—"}
@@ -148,7 +148,9 @@
 							<p class="mb-0.5 text-[10px] font-bold text-gray-400">
 								Favorite Day
 							</p>
-							<p class="text-[10px] font-bold text-tan">{favoriteDay ?? "—"}</p>
+							<p class="text-[10px] font-bold text-[#DBDEE3]">
+								{favoriteDay ?? "—"}
+							</p>
 						</div>
 					</div>
 

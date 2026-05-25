@@ -6,6 +6,7 @@
 		cloudApi,
 		type CreateTournamentBody,
 	} from "$lib/api-cloud";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		onClose: () => void;
@@ -21,7 +22,6 @@
 	let description = $state("");
 
 	let busy = $state(false);
-	let banner = $state<{ kind: "ok" | "err"; message: string } | null>(null);
 
 	const canSubmit = $derived(!busy && name.trim().length > 0);
 
@@ -35,7 +35,6 @@
 	async function submit() {
 		if (!canSubmit) return;
 		busy = true;
-		banner = null;
 		try {
 			const { tournament } = await cloudApi.createTournament(buildBody());
 			// Refresh the layout-level my-tournaments / admin-tournaments
@@ -48,7 +47,7 @@
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			banner = { kind: "err", message };
+			toast.error(message);
 			busy = false;
 		}
 	}
@@ -107,17 +106,6 @@
 			</button>
 		</header>
 
-		{#if banner}
-			<div
-				class="mb-3 rounded border px-3 py-2 text-sm"
-				class:border-red-500={banner.kind === "err"}
-				class:text-red-400={banner.kind === "err"}
-				role="status"
-			>
-				{banner.message}
-			</div>
-		{/if}
-
 		<div class="flex flex-col gap-3 text-xs text-tan">
 			<label class="flex flex-col gap-1">
 				<span>Name</span>
@@ -127,7 +115,7 @@
 					bind:value={name}
 					autofocus
 					maxlength="120"
-					class="rounded border border-black bg-[#35302b] p-1.5"
+					class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 				/>
 			</label>
 
@@ -137,20 +125,15 @@
 					bind:value={description}
 					rows="3"
 					maxlength="2000"
-					class="rounded border border-black bg-[#35302b] p-1.5"
+					class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 				></textarea>
 			</label>
-
-			<p class="text-tan opacity-60">
-				Divisions, Swiss configuration, and map scripts are set on the
-				tournament page after create.
-			</p>
 		</div>
 
 		<div class="mt-4 flex justify-end gap-2">
 			<button
 				type="button"
-				class="rounded border border-brown px-3 py-1.5 text-xs text-tan transition-colors hover:bg-brown disabled:opacity-50"
+				class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 				onclick={onClose}
 				disabled={busy}
 			>

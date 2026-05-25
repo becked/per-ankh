@@ -7,6 +7,7 @@
 		type TournamentDetail,
 	} from "$lib/api-cloud";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -55,26 +56,27 @@
 		return { low, high };
 	});
 
-	let status = $state<
-		| { kind: "idle" }
-		| { kind: "saving" }
-		| { kind: "saved" }
-		| { kind: "err"; message: string }
-	>({ kind: "idle" });
+	let saving = $state(false);
 
-	async function commit(patch: PatchTournamentBody) {
-		if (Object.keys(patch).length === 0) return;
-		status = { kind: "saving" };
+	// Returns whether the patch committed cleanly, so optimistic callers
+	// (commitSignupsOpen) can roll back their local state on failure.
+	async function commit(patch: PatchTournamentBody): Promise<boolean> {
+		if (Object.keys(patch).length === 0) return true;
+		saving = true;
 		try {
 			await cloudApi.patchTournament(tournament.tournament_id, patch);
 			await invalidateAll();
-			status = { kind: "saved" };
+			toast.info("Saved");
+			return true;
 		} catch (err) {
 			let message = "Save failed";
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			status = { kind: "err", message };
+			toast.error(message);
+			return false;
+		} finally {
+			saving = false;
 		}
 	}
 
@@ -128,22 +130,13 @@
 		// then PATCH. invalidateAll re-syncs from the canonical row; on
 		// failure we restore from the tournament prop.
 		signupsOpen = next;
-		await commit({ signups_open: next });
-		if (status.kind === "err") signupsOpen = tournament.signups_open;
+		const ok = await commit({ signups_open: next });
+		if (!ok) signupsOpen = tournament.signups_open;
 	}
 </script>
 
 <section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
-	<header class="mb-3 flex items-baseline justify-between">
-		<h2 class="text-sm font-bold text-tan">Signups</h2>
-		{#if status.kind === "saving"}
-			<span class="text-xs text-tan opacity-60">Saving…</span>
-		{:else if status.kind === "saved"}
-			<span class="text-xs text-orange opacity-80">Saved</span>
-		{:else if status.kind === "err"}
-			<span class="text-xs text-red-400">{status.message}</span>
-		{/if}
-	</header>
+	<h2 class="mb-3 text-sm font-bold text-tan">Signups</h2>
 
 	<div
 		class="mb-4 rounded-lg p-3 text-xs text-tan"
@@ -152,7 +145,7 @@
 		<Checkbox
 			checked={signupsOpen}
 			onCheckedChange={(c) => commitSignupsOpen(c)}
-			disabled={status.kind === "saving"}
+			disabled={saving}
 		>
 			<span>Open for signups</span>
 		</Checkbox>
@@ -179,7 +172,7 @@
 					max="20"
 					bind:value={swissMaxRounds}
 					onblur={commitMaxRounds}
-					class="no-spinner rounded border border-black bg-[#35302b] p-1.5"
+					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -190,7 +183,7 @@
 					max="20"
 					bind:value={swissWinsToAdvance}
 					onblur={commitWinsToAdvance}
-					class="no-spinner rounded border border-black bg-[#35302b] p-1.5"
+					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -201,7 +194,7 @@
 					max="20"
 					bind:value={swissLossesToEliminate}
 					onblur={commitLossesToEliminate}
-					class="no-spinner rounded border border-black bg-[#35302b] p-1.5"
+					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 				/>
 			</label>
 		</div>

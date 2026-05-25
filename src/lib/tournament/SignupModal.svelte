@@ -3,7 +3,7 @@
 	// one decision (division), live counts so they can see the field, and a
 	// reassurance line showing the exact Discord handle they'll appear under
 	// in the slot list. Mirrors TournamentCreateModal's scaffolding (modal
-	// chrome, busy/disabled states, banner pattern).
+	// chrome, busy/disabled states, toast-on-error).
 
 	import { invalidateAll } from "$app/navigation";
 	import {
@@ -15,6 +15,7 @@
 	} from "$lib/api-cloud";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
+	import { toast } from "$lib/ui/toast";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -29,7 +30,6 @@
 
 	let selectedDivision = $state<Division | null>(null);
 	let busy = $state(false);
-	let banner = $state<{ kind: "ok" | "err"; message: string } | null>(null);
 
 	const counts = $derived(tournament.slot_counts.swiss_by_division);
 
@@ -46,7 +46,6 @@
 	async function submit() {
 		if (!canSubmit || selectedDivision === null) return;
 		busy = true;
-		banner = null;
 		try {
 			await cloudApi.signupForTournament(
 				tournament.tournament_id,
@@ -70,7 +69,7 @@
 					message = err.message + (err.code ? ` (${err.code})` : "");
 				}
 			}
-			banner = { kind: "err", message };
+			toast.error(message);
 			busy = false;
 		}
 	}
@@ -134,17 +133,6 @@
 			tournament starts.
 		</p>
 
-		{#if banner}
-			<div
-				class="mb-3 rounded border px-3 py-2 text-sm"
-				class:border-red-500={banner.kind === "err"}
-				class:text-red-400={banner.kind === "err"}
-				role="status"
-			>
-				{banner.message}
-			</div>
-		{/if}
-
 		<RadioGroup
 			value={selectedDivision ?? ""}
 			onChange={(v) => (selectedDivision = v as Division)}
@@ -178,7 +166,7 @@
 		<div class="flex justify-end gap-2">
 			<button
 				type="button"
-				class="rounded border border-brown px-3 py-1.5 text-xs text-tan transition-colors hover:bg-brown disabled:opacity-50"
+				class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 				onclick={onClose}
 				disabled={busy}
 			>

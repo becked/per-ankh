@@ -15,22 +15,35 @@
 		new Set((data.myTournaments ?? []).map((t) => t.tournament_id)),
 	);
 
-	// Three groups so the most actionable tournaments are at the top:
-	//   1. Open for signups (status='setup' + signups_open) — the player
-	//      can join right now.
-	//   2. Active (everything else that's not complete).
-	//   3. Past (complete).
+	// Four groups, most-actionable first:
+	//   1. Open for signups (setup + signups_open) — the player can join now.
+	//   2. Active (swiss / championship) — in progress.
+	//   3. Setup (setup, signups closed) — configured but not yet started.
+	//   4. Past (complete).
 	const open = $derived(
 		data.tournaments.filter((t) => t.status === "setup" && t.signups_open),
 	);
+	const setup = $derived(
+		data.tournaments.filter((t) => t.status === "setup" && !t.signups_open),
+	);
 	const active = $derived(
 		data.tournaments.filter(
-			(t) =>
-				t.status !== "complete" && !(t.status === "setup" && t.signups_open),
+			(t) => t.status !== "setup" && t.status !== "complete",
 		),
 	);
 	const completed = $derived(
 		data.tournaments.filter((t) => t.status === "complete"),
+	);
+
+	// Render order + labels. `enrollable` gates the "✓ You're in" badge — we
+	// keep it off Past so finished tournaments read "Complete", not enrolled.
+	const groups = $derived(
+		[
+			{ label: "Open for signups", items: open, enrollable: true },
+			{ label: "Active", items: active, enrollable: true },
+			{ label: "Setup", items: setup, enrollable: true },
+			{ label: "Past", items: completed, enrollable: false },
+		].filter((g) => g.items.length > 0),
 	);
 </script>
 
@@ -40,16 +53,16 @@
 			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
-			<div class="mx-auto max-w-4xl">
+			<div class="mx-auto max-w-screen-2xl">
 				<div class="mb-4 flex items-center justify-between gap-3">
-					<h1 class="text-2xl font-bold text-tan">Tournaments</h1>
+					<h1 class="text-2xl font-bold text-gray-200">Tournaments</h1>
 					{#if data.user}
 						<button
 							type="button"
-							class="bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs text-tan"
+							class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan"
 							onclick={() => (showCreateModal = true)}
 						>
-							+ New tournament
+							New tournament
 						</button>
 					{/if}
 				</div>
@@ -59,54 +72,30 @@
 						No tournaments yet. Check back when one starts.
 					</p>
 				{:else}
-					{#if open.length > 0}
+					{#each groups as group (group.label)}
 						<section class="mb-6">
-							<h2
-								class="mb-2 text-xs uppercase tracking-wide text-tan opacity-60"
-							>
-								Open for signups
-							</h2>
+							<!-- Status separator, matching the month dividers in the user
+							     games list: centered label flanked by hairlines. -->
+							<div class="my-2 flex items-center gap-2 px-1">
+								<div class="h-px flex-1 bg-tan opacity-30"></div>
+								<span
+									class="text-[10px] uppercase tracking-wide text-tan opacity-60"
+								>
+									{group.label}
+								</span>
+								<div class="h-px flex-1 bg-tan opacity-30"></div>
+							</div>
 							<div class="space-y-3">
-								{#each open as t (t.tournament_id)}
+								{#each group.items as t (t.tournament_id)}
 									<TournamentRowCard
 										tournament={t}
-										enrolled={enrolledIds.has(t.tournament_id)}
+										enrolled={group.enrollable &&
+											enrolledIds.has(t.tournament_id)}
 									/>
 								{/each}
 							</div>
 						</section>
-					{/if}
-					{#if active.length > 0}
-						<section class="mb-6">
-							<h2
-								class="mb-2 text-xs uppercase tracking-wide text-tan opacity-60"
-							>
-								Active
-							</h2>
-							<div class="space-y-3">
-								{#each active as t (t.tournament_id)}
-									<TournamentRowCard
-										tournament={t}
-										enrolled={enrolledIds.has(t.tournament_id)}
-									/>
-								{/each}
-							</div>
-						</section>
-					{/if}
-					{#if completed.length > 0}
-						<section>
-							<h2
-								class="mb-2 text-xs uppercase tracking-wide text-tan opacity-60"
-							>
-								Past
-							</h2>
-							<div class="space-y-3">
-								{#each completed as t (t.tournament_id)}
-									<TournamentRowCard tournament={t} />
-								{/each}
-							</div>
-						</section>
-					{/if}
+					{/each}
 				{/if}
 			</div>
 		</div>

@@ -332,7 +332,7 @@
 		<footer class="mt-4 flex justify-end gap-2">
 			<button
 				type="button"
-				class="rounded border border-brown px-3 py-1.5 text-xs text-tan hover:bg-brown disabled:opacity-50"
+				class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 				onclick={onCancel}
 				disabled={busy}
 			>

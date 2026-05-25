@@ -16,6 +16,7 @@
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
+	import { toast } from "$lib/ui/toast";
 	import type { SelectOption } from "$lib/ui/types";
 
 	interface Props {
@@ -33,7 +34,6 @@
 	type EditMode = "none" | "map" | "retro";
 	let editMode = $state<EditMode>("none");
 	let busy = $state(false);
-	let banner = $state<{ kind: "ok" | "err"; message: string } | null>(null);
 
 	// Edit-form state lives at module scope so it survives data refreshes
 	// (e.g. an invalidateAll from a sibling save) without clobbering whatever
@@ -133,10 +133,9 @@
 		successMessage: string,
 	): Promise<T | null> {
 		busy = true;
-		banner = null;
 		try {
 			const out = await op();
-			banner = { kind: "ok", message: successMessage };
+			toast.info(successMessage);
 			await invalidateAll();
 			return out;
 		} catch (err) {
@@ -144,7 +143,7 @@
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
-			banner = { kind: "err", message };
+			toast.error(message);
 			return null;
 		} finally {
 			busy = false;
@@ -275,19 +274,6 @@
 			</button>
 		</header>
 
-		{#if banner}
-			<div
-				class="mb-3 rounded border px-3 py-2 text-xs"
-				class:border-orange={banner.kind === "ok"}
-				class:text-orange={banner.kind === "ok"}
-				class:border-red-500={banner.kind === "err"}
-				class:text-red-400={banner.kind === "err"}
-				role="status"
-			>
-				{banner.message}
-			</div>
-		{/if}
-
 		<div class="flex flex-col gap-3">
 			{#if matchMapOptions.length > 0}
 				<dl
@@ -318,7 +304,7 @@
 					{/if}
 					{#if canUploadAsObserver}
 						<a
-							class="rounded border border-brown px-3 py-1.5 text-xs text-tan transition-colors hover:bg-brown"
+							class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 							href="{resolve(
 								'/upload',
 							)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}&observer=1"
@@ -371,7 +357,7 @@
 							<div class="flex justify-end gap-2">
 								<button
 									type="button"
-									class="rounded border border-brown px-3 py-1 text-xs text-tan hover:bg-brown disabled:opacity-50"
+									class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 									onclick={() => (editMode = "none")}
 									disabled={busy}
 								>
@@ -419,7 +405,7 @@
 							<div class="flex justify-end gap-2">
 								<button
 									type="button"
-									class="rounded border border-brown px-3 py-1 text-xs text-tan hover:bg-brown disabled:opacity-50"
+									class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 									onclick={() => (editMode = "none")}
 									disabled={busy}
 								>
