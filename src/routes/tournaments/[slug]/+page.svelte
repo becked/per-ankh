@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { invalidateAll, pushState } from "$app/navigation";
+	import { goto, invalidateAll, pushState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
@@ -31,7 +31,6 @@
 		mapFullName,
 		poolEntryById,
 	} from "$lib/tournament/map-script-options";
-	import TournamentGuideModal from "$lib/tournament/TournamentGuideModal.svelte";
 	import TournamentConfigurationPanel from "$lib/tournament/TournamentConfigurationPanel.svelte";
 	import TournamentMapsPanel from "$lib/tournament/TournamentMapsPanel.svelte";
 	import TournamentOverviewPanel from "$lib/tournament/TournamentOverviewPanel.svelte";
@@ -50,6 +49,14 @@
 		{ label: "Tournaments", href: resolve("/tournaments") },
 		{ label: data.tournament.name },
 	]);
+
+	// Open the shared guide page, carrying this tournament as the origin so the
+	// guide's breadcrumb can link back here (see tournaments/guide/+page.svelte).
+	function openGuide() {
+		const dest = `${resolve("/tournaments/guide")}?from=${data.tournament.slug}&name=${encodeURIComponent(data.tournament.name)}`;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path
+		goto(dest);
+	}
 
 	const isAdmin = $derived(data.tournament.is_viewer_admin === true);
 	const user = $derived(page.data.user as UserMe | null);
@@ -599,7 +606,6 @@
 	}
 
 	let transitionPreviewOpen = $state(false);
-	let guideOpen = $state(false);
 	let signedUpOpen = $state(false);
 
 	// Invoked from the "Signed up" popup, whose explicit Withdraw button is the
@@ -645,7 +651,7 @@
 					{startReady}
 					{transitionReady}
 					settingsDisabled={busy || openMatchId !== null}
-					onGuide={() => (guideOpen = true)}
+					onGuide={openGuide}
 					onSettings={() => (settingsOpen = true)}
 					onSignedUp={() => (signedUpOpen = true)}
 					onSignup={() => (signupModalOpen = true)}
@@ -958,10 +964,6 @@
 		onConfirm={transitionChampionship}
 		onCancel={() => (transitionPreviewOpen = false)}
 	/>
-{/if}
-
-{#if guideOpen}
-	<TournamentGuideModal onClose={() => (guideOpen = false)} />
 {/if}
 
 {#if signedUpOpen && viewerSlot}
