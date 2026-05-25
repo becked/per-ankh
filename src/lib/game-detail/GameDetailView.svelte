@@ -220,7 +220,7 @@
 		{#if headerActions}
 			{@render headerActions()}
 		{/if}
-		<p class="text-sm text-brown">{formatDate(gameDetails.save_date)}</p>
+		<p class="text-sm text-gray-200">{formatDate(gameDetails.save_date)}</p>
 	</div>
 </div>
 

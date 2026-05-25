@@ -23,12 +23,12 @@
 </script>
 
 {#if mapTiles == null}
-	<p class="italic text-brown">Loading map data...</p>
+	<p class="italic text-tan">Loading map data...</p>
 {:else if mapTiles.length === 0}
 	{#if missingMessage}
 		{@render missingMessage()}
 	{:else}
-		<p class="italic text-brown">No map data available for this game.</p>
+		<p class="italic text-tan">No map data available for this game.</p>
 	{/if}
 {:else}
 	<SpriteMap

@@ -1777,7 +1777,7 @@
 		<div class="ml-auto flex items-center gap-6">
 			{#if showTurnSlider}
 				<div class="flex items-center gap-3">
-					<span class="text-sm font-bold text-brown">Turn:</span>
+					<span class="text-sm font-bold text-tan">Turn:</span>
 					<div class="flex items-center">
 						<button
 							onclick={togglePlayback}
