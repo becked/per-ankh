@@ -30,6 +30,11 @@
 		isPublic: boolean;
 		collections?: CollectionInfo[];
 		currentCollectionId?: number | null;
+		// Owner-set title (null = falls back to the save's original name) and
+		// the save's original game_name. Both feed the rename control's
+		// prefill + Reset affordance; the breadcrumb leaf shows the result.
+		displayName?: string | null;
+		gameName?: string | null;
 	}
 
 	let {
@@ -38,15 +43,21 @@
 		isPublic = $bindable(),
 		collections = [],
 		currentCollectionId = null,
+		displayName = null,
+		gameName = null,
 	}: Props = $props();
 
-	type Popover = "lock" | "collection" | "download" | "delete";
+	type Popover = "lock" | "rename" | "collection" | "download" | "delete";
 	let openPopover = $state<Popover | null>(null);
 
 	let toggling = $state(false);
+	let renaming = $state(false);
 	let moving = $state(false);
 	let downloading = $state(false);
 	let deleting = $state(false);
+
+	let renameValue = $state("");
+	let renameError = $state<string | null>(null);
 
 	let showNewCollectionInput = $state(false);
 	let newCollectionName = $state("");
@@ -59,6 +70,12 @@
 			newCollectionName = "";
 			createError = null;
 		}
+		if (openPopover === "rename") {
+			// Prefill with the current effective title; empty Save clears the
+			// rename (null → original game_name / nation+turns derivation).
+			renameValue = displayName ?? gameName ?? "";
+			renameError = null;
+		}
 	}
 
 	function closePopover() {
@@ -66,6 +83,7 @@
 		showNewCollectionInput = false;
 		newCollectionName = "";
 		createError = null;
+		renameError = null;
 	}
 
 	async function moveToCollection(collectionId: number) {
@@ -123,6 +141,30 @@
 		} finally {
 			toggling = false;
 		}
+	}
+
+	async function confirmRename(value: string | null) {
+		if (renaming) return;
+		renaming = true;
+		renameError = null;
+		try {
+			await cloudApi.renameGame(gameId, value);
+			await invalidateAll();
+			closePopover();
+		} catch (err) {
+			if (err instanceof ApiError && err.status === 400) {
+				renameError = err.message || "Invalid name";
+				return;
+			}
+			renameError = err instanceof Error ? err.message : "Failed to rename";
+		} finally {
+			renaming = false;
+		}
+	}
+
+	function submitRename() {
+		const trimmed = renameValue.trim();
+		confirmRename(trimmed === "" ? null : trimmed);
 	}
 
 	async function confirmDownload() {
@@ -275,6 +317,90 @@
 							class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors"
 						>
 							{isPublic ? "Make private" : "Make public"}
+						</button>
+					</div>
+				</div>
+			{/if}
+		</div>
+	{/if}
+
+	{#if isOwner}
+		<div class="relative">
+			<button
+				type="button"
+				onclick={() => togglePopover("rename")}
+				disabled={renaming}
+				aria-haspopup="dialog"
+				aria-expanded={openPopover === "rename"}
+				title="Rename"
+				class="action-trigger rounded border border-tan p-1 text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+			>
+				<!-- Inline SVG pencil; no external sprite dep. -->
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					viewBox="0 0 20 20"
+					fill="currentColor"
+					class="h-3.5 w-3.5"
+					aria-hidden="true"
+				>
+					<path
+						d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793 4 13.172V16h2.828l7.379-7.379-2.828-2.828z"
+					/>
+				</svg>
+			</button>
+
+			{#if openPopover === "rename"}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<div
+					class="action-popover absolute right-0 top-full z-50 mt-2 w-64 rounded border-2 border-black bg-blue-gray p-3 shadow-lg"
+					role="dialog"
+					tabindex="-1"
+					onclick={(e) => e.stopPropagation()}
+				>
+					<p class="mb-2 text-xs font-semibold text-tan">Rename save</p>
+					<!-- svelte-ignore a11y_autofocus -->
+					<input
+						type="text"
+						bind:value={renameValue}
+						maxlength={120}
+						placeholder={gameName ?? "Save title"}
+						autofocus
+						disabled={renaming}
+						class="w-full rounded border border-[#4a433b] bg-[#35302b] px-2 py-1 text-sm text-tan placeholder:text-[#c5c3c2] focus:border-[#5a524a] focus:outline-none"
+						onkeydown={(e) => {
+							if (e.key === "Enter") submitRename();
+							if (e.key === "Escape") closePopover();
+						}}
+					/>
+					{#if renameError}
+						<p class="mt-1 text-[10px] text-orange">{renameError}</p>
+					{/if}
+					<div class="mt-2 flex justify-end gap-2">
+						{#if displayName != null && displayName.trim() !== ""}
+							<button
+								type="button"
+								onclick={() => confirmRename(null)}
+								disabled={renaming}
+								title="Clear the rename and fall back to the save's original title"
+								class="mr-auto rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+							>
+								Reset
+							</button>
+						{/if}
+						<button
+							type="button"
+							onclick={closePopover}
+							class="rounded border border-tan px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+						>
+							Cancel
+						</button>
+						<button
+							type="button"
+							onclick={submitRename}
+							disabled={renaming}
+							class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors disabled:opacity-50"
+						>
+							Save
 						</button>
 					</div>
 				</div>

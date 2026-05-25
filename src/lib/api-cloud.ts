@@ -423,6 +423,9 @@ export const cloudApi = {
 	): Promise<
 		FullGameData & {
 			is_public?: boolean;
+			// Uploader's opaque profile id — links the breadcrumb back to
+			// /users/:id. Optional for legacy/observer-mode safety.
+			user_id?: string | null;
 			user_nation?: string | null;
 			user_won?: boolean | null;
 			user_display_name?: string | null;
@@ -433,6 +436,7 @@ export const cloudApi = {
 		return res.json() as Promise<
 			FullGameData & {
 				is_public?: boolean;
+				user_id?: string | null;
 				user_nation?: string | null;
 				user_won?: boolean | null;
 				user_display_name?: string | null;
@@ -450,6 +454,7 @@ export const cloudApi = {
 		opts?: CallOpts,
 	): Promise<
 		FullGameData & {
+			user_id?: string | null;
 			user_nation?: string | null;
 			user_won?: boolean | null;
 			user_display_name?: string | null;
@@ -468,6 +473,7 @@ export const cloudApi = {
 		}
 		return res.json() as Promise<
 			FullGameData & {
+				user_id?: string | null;
 				user_nation?: string | null;
 				user_won?: boolean | null;
 				user_display_name?: string | null;

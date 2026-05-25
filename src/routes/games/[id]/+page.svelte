@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { page } from "$app/state";
-	import { invalidateAll } from "$app/navigation";
 	import type { PageData } from "./$types";
 	import type { MapTile } from "$lib/types/MapTile";
 	import { GameDetailView } from "$lib/game-detail";
@@ -10,9 +9,10 @@
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { resolve } from "$app/paths";
+	import { formatGameTitle } from "$lib/utils/formatting";
+	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import ReimportButton from "$lib/ReimportButton.svelte";
 	import GameActions from "$lib/GameActions.svelte";
-	import { cloudApi, ApiError } from "$lib/api-cloud";
 
 	let { data }: { data: PageData } = $props();
 	const game = $derived(data.game);
@@ -62,21 +62,43 @@
 		mapTiles = reconstructMapTiles(game, turn);
 	}
 
-	// Owner-only rename hook plumbed into GameDetailView. The component owns
-	// the inline edit UX; we own the API call + cache refresh + error
-	// translation. Throwing here propagates the inline error into the
-	// component's `renameError` slot.
-	async function handleRename(value: string | null): Promise<void> {
-		try {
-			await cloudApi.renameGame(gameId, value);
-			await invalidateAll();
-		} catch (err) {
-			if (err instanceof ApiError && err.status === 400) {
-				throw new Error(err.message || "Invalid name");
-			}
-			throw err instanceof Error ? err : new Error("Failed to rename");
+	// Effective game title — same derivation GameDetailView used for its old
+	// H1. Forms the breadcrumb's leaf (current page) segment.
+	const gameTitle = $derived(
+		formatGameTitle({
+			display_name: game.display_name ?? null,
+			game_name: game.game_details.game_name,
+			save_owner_nation:
+				game.user_nation ??
+				game.game_details.players.find((p) => p.is_human)?.nation ??
+				null,
+			total_turns: game.game_details.total_turns,
+			match_id: game.game_details.match_id,
+		}),
+	);
+
+	// Canonical breadcrumb trail, derived from the game's own data so it's
+	// stable across direct links, refreshes, and re-entry. A tournament game's
+	// parent is its tournament; otherwise the parent is the uploader's profile.
+	const crumbs = $derived.by((): Crumb[] => {
+		const trail: Crumb[] = [{ label: "Home", href: resolve("/") }];
+		if (data.tournamentLink) {
+			trail.push({ label: "Tournaments", href: resolve("/tournaments") });
+			trail.push({
+				label: data.tournamentLink.tournament.name,
+				href: resolve("/tournaments/[slug]", {
+					slug: data.tournamentLink.tournament.slug,
+				}),
+			});
+		} else if (game.user_id && game.user_display_name) {
+			trail.push({
+				label: game.user_display_name,
+				href: resolve("/users/[user_id]", { user_id: game.user_id }),
+			});
 		}
-	}
+		trail.push({ label: gameTitle });
+		return trail;
+	});
 </script>
 
 <div class="flex flex-1 overflow-hidden">
@@ -104,12 +126,13 @@
 					userDisplayName={game.user_display_name ?? null}
 					userWon={game.user_won ?? null}
 					displayName={game.display_name ?? null}
-					{isOwner}
-					onRename={isOwner ? handleRename : null}
 					{mapTiles}
 					{selectedMapTurn}
 					onMapTurnChange={handleMapTurnChange}
 				>
+					{#snippet titleSlot()}
+						<Breadcrumb {crumbs} class="min-w-0" />
+					{/snippet}
 					{#snippet headerActions()}
 						<!--
 						currentCollectionId is omitted: with the sidebar gone we no
@@ -122,6 +145,8 @@
 							{isOwner}
 							bind:isPublic
 							collections={data.collections ?? []}
+							displayName={game.display_name ?? null}
+							gameName={game.game_details.game_name ?? null}
 						/>
 					{/snippet}
 					{#snippet preTabs()}
@@ -134,27 +159,6 @@
 									Click Reparse for the latest version ({PARSER_VERSION}).
 								</p>
 								<ReimportButton {gameId} />
-							</div>
-						{/if}
-						{#if data.tournamentLink}
-							<div
-								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
-							>
-								<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
-									<a
-										class="font-bold text-tan hover:text-orange hover:underline"
-										href="{resolve('/tournaments/[slug]', {
-											slug: data.tournamentLink.tournament.slug,
-										})}?match={data.tournamentLink.match.match_id}"
-									>
-										{data.tournamentLink.tournament.name}
-									</a>
-									<span class="opacity-80">
-										— Round {data.tournamentLink.match.round_number}: {data
-											.tournamentLink.match.slot_a_username ?? "—"} vs
-										{data.tournamentLink.match.slot_b_username ?? "—"}
-									</span>
-								</p>
 							</div>
 						{/if}
 					{/snippet}

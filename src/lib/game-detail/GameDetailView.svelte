@@ -64,8 +64,7 @@
 		userDisplayName = null,
 		userWon = null,
 		displayName = null,
-		isOwner = false,
-		onRename = null,
+		titleSlot,
 		headerActions,
 		preTabs,
 		mapMissingMessage,
@@ -106,17 +105,11 @@
 		// save's original game_name and ultimately the nation/turns
 		// derivation. Null for legacy callers (frozen web/ viewer).
 		displayName?: string | null;
-		// True when the signed-in viewer owns this game. Drives the H1
-		// pencil-to-edit affordance. False for anonymous + non-owner readers,
-		// and defaults false for legacy callers.
-		isOwner?: boolean;
-		// Page-supplied async hook that performs the actual rename and
-		// triggers a data refresh (typically `cloudApi.renameGame` +
-		// `invalidateAll`). Keeps GameDetailView free of an api-cloud
-		// import so the legacy web/ viewer (which symlinks this component
-		// but doesn't ship api-cloud) keeps building. Null = no rename UI.
-		// eslint-disable-next-line no-unused-vars -- Callback type signature
-		onRename?: ((value: string | null) => Promise<void>) | null;
+		// Optional override for the heading. The cloud routes pass a
+		// breadcrumb trail here (whose final segment is the game title), which
+		// replaces the default <h1>. Legacy callers (frozen web/ viewer) omit
+		// it and get the plain title heading derived from `gameTitle`.
+		titleSlot?: Snippet;
 		headerActions?: Snippet;
 		preTabs?: Snippet;
 		mapMissingMessage?: Snippet;
@@ -180,63 +173,6 @@
 		}),
 	);
 
-	// ─── Rename affordance ────────────────────────────────────────────
-	// `editing` is the inline-input toggle for owners; `editValue` mirrors
-	// what's in the input. Submission/cancellation reset both. `renameError`
-	// is shown inline below the input when onRename throws.
-	let editing = $state(false);
-	let editValue = $state("");
-	let renameError = $state<string | null>(null);
-	let renameBusy = $state(false);
-
-	function startEditing() {
-		editValue = displayName ?? gameDetails.game_name ?? "";
-		renameError = null;
-		editing = true;
-	}
-
-	function cancelEditing() {
-		editing = false;
-		editValue = "";
-		renameError = null;
-	}
-
-	async function submitRename() {
-		if (!onRename || renameBusy) return;
-		const trimmed = editValue.trim();
-		// Empty input clears the rename (null → fall back to original
-		// game_name / nation+turns derivation).
-		const value: string | null = trimmed === "" ? null : trimmed;
-		renameError = null;
-		renameBusy = true;
-		try {
-			await onRename(value);
-			editing = false;
-			editValue = "";
-		} catch (err) {
-			renameError =
-				err instanceof Error && err.message ? err.message : "Failed to rename";
-		} finally {
-			renameBusy = false;
-		}
-	}
-
-	async function resetRename() {
-		if (!onRename || renameBusy) return;
-		renameError = null;
-		renameBusy = true;
-		try {
-			await onRename(null);
-			editing = false;
-			editValue = "";
-		} catch (err) {
-			renameError =
-				err instanceof Error && err.message ? err.message : "Failed to reset";
-		} finally {
-			renameBusy = false;
-		}
-	}
-
 	const victoryConditions = $derived(
 		gameDetails.victory_conditions
 			?.split("+")
@@ -268,87 +204,16 @@
 
 <!-- Header -->
 <div class="mb-4 flex items-baseline justify-between gap-4">
-	{#if editing && onRename}
-		<!-- Inline edit mode: input + Save / Cancel / Reset buttons. Empty
-		     input on Save clears the rename (same semantics as the sidebar
-		     Rename… affordance). -->
-		<div class="flex min-w-0 flex-1 flex-col gap-1">
-			<div class="flex items-center gap-2">
-				<!-- svelte-ignore a11y_autofocus -->
-				<input
-					type="text"
-					bind:value={editValue}
-					maxlength={120}
-					placeholder="Save title"
-					autofocus
-					disabled={renameBusy}
-					class="min-w-0 flex-1 rounded border border-[#4a433b] bg-[#35302b] px-2 py-1 text-2xl font-bold text-gray-200 focus:border-[#7a6f60] focus:outline-none"
-					onkeydown={(e) => {
-						if (e.key === "Enter") submitRename();
-						if (e.key === "Escape") cancelEditing();
-					}}
-				/>
-				<button
-					type="button"
-					class="cursor-pointer rounded bg-[#ab9978] px-3 py-1 text-sm font-bold text-black transition-colors hover:bg-[#9a8a6c] disabled:opacity-50"
-					onclick={submitRename}
-					disabled={renameBusy}
-				>
-					Save
-				</button>
-				<button
-					type="button"
-					class="cursor-pointer rounded bg-[#35302b] px-3 py-1 text-sm text-tan transition-colors hover:bg-[#453e37] disabled:opacity-50"
-					onclick={cancelEditing}
-					disabled={renameBusy}
-				>
-					Cancel
-				</button>
-				{#if displayName != null && displayName.trim() !== ""}
-					<button
-						type="button"
-						class="cursor-pointer rounded border border-[#4a433b] px-3 py-1 text-sm text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50"
-						onclick={resetRename}
-						disabled={renameBusy}
-						title="Clear the rename and fall back to the save's original title"
-					>
-						Reset
-					</button>
-				{/if}
-			</div>
-			{#if renameError}
-				<p class="text-xs text-orange">{renameError}</p>
-			{/if}
-		</div>
+	{#if titleSlot}
+		<!-- Cloud routes pass a breadcrumb trail; its final segment is the
+		     game title. Replaces the default heading below. -->
+		{@render titleSlot()}
 	{:else}
+		<!-- Legacy (frozen web/ viewer): plain title heading, no rename. -->
 		<h1
 			class="flex min-w-0 items-baseline gap-2 text-3xl font-bold text-gray-200"
 		>
 			<span class="truncate">{gameTitle}</span>
-			{#if isOwner && onRename}
-				<!-- Pencil affordance: opens the inline editor. Only rendered
-				     for the signed-in owner; anonymous and non-owner viewers
-				     see the static title. -->
-				<button
-					type="button"
-					class="shrink-0 cursor-pointer rounded p-1 text-base text-tan opacity-60 transition hover:bg-[#35302b] hover:opacity-100"
-					onclick={startEditing}
-					title="Rename this save"
-					aria-label="Rename this save"
-				>
-					<!-- Inline SVG pencil; no external sprite dep. -->
-					<svg
-						xmlns="http://www.w3.org/2000/svg"
-						viewBox="0 0 20 20"
-						fill="currentColor"
-						class="h-4 w-4"
-					>
-						<path
-							d="M13.586 3.586a2 2 0 1 1 2.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793 4 13.172V16h2.828l7.379-7.379-2.828-2.828z"
-						/>
-					</svg>
-				</button>
-			{/if}
 		</h1>
 	{/if}
 	<div class="flex items-center gap-4">

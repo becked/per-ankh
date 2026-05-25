@@ -2178,20 +2178,23 @@ export async function handleGameDetail(
 	// Parse, transform, re-serialize. Owner gets an `is_public` flag
 	// injected for the visibility toggle's initial state; anonymous viewers
 	// get the blob with online_id stripped (PII protection — see
-	// stripOnlineIds). Everyone gets the uploader's identity triple
-	// (user_nation, user_won, user_display_name) so the detail view can
-	// surface "becked won as Tamil" even when the save's winner_name is
+	// stripOnlineIds). Everyone gets the uploader's identity
+	// (user_id, user_nation, user_won, user_display_name) so the detail view
+	// can surface "becked won as Tamil" even when the save's winner_name is
 	// the empty string (Old World writes "" for solo games where the
-	// player didn't customize their leader name). display_name is the same
-	// public identity already returned by /v1/games/public-recent — no
-	// new PII. FullGameData is a looseObject schema so the extra top-level
-	// fields are non-breaking.
+	// player didn't customize their leader name), and link the breadcrumb
+	// trail back to the uploader's profile. display_name is the same public
+	// identity already returned by /v1/games/public-recent; user_id is the
+	// opaque profile-URL nanoid (the /users/:id path segment), not a real
+	// name — no meaningful new PII. FullGameData is a looseObject schema so
+	// the extra top-level fields are non-breaking.
 	const parsed = JSON.parse(new TextDecoder().decode(decompressed)) as unknown;
 	const baseBlob = isOwner
 		? { ...(parsed as Record<string, unknown>), is_public: isPublic }
 		: (stripOnlineIds(parsed) as Record<string, unknown>);
 	const transformed = {
 		...baseBlob,
+		user_id: row.user_id,
 		user_nation: row.user_nation,
 		user_won: coerceD1Bool(row.user_won),
 		user_display_name: row.user_display_name,

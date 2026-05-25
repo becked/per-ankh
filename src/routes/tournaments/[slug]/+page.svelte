@@ -3,6 +3,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import {
 		ApiError,
 		cloudApi,
@@ -27,6 +28,13 @@
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
+
+	// Canonical trail: Home › Tournaments › this tournament.
+	const crumbs: Crumb[] = $derived([
+		{ label: "Home", href: resolve("/") },
+		{ label: "Tournaments", href: resolve("/tournaments") },
+		{ label: data.tournament.name },
+	]);
 
 	const isAdmin = $derived(data.tournament.is_viewer_admin === true);
 	const user = $derived(page.data.user as UserMe | null);
@@ -432,7 +440,7 @@
 			<div>
 				<header class="mb-6">
 					<div class="flex items-baseline justify-between gap-3">
-						<h1 class="text-2xl font-bold text-tan">{data.tournament.name}</h1>
+						<Breadcrumb {crumbs} class="min-w-0" />
 						<span
 							class="whitespace-nowrap rounded border border-orange px-2 py-0.5 text-xs uppercase text-orange"
 						>

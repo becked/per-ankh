@@ -7,8 +7,10 @@
 
 	import { Tabs } from "bits-ui";
 	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import GamesTable from "$lib/users/GamesTable.svelte";
 	import OverviewTab from "$lib/users/OverviewTab.svelte";
@@ -22,6 +24,13 @@
 	const bundle = $derived(data.bundle);
 	const profile = $derived(data.profile);
 	const nationOptions = $derived(data.bundle.nations.map((n) => n.nation));
+
+	// Canonical trail: Home › this user. The avatar stays alongside as
+	// profile identity; the breadcrumb leaf is the display name.
+	const crumbs: Crumb[] = $derived([
+		{ label: "Home", href: resolve("/") },
+		{ label: profile.display_name },
+	]);
 
 	// Profile-card stats — always over ALL the user's saves (from the
 	// profile endpoint), independent of the page's scope selector.
@@ -84,9 +93,7 @@
 							height="40"
 							class="h-10 w-10 rounded-full border-2 border-black"
 						/>
-						<h1 class="text-2xl font-bold text-gray-200">
-							{profile.display_name}
-						</h1>
+						<Breadcrumb {crumbs} class="min-w-0" />
 					</div>
 
 					<div class="flex flex-wrap gap-2">
