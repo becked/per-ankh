@@ -19,13 +19,52 @@ export async function gzipJson(obj: unknown): Promise<Blob> {
 // or ambiguous multiple matches) defaults to observer (null) so we never
 // auto-claim incorrectly.
 export function defaultSelection(
-	humans: PlayerRosterEntry[],
+	humans: readonly Pick<PlayerRosterEntry, "player_index" | "online_id">[],
 	knownOnlineIds: Set<string>,
 ): number | null {
 	const matches = humans.filter(
 		(h) => h.online_id && knownOnlineIds.has(h.online_id),
 	);
 	return matches.length === 1 ? matches[0].player_index : null;
+}
+
+// Enriched human-player option for the upload picker. Superset of the roster
+// entry — player_index / online_id still drive the upload + dedup logic — plus
+// the display stats the picker card shows (city count, winner flag).
+export interface PlayerChoice {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+	online_id: string | null;
+	city_count: number;
+	is_winner: boolean;
+}
+
+// Build the human-player choices for a parsed save: roster fields plus the
+// per-player city count and winner flag the picker renders. City counts come
+// from city_statistics (owner_nation match, the same derivation the game-detail
+// Overview uses); the winner is resolved from match_metadata.winner against the
+// roster's player_index (both are XML player-id space — see PlayerRosterEntry).
+export function playerChoices(data: FullGameData): PlayerChoice[] {
+	const cityCountByNation = new Map<string, number>();
+	for (const c of data.city_statistics.cities) {
+		if (c.owner_nation == null) continue;
+		cityCountByNation.set(
+			c.owner_nation,
+			(cityCountByNation.get(c.owner_nation) ?? 0) + 1,
+		);
+	}
+	const winnerIndex = data.match_metadata.winner?.winner_player_xml_id ?? null;
+	return data.player_roster
+		.filter((p) => p.is_human)
+		.map((p) => ({
+			player_index: p.player_index,
+			player_name: p.player_name,
+			nation: p.nation,
+			online_id: p.online_id,
+			city_count: p.nation ? (cityCountByNation.get(p.nation) ?? 0) : 0,
+			is_winner: winnerIndex !== null && p.player_index === winnerIndex,
+		}));
 }
 
 export type ParseProgressCb = (phase: string, percent: number) => void;

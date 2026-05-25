@@ -23,12 +23,13 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import ParserWorker from "$lib/parser/worker?worker";
-	import type { PlayerRosterEntry } from "$lib/parser/types";
 	import {
 		gzipJson,
 		defaultSelection,
 		parseSaveFile,
+		playerChoices,
 		ParseFailure,
+		type PlayerChoice,
 	} from "$lib/parser/upload-helpers";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -46,7 +47,14 @@
 		| { kind: "parsing"; phase: string; percent: number }
 		| {
 				kind: "ready";
-				humans: PlayerRosterEntry[];
+				humans: PlayerChoice[];
+				// Total game turns (match_metadata.total_turns), shown per option.
+				totalTurns: number;
+				// The heuristic's pre-selected player_index (matched against the
+				// user's past-upload online_ids), or null when there was no
+				// confident guess. Drives the "Suggested" badge independently of
+				// `selected`.
+				suggested: number | null;
 				// `selected` is the participant's player_index (for normal
 				// uploads and tournament-participant uploads), or null for the
 				// non-tournament Observer mode. In tournament-observer mode
@@ -71,7 +79,9 @@
 				// this to null since rawZip/gzippedData were never produced —
 				// the user must Remove + re-pick to retry those.
 				retry: {
-					humans: PlayerRosterEntry[];
+					humans: PlayerChoice[];
+					totalTurns: number;
+					suggested: number | null;
 					selected: number | null;
 					slotAPlayerIndex: number | null;
 					slotBPlayerIndex: number | null;
@@ -198,19 +208,20 @@
 
 				const gzippedData = await gzipJson(data);
 				const rawZipBlob = new Blob([rawZip], { type: "application/zip" });
-				const humans = data.player_roster.filter((p) => p.is_human);
+				const humans = playerChoices(data);
+				const suggested = defaultSelection(humans, knownOnlineIds);
 
 				const r = rows.find((r) => r.id === id);
 				if (!r) continue;
 				r.status = {
 					kind: "ready",
 					humans,
+					totalTurns: data.match_metadata.total_turns,
+					suggested,
 					// In observer mode the uploader doesn't claim a slot for
 					// themselves; slot mappings are entered explicitly via the
 					// per-slot pickers below.
-					selected: observerMode
-						? null
-						: defaultSelection(humans, knownOnlineIds),
+					selected: observerMode ? null : suggested,
 					slotAPlayerIndex: null,
 					slotBPlayerIndex: null,
 					rawZip: rawZipBlob,
@@ -380,6 +391,8 @@
 				message,
 				retry: {
 					humans: ready.humans,
+					totalTurns: ready.totalTurns,
+					suggested: ready.suggested,
 					selected: ready.selected,
 					slotAPlayerIndex: ready.slotAPlayerIndex,
 					slotBPlayerIndex: ready.slotBPlayerIndex,
@@ -427,6 +440,8 @@
 		row.status = {
 			kind: "ready",
 			humans: retry.humans,
+			totalTurns: retry.totalTurns,
+			suggested: retry.suggested,
 			selected: retry.selected,
 			slotAPlayerIndex: retry.slotAPlayerIndex,
 			slotBPlayerIndex: retry.slotBPlayerIndex,
@@ -446,75 +461,114 @@
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- doneRedirect is produced by the parent via resolve(); lint can't see through the prop
 		void goto(doneRedirect ?? fallback);
 	}
+
+	// Display name for a player option: the in-game leader name, falling back to
+	// the nation, then an em-dash (mirrors the picker's prior fallback chain).
+	function displayName(p: PlayerChoice): string {
+		return p.player_name || formatEnum(p.nation, "NATION_") || "—";
+	}
+
+	// "3 cities · 95 turns · Winner" — the per-option stats line.
+	function statsLine(p: PlayerChoice, totalTurns: number): string {
+		const parts = [
+			`${p.city_count} ${p.city_count === 1 ? "city" : "cities"}`,
+			`${totalTurns} turns`,
+		];
+		if (p.is_winner) parts.push("Winner");
+		return parts.join(" · ");
+	}
+
+	const readyCount = $derived(
+		rows.filter((r) => r.status.kind === "ready").length,
+	);
+
+	// Dark UI scheme (mirrors the game-detail tabs): tan text on dark surfaces,
+	// selected = a lighter-dark fill with a faint tan border — no bright accents.
+	const PRIMARY_BTN =
+		"rounded bg-[#35302b] px-4 py-2 text-sm font-bold text-tan transition-colors hover:bg-[#403a33] disabled:cursor-not-allowed disabled:opacity-50";
+	function optionCardClass(selected: boolean): string {
+		return `flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
+			selected
+				? "border-tan/40 bg-[#35302b]"
+				: "border-[#403a33] hover:border-[#5a5249]"
+		}`;
+	}
 </script>
 
-<div class="rounded-lg p-4" style="background-color: #2a2622;">
+<div class="rounded-lg border border-[#3a352f] bg-[#2a2622] p-3">
 	{#if rows.length === 0}
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
-			<label
-				class="inline-block cursor-pointer rounded bg-brown px-4 py-2 text-sm font-bold text-tan hover:bg-orange"
+		<label class="inline-flex cursor-pointer items-center gap-2 {PRIMARY_BTN}">
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-4 w-4"
+				fill="none"
+				viewBox="0 0 24 24"
+				stroke="currentColor"
+				stroke-width="2"
+				aria-hidden="true"
 			>
-				Choose files
-				<input
-					type="file"
-					accept=".zip"
-					multiple
-					onchange={onPick}
-					class="sr-only"
+				<path
+					stroke-linecap="round"
+					stroke-linejoin="round"
+					d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5L12 3m0 0l4.5 4.5M12 3v13.5"
 				/>
-			</label>
-			{#if pickError}
-				<p class="mt-3 text-sm text-orange">{pickError}</p>
-			{/if}
-		</div>
+			</svg>
+			Choose files
+			<input
+				type="file"
+				accept=".zip"
+				multiple
+				onchange={onPick}
+				class="sr-only"
+			/>
+		</label>
+		{#if pickError}
+			<p class="mt-3 text-sm text-[#d98a8a]">{pickError}</p>
+		{/if}
 	{:else}
-		<div class="mb-3 flex items-center justify-between">
-			<p class="text-sm" style="color: #DBDEE3;">
-				{rows.length}
-				{rows.length === 1 ? "save" : "saves"}
-				{#if phase === "picking" && !allParsed}
-					— parsing…
-				{:else if phase === "uploading"}
-					— uploading…
-				{:else if phase === "done"}
-					— {summary.uploaded} uploaded · {summary.duplicate} duplicate · {summary.failed}
-					failed
-				{/if}
-			</p>
-		</div>
+		<p class="mb-3 text-sm text-gray-400">
+			{rows.length}
+			{rows.length === 1 ? "save" : "saves"}
+			{#if phase === "picking" && !allParsed}
+				· parsing…
+			{:else if phase === "uploading"}
+				· uploading…
+			{:else if phase === "done"}
+				· {summary.uploaded} uploaded · {summary.duplicate} duplicate · {summary.failed}
+				failed
+			{/if}
+		</p>
 
 		<ul class="mb-4 max-h-[60vh] space-y-2 overflow-y-auto">
 			{#each rows as row (row.id)}
-				<li class="rounded-lg p-3" style="background-color: #35302B;">
-					<div class="mb-2 flex items-start justify-between gap-3">
-						<span class="truncate text-sm font-bold" style="color: #DBDEE3;">
+				<li class="rounded-lg border border-[#403a33] bg-blue-gray p-3">
+					<div class="flex items-start justify-between gap-3">
+						<span class="truncate text-sm font-bold text-white">
 							{row.fileName}
 						</span>
-						<span
-							class="shrink-0 text-xs uppercase tracking-wide text-gray-400"
-						>
+						<span class="shrink-0 text-xs font-bold uppercase tracking-wide">
 							{#if row.status.kind === "queued"}
-								Queued
+								<span class="text-gray-400">Queued</span>
 							{:else if row.status.kind === "parsing"}
-								Parsing
+								<span class="text-gray-400">Parsing</span>
 							{:else if row.status.kind === "ready"}
-								Ready
+								<span class="text-[#6fcf8e]">Ready</span>
 							{:else if row.status.kind === "uploading"}
-								Uploading
+								<span class="text-gray-400">Uploading</span>
 							{:else if row.status.kind === "uploaded"}
-								<span class="text-orange">
+								<span class="text-[#6fcf8e]">
 									{row.status.reimported ? "Updated" : "Uploaded"}
 								</span>
 							{:else if row.status.kind === "duplicate"}
-								Duplicate
+								<span class="text-gray-400">Duplicate</span>
 							{:else}
-								<span class="text-orange">Failed</span>
+								<span class="text-[#d98a8a]">Failed</span>
 							{/if}
 						</span>
 					</div>
 
 					{#if row.status.kind === "parsing"}
-						<p class="mb-1 text-xs text-gray-400">
+						<p class="mb-1 mt-2 text-xs text-gray-400">
 							{row.status.phase} — {row.status.percent}%
 						</p>
 						<progress value={row.status.percent} max={100} class="w-full"
@@ -523,12 +577,12 @@
 						{@const ready = row.status}
 						{#if observerMode}
 							{#if ready.humans.length !== 2}
-								<p class="mb-2 text-xs text-orange">
+								<p class="mb-2 mt-2 text-xs text-[#d98a8a]">
 									Tournament matches require exactly 2 humans in the save; got
 									{ready.humans.length}. Cannot upload.
 								</p>
 							{/if}
-							<p class="text-xs text-gray-400">
+							<p class="mt-3 text-xs text-gray-400">
 								{slotALabel ?? "Slot A"} played as:
 							</p>
 							<RadioGroup
@@ -538,23 +592,25 @@
 								onChange={(v) => selectSlotAPlayer(row, Number(v))}
 								disabled={phase !== "picking"}
 								ariaLabel="Slot A player"
-								class="mt-1 block space-y-1"
+								class="mt-2 block space-y-1.5"
 							>
 								{#each ready.humans as human (human.player_index)}
-									<label
-										class="flex cursor-pointer items-center gap-2 text-sm text-tan"
-									>
+									{@const isSel = ready.slotAPlayerIndex === human.player_index}
+									<label class={optionCardClass(isSel)}>
 										<RadioItem value={String(human.player_index)} />
-										<span class="font-bold">
-											{human.player_name ||
-												formatEnum(human.nation, "NATION_") ||
-												"—"}
-										</span>
-										{#if human.player_name}
-											<span class="text-xs text-gray-400">
-												{formatEnum(human.nation, "NATION_") ?? "—"}
-											</span>
-										{/if}
+										<div class="min-w-0 flex-1 text-xs">
+											<span class="font-bold text-white"
+												>{displayName(human)}</span
+											>
+											{#if human.player_name && human.nation}
+												<span class="text-gray-400">
+													— {formatEnum(human.nation, "NATION_")}</span
+												>
+											{/if}
+											<div class="text-xs text-gray-400">
+												{statsLine(human, ready.totalTurns)}
+											</div>
+										</div>
 									</label>
 								{/each}
 							</RadioGroup>
@@ -573,7 +629,17 @@
 								</p>
 							{/if}
 						{:else}
-							<p class="mb-2 text-xs font-bold text-gray-400">Choose player</p>
+							<h3 class="mt-4 text-xs font-bold text-white">
+								Which nation were you?
+							</h3>
+							<p class="mb-2 mt-0.5 text-xs text-gray-400">
+								{#if ready.suggested !== null}
+									Based on your past uploads. Change it if its wrong.
+								{:else}
+									Select the player you controlled, or choose observer.
+								{/if}
+							</p>
+
 							<RadioGroup
 								value={ready.selected === null
 									? OBSERVER_RADIO
@@ -582,45 +648,66 @@
 									selectFor(row, v === OBSERVER_RADIO ? null : Number(v))}
 								disabled={phase !== "picking"}
 								ariaLabel="Uploading player"
-								class="block space-y-1"
+								class="block space-y-1.5"
 							>
 								{#each ready.humans as human (human.player_index)}
-									<label
-										class="flex cursor-pointer items-center gap-2 text-sm text-tan"
-									>
+									{@const isSel = ready.selected === human.player_index}
+									{@const isSuggested = ready.suggested === human.player_index}
+									<label class={optionCardClass(isSel)}>
 										<RadioItem value={String(human.player_index)} />
-										<span class="font-bold">
-											{human.player_name ||
-												formatEnum(human.nation, "NATION_") ||
-												"—"}
-										</span>
-										{#if human.player_name}
-											<span class="text-xs text-gray-400">
-												{formatEnum(human.nation, "NATION_") ?? "—"}
+										<div class="min-w-0 flex-1 text-xs">
+											<span class="font-bold text-white"
+												>{displayName(human)}</span
+											>
+											{#if human.player_name && human.nation}
+												<span class="text-gray-400">
+													— {formatEnum(human.nation, "NATION_")}</span
+												>
+											{/if}
+											<div class="text-xs text-gray-400">
+												{statsLine(human, ready.totalTurns)}
+											</div>
+										</div>
+										{#if isSuggested}
+											<span
+												class="shrink-0 rounded bg-[#403a33] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-tan"
+											>
+												Suggested
 											</span>
 										{/if}
 									</label>
 								{/each}
+
+								{@const obsSel = ready.selected === null}
 								<label
-									class="flex cursor-pointer items-center gap-2 text-sm text-tan"
+									class="flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors {obsSel
+										? 'border-tan/40 bg-[#35302b]'
+										: 'border-transparent hover:border-[#403a33]'}"
 								>
-									<RadioItem value={OBSERVER_RADIO} />
-									<span class="font-bold">Observer</span>
+									<RadioItem value={OBSERVER_RADIO} class="mt-0.5" />
+									<div class="text-sm">
+										<div class="text-xs font-bold text-white">
+											I didn't play in this game
+										</div>
+										<div class="text-xs text-gray-400">
+											Observer - I have the save but wasn't a player
+										</div>
+									</div>
 								</label>
 							</RadioGroup>
 						{/if}
 					{:else if row.status.kind === "uploaded"}
 						<a
-							class="text-xs text-orange underline"
+							class="mt-2 inline-block text-xs text-tan underline transition-colors hover:text-white"
 							href={resolve("/games/[id]", { id: row.status.gameId })}
 						>
 							Open game →
 						</a>
 					{:else if row.status.kind === "duplicate"}
-						<p class="text-xs" style="color: #DBDEE3;">
+						<p class="mt-2 text-xs text-gray-300">
 							Already uploaded.
 							<a
-								class="text-orange underline"
+								class="text-tan underline transition-colors hover:text-white"
 								href={resolve("/games/[id]", {
 									id: row.status.existingGameId,
 								})}
@@ -629,12 +716,14 @@
 							</a>
 						</p>
 					{:else if row.status.kind === "error"}
-						<p class="break-words text-xs text-orange">{row.status.message}</p>
+						<p class="mt-2 break-words text-xs text-[#d98a8a]">
+							{row.status.message}
+						</p>
 						{#if row.status.retry !== null && phase !== "uploading"}
 							<button
 								type="button"
 								onclick={() => retryRow(row)}
-								class="bg-brown/40 mt-2 rounded px-2 py-0.5 text-xs text-tan hover:bg-brown"
+								class="mt-2 rounded bg-[#35302b] px-2 py-0.5 text-xs font-bold text-tan transition-colors hover:bg-[#403a33]"
 							>
 								Retry upload
 							</button>
@@ -642,13 +731,13 @@
 					{/if}
 
 					{#if phase === "picking" && (row.status.kind === "ready" || row.status.kind === "error")}
-						<div class="mt-2">
+						<div class="mt-3 text-right">
 							<button
 								type="button"
 								onclick={() => removeRow(row)}
-								class="text-xs text-brown underline hover:text-orange"
+								class="text-xs text-[#c98b8b] underline transition-colors hover:text-[#e0a5a5]"
 							>
-								Remove
+								Remove this save
 							</button>
 						</div>
 					{/if}
@@ -657,11 +746,11 @@
 		</ul>
 
 		{#if phase === "picking"}
-			<div class="flex justify-between">
+			<div class="flex items-center justify-between">
 				<button
 					type="button"
 					onclick={cancelAll}
-					class="bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown"
+					class="px-2 py-1 text-sm text-tan transition-colors hover:text-white"
 				>
 					Cancel
 				</button>
@@ -669,15 +758,14 @@
 					type="button"
 					onclick={uploadAll}
 					disabled={!allParsed || !hasReady || !allReadyCanUpload}
-					class="hover:bg-orange/80 rounded bg-orange px-4 py-1 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+					class={PRIMARY_BTN}
 				>
-					Upload {hasReady
-						? rows.filter((r) => r.status.kind === "ready").length
-						: ""}
+					Upload {readyCount}
+					{readyCount === 1 ? "save" : "saves"}
 				</button>
 			</div>
 		{:else if phase === "uploading"}
-			<p class="text-sm" style="color: #DBDEE3;">
+			<p class="text-sm text-gray-300">
 				Uploading… please don't close this tab.
 			</p>
 		{:else if phase === "done"}
@@ -686,7 +774,7 @@
 					type="button"
 					onclick={navigateDone}
 					disabled={!allTerminal}
-					class="hover:bg-orange/80 rounded bg-orange px-4 py-1 text-sm font-bold text-white disabled:cursor-not-allowed disabled:opacity-50"
+					class={PRIMARY_BTN}
 				>
 					Done
 				</button>
