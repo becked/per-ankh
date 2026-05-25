@@ -18,9 +18,7 @@ Generated **2026-05-25T00:52:25.703Z** against `http://localhost:1420` · game `
 
 Breakpoints: Desktop (1440×900), Tablet (768×1024), Mobile (390×844).
 
-
 ### Anonymous (signed out)
-
 
 **Home** — `/`
 
@@ -46,7 +44,6 @@ Breakpoints: Desktop (1440×900), Tablet (768×1024), Mobile (390×844).
 - Stats: [Desktop](shots/anon__user-profile__stats__desktop.jpg) · [Tablet](shots/anon__user-profile__stats__tablet.jpg) · [Mobile](shots/anon__user-profile__stats__mobile.jpg)
 
 ### Signed in (.becked)
-
 
 **Home** — `/`
 
