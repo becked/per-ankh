@@ -469,12 +469,14 @@
 									Signed up
 								</button>
 							{/if}
-							<span
-								class="whitespace-nowrap rounded bg-[#2a2622] px-2 py-0.5 text-xs uppercase tracking-wide text-tan opacity-80"
-							>
-								{data.tournament.status}
-							</span>
 						</div>
+					</div>
+					<div class="mt-2">
+						<span
+							class="whitespace-nowrap rounded bg-[#2a2622] px-2 py-0.5 text-xs uppercase tracking-wide text-tan opacity-80"
+						>
+							Status: {data.tournament.status}
+						</span>
 					</div>
 					{#if data.tournament.description}
 						<p class="mt-2 text-sm text-tan opacity-80">
