@@ -14,6 +14,7 @@
 		mapOptionChoiceLabel,
 		mapOptionLabel,
 		optionsForScript,
+		poolEntryById,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
 	import { toast } from "$lib/ui/toast";
@@ -41,7 +42,7 @@
 	// in {#key match.match_id} so navigating to a different match remounts
 	// and resets these naturally.
 	// svelte-ignore state_referenced_locally
-	let mapScriptInput = $state(match.map_script ?? "");
+	let mapPoolIdInput = $state(match.map_pool_id ?? "");
 	// svelte-ignore state_referenced_locally
 	let retroWinnerSlotId = $state<string | null>(match.winner_slot_id);
 	// svelte-ignore state_referenced_locally
@@ -65,19 +66,22 @@
 		match.map_script ? mapScriptLabel(match.map_script) : null,
 	);
 
-	// Read-only list of (option, value) pairs for the match's script, used
-	// in the body to communicate hosting config to players. Empty when no
-	// map_script is set or the script has no applicable options.
+	// The map_pool instance this match was assigned, resolved from its id.
+	const matchEntry = $derived(
+		poolEntryById(tournament.map_pool, match.map_pool_id),
+	);
+
+	// Read-only list of (option, value) pairs for the match's assigned instance,
+	// used in the body to communicate hosting config to players. Empty when the
+	// match has no instance (bye) or the script has no applicable options.
 	const matchMapOptions = $derived.by(() => {
-		const script = match.map_script;
-		if (!script) return [];
-		const stored = tournament.map_script_options;
-		return optionsForScript(script).map((option) => ({
+		if (!matchEntry) return [];
+		return optionsForScript(matchEntry.script).map((option) => ({
 			option,
 			label: mapOptionLabel(option),
 			value: mapOptionChoiceLabel(
 				option,
-				effectiveOptionValue(stored, script, option),
+				effectiveOptionValue(matchEntry.options, option),
 			),
 		}));
 	});
@@ -98,26 +102,33 @@
 		match.status === "pending" ? "Set result" : "Edit result",
 	);
 
-	// Map-script dropdown options. If the match currently references a script
-	// that's no longer in allowed_map_scripts (settings were narrowed after
-	// pairing), keep it as the first option so admin can see what's set and
-	// retain it or change it.
-	const mapScriptOptions = $derived.by(() => {
-		const allowed = tournament.allowed_map_scripts;
-		const current = match.map_script;
-		if (!current || allowed.includes(current)) return allowed;
-		return [current, ...allowed];
-	});
+	// Short label that disambiguates instances of the same script by their
+	// aspect + size (e.g. "Continent · Wide Duel").
+	function instanceLabel(e: {
+		script: string;
+		options: Record<string, string | boolean>;
+	}): string {
+		const aspect = mapOptionChoiceLabel(
+			"MAPASPECTRATIO",
+			effectiveOptionValue(e.options, "MAPASPECTRATIO"),
+		);
+		const size = mapOptionChoiceLabel(
+			"MAPSIZE",
+			effectiveOptionValue(e.options, "MAPSIZE"),
+		);
+		return `${mapScriptLabel(e.script)} · ${aspect} ${size}`;
+	}
 
-	// --- Styled-Select option lists (retro edit mode) -----------------
-	const mapSelectOptions = $derived<SelectOption[]>(
-		mapScriptOptions.map((script) => ({
-			value: script,
-			label: tournament.allowed_map_scripts.includes(script)
-				? mapScriptLabel(script)
-				: `${mapScriptLabel(script)} (no longer allowed)`,
+	// Map-instance dropdown: one option per map_pool entry. If the match's
+	// current instance is somehow absent from the pool, keep it as the first
+	// option so admin can see what's set.
+	const mapSelectOptions = $derived<SelectOption[]>([
+		...(matchEntry ? [] : []),
+		...tournament.map_pool.map((e) => ({
+			value: e.id,
+			label: instanceLabel(e),
 		})),
-	);
+	]);
 	const winnerOptions = $derived<SelectOption[]>([
 		{ value: match.slot_a_id, label: slotALabel },
 		...(match.slot_b_id ? [{ value: match.slot_b_id, label: slotBLabel }] : []),
@@ -151,7 +162,7 @@
 	}
 
 	function openMapEdit() {
-		mapScriptInput = match.map_script ?? "";
+		mapPoolIdInput = match.map_pool_id ?? "";
 		editMode = "map";
 	}
 
@@ -159,7 +170,7 @@
 		const ok = await withBusy(
 			() =>
 				cloudApi.patchMatchMap(tournament.tournament_id, match.match_id, {
-					map_script: mapScriptInput || undefined,
+					map_pool_id: mapPoolIdInput || undefined,
 				}),
 			"Map updated",
 		);
@@ -346,8 +357,8 @@
 							<label class="text-xs text-tan">
 								Map
 								<Select
-									value={mapScriptInput}
-									onChange={(v) => (mapScriptInput = v ?? "")}
+									value={mapPoolIdInput}
+									onChange={(v) => (mapPoolIdInput = v ?? "")}
 									options={mapSelectOptions}
 									placeholder="(no map set)"
 									ariaLabel="Map"

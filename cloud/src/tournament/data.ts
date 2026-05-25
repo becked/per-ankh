@@ -7,6 +7,7 @@
 
 import type {
 	Division,
+	MapPoolEntry,
 	MatchRef,
 	MatchStatus,
 	Phase,
@@ -25,8 +26,11 @@ export interface TournamentRow {
 	swiss_wins_to_advance: number;
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
-	allowed_map_scripts: string; // JSON array
-	map_script_options: string; // JSON object: { [MAPCLASS]: { [OPTION]: string | boolean } }
+	// JSON array of map_pool instances: [{ id, script, options }]. The same
+	// script may appear multiple times with different options. Parsed by
+	// parseMapPool. (Replaced allowed_map_scripts + map_script_options in
+	// migration 0019.)
+	map_pool: string;
 	// 0/1 (SQLite has no real bool). When 1 AND status='setup', the tournament
 	// is visible to all beta users and POST /signup is enabled. Auto-flipped
 	// to 0 on the setup → swiss transition in handleStartTournament.
@@ -66,6 +70,9 @@ export interface MatchRow {
 	round_id: string;
 	slot_a_id: string;
 	slot_b_id: string | null;
+	// Assigned map_pool instance id (migration 0019). map_script is the
+	// denormalized played MAPCLASS, kept for display. Null for byes.
+	map_pool_id: string | null;
 	map_script: string | null;
 	pick_order_winner_slot_id: string | null;
 	status: MatchStatus;
@@ -235,6 +242,7 @@ export function matchRowToRef(
 		division: round.division,
 		slot_a_id: row.slot_a_id,
 		slot_b_id: row.slot_b_id,
+		map_pool_id: row.map_pool_id,
 		map_script: row.map_script,
 		status: row.status,
 		winner_slot_id: row.winner_slot_id,
@@ -256,54 +264,42 @@ export class MapConfigError extends Error {
 	}
 }
 
-// Parse the JSON-encoded allowed_map_scripts column. Throws MapConfigError
-// on shape corruption (bad JSON, not a string array). An empty array is a
-// legitimate state during status='setup' (create accepts the field as
-// optional so the public modal can omit it), so empty is returned rather
-// than thrown. Match-generation call sites are gated by handleStartTournament,
-// which rejects empty before any transition out of 'setup'.
-export function parseAllowedMaps(t: TournamentRow): string[] {
+// Parse the JSON-encoded map_pool column into instances. Throws MapConfigError
+// on hard corruption (bad JSON, not an array). Individual malformed entries
+// (missing id/script, bad option values) are skipped leniently — every option
+// has an XML fallback at render time, so a partially-bad blob degrades rather
+// than bricking the tournament. An empty array is a legitimate state during
+// status='setup' (create accepts the field as optional so the public modal can
+// omit it). Match-generation call sites are gated by handleStartTournament,
+// which rejects an empty pool before any transition out of 'setup'.
+export function parseMapPool(t: TournamentRow): MapPoolEntry[] {
 	let parsed: unknown;
 	try {
-		parsed = JSON.parse(t.allowed_map_scripts);
+		parsed = JSON.parse(t.map_pool);
 	} catch {
 		throw new MapConfigError(
-			`allowed_map_scripts JSON is corrupted for tournament ${t.tournament_id}`,
+			`map_pool JSON is corrupted for tournament ${t.tournament_id}`,
 		);
 	}
-	if (!Array.isArray(parsed) || !parsed.every((s) => typeof s === "string")) {
+	if (!Array.isArray(parsed)) {
 		throw new MapConfigError(
-			`allowed_map_scripts must be a JSON array of strings for tournament ${t.tournament_id}`,
+			`map_pool must be a JSON array for tournament ${t.tournament_id}`,
 		);
 	}
-	return parsed;
-}
-
-// Parse the JSON-encoded map_script_options column. Unlike parseAllowedMaps,
-// this returns {} for any corruption (bad JSON, wrong shape) rather than
-// throwing — every value is optional with an XML fallback, so a corrupted
-// blob falls through to in-game defaults instead of bricking the tournament.
-// Schema-level validation at write time keeps the corruption window narrow.
-export function parseMapScriptOptions(
-	t: TournamentRow,
-): Record<string, Record<string, string | boolean>> {
-	let parsed: unknown;
-	try {
-		parsed = JSON.parse(t.map_script_options);
-	} catch {
-		return {};
-	}
-	if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-		return {};
-	}
-	const out: Record<string, Record<string, string | boolean>> = {};
-	for (const [script, optsObj] of Object.entries(parsed)) {
-		if (typeof optsObj !== "object" || optsObj === null) continue;
-		const cleaned: Record<string, string | boolean> = {};
-		for (const [k, v] of Object.entries(optsObj as Record<string, unknown>)) {
-			if (typeof v === "string" || typeof v === "boolean") cleaned[k] = v;
+	const out: MapPoolEntry[] = [];
+	for (const raw of parsed) {
+		if (typeof raw !== "object" || raw === null) continue;
+		const e = raw as Record<string, unknown>;
+		if (typeof e.id !== "string" || typeof e.script !== "string") continue;
+		const options: Record<string, string | boolean> = {};
+		if (typeof e.options === "object" && e.options !== null) {
+			for (const [k, v] of Object.entries(
+				e.options as Record<string, unknown>,
+			)) {
+				if (typeof v === "string" || typeof v === "boolean") options[k] = v;
+			}
 		}
-		out[script] = cleaned;
+		out.push({ id: e.id, script: e.script, options });
 	}
 	return out;
 }

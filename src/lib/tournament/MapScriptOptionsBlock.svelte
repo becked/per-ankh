@@ -1,11 +1,4 @@
 <script lang="ts">
-	import { invalidateAll } from "$app/navigation";
-	import {
-		ApiError,
-		cloudApi,
-		type MapScriptOptions,
-		type TournamentDetail,
-	} from "$lib/api-cloud";
 	import {
 		effectiveOptionValue,
 		mapOptionLabel,
@@ -14,62 +7,28 @@
 	} from "$lib/tournament/map-script-options";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 	import Select from "$lib/ui/Select.svelte";
-	import { toast } from "$lib/ui/toast";
 
 	interface Props {
-		tournament: TournamentDetail;
+		// A single map_pool instance's script + options. Controlled: changes are
+		// reported via onChange with the full next options object; the parent
+		// (TournamentMapsPanel) folds them into the pool and persists.
 		script: string;
+		options: Record<string, string | boolean>;
+		disabled?: boolean;
+		// eslint-disable-next-line no-unused-vars -- param name is documentary
+		onChange: (next: Record<string, string | boolean>) => void;
 	}
 
-	let { tournament, script }: Props = $props();
-
-	// Local working copy. svelte-ignore on the initial read mirrors the
-	// pattern in TournamentMapsPanel.svelte:21 — we want the initial value
-	// from the prop but then keep our own optimistic state.
-	//
-	// $state.snapshot (not structuredClone) is required when cloning a value
-	// that is, or will become, a $state proxy: structuredClone trips on the
-	// proxy's internals with a DataCloneError ("Window could not be cloned").
-	// svelte-ignore state_referenced_locally
-	let working = $state<MapScriptOptions>(
-		$state.snapshot(tournament.map_script_options),
-	);
-
-	let saving = $state(false);
+	let { script, options, disabled = false, onChange }: Props = $props();
 
 	const scriptOptions = $derived(optionsForScript(script));
 
-	async function commit(next: MapScriptOptions) {
-		saving = true;
-		try {
-			await cloudApi.patchTournament(tournament.tournament_id, {
-				map_script_options: next,
-			});
-			await invalidateAll();
-			toast.info("Saved");
-		} catch (err) {
-			let message = "Save failed";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-			// Roll back to server state.
-			working = $state.snapshot(tournament.map_script_options);
-		} finally {
-			saving = false;
-		}
-	}
-
 	function setOption(option: string, value: string | boolean) {
-		const next: MapScriptOptions = $state.snapshot(working);
-		if (!next[script]) next[script] = {};
-		next[script][option] = value;
-		working = next;
-		commit(next);
+		onChange({ ...options, [option]: value });
 	}
 
 	function currentValue(option: string): string | boolean {
-		return effectiveOptionValue(working, script, option);
+		return effectiveOptionValue(options, option);
 	}
 </script>
 
@@ -85,7 +44,7 @@
 					{#if def.kind === "toggle"}
 						<Checkbox
 							checked={currentValue(option) === true}
-							disabled={saving}
+							{disabled}
 							onCheckedChange={(c) => setOption(option, c)}
 						/>
 					{:else}
@@ -93,7 +52,7 @@
 							value={String(currentValue(option) ?? "")}
 							onChange={(v) => v != null && setOption(option, v)}
 							options={def.choices}
-							disabled={saving}
+							{disabled}
 							ariaLabel={mapOptionLabel(option)}
 							class="min-w-[10rem]"
 						/>

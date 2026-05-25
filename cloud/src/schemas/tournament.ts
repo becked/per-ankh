@@ -20,22 +20,15 @@ const DiscordUsernameSchema = v.pipe(
 	v.toLowerCase(),
 );
 
-// Loose schema: shape-only check. Used for PatchMatchMapSchema, where the
-// value is also intersected against the tournament's allowed_map_scripts
-// at the handler layer — that effectively enforces canonical-ness for any
-// new write, since allowed_map_scripts itself flows through StrictMapScriptSchema.
-const MapScriptSchema = v.pipe(
-	v.string(),
-	v.trim(),
-	v.minLength(1),
-	v.maxLength(128),
-);
+// Opaque instance id for a map_pool entry. The migration seeds 16-hex ids;
+// the handler assigns nanoid-shaped ids to new entries. Both fit this regex.
+const mapPoolIdRegex = /^[A-Za-z0-9_-]{1,32}$/;
 
 // Strict schema: only accepts canonical MAPCLASS_MapScript<Name> identifiers
-// known to the SvelteKit lookup table. Used for create + patch of
-// tournaments.allowed_map_scripts so the array can never contain a value
-// that mapScriptLabel will fall back to formatMapClass for (which produced
-// ugly "A R I D _ P L A T E A U" output before this gate existed).
+// known to the SvelteKit lookup table. Used for each map_pool entry's script
+// so the pool can never contain a value that mapScriptLabel will fall back to
+// formatMapClass for (which produced ugly "A R I D _ P L A T E A U" output
+// before this gate existed).
 const StrictMapScriptSchema = v.pipe(
 	v.string(),
 	v.trim(),
@@ -45,35 +38,33 @@ const StrictMapScriptSchema = v.pipe(
 	),
 );
 
-// Constraint shared by Create + Patch (and reused by the admin CLI's
-// equivalent local validation). 1–64 entries, each canonical.
-const AllowedMapScriptsSchema = v.pipe(
-	v.array(StrictMapScriptSchema),
-	v.minLength(1, "allowed_map_scripts must be non-empty"),
-	v.maxLength(64),
-);
-
-// Create-only variant: the public modal asks for name + description only,
-// so the array is optional and may be empty at create time. The
-// setup → swiss FSM transition (handleStartTournament) enforces non-empty
-// before any match generation can happen.
-const CreateAllowedMapScriptsSchema = v.pipe(
-	v.array(StrictMapScriptSchema),
-	v.maxLength(64),
-);
-
-// Shape-only schema for the map_script_options column. Keys are MAPCLASS
-// strings; values are objects keyed by MAP_OPTIONS_* option zType, with
-// either a string (select choice) or boolean (toggle) value.
-//
-// Semantic validation (script ∈ allowed_map_scripts, option ∈ script's
-// applicable set, value ∈ option's choices) is done in the handler
-// (validateMapScriptOptions in admin.ts) since v.record can't express
-// "value type depends on key" cleanly. The handler runs before any
-// SQL bind.
+// Shape-only schema for a single entry's options. Keys are MAP_OPTIONS_* /
+// synthetic option zTypes; values are a string (select choice) or boolean
+// (toggle). Semantic validation (option ∈ script's applicable set, value ∈
+// option's choices) happens in the handler (validateInstanceOptions in
+// admin.ts) since v.record can't express "value type depends on key" cleanly.
 const MapScriptOptionValueSchema = v.union([v.string(), v.boolean()]);
 const PerScriptOptionsSchema = v.record(v.string(), MapScriptOptionValueSchema);
-const MapScriptOptionsSchema = v.record(v.string(), PerScriptOptionsSchema);
+
+// A map_pool entry: an instance of a script with its own options. The same
+// script may appear in multiple entries (e.g. Continent @ Duel and
+// Continent @ Tiny). `id` is optional on input — the handler assigns one to
+// any entry that arrives without it (new entries from the maps panel).
+const MapPoolEntrySchema = v.object({
+	id: v.optional(v.pipe(v.string(), v.regex(mapPoolIdRegex))),
+	script: StrictMapScriptSchema,
+	options: v.optional(PerScriptOptionsSchema),
+});
+
+// Constraint shared by Create + Patch: 0–64 entries. Empty is intentionally
+// allowed — the public create modal asks for name + description only, and the
+// maps panel must be able to clear the pool back to empty while still in
+// setup. Non-emptiness is enforced at the gate that actually needs it: the
+// setup → swiss FSM transition (handleStartTournament) rejects an empty pool
+// with MAP_CONFIG_EMPTY before any match generation. Patch edits to this field
+// are locked to status='setup' in the handler. (The admin CLI does its own
+// equivalent local validation; it doesn't use this schema.)
+const MapPoolSchema = v.pipe(v.array(MapPoolEntrySchema), v.maxLength(64));
 
 export const CreateTournamentSchema = v.object({
 	// Optional. When absent, the handler derives a slug from `name` and
@@ -103,8 +94,7 @@ export const CreateTournamentSchema = v.object({
 	swiss_max_rounds: v.optional(
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
 	),
-	allowed_map_scripts: v.optional(CreateAllowedMapScriptsSchema),
-	map_script_options: v.optional(MapScriptOptionsSchema),
+	map_pool: v.optional(MapPoolSchema),
 });
 
 export const PatchTournamentSchema = v.object({
@@ -127,8 +117,7 @@ export const PatchTournamentSchema = v.object({
 	swiss_max_rounds: v.optional(
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
 	),
-	allowed_map_scripts: v.optional(AllowedMapScriptsSchema),
-	map_script_options: v.optional(MapScriptOptionsSchema),
+	map_pool: v.optional(MapPoolSchema),
 	signups_open: v.optional(v.boolean()),
 });
 
@@ -203,11 +192,13 @@ export const ReorderSlotsSchema = v.object({
 	}),
 });
 
-// map_script is not nullable: match generation always assigns one for
-// non-bye matches (assignMap throws on empty input), and the admin's only
-// map-edit UI is for replacing it, not clearing it. Byes carry
-// map_script=null because the bye row is INSERTed with null at round
-// generation — there's no post-hoc clear path.
+// The admin picks a map_pool instance for the match; the handler validates it
+// against the tournament's pool and denormalizes its script onto the match.
+// map_pool_id is not nullable: match generation always assigns one for non-bye
+// matches (assignMap throws on an empty pool), and the admin's only map-edit UI
+// is for replacing it, not clearing it. Byes carry map_pool_id=null because the
+// bye row is INSERTed with null at round generation — there's no post-hoc clear
+// path.
 //
 // Slot identity (slot_a_id, slot_b_id) is deliberately not patchable: the
 // substitute-username flow (patchSlot.discord_username) covers the common
@@ -215,7 +206,7 @@ export const ReorderSlotsSchema = v.object({
 // match-level slot swaps that leave the displaced slot without a make-up
 // game.
 export const PatchMatchMapSchema = v.object({
-	map_script: v.optional(MapScriptSchema),
+	map_pool_id: v.optional(v.pipe(v.string(), v.regex(mapPoolIdRegex))),
 });
 
 export const ReportMatchSchema = v.object({

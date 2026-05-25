@@ -17,13 +17,27 @@ beforeAll(async () => {
 const VALID_MAP = "MAPCLASS_MapScriptDonut";
 const VALID_MAP_2 = "MAPCLASS_MapScriptContinent";
 
+// Build a map_pool create payload from scripts (options default-filled server-
+// side). The same script may appear more than once.
+function pool(
+	...scripts: string[]
+): { script: string; options?: Record<string, string | boolean> }[] {
+	return scripts.map((script) => ({ script }));
+}
+
 function uniqueSlug(prefix: string): string {
 	return `${prefix}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
+interface MapPoolEntryInput {
+	id?: string;
+	script: string;
+	options?: Record<string, string | boolean>;
+}
+
 interface CreateBody {
 	name: string;
-	allowed_map_scripts?: string[];
+	map_pool?: MapPoolEntryInput[];
 	slug?: string;
 	description?: string;
 	division_a_name?: string;
@@ -31,7 +45,6 @@ interface CreateBody {
 	swiss_max_rounds?: number;
 	swiss_wins_to_advance?: number;
 	swiss_losses_to_eliminate?: number;
-	map_script_options?: Record<string, Record<string, string | boolean>>;
 }
 
 interface TournamentResponse {
@@ -46,8 +59,11 @@ interface TournamentResponse {
 		swiss_wins_to_advance: number;
 		swiss_losses_to_eliminate: number;
 		swiss_max_rounds: number;
-		allowed_map_scripts: string[];
-		map_script_options: Record<string, Record<string, string | boolean>>;
+		map_pool: {
+			id: string;
+			script: string;
+			options: Record<string, string | boolean>;
+		}[];
 		slot_counts: { swiss: number; championship: number };
 		is_viewer_admin: boolean;
 		created_at: string;
@@ -73,7 +89,7 @@ describe("POST /v1/tournaments — auth", () => {
 			body: {
 				slug: uniqueSlug("anon"),
 				name: "Anon",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, {
@@ -93,7 +109,7 @@ describe("POST /v1/tournaments — happy path", () => {
 			body: {
 				slug,
 				name: "Happy Path Open",
-				allowed_map_scripts: [VALID_MAP, VALID_MAP_2],
+				map_pool: pool(VALID_MAP, VALID_MAP_2),
 				description: "A test",
 				division_a_name: "Custom A",
 				division_b_name: "Custom B",
@@ -113,10 +129,12 @@ describe("POST /v1/tournaments — happy path", () => {
 		expect(body.tournament.swiss_max_rounds).toBe(7);
 		expect(body.tournament.swiss_wins_to_advance).toBe(4);
 		expect(body.tournament.swiss_losses_to_eliminate).toBe(2);
-		expect(body.tournament.allowed_map_scripts).toEqual([
+		expect(body.tournament.map_pool.map((e) => e.script)).toEqual([
 			VALID_MAP,
 			VALID_MAP_2,
 		]);
+		// Server assigns an id to each entry.
+		expect(body.tournament.map_pool.every((e) => e.id.length > 0)).toBe(true);
 		expect(body.tournament.slot_counts).toEqual({ swiss: 0, championship: 0 });
 		expect(body.tournament.is_viewer_admin).toBe(true);
 
@@ -146,7 +164,7 @@ describe("POST /v1/tournaments — happy path", () => {
 			body: {
 				slug: uniqueSlug("defaults"),
 				name: "Defaults",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
@@ -168,7 +186,7 @@ describe("POST /v1/tournaments — validation", () => {
 			body: {
 				slug: "Has Caps",
 				name: "Bad slug",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 400, code: "INVALID_BODY" });
@@ -182,13 +200,13 @@ describe("POST /v1/tournaments — validation", () => {
 			body: {
 				slug: "new",
 				name: "Reserved",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 400, code: "SLUG_RESERVED" });
 	});
 
-	it("accepts an empty map list (admin configures maps on the tournament page)", async () => {
+	it("accepts an empty map pool (admin configures maps on the tournament page)", async () => {
 		const user = await makeUser();
 		const res = await request.post({
 			path: "/v1/tournaments",
@@ -196,14 +214,14 @@ describe("POST /v1/tournaments — validation", () => {
 			body: {
 				slug: uniqueSlug("nomaps"),
 				name: "No maps",
-				allowed_map_scripts: [],
+				map_pool: [],
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
-		expect(body.tournament.allowed_map_scripts).toEqual([]);
+		expect(body.tournament.map_pool).toEqual([]);
 	});
 
-	it("accepts a body that omits allowed_map_scripts entirely", async () => {
+	it("accepts a body that omits map_pool entirely", async () => {
 		const user = await makeUser();
 		const res = await request.post({
 			path: "/v1/tournaments",
@@ -214,7 +232,7 @@ describe("POST /v1/tournaments — validation", () => {
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
-		expect(body.tournament.allowed_map_scripts).toEqual([]);
+		expect(body.tournament.map_pool).toEqual([]);
 	});
 
 	it("rejects a non-canonical map_script value", async () => {
@@ -225,15 +243,15 @@ describe("POST /v1/tournaments — validation", () => {
 			body: {
 				slug: uniqueSlug("badmap"),
 				name: "Bad map",
-				allowed_map_scripts: ["MAPCLASS_ARID_PLATEAU"],
+				map_pool: pool("MAPCLASS_ARID_PLATEAU"),
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 400, code: "INVALID_BODY" });
 	});
 });
 
-describe("POST /v1/tournaments — map_script_options", () => {
-	it("pre-populates options for every allowed script with XML defaults when none supplied", async () => {
+describe("POST /v1/tournaments — map pool options", () => {
+	it("pre-populates options for every entry with XML defaults when none supplied", async () => {
 		const user = await makeUser();
 		const res = await request.post({
 			path: "/v1/tournaments",
@@ -241,21 +259,28 @@ describe("POST /v1/tournaments — map_script_options", () => {
 			body: {
 				slug: uniqueSlug("opts-defaults"),
 				name: "Opts Defaults",
-				allowed_map_scripts: [VALID_MAP, VALID_MAP_2],
+				map_pool: pool(VALID_MAP, VALID_MAP_2),
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
-		const opts = body.tournament.map_script_options;
-		expect(Object.keys(opts).sort()).toEqual([VALID_MAP, VALID_MAP_2].sort());
+		const donut = body.tournament.map_pool.find((e) => e.script === VALID_MAP);
+		const continent = body.tournament.map_pool.find(
+			(e) => e.script === VALID_MAP_2,
+		);
+		expect(donut).toBeDefined();
+		expect(continent).toBeDefined();
 		// Donut's XML defaults from canonical-map-options.ts
-		expect(opts[VALID_MAP]).toMatchObject({
+		expect(donut!.options).toMatchObject({
 			MAP_OPTIONS_MULTI_RESOURCE_DENSITY: "MAP_OPTION_MEDIUM_RESOURCES",
 			MAP_OPTIONS_DONUT_IRREGULARITY: "MAP_OPTION_DONUT_IRREGULARITY_MEDIUM",
 			MAP_OPTIONS_SINGLE_POINT_SYMMETRY: false,
 		});
+		expect(continent!.options.MAP_OPTIONS_MULTI_RESOURCE_DENSITY).toBe(
+			"MAP_OPTION_MEDIUM_RESOURCES",
+		);
 	});
 
-	it("accepts admin overrides and merges them into the defaults", async () => {
+	it("accepts per-entry overrides and merges them into the defaults", async () => {
 		const user = await makeUser();
 		const res = await request.post({
 			path: "/v1/tournaments",
@@ -263,18 +288,20 @@ describe("POST /v1/tournaments — map_script_options", () => {
 			body: {
 				slug: uniqueSlug("opts-override"),
 				name: "Opts Override",
-				allowed_map_scripts: [VALID_MAP],
-				map_script_options: {
-					[VALID_MAP]: {
-						MAP_OPTIONS_DONUT_IRREGULARITY:
-							"MAP_OPTION_DONUT_IRREGULARITY_HIGH",
-						MAP_OPTIONS_SINGLE_POINT_SYMMETRY: true,
+				map_pool: [
+					{
+						script: VALID_MAP,
+						options: {
+							MAP_OPTIONS_DONUT_IRREGULARITY:
+								"MAP_OPTION_DONUT_IRREGULARITY_HIGH",
+							MAP_OPTIONS_SINGLE_POINT_SYMMETRY: true,
+						},
 					},
-				},
+				],
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
-		const donut = body.tournament.map_script_options[VALID_MAP];
+		const donut = body.tournament.map_pool[0].options;
 		expect(donut.MAP_OPTIONS_DONUT_IRREGULARITY).toBe(
 			"MAP_OPTION_DONUT_IRREGULARITY_HIGH",
 		);
@@ -285,23 +312,34 @@ describe("POST /v1/tournaments — map_script_options", () => {
 		);
 	});
 
-	it("rejects options for a script not in allowed_map_scripts", async () => {
+	it("allows the same script multiple times with different options", async () => {
 		const user = await makeUser();
 		const res = await request.post({
 			path: "/v1/tournaments",
 			as: user,
 			body: {
-				slug: uniqueSlug("opts-unallowed"),
-				name: "Opts Unallowed",
-				allowed_map_scripts: [VALID_MAP],
-				map_script_options: {
-					[VALID_MAP_2]: {
-						MAP_OPTIONS_MULTI_RESOURCE_DENSITY: "MAP_OPTION_HIGH_RESOURCES",
-					},
-				},
+				slug: uniqueSlug("opts-dups"),
+				name: "Opts Dups",
+				map_pool: [
+					{ script: VALID_MAP_2, options: { MAPSIZE: "MAPSIZE_SMALLEST" } },
+					{ script: VALID_MAP_2, options: { MAPSIZE: "MAPSIZE_TINY" } },
+				],
 			} satisfies CreateBody,
 		});
-		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
+		const body = await expectOk<TournamentResponse>(res);
+		expect(body.tournament.map_pool).toHaveLength(2);
+		expect(body.tournament.map_pool.map((e) => e.script)).toEqual([
+			VALID_MAP_2,
+			VALID_MAP_2,
+		]);
+		expect(body.tournament.map_pool[0].options.MAPSIZE).toBe(
+			"MAPSIZE_SMALLEST",
+		);
+		expect(body.tournament.map_pool[1].options.MAPSIZE).toBe("MAPSIZE_TINY");
+		// Distinct instance ids.
+		expect(body.tournament.map_pool[0].id).not.toBe(
+			body.tournament.map_pool[1].id,
+		);
 	});
 
 	it("rejects an option that doesn't apply to its script", async () => {
@@ -312,13 +350,15 @@ describe("POST /v1/tournaments — map_script_options", () => {
 			body: {
 				slug: uniqueSlug("opts-misapplied"),
 				name: "Opts Misapplied",
-				allowed_map_scripts: [VALID_MAP],
-				map_script_options: {
-					// Donut doesn't register DOTA_RIVER_WIDTH
-					[VALID_MAP]: {
-						MAP_OPTIONS_MULTI_DOTA_RIVER_WIDTH: "MAP_OPTION_RIVER_WIDE",
+				map_pool: [
+					{
+						// Donut doesn't register DOTA_RIVER_WIDTH
+						script: VALID_MAP,
+						options: {
+							MAP_OPTIONS_MULTI_DOTA_RIVER_WIDTH: "MAP_OPTION_RIVER_WIDE",
+						},
 					},
-				},
+				],
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
@@ -332,12 +372,14 @@ describe("POST /v1/tournaments — map_script_options", () => {
 			body: {
 				slug: uniqueSlug("opts-badchoice"),
 				name: "Opts Bad Choice",
-				allowed_map_scripts: [VALID_MAP],
-				map_script_options: {
-					[VALID_MAP]: {
-						MAP_OPTIONS_DONUT_IRREGULARITY: "MAP_OPTION_NOT_A_REAL_CHOICE",
+				map_pool: [
+					{
+						script: VALID_MAP,
+						options: {
+							MAP_OPTIONS_DONUT_IRREGULARITY: "MAP_OPTION_NOT_A_REAL_CHOICE",
+						},
 					},
-				},
+				],
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
@@ -351,12 +393,14 @@ describe("POST /v1/tournaments — map_script_options", () => {
 			body: {
 				slug: uniqueSlug("opts-badbool"),
 				name: "Opts Bad Bool",
-				allowed_map_scripts: [VALID_MAP],
-				map_script_options: {
-					[VALID_MAP]: {
-						MAP_OPTIONS_SINGLE_POINT_SYMMETRY: "yes",
+				map_pool: [
+					{
+						script: VALID_MAP,
+						options: {
+							MAP_OPTIONS_SINGLE_POINT_SYMMETRY: "yes",
+						},
 					},
-				},
+				],
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
@@ -371,7 +415,7 @@ describe("POST /v1/tournaments — server-derived slug", () => {
 			as: user,
 			body: {
 				name: `Old World Open ${uniqueSlug("noslug")}`,
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
@@ -390,7 +434,7 @@ describe("POST /v1/tournaments — server-derived slug", () => {
 				body: {
 					slug: baseSlug,
 					name: "Planted",
-					allowed_map_scripts: [VALID_MAP],
+					map_pool: pool(VALID_MAP),
 				} satisfies CreateBody,
 			}),
 		);
@@ -398,7 +442,7 @@ describe("POST /v1/tournaments — server-derived slug", () => {
 		const res = await request.post({
 			path: "/v1/tournaments",
 			as: user,
-			body: { name, allowed_map_scripts: [VALID_MAP] } satisfies CreateBody,
+			body: { name, map_pool: pool(VALID_MAP) } satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
 		expect(body.tournament.slug).not.toBe(baseSlug);
@@ -412,7 +456,7 @@ describe("POST /v1/tournaments — server-derived slug", () => {
 			as: user,
 			body: {
 				name: "!!!",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
@@ -428,7 +472,7 @@ describe("POST /v1/tournaments — server-derived slug", () => {
 			as: user,
 			body: {
 				name: "New",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		const body = await expectOk<TournamentResponse>(res);
@@ -449,7 +493,7 @@ describe("POST /v1/tournaments — slug uniqueness", () => {
 				body: {
 					slug,
 					name: "First",
-					allowed_map_scripts: [VALID_MAP],
+					map_pool: pool(VALID_MAP),
 				} satisfies CreateBody,
 			}),
 		);
@@ -459,7 +503,7 @@ describe("POST /v1/tournaments — slug uniqueness", () => {
 			body: {
 				slug,
 				name: "Second",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, { status: 409, code: "SLUG_TAKEN" });
@@ -476,7 +520,7 @@ describe("POST /v1/tournaments — rate limit", () => {
 			body: {
 				slug: uniqueSlug("ratelimit"),
 				name: "Over limit",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, {
@@ -497,7 +541,7 @@ describe("POST /v1/tournaments — rate limit", () => {
 			body: {
 				slug: uniqueSlug("under"),
 				name: "Under limit",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		expect(res.status).toBe(201);
@@ -513,7 +557,7 @@ describe("POST /v1/tournaments — rate limit", () => {
 			body: {
 				slug: uniqueSlug("otheruser"),
 				name: "Other user",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			} satisfies CreateBody,
 		});
 		expect(res.status).toBe(201);
@@ -533,7 +577,7 @@ describe("POST /v1/tournaments — content-type hardening", () => {
 			body: JSON.stringify({
 				slug: uniqueSlug("ct"),
 				name: "x",
-				allowed_map_scripts: [VALID_MAP],
+				map_pool: pool(VALID_MAP),
 			}),
 		});
 		await expectErrorCode(res, {

@@ -34,6 +34,7 @@ function match(
 		division: "A",
 		slot_a_id: a,
 		slot_b_id: b,
+		map_pool_id: null,
 		map_script: null,
 		status,
 		winner_slot_id: winner,

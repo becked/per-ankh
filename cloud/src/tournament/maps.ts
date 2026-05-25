@@ -15,7 +15,7 @@
 // be assigned CRB if there's literally no map both haven't played.
 
 import { createRng } from "./rng";
-import type { MatchRef } from "./types";
+import type { MapPoolEntry, MatchRef } from "./types";
 
 export interface PairingInput {
 	slot_a_id: string;
@@ -23,19 +23,24 @@ export interface PairingInput {
 }
 
 export interface MapAssignment extends PairingInput {
-	map_script: string | null; // null for byes
+	// Assigned map_pool instance + its denormalized script. Both null for byes.
+	map_pool_id: string | null;
+	map_script: string | null;
 }
 
+// Count plays by map_pool instance id, not by script — two instances of the
+// same script (e.g. Continent @ Duel and Continent @ Tiny) are distinct for
+// anti-repeat purposes.
 function countMapPlays(
 	slotId: string,
 	matches: MatchRef[],
 ): Map<string, number> {
 	const counts = new Map<string, number>();
 	for (const m of matches) {
-		if (m.map_script === null) continue;
+		if (m.map_pool_id === null) continue;
 		const isParticipant = m.slot_a_id === slotId || m.slot_b_id === slotId;
 		if (!isParticipant) continue;
-		counts.set(m.map_script, (counts.get(m.map_script) ?? 0) + 1);
+		counts.set(m.map_pool_id, (counts.get(m.map_pool_id) ?? 0) + 1);
 	}
 	return counts;
 }
@@ -43,51 +48,45 @@ function countMapPlays(
 export function assignMap(
 	slotA: string,
 	slotB: string,
-	allowedMaps: string[],
+	pool: MapPoolEntry[],
 	priorMatches: MatchRef[],
 	rng: () => number,
-): string {
-	if (allowedMaps.length === 0) {
-		throw new Error("allowedMaps must be non-empty");
+): MapPoolEntry {
+	if (pool.length === 0) {
+		throw new Error("map pool must be non-empty");
 	}
 	const playsA = countMapPlays(slotA, priorMatches);
 	const playsB = countMapPlays(slotB, priorMatches);
 
-	const unplayed = allowedMaps.filter((m) => !playsA.has(m) && !playsB.has(m));
+	const unplayed = pool.filter((e) => !playsA.has(e.id) && !playsB.has(e.id));
 	if (unplayed.length > 0) {
 		const i = Math.floor(rng() * unplayed.length);
 		return unplayed[i];
 	}
 
-	// All maps played by at least one of the pair. Pick the map with the
-	// lowest combined play count; alphabetical tiebreak for determinism.
-	const sorted = [...allowedMaps].sort((a, b) => {
-		const ca = (playsA.get(a) ?? 0) + (playsB.get(a) ?? 0);
-		const cb = (playsA.get(b) ?? 0) + (playsB.get(b) ?? 0);
+	// All instances played by at least one of the pair. Pick the one with the
+	// lowest combined play count; id tiebreak for determinism.
+	const sorted = [...pool].sort((a, b) => {
+		const ca = (playsA.get(a.id) ?? 0) + (playsB.get(a.id) ?? 0);
+		const cb = (playsA.get(b.id) ?? 0) + (playsB.get(b.id) ?? 0);
 		if (ca !== cb) return ca - cb;
-		return a.localeCompare(b);
+		return a.id.localeCompare(b.id);
 	});
 	return sorted[0];
 }
 
 export function assignMapsToPairings(
 	pairings: PairingInput[],
-	allowedMaps: string[],
+	pool: MapPoolEntry[],
 	priorMatches: MatchRef[],
 	seed: string,
 ): MapAssignment[] {
 	const rng = createRng(seed);
 	return pairings.map((p) => {
 		if (p.slot_b_id === null) {
-			return { ...p, map_script: null };
+			return { ...p, map_pool_id: null, map_script: null };
 		}
-		const map = assignMap(
-			p.slot_a_id,
-			p.slot_b_id,
-			allowedMaps,
-			priorMatches,
-			rng,
-		);
-		return { ...p, map_script: map };
+		const entry = assignMap(p.slot_a_id, p.slot_b_id, pool, priorMatches, rng);
+		return { ...p, map_pool_id: entry.id, map_script: entry.script };
 	});
 }

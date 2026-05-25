@@ -94,7 +94,11 @@ describe("public read handlers", () => {
 			swiss_wins_to_advance: number;
 			swiss_losses_to_eliminate: number;
 			swiss_max_rounds: number;
-			allowed_map_scripts: string[];
+			map_pool: {
+				id: string;
+				script: string;
+				options: Record<string, string | boolean>;
+			}[];
 			slot_counts: { swiss: number; championship: number };
 			is_viewer_admin: boolean;
 			created_at: string;
@@ -105,7 +109,10 @@ describe("public read handlers", () => {
 		expect(body.slug).toBe(t.slug);
 		expect(body.name).toBe("Detail Cup");
 		expect(body.status).toBe("setup");
-		expect(body.allowed_map_scripts).toEqual(["MAP_SEASIDE", "MAP_RIVER"]);
+		expect(body.map_pool.map((e) => e.script)).toEqual([
+			"MAP_SEASIDE",
+			"MAP_RIVER",
+		]);
 		// Default 4 slots per division from makeTournament.
 		expect(body.slot_counts.swiss).toBe(8);
 		expect(body.slot_counts.championship).toBe(0);

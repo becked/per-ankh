@@ -982,7 +982,7 @@ export const cloudApi = {
 	patchMatchMap: async (
 		tournamentId: string,
 		matchId: string,
-		body: { map_script?: string },
+		body: { map_pool_id?: string },
 		opts?: CallOpts,
 	): Promise<void> => {
 		await request(`/tournaments/${tournamentId}/matches/${matchId}/map`, {
@@ -1072,7 +1072,7 @@ export interface TournamentListItem {
 	swiss_wins_to_advance: number;
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
-	// Length of the tournament's allowed_map_scripts JSON array, parsed at
+	// Length of the tournament's map_pool JSON array, parsed at
 	// the worker. Zero when the JSON is corrupt (matches the detail page's
 	// public-read leniency for the same column).
 	map_pool_size: number;
@@ -1103,12 +1103,24 @@ export interface TournamentListResponse {
 	offset: number;
 }
 
-// Per-script option overrides keyed by MAPCLASS_* → option zType →
-// value. Values are either a string (one of the option's <Choices>)
-// or boolean (toggles). Sparse — a missing option key means "use the
-// XML <Default>" at render time. Pre-populated by the server with XML
-// defaults whenever a script enters allowed_map_scripts.
-export type MapScriptOptions = Record<string, Record<string, string | boolean>>;
+// One entry in a tournament's map_pool: an instance of a map script with its
+// own options. The same script may appear in multiple entries (e.g. Continent
+// @ Duel and Continent @ Tiny). `options` is keyed by option zType → value
+// (string choice or boolean toggle); the server pre-populates every applicable
+// option with its XML default, so it's dense rather than sparse.
+export interface MapPoolEntry {
+	id: string;
+	script: string;
+	options: Record<string, string | boolean>;
+}
+
+// Input shape for create/patch: `id` is optional — the server assigns one to
+// any entry that arrives without it (new entries added in the maps panel).
+export type MapPoolEntryInput = {
+	id?: string;
+	script: string;
+	options?: Record<string, string | boolean>;
+};
 
 export interface TournamentDetail {
 	tournament_id: string;
@@ -1121,8 +1133,7 @@ export interface TournamentDetail {
 	swiss_wins_to_advance: number;
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
-	allowed_map_scripts: string[];
-	map_script_options: MapScriptOptions;
+	map_pool: MapPoolEntry[];
 	slot_counts: {
 		swiss: number;
 		championship: number;
@@ -1161,8 +1172,7 @@ export interface PatchTournamentBody {
 	swiss_wins_to_advance?: number;
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
-	allowed_map_scripts?: string[];
-	map_script_options?: MapScriptOptions;
+	map_pool?: MapPoolEntryInput[];
 	// Toggle self-service signups. Only valid in setup; PATCH rejects
 	// re-opening once status moves past setup. handleStartTournament auto-
 	// clears the flag on the setup → swiss transition.
@@ -1173,12 +1183,12 @@ export interface PatchTournamentBody {
 // is the only required field — the public modal asks for name +
 // description only and lets the server derive `slug` and apply SQL
 // defaults from cloud/migrations/0006_tournaments.sql for everything
-// else. `allowed_map_scripts` may be omitted at create time; the
-// setup → swiss transition enforces non-empty before match generation.
-// The admin CLI uses the same shape and passes a richer payload.
+// else. `map_pool` may be omitted at create time; the setup → swiss
+// transition enforces non-empty before match generation. The admin CLI
+// uses the same shape and passes a richer payload.
 export interface CreateTournamentBody {
 	name: string;
-	allowed_map_scripts?: string[];
+	map_pool?: MapPoolEntryInput[];
 	slug?: string;
 	description?: string;
 	division_a_name?: string;
@@ -1186,7 +1196,6 @@ export interface CreateTournamentBody {
 	swiss_wins_to_advance?: number;
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
-	map_script_options?: MapScriptOptions;
 }
 
 export interface SlotStanding {
@@ -1259,6 +1268,9 @@ export interface TournamentMatch {
 	division?: Division | null;
 	slot_a_id: string;
 	slot_b_id: string | null;
+	// Assigned map_pool instance id; resolve options from tournament.map_pool.
+	// map_script is the denormalized played MAPCLASS label. Both null for byes.
+	map_pool_id: string | null;
 	map_script: string | null;
 	pick_order_winner_slot_id: string | null;
 	status: "pending" | "complete" | "forfeit" | "bye";

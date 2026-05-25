@@ -152,3 +152,13 @@ export function unaddedMapScriptsByDlc(
 	}
 	return groups.filter((g) => g.entries.length > 0);
 }
+
+// All known map scripts grouped by DLC. Used by the maps panel's "Add a map"
+// picker — with the map_pool model the same script can be added multiple times
+// (with different options), so the picker never excludes already-added scripts.
+export function allMapScriptsByDlc(): {
+	dlc: MapScriptDlc;
+	entries: MapScriptInfo[];
+}[] {
+	return unaddedMapScriptsByDlc([]);
+}

@@ -96,7 +96,7 @@ const SWEEP_CASES: SweepCase[] = [
 		label: "create tournament",
 		method: "POST",
 		path: () => "/v1/tournaments",
-		body: { name: "Beta Gate Test", allowed_map_scripts: [VALID_MAP] },
+		body: { name: "Beta Gate Test", map_pool: [{ script: VALID_MAP }] },
 	},
 	{
 		label: "patch tournament",
@@ -120,7 +120,7 @@ const SWEEP_CASES: SweepCase[] = [
 		method: "PATCH",
 		path: ({ tournamentId, matchId }) =>
 			matchId ? `/v1/tournaments/${tournamentId}/matches/${matchId}/map` : null,
-		body: { map_script: VALID_MAP },
+		body: { map_pool_id: "map-0" },
 	},
 	{
 		label: "retro-edit match",

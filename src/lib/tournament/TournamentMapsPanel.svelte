@@ -1,13 +1,19 @@
 <script lang="ts">
 	import { invalidateAll } from "$app/navigation";
-	import { ApiError, cloudApi, type TournamentDetail } from "$lib/api-cloud";
 	import {
+		ApiError,
+		cloudApi,
+		type MapPoolEntry,
+		type TournamentDetail,
+	} from "$lib/api-cloud";
+	import {
+		allMapScriptsByDlc,
 		DLC_GROUP_LABELS,
 		mapScriptLabel,
-		unaddedMapScriptsByDlc,
 	} from "$lib/tournament/map-scripts";
 	import MapScriptOptionsBlock from "$lib/tournament/MapScriptOptionsBlock.svelte";
 	import {
+		defaultsForScript,
 		effectiveOptionValue,
 		mapOptionChoiceLabel,
 		optionsForScript,
@@ -21,31 +27,44 @@
 
 	let { tournament }: Props = $props();
 
+	// Local optimistic copy of the pool. Cloned so edits don't mutate the prop;
+	// rolled back to the prop on a failed save. Mirrors the pattern elsewhere
+	// in the tournament admin UI.
 	// svelte-ignore state_referenced_locally
-	let allowedMapScripts = $state<string[]>([...tournament.allowed_map_scripts]);
+	let mapPool = $state<MapPoolEntry[]>(clonePool(tournament.map_pool));
 
 	let saving = $state(false);
 
-	const unaddedGroups = $derived(unaddedMapScriptsByDlc(allowedMapScripts));
-	const mapScriptGroups = $derived(
-		unaddedGroups.map((g) => ({
-			heading: DLC_GROUP_LABELS[g.dlc],
-			options: g.entries.map((e) => ({ value: e.value, label: e.label })),
-		})),
-	);
+	// The picker always lists every script — the same script can be added
+	// multiple times with different options (e.g. Continent @ Duel + @ Tiny).
+	const mapScriptGroups = allMapScriptsByDlc().map((g) => ({
+		heading: DLC_GROUP_LABELS[g.dlc],
+		options: g.entries.map((e) => ({ value: e.value, label: e.label })),
+	}));
 
-	// Track which scripts have their options expanded. Local-only state;
-	// resets on remount, intentional (no per-user persistence needed).
+	// Track which instances have their options expanded, keyed by instance id.
 	let expanded = $state<Record<string, boolean>>({});
-	function toggleExpanded(script: string) {
-		expanded[script] = !expanded[script];
+	function toggleExpanded(id: string) {
+		expanded[id] = !expanded[id];
 	}
 
-	async function commit(next: string[]) {
+	function clonePool(pool: readonly MapPoolEntry[]): MapPoolEntry[] {
+		return pool.map((e) => ({ ...e, options: { ...e.options } }));
+	}
+
+	// Client-side instance id (16 hex chars) for newly-added entries. Regex-safe
+	// for the server schema; the server keeps it rather than reassigning.
+	function newInstanceId(): string {
+		return Array.from(crypto.getRandomValues(new Uint8Array(8)), (b) =>
+			b.toString(16).padStart(2, "0"),
+		).join("");
+	}
+
+	async function commit(next: MapPoolEntry[]) {
 		saving = true;
 		try {
 			await cloudApi.patchTournament(tournament.tournament_id, {
-				allowed_map_scripts: next,
+				map_pool: next,
 			});
 			await invalidateAll();
 			toast.info("Saved");
@@ -55,23 +74,35 @@
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
 			toast.error(message);
-			// Roll back optimistic state so the visible list matches the server.
-			allowedMapScripts = [...tournament.allowed_map_scripts];
+			// Roll back optimistic state so the visible pool matches the server.
+			mapPool = clonePool(tournament.map_pool);
 		} finally {
 			saving = false;
 		}
 	}
 
-	function addMapScript(value: string) {
-		if (!value || allowedMapScripts.includes(value)) return;
-		const next = [...allowedMapScripts, value];
-		allowedMapScripts = next;
+	function addMapScript(script: string) {
+		if (!script) return;
+		const next = [
+			...mapPool,
+			{ id: newInstanceId(), script, options: defaultsForScript(script) },
+		];
+		mapPool = next;
 		commit(next);
 	}
 
-	function removeMapScript(script: string) {
-		const next = allowedMapScripts.filter((s) => s !== script);
-		allowedMapScripts = next;
+	function removeInstance(id: string) {
+		const next = mapPool.filter((e) => e.id !== id);
+		mapPool = next;
+		commit(next);
+	}
+
+	function setInstanceOptions(
+		id: string,
+		options: Record<string, string | boolean>,
+	) {
+		const next = mapPool.map((e) => (e.id === id ? { ...e, options } : e));
+		mapPool = next;
 		commit(next);
 	}
 </script>
@@ -80,29 +111,29 @@
 	<h2 class="mb-3 text-sm font-bold text-tan">Maps</h2>
 
 	<div class="flex flex-col gap-2 text-xs text-tan">
-		{#if allowedMapScripts.length === 0}
+		{#if mapPool.length === 0}
 			<p class="text-tan opacity-60">
 				None — add at least one before starting the tournament.
 			</p>
 		{:else}
 			<ul class="flex flex-col gap-1.5">
-				{#each allowedMapScripts as script (script)}
-					{@const optsCount = optionsForScript(script).length}
-					{@const isExpanded = expanded[script] === true}
+				{#each mapPool as entry (entry.id)}
+					{@const optsCount = optionsForScript(entry.script).length}
+					{@const isExpanded = expanded[entry.id] === true}
 					{@const expandable = optsCount > 0}
 					<li
 						class="overflow-hidden rounded border border-black bg-[#35302b]"
-						title={script}
+						title={entry.script}
 					>
 						<div class="flex items-stretch">
 							<button
 								type="button"
 								class="flex flex-1 items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[#3d3832] disabled:cursor-default disabled:hover:bg-transparent"
-								onclick={() => expandable && toggleExpanded(script)}
+								onclick={() => expandable && toggleExpanded(entry.id)}
 								disabled={!expandable}
 								aria-expanded={expandable ? isExpanded : undefined}
 								aria-label={expandable
-									? `${isExpanded ? "Collapse" : "Expand"} ${mapScriptLabel(script)} options`
+									? `${isExpanded ? "Collapse" : "Expand"} ${mapScriptLabel(entry.script)} options`
 									: undefined}
 							>
 								{#if expandable}
@@ -124,18 +155,15 @@
 									<span class="inline-block h-4 w-4 shrink-0" aria-hidden="true"
 									></span>
 								{/if}
-								<span class="flex-1 text-sm">{mapScriptLabel(script)}</span>
+								<span class="flex-1 text-xs"
+									>{mapScriptLabel(entry.script)}</span
+								>
 								{#if !isExpanded}
 									{@const aspect = effectiveOptionValue(
-										tournament.map_script_options,
-										script,
+										entry.options,
 										"MAPASPECTRATIO",
 									)}
-									{@const size = effectiveOptionValue(
-										tournament.map_script_options,
-										script,
-										"MAPSIZE",
-									)}
+									{@const size = effectiveOptionValue(entry.options, "MAPSIZE")}
 									<span class="text-[11px] text-tan opacity-70">
 										{mapOptionChoiceLabel("MAPASPECTRATIO", aspect)}
 										{mapOptionChoiceLabel("MAPSIZE", size)}
@@ -150,9 +178,9 @@
 							<button
 								type="button"
 								class="flex shrink-0 items-center justify-center border-l border-black px-3 text-tan opacity-60 transition-colors hover:bg-[#3d3832] hover:text-red-400 hover:opacity-100 disabled:opacity-30"
-								onclick={() => removeMapScript(script)}
+								onclick={() => removeInstance(entry.id)}
 								disabled={saving}
-								aria-label="Remove {mapScriptLabel(script)}"
+								aria-label="Remove {mapScriptLabel(entry.script)}"
 							>
 								<svg
 									xmlns="http://www.w3.org/2000/svg"
@@ -173,7 +201,12 @@
 						</div>
 						{#if isExpanded && expandable}
 							<div class="border-t border-black bg-[#2a2622] px-3 py-2">
-								<MapScriptOptionsBlock {tournament} {script} />
+								<MapScriptOptionsBlock
+									script={entry.script}
+									options={entry.options}
+									disabled={saving}
+									onChange={(options) => setInstanceOptions(entry.id, options)}
+								/>
 							</div>
 						{/if}
 					</li>
@@ -187,10 +220,8 @@
 			}}
 			options={mapScriptGroups}
 			resetAfterSelect
-			placeholder={unaddedGroups.length === 0
-				? "All known maps added"
-				: "Add a map…"}
-			disabled={saving || unaddedGroups.length === 0}
+			placeholder="Add a map…"
+			disabled={saving}
 			ariaLabel="Add map script"
 			class="mt-1"
 		/>

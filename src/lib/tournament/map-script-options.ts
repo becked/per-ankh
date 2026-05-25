@@ -1,14 +1,24 @@
-// Client-side helpers for working with the tournament map_script_options
-// blob. Mostly thin wrappers around the baked manifests at
+// Client-side helpers for working with a tournament's map_pool instances.
+// Mostly thin wrappers around the baked manifests at
 // $lib/generated/{map-option-defs,map-script-options}.
 
-import type { MapScriptOptions } from "$lib/api-cloud";
+import type { MapPoolEntry } from "$lib/api-cloud";
 import {
 	MAP_OPTION_DEFS,
 	type MapOptionDef,
 } from "$lib/generated/map-option-defs";
 import { MAP_SCRIPT_OPTIONS } from "$lib/generated/map-script-options";
 import { formatEnum } from "$lib/utils/formatting";
+
+// Find a map_pool entry by id. Returns undefined for a null/unknown id (e.g.
+// a bye match, or a match whose instance no longer exists in the pool).
+export function poolEntryById(
+	pool: readonly MapPoolEntry[],
+	id: string | null | undefined,
+): MapPoolEntry | undefined {
+	if (!id) return undefined;
+	return pool.find((e) => e.id === id);
+}
 
 // Option zTypes that apply to a given script, in display order (globals
 // first, then script-specific). Empty array for unknown scripts (e.g.
@@ -22,15 +32,14 @@ export function optionDef(option: string): MapOptionDef | undefined {
 	return MAP_OPTION_DEFS[option];
 }
 
-// Effective value for (script, option) — admin-set if present, otherwise
-// the XML default from the manifest, otherwise false for unknown toggles
-// and the empty string for unknown selects.
+// Effective value for an option within an instance's options — instance-set if
+// present, otherwise the XML default from the manifest, otherwise false for
+// unknown toggles. Accepts undefined options (treated as all-unset).
 export function effectiveOptionValue(
-	stored: MapScriptOptions,
-	script: string,
+	options: Record<string, string | boolean> | undefined,
 	option: string,
 ): string | boolean {
-	const set = stored[script]?.[option];
+	const set = options?.[option];
 	if (set !== undefined) return set;
 	const def = MAP_OPTION_DEFS[option];
 	if (!def) return false;
@@ -78,18 +87,18 @@ export function defaultsForScript(
 	return out;
 }
 
-// Compact human-readable summary of the options set for a script, one
-// "Label: Value" per line. Used in bracket-card tooltips. Empty string
-// when the script has no options or isn't in the baked manifest.
+// Compact human-readable summary of an instance's options, one "Label: Value"
+// per line. Used in bracket-card tooltips. Empty string when the script has no
+// options or isn't in the baked manifest.
 export function summarizeOptions(
-	stored: MapScriptOptions,
+	options: Record<string, string | boolean> | undefined,
 	script: string,
 ): string {
 	const opts = optionsForScript(script);
 	if (opts.length === 0) return "";
 	const lines: string[] = [];
 	for (const opt of opts) {
-		const value = effectiveOptionValue(stored, script, opt);
+		const value = effectiveOptionValue(options, opt);
 		lines.push(`${mapOptionLabel(opt)}: ${mapOptionChoiceLabel(opt, value)}`);
 	}
 	return lines.join("\n");

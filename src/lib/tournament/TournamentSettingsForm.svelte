@@ -6,12 +6,6 @@
 		type PatchTournamentBody,
 		type TournamentDetail,
 	} from "$lib/api-cloud";
-	import {
-		DLC_GROUP_LABELS,
-		mapScriptLabel,
-		unaddedMapScriptsByDlc,
-	} from "$lib/tournament/map-scripts";
-	import Select from "$lib/ui/Select.svelte";
 	import { toast } from "$lib/ui/toast";
 
 	interface Props {
@@ -39,8 +33,6 @@
 	let swissWinsToAdvance = $state(tournament.swiss_wins_to_advance);
 	// svelte-ignore state_referenced_locally
 	let swissLossesToEliminate = $state(tournament.swiss_losses_to_eliminate);
-	// svelte-ignore state_referenced_locally
-	let allowedMapScripts = $state<string[]>([...tournament.allowed_map_scripts]);
 
 	let busy = $state(false);
 
@@ -59,25 +51,6 @@
 		}
 		return null;
 	});
-
-	const unaddedGroups = $derived(unaddedMapScriptsByDlc(allowedMapScripts));
-	const mapScriptGroups = $derived(
-		unaddedGroups.map((g) => ({
-			heading: DLC_GROUP_LABELS[g.dlc],
-			options: g.entries.map((e) => ({ value: e.value, label: e.label })),
-		})),
-	);
-
-	function addMapScript(value: string) {
-		if (!value) return;
-		if (!allowedMapScripts.includes(value)) {
-			allowedMapScripts = [...allowedMapScripts, value];
-		}
-	}
-
-	function removeMapScript(script: string) {
-		allowedMapScripts = allowedMapScripts.filter((s) => s !== script);
-	}
 
 	function buildPatch(): PatchTournamentBody {
 		const patch: PatchTournamentBody = {};
@@ -99,11 +72,6 @@
 			if (swissLossesToEliminate !== tournament.swiss_losses_to_eliminate)
 				patch.swiss_losses_to_eliminate = swissLossesToEliminate;
 		}
-		const oldScripts = tournament.allowed_map_scripts;
-		const scriptsChanged =
-			allowedMapScripts.length !== oldScripts.length ||
-			allowedMapScripts.some((s, i) => s !== oldScripts[i]);
-		if (scriptsChanged) patch.allowed_map_scripts = allowedMapScripts;
 		return patch;
 	}
 
@@ -223,49 +191,6 @@
 			<p class="mt-2 text-xs text-red-400">{thresholdError}</p>
 		{/if}
 	</fieldset>
-
-	<div class="flex flex-col gap-2">
-		<span>Allowed map scripts</span>
-		{#if allowedMapScripts.length === 0}
-			<p class="text-tan opacity-60">
-				None — add at least one before starting the tournament.
-			</p>
-		{:else}
-			<ul class="flex flex-wrap gap-1.5">
-				{#each allowedMapScripts as script (script)}
-					<li
-						class="inline-flex items-center gap-1.5 rounded border border-black bg-[#35302b] py-0.5 pl-2 pr-1"
-						title={script}
-					>
-						<span>{mapScriptLabel(script)}</span>
-						<button
-							type="button"
-							class="text-tan opacity-60 transition-colors hover:text-red-400 hover:opacity-100 disabled:opacity-30"
-							onclick={() => removeMapScript(script)}
-							disabled={busy}
-							aria-label="Remove {mapScriptLabel(script)}"
-						>
-							×
-						</button>
-					</li>
-				{/each}
-			</ul>
-		{/if}
-		<Select
-			value=""
-			onChange={(v) => {
-				if (v) addMapScript(v);
-			}}
-			options={mapScriptGroups}
-			resetAfterSelect
-			placeholder={unaddedGroups.length === 0
-				? "All known maps added"
-				: "Add a map…"}
-			disabled={busy || unaddedGroups.length === 0}
-			ariaLabel="Add map script"
-			class="mt-1"
-		/>
-	</div>
 </div>
 
 <div class="mt-4 flex justify-end gap-2">

@@ -160,13 +160,20 @@ export async function makeTournament(
 		for (const u of opts.slotOwners?.B ?? []) await seedBetaUser(u);
 	}
 
-	// 1) Direct INSERT (no API endpoint for tournament creation).
+	// 1) Direct INSERT (no API endpoint for tournament creation). Build a
+	// map_pool of one instance per allowedMaps script with a deterministic id
+	// so tests can reference instances if needed; options left empty.
+	const mapPool = allowedMaps.map((script, i) => ({
+		id: `map-${i}`,
+		script,
+		options: {},
+	}));
 	await env.SHARE_DB.prepare(
 		`INSERT INTO tournaments
-		   (tournament_id, slug, name, status, allowed_map_scripts)
+		   (tournament_id, slug, name, status, map_pool)
 		 VALUES (?, ?, ?, 'setup', ?)`,
 	)
-		.bind(tournamentId, slug, name, JSON.stringify(allowedMaps))
+		.bind(tournamentId, slug, name, JSON.stringify(mapPool))
 		.run();
 	await env.SHARE_DB.prepare(
 		`INSERT INTO tournament_admins (tournament_id, user_id) VALUES (?, ?)`,

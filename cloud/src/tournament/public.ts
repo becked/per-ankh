@@ -25,8 +25,7 @@ import {
 	loadTournamentBySlug,
 	MapConfigError,
 	matchRowToRef,
-	parseAllowedMaps,
-	parseMapScriptOptions,
+	parseMapPool,
 	slotRowToRef,
 	tournamentConfig,
 	type MatchRow,
@@ -163,7 +162,7 @@ export async function handleTournamentList(
 		`SELECT t.tournament_id, t.slug, t.name, t.status, t.signups_open,
 		        t.created_at, t.updated_at,
 		        t.swiss_wins_to_advance, t.swiss_losses_to_eliminate,
-		        t.swiss_max_rounds, t.allowed_map_scripts
+		        t.swiss_max_rounds, t.map_pool
 		 FROM tournaments t
 		 LEFT JOIN tournament_admins ta
 		   ON ta.tournament_id = t.tournament_id AND ta.user_id = ?
@@ -182,7 +181,7 @@ export async function handleTournamentList(
 		swiss_wins_to_advance: number;
 		swiss_losses_to_eliminate: number;
 		swiss_max_rounds: number;
-		allowed_map_scripts: string;
+		map_pool: string;
 	}>();
 
 	const baseRows = res.results ?? [];
@@ -196,11 +195,11 @@ export async function handleTournamentList(
 	const tournaments = baseRows.map((t) => {
 		let mapPoolSize = 0;
 		try {
-			const parsed = JSON.parse(t.allowed_map_scripts);
+			const parsed = JSON.parse(t.map_pool);
 			if (Array.isArray(parsed)) mapPoolSize = parsed.length;
 		} catch {
 			// Tournament with corrupt JSON shows zero — same leniency the
-			// detail handler applies to allowed_map_scripts.
+			// detail handler applies to map_pool.
 		}
 		const slotCounts = aggregates.slotCounts.get(t.tournament_id) ?? {
 			swiss: 0,
@@ -477,18 +476,17 @@ export async function handleTournamentDetail(
 			};
 		}
 	}
-	// Public-read leniency: render the tournament detail even if the maps
+	// Public-read leniency: render the tournament detail even if the map_pool
 	// JSON is corrupted (admins will see the failure surface via round
 	// generation; no need to break the public-facing page). Admin write
-	// paths still throw MAP_CONFIG_INVALID via parseAllowedMapsOrError.
-	let allowed_map_scripts: string[];
+	// paths still throw MAP_CONFIG_INVALID via parseMapPoolOrError.
+	let map_pool: ReturnType<typeof parseMapPool>;
 	try {
-		allowed_map_scripts = parseAllowedMaps(tournament);
+		map_pool = parseMapPool(tournament);
 	} catch (e) {
 		if (!(e instanceof MapConfigError)) throw e;
-		allowed_map_scripts = [];
+		map_pool = [];
 	}
-	const map_script_options = parseMapScriptOptions(tournament);
 	return jsonResponse(
 		{
 			tournament_id: tournament.tournament_id,
@@ -501,8 +499,7 @@ export async function handleTournamentDetail(
 			swiss_wins_to_advance: tournament.swiss_wins_to_advance,
 			swiss_losses_to_eliminate: tournament.swiss_losses_to_eliminate,
 			swiss_max_rounds: tournament.swiss_max_rounds,
-			allowed_map_scripts,
-			map_script_options,
+			map_pool,
 			slot_counts: {
 				swiss: counts["swiss"] ?? 0,
 				championship: counts["championship"] ?? 0,
@@ -975,6 +972,7 @@ function serializeMatch(m: MatchRow) {
 		match_id: m.match_id,
 		slot_a_id: m.slot_a_id,
 		slot_b_id: m.slot_b_id,
+		map_pool_id: m.map_pool_id,
 		map_script: m.map_script,
 		pick_order_winner_slot_id: m.pick_order_winner_slot_id,
 		status: m.status,
@@ -997,7 +995,7 @@ async function loadMatchesWithRound(
 ): Promise<MatchWithRound[]> {
 	const res = await env.SHARE_DB.prepare(
 		`SELECT
-		   m.match_id, m.round_id, m.slot_a_id, m.slot_b_id, m.map_script,
+		   m.match_id, m.round_id, m.slot_a_id, m.slot_b_id, m.map_pool_id, m.map_script,
 		   m.pick_order_winner_slot_id, m.status, m.winner_slot_id, m.game_id,
 		   m.reported_by_user_id, m.reported_at, m.notes,
 		   m.slot_a_player_index, m.slot_b_player_index, m.match_index,
@@ -1018,6 +1016,7 @@ async function loadMatchesWithRound(
 			round_id: row.round_id,
 			slot_a_id: row.slot_a_id,
 			slot_b_id: row.slot_b_id,
+			map_pool_id: row.map_pool_id,
 			map_script: row.map_script,
 			pick_order_winner_slot_id: row.pick_order_winner_slot_id,
 			status: row.status,

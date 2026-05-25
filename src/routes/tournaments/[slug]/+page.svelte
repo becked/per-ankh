@@ -827,7 +827,7 @@
 										standings={divisionData.standings}
 										matches={matchesByDivision[division]}
 										tournamentSlug={data.tournament.slug}
-										mapScriptOptions={data.tournament.map_script_options}
+										mapPool={data.tournament.map_pool}
 										onMatchClick={openMatch}
 									/>
 									<SwissStandings

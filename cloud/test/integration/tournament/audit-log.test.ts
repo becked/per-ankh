@@ -140,12 +140,13 @@ describe("tournament admin audit log", () => {
 		const matches = await t.matches();
 		const target = matches.find((m) => m.status === "pending");
 		expect(target).toBeDefined();
-		const newMap =
-			target!.map_script === "MAP_CONTINENTS" ? "MAP_RIVER" : "MAP_CONTINENTS";
+		// Builder assigns ids map-0/1/2 to the maps in order; pick a different
+		// instance from the one currently assigned.
+		const newPoolId = target!.map_pool_id === "map-2" ? "map-1" : "map-2";
 		const res = await request.patch({
 			path: `/v1/tournaments/${t.tournamentId}/matches/${target!.match_id}/map`,
 			as: t.admin,
-			body: { map_script: newMap },
+			body: { map_pool_id: newPoolId },
 		});
 		await expectOk(res);
 		expect(actionsFor(await adminEventsForUser(t.admin.userId))).toContain(

@@ -58,7 +58,7 @@ interface TournamentRow {
 	swiss_wins_to_advance: number;
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
-	allowed_map_scripts: string;
+	map_pool: string;
 	created_at: string;
 	updated_at: string;
 }
@@ -181,16 +181,24 @@ async function runCreate(argv: string[], opts: CommandOpts): Promise<void> {
 	const divB = flagString(flags, "div-b") ?? "Division B";
 
 	const tournamentId = nanoid21();
+	// Build the map_pool: one instance per --maps script, options left empty
+	// (the UI / a Worker patch reconciles XML defaults; match generation only
+	// needs id + script). Each gets a worker-compatible nanoid21 instance id.
+	const mapPool = maps.map((script) => ({
+		id: nanoid21(),
+		script,
+		options: {},
+	}));
 	await d1Exec(`
 		INSERT INTO tournaments (
 			tournament_id, slug, name, description, status,
-			division_a_name, division_b_name, allowed_map_scripts
+			division_a_name, division_b_name, map_pool
 		) VALUES (
 			${sqlStr(tournamentId)}, ${sqlStr(slug)}, ${sqlStr(name)},
 			${description === null ? "NULL" : sqlStr(description)},
 			'setup',
 			${sqlStr(divA)}, ${sqlStr(divB)},
-			${sqlStr(JSON.stringify(maps))}
+			${sqlStr(JSON.stringify(mapPool))}
 		)
 	`);
 
@@ -200,7 +208,7 @@ async function runCreate(argv: string[], opts: CommandOpts): Promise<void> {
 			slug,
 			name,
 			status: "setup",
-			allowed_map_scripts: maps,
+			map_pool: mapPool,
 		});
 	} else {
 		ok(`Created tournament ${name} (id=${tournamentId}, slug=${slug})`);
@@ -298,8 +306,12 @@ async function runShow(argv: string[], opts: CommandOpts): Promise<void> {
 	}
 	let maps: string[] = [];
 	try {
-		const parsed = JSON.parse(tournament.allowed_map_scripts);
-		if (Array.isArray(parsed)) maps = parsed.map(String);
+		const parsed = JSON.parse(tournament.map_pool);
+		if (Array.isArray(parsed)) {
+			maps = parsed
+				.map((e) => (e && typeof e.script === "string" ? e.script : null))
+				.filter((s): s is string => s !== null);
+		}
 	} catch {
 		// fall through
 	}
@@ -314,7 +326,7 @@ async function runShow(argv: string[], opts: CommandOpts): Promise<void> {
 			"wins to advance / losses to eliminate / max rounds",
 			`${tournament.swiss_wins_to_advance} / ${tournament.swiss_losses_to_eliminate} / ${tournament.swiss_max_rounds}`,
 		],
-		["allowed maps", maps.join(", ") || "—"],
+		["map pool", maps.join(", ") || "—"],
 		["slots (swiss)", String(counts["swiss"] ?? 0)],
 		["slots (championship)", String(counts["championship"] ?? 0)],
 		["created_at", formatDate(tournament.created_at)],

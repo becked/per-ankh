@@ -15,9 +15,9 @@
 	let { onClose }: Props = $props();
 
 	// Modal only collects name + description. Divisions, Swiss thresholds,
-	// and allowed_map_scripts are configured from the tournament settings
-	// page after create. The setup → swiss transition rejects an empty
-	// map list, so the admin can't accidentally start without one.
+	// and the map pool are configured from the tournament settings page
+	// after create. The setup → swiss transition rejects an empty map pool,
+	// so the admin can't accidentally start without one.
 	let name = $state("");
 	let description = $state("");
 

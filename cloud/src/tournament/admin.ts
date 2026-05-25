@@ -50,8 +50,7 @@ import {
 	loadTournamentBySlug,
 	MapConfigError,
 	matchRowToRef,
-	parseAllowedMaps,
-	parseMapScriptOptions,
+	parseMapPool,
 	slotRowToRef,
 	tournamentConfig,
 	type MatchRow,
@@ -65,108 +64,120 @@ import {
 	CANONICAL_MAP_OPTION_DEFAULTS,
 	CANONICAL_SCRIPT_OPTIONS,
 } from "./canonical-map-options";
-import type { Division, MatchRef, Phase, SlotRef } from "./types";
+import type { Division, MapPoolEntry, MatchRef, Phase, SlotRef } from "./types";
 
-// ---------- Map-script options helpers ----------
+// ---------- Map-pool helpers ----------
 
-// Type used in-memory throughout admin.ts. The on-disk representation is
-// JSON.stringify of the same shape.
-type MapScriptOptions = Record<string, Record<string, string | boolean>>;
+// Shape of a map_pool entry as it arrives from the schema (id optional — the
+// maps panel sends new entries without one).
+type MapPoolEntryInput = {
+	id?: string;
+	script: string;
+	options?: Record<string, string | boolean>;
+};
 
-// Validates raw input against the canonical manifest + the post-patch
-// allowed_map_scripts list. Drops scripts not in the allowed list (with
-// an error). Drops options not registered by the script (with an error).
-// Drops values that don't match the option's kind / choices (with an error).
-// Returns the cleaned object on success.
-function validateMapScriptOptions(
-	raw: MapScriptOptions,
-	allowedScripts: readonly string[],
-): { ok: true; value: MapScriptOptions } | { ok: false; message: string } {
-	const allowed = new Set(allowedScripts);
-	const out: MapScriptOptions = {};
-	for (const [script, optsObj] of Object.entries(raw)) {
-		if (!allowed.has(script)) {
-			return {
-				ok: false,
-				message: `map_script_options key "${script}" is not in allowed_map_scripts`,
-			};
-		}
-		const applicable = CANONICAL_SCRIPT_OPTIONS[script];
-		if (!applicable) {
-			return {
-				ok: false,
-				message: `map_script_options key "${script}" has no known options manifest`,
-			};
-		}
-		const applicableSet = new Set(applicable);
-		const cleaned: Record<string, string | boolean> = {};
-		for (const [optKey, optVal] of Object.entries(optsObj)) {
-			if (!applicableSet.has(optKey)) {
-				return {
-					ok: false,
-					message: `option "${optKey}" does not apply to script "${script}"`,
-				};
-			}
-			const def = CANONICAL_MAP_OPTIONS[optKey];
-			if (!def) {
-				return {
-					ok: false,
-					message: `option "${optKey}" is not a canonical map option`,
-				};
-			}
-			if (def.kind === "toggle") {
-				if (typeof optVal !== "boolean") {
-					return {
-						ok: false,
-						message: `option "${optKey}" expects boolean, got ${typeof optVal}`,
-					};
-				}
-				cleaned[optKey] = optVal;
-			} else {
-				if (typeof optVal !== "string") {
-					return {
-						ok: false,
-						message: `option "${optKey}" expects string choice, got ${typeof optVal}`,
-					};
-				}
-				if (!def.choices.includes(optVal)) {
-					return {
-						ok: false,
-						message: `option "${optKey}" got invalid choice "${optVal}"`,
-					};
-				}
-				cleaned[optKey] = optVal;
-			}
-		}
-		out[script] = cleaned;
+// Validate one instance's options against its script's applicable set + the
+// canonical manifest. Returns the cleaned options on success.
+function validateInstanceOptions(
+	script: string,
+	options: Record<string, string | boolean>,
+):
+	| { ok: true; value: Record<string, string | boolean> }
+	| {
+			ok: false;
+			message: string;
+	  } {
+	const applicable = CANONICAL_SCRIPT_OPTIONS[script];
+	if (!applicable) {
+		return {
+			ok: false,
+			message: `script "${script}" has no known options manifest`,
+		};
 	}
-	return { ok: true, value: out };
+	const applicableSet = new Set(applicable);
+	const cleaned: Record<string, string | boolean> = {};
+	for (const [optKey, optVal] of Object.entries(options)) {
+		if (!applicableSet.has(optKey)) {
+			return {
+				ok: false,
+				message: `option "${optKey}" does not apply to script "${script}"`,
+			};
+		}
+		const def = CANONICAL_MAP_OPTIONS[optKey];
+		if (!def) {
+			return {
+				ok: false,
+				message: `option "${optKey}" is not a canonical map option`,
+			};
+		}
+		if (def.kind === "toggle") {
+			if (typeof optVal !== "boolean") {
+				return {
+					ok: false,
+					message: `option "${optKey}" expects boolean, got ${typeof optVal}`,
+				};
+			}
+			cleaned[optKey] = optVal;
+		} else {
+			if (typeof optVal !== "string") {
+				return {
+					ok: false,
+					message: `option "${optKey}" expects string choice, got ${typeof optVal}`,
+				};
+			}
+			if (!def.choices.includes(optVal)) {
+				return {
+					ok: false,
+					message: `option "${optKey}" got invalid choice "${optVal}"`,
+				};
+			}
+			cleaned[optKey] = optVal;
+		}
+	}
+	return { ok: true, value: cleaned };
 }
 
-// Reconciles a map_script_options object against an allowed_map_scripts
-// list: drops blocks for scripts no longer allowed, pre-populates blocks
-// for newly-allowed scripts with their XML defaults. Used on tournament
-// create and on patches that change allowed_map_scripts.
-function reconcileMapScriptOptions(
-	existing: MapScriptOptions,
-	allowed: readonly string[],
-): MapScriptOptions {
-	const out: MapScriptOptions = {};
-	for (const script of allowed) {
-		const applicable = CANONICAL_SCRIPT_OPTIONS[script];
-		if (!applicable) continue; // Should never happen — allowed_map_scripts is canonical-gated.
-		const prev = existing[script] ?? {};
-		const next: Record<string, string | boolean> = {};
-		for (const optKey of applicable) {
-			if (Object.prototype.hasOwnProperty.call(prev, optKey)) {
-				next[optKey] = prev[optKey];
-			} else {
-				next[optKey] = CANONICAL_MAP_OPTION_DEFAULTS[optKey] ?? false;
-			}
+// Pre-populate every applicable option for a script with the instance's value
+// (when set) or the XML default — mirrors the in-game lobby, which shows all
+// options. Drops options that don't apply. Assumes `options` is already
+// validated by validateInstanceOptions.
+function reconcileInstanceOptions(
+	script: string,
+	options: Record<string, string | boolean>,
+): Record<string, string | boolean> {
+	const applicable = CANONICAL_SCRIPT_OPTIONS[script] ?? [];
+	const next: Record<string, string | boolean> = {};
+	for (const optKey of applicable) {
+		if (Object.prototype.hasOwnProperty.call(options, optKey)) {
+			next[optKey] = options[optKey];
+		} else {
+			next[optKey] = CANONICAL_MAP_OPTION_DEFAULTS[optKey] ?? false;
 		}
-		out[script] = next;
 	}
-	return out;
+	return next;
+}
+
+// Build the canonical, reconciled map_pool from validated schema input.
+// Assigns an id to any entry without one (new entries from the maps panel)
+// and repairs duplicate ids, then validates + reconciles each entry's options.
+function buildMapPool(
+	input: readonly MapPoolEntryInput[],
+): { ok: true; pool: MapPoolEntry[] } | { ok: false; message: string } {
+	const pool: MapPoolEntry[] = [];
+	const seenIds = new Set<string>();
+	for (const entry of input) {
+		const valid = validateInstanceOptions(entry.script, entry.options ?? {});
+		if (!valid.ok) return valid;
+		let id = entry.id;
+		if (!id || seenIds.has(id)) id = nanoid(12);
+		seenIds.add(id);
+		pool.push({
+			id,
+			script: entry.script,
+			options: reconcileInstanceOptions(entry.script, valid.value),
+		});
+	}
+	return { ok: true, pool };
 }
 
 export interface TournamentAdminEnv extends TournamentEnv, SessionEnv {
@@ -321,19 +332,18 @@ async function parseJsonBody<T>(
 	return { ok: true, body: result.output };
 }
 
-// Wrap parseAllowedMaps so JSON-shape corruption becomes an explicit
-// 500 with MAP_CONFIG_INVALID rather than propagating into assignMap as a
-// misleading 500. Reachable only via direct-DB tampering — schema-validated
-// writes always produce a JSON array of canonical strings. Empty arrays
-// are legal (admin can create a tournament without map scripts and pick
-// them later); the setup → swiss transition rejects empty separately
-// with MAP_CONFIG_EMPTY.
-function parseAllowedMapsOrError(
+// Wrap parseMapPool so JSON-shape corruption becomes an explicit 500 with
+// MAP_CONFIG_INVALID rather than propagating into assignMap as a misleading
+// 500. Reachable only via direct-DB tampering — schema-validated writes always
+// produce a well-formed pool. Empty pools are legal (admin can create a
+// tournament without maps and pick them later); the setup → swiss transition
+// rejects empty separately with MAP_CONFIG_EMPTY.
+function parseMapPoolOrError(
 	tournament: TournamentRow,
 	cors: Record<string, string>,
-): { ok: true; maps: string[] } | { ok: false; response: Response } {
+): { ok: true; pool: MapPoolEntry[] } | { ok: false; response: Response } {
 	try {
-		return { ok: true, maps: parseAllowedMaps(tournament) };
+		return { ok: true, pool: parseMapPool(tournament) };
 	} catch (e) {
 		if (e instanceof MapConfigError) {
 			return {
@@ -516,12 +526,17 @@ export async function handleCreateTournament(
 	const divA = input.division_a_name?.trim() ?? "Division A";
 	const divB = input.division_b_name?.trim() ?? "Division B";
 	const description = input.description?.trim() || null;
-	// allowed_map_scripts is optional on create — the public modal asks for
-	// name + description only, leaving map-script selection to the
-	// tournament settings page. Empty here is legal in 'setup'; the
-	// setup → swiss transition enforces non-empty before match generation.
-	const allowedMapScripts = input.allowed_map_scripts ?? [];
-	const allowedMapsJson = JSON.stringify(allowedMapScripts);
+	// map_pool is optional on create — the public modal asks for name +
+	// description only, leaving map selection to the tournament settings page.
+	// Empty here is legal in 'setup'; the setup → swiss transition enforces
+	// non-empty before match generation. Each entry's options are validated +
+	// reconciled (XML defaults for unset options); ids are assigned here.
+	const builtPool = buildMapPool(input.map_pool ?? []);
+	if (!builtPool.ok) {
+		return errorResponse(builtPool.message, 400, cors, "MAP_OPTIONS_INVALID");
+	}
+	const mapPool = builtPool.pool;
+	const mapPoolJson = JSON.stringify(mapPool);
 	// Migration defaults: 5 / 3 / 3. Mirror them here so the API returns
 	// the actual stored values without a re-load round-trip on the
 	// happy path (we still re-load below to get created_at/updated_at).
@@ -538,26 +553,6 @@ export async function handleCreateTournament(
 		return errorResponse(thresholdError, 400, cors, "INVALID_THRESHOLDS");
 	}
 
-	// Map-script options: validate caller input (if any), then reconcile
-	// against allowed_map_scripts so every allowed script gets a populated
-	// options block (XML defaults for unset values). Stored as JSON.
-	let mapScriptOptions: MapScriptOptions = {};
-	if (input.map_script_options) {
-		const valid = validateMapScriptOptions(
-			input.map_script_options as MapScriptOptions,
-			allowedMapScripts,
-		);
-		if (!valid.ok) {
-			return errorResponse(valid.message, 400, cors, "MAP_OPTIONS_INVALID");
-		}
-		mapScriptOptions = valid.value;
-	}
-	mapScriptOptions = reconcileMapScriptOptions(
-		mapScriptOptions,
-		allowedMapScripts,
-	);
-	const mapScriptOptionsJson = JSON.stringify(mapScriptOptions);
-
 	const metadata = JSON.stringify({
 		action: "tournament_created",
 		tournament_id: tournamentId,
@@ -571,8 +566,8 @@ export async function handleCreateTournament(
 				    tournament_id, slug, name, description, status,
 				    division_a_name, division_b_name,
 				    swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds,
-				    allowed_map_scripts, map_script_options
-				 ) VALUES (?, ?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?, ?)`,
+				    map_pool
+				 ) VALUES (?, ?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				tournamentId,
 				slug,
@@ -583,8 +578,7 @@ export async function handleCreateTournament(
 				swissWinsToAdvance,
 				swissLossesToEliminate,
 				swissMaxRounds,
-				allowedMapsJson,
-				mapScriptOptionsJson,
+				mapPoolJson,
 			),
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_admins (tournament_id, user_id) VALUES (?, ?)`,
@@ -637,8 +631,7 @@ export async function handleCreateTournament(
 				swiss_wins_to_advance: created.swiss_wins_to_advance,
 				swiss_losses_to_eliminate: created.swiss_losses_to_eliminate,
 				swiss_max_rounds: created.swiss_max_rounds,
-				allowed_map_scripts: allowedMapScripts,
-				map_script_options: mapScriptOptions,
+				map_pool: mapPool,
 				slot_counts: { swiss: 0, championship: 0 },
 				is_viewer_admin: true,
 				created_at: created.created_at,
@@ -675,8 +668,7 @@ export async function handlePatchTournament(
 		(patch.swiss_wins_to_advance !== undefined ||
 			patch.swiss_losses_to_eliminate !== undefined ||
 			patch.swiss_max_rounds !== undefined ||
-			patch.allowed_map_scripts !== undefined ||
-			patch.map_script_options !== undefined)
+			patch.map_pool !== undefined)
 	) {
 		return errorResponse(
 			"Cannot edit Swiss config after the tournament has started",
@@ -715,42 +707,24 @@ export async function handlePatchTournament(
 		return errorResponse(thresholdError, 400, cors, "INVALID_THRESHOLDS");
 	}
 
-	// Compute the post-patch allowed_map_scripts list. The map_script_options
-	// reconciliation needs to validate against the *new* list when both fields
-	// are being patched together.
-	const nextAllowed = patch.allowed_map_scripts ?? parseAllowedMaps(tournament);
-
-	// Compute the post-patch map_script_options object. Three cases:
-	//   1. Caller provided map_script_options → validate, then reconcile.
-	//   2. Caller changed allowed_map_scripts (only) → reconcile existing
-	//      against new list (drops removed scripts' blocks, pre-populates
-	//      newly-added ones).
-	//   3. Neither → leave map_script_options alone.
-	let nextMapScriptOptions: MapScriptOptions | undefined;
-	if (patch.map_script_options !== undefined) {
-		const valid = validateMapScriptOptions(
-			patch.map_script_options as MapScriptOptions,
-			nextAllowed,
-		);
-		if (!valid.ok) {
-			return errorResponse(valid.message, 400, cors, "MAP_OPTIONS_INVALID");
+	// Build the post-patch map_pool when the caller provided one: validate +
+	// reconcile each instance's options (XML defaults for unset options) and
+	// assign ids to any new entries. Stored as JSON.
+	let nextMapPoolJson: string | undefined;
+	if (patch.map_pool !== undefined) {
+		const built = buildMapPool(patch.map_pool);
+		if (!built.ok) {
+			return errorResponse(built.message, 400, cors, "MAP_OPTIONS_INVALID");
 		}
-		nextMapScriptOptions = reconcileMapScriptOptions(valid.value, nextAllowed);
-	} else if (patch.allowed_map_scripts !== undefined) {
-		const existing = parseMapScriptOptions(tournament);
-		nextMapScriptOptions = reconcileMapScriptOptions(existing, nextAllowed);
+		nextMapPoolJson = JSON.stringify(built.pool);
 	}
 
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
 	for (const [key, value] of Object.entries(patch)) {
 		if (value === undefined) continue;
-		if (key === "allowed_map_scripts") {
-			fragments.push(`${key} = ?`);
-			binds.push(JSON.stringify(value));
-		} else if (key === "map_script_options") {
-			// Skip — handled below from nextMapScriptOptions (which may have
-			// been reconciled or pre-populated).
+		if (key === "map_pool") {
+			// Skip — handled below from nextMapPoolJson (validated + reconciled).
 			continue;
 		} else if (key === "signups_open") {
 			// SQLite has no boolean; the column is INTEGER 0/1.
@@ -761,9 +735,9 @@ export async function handlePatchTournament(
 			binds.push(value);
 		}
 	}
-	if (nextMapScriptOptions !== undefined) {
-		fragments.push("map_script_options = ?");
-		binds.push(JSON.stringify(nextMapScriptOptions));
+	if (nextMapPoolJson !== undefined) {
+		fragments.push("map_pool = ?");
+		binds.push(nextMapPoolJson);
 	}
 	if (fragments.length === 0) {
 		return jsonResponse({ tournament }, 200, cors);
@@ -1228,14 +1202,14 @@ export async function handleStartTournament(
 			"DIVISION_EMPTY",
 		);
 	}
-	const mapsResult = parseAllowedMapsOrError(tournament, cors);
+	const mapsResult = parseMapPoolOrError(tournament, cors);
 	if (!mapsResult.ok) return mapsResult.response;
-	const allowedMaps = mapsResult.maps;
+	const mapPool = mapsResult.pool;
 	// Empty is legal during status='setup' (create no longer requires the
 	// field) but match generation needs at least one map. Block the
 	// transition with a clear error rather than letting assignMap throw
-	// "allowedMaps must be non-empty" as an opaque 500.
-	if (allowedMaps.length === 0) {
+	// "map pool must be non-empty" as an opaque 500.
+	if (mapPool.length === 0) {
 		return errorResponse(
 			"Configure at least one map script before starting the tournament",
 			409,
@@ -1269,7 +1243,7 @@ export async function handleStartTournament(
 			1,
 			divSlots,
 			[],
-			allowedMaps,
+			mapPool,
 		);
 		statements.push(...built.statements);
 		summaries.push({
@@ -1324,13 +1298,26 @@ export async function handlePatchMatchMap(
 	const body = await parseJsonBody(request, PatchMatchMapSchema, cors);
 	if (!body.ok) return body.response;
 	const patch = body.body;
-	if (patch.map_script === undefined) {
+	if (patch.map_pool_id === undefined) {
 		return jsonResponse({ match }, 200, cors);
 	}
+	// Resolve the chosen instance from the tournament's pool and denormalize
+	// its script onto the match alongside the instance id.
+	const poolResult = parseMapPoolOrError(a.tournament, cors);
+	if (!poolResult.ok) return poolResult.response;
+	const entry = poolResult.pool.find((e) => e.id === patch.map_pool_id);
+	if (!entry) {
+		return errorResponse(
+			"map_pool_id is not in this tournament's map pool",
+			400,
+			cors,
+			"MAP_NOT_IN_POOL",
+		);
+	}
 	await env.SHARE_DB.prepare(
-		"UPDATE tournament_matches SET map_script = ? WHERE match_id = ?",
+		"UPDATE tournament_matches SET map_pool_id = ?, map_script = ? WHERE match_id = ?",
 	)
-		.bind(patch.map_script, matchId)
+		.bind(entry.id, entry.script, matchId)
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
@@ -1695,14 +1682,14 @@ export async function handleTransitionChampionship(
 		).bind(roundId, tournamentId),
 	);
 
-	const mapsResult = parseAllowedMapsOrError(tournament, cors);
+	const mapsResult = parseMapPoolOrError(tournament, cors);
 	if (!mapsResult.ok) return mapsResult.response;
-	const allowedMaps = mapsResult.maps;
+	const mapPool = mapsResult.pool;
 
-	// Map assignment: real matches (not byes) get one of allowedMaps; byes
-	// get null. Convert each round1 template to a Pairing (slot_b_id null
-	// for byes) and run assignMapsToPairings, which already handles null
-	// slot_b correctly (returns map_script=null).
+	// Map assignment: real matches (not byes) get a pool instance; byes get
+	// null. Convert each round1 template to a Pairing (slot_b_id null for byes)
+	// and run assignMapsToPairings, which handles null slot_b correctly
+	// (returns map_pool_id=null, map_script=null).
 	const matchPairings: Pairing[] = round1.matches.map((t) => ({
 		slot_a_id: championshipSlotIds[t.seed_a]!,
 		slot_b_id: t.is_bye ? null : championshipSlotIds[t.seed_b]!,
@@ -1710,7 +1697,7 @@ export async function handleTransitionChampionship(
 	const seed = `${tournamentId}|championship|r1`;
 	const withMaps = assignMapsToPairings(
 		matchPairings,
-		allowedMaps,
+		mapPool,
 		matchRefs,
 		seed,
 	);
@@ -1726,14 +1713,15 @@ export async function handleTransitionChampionship(
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
-				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
+				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				matchId,
 				roundId,
 				p.slot_a_id,
 				p.slot_b_id,
+				p.map_pool_id,
 				p.map_script,
 				pickOrderWinner,
 				status,
@@ -1848,7 +1836,7 @@ function buildSwissRoundStatements(
 	nextRoundNumber: number,
 	divSlots: SlotRef[],
 	divMatchRefs: MatchRef[],
-	allowedMaps: string[],
+	pool: MapPoolEntry[],
 ): { statements: D1PreparedStatement[]; roundId: string; matchCount: number } {
 	const config = tournamentConfig(tournament);
 	const seed = `${tournament.tournament_id}|swiss|${division}|r${nextRoundNumber}`;
@@ -1859,12 +1847,7 @@ function buildSwissRoundStatements(
 		config,
 		seed,
 	);
-	const withMaps = assignMapsToPairings(
-		pairings,
-		allowedMaps,
-		divMatchRefs,
-		seed,
-	);
+	const withMaps = assignMapsToPairings(pairings, pool, divMatchRefs, seed);
 
 	const roundId = nanoid(21);
 	const statements: D1PreparedStatement[] = [
@@ -1883,14 +1866,15 @@ function buildSwissRoundStatements(
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
-				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
+				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				matchId,
 				roundId,
 				p.slot_a_id,
 				p.slot_b_id,
+				p.map_pool_id,
 				p.map_script,
 				isBye ? null : p.slot_b_id, // default pick-order to slot_b
 				isBye ? "bye" : "pending",
@@ -1912,10 +1896,10 @@ function buildChampionshipRoundStatements(
 	nextRoundNumber: number,
 	pairings: Pairing[],
 	matchRefs: MatchRef[],
-	allowedMaps: string[],
+	pool: MapPoolEntry[],
 ): { statements: D1PreparedStatement[]; roundId: string; matchCount: number } {
 	const seed = `${tournament.tournament_id}|championship|r${nextRoundNumber}`;
-	const withMaps = assignMapsToPairings(pairings, allowedMaps, matchRefs, seed);
+	const withMaps = assignMapsToPairings(pairings, pool, matchRefs, seed);
 	const roundId = nanoid(21);
 	const statements: D1PreparedStatement[] = [
 		env.SHARE_DB.prepare(
@@ -1932,14 +1916,15 @@ function buildChampionshipRoundStatements(
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
-				   (match_id, round_id, slot_a_id, slot_b_id, map_script,
+				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
 			).bind(
 				matchId,
 				roundId,
 				p.slot_a_id,
 				p.slot_b_id,
+				p.map_pool_id,
 				p.map_script,
 				p.slot_b_id,
 				i + 1,
@@ -2048,7 +2033,7 @@ export async function maybeAdvanceAfterMatchReport(
 					allMatches,
 				);
 				const divMatchRefs = matchRefs.filter((m) => m.division === division);
-				const allowedMaps = parseAllowedMaps(tournament);
+				const mapPool = parseMapPool(tournament);
 				const built = buildSwissRoundStatements(
 					env,
 					tournament,
@@ -2056,7 +2041,7 @@ export async function maybeAdvanceAfterMatchReport(
 					round.round_number + 1,
 					divSlots,
 					divMatchRefs,
-					allowedMaps,
+					mapPool,
 				);
 				statements.push(...built.statements);
 				auditAction = "round_generated";
@@ -2099,14 +2084,14 @@ export async function maybeAdvanceAfterMatchReport(
 						tournament.tournament_id,
 						allMatches,
 					);
-					const allowedMaps = parseAllowedMaps(tournament);
+					const mapPool = parseMapPool(tournament);
 					const built = buildChampionshipRoundStatements(
 						env,
 						tournament,
 						round.round_number + 1,
 						pairings,
 						matchRefs,
-						allowedMaps,
+						mapPool,
 					);
 					statements.push(...built.statements);
 					auditAction = "round_generated";

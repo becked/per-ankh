@@ -24,9 +24,22 @@ export interface MatchRef {
 	division: Division | null;
 	slot_a_id: string;
 	slot_b_id: string | null;
+	// Instance the match was assigned, into tournaments.map_pool. Drives
+	// anti-repeat (counts by instance, so two Continent variants are distinct).
+	// map_script is the denormalized played MAPCLASS, kept for display.
+	map_pool_id: string | null;
 	map_script: string | null;
 	status: MatchStatus;
 	winner_slot_id: string | null;
+}
+
+// One entry in tournaments.map_pool: an instance of a map script with its own
+// options. The same script may appear in multiple entries (e.g. Continent @
+// Duel and Continent @ Tiny).
+export interface MapPoolEntry {
+	id: string;
+	script: string;
+	options: Record<string, string | boolean>;
 }
 
 export interface TournamentConfig {
