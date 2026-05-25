@@ -3,6 +3,8 @@
 	import type { Snippet } from "svelte";
 	import { page } from "$app/state";
 	import CloudHeader from "$lib/CloudHeader.svelte";
+	import Toaster from "$lib/ui/Toaster.svelte";
+	import ConfirmDialogHost from "$lib/ui/ConfirmDialogHost.svelte";
 	import { PUBLIC_ORIGIN, type PageMeta } from "$lib/page-meta";
 	import type { LayoutData } from "./$types";
 
@@ -61,3 +63,7 @@
 {:else}
 	{@render children()}
 {/if}
+
+<!-- Always-on global UI hosts (portal / fixed; route-independent) -->
+<Toaster />
+<ConfirmDialogHost />
