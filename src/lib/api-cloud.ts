@@ -45,7 +45,7 @@ export interface UserMe {
 	discord_id: string;
 	display_name: string;
 	// Lowercased Discord handle (mirrors the value stored on
-	// tournament_slots.discord_username). Used by the SignupModal to show
+	// tournament_slots.discord_username). Used by the signup popover to show
 	// "Signed in as @username" so players know the exact identity they'll
 	// be entered under.
 	discord_username: string;
@@ -1131,7 +1131,7 @@ export interface TournamentDetail {
 	slot_counts: {
 		swiss: number;
 		championship: number;
-		// Per-division swiss counts so the SignupModal can show "Division A
+		// Per-division swiss counts so the signup popover can show "Division A
 		// (5 players)" without an extra query.
 		swiss_by_division: { A: number; B: number };
 	};

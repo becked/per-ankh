@@ -238,6 +238,7 @@
 							{@const bWon = m.winner_slot_id === m.slot_b_id}
 							<a
 								class="match"
+								data-match-id={m.match_id}
 								href="{resolve('/tournaments/[slug]', {
 									slug: tournamentSlug,
 								})}?match={m.match_id}"

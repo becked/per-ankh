@@ -13,11 +13,9 @@
 		type UserMe,
 	} from "$lib/api-cloud";
 	import ChampionshipBracketTree from "$lib/tournament/ChampionshipBracketTree.svelte";
-	import ChampionshipTransitionPreview from "$lib/tournament/ChampionshipTransitionPreview.svelte";
 	import FirstPickNote from "$lib/tournament/FirstPickNote.svelte";
-	import MatchModal from "$lib/tournament/MatchModal.svelte";
+	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
-	import SignupModal from "$lib/tournament/SignupModal.svelte";
 	import SlotUsernameAutocomplete from "$lib/tournament/SlotUsernameAutocomplete.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
@@ -35,7 +33,7 @@
 	import TournamentConfigurationPanel from "$lib/tournament/TournamentConfigurationPanel.svelte";
 	import TournamentMapsPanel from "$lib/tournament/TournamentMapsPanel.svelte";
 	import TournamentOverviewPanel from "$lib/tournament/TournamentOverviewPanel.svelte";
-	import TournamentSettingsModal from "$lib/tournament/TournamentSettingsModal.svelte";
+	import Popover from "$lib/ui/Popover.svelte";
 	import { confirmDialog } from "$lib/ui/confirm";
 	import { toast } from "$lib/ui/toast";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
@@ -74,7 +72,6 @@
 			data.tournament.signups_open &&
 			viewerSlot === null,
 	);
-	let signupModalOpen = $state(false);
 
 	// Swiss-phase matches, filtered per division. The flow bracket needs
 	// only its own division's matches so the (W, L) record walk doesn't
@@ -185,7 +182,6 @@
 	// --- Admin action surface: busy gate + toast feedback + handlers.
 
 	let busy = $state(false);
-	let settingsOpen = $state(false);
 
 	const slotsA = $derived(data.standings.divisions.A.standings);
 	const slotsB = $derived(data.standings.divisions.B.standings);
@@ -621,13 +617,9 @@
 		);
 	}
 
-	let transitionPreviewOpen = $state(false);
-	let signedUpOpen = $state(false);
-
-	// Invoked from the "Signed up" popup, whose explicit Withdraw button is the
+	// Invoked from the "Signed up" popover, whose explicit Withdraw button is the
 	// deliberate confirmation — no extra confirm dialog needed.
 	async function withdraw() {
-		signedUpOpen = false;
 		await withBusy(
 			() => cloudApi.withdrawFromTournament(data.tournament.tournament_id),
 			"Withdrew from tournament",
@@ -635,7 +627,6 @@
 	}
 
 	async function transitionChampionship(overrideRanks?: string[]) {
-		transitionPreviewOpen = false;
 		await withBusy(
 			() =>
 				cloudApi.transitionChampionship(
@@ -660,6 +651,8 @@
 					{statusMeta}
 					{hero}
 					{playerCount}
+					{user}
+					combined={data.standings.combined_qualifier_ranking ?? null}
 					{isAdmin}
 					{canSignUp}
 					hasViewerSlot={viewerSlot !== null}
@@ -668,11 +661,9 @@
 					{transitionReady}
 					settingsDisabled={busy || openMatchId !== null}
 					onGuide={openGuide}
-					onSettings={() => (settingsOpen = true)}
-					onSignedUp={() => (signedUpOpen = true)}
-					onSignup={() => (signupModalOpen = true)}
 					onStart={startTournament}
-					onTransition={() => (transitionPreviewOpen = true)}
+					onWithdraw={withdraw}
+					onConfirmTransition={transitionChampionship}
 				/>
 
 				{#if data.tournament.status === "setup"}
@@ -952,105 +943,31 @@
 	</main>
 </div>
 
-{#if currentMatch}
-	{#key currentMatch.match_id}
-		<MatchModal
-			match={currentMatch}
-			tournament={data.tournament}
-			{slotLabels}
-			{slotUserIds}
-			{slotAvatars}
-			{user}
-			onClose={closeMatch}
-		/>
-	{/key}
-{/if}
-
-{#if settingsOpen}
-	<TournamentSettingsModal
-		tournament={data.tournament}
-		onClose={() => (settingsOpen = false)}
-	/>
-{/if}
-
-{#if signupModalOpen && user}
-	<SignupModal
-		tournament={data.tournament}
-		{user}
-		onClose={() => (signupModalOpen = false)}
-	/>
-{/if}
-
-{#if transitionPreviewOpen && data.standings.combined_qualifier_ranking}
-	<ChampionshipTransitionPreview
-		tournament={data.tournament}
-		combined={data.standings.combined_qualifier_ranking}
-		{busy}
-		onConfirm={transitionChampionship}
-		onCancel={() => (transitionPreviewOpen = false)}
-	/>
-{/if}
-
-{#if signedUpOpen && viewerSlot}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4"
-		onclick={() => (signedUpOpen = false)}
-		role="presentation"
-	>
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
-		<div
-			class="w-full max-w-sm rounded-lg border-2 border-black bg-blue-gray p-5 shadow-lg"
-			onclick={(e) => e.stopPropagation()}
-			role="dialog"
-			aria-modal="true"
-			aria-labelledby="signed-up-title"
-			tabindex="-1"
-		>
-			<header class="mb-3 flex items-start justify-between gap-3">
-				<h2 id="signed-up-title" class="text-lg font-bold text-tan">
-					You're signed up
-				</h2>
-				<button
-					type="button"
-					class="text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100"
-					onclick={() => (signedUpOpen = false)}
-					aria-label="Close"
-				>
-					✕
-				</button>
-			</header>
-			<p class="text-xs text-tan">
-				Division:
-				<span class="font-bold"
-					>{viewerSlot.division === "A"
-						? data.tournament.division_a_name
-						: data.tournament.division_b_name}</span
-				>
-			</p>
-			{#if data.tournament.status === "setup"}
-				<p class="mt-2 text-xs text-tan opacity-80">
-					You can withdraw any time before the tournament starts.
-				</p>
-			{/if}
-			<div class="mt-4 flex justify-end gap-2">
-				{#if data.tournament.status === "setup"}
-					<button
-						type="button"
-						class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-						onclick={withdraw}
-						disabled={busy}
-					>
-						Withdraw
-					</button>
-				{/if}
-				<button
-					type="button"
-					class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-					onclick={() => (signedUpOpen = false)}
-				>
-					Close
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<!-- Match detail. Page-level (its data bundle is assembled here and both
+     brackets link to it) and anchored to the bracket cell carrying the open
+     match's id; open is driven by the `?match=` shallow-routing deep link. -->
+<Popover
+	open={openMatchId !== null}
+	onOpenChange={(o) => {
+		if (!o) closeMatch();
+	}}
+	customAnchor={openMatchId ? `[data-match-id="${openMatchId}"]` : null}
+	side="bottom"
+	align="center"
+	contentClass="w-[min(92vw,36rem)]"
+	ariaLabel="Match detail"
+>
+	{#if currentMatch}
+		{#key currentMatch.match_id}
+			<MatchPopover
+				match={currentMatch}
+				tournament={data.tournament}
+				{slotLabels}
+				{slotUserIds}
+				{slotAvatars}
+				{user}
+				onClose={closeMatch}
+			/>
+		{/key}
+	{/if}
+</Popover>

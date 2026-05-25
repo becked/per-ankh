@@ -1,8 +1,16 @@
 <script lang="ts">
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
-	import type { TournamentDetail } from "$lib/api-cloud";
+	import type {
+		CombinedQualifier,
+		TournamentDetail,
+		UserMe,
+	} from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import Progress from "$lib/ui/Progress.svelte";
+	import SettingsPopover from "./SettingsPopover.svelte";
+	import SignedUpPopover from "./SignedUpPopover.svelte";
+	import SignupPopover from "./SignupPopover.svelte";
+	import TransitionPopover from "./TransitionPopover.svelte";
 	import type { HeaderHero, HeaderStatusMeta } from "./header-status";
 
 	interface Props {
@@ -13,20 +21,25 @@
 		// Roster size for the meta strip; only shown once the tournament is
 		// running or complete (setup/sign-ups surface their own count in the hero).
 		playerCount: number;
+		// Signed-in user, threaded through for the signup popover's confirmation
+		// line (null for anonymous viewers — signup isn't offered then anyway).
+		user: UserMe | null;
+		// Combined qualifier ranking for the championship-transition preview;
+		// null until the swiss phase produces a ranking.
+		combined: CombinedQualifier[] | null;
 		isAdmin: boolean;
 		canSignUp: boolean;
 		hasViewerSlot: boolean;
 		busy: boolean;
 		startReady: boolean;
 		transitionReady: boolean;
-		// Settings is disabled while a match modal is open (shallow-routing guard).
+		// Settings is disabled while a match popover is open (shallow-routing guard).
 		settingsDisabled: boolean;
 		onGuide: () => void;
-		onSettings: () => void;
-		onSignedUp: () => void;
-		onSignup: () => void;
 		onStart: () => void;
-		onTransition: () => void;
+		onWithdraw: () => void;
+		// eslint-disable-next-line no-unused-vars -- callback signature
+		onConfirmTransition: (overrideRanks?: string[]) => void;
 	}
 
 	let {
@@ -35,6 +48,8 @@
 		statusMeta,
 		hero,
 		playerCount,
+		user,
+		combined,
 		isAdmin,
 		canSignUp,
 		hasViewerSlot,
@@ -43,11 +58,9 @@
 		transitionReady,
 		settingsDisabled,
 		onGuide,
-		onSettings,
-		onSignedUp,
-		onSignup,
 		onStart,
-		onTransition,
+		onWithdraw,
+		onConfirmTransition,
 	}: Props = $props();
 
 	// Date-only display ("May 30"); the stored value is a full instant.
@@ -104,14 +117,7 @@
 
 		<div class="flex flex-shrink-0 items-center gap-2">
 			{#if hasViewerSlot}
-				<button
-					type="button"
-					class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
-					onclick={onSignedUp}
-					title="You're signed up"
-				>
-					Signed up
-				</button>
+				<SignedUpPopover {tournament} {busy} {onWithdraw} />
 			{/if}
 			<button
 				type="button"
@@ -123,15 +129,7 @@
 				Guide
 			</button>
 			{#if showSettings}
-				<button
-					type="button"
-					class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-					onclick={onSettings}
-					disabled={settingsDisabled}
-					aria-label="Tournament settings"
-				>
-					Settings
-				</button>
+				<SettingsPopover {tournament} disabled={settingsDisabled} />
 			{/if}
 		</div>
 	</div>
@@ -241,15 +239,8 @@
 					>
 						Start tournament
 					</button>
-				{:else if canSignUp}
-					<button
-						type="button"
-						class="bg-orange/20 hover:bg-orange/40 whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-						onclick={onSignup}
-						disabled={busy}
-					>
-						Sign up
-					</button>
+				{:else if canSignUp && user}
+					<SignupPopover {tournament} {user} {busy} />
 				{/if}
 			</div>
 		{:else if hero.kind === "in-progress"}
@@ -277,15 +268,13 @@
 					<span class="whitespace-nowrap text-xs italic text-tan opacity-70">
 						{hero.reported} of {hero.total} matches reported
 					</span>
-					{#if isAdmin && transitionReady}
-						<button
-							type="button"
-							class="bg-orange/20 hover:bg-orange/40 whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-							onclick={onTransition}
-							disabled={busy}
-						>
-							Transition to Championship
-						</button>
+					{#if isAdmin && transitionReady && combined}
+						<TransitionPopover
+							{tournament}
+							{combined}
+							{busy}
+							onConfirm={onConfirmTransition}
+						/>
 					{/if}
 				</div>
 			</div>

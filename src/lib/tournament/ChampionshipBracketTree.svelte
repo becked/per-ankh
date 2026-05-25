@@ -310,6 +310,7 @@
 							class="match"
 							class:decided={m.status === "complete" || m.status === "forfeit"}
 							class:bye={m.status === "bye"}
+							data-match-id={m.match_id}
 							href="{resolve('/tournaments/[slug]', {
 								slug: tournamentSlug,
 							})}?match={m.match_id}"

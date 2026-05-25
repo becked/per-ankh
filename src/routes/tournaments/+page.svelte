@@ -1,12 +1,10 @@
 <script lang="ts">
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import TournamentRowCard from "$lib/tournament/TournamentRowCard.svelte";
-	import TournamentCreateModal from "$lib/tournament/TournamentCreateModal.svelte";
+	import CreateTournamentPopover from "$lib/tournament/CreateTournamentPopover.svelte";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
-
-	let showCreateModal = $state(false);
 
 	// `myTournaments` is loaded by the root layout (`src/routes/+layout.ts`)
 	// and propagated into every page's data. Used here to mark each card with
@@ -57,13 +55,7 @@
 				<div class="mb-4 flex items-center justify-between gap-3">
 					<h1 class="text-2xl font-bold text-gray-200">Tournaments</h1>
 					{#if data.user}
-						<button
-							type="button"
-							class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan"
-							onclick={() => (showCreateModal = true)}
-						>
-							New tournament
-						</button>
+						<CreateTournamentPopover />
 					{/if}
 				</div>
 
@@ -101,7 +93,3 @@
 		</div>
 	</main>
 </div>
-
-{#if showCreateModal}
-	<TournamentCreateModal onClose={() => (showCreateModal = false)} />
-{/if}
