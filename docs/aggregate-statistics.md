@@ -60,14 +60,14 @@ same predicates.
 
 Scope is one mutually-exclusive selection:
 
-| Scope | Predicate |
-| --- | --- |
-| `all` | none |
-| `public` | `is_public = 1` |
-| `vs_ai` | not tournament-linked AND exactly one human |
-| `mp` | not tournament-linked AND ≥2 humans |
-| `tournament` | linked to a `tournament_matches` row |
-| `<collection_id>` | `collection_id = ?` (owner-only) |
+| Scope             | Predicate                                   |
+| ----------------- | ------------------------------------------- |
+| `all`             | none                                        |
+| `public`          | `is_public = 1`                             |
+| `vs_ai`           | not tournament-linked AND exactly one human |
+| `mp`              | not tournament-linked AND ≥2 humans         |
+| `tournament`      | linked to a `tournament_matches` row        |
+| `<collection_id>` | `collection_id = ?` (owner-only)            |
 
 **Identity visibility composes on top** via `viewerOwnsTarget`: a visitor/anon
 viewing someone else's library is forced to `is_public = 1` and cannot select a
@@ -155,7 +155,7 @@ via the two-emit pattern in `scripts/build-manifests.ts` (`npm run bake:finalize
 ## Known limitations / caveats
 
 - **Opening-laws "sequence" is order-insensitive** — `openingLaws` groups the
-  first four enacted laws as a *sorted set*, so the "sequence" label is a
+  first four enacted laws as a _sorted set_, so the "sequence" label is a
   deliberate naming mismatch (the four track the in-game unit-unlock breakpoint,
   not enactment order).
 - **Families "All nations" pick-rate is across-pool confounded** — aggregating
@@ -165,8 +165,8 @@ via the two-emit pattern in `scripts/build-manifests.ts` (`npm run bake:finalize
   hardcoded `ALL_CLASSES` list rather than introspecting the corpus.
 - **Profile-card summary vs Overview are computed separately.** The profile
   header (`handleUserProfile`) computes win rate / favorite day / favorite
-  nation over the user's *whole, unscoped* library; the Overview tab computes
-  the same shapes *scoped* in `aggregate.ts`. This is intentional (the header
+  nation over the user's _whole, unscoped_ library; the Overview tab computes
+  the same shapes _scoped_ in `aggregate.ts`. This is intentional (the header
   sits above the scope selector and shouldn't move with it) but means two SQL
   implementations of "win rate" and "modal weekday" must stay aligned.
 - **No aggregator tests.** Option builders are presentation code; the SQL/JS
