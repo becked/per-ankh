@@ -25,11 +25,7 @@
 		try {
 			const redirectUri = `${window.location.origin}/auth/callback`;
 			const next = safeNext(window.location.pathname + window.location.search);
-			const { authorize_url } = await cloudApi.discordStart(
-				redirectUri,
-				next,
-				null,
-			);
+			const { authorize_url } = await cloudApi.discordStart(redirectUri, next);
 			window.location.href = authorize_url;
 		} catch (err) {
 			signingIn = false;

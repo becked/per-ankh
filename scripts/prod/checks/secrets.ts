@@ -22,7 +22,7 @@ const CLOUD_DIR = resolve(REPO_ROOT, "cloud");
 // Required production secrets on the Worker. If any are missing, OAuth
 // breaks and every login 500s. Keep this list in sync with the actual
 // wrangler.toml comments naming required secrets.
-const REQUIRED_SECRETS = ["DISCORD_CLIENT_SECRET", "INVITE_CODE"];
+const REQUIRED_SECRETS = ["DISCORD_CLIENT_SECRET"];
 
 interface SecretEntry {
 	name: string;

@@ -317,18 +317,12 @@ export interface CallbackResponse extends UserMe {
 
 export const cloudApi = {
 	// --- Auth ---
-	discordStart: (
-		redirectUri: string,
-		next: string | null,
-		inviteCode: string | null,
-		opts?: CallOpts,
-	) =>
+	discordStart: (redirectUri: string, next: string | null, opts?: CallOpts) =>
 		postJson<{ authorize_url: string }>(
 			"/auth/discord/start",
 			{
 				redirect_uri: redirectUri,
 				next: next ?? undefined,
-				invite_code: inviteCode ?? undefined,
 			},
 			opts,
 		),

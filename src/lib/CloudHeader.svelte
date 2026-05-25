@@ -22,8 +22,7 @@
 
 	// Signed-out login. Mirrors the (removed) home-page sign-in card: kicks
 	// off the Discord OAuth round-trip, returning the viewer to the page they
-	// launched from via `next`. Invite-code capture intentionally lives
-	// elsewhere — the header button is login-only.
+	// launched from via `next`.
 	let signingIn = $state(false);
 	let loginError = $state<string | null>(null);
 
@@ -43,11 +42,7 @@
 		try {
 			const redirectUri = `${window.location.origin}/auth/callback`;
 			const next = safeNext(window.location.pathname + window.location.search);
-			const { authorize_url } = await cloudApi.discordStart(
-				redirectUri,
-				next,
-				null,
-			);
+			const { authorize_url } = await cloudApi.discordStart(redirectUri, next);
 			window.location.href = authorize_url;
 		} catch (err) {
 			signingIn = false;

@@ -85,9 +85,3 @@ ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
 DISCORD_CLIENT_ID = "1500901451034263604"
 # DISCORD_CLIENT_SECRET is set out-of-band:
 #   npx wrangler secret put DISCORD_CLIENT_SECRET
-# INVITE_CODE is set out-of-band:
-#   cd cloud && npx wrangler secret put INVITE_CODE
-# Sign-up gate for new accounts. Existing users bypass — only first logins for
-# an unknown discord_id are checked. Rotate by running `wrangler secret put`
-# again with a new value; new logins pick it up immediately, no redeploy.
-# For local dev, add INVITE_CODE="..." to cloud/.dev.vars.

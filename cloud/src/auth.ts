@@ -29,7 +29,6 @@ import {
 	clearSessionCookie,
 	createSession,
 	deleteSession,
-	seenCookie,
 	sessionCookie,
 	sessionFromRequest,
 } from "./session";
@@ -42,9 +41,6 @@ export interface AuthEnv extends SessionEnv {
 	ALLOWED_ORIGINS: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
-	// Invite-code passphrase that gates new-account sign-up. Set out-of-band
-	// via `wrangler secret put INVITE_CODE`. Rotatable without a redeploy.
-	INVITE_CODE: string;
 }
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
@@ -63,11 +59,6 @@ interface OAuthPending {
 	// Internal post-login redirect target (e.g. "/games/abc"). Always a
 	// same-origin path; validated by safeNext before storage.
 	next: string;
-	// Invite-code passphrase carried across the Discord round-trip. Validated
-	// at callback time, only for new accounts (existing discord_id bypasses).
-	// Null when the user didn't submit one — they'll be rejected at callback
-	// if Discord identifies them as a new user.
-	invite_code: string | null;
 }
 
 const DEFAULT_NEXT = "/";
@@ -179,13 +170,11 @@ export async function handleDiscordStart(
 	let body: {
 		redirect_uri?: string;
 		next?: string;
-		invite_code?: string;
 	};
 	try {
 		body = await readJsonBody<{
 			redirect_uri?: string;
 			next?: string;
-			invite_code?: string;
 		}>(request);
 	} catch {
 		return errorResponse("Invalid JSON body", 400, cors, "INVALID_BODY");
@@ -202,22 +191,6 @@ export async function handleDiscordStart(
 	}
 	const next = safeNext(body.next);
 
-	// Carry invite code verbatim through the Discord round-trip; validated at
-	// callback. Cap length to prevent abusive payloads filling KV — real codes
-	// are short. Empty/missing → null (caller is presumed existing user; gate
-	// rejects at callback if Discord identifies them as new).
-	const rawInvite =
-		typeof body.invite_code === "string" ? body.invite_code : "";
-	if (rawInvite.length > 256) {
-		return errorResponse(
-			"invite_code too long",
-			400,
-			cors,
-			"INVITE_CODE_TOO_LONG",
-		);
-	}
-	const inviteCode = rawInvite.trim() || null;
-
 	const state = generateState();
 	const { verifier, challenge } = await generatePkce();
 	const kvId = nanoid(21);
@@ -227,7 +200,6 @@ export async function handleDiscordStart(
 		code_verifier: verifier,
 		redirect_uri: redirectUri,
 		next,
-		invite_code: inviteCode,
 	};
 	await env.SESSIONS_KV.put(oauthKey(kvId), JSON.stringify(pending), {
 		expirationTtl: OAUTH_PENDING_TTL_SECONDS,
@@ -405,66 +377,6 @@ export async function handleDiscordCallback(
 
 	const discordUsername = discordUser.username.toLowerCase();
 
-	// Invite-code gate for new accounts only. We can only distinguish new
-	// from returning users after Discord identifies them, hence the check
-	// runs here rather than at /start. Existing discord_id → skip gate.
-	// New user → per-IP rate limit, then constant-time code compare.
-	const existing = await env.SHARE_DB.prepare(
-		`SELECT 1 AS one FROM users WHERE discord_id = ? LIMIT 1`,
-	)
-		.bind(discordUser.id)
-		.first<{ one: number }>();
-
-	if (!existing) {
-		const clientIp = getClientIp(request);
-		// Skip rate-limit check when CF-RAY is missing (misconfigured
-		// topology — getClientIp already emits a warn). A global counter
-		// would let a single attacker block legit users; we'd rather lose
-		// the rate limit than the availability.
-		if (clientIp) {
-			const failed = await env.SHARE_DB.prepare(
-				`SELECT COUNT(*) AS count FROM events
-				 WHERE event_type = 'invite_code_failed'
-				   AND ip_address = ?
-				   AND created_at > datetime('now', '-10 minutes')`,
-			)
-				.bind(clientIp)
-				.first<{ count: number }>();
-			if ((failed?.count ?? 0) >= 10) {
-				logError("invite_code_rate_limited", null, { ip: clientIp });
-				return errorResponse(
-					"Too many invite-code attempts. Try again in a few minutes.",
-					429,
-					cors,
-					"RATE_LIMITED",
-				);
-			}
-		}
-
-		const submitted = pending.invite_code;
-		if (!submitted) {
-			await recordInviteFailure(env, clientIp);
-			return errorResponse(
-				"An invite code is required to sign up.",
-				403,
-				cors,
-				"INVITE_CODE_REQUIRED",
-			);
-		}
-		if (!timingSafeEqual(submitted, env.INVITE_CODE)) {
-			await recordInviteFailure(env, clientIp);
-			logError("invite_code_invalid", null, {
-				discord_id: discordUser.id,
-			});
-			return errorResponse(
-				"Invalid invite code.",
-				403,
-				cors,
-				"INVITE_CODE_INVALID",
-			);
-		}
-	}
-
 	const displayName = discordUser.global_name ?? discordUser.username;
 	const email = discordUser.email ?? null;
 	const emailVerified = discordUser.verified ?? null;
@@ -594,11 +506,6 @@ export async function handleDiscordCallback(
 		...cors,
 	});
 	headers.append("Set-Cookie", sessionCookie(sessionToken, request));
-	// Returning-user hint for the login page. Cleared cookies will lose it,
-	// but the login form gracefully handles that (existing users can leave
-	// the invite-code field blank — backend doesn't enforce on existing
-	// discord_id). See session.seenCookie.
-	headers.append("Set-Cookie", seenCookie(request));
 	// Also clear the now-consumed pending cookie.
 	const isHttps = new URL(request.url).protocol === "https:";
 	const clearPending = [
@@ -755,25 +662,4 @@ export async function handleLogout(
 			...cors,
 		},
 	});
-}
-
-// Log a failed invite-code attempt for per-IP rate limiting. Skips when the
-// client IP is unavailable (CF-RAY missing). Fire-and-forget — a logging
-// failure here is degraded state, not a reason to fail the request, since
-// the caller is already on an error path.
-async function recordInviteFailure(
-	env: AuthEnv,
-	clientIp: string | null,
-): Promise<void> {
-	if (!clientIp) return;
-	try {
-		await env.SHARE_DB.prepare(
-			`INSERT INTO events (event_type, ip_address)
-			 VALUES ('invite_code_failed', ?)`,
-		)
-			.bind(clientIp)
-			.run();
-	} catch (e) {
-		logError("invite_code_failure_log_failed", e);
-	}
 }
