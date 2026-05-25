@@ -69,132 +69,138 @@
 			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
-			<!--
+			<div class="mx-auto max-w-screen-2xl">
+				<!--
 				Profile card: identity (left) + all-time stat boxes (right),
 				styled like the / game-card stat panels. The stats are over the
 				user's whole library — they do NOT track the scope selector.
 			-->
-			<div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3">
-				<div class="flex items-center gap-3">
-					<img
-						src={profile.avatar_url}
-						alt=""
-						width="40"
-						height="40"
-						class="h-10 w-10 rounded-full border-2 border-black"
-					/>
-					<h1 class="text-2xl font-bold text-gray-200">
-						{profile.display_name}
-					</h1>
+				<div class="mb-4 flex flex-wrap items-center gap-x-6 gap-y-3">
+					<div class="flex items-center gap-3">
+						<img
+							src={profile.avatar_url}
+							alt=""
+							width="40"
+							height="40"
+							class="h-10 w-10 rounded-full border-2 border-black"
+						/>
+						<h1 class="text-2xl font-bold text-gray-200">
+							{profile.display_name}
+						</h1>
+					</div>
+
+					<div class="flex flex-wrap gap-2">
+						<div
+							class="min-w-[88px] rounded px-2 py-1"
+							style="background-color: #2a2622;"
+						>
+							<p class="mb-0.5 text-[10px] font-bold text-gray-400">Saves</p>
+							<p class="text-[10px] font-bold text-tan">
+								{summary.total_games}
+							</p>
+						</div>
+
+						<div
+							class="min-w-[88px] rounded px-2 py-1"
+							style="background-color: #2a2622;"
+						>
+							<p class="mb-0.5 text-[10px] font-bold text-gray-400">Win Rate</p>
+							<p class="text-[10px] font-bold text-tan">
+								{#if winRatePct != null}{winRatePct}%{:else}—{/if}
+							</p>
+						</div>
+
+						<div
+							class="min-w-[88px] rounded px-2 py-1"
+							style="background-color: #2a2622;"
+						>
+							<p
+								class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+							>
+								{#if summary.favorite_nation}
+									<SpriteIcon
+										category="crests"
+										value={summary.favorite_nation}
+										size={10}
+										alt={formatEnum(summary.favorite_nation, "NATION_")}
+									/>
+								{/if}
+								Favorite Nation
+							</p>
+							<p class="text-[10px] font-bold text-tan">
+								{summary.favorite_nation
+									? formatEnum(summary.favorite_nation, "NATION_")
+									: "—"}
+							</p>
+						</div>
+
+						<div
+							class="min-w-[88px] rounded px-2 py-1"
+							style="background-color: #2a2622;"
+						>
+							<p class="mb-0.5 text-[10px] font-bold text-gray-400">
+								Favorite Day
+							</p>
+							<p class="text-[10px] font-bold text-tan">{favoriteDay ?? "—"}</p>
+						</div>
+					</div>
+
+					<!-- Scope selector, aligned with the profile card. -->
+					<div class="ml-auto">
+						<ScopeRow
+							collections={data.collections}
+							scopeCounts={data.scopeCounts}
+							scope={data.scope}
+							isOwner={data.isOwner}
+						/>
+					</div>
 				</div>
 
-				<div class="flex flex-wrap gap-2">
-					<div
-						class="min-w-[88px] rounded px-2 py-1"
-						style="background-color: #2a2622;"
-					>
-						<p class="mb-0.5 text-[10px] font-bold text-gray-400">Saves</p>
-						<p class="text-[10px] font-bold text-tan">
-							{summary.total_games}
-						</p>
-					</div>
-
-					<div
-						class="min-w-[88px] rounded px-2 py-1"
-						style="background-color: #2a2622;"
-					>
-						<p class="mb-0.5 text-[10px] font-bold text-gray-400">Win Rate</p>
-						<p class="text-[10px] font-bold text-tan">
-							{#if winRatePct != null}{winRatePct}%{:else}—{/if}
-						</p>
-					</div>
-
-					<div
-						class="min-w-[88px] rounded px-2 py-1"
-						style="background-color: #2a2622;"
-					>
-						<p
-							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+				<Tabs.Root value={data.tab} onValueChange={onTabChange}>
+					<!-- Tabs live inside the light-brown panel; the list is a floating
+				     chip bar matching the stats subtabs. -->
+					<div class="rounded-lg p-4" style="background-color: #35302B;">
+						<Tabs.List
+							class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
 						>
-							{#if summary.favorite_nation}
-								<SpriteIcon
-									category="crests"
-									value={summary.favorite_nation}
-									size={10}
-									alt={formatEnum(summary.favorite_nation, "NATION_")}
+							<Tabs.Trigger value="overview" class={triggerClass}
+								>Overview</Tabs.Trigger
+							>
+							<Tabs.Trigger value="games" class={triggerClass}
+								>Games</Tabs.Trigger
+							>
+							<Tabs.Trigger value="stats" class={triggerClass}
+								>Stats</Tabs.Trigger
+							>
+						</Tabs.List>
+
+						<Tabs.Content value="overview">
+							<OverviewTab {bundle} />
+						</Tabs.Content>
+
+						<Tabs.Content value="games">
+							{#if data.tab === "games"}
+								<GamesTable
+									userId={profile.user_id}
+									initialGames={data.games}
+									total={data.gamesTotal}
+									pageSize={data.pageSize}
+									q={data.q}
+									nation={data.nation}
+									result={data.result}
+									date={data.date}
+									sort={data.sort}
+									{nationOptions}
 								/>
 							{/if}
-							Favorite Nation
-						</p>
-						<p class="text-[10px] font-bold text-tan">
-							{summary.favorite_nation
-								? formatEnum(summary.favorite_nation, "NATION_")
-								: "—"}
-						</p>
-					</div>
+						</Tabs.Content>
 
-					<div
-						class="min-w-[88px] rounded px-2 py-1"
-						style="background-color: #2a2622;"
-					>
-						<p class="mb-0.5 text-[10px] font-bold text-gray-400">
-							Favorite Day
-						</p>
-						<p class="text-[10px] font-bold text-tan">{favoriteDay ?? "—"}</p>
+						<Tabs.Content value="stats">
+							<StatsView {bundle} />
+						</Tabs.Content>
 					</div>
-				</div>
-
-				<!-- Scope selector, aligned with the profile card. -->
-				<div class="ml-auto">
-					<ScopeRow
-						collections={data.collections}
-						scopeCounts={data.scopeCounts}
-						scope={data.scope}
-						isOwner={data.isOwner}
-					/>
-				</div>
+				</Tabs.Root>
 			</div>
-
-			<Tabs.Root value={data.tab} onValueChange={onTabChange}>
-				<!-- Tabs live inside the light-brown panel; the list is a floating
-				     chip bar matching the stats subtabs. -->
-				<div class="rounded-lg p-4" style="background-color: #35302B;">
-					<Tabs.List
-						class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
-					>
-						<Tabs.Trigger value="overview" class={triggerClass}
-							>Overview</Tabs.Trigger
-						>
-						<Tabs.Trigger value="games" class={triggerClass}>Games</Tabs.Trigger>
-						<Tabs.Trigger value="stats" class={triggerClass}>Stats</Tabs.Trigger>
-					</Tabs.List>
-
-					<Tabs.Content value="overview">
-						<OverviewTab {bundle} />
-					</Tabs.Content>
-
-					<Tabs.Content value="games">
-						{#if data.tab === "games"}
-							<GamesTable
-								userId={profile.user_id}
-								initialGames={data.games}
-								total={data.gamesTotal}
-								pageSize={data.pageSize}
-								q={data.q}
-								nation={data.nation}
-								result={data.result}
-								date={data.date}
-								sort={data.sort}
-								{nationOptions}
-							/>
-						{/if}
-					</Tabs.Content>
-
-					<Tabs.Content value="stats">
-						<StatsView {bundle} />
-					</Tabs.Content>
-				</div>
-			</Tabs.Root>
 		</div>
 	</main>
 </div>

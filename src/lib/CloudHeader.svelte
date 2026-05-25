@@ -6,8 +6,10 @@
 	import { resolve } from "$app/paths";
 	import HeaderGameSearch from "$lib/users/HeaderGameSearch.svelte";
 	import AboutModal from "$lib/AboutModal.svelte";
+	import { safeNext } from "$lib/utils/safe-next";
 	import {
 		cloudApi,
+		ApiError,
 		type MyAdminTournamentEntry,
 		type MyTournamentEntry,
 		type UserMe,
@@ -61,6 +63,36 @@
 	let isMenuOpen = $state(false);
 	let isAboutModalOpen = $state(false);
 	let signingOut = $state(false);
+
+	// Signed-out login. Mirrors the (removed) home-page sign-in card: kicks
+	// off the Discord OAuth round-trip, returning the viewer to the page they
+	// launched from via `next`. Invite-code capture intentionally lives
+	// elsewhere — the header button is login-only.
+	let signingIn = $state(false);
+	let loginError = $state<string | null>(null);
+
+	async function handleSignIn() {
+		signingIn = true;
+		loginError = null;
+		try {
+			const redirectUri = `${window.location.origin}/auth/callback`;
+			const next = safeNext(window.location.pathname + window.location.search);
+			const { authorize_url } = await cloudApi.discordStart(
+				redirectUri,
+				next,
+				null,
+			);
+			window.location.href = authorize_url;
+		} catch (err) {
+			signingIn = false;
+			loginError =
+				err instanceof ApiError
+					? `${err.code ?? err.status}: ${err.message}`
+					: err instanceof Error
+						? err.message
+						: "Login failed";
+		}
+	}
 
 	function toggleMenu() {
 		isMenuOpen = !isMenuOpen;
@@ -204,14 +236,6 @@
 					>
 						About
 					</button>
-					<div class="border-t border-black"></div>
-					<a
-						href={resolve("/")}
-						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						onclick={closeMenu}
-					>
-						Login
-					</a>
 				{/if}
 			</div>
 		{/if}
@@ -277,7 +301,7 @@
 		{/if}
 		{#if user}
 			<!-- Navigational search over the signed-in user's own games. -->
-			<HeaderGameSearch {user} class="w-56 flex-shrink-0" />
+			<HeaderGameSearch {user} class="w-48 flex-shrink-0" />
 			<!-- Avatar (profile link) sits to the right of the search. -->
 			<a
 				href={resolve(`/users/${user.user_id}`)}
@@ -293,6 +317,17 @@
 					height="28"
 				/>
 			</a>
+		{:else}
+			<!-- Signed out: a plain login button stands in for the avatar. -->
+			<button
+				type="button"
+				onclick={handleSignIn}
+				disabled={signingIn}
+				class="inline-flex flex-shrink-0 items-center rounded border border-tan px-3 py-1 text-xs font-semibold text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-60"
+				title={loginError ?? undefined}
+			>
+				{signingIn ? "Redirecting…" : "Login"}
+			</button>
 		{/if}
 	</div>
 </header>

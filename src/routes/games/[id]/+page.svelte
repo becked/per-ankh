@@ -85,79 +85,81 @@
 			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
-			<GameDetailView
-				gameDetails={game.game_details}
-				playerHistory={game.player_history}
-				allYields={game.yield_history}
-				eventLogs={game.event_logs}
-				lawAdoptionHistory={game.law_adoption_history}
-				currentLaws={game.current_laws}
-				techDiscoveryHistory={game.tech_discovery_history}
-				completedTechs={game.completed_techs}
-				unitsProduced={game.units_produced}
-				cityStatistics={game.city_statistics}
-				improvementData={game.improvement_data}
-				gameReligions={game.game_religions}
-				playerWonders={game.player_wonders}
-				userNation={game.user_nation ?? null}
-				userDisplayName={game.user_display_name ?? null}
-				userWon={game.user_won ?? null}
-				displayName={game.display_name ?? null}
-				{isOwner}
-				onRename={isOwner ? handleRename : null}
-				{mapTiles}
-				{selectedMapTurn}
-				onMapTurnChange={handleMapTurnChange}
-			>
-				{#snippet headerActions()}
-					<!--
+			<div class="mx-auto max-w-screen-2xl">
+				<GameDetailView
+					gameDetails={game.game_details}
+					playerHistory={game.player_history}
+					allYields={game.yield_history}
+					eventLogs={game.event_logs}
+					lawAdoptionHistory={game.law_adoption_history}
+					currentLaws={game.current_laws}
+					techDiscoveryHistory={game.tech_discovery_history}
+					completedTechs={game.completed_techs}
+					unitsProduced={game.units_produced}
+					cityStatistics={game.city_statistics}
+					improvementData={game.improvement_data}
+					gameReligions={game.game_religions}
+					playerWonders={game.player_wonders}
+					userNation={game.user_nation ?? null}
+					userDisplayName={game.user_display_name ?? null}
+					userWon={game.user_won ?? null}
+					displayName={game.display_name ?? null}
+					{isOwner}
+					onRename={isOwner ? handleRename : null}
+					{mapTiles}
+					{selectedMapTurn}
+					onMapTurnChange={handleMapTurnChange}
+				>
+					{#snippet headerActions()}
+						<!--
 						currentCollectionId is omitted: with the sidebar gone we no
 						longer load the games list here, so the "already in this
 						collection" checkmark is unavailable. The move action still
 						works; the Games-tab row menu shows the indicator instead.
 					-->
-					<GameActions
-						{gameId}
-						{isOwner}
-						bind:isPublic
-						collections={data.collections ?? []}
-					/>
-				{/snippet}
-				{#snippet preTabs()}
-					{#if isReimportAvailable}
-						<div
-							class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
-						>
-							<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
-								This game was parsed with an older version ({game.parser_version}).
-								Click Reparse for the latest version ({PARSER_VERSION}).
-							</p>
-							<ReimportButton {gameId} />
-						</div>
-					{/if}
-					{#if data.tournamentLink}
-						<div
-							class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
-						>
-							<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
-								<a
-									class="font-bold text-tan hover:text-orange hover:underline"
-									href="{resolve('/tournaments/[slug]', {
-										slug: data.tournamentLink.tournament.slug,
-									})}?match={data.tournamentLink.match.match_id}"
-								>
-									{data.tournamentLink.tournament.name}
-								</a>
-								<span class="opacity-80">
-									— Round {data.tournamentLink.match.round_number}: {data
-										.tournamentLink.match.slot_a_username ?? "—"} vs
-									{data.tournamentLink.match.slot_b_username ?? "—"}
-								</span>
-							</p>
-						</div>
-					{/if}
-				{/snippet}
-			</GameDetailView>
+						<GameActions
+							{gameId}
+							{isOwner}
+							bind:isPublic
+							collections={data.collections ?? []}
+						/>
+					{/snippet}
+					{#snippet preTabs()}
+						{#if isReimportAvailable}
+							<div
+								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+							>
+								<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
+									This game was parsed with an older version ({game.parser_version}).
+									Click Reparse for the latest version ({PARSER_VERSION}).
+								</p>
+								<ReimportButton {gameId} />
+							</div>
+						{/if}
+						{#if data.tournamentLink}
+							<div
+								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+							>
+								<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
+									<a
+										class="font-bold text-tan hover:text-orange hover:underline"
+										href="{resolve('/tournaments/[slug]', {
+											slug: data.tournamentLink.tournament.slug,
+										})}?match={data.tournamentLink.match.match_id}"
+									>
+										{data.tournamentLink.tournament.name}
+									</a>
+									<span class="opacity-80">
+										— Round {data.tournamentLink.match.round_number}: {data
+											.tournamentLink.match.slot_a_username ?? "—"} vs
+										{data.tournamentLink.match.slot_b_username ?? "—"}
+									</span>
+								</p>
+							</div>
+						{/if}
+					{/snippet}
+				</GameDetailView>
+			</div>
 		</div>
 	</main>
 </div>
