@@ -180,6 +180,38 @@ function buildMapPool(
 	return { ok: true, pool };
 }
 
+// Shallow value-equality for an instance's options (keys are option zTypes,
+// values are string | boolean — no nesting).
+function sameOptions(
+	a: Record<string, string | boolean>,
+	b: Record<string, string | boolean>,
+): boolean {
+	const keys = Object.keys(a);
+	if (keys.length !== Object.keys(b).length) return false;
+	return keys.every((k) => a[k] === b[k]);
+}
+
+// Enforce the append-only rule for a started tournament's map pool: every
+// existing instance must reappear in `next` unchanged (same script + options),
+// and `next` may otherwise add new instances. Returns a human-readable reason
+// on violation, or null if `next` is a valid append of `existing`.
+function appendOnlyViolation(
+	existing: MapPoolEntry[],
+	next: MapPoolEntry[],
+): string | null {
+	const nextById = new Map(next.map((e) => [e.id, e]));
+	for (const prev of existing) {
+		const now = nextById.get(prev.id);
+		if (!now) {
+			return "Existing maps can't be removed after the tournament has started";
+		}
+		if (now.script !== prev.script || !sameOptions(prev.options, now.options)) {
+			return "Existing maps can't be changed after the tournament has started — you can only add new maps";
+		}
+	}
+	return null;
+}
+
 export interface TournamentAdminEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
 }
@@ -661,14 +693,16 @@ export async function handlePatchTournament(
 	if (!body.ok) return body.response;
 	const patch = body.body;
 
-	// Some fields are locked once the tournament has started.
+	// Swiss config is frozen once the tournament has started. The map pool is
+	// not frozen outright — past 'setup' it becomes append-only (admins can add
+	// maps for future rounds; see the append-only enforcement below where the
+	// pool is built).
 	const locked = tournament.status !== "setup";
 	if (
 		locked &&
 		(patch.swiss_wins_to_advance !== undefined ||
 			patch.swiss_losses_to_eliminate !== undefined ||
-			patch.swiss_max_rounds !== undefined ||
-			patch.map_pool !== undefined)
+			patch.swiss_max_rounds !== undefined)
 	) {
 		return errorResponse(
 			"Cannot edit Swiss config after the tournament has started",
@@ -715,6 +749,31 @@ export async function handlePatchTournament(
 		const built = buildMapPool(patch.map_pool);
 		if (!built.ok) {
 			return errorResponse(built.message, 400, cors, "MAP_OPTIONS_INVALID");
+		}
+		// A completed tournament has no future rounds to consume new maps and
+		// nothing left to override, so the pool is frozen entirely.
+		if (tournament.status === "complete") {
+			return errorResponse(
+				"Can't change the map pool of a completed tournament",
+				409,
+				cors,
+				"TOURNAMENT_COMPLETE",
+			);
+		}
+		// Otherwise past 'setup' the pool is append-only: new instances may be
+		// added (future rounds pick them up at generation time, and pending
+		// matches can be pointed at them via handlePatchMatchMap), but existing
+		// instances must survive unchanged. Matches reference pool instances by
+		// id with no per-match options snapshot (migration 0019), so editing or
+		// removing a live instance would silently rewrite the config of matches
+		// that reference it.
+		if (locked) {
+			const existing = parseMapPoolOrError(tournament, cors);
+			if (!existing.ok) return existing.response;
+			const violation = appendOnlyViolation(existing.pool, built.pool);
+			if (violation) {
+				return errorResponse(violation, 409, cors, "MAP_POOL_LOCKED");
+			}
 		}
 		nextMapPoolJson = JSON.stringify(built.pool);
 	}

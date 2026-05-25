@@ -61,9 +61,11 @@ const MapPoolEntrySchema = v.object({
 // maps panel must be able to clear the pool back to empty while still in
 // setup. Non-emptiness is enforced at the gate that actually needs it: the
 // setup → swiss FSM transition (handleStartTournament) rejects an empty pool
-// with MAP_CONFIG_EMPTY before any match generation. Patch edits to this field
-// are locked to status='setup' in the handler. (The admin CLI does its own
-// equivalent local validation; it doesn't use this schema.)
+// with MAP_CONFIG_EMPTY before any match generation. In 'setup' the handler
+// accepts arbitrary patch edits to this field; once the tournament has started
+// it enforces append-only (existing instances frozen, new ones may be added).
+// (The admin CLI does its own equivalent local validation; it doesn't use this
+// schema.)
 const MapPoolSchema = v.pipe(v.array(MapPoolEntrySchema), v.maxLength(64));
 
 export const CreateTournamentSchema = v.object({

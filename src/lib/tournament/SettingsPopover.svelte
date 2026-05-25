@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { TournamentDetail } from "$lib/api-cloud";
 	import Popover from "$lib/ui/Popover.svelte";
+	import TournamentMapPoolAdder from "./TournamentMapPoolAdder.svelte";
 	import TournamentMapPoolSummary from "./TournamentMapPoolSummary.svelte";
 	import TournamentSettingsForm from "./TournamentSettingsForm.svelte";
 
@@ -72,6 +73,9 @@
 		</div>
 		<div>
 			<TournamentMapPoolSummary mapPool={tournament.map_pool} />
+			{#if isAdmin && (tournament.status === "swiss" || tournament.status === "championship")}
+				<TournamentMapPoolAdder {tournament} />
+			{/if}
 		</div>
 	</div>
 </Popover>
