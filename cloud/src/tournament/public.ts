@@ -476,6 +476,32 @@ export async function handleTournamentDetail(
 			};
 		}
 	}
+	// Admin roster for the header's meta strip. The creator is inserted into
+	// tournament_admins at create time, so the earliest granted_at row is the
+	// owner; any later rows are co-admins added afterward. (user_id ASC is a
+	// deterministic tiebreaker for the degenerate same-second case.) Joined to
+	// users for display_name + avatar — both always present (display_name is
+	// NOT NULL; discord_id always yields a buildAvatarUrl result).
+	const adminRows = await env.SHARE_DB.prepare(
+		`SELECT u.display_name, u.discord_id, u.avatar_hash
+		 FROM tournament_admins ta
+		 JOIN users u ON u.user_id = ta.user_id
+		 WHERE ta.tournament_id = ?
+		 ORDER BY ta.granted_at ASC, ta.user_id ASC`,
+	)
+		.bind(tournament.tournament_id)
+		.all<{
+			display_name: string;
+			discord_id: string;
+			avatar_hash: string | null;
+		}>();
+	const adminList = (adminRows.results ?? []).map((r) => ({
+		display_name: r.display_name,
+		avatar_url: buildAvatarUrl(r.discord_id, r.avatar_hash),
+	}));
+	const owner = adminList[0] ?? null;
+	const admins = adminList.slice(1);
+
 	// Public-read leniency: render the tournament detail even if the map_pool
 	// JSON is corrupted (admins will see the failure surface via round
 	// generation; no need to break the public-facing page). Admin write
@@ -508,6 +534,10 @@ export async function handleTournamentDetail(
 			signups_open: tournament.signups_open === 1,
 			viewer_slot,
 			is_viewer_admin,
+			owner,
+			admins,
+			starts_at: tournament.starts_at,
+			completed_at: tournament.completed_at,
 			created_at: tournament.created_at,
 			updated_at: tournament.updated_at,
 		},
@@ -735,6 +765,27 @@ export async function handleTournamentBracket(
 		matchesByRound.set(m.round_id, list);
 	}
 
+	// Linked-game turn counts for matches that have a reported game. The
+	// complete-tournament header renders "won the final … in N turns" off the
+	// championship final's count; one batched lookup covers every match here.
+	const gameIds = [
+		...new Set(
+			matches.map((m) => m.game_id).filter((id): id is string => id !== null),
+		),
+	];
+	const turnsByGame = new Map<string, number>();
+	if (gameIds.length > 0) {
+		const res = await env.SHARE_DB.prepare(
+			`SELECT game_id, total_turns FROM games
+			 WHERE game_id IN (${gameIds.map(() => "?").join(",")})`,
+		)
+			.bind(...gameIds)
+			.all<{ game_id: string; total_turns: number }>();
+		for (const row of res.results ?? []) {
+			turnsByGame.set(row.game_id, row.total_turns);
+		}
+	}
+
 	const body = {
 		tournament_id: tournament.tournament_id,
 		slots: champSlots.map((s) => ({
@@ -747,7 +798,10 @@ export async function handleTournamentBracket(
 			round_id: r.round_id,
 			round_number: r.round_number,
 			status: r.status,
-			matches: (matchesByRound.get(r.round_id) ?? []).map(serializeMatch),
+			matches: (matchesByRound.get(r.round_id) ?? []).map((m) => ({
+				...serializeMatch(m),
+				total_turns: m.game_id ? (turnsByGame.get(m.game_id) ?? null) : null,
+			})),
 		})),
 	};
 	return jsonResponse(body, 200, cors);

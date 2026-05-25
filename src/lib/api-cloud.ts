@@ -1148,6 +1148,18 @@ export interface TournamentDetail {
 		swiss_seed: number;
 	} | null;
 	is_viewer_admin: boolean;
+	// Admin roster for the header meta strip. owner = the creator (earliest
+	// tournament_admins.granted_at); admins = co-admins added afterward (may be
+	// empty). display_name + avatar_url are always present. owner is null only
+	// for the degenerate case of a tournament with no admin rows.
+	owner: { display_name: string; avatar_url: string } | null;
+	admins: { display_name: string; avatar_url: string }[];
+	// Admin-announced start time (full ISO instant; display date-only), shown
+	// while in setup/sign-ups. Null until set.
+	starts_at: string | null;
+	// Set once when the tournament completes; shown as "Ended <date>". Null for
+	// any non-complete tournament.
+	completed_at: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -1171,6 +1183,9 @@ export interface PatchTournamentBody {
 	// re-opening once status moves past setup. handleStartTournament auto-
 	// clears the flag on the setup → swiss transition.
 	signups_open?: boolean;
+	// Admin-announced start time as a full ISO-8601 instant, or null to clear.
+	// Server validates via v.isoTimestamp(); send new Date(local).toISOString().
+	starts_at?: string | null;
 }
 
 // Mirrors cloud/src/schemas/tournament.ts:CreateTournamentSchema. `name`
@@ -1275,6 +1290,10 @@ export interface TournamentMatch {
 	reported_by_user_id: string | null;
 	reported_at: string | null;
 	notes: string | null;
+	// Linked game's turn count, surfaced on bracket matches only (the complete
+	// header's "won the final in N turns" line). Null when no game was uploaded
+	// for the match, and absent from non-bracket match payloads.
+	total_turns?: number | null;
 }
 
 export interface MyTournamentEntry {

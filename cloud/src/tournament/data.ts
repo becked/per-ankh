@@ -35,6 +35,12 @@ export interface TournamentRow {
 	// is visible to all beta users and POST /signup is enabled. Auto-flipped
 	// to 0 on the setup → swiss transition in handleStartTournament.
 	signups_open: number;
+	// Admin-announced start time (full ISO-8601 instant), shown as "Starts
+	// <date>" during setup/sign-ups. NULL until set via the settings form.
+	starts_at: string | null;
+	// Stamped once, on the championship-final report that flips status →
+	// 'complete'. Shown as "Ended <date>". NULL for any non-complete tournament.
+	completed_at: string | null;
 	created_at: string;
 	updated_at: string;
 }

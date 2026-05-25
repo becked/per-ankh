@@ -36,6 +36,29 @@
 	let swissWinsToAdvance = $state(tournament.swiss_wins_to_advance);
 	// svelte-ignore state_referenced_locally
 	let swissLossesToEliminate = $state(tournament.swiss_losses_to_eliminate);
+	// Scheduled start. Stored as a full ISO-8601 instant; the <input
+	// type="datetime-local"> works in the viewer's local time with minute
+	// precision, so we convert in both directions.
+	// svelte-ignore state_referenced_locally
+	let startsAtLocal = $state(isoToLocalInput(tournament.starts_at));
+
+	// ISO instant → "YYYY-MM-DDTHH:MM" in local time for datetime-local.
+	function isoToLocalInput(iso: string | null): string {
+		if (!iso) return "";
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return "";
+		const pad = (n: number) => String(n).padStart(2, "0");
+		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+	}
+
+	// datetime-local value → ISO instant (or null when cleared).
+	function localInputToIso(local: string): string | null {
+		const trimmed = local.trim();
+		if (!trimmed) return null;
+		const d = new Date(trimmed);
+		if (Number.isNaN(d.getTime())) return null;
+		return d.toISOString();
+	}
 
 	let busy = $state(false);
 
@@ -67,6 +90,8 @@
 		const trimmedB = divisionBName.trim();
 		if (trimmedB !== tournament.division_b_name)
 			patch.division_b_name = trimmedB;
+		const nextStartsAt = localInputToIso(startsAtLocal);
+		if (nextStartsAt !== tournament.starts_at) patch.starts_at = nextStartsAt;
 		if (!swissConfigLocked) {
 			if (swissMaxRounds !== tournament.swiss_max_rounds)
 				patch.swiss_max_rounds = swissMaxRounds;
@@ -129,6 +154,20 @@
 			disabled={!canEdit}
 			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 		></textarea>
+	</label>
+
+	<label class="flex flex-col gap-1">
+		<span>Scheduled start</span>
+		<input
+			type="datetime-local"
+			bind:value={startsAtLocal}
+			disabled={!canEdit}
+			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+		/>
+		<span class="opacity-60"
+			>Shown to players as the announced start date while sign-ups are open.
+			Leave blank for none.</span
+		>
 	</label>
 
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">

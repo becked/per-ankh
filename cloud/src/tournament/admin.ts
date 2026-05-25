@@ -2062,7 +2062,10 @@ export async function maybeAdvanceAfterMatchReport(
 					// The just-closed round was the final.
 					statements.push(
 						env.SHARE_DB.prepare(
-							`UPDATE tournaments SET status = 'complete', updated_at = datetime('now')
+							`UPDATE tournaments
+							 SET status = 'complete',
+							     completed_at = datetime('now'),
+							     updated_at = datetime('now')
 							 WHERE tournament_id = ? AND status = 'championship'`,
 						).bind(tournament.tournament_id),
 					);

@@ -119,6 +119,11 @@ export const PatchTournamentSchema = v.object({
 	),
 	map_pool: v.optional(MapPoolSchema),
 	signups_open: v.optional(v.boolean()),
+	// Admin-announced start time. Full ISO-8601 instant (the settings form
+	// sends new Date(local).toISOString()); displayed date-only. `null` clears
+	// a previously-set date. Only meaningful in setup/sign-ups but harmless to
+	// edit later, so it's not gated by the post-start lock.
+	starts_at: v.optional(v.nullable(v.pipe(v.string(), v.isoTimestamp()))),
 });
 
 // Body for POST /v1/tournaments/:id/signup. The caller must be signed in

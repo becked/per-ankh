@@ -3,7 +3,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
-	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
+	import { type Crumb } from "$lib/Breadcrumb.svelte";
 	import {
 		ApiError,
 		cloudApi,
@@ -21,6 +21,16 @@
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
+	import TournamentHeader from "$lib/tournament/TournamentHeader.svelte";
+	import {
+		headerStatusMeta,
+		type HeaderHero,
+	} from "$lib/tournament/header-status";
+	import { mapScriptLabel } from "$lib/tournament/map-scripts";
+	import {
+		mapFullName,
+		poolEntryById,
+	} from "$lib/tournament/map-script-options";
 	import TournamentGuideModal from "$lib/tournament/TournamentGuideModal.svelte";
 	import TournamentConfigurationPanel from "$lib/tournament/TournamentConfigurationPanel.svelte";
 	import TournamentMapsPanel from "$lib/tournament/TournamentMapsPanel.svelte";
@@ -182,6 +192,182 @@
 			isDivisionSwissComplete("A") &&
 			isDivisionSwissComplete("B"),
 	);
+
+	// --- Header: status chip + per-status hero strip.
+
+	const statusMeta = $derived(
+		headerStatusMeta(data.tournament.status, data.tournament.signups_open),
+	);
+
+	// Roster size for the meta strip, mirroring the list endpoint's phase rule:
+	// championship/complete count the bracket, otherwise the swiss roster.
+	const playerCount = $derived(
+		data.tournament.status === "championship" ||
+			data.tournament.status === "complete"
+			? data.tournament.slot_counts.championship ||
+					data.tournament.slot_counts.swiss
+			: data.tournament.slot_counts.swiss,
+	);
+
+	// Final-match outcome for the champion card. The final is the highest-
+	// numbered championship round's decisive match; its winner is the champion
+	// and the other slot the runner-up. Null fields until a winner is recorded.
+	const championshipFinal = $derived.by(
+		(): {
+			champion: string | null;
+			finalist: string | null;
+			finalSummary: string | null;
+		} => {
+			const rounds = data.bracket.rounds;
+			const empty = { champion: null, finalist: null, finalSummary: null };
+			if (rounds.length === 0) return empty;
+			const finalRound = rounds.reduce((a, b) =>
+				b.round_number > a.round_number ? b : a,
+			);
+			const finalMatch =
+				finalRound.matches.find((m) => m.winner_slot_id) ??
+				finalRound.matches[0] ??
+				null;
+			if (!finalMatch?.winner_slot_id) return empty;
+			const loserId =
+				finalMatch.slot_a_id === finalMatch.winner_slot_id
+					? finalMatch.slot_b_id
+					: finalMatch.slot_a_id;
+
+			// "Won the final on <map>[ in N turns]". Map name resolves from the
+			// final's assigned pool instance (falling back to the bare script
+			// label); the turn count only exists when a game was uploaded.
+			const entry = poolEntryById(
+				data.tournament.map_pool,
+				finalMatch.map_pool_id,
+			);
+			const mapName = entry
+				? mapFullName(entry.options, entry.script)
+				: finalMatch.map_script
+					? mapScriptLabel(finalMatch.map_script)
+					: null;
+			const turns = finalMatch.total_turns ?? null;
+			let finalSummary = "Won the final";
+			if (mapName) finalSummary += ` on ${mapName}`;
+			if (turns != null)
+				finalSummary += ` in ${turns} turn${turns === 1 ? "" : "s"}`;
+
+			return {
+				champion: slotLabelFor(finalMatch.winner_slot_id),
+				finalist: loserId ? slotLabelFor(loserId) : null,
+				finalSummary,
+			};
+		},
+	);
+
+	// Rounds-completed measure for a phase: fully-finished rounds count 1 each,
+	// plus the reported fraction of the first still-open round. Rounds generate
+	// progressively, so the first incomplete round is the current one and there
+	// are no later rounds to count. Used to fill each half of the overall bar.
+	function effectiveRoundsDone(
+		matches: { round_number?: number | null; status: string }[],
+	): number {
+		const byRound: Record<number, { total: number; done: number }> = {};
+		for (const m of matches) {
+			const r = m.round_number ?? 0;
+			const e = (byRound[r] ??= { total: 0, done: 0 });
+			e.total++;
+			if (m.status !== "pending") e.done++;
+		}
+		let done = 0;
+		for (const r of Object.keys(byRound)
+			.map(Number)
+			.sort((a, b) => a - b)) {
+			const e = byRound[r];
+			if (e.total > 0 && e.done === e.total) {
+				done += 1;
+			} else {
+				done += e.total > 0 ? e.done / e.total : 0;
+				break;
+			}
+		}
+		return done;
+	}
+
+	const hero = $derived.by((): HeaderHero => {
+		const t = data.tournament;
+		switch (statusMeta.key) {
+			case "setup":
+				return { kind: "setup" };
+			case "signups":
+				return {
+					kind: "signups",
+					signedUp: t.slot_counts.swiss,
+					divisionAName: t.division_a_name,
+					divisionACount: t.slot_counts.swiss_by_division.A,
+					divisionBName: t.division_b_name,
+					divisionBCount: t.slot_counts.swiss_by_division.B,
+				};
+			case "complete":
+				return {
+					kind: "complete",
+					...championshipFinal,
+					fieldSize: data.bracket.slots.length,
+				};
+			case "in-progress": {
+				// Championship: progress walks the generated bracket rounds; total
+				// rounds is the bracket depth (ceil log2 of the bracket size). The
+				// overall bar starts at 0.5 (Swiss done) and fills its back half by
+				// bracket-round completion.
+				if (t.status === "championship") {
+					const rounds = data.bracket.rounds;
+					const current = rounds.reduce(
+						(a, b) => (b.round_number > a.round_number ? b : a),
+						rounds[0],
+					);
+					const matches = current?.matches ?? [];
+					const slotCount = data.bracket.slots.length;
+					const depth =
+						slotCount > 1 ? Math.ceil(Math.log2(slotCount)) : rounds.length;
+					const round = current?.round_number ?? 1;
+					const champMatches = rounds.flatMap((rd) =>
+						rd.matches.map((m) => ({
+							round_number: rd.round_number,
+							status: m.status,
+						})),
+					);
+					const champFraction =
+						depth > 0
+							? Math.min(1, effectiveRoundsDone(champMatches) / depth)
+							: 0;
+					return {
+						kind: "in-progress",
+						phaseLabel: "Championship",
+						round,
+						totalRounds: Math.max(depth, round),
+						reported: matches.filter((m) => m.status !== "pending").length,
+						total: matches.length,
+						overall: 0.5 + champFraction * 0.5,
+					};
+				}
+				// Swiss: both divisions advance in lockstep, so the current round is
+				// the highest round number present across either division. The overall
+				// bar fills its front half (0–0.5) by Swiss-round completion.
+				const swiss = data.matches.filter((m) => m.phase === "swiss");
+				const round =
+					swiss.reduce((acc, m) => Math.max(acc, m.round_number ?? 0), 0) || 1;
+				const inRound = swiss.filter((m) => m.round_number === round);
+				const swissFraction =
+					t.swiss_max_rounds > 0
+						? Math.min(1, effectiveRoundsDone(swiss) / t.swiss_max_rounds)
+						: 0;
+				return {
+					kind: "in-progress",
+					phaseLabel: "Swiss",
+					round,
+					totalRounds: t.swiss_max_rounds,
+					reported: inRound.filter((m) => m.status !== "pending").length,
+					total: inRound.length,
+					overall: swissFraction * 0.5,
+				};
+			}
+		}
+	});
 
 	async function withBusy<T>(
 		op: () => Promise<T>,
@@ -446,122 +632,26 @@
 			use:autohideScroll
 		>
 			<div class="mx-auto max-w-screen-2xl">
-				<header class="mb-6">
-					<div class="flex items-baseline justify-between gap-3">
-						<Breadcrumb {crumbs} class="min-w-0" />
-						<div class="flex flex-shrink-0 items-center gap-2">
-							<button
-								type="button"
-								class="whitespace-nowrap rounded border border-tan px-2 py-0.5 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
-								onclick={() => (guideOpen = true)}
-								aria-label="How the tournament works"
-								title="How the tournament works"
-							>
-								Guide
-							</button>
-							{#if viewerSlot}
-								<button
-									type="button"
-									class="whitespace-nowrap rounded border border-tan px-2 py-0.5 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
-									onclick={() => (signedUpOpen = true)}
-									title="You're signed up"
-								>
-									Signed up
-								</button>
-							{/if}
-						</div>
-					</div>
-					<div class="mt-2">
-						<span
-							class="whitespace-nowrap rounded bg-[#2a2622] px-2 py-0.5 text-xs uppercase tracking-wide text-tan opacity-80"
-						>
-							Status: {data.tournament.status}
-						</span>
-					</div>
-					{#if data.tournament.description}
-						<p class="mt-2 text-sm text-tan opacity-80">
-							{data.tournament.description}
-						</p>
-					{/if}
-
-					{#if canSignUp}
-						<div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-							<button
-								type="button"
-								class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-								onclick={() => (signupModalOpen = true)}
-								disabled={busy}
-							>
-								Sign up
-							</button>
-						</div>
-					{/if}
-
-					{#if isAdmin || data.tournament.status !== "setup"}
-						<div class="mt-3 flex flex-wrap items-center justify-end gap-2">
-							{#if isAdmin}
-								{#if data.tournament.status === "setup"}
-									<button
-										type="button"
-										class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-										onclick={startTournament}
-										disabled={busy || !startReady}
-										title={startReady
-											? ""
-											: "Add at least one player to each division to start"}
-									>
-										Start Tournament
-									</button>
-								{:else if data.tournament.status === "swiss"}
-									<button
-										type="button"
-										class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-										onclick={() => (transitionPreviewOpen = true)}
-										disabled={busy || !transitionReady}
-										title={transitionReady
-											? ""
-											: "All swiss rounds must finish before championship can start"}
-									>
-										Transition to Championship
-									</button>
-								{/if}
-							{/if}
-							{#if data.tournament.status !== "setup"}
-								<button
-									type="button"
-									class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-									onclick={() => (settingsOpen = true)}
-									disabled={busy || openMatchId !== null}
-									aria-label="Tournament settings"
-								>
-									<span class="inline-flex items-center gap-1">
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											class="h-3.5 w-3.5"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-											stroke-width="2"
-											aria-hidden="true"
-										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-											/>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
-											/>
-										</svg>
-										Settings
-									</span>
-								</button>
-							{/if}
-						</div>
-					{/if}
-				</header>
+				<TournamentHeader
+					{crumbs}
+					tournament={data.tournament}
+					{statusMeta}
+					{hero}
+					{playerCount}
+					{isAdmin}
+					{canSignUp}
+					hasViewerSlot={viewerSlot !== null}
+					{busy}
+					{startReady}
+					{transitionReady}
+					settingsDisabled={busy || openMatchId !== null}
+					onGuide={() => (guideOpen = true)}
+					onSettings={() => (settingsOpen = true)}
+					onSignedUp={() => (signedUpOpen = true)}
+					onSignup={() => (signupModalOpen = true)}
+					onStart={startTournament}
+					onTransition={() => (transitionPreviewOpen = true)}
+				/>
 
 				{#if data.tournament.status === "setup"}
 					{#if isAdmin}

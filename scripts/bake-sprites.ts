@@ -17,6 +17,10 @@
 //   events_images/TURN_SUMMARY_PLAYER_DIPLOMACY.png → icons/PLAYER_DIPLOMACY.png
 //   city/CITY_FOUNDED.png                        → icons/CITY_FOUNDED.png
 //   achievements/ACHIEVEMENT_WIN.png             → icons/ACHIEVEMENT_WIN.png
+//   achievements/ACHIEVEMENT.png                 → icons/ACHIEVEMENT.png
+//   other/PENDING_CRITICAL.png                   → icons/PENDING_CRITICAL.png
+//   tools/TOOL_SETTINGS.png                      → icons/TOOL_SETTINGS.png
+//   other/GOAL_STARTED.png                       → icons/GOAL_STARTED.png
 //
 // OUTPUT:
 //   static/sprites/<category>/<basename>.<hash>.png
@@ -94,6 +98,12 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 		source: "achievements/ACHIEVEMENT_WIN.png",
 		target: "ACHIEVEMENT_WIN.png",
 	},
+	// Tournament header hero icons: champion trophy, active-state pulse, and
+	// setup gear (see TournamentHeader.svelte).
+	{ source: "achievements/ACHIEVEMENT.png", target: "ACHIEVEMENT.png" },
+	{ source: "other/PENDING_CRITICAL.png", target: "PENDING_CRITICAL.png" },
+	{ source: "tools/TOOL_SETTINGS.png", target: "TOOL_SETTINGS.png" },
+	{ source: "other/GOAL_STARTED.png", target: "GOAL_STARTED.png" },
 	{
 		source: "city/CITY_FOUNDED.png",
 		target: "CITY_FOUNDED.png",

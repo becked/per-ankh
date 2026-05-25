@@ -101,6 +101,10 @@ describe("public read handlers", () => {
 			}[];
 			slot_counts: { swiss: number; championship: number };
 			is_viewer_admin: boolean;
+			owner: { display_name: string; avatar_url: string } | null;
+			admins: { display_name: string; avatar_url: string }[];
+			starts_at: string | null;
+			completed_at: string | null;
 			created_at: string;
 			updated_at: string;
 		}>(res);
@@ -118,6 +122,14 @@ describe("public read handlers", () => {
 		expect(body.slot_counts.championship).toBe(0);
 		// Caller is the tournament admin — affordances flagged on.
 		expect(body.is_viewer_admin).toBe(true);
+		// The creator is the owner (sole admin → empty co-admin list). Both
+		// schedule dates are unset for a fresh setup-phase tournament.
+		expect(body.owner).not.toBeNull();
+		expect(typeof body.owner?.display_name).toBe("string");
+		expect(typeof body.owner?.avatar_url).toBe("string");
+		expect(body.admins).toEqual([]);
+		expect(body.starts_at).toBeNull();
+		expect(body.completed_at).toBeNull();
 	});
 
 	it("GET /v1/tournaments/:id/standings returns ranked standings + combined qualifier ranking", async () => {
