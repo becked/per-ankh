@@ -5,6 +5,7 @@
 	import { page } from "$app/state";
 	import { cloudApi } from "$lib/api-cloud";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import { safeNext } from "$lib/utils/safe-next";
 	import BulkUploadModal from "$lib/BulkUploadModal.svelte";
 	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
 
@@ -27,6 +28,14 @@
 	);
 	const returnSlug = $derived(page.url.searchParams.get("return_slug"));
 	const observerMode = $derived(page.url.searchParams.get("observer") === "1");
+	// The page the upload was launched from (set by the header Upload link).
+	// Sanitized to a same-origin path so Done returns the user where they came
+	// from rather than always to their profile. Null when absent.
+	const fromPath = $derived(
+		page.url.searchParams.has("from")
+			? safeNext(page.url.searchParams.get("from"))
+			: null,
+	);
 	const showBackLink = $derived(
 		tournamentMatchId !== null && returnSlug !== null,
 	);
@@ -95,7 +104,7 @@
 				slotBLabel={slotBLabel ?? undefined}
 				doneRedirect={tournamentMatchId && returnSlug
 					? `${resolve("/tournaments/[slug]", { slug: returnSlug })}?match=${encodeURIComponent(tournamentMatchId)}`
-					: undefined}
+					: (fromPath ?? undefined)}
 			/>
 		{:else}
 			<p class="text-sm text-gray-400">Loading…</p>

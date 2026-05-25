@@ -5,6 +5,7 @@
 	// the `user` prop.
 
 	import { resolve } from "$app/paths";
+	import { page } from "$app/state";
 	import HeaderGameSearch from "$lib/users/HeaderGameSearch.svelte";
 	import AboutModal from "$lib/AboutModal.svelte";
 	import { safeNext } from "$lib/utils/safe-next";
@@ -25,6 +26,16 @@
 	// elsewhere — the header button is login-only.
 	let signingIn = $state(false);
 	let loginError = $state<string | null>(null);
+
+	// Upload link carries the current page as `?from=` so the upload flow's
+	// Done button returns the user here rather than to a fixed default. Omit it
+	// when already on /upload (nothing meaningful to return to).
+	const uploadHref = $derived.by(() => {
+		const base = resolve("/upload");
+		if (page.url.pathname === "/upload") return base;
+		const from = encodeURIComponent(page.url.pathname + page.url.search);
+		return `${base}?from=${from}`;
+	});
 
 	async function handleSignIn() {
 		signingIn = true;
@@ -160,8 +171,11 @@
 					</svg>
 				</button>
 			{/if}
+			<!-- uploadHref is built from resolve("/upload") with a sanitized ?from=
+			     query that resolve()'s branded types can't express. -->
+			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 			<a
-				href={resolve("/upload")}
+				href={uploadHref}
 				class="inline-flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-xs font-semibold text-tan transition-colors hover:border-orange hover:text-orange"
 				aria-label="Upload saves"
 				title="Upload saves"
@@ -183,6 +197,7 @@
 					/>
 				</svg>
 			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 			<!-- Avatar (profile link). -->
 			<a
 				href={resolve(`/users/${user.user_id}`)}
