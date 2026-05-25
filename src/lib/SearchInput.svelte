@@ -5,13 +5,20 @@
 		variant = "light",
 		class: className = "",
 		style = "",
+		autofocus = false,
 	}: {
 		value?: string;
 		placeholder?: string;
 		variant?: "light" | "dark" | "field";
 		class?: string;
 		style?: string;
+		autofocus?: boolean;
 	} = $props();
+
+	let inputEl = $state<HTMLInputElement | null>(null);
+	$effect(() => {
+		if (autofocus) inputEl?.focus();
+	});
 
 	const variantStyles = {
 		light: {
@@ -55,6 +62,7 @@
 	</div>
 	<input
 		type="text"
+		bind:this={inputEl}
 		bind:value
 		{placeholder}
 		autocomplete="off"

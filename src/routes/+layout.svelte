@@ -53,11 +53,7 @@
 		scroll) or scroll the slot directly (flex-1 overflow-y-auto).
 	-->
 	<div class="flex h-screen flex-col overflow-hidden bg-blue-gray">
-		<CloudHeader
-			user={data.user}
-			myTournaments={data.myTournaments}
-			adminTournaments={data.adminTournaments}
-		/>
+		<CloudHeader user={data.user} />
 		{@render children()}
 	</div>
 {:else}

@@ -1,68 +1,23 @@
 <script lang="ts">
-	// Persistent app chrome for cloud routes. Three-zone layout mirrors
-	// the deleted desktop Header.svelte: hamburger menu left, centered
-	// hieroglyph wordmark, search right. Auth-aware via the `user` prop.
+	// Persistent app chrome for cloud routes. Left-aligned hieroglyph
+	// wordmark; a right-aligned cluster of search (collapses to an icon),
+	// upload, avatar, and the hamburger menu (far right). Auth-aware via
+	// the `user` prop.
 
 	import { resolve } from "$app/paths";
 	import HeaderGameSearch from "$lib/users/HeaderGameSearch.svelte";
 	import AboutModal from "$lib/AboutModal.svelte";
 	import { safeNext } from "$lib/utils/safe-next";
-	import {
-		cloudApi,
-		ApiError,
-		type MyAdminTournamentEntry,
-		type MyTournamentEntry,
-		type UserMe,
-	} from "$lib/api-cloud";
+	import { cloudApi, ApiError, type UserMe } from "$lib/api-cloud";
 
-	let {
-		user,
-		myTournaments = [],
-		adminTournaments = [],
-	}: {
-		user: UserMe | null;
-		myTournaments?: MyTournamentEntry[];
-		adminTournaments?: MyAdminTournamentEntry[];
-	} = $props();
-
-	// Union of tournaments the user participates in and tournaments they
-	// admin, deduplicated by tournament_id. Admin-only entries appear with
-	// the ⚙ glyph; participant-and-admin entries also get the glyph.
-	type TournamentMenuEntry = {
-		tournament_id: string;
-		slug: string;
-		name: string;
-		isAdmin: boolean;
-	};
-	const tournamentMenuEntries = $derived.by((): TournamentMenuEntry[] => {
-		const byId: Record<string, TournamentMenuEntry> = {};
-		for (const t of myTournaments) {
-			byId[t.tournament_id] = {
-				tournament_id: t.tournament_id,
-				slug: t.slug,
-				name: t.name,
-				isAdmin: false,
-			};
-		}
-		for (const t of adminTournaments) {
-			const existing = byId[t.tournament_id];
-			if (existing) {
-				existing.isAdmin = true;
-			} else {
-				byId[t.tournament_id] = {
-					tournament_id: t.tournament_id,
-					slug: t.slug,
-					name: t.name,
-					isAdmin: true,
-				};
-			}
-		}
-		return Object.values(byId);
-	});
+	let { user }: { user: UserMe | null } = $props();
 
 	let isMenuOpen = $state(false);
 	let isAboutModalOpen = $state(false);
 	let signingOut = $state(false);
+	// Search collapses to a single icon; clicking it expands the input inline
+	// (to the left of Upload). Collapses again on Escape or blur-while-empty.
+	let searchExpanded = $state(false);
 
 	// Signed-out login. Mirrors the (removed) home-page sign-in card: kicks
 	// off the Discord OAuth round-trip, returning the viewer to the page they
@@ -142,139 +97,69 @@
 <header
 	class="relative flex w-full shrink-0 items-center justify-between border-b-[3px] border-black bg-blue-gray px-4 pb-2 pt-2"
 >
-	<!-- Left: hamburger + dropdown -->
-	<div class="menu-container flex-shrink-0">
-		<button
-			class="py-2 pr-2 text-orange transition-colors hover:text-tan"
-			type="button"
-			onclick={toggleMenu}
-			aria-label={user ? `Menu — signed in as ${user.display_name}` : "Menu"}
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				class="h-6 w-6"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke="currentColor"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					stroke-width="2"
-					d="M4 6h16M4 12h16M4 18h16"
-				/>
-			</svg>
-		</button>
-
-		{#if isMenuOpen}
-			<div
-				class="absolute left-0 z-50 mt-2 w-40 rounded border-2 border-black bg-blue-gray shadow-lg"
-			>
-				{#if user}
-					{#if user.is_beta}
-						<a
-							href={resolve("/tournaments")}
-							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-							onclick={closeMenu}
-						>
-							Tournaments
-						</a>
-						{#each tournamentMenuEntries as t (t.tournament_id)}
-							<a
-								href={resolve(`/tournaments/${t.slug}`)}
-								title={t.isAdmin ? `${t.name} (admin)` : t.name}
-								class="block w-full truncate py-1.5 pl-6 pr-3 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-								onclick={closeMenu}
-							>
-								<span aria-hidden="true" class="mr-1.5">•</span
-								>{t.name}{#if t.isAdmin}<span
-										class="ml-1 opacity-60"
-										aria-label="admin"
-										title="You administer this tournament">⚙</span
-									>{/if}
-							</a>
-						{/each}
-						<div class="border-t border-black"></div>
-					{/if}
-					<a
-						href={resolve("/account")}
-						class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						onclick={closeMenu}
-					>
-						Settings
-					</a>
-					{#if user.is_admin}
-						<div class="border-t border-black"></div>
-						<a
-							href={resolve("/admin/reparse")}
-							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-							onclick={closeMenu}
-						>
-							Admin
-						</a>
-					{/if}
-					<button
-						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						type="button"
-						onclick={openAbout}
-					>
-						About
-					</button>
-					<button
-						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50"
-						type="button"
-						onclick={handleSignOut}
-						disabled={signingOut}
-					>
-						{signingOut ? "Logging out…" : "Log out"}
-					</button>
-				{:else}
-					<button
-						class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
-						type="button"
-						onclick={openAbout}
-					>
-						About
-					</button>
-				{/if}
-			</div>
-		{/if}
-	</div>
-
 	<!--
-		Center: hieroglyph wordmark. Absolute-positioned so it stays visually
-		centered regardless of the side zones. pointer-events-none on the
-		wrapper so the layer doesn't capture clicks meant for the hamburger
-		when the two overlap at narrow widths; pointer-events-auto on the
-		anchor itself so the wordmark stays clickable.
-
-		Always routes to / — the home page is the public discovery surface
-		(recent saves, active tournaments) and is served to signed-in and
-		signed-out viewers alike. Signed-in users can still jump to their
-		personal dashboard via the hamburger menu.
+		Left: hieroglyph wordmark. Always routes to / — the home page is the
+		public discovery surface (recent saves, active tournaments) served to
+		signed-in and signed-out viewers alike. Signed-in users can still jump
+		to their personal dashboard via the hamburger menu.
 	-->
-	<div class="pointer-events-none absolute left-1/2 -translate-x-1/2">
-		<a
-			href={resolve("/")}
-			class="pointer-events-auto block cursor-pointer transition-opacity hover:opacity-80"
-			aria-label="Per Ankh — home"
-		>
-			<div
-				class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200"
-			>
-				𓉑 Per Ankh
-			</div>
-		</a>
-	</div>
+	<a
+		href={resolve("/")}
+		class="flex-shrink-0 cursor-pointer transition-opacity hover:opacity-80"
+		aria-label="Per Ankh — home"
+	>
+		<div class="border-b-2 border-orange pb-1 text-3xl font-bold text-gray-200">
+			𓉑 Per Ankh
+		</div>
+	</a>
 
 	<!--
-		Right: upload shortcut + navigational game search (HeaderGameSearch),
-		shown only for signed-in users — it searches the viewer's own games
-		and navigates to the picked game. Upload icon mirrors the "Upload
-		saves" menu entry and only shows for signed-in users.
+		Right: search (collapses to an icon, expands inline to the left of
+		Upload), upload shortcut, avatar/login, then the hamburger menu on the
+		far right. Search and upload show only for signed-in users.
 	-->
 	<div class="flex flex-shrink-0 items-center gap-2">
 		{#if user}
+			<!-- Navigational search over the signed-in user's own games. -->
+			{#if searchExpanded}
+				<HeaderGameSearch
+					{user}
+					class="w-48 flex-shrink-0"
+					autofocus
+					onCollapse={() => (searchExpanded = false)}
+				/>
+			{:else}
+				<button
+					type="button"
+					onclick={(e) => {
+						// Stop this click reaching the window listener that
+						// HeaderGameSearch registers when it mounts on the same
+						// synchronous flush — otherwise its click-outside check
+						// fires for this very click and collapses immediately.
+						e.stopPropagation();
+						searchExpanded = true;
+					}}
+					class="flex-shrink-0 rounded p-1 text-tan transition-colors hover:text-orange"
+					aria-label="Search your games"
+					title="Search your games"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-5 w-5"
+						fill="none"
+						viewBox="0 0 24 24"
+						stroke="currentColor"
+						stroke-width="2"
+						aria-hidden="true"
+					>
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+						/>
+					</svg>
+				</button>
+			{/if}
 			<a
 				href={resolve("/upload")}
 				class="inline-flex items-center gap-1.5 rounded border border-tan px-2 py-1 text-xs font-semibold text-tan transition-colors hover:border-orange hover:text-orange"
@@ -298,11 +183,7 @@
 					/>
 				</svg>
 			</a>
-		{/if}
-		{#if user}
-			<!-- Navigational search over the signed-in user's own games. -->
-			<HeaderGameSearch {user} class="w-48 flex-shrink-0" />
-			<!-- Avatar (profile link) sits to the right of the search. -->
+			<!-- Avatar (profile link). -->
 			<a
 				href={resolve(`/users/${user.user_id}`)}
 				class="flex-shrink-0"
@@ -329,6 +210,80 @@
 				{signingIn ? "Redirecting…" : "Login"}
 			</button>
 		{/if}
+
+		<!-- Hamburger menu + dropdown, anchored on the far right. -->
+		<div class="menu-container relative flex-shrink-0">
+			<button
+				class="py-2 pl-2 text-orange transition-colors hover:text-tan"
+				type="button"
+				onclick={toggleMenu}
+				aria-label={user ? `Menu — signed in as ${user.display_name}` : "Menu"}
+			>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-6 w-6"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M4 6h16M4 12h16M4 18h16"
+					/>
+				</svg>
+			</button>
+
+			{#if isMenuOpen}
+				<div
+					class="absolute right-0 z-50 mt-2 w-40 rounded border-2 border-black bg-blue-gray shadow-lg"
+				>
+					{#if user}
+						<a
+							href={resolve("/account")}
+							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							onclick={closeMenu}
+						>
+							Settings
+						</a>
+						{#if user.is_admin}
+							<div class="border-t border-black"></div>
+							<a
+								href={resolve("/admin/reparse")}
+								class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+								onclick={closeMenu}
+							>
+								Admin
+							</a>
+						{/if}
+						<button
+							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							type="button"
+							onclick={openAbout}
+						>
+							About
+						</button>
+						<button
+							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50"
+							type="button"
+							onclick={handleSignOut}
+							disabled={signingOut}
+						>
+							{signingOut ? "Logging out…" : "Log out"}
+						</button>
+					{:else}
+						<button
+							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							type="button"
+							onclick={openAbout}
+						>
+							About
+						</button>
+					{/if}
+				</div>
+			{/if}
+		</div>
 	</div>
 </header>
 

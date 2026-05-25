@@ -24,7 +24,15 @@
 		user,
 		class: className = "",
 		style = "",
-	}: { user: UserMe; class?: string; style?: string } = $props();
+		autofocus = false,
+		onCollapse,
+	}: {
+		user: UserMe;
+		class?: string;
+		style?: string;
+		autofocus?: boolean;
+		onCollapse?: () => void;
+	} = $props();
 
 	let query = $state("");
 	let results = $state<GameListItem[]>([]);
@@ -103,7 +111,10 @@
 
 	function handleKeydown(e: KeyboardEvent) {
 		if (!open || results.length === 0) {
-			if (e.key === "Escape") open = false;
+			if (e.key === "Escape") {
+				open = false;
+				if (query.trim() === "") onCollapse?.();
+			}
 			return;
 		}
 		if (e.key === "ArrowDown") {
@@ -120,12 +131,25 @@
 			if (target) void pick(target);
 		} else if (e.key === "Escape") {
 			open = false;
+			if (query.trim() === "") onCollapse?.();
 		}
 	}
 
 	function handleClickOutside(e: MouseEvent) {
 		const target = e.target as HTMLElement;
-		if (!target.closest(".header-game-search")) open = false;
+		if (!target.closest(".header-game-search")) {
+			open = false;
+			if (query.trim() === "") onCollapse?.();
+		}
+	}
+
+	// When focus leaves the search entirely and there's no query, collapse
+	// back to the icon. relatedTarget guards against collapsing while focus
+	// moves between the input and a result row.
+	function handleFocusOut(e: FocusEvent) {
+		const next = e.relatedTarget as HTMLElement | null;
+		if (next && next.closest(".header-game-search")) return;
+		if (query.trim() === "") onCollapse?.();
 	}
 </script>
 
@@ -138,8 +162,9 @@
 		onfocusin={() => {
 			if (results.length > 0) open = true;
 		}}
+		onfocusout={handleFocusOut}
 	>
-		<SearchInput bind:value={query} variant="dark" placeholder="" />
+		<SearchInput bind:value={query} variant="dark" placeholder="" {autofocus} />
 	</div>
 
 	{#if open}
