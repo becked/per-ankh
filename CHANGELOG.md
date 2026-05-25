@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-05-25-cbb4ebd] - 2026-05-25
+
+### Features
+
+- (games) plot victory points in card sparklines, add admin reindex — [3356fb7](https://github.com/becked/per-ankh/commit/3356fb783512614ebf89b017da44202784b3cdd4)
+- (admin) add delete-game and purge-games commands — [cbb4ebd](https://github.com/becked/per-ankh/commit/cbb4ebda8efa5f2da20a629898d5192590061cfe)
+
 ## [2026-05-25-609062e] - 2026-05-25
 
 ### Features
