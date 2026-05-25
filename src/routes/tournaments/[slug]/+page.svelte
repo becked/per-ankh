@@ -14,6 +14,7 @@
 	} from "$lib/api-cloud";
 	import ChampionshipBracketTree from "$lib/tournament/ChampionshipBracketTree.svelte";
 	import ChampionshipTransitionPreview from "$lib/tournament/ChampionshipTransitionPreview.svelte";
+	import FirstPickNote from "$lib/tournament/FirstPickNote.svelte";
 	import MatchModal from "$lib/tournament/MatchModal.svelte";
 	import SignupModal from "$lib/tournament/SignupModal.svelte";
 	import SlotUsernameAutocomplete from "$lib/tournament/SlotUsernameAutocomplete.svelte";
@@ -776,18 +777,19 @@
 					</section>
 				{:else}
 					{#if data.bracket.rounds.length > 0}
-						<section
-							class="mb-6 rounded-lg p-4"
-							style="background-color: #2a2622;"
-						>
-							<h2 class="mb-3 text-sm font-bold text-tan">
+						<section class="mb-8">
+							<h2 class="mb-1 text-lg font-bold text-tan">
 								Championship Bracket
 							</h2>
-							<ChampionshipBracketTree
-								bracket={data.bracket}
-								tournamentSlug={data.tournament.slug}
-								onMatchClick={openMatch}
-							/>
+							<FirstPickNote />
+							<div class="rounded-lg p-4" style="background-color: #2a2622;">
+								<ChampionshipBracketTree
+									bracket={data.bracket}
+									tournamentSlug={data.tournament.slug}
+									mapPool={data.tournament.map_pool}
+									onMatchClick={openMatch}
+								/>
+							</div>
 						</section>
 					{/if}
 
@@ -798,24 +800,7 @@
 								<h2 class="mb-1 text-lg font-bold text-tan">
 									{divisionData.name}
 								</h2>
-								<p
-									class="mb-3 flex items-center gap-1.5 text-xs text-tan opacity-70"
-								>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										class="h-3.5 w-3.5 shrink-0"
-										viewBox="0 0 20 20"
-										fill="currentColor"
-										aria-hidden="true"
-									>
-										<path
-											fill-rule="evenodd"
-											d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
-											clip-rule="evenodd"
-										/>
-									</svg>
-									Second player listed gets first pick
-								</p>
+								<FirstPickNote />
 								<div class="space-y-3">
 									<SwissFlowBracket
 										winsToAdvance={data.tournament.swiss_wins_to_advance}

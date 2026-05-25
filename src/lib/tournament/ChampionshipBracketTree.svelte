@@ -1,14 +1,30 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
-	import type { BracketResponse, BracketSlot } from "$lib/api-cloud";
+	import type {
+		BracketResponse,
+		BracketSlot,
+		MapPoolEntry,
+	} from "$lib/api-cloud";
+	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+	import { mapScriptLabel } from "$lib/tournament/map-scripts";
+	import {
+		mapFullName,
+		poolEntryById,
+	} from "$lib/tournament/map-script-options";
+
+	const MAP_ICON = SPRITE_MANIFEST["icons/MAP_OVERVIEW"];
 
 	let {
 		bracket,
 		tournamentSlug,
+		mapPool,
 		onMatchClick,
 	}: {
 		bracket: BracketResponse;
 		tournamentSlug: string;
+		// The tournament's map_pool — used to resolve each match's assigned
+		// instance (by map_pool_id) for its full map name.
+		mapPool: MapPoolEntry[];
 		// eslint-disable-next-line no-unused-vars -- param name is documentary
 		onMatchClick: (matchId: string) => void;
 	} = $props();
@@ -22,7 +38,7 @@
 	// Box / spacing geometry. Match-box height is fixed so the bracket math
 	// stays exact regardless of slot name length (long names ellipsize).
 	const MATCH_W = 200;
-	const MATCH_H = 56;
+	const MATCH_H = 78; // two slot rows + a full-width map-name row
 	const COL_GAP = 64;
 	const R1_GAP = 16; // extra vertical gap between adjacent R1 matches
 
@@ -54,6 +70,8 @@
 		slot_a_id: string | null;
 		slot_b_id: string | null;
 		winner_slot_id: string | null;
+		map_pool_id: string | null;
+		map_script: string | null;
 		left: number;
 		top: number;
 		centerY: number;
@@ -94,6 +112,8 @@
 					slot_a_id: m.slot_a_id,
 					slot_b_id: m.slot_b_id,
 					winner_slot_id: m.winner_slot_id,
+					map_pool_id: m.map_pool_id,
+					map_script: m.map_script,
 					left,
 					top,
 					centerY,
@@ -190,6 +210,16 @@
 						<div class="slot" class:winner={bWon}>
 							{m.status === "bye" ? "BYE" : slotLabel(m.slot_b_id)}
 						</div>
+						{#if m.map_script}
+							{@const entry = poolEntryById(mapPool, m.map_pool_id)}
+							{@const mapName = entry
+								? mapFullName(entry.options, entry.script)
+								: mapScriptLabel(m.map_script)}
+							<div class="map-row" title={mapName}>
+								<img class="map-icon" src={MAP_ICON} alt="" />
+								<span class="map-name">{mapName}</span>
+							</div>
+						{/if}
 					</a>
 				{/each}
 			</div>
@@ -229,6 +259,8 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		text-align: center;
+		padding-bottom: 0.25rem;
+		border-bottom: 1px solid rgba(232, 216, 184, 0.15);
 	}
 
 	.canvas {
@@ -257,11 +289,11 @@
 		border-radius: 0.375rem;
 		text-decoration: none;
 		overflow: hidden;
-		transition: border-color 0.1s;
+		transition: background-color 0.1s;
 	}
 
 	.match:hover {
-		border-color: var(--color-orange, #d97706);
+		background-color: #2a2622;
 	}
 
 	/* Bye matches are pre-decided — dim them to keep the visual focus on
@@ -292,5 +324,32 @@
 	.slot.winner {
 		color: var(--color-orange, #d97706);
 		font-weight: 700;
+	}
+
+	.map-row {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		min-width: 0;
+		padding: 0.2rem 0.6rem;
+		border-top: 1px solid rgba(232, 216, 184, 0.08);
+	}
+
+	.map-icon {
+		flex-shrink: 0;
+		width: 0.8rem;
+		height: 0.8rem;
+		object-fit: contain;
+		opacity: 0.7;
+	}
+
+	.map-name {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		font-size: 0.6rem;
+		opacity: 0.6;
+		color: var(--color-tan, #e8d8b8);
 	}
 </style>
