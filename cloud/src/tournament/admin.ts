@@ -1845,7 +1845,6 @@ function buildSwissRoundStatements(
 		divMatchRefs,
 		nextRoundNumber,
 		config,
-		seed,
 	);
 	const withMaps = assignMapsToPairings(pairings, pool, divMatchRefs, seed);
 

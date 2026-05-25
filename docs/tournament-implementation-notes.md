@@ -87,11 +87,12 @@ Eight migrations applied locally; not yet remote.
 - `cloud/src/tournament/` package (algorithms + handlers):
   - `types.ts` — in-memory shapes for the pure-function algorithms
   - `rng.ts` — seeded mulberry32 PRNG + shuffle for deterministic
-    Swiss-pairing and map-assignment seeds
+    map-assignment seeds
   - `standings.ts` — wins/losses derived on read from `tournament_matches`
     (no stored W/L on slots); Median-Buchholz + Solkoff computation; rank
     cascade with stable secondary sort by `swiss_seed`
-  - `pairing.ts` — Swiss pairing algorithm: round 1 random, round 2+
+  - `pairing.ts` — Swiss pairing algorithm: round 1 fold-paired by
+    swiss_seed, round 2+
     bucketed by (wins, losses) with top-half-vs-bottom-half pairing,
     rematch avoidance via in-bucket swap, bucket spillover (odd bucket
     floats one slot down), bye assignment for odd active counts

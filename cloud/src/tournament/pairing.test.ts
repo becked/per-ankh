@@ -47,31 +47,35 @@ function unorderedPair(a: string, b: string | null): string {
 }
 
 describe("pairSwissRound — round 1", () => {
-	it("pairs all slots when count is even", () => {
+	it("folds by seed: top half vs bottom half", () => {
 		const slots = ["A", "B", "C", "D"].map((id, i) => slot(id, i + 1));
-		const pairings = pairSwissRound(slots, [], 1, CONFIG, "s1");
+		const pairings = pairSwissRound(slots, [], 1, CONFIG);
 		expect(pairings).toHaveLength(2);
-		const allSlots = new Set<string>();
-		for (const p of pairings) {
-			allSlots.add(p.slot_a_id);
-			if (p.slot_b_id) allSlots.add(p.slot_b_id);
-		}
-		expect(allSlots.size).toBe(4);
+		const pairKeys = pairings.map((p) =>
+			unorderedPair(p.slot_a_id, p.slot_b_id),
+		);
+		// seed 1 (A) vs seed 3 (C); seed 2 (B) vs seed 4 (D)
+		expect(pairKeys).toContain(unorderedPair("A", "C"));
+		expect(pairKeys).toContain(unorderedPair("B", "D"));
 	});
 
-	it("assigns a bye when count is odd", () => {
+	it("pairs strictly by seed, ignoring slot insertion order", () => {
+		const slots = [slot("D", 4), slot("B", 2), slot("A", 1), slot("C", 3)];
+		const pairings = pairSwissRound(slots, [], 1, CONFIG);
+		const pairKeys = pairings.map((p) =>
+			unorderedPair(p.slot_a_id, p.slot_b_id),
+		);
+		expect(pairKeys).toContain(unorderedPair("A", "C"));
+		expect(pairKeys).toContain(unorderedPair("B", "D"));
+	});
+
+	it("assigns the bye to the lowest seed when odd", () => {
 		const slots = ["A", "B", "C"].map((id, i) => slot(id, i + 1));
-		const pairings = pairSwissRound(slots, [], 1, CONFIG, "s1");
+		const pairings = pairSwissRound(slots, [], 1, CONFIG);
 		const byes = pairings.filter((p) => p.slot_b_id === null);
 		expect(byes).toHaveLength(1);
+		expect(byes[0].slot_a_id).toBe("C"); // seed 3 = lowest
 		expect(pairings).toHaveLength(2);
-	});
-
-	it("is deterministic for the same seed", () => {
-		const slots = ["A", "B", "C", "D"].map((id, i) => slot(id, i + 1));
-		const a = pairSwissRound(slots, [], 1, CONFIG, "seed");
-		const b = pairSwissRound(slots, [], 1, CONFIG, "seed");
-		expect(a).toEqual(b);
 	});
 });
 
@@ -80,7 +84,7 @@ describe("pairSwissRound — round 2+", () => {
 		// 4 slots: A and B won round 1, C and D lost.
 		const slots = ["A", "B", "C", "D"].map((id, i) => slot(id, i + 1));
 		const r1 = [match("m1", 1, "A", "C", "A"), match("m2", 1, "B", "D", "B")];
-		const pairings = pairSwissRound(slots, r1, 2, CONFIG, "s2");
+		const pairings = pairSwissRound(slots, r1, 2, CONFIG);
 		expect(pairings).toHaveLength(2);
 		// Winners should be paired with winners, losers with losers.
 		const pairKeys = pairings.map((p) =>
@@ -127,13 +131,7 @@ describe("pairSwissRound — round 2+", () => {
 			match("r2m4", 2, "D", "Q", "D"),
 		];
 
-		const pairings = pairSwissRound(
-			allSlots,
-			prior,
-			3,
-			shortConfig,
-			"rematch-swap",
-		);
+		const pairings = pairSwissRound(allSlots, prior, 3, shortConfig);
 
 		// 4 active slots → 2 pairings. (E/F advanced, P/Q eliminated.)
 		expect(pairings).toHaveLength(2);
@@ -164,7 +162,7 @@ describe("pairSwissRound — round 2+", () => {
 		// E already had byes — should prefer someone else if anyone hasn't.
 		// All of A,B,C,D have played each round. None had bye. E had byes.
 		// Lowest-ranked without bye = D (seed 4). D should get the bye.
-		const pairings = pairSwissRound(slots, priorMatches, 3, CONFIG, "s3");
+		const pairings = pairSwissRound(slots, priorMatches, 3, CONFIG);
 		const byes = pairings.filter((p) => p.slot_b_id === null);
 		expect(byes).toHaveLength(1);
 		expect(byes[0].slot_a_id).toBe("D");
@@ -180,7 +178,7 @@ describe("pairSwissRound — round 2+", () => {
 			match("m4", 1, "C", "D", "C"),
 		];
 		// A=3-0 advanced; B=0-3 eliminated; C=1-0; D=0-1.
-		const pairings = pairSwissRound(slots, prior, 4, CONFIG, "s4");
+		const pairings = pairSwissRound(slots, prior, 4, CONFIG);
 		// Only C and D should be paired.
 		expect(pairings).toHaveLength(1);
 		const ids = new Set<string>([
@@ -202,7 +200,7 @@ describe("pairSwissRound — round 2+", () => {
 			match("m2", 1, "B", "E", "B"),
 			match("m3", 1, "C", "F", "C"),
 		];
-		const pairings = pairSwissRound(slots, prior, 2, CONFIG, "s5");
+		const pairings = pairSwissRound(slots, prior, 2, CONFIG);
 		// Should produce 3 pairings, all slots covered, no byes.
 		expect(pairings).toHaveLength(3);
 		const allIds = new Set<string>();

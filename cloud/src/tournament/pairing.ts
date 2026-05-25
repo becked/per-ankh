@@ -1,7 +1,10 @@
 // Swiss pairing algorithm.
 //
-// Round 1: random shuffle within division, paired sequentially. Seeded by
-// (tournament_id + round_id) for reproducibility.
+// Round 1: seed-ordered fold pairing within division. Slots are sorted by
+// swiss_seed (everyone is 0-0, so the record tiers are no-ops) and the top
+// half is paired against the bottom half — seed 1 vs seed N/2+1, etc. — the
+// same fold the bucket logic uses in later rounds. Odd field: the lowest seed
+// takes the bye.
 //
 // Round 2+:
 //   1. Compute W-L per active slot (active = not yet at 3W or 3L).
@@ -21,7 +24,6 @@
 // before calling /start.
 
 import { computeRecord } from "./standings";
-import { createRng, shuffle } from "./rng";
 import type { MatchRef, SlotRef, TournamentConfig } from "./types";
 
 export interface Pairing {
@@ -40,12 +42,9 @@ export function pairSwissRound(
 	priorMatches: MatchRef[],
 	roundNumber: number,
 	config: TournamentConfig,
-	seed: string,
 ): Pairing[] {
-	const rng = createRng(seed);
-
 	if (roundNumber === 1) {
-		return pairRound1(slots, rng);
+		return pairRound1(slots);
 	}
 
 	const active: ActiveSlot[] = [];
@@ -97,20 +96,27 @@ export function pairSwissRound(
 	return pairings;
 }
 
-function pairRound1(slots: SlotRef[], rng: () => number): Pairing[] {
-	const order = shuffle([...slots], rng);
-	const pairings: Pairing[] = [];
-	for (let i = 0; i + 1 < order.length; i += 2) {
-		pairings.push({
-			slot_a_id: order[i].slot_id,
-			slot_b_id: order[i + 1].slot_id,
-		});
+function pairRound1(slots: SlotRef[]): Pairing[] {
+	// Every slot is 0-0, so compareForPairing reduces to swiss_seed asc: the
+	// field ends up sorted best-seed-first. pairBucket then folds top half
+	// against bottom half (seed 1 vs seed N/2+1, …) — no prior matches, so no
+	// rematch avoidance is needed.
+	const active: ActiveSlot[] = slots.map((s) => ({
+		slot: s,
+		wins: 0,
+		losses: 0,
+	}));
+	active.sort(compareForPairing);
+
+	let byeSlot: SlotRef | null = null;
+	if (active.length % 2 === 1) {
+		// Lowest seed (last after the best-first sort) takes the bye.
+		byeSlot = active.pop()!.slot;
 	}
-	if (order.length % 2 === 1) {
-		pairings.push({
-			slot_a_id: order[order.length - 1].slot_id,
-			slot_b_id: null,
-		});
+
+	const pairings = pairBucket(active, new Set());
+	if (byeSlot) {
+		pairings.push({ slot_a_id: byeSlot.slot_id, slot_b_id: null });
 	}
 	return pairings;
 }
