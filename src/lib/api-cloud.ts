@@ -1204,6 +1204,7 @@ export interface SlotStanding {
 	losses: number;
 	status: "active" | "advanced" | "eliminated";
 	buchholz_cut1: number;
+	opponents_buchholz: number;
 	cumulative: number;
 	h2h: number;
 	rank: number;
@@ -1224,6 +1225,7 @@ export interface CombinedQualifier {
 	status: "active" | "advanced" | "eliminated";
 	h2h: number;
 	buchholz_cut1: number;
+	opponents_buchholz: number;
 	cumulative: number;
 	division: "A" | "B" | null;
 	discord_username: string | null;

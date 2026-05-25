@@ -97,7 +97,7 @@ A product-level view of what the tournament layer adds on top of the cloud rewri
 
 - Open registration until a stated deadline.
 - Two divisions, admin-named per tournament (default `Division A` / `Division B`). Divisions exist **purely as a parallelization mechanism** so Swiss rounds can run in smaller pools and finish faster — they carry no competitive significance once Swiss ends.
-- Within each division: round 1 is paired by admin choice (typically random or seeded by something external like rating). Subsequent rounds bucket players by W-L record and pair within bucket, avoiding rematches.
+- Within each division: round 1 is fold-paired by initial swiss seed (seed 1 vs seed N/2+1, etc.); the admin can edit the generated pairing before starting. Subsequent rounds bucket players by W-L record and pair within bucket, avoiding rematches.
 - Each player plays until they reach `swiss_wins_to_advance` wins (status flips to `advanced`; they sit out remaining Swiss rounds and qualify for the championship bracket) or `swiss_losses_to_eliminate` losses (status flips to `eliminated`). Hard cap of `swiss_max_rounds` rounds.
 - FSM consistency requires `swiss_wins_to_advance ≤ swiss_max_rounds` and `swiss_wins_to_advance + swiss_losses_to_eliminate ≤ swiss_max_rounds + 1`. Validated on create + patch.
 
@@ -513,11 +513,14 @@ This rules out the surprise mode where a 3-0 player was cut by Buchholz in favor
 
 ### Cascade order
 
-1. **Match wins** — descending.
-2. **Head-to-head (H2H)** — sum of wins against other players in the still-tied subset. Only fires between players who share the same win count. Pairwise — needs the tied set defined first — so the ranker computes it tier-by-tier, not as a flat comparator.
+1. **Losses** — ascending, with **match wins descending** as the primary axis (the composite key `(wins desc, losses asc)`). In our early-exit Swiss every qualifier has the same number of wins by definition, so wins-desc alone was degenerate — it pooled all qualifiers into one group and pushed the whole seeding job onto Tiers 2+ across players who'd played different numbers of rounds. Losses-asc separates qualifiers directly (it's equivalent to "rounds taken to clinch") and, as a side effect, restricts every downstream tier to a single rounds-played cohort. See `docs/tournament-seeding-tier1-proposal.md`.
+2. **Head-to-head (H2H)** — sum of wins against other players in the still-tied subset. Only fires between players who share the same record. Pairwise — needs the tied set defined first — so the ranker computes it tier-by-tier, not as a flat comparator.
 3. **Buchholz cut-1** — sum of opponents' final win counts, with the single lowest opponent dropped. Falls back to the full sum (Solkoff) when the player has ≤1 real opponent. Byes are excluded entirely from the opponent list.
-4. **Cumulative (Harkness)** — sum of running win count across rounds. Rewards early dominance: a player at 3-0 after R3 carries those 3 wins through R4 and R5 (they sit out the remaining rounds), so they outscore a 3-0-by-R5 player on this tier.
-5. **Admin override** — if the cascade leaves a tie at any seed, the admin uses `override_ranks` (a flat ordered list of slot IDs) to specify the bracket seed order explicitly.
+4. **Opponents' Buchholz** — sum of each opponent's Buchholz cut-1 (depth of schedule). A deeper strength-of-schedule measure; it's the only tier with discriminating power in the zero-loss bucket, where cumulative is a structural no-op (only `W…W` reaches a clean record) and top-bracket seeding matters most.
+5. **Cumulative (Harkness)** — sum of running win count across rounds. Historically the early-vs-late-clinch separator; under Tier 1 = losses asc that separation already happens upstream, so cumulative now only orders within a bucket (and is a no-op in the zero-loss bucket).
+6. **Initial swiss seed**, then **slot_id** — a deterministic terminal key. Whatever the meaningful tiers (1–5) can't separate is emitted in initial-seed order, with slot_id as the unique final fallback, so the bracket seed order is **always fully determined without manual input**. `override_ranks` is no longer needed for ties — it remains only for the `INSUFFICIENT_QUALIFIERS` case (promoting non-clinched slots when too few players reached the win threshold).
+
+Only the meaningful tiers (1–5) set a player's `rank`/`tied_with`: players the cascade can't separate on skill still _report_ as tied. Tier 6 fixes only the emission order within such a tie, which is what the bracket consumes as the seed order.
 
 All values are computed on demand from `tournament_matches`. None are stored.
 
@@ -531,6 +534,11 @@ function computeBuchholzCut1(opponentWins: number[]): number {
 	const sorted = [...opponentWins].sort((a, b) => a - b);
 	return sorted.slice(1).reduce((a, b) => a + b, 0);
 }
+
+// Opponents' Buchholz: two-pass over computeStandings. After every slot's
+// buchholz_cut1 is known, each slot's opponents_buchholz is the sum of its
+// (non-bye) opponents' buchholz_cut1 — repeated opponents counted each time,
+// matching how Buchholz itself sums repeated encounters.
 
 // Cumulative: walk each round from 1..maxRounds. Maintain a running W counter;
 // add the W count to the total at every round (including rounds the player
@@ -579,12 +587,14 @@ function computePairwiseH2H(
 
 `rankStandings(standings, matches)` runs a multi-pass group-and-sub-group:
 
-1. Group by wins (desc).
+1. Group by the composite key `(wins desc, losses asc)`.
 2. Within each group of size ≥ 2: compute pairwise H2H against the current tied set, sub-group by H2H.
 3. Within each remaining group of size ≥ 2: sub-group by Buchholz cut-1.
-4. Within each remaining group of size ≥ 2: sub-group by cumulative.
+4. Within each remaining group of size ≥ 2: sub-group by opponents' Buchholz.
+5. Within each remaining group of size ≥ 2: sub-group by cumulative.
+6. Within each remaining group of size ≥ 2: sort the emission order by initial swiss seed (asc), then slot_id (asc).
 
-Slots that share every tier value share a rank and list each other in `tied_with`. The transition handler reports any rank-1 tie as a 409 so the admin can disambiguate via `override_ranks`.
+Slots that share every _meaningful_ tier value (1–5) share a rank and list each other in `tied_with`. Such ties no longer require manual disambiguation: step 6 deterministically fixes the emission order — hence the bracket seed — within a tied group. (The transition handler does **not** 409 on ties; it only 409s `INSUFFICIENT_QUALIFIERS`.)
 
 ### Application
 
@@ -619,6 +629,7 @@ interface SlotStanding {
 	status: "active" | "advanced" | "eliminated";
 	h2h: number; // computed against the slot's current tied set (0 if not tied)
 	buchholz_cut1: number;
+	opponents_buchholz: number;
 	cumulative: number;
 	discord_username: string | null;
 	user_id: string | null;

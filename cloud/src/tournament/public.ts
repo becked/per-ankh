@@ -658,6 +658,7 @@ async function computeStandingsResponse(
 				status: "active" | "advanced" | "eliminated";
 				h2h: number;
 				buchholz_cut1: number;
+				opponents_buchholz: number;
 				cumulative: number;
 				division: "A" | "B" | null;
 				discord_username: string | null;
@@ -682,6 +683,7 @@ async function computeStandingsResponse(
 				status: r.status,
 				h2h: r.h2h,
 				buchholz_cut1: r.buchholz_cut1,
+				opponents_buchholz: r.opponents_buchholz,
 				cumulative: r.cumulative,
 				division: id?.division ?? null,
 				discord_username: id?.discord_username ?? null,

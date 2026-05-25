@@ -2,7 +2,24 @@
 
 ## Status
 
-Proposal. Not implemented. Drafted after investigating siontific's seed-12 result in 2025-redux.
+**Implemented** (May 2026). Drafted after investigating siontific's seed-12 result in 2025-redux.
+
+The shipped cascade went beyond this proposal's Tier-1-only change. The full
+6-tier cascade in `cloud/src/tournament/standings.ts` is now:
+
+1. Losses asc (composite `(wins desc, losses asc)` for the full-standings view)
+2. Head-to-head
+3. Buchholz cut-1
+4. **Opponents' Buchholz** — a deeper strength-of-schedule tier, added because
+   cumulative is a structural no-op in the zero-loss bucket (where top-bracket
+   seeding matters most) and Buchholz alone routinely left multi-way ties there.
+5. Cumulative (Harkness)
+6. **Initial swiss seed, then slot_id** — an explicit deterministic terminal key,
+   so the bracket seed order is always fully determined automatically.
+   `override_ranks` is now reserved for `INSUFFICIENT_QUALIFIERS` only, never ties.
+
+The rest of this document is the original Tier-1 analysis, preserved as the
+rationale for the change.
 
 ## Summary
 
@@ -25,20 +42,20 @@ Replace Tier 1 with **losses ascending**. This gives meaningful separation at Ti
 
 Computed standings for the 16-player qualifier set (combined across divisions):
 
-| Seed | Player | Div | W-L | H2H | Buch | Cum |
-|------|--------|-----|------|-----|------|------|
-| 1 | ninjaa | B | 3-0 | 3 | 6 | 12 |
-| 2 | auro | A | 3-1 | 2 | 9 | 11 |
-| 2 | purplebullmoose | B | 3-1 | 2 | 9 | 11 |
-| 4 | klass | A | 3-0 | 2 | 6 | 12 |
-| 4 | aran | A | 3-0 | 2 | 6 | 12 |
-| 6 | nizar | B | 3-2 | 1 | 11 | 10 |
-| 7 | moroten | A | 3-2 | 1 | 11 | 9 |
-| 8 | fluffy | A | 3-1 | 1 | 8 | 11 |
-| 9 | blaj | A | 3-1 | 1 | 8 | 10 |
-| 9 | alcaras | B | 3-1 | 1 | 8 | 10 |
-| 9 | sabertooth | B | 3-1 | 1 | 8 | 10 |
-| **12** | **siontific** | **B** | **3-0** | **1** | **5** | **12** |
+| Seed   | Player          | Div   | W-L     | H2H   | Buch  | Cum    |
+| ------ | --------------- | ----- | ------- | ----- | ----- | ------ |
+| 1      | ninjaa          | B     | 3-0     | 3     | 6     | 12     |
+| 2      | auro            | A     | 3-1     | 2     | 9     | 11     |
+| 2      | purplebullmoose | B     | 3-1     | 2     | 9     | 11     |
+| 4      | klass           | A     | 3-0     | 2     | 6     | 12     |
+| 4      | aran            | A     | 3-0     | 2     | 6     | 12     |
+| 6      | nizar           | B     | 3-2     | 1     | 11    | 10     |
+| 7      | moroten         | A     | 3-2     | 1     | 11    | 9      |
+| 8      | fluffy          | A     | 3-1     | 1     | 8     | 11     |
+| 9      | blaj            | A     | 3-1     | 1     | 8     | 10     |
+| 9      | alcaras         | B     | 3-1     | 1     | 8     | 10     |
+| 9      | sabertooth      | B     | 3-1     | 1     | 8     | 10     |
+| **12** | **siontific**   | **B** | **3-0** | **1** | **5** | **12** |
 
 ### Why this happens
 
@@ -56,9 +73,9 @@ The standings comment at `standings.ts:14-17` acknowledges the design: "A 3-0 pl
 
 ### Why this isn't a "match points" problem
 
-Standard Swiss "match points" (W=1, L=0, D=0.5) only differentiates when players play different numbers of games *with different outcomes*. With no draws, match points = match wins, and in this format every qualifier has the same number of wins — so plain match points doesn't help either.
+Standard Swiss "match points" (W=1, L=0, D=0.5) only differentiates when players play different numbers of games _with different outcomes_. With no draws, match points = match wins, and in this format every qualifier has the same number of wins — so plain match points doesn't help either.
 
-The thing that *does* separate 3-0 from 3-2 is the difference in **losses** (equivalently `wins - losses`, equivalently `win percentage`, equivalently `round-at-which-clinched`). All four orderings are identical for this format.
+The thing that _does_ separate 3-0 from 3-2 is the difference in **losses** (equivalently `wins - losses`, equivalently `win percentage`, equivalently `round-at-which-clinched`). All four orderings are identical for this format.
 
 ## Proposal
 
@@ -77,39 +94,39 @@ For the bracket-seeding cascade (qualifier-only), `losses asc` alone is sufficie
 ### Buckets for current format (5 rounds, advance at 3 wins, eliminate at 3 losses)
 
 | Bucket | Players (2025-redux) | Games played per player |
-|--------|---------------------|--------------------------|
-| 3-0 | 4 | 3 |
-| 3-1 | 6 | 4 |
-| 3-2 | 6 | 5 |
+| ------ | -------------------- | ----------------------- |
+| 3-0    | 4                    | 3                       |
+| 3-1    | 6                    | 4                       |
+| 3-2    | 6                    | 5                       |
 
 For a 60-player tournament (likely 7 rounds, advance at 4 wins), buckets would be 4-0, 4-1, 4-2, 4-3.
 
 ### Resulting seed order for 2025-redux (qualifier-only)
 
-| Seed | Player | Div | W-L | H2H | Buch | Cum |
-|------|--------|-----|------|-----|------|------|
-| 1 | klass | A | 3-0 | 0 | 6 | 12 |
-| 1 | aran | A | 3-0 | 0 | 6 | 12 |
-| 1 | ninjaa | B | 3-0 | 0 | 6 | 12 |
-| 4 | siontific | B | 3-0 | 0 | 5 | 12 |
-| 5 | purplebullmoose | B | 3-1 | 1 | 9 | 11 |
-| 6 | auro | A | 3-1 | 0 | 9 | 11 |
-| 7 | fluffy | A | 3-1 | 0 | 8 | 11 |
-| 8 | blaj | A | 3-1 | 0 | 8 | 10 |
-| 8 | alcaras | B | 3-1 | 0 | 8 | 10 |
-| 8 | sabertooth | B | 3-1 | 0 | 8 | 10 |
-| 11 | moroten | A | 3-2 | 1 | 11 | 9 |
-| 12 | nizar | B | 3-2 | 0 | 11 | 10 |
-| 13 | cliff | B | 3-2 | 0 | 10 | 8 |
-| 14 | rincewind | B | 3-2 | 0 | 9 | 8 |
-| 15 | marauder | A | 3-2 | 0 | 9 | 7 |
-| 15 | mongreleyes | A | 3-2 | 0 | 9 | 7 |
+| Seed | Player          | Div | W-L | H2H | Buch | Cum |
+| ---- | --------------- | --- | --- | --- | ---- | --- |
+| 1    | klass           | A   | 3-0 | 0   | 6    | 12  |
+| 1    | aran            | A   | 3-0 | 0   | 6    | 12  |
+| 1    | ninjaa          | B   | 3-0 | 0   | 6    | 12  |
+| 4    | siontific       | B   | 3-0 | 0   | 5    | 12  |
+| 5    | purplebullmoose | B   | 3-1 | 1   | 9    | 11  |
+| 6    | auro            | A   | 3-1 | 0   | 9    | 11  |
+| 7    | fluffy          | A   | 3-1 | 0   | 8    | 11  |
+| 8    | blaj            | A   | 3-1 | 0   | 8    | 10  |
+| 8    | alcaras         | B   | 3-1 | 0   | 8    | 10  |
+| 8    | sabertooth      | B   | 3-1 | 0   | 8    | 10  |
+| 11   | moroten         | A   | 3-2 | 1   | 11   | 9   |
+| 12   | nizar           | B   | 3-2 | 0   | 11   | 10  |
+| 13   | cliff           | B   | 3-2 | 0   | 10   | 8   |
+| 14   | rincewind       | B   | 3-2 | 0   | 9    | 8   |
+| 15   | marauder        | A   | 3-2 | 0   | 9    | 7   |
+| 15   | mongreleyes     | A   | 3-2 | 0   | 9    | 7   |
 
 siontific moves from seed 12 → 4.
 
 ## Why losses-asc is the right key
 
-It's not just an "also works" choice. In an early-exit Swiss, the only signal the format produces about qualifier quality at Tier 1 is *how long they took to clinch*. Losses encodes that directly:
+It's not just an "also works" choice. In an early-exit Swiss, the only signal the format produces about qualifier quality at Tier 1 is _how long they took to clinch_. Losses encodes that directly:
 
 - `losses = 0` → clinched at round `swiss_wins_to_advance`
 - `losses = 1` → clinched at round `swiss_wins_to_advance + 1`
@@ -123,7 +140,7 @@ Beyond Tier 1, the change has a clean structural property: **within each losses 
 - All 3-1s played 4 rounds.
 - All 3-2s played 5 rounds.
 
-This means H2H, Buchholz cut-1, and cumulative — all of which were designed assuming uniform rounds-played — now operate on populations where that assumption actually holds. The opportunity-to-score-H2H skew, the Buchholz-sample-size skew, and the cumulative-trajectory skew all vanish *within* a bucket. Cross-bucket comparison was always degenerate; under the proposal, Tier 1 has already separated cross-bucket players so the cascade never has to compare them.
+This means H2H, Buchholz cut-1, and cumulative — all of which were designed assuming uniform rounds-played — now operate on populations where that assumption actually holds. The opportunity-to-score-H2H skew, the Buchholz-sample-size skew, and the cumulative-trajectory skew all vanish _within_ a bucket. Cross-bucket comparison was always degenerate; under the proposal, Tier 1 has already separated cross-bucket players so the cascade never has to compare them.
 
 This is unusual in tiebreaker design — usually you're adding a knob. Here you're getting cleaner per-bucket math as a side effect of fixing Tier 1.
 
@@ -141,7 +158,7 @@ Buchholz cut-1 still applies. Because every player in the bucket has the same nu
 
 ### Tier 4 (Cumulative) within each bucket
 
-The cumulative *calculation* doesn't change, but its discriminating power varies by bucket:
+The cumulative _calculation_ doesn't change, but its discriminating power varies by bucket:
 
 - **3-0 bucket: Tier 4 becomes a no-op.** Only one sequence produces a 3-0 record (W,W,W), giving running wins 1,2,3,3,3 → cum = 12 for every 3-0 player.
 - **3-1 bucket: Tier 4 retains power.** Three sequences are possible (L,W,W,W / W,L,W,W / W,W,L,W), giving distinct cumulatives 9 / 10 / 11.

@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { computeRecord, computeStandings, rankStandings } from "./standings";
+import {
+	computeRecord,
+	computeStandings,
+	rankStandings,
+	type SlotStanding,
+} from "./standings";
 import type { MatchRef, SlotRef, TournamentConfig } from "./types";
 
 const CONFIG: TournamentConfig = {
@@ -15,6 +20,33 @@ function slot(id: string, seed = 0): SlotRef {
 		division: "A",
 		swiss_seed: seed,
 		championship_seed: null,
+	};
+}
+
+// Hand-built SlotStanding for tests that exercise rankStandings directly
+// (the ranker is a pure function of standings + matches). status is derived
+// from CONFIG thresholds so callers only supply the record + tiebreaker fields.
+function standing(
+	id: string,
+	wins: number,
+	losses: number,
+	extra: Partial<SlotStanding> = {},
+): SlotStanding {
+	return {
+		slot_id: id,
+		wins,
+		losses,
+		status:
+			wins >= CONFIG.swiss_wins_to_advance
+				? "advanced"
+				: losses >= CONFIG.swiss_losses_to_eliminate
+					? "eliminated"
+					: "active",
+		buchholz_cut1: 0,
+		opponents_buchholz: 0,
+		cumulative: 0,
+		swiss_seed: 0,
+		...extra,
 	};
 }
 
@@ -164,6 +196,35 @@ describe("computeStandings — Buchholz cut-1 and Cumulative", () => {
 		expect(a.cumulative).toBe(1 + 2 + 3 + 3 + 3); // 12
 		expect(b.cumulative).toBe(0 + 0 + 1 + 2 + 3); // 6
 	});
+
+	it("opponents' Buchholz sums each opponent's Buchholz cut-1", () => {
+		// 4-player single round robin. Final wins: A=3, B=2, C=1, D=0.
+		// Buchholz cut-1: A=3, B=4, C=5, D=5.
+		// Opponents' Buchholz (sum of opponents' cut-1):
+		//   A (opps B,C,D) = 4+5+5 = 14
+		//   B (opps A,C,D) = 3+5+5 = 13
+		//   C (opps A,B,D) = 3+4+5 = 12
+		//   D (opps A,B,C) = 3+4+5 = 12
+		const slots = [slot("A"), slot("B"), slot("C"), slot("D")];
+		const matches = [
+			match("r1a", 1, "A", "B", "A"),
+			match("r1b", 1, "C", "D", "C"),
+			match("r2a", 2, "A", "C", "A"),
+			match("r2b", 2, "B", "D", "B"),
+			match("r3a", 3, "A", "D", "A"),
+			match("r3b", 3, "B", "C", "B"),
+		];
+		const standings = computeStandings(slots, matches, CONFIG);
+		const get = (id: string) => standings.find((s) => s.slot_id === id)!;
+		expect(get("A").buchholz_cut1).toBe(3);
+		expect(get("B").buchholz_cut1).toBe(4);
+		expect(get("C").buchholz_cut1).toBe(5);
+		expect(get("D").buchholz_cut1).toBe(5);
+		expect(get("A").opponents_buchholz).toBe(14);
+		expect(get("B").opponents_buchholz).toBe(13);
+		expect(get("C").opponents_buchholz).toBe(12);
+		expect(get("D").opponents_buchholz).toBe(12);
+	});
 });
 
 describe("rankStandings — full cascade", () => {
@@ -181,15 +242,13 @@ describe("rankStandings — full cascade", () => {
 		expect(ranked[0].rank).toBe(1);
 	});
 
-	it("Sion regression: Division A 3-way tie resolved by H2H", () => {
+	it("Sion Div A: losses-asc seeds the 3-0 first, ahead of stronger-H2H 3-1/3-2", () => {
 		// Recreate Sion's Div A from May 2026:
 		//   12thumbs: 3-0; eyebeams: 3-1 (R1 bye); brain1: 3-2; thingobongo: 2-3; anxiety: 1-3
-		// H2H within the 3-way tie {12thumbs, eyebeams, brain1}:
-		//   eyebeams beat brain1 twice (R2 + R4)
-		//   12thumbs beat eyebeams (R3)
-		//   brain1 and 12thumbs didn't play
-		// H2H sum-of-points: eyebeams=2, 12thumbs=1, brain1=0.
-		// Order: eyebeams > 12thumbs > brain1 (brain1 cut by H2H, NOT by Buchholz).
+		// Under the OLD wins-desc Tier 1 the three 3-W players tied and H2H
+		// seeded eyebeams (H2H 2) above 12thumbs (the actual 3-0). Under
+		// losses-asc Tier 1 they separate by losses with no tie: the 3-0 seeds
+		// first, then the 3-1, then the 3-2 — H2H never fires (all singletons).
 		const slots = [
 			slot("12thumbs"),
 			slot("eyebeams"),
@@ -213,28 +272,27 @@ describe("rankStandings — full cascade", () => {
 		];
 		const standings = computeStandings(slots, matches, CONFIG);
 		const ranked = rankStandings(standings, matches);
-		// Top 3 by H2H within the 3-win tie:
-		expect(ranked[0].slot_id).toBe("eyebeams");
-		expect(ranked[0].h2h).toBe(2);
-		expect(ranked[1].slot_id).toBe("12thumbs");
-		expect(ranked[1].h2h).toBe(1);
-		expect(ranked[2].slot_id).toBe("brain1");
-		expect(ranked[2].h2h).toBe(0);
-		// All three 3-W players are "advanced" — no cut.
+		// Strict losses-asc order, no ties:
+		expect(ranked.map((r) => r.slot_id)).toEqual([
+			"12thumbs", // 3-0
+			"eyebeams", // 3-1
+			"brain1", // 3-2
+			"thingobongo", // 2-3
+			"anxiety", // 1-3
+		]);
+		expect(ranked.map((r) => r.rank)).toEqual([1, 2, 3, 4, 5]);
+		// All three 3-W players still "advanced" — Tier 1 only reorders seeds.
 		expect(ranked[0].status).toBe("advanced");
 		expect(ranked[1].status).toBe("advanced");
 		expect(ranked[2].status).toBe("advanced");
 	});
 
-	it("Sion regression: Division B 3-way tie resolved by H2H then Buchholz", () => {
+	it("Sion Div B: losses-asc seeds the 3-1 above the stronger-Buchholz 3-2", () => {
 		// Recreate Sion's Div B from May 2026:
 		//   brian: 3-0 (R1 bye); twobits: 3-1; cerebelum: 3-2; hippocampus: 2-3; brain2: 1-3
-		// H2H: brian beat cerebelum (R2) and twobits (R3); cerebelum vs twobits didn't play.
-		// H2H sum: brian=2, cerebelum=0, twobits=0 → brian wins outright.
-		// Cerebelum/twobits then break tie at Buchholz cut-1:
-		//   cerebelum opps: brain2(1), brian(3), hippocampus(2), brain2(1), hippocampus(2) → cut1 = 8
-		//   twobits opps: hippocampus(2), brain2(1), brian(3), hippocampus(2) → cut1 = 7
-		// So cerebelum (8) > twobits (7).
+		// Under the OLD wins-desc Tier 1, cerebelum (3-2, Buchholz 8) seeded
+		// ABOVE twobits (3-1, Buchholz 7). Under losses-asc Tier 1 the 3-1
+		// outranks the 3-2 outright, regardless of Buchholz — the intended fix.
 		const slots = [
 			slot("brian"),
 			slot("twobits"),
@@ -258,12 +316,19 @@ describe("rankStandings — full cascade", () => {
 		];
 		const standings = computeStandings(slots, matches, CONFIG);
 		const ranked = rankStandings(standings, matches);
-		expect(ranked[0].slot_id).toBe("brian");
-		expect(ranked[0].h2h).toBe(2);
-		expect(ranked[1].slot_id).toBe("cerebelum");
-		expect(ranked[1].buchholz_cut1).toBe(8);
-		expect(ranked[2].slot_id).toBe("twobits");
-		expect(ranked[2].buchholz_cut1).toBe(7);
+		// Strict losses-asc order, no ties:
+		expect(ranked.map((r) => r.slot_id)).toEqual([
+			"brian", // 3-0
+			"twobits", // 3-1
+			"cerebelum", // 3-2
+			"hippocampus", // 2-3
+			"brain2", // 1-3
+		]);
+		// twobits now seeds above cerebelum despite cerebelum's higher Buchholz.
+		expect(ranked[1].slot_id).toBe("twobits");
+		expect(ranked[1].buchholz_cut1).toBe(7);
+		expect(ranked[2].slot_id).toBe("cerebelum");
+		expect(ranked[2].buchholz_cut1).toBe(8);
 	});
 
 	it("marks ties when every tier returns equal", () => {
@@ -306,5 +371,83 @@ describe("rankStandings — full cascade", () => {
 		// A has more wins than B; A's H2H against B is irrelevant.
 		expect(ranked[0].slot_id).toBe("A");
 		expect(ranked[0].wins).toBeGreaterThan(ranked[1].wins);
+	});
+
+	it("within a losses bucket, H2H then Buchholz still break ties", () => {
+		// P, Q, R all finish 2-1 (one losses bucket). Within {P,Q,R}:
+		//   P beat Q, Q beat R, P vs R didn't play → H2H: P=1, Q=1, R=0.
+		// R drops to the bottom on H2H; P/Q (both H2H 1) split on Buchholz:
+		//   Q opps P(2),R(2),C(0) → cut-1 = 4; P opps Q(2),A(1),B(0) → cut-1 = 3.
+		// So within the bucket: Q > P > R.
+		const slots = ["P", "Q", "R", "A", "B", "C"].map((id) => slot(id));
+		const matches = [
+			match("w1", 1, "P", "Q", "P"),
+			match("w2", 2, "P", "A", "A"),
+			match("w3", 2, "Q", "R", "Q"),
+			match("w4", 3, "P", "B", "P"),
+			match("w5", 3, "R", "A", "R"),
+			match("w6", 4, "Q", "C", "Q"),
+			match("w7", 4, "R", "B", "R"),
+		];
+		const standings = computeStandings(slots, matches, CONFIG);
+		const ranked = rankStandings(standings, matches);
+		expect(ranked.slice(0, 3).map((r) => r.slot_id)).toEqual(["Q", "P", "R"]);
+		expect(ranked[0].h2h).toBe(1);
+		expect(ranked[0].buchholz_cut1).toBe(4);
+		expect(ranked[1].h2h).toBe(1);
+		expect(ranked[1].buchholz_cut1).toBe(3);
+		expect(ranked[2].h2h).toBe(0);
+	});
+
+	it("Tier 4: opponents' Buchholz breaks a Buchholz tie before cumulative", () => {
+		// Both 3-0, equal Buchholz and cumulative; differ only on opponents'
+		// Buchholz. swiss_seed favors "low" (1 < 2), so a win for "high" proves
+		// Tier 4 fires ahead of the Tier 6 seed fallback.
+		const standings = [
+			standing("low", 3, 0, {
+				buchholz_cut1: 6,
+				opponents_buchholz: 10,
+				cumulative: 12,
+				swiss_seed: 1,
+			}),
+			standing("high", 3, 0, {
+				buchholz_cut1: 6,
+				opponents_buchholz: 14,
+				cumulative: 12,
+				swiss_seed: 2,
+			}),
+		];
+		const ranked = rankStandings(standings, []);
+		expect(ranked[0].slot_id).toBe("high");
+		expect(ranked[1].slot_id).toBe("low");
+		expect(ranked[0].rank).toBe(1);
+		expect(ranked[1].rank).toBe(2);
+	});
+
+	it("Tier 6: fully-tied players seed by swiss_seed yet still report the tie", () => {
+		// Identical through Tier 5; only swiss_seed differs. Input order is
+		// scrambled (b before a) to prove the deterministic sort.
+		const standings = [
+			standing("b", 3, 0, {
+				buchholz_cut1: 6,
+				opponents_buchholz: 12,
+				cumulative: 12,
+				swiss_seed: 5,
+			}),
+			standing("a", 3, 0, {
+				buchholz_cut1: 6,
+				opponents_buchholz: 12,
+				cumulative: 12,
+				swiss_seed: 2,
+			}),
+		];
+		const ranked = rankStandings(standings, []);
+		// Emission (bracket-seed) order is swiss_seed asc: a (2) before b (5).
+		expect(ranked.map((r) => r.slot_id)).toEqual(["a", "b"]);
+		// But they remain a reported tie on the meaningful tiers.
+		expect(ranked[0].rank).toBe(1);
+		expect(ranked[1].rank).toBe(1);
+		expect(ranked[0].tied_with).toEqual(["b"]);
+		expect(ranked[1].tied_with).toEqual(["a"]);
 	});
 });

@@ -86,6 +86,10 @@
 						class="py-1 pr-2 text-right"
 						title="Buchholz cut-1 (strength of schedule)">B1</th
 					>
+					<th
+						class="py-1 pr-2 text-right"
+						title="Opponents' Buchholz (depth of schedule)">B2</th
+					>
 					<th class="py-1 pr-2 text-right" title="Cumulative running win total"
 						>Cum</th
 					>
@@ -122,6 +126,9 @@
 							{/if}
 						</td>
 						<td class="py-1 pr-2 text-right font-mono">{s.buchholz_cut1}</td>
+						<td class="py-1 pr-2 text-right font-mono"
+							>{s.opponents_buchholz}</td
+						>
 						<td class="py-1 pr-2 text-right font-mono">{s.cumulative}</td>
 						<td class="py-1 text-right">
 							<span

@@ -6,10 +6,27 @@
 // state drifts from the underlying matches.
 //
 // Cascade for bracket seeding:
-//   1. Match wins (descending)
+//   1. Losses (ascending), with wins (descending) as the primary axis for
+//      the full-standings view — i.e. the composite key (wins desc, losses
+//      asc). For qualifiers wins is constant at the advance threshold, so
+//      Tier 1 reduces to losses asc — equivalently, "rounds taken to clinch."
 //   2. Head-to-head — sum of wins against other still-tied players
 //   3. Buchholz cut-1 — sum of opponents' wins, lowest dropped
-//   4. Cumulative — sum of running win count across rounds (Harkness)
+//   4. Opponents' Buchholz — sum of each opponent's Buchholz cut-1. A
+//      deeper strength-of-schedule measure; the only tier with discriminating
+//      power in the zero-loss bucket (where cumulative is a structural no-op).
+//   5. Cumulative — sum of running win count across rounds (Harkness)
+//   6. Initial swiss seed, then slot_id — a deterministic terminal key so the
+//      bracket seed order is always fully determined without manual input.
+//      Only the *emission order within a tied group* is fixed here; `rank` and
+//      `tied_with` still report ties on the meaningful tiers (1-5).
+//
+// Why Tier 1 is losses, not wins: in early-exit Swiss every qualifier has the
+// same number of wins by definition, so wins-desc was degenerate and pushed
+// the entire seeding job onto Tiers 2+ across a population that played
+// different numbers of rounds. Losses-asc separates qualifiers directly and,
+// as a side effect, restricts each downstream tier to a single rounds-played
+// cohort. See docs/tournament-seeding-tier1-proposal.md.
 //
 // Tiebreakers only seed the bracket — qualification is purely "did you
 // reach `swiss_wins_to_advance` wins." A 3-0 player never gets cut by
@@ -39,7 +56,14 @@ export interface SlotRecord {
 
 export interface SlotStanding extends SlotRecord {
 	buchholz_cut1: number;
+	// Sum of each opponent's buchholz_cut1 (Tier 4). Two-pass: needs every
+	// slot's buchholz_cut1 computed first.
+	opponents_buchholz: number;
 	cumulative: number;
+	// Carried from the SlotRef so the ranker can use it as the deterministic
+	// Tier 6 fallback. Null for slots without a swiss seed (shouldn't happen
+	// for swiss-phase slots, but the column is nullable).
+	swiss_seed: number | null;
 }
 
 export function computeRecord(
@@ -95,9 +119,12 @@ function computeBuchholzCut1(opponentWins: number[]): number {
 // count frozen at its last-played value — implemented by carrying the
 // running W across max_rounds even when no match exists.
 //
-// Why count past-clinch rounds: a player who hit 3-0 in R3 should outscore
-// a player who hit 3-0 in R5 on this tier. Carrying their 3-W through R4-R5
-// captures that.
+// Why count past-clinch rounds: it was originally how the cascade separated
+// early clinchers from late ones. Under Tier 1 = losses asc that separation
+// now happens upstream (everyone in a losses bucket clinched at the same
+// round), so the carry only adds a per-bucket constant and never reorders
+// within a bucket. Retained anyway: it keeps cumulative monotonic across
+// buckets and the calculation simple.
 function computeCumulative(
 	slotId: string,
 	matches: MatchRef[],
@@ -159,7 +186,13 @@ export function computeStandings(
 		recordById.set(s.slot_id, computeRecord(s.slot_id, matches, config));
 	}
 
-	const standings: SlotStanding[] = [];
+	// Pass 1: per-slot Buchholz cut-1 and cumulative. Buchholz is also kept in
+	// a map so pass 2 can sum opponents' Buchholz (Tier 4).
+	const buchholzBySlot = new Map<string, number>();
+	const partial = new Map<
+		string,
+		{ rec: SlotRecord; buchholz_cut1: number; cumulative: number }
+	>();
 	for (const s of slots) {
 		const rec = recordById.get(s.slot_id)!;
 		const opponentWins = collectOpponents(s.slot_id, matches).map(
@@ -171,7 +204,26 @@ export function computeStandings(
 			matches,
 			config.swiss_max_rounds,
 		);
-		standings.push({ ...rec, buchholz_cut1, cumulative });
+		buchholzBySlot.set(s.slot_id, buchholz_cut1);
+		partial.set(s.slot_id, { rec, buchholz_cut1, cumulative });
+	}
+
+	// Pass 2: opponents' Buchholz = sum of each (non-bye) opponent's Buchholz
+	// cut-1. Needs every slot's buchholz_cut1 from pass 1.
+	const standings: SlotStanding[] = [];
+	for (const s of slots) {
+		const { rec, buchholz_cut1, cumulative } = partial.get(s.slot_id)!;
+		const opponents_buchholz = collectOpponents(s.slot_id, matches).reduce(
+			(sum, oid) => sum + (buchholzBySlot.get(oid) ?? 0),
+			0,
+		);
+		standings.push({
+			...rec,
+			buchholz_cut1,
+			opponents_buchholz,
+			cumulative,
+			swiss_seed: s.swiss_seed,
+		});
 	}
 	return standings;
 }
@@ -186,16 +238,24 @@ export interface RankedStanding extends SlotStanding {
 // tier may break some ties and leave others, with H2H specifically
 // requiring the *tied set* to be known before it can be computed.
 //
-// Slots that share every tier value share a rank and list each other in
-// `tied_with`. Callers that need to disambiguate seed-1 (or any rank with
-// a non-empty tied_with) must use override_ranks.
+// Slots that share every *meaningful* tier value (1-5) share a rank and list
+// each other in `tied_with`. Such ties no longer require manual intervention:
+// Tier 6 (initial swiss seed, then slot_id) deterministically fixes the
+// emission order — hence the bracket seed — within a tied group. override_ranks
+// remains only for the INSUFFICIENT_QUALIFIERS case (promoting non-clinchers).
 export function rankStandings(
 	standings: SlotStanding[],
 	matches: MatchRef[],
 ): RankedStanding[] {
-	// Initial grouping by wins (desc). Each group is a list of slots tied on
-	// match wins so far. Subsequent tiers split groups further.
-	let groups: SlotStanding[][] = groupByKey(standings, (s) => -s.wins);
+	// Tier 1: composite (wins desc, losses asc). WINS_WEIGHT just needs to
+	// exceed any realistic losses count (bounded by swiss_losses_to_eliminate)
+	// so wins dominates the sort and losses breaks wins-ties. For qualifiers
+	// wins is constant, so this reduces to losses asc.
+	const WINS_WEIGHT = 1000;
+	let groups: SlotStanding[][] = groupByKey(
+		standings,
+		(s) => s.losses - WINS_WEIGHT * s.wins,
+	);
 
 	// Tier 2: H2H sum-of-points within each still-tied group.
 	const h2hByPair = new Map<string, number>(); // slot_id → h2h within its current group
@@ -223,10 +283,30 @@ export function rankStandings(
 		group.length <= 1 ? [group] : groupByKey(group, (s) => -s.buchholz_cut1),
 	);
 
-	// Tier 4: Cumulative.
+	// Tier 4: Opponents' Buchholz (depth of schedule).
+	groups = groups.flatMap((group) =>
+		group.length <= 1
+			? [group]
+			: groupByKey(group, (s) => -s.opponents_buchholz),
+	);
+
+	// Tier 5: Cumulative.
 	groups = groups.flatMap((group) =>
 		group.length <= 1 ? [group] : groupByKey(group, (s) => -s.cumulative),
 	);
+
+	// Tier 6: deterministic terminal key. Within any group the meaningful tiers
+	// couldn't split, fix the emission order by initial swiss seed (asc), then
+	// slot_id (asc) to guarantee a total order. This sets the bracket seed
+	// order; `rank`/`tied_with` below still reflect the Tier 1-5 tie.
+	for (const group of groups) {
+		if (group.length <= 1) continue;
+		group.sort(
+			(a, b) =>
+				(a.swiss_seed ?? Infinity) - (b.swiss_seed ?? Infinity) ||
+				(a.slot_id < b.slot_id ? -1 : a.slot_id > b.slot_id ? 1 : 0),
+		);
+	}
 
 	// Assemble ranked output. Slots in the same final group share a rank.
 	const ranked: RankedStanding[] = [];
