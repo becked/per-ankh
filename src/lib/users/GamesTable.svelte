@@ -13,6 +13,7 @@
 	import { cloudApi, ApiError, type GameListItem } from "$lib/api-cloud";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import SearchInput from "$lib/SearchInput.svelte";
+	import DateFilter from "./DateFilter.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import { getCivilizationColor } from "$lib/config";
 	import { formatDate, formatEnum } from "$lib/utils/formatting";
@@ -260,14 +261,7 @@
 				<option value="loss">Loss</option>
 			</select>
 
-			<input
-				type="date"
-				value={date ?? ""}
-				onchange={(e) =>
-					setParam("date", (e.target as HTMLInputElement).value || null)}
-				class="w-full rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
-				aria-label="Filter by date"
-			/>
+			<DateFilter value={date} onChange={(v) => setParam("date", v)} />
 		</div>
 	</aside>
 
