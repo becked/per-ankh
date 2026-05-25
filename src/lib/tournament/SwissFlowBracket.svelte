@@ -6,6 +6,7 @@
 		TournamentMatch,
 	} from "$lib/api-cloud";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		mapFullName,
@@ -51,6 +52,14 @@
 		const out: Record<string, string> = {};
 		for (const s of standings) {
 			out[s.slot_id] = s.discord_username ?? `slot ${s.slot_id.slice(0, 6)}`;
+		}
+		return out;
+	});
+
+	const avatarOf = $derived.by(() => {
+		const out: Record<string, string | null> = {};
+		for (const s of standings) {
+			out[s.slot_id] = s.avatar_url;
 		}
 		return out;
 	});
@@ -235,11 +244,17 @@
 								onclick={(e) => handleMatchClick(m.match_id, e)}
 							>
 								<div class="match-row">
+									{#if m.slot_a_id}
+										<PlayerAvatar avatarUrl={avatarOf[m.slot_a_id]} size={12} />
+									{/if}
 									<span class="slot" class:winner={aWon}>
 										{slotLabel(m.slot_a_id)}
 									</span>
 								</div>
 								<div class="match-row">
+									{#if m.slot_b_id}
+										<PlayerAvatar avatarUrl={avatarOf[m.slot_b_id]} size={12} />
+									{/if}
 									<span class="slot" class:winner={bWon}>
 										{slotLabel(m.slot_b_id)}
 									</span>
@@ -272,6 +287,7 @@
 					<ul class="chip-list">
 						{#each layout.advanced as a (a.slot_id)}
 							<li class="chip chip-advance">
+								<PlayerAvatar avatarUrl={avatarOf[a.slot_id]} size={12} />
 								<span class="chip-name">{slotLabel(a.slot_id)}</span>
 								<span class="chip-record">{a.finalWins}-{a.finalLosses}</span>
 							</li>
@@ -292,6 +308,7 @@
 					<ul class="chip-list">
 						{#each layout.eliminated as e (e.slot_id)}
 							<li class="chip chip-eliminate">
+								<PlayerAvatar avatarUrl={avatarOf[e.slot_id]} size={12} />
 								<span class="chip-name">{slotLabel(e.slot_id)}</span>
 								<span class="chip-record">{e.finalWins}-{e.finalLosses}</span>
 							</li>
@@ -388,7 +405,7 @@
 
 	.match-row {
 		display: flex;
-		align-items: baseline;
+		align-items: center;
 		gap: 0.3rem;
 		min-width: 0;
 	}
@@ -498,6 +515,8 @@
 	}
 
 	.chip-name {
+		flex: 1 1 auto;
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

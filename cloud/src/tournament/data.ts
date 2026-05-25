@@ -5,6 +5,7 @@
 // tournaments.updated_at via bumpTournamentUpdatedAt — that's the cache
 // invalidation key for /standings and /bracket.
 
+import { buildAvatarUrl } from "../auth";
 import type {
 	Division,
 	MapPoolEntry,
@@ -55,6 +56,10 @@ export interface SlotRow {
 	discord_username: string | null;
 	discord_id: string | null;
 	user_id: string | null;
+	// avatar_hash of the claiming user, LEFT JOINed from users by the slot
+	// loaders below. NULL when the slot is unclaimed (no user_id) or the
+	// claiming user has no custom Discord avatar. Feeds slotAvatarUrl().
+	user_avatar_hash: string | null;
 	claim_banner_dismissed_at: string | null;
 	created_at: string;
 }
@@ -129,7 +134,11 @@ export async function loadSlots(
 	tournamentId: string,
 ): Promise<SlotRow[]> {
 	const res = await env.SHARE_DB.prepare(
-		"SELECT * FROM tournament_slots WHERE tournament_id = ? ORDER BY phase, division, swiss_seed, championship_seed",
+		`SELECT s.*, u.avatar_hash AS user_avatar_hash
+		 FROM tournament_slots s
+		 LEFT JOIN users u ON u.user_id = s.user_id
+		 WHERE s.tournament_id = ?
+		 ORDER BY s.phase, s.division, s.swiss_seed, s.championship_seed`,
 	)
 		.bind(tournamentId)
 		.all<SlotRow>();
@@ -190,7 +199,10 @@ export async function loadSlot(
 	slotId: string,
 ): Promise<SlotRow | null> {
 	return env.SHARE_DB.prepare(
-		"SELECT * FROM tournament_slots WHERE slot_id = ?",
+		`SELECT s.*, u.avatar_hash AS user_avatar_hash
+		 FROM tournament_slots s
+		 LEFT JOIN users u ON u.user_id = s.user_id
+		 WHERE s.slot_id = ?`,
 	)
 		.bind(slotId)
 		.first<SlotRow>();
@@ -206,7 +218,10 @@ export async function loadSlotInTournament(
 	tournamentId: string,
 ): Promise<SlotRow | null> {
 	return env.SHARE_DB.prepare(
-		"SELECT * FROM tournament_slots WHERE slot_id = ? AND tournament_id = ?",
+		`SELECT s.*, u.avatar_hash AS user_avatar_hash
+		 FROM tournament_slots s
+		 LEFT JOIN users u ON u.user_id = s.user_id
+		 WHERE s.slot_id = ? AND s.tournament_id = ?`,
 	)
 		.bind(slotId, tournamentId)
 		.first<SlotRow>();
@@ -223,6 +238,17 @@ export async function bumpTournamentUpdatedAt(
 	)
 		.bind(tournamentId)
 		.run();
+}
+
+// Public avatar URL for a slot's occupant, or null when the slot is
+// unclaimed (no discord_id pinned yet). buildAvatarUrl always yields a URL
+// once discord_id is present — falling back to Discord's default avatar when
+// the user has no custom one — so null here means "show the unclaimed
+// fallback" (the EFFECTUNIT_ENLIST_ICON sprite) on the client.
+export function slotAvatarUrl(row: SlotRow): string | null {
+	return row.discord_id
+		? buildAvatarUrl(row.discord_id, row.user_avatar_hash)
+		: null;
 }
 
 // Convert D1 rows → in-memory refs used by the pure-function algorithms.

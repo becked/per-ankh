@@ -6,6 +6,7 @@
 		MapPoolEntry,
 	} from "$lib/api-cloud";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		mapFullName,
@@ -53,6 +54,11 @@
 		const s = slotsById[slotId];
 		if (!s) return "—";
 		return s.discord_username ?? `seed ${s.championship_seed ?? "?"}`;
+	}
+
+	function slotAvatar(slotId: string | null): string | null {
+		if (!slotId) return null;
+		return slotsById[slotId]?.avatar_url ?? null;
 	}
 
 	// Slot text for display. An empty slot in a placeholder (not-yet-generated)
@@ -330,14 +336,24 @@
 		class:winner={aWon}
 		class:tbd={m.is_placeholder && !m.slot_a_id}
 	>
-		{slotDisplay(m.slot_a_id, m.is_placeholder)}
+		{#if m.slot_a_id}
+			<PlayerAvatar avatarUrl={slotAvatar(m.slot_a_id)} size={14} />
+		{/if}
+		<span class="slot-name">{slotDisplay(m.slot_a_id, m.is_placeholder)}</span>
 	</div>
 	<div
 		class="slot"
 		class:winner={bWon}
 		class:tbd={m.is_placeholder && !m.slot_b_id}
 	>
-		{m.status === "bye" ? "BYE" : slotDisplay(m.slot_b_id, m.is_placeholder)}
+		{#if m.status !== "bye" && m.slot_b_id}
+			<PlayerAvatar avatarUrl={slotAvatar(m.slot_b_id)} size={14} />
+		{/if}
+		<span class="slot-name"
+			>{m.status === "bye"
+				? "BYE"
+				: slotDisplay(m.slot_b_id, m.is_placeholder)}</span
+		>
 	</div>
 	{#if m.map_script}
 		{@const entry = poolEntryById(mapPool, m.map_pool_id)}
@@ -446,9 +462,15 @@
 		flex: 1;
 		display: flex;
 		align-items: center;
+		gap: 0.4rem;
 		padding: 0 0.6rem;
 		color: var(--color-tan, #e8d8b8);
 		font-size: 0.8rem;
+		overflow: hidden;
+	}
+
+	.slot-name {
+		min-width: 0;
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;

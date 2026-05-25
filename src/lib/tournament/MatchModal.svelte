@@ -12,6 +12,7 @@
 	import type { FullGameData } from "$lib/parser/types";
 	import Chart from "$lib/Chart.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import {
 		CHART_THEME,
@@ -37,12 +38,20 @@
 		tournament: TournamentDetail;
 		slotLabels: Record<string, string>;
 		slotUserIds: Record<string, string | null>;
+		slotAvatars: Record<string, string | null>;
 		user: UserMe | null;
 		onClose: () => void;
 	}
 
-	let { match, tournament, slotLabels, slotUserIds, user, onClose }: Props =
-		$props();
+	let {
+		match,
+		tournament,
+		slotLabels,
+		slotUserIds,
+		slotAvatars,
+		user,
+		onClose,
+	}: Props = $props();
 
 	type EditMode = "none" | "map" | "retro";
 	let editMode = $state<EditMode>("none");
@@ -83,6 +92,26 @@
 				: match.slot_a_id;
 		if (loserId === null) return "Bye";
 		return slotLabels[loserId] ?? "—";
+	});
+
+	// Avatars parallel to the labels above (null → unclaimed → enlist fallback).
+	const slotAAvatar = $derived(slotAvatars[match.slot_a_id] ?? null);
+	const slotBAvatar = $derived(
+		match.slot_b_id !== null ? (slotAvatars[match.slot_b_id] ?? null) : null,
+	);
+	const winnerAvatar = $derived(
+		match.winner_slot_id !== null
+			? (slotAvatars[match.winner_slot_id] ?? null)
+			: null,
+	);
+	const loserAvatar = $derived.by(() => {
+		if (match.winner_slot_id === null) return null;
+		const loserId =
+			match.winner_slot_id === match.slot_a_id
+				? match.slot_b_id
+				: match.slot_a_id;
+		if (loserId === null) return null;
+		return slotAvatars[loserId] ?? null;
 	});
 
 	// The map_pool instance this match was assigned, resolved from its id.
@@ -336,15 +365,34 @@
 	>
 		<header class="mb-3 flex items-start justify-between gap-3">
 			<div class="min-w-0 flex-1">
-				<h2 id="match-modal-title" class="truncate text-lg font-bold text-tan">
+				<h2
+					id="match-modal-title"
+					class="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold text-tan"
+				>
 					{#if winnerLabel}
-						<span>{winnerLabel}</span>
+						<span class="inline-flex min-w-0 items-center gap-1.5">
+							<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
+							<span class="truncate">{winnerLabel}</span>
+						</span>
 						<span class="opacity-50">v</span>
-						<span class="opacity-50">{loserLabel}</span>
+						<span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
+							{#if loserLabel !== "Bye"}
+								<PlayerAvatar avatarUrl={loserAvatar} size={14} />
+							{/if}
+							<span class="truncate">{loserLabel}</span>
+						</span>
 					{:else}
-						<span>{slotALabel}</span>
+						<span class="inline-flex min-w-0 items-center gap-1.5">
+							<PlayerAvatar avatarUrl={slotAAvatar} size={14} />
+							<span class="truncate">{slotALabel}</span>
+						</span>
 						<span class="opacity-50">v</span>
-						<span>{slotBLabel}</span>
+						<span class="inline-flex min-w-0 items-center gap-1.5">
+							{#if match.slot_b_id !== null}
+								<PlayerAvatar avatarUrl={slotBAvatar} size={14} />
+							{/if}
+							<span class="truncate">{slotBLabel}</span>
+						</span>
 					{/if}
 				</h2>
 				<div
@@ -418,8 +466,13 @@
 									/>
 									Winner
 								</p>
-								<p class="truncate text-sm font-bold text-[#DBDEE3]">
-									{winnerLabel ?? "—"}
+								<p
+									class="flex items-center gap-1.5 text-sm font-bold text-[#DBDEE3]"
+								>
+									{#if winnerLabel}
+										<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
+									{/if}
+									<span class="truncate">{winnerLabel ?? "—"}</span>
 								</p>
 							</div>
 							<div class="rounded p-2" style="background-color: #2a2622;">
@@ -476,8 +529,13 @@
 							/>
 							Winner
 						</p>
-						<p class="truncate text-sm font-bold text-[#DBDEE3]">
-							{winnerLabel ?? "—"}
+						<p
+							class="flex items-center gap-1.5 text-sm font-bold text-[#DBDEE3]"
+						>
+							{#if winnerLabel}
+								<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
+							{/if}
+							<span class="truncate">{winnerLabel ?? "—"}</span>
 						</p>
 					</div>
 				</div>

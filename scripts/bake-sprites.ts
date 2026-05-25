@@ -21,6 +21,7 @@
 //   other/PENDING_CRITICAL.png                   → icons/PENDING_CRITICAL.png
 //   tools/TOOL_SETTINGS.png                      → icons/TOOL_SETTINGS.png
 //   other/GOAL_STARTED.png                       → icons/GOAL_STARTED.png
+//   mods/dynamic-unit/sprites/EFFECTUNIT_ENLIST_ICON.png → icons/EFFECTUNIT_ENLIST_ICON.png
 //
 // OUTPUT:
 //   static/sprites/<category>/<basename>.<hash>.png
@@ -130,6 +131,13 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	{ source: "other/CULTURE_DEVELOPING.png", target: "CULTURE_DEVELOPING.png" },
 	{ source: "other/CULTURE_STRONG.png", target: "CULTURE_STRONG.png" },
 	{ source: "other/CULTURE_LEGENDARY.png", target: "CULTURE_LEGENDARY.png" },
+	// Unclaimed-slot stand-in for tournament player avatars (see
+	// PlayerAvatar.svelte): shown in front of a slot's name when no logged-in
+	// user has claimed it yet, so there's no Discord avatar to display.
+	{
+		source: "mods/dynamic-unit/sprites/EFFECTUNIT_ENLIST_ICON.png",
+		target: "EFFECTUNIT_ENLIST_ICON.png",
+	},
 ];
 
 function contentHash(buf: Buffer): string {

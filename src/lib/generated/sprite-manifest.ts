@@ -109,6 +109,8 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"icons/CULTURE_LEGENDARY": "/sprites/icons/CULTURE_LEGENDARY.ec3dbeb2.png",
 	"icons/CULTURE_STRONG": "/sprites/icons/CULTURE_STRONG.b6179a95.png",
 	"icons/CULTURE_WEAK": "/sprites/icons/CULTURE_WEAK.20c371c7.png",
+	"icons/EFFECTUNIT_ENLIST_ICON":
+		"/sprites/icons/EFFECTUNIT_ENLIST_ICON.be3a8836.png",
 	"icons/GAME_HELP": "/sprites/icons/GAME_HELP.113586dd.png",
 	"icons/GOAL_STARTED": "/sprites/icons/GOAL_STARTED.202fc07c.png",
 	"icons/IMPROVEMENT_FINISHED":

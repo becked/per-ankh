@@ -1220,6 +1220,9 @@ export interface SlotStanding {
 	tied_with: string[];
 	discord_username: string | null;
 	user_id: string | null;
+	// Discord avatar URL of the claiming user, or null when the slot is
+	// unclaimed (render the EFFECTUNIT_ENLIST_ICON fallback in that case).
+	avatar_url: string | null;
 	swiss_seed: number | null;
 }
 
@@ -1238,6 +1241,7 @@ export interface CombinedQualifier {
 	cumulative: number;
 	division: "A" | "B" | null;
 	discord_username: string | null;
+	avatar_url: string | null;
 	swiss_seed: number | null;
 }
 
@@ -1256,6 +1260,7 @@ export interface BracketSlot {
 	championship_seed: number | null;
 	discord_username: string | null;
 	user_id: string | null;
+	avatar_url: string | null;
 }
 
 export interface BracketRound {

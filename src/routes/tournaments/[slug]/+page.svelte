@@ -16,6 +16,7 @@
 	import ChampionshipTransitionPreview from "$lib/tournament/ChampionshipTransitionPreview.svelte";
 	import FirstPickNote from "$lib/tournament/FirstPickNote.svelte";
 	import MatchModal from "$lib/tournament/MatchModal.svelte";
+	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import SignupModal from "$lib/tournament/SignupModal.svelte";
 	import SlotUsernameAutocomplete from "$lib/tournament/SlotUsernameAutocomplete.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
@@ -119,6 +120,21 @@
 		}
 		for (const s of data.bracket.slots) {
 			out[s.slot_id] = s.user_id;
+		}
+		return out;
+	});
+
+	// Avatar URL per slot (null → unclaimed → enlist-icon fallback). Same
+	// standings ∪ bracket union as slotLabels; consumed by the match modal.
+	const slotAvatars = $derived.by(() => {
+		const out: Record<string, string | null> = {};
+		for (const div of ["A", "B"] as const) {
+			for (const s of data.standings.divisions[div].standings) {
+				out[s.slot_id] = s.avatar_url;
+			}
+		}
+		for (const s of data.bracket.slots) {
+			out[s.slot_id] = s.avatar_url;
 		}
 		return out;
 	});
@@ -810,18 +826,26 @@
 															{s.swiss_seed ?? s.rank}
 														</td>
 														<td class="py-1 pr-2">
-															{#if isAdmin}
-																<SlotUsernameCell
-																	slotId={s.slot_id}
-																	username={s.discord_username}
-																	disabled={busy}
-																	onSubstitute={(u) =>
-																		substituteSlot(s.slot_id, u)}
+															<span class="flex items-center gap-1.5">
+																<PlayerAvatar
+																	avatarUrl={s.avatar_url}
+																	size={15}
 																/>
-															{:else}
-																{s.discord_username ??
-																	`slot ${s.slot_id.slice(0, 6)}`}
-															{/if}
+																{#if isAdmin}
+																	<SlotUsernameCell
+																		slotId={s.slot_id}
+																		username={s.discord_username}
+																		disabled={busy}
+																		onSubstitute={(u) =>
+																			substituteSlot(s.slot_id, u)}
+																	/>
+																{:else}
+																	<span>
+																		{s.discord_username ??
+																			`slot ${s.slot_id.slice(0, 6)}`}
+																	</span>
+																{/if}
+															</span>
 														</td>
 														<td class="py-1 text-right">
 															{s.user_id ? "✓" : "—"}
@@ -935,6 +959,7 @@
 			tournament={data.tournament}
 			{slotLabels}
 			{slotUserIds}
+			{slotAvatars}
 			{user}
 			onClose={closeMatch}
 		/>

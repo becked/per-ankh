@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SlotStanding } from "$lib/api-cloud";
+	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 
 	let {
@@ -104,16 +105,19 @@
 					>
 						<td class="py-1 pr-2 font-mono">{s.rank}</td>
 						<td class="py-1 pr-2">
-							{#if isViewerAdmin && onSubstitute}
-								<SlotUsernameCell
-									slotId={s.slot_id}
-									username={s.discord_username}
-									disabled={busy}
-									onSubstitute={(u) => onSubstitute(s.slot_id, u)}
-								/>
-							{:else}
-								{slotLabel(s)}
-							{/if}
+							<span class="flex items-center gap-1.5">
+								<PlayerAvatar avatarUrl={s.avatar_url} size={15} />
+								{#if isViewerAdmin && onSubstitute}
+									<SlotUsernameCell
+										slotId={s.slot_id}
+										username={s.discord_username}
+										disabled={busy}
+										onSubstitute={(u) => onSubstitute(s.slot_id, u)}
+									/>
+								{:else}
+									<span>{slotLabel(s)}</span>
+								{/if}
+							</span>
 						</td>
 						<td class="py-1 pr-2 text-right font-mono">
 							{s.wins}-{s.losses}

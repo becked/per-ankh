@@ -26,6 +26,7 @@ import {
 	MapConfigError,
 	matchRowToRef,
 	parseMapPool,
+	slotAvatarUrl,
 	slotRowToRef,
 	tournamentConfig,
 	type MatchRow,
@@ -618,6 +619,7 @@ async function computeStandingsResponse(
 		{
 			discord_username: string | null;
 			user_id: string | null;
+			avatar_url: string | null;
 			swiss_seed: number | null;
 			division: "A" | "B" | null;
 		}
@@ -626,6 +628,7 @@ async function computeStandingsResponse(
 		slotIdentity.set(s.slot_id, {
 			discord_username: s.discord_username,
 			user_id: s.user_id,
+			avatar_url: slotAvatarUrl(s),
 			swiss_seed: s.swiss_seed,
 			division: s.division,
 		});
@@ -637,6 +640,7 @@ async function computeStandingsResponse(
 			RankedStanding & {
 				discord_username: string | null;
 				user_id: string | null;
+				avatar_url: string | null;
 				swiss_seed: number | null;
 			}
 		>
@@ -655,6 +659,7 @@ async function computeStandingsResponse(
 			const id = slotIdentity.get(r.slot_id) ?? {
 				discord_username: null,
 				user_id: null,
+				avatar_url: null,
 				swiss_seed: null,
 				division: null,
 			};
@@ -692,6 +697,7 @@ async function computeStandingsResponse(
 				cumulative: number;
 				division: "A" | "B" | null;
 				discord_username: string | null;
+				avatar_url: string | null;
 				swiss_seed: number | null;
 		  }>
 		| undefined = undefined;
@@ -717,6 +723,7 @@ async function computeStandingsResponse(
 				cumulative: r.cumulative,
 				division: id?.division ?? null,
 				discord_username: id?.discord_username ?? null,
+				avatar_url: id?.avatar_url ?? null,
 				swiss_seed: id?.swiss_seed ?? null,
 			};
 		});
@@ -793,6 +800,7 @@ export async function handleTournamentBracket(
 			championship_seed: s.championship_seed,
 			discord_username: s.discord_username,
 			user_id: s.user_id,
+			avatar_url: slotAvatarUrl(s),
 		})),
 		rounds: champRounds.map((r) => ({
 			round_id: r.round_id,
