@@ -178,6 +178,29 @@ Lives under `cloud/`. Handlers in `cloud/src/`, validation via Valibot in `cloud
 - Apply remote: `(cd cloud && npm run migrate:remote)`.
 - Always rehearse a new migration on a throwaway D1 before running it on production.
 
+### Investigating tournament data locally
+
+Dev tournament data lives in the local D1 (`.wrangler/state`). A tournament URL is `/tournaments/<slug>` — the path segment is the `slug`, not `tournament_id`. Query it read-only (local only — `--remote` is prod and gated, see Admin/Deploy CLI notes):
+
+```bash
+DB="per-ankh-share-index"
+# slug → tournament_id + map_pool
+npx wrangler d1 execute $DB --local --command \
+  "SELECT tournament_id, slug, status, map_pool FROM tournaments WHERE slug='<slug>';"
+# matches by round, with maps and outcomes
+npx wrangler d1 execute $DB --local --command \
+  "SELECT r.round_number, r.division, m.match_index, m.slot_a_id, m.slot_b_id,
+          m.map_pool_id, m.map_script, m.status, m.winner_slot_id
+   FROM tournament_matches m JOIN tournament_rounds r ON m.round_id=r.round_id
+   WHERE r.tournament_id='<id>' ORDER BY r.division, r.round_number, m.match_index;"
+# slot_id → player
+npx wrangler d1 execute $DB --local --command \
+  "SELECT slot_id, division, swiss_seed, discord_username FROM tournament_slots
+   WHERE tournament_id='<id>' AND phase='swiss' ORDER BY division, swiss_seed;"
+```
+
+Shape: `tournaments` (1) → `tournament_rounds` → `tournament_matches`; matches reference `tournament_slots` by id; `map_pool` is JSON on the tournament. The `./per-ankh admin` CLI targets **remote/prod** and stays gated — use these `--local` queries for dev investigation.
+
 ### Bumping `PARSER_VERSION`
 
 When you bump `PARSER_VERSION` in `src/lib/parser/types.ts`, also add the new string to `KNOWN_PARSER_VERSIONS` in `cloud/src/schemas/game.ts` with a one-line changelog entry above the set. The Worker rejects unknown versions with `INVALID_BLOB: Unknown parser_version`, so a frontend that ships ahead of the Worker breaks all uploads. Deploy ordering: Worker first, frontend second.
