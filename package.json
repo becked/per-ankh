@@ -1,6 +1,6 @@
 {
 	"name": "per-ankh",
-	"version": "2026-05-25-e2cb64d",
+	"version": "2026-05-26-ae354f8",
 	"description": "Web analytics for Old World save files",
 	"type": "module",
 	"scripts": {

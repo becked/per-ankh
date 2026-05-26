@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-26-ae354f8] - 2026-05-26
+
+### Fixes
+
+- (parser) resolve legacy <WinnerVictory> against global victory ordering — [ae354f8](https://github.com/becked/per-ankh/commit/ae354f88ec48f8cf27d7b74f3b8d7fd3bbbd5c88)
+
 ## [2026-05-25-e2cb64d] - 2026-05-25
 
 ### Fixes
