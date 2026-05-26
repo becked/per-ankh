@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-25-e2cb64d] - 2026-05-25
+
+### Fixes
+
+- (game-detail) prefer in-game leader name on the winner card — [e2cb64d](https://github.com/becked/per-ankh/commit/e2cb64d5fe6abf2087d8a9ef55cca0d74e7944a5)
+
 ## [2026-05-25-cc20834] - 2026-05-25
 
 ### Features
