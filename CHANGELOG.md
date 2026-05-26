@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-05-25-cc20834] - 2026-05-25
+
+### Features
+
+- (home) order recent saves by save date instead of upload date — [45609ef](https://github.com/becked/per-ankh/commit/45609ef37c60702d730aba25ec9a1c880c16bb2e)
+
+### Other
+
+- format +page.svelte — [cc20834](https://github.com/becked/per-ankh/commit/cc208341166fe46a8090e1bd332527ea0650ba08)
+
 ## [2026-05-25-cbb4ebd] - 2026-05-25
 
 ### Features
