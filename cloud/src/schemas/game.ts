@@ -51,6 +51,10 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         sourced from <Difficulty>/<PlayerDifficulty> positional array;
 //         isSaveOwner correctly set from <?ActivePlayer?> PI (with
 //         single-human-roster fallback).
+// 2.5.1 — legacy <WinnerVictory> resolved against the global victory info-list
+//         ordering (baked from Reference victory.xml) instead of the per-save
+//         <VictoryEnabled> subset; fixes dropped winners when an earlier
+//         victory type is disabled (e.g. MP with DOUBLE/AMBITION off).
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -60,6 +64,7 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.4.0",
 	"2.4.1",
 	"2.5.0",
+	"2.5.1",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and

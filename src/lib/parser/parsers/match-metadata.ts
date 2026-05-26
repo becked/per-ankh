@@ -7,6 +7,7 @@
 // can resolve a winning-team-id back to a player XML id without a second
 // pass over the XML.
 
+import { VICTORY_ORDERING } from "../../generated/victory-ordering.js";
 import { ParseError } from "../extract-zip.js";
 import {
 	asArray,
@@ -58,7 +59,7 @@ export function parseMatchMetadata(
 
 	const gameOver = "GameOver" in gameNode;
 
-	const rawWinner = detectRawWinner(root, gameNode, victoryEnabled);
+	const rawWinner = detectRawWinner(root, gameNode);
 	const winner = rawWinner
 		? resolveWinner(rawWinner, players, teamAssignments)
 		: null;
@@ -169,11 +170,11 @@ function parseSaveDate(dateStr: string): string | null {
 // ---------- Victory conditions ----------
 
 /**
- * Ordered list of enabled victory types from `<VictoryEnabled>`. Two consumers:
- *   1. `victory_conditions` field — joined with `+` for compact storage.
- *   2. Mapping a `<WinnerVictory>` integer to a `VICTORY_*` string for the
- *      legacy winner format (older save versions). The integer is a runtime
- *      info-list index; this list is the per-save snapshot of that order.
+ * Ordered list of *enabled* victory types from `<VictoryEnabled>`, joined into
+ * the `victory_conditions` field. This is a per-save subset and is NOT a valid
+ * index space for `<WinnerVictory>` — that field indexes the global victory
+ * info-list (see `VICTORY_ORDERING`, baked from `victory.xml`), which keeps its
+ * indices even when some types are disabled.
  */
 function parseVictoryEnabledList(root: Record<string, unknown>): string[] {
 	const ve = root.VictoryEnabled;
@@ -217,7 +218,9 @@ function parseTeamAssignments(root: Record<string, unknown>): number[] {
  *      — newer save format (≥ ~1.0.79513).
  *   2. `<Game><WinnerTeam>N</WinnerTeam><WinnerVictory>N</WinnerVictory>`
  *      — legacy save format (≤ ~1.0.70671). `WinnerVictory` is an integer
- *      index into the per-save `<VictoryEnabled>` list, passed in here.
+ *      index into the *global* victory info-list (`VICTORY_ORDERING`, baked
+ *      from `victory.xml`), NOT the per-save `<VictoryEnabled>` subset — the
+ *      global list keeps its indices even when some victory types are disabled.
  *   3. `<Victory winner="player_xml_id" type="...">` at the root — older
  *      single-player fallback shape (rarely seen in modern saves).
  * Returns the team-id form for (1)/(2) and the player-id form for (3). The
@@ -226,7 +229,6 @@ function parseTeamAssignments(root: Record<string, unknown>): number[] {
 function detectRawWinner(
 	root: Record<string, unknown>,
 	gameNode: Record<string, unknown>,
-	victoryEnabled: string[],
 ): RawWinnerInfo | { player_xml_id: number; victory_type: string } | null {
 	const teamVictories = gameNode.TeamVictories;
 	if (isElement(teamVictories)) {
@@ -254,7 +256,11 @@ function detectRawWinner(
 	const winnerTeamId = optInt(gameNode.WinnerTeam);
 	const winnerVictoryIdx = optInt(gameNode.WinnerVictory);
 	if (winnerTeamId !== null && winnerVictoryIdx !== null) {
-		const victoryType = victoryEnabled[winnerVictoryIdx];
+		// Index the global victory ordering, not the enabled subset: disabling an
+		// earlier victory type compresses <VictoryEnabled> and shifts indices, so
+		// indexing it drops the winner (e.g. CONQUEST at global idx 4 with
+		// DOUBLE+AMBITION disabled lands past the end of a 3-entry enabled list).
+		const victoryType = VICTORY_ORDERING[winnerVictoryIdx];
 		if (victoryType !== undefined) {
 			return { team_id: winnerTeamId, victory_type: victoryType };
 		}
