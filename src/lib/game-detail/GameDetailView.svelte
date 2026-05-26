@@ -262,14 +262,18 @@
 				Winner
 			</p>
 			<p class="text-lg font-bold" style="color: #DBDEE3;">
-				{#if userWon && userDisplayName && gameDetails.winner_civilization}
-					{userDisplayName} ({formatEnum(
-						gameDetails.winner_civilization,
-						"NATION_",
-					)})
-				{:else if gameDetails.winner_civilization}
+				{#if gameDetails.winner_civilization}
 					{#if gameDetails.winner_name}
+						<!-- Prefer the save's in-game leader name. Only when it's
+						     empty (Old World writes "" for solo saves whose player
+						     never set a custom name) do we fall back to the
+						     uploader's account name, and only if they won. -->
 						{gameDetails.winner_name} ({formatEnum(
+							gameDetails.winner_civilization,
+							"NATION_",
+						)})
+					{:else if userWon && userDisplayName}
+						{userDisplayName} ({formatEnum(
 							gameDetails.winner_civilization,
 							"NATION_",
 						)})
