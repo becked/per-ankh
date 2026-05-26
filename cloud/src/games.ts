@@ -1916,7 +1916,7 @@ export async function handlePublicRecentGames(
 		 FROM games g
 		 JOIN users u ON g.user_id = u.user_id
 		 WHERE g.is_public = 1
-		 ORDER BY g.created_at DESC
+		 ORDER BY g.save_date DESC NULLS LAST, g.created_at DESC
 		 LIMIT ?`,
 	)
 		.bind(PUBLIC_RECENT_LIMIT)

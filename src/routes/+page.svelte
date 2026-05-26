@@ -193,7 +193,7 @@
 				<section class={hasRail ? "lg:col-span-9" : "lg:col-span-12"}>
 					{#if !user}
 						<h2 class="mb-3 text-lg font-bold text-gray-200">
-							Recently Uploaded Games
+							Recent Games
 						</h2>
 					{/if}
 					{#if data.recentGames.length === 0}
