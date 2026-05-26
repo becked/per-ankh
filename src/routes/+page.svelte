@@ -192,9 +192,7 @@
 			<div class="grid gap-4 lg:grid-cols-12">
 				<section class={hasRail ? "lg:col-span-9" : "lg:col-span-12"}>
 					{#if !user}
-						<h2 class="mb-3 text-lg font-bold text-gray-200">
-							Recent Games
-						</h2>
+						<h2 class="mb-3 text-lg font-bold text-gray-200">Recent Games</h2>
 					{/if}
 					{#if data.recentGames.length === 0}
 						<p class="text-sm text-tan opacity-70">
