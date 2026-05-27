@@ -14,6 +14,7 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { MapTile } from "$lib/types/MapTile";
+	import type { PlayerRosterEntry } from "$lib/parser/types";
 	import { Tabs } from "bits-ui";
 	import {
 		formatEnum,
@@ -27,6 +28,7 @@
 		createDefaultTableStates,
 		createDefaultCityVisibleColumns,
 		createDefaultSelection,
+		resolveDetailPlayers,
 	} from "./helpers";
 	import type { TimelineCategory } from "./helpers";
 	import OverviewTab from "./OverviewTab.svelte";
@@ -57,6 +59,7 @@
 		improvementData,
 		gameReligions,
 		playerWonders,
+		playerRoster = [],
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -82,6 +85,10 @@
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
 		playerWonders: PlayerWonder[];
+		// Canonical roster (player_index = the per-player join key). Present in
+		// every blob; used to recover player ids for pre-2.6.0 game_details
+		// rows that lack them. Defaults to [] for legacy callers.
+		playerRoster?: PlayerRosterEntry[];
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -116,6 +123,24 @@
 	} = $props();
 
 	// ─── Persistent UI state ──────────────────────────────────────────
+	// Per-player iteration source: roster players enriched with a stable
+	// playerId + unique label + color. Mirror-match safe (nation alone isn't).
+	// `player_roster` is the id source; the legacy share viewer doesn't supply
+	// it, so fall back to one synthesized from player_history (which carries
+	// player_id) to recover ids for those id-less game_details.players rows.
+	const effectiveRoster = $derived(
+		playerRoster.length > 0
+			? playerRoster
+			: playerHistory.map((h) => ({
+					player_index: h.player_id,
+					player_name: h.player_name,
+					nation: h.nation,
+				})),
+	);
+	const resolvedPlayers = $derived(
+		resolveDetailPlayers(gameDetails.players, effectiveRoster),
+	);
+
 	let activeTab = $state<string>("overview");
 	let chartFilters = $state(createDefaultChartFilters());
 	let tables = $state(createDefaultTableStates());
@@ -374,6 +399,7 @@
 	<Tabs.Content value="overview" class="tab-pane min-h-[400px]">
 		<OverviewTab
 			{gameDetails}
+			players={resolvedPlayers}
 			{playerHistory}
 			{allYields}
 			{completedTechs}
@@ -416,6 +442,7 @@
 			{eventLogs}
 			{playerHistory}
 			{gameDetails}
+			players={resolvedPlayers}
 			{victoryPointsEnabled}
 			bind:chartFilter={chartFilters.points}
 			bind:legitimacyChartFilter={chartFilters.legitimacy}
@@ -426,6 +453,7 @@
 	<!-- Tab Content: Laws -->
 	<Tabs.Content value="laws" class="tab-pane min-h-[400px]">
 		<LawsTab
+			players={resolvedPlayers}
 			{lawAdoptionHistory}
 			{currentLaws}
 			bind:chartFilter={chartFilters.laws}
@@ -436,6 +464,7 @@
 	<!-- Tab Content: Techs -->
 	<Tabs.Content value="techs" class="tab-pane min-h-[400px]">
 		<TechsTab
+			players={resolvedPlayers}
 			{techDiscoveryHistory}
 			{completedTechs}
 			bind:chartFilter={chartFilters.techs}
@@ -451,7 +480,7 @@
 	<!-- Tab Content: Military -->
 	<Tabs.Content value="military" class="tab-pane min-h-[400px]">
 		<MilitaryTab
-			{gameDetails}
+			players={resolvedPlayers}
 			{playerHistory}
 			{unitsProduced}
 			bind:chartFilter={chartFilters.military}
@@ -470,7 +499,11 @@
 
 	<!-- Tab Content: Improvements -->
 	<Tabs.Content value="improvements" class="tab-pane min-h-[400px]">
-		<ImprovementsTab {improvementData} bind:tableState={tables.improvements} />
+		<ImprovementsTab
+			players={resolvedPlayers}
+			{improvementData}
+			bind:tableState={tables.improvements}
+		/>
 	</Tabs.Content>
 
 	<!-- Tab Content: Map -->
@@ -490,7 +523,13 @@
 
 	<!-- Tab Content: Settings -->
 	<Tabs.Content value="settings" class="tab-pane min-h-[400px]">
-		<SettingsTab {gameDetails} {victoryConditions} {dlcList} {modsList} />
+		<SettingsTab
+			{gameDetails}
+			players={resolvedPlayers}
+			{victoryConditions}
+			{dlcList}
+			{modsList}
+		/>
 	</Tabs.Content>
 </Tabs.Root>
 

@@ -3,4 +3,10 @@
 /**
  * Single improvement with its city and owner information
  */
-export type ImprovementInfo = { nation: string | null, city_name: string | null, improvement: string, specialist: string | null, resource: string | null, };
+export type ImprovementInfo = { nation: string | null,
+/**
+ * xml_id of the owning player (Player.xmlId). Distinguishes same-nation
+ * owners in mirror matches, where nation collides. Optional: absent on
+ * blobs parsed before PARSER_VERSION 2.6.0.
+ */
+owner_player_xml_id?: number | null, city_name: string | null, improvement: string, specialist: string | null, resource: string | null, };

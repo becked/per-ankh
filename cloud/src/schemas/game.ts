@@ -55,6 +55,11 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         ordering (baked from Reference victory.xml) instead of the per-save
 //         <VictoryEnabled> subset; fixes dropped winners when an earlier
 //         victory type is disabled (e.g. MP with DOUBLE/AMBITION off).
+// 2.6.0 — per-player ids retained where previously only nation was kept:
+//         game_details.players[].player_id, city_statistics.cities[]
+//         .owner_player_xml_id, game_religions[].founder_player_xml_id,
+//         improvement_data.improvements[].owner_player_xml_id. Lets the
+//         detail view distinguish same-nation players in mirror matches.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -65,13 +70,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.4.1",
 	"2.5.0",
 	"2.5.1",
+	"2.6.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.5.0";
+export const CURRENT_PARSER_VERSION = "2.6.0";
 
 // ----- Reusable atoms -----
 
@@ -84,6 +90,10 @@ const PlayerRosterEntrySchema = v.object({
 });
 
 const PlayerInfoSchema = v.object({
+	// Added in PARSER_VERSION 2.6.0 — the player's xml_id, used by the detail
+	// view to key/join players (nation collides in mirror matches). `v.optional`
+	// tolerates the deploy gap and keeps older R2 blobs passing if re-validated.
+	player_id: v.optional(v.number()),
 	player_name: v.string(),
 	nation: v.nullable(v.string()),
 	is_human: v.boolean(),

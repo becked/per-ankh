@@ -14,7 +14,9 @@
 		type PlayerSummary,
 		type SpriteCategory,
 		type UnitClass,
-		getPlayerColor,
+		type DetailPlayer,
+		ownedByPlayer,
+		findByPlayer,
 		classifyUnit,
 		UNIT_CLASS_COLORS,
 	} from "./helpers";
@@ -22,6 +24,7 @@
 
 	let {
 		gameDetails,
+		players,
 		playerHistory,
 		allYields,
 		completedTechs,
@@ -36,6 +39,7 @@
 		userDisplayName = null,
 	}: {
 		gameDetails: GameDetails;
+		players: DetailPlayer[];
 		playerHistory: PlayerHistory[];
 		allYields: YieldHistory[];
 		completedTechs: PlayerTech[];
@@ -73,18 +77,39 @@
 	type PlayerWonderEntry = { wonder: string; completed_turn: number };
 
 	type PlayerOverview = PlayerSummary & {
+		color: string;
 		army: ArmySlice[];
 		religions: PlayerReligion[];
 		wonders: PlayerWonderEntry[];
 	};
 
+	// Exactly one player is the save owner. In a mirror match `userNation`
+	// can't disambiguate two same-nation players, so pick the first matching
+	// human (or the first human when userNation is absent — the legacy path).
+	const saveOwnerId = $derived(
+		(userNation != null
+			? players.find((p) => p.nation === userNation)
+			: players.find((p) => p.is_human)
+		)?.playerId ?? null,
+	);
+
 	const playerOverviews = $derived<PlayerOverview[]>(
-		gameDetails.players
+		players
 			.map((p) => {
-				const ph = playerHistory.find((h) => h.nation === p.nation);
+				const ph = findByPlayer(
+					playerHistory,
+					p,
+					(h) => h.player_id,
+					(h) => h.nation,
+				);
 				const lastPoint = ph?.history.at(-1);
 
-				const playerUnits = unitsProduced.filter((u) => u.nation === p.nation);
+				const playerUnits = ownedByPlayer(
+					unitsProduced,
+					p,
+					(u) => u.player_id,
+					(u) => u.nation,
+				);
 				const classCounts: Partial<Record<UnitClass, number>> = {};
 				let totalUnits = 0;
 				for (const u of playerUnits) {
@@ -104,20 +129,24 @@
 					}))
 					.sort((a, b) => b.count - a.count);
 
-				const religions: PlayerReligion[] = gameReligions
-					.filter((r) => r.founder_nation === p.nation)
-					.map((r) => ({
-						religion_name: r.religion_name,
-						founded_turn: r.founded_turn,
-					}));
+				const religions: PlayerReligion[] = ownedByPlayer(
+					gameReligions,
+					p,
+					(r) => r.founder_player_xml_id,
+					(r) => r.founder_nation,
+				).map((r) => ({
+					religion_name: r.religion_name,
+					founded_turn: r.founded_turn,
+				}));
 
-				const wonders: PlayerWonderEntry[] = playerWonders
-					.filter((w) => w.nation === p.nation)
-					.map((w) => ({ wonder: w.wonder, completed_turn: w.completed_turn }));
+				const wonders: PlayerWonderEntry[] = ownedByPlayer(
+					playerWonders,
+					p,
+					(w) => w.player_id,
+					(w) => w.nation,
+				).map((w) => ({ wonder: w.wonder, completed_turn: w.completed_turn }));
 
-				const isSaveOwner = userNation
-					? p.nation === userNation
-					: p === gameDetails.players.find((pl) => pl.is_human);
+				const isSaveOwner = p.playerId === saveOwnerId;
 				// Fall back to the uploader's Discord display_name on the
 				// save-owner card when Old World wrote no leader name (common
 				// for solo games where the player didn't customize names).
@@ -126,20 +155,37 @@
 						? userDisplayName
 						: p.player_name;
 				return {
+					playerId: p.playerId,
 					playerName,
 					nation: p.nation,
 					isHuman: p.is_human,
 					isSaveOwner,
-					isWinner: p.nation === gameDetails.winner_civilization,
+					isWinner:
+						gameDetails.winner_player_id != null &&
+						p.playerId === gameDetails.winner_player_id,
 					finalVP: lastPoint?.points ?? null,
 					finalMilitary: lastPoint?.military_power ?? null,
-					cityCount: cityStatistics.cities.filter(
-						(c) => c.owner_nation === p.nation,
+					cityCount: ownedByPlayer(
+						cityStatistics.cities,
+						p,
+						(c) => c.owner_player_xml_id,
+						(c) => c.owner_nation,
 					).length,
-					techCount: completedTechs.filter((t) => t.nation === p.nation).length,
-					lawCount: currentLaws.filter((l) => l.nation === p.nation).length,
+					techCount: ownedByPlayer(
+						completedTechs,
+						p,
+						(t) => t.player_id,
+						(t) => t.nation,
+					).length,
+					lawCount: ownedByPlayer(
+						currentLaws,
+						p,
+						(l) => l.player_id,
+						(l) => l.nation,
+					).length,
 					unitsTotal: totalUnits,
 					religion: p.state_religion,
+					color: p.color,
 					religions,
 					wonders,
 					army,
@@ -161,37 +207,43 @@
 	type MetricBar = {
 		label: string;
 		sprite: MetricSprite | null;
-		players: { nation: string | null; value: number; color: string }[];
+		players: {
+			playerId: number;
+			label: string;
+			nation: string | null;
+			value: number;
+			color: string;
+		}[];
 		maxValue: number;
 	};
 
 	function buildMetric(
 		label: string,
-		getValue: (nation: string | null) => number, // eslint-disable-line no-unused-vars
+		getValue: (player: DetailPlayer) => number, // eslint-disable-line no-unused-vars
 		sprite: MetricSprite | null = null,
 	): MetricBar {
-		const colorOf = (nation: string | null) =>
-			getPlayerColor(
-				nation,
-				gameDetails.players.findIndex((gp) => gp.nation === nation),
-			);
-		const players = gameDetails.players
+		const bars = players
 			.map((p) => ({
+				playerId: p.playerId,
+				label: p.label,
 				nation: p.nation,
-				value: getValue(p.nation),
-				color: colorOf(p.nation),
+				value: getValue(p),
+				color: p.color,
 			}))
 			.sort((a, b) => b.value - a.value);
-		const maxVal = Math.max(...players.map((p) => p.value), 1);
-		return { label, sprite, players, maxValue: maxVal };
+		const maxVal = Math.max(...bars.map((p) => p.value), 1);
+		return { label, sprite, players: bars, maxValue: maxVal };
 	}
 
 	function yieldMetric(yieldType: string, label: string): MetricBar {
 		return buildMetric(
 			label,
-			(nation) => {
-				const yieldData = allYields.find(
-					(y) => y.nation === nation && y.yield_type === yieldType,
+			(player) => {
+				const yieldData = findByPlayer(
+					allYields.filter((y) => y.yield_type === yieldType),
+					player,
+					(y) => y.player_id,
+					(y) => y.nation,
 				);
 				return Math.round(yieldData?.data.at(-1)?.rate ?? 0);
 			},
@@ -205,8 +257,13 @@
 			? [
 					buildMetric(
 						"Victory Points",
-						(nation) => {
-							const ph = playerHistory.find((h) => h.nation === nation);
+						(player) => {
+							const ph = findByPlayer(
+								playerHistory,
+								player,
+								(h) => h.player_id,
+								(h) => h.nation,
+							);
 							return ph?.history.at(-1)?.points ?? 0;
 						},
 						{ category: "icons", value: "VICTORY_NORMAL" },
@@ -216,8 +273,13 @@
 		yieldMetric("YIELD_ORDERS", "Orders"),
 		buildMetric(
 			"Military",
-			(nation) => {
-				const ph = playerHistory.find((h) => h.nation === nation);
+			(player) => {
+				const ph = findByPlayer(
+					playerHistory,
+					player,
+					(h) => h.player_id,
+					(h) => h.nation,
+				);
 				return ph?.history.at(-1)?.military_power ?? 0;
 			},
 			{ category: "icons", value: "MILITARY" },
@@ -232,9 +294,13 @@
 		yieldMetric("YIELD_MONEY", "Money"),
 		buildMetric(
 			"Improvements",
-			(nation) =>
-				improvementData.improvements.filter((imp) => imp.nation === nation)
-					.length,
+			(player) =>
+				ownedByPlayer(
+					improvementData.improvements,
+					player,
+					(imp) => imp.owner_player_xml_id,
+					(imp) => imp.nation,
+				).length,
 			{ category: "icons", value: "IMPROVEMENT_FINISHED" },
 		),
 	]);
@@ -249,8 +315,8 @@
 <div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
 	<h3 class="mb-3 text-base font-bold text-tan">Nations</h3>
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
-		{#each playerOverviews as player, i (`${player.playerName}\x01${player.nation ?? ""}`)}
-			{@const borderColor = getPlayerColor(player.nation, i)}
+		{#each playerOverviews as player (player.playerId)}
+			{@const borderColor = player.color}
 			<div class="relative rounded-lg p-3" style="background-color: #35302B;">
 				{#if player.isWinner}
 					<span
@@ -394,16 +460,14 @@
 						{metric.label}
 					</p>
 					<div class="space-y-1">
-						{#each metric.players as player (player.nation)}
+						{#each metric.players as player (player.playerId)}
 							<div class="flex items-center gap-2">
 								<div class="relative h-2.5 flex-1 overflow-hidden rounded">
 									<div
 										class="h-full rounded"
 										style="width: {(player.value / metric.maxValue) *
 											100}%; background-color: {player.color};"
-										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(
-											player.value,
-										)}"
+										title="{player.label}: {formatValue(player.value)}"
 									></div>
 								</div>
 								<span
@@ -435,16 +499,14 @@
 						{metric.label}
 					</p>
 					<div class="space-y-1">
-						{#each metric.players as player (player.nation)}
+						{#each metric.players as player (player.playerId)}
 							<div class="flex items-center gap-2">
 								<div class="relative h-2.5 flex-1 overflow-hidden rounded">
 									<div
 										class="h-full rounded"
 										style="width: {(player.value / metric.maxValue) *
 											100}%; background-color: {player.color};"
-										title="{formatEnum(player.nation, 'NATION_')}: {formatValue(
-											player.value,
-										)}"
+										title="{player.label}: {formatValue(player.value)}"
 									></div>
 								</div>
 								<span

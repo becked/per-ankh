@@ -1,15 +1,18 @@
 <script lang="ts">
 	import type { GameDetails } from "$lib/types/GameDetails";
+	import type { DetailPlayer } from "./helpers";
 	import { formatEnum } from "$lib/utils/formatting";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
 	let {
 		gameDetails,
+		players,
 		victoryConditions,
 		dlcList,
 		modsList,
 	}: {
 		gameDetails: GameDetails;
+		players: DetailPlayer[];
 		victoryConditions: string;
 		dlcList: string;
 		modsList: string;
@@ -20,7 +23,7 @@
 	// player-chosen — include only humans in the divergence check.
 	const showBreakdown = $derived(
 		new Set(
-			gameDetails.players
+			players
 				.filter((p) => p.is_human)
 				.map((p) => p.difficulty)
 				.filter((d): d is string => d != null),
@@ -30,7 +33,7 @@
 		gameDetails.difficulty != null || showBreakdown,
 	);
 	const humansWithDifficulty = $derived(
-		gameDetails.players.filter((p) => p.is_human && p.difficulty != null),
+		players.filter((p) => p.is_human && p.difficulty != null),
 	);
 </script>
 
@@ -73,7 +76,7 @@
 						{/if}
 						{#if showBreakdown}
 							<ul class="m-0 list-none p-0 text-sm text-[#DBDEE3]">
-								{#each humansWithDifficulty as p (p.player_name)}
+								{#each humansWithDifficulty as p (p.playerId)}
 									<li>
 										{p.player_name}: {formatEnum(p.difficulty, "DIFFICULTY_")}
 									</li>
@@ -155,7 +158,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each gameDetails.players as player (player.nation)}
+				{#each players as player (player.playerId)}
 					<tr class="hover:bg-brown/20 transition-colors duration-200">
 						<td class="border-b border-[#2a2622] p-3 text-left text-tan"
 							>{player.player_name}</td

@@ -10,11 +10,11 @@
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import {
 		type TableState,
+		type DetailPlayer,
 		TABLE_FRAME_CLASS,
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
-		getPlayerColor,
 		toggleSort,
 	} from "./helpers";
 
@@ -22,6 +22,7 @@
 		eventLogs,
 		playerHistory,
 		gameDetails,
+		players,
 		victoryPointsEnabled,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		legitimacyChartFilter = $bindable<Record<string, boolean>>({}),
@@ -35,11 +36,16 @@
 		eventLogs: EventLog[];
 		playerHistory: PlayerHistory[];
 		gameDetails: GameDetails;
+		players: DetailPlayer[];
 		victoryPointsEnabled: boolean;
 		chartFilter?: Record<string, boolean>;
 		legitimacyChartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
+
+	// Resolved identity lookup (stable label + color per player), keyed by the
+	// player id every per-player array carries. Mirror-match safe.
+	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
 	// ─── Chart options ────────────────────────────────────────────────
 	const legitimacyChartOption = $derived<EChartsOption | null>(
@@ -52,7 +58,11 @@
 					},
 					legend: {
 						show: false,
-						data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
+						data: playerHistory.map(
+							(p) =>
+								playerById.get(p.player_id)?.label ??
+								formatEnum(p.nation, "NATION_"),
+						),
 						selected: legitimacyChartFilter,
 					},
 					grid: {
@@ -74,12 +84,15 @@
 						nameLocation: "middle",
 						nameGap: 40,
 					},
-					series: playerHistory.map((player, i) => ({
-						name: formatEnum(player.nation, "NATION_"),
-						type: "line",
-						data: player.history.map((h) => h.legitimacy),
-						itemStyle: { color: getPlayerColor(player.nation, i) },
-					})),
+					series: playerHistory.map((player) => {
+						const rp = playerById.get(player.player_id);
+						return {
+							name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+							type: "line",
+							data: player.history.map((h) => h.legitimacy),
+							itemStyle: { color: rp?.color },
+						};
+					}),
 				}
 			: null,
 	);
@@ -94,7 +107,11 @@
 					},
 					legend: {
 						show: false,
-						data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
+						data: playerHistory.map(
+							(p) =>
+								playerById.get(p.player_id)?.label ??
+								formatEnum(p.nation, "NATION_"),
+						),
 						selected: chartFilter,
 					},
 					grid: {
@@ -116,12 +133,15 @@
 						nameLocation: "middle",
 						nameGap: 40,
 					},
-					series: playerHistory.map((player, i) => ({
-						name: formatEnum(player.nation, "NATION_"),
-						type: "line",
-						data: player.history.map((h) => h.points),
-						itemStyle: { color: getPlayerColor(player.nation, i) },
-					})),
+					series: playerHistory.map((player) => {
+						const rp = playerById.get(player.player_id);
+						return {
+							name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+							type: "line",
+							data: player.history.map((h) => h.points),
+							itemStyle: { color: rp?.color },
+						};
+					}),
 				}
 			: null,
 	);

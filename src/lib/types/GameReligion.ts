@@ -3,4 +3,10 @@
 /**
  * Religion founded in a game, with founder nation and founding turn
  */
-export type GameReligion = { religion_name: string, founded_turn: number | null, founder_nation: string | null, };
+export type GameReligion = { religion_name: string, founded_turn: number | null, founder_nation: string | null,
+/**
+ * xml_id of the founding player (Player.xmlId). Distinguishes same-nation
+ * founders in mirror matches, where founder_nation collides. Optional:
+ * absent on blobs parsed before PARSER_VERSION 2.6.0.
+ */
+founder_player_xml_id?: number | null, };

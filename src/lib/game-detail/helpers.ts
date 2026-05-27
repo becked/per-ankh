@@ -1,9 +1,10 @@
 import type { CityInfo } from "$lib/types/CityInfo";
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
+import type { PlayerInfo } from "$lib/types/PlayerInfo";
 import type { EChartsOption } from "echarts";
 import { formatEnum } from "$lib/utils/formatting";
-import { CHART_THEME, getNationChartColor } from "$lib/config";
+import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 
 // ─── Types ───────────────────────────────────────────────────────────
@@ -569,6 +570,7 @@ export type TimelineEvent = {
 // ─── Overview Types ─────────────────────────────────────────────────
 
 export type PlayerSummary = {
+	playerId: number;
 	playerName: string;
 	nation: string | null;
 	isHuman: boolean;
@@ -582,6 +584,162 @@ export type PlayerSummary = {
 	unitsTotal: number;
 	religion: string | null;
 };
+
+// ─── Player identity (mirror-match safe) ─────────────────────────────
+//
+// `nation` is NOT a unique player key: mirror matches (two players, same
+// nation) collide, which crashes `{#each}` keys and conflates per-player
+// joins. The stable key is the player's xml_id — present as `player_id` on
+// every per-player array and as `player_index` on `player_roster`. These
+// helpers resolve that id, plus a unique display label and a per-player
+// color, used as the single identity backbone across the detail view.
+
+// Any row that identifies a player. `player_id` is present on parser ≥2.x
+// per-player arrays and (from 2.6.0) on `PlayerInfo`; older `PlayerInfo`
+// rows carry neither and are recovered from `player_roster`.
+export type PlayerLike = {
+	player_id?: number | null;
+	player_index?: number;
+	player_name: string;
+	nation: string | null;
+};
+
+// Minimal roster shape used to recover ids for id-less PlayerInfo rows. The
+// canonical `player_roster` (player_index) satisfies it; so does a roster
+// synthesized from any per-player array (player_id → player_index) for legacy
+// blobs that predate the roster sidecar.
+export type RosterLike = {
+	player_index: number;
+	player_name: string;
+	nation: string | null;
+};
+
+export type ResolvedPlayer = {
+	// Canonical id — equals per-array `player_id` and roster `player_index`.
+	playerId: number;
+	playerName: string;
+	nation: string | null;
+	// Unique, display-friendly label: the nation name, with the player name
+	// appended only when ≥2 players share a nation. Safe as an `{#each}` key
+	// and as an ECharts series name / legend + selection key.
+	label: string;
+	// Nation color when the nation is unique among players; a distinct palette
+	// color when nations collide, so same-nation players stay visually separable.
+	color: string;
+};
+
+/**
+ * Resolve a stable per-player identity from any list of player-bearing rows.
+ *
+ * Dedupes by canonical id (so it accepts a per-player array with many rows
+ * per player, or a one-row-per-player roster). `roster` backfills the id for
+ * pre-2.6.0 `PlayerInfo` rows that lack one (matched by name+nation); an
+ * unrecoverable row gets a unique synthetic id so keys never collide.
+ */
+export function resolvePlayers(
+	rows: PlayerLike[],
+	roster?: RosterLike[],
+): ResolvedPlayer[] {
+	const consumed = new Set<number>();
+	const order: number[] = [];
+	const byId = new Map<number, { playerName: string; nation: string | null }>();
+	let synthetic = -1;
+
+	for (const r of rows) {
+		let id: number | null = r.player_id ?? r.player_index ?? null;
+		if (id == null && roster) {
+			const match = roster.find(
+				(e) =>
+					!consumed.has(e.player_index) &&
+					e.player_name === r.player_name &&
+					e.nation === r.nation,
+			);
+			if (match) {
+				id = match.player_index;
+				consumed.add(match.player_index);
+			}
+		}
+		if (id == null) id = synthetic--;
+		if (!byId.has(id)) {
+			byId.set(id, { playerName: r.player_name, nation: r.nation });
+			order.push(id);
+		}
+	}
+
+	const nationCounts = new Map<string, number>();
+	for (const id of order) {
+		const key = byId.get(id)!.nation ?? "";
+		nationCounts.set(key, (nationCounts.get(key) ?? 0) + 1);
+	}
+
+	return order.map((id, ordinal) => {
+		const { playerName, nation } = byId.get(id)!;
+		const collides = (nationCounts.get(nation ?? "") ?? 0) > 1;
+		const base = formatEnum(nation, "NATION_");
+		const name = playerName.length > 0 ? playerName : `#${id}`;
+		return {
+			playerId: id,
+			playerName,
+			nation,
+			label: collides ? `${base} (${name})` : base,
+			color: collides ? getChartColor(ordinal) : getNationChartColor(nation, ordinal),
+		};
+	});
+}
+
+// A roster player enriched with its resolved identity — the iteration source
+// for the per-player tabs (Overview, Settings, Military).
+export type DetailPlayer = PlayerInfo &
+	Pick<ResolvedPlayer, "playerId" | "label" | "color">;
+
+/**
+ * Resolve `gameDetails.players` into the iteration source for per-player tabs,
+ * keeping the full `PlayerInfo` fields and adding a stable `playerId`, unique
+ * `label`, and per-player `color`. `players` is one row per player, so the
+ * resolved list aligns 1:1 by index.
+ */
+export function resolveDetailPlayers(
+	players: PlayerInfo[],
+	roster?: RosterLike[],
+): DetailPlayer[] {
+	const resolved = resolvePlayers(players, roster);
+	return players.map((p, i) => ({
+		...p,
+		playerId: resolved[i].playerId,
+		label: resolved[i].label,
+		color: resolved[i].color,
+	}));
+}
+
+/**
+ * Filter per-entity rows down to those owned by `player`. Prefers the entity's
+ * owner-id field when present (reparsed ≥2.6.0 blobs), falling back to nation
+ * when it's absent (older blobs, where same-nation owners can't be split).
+ */
+export function ownedByPlayer<T>(
+	rows: T[],
+	player: Pick<ResolvedPlayer, "playerId" | "nation">,
+	idOf: (row: T) => number | null | undefined,
+	nationOf: (row: T) => string | null,
+): T[] {
+	return rows.filter((row) => {
+		const id = idOf(row);
+		return id != null ? id === player.playerId : nationOf(row) === player.nation;
+	});
+}
+
+/** Single-row variant of {@link ownedByPlayer} — id match, nation fallback. */
+export function findByPlayer<T>(
+	rows: T[],
+	player: Pick<ResolvedPlayer, "playerId" | "nation">,
+	idOf: (row: T) => number | null | undefined,
+	nationOf: (row: T) => string | null,
+): T | undefined {
+	return rows.find((row) => {
+		const id = idOf(row);
+		return id != null ? id === player.playerId : nationOf(row) === player.nation;
+	});
+}
 
 // ─── Pure Functions ──────────────────────────────────────────────────
 
@@ -599,12 +757,12 @@ export function toggleSort(table: TableState, columnKey: string): void {
 // identically.
 export const getPlayerColor = getNationChartColor;
 
+// Chart selection is keyed by the resolved player label (unique per player,
+// mirror-match safe) — the same string used as the ECharts series name.
 export function createDefaultSelection(
-	players: { nation: string | null }[],
+	players: PlayerLike[],
 ): Record<string, boolean> {
-	return Object.fromEntries(
-		players.map((player) => [formatEnum(player.nation, "NATION_"), true]),
-	);
+	return Object.fromEntries(resolvePlayers(players).map((p) => [p.label, true]));
 }
 
 export function formatCityCell(column: CityColumn, city: CityInfo): string {
@@ -628,6 +786,11 @@ export function createYieldChartOption(
 	const yieldData = allYields.filter((y) => y.yield_type === yieldType);
 	if (yieldData.length === 0) return null;
 
+	// Resolve per-player labels/colors so same-nation players get distinct,
+	// unique series names (ECharts dedupes series that share a name).
+	const resolved = resolvePlayers(yieldData);
+	const byId = new Map(resolved.map((p) => [p.playerId, p]));
+
 	const fullTitle =
 		mode === "rate" ? `${title} per Turn` : `Cumulative ${title}`;
 	const fullYAxisLabel =
@@ -641,7 +804,7 @@ export function createYieldChartOption(
 		},
 		legend: {
 			show: false,
-			data: yieldData.map((y) => formatEnum(y.nation, "NATION_")),
+			data: resolved.map((p) => p.label),
 			selected: selectedNationsState,
 		},
 		grid: {
@@ -663,13 +826,16 @@ export function createYieldChartOption(
 			nameLocation: "middle",
 			nameGap: 40,
 		},
-		series: yieldData.map((playerYield, i) => ({
-			name: formatEnum(playerYield.nation, "NATION_"),
-			type: "line",
-			data: playerYield.data.map((d: YieldDataPoint) =>
-				mode === "rate" ? d.rate : d.cumulative,
-			),
-			itemStyle: { color: getPlayerColor(playerYield.nation, i) },
-		})),
+		series: yieldData.map((playerYield, i) => {
+			const rp = byId.get(playerYield.player_id);
+			return {
+				name: rp?.label ?? formatEnum(playerYield.nation, "NATION_"),
+				type: "line",
+				data: playerYield.data.map((d: YieldDataPoint) =>
+					mode === "rate" ? d.rate : d.cumulative,
+				),
+				itemStyle: { color: rp?.color ?? getPlayerColor(playerYield.nation, i) },
+			};
+		}),
 	};
 }

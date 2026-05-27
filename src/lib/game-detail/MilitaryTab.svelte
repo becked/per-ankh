@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { PlayerUnitProduced } from "$lib/types/PlayerUnitProduced";
 	import type { EChartsOption } from "echarts";
@@ -13,18 +12,19 @@
 	import {
 		type TableState,
 		type UnitClass,
+		type DetailPlayer,
 		TABLE_FRAME_CLASS,
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
-		getPlayerColor,
+		ownedByPlayer,
 		toggleSort,
 		classifyUnit,
 		UNIT_CLASS_COLORS,
 	} from "./helpers";
 
 	let {
-		gameDetails,
+		players,
 		playerHistory,
 		unitsProduced,
 		chartFilter = $bindable<Record<string, boolean>>({}),
@@ -35,12 +35,16 @@
 			filters: [],
 		}),
 	}: {
-		gameDetails: GameDetails;
+		players: DetailPlayer[];
 		playerHistory: PlayerHistory[];
 		unitsProduced: PlayerUnitProduced[];
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
+
+	// Resolved identity lookup (stable label + color per player), keyed by the
+	// player id that every per-player array carries. Mirror-match safe.
+	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
 	// ─── Chart option ─────────────────────────────────────────────────
 	const militaryChartOption = $derived<EChartsOption | null>(
@@ -53,7 +57,11 @@
 					},
 					legend: {
 						show: false,
-						data: playerHistory.map((p) => formatEnum(p.nation, "NATION_")),
+						data: playerHistory.map(
+							(p) =>
+								playerById.get(p.player_id)?.label ??
+								formatEnum(p.nation, "NATION_"),
+						),
 						selected: chartFilter,
 					},
 					xAxis: {
@@ -65,28 +73,36 @@
 						type: "value",
 						name: "Military Power",
 					},
-					series: playerHistory.map((player, i) => ({
-						name: formatEnum(player.nation, "NATION_"),
-						type: "line",
-						data: player.history.map((h) => h.military_power),
-						itemStyle: { color: getPlayerColor(player.nation, i) },
-					})),
+					series: playerHistory.map((player) => {
+						const rp = playerById.get(player.player_id);
+						return {
+							name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+							type: "line",
+							data: player.history.map((h) => h.military_power),
+							itemStyle: { color: rp?.color },
+						};
+					}),
 				}
 			: null,
 	);
 
 	// ─── Army composition pie charts ─────────────────────────────────
 	type ArmyPieData = {
-		nation: string | null;
-		nationLabel: string;
+		playerId: number;
+		label: string;
 		color: string;
 		pieOption: EChartsOption;
 	};
 
 	const armyPieCharts = $derived<ArmyPieData[]>(
-		gameDetails.players
-			.map((p, i) => {
-				const playerUnits = unitsProduced.filter((u) => u.nation === p.nation);
+		players
+			.map((p) => {
+				const playerUnits = ownedByPlayer(
+					unitsProduced,
+					p,
+					(u) => u.player_id,
+					(u) => u.nation,
+				);
 				const classCounts: Partial<Record<UnitClass, number>> = {};
 				for (const u of playerUnits) {
 					const cls = classifyUnit(u.unit_type);
@@ -103,10 +119,10 @@
 					backgroundColor: "#211A12",
 					animation: false,
 					title: {
-						text: formatEnum(p.nation, "NATION_"),
+						text: p.label,
 						left: "center",
 						top: 8,
-						textStyle: { color: getPlayerColor(p.nation, i), fontSize: 14 },
+						textStyle: { color: p.color, fontSize: 14 },
 					},
 					tooltip: {
 						trigger: "item",
@@ -142,22 +158,31 @@
 				};
 
 				return {
-					nation: p.nation,
-					nationLabel: formatEnum(p.nation, "NATION_"),
-					color: getPlayerColor(p.nation, i),
+					playerId: p.playerId,
+					label: p.label,
+					color: p.color,
 					pieOption,
 				};
 			})
 			.filter((d): d is ArmyPieData => d != null)
-			.sort((a, b) => a.nationLabel.localeCompare(b.nationLabel)),
+			.sort((a, b) => a.label.localeCompare(b.label)),
 	);
 
 	// ─── Units pivot table logic ──────────────────────────────────────
+	// Columns are per player (mirror-match safe); filtering stays by nation.
+	const unitColumnPlayers = $derived(
+		players.filter(
+			(p) =>
+				ownedByPlayer(unitsProduced, p, (u) => u.player_id, (u) => u.nation)
+					.length > 0,
+		),
+	);
+
 	const uniqueUnitNations = $derived(
 		[
 			...new Set(
-				unitsProduced
-					.map((u) => u.nation)
+				unitColumnPlayers
+					.map((p) => p.nation)
 					.filter((n): n is string => n != null),
 			),
 		].sort(),
@@ -169,13 +194,17 @@
 			.map((f) => f.replace("nation:", "")),
 	);
 
-	const displayedUnitNations = $derived(
-		selectedUnitNations.length > 0 ? selectedUnitNations : uniqueUnitNations,
+	const displayedUnitPlayers = $derived(
+		selectedUnitNations.length > 0
+			? unitColumnPlayers.filter(
+					(p) => p.nation != null && selectedUnitNations.includes(p.nation),
+				)
+			: unitColumnPlayers,
 	);
 
 	type UnitPivotRow = {
 		unit_type: string;
-		counts: Record<string, number>;
+		counts: Record<number, number>;
 		total: number;
 	};
 
@@ -183,15 +212,21 @@
 		if (unitsProduced.length === 0) return [];
 
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const pivotMap = new Map<string, Record<string, number>>();
+		const pivotMap = new Map<string, Record<number, number>>();
 
-		for (const u of unitsProduced) {
-			if (!u.nation) continue;
-			if (!pivotMap.has(u.unit_type)) {
-				pivotMap.set(u.unit_type, {});
+		for (const p of unitColumnPlayers) {
+			for (const u of ownedByPlayer(
+				unitsProduced,
+				p,
+				(x) => x.player_id,
+				(x) => x.nation,
+			)) {
+				if (!pivotMap.has(u.unit_type)) {
+					pivotMap.set(u.unit_type, {});
+				}
+				const counts = pivotMap.get(u.unit_type)!;
+				counts[p.playerId] = (counts[p.playerId] ?? 0) + u.count;
 			}
-			const counts = pivotMap.get(u.unit_type)!;
-			counts[u.nation] = (counts[u.nation] ?? 0) + u.count;
 		}
 
 		const rows: UnitPivotRow[] = [];
@@ -202,8 +237,8 @@
 					continue;
 				}
 			}
-			const total = displayedUnitNations.reduce(
-				(sum, nation) => sum + (counts[nation] ?? 0),
+			const total = displayedUnitPlayers.reduce(
+				(sum, p) => sum + (counts[p.playerId] ?? 0),
 				0,
 			);
 			rows.push({ unit_type, counts, total });
@@ -216,11 +251,9 @@
 			} else if (tableState.sortColumn === "total") {
 				const cmp = a.total - b.total;
 				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			} else if (tableState.sortColumn.startsWith("nation:")) {
-				const nation = tableState.sortColumn.replace("nation:", "");
-				const aVal = a.counts[nation] ?? 0;
-				const bVal = b.counts[nation] ?? 0;
-				const cmp = aVal - bVal;
+			} else if (tableState.sortColumn.startsWith("player:")) {
+				const id = Number(tableState.sortColumn.replace("player:", ""));
+				const cmp = (a.counts[id] ?? 0) - (b.counts[id] ?? 0);
 				return tableState.sortDirection === "asc" ? cmp : -cmp;
 			}
 			return a.unit_type.localeCompare(b.unit_type);
@@ -247,7 +280,7 @@
 				class="{militaryChartOption ? 'mt-4 ' : ''}grid gap-4"
 				style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));"
 			>
-				{#each armyPieCharts as chart (chart.nation)}
+				{#each armyPieCharts as chart (chart.playerId)}
 					<div class="overflow-hidden rounded-lg">
 						<Chart option={chart.pieOption} height="200px" />
 					</div>
@@ -280,7 +313,7 @@
 				<thead>
 					<tr>
 						<th
-							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedUnitNations.length ===
+							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedUnitPlayers.length ===
 							0
 								? 'rounded-r-lg border-r'
 								: ''}"
@@ -295,23 +328,25 @@
 								{/if}
 							</span>
 						</th>
-						{#each displayedUnitNations as nation (nation)}
+						{#each displayedUnitPlayers as player (player.playerId)}
 							<th
-								class="{TABLE_HEADER_TH_CLASS} !text-right {displayedUnitNations.length ===
+								class="{TABLE_HEADER_TH_CLASS} !text-right {displayedUnitPlayers.length ===
 								1
 									? 'rounded-r-lg border-r'
 									: ''}"
-								onclick={() => toggleSort(tableState, `nation:${nation}`)}
+								onclick={() => toggleSort(tableState, `player:${player.playerId}`)}
 							>
 								<span class="inline-flex items-center justify-end gap-1.5">
-									<SpriteIcon
-										category="crests"
-										value={nation}
-										size={14}
-										alt={formatEnum(nation, "NATION_")}
-									/>
-									{formatEnum(nation, "NATION_")}
-									{#if tableState.sortColumn === `nation:${nation}`}
+									{#if player.nation}
+										<SpriteIcon
+											category="crests"
+											value={player.nation}
+											size={14}
+											alt={formatEnum(player.nation, "NATION_")}
+										/>
+									{/if}
+									{player.label}
+									{#if tableState.sortColumn === `player:${player.playerId}`}
 										<span class="text-orange">
 											{tableState.sortDirection === "asc" ? "↑" : "↓"}
 										</span>
@@ -319,7 +354,7 @@
 								</span>
 							</th>
 						{/each}
-						{#if displayedUnitNations.length > 1}
+						{#if displayedUnitPlayers.length > 1}
 							<th
 								class="{TABLE_HEADER_TH_CLASS} rounded-r-lg border-r !text-right"
 								onclick={() => toggleSort(tableState, "total")}
@@ -340,24 +375,24 @@
 					{#each unitPivotData as row (row.unit_type)}
 						<tr class="group">
 							<td
-								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedUnitNations.length ===
+								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedUnitPlayers.length ===
 								0
 									? 'rounded-r-lg'
 									: ''}"
 							>
 								{formatEnum(row.unit_type, "UNIT_")}
 							</td>
-							{#each displayedUnitNations as nation (nation)}
+							{#each displayedUnitPlayers as player (player.playerId)}
 								<td
-									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-right {displayedUnitNations.length ===
+									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-right {displayedUnitPlayers.length ===
 									1
 										? 'rounded-r-lg'
 										: ''}"
 								>
-									{row.counts[nation] ?? 0}
+									{row.counts[player.playerId] ?? 0}
 								</td>
 							{/each}
-							{#if displayedUnitNations.length > 1}
+							{#if displayedUnitPlayers.length > 1}
 								<td
 									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-r-lg !text-right font-bold"
 								>
@@ -368,7 +403,7 @@
 					{:else}
 						<tr>
 							<td
-								colspan={displayedUnitNations.length + 2}
+								colspan={displayedUnitPlayers.length + 2}
 								class="p-8 text-center italic text-tan"
 							>
 								No units match search

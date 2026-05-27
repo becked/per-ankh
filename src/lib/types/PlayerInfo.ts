@@ -2,6 +2,13 @@
 // Frozen as a hand-maintained TS type since the Rust source is gone.
 
 export type PlayerInfo = {
+	// Stable per-player xml_id (Player.xmlId). Matches `player_id` on every
+	// per-player array (player_history, units_produced, …) and
+	// `player_roster[].player_index`. The unique key for joining/iterating
+	// players, since `nation` collides in mirror matches (two players, same
+	// nation). Added in PARSER_VERSION 2.6.0; optional so the frontend can
+	// still read older blobs (which recover the id from player_roster).
+	player_id?: number;
 	player_name: string;
 	nation: string | null;
 	is_human: boolean;

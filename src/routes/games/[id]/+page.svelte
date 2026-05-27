@@ -122,6 +122,7 @@
 					improvementData={game.improvement_data}
 					gameReligions={game.game_religions}
 					playerWonders={game.player_wonders}
+					playerRoster={game.player_roster}
 					userNation={game.user_nation ?? null}
 					userDisplayName={game.user_display_name ?? null}
 					userWon={game.user_won ?? null}
@@ -154,9 +155,9 @@
 							<div
 								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
 							>
-								<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs text-tan">
-									This game was parsed with an older version ({game.parser_version}).
-									Click Reparse for the latest version ({PARSER_VERSION}).
+								<p class="rounded bg-[#2a2622] px-2.5 py-1 text-xs italic text-tan">
+									This game was parsed with version {game.parser_version}. Reparse
+									to use the latest version ({PARSER_VERSION}).
 								</p>
 								<ReimportButton {gameId} />
 							</div>

@@ -11,15 +11,17 @@
 	import NationFilterSelect from "./NationFilterSelect.svelte";
 	import {
 		type TableState,
+		type DetailPlayer,
 		TABLE_FRAME_CLASS,
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
-		getPlayerColor,
+		ownedByPlayer,
 		toggleSort,
 	} from "./helpers";
 
 	let {
+		players,
 		techDiscoveryHistory,
 		completedTechs,
 		chartFilter = $bindable<Record<string, boolean>>({}),
@@ -30,27 +32,34 @@
 			filters: [],
 		}),
 	}: {
+		players: DetailPlayer[];
 		techDiscoveryHistory: TechDiscoveryHistory[];
 		completedTechs: PlayerTech[];
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
 
+	// Resolved identity lookup (stable label + color per player), keyed by the
+	// player id every per-player array carries. Mirror-match safe.
+	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
+
 	// ─── Chart option ─────────────────────────────────────────────────
 	const techDiscoveryChartOption = $derived(
 		techDiscoveryHistory.length > 0
 			? (() => {
-					const players = techDiscoveryHistory;
+					const histories = techDiscoveryHistory;
 					const maxTechCount = Math.max(
-						...players.flatMap((player) =>
+						...histories.flatMap((player) =>
 							player.data.map((d) => d.tech_count),
 						),
 					);
 					const finalTurn = Math.max(
-						...players.flatMap((player) => player.data.map((d) => d.turn)),
+						...histories.flatMap((player) => player.data.map((d) => d.turn)),
 					);
-					const nationNames = players.map((p) =>
-						formatEnum(p.nation, "NATION_"),
+					const seriesLabels = histories.map(
+						(p) =>
+							playerById.get(p.player_id)?.label ??
+							formatEnum(p.nation, "NATION_"),
 					);
 
 					return {
@@ -61,7 +70,7 @@
 						},
 						legend: {
 							show: false,
-							data: nationNames,
+							data: seriesLabels,
 							selected: chartFilter,
 						},
 						tooltip: {
@@ -102,11 +111,13 @@
 							max: maxTechCount + 2,
 							splitLine: { show: false },
 						},
-						series: players.map((player, i) => ({
-							name: formatEnum(player.nation, "NATION_"),
+						series: histories.map((player) => ({
+							name:
+								playerById.get(player.player_id)?.label ??
+								formatEnum(player.nation, "NATION_"),
 							type: "line" as const,
 							data: player.data.map((d) => [d.turn, d.tech_count, d.tech_name]),
-							itemStyle: { color: getPlayerColor(player.nation, i) },
+							itemStyle: { color: playerById.get(player.player_id)?.color },
 							symbol: (value: [number, number, string | null]) =>
 								value[2] ? "circle" : "none",
 							symbolSize: 8,
@@ -120,11 +131,20 @@
 	);
 
 	// ─── Pivot table logic ────────────────────────────────────────────
+	// Columns are per player (mirror-match safe); filtering stays by nation.
+	const techColumnPlayers = $derived(
+		players.filter(
+			(p) =>
+				ownedByPlayer(completedTechs, p, (t) => t.player_id, (t) => t.nation)
+					.length > 0,
+		),
+	);
+
 	const uniqueTechNations = $derived(
 		[
 			...new Set(
-				completedTechs
-					.map((tech) => tech.nation)
+				techColumnPlayers
+					.map((p) => p.nation)
 					.filter((n): n is string => n != null),
 			),
 		].sort(),
@@ -136,28 +156,37 @@
 			.map((f) => f.replace("nation:", "")),
 	);
 
-	const displayedTechNations = $derived(
-		selectedTechNations.length > 0 ? selectedTechNations : uniqueTechNations,
+	const displayedTechPlayers = $derived(
+		selectedTechNations.length > 0
+			? techColumnPlayers.filter(
+					(p) => p.nation != null && selectedTechNations.includes(p.nation),
+				)
+			: techColumnPlayers,
 	);
 
 	type TechPivotRow = {
 		tech: string;
-		turns: Record<string, number | null>;
+		turns: Record<number, number | null>;
 	};
 
 	const techPivotData = $derived.by(() => {
 		if (completedTechs.length === 0) return [];
 
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const pivotMap = new Map<string, Record<string, number | null>>();
+		const pivotMap = new Map<string, Record<number, number | null>>();
 
-		for (const t of completedTechs) {
-			if (!t.nation) continue;
-			if (!pivotMap.has(t.tech)) {
-				pivotMap.set(t.tech, {});
+		for (const p of techColumnPlayers) {
+			for (const t of ownedByPlayer(
+				completedTechs,
+				p,
+				(x) => x.player_id,
+				(x) => x.nation,
+			)) {
+				if (!pivotMap.has(t.tech)) {
+					pivotMap.set(t.tech, {});
+				}
+				pivotMap.get(t.tech)![p.playerId] = t.completed_turn;
 			}
-			const turns = pivotMap.get(t.tech)!;
-			turns[t.nation] = t.completed_turn;
 		}
 
 		const rows: TechPivotRow[] = [];
@@ -175,10 +204,10 @@
 			if (tableState.sortColumn === "tech") {
 				const cmp = a.tech.localeCompare(b.tech);
 				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			} else if (tableState.sortColumn.startsWith("nation:")) {
-				const nation = tableState.sortColumn.replace("nation:", "");
-				const aVal = a.turns[nation] ?? Infinity;
-				const bVal = b.turns[nation] ?? Infinity;
+			} else if (tableState.sortColumn.startsWith("player:")) {
+				const id = Number(tableState.sortColumn.replace("player:", ""));
+				const aVal = a.turns[id] ?? Infinity;
+				const bVal = b.turns[id] ?? Infinity;
 				const cmp = aVal - bVal;
 				return tableState.sortDirection === "asc" ? cmp : -cmp;
 			}
@@ -231,7 +260,7 @@
 				<thead>
 					<tr>
 						<th
-							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedTechNations.length ===
+							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedTechPlayers.length ===
 							0
 								? 'rounded-r-lg border-r'
 								: ''}"
@@ -246,23 +275,25 @@
 								{/if}
 							</span>
 						</th>
-						{#each displayedTechNations as nation, i (nation)}
+						{#each displayedTechPlayers as player, i (player.playerId)}
 							<th
 								class="{TABLE_HEADER_TH_CLASS} !text-center {i ===
-								displayedTechNations.length - 1
+								displayedTechPlayers.length - 1
 									? 'rounded-r-lg border-r'
 									: ''}"
-								onclick={() => toggleSort(tableState, `nation:${nation}`)}
+								onclick={() => toggleSort(tableState, `player:${player.playerId}`)}
 							>
 								<span class="inline-flex items-center justify-center gap-1.5">
-									<SpriteIcon
-										category="crests"
-										value={nation}
-										size={14}
-										alt={formatEnum(nation, "NATION_")}
-									/>
-									{formatEnum(nation, "NATION_")}
-									{#if tableState.sortColumn === `nation:${nation}`}
+									{#if player.nation}
+										<SpriteIcon
+											category="crests"
+											value={player.nation}
+											size={14}
+											alt={formatEnum(player.nation, "NATION_")}
+										/>
+									{/if}
+									{player.label}
+									{#if tableState.sortColumn === `player:${player.playerId}`}
 										<span class="text-orange">
 											{tableState.sortDirection === "asc" ? "↑" : "↓"}
 										</span>
@@ -276,28 +307,30 @@
 					{#each techPivotData as row (row.tech)}
 						<tr class="group">
 							<td
-								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedTechNations.length ===
+								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedTechPlayers.length ===
 								0
 									? 'rounded-r-lg'
 									: ''}"
 							>
 								{TECH_NAMES[row.tech] ?? formatEnum(row.tech, "TECH_")}
 							</td>
-							{#each displayedTechNations as nation, i (nation)}
+							{#each displayedTechPlayers as player, i (player.playerId)}
 								<td
 									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-center {i ===
-									displayedTechNations.length - 1
+									displayedTechPlayers.length - 1
 										? 'rounded-r-lg'
 										: ''}"
 								>
-									{row.turns[nation] != null ? row.turns[nation] : "—"}
+									{row.turns[player.playerId] != null
+										? row.turns[player.playerId]
+										: "—"}
 								</td>
 							{/each}
 						</tr>
 					{:else}
 						<tr>
 							<td
-								colspan={displayedTechNations.length + 1}
+								colspan={displayedTechPlayers.length + 1}
 								class="p-8 text-center italic text-tan"
 							>
 								No technologies match search

@@ -24,6 +24,7 @@ export function deriveGameDetails(
 
 	const playerInfos: PlayerInfo[] = players
 		.map((p) => ({
+			player_id: p.xmlId,
 			player_name: p.playerName,
 			nation: p.nation,
 			is_human: p.isHuman,

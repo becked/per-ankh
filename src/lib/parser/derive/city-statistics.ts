@@ -66,6 +66,7 @@ export function deriveCityStatistics(
 			city_id: c.xmlId,
 			city_name: c.cityName,
 			owner_nation: owner?.nation ?? null,
+			owner_player_xml_id: c.playerXmlId,
 			family: c.family,
 			family_class: family?.familyClass ?? null,
 			first_owner_player_xml_id: c.firstOwnerPlayerXmlId,

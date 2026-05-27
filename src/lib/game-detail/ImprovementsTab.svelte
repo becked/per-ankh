@@ -6,14 +6,17 @@
 	import NationFilterSelect from "./NationFilterSelect.svelte";
 	import {
 		type TableState,
+		type DetailPlayer,
 		TABLE_FRAME_CLASS,
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
+		ownedByPlayer,
 		toggleSort,
 	} from "./helpers";
 
 	let {
+		players,
 		improvementData,
 		tableState = $bindable<TableState>({
 			search: "",
@@ -22,16 +25,32 @@
 			filters: [],
 		}),
 	}: {
+		players: DetailPlayer[];
 		improvementData: ImprovementData;
 		tableState?: TableState;
 	} = $props();
 
 	// ─── Pivot table logic ────────────────────────────────────────────
+	// Columns are per player (mirror-match safe); filtering stays by nation.
+	// Attribution prefers owner_player_xml_id (reparsed ≥2.6.0 blobs) and
+	// falls back to nation on older blobs (where same-nation owners merge).
+	const impColumnPlayers = $derived(
+		players.filter(
+			(p) =>
+				ownedByPlayer(
+					improvementData.improvements,
+					p,
+					(imp) => imp.owner_player_xml_id,
+					(imp) => imp.nation,
+				).length > 0,
+		),
+	);
+
 	const uniqueImprovementNations = $derived(
 		[
 			...new Set(
-				improvementData.improvements
-					.map((imp) => imp.nation)
+				impColumnPlayers
+					.map((p) => p.nation)
 					.filter((n): n is string => n != null),
 			),
 		].sort(),
@@ -43,15 +62,18 @@
 			.map((f) => f.replace("nation:", "")),
 	);
 
-	const displayedImprovementNations = $derived(
+	const displayedImprovementPlayers = $derived(
 		selectedImprovementNations.length > 0
-			? selectedImprovementNations
-			: uniqueImprovementNations,
+			? impColumnPlayers.filter(
+					(p) =>
+						p.nation != null && selectedImprovementNations.includes(p.nation),
+				)
+			: impColumnPlayers,
 	);
 
 	type ImprovementPivotRow = {
 		improvement: string;
-		counts: Record<string, number>;
+		counts: Record<number, number>;
 		total: number;
 	};
 
@@ -59,15 +81,21 @@
 		if (improvementData.improvements.length === 0) return [];
 
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const pivotMap = new Map<string, Record<string, number>>();
+		const pivotMap = new Map<string, Record<number, number>>();
 
-		for (const imp of improvementData.improvements) {
-			if (!imp.nation) continue;
-			if (!pivotMap.has(imp.improvement)) {
-				pivotMap.set(imp.improvement, {});
+		for (const p of impColumnPlayers) {
+			for (const imp of ownedByPlayer(
+				improvementData.improvements,
+				p,
+				(i) => i.owner_player_xml_id,
+				(i) => i.nation,
+			)) {
+				if (!pivotMap.has(imp.improvement)) {
+					pivotMap.set(imp.improvement, {});
+				}
+				const counts = pivotMap.get(imp.improvement)!;
+				counts[p.playerId] = (counts[p.playerId] ?? 0) + 1;
 			}
-			const counts = pivotMap.get(imp.improvement)!;
-			counts[imp.nation] = (counts[imp.nation] ?? 0) + 1;
 		}
 
 		const rows: ImprovementPivotRow[] = [];
@@ -78,7 +106,10 @@
 					continue;
 				}
 			}
-			const total = Object.values(counts).reduce((sum, c) => sum + c, 0);
+			const total = displayedImprovementPlayers.reduce(
+				(sum, p) => sum + (counts[p.playerId] ?? 0),
+				0,
+			);
 			rows.push({ improvement, counts, total });
 		}
 
@@ -89,10 +120,10 @@
 			} else if (tableState.sortColumn === "total") {
 				const cmp = a.total - b.total;
 				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			} else if (tableState.sortColumn.startsWith("nation:")) {
-				const nation = tableState.sortColumn.replace("nation:", "");
-				const aVal = a.counts[nation] ?? 0;
-				const bVal = b.counts[nation] ?? 0;
+			} else if (tableState.sortColumn.startsWith("player:")) {
+				const id = Number(tableState.sortColumn.replace("player:", ""));
+				const aVal = a.counts[id] ?? 0;
+				const bVal = b.counts[id] ?? 0;
 				const cmp = aVal - bVal;
 				return tableState.sortDirection === "asc" ? cmp : -cmp;
 			}
@@ -126,7 +157,7 @@
 				<thead>
 					<tr>
 						<th
-							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedImprovementNations.length ===
+							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedImprovementPlayers.length ===
 							0
 								? 'rounded-r-lg border-r'
 								: ''}"
@@ -141,23 +172,25 @@
 								{/if}
 							</span>
 						</th>
-						{#each displayedImprovementNations as nation (nation)}
+						{#each displayedImprovementPlayers as player (player.playerId)}
 							<th
-								class="{TABLE_HEADER_TH_CLASS} !text-center {displayedImprovementNations.length ===
+								class="{TABLE_HEADER_TH_CLASS} !text-center {displayedImprovementPlayers.length ===
 								1
 									? 'rounded-r-lg border-r'
 									: ''}"
-								onclick={() => toggleSort(tableState, `nation:${nation}`)}
+								onclick={() => toggleSort(tableState, `player:${player.playerId}`)}
 							>
 								<span class="inline-flex items-center justify-center gap-1.5">
-									<SpriteIcon
-										category="crests"
-										value={nation}
-										size={14}
-										alt={formatEnum(nation, "NATION_")}
-									/>
-									{formatEnum(nation, "NATION_")}
-									{#if tableState.sortColumn === `nation:${nation}`}
+									{#if player.nation}
+										<SpriteIcon
+											category="crests"
+											value={player.nation}
+											size={14}
+											alt={formatEnum(player.nation, "NATION_")}
+										/>
+									{/if}
+									{player.label}
+									{#if tableState.sortColumn === `player:${player.playerId}`}
 										<span class="text-orange">
 											{tableState.sortDirection === "asc" ? "↑" : "↓"}
 										</span>
@@ -165,7 +198,7 @@
 								</span>
 							</th>
 						{/each}
-						{#if displayedImprovementNations.length > 1}
+						{#if displayedImprovementPlayers.length > 1}
 							<th
 								class="{TABLE_HEADER_TH_CLASS} rounded-r-lg border-r !text-center"
 								onclick={() => toggleSort(tableState, "total")}
@@ -186,24 +219,24 @@
 					{#each improvementPivotData as row (row.improvement)}
 						<tr class="group">
 							<td
-								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedImprovementNations.length ===
+								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedImprovementPlayers.length ===
 								0
 									? 'rounded-r-lg'
 									: ''}"
 							>
 								{formatEnum(row.improvement, "IMPROVEMENT_")}
 							</td>
-							{#each displayedImprovementNations as nation (nation)}
+							{#each displayedImprovementPlayers as player (player.playerId)}
 								<td
-									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-center {displayedImprovementNations.length ===
+									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-center {displayedImprovementPlayers.length ===
 									1
 										? 'rounded-r-lg'
 										: ''}"
 								>
-									{row.counts[nation] ?? 0}
+									{row.counts[player.playerId] ?? 0}
 								</td>
 							{/each}
-							{#if displayedImprovementNations.length > 1}
+							{#if displayedImprovementPlayers.length > 1}
 								<td
 									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-r-lg !text-center font-bold"
 								>
@@ -214,8 +247,8 @@
 					{:else}
 						<tr>
 							<td
-								colspan={displayedImprovementNations.length +
-									(displayedImprovementNations.length > 1 ? 2 : 1)}
+								colspan={displayedImprovementPlayers.length +
+									(displayedImprovementPlayers.length > 1 ? 2 : 1)}
 								class="p-8 text-center italic text-tan"
 							>
 								No improvements match search

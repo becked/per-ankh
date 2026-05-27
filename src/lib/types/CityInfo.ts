@@ -3,7 +3,13 @@
 /**
  * City information for the Cities tab
  */
-export type CityInfo = { city_id: number, city_name: string, owner_nation: string | null, family: string | null, 
+export type CityInfo = { city_id: number, city_name: string, owner_nation: string | null,
+/**
+ * xml_id of the city's CURRENT owner (Player.xmlId). Distinguishes
+ * same-nation players in mirror matches, where owner_nation collides.
+ * Optional: absent on blobs parsed before PARSER_VERSION 2.6.0.
+ */
+owner_player_xml_id?: number | null, family: string | null,
 /**
  * Family class enum (FAMILYCLASS_CHAMPIONS, FAMILYCLASS_LANDOWNERS, ...).
  * Frontend uses this as the crest fallback when the per-family crest art

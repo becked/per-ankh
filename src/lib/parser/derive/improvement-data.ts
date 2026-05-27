@@ -34,6 +34,7 @@ export function deriveImprovementData(
 				: undefined;
 		improvements.push({
 			nation: owner?.nation ?? null,
+			owner_player_xml_id: city?.playerXmlId ?? null,
 			city_name: city?.cityName ?? null,
 			improvement: t.improvement,
 			specialist: t.specialist,
