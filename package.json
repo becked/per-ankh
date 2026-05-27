@@ -18,6 +18,7 @@
 		"bake:resources": "tsx scripts/bake-resources.ts",
 		"bake:sprites": "tsx scripts/bake-sprites.ts",
 		"bake:tech-names": "tsx scripts/bake-tech-names.ts",
+		"bake:improvement-names": "tsx scripts/bake-improvement-names.ts",
 		"bake:victory-ordering": "tsx scripts/bake-victory-ordering.ts",
 		"bake:map-options": "tsx scripts/bake-map-options.ts",
 		"bake:law-classes": "tsx scripts/bake-law-classes.ts",
@@ -26,7 +27,7 @@
 		"bake:og": "node scripts/make-og-default.mjs .",
 		"bake:screenshots": "node scripts/capture-home-screenshots.mjs",
 		"ux:review": "node scripts/capture-ux-review.mjs",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:finalize"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:finalize"
 	},
 	"license": "MIT",
 	"dependencies": {

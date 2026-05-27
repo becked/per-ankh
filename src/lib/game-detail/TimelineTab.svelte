@@ -10,6 +10,7 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
 	import { TECH_NAMES } from "$lib/generated/tech-names";
+	import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 	import {
 		type TimelineEvent,
 		type TimelineCategory,
@@ -132,7 +133,9 @@
 				nation: wonder.nation,
 				playerName: wonder.player_name,
 				category: "wonder",
-				label: formatEnum(wonder.wonder, "IMPROVEMENT_"),
+				label:
+					IMPROVEMENT_NAMES[wonder.wonder] ??
+					formatEnum(wonder.wonder, "IMPROVEMENT_"),
 				enumValue: wonder.wonder,
 				spriteCategory: null,
 			});

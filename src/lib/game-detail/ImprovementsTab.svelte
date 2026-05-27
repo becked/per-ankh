@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
@@ -225,7 +226,8 @@
 									? 'rounded-r-lg'
 									: ''}"
 							>
-								{formatEnum(row.improvement, "IMPROVEMENT_")}
+								{IMPROVEMENT_NAMES[row.improvement] ??
+									formatEnum(row.improvement, "IMPROVEMENT_")}
 							</td>
 							{#each displayedImprovementPlayers as player (player.playerId)}
 								<td
