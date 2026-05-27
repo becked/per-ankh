@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-05-26-3e2c04d] - 2026-05-26
+
+### Fixes
+
+- (game-detail) support same-nation (mirror match) players — [b56711d](https://github.com/becked/per-ankh/commit/b56711d26726c1d4c17b41da2dd9186e0211cb18)
+
+### Other
+
+- apply prettier formatting to game-detail files — [3e2c04d](https://github.com/becked/per-ankh/commit/3e2c04d4367b8aa4a0ca6d35c094dd87d87eef0c)
+
 ## [2026-05-26-ae354f8] - 2026-05-26
 
 ### Fixes
