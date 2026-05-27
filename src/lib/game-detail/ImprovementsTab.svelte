@@ -178,7 +178,8 @@
 								1
 									? 'rounded-r-lg border-r'
 									: ''}"
-								onclick={() => toggleSort(tableState, `player:${player.playerId}`)}
+								onclick={() =>
+									toggleSort(tableState, `player:${player.playerId}`)}
 							>
 								<span class="inline-flex items-center justify-center gap-1.5">
 									{#if player.nation}

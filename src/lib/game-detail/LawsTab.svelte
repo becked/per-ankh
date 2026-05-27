@@ -148,8 +148,12 @@
 	const lawColumnPlayers = $derived(
 		players.filter(
 			(p) =>
-				ownedByPlayer(currentLaws, p, (l) => l.player_id, (l) => l.nation)
-					.length > 0,
+				ownedByPlayer(
+					currentLaws,
+					p,
+					(l) => l.player_id,
+					(l) => l.nation,
+				).length > 0,
 		),
 	);
 
@@ -290,7 +294,8 @@
 								displayedLawPlayers.length - 1
 									? 'rounded-r-lg border-r'
 									: ''}"
-								onclick={() => toggleSort(tableState, `player:${player.playerId}`)}
+								onclick={() =>
+									toggleSort(tableState, `player:${player.playerId}`)}
 							>
 								<span class="inline-flex items-center justify-center gap-1.5">
 									{#if player.nation}

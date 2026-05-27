@@ -682,7 +682,9 @@ export function resolvePlayers(
 			playerName,
 			nation,
 			label: collides ? `${base} (${name})` : base,
-			color: collides ? getChartColor(ordinal) : getNationChartColor(nation, ordinal),
+			color: collides
+				? getChartColor(ordinal)
+				: getNationChartColor(nation, ordinal),
 		};
 	});
 }
@@ -724,7 +726,9 @@ export function ownedByPlayer<T>(
 ): T[] {
 	return rows.filter((row) => {
 		const id = idOf(row);
-		return id != null ? id === player.playerId : nationOf(row) === player.nation;
+		return id != null
+			? id === player.playerId
+			: nationOf(row) === player.nation;
 	});
 }
 
@@ -737,7 +741,9 @@ export function findByPlayer<T>(
 ): T | undefined {
 	return rows.find((row) => {
 		const id = idOf(row);
-		return id != null ? id === player.playerId : nationOf(row) === player.nation;
+		return id != null
+			? id === player.playerId
+			: nationOf(row) === player.nation;
 	});
 }
 
@@ -762,7 +768,9 @@ export const getPlayerColor = getNationChartColor;
 export function createDefaultSelection(
 	players: PlayerLike[],
 ): Record<string, boolean> {
-	return Object.fromEntries(resolvePlayers(players).map((p) => [p.label, true]));
+	return Object.fromEntries(
+		resolvePlayers(players).map((p) => [p.label, true]),
+	);
 }
 
 export function formatCityCell(column: CityColumn, city: CityInfo): string {
@@ -834,7 +842,9 @@ export function createYieldChartOption(
 				data: playerYield.data.map((d: YieldDataPoint) =>
 					mode === "rate" ? d.rate : d.cumulative,
 				),
-				itemStyle: { color: rp?.color ?? getPlayerColor(playerYield.nation, i) },
+				itemStyle: {
+					color: rp?.color ?? getPlayerColor(playerYield.nation, i),
+				},
 			};
 		}),
 	};

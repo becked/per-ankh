@@ -135,8 +135,12 @@
 	const techColumnPlayers = $derived(
 		players.filter(
 			(p) =>
-				ownedByPlayer(completedTechs, p, (t) => t.player_id, (t) => t.nation)
-					.length > 0,
+				ownedByPlayer(
+					completedTechs,
+					p,
+					(t) => t.player_id,
+					(t) => t.nation,
+				).length > 0,
 		),
 	);
 
@@ -281,7 +285,8 @@
 								displayedTechPlayers.length - 1
 									? 'rounded-r-lg border-r'
 									: ''}"
-								onclick={() => toggleSort(tableState, `player:${player.playerId}`)}
+								onclick={() =>
+									toggleSort(tableState, `player:${player.playerId}`)}
 							>
 								<span class="inline-flex items-center justify-center gap-1.5">
 									{#if player.nation}
