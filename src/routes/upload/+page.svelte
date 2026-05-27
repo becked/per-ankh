@@ -82,7 +82,7 @@
 </script>
 
 <svelte:head>
-	<title>Upload — Per-Ankh</title>
+	<title>Upload - Per-Ankh</title>
 </svelte:head>
 
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>

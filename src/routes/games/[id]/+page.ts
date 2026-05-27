@@ -40,7 +40,7 @@ function buildMeta(game: {
 	// Prefer the owner's renamed title for the social-share title so
 	// unfurled links match what the user sees in the app.
 	const gameName = game.display_name ?? gd.game_name ?? "Old World game";
-	return { title: `${gameName} — Per-Ankh`, description };
+	return { title: `${gameName} - Per-Ankh`, description };
 }
 
 // Translate the API's `ApiError` into the right SvelteKit response —

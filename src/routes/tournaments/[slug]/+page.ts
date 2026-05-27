@@ -36,7 +36,7 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		bracket,
 		matches: matches.matches,
 		meta: {
-			title: `${tournament.name} — Per-Ankh`,
+			title: `${tournament.name} - Per-Ankh`,
 			description: tournament.description ?? `${tournament.name} on Per-Ankh.`,
 		},
 	};

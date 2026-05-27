@@ -20,5 +20,13 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		cloudApi.adminListOutOfDate(PARSER_VERSION, { fetch }),
 		cloudApi.adminListAllGames({ fetch }),
 	]);
-	return { user, outOfDateGames, allGames };
+	return {
+		user,
+		outOfDateGames,
+		allGames,
+		meta: {
+			title: "Admin - Per-Ankh",
+			description: "Per-Ankh site administration.",
+		},
+	};
 };

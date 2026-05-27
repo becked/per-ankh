@@ -12,5 +12,12 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		throw redirect(303, loginBounce(url));
 	}
 	const { games } = await cloudApi.listGames({ fetch });
-	return { user, games };
+	return {
+		user,
+		games,
+		meta: {
+			title: "Settings - Per-Ankh",
+			description: "Manage your Per-Ankh account settings.",
+		},
+	};
 };

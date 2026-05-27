@@ -69,10 +69,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Settings — Per-Ankh</title>
-</svelte:head>
-
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<div class="mx-auto max-w-xl">
 		<Tabs.Root bind:value={activeTab}>

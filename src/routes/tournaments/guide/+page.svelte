@@ -25,10 +25,6 @@
 	]);
 </script>
 
-<svelte:head>
-	<title>Tournament guide — Per-Ankh</title>
-</svelte:head>
-
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<Breadcrumb {crumbs} class="mb-4" />
 	<div

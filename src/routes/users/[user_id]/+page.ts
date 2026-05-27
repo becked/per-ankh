@@ -75,6 +75,10 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 
 		return {
 			profile,
+			meta: {
+				title: `${profile.display_name} - Per-Ankh`,
+				description: `${profile.display_name}'s Old World games and statistics on Per-Ankh.`,
+			},
 			isOwner,
 			bundle,
 			collections: collectionsRes.collections,

@@ -25,10 +25,6 @@
 	}
 </script>
 
-<svelte:head>
-	<title>Admin — Per-Ankh</title>
-</svelte:head>
-
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<div class="mx-auto max-w-xl space-y-4">
 		<div class="rounded-lg p-4" style="background-color: #2a2622;">

@@ -14,7 +14,7 @@ export type PageMeta = {
 };
 
 export const DEFAULT_META: PageMeta = {
-	title: "Per-Ankh — Old World Save Analytics",
+	title: "Per-Ankh - Old World Save Analytics",
 	description:
 		"Upload and analyze your Old World save files: charts, maps, tech, religion, and more.",
 };

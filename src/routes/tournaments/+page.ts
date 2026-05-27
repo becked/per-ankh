@@ -20,7 +20,7 @@ export const load: PageLoad = async ({ fetch, url }) => {
 		return {
 			tournaments,
 			meta: {
-				title: "Tournaments — Per-Ankh",
+				title: "Tournaments - Per-Ankh",
 				description: "Live and past Old World tournaments hosted on Per-Ankh.",
 			},
 		};
