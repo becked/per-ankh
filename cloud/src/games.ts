@@ -1910,6 +1910,7 @@ export async function handlePublicRecentGames(
 		        g.winner_nation, g.winner_name, g.victory_type,
 		        g.map_size, g.map_class, g.difficulty, g.total_turns,
 		        g.save_date, g.created_at,
+		        g.user_id AS uploader_user_id,
 		        u.display_name AS uploader_display_name,
 		        u.discord_id AS uploader_discord_id,
 		        u.avatar_hash AS uploader_avatar_hash
@@ -1935,6 +1936,7 @@ export async function handlePublicRecentGames(
 			total_turns: number;
 			save_date: string | null;
 			created_at: string;
+			uploader_user_id: string;
 			uploader_display_name: string;
 			uploader_discord_id: string;
 			uploader_avatar_hash: string | null;
@@ -2062,6 +2064,7 @@ export async function handlePublicRecentGames(
 		total_turns: g.total_turns,
 		save_date: g.save_date,
 		created_at: g.created_at,
+		uploader_user_id: g.uploader_user_id,
 		uploader_display_name: g.uploader_display_name,
 		uploader_avatar_url: buildAvatarUrl(
 			g.uploader_discord_id,

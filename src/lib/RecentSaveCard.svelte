@@ -143,28 +143,42 @@
 	);
 </script>
 
-<a
-	href={resolve("/games/[id]", { id: game.game_id })}
-	class="block rounded-lg p-3 transition-colors hover:bg-[#3e3833]"
+<div
+	class="relative rounded-lg p-3 transition-colors hover:bg-[#3e3833]"
 	style="background-color: #35302b;"
 >
+	<!-- Stretched-link overlay: the whole card navigates to the game, but the
+	     uploader link below sits above this overlay (higher z-index) so it wins
+	     clicks on the name/avatar. Two real, non-nested anchors — middle-click
+	     and open-in-new-tab work for both. -->
+	<a
+		href={resolve("/games/[id]", { id: game.game_id })}
+		class="absolute inset-0 z-10 rounded-lg"
+		aria-label={gameTitle}
+	></a>
+
 	<!-- Discovery row: uploader (left) + game title (center) + save date
 	     (right). Equal-flex side columns keep the title visually centered
 	     even when the uploader name or date pill grow. Date pill reuses
 	     the amber treatment that the "Winner" badge previously used. -->
 	<div class="mb-2 flex items-center gap-2">
-		<div class="flex min-w-0 flex-1 items-center gap-1.5">
-			<img
-				src={game.uploader_avatar_url}
-				alt=""
-				class="h-5 w-5 shrink-0 rounded-full"
-				width="20"
-				height="20"
-				loading="lazy"
-			/>
-			<span class="truncate text-lg font-bold text-white">
-				{game.uploader_display_name}
-			</span>
+		<div class="flex min-w-0 flex-1">
+			<a
+				href={resolve("/users/[user_id]", { user_id: game.uploader_user_id })}
+				class="relative z-20 flex min-w-0 items-center gap-1.5 hover:underline"
+			>
+				<img
+					src={game.uploader_avatar_url}
+					alt=""
+					class="h-5 w-5 shrink-0 rounded-full"
+					width="20"
+					height="20"
+					loading="lazy"
+				/>
+				<span class="truncate text-lg font-bold text-white">
+					{game.uploader_display_name}
+				</span>
+			</a>
 		</div>
 		<span
 			class="min-w-0 flex-1 truncate text-center text-lg font-bold text-tan"
@@ -373,4 +387,4 @@
 			<Chart option={sparklineOption} height="60px" />
 		</div>
 	{/if}
-</a>
+</div>
