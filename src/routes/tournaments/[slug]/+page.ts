@@ -1,5 +1,6 @@
 import { error, redirect } from "@sveltejs/kit";
 import { ApiError, cloudApi } from "$lib/api-cloud";
+import { loginBounce } from "$lib/utils/safe-next";
 import type { PageLoad } from "./$types";
 
 export const load: PageLoad = async ({ params, fetch, url }) => {
@@ -8,7 +9,7 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 	// and /dashboard. After login they land back here.
 	const me = await cloudApi.getMe({ fetch });
 	if (!me) {
-		throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
+		throw redirect(303, loginBounce(url));
 	}
 	let tournament;
 	try {

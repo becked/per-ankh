@@ -3,11 +3,27 @@
 // recent shared saves (anonymous endpoint). Signed-in users see the
 // same page; the login card swaps to a "Go to library" CTA pointing
 // at their /users/[user_id] profile.
+import { redirect } from "@sveltejs/kit";
 import { cloudApi } from "$lib/api-cloud";
+import { safeNext } from "$lib/utils/safe-next";
 import type { PageLoad } from "./$types";
 
-export const load: PageLoad = async ({ fetch, parent }) => {
+export const load: PageLoad = async ({ fetch, parent, url }) => {
 	const { user } = await parent();
+
+	// Belt-and-suspenders: an already-authenticated viewer who lands on a
+	// `/?next=…` bounce URL (a stale/bookmarked link, or a live session in
+	// another tab) should be forwarded to their destination rather than left on
+	// the home page. The normal anon→login→callback path never reaches here —
+	// the callback navigates straight to the unwrapped `next`. Skip home targets
+	// so a self-referential `/?next=…` can't loop.
+	const nextParam = url.searchParams.get("next");
+	if (user && nextParam) {
+		const target = safeNext(nextParam);
+		if (target !== "/" && !target.startsWith("/?")) {
+			throw redirect(303, target);
+		}
+	}
 
 	// All fetches are best-effort: a transient worker hiccup shouldn't
 	// blank the home page. Failures fall through to empty/null — the

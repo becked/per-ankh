@@ -7,6 +7,7 @@ import {
 } from "$lib/api-cloud";
 import type { PageMeta } from "$lib/page-meta";
 import { formatEnum } from "$lib/utils/formatting";
+import { loginBounce } from "$lib/utils/safe-next";
 import type { PageLoad } from "./$types";
 
 // Build the OG/Twitter description from match metadata. Same shape that
@@ -77,7 +78,7 @@ export const load: PageLoad = async ({ params, fetch, url }) => {
 		game = await cloudApi.getGame(params.id, { fetch });
 	} catch (err) {
 		if (err instanceof UnauthorizedError) {
-			throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
+			throw redirect(303, loginBounce(url));
 		}
 		return mapApiErrorToPage(err);
 	}

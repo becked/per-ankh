@@ -8,7 +8,7 @@
 	import { page } from "$app/state";
 	import HeaderGameSearch from "$lib/users/HeaderGameSearch.svelte";
 	import AboutModal from "$lib/AboutModal.svelte";
-	import { safeNext } from "$lib/utils/safe-next";
+	import { resolveLoginNext } from "$lib/utils/safe-next";
 	import { cloudApi, ApiError, type UserMe } from "$lib/api-cloud";
 
 	let { user }: { user: UserMe | null } = $props();
@@ -41,7 +41,7 @@
 		loginError = null;
 		try {
 			const redirectUri = `${window.location.origin}/auth/callback`;
-			const next = safeNext(window.location.pathname + window.location.search);
+			const next = resolveLoginNext(page.url);
 			const { authorize_url } = await cloudApi.discordStart(redirectUri, next);
 			window.location.href = authorize_url;
 		} catch (err) {

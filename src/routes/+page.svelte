@@ -6,7 +6,7 @@
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import TournamentCard from "$lib/tournament/TournamentCard.svelte";
 	import { cloudApi, ApiError } from "$lib/api-cloud";
-	import { safeNext } from "$lib/utils/safe-next";
+	import { resolveLoginNext } from "$lib/utils/safe-next";
 	import { formatEnum } from "$lib/utils/formatting";
 	import type { PageData } from "./$types";
 
@@ -24,7 +24,7 @@
 		loginError = null;
 		try {
 			const redirectUri = `${window.location.origin}/auth/callback`;
-			const next = safeNext(window.location.pathname + window.location.search);
+			const next = resolveLoginNext(page.url);
 			const { authorize_url } = await cloudApi.discordStart(redirectUri, next);
 			window.location.href = authorize_url;
 		} catch (err) {

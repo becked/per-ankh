@@ -1,6 +1,7 @@
 import { error, redirect } from "@sveltejs/kit";
 import { cloudApi } from "$lib/api-cloud";
 import { PARSER_VERSION } from "$lib/parser/types";
+import { loginBounce } from "$lib/utils/safe-next";
 import type { PageLoad } from "./$types";
 
 // Site-admin gate. Mirror the Worker's 404-on-not-admin so the route
@@ -8,7 +9,7 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, url }) => {
 	const user = await cloudApi.getMe({ fetch });
 	if (!user) {
-		throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
+		throw redirect(303, loginBounce(url));
 	}
 	if (!user.is_admin) {
 		throw error(404, "Not found");

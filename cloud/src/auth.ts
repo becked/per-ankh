@@ -21,7 +21,9 @@ import {
 	cloudCorsHeaders,
 	errorResponse,
 	getClientIp,
+	isAllowedRedirectUri,
 	jsonResponse,
+	parseAllowedOrigins,
 	parseCookies,
 	timingSafeEqual,
 } from "./util";
@@ -187,6 +189,19 @@ export async function handleDiscordStart(
 			400,
 			cors,
 			"MISSING_REDIRECT_URI",
+		);
+	}
+	// Defense in depth: only forward redirect_uris we own to Discord, rather
+	// than trusting the client and relying solely on Discord's registered-URI
+	// allowlist. Derived from ALLOWED_ORIGINS — the callback path is fixed.
+	if (
+		!isAllowedRedirectUri(redirectUri, parseAllowedOrigins(env.ALLOWED_ORIGINS))
+	) {
+		return errorResponse(
+			"redirect_uri not allowed",
+			400,
+			cors,
+			"INVALID_REDIRECT_URI",
 		);
 	}
 	const next = safeNext(body.next);

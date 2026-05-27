@@ -59,14 +59,40 @@ export function legacyCorsHeaders(
 // Echoes the request Origin if it's in ALLOWED_ORIGINS so credentialed
 // requests work. Returns null Access-Control-Allow-Origin if the origin
 // isn't allowed (the browser will then block the response).
+// Parse the comma-separated ALLOWED_ORIGINS into a trimmed, non-empty list.
+// Shared by cloudCorsHeaders and the OAuth redirect_uri allowlist so both read
+// the same source of truth.
+export function parseAllowedOrigins(allowed: string): string[] {
+	return allowed
+		.split(",")
+		.map((o) => o.trim())
+		.filter(Boolean);
+}
+
+// Allowlist check for the OAuth callback URL. The origin must be in
+// ALLOWED_ORIGINS and the path must be exactly the SvelteKit callback route —
+// nothing else is a legitimate redirect target. Defense in depth atop Discord's
+// own registered-redirect-URI list (see handleDiscordStart).
+export function isAllowedRedirectUri(
+	redirectUri: string,
+	allowedOrigins: string[],
+): boolean {
+	let url: URL;
+	try {
+		url = new URL(redirectUri);
+	} catch {
+		return false;
+	}
+	if (url.pathname !== "/auth/callback") return false;
+	return allowedOrigins.includes(url.origin);
+}
+
 export function cloudCorsHeaders(
 	env: Pick<CommonEnv, "ALLOWED_ORIGINS">,
 	request: Request,
 ): Record<string, string> {
 	const origin = request.headers.get("Origin");
-	const allowed = env.ALLOWED_ORIGINS.split(",")
-		.map((o) => o.trim())
-		.filter(Boolean);
+	const allowed = parseAllowedOrigins(env.ALLOWED_ORIGINS);
 	const allowedOrigin = origin && allowed.includes(origin) ? origin : "";
 	const headers: Record<string, string> = {
 		"Access-Control-Allow-Methods": "GET, POST, PATCH, DELETE, OPTIONS",

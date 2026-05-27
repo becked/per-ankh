@@ -6,6 +6,7 @@
 
 import { error, redirect } from "@sveltejs/kit";
 import { ApiError, cloudApi, UnauthorizedError } from "$lib/api-cloud";
+import { loginBounce } from "$lib/utils/safe-next";
 import type { UserScope } from "$lib/stats/types";
 import type { PageLoad } from "./$types";
 
@@ -93,7 +94,7 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 		};
 	} catch (err) {
 		if (err instanceof UnauthorizedError) {
-			throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
+			throw redirect(303, loginBounce(url));
 		}
 		if (err instanceof ApiError && err.status === 404) {
 			throw error(404, "User not found");

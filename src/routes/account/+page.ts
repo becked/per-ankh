@@ -1,5 +1,6 @@
 import { redirect } from "@sveltejs/kit";
 import { cloudApi } from "$lib/api-cloud";
+import { loginBounce } from "$lib/utils/safe-next";
 import type { PageLoad } from "./$types";
 
 // Auth: redirects to /?next=/account if the user isn't signed in.
@@ -8,7 +9,7 @@ import type { PageLoad } from "./$types";
 export const load: PageLoad = async ({ fetch, url }) => {
 	const user = await cloudApi.getMe({ fetch });
 	if (!user) {
-		throw redirect(303, `/?next=${encodeURIComponent(url.pathname)}`);
+		throw redirect(303, loginBounce(url));
 	}
 	const { games } = await cloudApi.listGames({ fetch });
 	return { user, games };
