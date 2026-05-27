@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-27-b6d49a5] - 2026-05-27
+
+### Features
+
+- (improvements) bake real in-game improvement names from XML — [b6d49a5](https://github.com/becked/per-ankh/commit/b6d49a53684dd08ca704aa5ea36b6d9661c6b03d)
+
 ## [2026-05-27-df29275] - 2026-05-27
 
 ### Features
