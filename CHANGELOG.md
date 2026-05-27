@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-27-df29275] - 2026-05-27
+
+### Features
+
+- (home) link game card uploader to their profile — [df29275](https://github.com/becked/per-ankh/commit/df292758803def3c13726d593b93c86ad70ddf4e)
+
 ## [2026-05-26-3e2c04d] - 2026-05-26
 
 ### Fixes
