@@ -162,7 +162,7 @@ describe("PATCH /v1/tournaments/:id — map_pool", () => {
 		await expectErrorCode(res, { status: 400, code: "MAP_OPTIONS_INVALID" });
 	});
 
-	it("locks map_pool after the tournament leaves setup", async () => {
+	it("rejects editing an existing map_pool entry after the tournament leaves setup", async () => {
 		const t = await makeTournament({
 			advanceTo: "swiss-round-1-generated",
 			allowedMaps: [DONUT],
@@ -182,7 +182,7 @@ describe("PATCH /v1/tournaments/:id — map_pool", () => {
 				],
 			},
 		});
-		await expectErrorCode(res, { status: 409, code: "TOURNAMENT_LOCKED" });
+		await expectErrorCode(res, { status: 409, code: "MAP_POOL_LOCKED" });
 	});
 
 	it("swaps the pool to a different script and configures it in one call", async () => {
