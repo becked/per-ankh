@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-05-27-2183412] - 2026-05-27
+
+### Features
+
+- (tournament) in-app admin management, delete, signup question, themed date picker — [f96b04b](https://github.com/becked/per-ankh/commit/f96b04b1503b119c85ce928a04175a8abd46b47d)
+
+### Fixes
+
+- (auth) return users to their origin page after login + redirect_uri allowlist — [88f3bfe](https://github.com/becked/per-ankh/commit/88f3bfe6d4f21483e29062f82608a8c94c64b0da)
+- (meta) standardize page titles and unify on meta system — [237fba5](https://github.com/becked/per-ankh/commit/237fba578e8800f6ba8df318ab69942666edd5d3)
+
+### Other
+
+- (tournament) fix stale map_pool lock assertion — [9143919](https://github.com/becked/per-ankh/commit/9143919299ec33f003c0926810d7f9541ea05ff8)
+- (tournament) rename FirstPickNote to PickPreferenceNote — [2183412](https://github.com/becked/per-ankh/commit/218341278cc6789f67ea305672ed3d69f7238ac4)
+
 ## [2026-05-27-b6d49a5] - 2026-05-27
 
 ### Features
