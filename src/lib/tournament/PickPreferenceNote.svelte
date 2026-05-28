@@ -1,4 +1,4 @@
-<!-- Shared "first pick" rule note. Both Swiss divisions and the championship
+<!-- Shared "pick preference" rule note. Both Swiss divisions and the championship
      bracket default each match's pick order to the slot listed second (see
      cloud/src/tournament/admin.ts), so the same rule line appears under each. -->
 <p class="mb-3 flex items-center gap-1.5 text-xs text-tan opacity-70">
@@ -15,5 +15,5 @@
 			clip-rule="evenodd"
 		/>
 	</svg>
-	Second player listed gets first pick
+	Second player listed gets pick preference
 </p>

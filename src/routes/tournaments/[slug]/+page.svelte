@@ -13,7 +13,7 @@
 		type UserMe,
 	} from "$lib/api-cloud";
 	import ChampionshipBracketTree from "$lib/tournament/ChampionshipBracketTree.svelte";
-	import FirstPickNote from "$lib/tournament/FirstPickNote.svelte";
+	import PickPreferenceNote from "$lib/tournament/PickPreferenceNote.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import SlotUsernameAutocomplete from "$lib/tournament/SlotUsernameAutocomplete.svelte";
@@ -906,7 +906,7 @@
 							<h2 class="mb-1 text-lg font-bold text-tan">
 								Championship Bracket
 							</h2>
-							<FirstPickNote />
+							<PickPreferenceNote />
 							<div class="rounded-lg p-4" style="background-color: #2a2622;">
 								<ChampionshipBracketTree
 									bracket={data.bracket}
@@ -925,7 +925,7 @@
 								<h2 class="mb-1 text-lg font-bold text-tan">
 									{divisionData.name}
 								</h2>
-								<FirstPickNote />
+								<PickPreferenceNote />
 								<div class="space-y-3">
 									<SwissFlowBracket
 										winsToAdvance={data.tournament.swiss_wins_to_advance}
