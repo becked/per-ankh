@@ -1,5 +1,12 @@
 <script lang="ts">
 	import { invalidateAll } from "$app/navigation";
+	import { DatePicker } from "bits-ui";
+	import {
+		type DateValue,
+		parseAbsolute,
+		today,
+		toCalendarDate,
+	} from "@internationalized/date";
 	import {
 		ApiError,
 		cloudApi,
@@ -22,6 +29,31 @@
 	let divisionAName = $state(tournament.division_a_name);
 	// svelte-ignore state_referenced_locally
 	let divisionBName = $state(tournament.division_b_name);
+
+	// Scheduled start, entered and displayed as a UTC calendar date. starts_at
+	// is stored as a full ISO-8601 instant for column-type consistency; we treat
+	// the date as midnight UTC on the chosen day (the standard pattern for a
+	// date-only field backed by a timestamp column). Controlled value —
+	// onValueChange writes straight back through the same PATCH path.
+	const startsAt = $derived<DateValue | undefined>(
+		tournament.starts_at
+			? toCalendarDate(parseAbsolute(tournament.starts_at, "UTC"))
+			: undefined,
+	);
+	// Seeds the empty-state segment layout and the calendar's initial month.
+	const startsAtPlaceholder = today("UTC");
+	let calendarOpen = $state(false);
+	// The whole field is the popup's anchor (via DatePicker.Content's
+	// customAnchor) so the calendar drops below and centers under the field
+	// rather than under the small trigger icon at its left edge.
+	let fieldEl = $state<HTMLDivElement | null>(null);
+
+	function commitStartsAt(value: DateValue | undefined) {
+		// CalendarDate.toDate("UTC") → JS Date at midnight UTC on that day.
+		const next = value ? value.toDate("UTC").toISOString() : null;
+		if (next === tournament.starts_at) return;
+		commit({ starts_at: next });
+	}
 
 	async function commit(patch: PatchTournamentBody) {
 		if (Object.keys(patch).length === 0) return;
@@ -98,6 +130,153 @@
 				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
 			></textarea>
 		</label>
+
+		<div class="flex flex-col gap-1">
+			<span>Scheduled start</span>
+			<DatePicker.Root
+				bind:open={calendarOpen}
+				locale="en-CA"
+				weekdayFormat="short"
+				fixedWeeks
+				value={startsAt}
+				placeholder={startsAtPlaceholder}
+				onValueChange={commitStartsAt}
+			>
+				<!-- Clicking the field chrome opens the calendar; clicking a segment
+				(role=spinbutton) edits it instead, so typing the time still works. -->
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					bind:this={fieldEl}
+					class="flex items-center gap-1 rounded border border-[#4a433b] bg-[#35302b] p-1.5 text-tan focus-within:border-[#5a524a]"
+					onclick={(e) => {
+						// Open on field-chrome clicks. Exclude the segments (spinbuttons —
+						// let them take focus to edit) and the trigger/clear buttons (they
+						// manage open state themselves).
+						const t = e.target as HTMLElement;
+						if (!t.closest("button") && !t.closest('[role="spinbutton"]')) {
+							calendarOpen = true;
+						}
+					}}
+				>
+					<DatePicker.Trigger
+						class="text-tan/70 flex items-center rounded px-0.5 hover:text-tan"
+						aria-label="Open calendar"
+					>
+						<svg
+							width="14"
+							height="14"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							aria-hidden="true"
+						>
+							<rect x="3" y="4" width="18" height="18" rx="2" />
+							<path d="M16 2v4M8 2v4M3 10h18" />
+						</svg>
+					</DatePicker.Trigger>
+
+					<DatePicker.Input class="flex items-center">
+						{#snippet children({ segments })}
+							{#each segments as segment, i (i)}
+								{#if segment.part === "literal"}
+									<span class="text-tan/50 px-0.5"
+										>{segment.value.replace(/-/g, "/").replace(/,/g, "")}</span
+									>
+								{:else}
+									<DatePicker.Segment
+										part={segment.part}
+										class="data-[placeholder]:text-tan/40 rounded px-0.5 tabular-nums focus:bg-[#5a524a] focus:text-tan focus:outline-none"
+									>
+										{segment.value}
+									</DatePicker.Segment>
+								{/if}
+							{/each}
+						{/snippet}
+					</DatePicker.Input>
+
+					<span class="text-tan/60 px-0.5 text-[11px] uppercase">UTC</span>
+
+					{#if startsAt}
+						<button
+							type="button"
+							class="text-tan/60 ml-auto rounded px-1 leading-none hover:text-tan"
+							aria-label="Clear scheduled start"
+							onclick={(e) => {
+								e.stopPropagation();
+								commitStartsAt(undefined);
+							}}
+						>
+							×
+						</button>
+					{/if}
+				</div>
+
+				<DatePicker.Content
+					customAnchor={fieldEl}
+					side="bottom"
+					align="center"
+					sideOffset={6}
+					class="z-50"
+				>
+					<DatePicker.Calendar
+						class="rounded-lg border border-[#2a2622] bg-[#241f1b] p-3 shadow-lg"
+					>
+						{#snippet children({ months, weekdays })}
+							<DatePicker.Header class="mb-2 flex items-center justify-between">
+								<DatePicker.PrevButton
+									class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+								>
+									‹
+								</DatePicker.PrevButton>
+								<DatePicker.Heading class="text-xs font-bold text-tan" />
+								<DatePicker.NextButton
+									class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+								>
+									›
+								</DatePicker.NextButton>
+							</DatePicker.Header>
+
+							{#each months as month (month.value)}
+								<DatePicker.Grid class="w-full border-collapse select-none">
+									<DatePicker.GridHead>
+										<DatePicker.GridRow class="flex">
+											{#each weekdays as day (day)}
+												<DatePicker.HeadCell
+													class="text-tan/50 w-8 text-center text-[10px] font-bold uppercase"
+												>
+													{day.slice(0, 2)}
+												</DatePicker.HeadCell>
+											{/each}
+										</DatePicker.GridRow>
+									</DatePicker.GridHead>
+									<DatePicker.GridBody>
+										{#each month.weeks as weekDates (weekDates)}
+											<DatePicker.GridRow class="flex w-full">
+												{#each weekDates as date (date)}
+													<DatePicker.Cell
+														{date}
+														month={month.value}
+														class="p-0"
+													>
+														<DatePicker.Day
+															class="data-[outside-month]:text-tan/30 flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-[#35302B] data-[selected]:bg-[#5a524a] data-[selected]:font-bold data-[selected]:text-tan data-[today]:underline data-[disabled]:opacity-30"
+														/>
+													</DatePicker.Cell>
+												{/each}
+											</DatePicker.GridRow>
+										{/each}
+									</DatePicker.GridBody>
+								</DatePicker.Grid>
+							{/each}
+						{/snippet}
+					</DatePicker.Calendar>
+				</DatePicker.Content>
+			</DatePicker.Root>
+		</div>
 
 		<label class="flex flex-col gap-1">
 			<span>Division A name</span>

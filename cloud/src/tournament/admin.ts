@@ -10,6 +10,7 @@ import * as v from "valibot";
 import {
 	BulkCreateSlotsSchema,
 	CreateTournamentSchema,
+	GrantAdminSchema,
 	PatchMatchSchema,
 	PatchMatchMapSchema,
 	PatchSlotSchema,
@@ -18,6 +19,8 @@ import {
 	TransitionChampionshipSchema,
 } from "../schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "../session";
+import { isSiteAdmin } from "../admin";
+import { buildAvatarUrl } from "../auth";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
 import { countEventsSince } from "../games";
 import { logError } from "../log";
@@ -598,8 +601,8 @@ export async function handleCreateTournament(
 				    tournament_id, slug, name, description, status,
 				    division_a_name, division_b_name,
 				    swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds,
-				    map_pool
-				 ) VALUES (?, ?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?)`,
+				    map_pool, created_by_user_id
+				 ) VALUES (?, ?, ?, ?, 'setup', ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				tournamentId,
 				slug,
@@ -611,6 +614,7 @@ export async function handleCreateTournament(
 				swissLossesToEliminate,
 				swissMaxRounds,
 				mapPoolJson,
+				session.data.user_id,
 			),
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_admins (tournament_id, user_id) VALUES (?, ?)`,
@@ -814,6 +818,233 @@ export async function handlePatchTournament(
 		),
 	});
 	return jsonResponse({ tournament: updated }, 200, cors);
+}
+
+// ----------------------------------------------------------------------
+// Admin roster management — GET / POST / DELETE /v1/tournaments/:id/admins
+// ----------------------------------------------------------------------
+
+// GET /v1/tournaments/:id/admins — full admin list with user_ids for the
+// in-app management UI. The public detail payload exposes only display_name +
+// avatar (no user_ids) for everyone; this admin-gated endpoint is the one place
+// that hands out user_ids so the remove buttons have something to act on.
+export async function handleListTournamentAdmins(
+	tournamentId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT ta.user_id, u.display_name, u.discord_id, u.avatar_hash
+		 FROM tournament_admins ta
+		 JOIN users u ON u.user_id = ta.user_id
+		 WHERE ta.tournament_id = ?
+		 ORDER BY ta.granted_at ASC, ta.user_id ASC`,
+	)
+		.bind(tournamentId)
+		.all<{
+			user_id: string;
+			display_name: string;
+			discord_id: string;
+			avatar_hash: string | null;
+		}>();
+	const admins = (rows.results ?? []).map((r) => ({
+		user_id: r.user_id,
+		display_name: r.display_name,
+		avatar_url: buildAvatarUrl(r.discord_id, r.avatar_hash),
+		is_creator: r.user_id === a.tournament.created_by_user_id,
+	}));
+	return jsonResponse({ admins }, 200, cors);
+}
+
+// POST /v1/tournaments/:id/admins { user_id } — grant another Per-Ankh user
+// admin on this tournament. The target must already exist as a user (the
+// autocomplete sources from /v1/users/search). Beta is deliberately NOT
+// auto-granted — the response reports the target's beta status so the UI can
+// warn that a non-beta admin can't actually reach the tournament yet.
+export async function handleGrantTournamentAdmin(
+	tournamentId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+
+	const body = await parseJsonBody(request, GrantAdminSchema, cors);
+	if (!body.ok) return body.response;
+	const targetUserId = body.body.user_id;
+
+	const target = await env.SHARE_DB.prepare(
+		"SELECT user_id, display_name, discord_id, avatar_hash FROM users WHERE user_id = ?",
+	)
+		.bind(targetUserId)
+		.first<{
+			user_id: string;
+			display_name: string;
+			discord_id: string;
+			avatar_hash: string | null;
+		}>();
+	if (!target) {
+		return errorResponse("User not found", 404, cors, "USER_NOT_FOUND");
+	}
+
+	// Idempotent — re-granting an existing admin is a no-op, not an error.
+	await env.SHARE_DB.prepare(
+		"INSERT OR IGNORE INTO tournament_admins (tournament_id, user_id) VALUES (?, ?)",
+	)
+		.bind(tournamentId, targetUserId)
+		.run();
+
+	const betaRow = await env.SHARE_DB.prepare(
+		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
+	)
+		.bind(targetUserId)
+		.first<{ ok: number }>();
+	const is_beta = betaRow !== null;
+
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "admin_granted", {
+		granted_user_id: targetUserId,
+	});
+
+	return jsonResponse(
+		{
+			admin: {
+				user_id: target.user_id,
+				display_name: target.display_name,
+				avatar_url: buildAvatarUrl(target.discord_id, target.avatar_hash),
+				is_creator: target.user_id === a.tournament.created_by_user_id,
+			},
+			is_beta,
+		},
+		201,
+		cors,
+	);
+}
+
+// DELETE /v1/tournaments/:id/admins/:user_id — revoke an admin. The creator
+// (created_by_user_id) is protected — they can't be removed via the UI, so
+// every tournament always retains at least its owner.
+export async function handleRevokeTournamentAdmin(
+	tournamentId: string,
+	targetUserId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+
+	if (targetUserId === a.tournament.created_by_user_id) {
+		return errorResponse(
+			"The tournament creator can't be removed as an admin",
+			409,
+			cors,
+			"CANNOT_REMOVE_CREATOR",
+		);
+	}
+
+	const result = await env.SHARE_DB.prepare(
+		"DELETE FROM tournament_admins WHERE tournament_id = ? AND user_id = ?",
+	)
+		.bind(tournamentId, targetUserId)
+		.run();
+	if ((result.meta?.changes ?? 0) === 0) {
+		return errorResponse(
+			"Not an admin of this tournament",
+			404,
+			cors,
+			"ADMIN_NOT_FOUND",
+		);
+	}
+
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "admin_revoked", {
+		revoked_user_id: targetUserId,
+	});
+	return jsonResponse({ revoked: true }, 200, cors);
+}
+
+// ----------------------------------------------------------------------
+// DELETE /v1/tournaments/:id — delete a tournament (cancel == delete)
+// ----------------------------------------------------------------------
+
+// Authorized to the tournament creator OR the global site admin — NOT plain
+// tournament admins (a co-admin can run the tournament but not tear it down).
+// Completed tournaments are intentionally undeletable here; they're preserved
+// unless removed via `./per-ankh admin tournament delete`. The FK cascade drops
+// slots/rounds/matches/admins; R2 game blobs are left intact (the participants'
+// own uploads), mirroring the CLI delete.
+export async function handleDeleteTournament(
+	tournamentId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+	}
+
+	const tournament = await loadTournamentById(env, tournamentId);
+	if (!tournament) {
+		return errorResponse(
+			"Tournament not found",
+			404,
+			cors,
+			"TOURNAMENT_NOT_FOUND",
+		);
+	}
+
+	const siteAdmin = await isSiteAdmin(env, session);
+	if (!siteAdmin) {
+		// Non-site-admins must be inside the beta cohort (404 hides existence)
+		// and must be the creator specifically (403 for any other beta user,
+		// including co-admins).
+		try {
+			await requireTournamentBeta(env, session.data);
+		} catch (e) {
+			if (e instanceof AuthzError) {
+				return errorResponse(e.message, e.status, cors, e.code);
+			}
+			throw e;
+		}
+		if (tournament.created_by_user_id !== session.data.user_id) {
+			return errorResponse(
+				"Only the tournament creator or a site admin can delete a tournament",
+				403,
+				cors,
+				"FORBIDDEN_DELETE",
+			);
+		}
+	}
+
+	// Completed tournaments stay CLI-only regardless of who's asking.
+	if (tournament.status === "complete") {
+		return errorResponse(
+			"Completed tournaments can't be deleted here",
+			409,
+			cors,
+			"CANNOT_DELETE_COMPLETED",
+		);
+	}
+
+	await env.SHARE_DB.prepare("DELETE FROM tournaments WHERE tournament_id = ?")
+		.bind(tournamentId)
+		.run();
+
+	// Audit. The tournament row is gone, but events.metadata is plain text
+	// (not an FK), so the record survives the delete.
+	logTournamentAdminAction(env, session.data.user_id, tournamentId, "deleted", {
+		slug: tournament.slug,
+		status: tournament.status,
+		by_site_admin: siteAdmin,
+	});
+	return jsonResponse({ deleted: true }, 200, cors);
 }
 
 // ----------------------------------------------------------------------

@@ -84,10 +84,14 @@ import {
 	handleBulkCreateSlots,
 	handleCreateTournament,
 	handleDeleteSlot,
+	handleDeleteTournament,
+	handleGrantTournamentAdmin,
+	handleListTournamentAdmins,
 	handlePatchMatchMap,
 	handlePatchSlot,
 	handlePatchTournament,
 	handleReorderSlots,
+	handleRevokeTournamentAdmin,
 	handleRetroEditMatch,
 	handleStartTournament,
 	handleTransitionChampionship,
@@ -922,6 +926,36 @@ const ROUTES: RouteSpec[] = [
 		route: "DELETE /v1/tournaments/:id/signup",
 		handler: (r, e, m) => handleTournamentWithdraw(m![1], r, e),
 	},
+	// Admin roster management. Creator + co-admins; the management endpoints
+	// are gated by requireTournamentAdmin inside the handlers.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/admins$/,
+		},
+		route: "GET /v1/tournaments/:id/admins",
+		handler: (r, e, m) => handleListTournamentAdmins(m![1], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/admins$/,
+		},
+		route: "POST /v1/tournaments/:id/admins",
+		handler: (r, e, m) => handleGrantTournamentAdmin(m![1], r, e),
+	},
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/admins\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "DELETE /v1/tournaments/:id/admins/:user_id",
+		handler: (r, e, m) => handleRevokeTournamentAdmin(m![1], m![2], r, e),
+	},
 	{
 		method: "PATCH",
 		match: {
@@ -930,6 +964,17 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "PATCH /v1/tournaments/:id",
 		handler: (r, e, m) => handlePatchTournament(m![1], r, e),
+	},
+	// Delete (cancel == delete). Creator or site admin only; completed
+	// tournaments are CLI-only. Authz lives in the handler, not the route.
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})$/,
+		},
+		route: "DELETE /v1/tournaments/:id",
+		handler: (r, e, m) => handleDeleteTournament(m![1], r, e),
 	},
 	// Tournament detail by slug (must come AFTER all /tournaments/:id/... routes;
 	// slug regex is broader)

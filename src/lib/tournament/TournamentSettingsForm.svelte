@@ -10,18 +10,15 @@
 
 	interface Props {
 		tournament: TournamentDetail;
-		// When false the form renders read-only: inputs disabled, Save hidden.
-		// Non-admins can open settings but cannot change anything.
+		// When false the form renders read-only: inputs disabled. Non-admins can
+		// open settings but cannot change anything.
 		canEdit?: boolean;
-		onSaved?: () => void;
-		onCancel?: () => void;
 	}
 
-	let { tournament, canEdit = true, onSaved, onCancel }: Props = $props();
+	let { tournament, canEdit = true }: Props = $props();
 
-	// Local edit state. Module-scope init from props is enough — both callers
-	// either remount on open (modal) or remount via invalidateAll() (inline
-	// panel) so we never have to resync mid-life.
+	// Local edit state. The modal remounts on open and re-syncs via
+	// invalidateAll() after each commit, so module-scope init from props is enough.
 	// svelte-ignore state_referenced_locally
 	let name = $state(tournament.name);
 	// svelte-ignore state_referenced_locally
@@ -36,103 +33,65 @@
 	let swissWinsToAdvance = $state(tournament.swiss_wins_to_advance);
 	// svelte-ignore state_referenced_locally
 	let swissLossesToEliminate = $state(tournament.swiss_losses_to_eliminate);
-	// Scheduled start. Stored as a full ISO-8601 instant; the <input
-	// type="datetime-local"> works in the viewer's local time with minute
-	// precision, so we convert in both directions.
-	// svelte-ignore state_referenced_locally
-	let startsAtLocal = $state(isoToLocalInput(tournament.starts_at));
 
-	// ISO instant → "YYYY-MM-DDTHH:MM" in local time for datetime-local.
-	function isoToLocalInput(iso: string | null): string {
-		if (!iso) return "";
-		const d = new Date(iso);
-		if (Number.isNaN(d.getTime())) return "";
-		const pad = (n: number) => String(n).padStart(2, "0");
-		return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-	}
-
-	// datetime-local value → ISO instant (or null when cleared).
-	function localInputToIso(local: string): string | null {
-		const trimmed = local.trim();
-		if (!trimmed) return null;
-		const d = new Date(trimmed);
-		if (Number.isNaN(d.getTime())) return null;
-		return d.toISOString();
-	}
-
-	let busy = $state(false);
-
+	// This form is only mounted once the tournament has started (in setup the
+	// on-page Overview/Configuration panels cover these fields). So the Swiss
+	// config is always locked here — shown read-only.
 	const swissConfigLocked = $derived(tournament.status !== "setup");
 
-	// FSM-consistency check. Mirrors validateSwissThresholds in
-	// cloud/src/tournament/admin.ts — the server still validates, this is
-	// just inline feedback so the save button shows why it's disabled.
-	const thresholdError = $derived.by(() => {
-		if (swissConfigLocked) return null;
-		if (swissWinsToAdvance > swissMaxRounds) {
-			return `Wins to advance (${swissWinsToAdvance}) cannot exceed max rounds (${swissMaxRounds}).`;
-		}
-		if (swissWinsToAdvance + swissLossesToEliminate > swissMaxRounds + 1) {
-			return `Wins to advance + losses to eliminate (${swissWinsToAdvance + swissLossesToEliminate}) must be ≤ max rounds + 1 (${swissMaxRounds + 1}).`;
-		}
-		return null;
-	});
-
-	function buildPatch(): PatchTournamentBody {
-		const patch: PatchTournamentBody = {};
-		const trimmedName = name.trim();
-		if (trimmedName !== tournament.name) patch.name = trimmedName;
-		const trimmedDesc = description.trim() || null;
-		if (trimmedDesc !== tournament.description) patch.description = trimmedDesc;
-		const trimmedA = divisionAName.trim();
-		if (trimmedA !== tournament.division_a_name)
-			patch.division_a_name = trimmedA;
-		const trimmedB = divisionBName.trim();
-		if (trimmedB !== tournament.division_b_name)
-			patch.division_b_name = trimmedB;
-		const nextStartsAt = localInputToIso(startsAtLocal);
-		if (nextStartsAt !== tournament.starts_at) patch.starts_at = nextStartsAt;
-		if (!swissConfigLocked) {
-			if (swissMaxRounds !== tournament.swiss_max_rounds)
-				patch.swiss_max_rounds = swissMaxRounds;
-			if (swissWinsToAdvance !== tournament.swiss_wins_to_advance)
-				patch.swiss_wins_to_advance = swissWinsToAdvance;
-			if (swissLossesToEliminate !== tournament.swiss_losses_to_eliminate)
-				patch.swiss_losses_to_eliminate = swissLossesToEliminate;
-		}
-		return patch;
-	}
-
-	async function save() {
-		const patch = buildPatch();
-		if (Object.keys(patch).length === 0) {
-			onSaved?.();
-			return;
-		}
-		busy = true;
+	// Commit-on-blur, matching the on-page Overview/Configuration panels. The
+	// modal's close button is the only "cancel" — there's nothing to discard
+	// since each field persists as you leave it.
+	async function commit(patch: PatchTournamentBody) {
+		if (Object.keys(patch).length === 0) return;
 		try {
 			await cloudApi.patchTournament(tournament.tournament_id, patch);
 			await invalidateAll();
 			toast.info("Saved");
-			onSaved?.();
 		} catch (err) {
 			let message = "Save failed";
 			if (err instanceof ApiError) {
 				message = err.message + (err.code ? ` (${err.code})` : "");
 			}
 			toast.error(message);
-		} finally {
-			busy = false;
 		}
 	}
 
-	const canSave = $derived(
-		!busy &&
-			name.trim() &&
-			divisionAName.trim() &&
-			divisionBName.trim() &&
-			thresholdError === null,
-	);
+	function commitName() {
+		const trimmed = name.trim();
+		if (!trimmed) {
+			name = tournament.name; // empty name not allowed — revert
+			return;
+		}
+		if (trimmed === tournament.name) return;
+		commit({ name: trimmed });
+	}
+
+	function commitDescription() {
+		const next = description.trim() || null;
+		if (next === tournament.description) return;
+		commit({ description: next });
+	}
+
+	function commitDivisionA() {
+		const trimmed = divisionAName.trim();
+		if (!trimmed) {
+			divisionAName = tournament.division_a_name;
+			return;
+		}
+		if (trimmed === tournament.division_a_name) return;
+		commit({ division_a_name: trimmed });
+	}
+
+	function commitDivisionB() {
+		const trimmed = divisionBName.trim();
+		if (!trimmed) {
+			divisionBName = tournament.division_b_name;
+			return;
+		}
+		if (trimmed === tournament.division_b_name) return;
+		commit({ division_b_name: trimmed });
+	}
 </script>
 
 <div class="flex flex-col gap-3 text-xs text-tan">
@@ -141,6 +100,7 @@
 		<input
 			type="text"
 			bind:value={name}
+			onblur={commitName}
 			disabled={!canEdit}
 			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 		/>
@@ -150,24 +110,11 @@
 		<span>Description</span>
 		<textarea
 			bind:value={description}
+			onblur={commitDescription}
 			rows="2"
 			disabled={!canEdit}
 			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 		></textarea>
-	</label>
-
-	<label class="flex flex-col gap-1">
-		<span>Scheduled start</span>
-		<input
-			type="datetime-local"
-			bind:value={startsAtLocal}
-			disabled={!canEdit}
-			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
-		/>
-		<span class="opacity-60"
-			>Shown to players as the announced start date while sign-ups are open.
-			Leave blank for none.</span
-		>
 	</label>
 
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
@@ -176,6 +123,7 @@
 			<input
 				type="text"
 				bind:value={divisionAName}
+				onblur={commitDivisionA}
 				disabled={!canEdit}
 				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 			/>
@@ -185,6 +133,7 @@
 			<input
 				type="text"
 				bind:value={divisionBName}
+				onblur={commitDivisionB}
 				disabled={!canEdit}
 				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 			/>
@@ -233,31 +182,5 @@
 				/>
 			</label>
 		</div>
-		{#if thresholdError}
-			<p class="mt-2 text-xs text-red-400">{thresholdError}</p>
-		{/if}
 	</fieldset>
-</div>
-
-<div class="mt-4 flex justify-end gap-2">
-	{#if onCancel}
-		<button
-			type="button"
-			class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-			onclick={onCancel}
-			disabled={busy}
-		>
-			{canEdit ? "Cancel" : "Close"}
-		</button>
-	{/if}
-	{#if canEdit}
-		<button
-			type="button"
-			class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-			onclick={save}
-			disabled={!canSave}
-		>
-			Save
-		</button>
-	{/if}
 </div>

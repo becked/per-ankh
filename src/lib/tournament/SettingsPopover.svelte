@@ -1,6 +1,17 @@
 <script lang="ts">
-	import type { TournamentDetail } from "$lib/api-cloud";
+	import { goto, invalidateAll } from "$app/navigation";
+	import { resolve } from "$app/paths";
+	import { page } from "$app/state";
+	import {
+		ApiError,
+		cloudApi,
+		type TournamentDetail,
+		type UserMe,
+	} from "$lib/api-cloud";
+	import { confirmDialog } from "$lib/ui/confirm";
 	import Popover from "$lib/ui/Popover.svelte";
+	import { toast } from "$lib/ui/toast";
+	import TournamentAdminManager from "./TournamentAdminManager.svelte";
 	import TournamentMapPoolAdder from "./TournamentMapPoolAdder.svelte";
 	import TournamentMapPoolSummary from "./TournamentMapPoolSummary.svelte";
 	import TournamentSettingsForm from "./TournamentSettingsForm.svelte";
@@ -14,8 +25,41 @@
 	let { tournament, disabled = false }: Props = $props();
 
 	let open = $state(false);
+	let deleting = $state(false);
 
 	const isAdmin = $derived(tournament.is_viewer_admin === true);
+	const user = $derived(page.data.user as UserMe | null);
+	// Delete is the creator's or the global site admin's power, and only while
+	// the tournament hasn't completed (completed tournaments are CLI-only).
+	const canDelete = $derived(
+		(tournament.is_viewer_creator || user?.is_admin === true) &&
+			tournament.status !== "complete",
+	);
+
+	async function handleDelete() {
+		const ok = await confirmDialog({
+			title: "Delete tournament",
+			message: `Delete "${tournament.name}"? This permanently removes the tournament and all its slots, rounds, and matches. Uploaded game saves are kept. This can't be undone.`,
+			confirmLabel: "Delete tournament",
+			destructive: true,
+		});
+		if (!ok) return;
+		deleting = true;
+		try {
+			await cloudApi.deleteTournament(tournament.tournament_id);
+			toast.info("Tournament deleted.");
+			open = false;
+			await goto(resolve("/tournaments"));
+			await invalidateAll();
+		} catch (err) {
+			let message = "Couldn't delete tournament";
+			if (err instanceof ApiError) {
+				message = err.message + (err.code ? ` (${err.code})` : "");
+			}
+			toast.error(message);
+			deleting = false;
+		}
+	}
 </script>
 
 <Popover
@@ -62,20 +106,50 @@
 		</button>
 	</header>
 
-	<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-		<div class="rounded-lg p-4" style="background-color: #2a2622;">
-			<TournamentSettingsForm
-				{tournament}
-				canEdit={isAdmin}
-				onSaved={() => (open = false)}
-				onCancel={() => (open = false)}
-			/>
+	<!-- During setup, the overview/config/maps panels render on the tournament
+	page itself, so the modal would only duplicate them. Show the settings form
+	and map pool here only once the tournament has started (when those page
+	panels are gone); in setup the modal is just Admins + Delete below. -->
+	{#if tournament.status !== "setup"}
+		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+			<div class="rounded-lg p-4" style="background-color: #2a2622;">
+				<TournamentSettingsForm {tournament} canEdit={isAdmin} />
+			</div>
+			<div>
+				<TournamentMapPoolSummary mapPool={tournament.map_pool} />
+				{#if isAdmin && (tournament.status === "swiss" || tournament.status === "championship")}
+					<TournamentMapPoolAdder {tournament} />
+				{/if}
+			</div>
 		</div>
-		<div>
-			<TournamentMapPoolSummary mapPool={tournament.map_pool} />
-			{#if isAdmin && (tournament.status === "swiss" || tournament.status === "championship")}
-				<TournamentMapPoolAdder {tournament} />
-			{/if}
+	{/if}
+
+	{#if isAdmin}
+		<div class="mt-4 rounded-lg p-4" style="background-color: #2a2622;">
+			<TournamentAdminManager {tournament} />
 		</div>
-	</div>
+	{/if}
+
+	{#if canDelete}
+		<div
+			class="mt-4 flex items-center justify-between gap-3 rounded-lg p-4"
+			style="background-color: #2a2622;"
+		>
+			<div class="text-xs text-tan">
+				<p class="font-bold">Delete tournament</p>
+				<p class="opacity-60">
+					Permanently removes this tournament and all its slots, rounds, and
+					matches. Uploaded game saves are kept.
+				</p>
+			</div>
+			<button
+				type="button"
+				class="whitespace-nowrap rounded border border-red-400 px-3 py-1.5 text-xs text-red-400 transition-colors hover:bg-red-400 hover:text-black disabled:opacity-50"
+				onclick={handleDelete}
+				disabled={deleting}
+			>
+				{deleting ? "Deleting…" : "Delete tournament"}
+			</button>
+		</div>
+	{/if}
 </Popover>

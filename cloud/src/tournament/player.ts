@@ -255,6 +255,12 @@ export async function handleTournamentSignup(
 	const body = await parseJsonBody(request, TournamentSignupSchema, cors);
 	if (!body.ok) return body.response;
 	const { division } = body.body;
+	// Normalize a trimmed-empty answer to null so "answered with whitespace"
+	// and "didn't answer" are the same stored state.
+	const signupAnswer =
+		body.body.signup_answer && body.body.signup_answer.length > 0
+			? body.body.signup_answer
+			: null;
 
 	const tournament = await loadTournamentById(env, tournamentId);
 	if (!tournament) {
@@ -303,8 +309,8 @@ export async function handleTournamentSignup(
 	const result = await env.SHARE_DB.prepare(
 		`INSERT INTO tournament_slots
 		   (slot_id, tournament_id, phase, division, swiss_seed,
-		    discord_username, discord_id, user_id, created_at)
-		 SELECT ?, ?, 'swiss', ?, ?, ?, ?, ?, datetime('now')
+		    discord_username, discord_id, user_id, signup_answer, created_at)
+		 SELECT ?, ?, 'swiss', ?, ?, ?, ?, ?, ?, datetime('now')
 		 WHERE NOT EXISTS (
 		   SELECT 1 FROM tournament_slots
 		   WHERE tournament_id = ? AND user_id = ? AND phase = 'swiss'
@@ -318,6 +324,7 @@ export async function handleTournamentSignup(
 			session.data.discord_username,
 			user.discord_id,
 			session.data.user_id,
+			signupAnswer,
 			tournamentId,
 			session.data.user_id,
 		)

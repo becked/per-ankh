@@ -668,15 +668,20 @@
 
 				{#if data.tournament.status === "setup"}
 					{#if isAdmin}
-						<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-							<TournamentOverviewPanel tournament={data.tournament} />
+						<!-- Left column stacks Overview + Signups; Maps sits in the right
+						column at its natural height (items-start), so there's blank space
+						to the right of Signups until the maps panel grows as maps are added. -->
+						<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+							<div>
+								<TournamentOverviewPanel tournament={data.tournament} />
+								<TournamentConfigurationPanel
+									tournament={data.tournament}
+									divACount={slotsA.length}
+									divBCount={slotsB.length}
+								/>
+							</div>
 							<TournamentMapsPanel tournament={data.tournament} />
 						</div>
-						<TournamentConfigurationPanel
-							tournament={data.tournament}
-							divACount={slotsA.length}
-							divBCount={slotsB.length}
-						/>
 					{/if}
 
 					<section
@@ -837,6 +842,13 @@
 																	</span>
 																{/if}
 															</span>
+															{#if isAdmin && s.signup_answer}
+																<span
+																	class="mt-0.5 block whitespace-pre-wrap pl-[21px] text-[11px] text-tan opacity-60"
+																>
+																	{s.signup_answer}
+																</span>
+															{/if}
 														</td>
 														<td class="py-1 text-right">
 															{s.user_id ? "✓" : "—"}

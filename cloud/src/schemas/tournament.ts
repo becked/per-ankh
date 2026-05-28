@@ -126,6 +126,12 @@ export const PatchTournamentSchema = v.object({
 	// a previously-set date. Only meaningful in setup/sign-ups but harmless to
 	// edit later, so it's not gated by the post-start lock.
 	starts_at: v.optional(v.nullable(v.pipe(v.string(), v.isoTimestamp()))),
+	// Optional freeform prompt shown on the signup form (e.g. "what timezone /
+	// time of day do you want to play?"). `null` (or empty, normalized to null
+	// by the handler) clears it. Same nullable-clear pattern as description.
+	signup_question: v.optional(
+		v.nullable(v.pipe(v.string(), v.maxLength(2000))),
+	),
 });
 
 // Body for POST /v1/tournaments/:id/signup. The caller must be signed in
@@ -133,6 +139,17 @@ export const PatchTournamentSchema = v.object({
 // the only thing the player picks is which division to enter.
 export const TournamentSignupSchema = v.object({
 	division: DivisionSchema,
+	// Answer to the tournament's optional signup_question. Always optional —
+	// the question itself is optional, and even when set the answer isn't
+	// required. Stored on the player's slot.
+	signup_answer: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
+});
+
+// Body for POST /v1/tournaments/:id/admins. The caller (an existing admin)
+// names an existing Per-Ankh user by id; the autocomplete (/v1/users/search)
+// supplies it. Identity is resolved server-side from the users table.
+export const GrantAdminSchema = v.object({
+	user_id: v.pipe(v.string(), v.regex(nanoid21Regex)),
 });
 
 export const BulkCreateSlotsSchema = v.pipe(

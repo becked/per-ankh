@@ -42,6 +42,15 @@ export interface TournamentRow {
 	// Stamped once, on the championship-final report that flips status →
 	// 'complete'. Shown as "Ended <date>". NULL for any non-complete tournament.
 	completed_at: string | null;
+	// The creator. Stamped at create time (handleCreateTournament); backfilled
+	// for pre-existing rows from the earliest tournament_admins row (migration
+	// 0022). Drives delete authz and creator-protection in the admin list. NULL
+	// only if backfill found no admin row (shouldn't happen — create always
+	// inserts one).
+	created_by_user_id: string | null;
+	// Optional freeform prompt shown on the signup form. NULL when no question
+	// is configured. Set via the settings form (migration 0023).
+	signup_question: string | null;
 	created_at: string;
 	updated_at: string;
 }
@@ -61,6 +70,10 @@ export interface SlotRow {
 	// claiming user has no custom Discord avatar. Feeds slotAvatarUrl().
 	user_avatar_hash: string | null;
 	claim_banner_dismissed_at: string | null;
+	// The player's answer to the tournament's optional signup_question, captured
+	// at signup (migration 0023). NULL when unanswered or the slot predates the
+	// question. Admin-only display in the roster.
+	signup_answer: string | null;
 	created_at: string;
 }
 

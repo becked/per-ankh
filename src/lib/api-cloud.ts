@@ -853,6 +853,64 @@ export const cloudApi = {
 		return res.json() as Promise<{ tournament: TournamentDetail }>;
 	},
 
+	// Admin roster for the in-app management UI. Admin-gated; unlike the
+	// public detail's owner/admins fields, this returns user_ids so the remove
+	// controls have something to act on.
+	listTournamentAdmins: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<{ admins: TournamentAdmin[] }> => {
+		const res = await request(`/tournaments/${tournamentId}/admins`, {
+			...opts,
+			method: "GET",
+		});
+		return res.json() as Promise<{ admins: TournamentAdmin[] }>;
+	},
+
+	// Grant another Per-Ankh user admin on this tournament. is_beta in the
+	// response is false when the new admin isn't on the beta allowlist (and so
+	// can't reach the tournament yet) — the UI surfaces a warning, but the
+	// grant still lands. Beta is not auto-granted.
+	grantTournamentAdmin: async (
+		tournamentId: string,
+		userId: string,
+		opts?: CallOpts,
+	): Promise<{ admin: TournamentAdmin; is_beta: boolean }> => {
+		const res = await request(`/tournaments/${tournamentId}/admins`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ user_id: userId }),
+		});
+		return res.json() as Promise<{ admin: TournamentAdmin; is_beta: boolean }>;
+	},
+
+	// Revoke an admin. Server returns 409 CANNOT_REMOVE_CREATOR if userId is
+	// the tournament creator.
+	revokeTournamentAdmin: async (
+		tournamentId: string,
+		userId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/admins/${userId}`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
+	// Delete (cancel) a tournament. Server authorizes creator or site admin and
+	// rejects completed tournaments (409 CANNOT_DELETE_COMPLETED — those are
+	// CLI-only). The structure cascades; uploaded game blobs are kept.
+	deleteTournament: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
 	bulkCreateSlots: async (
 		tournamentId: string,
 		slots: Array<{
@@ -951,21 +1009,27 @@ export const cloudApi = {
 		return res.json() as Promise<{ users: UserSearchResult[] }>;
 	},
 
-	// Self-service tournament signup. The player picks a division; the
-	// server creates a tournament_slots row keyed to their session user.
-	// Gated server-side on status='setup' AND signups_open=1.
+	// Self-service tournament signup. The player picks a division and may
+	// answer the tournament's optional signup question; the server creates a
+	// tournament_slots row keyed to their session user. Gated server-side on
+	// status='setup' AND signups_open=1.
 	signupForTournament: async (
 		tournamentId: string,
 		division: Division,
+		signupAnswer?: string,
 		opts?: CallOpts,
 	): Promise<{
 		slot: { slot_id: string; division: Division; swiss_seed: number };
 	}> => {
+		const body: { division: Division; signup_answer?: string } = { division };
+		if (signupAnswer !== undefined && signupAnswer.trim().length > 0) {
+			body.signup_answer = signupAnswer.trim();
+		}
 		const res = await request(`/tournaments/${tournamentId}/signup`, {
 			...opts,
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ division }),
+			body: JSON.stringify(body),
 		});
 		return res.json() as Promise<{
 			slot: { slot_id: string; division: Division; swiss_seed: number };
@@ -1173,6 +1237,9 @@ export interface TournamentDetail {
 	// "Sign up" CTA on the detail page and the visibility of setup-phase
 	// tournaments to non-admins.
 	signups_open: boolean;
+	// Optional freeform prompt shown on the signup form. Null when no question
+	// is configured.
+	signup_question: string | null;
 	// The caller's swiss slot in this tournament, if any. Drives the "you're
 	// signed up" strip and Withdraw button. Null when the caller has no slot,
 	// when there's no session, or when only a championship slot exists.
@@ -1182,6 +1249,9 @@ export interface TournamentDetail {
 		swiss_seed: number;
 	} | null;
 	is_viewer_admin: boolean;
+	// True iff the viewer is the tournament's creator. Combined with the global
+	// user.is_admin flag, gates the in-app delete control.
+	is_viewer_creator: boolean;
 	// Admin roster for the header meta strip. owner = the creator (earliest
 	// tournament_admins.granted_at); admins = co-admins added afterward (may be
 	// empty). display_name + avatar_url are always present. owner is null only
@@ -1220,6 +1290,17 @@ export interface PatchTournamentBody {
 	// Admin-announced start time as a full ISO-8601 instant, or null to clear.
 	// Server validates via v.isoTimestamp(); send new Date(local).toISOString().
 	starts_at?: string | null;
+	// Optional freeform signup prompt, or null to clear.
+	signup_question?: string | null;
+}
+
+// A tournament admin as returned by listTournamentAdmins / grantTournamentAdmin.
+export interface TournamentAdmin {
+	user_id: string;
+	display_name: string;
+	avatar_url: string;
+	// The creator can't be removed from the admin list.
+	is_creator: boolean;
 }
 
 // Mirrors cloud/src/schemas/tournament.ts:CreateTournamentSchema. `name`
@@ -1258,6 +1339,10 @@ export interface SlotStanding {
 	// unclaimed (render the EFFECTUNIT_ENLIST_ICON fallback in that case).
 	avatar_url: string | null;
 	swiss_seed: number | null;
+	// The player's answer to the tournament's optional signup question. Only
+	// populated for admin viewers (null for everyone else); null also when the
+	// player didn't answer. Admin-only display in the roster.
+	signup_answer: string | null;
 }
 
 // One entry in the combined-ranking response field. Spans both divisions

@@ -20,6 +20,8 @@
 	// svelte-ignore state_referenced_locally
 	let signupsOpen = $state(tournament.signups_open);
 	// svelte-ignore state_referenced_locally
+	let signupQuestion = $state(tournament.signup_question ?? "");
+	// svelte-ignore state_referenced_locally
 	let swissMaxRounds = $state(tournament.swiss_max_rounds);
 	// svelte-ignore state_referenced_locally
 	let swissWinsToAdvance = $state(tournament.swiss_wins_to_advance);
@@ -133,36 +135,56 @@
 		const ok = await commit({ signups_open: next });
 		if (!ok) signupsOpen = tournament.signups_open;
 	}
+
+	// Commit on blur, mirroring the swiss-config inputs. Empty → null clears the
+	// question (same nullable-clear pattern as description).
+	function commitSignupQuestion() {
+		const next = signupQuestion.trim() || null;
+		if (next === (tournament.signup_question ?? null)) return;
+		commit({ signup_question: next });
+	}
 </script>
 
 <section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
 	<h2 class="mb-3 text-sm font-bold text-tan">Signups</h2>
 
-	<div
-		class="mb-4 rounded-lg p-3 text-xs text-tan"
-		style="background-color: #35302B;"
-	>
-		<Checkbox
-			checked={signupsOpen}
-			onCheckedChange={(c) => commitSignupsOpen(c)}
-			disabled={saving}
-		>
-			<span>Open for signups</span>
-		</Checkbox>
-		<p class="mt-1 text-[11px] text-tan opacity-60">
-			When open, any signed-in player can sign up. Closes automatically when you
-			start the tournament.
-		</p>
+	<div class="flex flex-col gap-3 text-xs text-tan">
+		<div>
+			<Checkbox
+				checked={signupsOpen}
+				onCheckedChange={(c) => commitSignupsOpen(c)}
+				disabled={saving}
+			>
+				<span>Open for signups</span>
+			</Checkbox>
+			<p class="mt-1 text-[11px] text-tan opacity-60">
+				When open, any signed-in player can sign up. Closes automatically when
+				you start the tournament.
+			</p>
+		</div>
+
+		<label class="flex flex-col gap-1">
+			<span>Signup question</span>
+			<textarea
+				bind:value={signupQuestion}
+				onblur={commitSignupQuestion}
+				rows="2"
+				maxlength="2000"
+				disabled={saving}
+				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+			></textarea>
+			<span class="text-[11px] text-tan opacity-60"
+				>Optional freeform prompt shown on the signup form (e.g. "What timezone
+				and time of day do you want to play?"). Leave blank for none.</span
+			>
+		</label>
 	</div>
 
-	<header class="mb-3 flex items-baseline justify-between">
+	<header class="mb-3 mt-6 flex items-baseline justify-between">
 		<h2 class="text-sm font-bold text-tan">Swiss configuration</h2>
 	</header>
 
-	<div
-		class="rounded-lg p-3 text-xs text-tan"
-		style="background-color: #35302B;"
-	>
+	<div class="text-xs text-tan">
 		<div class="grid grid-cols-1 gap-3 lg:grid-cols-3">
 			<label class="flex flex-col gap-1">
 				<span>Max rounds</span>

@@ -28,6 +28,7 @@
 
 	let open = $state(false);
 	let selectedDivision = $state<Division | null>(null);
+	let signupAnswer = $state("");
 	let busy = $state(false);
 
 	const counts = $derived(tournament.slot_counts.swiss_by_division);
@@ -49,6 +50,7 @@
 			await cloudApi.signupForTournament(
 				tournament.tournament_id,
 				selectedDivision,
+				signupAnswer,
 			);
 			// Refresh layout-level myTournaments (drives the header dropdown)
 			// and the page-level tournament detail (viewer_slot, slot list).
@@ -139,6 +141,20 @@
 			<span>{divisionLabel("B")}</span>
 		</label>
 	</RadioGroup>
+
+	{#if tournament.signup_question}
+		<label class="mb-4 flex flex-col gap-1 text-xs text-tan">
+			<span>{tournament.signup_question}</span>
+			<textarea
+				bind:value={signupAnswer}
+				rows="2"
+				maxlength="2000"
+				disabled={busy}
+				class="rounded border border-black bg-[#35302b] p-2 focus:border-orange focus:outline-none disabled:opacity-50"
+			></textarea>
+			<span class="text-[11px] opacity-60">Optional.</span>
+		</label>
+	{/if}
 
 	<p class="mb-4 text-[11px] text-tan opacity-60">
 		Signed in as <span class="font-mono text-tan opacity-90"

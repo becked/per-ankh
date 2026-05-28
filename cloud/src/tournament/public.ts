@@ -533,8 +533,15 @@ export async function handleTournamentDetail(
 				swiss_by_division: swissByDivision,
 			},
 			signups_open: tournament.signups_open === 1,
+			signup_question: tournament.signup_question,
 			viewer_slot,
 			is_viewer_admin,
+			// Whether the viewer is the tournament's creator. Combined with the
+			// global is_admin flag on the frontend's user object, this gates the
+			// in-app delete button (the server delete handler authorizes the same
+			// creator-or-site-admin pair independently).
+			is_viewer_creator:
+				viewerUserId != null && viewerUserId === tournament.created_by_user_id,
 			owner,
 			admins,
 			starts_at: tournament.starts_at,
@@ -594,13 +601,21 @@ export async function handleTournamentStandings(
 			"TOURNAMENT_NOT_FOUND",
 		);
 	}
-	const body = await computeStandingsResponse(env, tournament);
+	// Signup answers are admin-only — they're collected for the admin's
+	// scheduling use, not for public display alongside the standings.
+	const viewerIsAdmin = await isTournamentAdmin(
+		env,
+		gate.session?.data ?? null,
+		tournament.tournament_id,
+	);
+	const body = await computeStandingsResponse(env, tournament, viewerIsAdmin);
 	return jsonResponse(body, 200, cors);
 }
 
 async function computeStandingsResponse(
 	env: TournamentEnv,
 	tournament: TournamentRow,
+	viewerIsAdmin: boolean,
 ) {
 	const slotRows = await loadSlots(env, tournament.tournament_id);
 	const matchRowsAll = await loadMatchesWithRound(
@@ -622,6 +637,7 @@ async function computeStandingsResponse(
 			avatar_url: string | null;
 			swiss_seed: number | null;
 			division: "A" | "B" | null;
+			signup_answer: string | null;
 		}
 	>();
 	for (const s of swissSlots) {
@@ -631,6 +647,9 @@ async function computeStandingsResponse(
 			avatar_url: slotAvatarUrl(s),
 			swiss_seed: s.swiss_seed,
 			division: s.division,
+			// Admin-only — omitted for non-admin viewers so signup answers don't
+			// leak into the public standings payload.
+			signup_answer: viewerIsAdmin ? s.signup_answer : null,
 		});
 	}
 
@@ -642,6 +661,7 @@ async function computeStandingsResponse(
 				user_id: string | null;
 				avatar_url: string | null;
 				swiss_seed: number | null;
+				signup_answer: string | null;
 			}
 		>
 	> = {
@@ -662,6 +682,7 @@ async function computeStandingsResponse(
 				avatar_url: null,
 				swiss_seed: null,
 				division: null,
+				signup_answer: null,
 			};
 			// Strip `division` — division grouping is communicated by the
 			// containing key in the response, not by a per-row field. The
