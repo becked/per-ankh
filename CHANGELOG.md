@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-05-29-c098632] - 2026-05-29
+
+### Features
+
+- (tournament) snapshot slot occupant at report time, surface substitution in bracket — [b73da27](https://github.com/becked/per-ankh/commit/b73da2778eb881c196bf56a3b412636a190078f2)
+
+### Fixes
+
+- (tournament) let an admin replace the save for their own match — [c098632](https://github.com/becked/per-ankh/commit/c098632758a0d547f97da0bffaad46db0fd379b6)
+
 ## [2026-05-27-2183412] - 2026-05-27
 
 ### Features
