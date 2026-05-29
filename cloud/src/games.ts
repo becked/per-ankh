@@ -1102,20 +1102,18 @@ export async function handleGameUpload(
 		}
 		const isParticipant =
 			userId === match.slot_a_user || userId === match.slot_b_user;
-		if (!isParticipant) {
-			const isAdmin = await isTournamentAdmin(
-				env,
-				sessionData!,
-				match.tournament_id,
+		const isAdmin = await isTournamentAdmin(
+			env,
+			sessionData!,
+			match.tournament_id,
+		);
+		if (!isParticipant && !isAdmin) {
+			return errorResponse(
+				"Not a participant or admin for this match",
+				403,
+				cors,
+				"NOT_MATCH_PARTICIPANT",
 			);
-			if (!isAdmin) {
-				return errorResponse(
-					"Not a participant or admin for this match",
-					403,
-					cors,
-					"NOT_MATCH_PARTICIPANT",
-				);
-			}
 		}
 		tournamentContext = {
 			match_id: tournamentMatchId,
@@ -1127,8 +1125,13 @@ export async function handleGameUpload(
 			slot_b_user_id: match.slot_b_user,
 			slot_a_username: match.slot_a_username,
 			slot_b_username: match.slot_b_username,
+			// Participation drives the slot↔player mapping branch below
+			// (participant claims one slot; observer maps both). Admin status
+			// drives the overwrite guard in linkTournamentMatch: only admins
+			// may replace a save on an already-reported match, including an
+			// admin replacing the save for their own match.
 			is_participant: isParticipant,
-			is_admin_override: !isParticipant,
+			is_admin_override: isAdmin,
 		};
 	}
 

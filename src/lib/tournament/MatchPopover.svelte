@@ -187,10 +187,19 @@
 	// Placeholder cells don't correspond to a real tournament_matches row
 	// yet, so any action that PATCHes the match (map, retro, upload-link) is
 	// suppressed in preview mode.
+	// Participant uploads their own match. Non-admins only while pending
+	// (first-upload-wins, no replace). Admin participants any time — that's
+	// how an admin fixes a wrong save on their own already-reported match,
+	// using the participant "which nation were you?" picker.
 	const canUploadAsParticipant = $derived(
-		!isPlaceholder && isParticipant && match.status === "pending",
+		!isPlaceholder && isParticipant && (match.status === "pending" || isAdmin),
 	);
-	const canUploadAsObserver = $derived(!isPlaceholder && isAdmin);
+	// Observer (admin acting on someone else's match) — only when NOT a
+	// participant, so an admin-participant never lands in the dual-slot
+	// observer picker for their own game.
+	const canUploadAsObserver = $derived(
+		!isPlaceholder && isAdmin && !isParticipant,
+	);
 	const canEditMap = $derived(
 		!isPlaceholder && isAdmin && match.status === "pending",
 	);
@@ -735,7 +744,7 @@
 								d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"
 							/>
 						</svg>
-						Upload save
+						{match.game_id ? "Replace save" : "Upload save"}
 					</a>
 				{/if}
 				{#if canUploadAsObserver}
