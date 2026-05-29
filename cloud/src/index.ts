@@ -31,6 +31,7 @@ import {
 	setRoute,
 } from "./log";
 import {
+	handleDevLogin,
 	handleDiscordCallback,
 	handleDiscordStart,
 	handleLogout,
@@ -615,6 +616,14 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/auth/me" },
 		route: "GET /v1/auth/me",
 		handler: (r, e) => handleMe(r, e),
+	},
+	{
+		// Local-only login bypass; returns 404 in prod (gated in handleDevLogin
+		// on DEV_LOGIN + non-HTTPS). GET so it works from the browser bar.
+		method: "GET",
+		match: { kind: "path", path: "/v1/auth/dev/login" },
+		route: "GET /v1/auth/dev/login",
+		handler: (r, e) => handleDevLogin(r, e),
 	},
 	{
 		method: "POST",

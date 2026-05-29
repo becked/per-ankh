@@ -196,6 +196,13 @@ export const PatchSlotSchema = v.object({
 	swiss_seed: v.optional(
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(1000)),
 	),
+	// Optional pre-link for a substitution via /v1/users/search autocomplete.
+	// Mirrors BulkCreateSlotsSchema's field: when set, the handler resolves
+	// the canonical discord_id + discord_username from the users table
+	// (ignoring the body's discord_username) and links the slot to that user
+	// immediately — no OAuth-callback claim needed. nanoid21Regex matches the
+	// user_id shape; the handler validates existence and rejects unknown IDs.
+	user_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
 });
 
 // Body for POST /v1/tournaments/:id/slots/reorder. Each division array is the

@@ -1,22 +1,31 @@
 <script lang="ts">
-	import { autofocus } from "$lib/actions/autofocus";
+	import type { UserSearchResult } from "$lib/api-cloud";
+	import SlotUsernameAutocomplete from "./SlotUsernameAutocomplete.svelte";
 
 	interface Props {
 		slotId: string;
 		username: string | null;
 		disabled: boolean;
-		// eslint-disable-next-line no-unused-vars -- type-signature param name is documentary
-		onSubstitute: (newUsername: string) => void;
+		// Picks up the substitute username and, when the admin chose a real
+		// user from the autocomplete, that user's id so the worker can pre-link
+		// the slot. userId is null for a free-text substitution.
+		// eslint-disable-next-line no-unused-vars -- type-signature param names are documentary
+		onSubstitute: (newUsername: string, userId: string | null) => void;
 	}
 
 	let { slotId, username, disabled, onSubstitute }: Props = $props();
 
 	let editing = $state(false);
 	let value = $state("");
+	// Set when the admin picks a user from the autocomplete; cleared when they
+	// edit the value away from the picked handle (the autocomplete fires
+	// onSelectUser(null) in that case).
+	let pickedUserId = $state<string | null>(null);
 	let error = $state<string | null>(null);
 
 	function startEdit() {
 		value = username ?? "";
+		pickedUserId = null;
 		error = null;
 		editing = true;
 	}
@@ -27,12 +36,13 @@
 			error = "Username cannot be empty";
 			return;
 		}
-		if (trimmed === username) {
+		// No-op when nothing changed and the admin didn't pick a user to link.
+		if (trimmed === username && pickedUserId === null) {
 			editing = false;
 			error = null;
 			return;
 		}
-		onSubstitute(trimmed);
+		onSubstitute(trimmed, pickedUserId);
 		editing = false;
 		error = null;
 	}
@@ -42,28 +52,24 @@
 		error = null;
 	}
 
-	function onKey(e: KeyboardEvent) {
-		if (e.key === "Enter") {
-			e.preventDefault();
-			save();
-		} else if (e.key === "Escape") {
-			e.preventDefault();
-			cancel();
-		}
+	function onSelectUser(user: UserSearchResult | null) {
+		pickedUserId = user?.user_id ?? null;
 	}
 </script>
 
 {#if editing}
 	<span class="inline-flex flex-col gap-0.5">
 		<span class="inline-flex items-center gap-1">
-			<input
-				type="text"
-				bind:value
-				oninput={() => (error = null)}
-				onkeydown={onKey}
-				use:autofocus
-				class="rounded border border-black bg-[#35302b] p-1 text-xs text-tan"
+			<SlotUsernameAutocomplete
+				{value}
+				onValueChange={(next) => {
+					value = next;
+					error = null;
+				}}
+				{onSelectUser}
+				onEnter={save}
 				{disabled}
+				autofocusOnMount
 			/>
 			<button
 				type="button"

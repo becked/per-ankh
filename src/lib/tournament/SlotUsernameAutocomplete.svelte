@@ -19,6 +19,7 @@
 	//   * Enter with no row highlighted calls onEnter (free-text path).
 
 	import { ApiError, cloudApi, type UserSearchResult } from "$lib/api-cloud";
+	import { autofocus } from "$lib/actions/autofocus";
 
 	interface Props {
 		value: string;
@@ -35,6 +36,9 @@
 		// input had.
 		inputAttrs?: Record<string, string>;
 		placeholder?: string;
+		// Focus + select the input on mount (via the autofocus action, so no
+		// a11y warning). Used by toggle-to-edit hosts like SlotUsernameCell.
+		autofocusOnMount?: boolean;
 	}
 
 	let {
@@ -45,6 +49,7 @@
 		onEnter,
 		inputAttrs = {},
 		placeholder,
+		autofocusOnMount = false,
 	}: Props = $props();
 
 	let suggestions = $state<UserSearchResult[]>([]);
@@ -156,6 +161,12 @@
 		// Delay close so a click on a suggestion still registers.
 		setTimeout(() => close(), 150);
 	}
+
+	// Conditional autofocus — `use:` can't be applied conditionally, so gate
+	// inside the action. Reads autofocusOnMount once at mount.
+	function maybeAutofocus(node: HTMLElement) {
+		return autofocusOnMount ? autofocus(node) : { destroy() {} };
+	}
 </script>
 
 <div class="relative">
@@ -173,6 +184,7 @@
 		class="block w-full rounded border border-black bg-[#35302b] p-1.5 text-xs text-tan"
 		{...inputAttrs}
 		autocomplete="off"
+		use:maybeAutofocus
 	/>
 
 	{#if open && suggestions.length > 0}

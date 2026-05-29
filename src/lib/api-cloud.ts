@@ -950,6 +950,11 @@ export const cloudApi = {
 			discord_username?: string;
 			division?: Division;
 			swiss_seed?: number;
+			// Pre-link a substitution to a registered user (from the slot
+			// autocomplete). When set, the worker resolves the canonical
+			// discord_username + discord_id and links the slot immediately —
+			// no OAuth-callback claim needed.
+			user_id?: string;
 		},
 		opts?: CallOpts,
 	): Promise<void> => {

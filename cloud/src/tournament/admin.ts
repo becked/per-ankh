@@ -1248,12 +1248,6 @@ export async function handlePatchSlot(
 	if (!body.ok) return body.response;
 	const patch = body.body;
 
-	// Substitution: changing discord_username clears user_id + discord_id so
-	// the new occupant must log in and re-claim.
-	const usernameChanged =
-		patch.discord_username !== undefined &&
-		patch.discord_username !== slot.discord_username;
-
 	if (
 		patch.division !== undefined &&
 		tournament.status !== "setup" &&
@@ -1267,15 +1261,92 @@ export async function handlePatchSlot(
 		);
 	}
 
+	// Resolve the new occupant. When user_id is supplied (a pick from the
+	// admin's autocomplete), the slot links to that account immediately:
+	// canonical discord_username + discord_id come from the users table and
+	// user_id is pinned, so no OAuth-callback claim is needed. The body's
+	// discord_username is ignored in this branch (the canonical handle wins),
+	// mirroring handleBulkCreateSlots' pre-link path.
+	let prelink: {
+		user_id: string;
+		discord_username: string;
+		discord_id: string;
+	} | null = null;
+	if (patch.user_id !== undefined) {
+		const u = await env.SHARE_DB.prepare(
+			"SELECT discord_id, discord_username FROM users WHERE user_id = ?",
+		)
+			.bind(patch.user_id)
+			.first<{ discord_id: string; discord_username: string | null }>();
+		if (!u || !u.discord_username) {
+			// No users row, or a legacy row with discord_username = NULL (hasn't
+			// logged in since migration 0016) — can't pre-link. Admin should fall
+			// back to free-text and let the user claim at next login.
+			return errorResponse(
+				`Unknown or unlinkable user_id: ${patch.user_id}`,
+				400,
+				cors,
+				"INVALID_USER_ID",
+			);
+		}
+		prelink = {
+			user_id: patch.user_id,
+			discord_username: u.discord_username,
+			discord_id: u.discord_id,
+		};
+		// Don't link the same handle to two slots in the same phase. (A user
+		// legitimately holds both a swiss and a championship slot, so scope the
+		// check to the edited slot's phase rather than the whole tournament.)
+		const others = await loadSlots(env, tournamentId);
+		const collision = others.some(
+			(s) =>
+				s.slot_id !== slotId &&
+				s.phase === slot.phase &&
+				s.discord_username === prelink!.discord_username,
+		);
+		if (collision) {
+			return errorResponse(
+				`Discord username already used: ${prelink.discord_username}`,
+				409,
+				cors,
+				"DUPLICATE_USERNAME",
+			);
+		}
+	}
+
+	// The effective post-resolution username (canonical when pre-linking).
+	const effectiveUsername = prelink
+		? prelink.discord_username
+		: patch.discord_username;
+	const occupantChanged =
+		effectiveUsername !== undefined &&
+		effectiveUsername !== slot.discord_username;
+
+	// Build the UPDATE. user_id is never written from the raw patch — the
+	// prelink / free-text branches own the identity columns.
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
-	for (const [key, value] of Object.entries(patch)) {
-		if (value === undefined) continue;
-		fragments.push(`${key} = ?`);
-		binds.push(value);
+	if (patch.division !== undefined) {
+		fragments.push("division = ?");
+		binds.push(patch.division);
 	}
-	if (usernameChanged) {
-		fragments.push("user_id = NULL", "discord_id = NULL");
+	if (patch.swiss_seed !== undefined) {
+		fragments.push("swiss_seed = ?");
+		binds.push(patch.swiss_seed);
+	}
+	if (prelink) {
+		fragments.push("discord_username = ?", "discord_id = ?", "user_id = ?");
+		binds.push(prelink.discord_username, prelink.discord_id, prelink.user_id);
+	} else {
+		if (patch.discord_username !== undefined) {
+			fragments.push("discord_username = ?");
+			binds.push(patch.discord_username);
+		}
+		// Free-text occupant change clears the prior link so the new occupant
+		// claims at next login (OAuth callback or /v1/auth/me).
+		if (occupantChanged) {
+			fragments.push("user_id = NULL", "discord_id = NULL");
+		}
 	}
 	if (fragments.length === 0) {
 		return jsonResponse({ slot }, 200, cors);
@@ -1287,7 +1358,7 @@ export async function handlePatchSlot(
 		.bind(...binds)
 		.run();
 
-	if (usernameChanged) {
+	if (occupantChanged) {
 		// Audit substitution
 		try {
 			await env.SHARE_DB.prepare(
@@ -1300,7 +1371,7 @@ export async function handlePatchSlot(
 						tournament_id: tournamentId,
 						slot_id: slotId,
 						old_username: slot.discord_username,
-						new_username: patch.discord_username,
+						new_username: effectiveUsername,
 					}),
 				)
 				.run();
@@ -1313,7 +1384,8 @@ export async function handlePatchSlot(
 	const updated = await loadSlot(env, slotId);
 	logTournamentAdminAction(env, a.userId, tournamentId, "slot_patched", {
 		slot_id: slotId,
-		username_changed: usernameChanged,
+		username_changed: occupantChanged,
+		prelinked: prelink !== null,
 	});
 	return jsonResponse({ slot: updated }, 200, cors);
 }

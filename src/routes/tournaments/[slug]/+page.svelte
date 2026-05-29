@@ -452,12 +452,17 @@
 		}
 	}
 
-	async function substituteSlot(slotId: string, newUsername: string) {
+	async function substituteSlot(
+		slotId: string,
+		newUsername: string,
+		userId: string | null = null,
+	) {
 		if (!newUsername.trim()) return;
 		await withBusy(
 			() =>
 				cloudApi.patchSlot(data.tournament.tournament_id, slotId, {
 					discord_username: newUsername.trim(),
+					...(userId ? { user_id: userId } : {}),
 				}),
 			`Substituted slot to ${newUsername}`,
 		);
@@ -846,8 +851,8 @@
 																		slotId={s.slot_id}
 																		username={s.discord_username}
 																		disabled={busy}
-																		onSubstitute={(u) =>
-																			substituteSlot(s.slot_id, u)}
+																		onSubstitute={(u, userId) =>
+																			substituteSlot(s.slot_id, u, userId)}
 																	/>
 																{:else}
 																	<span>

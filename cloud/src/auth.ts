@@ -22,6 +22,7 @@ import {
 	errorResponse,
 	getClientIp,
 	isAllowedRedirectUri,
+	isSecureRequest,
 	jsonResponse,
 	parseAllowedOrigins,
 	parseCookies,
@@ -43,6 +44,9 @@ export interface AuthEnv extends SessionEnv {
 	ALLOWED_ORIGINS: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
+	// Dev-only login bypass. Truthy ONLY in cloud/.dev.vars (gitignored,
+	// local-only); prod never sets it. Gates handleDevLogin — see there.
+	DEV_LOGIN?: string;
 }
 
 const DISCORD_AUTHORIZE_URL = "https://discord.com/api/oauth2/authorize";
@@ -130,6 +134,48 @@ export function buildAvatarUrl(
 	const idBig = BigInt(discordId);
 	const index = Number((idBig >> 22n) % 6n);
 	return `https://cdn.discordapp.com/embed/avatars/${index}.png`;
+}
+
+// Claim any unclaimed tournament slots that belong to this user. Called from
+// every authenticated entry point — the OAuth callback AND /v1/auth/me — so a
+// player substituted into a slot while already logged in is linked on their
+// next app load, without needing to re-authenticate. `discordUsername` must be
+// the lowercased Discord handle (both call sites pass the canonical session
+// value). Two-step lookup:
+//   1. discord_id-pinned slots from prior claims (Discord usernames are
+//      mutable; the snowflake ID isn't). Updates user_id only.
+//   2. Unclaimed slots matched by discord_username (case-insensitive: both
+//      stored and queried lowercase). Pins discord_id for future logins so a
+//      later username change doesn't break the claim.
+// Only targets active (non-complete) tournaments. Fire-and-forget — a failure
+// is degraded state (the user can still discover the tournament via My
+// Tournaments), so it never blocks the caller.
+async function claimTournamentSlots(
+	db: D1Database,
+	userId: string,
+	discordId: string,
+	discordUsername: string,
+): Promise<void> {
+	try {
+		await db.batch([
+			db
+				.prepare(
+					`UPDATE tournament_slots SET user_id = ?
+				 WHERE discord_id = ? AND user_id IS NULL
+				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
+				)
+				.bind(userId, discordId),
+			db
+				.prepare(
+					`UPDATE tournament_slots SET user_id = ?, discord_id = ?
+				 WHERE discord_username = ? AND user_id IS NULL AND discord_id IS NULL
+				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
+				)
+				.bind(userId, discordId, discordUsername),
+		]);
+	} catch (e) {
+		logError("tournament_slot_claim_failed", e, { user_id: userId });
+	}
 }
 
 // Generate a PKCE pair: a high-entropy random verifier and its
@@ -467,34 +513,15 @@ export async function handleDiscordCallback(
 
 	// Tournament-slot claim. The admin pre-fills tournament_slots with
 	// expected discord_usernames; logging in claims any unclaimed slot
-	// matching this user. Two-step lookup:
-	//   1. discord_id-pinned slots from prior claims (Discord usernames are
-	//      mutable; the snowflake ID isn't). Updates user_id only — discord_id
-	//      already matches.
-	//   2. Unclaimed slots matched by discord_username (case-insensitive: both
-	//      stored and queried lowercase via auth.ts:385 and the schemas).
-	//      Pins discord_id for future logins so a later username change
-	//      doesn't break the claim.
-	// Only targets active (non-complete) tournaments. Failures are degraded
-	// state — the user can still log in and discover their tournament via
-	// the My Tournaments page, just without the auto-claim. Fire-and-forget
-	// log; don't fail the OAuth callback.
-	try {
-		await env.SHARE_DB.batch([
-			env.SHARE_DB.prepare(
-				`UPDATE tournament_slots SET user_id = ?
-				 WHERE discord_id = ? AND user_id IS NULL
-				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
-			).bind(upsert.user_id, discordUser.id),
-			env.SHARE_DB.prepare(
-				`UPDATE tournament_slots SET user_id = ?, discord_id = ?
-				 WHERE discord_username = ? AND user_id IS NULL AND discord_id IS NULL
-				   AND tournament_id IN (SELECT tournament_id FROM tournaments WHERE status != 'complete')`,
-			).bind(upsert.user_id, discordUser.id, discordUsername),
-		]);
-	} catch (e) {
-		logError("tournament_slot_claim_failed", e, { user_id: upsert.user_id });
-	}
+	// matching this user. See claimTournamentSlots for the lookup. Also runs
+	// in /v1/auth/me, so an already-logged-in substitute doesn't have to
+	// re-authenticate to be linked.
+	await claimTournamentSlots(
+		env.SHARE_DB,
+		upsert.user_id,
+		discordUser.id,
+		discordUsername,
+	);
 
 	const sessionToken = await createSession(
 		env,
@@ -550,6 +577,138 @@ export async function handleDiscordCallback(
 	);
 }
 
+// ----------------------------------------------------------------------
+// GET /v1/auth/dev/login — local-only login bypass.
+//
+// Skips the Discord OAuth dance entirely: fabricates (or refreshes) a users
+// row from an explicit discord_id + username, runs the same post-login work
+// the real callback does (Personal-collection seed, beta pin, slot claim,
+// session mint), sets the session cookie, and 302-redirects to the SvelteKit
+// dev origin so a plain browser navigation lands logged in. Lets us test
+// account-specific flows (substitution claims, account switching, re-login)
+// without round-tripping through Discord each time.
+//
+// HARD-GATED to dev: returns 404 unless DEV_LOGIN is set (present only in
+// cloud/.dev.vars, never in prod) AND the request is non-HTTPS (prod is always
+// HTTPS, dev is HTTP). Either guard alone keeps it dark in prod; both together
+// are belt-and-suspenders.
+//
+// Usage (paste in the browser address bar with the dev server running):
+//   http://localhost:8787/v1/auth/dev/login?discord_id=123&username=siontific
+//   (optionally &display_name=Siontific&next=/tournaments/test-run)
+// ----------------------------------------------------------------------
+
+const DevLoginQuerySchema = v.object({
+	discord_id: v.pipe(
+		v.string(),
+		v.trim(),
+		v.regex(/^[0-9]{1,20}$/, "discord_id must be a numeric snowflake"),
+	),
+	username: v.pipe(
+		v.string(),
+		v.trim(),
+		v.toLowerCase(),
+		v.minLength(1),
+		v.maxLength(32),
+	),
+	// Optional human-facing name; defaults to the handle. Mirrors Discord's
+	// global_name (which the real flow falls back to username for).
+	display_name: v.optional(v.pipe(v.string(), v.trim(), v.maxLength(64))),
+});
+
+export async function handleDevLogin(
+	request: Request,
+	env: AuthEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	// Dark in prod: no flag, or HTTPS.
+	if (!env.DEV_LOGIN || isSecureRequest(request)) {
+		return errorResponse("Not found", 404, cors, "NOT_FOUND");
+	}
+
+	const url = new URL(request.url);
+	const parsed = v.safeParse(DevLoginQuerySchema, {
+		discord_id: url.searchParams.get("discord_id") ?? undefined,
+		username: url.searchParams.get("username") ?? undefined,
+		display_name: url.searchParams.get("display_name") ?? undefined,
+	});
+	if (!parsed.success) {
+		return errorResponse(
+			`Invalid query: ${parsed.issues[0]?.message ?? "unknown"}`,
+			400,
+			cors,
+			"VALIDATION_ERROR",
+		);
+	}
+	const { discord_id, username } = parsed.output;
+	const displayName = parsed.output.display_name || username;
+
+	// Same upsert shape as the real callback (avatar/email NULL — dev has no
+	// Discord profile to read; ON CONFLICT leaves an existing user's avatar/
+	// email untouched).
+	const newUserId = nanoid(21);
+	const upsert = await env.SHARE_DB.prepare(
+		`INSERT INTO users (user_id, discord_id, display_name, discord_username,
+		                    avatar_hash, email, email_verified, last_login_at)
+		 VALUES (?, ?, ?, ?, NULL, NULL, NULL, datetime('now'))
+		 ON CONFLICT(discord_id) DO UPDATE SET
+		   display_name = excluded.display_name,
+		   discord_username = excluded.discord_username,
+		   last_login_at = datetime('now')
+		 RETURNING user_id, discord_id, display_name, avatar_hash`,
+	)
+		.bind(newUserId, discord_id, displayName, username)
+		.first<UserRow>();
+	if (!upsert) {
+		return errorResponse(
+			"User upsert returned no row",
+			500,
+			cors,
+			"UPSERT_FAILED",
+		);
+	}
+
+	// Personal-collection seed (idempotent), mirroring the real callback.
+	await env.SHARE_DB.prepare(
+		`INSERT OR IGNORE INTO collections (user_id, name, is_default) VALUES (?, 'Personal', 1)`,
+	)
+		.bind(upsert.user_id)
+		.run();
+
+	// Auto-grant tournament beta so the dev user can actually exercise the
+	// tournament surface (the point of this bypass). Unlike the real callback
+	// — which only PINS an operator-created row — this inserts one.
+	await env.SHARE_DB.prepare(
+		`INSERT INTO tournament_beta_users (discord_id, user_id, note)
+		 VALUES (?, ?, 'dev-login')
+		 ON CONFLICT(discord_id) DO UPDATE SET user_id = excluded.user_id`,
+	)
+		.bind(discord_id, upsert.user_id)
+		.run();
+
+	await claimTournamentSlots(
+		env.SHARE_DB,
+		upsert.user_id,
+		discord_id,
+		username,
+	);
+
+	const sessionToken = await createSession(env, upsert.user_id, username);
+
+	// Redirect to the SvelteKit dev origin (NOT this API origin) so the browser
+	// lands on the app. Pick the localhost entry from ALLOWED_ORIGINS.
+	const frontendOrigin =
+		parseAllowedOrigins(env.ALLOWED_ORIGINS).find((o) =>
+			o.startsWith("http://localhost"),
+		) ?? "http://localhost:1420";
+	const next = safeNext(url.searchParams.get("next"));
+
+	const headers = new Headers(cors);
+	headers.append("Set-Cookie", sessionCookie(sessionToken, request));
+	headers.set("Location", `${frontendOrigin}${next}`);
+	return new Response(null, { status: 302, headers });
+}
+
 export async function handleMe(
 	request: Request,
 	env: AuthEnv,
@@ -572,6 +731,17 @@ export async function handleMe(
 		await deleteSession(env, session.token);
 		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
 	}
+
+	// Claim any tournament slots an admin substituted this user into since
+	// their last login. The OAuth-callback claim only fires on re-auth; running
+	// it here too means an already-logged-in player is linked on their next app
+	// load. Fire-and-forget inside the helper; cheap indexed UPDATEs.
+	await claimTournamentSlots(
+		env.SHARE_DB,
+		row.user_id,
+		row.discord_id,
+		session.data.discord_username,
+	);
 
 	// is_beta lets the frontend hide tournament UI (header link, layout
 	// fetches) for non-beta users. Not load-bearing for authz — the

@@ -114,29 +114,29 @@ export async function handleUserSearch(
 			});
 		});
 
-	// Search on display_name (the global_name fallback to username — what
-	// people typically recognize themselves as) rather than discord_username
-	// (the lowercased canonical @ handle). Picking a row still threads
-	// discord_username into the slot row via the user_id pre-link path, so
-	// the data we store is unchanged. discord_username IS NOT NULL filters
-	// out users who haven't logged in since migration 0016 and would
-	// therefore be unpickable.
+	// Match a prefix of either display_name (the global_name fallback to
+	// username — what people recognize themselves as) OR discord_username (the
+	// lowercased canonical @ handle), so an admin can type whichever they know.
+	// Picking a row threads discord_username into the slot via the user_id
+	// pre-link path, so the data we store is unchanged. discord_username IS NOT
+	// NULL filters out users who haven't logged in since migration 0016 and
+	// would therefore be unpickable.
 	//
-	// LOWER(display_name) for case-insensitive match against the already-
-	// lowercased `q`. Index on display_name doesn't exist (we only added
-	// idx_users_discord_username); table is small enough that full-scan is
-	// fine — promote to a functional index if user count grows past a few
-	// thousand.
+	// LOWER(...) for case-insensitive match against the already-lowercased `q`
+	// (discord_username is already stored lowercase). Indexes:
+	// idx_users_discord_username covers the handle prefix; display_name has no
+	// index. Table is small enough that the scan is fine — promote to a
+	// functional index if user count grows past a few thousand.
 	const rows = await env.SHARE_DB.prepare(
 		`SELECT user_id, discord_id, discord_username, display_name
 		 FROM users
-		 WHERE LOWER(display_name) LIKE ?
+		 WHERE (LOWER(display_name) LIKE ? OR LOWER(discord_username) LIKE ?)
 		   AND discord_username IS NOT NULL
 		   AND display_name IS NOT NULL
 		 ORDER BY display_name
 		 LIMIT ?`,
 	)
-		.bind(q + "%", limit)
+		.bind(q + "%", q + "%", limit)
 		.all<{
 			user_id: string;
 			discord_id: string;

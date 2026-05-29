@@ -5,13 +5,13 @@
 	// shallow-routing `?match=` deep link — so this component is pure content
 	// (no overlay / escape / positioning of its own).
 	import { resolve } from "$app/paths";
-	import { autofocus } from "$lib/actions/autofocus";
 	import {
 		ApiError,
 		cloudApi,
 		type TournamentDetail,
 		type TournamentMatch,
 		type UserMe,
+		type UserSearchResult,
 	} from "$lib/api-cloud";
 	import { invalidateAll } from "$app/navigation";
 	import type { EChartsOption } from "echarts";
@@ -19,6 +19,7 @@
 	import Chart from "$lib/Chart.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import SlotUsernameAutocomplete from "$lib/tournament/SlotUsernameAutocomplete.svelte";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import {
 		CHART_THEME,
@@ -50,11 +51,18 @@
 		slotUserIds: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
 		user: UserMe | null;
-		// Admin substitute: rename the named slot's occupant. Wired by the
-		// parent to the same handler that drives the swiss-standings edit
-		// pencil; undefined for non-admin viewers.
-		// eslint-disable-next-line no-unused-vars -- param names are documentary
-		onSubstitute?: (slotId: string, newUsername: string) => void;
+		// Admin substitute: rename the named slot's occupant, optionally pre-
+		// linking to a registered user (userId from the autocomplete; null for
+		// free text). Wired by the parent to the same handler that drives the
+		// swiss-standings edit pencil; undefined for non-admin viewers.
+		onSubstitute?: (
+			// eslint-disable-next-line no-unused-vars -- param names are documentary
+			slotId: string,
+			// eslint-disable-next-line no-unused-vars -- param names are documentary
+			newUsername: string,
+			// eslint-disable-next-line no-unused-vars -- param names are documentary
+			userId: string | null,
+		) => void;
 		onClose: () => void;
 	}
 
@@ -79,6 +87,10 @@
 	// derived gate / save handler live below the labels they read.
 	let substituteSide = $state<"a" | "b" | null>(null);
 	let substituteValue = $state("");
+	// Set when the admin picks a user from the autocomplete; null for a free-
+	// text substitution. Cleared on open/cancel and when the value diverges
+	// from the picked handle.
+	let substitutePickedUserId = $state<string | null>(null);
 	let substituteError = $state<string | null>(null);
 
 	// Edit-form state lives at module scope so it survives data refreshes
@@ -232,11 +244,13 @@
 	function openSubstitute(side: "a" | "b", currentLabel: string) {
 		substituteSide = side;
 		substituteValue = currentLabel;
+		substitutePickedUserId = null;
 		substituteError = null;
 	}
 
 	function cancelSubstitute() {
 		substituteSide = null;
+		substitutePickedUserId = null;
 		substituteError = null;
 	}
 
@@ -253,22 +267,17 @@
 			return;
 		}
 		const currentLabel = substituteSide === "a" ? slotALabel : slotBLabel;
-		if (trimmed === currentLabel) {
+		// No-op when nothing changed and no user was picked to link.
+		if (trimmed === currentLabel && substitutePickedUserId === null) {
 			cancelSubstitute();
 			return;
 		}
-		onSubstitute(slotId, trimmed);
+		onSubstitute(slotId, trimmed, substitutePickedUserId);
 		cancelSubstitute();
 	}
 
-	function onSubstituteKey(e: KeyboardEvent) {
-		if (e.key === "Enter") {
-			e.preventDefault();
-			saveSubstitute();
-		} else if (e.key === "Escape") {
-			e.preventDefault();
-			cancelSubstitute();
-		}
+	function onSubstituteSelectUser(user: UserSearchResult | null) {
+		substitutePickedUserId = user?.user_id ?? null;
 	}
 
 	// Status chip styling: completed/bye reads as a "done" amber pill, anything
@@ -481,14 +490,16 @@
 	{#if substituteSide === side}
 		<span class="inline-flex flex-col gap-0.5">
 			<span class="inline-flex items-center gap-1">
-				<input
-					type="text"
-					bind:value={substituteValue}
-					oninput={() => (substituteError = null)}
-					onkeydown={onSubstituteKey}
-					use:autofocus
-					class="rounded border border-black bg-[#35302b] p-1 text-sm text-tan"
+				<SlotUsernameAutocomplete
+					value={substituteValue}
+					onValueChange={(next) => {
+						substituteValue = next;
+						substituteError = null;
+					}}
+					onSelectUser={onSubstituteSelectUser}
+					onEnter={saveSubstitute}
 					disabled={busy}
+					autofocusOnMount
 				/>
 				<button
 					type="button"

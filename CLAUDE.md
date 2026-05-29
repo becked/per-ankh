@@ -182,6 +182,8 @@ Lives under `cloud/`. Handlers in `cloud/src/`, validation via Valibot in `cloud
 
 Dev tournament data lives in the local D1 (`.wrangler/state`). A tournament URL is `/tournaments/<slug>` — the path segment is the `slug`, not `tournament_id`. Query it read-only (local only — `--remote` is prod and gated, see Admin/Deploy CLI notes):
 
+To test account-specific behavior (slot claims, account switching, re-login) without a Discord round-trip, use the local Discord-free login bypass — see `docs/dev-login.md`.
+
 ```bash
 DB="per-ankh-share-index"
 # slug → tournament_id + map_pool
