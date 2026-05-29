@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-29-f288bbf] - 2026-05-29
+
+### Features
+
+- (tournament) link substituted players to accounts and auto-claim slots — [f288bbf](https://github.com/becked/per-ankh/commit/f288bbfd3a704dda42eea9d7af0220e0ad7ca4a3)
+
 ## [2026-05-29-c098632] - 2026-05-29
 
 ### Features
