@@ -89,18 +89,29 @@
 		{/if}
 	</span>
 {:else}
-	<span class="inline-flex items-baseline gap-1">
+	<span class="inline-flex items-center gap-1">
 		<span class:opacity-60={!username}>
 			{username ?? `slot ${slotId.slice(0, 6)}`}
 		</span>
 		<button
 			type="button"
-			class="text-[10px] text-tan opacity-40 hover:text-orange hover:opacity-100"
+			class="text-tan opacity-40 transition-colors hover:text-orange hover:opacity-100"
 			onclick={startEdit}
 			{disabled}
+			aria-label="Edit / substitute"
 			title="Edit / substitute"
 		>
-			edit
+			<svg
+				xmlns="http://www.w3.org/2000/svg"
+				class="h-3 w-3"
+				viewBox="0 0 20 20"
+				fill="currentColor"
+				aria-hidden="true"
+			>
+				<path
+					d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.886L17.5 5.501a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z"
+				/>
+			</svg>
 		</button>
 	</span>
 {/if}

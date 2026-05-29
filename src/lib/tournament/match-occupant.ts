@@ -1,0 +1,55 @@
+// Minimal shape accepted by the helpers below: anything that exposes a
+// status, the two slot_ids, and the relevant snapshot column. Placeholder
+// bracket matches use a slot_a_id of null (TBD feeder cell) — the helpers
+// resolve that to a null label/avatar before any snapshot lookup.
+
+interface MatchUsernameLike {
+	status: "pending" | "complete" | "forfeit" | "bye";
+	slot_a_id: string | null;
+	slot_b_id: string | null;
+	slot_a_username: string | null;
+	slot_b_username: string | null;
+}
+
+interface MatchAvatarLike {
+	status: "pending" | "complete" | "forfeit" | "bye";
+	slot_a_id: string | null;
+	slot_b_id: string | null;
+	slot_a_avatar_url: string | null;
+	slot_b_avatar_url: string | null;
+}
+
+// Returns the username to display for one side of a match. For non-pending
+// matches we prefer the snapshot column written at report time so a later
+// substitution doesn't rewrite the historical name. Pending matches fall
+// through to live data — a substitute paired into an upcoming round should
+// appear under the new name immediately. The live map is keyed by slot_id.
+export function matchSlotUsername(
+	match: MatchUsernameLike,
+	side: "a" | "b",
+	liveBySlotId: Record<string, string | null | undefined>,
+): string | null {
+	const slotId = side === "a" ? match.slot_a_id : match.slot_b_id;
+	if (slotId === null) return null;
+	if (match.status !== "pending") {
+		const snap = side === "a" ? match.slot_a_username : match.slot_b_username;
+		if (snap !== null && snap !== undefined) return snap;
+	}
+	return liveBySlotId[slotId] ?? null;
+}
+
+// Avatar URL for one side of a match, with the same snapshot-vs-live rule.
+export function matchSlotAvatarUrl(
+	match: MatchAvatarLike,
+	side: "a" | "b",
+	liveBySlotId: Record<string, string | null | undefined>,
+): string | null {
+	const slotId = side === "a" ? match.slot_a_id : match.slot_b_id;
+	if (slotId === null) return null;
+	if (match.status !== "pending") {
+		const snap =
+			side === "a" ? match.slot_a_avatar_url : match.slot_b_avatar_url;
+		if (snap !== null && snap !== undefined) return snap;
+	}
+	return liveBySlotId[slotId] ?? null;
+}

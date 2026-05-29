@@ -1418,6 +1418,26 @@ export interface TournamentMatch {
 	// header's "won the final in N turns" line). Null when no game was uploaded
 	// for the match, and absent from non-bracket match payloads.
 	total_turns?: number | null;
+	// Slot occupant snapshot at report time (migration 0024). Populated when
+	// the match flipped out of 'pending', cleared on retro-edit back to
+	// 'pending'. Renderers prefer the snapshot for non-pending matches so a
+	// later substitution doesn't rewrite historical names/avatars.
+	slot_a_username: string | null;
+	slot_a_user_id: string | null;
+	slot_b_username: string | null;
+	slot_b_user_id: string | null;
+	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
+	// pending matches (no snapshot) and for slots whose occupant had no
+	// claimed discord_id at report time — frontend falls through to live
+	// data in those cases.
+	slot_a_avatar_url: string | null;
+	slot_b_avatar_url: string | null;
+	// Client-only flag: true for synthesized future-round bracket cells that
+	// don't yet correspond to a real tournament_matches row. The server never
+	// sets this. MatchPopover uses it to render a stripped-down preview view
+	// (no map name / no retro-edit / no upload actions; substitute pencil
+	// only on resolved sides).
+	is_placeholder?: boolean;
 }
 
 export interface MyTournamentEntry {

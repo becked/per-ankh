@@ -12,6 +12,7 @@
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
+	import { synthesizeChampionshipPlaceholders } from "$lib/tournament/bracket-placeholders";
 	import ChampionshipBracketTree from "$lib/tournament/ChampionshipBracketTree.svelte";
 	import PickPreferenceNote from "$lib/tournament/PickPreferenceNote.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
@@ -150,9 +151,22 @@
 		if (typeof stateValue === "string") return stateValue;
 		return page.url.searchParams.get("match");
 	});
+	// Client-synthesized placeholder cells for future championship rounds the
+	// backend hasn't generated yet (final between two semis before both
+	// semis report, etc.). Keyed by synthetic match_id so currentMatch can
+	// find them.
+	const placeholderById = $derived.by(() => {
+		const out: Record<string, TournamentMatch> = {};
+		for (const m of synthesizeChampionshipPlaceholders(data.bracket)) {
+			out[m.match_id] = m;
+		}
+		return out;
+	});
 	const currentMatch = $derived(
 		openMatchId
-			? (data.matches.find((m) => m.match_id === openMatchId) ?? null)
+			? (data.matches.find((m) => m.match_id === openMatchId) ??
+					placeholderById[openMatchId] ??
+					null)
 			: null,
 	);
 
@@ -943,7 +957,9 @@
 										standings={divisionData.standings}
 										isViewerAdmin={isAdmin}
 										{busy}
-										onSubstitute={substituteSlot}
+										onSubstitute={data.tournament.status === "championship"
+											? undefined
+											: substituteSlot}
 									/>
 								</div>
 							</section>
@@ -978,6 +994,7 @@
 				{slotUserIds}
 				{slotAvatars}
 				{user}
+				onSubstitute={isAdmin ? substituteSlot : undefined}
 				onClose={closeMatch}
 			/>
 		{/key}

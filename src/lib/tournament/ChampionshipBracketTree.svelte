@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
-	import type {
-		BracketResponse,
-		BracketSlot,
-		MapPoolEntry,
-	} from "$lib/api-cloud";
+	import type { BracketResponse, MapPoolEntry } from "$lib/api-cloud";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import {
+		matchSlotAvatarUrl,
+		matchSlotUsername,
+	} from "$lib/tournament/match-occupant";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		mapFullName,
@@ -43,29 +43,39 @@
 	const COL_GAP = 64;
 	const R1_GAP = 16; // extra vertical gap between adjacent R1 matches
 
-	const slotsById = $derived.by(() => {
-		const out: Record<string, BracketSlot> = {};
-		for (const s of bracket.slots) out[s.slot_id] = s;
+	// Live (current-occupant) lookup maps used as fall-through for pending
+	// matches and for synthesized placeholder cells in unreported rounds.
+	const liveLabelBySlot = $derived.by(() => {
+		const out: Record<string, string> = {};
+		for (const s of bracket.slots) {
+			out[s.slot_id] =
+				s.discord_username ?? `seed ${s.championship_seed ?? "?"}`;
+		}
 		return out;
 	});
 
-	function slotLabel(slotId: string | null): string {
-		if (!slotId) return "—";
-		const s = slotsById[slotId];
-		if (!s) return "—";
-		return s.discord_username ?? `seed ${s.championship_seed ?? "?"}`;
+	const liveAvatarBySlot = $derived.by(() => {
+		const out: Record<string, string | null> = {};
+		for (const s of bracket.slots) {
+			out[s.slot_id] = s.avatar_url;
+		}
+		return out;
+	});
+
+	function matchLabel(m: PositionedMatch, side: "a" | "b"): string {
+		return matchSlotUsername(m, side, liveLabelBySlot) ?? "—";
 	}
 
-	function slotAvatar(slotId: string | null): string | null {
-		if (!slotId) return null;
-		return slotsById[slotId]?.avatar_url ?? null;
+	function matchAvatar(m: PositionedMatch, side: "a" | "b"): string | null {
+		return matchSlotAvatarUrl(m, side, liveAvatarBySlot);
 	}
 
 	// Slot text for display. An empty slot in a placeholder (not-yet-generated)
 	// match reads "TBD" — its player isn't known until the feeder match decides.
-	function slotDisplay(slotId: string | null, isPlaceholder: boolean): string {
-		if (slotId) return slotLabel(slotId);
-		return isPlaceholder ? "TBD" : "—";
+	function slotDisplay(m: PositionedMatch, side: "a" | "b"): string {
+		const slotId = side === "a" ? m.slot_a_id : m.slot_b_id;
+		if (slotId) return matchLabel(m, side);
+		return m.is_placeholder ? "TBD" : "—";
 	}
 
 	function roundTitle(roundNumber: number, totalRounds: number): string {
@@ -88,8 +98,16 @@
 		left: number;
 		top: number;
 		centerY: number;
-		status: string;
+		status: "pending" | "complete" | "forfeit" | "bye";
 		is_placeholder: boolean;
+		// Snapshot fields propagated from the underlying real match (migration
+		// 0024). NULL on synthesized placeholders and on still-pending matches.
+		slot_a_username: string | null;
+		slot_a_user_id: string | null;
+		slot_a_avatar_url: string | null;
+		slot_b_username: string | null;
+		slot_b_user_id: string | null;
+		slot_b_avatar_url: string | null;
 	};
 
 	// A match in the bracket model: either a real DB match or a synthesized
@@ -101,8 +119,14 @@
 		winner_slot_id: string | null;
 		map_pool_id: string | null;
 		map_script: string | null;
-		status: string;
+		status: "pending" | "complete" | "forfeit" | "bye";
 		is_placeholder: boolean;
+		slot_a_username: string | null;
+		slot_a_user_id: string | null;
+		slot_a_avatar_url: string | null;
+		slot_b_username: string | null;
+		slot_b_user_id: string | null;
+		slot_b_avatar_url: string | null;
 	};
 
 	type BracketRoundModel = {
@@ -143,6 +167,12 @@
 				map_script: m.map_script,
 				status: m.status,
 				is_placeholder: false,
+				slot_a_username: m.slot_a_username,
+				slot_a_user_id: m.slot_a_user_id,
+				slot_a_avatar_url: m.slot_a_avatar_url,
+				slot_b_username: m.slot_b_username,
+				slot_b_user_id: m.slot_b_user_id,
+				slot_b_avatar_url: m.slot_b_avatar_url,
 			})),
 		}));
 
@@ -171,6 +201,12 @@
 					map_script: null,
 					status: "pending",
 					is_placeholder: true,
+					slot_a_username: null,
+					slot_a_user_id: null,
+					slot_a_avatar_url: null,
+					slot_b_username: null,
+					slot_b_user_id: null,
+					slot_b_avatar_url: null,
 				});
 			}
 			model.push({
@@ -222,6 +258,12 @@
 					centerY,
 					status: m.status,
 					is_placeholder: m.is_placeholder,
+					slot_a_username: m.slot_a_username,
+					slot_a_user_id: m.slot_a_user_id,
+					slot_a_avatar_url: m.slot_a_avatar_url,
+					slot_b_username: m.slot_b_username,
+					slot_b_user_id: m.slot_b_user_id,
+					slot_b_avatar_url: m.slot_b_avatar_url,
 				});
 				centersByRound[rIdx][kIdx] = centerY;
 			});
@@ -291,38 +333,28 @@
 				</svg>
 
 				{#each layout.matches as m (m.match_id)}
-					<!-- Real matches link to their match modal; placeholder matches
-					     (future rounds the backend hasn't generated yet) aren't
-					     clickable, so they render as a plain, non-interactive box.
-					     Both share the same inner layout via the matchBody snippet. -->
-					{#if m.is_placeholder}
-						<div
-							class="match placeholder"
-							style:left="{m.left}px"
-							style:top="{m.top}px"
-							style:width="{MATCH_W}px"
-							style:height="{MATCH_H}px"
-						>
-							{@render matchBody(m)}
-						</div>
-					{:else}
-						<a
-							class="match"
-							class:decided={m.status === "complete" || m.status === "forfeit"}
-							class:bye={m.status === "bye"}
-							data-match-id={m.match_id}
-							href="{resolve('/tournaments/[slug]', {
-								slug: tournamentSlug,
-							})}?match={m.match_id}"
-							onclick={(e) => handleMatchClick(m.match_id, e)}
-							style:left="{m.left}px"
-							style:top="{m.top}px"
-							style:width="{MATCH_W}px"
-							style:height="{MATCH_H}px"
-						>
-							{@render matchBody(m)}
-						</a>
-					{/if}
+					<!-- Both real matches and synthesized placeholder cells render as
+					     anchors so admins can open the match popover from either. The
+					     popover detects placeholders by match_id and renders a
+					     stripped-down preview (no map / no retro / no upload; the
+					     substitute pencil stays live on resolved feeder sides). -->
+					<a
+						class="match"
+						class:placeholder={m.is_placeholder}
+						class:decided={m.status === "complete" || m.status === "forfeit"}
+						class:bye={m.status === "bye"}
+						data-match-id={m.match_id}
+						href="{resolve('/tournaments/[slug]', {
+							slug: tournamentSlug,
+						})}?match={m.match_id}"
+						onclick={(e) => handleMatchClick(m.match_id, e)}
+						style:left="{m.left}px"
+						style:top="{m.top}px"
+						style:width="{MATCH_W}px"
+						style:height="{MATCH_H}px"
+					>
+						{@render matchBody(m)}
+					</a>
 				{/each}
 			</div>
 		</div>
@@ -338,9 +370,9 @@
 		class:tbd={m.is_placeholder && !m.slot_a_id}
 	>
 		{#if m.slot_a_id}
-			<PlayerAvatar avatarUrl={slotAvatar(m.slot_a_id)} size={14} />
+			<PlayerAvatar avatarUrl={matchAvatar(m, "a")} size={14} />
 		{/if}
-		<span class="slot-name">{slotDisplay(m.slot_a_id, m.is_placeholder)}</span>
+		<span class="slot-name">{slotDisplay(m, "a")}</span>
 	</div>
 	<div
 		class="slot"
@@ -348,12 +380,10 @@
 		class:tbd={m.is_placeholder && !m.slot_b_id}
 	>
 		{#if m.status !== "bye" && m.slot_b_id}
-			<PlayerAvatar avatarUrl={slotAvatar(m.slot_b_id)} size={14} />
+			<PlayerAvatar avatarUrl={matchAvatar(m, "b")} size={14} />
 		{/if}
 		<span class="slot-name"
-			>{m.status === "bye"
-				? "BYE"
-				: slotDisplay(m.slot_b_id, m.is_placeholder)}</span
+			>{m.status === "bye" ? "BYE" : slotDisplay(m, "b")}</span
 		>
 	</div>
 	{#if m.map_script}
@@ -449,14 +479,15 @@
 	/* Placeholder matches stand in for rounds the backend hasn't generated
 	   yet. A dashed border + flatter background marks them as not-yet-live
 	   without dimming the whole box, so any already-known advancer stays
-	   legible (TBD slots are muted separately via .slot.tbd). */
+	   legible (TBD slots are muted separately via .slot.tbd). They're still
+	   clickable — the popover opens in preview mode so admins can substitute
+	   a resolved feeder ahead of the round being generated. */
 	.match.placeholder {
 		background-color: #2b2723;
 		border-style: dashed;
-		cursor: default;
 	}
 	.match.placeholder:hover {
-		background-color: #2b2723;
+		background-color: #322c26;
 	}
 
 	.slot {

@@ -168,6 +168,7 @@ export async function handleMyMatches(
 	const res = await env.SHARE_DB.prepare(
 		`SELECT DISTINCT m.match_id, m.round_id, m.slot_a_id, m.slot_b_id, m.map_script,
 		        m.status, m.winner_slot_id, m.game_id, m.reported_at,
+		        m.slot_a_username, m.slot_a_user_id, m.slot_b_username, m.slot_b_user_id,
 		        r.tournament_id, r.phase, r.division, r.round_number,
 		        r.status AS round_status,
 		        t.slug AS tournament_slug, t.name AS tournament_name

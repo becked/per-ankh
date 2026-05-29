@@ -7,6 +7,10 @@
 	} from "$lib/api-cloud";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import {
+		matchSlotAvatarUrl,
+		matchSlotUsername,
+	} from "$lib/tournament/match-occupant";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		mapFullName,
@@ -190,9 +194,18 @@
 		return winsToAdvance - 1 - wins + losses + 2;
 	}
 
+	// Status-chip label (advance/eliminate gutters) — current occupant, by slot.
 	function slotLabel(slotId: string | null): string {
 		if (!slotId) return "BYE";
 		return labelOf[slotId] ?? "—";
+	}
+
+	// Match-cell label — prefer snapshot for non-pending matches so a later
+	// substitution doesn't rewrite a historical name.
+	function matchSlotLabel(m: TournamentMatch, side: "a" | "b"): string {
+		const slotId = side === "a" ? m.slot_a_id : m.slot_b_id;
+		if (!slotId) return "BYE";
+		return matchSlotUsername(m, side, labelOf) ?? "—";
 	}
 </script>
 
@@ -246,18 +259,24 @@
 							>
 								<div class="match-row">
 									{#if m.slot_a_id}
-										<PlayerAvatar avatarUrl={avatarOf[m.slot_a_id]} size={12} />
+										<PlayerAvatar
+											avatarUrl={matchSlotAvatarUrl(m, "a", avatarOf)}
+											size={12}
+										/>
 									{/if}
 									<span class="slot" class:winner={aWon}>
-										{slotLabel(m.slot_a_id)}
+										{matchSlotLabel(m, "a")}
 									</span>
 								</div>
 								<div class="match-row">
 									{#if m.slot_b_id}
-										<PlayerAvatar avatarUrl={avatarOf[m.slot_b_id]} size={12} />
+										<PlayerAvatar
+											avatarUrl={matchSlotAvatarUrl(m, "b", avatarOf)}
+											size={12}
+										/>
 									{/if}
 									<span class="slot" class:winner={bWon}>
-										{slotLabel(m.slot_b_id)}
+										{matchSlotLabel(m, "b")}
 									</span>
 								</div>
 								{#if m.map_script}

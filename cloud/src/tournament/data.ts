@@ -115,6 +115,15 @@ export interface MatchRow {
 	// deterministic ORDER BY in loadMatches; consumed by
 	// generateChampionshipFollowup to pair winners by structural position.
 	match_index: number | null;
+	// Slot occupant snapshot at report time (migration 0024). Captured when
+	// status flips out of 'pending' or at INSERT for byes; cleared back to
+	// NULL when an admin retro-edits a match back to 'pending'. Render layer
+	// prefers these for non-pending matches so a later substitution doesn't
+	// rewrite historical names/avatars.
+	slot_a_username: string | null;
+	slot_a_user_id: string | null;
+	slot_b_username: string | null;
+	slot_b_user_id: string | null;
 	created_at: string;
 }
 

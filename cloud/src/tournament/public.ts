@@ -814,6 +814,8 @@ export async function handleTournamentBracket(
 		}
 	}
 
+	const avatarByUserId = await loadHistoricalAvatarsForMatches(env, matches);
+
 	const body = {
 		tournament_id: tournament.tournament_id,
 		slots: champSlots.map((s) => ({
@@ -828,7 +830,7 @@ export async function handleTournamentBracket(
 			round_number: r.round_number,
 			status: r.status,
 			matches: (matchesByRound.get(r.round_id) ?? []).map((m) => ({
-				...serializeMatch(m),
+				...serializeMatch(m, avatarByUserId),
 				total_turns: m.game_id ? (turnsByGame.get(m.game_id) ?? null) : null,
 			})),
 		})),
@@ -901,11 +903,16 @@ export async function handleTournamentMatches(
 		return true;
 	});
 
+	const avatarByUserId = await loadHistoricalAvatarsForMatches(
+		env,
+		filtered.map(({ match }) => match),
+	);
+
 	return jsonResponse(
 		{
 			tournament_id: tournament.tournament_id,
 			matches: filtered.map(({ match, round }) => ({
-				...serializeMatch(match),
+				...serializeMatch(match, avatarByUserId),
 				round_id: round.round_id,
 				round_number: round.round_number,
 				phase: round.phase,
@@ -950,9 +957,10 @@ export async function handleTournamentMatchDetail(
 	if (!round || round.tournament_id !== tournament.tournament_id) {
 		return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
 	}
+	const avatarByUserId = await loadHistoricalAvatarsForMatches(env, [match]);
 	return jsonResponse(
 		{
-			...serializeMatch(match),
+			...serializeMatch(match, avatarByUserId),
 			round_id: round.round_id,
 			round_number: round.round_number,
 			phase: round.phase,
@@ -1052,7 +1060,18 @@ export async function handleGameTournamentLink(
 	);
 }
 
-function serializeMatch(m: MatchRow) {
+function serializeMatch(
+	m: MatchRow,
+	avatarByUserId?: Map<string, string | null>,
+) {
+	const slotAAvatar =
+		m.slot_a_user_id && avatarByUserId
+			? (avatarByUserId.get(m.slot_a_user_id) ?? null)
+			: null;
+	const slotBAvatar =
+		m.slot_b_user_id && avatarByUserId
+			? (avatarByUserId.get(m.slot_b_user_id) ?? null)
+			: null;
 	return {
 		match_id: m.match_id,
 		slot_a_id: m.slot_a_id,
@@ -1066,7 +1085,49 @@ function serializeMatch(m: MatchRow) {
 		reported_by_user_id: m.reported_by_user_id,
 		reported_at: m.reported_at,
 		notes: m.notes,
+		slot_a_username: m.slot_a_username,
+		slot_a_user_id: m.slot_a_user_id,
+		slot_a_avatar_url: slotAAvatar,
+		slot_b_username: m.slot_b_username,
+		slot_b_user_id: m.slot_b_user_id,
+		slot_b_avatar_url: slotBAvatar,
 	};
+}
+
+// Resolve avatar URLs for every distinct snapshot user_id referenced by the
+// supplied matches. One batched SELECT per call. Returns a Map keyed by
+// user_id; missing rows or NULL discord_id map to null (placeholder avatar
+// on the client). For pending matches (snapshot user_ids are NULL) callers
+// can pass an empty match list — no users → no query.
+async function loadHistoricalAvatarsForMatches(
+	env: TournamentEnv,
+	matches: MatchRow[],
+): Promise<Map<string, string | null>> {
+	const userIds = new Set<string>();
+	for (const m of matches) {
+		if (m.slot_a_user_id) userIds.add(m.slot_a_user_id);
+		if (m.slot_b_user_id) userIds.add(m.slot_b_user_id);
+	}
+	const map = new Map<string, string | null>();
+	if (userIds.size === 0) return map;
+	const ids = [...userIds];
+	const placeholders = ids.map(() => "?").join(",");
+	const res = await env.SHARE_DB.prepare(
+		`SELECT user_id, discord_id, avatar_hash FROM users WHERE user_id IN (${placeholders})`,
+	)
+		.bind(...ids)
+		.all<{
+			user_id: string;
+			discord_id: string | null;
+			avatar_hash: string | null;
+		}>();
+	for (const row of res.results ?? []) {
+		map.set(
+			row.user_id,
+			row.discord_id ? buildAvatarUrl(row.discord_id, row.avatar_hash) : null,
+		);
+	}
+	return map;
 }
 
 interface MatchWithRound {
@@ -1084,6 +1145,7 @@ async function loadMatchesWithRound(
 		   m.pick_order_winner_slot_id, m.status, m.winner_slot_id, m.game_id,
 		   m.reported_by_user_id, m.reported_at, m.notes,
 		   m.slot_a_player_index, m.slot_b_player_index, m.match_index,
+		   m.slot_a_username, m.slot_a_user_id, m.slot_b_username, m.slot_b_user_id,
 		   m.created_at,
 		   r.tournament_id, r.phase, r.division, r.round_number,
 		   r.status AS round_status,
@@ -1113,6 +1175,10 @@ async function loadMatchesWithRound(
 			slot_a_player_index: row.slot_a_player_index,
 			slot_b_player_index: row.slot_b_player_index,
 			match_index: row.match_index,
+			slot_a_username: row.slot_a_username,
+			slot_a_user_id: row.slot_a_user_id,
+			slot_b_username: row.slot_b_username,
+			slot_b_user_id: row.slot_b_user_id,
 			created_at: row.created_at,
 		},
 		round: {

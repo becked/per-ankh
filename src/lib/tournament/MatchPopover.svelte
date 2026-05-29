@@ -5,6 +5,7 @@
 	// shallow-routing `?match=` deep link — so this component is pure content
 	// (no overlay / escape / positioning of its own).
 	import { resolve } from "$app/paths";
+	import { autofocus } from "$lib/actions/autofocus";
 	import {
 		ApiError,
 		cloudApi,
@@ -25,6 +26,10 @@
 		getCivilizationColor,
 	} from "$lib/config";
 	import { formatEnum } from "$lib/utils/formatting";
+	import {
+		matchSlotAvatarUrl,
+		matchSlotUsername,
+	} from "$lib/tournament/match-occupant";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		effectiveOptionValue,
@@ -45,6 +50,11 @@
 		slotUserIds: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
 		user: UserMe | null;
+		// Admin substitute: rename the named slot's occupant. Wired by the
+		// parent to the same handler that drives the swiss-standings edit
+		// pencil; undefined for non-admin viewers.
+		// eslint-disable-next-line no-unused-vars -- param names are documentary
+		onSubstitute?: (slotId: string, newUsername: string) => void;
 		onClose: () => void;
 	}
 
@@ -55,12 +65,21 @@
 		slotUserIds,
 		slotAvatars,
 		user,
+		onSubstitute,
 		onClose,
 	}: Props = $props();
 
 	type EditMode = "none" | "map" | "retro";
 	let editMode = $state<EditMode>("none");
 	let busy = $state(false);
+
+	// Inline substitute editor (admin-only). When a side is set, the matching
+	// slot's name in the header is replaced by an input + ✓ / × buttons.
+	// Defined here so the binding exists in the script's lexical scope; the
+	// derived gate / save handler live below the labels they read.
+	let substituteSide = $state<"a" | "b" | null>(null);
+	let substituteValue = $state("");
+	let substituteError = $state<string | null>(null);
 
 	// Edit-form state lives at module scope so it survives data refreshes
 	// (e.g. an invalidateAll from a sibling save) without clobbering whatever
@@ -79,44 +98,70 @@
 	);
 
 	const isAdmin = $derived(tournament.is_viewer_admin === true);
-	const slotALabel = $derived(slotLabels[match.slot_a_id] ?? "—");
+	// Synthesized client-side placeholder for a future championship cell that
+	// the backend hasn't generated yet. Triggers preview-mode rendering:
+	// "TBD" for unresolved feeder sides, no map / no upload / no retro
+	// actions, substitute pencil only on resolved sides.
+	const isPlaceholder = $derived(match.is_placeholder === true);
+	// `slot_a_id` is non-empty string for real matches; the placeholder
+	// synthesizer falls back to "" when the feeder hasn't decided.
+	const isSlotAResolved = $derived(match.slot_a_id !== "");
+	// Labels and avatars prefer the per-match snapshot for non-pending matches
+	// (so a later substitution doesn't rewrite historical names/avatars), and
+	// fall through to the live slotLabels/slotAvatars maps for pending matches.
+	const slotALabel = $derived(
+		isPlaceholder && !isSlotAResolved
+			? "TBD"
+			: (matchSlotUsername(match, "a", slotLabels) ?? "—"),
+	);
 	const slotBLabel = $derived(
-		match.slot_b_id !== null ? (slotLabels[match.slot_b_id] ?? "—") : "Bye",
+		match.slot_b_id !== null
+			? (matchSlotUsername(match, "b", slotLabels) ?? "—")
+			: isPlaceholder
+				? "TBD"
+				: "Bye",
+	);
+	const winnerSide = $derived<"a" | "b" | null>(
+		match.winner_slot_id === null
+			? null
+			: match.winner_slot_id === match.slot_a_id
+				? "a"
+				: "b",
+	);
+	const loserSide = $derived<"a" | "b" | null>(
+		winnerSide === null ? null : winnerSide === "a" ? "b" : "a",
 	);
 	const winnerLabel = $derived(
-		match.winner_slot_id !== null
-			? (slotLabels[match.winner_slot_id] ?? null)
-			: null,
+		winnerSide === null
+			? null
+			: (matchSlotUsername(match, winnerSide, slotLabels) ?? null),
 	);
 	// The slot that didn't win — used for the dimmed half of the title.
 	const loserLabel = $derived.by(() => {
-		if (match.winner_slot_id === null) return null;
-		const loserId =
-			match.winner_slot_id === match.slot_a_id
-				? match.slot_b_id
-				: match.slot_a_id;
+		if (loserSide === null) return null;
+		const loserId = loserSide === "a" ? match.slot_a_id : match.slot_b_id;
 		if (loserId === null) return "Bye";
-		return slotLabels[loserId] ?? "—";
+		return matchSlotUsername(match, loserSide, slotLabels) ?? "—";
 	});
 
-	// Avatars parallel to the labels above (null → unclaimed → enlist fallback).
-	const slotAAvatar = $derived(slotAvatars[match.slot_a_id] ?? null);
+	const slotAAvatar = $derived(matchSlotAvatarUrl(match, "a", slotAvatars));
 	const slotBAvatar = $derived(
-		match.slot_b_id !== null ? (slotAvatars[match.slot_b_id] ?? null) : null,
-	);
-	const winnerAvatar = $derived(
-		match.winner_slot_id !== null
-			? (slotAvatars[match.winner_slot_id] ?? null)
+		match.slot_b_id !== null
+			? matchSlotAvatarUrl(match, "b", slotAvatars)
 			: null,
 	);
+	const winnerAvatar = $derived.by(() => {
+		if (match.winner_slot_id === null) return null;
+		const side = match.winner_slot_id === match.slot_a_id ? "a" : "b";
+		return matchSlotAvatarUrl(match, side, slotAvatars);
+	});
 	const loserAvatar = $derived.by(() => {
 		if (match.winner_slot_id === null) return null;
-		const loserId =
-			match.winner_slot_id === match.slot_a_id
-				? match.slot_b_id
-				: match.slot_a_id;
+		const loserSide: "a" | "b" =
+			match.winner_slot_id === match.slot_a_id ? "b" : "a";
+		const loserId = loserSide === "a" ? match.slot_a_id : match.slot_b_id;
 		if (loserId === null) return null;
-		return slotAvatars[loserId] ?? null;
+		return matchSlotAvatarUrl(match, loserSide, slotAvatars);
 	});
 
 	// The map_pool instance this match was assigned, resolved from its id.
@@ -139,18 +184,83 @@
 				(match.slot_b_id !== null &&
 					slotUserIds[match.slot_b_id] === user.user_id)),
 	);
+	// Placeholder cells don't correspond to a real tournament_matches row
+	// yet, so any action that PATCHes the match (map, retro, upload-link) is
+	// suppressed in preview mode.
 	const canUploadAsParticipant = $derived(
-		isParticipant && match.status === "pending",
+		!isPlaceholder && isParticipant && match.status === "pending",
 	);
-	const canUploadAsObserver = $derived(isAdmin);
-	const canEditMap = $derived(isAdmin && match.status === "pending");
-	const canRetroEdit = $derived(isAdmin && match.status !== "bye");
+	const canUploadAsObserver = $derived(!isPlaceholder && isAdmin);
+	const canEditMap = $derived(
+		!isPlaceholder && isAdmin && match.status === "pending",
+	);
+	const canRetroEdit = $derived(
+		!isPlaceholder && isAdmin && match.status !== "bye",
+	);
 	const retroEditLabel = $derived(
 		match.status === "pending" ? "Set result" : "Edit result",
 	);
 	const hasSecondaryActions = $derived(
 		canUploadAsParticipant || canUploadAsObserver || canEditMap || canRetroEdit,
 	);
+
+	// Substitution availability. Only shown on still-pending matches: the
+	// pencil reads as "this is the next game — swap who's playing it" rather
+	// than the more confusing "edit the participant on a finished match"
+	// (substitution affects the slot's future matches, never the completed
+	// one whose snapshot is frozen). Roster edits on past matches are still
+	// reachable through the swiss-standings pencil during swiss phase, and
+	// through any future pending match during championship. The per-side
+	// gate (in the snippet) additionally requires a resolved slot — a TBD
+	// side has no occupant to substitute.
+	const canSubstitute = $derived(
+		isAdmin &&
+			onSubstitute !== undefined &&
+			tournament.status !== "complete" &&
+			match.status === "pending",
+	);
+
+	function openSubstitute(side: "a" | "b", currentLabel: string) {
+		substituteSide = side;
+		substituteValue = currentLabel;
+		substituteError = null;
+	}
+
+	function cancelSubstitute() {
+		substituteSide = null;
+		substituteError = null;
+	}
+
+	function saveSubstitute() {
+		if (substituteSide === null || !onSubstitute) return;
+		const trimmed = substituteValue.trim();
+		if (!trimmed) {
+			substituteError = "Username cannot be empty";
+			return;
+		}
+		const slotId = substituteSide === "a" ? match.slot_a_id : match.slot_b_id;
+		if (slotId === null) {
+			substituteError = "Bye slot — nothing to substitute";
+			return;
+		}
+		const currentLabel = substituteSide === "a" ? slotALabel : slotBLabel;
+		if (trimmed === currentLabel) {
+			cancelSubstitute();
+			return;
+		}
+		onSubstitute(slotId, trimmed);
+		cancelSubstitute();
+	}
+
+	function onSubstituteKey(e: KeyboardEvent) {
+		if (e.key === "Enter") {
+			e.preventDefault();
+			saveSubstitute();
+		} else if (e.key === "Escape") {
+			e.preventDefault();
+			cancelSubstitute();
+		}
+	}
 
 	// Status chip styling: completed/bye reads as a "done" amber pill, anything
 	// else (pending) as a muted neutral pill.
@@ -346,35 +456,112 @@
 	}
 </script>
 
+<!-- Inline name + admin substitute-edit affordance. Renders either:
+       (a) name + small "edit" link (admin, slot present, not currently editing);
+       (b) inline input + ✓ / × (admin, currently editing this side); or
+       (c) just the name (non-admin, or this side is the bye slot).
+     `side` names the underlying slot (slot_a / slot_b), independent of which
+     half of the visual layout it occupies (winner vs loser may swap them). -->
+{#snippet nameWithEdit(
+	side: "a" | "b",
+	label: string,
+	avatar: string | null,
+	faded: boolean,
+)}
+	{@const slotId = side === "a" ? match.slot_a_id : match.slot_b_id}
+	{#if substituteSide === side}
+		<span class="inline-flex flex-col gap-0.5">
+			<span class="inline-flex items-center gap-1">
+				<input
+					type="text"
+					bind:value={substituteValue}
+					oninput={() => (substituteError = null)}
+					onkeydown={onSubstituteKey}
+					use:autofocus
+					class="rounded border border-black bg-[#35302b] p-1 text-sm text-tan"
+					disabled={busy}
+				/>
+				<button
+					type="button"
+					class="text-xs text-tan opacity-70 hover:text-orange hover:opacity-100"
+					onclick={saveSubstitute}
+					disabled={busy}
+					aria-label="Save substitution"
+				>
+					✓
+				</button>
+				<button
+					type="button"
+					class="text-xs text-tan opacity-50 hover:opacity-100"
+					onclick={cancelSubstitute}
+					disabled={busy}
+					aria-label="Cancel"
+				>
+					×
+				</button>
+			</span>
+			{#if substituteError}
+				<span class="text-[10px] text-red-400">{substituteError}</span>
+			{/if}
+		</span>
+	{:else}
+		<span
+			class="inline-flex min-w-0 items-center gap-1.5"
+			class:opacity-50={faded}
+		>
+			<PlayerAvatar avatarUrl={avatar} size={14} />
+			<span class="truncate">{label}</span>
+			{#if canSubstitute && slotId !== null && slotId !== ""}
+				<button
+					type="button"
+					class="shrink-0 text-tan opacity-40 transition-colors hover:text-orange hover:opacity-100"
+					onclick={() => openSubstitute(side, label)}
+					disabled={busy}
+					aria-label="Substitute player"
+					title="Substitute player"
+				>
+					<svg
+						xmlns="http://www.w3.org/2000/svg"
+						class="h-3.5 w-3.5"
+						viewBox="0 0 20 20"
+						fill="currentColor"
+						aria-hidden="true"
+					>
+						<path
+							d="M2.695 14.763l-1.262 3.154a.5.5 0 00.65.65l3.155-1.262a4 4 0 001.343-.886L17.5 5.501a2.121 2.121 0 00-3-3L3.58 13.42a4 4 0 00-.885 1.343z"
+						/>
+					</svg>
+				</button>
+			{/if}
+		</span>
+	{/if}
+{/snippet}
+
 <header class="mb-3 flex items-start justify-between gap-3">
 	<div class="min-w-0 flex-1">
 		<h2
 			class="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold text-tan"
 		>
-			{#if winnerLabel}
-				<span class="inline-flex min-w-0 items-center gap-1.5">
-					<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
-					<span class="truncate">{winnerLabel}</span>
-				</span>
+			{#if winnerLabel && winnerSide !== null && loserSide !== null}
+				{@render nameWithEdit(winnerSide, winnerLabel, winnerAvatar, false)}
 				<span class="opacity-50">v</span>
-				<span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
-					{#if loserLabel !== "Bye"}
-						<PlayerAvatar avatarUrl={loserAvatar} size={14} />
-					{/if}
-					<span class="truncate">{loserLabel}</span>
-				</span>
+				{#if loserLabel === "Bye"}
+					<span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
+						<span class="truncate">Bye</span>
+					</span>
+				{:else if loserLabel !== null}
+					{@render nameWithEdit(loserSide, loserLabel, loserAvatar, true)}
+				{/if}
 			{:else}
-				<span class="inline-flex min-w-0 items-center gap-1.5">
-					<PlayerAvatar avatarUrl={slotAAvatar} size={14} />
-					<span class="truncate">{slotALabel}</span>
-				</span>
+				{@render nameWithEdit("a", slotALabel, slotAAvatar, false)}
 				<span class="opacity-50">v</span>
-				<span class="inline-flex min-w-0 items-center gap-1.5">
-					{#if match.slot_b_id !== null}
-						<PlayerAvatar avatarUrl={slotBAvatar} size={14} />
-					{/if}
-					<span class="truncate">{slotBLabel}</span>
-				</span>
+				{#if match.slot_b_id !== null}
+					{@render nameWithEdit("b", slotBLabel, slotBAvatar, false)}
+				{:else}
+					<span class="inline-flex min-w-0 items-center gap-1.5">
+						<span class="truncate">{slotBLabel}</span>
+					</span>
+				{/if}
 			{/if}
 		</h2>
 		<div class="mt-1 flex items-center justify-between gap-3 text-xs text-tan">
@@ -393,7 +580,7 @@
 			<span
 				class="shrink-0 rounded-full border px-2 py-0.5 text-[11px] {statusChipClass}"
 			>
-				{match.status}
+				{isPlaceholder ? "awaiting prior round" : match.status}
 			</span>
 		</div>
 	</div>
@@ -489,6 +676,15 @@
 					</div>
 				{/if}
 			{/if}
+		</div>
+	{:else if isPlaceholder}
+		<div
+			class="rounded-lg p-3 text-xs text-tan opacity-70"
+			style="background-color: #35302b;"
+		>
+			This match is generated once the prior round finishes. Map, result, and
+			uploads aren't available yet — once both feeders report, the real match
+			takes over this cell.
 		</div>
 	{:else}
 		<div class="rounded-lg p-3" style="background-color: #35302b;">

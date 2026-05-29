@@ -1522,6 +1522,12 @@ export async function handleStartTournament(
 	];
 	const summaries: { division: Division; round_id: string; matches: number }[] =
 		[];
+	const slotIdentityById = new Map(
+		swissSlots.map((s) => [
+			s.slot_id,
+			{ discord_username: s.discord_username, user_id: s.user_id },
+		]),
+	);
 	for (const division of ["A", "B"] as const) {
 		const divSlots = swissSlots
 			.filter((s) => s.division === division)
@@ -1534,6 +1540,7 @@ export async function handleStartTournament(
 			divSlots,
 			[],
 			mapPool,
+			slotIdentityById,
 		);
 		statements.push(...built.statements);
 		summaries.push({
@@ -1733,6 +1740,38 @@ export async function handleRetroEditMatch(
 		fragments.push(`${key} = ?`);
 		binds.push(value);
 	}
+
+	// Snapshot occupant on a forward transition (pending → non-pending);
+	// clear it on a revert (non-pending → pending) so a subsequent re-report
+	// captures fresh occupants.
+	const goingNonPending =
+		match.status === "pending" && postStatus !== "pending";
+	const revertingToPending =
+		match.status !== "pending" && postStatus === "pending";
+	if (goingNonPending) {
+		const slotA = await loadSlot(env, match.slot_a_id);
+		const slotB = match.slot_b_id ? await loadSlot(env, match.slot_b_id) : null;
+		fragments.push(
+			"slot_a_username = ?",
+			"slot_a_user_id = ?",
+			"slot_b_username = ?",
+			"slot_b_user_id = ?",
+		);
+		binds.push(
+			slotA?.discord_username ?? null,
+			slotA?.user_id ?? null,
+			slotB?.discord_username ?? null,
+			slotB?.user_id ?? null,
+		);
+	} else if (revertingToPending) {
+		fragments.push(
+			"slot_a_username = NULL",
+			"slot_a_user_id = NULL",
+			"slot_b_username = NULL",
+			"slot_b_user_id = NULL",
+		);
+	}
+
 	if (fragments.length === 0) return jsonResponse({ match }, 200, cors);
 	binds.push(matchId);
 	await env.SHARE_DB.prepare(
@@ -1926,6 +1965,14 @@ export async function handleTransitionChampionship(
 
 	const statements: D1PreparedStatement[] = [];
 	const championshipSlotIds: Record<number, string> = {};
+	// For R1 byes we need to snapshot the occupant on the match row at
+	// INSERT time. The championship slot row hasn't been committed yet
+	// (the statements batch flushes after this loop), so capture identity
+	// here keyed by the new slot_id and read it below.
+	const champIdentityById: Record<
+		string,
+		{ discord_username: string | null; user_id: string | null }
+	> = {};
 
 	// Insert one championship slot per real qualifier (seeds 1..N where N
 	// is seedOrder.length). Phantom seeds (N+1..bracket_size) do not get
@@ -1945,6 +1992,10 @@ export async function handleTransitionChampionship(
 		const seed = i + 1;
 		const newSlotId = nanoid(21);
 		championshipSlotIds[seed] = newSlotId;
+		champIdentityById[newSlotId] = {
+			discord_username: sourceSlot.discord_username,
+			user_id: sourceSlot.user_id,
+		};
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_slots
@@ -2000,12 +2051,18 @@ export async function handleTransitionChampionship(
 		// pick_order_winner_slot_id: defaults to slot_b for real matches
 		// (player listed second picks first). NULL for byes.
 		const pickOrderWinner = template.is_bye ? null : p.slot_b_id;
+		// Snapshot occupant for byes (status='bye' is non-pending). Pending
+		// matches leave snapshots NULL and resolve live until reported.
+		const aIdentity = template.is_bye ? champIdentityById[p.slot_a_id] : null;
+		const slotAUsername = aIdentity?.discord_username ?? null;
+		const slotAUserId = aIdentity?.user_id ?? null;
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
+				    slot_a_username, slot_a_user_id)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				matchId,
 				roundId,
@@ -2017,6 +2074,8 @@ export async function handleTransitionChampionship(
 				status,
 				winnerSlotId,
 				i + 1,
+				slotAUsername,
+				slotAUserId,
 			),
 		);
 	}
@@ -2127,6 +2186,13 @@ function buildSwissRoundStatements(
 	divSlots: SlotRef[],
 	divMatchRefs: MatchRef[],
 	pool: MapPoolEntry[],
+	// For byes (status='bye' INSERTed below): snapshot the occupant identity
+	// onto the match row at INSERT time so a later substitution doesn't
+	// rewrite the bye card.
+	slotIdentityById: Map<
+		string,
+		{ discord_username: string | null; user_id: string | null }
+	>,
 ): { statements: D1PreparedStatement[]; roundId: string; matchCount: number } {
 	const config = tournamentConfig(tournament);
 	const seed = `${tournament.tournament_id}|swiss|${division}|r${nextRoundNumber}`;
@@ -2152,12 +2218,14 @@ function buildSwissRoundStatements(
 		const p = withMaps[i];
 		const matchId = nanoid(21);
 		const isBye = p.slot_b_id === null;
+		const aIdentity = isBye ? slotIdentityById.get(p.slot_a_id) : null;
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
+				    slot_a_username, slot_a_user_id)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
 			).bind(
 				matchId,
 				roundId,
@@ -2169,6 +2237,8 @@ function buildSwissRoundStatements(
 				isBye ? "bye" : "pending",
 				isBye ? p.slot_a_id : null,
 				i + 1,
+				aIdentity?.discord_username ?? null,
+				aIdentity?.user_id ?? null,
 			),
 		);
 	}
@@ -2323,6 +2393,14 @@ export async function maybeAdvanceAfterMatchReport(
 				);
 				const divMatchRefs = matchRefs.filter((m) => m.division === division);
 				const mapPool = parseMapPool(tournament);
+				const slotIdentityById = new Map(
+					slots
+						.filter((s) => s.phase === "swiss")
+						.map((s) => [
+							s.slot_id,
+							{ discord_username: s.discord_username, user_id: s.user_id },
+						]),
+				);
 				const built = buildSwissRoundStatements(
 					env,
 					tournament,
@@ -2331,6 +2409,7 @@ export async function maybeAdvanceAfterMatchReport(
 					divSlots,
 					divMatchRefs,
 					mapPool,
+					slotIdentityById,
 				);
 				statements.push(...built.statements);
 				auditAction = "round_generated";

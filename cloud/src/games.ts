@@ -735,6 +735,11 @@ interface TournamentUploadContext {
 	slot_b_id: string | null;
 	slot_a_user_id: string | null;
 	slot_b_user_id: string | null;
+	// Snapshot fields written onto tournament_matches when the upload flips
+	// status pending → complete (migration 0024). Captured from the live
+	// slot row at SELECT time below.
+	slot_a_username: string | null;
+	slot_b_username: string | null;
 	is_participant: boolean;
 	slot_a_player_index?: number;
 	slot_b_player_index?: number;
@@ -795,7 +800,9 @@ async function linkTournamentMatch(
 			`UPDATE tournament_matches
 			   SET game_id = ?, winner_slot_id = ?, status = 'complete',
 			       slot_a_player_index = ?, slot_b_player_index = ?,
-			       reported_by_user_id = ?, reported_at = datetime('now')
+			       reported_by_user_id = ?, reported_at = datetime('now'),
+			       slot_a_username = ?, slot_a_user_id = ?,
+			       slot_b_username = ?, slot_b_user_id = ?
 			 WHERE match_id = ?
 			   AND (? = 1 OR status = 'pending')`,
 		)
@@ -805,6 +812,10 @@ async function linkTournamentMatch(
 				tournamentContext.slot_a_player_index ?? null,
 				tournamentContext.slot_b_player_index ?? null,
 				userId,
+				tournamentContext.slot_a_username,
+				tournamentContext.slot_a_user_id,
+				tournamentContext.slot_b_username,
+				tournamentContext.slot_b_user_id,
 				tournamentContext.match_id,
 				isOverride ? 1 : 0,
 			)
@@ -1004,6 +1015,11 @@ export async function handleGameUpload(
 		slot_b_id: string | null;
 		slot_a_user_id: string | null;
 		slot_b_user_id: string | null;
+		// Snapshot fields (migration 0024) written onto the match row when the
+		// upload flips pending → complete. Captured from the live slot row in
+		// the same SELECT that drives the participant check below.
+		slot_a_username: string | null;
+		slot_b_username: string | null;
 		// True when the caller's user_id matches either slot's user_id.
 		// Drives participant-mode mapping derivation. False when caller is
 		// an admin uploading on behalf of others (observer mode) — then the
@@ -1046,7 +1062,9 @@ export async function handleGameUpload(
 		const match = await env.SHARE_DB.prepare(
 			`SELECT m.slot_a_id, m.slot_b_id, r.tournament_id, t.name AS tournament_name,
 			        t.status AS tournament_status,
-			        sa.user_id AS slot_a_user, sb.user_id AS slot_b_user
+			        sa.user_id AS slot_a_user, sb.user_id AS slot_b_user,
+			        sa.discord_username AS slot_a_username,
+			        sb.discord_username AS slot_b_username
 			 FROM tournament_matches m
 			 JOIN tournament_rounds r ON r.round_id = m.round_id
 			 JOIN tournaments t ON t.tournament_id = r.tournament_id
@@ -1063,6 +1081,8 @@ export async function handleGameUpload(
 				tournament_status: string;
 				slot_a_user: string | null;
 				slot_b_user: string | null;
+				slot_a_username: string | null;
+				slot_b_username: string | null;
 			}>();
 		if (!match) {
 			return errorResponse(
@@ -1105,6 +1125,8 @@ export async function handleGameUpload(
 			slot_b_id: match.slot_b_id,
 			slot_a_user_id: match.slot_a_user,
 			slot_b_user_id: match.slot_b_user,
+			slot_a_username: match.slot_a_username,
+			slot_b_username: match.slot_b_username,
 			is_participant: isParticipant,
 			is_admin_override: !isParticipant,
 		};
