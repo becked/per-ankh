@@ -295,15 +295,13 @@
 						<SpriteIcon category="icons" value="ACHIEVEMENT" size={24} />
 					</span>
 					<div class="min-w-0">
-						<p class="text-xs uppercase tracking-wide text-tan opacity-50">
-							Champion
-						</p>
+						<p class="text-xs uppercase tracking-wide text-tan">Champion</p>
 						{#if hero.champion}
-							<p class="text-sm text-tan">
-								<span class="font-bold">{hero.champion}</span>
+							<p class="text-sm">
+								<span class="font-bold text-orange">{hero.champion}</span>
 							</p>
 							{#if hero.finalSummary}
-								<p class="text-xs text-tan opacity-60">{hero.finalSummary}</p>
+								<p class="text-xs text-tan">{hero.finalSummary}</p>
 							{/if}
 						{:else}
 							<p class="text-sm text-tan opacity-70">Not recorded yet</p>
@@ -322,14 +320,12 @@
 							<SpriteIcon category="icons" value="GOAL_STARTED" size={22} />
 						</span>
 						<div class="min-w-0">
-							<p class="text-xs uppercase tracking-wide text-tan opacity-50">
-								Runner-up
-							</p>
-							<p class="text-sm text-tan">
-								<span class="font-bold">{hero.finalist}</span>
+							<p class="text-xs uppercase tracking-wide text-tan">Runner-up</p>
+							<p class="text-sm">
+								<span class="font-bold text-orange">{hero.finalist}</span>
 							</p>
 							{#if hero.fieldSize > 0}
-								<p class="text-xs text-tan opacity-60">
+								<p class="text-xs text-tan">
 									Finished 2nd of {hero.fieldSize}
 								</p>
 							{/if}
