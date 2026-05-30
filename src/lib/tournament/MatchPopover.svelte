@@ -660,10 +660,10 @@
 			{#if gameLoading && !gameData}
 				<p class="text-xs text-tan opacity-60">Loading game…</p>
 			{:else if gameData}
-				<div class="grid grid-cols-3 gap-3">
+				<div class="grid grid-cols-3 gap-3 text-center">
 					<div>
 						<p
-							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+							class="mb-0.5 flex items-center justify-center gap-1 text-[10px] font-bold text-gray-400"
 						>
 							<SpriteIcon
 								category="icons"
@@ -674,7 +674,7 @@
 							Winner
 						</p>
 						<p
-							class="flex items-center gap-1.5 text-sm font-bold text-[#DBDEE3]"
+							class="flex items-center justify-center gap-1.5 text-sm font-bold text-[#DBDEE3]"
 						>
 							{#if winnerLabel}
 								<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
@@ -684,7 +684,7 @@
 					</div>
 					<div>
 						<p
-							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+							class="mb-0.5 flex items-center justify-center gap-1 text-[10px] font-bold text-gray-400"
 						>
 							<SpriteIcon
 								category="icons"
@@ -700,7 +700,7 @@
 					</div>
 					<div>
 						<p
-							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+							class="mb-0.5 flex items-center justify-center gap-1 text-[10px] font-bold text-gray-400"
 						>
 							<SpriteIcon category="icons" value="TURN" size={10} alt="Turns" />
 							Turns
@@ -739,11 +739,41 @@
 		</div>
 	{/if}
 
-	{#if mapName}
+	{#if mapName || canEditMap}
 		<div class="rounded-lg p-3" style="background-color: #35302a;">
-			<div class="flex items-center gap-1.5 text-sm text-tan" title={mapName}>
+			<div class="flex items-center gap-1.5 text-sm text-tan">
 				<img src={MAP_ICON} alt="" class="h-4 w-4 shrink-0 opacity-80" />
-				<span class="truncate">{mapName}</span>
+				<span class="truncate" title={mapName ?? undefined}>
+					{#if mapName}{mapName}{:else}<span class="opacity-60"
+							>(no map set)</span
+						>{/if}
+				</span>
+				{#if canEditMap}
+					<button
+						type="button"
+						class="ml-auto shrink-0 text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100 disabled:opacity-50"
+						onclick={openMapEdit}
+						disabled={busy}
+						aria-label="Change map"
+						title="Change map"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+							/>
+						</svg>
+					</button>
+				{/if}
 			</div>
 		</div>
 	{/if}
@@ -891,16 +921,6 @@
 						</svg>
 						{match.game_id ? "Replace save" : "Upload save (observer)"}
 					</a>
-				{/if}
-				{#if canEditMap}
-					<button
-						type="button"
-						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-						onclick={openMapEdit}
-						disabled={busy}
-					>
-						Change map
-					</button>
 				{/if}
 				{#if canRetroEdit}
 					<button

@@ -1115,7 +1115,9 @@
 	customAnchor={openMatchId ? `[data-match-id="${openMatchId}"]` : null}
 	side={matchSide}
 	align="center"
-	contentClass="w-[min(92vw,35.2rem)]"
+	contentClass={currentMatch?.game_id
+		? "w-[min(92vw,35.2rem)]"
+		: "w-fit max-w-[92vw]"}
 	frameClass="bg-[#2a2623] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
 	ariaLabel="Match detail"
 >
