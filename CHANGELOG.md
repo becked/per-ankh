@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-05-30-232aaf2] - 2026-05-30
+
+### Features
+
+- (cli) add `./per-ankh backup` to snapshot D1 to a SQLite file — [65d3f0f](https://github.com/becked/per-ankh/commit/65d3f0f10b0c9289853357abfe1bd80f6477f4de)
+- (tournament) add admin CSV export of standings + matches — [0f35534](https://github.com/becked/per-ankh/commit/0f35534c516081745b62d02948f323ac475b00cc)
+- (tournament) tighten swiss bracket columns and add hover path-trace — [65c5544](https://github.com/becked/per-ankh/commit/65c5544b6b0f10ed1ecef104f0113007c250062f)
+- (tournament) trace a player's path through the swiss bracket on hover — [e0c1974](https://github.com/becked/per-ankh/commit/e0c1974891784ba8d5f9ec63b52e15e32a2f5b63)
+
+### Other
+
+- add owreference extraction reference + entity-popup data approaches — [17a7f78](https://github.com/becked/per-ankh/commit/17a7f789217df70fa642249ed8cd07e41ad71792)
+- (tournament) label phase toggles Bracket/Rounds instead of Diagram — [d3e2f74](https://github.com/becked/per-ankh/commit/d3e2f740dfedd2deeeca25a48c3aafe7ec1f3649)
+- prettier-format reference extraction tables — [35686a0](https://github.com/becked/per-ankh/commit/35686a040b3a34bf63b07971dc43fbbd00ea62aa)
+- stop running prettier on markdown — [232aaf2](https://github.com/becked/per-ankh/commit/232aaf27c146b82c2b191dbfe2a08d02f1e31d3a)
+
 ## [2026-05-30-d0b2c64] - 2026-05-30
 
 ### Features
