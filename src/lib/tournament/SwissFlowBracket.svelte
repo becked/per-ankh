@@ -344,7 +344,9 @@
 	.flow-bracket {
 		background-color: #2a2622;
 		border-radius: 0.5rem;
-		padding: 1rem;
+		/* No left/right padding: the bracket sits inside the division card,
+		   which already supplies the horizontal gutter. */
+		padding: 1rem 0;
 	}
 
 	.grid-scroll {

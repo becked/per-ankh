@@ -14,6 +14,7 @@
 	} from "$lib/api-cloud";
 	import { synthesizeChampionshipPlaceholders } from "$lib/tournament/bracket-placeholders";
 	import ChampionshipBracketTree from "$lib/tournament/ChampionshipBracketTree.svelte";
+	import ChampionshipStandings from "$lib/tournament/ChampionshipStandings.svelte";
 	import PickPreferenceNote from "$lib/tournament/PickPreferenceNote.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
@@ -35,6 +36,7 @@
 	import TournamentMapsPanel from "$lib/tournament/TournamentMapsPanel.svelte";
 	import TournamentOverviewPanel from "$lib/tournament/TournamentOverviewPanel.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
+	import { Tabs } from "bits-ui";
 	import { confirmDialog } from "$lib/ui/confirm";
 	import { toast } from "$lib/ui/toast";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
@@ -60,6 +62,19 @@
 
 	const isAdmin = $derived(data.tournament.is_viewer_admin === true);
 	const user = $derived(page.data.user as UserMe | null);
+
+	// Per-division Swiss view toggle: the bracket diagram and the standings table
+	// occupy one card and are switched (not stacked) to tighten the page. Each
+	// division keeps its own selection so A and B flip independently.
+	let swissView = $state<Record<Division, "diagram" | "standings">>({
+		A: "diagram",
+		B: "diagram",
+	});
+	let championshipView = $state<"diagram" | "standings">("diagram");
+	// Segmented-toggle pills, matching the game-detail tab bar (GameDetailView):
+	// borderless, fill-based state (active = #35302B, inactive = #2a2622).
+	const viewTriggerClass =
+		"cursor-pointer rounded px-3 py-1.5 text-xs font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622]";
 
 	// Self-signup state. viewerSlot drives the "you're signed up" strip
 	// (non-null → strip + Withdraw); canSignUp drives the "Sign up" CTA
@@ -921,31 +936,77 @@
 					</section>
 				{:else}
 					{#if data.bracket.rounds.length > 0}
-						<section class="mb-8">
-							<h2 class="mb-1 text-lg font-bold text-tan">
-								Championship Bracket
-							</h2>
-							<PickPreferenceNote />
-							<div class="rounded-lg p-4" style="background-color: #2a2622;">
+						<!-- Bracket diagram and standings share one card and are
+						     toggled (not stacked), matching the Swiss divisions. -->
+						<Tabs.Root
+							bind:value={championshipView}
+							class="mb-8 rounded-lg p-4"
+							style="background-color: #2a2622;"
+						>
+							<div
+								class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+								style="background-color: #35302b;"
+							>
+								<h2 class="text-lg font-bold text-tan">Championship</h2>
+								<Tabs.List
+									class="flex w-fit shrink-0 items-center gap-1 rounded-lg bg-[#241f1b] p-1"
+								>
+									<Tabs.Trigger value="diagram" class={viewTriggerClass}>
+										Diagram
+									</Tabs.Trigger>
+									<Tabs.Trigger value="standings" class={viewTriggerClass}>
+										Standings
+									</Tabs.Trigger>
+								</Tabs.List>
+							</div>
+							<Tabs.Content value="diagram" class="view-pane">
+								<PickPreferenceNote />
 								<ChampionshipBracketTree
 									bracket={data.bracket}
 									tournamentSlug={data.tournament.slug}
 									mapPool={data.tournament.map_pool}
 									onMatchClick={openMatch}
 								/>
-							</div>
-						</section>
+							</Tabs.Content>
+							<Tabs.Content value="standings" class="view-pane">
+								<ChampionshipStandings
+									bracket={data.bracket}
+									isComplete={data.tournament.status === "complete"}
+								/>
+							</Tabs.Content>
+						</Tabs.Root>
 					{/if}
 
 					{#each ["A", "B"] as const as division (division)}
 						{@const divisionData = data.standings.divisions[division]}
 						{#if divisionData.standings.length > 0}
-							<section class="mb-8">
-								<h2 class="mb-1 text-lg font-bold text-tan">
-									{divisionData.name}
-								</h2>
-								<PickPreferenceNote />
-								<div class="space-y-3">
+							<!-- Bracket diagram and standings share one card and are
+							     toggled (not stacked) to keep the page compact. -->
+							<Tabs.Root
+								bind:value={swissView[division]}
+								class="mb-8 rounded-lg p-4"
+								style="background-color: #2a2622;"
+							>
+								<div
+									class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+									style="background-color: #35302b;"
+								>
+									<h2 class="text-lg font-bold text-tan">
+										{divisionData.name}
+									</h2>
+									<Tabs.List
+										class="flex w-fit shrink-0 items-center gap-1 rounded-lg bg-[#241f1b] p-1"
+									>
+										<Tabs.Trigger value="diagram" class={viewTriggerClass}>
+											Diagram
+										</Tabs.Trigger>
+										<Tabs.Trigger value="standings" class={viewTriggerClass}>
+											Standings
+										</Tabs.Trigger>
+									</Tabs.List>
+								</div>
+								<Tabs.Content value="diagram" class="view-pane">
+									<PickPreferenceNote />
 									<SwissFlowBracket
 										winsToAdvance={data.tournament.swiss_wins_to_advance}
 										lossesToEliminate={data.tournament
@@ -957,6 +1018,8 @@
 										mapPool={data.tournament.map_pool}
 										onMatchClick={openMatch}
 									/>
+								</Tabs.Content>
+								<Tabs.Content value="standings" class="view-pane">
 									<SwissStandings
 										divisionName=""
 										standings={divisionData.standings}
@@ -966,8 +1029,8 @@
 											? undefined
 											: substituteSlot}
 									/>
-								</div>
-							</section>
+								</Tabs.Content>
+							</Tabs.Root>
 						{/if}
 					{/each}
 				{/if}
@@ -1005,3 +1068,20 @@
 		{/key}
 	{/if}
 </Popover>
+
+<style>
+	/* Fade the active Swiss view in on toggle. bits-ui remounts Tabs.Content
+	   when its value becomes active, so the animation replays on each switch. */
+	:global(.view-pane) {
+		animation: view-fade-in 0.18s ease-out;
+	}
+
+	@keyframes view-fade-in {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
+</style>
