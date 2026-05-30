@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from "svelte";
 	import { goto, invalidateAll, pushState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -66,9 +67,16 @@
 	// Per-division Swiss view toggle: the bracket diagram and the standings table
 	// occupy one card and are switched (not stacked) to tighten the page. Each
 	// division keeps its own selection so A and B flip independently.
+	// Once the championship is under way the Swiss rounds are settled, so the
+	// standings are the more useful default for each group; the live bracket is
+	// still one toggle away. untrack: this is a one-time initial default, not a
+	// reactive binding (a later phase change shouldn't yank a user's toggle).
+	const defaultSwissView = untrack(() =>
+		data.tournament.status === "championship" ? "standings" : "diagram",
+	);
 	let swissView = $state<Record<Division, "diagram" | "standings">>({
-		A: "diagram",
-		B: "diagram",
+		A: defaultSwissView,
+		B: defaultSwissView,
 	});
 	let championshipView = $state<"diagram" | "standings">("diagram");
 	// Segmented-toggle pills, matching the game-detail tab bar (GameDetailView):
