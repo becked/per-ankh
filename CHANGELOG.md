@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-30-d0b2c64] - 2026-05-30
+
+### Features
+
+- (tournament) highlight champion/runner-up names and brighten completed header — [d0b2c64](https://github.com/becked/per-ankh/commit/d0b2c64f26efc5c8d61234f0312c411b89f1db56)
+
 ## [2026-05-29-867d604] - 2026-05-29
 
 ### Features
