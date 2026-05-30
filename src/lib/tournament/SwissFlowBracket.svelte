@@ -51,6 +51,88 @@
 	// lights up that player's card in every round and dims the rest.
 	let highlightedSlot = $state<string | null>(null);
 
+	// SVG path-trace overlay. When a slot is hovered we measure its row in
+	// each round (plus its final gutter chip) and emit one bezier per hop.
+	// Geometry is read from the DOM rather than computed: the grid auto-sizes
+	// its buckets, so a card's pixel position isn't known before render.
+	let stageEl = $state<HTMLDivElement | undefined>(undefined);
+	let connectors = $state<string[]>([]);
+	// Bumped by the ResizeObserver to force the overlay to remeasure on reflow.
+	let geomVersion = $state(0);
+
+	// Smooth S-curve between two anchor points with horizontal control handles.
+	function tracePath(x0: number, y0: number, x1: number, y1: number): string {
+		const dx = Math.max(24, (x1 - x0) * 0.5);
+		return `M ${x0} ${y0} C ${x0 + dx} ${y0} ${x1 - dx} ${y1} ${x1} ${y1}`;
+	}
+
+	$effect(() => {
+		// Track deps explicitly: recompute on hover changes and on reflow.
+		const slot = highlightedSlot;
+		geomVersion;
+		const stage = stageEl;
+		if (!slot || !stage) {
+			connectors = [];
+			return;
+		}
+		const rows = Array.from(
+			stage.querySelectorAll<HTMLElement>(`.match-row[data-slot-id="${slot}"]`),
+		)
+			.map((el) => ({ el, round: Number(el.dataset.round ?? 0) }))
+			.sort((a, b) => a.round - b.round);
+		if (rows.length === 0) {
+			connectors = [];
+			return;
+		}
+		const stageRect = stage.getBoundingClientRect();
+		const anchors = rows.map(({ el }) => {
+			const r = el.getBoundingClientRect();
+			return {
+				leftX: r.left - stageRect.left,
+				rightX: r.right - stageRect.left,
+				y: r.top - stageRect.top + r.height / 2,
+			};
+		});
+		const paths: string[] = [];
+		for (let i = 0; i < anchors.length - 1; i++) {
+			paths.push(
+				tracePath(
+					anchors[i].rightX,
+					anchors[i].y,
+					anchors[i + 1].leftX,
+					anchors[i + 1].y,
+				),
+			);
+		}
+		// Final hop: last match → the player's advancing/eliminated gutter chip.
+		const chip = stage.querySelector<HTMLElement>(
+			`.chip[data-slot-id="${slot}"]`,
+		);
+		if (chip) {
+			const last = anchors[anchors.length - 1];
+			const cr = chip.getBoundingClientRect();
+			paths.push(
+				tracePath(
+					last.rightX,
+					last.y,
+					cr.left - stageRect.left,
+					cr.top - stageRect.top + cr.height / 2,
+				),
+			);
+		}
+		connectors = paths;
+	});
+
+	$effect(() => {
+		const stage = stageEl;
+		if (!stage) return;
+		const ro = new ResizeObserver(() => {
+			geomVersion += 1;
+		});
+		ro.observe(stage);
+		return () => ro.disconnect();
+	});
+
 	function handleMatchClick(matchId: string, e: MouseEvent) {
 		if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
 		e.preventDefault();
@@ -220,156 +302,178 @@
 	style:--rows={totalContentRows + 1}
 >
 	<div class="grid-scroll">
-		<div
-			class="grid"
-			style:grid-template-columns="repeat({maxRounds}, 156px) 132px"
-			style:grid-template-rows="auto repeat({totalContentRows}, minmax(0, auto))"
-		>
-			{#each roundIndexes as i (i)}
-				<div class="round-header" style:grid-column={i + 1} style:grid-row={1}>
-					Round {i + 1}
-				</div>
-			{/each}
+		<div class="grid-stage" bind:this={stageEl}>
+			<svg class="connectors" aria-hidden="true">
+				{#each connectors as d, i (i)}
+					<path {d} class="connector" />
+				{/each}
+			</svg>
 			<div
-				class="round-header gutter-header"
-				style:grid-column={gutterCol}
-				style:grid-row={1}
+				class="grid"
+				style:grid-template-columns="repeat({maxRounds}, 156px) 132px"
+				style:grid-template-rows="auto repeat({totalContentRows}, minmax(0,
+				auto))"
 			>
-				Status
-			</div>
-
-			{#each layout.buckets as b (`${b.round}-${b.wins}-${b.losses}`)}
-				<div
-					class="bucket"
-					class:bucket-advance={b.wins === winsToAdvance - 1 &&
-						b.losses < lossesToEliminate}
-					class:bucket-eliminate={b.losses === lossesToEliminate - 1 &&
-						b.wins < winsToAdvance}
-					style:grid-column={b.round}
-					style:grid-row={rowForBucket(b.wins, b.losses)}
-				>
-					<div class="record-label">{b.wins}-{b.losses}</div>
-					<div class="match-list">
-						{#each b.matches as m (m.match_id)}
-							{@const aWon = m.winner_slot_id === m.slot_a_id}
-							{@const bWon = m.winner_slot_id === m.slot_b_id}
-							{@const aOnPath =
-								highlightedSlot !== null && m.slot_a_id === highlightedSlot}
-							{@const bOnPath =
-								highlightedSlot !== null && m.slot_b_id === highlightedSlot}
-							{@const onPath = aOnPath || bOnPath}
-							<a
-								class="match"
-								class:dimmed={highlightedSlot !== null && !onPath}
-								class:on-path={onPath}
-								data-match-id={m.match_id}
-								href="{resolve('/tournaments/[slug]', {
-									slug: tournamentSlug,
-								})}?match={m.match_id}"
-								onclick={(e) => handleMatchClick(m.match_id, e)}
-							>
-								<div
-									class="match-row"
-									class:row-active={aOnPath}
-									role="presentation"
-									onmouseenter={() => (highlightedSlot = m.slot_a_id)}
-									onmouseleave={() => (highlightedSlot = null)}
-								>
-									{#if m.slot_a_id}
-										<PlayerAvatar
-											avatarUrl={matchSlotAvatarUrl(m, "a", avatarOf)}
-											size={12}
-										/>
-									{/if}
-									<span class="slot" class:winner={aWon}>
-										{matchSlotLabel(m, "a")}
-									</span>
-								</div>
-								<div
-									class="match-row"
-									class:row-active={bOnPath}
-									role="presentation"
-									onmouseenter={() => (highlightedSlot = m.slot_b_id)}
-									onmouseleave={() => (highlightedSlot = null)}
-								>
-									{#if m.slot_b_id}
-										<PlayerAvatar
-											avatarUrl={matchSlotAvatarUrl(m, "b", avatarOf)}
-											size={12}
-										/>
-									{/if}
-									<span class="slot" class:winner={bWon}>
-										{matchSlotLabel(m, "b")}
-									</span>
-								</div>
-								{#if m.map_script}
-									{@const entry = poolEntryById(mapPool, m.map_pool_id)}
-									{@const mapName = entry
-										? mapFullName(entry.options, entry.script)
-										: mapScriptLabel(m.map_script)}
-									<div class="map-row" title={mapName}>
-										<img class="map-icon" src={MAP_ICON} alt="" />
-										<span class="map-name">{mapName}</span>
-									</div>
-								{/if}
-							</a>
-						{/each}
+				{#each roundIndexes as i (i)}
+					<div
+						class="round-header"
+						style:grid-column={i + 1}
+						style:grid-row={1}
+					>
+						Round {i + 1}
 					</div>
+				{/each}
+				<div
+					class="round-header gutter-header"
+					style:grid-column={gutterCol}
+					style:grid-row={1}
+				>
+					Status
 				</div>
-			{/each}
 
-			<div
-				class="gutter advance-gutter"
-				style:grid-column={gutterCol}
-				style:grid-row="2 / span {gutterSplit}"
-			>
-				<div class="gutter-label gutter-label-advance">Advancing</div>
-				{#if layout.advanced.length === 0}
-					<p class="gutter-empty">—</p>
-				{:else}
-					<ul class="chip-list">
-						{#each layout.advanced as a (a.slot_id)}
-							<li
-								class="chip chip-advance"
-								class:dimmed={highlightedSlot !== null &&
-									highlightedSlot !== a.slot_id}
-								onmouseenter={() => (highlightedSlot = a.slot_id)}
-								onmouseleave={() => (highlightedSlot = null)}
-							>
-								<PlayerAvatar avatarUrl={avatarOf[a.slot_id]} size={12} />
-								<span class="chip-name">{slotLabel(a.slot_id)}</span>
-								<span class="chip-record">{a.finalWins}-{a.finalLosses}</span>
-							</li>
-						{/each}
-					</ul>
-				{/if}
-			</div>
+				{#each layout.buckets as b (`${b.round}-${b.wins}-${b.losses}`)}
+					<div
+						class="bucket"
+						style:grid-column={b.round}
+						style:grid-row={rowForBucket(b.wins, b.losses)}
+					>
+						<div class="record-label">{b.wins}-{b.losses}</div>
+						<div class="match-list">
+							{#each b.matches as m (m.match_id)}
+								{@const aWon = m.winner_slot_id === m.slot_a_id}
+								{@const bWon = m.winner_slot_id === m.slot_b_id}
+								{@const aOnPath =
+									highlightedSlot !== null && m.slot_a_id === highlightedSlot}
+								{@const bOnPath =
+									highlightedSlot !== null && m.slot_b_id === highlightedSlot}
+								{@const onPath = aOnPath || bOnPath}
+								<a
+									class="match"
+									class:dimmed={highlightedSlot !== null && !onPath}
+									class:on-path={onPath}
+									data-match-id={m.match_id}
+									href="{resolve('/tournaments/[slug]', {
+										slug: tournamentSlug,
+									})}?match={m.match_id}"
+									onclick={(e) => handleMatchClick(m.match_id, e)}
+								>
+									<div
+										class="match-row"
+										class:row-active={aOnPath}
+										data-slot-id={m.slot_a_id}
+										data-round={b.round}
+									>
+										<span
+											class="slot-hit"
+											role="presentation"
+											onmouseenter={() => (highlightedSlot = m.slot_a_id)}
+											onmouseleave={() => (highlightedSlot = null)}
+										>
+											{#if m.slot_a_id}
+												<PlayerAvatar
+													avatarUrl={matchSlotAvatarUrl(m, "a", avatarOf)}
+													size={12}
+												/>
+											{/if}
+											<span class="slot" class:winner={aWon}>
+												{matchSlotLabel(m, "a")}
+											</span>
+										</span>
+									</div>
+									<div
+										class="match-row"
+										class:row-active={bOnPath}
+										data-slot-id={m.slot_b_id}
+										data-round={b.round}
+									>
+										<span
+											class="slot-hit"
+											role="presentation"
+											onmouseenter={() => (highlightedSlot = m.slot_b_id)}
+											onmouseleave={() => (highlightedSlot = null)}
+										>
+											{#if m.slot_b_id}
+												<PlayerAvatar
+													avatarUrl={matchSlotAvatarUrl(m, "b", avatarOf)}
+													size={12}
+												/>
+											{/if}
+											<span class="slot" class:winner={bWon}>
+												{matchSlotLabel(m, "b")}
+											</span>
+										</span>
+									</div>
+									{#if m.map_script}
+										{@const entry = poolEntryById(mapPool, m.map_pool_id)}
+										{@const mapName = entry
+											? mapFullName(entry.options, entry.script)
+											: mapScriptLabel(m.map_script)}
+										<div class="map-row" title={mapName}>
+											<img class="map-icon" src={MAP_ICON} alt="" />
+											<span class="map-name">{mapName}</span>
+										</div>
+									{/if}
+								</a>
+							{/each}
+						</div>
+					</div>
+				{/each}
 
-			<div
-				class="gutter eliminate-gutter"
-				style:grid-column={gutterCol}
-				style:grid-row="{2 + gutterSplit} / -1"
-			>
-				<div class="gutter-label gutter-label-eliminate">Eliminated</div>
-				{#if layout.eliminated.length === 0}
-					<p class="gutter-empty">—</p>
-				{:else}
-					<ul class="chip-list">
-						{#each layout.eliminated as e (e.slot_id)}
-							<li
-								class="chip chip-eliminate"
-								class:dimmed={highlightedSlot !== null &&
-									highlightedSlot !== e.slot_id}
-								onmouseenter={() => (highlightedSlot = e.slot_id)}
-								onmouseleave={() => (highlightedSlot = null)}
-							>
-								<PlayerAvatar avatarUrl={avatarOf[e.slot_id]} size={12} />
-								<span class="chip-name">{slotLabel(e.slot_id)}</span>
-								<span class="chip-record">{e.finalWins}-{e.finalLosses}</span>
-							</li>
-						{/each}
-					</ul>
-				{/if}
+				<div
+					class="gutter advance-gutter"
+					style:grid-column={gutterCol}
+					style:grid-row="2 / span {gutterSplit}"
+				>
+					<div class="gutter-label gutter-label-advance">Advancing</div>
+					{#if layout.advanced.length === 0}
+						<p class="gutter-empty">—</p>
+					{:else}
+						<ul class="chip-list">
+							{#each layout.advanced as a (a.slot_id)}
+								<li
+									class="chip chip-advance"
+									data-slot-id={a.slot_id}
+									class:dimmed={highlightedSlot !== null &&
+										highlightedSlot !== a.slot_id}
+									onmouseenter={() => (highlightedSlot = a.slot_id)}
+									onmouseleave={() => (highlightedSlot = null)}
+								>
+									<PlayerAvatar avatarUrl={avatarOf[a.slot_id]} size={12} />
+									<span class="chip-name">{slotLabel(a.slot_id)}</span>
+									<span class="chip-record">{a.finalWins}-{a.finalLosses}</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
+
+				<div
+					class="gutter eliminate-gutter"
+					style:grid-column={gutterCol}
+					style:grid-row="{2 + gutterSplit} / -1"
+				>
+					<div class="gutter-label gutter-label-eliminate">Eliminated</div>
+					{#if layout.eliminated.length === 0}
+						<p class="gutter-empty">—</p>
+					{:else}
+						<ul class="chip-list">
+							{#each layout.eliminated as e (e.slot_id)}
+								<li
+									class="chip chip-eliminate"
+									data-slot-id={e.slot_id}
+									class:dimmed={highlightedSlot !== null &&
+										highlightedSlot !== e.slot_id}
+									onmouseenter={() => (highlightedSlot = e.slot_id)}
+									onmouseleave={() => (highlightedSlot = null)}
+								>
+									<PlayerAvatar avatarUrl={avatarOf[e.slot_id]} size={12} />
+									<span class="chip-name">{slotLabel(e.slot_id)}</span>
+									<span class="chip-record">{e.finalWins}-{e.finalLosses}</span>
+								</li>
+							{/each}
+						</ul>
+					{/if}
+				</div>
 			</div>
 		</div>
 	</div>
@@ -388,9 +492,35 @@
 		overflow-x: auto;
 	}
 
+	/* Wraps the grid tightly (max-content) so the absolutely-positioned
+	   connector overlay can span the grid's full scroll extent and scroll
+	   with it. */
+	.grid-stage {
+		position: relative;
+		width: max-content;
+	}
+
+	.connectors {
+		position: absolute;
+		inset: 0;
+		width: 100%;
+		height: 100%;
+		pointer-events: none;
+		overflow: visible;
+	}
+
+	.connector {
+		fill: none;
+		stroke: rgba(232, 216, 184, 0.25);
+		stroke-width: 1.5;
+	}
+
 	.grid {
 		display: grid;
-		gap: 0.5rem;
+		/* Wider column gap than row gap: gives the round columns (and the
+		   hover-trace connector lines between them) room to breathe. */
+		row-gap: 0.5rem;
+		column-gap: 1.5rem;
 		min-width: max-content;
 	}
 
@@ -418,14 +548,6 @@
 		flex-direction: column;
 		gap: 0.25rem;
 		align-self: start;
-	}
-
-	.bucket-advance {
-		border-color: rgba(120, 180, 100, 0.5);
-	}
-
-	.bucket-eliminate {
-		border-color: rgba(180, 90, 70, 0.5);
 	}
 
 	.record-label {
@@ -484,6 +606,17 @@
 		align-items: center;
 		gap: 0.3rem;
 		min-width: 0;
+	}
+
+	/* Hover hit-area: hugs the avatar + name so the trace triggers on the
+	   player, not the empty space filling the rest of the card. Still shrinks
+	   (flex-shrink) so long names ellipsize within the card. */
+	.slot-hit {
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
+		min-width: 0;
+		flex: 0 1 auto;
 	}
 
 	.slot {
