@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { untrack } from "svelte";
+	import { fade } from "svelte/transition";
 	import { goto, invalidateAll, pushState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -79,10 +80,12 @@
 		B: defaultSwissView,
 	});
 	let championshipView = $state<"diagram" | "standings">("diagram");
-	// Segmented-toggle pills, matching the game-detail tab bar (GameDetailView):
-	// borderless, fill-based state (active = #35302B, inactive = #2a2622).
+	// Segmented switch: the triggers are transparent text laid over a sliding
+	// highlight thumb (see each Tabs.List), so the lit #35302B segment animates
+	// across rather than the fill swapping. text-center + the grid-cols-2 track
+	// keep both halves equal width so the half-width thumb lands on each.
 	const viewTriggerClass =
-		"cursor-pointer rounded px-3 py-1.5 text-xs font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622]";
+		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
 	// Self-signup state. viewerSlot drives the "you're signed up" strip
 	// (non-null → strip + Withdraw); canSignUp drives the "Sign up" CTA
@@ -957,8 +960,16 @@
 							>
 								<h2 class="text-lg font-bold text-tan">Championship</h2>
 								<Tabs.List
-									class="flex w-fit shrink-0 items-center gap-1 rounded-lg bg-[#241f1b] p-1"
+									class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
+									style="background-color: #2a2622;"
 								>
+									<div
+										class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+										style:background-color="#35302B"
+										style:transform={championshipView === "standings"
+											? "translateX(100%)"
+											: "translateX(0)"}
+									></div>
 									<Tabs.Trigger value="diagram" class={viewTriggerClass}>
 										Diagram
 									</Tabs.Trigger>
@@ -967,21 +978,30 @@
 									</Tabs.Trigger>
 								</Tabs.List>
 							</div>
-							<Tabs.Content value="diagram" class="view-pane">
-								<PickPreferenceNote />
-								<ChampionshipBracketTree
-									bracket={data.bracket}
-									tournamentSlug={data.tournament.slug}
-									mapPool={data.tournament.map_pool}
-									onMatchClick={openMatch}
-								/>
-							</Tabs.Content>
-							<Tabs.Content value="standings" class="view-pane">
-								<ChampionshipStandings
-									bracket={data.bracket}
-									isComplete={data.tournament.status === "complete"}
-								/>
-							</Tabs.Content>
+							<div class="view-stack">
+								{#key championshipView}
+									<div
+										class="view-pane"
+										in:fade={{ duration: 200 }}
+										out:fade={{ duration: 200 }}
+									>
+										{#if championshipView === "standings"}
+											<ChampionshipStandings
+												bracket={data.bracket}
+												isComplete={data.tournament.status === "complete"}
+											/>
+										{:else}
+											<PickPreferenceNote />
+											<ChampionshipBracketTree
+												bracket={data.bracket}
+												tournamentSlug={data.tournament.slug}
+												mapPool={data.tournament.map_pool}
+												onMatchClick={openMatch}
+											/>
+										{/if}
+									</div>
+								{/key}
+							</div>
 						</Tabs.Root>
 					{/if}
 
@@ -1003,8 +1023,16 @@
 										{divisionData.name}
 									</h2>
 									<Tabs.List
-										class="flex w-fit shrink-0 items-center gap-1 rounded-lg bg-[#241f1b] p-1"
+										class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
+										style="background-color: #2a2622;"
 									>
+										<div
+											class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+											style:background-color="#35302B"
+											style:transform={swissView[division] === "standings"
+												? "translateX(100%)"
+												: "translateX(0)"}
+										></div>
 										<Tabs.Trigger value="diagram" class={viewTriggerClass}>
 											Diagram
 										</Tabs.Trigger>
@@ -1013,31 +1041,41 @@
 										</Tabs.Trigger>
 									</Tabs.List>
 								</div>
-								<Tabs.Content value="diagram" class="view-pane">
-									<PickPreferenceNote />
-									<SwissFlowBracket
-										winsToAdvance={data.tournament.swiss_wins_to_advance}
-										lossesToEliminate={data.tournament
-											.swiss_losses_to_eliminate}
-										maxRounds={data.tournament.swiss_max_rounds}
-										standings={divisionData.standings}
-										matches={matchesByDivision[division]}
-										tournamentSlug={data.tournament.slug}
-										mapPool={data.tournament.map_pool}
-										onMatchClick={openMatch}
-									/>
-								</Tabs.Content>
-								<Tabs.Content value="standings" class="view-pane">
-									<SwissStandings
-										divisionName=""
-										standings={divisionData.standings}
-										isViewerAdmin={isAdmin}
-										{busy}
-										onSubstitute={data.tournament.status === "championship"
-											? undefined
-											: substituteSlot}
-									/>
-								</Tabs.Content>
+								<div class="view-stack">
+									{#key swissView[division]}
+										<div
+											class="view-pane"
+											in:fade={{ duration: 200 }}
+											out:fade={{ duration: 200 }}
+										>
+											{#if swissView[division] === "standings"}
+												<SwissStandings
+													divisionName=""
+													standings={divisionData.standings}
+													isViewerAdmin={isAdmin}
+													{busy}
+													onSubstitute={data.tournament.status ===
+													"championship"
+														? undefined
+														: substituteSlot}
+												/>
+											{:else}
+												<PickPreferenceNote />
+												<SwissFlowBracket
+													winsToAdvance={data.tournament.swiss_wins_to_advance}
+													lossesToEliminate={data.tournament
+														.swiss_losses_to_eliminate}
+													maxRounds={data.tournament.swiss_max_rounds}
+													standings={divisionData.standings}
+													matches={matchesByDivision[division]}
+													tournamentSlug={data.tournament.slug}
+													mapPool={data.tournament.map_pool}
+													onMatchClick={openMatch}
+												/>
+											{/if}
+										</div>
+									{/key}
+								</div>
 							</Tabs.Root>
 						{/if}
 					{/each}
@@ -1078,18 +1116,19 @@
 </Popover>
 
 <style>
-	/* Fade the active Swiss view in on toggle. bits-ui remounts Tabs.Content
-	   when its value becomes active, so the animation replays on each switch. */
-	:global(.view-pane) {
-		animation: view-fade-in 0.18s ease-out;
+	/* Crossfade the two views: both panes occupy the same grid cell so the
+	   outgoing (out:fade) and incoming (in:fade) overlap in place — no transform,
+	   so nothing inside a pane shifts. The cell tracks the taller pane only while
+	   both are mounted, then settles to the active one. minmax(0,1fr) keeps the
+	   column at the available width so the bracket scrolls internally rather than
+	   widening the card. */
+	.view-stack {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
 	}
 
-	@keyframes view-fade-in {
-		from {
-			opacity: 0;
-		}
-		to {
-			opacity: 1;
-		}
+	.view-stack > :global(.view-pane) {
+		grid-area: 1 / 1;
+		min-width: 0;
 	}
 </style>
