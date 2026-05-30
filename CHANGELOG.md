@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-29-b255700] - 2026-05-29
+
+### Features
+
+- (tournament) toggle bracket diagram and standings within a card — [b255700](https://github.com/becked/per-ankh/commit/b255700918a2801856ba33b0f6852e721494e84a)
+
 ## [2026-05-29-f288bbf] - 2026-05-29
 
 ### Features
