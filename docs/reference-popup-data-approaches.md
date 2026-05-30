@@ -35,7 +35,7 @@ That distinction is the whole cost driver:
 
 Either way, the **rendered output text is Mohawk's game content** — same
 non-MIT posture as the baked atlases/sprites. What differs between the two
-approaches is who writes and maintains the *rendering code*, not the data's
+approaches is who writes and maintains the _rendering code_, not the data's
 provenance.
 
 ### Rights status
@@ -135,7 +135,7 @@ That risk is bounded by:
 
 1. **Pin the source.** Bring owreference in as a **git submodule pinned to a
    SHA** (or a vendored snapshot). A patch-time shape change cannot reach
-   per-ankh until *we* bump the pin deliberately.
+   per-ankh until _we_ bump the pin deliberately.
 2. **Anti-corruption adapter — the whole game.** owreference's shape never
    touches app code. The adapter reads its JSON and emits a per-ankh-**owned**,
    stable, typed module. When alcaras's keys move, we fix **one adapter file**;
@@ -182,16 +182,16 @@ asset bake generally.)
 
 ## 4. Side-by-side
 
-| Axis | A — bake ourselves | B — through owreference |
-|---|---|---|
-| Up-front build | High (port humanizer + N builders) | Low (adapter + schema + pin) |
-| Ongoing maintenance | We own the patch treadmill | alcaras owns it; we re-pin |
-| External dependency | None | Pinned submodule |
-| Contract risk | None | Bounded by adapter + Valibot + pin |
-| Patch/version skew | None (our own install) | Possible (stamp it) |
-| Coverage | Whatever we build | Broad, immediate |
-| Provenance of output text | Mohawk content (non-MIT) | Mohawk content (non-MIT) — same |
-| Fits per-ankh conventions | Yes | Yes (same two-stage bake) |
+| Axis                      | A — bake ourselves                 | B — through owreference            |
+| ------------------------- | ---------------------------------- | ---------------------------------- |
+| Up-front build            | High (port humanizer + N builders) | Low (adapter + schema + pin)       |
+| Ongoing maintenance       | We own the patch treadmill         | alcaras owns it; we re-pin         |
+| External dependency       | None                               | Pinned submodule                   |
+| Contract risk             | None                               | Bounded by adapter + Valibot + pin |
+| Patch/version skew        | None (our own install)             | Possible (stamp it)                |
+| Coverage                  | Whatever we build                  | Broad, immediate                   |
+| Provenance of output text | Mohawk content (non-MIT)           | Mohawk content (non-MIT) — same    |
+| Fits per-ankh conventions | Yes                                | Yes (same two-stage bake)          |
 
 Both paths terminate in the **same** per-ankh-owned
 `src/lib/generated/reference-entities.ts` consumed by the popup, so the app code
