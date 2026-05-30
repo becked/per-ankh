@@ -70,9 +70,11 @@ export function synthesizeChampionshipPlaceholders(
 				slot_a_username: null,
 				slot_a_user_id: null,
 				slot_a_avatar_url: null,
+				slot_a_nation: null,
 				slot_b_username: null,
 				slot_b_user_id: null,
 				slot_b_avatar_url: null,
+				slot_b_nation: null,
 				is_placeholder: true,
 			});
 		}

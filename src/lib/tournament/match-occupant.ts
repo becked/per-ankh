@@ -19,6 +19,23 @@ interface MatchAvatarLike {
 	slot_b_avatar_url: string | null;
 }
 
+interface MatchNationLike {
+	slot_a_nation: string | null;
+	slot_b_nation: string | null;
+}
+
+// Nation each side played, resolved server-side via the slot↔player_index
+// mapping against the linked game. Null when unknown (no save, bye, forfeit,
+// admin-set, or legacy match) — callers render the crest only when non-null.
+// No live fallback: nation is a property of the game that was played, not of
+// the slot's current occupant, so it never changes under a substitution.
+export function matchSlotNation(
+	match: MatchNationLike,
+	side: "a" | "b",
+): string | null {
+	return side === "a" ? match.slot_a_nation : match.slot_b_nation;
+}
+
 // Returns the username to display for one side of a match. For non-pending
 // matches we prefer the snapshot column written at report time so a later
 // substitution doesn't rewrite the historical name. Pending matches fall

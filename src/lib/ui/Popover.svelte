@@ -24,6 +24,7 @@
 		sideOffset = 8,
 		customAnchor = null,
 		contentClass = "w-[min(92vw,28rem)]",
+		frameClass = "border-4 border-[#35302B] bg-blue-gray p-5 shadow-lg",
 		ariaLabel,
 		onOpenChange,
 		trigger,
@@ -34,9 +35,14 @@
 		align?: Align;
 		sideOffset?: number;
 		customAnchor?: string | HTMLElement | null;
-		// Width / size override for the floating panel. The theme (surface,
-		// border, padding, max-height scroll) is fixed; width varies per use.
+		// Width / size override for the floating panel. The surface, rounding,
+		// scroll, and shadow are fixed; width varies per use.
 		contentClass?: string;
+		// Border, surface background, padding, and shadow of the floating panel.
+		// Defaults to the standard dark frame; callers can drop the border,
+		// recolor the surface, thin the padding, or deepen the shadow (e.g. the
+		// match popover, whose own header bar already frames the content).
+		frameClass?: string;
 		ariaLabel?: string;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onOpenChange?: (open: boolean) => void;
@@ -62,7 +68,7 @@
 			{sideOffset}
 			{customAnchor}
 			aria-label={ariaLabel}
-			class="z-50 max-h-[85vh] overflow-y-auto rounded-lg border-4 border-[#35302B] bg-blue-gray p-5 text-tan shadow-lg {contentClass}"
+			class="z-50 max-h-[85vh] overflow-y-auto rounded-lg text-tan {frameClass} {contentClass}"
 		>
 			{@render children()}
 		</Popover.Content>

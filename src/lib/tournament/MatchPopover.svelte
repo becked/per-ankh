@@ -29,6 +29,7 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
 		matchSlotAvatarUrl,
+		matchSlotNation,
 		matchSlotUsername,
 	} from "$lib/tournament/match-occupant";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
@@ -484,9 +485,10 @@
 	side: "a" | "b",
 	label: string,
 	avatar: string | null,
-	faded: boolean,
+	isWinner: boolean,
 )}
 	{@const slotId = side === "a" ? match.slot_a_id : match.slot_b_id}
+	{@const nation = matchSlotNation(match, side)}
 	{#if substituteSide === side}
 		<span class="inline-flex flex-col gap-0.5">
 			<span class="inline-flex items-center gap-1">
@@ -527,8 +529,16 @@
 	{:else}
 		<span
 			class="inline-flex min-w-0 items-center gap-1.5"
-			class:opacity-50={faded}
+			class:text-orange={isWinner}
 		>
+			{#if nation}
+				<SpriteIcon
+					category="crests"
+					value={nation}
+					size={16}
+					alt={formatEnum(nation, "NATION_")}
+				/>
+			{/if}
 			<PlayerAvatar avatarUrl={avatar} size={14} />
 			<span class="truncate">{label}</span>
 			{#if canSubstitute && slotId !== null && slotId !== ""}
@@ -557,35 +567,45 @@
 	{/if}
 {/snippet}
 
-<header class="mb-3 flex items-start justify-between gap-3">
-	<div class="min-w-0 flex-1">
-		<h2
-			class="flex flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold text-tan"
-		>
-			{#if winnerLabel && winnerSide !== null && loserSide !== null}
-				{@render nameWithEdit(winnerSide, winnerLabel, winnerAvatar, false)}
-				<span class="opacity-50">v</span>
-				{#if loserLabel === "Bye"}
-					<span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
-						<span class="truncate">Bye</span>
-					</span>
-				{:else if loserLabel !== null}
-					{@render nameWithEdit(loserSide, loserLabel, loserAvatar, true)}
-				{/if}
-			{:else}
-				{@render nameWithEdit("a", slotALabel, slotAAvatar, false)}
-				<span class="opacity-50">v</span>
-				{#if match.slot_b_id !== null}
-					{@render nameWithEdit("b", slotBLabel, slotBAvatar, false)}
-				{:else}
-					<span class="inline-flex min-w-0 items-center gap-1.5">
-						<span class="truncate">{slotBLabel}</span>
-					</span>
-				{/if}
-			{/if}
-		</h2>
-		<div class="mt-1 flex items-center justify-between gap-3 text-xs text-tan">
-			<span class="opacity-70">
+<!-- Header styled like the bracket section bar (e.g. the "West" / "Championship"
+     headers): a #35302b rounded bar carrying the matchup, the status badge to
+     its right, the controls far-right, and bracket · round on a second line. -->
+<header class="mb-3 rounded-lg px-3 py-2" style="background-color: #35302b;">
+	<div class="flex items-start justify-between gap-3">
+		<div class="min-w-0 flex-1">
+			<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
+				<h2
+					class="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-lg font-bold text-tan"
+				>
+					{#if winnerLabel && winnerSide !== null && loserSide !== null}
+						{@render nameWithEdit(winnerSide, winnerLabel, winnerAvatar, true)}
+						<span class="mx-1 opacity-50">v</span>
+						{#if loserLabel === "Bye"}
+							<span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
+								<span class="truncate">Bye</span>
+							</span>
+						{:else if loserLabel !== null}
+							{@render nameWithEdit(loserSide, loserLabel, loserAvatar, false)}
+						{/if}
+					{:else}
+						{@render nameWithEdit("a", slotALabel, slotAAvatar, false)}
+						<span class="mx-1 opacity-50">v</span>
+						{#if match.slot_b_id !== null}
+							{@render nameWithEdit("b", slotBLabel, slotBAvatar, false)}
+						{:else}
+							<span class="inline-flex min-w-0 items-center gap-1.5">
+								<span class="truncate">{slotBLabel}</span>
+							</span>
+						{/if}
+					{/if}
+				</h2>
+				<span
+					class="shrink-0 rounded-full border px-2 py-0.5 text-[11px] {statusChipClass}"
+				>
+					{isPlaceholder ? "awaiting prior round" : match.status}
+				</span>
+			</div>
+			<div class="mt-1 text-xs text-tan opacity-70">
 				{#if match.phase === "championship"}
 					Championship
 				{:else if match.division}
@@ -596,52 +616,52 @@
 				{#if match.round_number}
 					· Round {match.round_number}
 				{/if}
-			</span>
-			<span
-				class="shrink-0 rounded-full border px-2 py-0.5 text-[11px] {statusChipClass}"
+			</div>
+		</div>
+		<div class="flex flex-shrink-0 items-start gap-2">
+			<button
+				type="button"
+				class="text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100"
+				onclick={onClose}
+				aria-label="Close"
 			>
-				{isPlaceholder ? "awaiting prior round" : match.status}
-			</span>
+				<svg
+					xmlns="http://www.w3.org/2000/svg"
+					class="h-5 w-5"
+					fill="none"
+					viewBox="0 0 24 24"
+					stroke="currentColor"
+					stroke-width="2"
+				>
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						d="M6 18L18 6M6 6l12 12"
+					/>
+				</svg>
+			</button>
 		</div>
 	</div>
-	<button
-		type="button"
-		class="text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100"
-		onclick={onClose}
-		aria-label="Close"
-	>
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			class="h-5 w-5"
-			fill="none"
-			viewBox="0 0 24 24"
-			stroke="currentColor"
-			stroke-width="2"
-		>
-			<path
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				d="M6 18L18 6M6 6l12 12"
-			/>
-		</svg>
-	</button>
 </header>
 
 <div class="flex flex-col gap-3">
-	{#if mapName}
-		<div class="flex items-center gap-1.5 text-sm text-tan" title={mapName}>
-			<img src={MAP_ICON} alt="" class="h-4 w-4 shrink-0 opacity-80" />
-			<span class="truncate">{mapName}</span>
+	{#if isPlaceholder}
+		<div
+			class="rounded-lg p-3 text-xs text-tan opacity-70"
+			style="background-color: #35302a;"
+		>
+			This match is generated once the prior round finishes. Map, result, and
+			uploads aren't available yet — once both feeders report, the real match
+			takes over this cell.
 		</div>
-	{/if}
-
-	{#if match.game_id}
-		<div class="rounded-lg p-3" style="background-color: #35302b;">
+	{:else if match.game_id}
+		<!-- Result card: save-derived stats in three plain columns. -->
+		<div class="rounded-lg p-3" style="background-color: #35302a;">
 			{#if gameLoading && !gameData}
 				<p class="text-xs text-tan opacity-60">Loading game…</p>
 			{:else if gameData}
-				<div class="mb-2 grid grid-cols-3 gap-2">
-					<div class="rounded p-2" style="background-color: #2a2622;">
+				<div class="grid grid-cols-3 gap-3">
+					<div>
 						<p
 							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
 						>
@@ -662,7 +682,7 @@
 							<span class="truncate">{winnerLabel ?? "—"}</span>
 						</p>
 					</div>
-					<div class="rounded p-2" style="background-color: #2a2622;">
+					<div>
 						<p
 							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
 						>
@@ -678,7 +698,7 @@
 							{victoryType ?? "—"}
 						</p>
 					</div>
-					<div class="rounded p-2" style="background-color: #2a2622;">
+					<div>
 						<p
 							class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
 						>
@@ -690,151 +710,48 @@
 						</p>
 					</div>
 				</div>
-				{#if hasSparkline}
-					<div class="rounded p-1" style="background-color: #211a12;">
-						<Chart option={sparklineOption} height="60px" />
-					</div>
-				{/if}
 			{/if}
 		</div>
-	{:else if isPlaceholder}
-		<div
-			class="rounded-lg p-3 text-xs text-tan opacity-70"
-			style="background-color: #35302b;"
-		>
-			This match is generated once the prior round finishes. Map, result, and
-			uploads aren't available yet — once both feeders report, the real match
-			takes over this cell.
+		{#if hasSparkline}
+			<div class="rounded-lg p-3" style="background-color: #35302a;">
+				<Chart option={sparklineOption} height="60px" />
+			</div>
+		{/if}
+	{:else if winnerLabel}
+		<!-- Decided without a save (forfeit / admin-set result): show only the
+		     winner — no save card with empty "—" stats. -->
+		<div class="rounded-lg p-3" style="background-color: #35302a;">
+			<p
+				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
+			>
+				<SpriteIcon
+					category="icons"
+					value="ACHIEVEMENT_WIN"
+					size={10}
+					alt="Winner"
+				/>
+				Winner
+			</p>
+			<p class="flex items-center gap-1.5 text-sm font-bold text-[#DBDEE3]">
+				<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
+				<span class="truncate">{winnerLabel}</span>
+			</p>
 		</div>
-	{:else}
-		<div class="rounded-lg p-3" style="background-color: #35302b;">
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
-					<SpriteIcon
-						category="icons"
-						value="ACHIEVEMENT_WIN"
-						size={10}
-						alt="Winner"
-					/>
-					Winner
-				</p>
-				<p class="flex items-center gap-1.5 text-sm font-bold text-[#DBDEE3]">
-					{#if winnerLabel}
-						<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
-					{/if}
-					<span class="truncate">{winnerLabel ?? "—"}</span>
-				</p>
+	{/if}
+
+	{#if mapName}
+		<div class="rounded-lg p-3" style="background-color: #35302a;">
+			<div class="flex items-center gap-1.5 text-sm text-tan" title={mapName}>
+				<img src={MAP_ICON} alt="" class="h-4 w-4 shrink-0 opacity-80" />
+				<span class="truncate">{mapName}</span>
 			</div>
 		</div>
 	{/if}
 
-	{#if editMode === "none"}
-		{#if hasSecondaryActions}
-			<div class="flex flex-wrap gap-2">
-				{#if canUploadAsParticipant}
-					<a
-						class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange"
-						href="{resolve(
-							'/upload',
-						)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-4 w-4"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							stroke-width="2"
-							aria-hidden="true"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"
-							/>
-						</svg>
-						{match.game_id ? "Replace save" : "Upload save"}
-					</a>
-				{/if}
-				{#if canUploadAsObserver}
-					<a
-						class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange"
-						href="{resolve(
-							'/upload',
-						)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}&observer=1"
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-4 w-4"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							stroke-width="2"
-							aria-hidden="true"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"
-							/>
-						</svg>
-						{match.game_id ? "Replace save" : "Upload save (observer)"}
-					</a>
-				{/if}
-				{#if canEditMap}
-					<button
-						type="button"
-						class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-						onclick={openMapEdit}
-						disabled={busy}
-					>
-						Change map
-					</button>
-				{/if}
-				{#if canRetroEdit}
-					<button
-						type="button"
-						class="inline-flex items-center gap-2 rounded-lg border border-[#4a433b] px-4 py-2 text-sm text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-						onclick={openRetroEdit}
-						disabled={busy}
-					>
-						<svg
-							xmlns="http://www.w3.org/2000/svg"
-							class="h-4 w-4"
-							fill="none"
-							viewBox="0 0 24 24"
-							stroke="currentColor"
-							stroke-width="2"
-							aria-hidden="true"
-						>
-							<path
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-							/>
-						</svg>
-						{retroEditLabel}
-					</button>
-				{/if}
-			</div>
-		{/if}
-
-		{#if match.game_id}
-			<div class="flex justify-end border-t border-[#4a433b] pt-3">
-				<a
-					class="rounded-lg border border-amber-300 bg-amber-700/40 px-4 py-2 text-sm text-amber-300 transition-colors hover:bg-amber-700/50"
-					href={resolve("/games/[id]", { id: match.game_id })}
-				>
-					View full game
-				</a>
-			</div>
-		{/if}
-	{:else if editMode === "map"}
+	{#if editMode === "map"}
 		<div
 			class="flex flex-col gap-2 rounded-lg p-3"
-			style="background-color: #35302b;"
+			style="background-color: #35302a;"
 		>
 			<h3 class="text-xs font-bold text-tan">Change map</h3>
 			<label class="text-xs text-tan">
@@ -870,7 +787,7 @@
 	{:else if editMode === "retro"}
 		<div
 			class="flex flex-col gap-2 rounded-lg p-3"
-			style="background-color: #35302b;"
+			style="background-color: #35302a;"
 		>
 			<h3 class="text-xs font-bold text-tan">{retroEditLabel}</h3>
 			<label class="text-xs text-tan">
@@ -917,6 +834,108 @@
 					Save
 				</button>
 			</div>
+		</div>
+	{/if}
+
+	<!-- Footer actions: match controls on the left, "View full game" on the
+	     right, all sharing the same bordered-tan button style. -->
+	{#if hasSecondaryActions || match.game_id}
+		<div class="flex flex-wrap items-center justify-between gap-2">
+			<div class="flex flex-wrap items-center gap-2">
+				{#if canUploadAsParticipant}
+					<a
+						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+						href="{resolve(
+							'/upload',
+						)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"
+							/>
+						</svg>
+						{match.game_id ? "Replace save" : "Upload save"}
+					</a>
+				{/if}
+				{#if canUploadAsObserver}
+					<a
+						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+						href="{resolve(
+							'/upload',
+						)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}&observer=1"
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M12 4v12m0-12l-4 4m4-4l4 4"
+							/>
+						</svg>
+						{match.game_id ? "Replace save" : "Upload save (observer)"}
+					</a>
+				{/if}
+				{#if canEditMap}
+					<button
+						type="button"
+						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+						onclick={openMapEdit}
+						disabled={busy}
+					>
+						Change map
+					</button>
+				{/if}
+				{#if canRetroEdit}
+					<button
+						type="button"
+						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+						onclick={openRetroEdit}
+						disabled={busy}
+					>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							class="h-3.5 w-3.5"
+							fill="none"
+							viewBox="0 0 24 24"
+							stroke="currentColor"
+							stroke-width="2"
+							aria-hidden="true"
+						>
+							<path
+								stroke-linecap="round"
+								stroke-linejoin="round"
+								d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+							/>
+						</svg>
+						{retroEditLabel}
+					</button>
+				{/if}
+			</div>
+			{#if match.game_id}
+				<a
+					class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+					href={resolve("/games/[id]", { id: match.game_id })}
+				>
+					View full game
+				</a>
+			{/if}
 		</div>
 	{/if}
 </div>

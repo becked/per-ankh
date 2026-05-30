@@ -3,11 +3,14 @@
 	import { resolve } from "$app/paths";
 	import type { BracketResponse, MapPoolEntry } from "$lib/api-cloud";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import {
 		matchSlotAvatarUrl,
+		matchSlotNation,
 		matchSlotUsername,
 	} from "$lib/tournament/match-occupant";
+	import { formatEnum } from "$lib/utils/formatting";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		mapFullName,
@@ -111,9 +114,11 @@
 		slot_a_username: string | null;
 		slot_a_user_id: string | null;
 		slot_a_avatar_url: string | null;
+		slot_a_nation: string | null;
 		slot_b_username: string | null;
 		slot_b_user_id: string | null;
 		slot_b_avatar_url: string | null;
+		slot_b_nation: string | null;
 	};
 
 	// A match in the bracket model: either a real DB match or a synthesized
@@ -130,9 +135,11 @@
 		slot_a_username: string | null;
 		slot_a_user_id: string | null;
 		slot_a_avatar_url: string | null;
+		slot_a_nation: string | null;
 		slot_b_username: string | null;
 		slot_b_user_id: string | null;
 		slot_b_avatar_url: string | null;
+		slot_b_nation: string | null;
 	};
 
 	type BracketRoundModel = {
@@ -176,9 +183,11 @@
 				slot_a_username: m.slot_a_username,
 				slot_a_user_id: m.slot_a_user_id,
 				slot_a_avatar_url: m.slot_a_avatar_url,
+				slot_a_nation: m.slot_a_nation,
 				slot_b_username: m.slot_b_username,
 				slot_b_user_id: m.slot_b_user_id,
 				slot_b_avatar_url: m.slot_b_avatar_url,
+				slot_b_nation: m.slot_b_nation,
 			})),
 		}));
 
@@ -210,9 +219,11 @@
 					slot_a_username: null,
 					slot_a_user_id: null,
 					slot_a_avatar_url: null,
+					slot_a_nation: null,
 					slot_b_username: null,
 					slot_b_user_id: null,
 					slot_b_avatar_url: null,
+					slot_b_nation: null,
 				});
 			}
 			model.push({
@@ -267,9 +278,11 @@
 					slot_a_username: m.slot_a_username,
 					slot_a_user_id: m.slot_a_user_id,
 					slot_a_avatar_url: m.slot_a_avatar_url,
+					slot_a_nation: m.slot_a_nation,
 					slot_b_username: m.slot_b_username,
 					slot_b_user_id: m.slot_b_user_id,
 					slot_b_avatar_url: m.slot_b_avatar_url,
+					slot_b_nation: m.slot_b_nation,
 				});
 				centersByRound[rIdx][kIdx] = centerY;
 			});
@@ -375,12 +388,22 @@
 {#snippet matchBody(m: PositionedMatch)}
 	{@const aWon = m.winner_slot_id === m.slot_a_id && m.winner_slot_id !== null}
 	{@const bWon = m.winner_slot_id === m.slot_b_id && m.winner_slot_id !== null}
+	{@const aNation = matchSlotNation(m, "a")}
+	{@const bNation = matchSlotNation(m, "b")}
 	<div
 		class="slot"
 		class:winner={aWon}
 		class:tbd={m.is_placeholder && !m.slot_a_id}
 	>
 		{#if m.slot_a_id}
+			{#if aNation}
+				<SpriteIcon
+					category="crests"
+					value={aNation}
+					size={14}
+					alt={formatEnum(aNation, "NATION_")}
+				/>
+			{/if}
 			<PlayerAvatar avatarUrl={matchAvatar(m, "a")} size={14} />
 		{/if}
 		<span class="slot-name">{slotDisplay(m, "a")}</span>
@@ -391,6 +414,14 @@
 		class:tbd={m.is_placeholder && !m.slot_b_id}
 	>
 		{#if m.status !== "bye" && m.slot_b_id}
+			{#if bNation}
+				<SpriteIcon
+					category="crests"
+					value={bNation}
+					size={14}
+					alt={formatEnum(bNation, "NATION_")}
+				/>
+			{/if}
 			<PlayerAvatar avatarUrl={matchAvatar(m, "b")} size={14} />
 		{/if}
 		<span class="slot-name"

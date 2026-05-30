@@ -219,6 +219,20 @@
 		if (openMatchId && !currentMatch) closeMatch();
 	});
 
+	// Side the match popover opens toward: away from the clicked cell. A cell in
+	// the left half of the viewport opens the popover to its right and vice
+	// versa, so the detail never covers the part of the bracket you're looking
+	// at. floating-ui still flips as a fallback when the chosen side won't fit.
+	let matchSide = $state<"left" | "right">("right");
+	$effect(() => {
+		if (!openMatchId) return;
+		const el = document.querySelector(`[data-match-id="${openMatchId}"]`);
+		if (!(el instanceof HTMLElement)) return;
+		const rect = el.getBoundingClientRect();
+		const cellCenter = rect.left + rect.width / 2;
+		matchSide = cellCenter < window.innerWidth / 2 ? "right" : "left";
+	});
+
 	// --- Admin action surface: busy gate + toast feedback + handlers.
 
 	let busy = $state(false);
@@ -1099,9 +1113,10 @@
 		if (!o) closeMatch();
 	}}
 	customAnchor={openMatchId ? `[data-match-id="${openMatchId}"]` : null}
-	side="bottom"
+	side={matchSide}
 	align="center"
-	contentClass="w-[min(92vw,36rem)]"
+	contentClass="w-[min(92vw,35.2rem)]"
+	frameClass="bg-[#2a2623] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
 	ariaLabel="Match detail"
 >
 	{#if currentMatch}

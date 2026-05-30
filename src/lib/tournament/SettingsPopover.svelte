@@ -95,7 +95,7 @@
 		<button
 			{...props}
 			type="button"
-			class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+			class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 			{disabled}
 			aria-label="Tournament settings"
 		>

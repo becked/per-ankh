@@ -6,11 +6,14 @@
 		TournamentMatch,
 	} from "$lib/api-cloud";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import {
 		matchSlotAvatarUrl,
+		matchSlotNation,
 		matchSlotUsername,
 	} from "$lib/tournament/match-occupant";
+	import { formatEnum } from "$lib/utils/formatting";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		mapFullName,
@@ -370,6 +373,15 @@
 											onmouseleave={() => (highlightedSlot = null)}
 										>
 											{#if m.slot_a_id}
+												{@const aNation = matchSlotNation(m, "a")}
+												{#if aNation}
+													<SpriteIcon
+														category="crests"
+														value={aNation}
+														size={12}
+														alt={formatEnum(aNation, "NATION_")}
+													/>
+												{/if}
 												<PlayerAvatar
 													avatarUrl={matchSlotAvatarUrl(m, "a", avatarOf)}
 													size={12}
@@ -393,6 +405,15 @@
 											onmouseleave={() => (highlightedSlot = null)}
 										>
 											{#if m.slot_b_id}
+												{@const bNation = matchSlotNation(m, "b")}
+												{#if bNation}
+													<SpriteIcon
+														category="crests"
+														value={bNation}
+														size={12}
+														alt={formatEnum(bNation, "NATION_")}
+													/>
+												{/if}
 												<PlayerAvatar
 													avatarUrl={matchSlotAvatarUrl(m, "b", avatarOf)}
 													size={12}

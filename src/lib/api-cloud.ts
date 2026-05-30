@@ -1448,6 +1448,12 @@ export interface TournamentMatch {
 	// data in those cases.
 	slot_a_avatar_url: string | null;
 	slot_b_avatar_url: string | null;
+	// Nation each slot played, resolved server-side via the slot↔player_index
+	// mapping against the linked game's player_summaries. Null when no save is
+	// linked or the nation is unknown (bye, forfeit, admin-set, legacy match) —
+	// the crest is shown only when this is present.
+	slot_a_nation: string | null;
+	slot_b_nation: string | null;
 	// Client-only flag: true for synthesized future-round bracket cells that
 	// don't yet correspond to a real tournament_matches row. The server never
 	// sets this. MatchPopover uses it to render a stripped-down preview view

@@ -815,6 +815,7 @@ export async function handleTournamentBracket(
 	}
 
 	const avatarByUserId = await loadHistoricalAvatarsForMatches(env, matches);
+	const nationByGamePlayer = await loadNationsForMatches(env, matches);
 
 	const body = {
 		tournament_id: tournament.tournament_id,
@@ -830,7 +831,7 @@ export async function handleTournamentBracket(
 			round_number: r.round_number,
 			status: r.status,
 			matches: (matchesByRound.get(r.round_id) ?? []).map((m) => ({
-				...serializeMatch(m, avatarByUserId),
+				...serializeMatch(m, avatarByUserId, nationByGamePlayer),
 				total_turns: m.game_id ? (turnsByGame.get(m.game_id) ?? null) : null,
 			})),
 		})),
@@ -907,12 +908,16 @@ export async function handleTournamentMatches(
 		env,
 		filtered.map(({ match }) => match),
 	);
+	const nationByGamePlayer = await loadNationsForMatches(
+		env,
+		filtered.map(({ match }) => match),
+	);
 
 	return jsonResponse(
 		{
 			tournament_id: tournament.tournament_id,
 			matches: filtered.map(({ match, round }) => ({
-				...serializeMatch(match, avatarByUserId),
+				...serializeMatch(match, avatarByUserId, nationByGamePlayer),
 				round_id: round.round_id,
 				round_number: round.round_number,
 				phase: round.phase,
@@ -958,9 +963,10 @@ export async function handleTournamentMatchDetail(
 		return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
 	}
 	const avatarByUserId = await loadHistoricalAvatarsForMatches(env, [match]);
+	const nationByGamePlayer = await loadNationsForMatches(env, [match]);
 	return jsonResponse(
 		{
-			...serializeMatch(match, avatarByUserId),
+			...serializeMatch(match, avatarByUserId, nationByGamePlayer),
 			round_id: round.round_id,
 			round_number: round.round_number,
 			phase: round.phase,
@@ -1063,6 +1069,7 @@ export async function handleGameTournamentLink(
 function serializeMatch(
 	m: MatchRow,
 	avatarByUserId?: Map<string, string | null>,
+	nationByGamePlayer?: Map<string, string>,
 ) {
 	const slotAAvatar =
 		m.slot_a_user_id && avatarByUserId
@@ -1071,6 +1078,19 @@ function serializeMatch(
 	const slotBAvatar =
 		m.slot_b_user_id && avatarByUserId
 			? (avatarByUserId.get(m.slot_b_user_id) ?? null)
+			: null;
+	// Nation each slot played, resolved via the slot↔player_index mapping
+	// (migration 0007) against player_summaries. Null when no save is linked
+	// or the index/nation is unknown (bye, forfeit, admin-set, legacy match).
+	const slotANation =
+		m.game_id && m.slot_a_player_index !== null && nationByGamePlayer
+			? (nationByGamePlayer.get(`${m.game_id}:${m.slot_a_player_index}`) ??
+				null)
+			: null;
+	const slotBNation =
+		m.game_id && m.slot_b_player_index !== null && nationByGamePlayer
+			? (nationByGamePlayer.get(`${m.game_id}:${m.slot_b_player_index}`) ??
+				null)
 			: null;
 	return {
 		match_id: m.match_id,
@@ -1088,10 +1108,41 @@ function serializeMatch(
 		slot_a_username: m.slot_a_username,
 		slot_a_user_id: m.slot_a_user_id,
 		slot_a_avatar_url: slotAAvatar,
+		slot_a_nation: slotANation,
 		slot_b_username: m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_avatar_url: slotBAvatar,
+		slot_b_nation: slotBNation,
 	};
+}
+
+// Resolve the nation each slot played for every match with a linked game.
+// Keyed by `${game_id}:${player_index}` → nation enum (e.g. "NATION_ROME").
+// One batched SELECT per call over player_summaries; NULL nations are skipped
+// so a missing key resolves to "unknown" at serialize time. Matches without a
+// linked game contribute no game_ids — empty list → no query.
+async function loadNationsForMatches(
+	env: TournamentEnv,
+	matches: MatchRow[],
+): Promise<Map<string, string>> {
+	const gameIds = [
+		...new Set(
+			matches.map((m) => m.game_id).filter((id): id is string => id !== null),
+		),
+	];
+	const map = new Map<string, string>();
+	if (gameIds.length === 0) return map;
+	const placeholders = gameIds.map(() => "?").join(",");
+	const res = await env.SHARE_DB.prepare(
+		`SELECT game_id, player_index, nation FROM player_summaries
+		 WHERE game_id IN (${placeholders}) AND nation IS NOT NULL`,
+	)
+		.bind(...gameIds)
+		.all<{ game_id: string; player_index: number; nation: string }>();
+	for (const row of res.results ?? []) {
+		map.set(`${row.game_id}:${row.player_index}`, row.nation);
+	}
+	return map;
 }
 
 // Resolve avatar URLs for every distinct snapshot user_id referenced by the
