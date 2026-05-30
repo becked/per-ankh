@@ -310,7 +310,7 @@
 			</svg>
 			<div
 				class="grid"
-				style:grid-template-columns="repeat({maxRounds}, 156px) 132px"
+				style:grid-template-columns="repeat({maxRounds}, 192px) 132px"
 				style:grid-template-rows="auto repeat({totalContentRows}, minmax(0,
 				auto))"
 			>
@@ -490,6 +490,11 @@
 
 	.grid-scroll {
 		overflow-x: auto;
+		display: flex;
+		/* Center the rounds when they fit; `safe` falls back to start-aligned
+		   when they overflow a narrow viewport so the first round isn't
+		   clipped out of scroll reach. */
+		justify-content: safe center;
 	}
 
 	/* Wraps the grid tightly (max-content) so the absolutely-positioned
