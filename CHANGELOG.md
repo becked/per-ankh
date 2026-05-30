@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-29-867d604] - 2026-05-29
+
+### Features
+
+- (tournament) rework championship standings to seed/player/round — [867d604](https://github.com/becked/per-ankh/commit/867d6046a034d81732092123e7d059cb83ce75e6)
+
 ## [2026-05-29-6869c42] - 2026-05-29
 
 ### Features
