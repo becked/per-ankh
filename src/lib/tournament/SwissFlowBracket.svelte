@@ -46,6 +46,11 @@
 		onMatchClick,
 	}: Props = $props();
 
+	// Hover-trace: the slot whose path through the bracket is currently
+	// highlighted. A slot plays exactly one match per round, so setting this
+	// lights up that player's card in every round and dims the rest.
+	let highlightedSlot = $state<string | null>(null);
+
 	function handleMatchClick(matchId: string, e: MouseEvent) {
 		if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
 		e.preventDefault();
@@ -217,8 +222,7 @@
 	<div class="grid-scroll">
 		<div
 			class="grid"
-			style:grid-template-columns="repeat({maxRounds}, minmax(140px, 1fr))
-			minmax(110px, 0.7fr)"
+			style:grid-template-columns="repeat({maxRounds}, 156px) 132px"
 			style:grid-template-rows="auto repeat({totalContentRows}, minmax(0, auto))"
 		>
 			{#each roundIndexes as i (i)}
@@ -249,15 +253,28 @@
 						{#each b.matches as m (m.match_id)}
 							{@const aWon = m.winner_slot_id === m.slot_a_id}
 							{@const bWon = m.winner_slot_id === m.slot_b_id}
+							{@const aOnPath =
+								highlightedSlot !== null && m.slot_a_id === highlightedSlot}
+							{@const bOnPath =
+								highlightedSlot !== null && m.slot_b_id === highlightedSlot}
+							{@const onPath = aOnPath || bOnPath}
 							<a
 								class="match"
+								class:dimmed={highlightedSlot !== null && !onPath}
+								class:on-path={onPath}
 								data-match-id={m.match_id}
 								href="{resolve('/tournaments/[slug]', {
 									slug: tournamentSlug,
 								})}?match={m.match_id}"
 								onclick={(e) => handleMatchClick(m.match_id, e)}
 							>
-								<div class="match-row">
+								<div
+									class="match-row"
+									class:row-active={aOnPath}
+									role="presentation"
+									onmouseenter={() => (highlightedSlot = m.slot_a_id)}
+									onmouseleave={() => (highlightedSlot = null)}
+								>
 									{#if m.slot_a_id}
 										<PlayerAvatar
 											avatarUrl={matchSlotAvatarUrl(m, "a", avatarOf)}
@@ -268,7 +285,13 @@
 										{matchSlotLabel(m, "a")}
 									</span>
 								</div>
-								<div class="match-row">
+								<div
+									class="match-row"
+									class:row-active={bOnPath}
+									role="presentation"
+									onmouseenter={() => (highlightedSlot = m.slot_b_id)}
+									onmouseleave={() => (highlightedSlot = null)}
+								>
 									{#if m.slot_b_id}
 										<PlayerAvatar
 											avatarUrl={matchSlotAvatarUrl(m, "b", avatarOf)}
@@ -306,7 +329,13 @@
 				{:else}
 					<ul class="chip-list">
 						{#each layout.advanced as a (a.slot_id)}
-							<li class="chip chip-advance">
+							<li
+								class="chip chip-advance"
+								class:dimmed={highlightedSlot !== null &&
+									highlightedSlot !== a.slot_id}
+								onmouseenter={() => (highlightedSlot = a.slot_id)}
+								onmouseleave={() => (highlightedSlot = null)}
+							>
 								<PlayerAvatar avatarUrl={avatarOf[a.slot_id]} size={12} />
 								<span class="chip-name">{slotLabel(a.slot_id)}</span>
 								<span class="chip-record">{a.finalWins}-{a.finalLosses}</span>
@@ -327,7 +356,13 @@
 				{:else}
 					<ul class="chip-list">
 						{#each layout.eliminated as e (e.slot_id)}
-							<li class="chip chip-eliminate">
+							<li
+								class="chip chip-eliminate"
+								class:dimmed={highlightedSlot !== null &&
+									highlightedSlot !== e.slot_id}
+								onmouseenter={() => (highlightedSlot = e.slot_id)}
+								onmouseleave={() => (highlightedSlot = null)}
+							>
 								<PlayerAvatar avatarUrl={avatarOf[e.slot_id]} size={12} />
 								<span class="chip-name">{slotLabel(e.slot_id)}</span>
 								<span class="chip-record">{e.finalWins}-{e.finalLosses}</span>
@@ -423,6 +458,25 @@
 
 	.match:hover {
 		background-color: #1f1c19;
+	}
+
+	/* Hover-trace: a player's card stays lit on its path while every other
+	   card fades back, so the eye can follow one player across the rounds. */
+	.match.dimmed {
+		opacity: 0.2;
+		transition: opacity 0.12s;
+	}
+
+	.match.on-path {
+		background-color: #34302a;
+		box-shadow: inset 0 0 0 1px rgba(232, 216, 184, 0.25);
+	}
+
+	.match-row.row-active {
+		margin: -0.1rem -0.2rem;
+		padding: 0.1rem 0.2rem;
+		border-radius: 0.2rem;
+		background-color: rgba(232, 216, 184, 0.1);
 	}
 
 	.match-row {
@@ -521,6 +575,11 @@
 		padding: 0.2rem 0.4rem;
 		border-radius: 0.25rem;
 		border: 1px solid;
+	}
+
+	.chip.dimmed {
+		opacity: 0.2;
+		transition: opacity 0.12s;
 	}
 
 	.chip-advance {
