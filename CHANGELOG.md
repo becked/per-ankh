@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-30-1f8634e] - 2026-05-30
+
+### Fixes
+
+- (tournament) correct bye-match presentation in championship bracket — [1f8634e](https://github.com/becked/per-ankh/commit/1f8634ee557671da8aa3e6406ea87159a4d5dcbe)
+
 ## [2026-05-30-c4d4b75] - 2026-05-30
 
 ### Features
