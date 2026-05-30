@@ -971,7 +971,7 @@
 											: "translateX(0)"}
 									></div>
 									<Tabs.Trigger value="diagram" class={viewTriggerClass}>
-										Diagram
+										Bracket
 									</Tabs.Trigger>
 									<Tabs.Trigger value="standings" class={viewTriggerClass}>
 										Standings
@@ -1037,7 +1037,7 @@
 												: "translateX(0)"}
 										></div>
 										<Tabs.Trigger value="diagram" class={viewTriggerClass}>
-											Diagram
+											Rounds
 										</Tabs.Trigger>
 										<Tabs.Trigger value="standings" class={viewTriggerClass}>
 											Standings
