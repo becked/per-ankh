@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-05-29-6869c42] - 2026-05-29
+
+### Features
+
+- (tournament) animate the diagram/standings switch and panel swap — [3e5e376](https://github.com/becked/per-ankh/commit/3e5e376d92e2a2ae3e0b561d094844c247539fbd)
+
+### Other
+
+- add C4 architecture model (HTML) — [68e1364](https://github.com/becked/per-ankh/commit/68e1364e4df058b450d68c8224b9972a6890a510)
+- apply prettier formatting to c4-model.html — [6869c42](https://github.com/becked/per-ankh/commit/6869c427e1369f1329e7c6ec7bae7449e7a84191)
+
 ## [2026-05-29-2a13ace] - 2026-05-29
 
 ### Features
