@@ -361,7 +361,6 @@
 						class="match"
 						class:placeholder={m.is_placeholder}
 						class:decided={m.status === "complete" || m.status === "forfeit"}
-						class:bye={m.status === "bye"}
 						data-match-id={m.match_id}
 						href="{resolve('/tournaments/[slug]', {
 							slug: tournamentSlug,
@@ -424,8 +423,8 @@
 			{/if}
 			<PlayerAvatar avatarUrl={matchAvatar(m, "b")} size={14} />
 		{/if}
-		<span class="slot-name"
-			>{m.status === "bye" ? "BYE" : slotDisplay(m, "b")}</span
+		<span class="slot-name" class:bye-label={m.status === "bye"}
+			>{m.status === "bye" ? "Bye" : slotDisplay(m, "b")}</span
 		>
 	</div>
 	{#if m.map_script}
@@ -521,15 +520,6 @@
 		background-color: #2a2622;
 	}
 
-	/* Bye matches are pre-decided — dim them to keep the visual focus on
-	   the real R1 contests. The winner slot keeps full opacity via .winner. */
-	.match.bye {
-		opacity: 0.6;
-	}
-	.match.bye .winner {
-		opacity: 1;
-	}
-
 	/* Placeholder matches stand in for rounds the backend hasn't generated
 	   yet. A dashed border + flatter background marks them as not-yet-live
 	   without dimming the whole box, so any already-known advancer stays
@@ -560,6 +550,12 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+	}
+
+	/* The bye placeholder reads as a label, not a player name — same size,
+	   weight, and color as the player text (inherited from .slot), italic. */
+	.bye-label {
+		font-style: italic;
 	}
 
 	.slot + .slot {

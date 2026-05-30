@@ -205,13 +205,16 @@
 	// how an admin fixes a wrong save on their own already-reported match,
 	// using the participant "which nation were you?" picker.
 	const canUploadAsParticipant = $derived(
-		!isPlaceholder && isParticipant && (match.status === "pending" || isAdmin),
+		!isPlaceholder &&
+			isParticipant &&
+			match.status !== "bye" &&
+			(match.status === "pending" || isAdmin),
 	);
 	// Observer (admin acting on someone else's match) — only when NOT a
 	// participant, so an admin-participant never lands in the dual-slot
 	// observer picker for their own game.
 	const canUploadAsObserver = $derived(
-		!isPlaceholder && isAdmin && !isParticipant,
+		!isPlaceholder && isAdmin && !isParticipant && match.status !== "bye",
 	);
 	const canEditMap = $derived(
 		!isPlaceholder && isAdmin && match.status === "pending",
