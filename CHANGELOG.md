@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-30-a01c3ab] - 2026-05-30
+
+### Features
+
+- (tournament) widen swiss round columns and center the bracket — [a01c3ab](https://github.com/becked/per-ankh/commit/a01c3ab5f7fb3e15ff660ef1216414cdbf0ec2ff)
+
 ## [2026-05-30-232aaf2] - 2026-05-30
 
 ### Features
