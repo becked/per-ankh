@@ -12,6 +12,10 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 
+# D1 backups (./per-ankh backup) — .sql/.sqlite dumps. Contain user emails and
+# online_id PII; never commit.
+backups/
+
 # Node.js / Frontend
 node_modules/
 npm-debug.log*
