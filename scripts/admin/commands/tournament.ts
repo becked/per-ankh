@@ -32,8 +32,14 @@ import {
 	parseFlags,
 	printJson,
 } from "../../lib/cli";
-import { d1Exec, d1Query, sqlStr } from "../wrangler";
+import { d1Batch, d1Exec, d1Query, isLocal, sqlStr } from "../wrangler";
 import { KNOWN_MAP_SCRIPTS } from "$lib/tournament/map-scripts";
+// cloud/ is a CJS package (no "type":"module") while scripts/ runs as ESM, so
+// the planner's named exports surface only through the default-interop object.
+// Types are erased at runtime, so they import cleanly by name.
+import seedPlanner from "../../../cloud/src/tournament/seed";
+import type { FillStage, SeedPlan } from "../../../cloud/src/tournament/seed";
+const { planSeededTournament } = seedPlanner;
 
 // Nanoid-compatible 21-char ID generator (no external dep). Uses the
 // standard nanoid alphabet so IDs are interchangeable with worker-issued
@@ -81,6 +87,8 @@ export async function run(argv: string[], opts: CommandOpts): Promise<void> {
 	switch (sub) {
 		case "create":
 			return runCreate(rest, opts);
+		case "seed":
+			return runSeed(rest, opts);
 		case "list":
 			return runList(rest, opts);
 		case "show":
@@ -115,6 +123,12 @@ function printHelp(): void {
 			"  create <slug> <name> --maps M1,M2,...",
 			"                          Create a tournament (status='setup')",
 			"                          Optional: --description, --div-a, --div-b",
+			"  seed <slug> [name]      Seed a complete local fixture (Swiss + bracket).",
+			"                          Requires --local. Flags:",
+			"                            --qualifiers N (default 6; non-power-of-2 → bye)",
+			"                            --players-per-division N (default 8)",
+			"                            --fill mid-swiss|swiss-done|mid-championship|complete",
+			"                                   (default mid-championship)",
 			"  list [--status S]       List tournaments (filter: setup|swiss|championship|complete)",
 			"  show <id-or-slug>       Show one tournament's detail",
 			"  grant-admin <tournament_id> <user_id>",
@@ -216,6 +230,155 @@ async function runCreate(argv: string[], opts: CommandOpts): Promise<void> {
 			`Next: ./per-ankh admin tournament grant-admin ${tournamentId} <user_id>`,
 		);
 	}
+}
+
+const FILL_STAGES: FillStage[] = [
+	"mid-swiss",
+	"swiss-done",
+	"mid-championship",
+	"complete",
+];
+
+// Seed a complete, internally-consistent tournament into the LOCAL D1 for UI
+// testing. Drives the same Swiss/bracket logic the Worker uses (via the shared
+// pure planner) so the fixture can't drift from real invariants — including a
+// first-round bye when --qualifiers isn't a power of two.
+async function runSeed(argv: string[], opts: CommandOpts): Promise<void> {
+	// Local-only: this writes a pile of fixture rows. Mirrors dev-login's guard.
+	if (!isLocal()) {
+		throw new Error(
+			"seed refuses to run without --local. Pass --local explicitly — it " +
+				"writes fixture rows and must never touch production.",
+		);
+	}
+	const { positional, flags } = parseFlags(argv);
+	const slug = positional[0];
+	if (!slug) {
+		throw new Error(
+			"Usage: ./per-ankh admin tournament seed <slug> [name] --local " +
+				"[--qualifiers N] [--players-per-division N] [--fill STAGE]",
+		);
+	}
+	if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(slug)) {
+		throw new Error(
+			`Slug must match /^[a-z0-9][a-z0-9-]{0,63}$/ — got "${slug}"`,
+		);
+	}
+	const name = positional[1] ?? slug;
+	const fillRaw = flagString(flags, "fill") ?? "mid-championship";
+	if (!FILL_STAGES.includes(fillRaw as FillStage)) {
+		throw new Error(
+			`--fill must be one of: ${FILL_STAGES.join(", ")} — got "${fillRaw}"`,
+		);
+	}
+	const fill = fillRaw as FillStage;
+	const qualifiers = flagInt(flags, "qualifiers", 6);
+	const playersPerDivision = flagInt(flags, "players-per-division", 8);
+
+	const plan = planSeededTournament(
+		{ slug, name, qualifiers, playersPerDivision, fill },
+		nanoid21,
+	);
+
+	// Idempotent: clear any prior tournament with this slug first (children →
+	// parent; don't rely on FK cascade, which D1's execute path may not apply).
+	const slugLit = sqlStr(slug);
+	const childOf = `tournament_id IN (SELECT tournament_id FROM tournaments WHERE slug = ${slugLit})`;
+	const cleanup = [
+		`DELETE FROM tournament_matches WHERE round_id IN (SELECT round_id FROM tournament_rounds WHERE ${childOf})`,
+		`DELETE FROM tournament_rounds WHERE ${childOf}`,
+		`DELETE FROM tournament_slots WHERE ${childOf}`,
+		`DELETE FROM tournaments WHERE slug = ${slugLit}`,
+	];
+
+	await d1Batch([...cleanup, ...planToInserts(plan)]);
+
+	const { summary } = plan;
+	if (opts.json) {
+		printJson({
+			tournament_id: plan.tournament.tournament_id,
+			slug,
+			status: plan.tournament.status,
+			...summary,
+			view: `/tournaments/${slug}`,
+		});
+	} else {
+		ok(
+			`Seeded tournament ${name} (id=${plan.tournament.tournament_id}, slug=${slug})`,
+		);
+		info(
+			`fill=${summary.fill}, status=${plan.tournament.status}, ` +
+				`swiss=${summary.swissPlayers}` +
+				(summary.qualifiers
+					? `, qualifiers=${summary.qualifiers}, bracket=${summary.bracketSize}, byes=${summary.byeCount}`
+					: ""),
+		);
+		info(`View at /tournaments/${slug}`);
+	}
+}
+
+// Turn a SeedPlan into one INSERT statement per table. Strings via sqlStr,
+// nulls as NULL, timestamps as datetime('now'). Round/match timestamps are
+// derived from status (complete rounds get completed_at; complete matches get
+// reported_at) so the rows match the shapes the Worker writes.
+function planToInserts(plan: SeedPlan): string[] {
+	const num = (n: number): string => String(n);
+	const str = (s: string | null): string => (s === null ? "NULL" : sqlStr(s));
+	const now = "datetime('now')";
+
+	const t = plan.tournament;
+	const tournament = `INSERT INTO tournaments
+		(tournament_id, slug, name, description, status, division_a_name,
+		 division_b_name, swiss_wins_to_advance, swiss_losses_to_eliminate,
+		 swiss_max_rounds, map_pool, completed_at)
+		VALUES (${str(t.tournament_id)}, ${str(t.slug)}, ${str(t.name)},
+		 ${str(t.description)}, ${str(t.status)}, ${str(t.division_a_name)},
+		 ${str(t.division_b_name)}, ${num(t.swiss_wins_to_advance)},
+		 ${num(t.swiss_losses_to_eliminate)}, ${num(t.swiss_max_rounds)},
+		 ${sqlStr(JSON.stringify(t.map_pool))}, ${t.completed ? now : "NULL"})`;
+
+	const slots = `INSERT INTO tournament_slots
+		(slot_id, tournament_id, phase, division, swiss_seed, championship_seed,
+		 discord_username)
+		VALUES ${plan.slots
+			.map(
+				(s) =>
+					`(${str(s.slot_id)}, ${str(t.tournament_id)}, ${str(s.phase)}, ` +
+					`${str(s.division)}, ${s.swiss_seed === null ? "NULL" : num(s.swiss_seed)}, ` +
+					`${s.championship_seed === null ? "NULL" : num(s.championship_seed)}, ` +
+					`${str(s.discord_username)})`,
+			)
+			.join(", ")}`;
+
+	const rounds = `INSERT INTO tournament_rounds
+		(round_id, tournament_id, phase, division, round_number, status,
+		 generated_at, started_at, completed_at)
+		VALUES ${plan.rounds
+			.map(
+				(r) =>
+					`(${str(r.round_id)}, ${str(t.tournament_id)}, ${str(r.phase)}, ` +
+					`${str(r.division)}, ${num(r.round_number)}, ${str(r.status)}, ` +
+					`${now}, ${now}, ${r.status === "complete" ? now : "NULL"})`,
+			)
+			.join(", ")}`;
+
+	const matches = `INSERT INTO tournament_matches
+		(match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
+		 pick_order_winner_slot_id, status, winner_slot_id, match_index,
+		 slot_a_username, slot_b_username, reported_at)
+		VALUES ${plan.matches
+			.map(
+				(m) =>
+					`(${str(m.match_id)}, ${str(m.round_id)}, ${str(m.slot_a_id)}, ` +
+					`${str(m.slot_b_id)}, ${str(m.map_pool_id)}, ${str(m.map_script)}, ` +
+					`${str(m.pick_order_winner_slot_id)}, ${str(m.status)}, ` +
+					`${str(m.winner_slot_id)}, ${num(m.match_index)}, ` +
+					`${str(m.slot_a_username)}, ${str(m.slot_b_username)}, ` +
+					`${m.status === "complete" ? now : "NULL"})`,
+			)
+			.join(", ")}`;
+
+	return [tournament, slots, rounds, matches];
 }
 
 async function runList(argv: string[], opts: CommandOpts): Promise<void> {

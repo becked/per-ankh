@@ -52,6 +52,8 @@ function printHelp(): void {
 			"Tournaments:",
 			"  tournament create <slug> <name> --maps M1,M2,...",
 			"                                   Create a tournament (status='setup')",
+			"  tournament seed <slug> [name] --local [--qualifiers N] [--fill STAGE]",
+			"                                   Seed a complete local fixture (Swiss + bracket)",
 			"  tournament list [--status S]     List tournaments",
 			"  tournament show <id-or-slug>     Show one tournament's detail",
 			"  tournament grant-admin <t_id> <u_id>   Grant per-tournament admin",
