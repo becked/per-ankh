@@ -1,0 +1,915 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<title>Per-Ankh — C4 Architecture Model</title>
+
+		<script src="https://cdn.tailwindcss.com"></script>
+		<script>
+			tailwind.config = {
+				theme: {
+					extend: {
+						colors: {
+							black: "var(--color-black)",
+							brown: "var(--color-brown)",
+							"dark-brown": "var(--color-dark-brown)",
+							orange: "var(--color-orange)",
+							tan: "var(--color-tan)",
+							"tan-hover": "var(--color-tan-hover)",
+							white: "var(--color-white)",
+							yellow: "var(--color-yellow)",
+							"blue-gray": "var(--color-blue-gray)",
+							"border-gray": "var(--color-border-gray)",
+							gray: { 200: "var(--color-gray-200)" },
+						},
+					},
+				},
+			};
+		</script>
+
+		<script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
+		<script>
+			document.addEventListener("DOMContentLoaded", () => {
+				mermaid.initialize({
+					startOnLoad: true,
+					theme: "base",
+					themeVariables: {
+						background: "#1a1410",
+						primaryColor: "#35302b",
+						primaryTextColor: "#eeeeee",
+						primaryBorderColor: "#ffa500",
+						lineColor: "#d2b48c",
+						secondaryColor: "#211a12",
+						tertiaryColor: "#0e0a07",
+						clusterBkg: "#14100c",
+						clusterBorder: "#2a2622",
+						edgeLabelBackground: "#1a1410",
+						fontFamily:
+							'-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif',
+					},
+					flowchart: {
+						curve: "basis",
+						htmlLabels: true,
+						nodeSpacing: 55,
+						rankSpacing: 70,
+					},
+				});
+			});
+		</script>
+
+		<style>
+			:root {
+				--color-black: #000000;
+				--color-brown: #a52a2a;
+				--color-dark-brown: #79261d;
+				--color-orange: #ffa500;
+				--color-tan: #d2b48c;
+				--color-tan-hover: #d2b48c;
+				--color-white: #ffffff;
+				--color-yellow: #ffff00;
+				--color-blue-gray: #211a12;
+				--color-border-gray: #1c160f;
+				--color-gray-200: #eeeeee;
+			}
+
+			html,
+			body {
+				font-family:
+					-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+					"Helvetica Neue", Arial, sans-serif;
+				background-color: var(--color-blue-gray);
+				color: var(--color-white);
+				margin: 0;
+				padding: 0;
+			}
+
+			.flow-shell {
+				display: grid;
+				grid-template-columns: 260px 1fr;
+				min-height: 100vh;
+			}
+			.flow-toc {
+				position: sticky;
+				top: 0;
+				align-self: start;
+				height: 100vh;
+				overflow-y: auto;
+				border-right: 1px solid #000;
+				padding: 1.5rem 1rem;
+				background-color: #1a1410;
+			}
+			.flow-toc h1 {
+				font-size: 0.875rem;
+				font-weight: bold;
+				color: var(--color-orange);
+				margin-bottom: 1rem;
+				border-bottom: 1px solid #000;
+				padding-bottom: 0.5rem;
+			}
+			.flow-toc ol {
+				list-style: none;
+				padding: 0;
+				margin: 0;
+				font-size: 0.75rem;
+			}
+			.flow-toc ol li {
+				margin-bottom: 0.2rem;
+			}
+			.flow-toc a {
+				color: var(--color-tan);
+				text-decoration: none;
+				display: block;
+				padding: 0.25rem 0.5rem;
+				border-radius: 3px;
+			}
+			.flow-toc a:hover {
+				background: #35302b;
+				color: var(--color-orange);
+			}
+			.flow-toc .toc-group {
+				font-size: 0.65rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.08em;
+				margin: 0.9rem 0.5rem 0.3rem;
+			}
+			.flow-toc .toc-tag {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.6rem;
+				color: var(--color-orange);
+				margin-right: 0.35rem;
+			}
+
+			.flow-main {
+				padding: 2rem 2.5rem 4rem;
+				max-width: 1200px;
+			}
+			.flow-main h2 {
+				font-size: 1.75rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				border-bottom: 2px solid var(--color-orange);
+				padding-bottom: 0.5rem;
+				margin-top: 3rem;
+				margin-bottom: 1rem;
+			}
+			.flow-main h2:first-child {
+				margin-top: 0;
+			}
+			.flow-main h3 {
+				font-size: 1.125rem;
+				font-weight: bold;
+				color: var(--color-tan);
+				margin-top: 2rem;
+				margin-bottom: 0.5rem;
+			}
+			.flow-main h4 {
+				font-size: 0.75rem;
+				font-weight: 700;
+				color: #888;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				margin: 1.25rem 0 0.4rem;
+			}
+			.flow-main p,
+			.flow-main li {
+				color: #c5c3c2;
+				font-size: 0.9rem;
+				line-height: 1.55;
+			}
+			.flow-main p a,
+			.flow-main li a {
+				color: var(--color-orange);
+			}
+			.flow-main p a:hover,
+			.flow-main li a:hover {
+				text-decoration: underline;
+			}
+			.flow-main p.section-intro {
+				margin-bottom: 1.5rem;
+			}
+			.flow-main ul,
+			.flow-main ol {
+				padding-left: 1.4rem;
+			}
+			.flow-main li {
+				margin-bottom: 0.35rem;
+			}
+			.flow-main code {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.8rem;
+				background: #0e0a07;
+				padding: 0.1rem 0.3rem;
+				border-radius: 2px;
+				color: var(--color-orange);
+			}
+			.flow-main strong {
+				color: var(--color-gray-200);
+			}
+
+			.flow-card {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 6px;
+				padding: 1.25rem 1.5rem 1.5rem;
+				margin-bottom: 1.5rem;
+			}
+			.flow-card-head {
+				display: flex;
+				align-items: baseline;
+				gap: 0.6rem;
+				margin-bottom: 0.5rem;
+				flex-wrap: wrap;
+			}
+			.flow-card-tag {
+				font-family: ui-monospace, "SF Mono", Menlo, monospace;
+				font-size: 0.7rem;
+				color: var(--color-orange);
+				font-weight: 700;
+				background: #0e0a07;
+				padding: 2px 8px;
+				border-radius: 999px;
+			}
+			.flow-card-title {
+				font-size: 1.1rem;
+				font-weight: bold;
+				color: var(--color-gray-200);
+				line-height: 1.4;
+			}
+
+			.mermaid-frame {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 4px;
+				padding: 1rem;
+				margin: 0.75rem 0 1rem;
+				overflow-x: auto;
+			}
+			.mermaid {
+				min-width: 100%;
+				display: flex;
+				justify-content: center;
+			}
+
+			.legend-grid {
+				display: grid;
+				grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+				gap: 0.6rem;
+				margin: 0.75rem 0 1rem;
+			}
+			.legend-item {
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-left: 3px solid var(--color-orange);
+				border-radius: 4px;
+				padding: 0.6rem 0.8rem;
+				font-size: 0.8rem;
+			}
+			.legend-item .label {
+				font-weight: bold;
+				color: var(--color-gray-200);
+				display: block;
+				margin-bottom: 0.25rem;
+				font-size: 0.85rem;
+			}
+			.legend-item .desc {
+				color: var(--color-tan);
+				line-height: 1.4;
+			}
+
+			.boundary-note {
+				background: rgba(255, 165, 0, 0.06);
+				border-left: 3px solid var(--color-orange);
+				padding: 0.6rem 0.9rem;
+				margin: 0.5rem 0 1rem;
+				border-radius: 4px;
+				font-size: 0.85rem;
+			}
+			.boundary-note strong {
+				color: var(--color-orange);
+			}
+
+			.controls-table {
+				width: 100%;
+				border-collapse: collapse;
+				font-size: 0.8rem;
+				margin: 0.75rem 0;
+				background: #1a1410;
+				border: 1px solid #2a2622;
+				border-radius: 4px;
+				overflow: hidden;
+			}
+			.controls-table th {
+				text-align: left;
+				font-size: 0.7rem;
+				text-transform: uppercase;
+				letter-spacing: 0.06em;
+				background: #0e0a07;
+				color: var(--color-orange);
+				padding: 0.5rem 0.75rem;
+				border-bottom: 1px solid #2a2622;
+			}
+			.controls-table td {
+				padding: 0.55rem 0.75rem;
+				border-bottom: 1px solid #2a2622;
+				color: var(--color-tan);
+				vertical-align: top;
+			}
+			.controls-table tr:last-child td {
+				border-bottom: none;
+			}
+			.controls-table td code {
+				font-size: 0.7rem;
+				color: var(--color-tan);
+				background: #0e0a07;
+			}
+			.controls-table td strong {
+				color: var(--color-gray-200);
+			}
+
+			.footer-note {
+				margin-top: 4rem;
+				padding-top: 1rem;
+				border-top: 1px solid #2a2622;
+				color: #888;
+				font-size: 0.75rem;
+				font-style: italic;
+			}
+		</style>
+	</head>
+
+	<body>
+		<div class="flow-shell">
+			<nav class="flow-toc">
+				<h1>Per-Ankh C4 Model</h1>
+				<ol>
+					<li><a href="#about">About this model</a></li>
+					<li><a href="#legend">How to read it</a></li>
+				</ol>
+
+				<div class="toc-group">The four levels</div>
+				<ol>
+					<li>
+						<a href="#l1"><span class="toc-tag">L1</span>System Context</a>
+					</li>
+					<li>
+						<a href="#l2"><span class="toc-tag">L2</span>Containers</a>
+					</li>
+					<li>
+						<a href="#l3"><span class="toc-tag">L3</span>Components</a>
+					</li>
+					<li>
+						<a href="#l4"><span class="toc-tag">L4</span>Code</a>
+					</li>
+				</ol>
+
+				<div class="toc-group">Component diagrams</div>
+				<ol>
+					<li>
+						<a href="#c-api"><span class="toc-tag">C1</span>API Worker</a>
+					</li>
+					<li>
+						<a href="#c-ssr"><span class="toc-tag">C2</span>SSR app</a>
+					</li>
+					<li>
+						<a href="#c-parser"><span class="toc-tag">C3</span>Parser</a>
+					</li>
+				</ol>
+
+				<div class="toc-group">Reference</div>
+				<ol>
+					<li><a href="#stores">Data stores</a></li>
+				</ol>
+			</nav>
+
+			<main class="flow-main">
+				<header style="margin-bottom: 2rem">
+					<h2
+						style="margin-top: 0; border-bottom: 3px solid var(--color-orange)"
+					>
+						C4 Architecture Model
+					</h2>
+					<p class="section-intro">
+						Per-Ankh (<a href="https://per-ankh.app">per-ankh.app</a>) modelled
+						with the
+						<a href="https://c4model.com/">C4 visual notation</a> — four nested
+						levels of abstraction, each zooming one step further in: a
+						<strong>System Context</strong> for the whole app and its
+						neighbours, a <strong>Container</strong> view of the deployable
+						runtimes and data stores, a <strong>Component</strong> view of the
+						pieces inside the two Workers and the parser, and a note on the
+						<strong>Code</strong> level. Browser-side parsing, a SvelteKit SSR
+						Worker, a hand-rolled API Worker, and three Cloudflare storage
+						bindings — Discord is the only third party in any production flow.
+					</p>
+				</header>
+
+				<!-- ============ ABOUT ============ -->
+				<h2 id="about">About this model</h2>
+				<p class="section-intro">
+					The C4 model describes software architecture at four levels of detail,
+					like zooming a map. You stop descending once the diagram answers the
+					question at hand. Per-Ankh is small enough that Levels 1–3 carry almost
+					everything worth drawing; Level 4 is intentionally left to the code.
+				</p>
+
+				<div class="legend-grid">
+					<div class="legend-item">
+						<span class="label">L1 · Context</span>
+						<span class="desc"
+							>Per-Ankh as a single box, the people who use it, and the systems
+							it depends on.</span
+						>
+					</div>
+					<div class="legend-item">
+						<span class="label">L2 · Containers</span>
+						<span class="desc"
+							>The separately-deployable/runnable things: SSR Worker, API
+							Worker, in-browser parser, D1, R2, KV.</span
+						>
+					</div>
+					<div class="legend-item">
+						<span class="label">L3 · Components</span>
+						<span class="desc"
+							>The major modules inside each container and how they
+							collaborate.</span
+						>
+					</div>
+					<div class="legend-item">
+						<span class="label">L4 · Code</span>
+						<span class="desc"
+							>Classes/functions — not drawn; the TypeScript source is the
+							source of truth.</span
+						>
+					</div>
+				</div>
+
+				<!-- ============ LEGEND ============ -->
+				<h2 id="legend">How to read the diagrams</h2>
+				<p class="section-intro">
+					Colour and shape are consistent across every diagram below.
+				</p>
+				<div class="legend-grid">
+					<div class="legend-item" style="border-left-color: #d2b48c">
+						<span class="label">Person</span>
+						<span class="desc"
+							>A human role. Tan border. Players, viewers, operators.</span
+						>
+					</div>
+					<div class="legend-item" style="border-left-color: #ffa500">
+						<span class="label">Container (this system)</span>
+						<span class="desc"
+							>An orange-bordered runtime owned by Per-Ankh — a Worker, the
+							browser app, or the parser.</span
+						>
+					</div>
+					<div class="legend-item" style="border-left-color: #c1872f">
+						<span class="label">Data store</span>
+						<span class="desc"
+							>A Cloudflare binding — D1, R2, KV. Drawn as a cylinder.</span
+						>
+					</div>
+					<div class="legend-item" style="border-left-color: #79261d">
+						<span class="label">External system</span>
+						<span class="desc"
+							>A dependency Per-Ankh does not own — Discord OAuth, the Old World
+							game itself.</span
+						>
+					</div>
+				</div>
+
+				<!-- ============ LEVEL 1 ============ -->
+				<h2 id="l1">Level 1 — System Context</h2>
+				<p class="section-intro">
+					Who uses Per-Ankh and what it talks to. The whole application is one
+					box. Players generate save files by playing Old World on their own
+					machine, upload them, and explore the parsed analytics; anonymous
+					viewers follow public game and tournament links; operators run the
+					admin surface. Discord is the single sign-on identity provider.
+				</p>
+
+				<div class="mermaid-frame">
+					<div class="mermaid">
+flowchart TB
+    player["<b>Player</b><br/><i>[Person]</i><br/>Plays Old World, uploads<br/>saves, browses analytics"]
+    viewer["<b>Anonymous viewer</b><br/><i>[Person]</i><br/>Opens public game &amp;<br/>tournament share links"]
+    operator["<b>Operator / TO</b><br/><i>[Person]</i><br/>Admin tools &amp; tournament<br/>administration"]
+
+    perankh["<b>Per-Ankh</b><br/><i>[Software System]</i><br/>Parses Old World saves in the browser,<br/>persists to Cloudflare, and visualises<br/>them as charts, a hex map, and tournaments"]
+
+    ow["<b>Old World</b><br/><i>[External · Desktop game]</i><br/>Writes the save ZIPs that<br/>users upload"]
+    discord["<b>Discord OAuth</b><br/><i>[External · Identity]</i><br/>identify + email scopes<br/>for sign-in"]
+
+    player -->|"uploads saves, views<br/>charts &amp; maps · HTTPS"| perankh
+    viewer -.->|"reads public games &amp;<br/>tournaments · HTTPS"| perankh
+    operator -->|"admin &amp; tournament ops · HTTPS"| perankh
+    ow -.->|"produces .zip saves<br/>on the player's disk"| player
+    perankh -->|"OAuth token exchange<br/>+ profile fetch"| discord
+
+    style player fill:#211a12,stroke:#d2b48c,color:#eee
+    style viewer fill:#211a12,stroke:#d2b48c,color:#eee
+    style operator fill:#211a12,stroke:#d2b48c,color:#eee
+    style perankh fill:#35302b,stroke:#ffa500,color:#eee
+    style ow fill:#0e0a07,stroke:#79261d,color:#eee
+    style discord fill:#0e0a07,stroke:#79261d,color:#eee
+					</div>
+				</div>
+
+				<div class="boundary-note">
+					<strong>Boundary:</strong> Old World runs entirely on the player's
+					machine — Per-Ankh never connects to it. The only bytes that cross are
+					the save ZIP the user chooses to upload. PII (<code>online_id</code>,
+					<code>discord_id</code>) is stripped from anything served to anonymous
+					viewers.
+				</div>
+
+				<!-- ============ LEVEL 2 ============ -->
+				<h2 id="l2">Level 2 — Containers</h2>
+				<p class="section-intro">
+					Zooming into the Per-Ankh box. Four runtime tiers plus one external
+					service. Two tiers are Cloudflare Workers (SSR + API); a third
+					"container" is the parser, which runs as a Web Worker
+					<em>inside the user's browser</em> on the upload page; the storage tier
+					is three sibling bindings on the same Cloudflare account. The legacy
+					share viewer is a frozen static SvelteKit app sharing UI code via
+					symlinks.
+				</p>
+
+				<div class="mermaid-frame">
+					<div class="mermaid">
+flowchart TB
+    player["<b>Player / Viewer</b><br/><i>[Person]</i>"]
+
+    subgraph browser["User's browser"]
+        spa["<b>SvelteKit app</b><br/><i>[Container: Svelte 5 + TS]</i><br/>Routes, ECharts charts,<br/>hex SpriteMap, stores"]
+        parser["<b>Save parser</b><br/><i>[Container: Web Worker, TS]</i><br/>Unzips + parses XML to<br/>game blob, client-side"]
+    end
+
+    subgraph edge["Cloudflare edge (per-ankh account)"]
+        ssr["<b>SSR Worker</b><br/><i>[Container: SvelteKit + adapter-cloudflare]</i><br/>per-ankh.app — serves HTML,<br/>hydration, SSR data loads"]
+        api["<b>API Worker</b><br/><i>[Container: TS, hand-rolled router, Valibot]</i><br/>api.per-ankh.app — auth, games,<br/>collections, tournaments, stats, admin"]
+        legacy["<b>Legacy share viewer</b><br/><i>[Container: static SvelteKit, frozen]</i><br/>per-ankh.app/share/[id]"]
+
+        d1[("<b>D1</b><br/><i>SHARE_DB</i><br/>users · games · events ·<br/>collections · tournaments")]
+        r2[("<b>R2</b><br/><i>SHARE_BUCKET</i><br/>saves/&lt;id&gt;.zip<br/>games/&lt;id&gt;.json.gz")]
+        kv[("<b>KV</b><br/><i>SESSIONS_KV</i><br/>oauth:* 5min · session:* 30d")]
+    end
+
+    discord["<b>Discord OAuth</b><br/><i>[External]</i>"]
+
+    player -->|"HTTPS"| spa
+    spa -->|"parses file in"| parser
+    parser -->|"uploads game blob + raw ZIP<br/>credentialed JSON"| api
+    spa -->|"page nav · HTTPS"| ssr
+    ssr -->|"server-side fetch<br/>(cookie forwarded)"| api
+    spa -->|"XHR · Cookie: session"| api
+    player -.->|"public links"| legacy
+    legacy -->|"GET public game JSON"| api
+
+    api <-->|"prepare / bind"| d1
+    api <-->|"get / put / delete"| r2
+    api <-->|"session: + oauth:"| kv
+    api -->|"token + profile"| discord
+
+    style player fill:#211a12,stroke:#d2b48c,color:#eee
+    style spa fill:#35302b,stroke:#ffa500,color:#eee
+    style parser fill:#35302b,stroke:#ffa500,color:#eee
+    style ssr fill:#35302b,stroke:#ffa500,color:#eee
+    style api fill:#35302b,stroke:#ffa500,color:#eee
+    style legacy fill:#2a2018,stroke:#79261d,color:#eee
+    style d1 fill:#1a1410,stroke:#c1872f,color:#eee
+    style r2 fill:#1a1410,stroke:#c1872f,color:#eee
+    style kv fill:#1a1410,stroke:#c1872f,color:#eee
+    style discord fill:#0e0a07,stroke:#79261d,color:#eee
+					</div>
+				</div>
+
+				<div class="legend-grid">
+					<div class="legend-item">
+						<span class="label">SvelteKit app + parser</span>
+						<span class="desc"
+							>Runs in the browser. Source under <code>src/</code>. Parsing
+							happens client-side in a Web Worker so raw saves are only uploaded
+							after the user opts in.</span
+						>
+					</div>
+					<div class="legend-item">
+						<span class="label">SSR Worker</span>
+						<span class="desc"
+							><code>@sveltejs/adapter-cloudflare</code>. Renders pages, runs
+							<code>+page.ts</code>/<code>+layout.ts</code> loads server-side,
+							forwards the session cookie to the API via
+							<code>handleFetch</code>.</span
+						>
+					</div>
+					<div class="legend-item">
+						<span class="label">API Worker</span>
+						<span class="desc"
+							>Under <code>cloud/</code>. Hand-rolled URL routing, Valibot
+							validation, nanoid IDs. Owns all three storage bindings — the
+							browser never touches D1/R2/KV directly.</span
+						>
+					</div>
+					<div class="legend-item">
+						<span class="label">Legacy share viewer</span>
+						<span class="desc"
+							>Frozen static app under <code>web/</code>, symlinking
+							<code>src/lib/game-detail/</code> &amp; friends. Serves old desktop
+							share links; UI-only changes propagate on redeploy.</span
+						>
+					</div>
+				</div>
+
+				<!-- ============ LEVEL 3 ============ -->
+				<h2 id="l3">Level 3 — Components</h2>
+				<p class="section-intro">
+					Zooming inside the two Workers and the parser. These are the major
+					modules, mapped to source directories so the diagram stays honest
+					against the tree.
+				</p>
+
+				<!-- ---- API Worker components ---- -->
+				<div class="flow-card">
+					<div class="flow-card-head">
+						<span class="flow-card-tag" id="c-api">C1</span>
+						<span class="flow-card-title">Inside the API Worker</span>
+					</div>
+					<p>
+						A single fetch handler (<code>cloud/src/index.ts</code>) dispatches
+						to feature handlers by URL pattern. Cross-cutting concerns — session
+						resolution, validation, scoping — sit between the router and the
+						handlers; every handler talks to the storage bindings through the
+						same three accessors.
+					</p>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+flowchart TB
+    inbound["Inbound request<br/><i>from SSR Worker / browser / legacy</i>"]
+
+    subgraph apiw["API Worker · cloud/src"]
+        router["<b>Router</b><br/><i>index.ts</i><br/>URL-pattern dispatch, CORS"]
+        session["<b>Session / Auth</b><br/><i>auth.ts · session.ts</i><br/>OAuth, cookie → user"]
+        validation["<b>Validation</b><br/><i>validation.ts · schemas/</i><br/>Valibot, parser-version gate"]
+        scope["<b>Games scope</b><br/><i>games-scope.ts</i><br/>ownership / visibility"]
+
+        games["<b>Games</b><br/><i>games.ts · derive-player-summary.ts</i>"]
+        collections["<b>Collections</b><br/><i>collections.ts</i>"]
+        onlineids["<b>Online IDs</b><br/><i>online-ids.ts</i>"]
+        users["<b>Users</b><br/><i>users.ts</i>"]
+        tournaments["<b>Tournaments</b><br/><i>tournament/* · routes/tournaments</i><br/>pairing, bracket, standings, maps"]
+        stats["<b>Stats</b><br/><i>stats/* aggregate + cache</i>"]
+        admin["<b>Admin</b><br/><i>admin.ts</i>"]
+        csp["<b>CSP report</b><br/><i>csp.ts</i>"]
+    end
+
+    d1[("D1")]
+    r2[("R2")]
+    kv[("KV")]
+    discord["Discord OAuth"]
+
+    inbound --> router
+    router --> session
+    router --> validation
+    session --> scope
+    validation --> scope
+    scope --> games
+    scope --> collections
+    scope --> onlineids
+    router --> users
+    router --> tournaments
+    router --> stats
+    router --> admin
+    router --> csp
+
+    session <--> kv
+    session --> discord
+    games <--> d1
+    games <--> r2
+    collections <--> d1
+    onlineids <--> d1
+    users <--> d1
+    tournaments <--> d1
+    stats <--> d1
+    admin <--> d1
+
+    style inbound fill:#211a12,stroke:#d2b48c,color:#eee
+    style router fill:#3a2f1c,stroke:#ffa500,color:#eee
+    style session fill:#35302b,stroke:#ffa500,color:#eee
+    style validation fill:#35302b,stroke:#ffa500,color:#eee
+    style scope fill:#35302b,stroke:#ffa500,color:#eee
+    style games fill:#35302b,stroke:#ffa500,color:#eee
+    style collections fill:#35302b,stroke:#ffa500,color:#eee
+    style onlineids fill:#35302b,stroke:#ffa500,color:#eee
+    style users fill:#35302b,stroke:#ffa500,color:#eee
+    style tournaments fill:#35302b,stroke:#ffa500,color:#eee
+    style stats fill:#35302b,stroke:#ffa500,color:#eee
+    style admin fill:#35302b,stroke:#ffa500,color:#eee
+    style csp fill:#35302b,stroke:#ffa500,color:#eee
+    style d1 fill:#1a1410,stroke:#c1872f,color:#eee
+    style r2 fill:#1a1410,stroke:#c1872f,color:#eee
+    style kv fill:#1a1410,stroke:#c1872f,color:#eee
+    style discord fill:#0e0a07,stroke:#79261d,color:#eee
+						</div>
+					</div>
+				</div>
+
+				<!-- ---- SSR / browser app components ---- -->
+				<div class="flow-card">
+					<div class="flow-card-head">
+						<span class="flow-card-tag" id="c-ssr">C2</span>
+						<span class="flow-card-title"
+							>Inside the SvelteKit app (browser + SSR)</span
+						>
+					</div>
+					<p>
+						The same Svelte source renders on the SSR Worker and hydrates in the
+						browser. Routes load data through one thin API client
+						(<code>api-cloud.ts</code>); shared visualisation components and the
+						<code>game-detail/</code> view are reused by the legacy viewer via
+						symlink.
+					</p>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+flowchart TB
+    subgraph app["SvelteKit app · src"]
+        routes["<b>Routes</b><br/><i>routes/*</i><br/>/, dashboard, upload, games,<br/>tournaments, account, admin"]
+        apiclient["<b>API client</b><br/><i>lib/api-cloud.ts</i><br/>typed fetch wrapper, auth errors"]
+        gamedetail["<b>Game detail view</b><br/><i>lib/game-detail/*</i><br/>tabs, yield charts"]
+        viz["<b>Visualisation</b><br/><i>Chart.svelte (ECharts)<br/>SpriteMap.svelte (hex atlas)</i>"]
+        stores["<b>Stores + config</b><br/><i>lib/stores · lib/config</i><br/>session, theme, colours"]
+        parserlib["<b>Parser entry</b><br/><i>lib/parser/upload-helpers.ts</i>"]
+    end
+
+    apiworker["API Worker"]
+    parserwk["Save parser (Web Worker)"]
+
+    routes --> apiclient
+    routes --> gamedetail
+    routes --> stores
+    routes --> parserlib
+    gamedetail --> viz
+    apiclient -->|"JSON"| apiworker
+    parserlib -->|"postMessage"| parserwk
+
+    style routes fill:#35302b,stroke:#ffa500,color:#eee
+    style apiclient fill:#3a2f1c,stroke:#ffa500,color:#eee
+    style gamedetail fill:#35302b,stroke:#ffa500,color:#eee
+    style viz fill:#35302b,stroke:#ffa500,color:#eee
+    style stores fill:#35302b,stroke:#ffa500,color:#eee
+    style parserlib fill:#35302b,stroke:#ffa500,color:#eee
+    style apiworker fill:#0e0a07,stroke:#ffa500,color:#eee
+    style parserwk fill:#0e0a07,stroke:#ffa500,color:#eee
+						</div>
+					</div>
+				</div>
+
+				<!-- ---- Parser components ---- -->
+				<div class="flow-card">
+					<div class="flow-card-head">
+						<span class="flow-card-tag" id="c-parser">C3</span>
+						<span class="flow-card-title">Inside the save parser</span>
+					</div>
+					<p>
+						A pipeline that turns a raw Old World save ZIP into the structured
+						game blob the app uploads and renders — all in the browser, off the
+						main thread. Each domain parser under
+						<code>parsers/</code> extracts one slice of the XML; derived series
+						are computed before validation gates the result against
+						<code>PARSER_VERSION</code>.
+					</p>
+
+					<div class="mermaid-frame">
+						<div class="mermaid">
+flowchart LR
+    file["Save ZIP<br/><i>from file picker</i>"]
+
+    subgraph parser["Save parser · src/lib/parser"]
+        worker["<b>Worker entry</b><br/><i>worker.ts</i>"]
+        unzip["<b>Unzip</b><br/><i>extract-zip.ts</i>"]
+        xml["<b>XML parse</b><br/><i>parse-xml.ts</i>"]
+        domain["<b>Domain parsers</b><br/><i>parsers/* — players, cities,<br/>units, characters, tiles,<br/>diplomacy, events, timeseries…</i>"]
+        derive["<b>Derive</b><br/><i>derive/*</i><br/>computed series &amp; summaries"]
+        valid["<b>Validation</b><br/><i>validation.ts</i><br/>PARSER_VERSION gate"]
+    end
+
+    blob["Game blob<br/><i>→ upload to API</i>"]
+
+    file --> worker --> unzip --> xml --> domain --> derive --> valid --> blob
+
+    style file fill:#211a12,stroke:#d2b48c,color:#eee
+    style worker fill:#3a2f1c,stroke:#ffa500,color:#eee
+    style unzip fill:#35302b,stroke:#ffa500,color:#eee
+    style xml fill:#35302b,stroke:#ffa500,color:#eee
+    style domain fill:#35302b,stroke:#ffa500,color:#eee
+    style derive fill:#35302b,stroke:#ffa500,color:#eee
+    style valid fill:#35302b,stroke:#ffa500,color:#eee
+    style blob fill:#211a12,stroke:#d2b48c,color:#eee
+						</div>
+					</div>
+					<div class="boundary-note">
+						<strong>Version contract:</strong> bumping
+						<code>PARSER_VERSION</code> (<code>src/lib/parser/types.ts</code>)
+						requires adding the string to <code>KNOWN_PARSER_VERSIONS</code> in
+						the Worker, or uploads fail with
+						<code>INVALID_BLOB: Unknown parser_version</code>. Deploy the Worker
+						first.
+					</div>
+				</div>
+
+				<!-- ============ LEVEL 4 ============ -->
+				<h2 id="l4">Level 4 — Code</h2>
+				<p class="section-intro">
+					C4's deepest level drops to individual classes and functions. The model
+					stops here deliberately: at Per-Ankh's size, a code-level diagram would
+					duplicate the TypeScript and rot the moment a function is renamed. The
+					source — and its tests — are the source of truth.
+				</p>
+				<ul>
+					<li>
+						<strong>API handlers &amp; routing:</strong>
+						<code>cloud/src/index.ts</code> plus the per-feature modules listed
+						in the C1 diagram.
+					</li>
+					<li>
+						<strong>Tournament engine:</strong> pairing, bracket, standings, and
+						map selection under <code>cloud/src/tournament/</code> carry their own
+						<code>*.test.ts</code> — the densest logic in the codebase.
+					</li>
+					<li>
+						<strong>Parser pipeline:</strong> the domain parsers under
+						<code>src/lib/parser/parsers/</code>.
+					</li>
+					<li>
+						<strong>Data shape:</strong> Valibot schemas in
+						<code>cloud/src/schemas/</code> and
+						<code>cloud/src/validation.ts</code>.
+					</li>
+				</ul>
+
+				<!-- ============ DATA STORES ============ -->
+				<h2 id="stores">Reference — data stores</h2>
+				<p class="section-intro">
+					The three Cloudflare bindings the API Worker owns. The browser never
+					reaches them directly; every read and write is mediated by a Worker
+					handler.
+				</p>
+
+				<table class="controls-table">
+					<thead>
+						<tr>
+							<th>Binding</th>
+							<th>Service</th>
+							<th>Holds</th>
+							<th>Notes</th>
+						</tr>
+					</thead>
+					<tbody>
+						<tr>
+							<td><code>SHARE_DB</code></td>
+							<td><strong>D1</strong> (SQLite)</td>
+							<td>
+								Relational metadata: users, games, events, collections,
+								online_ids, and the tournament tables (tournaments → rounds →
+								matches → slots).
+							</td>
+							<td>
+								Forward-only numbered migrations in
+								<code>cloud/migrations/</code> (24 to date).
+							</td>
+						</tr>
+						<tr>
+							<td><code>SHARE_BUCKET</code></td>
+							<td><strong>R2</strong> (object store)</td>
+							<td>
+								Raw save ZIPs (<code>saves/&lt;id&gt;.zip</code>) and parsed,
+								gzipped game blobs (<code>games/&lt;id&gt;.json.gz</code>).
+							</td>
+							<td>Keys are always server-constructed, never client-supplied.</td>
+						</tr>
+						<tr>
+							<td><code>SESSIONS_KV</code></td>
+							<td><strong>KV</strong> (key-value)</td>
+							<td>
+								Sessions (<code>session:*</code>, 30-day TTL) and in-flight OAuth
+								state (<code>oauth:*</code>, 5-min TTL).
+							</td>
+							<td>The session cookie is an opaque KV key — no JWT.</td>
+						</tr>
+					</tbody>
+				</table>
+
+				<p class="footer-note">
+					C4 notation per <a href="https://c4model.com/">c4model.com</a>.
+					Structure reflects the working tree as of 2026-05-29 — directories
+					under <code>src/lib/</code>, <code>cloud/src/</code>, and
+					<code>web/</code>. Theme matches the other Per-Ankh HTML docs in
+					<code>docs/</code>.
+				</p>
+			</main>
+		</div>
+	</body>
+</html>
