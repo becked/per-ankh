@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-05-30-c4d4b75] - 2026-05-30
+
+### Features
+
+- (tournament) rework match popover and add nation crests — [c7a3a88](https://github.com/becked/per-ankh/commit/c7a3a88c933104c7c1414ae3918a3548a49a7fc8)
+- (tournament) refine match popover map control and layout — [c4d4b75](https://github.com/becked/per-ankh/commit/c4d4b757da96f9fc29e56dfc7816d6da144e9e21)
+
 ## [2026-05-30-a01c3ab] - 2026-05-30
 
 ### Features
