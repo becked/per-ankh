@@ -758,6 +758,17 @@ export const cloudApi = {
 		return res.json() as Promise<BracketResponse>;
 	},
 
+	// Admin-only CSV export — returns a zip Blob (standings.csv + matches.csv).
+	// Binary, so it returns the Blob rather than parsed JSON; `request` still
+	// applies the shared auth + typed-error handling.
+	exportTournament: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<Blob> => {
+		const res = await request(`/tournaments/${tournamentId}/export`, opts);
+		return res.blob();
+	},
+
 	getTournamentMatches: async (
 		tournamentId: string,
 		params: {

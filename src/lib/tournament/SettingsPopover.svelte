@@ -26,6 +26,7 @@
 
 	let open = $state(false);
 	let deleting = $state(false);
+	let exporting = $state(false);
 
 	const isAdmin = $derived(tournament.is_viewer_admin === true);
 	const user = $derived(page.data.user as UserMe | null);
@@ -35,6 +36,29 @@
 		(tournament.is_viewer_creator || user?.is_admin === true) &&
 			tournament.status !== "complete",
 	);
+
+	async function handleExport() {
+		exporting = true;
+		try {
+			const blob = await cloudApi.exportTournament(tournament.tournament_id);
+			const url = URL.createObjectURL(blob);
+			const a = document.createElement("a");
+			a.href = url;
+			a.download = `${tournament.slug}-export.zip`;
+			document.body.appendChild(a);
+			a.click();
+			a.remove();
+			URL.revokeObjectURL(url);
+		} catch (err) {
+			let message = "Couldn't export tournament";
+			if (err instanceof ApiError) {
+				message = err.message + (err.code ? ` (${err.code})` : "");
+			}
+			toast.error(message);
+		} finally {
+			exporting = false;
+		}
+	}
 
 	async function handleDelete() {
 		const ok = await confirmDialog({
@@ -127,6 +151,28 @@
 	{#if isAdmin}
 		<div class="mt-4 rounded-lg p-4" style="background-color: #2a2622;">
 			<TournamentAdminManager {tournament} />
+		</div>
+	{/if}
+
+	{#if isAdmin}
+		<div
+			class="mt-4 flex items-center justify-between gap-3 rounded-lg p-4"
+			style="background-color: #2a2622;"
+		>
+			<div class="text-xs text-tan">
+				<p class="font-bold">Export CSV</p>
+				<p class="opacity-60">
+					Download the standings and full match schedule as a zip of CSV files.
+				</p>
+			</div>
+			<button
+				type="button"
+				class="whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+				onclick={handleExport}
+				disabled={exporting}
+			>
+				{exporting ? "Exporting…" : "Export CSV"}
+			</button>
 		</div>
 	{/if}
 

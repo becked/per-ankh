@@ -612,7 +612,7 @@ export async function handleTournamentStandings(
 	return jsonResponse(body, 200, cors);
 }
 
-async function computeStandingsResponse(
+export async function computeStandingsResponse(
 	env: TournamentEnv,
 	tournament: TournamentRow,
 	viewerIsAdmin: boolean,

@@ -70,6 +70,7 @@ import {
 	handleTournamentStandings,
 } from "./tournament/public";
 import type { TournamentPublicEnv } from "./tournament/public";
+import { handleTournamentExport } from "./tournament/export";
 import {
 	handleDismissBanner,
 	handleMyAdminTournaments,
@@ -822,6 +823,15 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "GET /v1/tournaments/:id/matches",
 		handler: (r, e, m) => handleTournamentMatches(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/export$/,
+		},
+		route: "GET /v1/tournaments/:id/export",
+		handler: (r, e, m) => handleTournamentExport(m![1], r, e),
 	},
 	{
 		method: "GET",

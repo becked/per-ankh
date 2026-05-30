@@ -17,3 +17,10 @@ export const TOURNAMENT_VIEW_PER_HOUR = 600;
 // enough that 5/hour is generous. Spam at this rate is bounded by the
 // cost of acquiring Discord accounts.
 export const TOURNAMENT_CREATE_PER_USER_PER_HOUR = 5;
+
+// Per-user budget for the TO-only CSV export. The work is cheap (bounded D1
+// reads, no R2), so this is a runaway-client backstop rather than a real
+// constraint — and every call writes a 'tournament_export' audit event, so
+// the counter doubles as an export log. 30/hour is generous for an organizer
+// pulling results.
+export const TOURNAMENT_EXPORT_PER_HOUR = 30;
