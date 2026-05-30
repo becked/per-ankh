@@ -951,7 +951,7 @@
 						     toggled (not stacked), matching the Swiss divisions. -->
 						<Tabs.Root
 							bind:value={championshipView}
-							class="mb-8 rounded-lg p-4"
+							class="mb-8 rounded-lg p-4 pb-2"
 							style="background-color: #2a2622;"
 						>
 							<div
@@ -991,13 +991,16 @@
 												isComplete={data.tournament.status === "complete"}
 											/>
 										{:else}
-											<PickPreferenceNote />
 											<ChampionshipBracketTree
 												bracket={data.bracket}
 												tournamentSlug={data.tournament.slug}
 												mapPool={data.tournament.map_pool}
 												onMatchClick={openMatch}
-											/>
+											>
+												{#snippet footer()}
+													<PickPreferenceNote />
+												{/snippet}
+											</ChampionshipBracketTree>
 										{/if}
 									</div>
 								{/key}
@@ -1060,7 +1063,9 @@
 														: substituteSlot}
 												/>
 											{:else}
-												<PickPreferenceNote />
+												<div class="mb-3">
+													<PickPreferenceNote />
+												</div>
 												<SwissFlowBracket
 													winsToAdvance={data.tournament.swiss_wins_to_advance}
 													lossesToEliminate={data.tournament

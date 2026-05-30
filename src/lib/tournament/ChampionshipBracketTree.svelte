@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from "svelte";
 	import { resolve } from "$app/paths";
 	import type { BracketResponse, MapPoolEntry } from "$lib/api-cloud";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
@@ -20,6 +21,7 @@
 		tournamentSlug,
 		mapPool,
 		onMatchClick,
+		footer,
 	}: {
 		bracket: BracketResponse;
 		tournamentSlug: string;
@@ -28,6 +30,10 @@
 		mapPool: MapPoolEntry[];
 		// eslint-disable-next-line no-unused-vars -- param name is documentary
 		onMatchClick: (matchId: string) => void;
+		// Optional content rendered below the bracket, aligned to its first
+		// column and centered with it — so it tracks the bracket rather than the
+		// full panel width.
+		footer?: Snippet;
 	} = $props();
 
 	function handleMatchClick(matchId: string, e: MouseEvent) {
@@ -358,6 +364,11 @@
 				{/each}
 			</div>
 		</div>
+		{#if footer}
+			<div class="bracket-footer" style:width="{layout.width}px">
+				{@render footer()}
+			</div>
+		{/if}
 	</div>
 {/if}
 
@@ -407,11 +418,23 @@
 
 	.bracket-scroll {
 		overflow-x: auto;
-		padding-bottom: 0.5rem;
+		padding-bottom: 0.125rem;
 	}
 
 	.bracket {
 		position: relative;
+		/* Center within the scroll container when it fits; margins collapse to 0
+		   and it scrolls from the left when wider than the view. */
+		margin-inline: auto;
+	}
+
+	/* Centered with the bracket (so it tracks the first card's left edge), then
+	   shifted 100px left so the note begins to the left of the first round cards.
+	   The transform shifts it without disturbing the centering margins. */
+	.bracket-footer {
+		margin-inline: auto;
+		padding-top: 2rem;
+		transform: translateX(-100px);
 	}
 
 	.round-headers {

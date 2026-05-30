@@ -1,7 +1,9 @@
 <!-- Shared "pick preference" rule note. Both Swiss divisions and the championship
      bracket default each match's pick order to the slot listed second (see
-     cloud/src/tournament/admin.ts), so the same rule line appears under each. -->
-<p class="mb-3 flex items-center gap-1.5 text-xs text-tan opacity-70">
+     cloud/src/tournament/admin.ts), so the same rule line appears alongside each.
+     Spacing is left to the call site since the note sits above the Swiss brackets
+     but below the championship bracket. -->
+<p class="flex items-center gap-1.5 text-xs text-tan opacity-70">
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
 		class="h-3.5 w-3.5 shrink-0"
