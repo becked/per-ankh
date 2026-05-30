@@ -393,10 +393,9 @@
 					</h2>
 					<p class="section-intro">
 						Per-Ankh (<a href="https://per-ankh.app">per-ankh.app</a>) modelled
-						with the
-						<a href="https://c4model.com/">C4 visual notation</a> — four nested
-						levels of abstraction, each zooming one step further in: a
-						<strong>System Context</strong> for the whole app and its
+						with the <a href="https://c4model.com/">C4 visual notation</a> —
+						four nested levels of abstraction, each zooming one step further in:
+						a <strong>System Context</strong> for the whole app and its
 						neighbours, a <strong>Container</strong> view of the deployable
 						runtimes and data stores, a <strong>Component</strong> view of the
 						pieces inside the two Workers and the parser, and a note on the
@@ -411,8 +410,9 @@
 				<p class="section-intro">
 					The C4 model describes software architecture at four levels of detail,
 					like zooming a map. You stop descending once the diagram answers the
-					question at hand. Per-Ankh is small enough that Levels 1–3 carry almost
-					everything worth drawing; Level 4 is intentionally left to the code.
+					question at hand. Per-Ankh is small enough that Levels 1–3 carry
+					almost everything worth drawing; Level 4 is intentionally left to the
+					code.
 				</p>
 
 				<div class="legend-grid">
@@ -492,28 +492,31 @@
 
 				<div class="mermaid-frame">
 					<div class="mermaid">
-flowchart TB
-    player["<b>Player</b><br/><i>[Person]</i><br/>Plays Old World, uploads<br/>saves, browses analytics"]
-    viewer["<b>Anonymous viewer</b><br/><i>[Person]</i><br/>Opens public game &amp;<br/>tournament share links"]
-    operator["<b>Operator / TO</b><br/><i>[Person]</i><br/>Admin tools &amp; tournament<br/>administration"]
-
-    perankh["<b>Per-Ankh</b><br/><i>[Software System]</i><br/>Parses Old World saves in the browser,<br/>persists to Cloudflare, and visualises<br/>them as charts, a hex map, and tournaments"]
-
-    ow["<b>Old World</b><br/><i>[External · Desktop game]</i><br/>Writes the save ZIPs that<br/>users upload"]
-    discord["<b>Discord OAuth</b><br/><i>[External · Identity]</i><br/>identify + email scopes<br/>for sign-in"]
-
-    player -->|"uploads saves, views<br/>charts &amp; maps · HTTPS"| perankh
-    viewer -.->|"reads public games &amp;<br/>tournaments · HTTPS"| perankh
-    operator -->|"admin &amp; tournament ops · HTTPS"| perankh
-    ow -.->|"produces .zip saves<br/>on the player's disk"| player
-    perankh -->|"OAuth token exchange<br/>+ profile fetch"| discord
-
-    style player fill:#211a12,stroke:#d2b48c,color:#eee
-    style viewer fill:#211a12,stroke:#d2b48c,color:#eee
-    style operator fill:#211a12,stroke:#d2b48c,color:#eee
-    style perankh fill:#35302b,stroke:#ffa500,color:#eee
-    style ow fill:#0e0a07,stroke:#79261d,color:#eee
-    style discord fill:#0e0a07,stroke:#79261d,color:#eee
+						flowchart TB player["<b>Player</b><br /><i>[Person]</i><br />Plays
+						Old World, uploads<br />saves, browses analytics"] viewer["<b
+							>Anonymous viewer</b
+						><br /><i>[Person]</i><br />Opens public game &amp;<br />tournament
+						share links"] operator["<b>Operator / TO</b><br /><i>[Person]</i
+						><br />Admin tools &amp; tournament<br />administration"]
+						perankh["<b>Per-Ankh</b><br /><i>[Software System]</i><br />Parses
+						Old World saves in the browser,<br />persists to Cloudflare, and
+						visualises<br />them as charts, a hex map, and tournaments"] ow["<b
+							>Old World</b
+						><br /><i>[External · Desktop game]</i><br />Writes the save ZIPs
+						that<br />users upload"] discord["<b>Discord OAuth</b><br /><i
+							>[External · Identity]</i
+						><br />identify + email scopes<br />for sign-in"] player
+						-->|"uploads saves, views<br />charts &amp; maps · HTTPS"| perankh
+						viewer -.->|"reads public games &amp;<br />tournaments · HTTPS"|
+						perankh operator -->|"admin &amp; tournament ops · HTTPS"| perankh
+						ow -.->|"produces .zip saves<br />on the player's disk"| player
+						perankh -->|"OAuth token exchange<br />+ profile fetch"| discord
+						style player fill:#211a12,stroke:#d2b48c,color:#eee style viewer
+						fill:#211a12,stroke:#d2b48c,color:#eee style operator
+						fill:#211a12,stroke:#d2b48c,color:#eee style perankh
+						fill:#35302b,stroke:#ffa500,color:#eee style ow
+						fill:#0e0a07,stroke:#79261d,color:#eee style discord
+						fill:#0e0a07,stroke:#79261d,color:#eee
 					</div>
 				</div>
 
@@ -531,58 +534,53 @@ flowchart TB
 					Zooming into the Per-Ankh box. Four runtime tiers plus one external
 					service. Two tiers are Cloudflare Workers (SSR + API); a third
 					"container" is the parser, which runs as a Web Worker
-					<em>inside the user's browser</em> on the upload page; the storage tier
-					is three sibling bindings on the same Cloudflare account. The legacy
-					share viewer is a frozen static SvelteKit app sharing UI code via
-					symlinks.
+					<em>inside the user's browser</em> on the upload page; the storage
+					tier is three sibling bindings on the same Cloudflare account. The
+					legacy share viewer is a frozen static SvelteKit app sharing UI code
+					via symlinks.
 				</p>
 
 				<div class="mermaid-frame">
 					<div class="mermaid">
-flowchart TB
-    player["<b>Player / Viewer</b><br/><i>[Person]</i>"]
-
-    subgraph browser["User's browser"]
-        spa["<b>SvelteKit app</b><br/><i>[Container: Svelte 5 + TS]</i><br/>Routes, ECharts charts,<br/>hex SpriteMap, stores"]
-        parser["<b>Save parser</b><br/><i>[Container: Web Worker, TS]</i><br/>Unzips + parses XML to<br/>game blob, client-side"]
-    end
-
-    subgraph edge["Cloudflare edge (per-ankh account)"]
-        ssr["<b>SSR Worker</b><br/><i>[Container: SvelteKit + adapter-cloudflare]</i><br/>per-ankh.app — serves HTML,<br/>hydration, SSR data loads"]
-        api["<b>API Worker</b><br/><i>[Container: TS, hand-rolled router, Valibot]</i><br/>api.per-ankh.app — auth, games,<br/>collections, tournaments, stats, admin"]
-        legacy["<b>Legacy share viewer</b><br/><i>[Container: static SvelteKit, frozen]</i><br/>per-ankh.app/share/[id]"]
-
-        d1[("<b>D1</b><br/><i>SHARE_DB</i><br/>users · games · events ·<br/>collections · tournaments")]
-        r2[("<b>R2</b><br/><i>SHARE_BUCKET</i><br/>saves/&lt;id&gt;.zip<br/>games/&lt;id&gt;.json.gz")]
-        kv[("<b>KV</b><br/><i>SESSIONS_KV</i><br/>oauth:* 5min · session:* 30d")]
-    end
-
-    discord["<b>Discord OAuth</b><br/><i>[External]</i>"]
-
-    player -->|"HTTPS"| spa
-    spa -->|"parses file in"| parser
-    parser -->|"uploads game blob + raw ZIP<br/>credentialed JSON"| api
-    spa -->|"page nav · HTTPS"| ssr
-    ssr -->|"server-side fetch<br/>(cookie forwarded)"| api
-    spa -->|"XHR · Cookie: session"| api
-    player -.->|"public links"| legacy
-    legacy -->|"GET public game JSON"| api
-
-    api <-->|"prepare / bind"| d1
-    api <-->|"get / put / delete"| r2
-    api <-->|"session: + oauth:"| kv
-    api -->|"token + profile"| discord
-
-    style player fill:#211a12,stroke:#d2b48c,color:#eee
-    style spa fill:#35302b,stroke:#ffa500,color:#eee
-    style parser fill:#35302b,stroke:#ffa500,color:#eee
-    style ssr fill:#35302b,stroke:#ffa500,color:#eee
-    style api fill:#35302b,stroke:#ffa500,color:#eee
-    style legacy fill:#2a2018,stroke:#79261d,color:#eee
-    style d1 fill:#1a1410,stroke:#c1872f,color:#eee
-    style r2 fill:#1a1410,stroke:#c1872f,color:#eee
-    style kv fill:#1a1410,stroke:#c1872f,color:#eee
-    style discord fill:#0e0a07,stroke:#79261d,color:#eee
+						flowchart TB player["<b>Player / Viewer</b><br /><i>[Person]</i>"]
+						subgraph browser["User's browser"] spa["<b>SvelteKit app</b><br /><i
+							>[Container: Svelte 5 + TS]</i
+						><br />Routes, ECharts charts,<br />hex SpriteMap, stores"]
+						parser["<b>Save parser</b><br /><i>[Container: Web Worker, TS]</i
+						><br />Unzips + parses XML to<br />game blob, client-side"] end
+						subgraph edge["Cloudflare edge (per-ankh account)"] ssr["<b
+							>SSR Worker</b
+						><br /><i>[Container: SvelteKit + adapter-cloudflare]</i
+						><br />per-ankh.app — serves HTML,<br />hydration, SSR data loads"]
+						api["<b>API Worker</b><br /><i
+							>[Container: TS, hand-rolled router, Valibot]</i
+						><br />api.per-ankh.app — auth, games,<br />collections,
+						tournaments, stats, admin"] legacy["<b>Legacy share viewer</b
+						><br /><i>[Container: static SvelteKit, frozen]</i
+						><br />per-ankh.app/share/[id]"] d1[("<b>D1</b><br /><i>SHARE_DB</i
+						><br />users · games · events ·<br />collections · tournaments")]
+						r2[("<b>R2</b><br /><i>SHARE_BUCKET</i
+						><br />saves/&lt;id&gt;.zip<br />games/&lt;id&gt;.json.gz")] kv[("<b
+							>KV</b
+						><br /><i>SESSIONS_KV</i><br />oauth:* 5min · session:* 30d")] end
+						discord["<b>Discord OAuth</b><br /><i>[External]</i>"] player
+						-->|"HTTPS"| spa spa -->|"parses file in"| parser parser
+						-->|"uploads game blob + raw ZIP<br />credentialed JSON"| api spa
+						-->|"page nav · HTTPS"| ssr ssr -->|"server-side fetch<br />(cookie
+						forwarded)"| api spa -->|"XHR · Cookie: session"| api player
+						-.->|"public links"| legacy legacy -->|"GET public game JSON"| api
+						api <-->|"prepare / bind"| d1 api <-->|"get / put / delete"| r2 api
+						<-->|"session: + oauth:"| kv api -->|"token + profile"| discord
+						style player fill:#211a12,stroke:#d2b48c,color:#eee style spa
+						fill:#35302b,stroke:#ffa500,color:#eee style parser
+						fill:#35302b,stroke:#ffa500,color:#eee style ssr
+						fill:#35302b,stroke:#ffa500,color:#eee style api
+						fill:#35302b,stroke:#ffa500,color:#eee style legacy
+						fill:#2a2018,stroke:#79261d,color:#eee style d1
+						fill:#1a1410,stroke:#c1872f,color:#eee style r2
+						fill:#1a1410,stroke:#c1872f,color:#eee style kv
+						fill:#1a1410,stroke:#c1872f,color:#eee style discord
+						fill:#0e0a07,stroke:#79261d,color:#eee
 					</div>
 				</div>
 
@@ -616,8 +614,8 @@ flowchart TB
 						<span class="label">Legacy share viewer</span>
 						<span class="desc"
 							>Frozen static app under <code>web/</code>, symlinking
-							<code>src/lib/game-detail/</code> &amp; friends. Serves old desktop
-							share links; UI-only changes propagate on redeploy.</span
+							<code>src/lib/game-detail/</code> &amp; friends. Serves old
+							desktop share links; UI-only changes propagate on redeploy.</span
 						>
 					</div>
 				</div>
@@ -646,72 +644,50 @@ flowchart TB
 
 					<div class="mermaid-frame">
 						<div class="mermaid">
-flowchart TB
-    inbound["Inbound request<br/><i>from SSR Worker / browser / legacy</i>"]
-
-    subgraph apiw["API Worker · cloud/src"]
-        router["<b>Router</b><br/><i>index.ts</i><br/>URL-pattern dispatch, CORS"]
-        session["<b>Session / Auth</b><br/><i>auth.ts · session.ts</i><br/>OAuth, cookie → user"]
-        validation["<b>Validation</b><br/><i>validation.ts · schemas/</i><br/>Valibot, parser-version gate"]
-        scope["<b>Games scope</b><br/><i>games-scope.ts</i><br/>ownership / visibility"]
-
-        games["<b>Games</b><br/><i>games.ts · derive-player-summary.ts</i>"]
-        collections["<b>Collections</b><br/><i>collections.ts</i>"]
-        onlineids["<b>Online IDs</b><br/><i>online-ids.ts</i>"]
-        users["<b>Users</b><br/><i>users.ts</i>"]
-        tournaments["<b>Tournaments</b><br/><i>tournament/* · routes/tournaments</i><br/>pairing, bracket, standings, maps"]
-        stats["<b>Stats</b><br/><i>stats/* aggregate + cache</i>"]
-        admin["<b>Admin</b><br/><i>admin.ts</i>"]
-        csp["<b>CSP report</b><br/><i>csp.ts</i>"]
-    end
-
-    d1[("D1")]
-    r2[("R2")]
-    kv[("KV")]
-    discord["Discord OAuth"]
-
-    inbound --> router
-    router --> session
-    router --> validation
-    session --> scope
-    validation --> scope
-    scope --> games
-    scope --> collections
-    scope --> onlineids
-    router --> users
-    router --> tournaments
-    router --> stats
-    router --> admin
-    router --> csp
-
-    session <--> kv
-    session --> discord
-    games <--> d1
-    games <--> r2
-    collections <--> d1
-    onlineids <--> d1
-    users <--> d1
-    tournaments <--> d1
-    stats <--> d1
-    admin <--> d1
-
-    style inbound fill:#211a12,stroke:#d2b48c,color:#eee
-    style router fill:#3a2f1c,stroke:#ffa500,color:#eee
-    style session fill:#35302b,stroke:#ffa500,color:#eee
-    style validation fill:#35302b,stroke:#ffa500,color:#eee
-    style scope fill:#35302b,stroke:#ffa500,color:#eee
-    style games fill:#35302b,stroke:#ffa500,color:#eee
-    style collections fill:#35302b,stroke:#ffa500,color:#eee
-    style onlineids fill:#35302b,stroke:#ffa500,color:#eee
-    style users fill:#35302b,stroke:#ffa500,color:#eee
-    style tournaments fill:#35302b,stroke:#ffa500,color:#eee
-    style stats fill:#35302b,stroke:#ffa500,color:#eee
-    style admin fill:#35302b,stroke:#ffa500,color:#eee
-    style csp fill:#35302b,stroke:#ffa500,color:#eee
-    style d1 fill:#1a1410,stroke:#c1872f,color:#eee
-    style r2 fill:#1a1410,stroke:#c1872f,color:#eee
-    style kv fill:#1a1410,stroke:#c1872f,color:#eee
-    style discord fill:#0e0a07,stroke:#79261d,color:#eee
+							flowchart TB inbound["Inbound request<br /><i
+								>from SSR Worker / browser / legacy</i
+							>"] subgraph apiw["API Worker · cloud/src"] router["<b>Router</b
+							><br /><i>index.ts</i><br />URL-pattern dispatch, CORS"]
+							session["<b>Session / Auth</b><br /><i>auth.ts · session.ts</i
+							><br />OAuth, cookie → user"] validation["<b>Validation</b
+							><br /><i>validation.ts · schemas/</i><br />Valibot,
+							parser-version gate"] scope["<b>Games scope</b><br /><i
+								>games-scope.ts</i
+							><br />ownership / visibility"] games["<b>Games</b><br /><i
+								>games.ts · derive-player-summary.ts</i
+							>"] collections["<b>Collections</b><br /><i>collections.ts</i>"]
+							onlineids["<b>Online IDs</b><br /><i>online-ids.ts</i>"] users["<b
+								>Users</b
+							><br /><i>users.ts</i>"] tournaments["<b>Tournaments</b><br /><i
+								>tournament/* · routes/tournaments</i
+							><br />pairing, bracket, standings, maps"] stats["<b>Stats</b
+							><br /><i>stats/* aggregate + cache</i>"] admin["<b>Admin</b
+							><br /><i>admin.ts</i>"] csp["<b>CSP report</b><br /><i>csp.ts</i
+							>"] end d1[("D1")] r2[("R2")] kv[("KV")] discord["Discord OAuth"]
+							inbound --> router router --> session router --> validation
+							session --> scope validation --> scope scope --> games scope -->
+							collections scope --> onlineids router --> users router -->
+							tournaments router --> stats router --> admin router --> csp
+							session <--> kv session --> discord games <--> d1 games <--> r2
+							collections <--> d1 onlineids <--> d1 users <--> d1 tournaments
+							<--> d1 stats <--> d1 admin <--> d1 style inbound
+							fill:#211a12,stroke:#d2b48c,color:#eee style router
+							fill:#3a2f1c,stroke:#ffa500,color:#eee style session
+							fill:#35302b,stroke:#ffa500,color:#eee style validation
+							fill:#35302b,stroke:#ffa500,color:#eee style scope
+							fill:#35302b,stroke:#ffa500,color:#eee style games
+							fill:#35302b,stroke:#ffa500,color:#eee style collections
+							fill:#35302b,stroke:#ffa500,color:#eee style onlineids
+							fill:#35302b,stroke:#ffa500,color:#eee style users
+							fill:#35302b,stroke:#ffa500,color:#eee style tournaments
+							fill:#35302b,stroke:#ffa500,color:#eee style stats
+							fill:#35302b,stroke:#ffa500,color:#eee style admin
+							fill:#35302b,stroke:#ffa500,color:#eee style csp
+							fill:#35302b,stroke:#ffa500,color:#eee style d1
+							fill:#1a1410,stroke:#c1872f,color:#eee style r2
+							fill:#1a1410,stroke:#c1872f,color:#eee style kv
+							fill:#1a1410,stroke:#c1872f,color:#eee style discord
+							fill:#0e0a07,stroke:#79261d,color:#eee
 						</div>
 					</div>
 				</div>
@@ -734,35 +710,33 @@ flowchart TB
 
 					<div class="mermaid-frame">
 						<div class="mermaid">
-flowchart TB
-    subgraph app["SvelteKit app · src"]
-        routes["<b>Routes</b><br/><i>routes/*</i><br/>/, dashboard, upload, games,<br/>tournaments, account, admin"]
-        apiclient["<b>API client</b><br/><i>lib/api-cloud.ts</i><br/>typed fetch wrapper, auth errors"]
-        gamedetail["<b>Game detail view</b><br/><i>lib/game-detail/*</i><br/>tabs, yield charts"]
-        viz["<b>Visualisation</b><br/><i>Chart.svelte (ECharts)<br/>SpriteMap.svelte (hex atlas)</i>"]
-        stores["<b>Stores + config</b><br/><i>lib/stores · lib/config</i><br/>session, theme, colours"]
-        parserlib["<b>Parser entry</b><br/><i>lib/parser/upload-helpers.ts</i>"]
-    end
-
-    apiworker["API Worker"]
-    parserwk["Save parser (Web Worker)"]
-
-    routes --> apiclient
-    routes --> gamedetail
-    routes --> stores
-    routes --> parserlib
-    gamedetail --> viz
-    apiclient -->|"JSON"| apiworker
-    parserlib -->|"postMessage"| parserwk
-
-    style routes fill:#35302b,stroke:#ffa500,color:#eee
-    style apiclient fill:#3a2f1c,stroke:#ffa500,color:#eee
-    style gamedetail fill:#35302b,stroke:#ffa500,color:#eee
-    style viz fill:#35302b,stroke:#ffa500,color:#eee
-    style stores fill:#35302b,stroke:#ffa500,color:#eee
-    style parserlib fill:#35302b,stroke:#ffa500,color:#eee
-    style apiworker fill:#0e0a07,stroke:#ffa500,color:#eee
-    style parserwk fill:#0e0a07,stroke:#ffa500,color:#eee
+							flowchart TB subgraph app["SvelteKit app · src"] routes["<b
+								>Routes</b
+							><br /><i>routes/*</i><br />/, dashboard, upload, games,<br />tournaments,
+							account, admin"] apiclient["<b>API client</b><br /><i
+								>lib/api-cloud.ts</i
+							><br />typed fetch wrapper, auth errors"] gamedetail["<b
+								>Game detail view</b
+							><br /><i>lib/game-detail/*</i><br />tabs, yield charts"] viz["<b
+								>Visualisation</b
+							><br /><i
+								>Chart.svelte (ECharts)<br />SpriteMap.svelte (hex atlas)</i
+							>"] stores["<b>Stores + config</b><br /><i
+								>lib/stores · lib/config</i
+							><br />session, theme, colours"] parserlib["<b>Parser entry</b
+							><br /><i>lib/parser/upload-helpers.ts</i>"] end apiworker["API
+							Worker"] parserwk["Save parser (Web Worker)"] routes --> apiclient
+							routes --> gamedetail routes --> stores routes --> parserlib
+							gamedetail --> viz apiclient -->|"JSON"| apiworker parserlib
+							-->|"postMessage"| parserwk style routes
+							fill:#35302b,stroke:#ffa500,color:#eee style apiclient
+							fill:#3a2f1c,stroke:#ffa500,color:#eee style gamedetail
+							fill:#35302b,stroke:#ffa500,color:#eee style viz
+							fill:#35302b,stroke:#ffa500,color:#eee style stores
+							fill:#35302b,stroke:#ffa500,color:#eee style parserlib
+							fill:#35302b,stroke:#ffa500,color:#eee style apiworker
+							fill:#0e0a07,stroke:#ffa500,color:#eee style parserwk
+							fill:#0e0a07,stroke:#ffa500,color:#eee
 						</div>
 					</div>
 				</div>
@@ -784,30 +758,30 @@ flowchart TB
 
 					<div class="mermaid-frame">
 						<div class="mermaid">
-flowchart LR
-    file["Save ZIP<br/><i>from file picker</i>"]
-
-    subgraph parser["Save parser · src/lib/parser"]
-        worker["<b>Worker entry</b><br/><i>worker.ts</i>"]
-        unzip["<b>Unzip</b><br/><i>extract-zip.ts</i>"]
-        xml["<b>XML parse</b><br/><i>parse-xml.ts</i>"]
-        domain["<b>Domain parsers</b><br/><i>parsers/* — players, cities,<br/>units, characters, tiles,<br/>diplomacy, events, timeseries…</i>"]
-        derive["<b>Derive</b><br/><i>derive/*</i><br/>computed series &amp; summaries"]
-        valid["<b>Validation</b><br/><i>validation.ts</i><br/>PARSER_VERSION gate"]
-    end
-
-    blob["Game blob<br/><i>→ upload to API</i>"]
-
-    file --> worker --> unzip --> xml --> domain --> derive --> valid --> blob
-
-    style file fill:#211a12,stroke:#d2b48c,color:#eee
-    style worker fill:#3a2f1c,stroke:#ffa500,color:#eee
-    style unzip fill:#35302b,stroke:#ffa500,color:#eee
-    style xml fill:#35302b,stroke:#ffa500,color:#eee
-    style domain fill:#35302b,stroke:#ffa500,color:#eee
-    style derive fill:#35302b,stroke:#ffa500,color:#eee
-    style valid fill:#35302b,stroke:#ffa500,color:#eee
-    style blob fill:#211a12,stroke:#d2b48c,color:#eee
+							flowchart LR file["Save ZIP<br /><i>from file picker</i>"]
+							subgraph parser["Save parser · src/lib/parser"] worker["<b
+								>Worker entry</b
+							><br /><i>worker.ts</i>"] unzip["<b>Unzip</b><br /><i
+								>extract-zip.ts</i
+							>"] xml["<b>XML parse</b><br /><i>parse-xml.ts</i>"] domain["<b
+								>Domain parsers</b
+							><br /><i
+								>parsers/* — players, cities,<br />units, characters, tiles,<br />diplomacy,
+								events, timeseries…</i
+							>"] derive["<b>Derive</b><br /><i>derive/*</i><br />computed
+							series &amp; summaries"] valid["<b>Validation</b><br /><i
+								>validation.ts</i
+							><br />PARSER_VERSION gate"] end blob["Game blob<br /><i
+								>→ upload to API</i
+							>"] file --> worker --> unzip --> xml --> domain --> derive -->
+							valid --> blob style file fill:#211a12,stroke:#d2b48c,color:#eee
+							style worker fill:#3a2f1c,stroke:#ffa500,color:#eee style unzip
+							fill:#35302b,stroke:#ffa500,color:#eee style xml
+							fill:#35302b,stroke:#ffa500,color:#eee style domain
+							fill:#35302b,stroke:#ffa500,color:#eee style derive
+							fill:#35302b,stroke:#ffa500,color:#eee style valid
+							fill:#35302b,stroke:#ffa500,color:#eee style blob
+							fill:#211a12,stroke:#d2b48c,color:#eee
 						</div>
 					</div>
 					<div class="boundary-note">
@@ -823,10 +797,10 @@ flowchart LR
 				<!-- ============ LEVEL 4 ============ -->
 				<h2 id="l4">Level 4 — Code</h2>
 				<p class="section-intro">
-					C4's deepest level drops to individual classes and functions. The model
-					stops here deliberately: at Per-Ankh's size, a code-level diagram would
-					duplicate the TypeScript and rot the moment a function is renamed. The
-					source — and its tests — are the source of truth.
+					C4's deepest level drops to individual classes and functions. The
+					model stops here deliberately: at Per-Ankh's size, a code-level
+					diagram would duplicate the TypeScript and rot the moment a function
+					is renamed. The source — and its tests — are the source of truth.
 				</p>
 				<ul>
 					<li>
@@ -836,8 +810,8 @@ flowchart LR
 					</li>
 					<li>
 						<strong>Tournament engine:</strong> pairing, bracket, standings, and
-						map selection under <code>cloud/src/tournament/</code> carry their own
-						<code>*.test.ts</code> — the densest logic in the codebase.
+						map selection under <code>cloud/src/tournament/</code> carry their
+						own <code>*.test.ts</code> — the densest logic in the codebase.
 					</li>
 					<li>
 						<strong>Parser pipeline:</strong> the domain parsers under
@@ -888,14 +862,16 @@ flowchart LR
 								Raw save ZIPs (<code>saves/&lt;id&gt;.zip</code>) and parsed,
 								gzipped game blobs (<code>games/&lt;id&gt;.json.gz</code>).
 							</td>
-							<td>Keys are always server-constructed, never client-supplied.</td>
+							<td>
+								Keys are always server-constructed, never client-supplied.
+							</td>
 						</tr>
 						<tr>
 							<td><code>SESSIONS_KV</code></td>
 							<td><strong>KV</strong> (key-value)</td>
 							<td>
-								Sessions (<code>session:*</code>, 30-day TTL) and in-flight OAuth
-								state (<code>oauth:*</code>, 5-min TTL).
+								Sessions (<code>session:*</code>, 30-day TTL) and in-flight
+								OAuth state (<code>oauth:*</code>, 5-min TTL).
 							</td>
 							<td>The session cookie is an opaque KV key — no JWT.</td>
 						</tr>
