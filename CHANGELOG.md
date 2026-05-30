@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-05-29-2a13ace] - 2026-05-29
+
+### Features
+
+- (tournament) default Swiss groups to standings during championship — [2a13ace](https://github.com/becked/per-ankh/commit/2a13ace18bc0df66dba4d032096f3594a990da84)
+
 ## [2026-05-29-b255700] - 2026-05-29
 
 ### Features
