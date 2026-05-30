@@ -78,6 +78,28 @@ export function formatDate(dateStr: string | null | undefined): string {
 }
 
 /**
+ * Formats an ISO instant as a UTC date + 24h time for display, e.g.
+ * "May 30, 14:30". Tournament match scheduling is entered and shown in UTC
+ * (localization is a later iteration); callers append a " UTC" label.
+ *
+ * @param iso - ISO-8601 instant string, or null/undefined
+ * @returns "MMM D, HH:MM" in UTC, or "" when the input is empty/invalid
+ */
+export function formatScheduledUtc(iso: string | null | undefined): string {
+	if (!iso) return "";
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return "";
+	return d.toLocaleString("en-CA", {
+		timeZone: "UTC",
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
+	});
+}
+
+/**
  * Formats a game title for display, using intelligent fallbacks.
  *
  * Rules (first match wins):

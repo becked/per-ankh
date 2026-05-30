@@ -4,6 +4,10 @@
 // on requireTournamentAdmin — it only requires a session, and inserts the
 // caller's user_id into tournament_admins as part of the create batch.
 // Granting admin to a second user on an existing tournament is CLI-only.
+//
+// handlePatchMatchSchedule is the second exception: it accepts a tournament
+// admin OR either participant in the match (via authedMatchScheduler), so a
+// player can schedule their own upcoming game without an admin.
 
 import { nanoid } from "nanoid";
 import * as v from "valibot";
@@ -13,6 +17,7 @@ import {
 	GrantAdminSchema,
 	PatchMatchSchema,
 	PatchMatchMapSchema,
+	PatchMatchScheduleSchema,
 	PatchSlotSchema,
 	PatchTournamentSchema,
 	ReorderSlotsSchema,
@@ -27,6 +32,7 @@ import { logError } from "../log";
 import {
 	TOURNAMENT_ADMIN_ACTIONS_PER_HOUR,
 	TOURNAMENT_CREATE_PER_USER_PER_HOUR,
+	TOURNAMENT_SCHEDULE_ACTIONS_PER_HOUR,
 } from "./limits";
 import {
 	buildChampionshipFollowupRound,
@@ -1693,6 +1699,202 @@ export async function handlePatchMatchMap(
 	logTournamentAdminAction(env, a.userId, tournamentId, "match_map_patched", {
 		match_id: matchId,
 	});
+	return jsonResponse({ match: updated }, 200, cors);
+}
+
+// ----------------------------------------------------------------------
+// PATCH /v1/tournaments/:id/matches/:match_id/schedule — set scheduled time,
+// stream link, and caster. Admin OR participant (see authedMatchScheduler).
+// ----------------------------------------------------------------------
+
+// Like authedTournament, but widened for the schedule endpoint: a match
+// participant may use it in addition to a tournament admin. Loads + scopes the
+// match to the URL's tournament (404 hides existence cross-tournament) before
+// the authz branch, then authorizes the caller as admin OR owner of either
+// slot, and enforces the per-user schedule rate limit. Anon/non-beta collapse
+// to 404 to keep the URL space hidden, matching authedTournament.
+async function authedMatchScheduler(
+	tournamentId: string,
+	matchId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<
+	| { ok: true; match: MatchRow; userId: string }
+	| { ok: false; response: Response }
+> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return {
+			ok: false,
+			response: errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND"),
+		};
+	}
+	try {
+		await requireTournamentBeta(env, session.data);
+	} catch (e) {
+		if (e instanceof AuthzError) {
+			return {
+				ok: false,
+				response: errorResponse(e.message, e.status, cors, e.code),
+			};
+		}
+		throw e;
+	}
+
+	const match = await loadMatch(env, matchId);
+	if (!match) {
+		return {
+			ok: false,
+			response: errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND"),
+		};
+	}
+	const round = await loadRound(env, match.round_id);
+	if (!round || round.tournament_id !== tournamentId) {
+		return {
+			ok: false,
+			response: errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND"),
+		};
+	}
+
+	// Admin OR participant. Try admin first (reuses requireTournamentAdmin);
+	// on its 403 fall back to checking whether the caller owns either slot.
+	let authorized = false;
+	try {
+		await requireTournamentAdmin(env, session.data, tournamentId);
+		authorized = true;
+	} catch (e) {
+		if (!(e instanceof AuthzError)) throw e;
+		const slotA = await loadSlot(env, match.slot_a_id);
+		const slotB = match.slot_b_id ? await loadSlot(env, match.slot_b_id) : null;
+		authorized =
+			slotA?.user_id === session.data.user_id ||
+			slotB?.user_id === session.data.user_id;
+	}
+	if (!authorized) {
+		return {
+			ok: false,
+			response: errorResponse(
+				"You must be a tournament admin or a participant in this match to schedule it",
+				403,
+				cors,
+				"NOT_MATCH_PARTICIPANT",
+			),
+		};
+	}
+
+	// Per-user schedule budget (admins and participants alike).
+	const scheduleEventCount = await countEventsSince(
+		env.SHARE_DB,
+		"tournament_schedule",
+		"user_id",
+		session.data.user_id,
+	);
+	if (scheduleEventCount >= TOURNAMENT_SCHEDULE_ACTIONS_PER_HOUR) {
+		return {
+			ok: false,
+			response: errorResponse(
+				"Tournament schedule rate limit exceeded",
+				429,
+				cors,
+				"RATE_LIMIT_TOURNAMENT_SCHEDULE",
+			),
+		};
+	}
+
+	return { ok: true, match, userId: session.data.user_id };
+}
+
+export async function handlePatchMatchSchedule(
+	tournamentId: string,
+	matchId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedMatchScheduler(tournamentId, matchId, request, env);
+	if (!a.ok) return a.response;
+	const { match } = a;
+
+	// Only pending matches can be scheduled — a decided or bye match has
+	// nothing upcoming to coordinate.
+	if (match.status !== "pending") {
+		return errorResponse(
+			"Can only schedule a pending match",
+			409,
+			cors,
+			"MATCH_NOT_PENDING",
+		);
+	}
+
+	const body = await parseJsonBody(request, PatchMatchScheduleSchema, cors);
+	if (!body.ok) return body.response;
+	const patch = body.body;
+
+	const fragments: string[] = [];
+	const binds: unknown[] = [];
+
+	// Each field is provided iff its key is present with a non-undefined value;
+	// an explicit null clears it. (Mirrors the retro-edit handler's tolerance
+	// for Valibot emitting undefined for absent optionals.)
+	if (patch.scheduled_at !== undefined) {
+		fragments.push("scheduled_at = ?");
+		binds.push(patch.scheduled_at);
+	}
+	if (patch.stream_url !== undefined) {
+		fragments.push("stream_url = ?");
+		binds.push(patch.stream_url);
+	}
+
+	// Caster resolution mirrors handlePatchSlot's prelink branch: a non-null
+	// caster_user_id must reference a linkable user, and we snapshot that
+	// user's canonical username into caster_name (ignoring any client-sent
+	// name). Otherwise caster_name is free text (or null to clear), with no
+	// linked account.
+	const casterTouched =
+		patch.caster_user_id !== undefined || patch.caster_name !== undefined;
+	if (casterTouched) {
+		if (patch.caster_user_id) {
+			const u = await env.SHARE_DB.prepare(
+				"SELECT discord_username FROM users WHERE user_id = ?",
+			)
+				.bind(patch.caster_user_id)
+				.first<{ discord_username: string | null }>();
+			if (!u || !u.discord_username) {
+				return errorResponse(
+					`Unknown or unlinkable user_id: ${patch.caster_user_id}`,
+					400,
+					cors,
+					"INVALID_USER_ID",
+				);
+			}
+			fragments.push("caster_user_id = ?", "caster_name = ?");
+			binds.push(patch.caster_user_id, u.discord_username);
+		} else {
+			const name = patch.caster_name?.trim();
+			fragments.push("caster_user_id = NULL", "caster_name = ?");
+			binds.push(name ? name : null);
+		}
+	}
+
+	if (fragments.length === 0) {
+		return jsonResponse({ match }, 200, cors);
+	}
+	binds.push(matchId);
+	await env.SHARE_DB.prepare(
+		`UPDATE tournament_matches SET ${fragments.join(", ")} WHERE match_id = ?`,
+	)
+		.bind(...binds)
+		.run();
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	const updated = await loadMatch(env, matchId);
+	logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"match_schedule_patched",
+		{ match_id: matchId },
+	);
 	return jsonResponse({ match: updated }, 200, cors);
 }
 

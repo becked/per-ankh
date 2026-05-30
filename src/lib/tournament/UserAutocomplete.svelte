@@ -1,12 +1,14 @@
 <script lang="ts">
-	// Inline autocomplete for the admin's "Add slot" form.
+	// Inline autocomplete over Per-Ankh users. Used wherever a flow needs to
+	// pick (or free-text) a user: adding a tournament slot, substituting a
+	// slot occupant, granting a tournament admin, and setting a match caster.
 	//
 	// Scratch-built rather than wired through bits-ui's Combobox primitive:
-	// the project hasn't used Combobox yet, the existing slot form is a
-	// plain <input>, and the keyboard nav needed here is ~30 lines. The
-	// component matches the bare-input UX (Enter to submit, autofocus
-	// behavior, the existing dark Tailwind classes) so dropping it into
-	// the form is invisible until the admin starts typing.
+	// the project hasn't used Combobox yet, the host forms are plain <input>s,
+	// and the keyboard nav needed here is ~30 lines. The component matches the
+	// bare-input UX (Enter to submit, autofocus behavior, the existing dark
+	// Tailwind classes) so dropping it into a form is invisible until the user
+	// starts typing.
 	//
 	// Behavior:
 	//   * Below 2 chars: no fetch, no dropdown.
@@ -39,6 +41,10 @@
 		// Focus + select the input on mount (via the autofocus action, so no
 		// a11y warning). Used by toggle-to-edit hosts like SlotUsernameCell.
 		autofocusOnMount?: boolean;
+		// Background utility class for the input, so hosts on a different surface
+		// can match it (e.g. the schedule form uses #2a2623). Replaces the default
+		// rather than appending to avoid two conflicting bg- classes.
+		inputBgClass?: string;
 	}
 
 	let {
@@ -50,6 +56,7 @@
 		inputAttrs = {},
 		placeholder,
 		autofocusOnMount = false,
+		inputBgClass = "bg-[#35302b]",
 	}: Props = $props();
 
 	let suggestions = $state<UserSearchResult[]>([]);
@@ -92,7 +99,7 @@
 			// Anything else also degrades to free-text so a flaky search
 			// endpoint doesn't block slot creation. Logged for visibility.
 			if (!(err instanceof ApiError)) {
-				console.warn("[SlotUsernameAutocomplete] search failed", err);
+				console.warn("[UserAutocomplete] search failed", err);
 			}
 		}
 	}
@@ -181,7 +188,7 @@
 		onfocus={() => {
 			if (suggestions.length > 0) open = true;
 		}}
-		class="block w-full rounded border border-black bg-[#35302b] p-1.5 text-xs text-tan"
+		class="block w-full rounded border border-black {inputBgClass} p-1.5 text-xs text-tan"
 		{...inputAttrs}
 		autocomplete="off"
 		use:maybeAutofocus

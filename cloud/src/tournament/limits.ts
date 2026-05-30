@@ -6,6 +6,13 @@
 // session) is identical at our 4-admin-per-tournament scale.
 export const TOURNAMENT_ADMIN_ACTIONS_PER_HOUR = 30;
 
+// Per-user budget for match scheduling edits (scheduled time, stream link,
+// caster). Separate from the admin budget because participants — not just
+// admins — can schedule their own matches, and a participant has no admin
+// budget to draw from. Generous: setting a time/stream/caster on a match is a
+// handful of edits per match per player.
+export const TOURNAMENT_SCHEDULE_ACTIONS_PER_HOUR = 60;
+
 // Per-IP budget for anonymous tournament reads (list/detail/standings/
 // bracket/rounds/matches/match-detail + game tournament-link). Scraper
 // User-Agents bypass.

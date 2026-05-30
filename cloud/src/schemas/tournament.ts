@@ -240,6 +240,49 @@ export const PatchMatchMapSchema = v.object({
 	map_pool_id: v.optional(v.pipe(v.string(), v.regex(mapPoolIdRegex))),
 });
 
+// Allowed stream hosts for a scheduled match. Kept tight to the two platforms
+// tournaments actually stream on; expand if a third appears.
+const STREAM_HOSTS = new Set([
+	"youtube.com",
+	"www.youtube.com",
+	"m.youtube.com",
+	"youtu.be",
+	"twitch.tv",
+	"www.twitch.tv",
+	"m.twitch.tv",
+]);
+
+const StreamUrlSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.maxLength(500),
+	v.url("stream_url must be a valid URL"),
+	v.check((s) => {
+		try {
+			return STREAM_HOSTS.has(new URL(s).hostname.toLowerCase());
+		} catch {
+			return false;
+		}
+	}, "stream_url must be a youtube.com or twitch.tv link"),
+);
+
+// PATCH /v1/tournaments/:id/matches/:match_id/schedule body. Every field is
+// optional (partial update) and nullable (send null to clear). Caster is
+// modeled like a slot occupant: caster_user_id pre-links a Per-Ankh user when
+// picked, while caster_name carries free text when no account is linked (the
+// handler overwrites it with the canonical username when caster_user_id is
+// set, mirroring handlePatchSlot's prelink branch).
+export const PatchMatchScheduleSchema = v.object({
+	scheduled_at: v.optional(v.nullable(v.pipe(v.string(), v.isoTimestamp()))),
+	stream_url: v.optional(v.nullable(StreamUrlSchema)),
+	caster_user_id: v.optional(
+		v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),
+	),
+	caster_name: v.optional(
+		v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(80))),
+	),
+});
+
 export const ReportMatchSchema = v.object({
 	winner_slot_id: v.pipe(v.string(), v.regex(nanoid21Regex)),
 	game_id: v.optional(v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex)))),

@@ -127,6 +127,7 @@ export type RateLimitedEventType =
 	| "tournament_view"
 	| "tournament_create"
 	| "tournament_export"
+	| "tournament_schedule"
 	| "user_search";
 
 // Upload rate limits cover both first-time uploads and re-imports — both

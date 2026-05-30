@@ -20,7 +20,7 @@
 	import PickPreferenceNote from "$lib/tournament/PickPreferenceNote.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
-	import SlotUsernameAutocomplete from "$lib/tournament/SlotUsernameAutocomplete.svelte";
+	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
@@ -162,6 +162,18 @@
 		}
 		return out;
 	});
+
+	// Upcoming scheduled matches across every bracket/division, for the header
+	// Schedule view: still-pending matches that carry a scheduled time, soonest
+	// first. scheduled_at is an ISO-8601 instant, so lexical order is chrono.
+	const scheduledMatches = $derived(
+		data.matches
+			.filter((m) => m.status === "pending" && m.scheduled_at != null)
+			.slice()
+			.sort((a, b) =>
+				(a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""),
+			),
+	);
 
 	// --- Match modal state. pushState is shallow routing — page.url updates
 	// in the browser but page.state is the actually-reactive source. So we
@@ -466,7 +478,7 @@
 
 	let newSlotUsername = $state("");
 	let newSlotDivision = $state<Division>("A");
-	// Set by SlotUsernameAutocomplete when the admin picks a real user from
+	// Set by UserAutocomplete when the admin picks a real user from
 	// the dropdown; cleared if they edit the value afterward. Threads through
 	// to the bulk-create payload so the worker pre-links the slot to the
 	// canonical user without waiting for an OAuth-callback claim.
@@ -715,6 +727,11 @@
 					{isAdmin}
 					{canSignUp}
 					hasViewerSlot={viewerSlot !== null}
+					{scheduledMatches}
+					{slotLabels}
+					{slotUserIds}
+					{slotAvatars}
+					onSubstitute={isAdmin ? substituteSlot : undefined}
 					{busy}
 					{startReady}
 					{transitionReady}
@@ -757,7 +774,7 @@
 								<label class="block min-w-[14rem] text-xs text-tan">
 									Discord username
 									<div class="mt-1">
-										<SlotUsernameAutocomplete
+										<UserAutocomplete
 											value={newSlotUsername}
 											onValueChange={(v) => (newSlotUsername = v)}
 											onSelectUser={(u) => (newSlotUserId = u?.user_id ?? null)}

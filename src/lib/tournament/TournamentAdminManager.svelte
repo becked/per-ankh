@@ -14,7 +14,7 @@
 		type UserSearchResult,
 	} from "$lib/api-cloud";
 	import { toast } from "$lib/ui/toast";
-	import SlotUsernameAutocomplete from "./SlotUsernameAutocomplete.svelte";
+	import UserAutocomplete from "./UserAutocomplete.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -144,7 +144,7 @@
 		<span class="opacity-70">Add an admin</span>
 		<div class="flex items-start gap-2">
 			<div class="flex-1">
-				<SlotUsernameAutocomplete
+				<UserAutocomplete
 					value={addValue}
 					onValueChange={(next) => (addValue = next)}
 					onSelectUser={(user) => (pendingUser = user)}

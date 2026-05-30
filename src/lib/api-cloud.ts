@@ -11,7 +11,7 @@ const DEFAULT_API_BASE = "https://api.per-ankh.app/v1";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE) as string;
 
 // Result row returned by cloudApi.searchUsers — drives the
-// SlotUsernameAutocomplete. Intentionally narrow: discord_username for
+// UserAutocomplete. Intentionally narrow: discord_username for
 // matching, display_name for human-recognizable disambiguation in the
 // dropdown, discord_id + user_id for the eventual slot pre-link payload.
 // No email, no avatar, no timestamps.
@@ -928,7 +928,7 @@ export const cloudApi = {
 			division: Division;
 			discord_username: string;
 			swiss_seed?: number;
-			// Optional pre-link via SlotUsernameAutocomplete. When set, the
+			// Optional pre-link via UserAutocomplete. When set, the
 			// worker resolves the canonical discord_id + discord_username
 			// from the users table — body's discord_username is treated as
 			// a hint only. Slot is INSERTed as "claimed" (user_id populated)
@@ -1005,7 +1005,7 @@ export const cloudApi = {
 		});
 	},
 
-	// User-prefix search — powers the SlotUsernameAutocomplete on the
+	// User-prefix search — powers the UserAutocomplete on the
 	// admin's add-slot form. Beta-gated; returns up to `limit` users whose
 	// lowercased discord_username starts with `q`. Returns an empty list
 	// for q.length < 2 (still-typing floor; doesn't burn the per-user rate
@@ -1099,6 +1099,33 @@ export const cloudApi = {
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(body),
 		});
+	},
+
+	// Set scheduling metadata on a pending match (admin or participant). Every
+	// field is optional; send null to clear. caster_user_id pre-links a
+	// Per-Ankh user (server snapshots the canonical username); caster_name
+	// alone is a free-text caster.
+	patchMatchSchedule: async (
+		tournamentId: string,
+		matchId: string,
+		body: {
+			scheduled_at?: string | null;
+			stream_url?: string | null;
+			caster_user_id?: string | null;
+			caster_name?: string | null;
+		},
+		opts?: CallOpts,
+	): Promise<{ match: TournamentMatch }> => {
+		const res = await request(
+			`/tournaments/${tournamentId}/matches/${matchId}/schedule`,
+			{
+				...opts,
+				method: "PATCH",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(body),
+			},
+		);
+		return res.json() as Promise<{ match: TournamentMatch }>;
 	},
 
 	retroEditMatch: async (
@@ -1454,6 +1481,18 @@ export interface TournamentMatch {
 	// the crest is shown only when this is present.
 	slot_a_nation: string | null;
 	slot_b_nation: string | null;
+	// Scheduling metadata (migration 0025). Editable on pending matches by an
+	// admin or either participant. scheduled_at is a full ISO-8601 instant
+	// (UTC); stream_url a youtube/twitch link. Caster is modeled like a slot
+	// occupant: caster_user_id links a Per-Ankh user when picked (else null),
+	// caster_name is the canonical username when linked or free text otherwise,
+	// and caster_avatar_url resolves server-side from caster_user_id (null for
+	// a free-text caster or one with no claimed avatar).
+	scheduled_at: string | null;
+	stream_url: string | null;
+	caster_user_id: string | null;
+	caster_name: string | null;
+	caster_avatar_url: string | null;
 	// Client-only flag: true for synthesized future-round bracket cells that
 	// don't yet correspond to a real tournament_matches row. The server never
 	// sets this. MatchPopover uses it to render a stripped-down preview view

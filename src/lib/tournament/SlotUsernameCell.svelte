@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { UserSearchResult } from "$lib/api-cloud";
-	import SlotUsernameAutocomplete from "./SlotUsernameAutocomplete.svelte";
+	import UserAutocomplete from "./UserAutocomplete.svelte";
 
 	interface Props {
 		slotId: string;
@@ -60,7 +60,7 @@
 {#if editing}
 	<span class="inline-flex flex-col gap-0.5">
 		<span class="inline-flex items-center gap-1">
-			<SlotUsernameAutocomplete
+			<UserAutocomplete
 				{value}
 				onValueChange={(next) => {
 					value = next;

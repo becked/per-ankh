@@ -1113,6 +1113,17 @@ function serializeMatch(
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_avatar_url: slotBAvatar,
 		slot_b_nation: slotBNation,
+		// Scheduling metadata (migration 0025). caster_avatar_url resolves from
+		// the same user_id→avatar batch as the slot occupants; null for a
+		// free-text caster or one whose user has no claimed discord_id.
+		scheduled_at: m.scheduled_at,
+		stream_url: m.stream_url,
+		caster_user_id: m.caster_user_id,
+		caster_name: m.caster_name,
+		caster_avatar_url:
+			m.caster_user_id && avatarByUserId
+				? (avatarByUserId.get(m.caster_user_id) ?? null)
+				: null,
 	};
 }
 
@@ -1158,6 +1169,8 @@ async function loadHistoricalAvatarsForMatches(
 	for (const m of matches) {
 		if (m.slot_a_user_id) userIds.add(m.slot_a_user_id);
 		if (m.slot_b_user_id) userIds.add(m.slot_b_user_id);
+		// Caster avatar (migration 0025) resolves from the same batch.
+		if (m.caster_user_id) userIds.add(m.caster_user_id);
 	}
 	const map = new Map<string, string | null>();
 	if (userIds.size === 0) return map;
@@ -1197,6 +1210,7 @@ async function loadMatchesWithRound(
 		   m.reported_by_user_id, m.reported_at, m.notes,
 		   m.slot_a_player_index, m.slot_b_player_index, m.match_index,
 		   m.slot_a_username, m.slot_a_user_id, m.slot_b_username, m.slot_b_user_id,
+		   m.scheduled_at, m.stream_url, m.caster_user_id, m.caster_name,
 		   m.created_at,
 		   r.tournament_id, r.phase, r.division, r.round_number,
 		   r.status AS round_status,
@@ -1230,6 +1244,10 @@ async function loadMatchesWithRound(
 			slot_a_user_id: row.slot_a_user_id,
 			slot_b_username: row.slot_b_username,
 			slot_b_user_id: row.slot_b_user_id,
+			scheduled_at: row.scheduled_at,
+			stream_url: row.stream_url,
+			caster_user_id: row.caster_user_id,
+			caster_name: row.caster_name,
 			created_at: row.created_at,
 		},
 		round: {

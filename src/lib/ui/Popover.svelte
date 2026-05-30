@@ -16,6 +16,10 @@
 
 	type Side = "top" | "right" | "bottom" | "left";
 	type Align = "start" | "center" | "end";
+	// A floating-ui "virtual" anchor — anything exposing getBoundingClientRect.
+	// Lets callers anchor to a point (e.g. the mouse position) rather than a DOM
+	// element. Mirrors bits-ui's customAnchor, which accepts this same shape.
+	type Measurable = { getBoundingClientRect: () => DOMRect };
 
 	let {
 		open = $bindable(false),
@@ -34,7 +38,7 @@
 		side?: Side;
 		align?: Align;
 		sideOffset?: number;
-		customAnchor?: string | HTMLElement | null;
+		customAnchor?: string | HTMLElement | Measurable | null;
 		// Width / size override for the floating panel. The surface, rounding,
 		// scroll, and shadow are fixed; width varies per use.
 		contentClass?: string;

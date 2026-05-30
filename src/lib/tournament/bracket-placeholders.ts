@@ -75,6 +75,11 @@ export function synthesizeChampionshipPlaceholders(
 				slot_b_user_id: null,
 				slot_b_avatar_url: null,
 				slot_b_nation: null,
+				scheduled_at: null,
+				stream_url: null,
+				caster_user_id: null,
+				caster_name: null,
+				caster_avatar_url: null,
 				is_placeholder: true,
 			});
 		}

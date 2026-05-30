@@ -124,6 +124,15 @@ export interface MatchRow {
 	slot_a_user_id: string | null;
 	slot_b_username: string | null;
 	slot_b_user_id: string | null;
+	// Scheduling metadata (migration 0025). Editable on pending matches by an
+	// admin or either participant. scheduled_at is a full ISO-8601 instant
+	// (UTC); stream_url is a youtube/twitch link. Caster is modeled like a slot
+	// occupant: caster_user_id links a Per-Ankh user when picked, else NULL;
+	// caster_name is the canonical username when linked or free text otherwise.
+	scheduled_at: string | null;
+	stream_url: string | null;
+	caster_user_id: string | null;
+	caster_name: string | null;
 	created_at: string;
 }
 

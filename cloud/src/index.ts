@@ -90,6 +90,7 @@ import {
 	handleGrantTournamentAdmin,
 	handleListTournamentAdmins,
 	handlePatchMatchMap,
+	handlePatchMatchSchedule,
 	handlePatchSlot,
 	handlePatchTournament,
 	handleReorderSlots,
@@ -853,6 +854,16 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "PATCH /v1/tournaments/:id/matches/:match_id/map",
 		handler: (r, e, m) => handlePatchMatchMap(m![1], m![2], r, e),
+	},
+	{
+		method: "PATCH",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})\/schedule$/,
+		},
+		route: "PATCH /v1/tournaments/:id/matches/:match_id/schedule",
+		handler: (r, e, m) => handlePatchMatchSchedule(m![1], m![2], r, e),
 	},
 	{
 		method: "PATCH",
