@@ -46,13 +46,13 @@ The whole flow is five `make` targets:
 make patch  =  sync  →  art  →  data  →  changelog  →  build
 ```
 
-| Stage         | Script(s)                  | Output                                                     |
-| ------------- | -------------------------- | ---------------------------------------------------------- |
-| **sync**      | `scripts/sync_patch.sh`    | `reference/XML/`, `reference/Graphics/`, `data/patch.json` |
-| **art**       | `scripts/extract_art.py`   | `public/img/...` sprites (UnityPy)                         |
-| **data**      | ~28 × `scripts/build_*.py` | `src/data/*.json`                                          |
-| **changelog** | `scripts/changelog.py`     | `CHANGELOG.md` (diff of JSON snapshots)                    |
-| **build**     | `npx astro build`          | `dist/` static site                                        |
+| Stage | Script(s) | Output |
+|---|---|---|
+| **sync** | `scripts/sync_patch.sh` | `reference/XML/`, `reference/Graphics/`, `data/patch.json` |
+| **art** | `scripts/extract_art.py` | `public/img/...` sprites (UnityPy) |
+| **data** | ~28 × `scripts/build_*.py` | `src/data/*.json` |
+| **changelog** | `scripts/changelog.py` | `CHANGELOG.md` (diff of JSON snapshots) |
+| **build** | `npx astro build` | `dist/` static site |
 
 Per-patch operator flow: `make patch` → review `CHANGELOG.md` → `git push` →
 GitHub Actions deploys.
@@ -149,15 +149,15 @@ is imported by essentially every builder.
 
 Key entry points:
 
-| Function                                                      | Purpose                                                                                                                                                                                                                                        |
-| ------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `load_xml_indexes(xml_dir)`                                   | Preload + index ~13 cross-referenced XML files (`effectCity`, `effectPlayer`, `effectUnit`, `bonus`, `tech`, `trait`, `promotion`, `improvement`, `law`, `project`, `religion`, `resource`, `specialist`) so builders resolve references by ID |
-| `render_effect_city(entry, …)`                                | Per-city / flat yield effects                                                                                                                                                                                                                  |
-| `render_effect_player(…)` / `render_effect_player_scalars(…)` | Player-wide effects, bool/int/pct scalars                                                                                                                                                                                                      |
-| `render_effect_unit(entry)`                                   | Pillage / kill / fatigue effects                                                                                                                                                                                                               |
-| `render_bonus(entry, indexes)`                                | Stockpile, free units, free projects                                                                                                                                                                                                           |
-| `render_nation_effects(effect_player_id, indexes)`            | All effects for a nation                                                                                                                                                                                                                       |
-| `render_shrine_effects(improvement_entry)`                    | Shrine yield output + tile modifiers                                                                                                                                                                                                           |
+| Function | Purpose |
+|---|---|
+| `load_xml_indexes(xml_dir)` | Preload + index ~13 cross-referenced XML files (`effectCity`, `effectPlayer`, `effectUnit`, `bonus`, `tech`, `trait`, `promotion`, `improvement`, `law`, `project`, `religion`, `resource`, `specialist`) so builders resolve references by ID |
+| `render_effect_city(entry, …)` | Per-city / flat yield effects |
+| `render_effect_player(…)` / `render_effect_player_scalars(…)` | Player-wide effects, bool/int/pct scalars |
+| `render_effect_unit(entry)` | Pillage / kill / fatigue effects |
+| `render_bonus(entry, indexes)` | Stockpile, free units, free projects |
+| `render_nation_effects(effect_player_id, indexes)` | All effects for a nation |
+| `render_shrine_effects(improvement_entry)` | Shrine yield output + tile modifiers |
 
 ### Encoding quirks the humanizer normalizes
 
@@ -193,7 +193,7 @@ time**:
 
 ```js
 // src/pages/nations.astro
-import nations from "../data/nations.json";
+import nations from '../data/nations.json';
 ```
 
 During `astro build`, Astro inlines those values directly into the rendered
@@ -206,7 +206,7 @@ HTML/JS. Consequences:
 - Only `public/` is copied verbatim to the deploy root, and it currently holds
   just `img/`.
 
-GitHub Pages does serve assets with `access-control-allow-origin: *`, so _if_
+GitHub Pages does serve assets with `access-control-allow-origin: *`, so *if*
 these files were exposed (e.g. copied into `public/data/`) they'd be
 cross-origin fetchable. But as deployed today there is no data endpoint.
 
@@ -259,5 +259,5 @@ Steam install:  Reference/XML/Infos/*.xml
 
 ---
 
-_Source: `/Users/jeff/Projects/Old World/owreference` — see its `CLAUDE.md`,
-`Makefile`, `scripts/humanize.py`, and `scripts/build\__.py`.\*
+*Source: `/Users/jeff/Projects/Old World/owreference` — see its `CLAUDE.md`,
+`Makefile`, `scripts/humanize.py`, and `scripts/build_*.py`.*
