@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-05-30-bed2e4b] - 2026-05-30
+
+### Features
+
+- (tournament) add local fixture seeder CLI — [72536f2](https://github.com/becked/per-ankh/commit/72536f2d60a3ed81476241803b3b9cbc2b6ed8e4)
+- (tournament) schedule matches with time, stream, and caster — [bed2e4b](https://github.com/becked/per-ankh/commit/bed2e4bc6ea92521041bbfac8dc347c90da2e7db)
+
 ## [2026-05-30-1f8634e] - 2026-05-30
 
 ### Fixes
