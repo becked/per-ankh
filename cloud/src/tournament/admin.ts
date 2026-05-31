@@ -1340,6 +1340,16 @@ export async function handlePatchSlot(
 		fragments.push("swiss_seed = ?");
 		binds.push(patch.swiss_seed);
 	}
+	if (patch.signup_answer !== undefined) {
+		// Normalize empty/whitespace to null, matching handleTournamentSignup
+		// so a cleared answer reads as "unanswered" rather than "".
+		const normalized =
+			patch.signup_answer && patch.signup_answer.length > 0
+				? patch.signup_answer
+				: null;
+		fragments.push("signup_answer = ?");
+		binds.push(normalized);
+	}
 	if (prelink) {
 		fragments.push("discord_username = ?", "discord_id = ?", "user_id = ?");
 		binds.push(prelink.discord_username, prelink.discord_id, prelink.user_id);

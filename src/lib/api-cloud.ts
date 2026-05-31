@@ -966,6 +966,10 @@ export const cloudApi = {
 			// discord_username + discord_id and links the slot immediately —
 			// no OAuth-callback claim needed.
 			user_id?: string;
+			// Player's answer to the tournament's optional signup question,
+			// edited by an admin on the slots panel. null clears it; omit to
+			// leave it untouched.
+			signup_answer?: string | null;
 		},
 		opts?: CallOpts,
 	): Promise<void> => {

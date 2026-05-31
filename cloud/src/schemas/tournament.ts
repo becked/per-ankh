@@ -203,6 +203,13 @@ export const PatchSlotSchema = v.object({
 	// immediately — no OAuth-callback claim needed. nanoid21Regex matches the
 	// user_id shape; the handler validates existence and rejects unknown IDs.
 	user_id: v.optional(v.pipe(v.string(), v.regex(nanoid21Regex))),
+	// Admin edit of the player's answer to the tournament's optional signup
+	// question. Same trim/length bound as TournamentSignupSchema; nullable to
+	// clear (the handler also normalizes an empty string to null), mirroring
+	// PatchTournamentSchema.signup_question.
+	signup_answer: v.optional(
+		v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(2000))),
+	),
 });
 
 // Body for POST /v1/tournaments/:id/slots/reorder. Each division array is the

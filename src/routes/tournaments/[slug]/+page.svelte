@@ -509,6 +509,10 @@
 		slotId: string,
 		newUsername: string,
 		userId: string | null = null,
+		// signup answer edited alongside the username on the slots panel.
+		// undefined leaves the column untouched (the Swiss-standings call site
+		// omits it); null clears it.
+		answer?: string | null,
 	) {
 		if (!newUsername.trim()) return;
 		await withBusy(
@@ -516,6 +520,7 @@
 				cloudApi.patchSlot(data.tournament.tournament_id, slotId, {
 					discord_username: newUsername.trim(),
 					...(userId ? { user_id: userId } : {}),
+					...(answer !== undefined ? { signup_answer: answer } : {}),
 				}),
 			`Substituted slot to ${newUsername}`,
 		);
@@ -900,7 +905,7 @@
 															{s.swiss_seed ?? s.rank}
 														</td>
 														<td class="py-1 pr-2">
-															<span class="flex items-center gap-1.5">
+															<span class="flex items-start gap-1.5">
 																<PlayerAvatar
 																	avatarUrl={s.avatar_url}
 																	size={15}
@@ -909,9 +914,16 @@
 																	<SlotUsernameCell
 																		slotId={s.slot_id}
 																		username={s.discord_username}
+																		answer={s.signup_answer}
+																		editAnswer
 																		disabled={busy}
-																		onSubstitute={(u, userId) =>
-																			substituteSlot(s.slot_id, u, userId)}
+																		onSubstitute={(u, userId, answer) =>
+																			substituteSlot(
+																				s.slot_id,
+																				u,
+																				userId,
+																				answer,
+																			)}
 																	/>
 																{:else}
 																	<span>
@@ -920,13 +932,6 @@
 																	</span>
 																{/if}
 															</span>
-															{#if isAdmin && s.signup_answer}
-																<span
-																	class="mt-0.5 block whitespace-pre-wrap pl-[21px] text-[11px] text-tan opacity-60"
-																>
-																	{s.signup_answer}
-																</span>
-															{/if}
 														</td>
 														<td class="py-1 text-right">
 															{s.user_id ? "✓" : "—"}
