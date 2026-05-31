@@ -89,12 +89,13 @@
 
 	// Self-signup state. viewerSlot drives the "you're signed up" strip
 	// (non-null → strip + Withdraw); canSignUp drives the "Sign up" CTA
-	// (signed-in non-admin who hasn't signed up yet, on a setup-phase
-	// tournament with signups open).
+	// (any signed-in viewer who hasn't signed up yet, on a setup-phase
+	// tournament with signups open). Admins are included so they can sign
+	// themselves up and preview the signup form; the backend signup handler
+	// imposes no admin restriction either.
 	const viewerSlot = $derived(data.tournament.viewer_slot);
 	const canSignUp = $derived(
 		user !== null &&
-			!isAdmin &&
 			data.tournament.status === "setup" &&
 			data.tournament.signups_open &&
 			viewerSlot === null,
@@ -779,6 +780,7 @@
 											onValueChange={(v) => (newSlotUsername = v)}
 											onSelectUser={(u) => (newSlotUserId = u?.user_id ?? null)}
 											disabled={busy}
+											inputClass="bg-[#2a2623] focus:outline-none"
 											onEnter={() => {
 												if (!busy && newSlotUsername.trim()) addSlot();
 											}}

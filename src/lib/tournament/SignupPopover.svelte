@@ -75,7 +75,12 @@
 	}
 </script>
 
-<Popover bind:open ariaLabel="Sign up">
+<Popover
+	bind:open
+	ariaLabel="Sign up"
+	contentClass="w-[min(92vw,28rem)]"
+	frameClass="border-2 border-[#2a2623] bg-[#2a2622] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
+>
 	{#snippet trigger({ props })}
 		<button
 			{...props}
@@ -87,98 +92,75 @@
 		</button>
 	{/snippet}
 
-	<header class="mb-4 flex items-baseline justify-between gap-3">
-		<h2 class="border-b-2 border-orange pb-1 text-lg font-bold text-tan">
-			Sign up for {tournament.name}
-		</h2>
-		<button
-			type="button"
-			class="text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100"
-			onclick={() => (open = false)}
-			aria-label="Close"
-		>
-			<svg
-				xmlns="http://www.w3.org/2000/svg"
-				class="h-5 w-5"
-				fill="none"
-				viewBox="0 0 24 24"
-				stroke="currentColor"
-				stroke-width="2"
-			>
-				<path
-					stroke-linecap="round"
-					stroke-linejoin="round"
-					d="M6 18L18 6M6 6l12 12"
-				/>
-			</svg>
-		</button>
-	</header>
+	<div class="flex flex-col gap-3">
+		<div class="rounded-lg px-3 py-2" style="background-color: #35302b;">
+			<h2 class="text-sm font-bold text-tan">Sign up for {tournament.name}</h2>
+		</div>
 
-	<p class="mb-4 text-xs text-tan opacity-80">
-		Pick the division you want to play in. You can withdraw before the
-		tournament starts.
-	</p>
+		<p class="text-xs text-tan opacity-80">
+			Pick the division you want to play in. You can withdraw before the
+			tournament starts.
+		</p>
 
-	<RadioGroup
-		value={selectedDivision ?? ""}
-		onChange={(v) => (selectedDivision = v as Division)}
-		disabled={busy}
-		ariaLabel="Division"
-		class="mb-4 flex flex-col gap-2 text-xs text-tan"
-	>
-		<label
-			class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2 transition-colors hover:border-orange"
-			class:border-orange={selectedDivision === "A"}
-		>
-			<RadioItem value="A" disabled={busy} />
-			<span>{divisionLabel("A")}</span>
-		</label>
-		<label
-			class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2 transition-colors hover:border-orange"
-			class:border-orange={selectedDivision === "B"}
-		>
-			<RadioItem value="B" disabled={busy} />
-			<span>{divisionLabel("B")}</span>
-		</label>
-	</RadioGroup>
-
-	{#if tournament.signup_question}
-		<label class="mb-4 flex flex-col gap-1 text-xs text-tan">
-			<span>{tournament.signup_question}</span>
-			<textarea
-				bind:value={signupAnswer}
-				rows="2"
-				maxlength="2000"
-				disabled={busy}
-				class="rounded border border-black bg-[#35302b] p-2 focus:border-orange focus:outline-none disabled:opacity-50"
-			></textarea>
-			<span class="text-[11px] opacity-60">Optional.</span>
-		</label>
-	{/if}
-
-	<p class="mb-4 text-[11px] text-tan opacity-60">
-		Signed in as <span class="font-mono text-tan opacity-90"
-			>@{user.discord_username}</span
-		>
-		— we'll use this Discord handle to identify you in pairings.
-	</p>
-
-	<div class="flex justify-end gap-2">
-		<button
-			type="button"
-			class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-			onclick={() => (open = false)}
+		<RadioGroup
+			value={selectedDivision ?? ""}
+			onChange={(v) => (selectedDivision = v as Division)}
 			disabled={busy}
+			ariaLabel="Division"
+			class="flex flex-col gap-2 text-xs text-tan"
 		>
-			Cancel
-		</button>
-		<button
-			type="button"
-			class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-			onclick={submit}
-			disabled={!canSubmit}
-		>
-			{busy ? "Signing up…" : "Sign me up"}
-		</button>
+			<label
+				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2"
+			>
+				<RadioItem value="A" disabled={busy} />
+				<span>{divisionLabel("A")}</span>
+			</label>
+			<label
+				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2"
+			>
+				<RadioItem value="B" disabled={busy} />
+				<span>{divisionLabel("B")}</span>
+			</label>
+		</RadioGroup>
+
+		{#if tournament.signup_question}
+			<label class="flex flex-col gap-1 text-xs text-tan">
+				<span>{tournament.signup_question}</span>
+				<textarea
+					bind:value={signupAnswer}
+					rows="2"
+					maxlength="2000"
+					disabled={busy}
+					class="rounded border border-black bg-[#35302b] p-2 focus:outline-none disabled:opacity-50"
+				></textarea>
+				<span class="text-[11px] opacity-60">Optional.</span>
+			</label>
+		{/if}
+
+		<p class="text-[11px] text-tan opacity-60">
+			Signed in as <span class="font-mono text-tan opacity-90"
+				>@{user.discord_username}</span
+			>
+			— we'll use this Discord handle to identify you in pairings.
+		</p>
+
+		<div class="flex justify-end gap-2">
+			<button
+				type="button"
+				class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+				onclick={() => (open = false)}
+				disabled={busy}
+			>
+				Cancel
+			</button>
+			<button
+				type="button"
+				class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+				onclick={submit}
+				disabled={!canSubmit}
+			>
+				{busy ? "Signing up…" : "Sign me up"}
+			</button>
+		</div>
 	</div>
 </Popover>

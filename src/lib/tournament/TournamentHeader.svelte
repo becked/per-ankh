@@ -272,7 +272,8 @@
 					>
 						Start tournament
 					</button>
-				{:else if canSignUp && user}
+				{/if}
+				{#if canSignUp && user}
 					<SignupPopover {tournament} {user} {busy} />
 				{/if}
 			</div>

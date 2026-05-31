@@ -417,7 +417,7 @@
 				onValueChange={onCasterValueChange}
 				onSelectUser={onCasterSelectUser}
 				disabled={busy}
-				inputBgClass="bg-[#2a2623]"
+				inputClass="border border-black bg-[#2a2623]"
 			/>
 		</div>
 

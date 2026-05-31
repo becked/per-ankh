@@ -41,10 +41,11 @@
 		// Focus + select the input on mount (via the autofocus action, so no
 		// a11y warning). Used by toggle-to-edit hosts like SlotUsernameCell.
 		autofocusOnMount?: boolean;
-		// Background utility class for the input, so hosts on a different surface
-		// can match it (e.g. the schedule form uses #2a2623). Replaces the default
-		// rather than appending to avoid two conflicting bg- classes.
-		inputBgClass?: string;
+		// Chrome (border, surface, focus) utility classes for the input, so hosts
+		// can restyle it per surface — e.g. the schedule form recolors the
+		// background, and the slot-add form drops the border and focus outline.
+		// Replaces the default rather than appending to avoid conflicting classes.
+		inputClass?: string;
 	}
 
 	let {
@@ -56,7 +57,7 @@
 		inputAttrs = {},
 		placeholder,
 		autofocusOnMount = false,
-		inputBgClass = "bg-[#35302b]",
+		inputClass = "border border-black bg-[#35302b]",
 	}: Props = $props();
 
 	let suggestions = $state<UserSearchResult[]>([]);
@@ -188,7 +189,7 @@
 		onfocus={() => {
 			if (suggestions.length > 0) open = true;
 		}}
-		class="block w-full rounded border border-black {inputBgClass} p-1.5 text-xs text-tan"
+		class="block w-full rounded {inputClass} p-1.5 text-xs text-tan"
 		{...inputAttrs}
 		autocomplete="off"
 		use:maybeAutofocus
