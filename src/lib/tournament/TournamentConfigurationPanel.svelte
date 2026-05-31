@@ -157,10 +157,6 @@
 			>
 				<span>Open for signups</span>
 			</Checkbox>
-			<p class="mt-1 text-[11px] text-tan opacity-60">
-				When open, any signed-in player can sign up. Closes automatically when
-				you start the tournament.
-			</p>
 		</div>
 
 		<label class="flex flex-col gap-1">
@@ -174,8 +170,7 @@
 				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
 			></textarea>
 			<span class="text-[11px] text-tan opacity-60"
-				>Optional freeform prompt shown on the signup form (e.g. "What timezone
-				and time of day do you want to play?"). Leave blank for none.</span
+				>Optional question on signup form (ex. "What is your timezone?")</span
 			>
 		</label>
 	</div>
