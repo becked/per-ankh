@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-05-30-6f5803f] - 2026-05-30
+
+### Features
+
+- (tournament) let admins self-sign-up and refresh signup UI — [1a82abc](https://github.com/becked/per-ankh/commit/1a82abc5c5c245d1424bce1ced1763671d6ed00d)
+
+### Other
+
+- (tournament) tidy signup config help text — [6f5803f](https://github.com/becked/per-ankh/commit/6f5803f0838109380530fd2f4fcd9d7814d8f0f4)
+
 ## [2026-05-30-bed2e4b] - 2026-05-30
 
 ### Features
