@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-06-01-ce1f244] - 2026-06-01
+
+### Features
+
+- (tournament) add matches page with sortable table and calendar — [7036562](https://github.com/becked/per-ankh/commit/7036562cf34685fcf3fa00ba3bb2776317705ae0)
+- (tournament) restyle match card caster/stream into a single link — [ce1f244](https://github.com/becked/per-ankh/commit/ce1f244d4444c8405cdfce4f29c370d4efe21c79)
+
 ## [2026-05-31-940f8ce] - 2026-05-31
 
 ### Features
