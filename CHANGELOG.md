@@ -1,5 +1,18 @@
 # Changelog
 
+## [2026-05-31-940f8ce] - 2026-05-31
+
+### Features
+
+- (tournament) let admins edit a player's signup answer on the slots panel — [1c1656a](https://github.com/becked/per-ankh/commit/1c1656ad0e219d9b82c3a67a4f61335b14561a13)
+- (tournament) show match times in the viewer's local timezone — [b666d2c](https://github.com/becked/per-ankh/commit/b666d2cb8f88d17f8ed103f391fe0a7453c51c6e)
+
+### Other
+
+- refresh CLAUDE.md for tournaments, CLI surface, and Worker tests — [c4a0299](https://github.com/becked/per-ankh/commit/c4a0299450c70104e24faef4e3814bc3aaaed257)
+- (assets) bake dedicated fort renders into improvements atlas — [e6a7298](https://github.com/becked/per-ankh/commit/e6a72984852dce13a438a4eb5a9f1041523ca93a)
+- apply prettier to formatScheduledWithLocal — [940f8ce](https://github.com/becked/per-ankh/commit/940f8ce101eb3a7663cb45aa5b612987812e7dc4)
+
 ## [2026-05-30-6f5803f] - 2026-05-30
 
 ### Features
