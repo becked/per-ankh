@@ -419,7 +419,6 @@
 								<div class={TABLE_FRAME_CLASS}>
 									<TableFilterColumn
 										bind:search={tableState.search}
-										searchPlaceholder="Player, nation, or caster"
 										count={`${rows.length} / ${tableEligible.length} matches`}
 										chips={bracketChips}
 									>
