@@ -35,6 +35,14 @@ export default defineConfig({
 						miniflare: {
 							bindings: {
 								TEST_MIGRATIONS: await readD1Migrations(MIGRATIONS_PATH),
+								// Enable the local Discord-free login bypass
+								// (GET /v1/auth/dev/login) so integration tests can drive
+								// the real claimTournamentSlots path. Mirrors
+								// cloud/.dev.vars; prod never sets DEV_LOGIN. The handler
+								// also requires a non-HTTPS request, which SELF.fetch's
+								// http:// origin satisfies. See cloud/src/auth.ts
+								// handleDevLogin.
+								DEV_LOGIN: "1",
 							},
 						},
 					})),

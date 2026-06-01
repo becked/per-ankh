@@ -30,6 +30,12 @@ export interface UploadFixtureOpts {
 	// — bump those when adding a new value. Used by reimport tests that
 	// need to produce a newer version than an earlier upload.
 	readonly parserVersion?: string;
+	// Number of humans in the roster. Defaults to 2 (the standard
+	// tournament-match shape). Pass 1 to build a single-human save — used
+	// by the bye-upload test, which checks the worker rejects a one-human
+	// save against a bye match with WRONG_HUMAN_COUNT. With humans=1 the
+	// only valid winnerIndex is 0.
+	readonly humans?: 1 | 2;
 }
 
 export async function buildUploadFormData(
@@ -37,7 +43,11 @@ export async function buildUploadFormData(
 ): Promise<FormData> {
 	const nonce = opts.nonce ?? nanoid(16);
 
-	const blob = buildMinimalGameBlob(opts.winnerIndex, opts.parserVersion);
+	const blob = buildMinimalGameBlob(
+		opts.winnerIndex,
+		opts.parserVersion,
+		opts.humans ?? 2,
+	);
 	const jsonBytes = new TextEncoder().encode(JSON.stringify(blob));
 	const gzippedJson = await gzip(jsonBytes);
 
@@ -68,8 +78,43 @@ export async function buildUploadFormData(
 
 function buildMinimalGameBlob(
 	winnerIndex: 0 | 1,
-	parserVersion?: string,
+	parserVersion: string | undefined,
+	humans: 1 | 2,
 ): Record<string, unknown> {
+	// Player 1 (NATION_ROME) only exists in the two-human shape; a single-human
+	// save (a bye) has just Player 0.
+	const players = [
+		{
+			player_name: "Player 0",
+			nation: "NATION_EGYPT",
+			is_human: true,
+			legitimacy: 50,
+			state_religion: null,
+		},
+		{
+			player_name: "Player 1",
+			nation: "NATION_ROME",
+			is_human: true,
+			legitimacy: 50,
+			state_religion: null,
+		},
+	].slice(0, humans);
+	const playerRoster = [
+		{
+			player_index: 0,
+			player_name: "Player 0",
+			nation: "NATION_EGYPT",
+			is_human: true,
+			online_id: "steam:000000000000001",
+		},
+		{
+			player_index: 1,
+			player_name: "Player 1",
+			nation: "NATION_ROME",
+			is_human: true,
+			online_id: "steam:000000000000002",
+		},
+	].slice(0, humans);
 	return {
 		version: 2,
 		parser_version: parserVersion ?? PARSER_VERSION,
@@ -111,22 +156,7 @@ function buildMinimalGameBlob(
 			winner_name: "Player " + winnerIndex,
 			winner_civilization: "NATION_EGYPT",
 			winner_victory_type: "VICTORY_AMBITION",
-			players: [
-				{
-					player_name: "Player 0",
-					nation: "NATION_EGYPT",
-					is_human: true,
-					legitimacy: 50,
-					state_religion: null,
-				},
-				{
-					player_name: "Player 1",
-					nation: "NATION_ROME",
-					is_human: true,
-					legitimacy: 50,
-					state_religion: null,
-				},
-			],
+			players,
 		},
 		player_history: [],
 		yield_history: [],
@@ -151,22 +181,7 @@ function buildMinimalGameBlob(
 		families: [],
 		characters: [],
 		character_traits: [],
-		player_roster: [
-			{
-				player_index: 0,
-				player_name: "Player 0",
-				nation: "NATION_EGYPT",
-				is_human: true,
-				online_id: "steam:000000000000001",
-			},
-			{
-				player_index: 1,
-				player_name: "Player 1",
-				nation: "NATION_ROME",
-				is_human: true,
-				online_id: "steam:000000000000002",
-			},
-		],
+		player_roster: playerRoster,
 	};
 }
 

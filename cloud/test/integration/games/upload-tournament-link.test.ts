@@ -558,6 +558,51 @@ describe("POST /v1/games with tournament_match_id", () => {
 		});
 	});
 
+	it("rejects 409 WRONG_HUMAN_COUNT when a participant uploads a single-human save to a bye match", async () => {
+		// Odd slot count → one bye match per division (status='bye',
+		// slot_b_id=null). A real bye save has only one human; the upload path
+		// has no explicit bye guard, so WRONG_HUMAN_COUNT is what stops it. Pin
+		// that contract.
+		const playerA = await makeUser({ discordUsername: "alice-bye" });
+		const playerB = await makeUser({ discordUsername: "bob-bye" });
+		const playerC = await makeUser({ discordUsername: "carol-bye" });
+		const t = await makeTournament({
+			name: "Bye Cup",
+			slotsPerDivision: 3,
+			slotOwners: { A: [playerA, playerB, playerC] },
+			advanceTo: "swiss-round-1-generated",
+		});
+
+		// The division-A bye match, and the user who owns its (only) slot.
+		const aSlotIds = new Set(t.slotsByDivision.A.map((s) => s.slotId));
+		const byeMatch = (await t.matches()).find(
+			(m) => m.status === "bye" && aSlotIds.has(m.slot_a_id),
+		)!;
+		expect(byeMatch.slot_b_id).toBeNull();
+		const byeSlot = t.slotsByDivision.A.find(
+			(s) => s.slotId === byeMatch.slot_a_id,
+		)!;
+		const byeOwner = byeSlot.owner!;
+		expect(byeOwner).not.toBeNull();
+
+		const form = await buildUploadFormData({ winnerIndex: 0, humans: 1 });
+		form.set("tournament_match_id", byeMatch.match_id);
+		const res = await postMultipart({
+			path: "/v1/games",
+			form,
+			as: byeOwner,
+		});
+		await expectErrorCode(res, {
+			status: 409,
+			code: "WRONG_HUMAN_COUNT",
+		});
+
+		// The bye match is untouched — still a bye, no game linked.
+		const matchAfter = await loadMatch(byeMatch.match_id);
+		expect(matchAfter?.status).toBe("bye");
+		expect(matchAfter?.game_id).toBeNull();
+	});
+
 	it("rejects 409 TOURNAMENT_COMPLETE when uploading to a match whose tournament is already complete", async () => {
 		const playerA = await makeUser({ discordUsername: "alice-done" });
 		const playerB = await makeUser({ discordUsername: "bob-done" });

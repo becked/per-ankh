@@ -2573,6 +2573,18 @@ function logSystemTournamentAction(
 // Idempotent and best-effort: any failure logs but does not propagate.
 // Skips when the work has already been done (race-safe against parallel
 // reports racing the same round to completion).
+//
+// WHY concurrency is safe (so the next reader doesn't reach for a fault-
+// injection harness): two reports completing the last matches of a round can
+// both pass the `roundMatches.some(pending)` gate. The application guards —
+// the `downstream`-exists check and the status-scoped WHERE clauses below —
+// make the slower one a no-op in the common case. The hard backstop for a
+// genuine read-then-write interleaving is the database: round + match inserts
+// are pushed into a single transactional env.SHARE_DB.batch(...), and
+// tournament_rounds has UNIQUE(tournament_id, phase, division, round_number)
+// (migration 0006). A duplicate round insert fails that constraint, rolling
+// the whole batch back (no orphan matches) into the try/catch. Idempotency is
+// pinned by test/integration/tournament/concurrent-advance.test.ts.
 export async function maybeAdvanceAfterMatchReport(
 	env: TournamentEnv,
 	matchId: string,

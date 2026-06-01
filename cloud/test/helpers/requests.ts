@@ -83,3 +83,29 @@ export async function postMultipart(opts: MultipartOpts): Promise<Response> {
 		body: opts.form,
 	});
 }
+
+// Drives the local Discord-free login bypass (GET /v1/auth/dev/login). Runs the
+// same upsert + beta-grant + claimTournamentSlots + session work as the real
+// OAuth callback (see cloud/src/auth.ts handleDevLogin), so it's the realistic
+// way to exercise tournament-slot claiming end to end. Requires DEV_LOGIN in
+// the worker env (set in vitest.config.mts) and a non-HTTPS origin (the
+// http://test URL below satisfies it). On success the handler 302-redirects to
+// the frontend origin; `redirect: "manual"` keeps fetch from chasing that
+// redirect to a non-worker host.
+export async function devLogin(opts: {
+	readonly discordId: string;
+	readonly username: string;
+	readonly displayName?: string;
+}): Promise<Response> {
+	const params = new URLSearchParams({
+		discord_id: opts.discordId,
+		username: opts.username,
+	});
+	if (opts.displayName !== undefined) {
+		params.set("display_name", opts.displayName);
+	}
+	return SELF.fetch(`http://test/v1/auth/dev/login?${params.toString()}`, {
+		method: "GET",
+		redirect: "manual",
+	});
+}
