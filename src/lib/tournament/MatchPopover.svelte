@@ -817,17 +817,8 @@
 				</div>
 			{/if}
 			{#if match.caster_name || match.stream_url}
-				<!-- Caster top-right; stream beneath it, left-aligned to the caster. -->
-				<div class="ml-auto flex flex-col items-start gap-1.5">
-					{#if match.caster_name}
-						<div class="flex items-center gap-1.5 text-xs text-tan">
-							<span>Caster</span>
-							{#if match.caster_avatar_url}
-								<PlayerAvatar avatarUrl={match.caster_avatar_url} size={16} />
-							{/if}
-							<span class="truncate">{match.caster_name}</span>
-						</div>
-					{/if}
+				<!-- Caster avatar + name, with the stream link to the right. -->
+				<div class="ml-auto flex flex-col items-end gap-1.5">
 					{#if match.stream_url}
 						<!-- External stream URL (youtube/twitch), validated host-side; not
 						     an app route, so resolve() doesn't apply. -->
@@ -838,6 +829,11 @@
 							rel="noopener noreferrer"
 							class="inline-flex items-center gap-1.5 text-xs text-tan hover:underline"
 						>
+							<PlayerAvatar avatarUrl={match.caster_avatar_url} size={14} />
+							{#if match.caster_name}
+								<span class="truncate">{match.caster_name}</span>
+							{/if}
+							stream
 							<svg
 								xmlns="http://www.w3.org/2000/svg"
 								class="h-4 w-4 shrink-0"
@@ -853,9 +849,13 @@
 									d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 								/>
 							</svg>
-							Stream
 						</a>
 						<!-- eslint-enable svelte/no-navigation-without-resolve -->
+					{:else if match.caster_name}
+						<div class="flex items-center gap-1.5 text-xs text-tan">
+							<PlayerAvatar avatarUrl={match.caster_avatar_url} size={14} />
+							<span class="truncate">{match.caster_name}</span>
+						</div>
 					{/if}
 				</div>
 			{/if}
