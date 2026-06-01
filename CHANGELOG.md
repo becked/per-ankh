@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-06-01-554621d] - 2026-06-01
+
+### Features
+
+- (tournament) simplify swiss standings columns — [554621d](https://github.com/becked/per-ankh/commit/554621d299b98de046a6b00f7281d66e51a25ee0)
+
 ## [2026-06-01-ce1f244] - 2026-06-01
 
 ### Features
