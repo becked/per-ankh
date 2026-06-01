@@ -5,8 +5,8 @@ export const ATLAS_MANIFEST: Readonly<
 	Record<string, { readonly webp: string; readonly json: string }>
 > = {
 	"improvements-base": {
-		webp: "/atlases/improvements-base.c9fbf579.webp",
-		json: "/atlases/improvements-base.c9fbf579.json",
+		webp: "/atlases/improvements-base.66819bb9.webp",
+		json: "/atlases/improvements-base.66819bb9.json",
 	},
 	"improvements-urban-AKSUM": {
 		webp: "/atlases/improvements-urban-AKSUM.d1f5e6c7.webp",
