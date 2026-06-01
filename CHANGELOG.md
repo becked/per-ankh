@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-06-01-26b6c1b] - 2026-06-01
+
+### Other
+
+- tokenize UI colors and de-duplicate shared patterns — [26b6c1b](https://github.com/becked/per-ankh/commit/26b6c1b0c01248b9c5f60293a8ef9f4d4e45f80d)
+
 ## [2026-06-01-554621d] - 2026-06-01
 
 ### Features
