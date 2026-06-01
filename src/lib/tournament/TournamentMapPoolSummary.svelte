@@ -38,13 +38,16 @@
 </script>
 
 {#if mapPool.length > 0}
-	<section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
+	<section
+		class="mb-6 rounded-lg p-4"
+		style="background-color: rgb(var(--color-surface));"
+	>
 		<h2 class="mb-3 text-sm font-bold text-tan">Map scripts</h2>
 		<ul class="flex flex-col gap-1.5 text-xs text-tan">
 			{#each mapPool as entry (entry.id)}
 				{@const settings = extras(entry)}
 				<li
-					class="rounded border border-black bg-[#35302b] px-3 py-2"
+					class="rounded border border-black bg-surface-raised px-3 py-2"
 					title={entry.script}
 				>
 					<span class="font-bold">{headline(entry)}</span>

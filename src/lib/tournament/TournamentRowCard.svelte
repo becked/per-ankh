@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { resolve } from "$app/paths";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import StatTile from "$lib/StatTile.svelte";
 	import type { TournamentListItem } from "$lib/api-cloud";
 
 	let {
@@ -55,8 +56,8 @@
 
 <a
 	href={resolve("/tournaments/[slug]", { slug: tournament.slug })}
-	class="block rounded-lg p-3 transition-colors hover:bg-[#3e3833]"
-	style="background-color: #35302b;"
+	class="block rounded-lg p-3 transition-colors hover:bg-surface-hover"
+	style="background-color: rgb(var(--color-surface-raised));"
 >
 	<div class="mb-3 flex items-center justify-between gap-2">
 		<div class="flex min-w-0 items-center gap-1.5">
@@ -80,62 +81,49 @@
 	<!-- Stat boxes. Layout mirrors RecentSaveCard: same colors, padding,
 	     and grid breakpoints so the two pages read as siblings. -->
 	<div class="grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-5">
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Phase">
+			{#snippet icon()}
 				<SpriteIcon category="icons" value="TURN" size={10} alt="Phase" />
-				Phase
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">{phaseLabel}</p>
-		</div>
+			{/snippet}
+			{phaseLabel}
+		</StatTile>
 
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Players">
+			{#snippet icon()}
 				<SpriteIcon
 					category="icons"
 					value="MULTIPLAYER"
 					size={10}
 					alt="Players"
 				/>
-				Players
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">
-				{tournament.player_count > 0 ? tournament.player_count : "—"}
-			</p>
-		</div>
+			{/snippet}
+			{tournament.player_count > 0 ? tournament.player_count : "—"}
+		</StatTile>
 
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Maps">
+			{#snippet icon()}
 				<SpriteIcon
 					category="icons"
 					value="MAP_OVERVIEW"
 					size={10}
 					alt="Maps"
 				/>
-				Maps
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">
-				{tournament.map_pool_size > 0 ? tournament.map_pool_size : "—"}
-			</p>
-		</div>
+			{/snippet}
+			{tournament.map_pool_size > 0 ? tournament.map_pool_size : "—"}
+		</StatTile>
 
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Format">
+			{#snippet icon()}
 				<SpriteIcon category="icons" value="STATS" size={10} alt="Format" />
-				Format
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">{formatLabel}</p>
-		</div>
+			{/snippet}
+			{formatLabel}
+		</StatTile>
 
 		{#if tournament.champion}
-			<div class="rounded p-2" style="background-color: #2a2622;">
+			<div
+				class="rounded p-2"
+				style="background-color: rgb(var(--color-surface));"
+			>
 				<p
 					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
 				>
@@ -157,29 +145,24 @@
 							height="16"
 						/>
 					{/if}
-					<p class="truncate text-sm font-bold text-[#DBDEE3]">
+					<p class="truncate text-sm font-bold text-bright">
 						{tournament.champion.display_name}
 					</p>
 				</div>
 			</div>
 		{:else if tournament.active_round}
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+			<StatTile label="Round {tournament.active_round.round_number}">
+				{#snippet icon()}
 					<SpriteIcon
 						category="icons"
 						value="VICTORY_NORMAL"
 						size={10}
 						alt="Round"
 					/>
-					Round {tournament.active_round.round_number}
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">
-					{tournament.active_round.matches_reported} /
-					{tournament.active_round.matches_total} reported
-				</p>
-			</div>
+				{/snippet}
+				{tournament.active_round.matches_reported} /
+				{tournament.active_round.matches_total} reported
+			</StatTile>
 		{/if}
 	</div>
 </a>

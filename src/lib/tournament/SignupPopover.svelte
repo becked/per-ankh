@@ -4,9 +4,7 @@
 	// reassurance line showing the exact Discord handle they'll appear under
 	// in the slot list.
 
-	import { invalidateAll } from "$app/navigation";
 	import {
-		ApiError,
 		cloudApi,
 		type Division,
 		type TournamentDetail,
@@ -15,7 +13,8 @@
 	import Popover from "$lib/ui/Popover.svelte";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
-	import { toast } from "$lib/ui/toast";
+	import { runAction } from "$lib/tournament/async-action";
+	import FormFooter from "$lib/tournament/FormFooter.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -45,33 +44,32 @@
 
 	async function submit() {
 		if (!canSubmit || selectedDivision === null) return;
-		busy = true;
-		try {
-			await cloudApi.signupForTournament(
-				tournament.tournament_id,
-				selectedDivision,
-				signupAnswer,
-			);
-			// Refresh layout-level myTournaments (drives the header dropdown)
-			// and the page-level tournament detail (viewer_slot, slot list).
-			await invalidateAll();
-			open = false;
-		} catch (err) {
-			let message = "Sign up failed";
-			if (err instanceof ApiError) {
-				// Friendly copy for the two expected 409s. Anything else falls
-				// through with the server's message.
-				if (err.code === "SIGNUPS_CLOSED") {
-					message = "Signups just closed — the tournament started.";
-				} else if (err.code === "ALREADY_SIGNED_UP") {
-					message = "You're already signed up for this tournament.";
-				} else {
-					message = err.message + (err.code ? ` (${err.code})` : "");
-				}
-			}
-			toast.error(message);
-			busy = false;
-		}
+		// Capture the narrowed value: inside the closure, the $state widens
+		// back to Division | null.
+		const division = selectedDivision;
+		// Refresh on success drives layout-level myTournaments (the header
+		// dropdown) and the page-level tournament detail (viewer_slot, slots).
+		const ok = await runAction(
+			() =>
+				cloudApi.signupForTournament(
+					tournament.tournament_id,
+					division,
+					signupAnswer,
+				),
+			{
+				setBusy: (b) => (busy = b),
+				failMessage: "Sign up failed",
+				// Friendly copy for the two expected 409s; anything else falls
+				// through to the server's message.
+				onError: (err) =>
+					err.code === "SIGNUPS_CLOSED"
+						? "Signups just closed — the tournament started."
+						: err.code === "ALREADY_SIGNED_UP"
+							? "You're already signed up for this tournament."
+							: undefined,
+			},
+		);
+		if (ok !== null) open = false;
 	}
 </script>
 
@@ -79,13 +77,13 @@
 	bind:open
 	ariaLabel="Sign up"
 	contentClass="w-[min(92vw,28rem)]"
-	frameClass="border-2 border-[#2a2623] bg-[#2a2622] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
+	frameClass="border-2 border-surface bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
 >
 	{#snippet trigger({ props })}
 		<button
 			{...props}
 			type="button"
-			class="bg-orange/20 hover:bg-orange/40 whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+			class="whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 			disabled={pageBusy}
 		>
 			Sign up
@@ -93,7 +91,10 @@
 	{/snippet}
 
 	<div class="flex flex-col gap-3">
-		<div class="rounded-lg px-3 py-2" style="background-color: #35302b;">
+		<div
+			class="rounded-lg px-3 py-2"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<h2 class="text-sm font-bold text-tan">Sign up for {tournament.name}</h2>
 		</div>
 
@@ -110,13 +111,13 @@
 			class="flex flex-col gap-2 text-xs text-tan"
 		>
 			<label
-				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2"
+				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-surface-raised p-2"
 			>
 				<RadioItem value="A" disabled={busy} />
 				<span>{divisionLabel("A")}</span>
 			</label>
 			<label
-				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-[#35302b] p-2"
+				class="flex cursor-pointer items-center gap-2 rounded border border-black bg-surface-raised p-2"
 			>
 				<RadioItem value="B" disabled={busy} />
 				<span>{divisionLabel("B")}</span>
@@ -131,7 +132,7 @@
 					rows="2"
 					maxlength="2000"
 					disabled={busy}
-					class="rounded border border-black bg-[#35302b] p-2 focus:outline-none disabled:opacity-50"
+					class="rounded border border-black bg-surface-raised p-2 focus:outline-none disabled:opacity-50"
 				></textarea>
 				<span class="text-[11px] opacity-60">Optional.</span>
 			</label>
@@ -144,23 +145,13 @@
 			— we'll use this Discord handle to identify you in pairings.
 		</p>
 
-		<div class="flex justify-end gap-2">
-			<button
-				type="button"
-				class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-				onclick={() => (open = false)}
-				disabled={busy}
-			>
-				Cancel
-			</button>
-			<button
-				type="button"
-				class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-				onclick={submit}
-				disabled={!canSubmit}
-			>
-				{busy ? "Signing up…" : "Sign me up"}
-			</button>
-		</div>
+		<FormFooter
+			onCancel={() => (open = false)}
+			onConfirm={submit}
+			confirmLabel="Sign me up"
+			busyLabel="Signing up…"
+			{busy}
+			confirmDisabled={!canSubmit}
+		/>
 	</div>
 </Popover>

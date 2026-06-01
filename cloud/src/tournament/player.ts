@@ -10,61 +10,21 @@
 // feature exists.
 
 import { nanoid } from "nanoid";
-import * as v from "valibot";
 import { logError } from "../log";
 import { TournamentSignupSchema } from "../schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "../session";
-import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
+import {
+	cloudCorsHeaders,
+	errorResponse,
+	jsonResponse,
+	parseJsonBody,
+} from "../util";
 import {
 	bumpTournamentUpdatedAt,
 	loadTournamentById,
 	type TournamentEnv,
 } from "./data";
 import { AuthzError, requireTournamentBeta } from "./authz";
-
-// Mirrors the helper of the same name in admin.ts — kept local because that
-// file's copy isn't exported. A future refactor could lift this to util.ts.
-async function parseJsonBody<T>(
-	request: Request,
-	schema: v.GenericSchema<unknown, T>,
-	cors: Record<string, string>,
-): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
-	const rawType = request.headers.get("Content-Type") ?? "";
-	const baseType = rawType.split(";", 1)[0].trim().toLowerCase();
-	if (baseType !== "application/json") {
-		return {
-			ok: false,
-			response: errorResponse(
-				"Content-Type must be application/json",
-				415,
-				cors,
-				"UNSUPPORTED_MEDIA_TYPE",
-			),
-		};
-	}
-	let parsed: unknown;
-	try {
-		parsed = await request.json();
-	} catch {
-		return {
-			ok: false,
-			response: errorResponse("Invalid JSON body", 400, cors, "INVALID_JSON"),
-		};
-	}
-	const result = v.safeParse(schema, parsed);
-	if (!result.success) {
-		return {
-			ok: false,
-			response: errorResponse(
-				`Invalid body: ${result.issues[0]?.message ?? "unknown"}`,
-				400,
-				cors,
-				"VALIDATION_ERROR",
-			),
-		};
-	}
-	return { ok: true, body: result.output };
-}
 
 // Wraps the session lookup and the beta-gate check. Returns the session
 // for handler use, or an errorResponse-ready 404 on miss.

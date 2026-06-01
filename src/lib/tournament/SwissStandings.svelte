@@ -50,11 +50,14 @@
 	}
 </script>
 
-<section class="rounded-lg p-3" style="background-color: #35302B;">
+<section
+	class="rounded-lg p-3"
+	style="background-color: rgb(var(--color-surface-raised));"
+>
 	{#if showHeader}
 		<h3
 			class="mb-2 flex items-baseline justify-between pb-1 text-sm font-bold text-tan"
-			style="border-bottom: 1px solid #2a2622;"
+			style="border-bottom: 1px solid rgb(var(--color-surface));"
 		>
 			<span>{divisionName}</span>
 			{#if onOpenInfo}

@@ -82,7 +82,7 @@
 	});
 	let championshipView = $state<"diagram" | "standings">("diagram");
 	// Segmented switch: the triggers are transparent text laid over a sliding
-	// highlight thumb (see each Tabs.List), so the lit #35302B segment animates
+	// highlight thumb (see each Tabs.List), so the lit surface-raised segment animates
 	// across rather than the fill swapping. text-center + the grid-cols-2 track
 	// keep both halves equal width so the half-width thumb lands on each.
 	const viewTriggerClass =
@@ -716,14 +716,14 @@
 
 					<section
 						class="mb-6 rounded-lg p-4"
-						style="background-color: #2a2622;"
+						style="background-color: rgb(var(--color-surface));"
 					>
 						<h2 class="mb-3 text-sm font-bold text-tan">Slots</h2>
 
 						{#if isAdmin}
 							<div
 								class="mb-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
-								style="background-color: #35302B;"
+								style="background-color: rgb(var(--color-surface-raised));"
 							>
 								<label class="block min-w-[14rem] text-xs text-tan">
 									Discord username
@@ -733,7 +733,7 @@
 											onValueChange={(v) => (newSlotUsername = v)}
 											onSelectUser={(u) => (newSlotUserId = u?.user_id ?? null)}
 											disabled={busy}
-											inputClass="bg-[#2a2623] focus:outline-none"
+											inputClass="bg-surface focus:outline-none"
 											onEnter={() => {
 												if (!busy && newSlotUsername.trim()) addSlot();
 											}}
@@ -766,7 +766,7 @@
 								</div>
 								<button
 									type="button"
-									class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+									class="rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 									onclick={addSlot}
 									disabled={busy || !newSlotUsername.trim()}
 								>
@@ -788,7 +788,10 @@
 							{#each ["A", "B"] as const as div (div)}
 								{@const slots = localOrder[div]}
 								{@const draggable = isAdmin && !busy}
-								<div class="rounded-lg p-3" style="background-color: #35302B;">
+								<div
+									class="rounded-lg p-3"
+									style="background-color: rgb(var(--color-surface-raised));"
+								>
 									<h3 class="mb-2 text-xs uppercase text-tan opacity-70">
 										{data.standings.divisions[div].name}
 									</h3>
@@ -925,7 +928,7 @@
 				{:else if !hasAnyStandings}
 					<section
 						class="mb-6 rounded-lg p-6 text-center"
-						style="background-color: #2a2622;"
+						style="background-color: rgb(var(--color-surface));"
 					>
 						<p class="text-sm text-tan opacity-70">
 							No standings available yet.
@@ -938,20 +941,20 @@
 						<Tabs.Root
 							bind:value={championshipView}
 							class="mb-8 rounded-lg p-4 pb-2"
-							style="background-color: #2a2622;"
+							style="background-color: rgb(var(--color-surface));"
 						>
 							<div
 								class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
-								style="background-color: #35302b;"
+								style="background-color: rgb(var(--color-surface-raised));"
 							>
 								<h2 class="text-lg font-bold text-tan">Championship</h2>
 								<Tabs.List
-									class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
-									style="background-color: #2a2622;"
+									class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+									style="background-color: rgb(var(--color-surface));"
 								>
 									<div
 										class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-										style:background-color="#35302B"
+										style:background-color="rgb(var(--color-surface-raised))"
 										style:transform={championshipView === "standings"
 											? "translateX(100%)"
 											: "translateX(0)"}
@@ -1002,22 +1005,22 @@
 							<Tabs.Root
 								bind:value={swissView[division]}
 								class="mb-8 rounded-lg p-4"
-								style="background-color: #2a2622;"
+								style="background-color: rgb(var(--color-surface));"
 							>
 								<div
 									class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
-									style="background-color: #35302b;"
+									style="background-color: rgb(var(--color-surface-raised));"
 								>
 									<h2 class="text-lg font-bold text-tan">
 										{divisionData.name}
 									</h2>
 									<Tabs.List
-										class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
-										style="background-color: #2a2622;"
+										class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+										style="background-color: rgb(var(--color-surface));"
 									>
 										<div
 											class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-											style:background-color="#35302B"
+											style:background-color="rgb(var(--color-surface-raised))"
 											style:transform={swissView[division] === "standings"
 												? "translateX(100%)"
 												: "translateX(0)"}
@@ -1090,7 +1093,7 @@
 	contentClass={currentMatch?.game_id
 		? "w-[min(92vw,35.2rem)]"
 		: "w-fit max-w-[92vw]"}
-	frameClass="bg-[#2a2623] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
+	frameClass="bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
 	ariaLabel="Match detail"
 >
 	{#if currentMatch}

@@ -25,7 +25,7 @@
 </script>
 
 <div
-	class="sticky top-1 z-10 -ml-4 mb-4 flex w-fit items-center gap-2 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+	class="sticky top-1 z-10 -ml-4 mb-4 flex w-fit items-center gap-2 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 >
 	<Select.Root
 		type="single"
@@ -34,21 +34,21 @@
 		items={options.map((n) => ({ value: n, label: nationLabel(n) }))}
 	>
 		<Select.Trigger
-			class="flex items-center gap-2 rounded bg-[#35302B] px-2.5 py-1 text-xs font-bold text-tan"
+			class="flex items-center gap-2 rounded bg-surface-raised px-2.5 py-1 text-xs font-bold text-tan"
 		>
 			{nationLabel(value)}
 			<span class="text-brown">▼</span>
 		</Select.Trigger>
 		<Select.Portal>
 			<Select.Content
-				class="z-50 max-h-72 overflow-y-auto rounded-lg border border-[#2a2622] bg-[#241f1b] shadow-lg"
+				class="z-50 max-h-72 overflow-y-auto rounded-lg border border-surface bg-surface-sunken shadow-lg"
 			>
 				<Select.Viewport>
 					{#each options as n (n)}
 						<Select.Item
 							value={n}
 							label={nationLabel(n)}
-							class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm text-tan data-[highlighted]:bg-[#35302B]"
+							class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm text-tan data-[highlighted]:bg-surface-raised"
 						>
 							{#snippet children({ selected })}
 								{nationLabel(n)}

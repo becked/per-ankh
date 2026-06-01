@@ -57,7 +57,7 @@
 		inputAttrs = {},
 		placeholder,
 		autofocusOnMount = false,
-		inputClass = "border border-black bg-[#35302b]",
+		inputClass = "border border-black bg-surface-raised",
 	}: Props = $props();
 
 	let suggestions = $state<UserSearchResult[]>([]);
@@ -198,14 +198,16 @@
 	{#if open && suggestions.length > 0}
 		<ul
 			class="absolute left-0 right-0 top-full z-20 mt-1 max-h-56 overflow-y-auto rounded border border-black shadow-lg"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 			role="listbox"
 		>
 			{#each suggestions as user, i (user.user_id)}
 				<li
 					class="flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1.5 text-xs text-tan"
 					class:text-orange={i === highlight}
-					style:background-color={i === highlight ? "#35302b" : "transparent"}
+					style:background-color={i === highlight
+						? "rgb(var(--color-surface-raised))"
+						: "transparent"}
 					role="option"
 					aria-selected={i === highlight}
 					onmousedown={(e) => {

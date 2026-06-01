@@ -66,12 +66,12 @@
 	{/if}
 	<div
 		class="relative overflow-hidden rounded-lg"
-		style="background-color: #35302B;"
+		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		<!-- Expand button -->
 		<button
 			onclick={openFullscreen}
-			class="bg-black/20 hover:bg-black/40 absolute right-3 top-3 z-10 cursor-pointer rounded p-1.5 transition-colors focus:outline-none"
+			class="absolute right-3 top-3 z-10 cursor-pointer rounded bg-black/20 p-1.5 transition-colors hover:bg-black/40 focus:outline-none"
 			aria-label="Expand {title} to fullscreen"
 			title="Expand to fullscreen"
 		>
@@ -104,18 +104,18 @@
 >
 	<div class="dialog-content">
 		{#if controls}
-			<div class="bg-black/90 mb-4 flex-shrink-0 rounded-lg px-4 py-3">
+			<div class="mb-4 flex-shrink-0 rounded-lg bg-black/90 px-4 py-3">
 				{@render controls()}
 			</div>
 		{/if}
 		<div
 			class="relative min-h-0 flex-1 overflow-hidden rounded-lg"
-			style="background-color: #35302B;"
+			style="background-color: rgb(var(--color-surface-raised));"
 		>
 			<!-- Close button -->
 			<button
 				onclick={closeFullscreen}
-				class="bg-black/20 hover:bg-black/40 absolute right-3 top-3 z-10 cursor-pointer rounded p-1.5 transition-colors focus:outline-none"
+				class="absolute right-3 top-3 z-10 cursor-pointer rounded bg-black/20 p-1.5 transition-colors hover:bg-black/40 focus:outline-none"
 				aria-label="Close fullscreen"
 				title="Close fullscreen (Esc)"
 			>
@@ -249,7 +249,7 @@
 	}
 
 	.fullscreen-dialog::backdrop {
-		background: rgba(0, 0, 0, 0.8);
+		background: rgb(var(--color-black) / 0.8);
 	}
 
 	.dialog-content {

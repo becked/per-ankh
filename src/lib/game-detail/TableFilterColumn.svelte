@@ -41,7 +41,7 @@
 		{#if chips.length > 0}
 			<div class="flex flex-wrap gap-1">
 				{#each chips as chip (chip)}
-					<span class="rounded bg-[#35302b] px-2 py-1 text-xs text-tan">
+					<span class="rounded bg-surface-raised px-2 py-1 text-xs text-tan">
 						{chip}
 					</span>
 				{/each}

@@ -36,9 +36,7 @@
 				data: bundle.nations.map((n, i) => ({
 					value: n.games_played,
 					itemStyle: {
-						color:
-							getCivilizationColor(n.nation.replace(/^NATION_/, "")) ??
-							getChartColor(i),
+						color: getCivilizationColor(n.nation) ?? getChartColor(i),
 					},
 				})),
 			},
@@ -197,7 +195,7 @@
 {:else}
 	<div
 		class="rounded-lg p-8 text-center text-sm text-tan opacity-60"
-		style="background-color: #35302B;"
+		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		No games in this scope yet.
 	</div>

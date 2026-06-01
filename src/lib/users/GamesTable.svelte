@@ -24,7 +24,7 @@
 	// row's text color when a nation has no defined color).
 	function nationColor(nation: string | null): string | undefined {
 		if (!nation) return undefined;
-		return getCivilizationColor(nation.replace(/^NATION_/, "")) ?? undefined;
+		return getCivilizationColor(nation) ?? undefined;
 	}
 
 	// Shared grid template for the header row and each game row, so columns
@@ -232,7 +232,7 @@
 
 <!-- Same 12-col grid as the / page feed: filters (col-span-2) · games
      list (col-span-8) · sort (col-span-2), gap-4. One dark background
-     (#211a12) frames all three columns. -->
+     (blue-gray) frames all three columns. -->
 <div class="grid gap-4 rounded-lg bg-blue-gray p-3 lg:grid-cols-12">
 	<!-- Left: filters, stacked. -->
 	<aside class="lg:col-span-2">
@@ -272,8 +272,8 @@
 		</div>
 	</aside>
 
-	<!-- Center: the game cards (lighter #35302b) read as distinct against
-       the shared dark background. -->
+	<!-- Center: the game cards (lighter surface-raised) read as distinct
+       against the shared dark background. -->
 	<div
 		class="cloud-scroll max-h-[calc(100vh-220px)] overflow-y-auto lg:col-span-8"
 		use:autohideScroll
@@ -312,7 +312,7 @@
 				{/if}
 				{#each group.games as game (game.game_id)}
 					<div
-						class="{GRID_COLS} group mb-1.5 cursor-pointer rounded-lg bg-[#2a2622] px-3 py-3 transition-colors hover:bg-[#3e362f]"
+						class="{GRID_COLS} group mb-1.5 cursor-pointer rounded-lg bg-surface px-3 py-3 transition-colors hover:bg-surface-hover"
 						role="button"
 						tabindex="0"
 						onclick={() => navigateToGame(game.game_id)}
@@ -358,12 +358,14 @@
 							{#if game.user_won === true}
 								<span
 									class="rounded px-2 py-0.5 text-[10px] font-bold"
-									style="background-color:#2a3a24;color:#8fcc6a;">Win</span
+									style="background-color:rgb(var(--color-success-surface));color:rgb(var(--color-success));"
+									>Win</span
 								>
 							{:else if game.user_won === false}
 								<span
 									class="rounded px-2 py-0.5 text-[10px] font-bold"
-									style="background-color:#3a2622;color:#d98c87;">Loss</span
+									style="background-color:rgb(var(--color-danger-surface));color:rgb(var(--color-danger));"
+									>Loss</span
 								>
 							{/if}
 						</span>

@@ -26,7 +26,7 @@
 <Progress.Root
 	{value}
 	{max}
-	class="relative h-1 w-full overflow-hidden rounded-full bg-[#4a433b] {klass}"
+	class="relative h-1 w-full overflow-hidden rounded-full bg-input {klass}"
 >
 	<div
 		class="h-full rounded-full transition-[width] duration-300 {indicatorClass}"

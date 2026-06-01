@@ -72,7 +72,7 @@
 	<button
 		type="button"
 		onclick={startReimport}
-		class="hover:bg-orange/80 rounded bg-orange px-3 py-1 text-xs font-bold text-white"
+		class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80"
 	>
 		Reparse
 	</button>
@@ -99,12 +99,12 @@
 
 {#if status.kind === "modal"}
 	<div
-		class="bg-black/70 fixed inset-0 z-50 flex items-center justify-center p-4"
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
 		role="dialog"
 		aria-modal="true"
 		aria-label="Re-import game"
 	>
-		<div class="w-full max-w-lg rounded border-2 border-black bg-[#2a2622] p-6">
+		<div class="w-full max-w-lg rounded border-2 border-black bg-surface p-6">
 			<HieroglyphParade active={paradeActive} />
 			<UploadModal
 				prefilled={{ rawZip: status.rawZip, fileName: status.fileName }}

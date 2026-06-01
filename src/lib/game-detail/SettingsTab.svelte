@@ -37,16 +37,19 @@
 	);
 </script>
 
-<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
+<div
+	class="mb-4 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h3 class="mb-3 text-base font-bold text-tan">Game Settings</h3>
 	<div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-3">
 		{#if gameDetails.map_size}
 			<div
 				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: #35302B;"
+				style="background-color: rgb(var(--color-surface-raised));"
 			>
 				<span class="text-xs font-bold text-gray-400">Map Size:</span>
-				<span class="text-sm text-[#DBDEE3]"
+				<span class="text-sm text-bright"
 					>{formatEnum(
 						gameDetails.map_size,
 						"MAPSIZE_",
@@ -58,24 +61,24 @@
 		{#if gameDetails.game_mode || showDifficultySection}
 			<div
 				class="flex flex-col gap-3 rounded-lg p-3"
-				style="background-color: #35302B;"
+				style="background-color: rgb(var(--color-surface-raised));"
 			>
 				{#if gameDetails.game_mode}
 					<div class="flex flex-col gap-1">
 						<span class="text-xs font-bold text-gray-400">Game Mode:</span>
-						<span class="text-sm text-[#DBDEE3]">{gameDetails.game_mode}</span>
+						<span class="text-sm text-bright">{gameDetails.game_mode}</span>
 					</div>
 				{/if}
 				{#if showDifficultySection}
 					<div class="flex flex-col gap-1">
 						<span class="text-xs font-bold text-gray-400">Difficulty:</span>
 						{#if gameDetails.difficulty}
-							<span class="text-sm text-[#DBDEE3]"
+							<span class="text-sm text-bright"
 								>{formatEnum(gameDetails.difficulty, "DIFFICULTY_")}</span
 							>
 						{/if}
 						{#if showBreakdown}
-							<ul class="m-0 list-none p-0 text-sm text-[#DBDEE3]">
+							<ul class="m-0 list-none p-0 text-sm text-bright">
 								{#each humansWithDifficulty as p (p.playerId)}
 									<li>
 										{p.player_name}: {formatEnum(p.difficulty, "DIFFICULTY_")}
@@ -90,10 +93,10 @@
 		{#if gameDetails.victory_conditions}
 			<div
 				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: #35302B;"
+				style="background-color: rgb(var(--color-surface-raised));"
 			>
 				<span class="text-xs font-bold text-gray-400">Victory Conditions:</span>
-				<ul class="list-disc pl-5 text-sm text-[#DBDEE3]">
+				<ul class="list-disc pl-5 text-sm text-bright">
 					{#each victoryConditions.split(", ") as item (item)}
 						<li>{item}</li>
 					{/each}
@@ -103,10 +106,10 @@
 		{#if gameDetails.enabled_dlc}
 			<div
 				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: #35302B;"
+				style="background-color: rgb(var(--color-surface-raised));"
 			>
 				<span class="text-xs font-bold text-gray-400">DLC Enabled:</span>
-				<ul class="list-disc pl-5 text-sm text-[#DBDEE3]">
+				<ul class="list-disc pl-5 text-sm text-bright">
 					{#each dlcList.split(", ") as item (item)}
 						<li>{item}</li>
 					{/each}
@@ -116,10 +119,10 @@
 		{#if gameDetails.enabled_mods}
 			<div
 				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: #35302B;"
+				style="background-color: rgb(var(--color-surface-raised));"
 			>
 				<span class="text-xs font-bold text-gray-400">Mods Enabled:</span>
-				<ul class="list-disc pl-5 text-sm text-[#DBDEE3]">
+				<ul class="list-disc pl-5 text-sm text-bright">
 					{#each modsList.split(", ") as item (item)}
 						<li>{item}</li>
 					{/each}
@@ -129,41 +132,47 @@
 	</div>
 </div>
 
-<div class="rounded-lg p-4" style="background-color: #2a2622;">
+<div
+	class="rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h3 class="mb-3 text-base font-bold text-tan">Players</h3>
-	<div class="overflow-x-auto rounded-lg" style="background-color: #35302B;">
+	<div
+		class="overflow-x-auto rounded-lg"
+		style="background-color: rgb(var(--color-surface-raised));"
+	>
 		<table class="w-full">
 			<thead>
 				<tr>
 					<th
-						class="border-b-2 border-[#2a2622] p-3 text-left text-xs font-bold text-gray-400"
+						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
 						>Player</th
 					>
 					<th
-						class="border-b-2 border-[#2a2622] p-3 text-left text-xs font-bold text-gray-400"
+						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
 						>Nation</th
 					>
 					<th
-						class="border-b-2 border-[#2a2622] p-3 text-left text-xs font-bold text-gray-400"
+						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
 						>Type</th
 					>
 					<th
-						class="border-b-2 border-[#2a2622] p-3 text-left text-xs font-bold text-gray-400"
+						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
 						>Legitimacy</th
 					>
 					<th
-						class="border-b-2 border-[#2a2622] p-3 text-left text-xs font-bold text-gray-400"
+						class="border-b-2 border-surface p-3 text-left text-xs font-bold text-gray-400"
 						>State Religion</th
 					>
 				</tr>
 			</thead>
 			<tbody>
 				{#each players as player (player.playerId)}
-					<tr class="hover:bg-brown/20 transition-colors duration-200">
-						<td class="border-b border-[#2a2622] p-3 text-left text-tan"
+					<tr class="transition-colors duration-200 hover:bg-brown/20">
+						<td class="border-b border-surface p-3 text-left text-tan"
 							>{player.player_name}</td
 						>
-						<td class="border-b border-[#2a2622] p-3 text-left text-tan">
+						<td class="border-b border-surface p-3 text-left text-tan">
 							<span class="flex items-center gap-2">
 								{#if player.nation}
 									<SpriteIcon
@@ -176,13 +185,13 @@
 								{formatEnum(player.nation, "NATION_")}
 							</span>
 						</td>
-						<td class="border-b border-[#2a2622] p-3 text-left text-tan"
+						<td class="border-b border-surface p-3 text-left text-tan"
 							>{player.is_human ? "Human" : "AI"}</td
 						>
-						<td class="border-b border-[#2a2622] p-3 text-left text-tan"
+						<td class="border-b border-surface p-3 text-left text-tan"
 							>{player.legitimacy ?? "—"}</td
 						>
-						<td class="border-b border-[#2a2622] p-3 text-left text-tan">
+						<td class="border-b border-surface p-3 text-left text-tan">
 							<span class="flex items-center gap-2">
 								{#if player.state_religion}
 									<SpriteIcon

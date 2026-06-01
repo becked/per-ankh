@@ -107,7 +107,10 @@
 	}
 </script>
 
-<section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
+<section
+	class="mb-6 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h2 class="mb-3 text-sm font-bold text-tan">Overview</h2>
 
 	<div class="flex flex-col gap-3 text-xs text-tan">
@@ -117,7 +120,7 @@
 				type="text"
 				bind:value={name}
 				onblur={commitName}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 			/>
 		</label>
 
@@ -127,7 +130,7 @@
 				bind:value={description}
 				onblur={commitDescription}
 				rows="2"
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 			></textarea>
 		</label>
 
@@ -148,7 +151,7 @@
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
 					bind:this={fieldEl}
-					class="flex items-center gap-1 rounded border border-[#4a433b] bg-[#35302b] p-1.5 text-tan focus-within:border-[#5a524a]"
+					class="flex items-center gap-1 rounded border border-input bg-surface-raised p-1.5 text-tan focus-within:border-input-focus"
 					onclick={(e) => {
 						// Open on field-chrome clicks. Exclude the segments (spinbuttons —
 						// let them take focus to edit) and the trigger/clear buttons (they
@@ -160,7 +163,7 @@
 					}}
 				>
 					<DatePicker.Trigger
-						class="text-tan/70 flex items-center rounded px-0.5 hover:text-tan"
+						class="flex items-center rounded px-0.5 text-tan/70 hover:text-tan"
 						aria-label="Open calendar"
 					>
 						<svg
@@ -183,13 +186,13 @@
 						{#snippet children({ segments })}
 							{#each segments as segment, i (i)}
 								{#if segment.part === "literal"}
-									<span class="text-tan/50 px-0.5"
+									<span class="px-0.5 text-tan/50"
 										>{segment.value.replace(/-/g, "/").replace(/,/g, "")}</span
 									>
 								{:else}
 									<DatePicker.Segment
 										part={segment.part}
-										class="data-[placeholder]:text-tan/40 rounded px-0.5 tabular-nums focus:bg-[#5a524a] focus:text-tan focus:outline-none"
+										class="rounded px-0.5 tabular-nums focus:bg-input-focus focus:text-tan focus:outline-none data-[placeholder]:text-tan/40"
 									>
 										{segment.value}
 									</DatePicker.Segment>
@@ -198,12 +201,12 @@
 						{/snippet}
 					</DatePicker.Input>
 
-					<span class="text-tan/60 px-0.5 text-[11px] uppercase">UTC</span>
+					<span class="px-0.5 text-[11px] uppercase text-tan/60">UTC</span>
 
 					{#if startsAt}
 						<button
 							type="button"
-							class="text-tan/60 ml-auto rounded px-1 leading-none hover:text-tan"
+							class="ml-auto rounded px-1 leading-none text-tan/60 hover:text-tan"
 							aria-label="Clear scheduled start"
 							onclick={(e) => {
 								e.stopPropagation();
@@ -223,18 +226,18 @@
 					class="z-50"
 				>
 					<DatePicker.Calendar
-						class="rounded-lg border border-[#2a2622] bg-[#241f1b] p-3 shadow-lg"
+						class="rounded-lg border border-surface bg-surface-sunken p-3 shadow-lg"
 					>
 						{#snippet children({ months, weekdays })}
 							<DatePicker.Header class="mb-2 flex items-center justify-between">
 								<DatePicker.PrevButton
-									class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+									class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
 								>
 									‹
 								</DatePicker.PrevButton>
 								<DatePicker.Heading class="text-xs font-bold text-tan" />
 								<DatePicker.NextButton
-									class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+									class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
 								>
 									›
 								</DatePicker.NextButton>
@@ -246,7 +249,7 @@
 										<DatePicker.GridRow class="flex">
 											{#each weekdays as day (day)}
 												<DatePicker.HeadCell
-													class="text-tan/50 w-8 text-center text-[10px] font-bold uppercase"
+													class="w-8 text-center text-[10px] font-bold uppercase text-tan/50"
 												>
 													{day.slice(0, 2)}
 												</DatePicker.HeadCell>
@@ -263,7 +266,7 @@
 														class="p-0"
 													>
 														<DatePicker.Day
-															class="data-[outside-month]:text-tan/30 flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-[#35302B] data-[selected]:bg-[#5a524a] data-[selected]:font-bold data-[selected]:text-tan data-[today]:underline data-[disabled]:opacity-30"
+															class="flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-surface-raised data-[selected]:bg-input-focus data-[selected]:font-bold data-[outside-month]:text-tan/30 data-[selected]:text-tan data-[today]:underline data-[disabled]:opacity-30"
 														/>
 													</DatePicker.Cell>
 												{/each}
@@ -284,7 +287,7 @@
 				type="text"
 				bind:value={divisionAName}
 				onblur={commitDivisionA}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 			/>
 		</label>
 		<label class="flex flex-col gap-1">
@@ -293,7 +296,7 @@
 				type="text"
 				bind:value={divisionBName}
 				onblur={commitDivisionB}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 			/>
 		</label>
 	</div>

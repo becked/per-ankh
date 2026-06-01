@@ -96,7 +96,7 @@
 	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
 	let statusFilter = $state<MatchStatusGroup[]>(["scheduled", "unscheduled"]);
 	const statusItemClass =
-		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-[#35302B]";
+		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-surface-raised";
 
 	// Bracket filter: only offer brackets that actually have (non-bye) matches.
 	const bracketOptions = $derived.by(() => {
@@ -346,20 +346,20 @@
 				<!-- Controls card: title + zone toggle + view toggle. -->
 				<div
 					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
-					style="background-color: #35302b;"
+					style="background-color: rgb(var(--color-surface-raised));"
 				>
 					<h1 class="text-lg font-bold text-tan">Matches</h1>
 					<div class="flex items-center gap-2">
 						<!-- UTC / Local: a segmented toggle picking the active clock. -->
 						<div
-							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
-							style="background-color: #2a2622;"
+							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+							style="background-color: rgb(var(--color-surface));"
 							role="group"
 							aria-label="Timezone"
 						>
 							<div
 								class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-								style:background-color="#35302B"
+								style:background-color="rgb(var(--color-surface-raised))"
 								style:transform={zone === "local"
 									? "translateX(100%)"
 									: "translateX(0)"}
@@ -385,12 +385,12 @@
 						<!-- List / Calendar view switch (bracket-card pattern). -->
 						<Tabs.Root bind:value={view}>
 							<Tabs.List
-								class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
-								style="background-color: #2a2622;"
+								class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+								style="background-color: rgb(var(--color-surface));"
 							>
 								<div
 									class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-									style:background-color="#35302B"
+									style:background-color="rgb(var(--color-surface-raised))"
 									style:transform={view === "calendar"
 										? "translateX(100%)"
 										: "translateX(0)"}
@@ -431,21 +431,21 @@
 													onValueChange={setBracketFilter}
 												>
 													<Select.Trigger
-														class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+														class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
 													>
 														<span class="truncate">Bracket</span>
 														<span class="ml-2 text-tan opacity-60">▼</span>
 													</Select.Trigger>
 													<Select.Portal>
 														<Select.Content
-															class="z-50 max-h-80 overflow-y-auto rounded bg-[#241f1b] shadow-lg"
+															class="z-50 max-h-80 overflow-y-auto rounded bg-surface-sunken shadow-lg"
 														>
 															<Select.Viewport>
 																{#each bracketOptions as opt (opt.value)}
 																	<Select.Item
 																		value={`bracket:${opt.value}`}
 																		label={opt.label}
-																		class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+																		class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
 																	>
 																		{#snippet children({ selected })}
 																			<span>{opt.label}</span>
@@ -473,8 +473,8 @@
 												value={statusFilter}
 												onValueChange={(v) =>
 													(statusFilter = v as MatchStatusGroup[])}
-												class="flex overflow-hidden rounded-lg border-2 border-[#2a2623]"
-												style="background-color: #2a2622;"
+												class="flex overflow-hidden rounded-lg border-2 border-surface"
+												style="background-color: rgb(var(--color-surface));"
 												aria-label="Match status"
 											>
 												<ToggleGroup.Item
@@ -632,7 +632,7 @@
 								<!-- Monthly calendar. -->
 								<section
 									class="mb-6 rounded-lg p-4"
-									style="background-color: #2a2622;"
+									style="background-color: rgb(var(--color-surface));"
 								>
 									<div class="mb-3 flex items-center justify-between gap-3">
 										<button
@@ -666,13 +666,13 @@
 											{#if cell === null}
 												<div
 													class="min-h-[5rem] rounded-lg"
-													style="background-color: #221d18;"
+													style="background-color: rgb(var(--color-surface-sunken));"
 												></div>
 											{:else}
 												{@const events = eventsByDay[cell.key] ?? []}
 												<div
 													class="flex min-h-[5rem] flex-col gap-1 rounded-lg p-1.5"
-													style="background-color: #35302b;"
+													style="background-color: rgb(var(--color-surface-raised));"
 												>
 													<span
 														class="text-[11px] font-bold text-tan opacity-70"
@@ -682,8 +682,8 @@
 													{#each events as m (m.match_id)}
 														<button
 															type="button"
-															class="flex flex-col rounded px-1.5 py-1 text-left text-[11px] text-tan transition-colors hover:bg-[#4a443c]"
-															style="background-color: #2a2622;"
+															class="flex flex-col rounded px-1.5 py-1 text-left text-[11px] text-tan transition-colors hover:bg-track"
+															style="background-color: rgb(var(--color-surface));"
 															onclick={(e) => pick(m.match_id, e)}
 														>
 															<span class="font-bold"
@@ -720,7 +720,7 @@
 	contentClass={detailMatch?.game_id
 		? "w-[min(92vw,35.2rem)]"
 		: "w-fit max-w-[92vw]"}
-	frameClass="bg-[#2a2623] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
+	frameClass="bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
 	ariaLabel="Match detail"
 >
 	{#if detailMatch}

@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from "$app/navigation";
 	import {
-		ApiError,
 		cloudApi,
 		type MapPoolEntry,
 		type TournamentDetail,
@@ -17,7 +15,7 @@
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
-	import { toast } from "$lib/ui/toast";
+	import { runAction } from "$lib/tournament/async-action";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -73,27 +71,23 @@
 		// The server's append-only check accepts this; any edit/removal of an
 		// existing instance would be rejected.
 		const next = [...tournament.map_pool, entry];
-		saving = true;
-		try {
-			await cloudApi.patchTournament(tournament.tournament_id, {
-				map_pool: next,
-			});
-			await invalidateAll();
-			toast.info("Map added");
-			draft = null;
-		} catch (err) {
-			let message = "Add failed";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-		} finally {
-			saving = false;
-		}
+		const ok = await runAction(
+			() =>
+				cloudApi.patchTournament(tournament.tournament_id, { map_pool: next }),
+			{
+				setBusy: (b) => (saving = b),
+				success: "Map added",
+				failMessage: "Add failed",
+			},
+		);
+		if (ok !== null) draft = null;
 	}
 </script>
 
-<section class="mt-4 rounded-lg p-4" style="background-color: #2a2622;">
+<section
+	class="mt-4 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h2 class="mb-1 text-sm font-bold text-tan">Add a map</h2>
 	<p class="mb-3 text-xs text-tan opacity-60">
 		New maps apply to future rounds. Existing maps can't be changed or removed
@@ -113,7 +107,7 @@
 			ariaLabel="Add map script"
 		/>
 	{:else}
-		<div class="rounded border border-black bg-[#35302b] p-3">
+		<div class="rounded border border-black bg-surface-raised p-3">
 			<p class="mb-2 text-xs font-bold text-tan">
 				{mapScriptLabel(draft.script)}
 			</p>

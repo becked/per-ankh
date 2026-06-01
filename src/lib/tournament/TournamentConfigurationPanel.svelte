@@ -1,13 +1,11 @@
 <script lang="ts">
-	import { invalidateAll } from "$app/navigation";
 	import {
-		ApiError,
 		cloudApi,
 		type PatchTournamentBody,
 		type TournamentDetail,
 	} from "$lib/api-cloud";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
-	import { toast } from "$lib/ui/toast";
+	import { runAction } from "$lib/tournament/async-action";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -64,22 +62,15 @@
 	// (commitSignupsOpen) can roll back their local state on failure.
 	async function commit(patch: PatchTournamentBody): Promise<boolean> {
 		if (Object.keys(patch).length === 0) return true;
-		saving = true;
-		try {
-			await cloudApi.patchTournament(tournament.tournament_id, patch);
-			await invalidateAll();
-			toast.info("Saved");
-			return true;
-		} catch (err) {
-			let message = "Save failed";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-			return false;
-		} finally {
-			saving = false;
-		}
+		const ok = await runAction(
+			() => cloudApi.patchTournament(tournament.tournament_id, patch),
+			{
+				setBusy: (b) => (saving = b),
+				success: "Saved",
+				failMessage: "Save failed",
+			},
+		);
+		return ok !== null;
 	}
 
 	function clampToRange(raw: unknown, min: number, max: number): number | null {
@@ -145,7 +136,10 @@
 	}
 </script>
 
-<section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
+<section
+	class="mb-6 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h2 class="mb-3 text-sm font-bold text-tan">Signups</h2>
 
 	<div class="flex flex-col gap-3 text-xs text-tan">
@@ -167,7 +161,7 @@
 				rows="2"
 				maxlength="2000"
 				disabled={saving}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 			></textarea>
 			<span class="text-[11px] text-tan opacity-60"
 				>Optional question on signup form (ex. "What is your timezone?")</span
@@ -189,7 +183,7 @@
 					max="20"
 					bind:value={swissMaxRounds}
 					onblur={commitMaxRounds}
-					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+					class="no-spinner rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -200,7 +194,7 @@
 					max="20"
 					bind:value={swissWinsToAdvance}
 					onblur={commitWinsToAdvance}
-					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+					class="no-spinner rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -211,7 +205,7 @@
 					max="20"
 					bind:value={swissLossesToEliminate}
 					onblur={commitLossesToEliminate}
-					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+					class="no-spinner rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 				/>
 			</label>
 		</div>

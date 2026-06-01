@@ -708,7 +708,7 @@
 		for (const tile of mapTiles) {
 			if (!tile.owner_nation) continue;
 			const nationKey = tile.owner_nation;
-			const colorHex = getCivilizationColor(nationKey.replace("NATION_", ""));
+			const colorHex = getCivilizationColor(nationKey);
 			if (!colorHex) continue;
 
 			const [cx, cy] = hexToPixel(tile.x, tile.y);
@@ -792,7 +792,7 @@
 		// one in-edge and one out-edge (per island), so the chain is unambiguous.
 		const borders: NationBorder[] = [];
 		for (const [nationKey, edges] of edgesByNation) {
-			const colorHex = getCivilizationColor(nationKey.replace("NATION_", ""));
+			const colorHex = getCivilizationColor(nationKey);
 			if (!colorHex) continue;
 			const rgb = hexToRgb(colorHex);
 
@@ -841,7 +841,7 @@
 		// either a branch point or a terminal.
 		const subBorders: NationBorder[] = [];
 		for (const [nationKey, subEdges] of subEdgesByNation) {
-			const colorHex = getCivilizationColor(nationKey.replace("NATION_", ""));
+			const colorHex = getCivilizationColor(nationKey);
 			if (!colorHex) continue;
 			const rgb = hexToRgb(colorHex);
 			const color: [number, number, number, number] = [
@@ -968,7 +968,7 @@
 		for (const tile of mapTiles) {
 			const founder = tile.religions[0]?.founder_nation;
 			if (!founder) continue;
-			const colorHex = getCivilizationColor(founder.replace("NATION_", ""));
+			const colorHex = getCivilizationColor(founder);
 			if (!colorHex) continue;
 			const rgb = hexToRgb(colorHex);
 			const [cx, cy] = hexToPixel(tile.x, tile.y);
@@ -1856,7 +1856,7 @@
 				<!-- Expand button (chart-style: semi-transparent overlay icon) -->
 				<button
 					onclick={openFullscreen}
-					class="bg-black/20 hover:bg-black/40 cursor-pointer rounded p-1.5 transition-colors focus:outline-none"
+					class="cursor-pointer rounded bg-black/20 p-1.5 transition-colors hover:bg-black/40 focus:outline-none"
 					aria-label="Expand map to fullscreen"
 					title="Expand to fullscreen"
 				>
@@ -1879,7 +1879,7 @@
 				<!-- Close button (matches expand styling so it slots into the same row) -->
 				<button
 					onclick={closeFullscreen}
-					class="bg-black/20 hover:bg-black/40 cursor-pointer rounded p-1.5 transition-colors focus:outline-none"
+					class="cursor-pointer rounded bg-black/20 p-1.5 transition-colors hover:bg-black/40 focus:outline-none"
 					aria-label="Close fullscreen"
 					title="Close fullscreen (Esc)"
 				>
@@ -1974,7 +1974,7 @@
 	</div>
 {/snippet}
 
-<div class="flex flex-col gap-3 rounded-lg bg-[#1a1510] p-3">
+<div class="flex flex-col gap-3 rounded-lg bg-surface-deep p-3">
 	<!-- Layer toggles + turn controls + expand button -->
 	{@render controlsBar("expand")}
 
@@ -2035,7 +2035,7 @@
 	<div class="dialog-content">
 		<!-- Mirrored controls bar with the close button slotted in the same
 		     position the expand button occupies in the normal view. -->
-		<div class="bg-black/90 mb-4 flex-shrink-0 rounded-lg px-4 py-3">
+		<div class="mb-4 flex-shrink-0 rounded-lg bg-black/90 px-4 py-3">
 			{@render controlsBar("close")}
 		</div>
 
@@ -2095,7 +2095,7 @@
 		width: 100%;
 		overflow: hidden;
 		border-radius: 0.5rem;
-		background-color: #1a1510;
+		background-color: rgb(var(--color-surface-deep));
 	}
 
 	.sprite-map-canvas {
@@ -2122,14 +2122,14 @@
 		width: 2rem;
 		height: 2rem;
 		border-radius: 0.375rem;
-		background-color: rgb(0 0 0 / 0.5);
-		color: white;
+		background-color: rgb(var(--color-black) / 0.5);
+		color: rgb(var(--color-white));
 		cursor: pointer;
 		transition: background-color 0.15s ease;
 	}
 
 	.zoom-btn:hover:not(:disabled) {
-		background-color: rgb(0 0 0 / 0.75);
+		background-color: rgb(var(--color-black) / 0.75);
 	}
 
 	.zoom-btn:disabled {
@@ -2141,7 +2141,7 @@
 		-webkit-appearance: none;
 		appearance: none;
 		height: 6px;
-		background: #4a4540;
+		background: rgb(var(--color-track));
 		border-radius: 3px;
 		outline: none;
 		cursor: pointer;
@@ -2152,20 +2152,20 @@
 		appearance: none;
 		width: 16px;
 		height: 16px;
-		background: var(--color-brown);
+		background: rgb(var(--color-brown));
 		border-radius: 50%;
 		cursor: pointer;
 		transition: background 0.15s ease;
 	}
 
 	.turn-slider::-webkit-slider-thumb:hover {
-		background: var(--color-tan);
+		background: rgb(var(--color-tan));
 	}
 
 	.turn-slider::-moz-range-thumb {
 		width: 16px;
 		height: 16px;
-		background: var(--color-brown);
+		background: rgb(var(--color-brown));
 		border-radius: 50%;
 		cursor: pointer;
 		border: none;
@@ -2173,7 +2173,7 @@
 	}
 
 	.turn-slider::-moz-range-thumb:hover {
-		background: var(--color-tan);
+		background: rgb(var(--color-tan));
 	}
 
 	/* Fullscreen dialog — mirrors ChartContainer.svelte's behavior. */
@@ -2278,7 +2278,7 @@
 	}
 
 	.fullscreen-dialog::backdrop {
-		background: rgba(0, 0, 0, 0.8);
+		background: rgb(var(--color-black) / 0.8);
 	}
 
 	.dialog-content {

@@ -222,9 +222,9 @@
 
 	// Tab triggers styled as chip-bar pills, matching the aggregate-stats
 	// subtabs (src/lib/stats/StatsView.svelte): borderless, fill-based state
-	// (active = #35302B, inactive = #2a2622) inside a floating tray.
+	// (active = surface-raised, inactive = surface) inside a floating tray.
 	const triggerClass =
-		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622]";
+		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-surface-raised data-[state=inactive]:bg-surface";
 </script>
 
 <!-- Header -->
@@ -255,10 +255,16 @@
 {/if}
 
 <!-- Summary Section -->
-<div class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
+<div
+	class="mb-6 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<div class="grid grid-cols-2 gap-3 lg:grid-cols-5">
 		<!-- Player -->
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
 				{#if humanNation}
 					<SpriteIcon
@@ -270,13 +276,16 @@
 				{/if}
 				Player
 			</p>
-			<p class="text-lg font-bold" style="color: #DBDEE3;">
+			<p class="text-lg font-bold" style="color: rgb(var(--color-bright));">
 				{formatEnum(humanNation, "NATION_")}
 			</p>
 		</div>
 
 		<!-- Winner -->
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
 				<SpriteIcon
 					category="icons"
@@ -286,7 +295,7 @@
 				/>
 				Winner
 			</p>
-			<p class="text-lg font-bold" style="color: #DBDEE3;">
+			<p class="text-lg font-bold" style="color: rgb(var(--color-bright));">
 				{#if gameDetails.winner_civilization}
 					{#if gameDetails.winner_name}
 						<!-- Prefer the save's in-game leader name. Only when it's
@@ -312,7 +321,10 @@
 		</div>
 
 		<!-- Victory Type -->
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
 				<SpriteIcon
 					category="icons"
@@ -322,7 +334,7 @@
 				/>
 				Victory Type
 			</p>
-			<p class="text-lg font-bold" style="color: #DBDEE3;">
+			<p class="text-lg font-bold" style="color: rgb(var(--color-bright));">
 				{#if gameDetails.winner_victory_type}
 					{formatEnum(gameDetails.winner_victory_type, "VICTORY_")}
 				{:else}
@@ -333,7 +345,10 @@
 
 		<!-- Map -->
 		{#if gameDetails.map_class}
-			<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
 				<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
 					<SpriteIcon
 						category="icons"
@@ -343,19 +358,22 @@
 					/>
 					Map
 				</p>
-				<p class="text-lg font-bold" style="color: #DBDEE3;">
+				<p class="text-lg font-bold" style="color: rgb(var(--color-bright));">
 					{formatMapClass(gameDetails.map_class)}
 				</p>
 			</div>
 		{/if}
 
 		<!-- Turns -->
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
 				<SpriteIcon category="icons" value="TURN" size={14} alt="Turns" />
 				Turns
 			</p>
-			<p class="text-lg font-bold" style="color: #DBDEE3;">
+			<p class="text-lg font-bold" style="color: rgb(var(--color-bright));">
 				{gameDetails.total_turns}
 			</p>
 		</div>
@@ -366,7 +384,7 @@
 <Tabs.Root bind:value={activeTab}>
 	<!-- Tab Navigation -->
 	<Tabs.List
-		class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+		class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 	>
 		<Tabs.Trigger value="overview" class={triggerClass}>Overview</Tabs.Trigger>
 
@@ -419,7 +437,7 @@
 	<Tabs.Content
 		value="timeline"
 		class="tab-pane min-h-[400px] rounded-lg p-8"
-		style="background-color: #35302B;"
+		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		<TimelineTab
 			{gameDetails}

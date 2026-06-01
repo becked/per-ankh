@@ -26,7 +26,12 @@ import {
 import { sessionFromRequest, type SessionEnv } from "../session";
 import { isSiteAdmin } from "../admin";
 import { buildAvatarUrl } from "../auth";
-import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
+import {
+	cloudCorsHeaders,
+	errorResponse,
+	jsonResponse,
+	parseJsonBody,
+} from "../util";
 import { countEventsSince } from "../games";
 import { logError } from "../log";
 import {
@@ -325,52 +330,6 @@ function logTournamentAdminAction(
 				user_id: userId,
 			});
 		});
-}
-
-async function parseJsonBody<T>(
-	request: Request,
-	schema: v.GenericSchema<unknown, T>,
-	cors: Record<string, string>,
-): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
-	// Defense-in-depth against CSRF: SameSite=Lax already blocks
-	// cross-origin POST in modern browsers, but an explicit Content-Type
-	// check rejects form-encoded submissions that could otherwise reach a
-	// JSON endpoint with a non-empty body.
-	const rawType = request.headers.get("Content-Type") ?? "";
-	const baseType = rawType.split(";", 1)[0].trim().toLowerCase();
-	if (baseType !== "application/json") {
-		return {
-			ok: false,
-			response: errorResponse(
-				"Content-Type must be application/json",
-				415,
-				cors,
-				"UNSUPPORTED_MEDIA_TYPE",
-			),
-		};
-	}
-	let parsed: unknown;
-	try {
-		parsed = await request.json();
-	} catch {
-		return {
-			ok: false,
-			response: errorResponse("Invalid JSON body", 400, cors, "INVALID_JSON"),
-		};
-	}
-	const result = v.safeParse(schema, parsed);
-	if (!result.success) {
-		return {
-			ok: false,
-			response: errorResponse(
-				`Invalid body: ${result.issues[0]?.message ?? "unknown"}`,
-				400,
-				cors,
-				"INVALID_BODY",
-			),
-		};
-	}
-	return { ok: true, body: result.output };
 }
 
 // Wrap parseMapPool so JSON-shape corruption becomes an explicit 500 with

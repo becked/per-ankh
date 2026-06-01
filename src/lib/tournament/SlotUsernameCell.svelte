@@ -98,7 +98,7 @@
 				onEnter={save}
 				{disabled}
 				autofocusOnMount
-				inputClass="bg-[#2a2623] focus:outline-none"
+				inputClass="bg-surface focus:outline-none"
 			/>
 			<button
 				type="button"
@@ -125,7 +125,7 @@
 				rows="2"
 				maxlength="2000"
 				{disabled}
-				class="w-full rounded bg-[#2a2623] p-1.5 text-[11px] text-tan focus:outline-none disabled:opacity-50"
+				class="w-full rounded bg-surface p-1.5 text-[11px] text-tan focus:outline-none disabled:opacity-50"
 			></textarea>
 		{/if}
 		{#if error}

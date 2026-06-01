@@ -2,19 +2,18 @@
 	// Per-match scheduling form, opened as a nested popover off the "Schedule"
 	// button in the match popover footer. Lets a tournament admin or either
 	// participant set the match's scheduled time (UTC), stream link, and caster.
-	// Styled to mirror the match popover (dark #2a2623 frame, #35302b header bar,
-	// #35302a body card). Self-contained: owns its own busy/toast/invalidate
+	// Styled to mirror the match popover (surface frame, surface-raised header
+	// bar, surface-raised body card). Self-contained: owns its own busy/toast/invalidate
 	// cycle, so the parent only decides whether to render it.
-	import { invalidateAll } from "$app/navigation";
 	import {
-		ApiError,
 		cloudApi,
 		type TournamentDetail,
 		type TournamentMatch,
 		type UserSearchResult,
 	} from "$lib/api-cloud";
 	import Popover from "$lib/ui/Popover.svelte";
-	import { toast } from "$lib/ui/toast";
+	import { runAction } from "$lib/tournament/async-action";
+	import FormFooter from "$lib/tournament/FormFooter.svelte";
 	import UserAutocomplete from "./UserAutocomplete.svelte";
 	import { DatePicker, TimeField } from "bits-ui";
 	import {
@@ -134,30 +133,17 @@
 	}
 
 	async function save() {
-		busy = true;
-		try {
-			await cloudApi.patchMatchSchedule(
-				tournament.tournament_id,
-				match.match_id,
-				{
+		const ok = await runAction(
+			() =>
+				cloudApi.patchMatchSchedule(tournament.tournament_id, match.match_id, {
 					scheduled_at: scheduledToIso(),
 					stream_url: streamValue.trim() ? streamValue.trim() : null,
 					caster_user_id: casterUserId,
 					caster_name: casterValue.trim() ? casterValue.trim() : null,
-				},
-			);
-			toast.info("Schedule updated");
-			await invalidateAll();
-			open = false;
-		} catch (err) {
-			let message = "Action failed";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-		} finally {
-			busy = false;
-		}
+				}),
+			{ setBusy: (b) => (busy = b), success: "Schedule updated" },
+		);
+		if (ok !== null) open = false;
 	}
 </script>
 
@@ -169,14 +155,14 @@
 	side="bottom"
 	align="start"
 	contentClass="w-[min(92vw,24rem)]"
-	frameClass="bg-[#2a2623] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
+	frameClass="bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
 	ariaLabel="Schedule match"
 >
 	{#snippet trigger({ props })}
 		<button
 			{...props}
 			type="button"
-			class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+			class="inline-flex items-center gap-1.5 rounded border border-input px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
@@ -194,11 +180,11 @@
 		</button>
 	{/snippet}
 
-	<!-- Header bar mirrors the match popover's: a #35302b rounded bar carrying
+	<!-- Header bar mirrors the match popover's: a surface-raised rounded bar carrying
 	     the title with a close affordance on the right. -->
 	<header
 		class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
-		style="background-color: #35302b;"
+		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		<h2 class="text-lg font-bold text-tan">Schedule match</h2>
 		<button
@@ -226,7 +212,7 @@
 
 	<div
 		class="flex flex-col gap-3 rounded-lg p-3 text-xs text-tan"
-		style="background-color: #35302a;"
+		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		<!-- Scheduled time (UTC): a date-only themed calendar plus a separate
 		     TimeField. They're independent, so choosing a calendar day leaves the
@@ -250,7 +236,7 @@
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
 						<div
 							bind:this={fieldEl}
-							class="flex items-center gap-1 rounded border border-[#4a433b] bg-[#2a2623] p-1.5 text-tan focus-within:border-[#5a524a]"
+							class="flex items-center gap-1 rounded border border-input bg-surface p-1.5 text-tan focus-within:border-input-focus"
 							onclick={(e) => {
 								const t = e.target as HTMLElement;
 								if (!t.closest("button") && !t.closest('[role="spinbutton"]')) {
@@ -259,7 +245,7 @@
 							}}
 						>
 							<DatePicker.Trigger
-								class="text-tan/70 flex items-center rounded px-0.5 hover:text-tan"
+								class="flex items-center rounded px-0.5 text-tan/70 hover:text-tan"
 								aria-label="Open calendar"
 							>
 								<svg
@@ -282,11 +268,11 @@
 								{#snippet children({ segments })}
 									{#each segments as segment, i (i)}
 										{#if segment.part === "literal"}
-											<span class="text-tan/50 px-0.5">{segment.value}</span>
+											<span class="px-0.5 text-tan/50">{segment.value}</span>
 										{:else}
 											<DatePicker.Segment
 												part={segment.part}
-												class="data-[placeholder]:text-tan/40 rounded px-0.5 tabular-nums focus:bg-[#5a524a] focus:text-tan focus:outline-none"
+												class="rounded px-0.5 tabular-nums focus:bg-input-focus focus:text-tan focus:outline-none data-[placeholder]:text-tan/40"
 											>
 												{segment.value}
 											</DatePicker.Segment>
@@ -298,7 +284,7 @@
 							{#if dateValue}
 								<button
 									type="button"
-									class="text-tan/60 rounded px-1 leading-none hover:text-tan"
+									class="rounded px-1 leading-none text-tan/60 hover:text-tan"
 									aria-label="Clear scheduled date"
 									onclick={(e) => {
 										e.stopPropagation();
@@ -319,20 +305,20 @@
 							class="z-50"
 						>
 							<DatePicker.Calendar
-								class="rounded-lg border border-[#2a2622] bg-[#241f1b] p-3 shadow-lg"
+								class="rounded-lg border border-surface bg-surface-sunken p-3 shadow-lg"
 							>
 								{#snippet children({ months, weekdays })}
 									<DatePicker.Header
 										class="mb-2 flex items-center justify-between"
 									>
 										<DatePicker.PrevButton
-											class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+											class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
 										>
 											‹
 										</DatePicker.PrevButton>
 										<DatePicker.Heading class="text-xs font-bold text-tan" />
 										<DatePicker.NextButton
-											class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+											class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
 										>
 											›
 										</DatePicker.NextButton>
@@ -344,7 +330,7 @@
 												<DatePicker.GridRow class="flex">
 													{#each weekdays as day (day)}
 														<DatePicker.HeadCell
-															class="text-tan/50 w-8 text-center text-[10px] font-bold uppercase"
+															class="w-8 text-center text-[10px] font-bold uppercase text-tan/50"
 														>
 															{day.slice(0, 2)}
 														</DatePicker.HeadCell>
@@ -361,7 +347,7 @@
 																class="p-0"
 															>
 																<DatePicker.Day
-																	class="data-[outside-month]:text-tan/30 flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-[#35302B] data-[selected]:bg-[#5a524a] data-[selected]:font-bold data-[selected]:text-tan data-[today]:underline data-[disabled]:opacity-30"
+																	class="flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-surface-raised data-[selected]:bg-input-focus data-[selected]:font-bold data-[outside-month]:text-tan/30 data-[selected]:text-tan data-[today]:underline data-[disabled]:opacity-30"
 																/>
 															</DatePicker.Cell>
 														{/each}
@@ -385,7 +371,7 @@
 					onValueChange={(v) => (timeValue = v instanceof Time ? v : undefined)}
 				>
 					<TimeField.Input
-						class="flex items-center gap-0.5 rounded border border-[#4a433b] bg-[#2a2623] p-1.5 text-tan focus-within:border-[#5a524a]"
+						class="flex items-center gap-0.5 rounded border border-input bg-surface p-1.5 text-tan focus-within:border-input-focus"
 					>
 						{#snippet children({ segments })}
 							{#each segments as segment, i (i)}
@@ -394,7 +380,7 @@
 								{:else}
 									<TimeField.Segment
 										part={segment.part}
-										class="data-[placeholder]:text-tan/40 rounded px-0.5 tabular-nums focus:bg-[#5a524a] focus:text-tan focus:outline-none"
+										class="rounded px-0.5 tabular-nums focus:bg-input-focus focus:text-tan focus:outline-none data-[placeholder]:text-tan/40"
 									>
 										{segment.value}
 									</TimeField.Segment>
@@ -404,7 +390,7 @@
 					</TimeField.Input>
 				</TimeField.Root>
 
-				<span class="text-tan/60 text-[11px] uppercase">UTC</span>
+				<span class="text-[11px] uppercase text-tan/60">UTC</span>
 			</div>
 		</div>
 
@@ -417,7 +403,7 @@
 				onValueChange={onCasterValueChange}
 				onSelectUser={onCasterSelectUser}
 				disabled={busy}
-				inputClass="border border-black bg-[#2a2623]"
+				inputClass="border border-black bg-surface"
 			/>
 		</div>
 
@@ -429,7 +415,7 @@
 				type="url"
 				bind:value={streamValue}
 				disabled={busy}
-				class="block w-full rounded border border-black bg-[#2a2623] p-1.5 text-xs text-tan"
+				class="block w-full rounded border border-black bg-surface p-1.5 text-xs text-tan"
 				autocomplete="off"
 			/>
 			{#if streamError}
@@ -437,23 +423,13 @@
 			{/if}
 		</label>
 
-		<div class="flex justify-end gap-2 pt-1">
-			<button
-				type="button"
-				class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-				onclick={() => (open = false)}
-				disabled={busy}
-			>
-				Cancel
-			</button>
-			<button
-				type="button"
-				class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
-				onclick={save}
-				disabled={busy || streamError !== null}
-			>
-				Save
-			</button>
-		</div>
+		<FormFooter
+			class="pt-1"
+			onCancel={() => (open = false)}
+			onConfirm={save}
+			confirmLabel="Save"
+			{busy}
+			confirmDisabled={busy || streamError !== null}
+		/>
 	</div>
 </Popover>

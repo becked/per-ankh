@@ -102,7 +102,7 @@
 			bind:value={name}
 			onblur={commitName}
 			disabled={!canEdit}
-			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+			class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 		/>
 	</label>
 
@@ -113,7 +113,7 @@
 			onblur={commitDescription}
 			rows="2"
 			disabled={!canEdit}
-			class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+			class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 		></textarea>
 	</label>
 
@@ -125,7 +125,7 @@
 				bind:value={divisionAName}
 				onblur={commitDivisionA}
 				disabled={!canEdit}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 			/>
 		</label>
 		<label class="flex flex-col gap-1">
@@ -135,7 +135,7 @@
 				bind:value={divisionBName}
 				onblur={commitDivisionB}
 				disabled={!canEdit}
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 			/>
 		</label>
 	</div>
@@ -158,7 +158,7 @@
 					min="1"
 					max="20"
 					bind:value={swissMaxRounds}
-					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+					class="no-spinner rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -168,7 +168,7 @@
 					min="1"
 					max="20"
 					bind:value={swissWinsToAdvance}
-					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+					class="no-spinner rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 				/>
 			</label>
 			<label class="flex flex-col gap-1">
@@ -178,7 +178,7 @@
 					min="1"
 					max="20"
 					bind:value={swissLossesToEliminate}
-					class="no-spinner rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none disabled:opacity-50"
+					class="no-spinner rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
 				/>
 			</label>
 		</div>

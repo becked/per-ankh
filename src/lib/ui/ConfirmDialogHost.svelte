@@ -23,7 +23,7 @@
 	}}
 >
 	<AlertDialog.Portal>
-		<AlertDialog.Overlay class="bg-black/50 fixed inset-0 z-[90]" />
+		<AlertDialog.Overlay class="fixed inset-0 z-[90] bg-black/50" />
 		<AlertDialog.Content
 			class="fixed left-1/2 top-1/2 z-[91] w-full max-w-md -translate-x-1/2 -translate-y-1/2 rounded-lg border-2 border-black bg-blue-gray p-5 shadow-lg"
 		>
@@ -46,8 +46,8 @@
 					<AlertDialog.Action
 						onclick={() => settle(true)}
 						class={$confirmRequest.destructive
-							? "bg-brown/20 rounded border border-brown px-3 py-1.5 text-xs font-bold text-tan transition-colors hover:bg-brown"
-							: "bg-orange/20 hover:bg-orange/40 rounded border border-orange px-3 py-1.5 text-xs font-bold text-tan transition-colors"}
+							? "rounded border border-brown bg-brown/20 px-3 py-1.5 text-xs font-bold text-tan transition-colors hover:bg-brown"
+							: "rounded border border-orange px-3 py-1.5 text-xs font-bold text-tan transition-colors"}
 					>
 						{$confirmRequest.confirmLabel ?? "Confirm"}
 					</AlertDialog.Action>

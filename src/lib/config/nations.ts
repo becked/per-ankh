@@ -85,13 +85,16 @@ export function getTribeColor(tribe: string): string | undefined {
  * Get color for either a nation or tribe
  *
  * Convenience function that checks both nation and tribe colors.
- * Prioritizes nation colors if there's a key collision.
+ * Prioritizes nation colors if there's a key collision. Strips the
+ * `NATION_`/`TRIBE_` prefix the backend stores so callers can pass the raw
+ * enum value directly (the strip is a no-op for already-bare keys).
  *
- * @param civilization - The nation or tribe key
+ * @param civilization - The nation or tribe key, with or without prefix
  * @returns Hex color code, or undefined if not found
  */
 export function getCivilizationColor(civilization: string): string | undefined {
-	return getNationColor(civilization) ?? getTribeColor(civilization);
+	const key = civilization.replace(/^(NATION_|TRIBE_)/, "");
+	return getNationColor(key) ?? getTribeColor(key);
 }
 
 /**
@@ -109,7 +112,7 @@ export function getNationChartColor(
 	fallbackIndex: number,
 ): string {
 	if (nation) {
-		const color = getCivilizationColor(nation.replace(/^NATION_/, ""));
+		const color = getCivilizationColor(nation);
 		if (color) return color;
 	}
 	return getChartColor(fallbackIndex);

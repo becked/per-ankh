@@ -153,10 +153,10 @@
 					{#snippet preTabs()}
 						{#if isReimportAvailable}
 							<div
-								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 							>
 								<p
-									class="rounded bg-[#2a2622] px-2.5 py-1 text-xs italic text-tan"
+									class="rounded bg-surface px-2.5 py-1 text-xs italic text-tan"
 								>
 									This game was parsed with version {game.parser_version}.
 									Reparse to use the latest version ({PARSER_VERSION}).

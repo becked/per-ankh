@@ -282,7 +282,10 @@
 	});
 </script>
 
-<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
+<div
+	class="mb-4 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	{#if victoryPointsEnabled && pointsChartOption}
 		<ChartContainer
 			option={pointsChartOption}
@@ -319,21 +322,21 @@
 				<!-- Combined Log Type and Player Filter -->
 				<Select.Root type="multiple" bind:value={tableState.filters}>
 					<Select.Trigger
-						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
 					>
 						<span class="truncate">Filter</span>
 						<span class="ml-2 text-tan opacity-60">▼</span>
 					</Select.Trigger>
 					<Select.Portal>
 						<Select.Content
-							class="z-50 max-h-64 overflow-y-auto rounded bg-[#241f1b] shadow-lg"
+							class="z-50 max-h-64 overflow-y-auto rounded bg-surface-sunken shadow-lg"
 						>
 							<Select.Viewport>
 								<!-- Players Group (only show if player column is visible) -->
 								{#if showPlayerColumn && uniquePlayers.length > 0}
 									<Select.Group>
 										<Select.GroupHeading
-											class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
+											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
 										>
 											Players
 										</Select.GroupHeading>
@@ -341,7 +344,7 @@
 											<Select.Item
 												value={`player:${player}`}
 												label={player}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
 											>
 												{#snippet children({ selected })}
 													{player}
@@ -358,9 +361,9 @@
 								{#if uniqueLogTypes.length > 0}
 									<Select.Group>
 										<Select.GroupHeading
-											class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan {showPlayerColumn &&
+											class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan {showPlayerColumn &&
 											uniquePlayers.length > 0
-												? 'border-t border-[#2a2622]'
+												? 'border-t border-surface'
 												: ''}"
 										>
 											Log Types
@@ -369,7 +372,7 @@
 											<Select.Item
 												value={`logtype:${logType}`}
 												label={formatEnum(logType, "")}
-												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+												class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
 											>
 												{#snippet children({ selected })}
 													{formatEnum(logType, "")}

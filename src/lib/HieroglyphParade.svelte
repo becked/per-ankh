@@ -288,7 +288,7 @@
 	.parade-item {
 		position: absolute;
 		font-size: 1.2rem;
-		color: var(--color-tan);
+		color: rgb(var(--color-tan));
 		opacity: 0.9;
 		animation: parade-march 20s linear forwards;
 		right: -2.4rem;
@@ -327,7 +327,7 @@
 		left: 0;
 		right: 0;
 		font-size: 0.5rem;
-		color: var(--color-tan);
+		color: rgb(var(--color-tan));
 		opacity: 0.7;
 		white-space: nowrap;
 		overflow: hidden;

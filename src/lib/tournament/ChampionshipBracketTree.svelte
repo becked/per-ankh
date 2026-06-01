@@ -441,7 +441,7 @@
 
 <style>
 	.empty {
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 		opacity: 0.7;
 		font-size: 0.875rem;
 	}
@@ -476,7 +476,7 @@
 	.round-header {
 		position: absolute;
 		top: 0;
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 		opacity: 0.75;
 		font-size: 0.75rem;
 		font-weight: 700;
@@ -484,7 +484,7 @@
 		letter-spacing: 0.05em;
 		text-align: center;
 		padding-bottom: 0.25rem;
-		border-bottom: 1px solid rgba(232, 216, 184, 0.15);
+		border-bottom: 1px solid rgb(var(--color-tan-light) / 0.15);
 	}
 
 	.canvas {
@@ -499,7 +499,7 @@
 
 	.connector {
 		fill: none;
-		stroke: rgba(232, 216, 184, 0.25);
+		stroke: rgb(var(--color-tan-light) / 0.25);
 		stroke-width: 1.5;
 	}
 
@@ -508,8 +508,8 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: stretch;
-		background-color: #35302b;
-		border: 1px solid rgba(232, 216, 184, 0.12);
+		background-color: rgb(var(--color-surface-raised));
+		border: 1px solid rgb(var(--color-tan-light) / 0.12);
 		border-radius: 0.375rem;
 		text-decoration: none;
 		overflow: hidden;
@@ -517,7 +517,7 @@
 	}
 
 	.match:hover {
-		background-color: #2a2622;
+		background-color: rgb(var(--color-surface));
 	}
 
 	/* Placeholder matches stand in for rounds the backend hasn't generated
@@ -527,11 +527,11 @@
 	   clickable — the popover opens in preview mode so admins can substitute
 	   a resolved feeder ahead of the round being generated. */
 	.match.placeholder {
-		background-color: #2b2723;
+		background-color: rgb(var(--color-surface-sunken));
 		border-style: dashed;
 	}
 	.match.placeholder:hover {
-		background-color: #322c26;
+		background-color: rgb(var(--color-surface-sunken-hover));
 	}
 
 	.slot {
@@ -540,7 +540,7 @@
 		align-items: center;
 		gap: 0.4rem;
 		padding: 0 0.6rem;
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 		font-size: 0.8rem;
 		overflow: hidden;
 	}
@@ -559,17 +559,17 @@
 	}
 
 	.slot + .slot {
-		border-top: 1px solid rgba(232, 216, 184, 0.08);
+		border-top: 1px solid rgb(var(--color-tan-light) / 0.08);
 	}
 
 	.slot.winner {
-		color: var(--color-orange, #d97706);
+		color: rgb(var(--color-orange));
 		font-weight: 700;
 	}
 
 	/* An undetermined slot in a placeholder match. */
 	.slot.tbd {
-		color: rgba(232, 216, 184, 0.4);
+		color: rgb(var(--color-tan-light) / 0.4);
 		font-style: italic;
 	}
 
@@ -579,7 +579,7 @@
 		gap: 0.25rem;
 		min-width: 0;
 		padding: 0.2rem 0.6rem;
-		border-top: 1px solid rgba(232, 216, 184, 0.08);
+		border-top: 1px solid rgb(var(--color-tan-light) / 0.08);
 	}
 
 	.map-icon {
@@ -597,6 +597,6 @@
 		white-space: nowrap;
 		font-size: 0.6rem;
 		opacity: 0.6;
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 	}
 </style>

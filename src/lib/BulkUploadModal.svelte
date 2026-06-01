@@ -485,17 +485,17 @@
 	// Dark UI scheme (mirrors the game-detail tabs): tan text on dark surfaces,
 	// selected = a lighter-dark fill with a faint tan border — no bright accents.
 	const PRIMARY_BTN =
-		"rounded bg-[#35302b] px-4 py-2 text-sm font-bold text-tan transition-colors hover:bg-[#403a33] disabled:cursor-not-allowed disabled:opacity-50";
+		"rounded bg-surface-raised px-4 py-2 text-sm font-bold text-tan transition-colors hover:bg-surface-raised-hover disabled:cursor-not-allowed disabled:opacity-50";
 	function optionCardClass(selected: boolean): string {
 		return `flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
 			selected
-				? "border-tan/40 bg-[#35302b]"
-				: "border-[#403a33] hover:border-[#5a5249]"
+				? "border-tan/40 bg-surface-raised"
+				: "border-surface-raised-hover hover:border-input-focus"
 		}`;
 	}
 </script>
 
-<div class="rounded-lg border border-[#3a352f] bg-[#2a2622] p-3">
+<div class="rounded-lg border border-border-subtle bg-surface p-3">
 	{#if rows.length === 0}
 		<label class="inline-flex cursor-pointer items-center gap-2 {PRIMARY_BTN}">
 			<svg
@@ -523,7 +523,7 @@
 			/>
 		</label>
 		{#if pickError}
-			<p class="mt-3 text-sm text-[#d98a8a]">{pickError}</p>
+			<p class="mt-3 text-sm text-danger">{pickError}</p>
 		{/if}
 	{:else}
 		<p class="mb-3 text-sm text-gray-400">
@@ -541,7 +541,9 @@
 
 		<ul class="mb-4 max-h-[60vh] space-y-2 overflow-y-auto">
 			{#each rows as row (row.id)}
-				<li class="rounded-lg border border-[#403a33] bg-blue-gray p-3">
+				<li
+					class="rounded-lg border border-surface-raised-hover bg-blue-gray p-3"
+				>
 					<div class="flex items-start justify-between gap-3">
 						<span class="truncate text-sm font-bold text-white">
 							{row.fileName}
@@ -552,17 +554,17 @@
 							{:else if row.status.kind === "parsing"}
 								<span class="text-gray-400">Parsing</span>
 							{:else if row.status.kind === "ready"}
-								<span class="text-[#6fcf8e]">Ready</span>
+								<span class="text-success">Ready</span>
 							{:else if row.status.kind === "uploading"}
 								<span class="text-gray-400">Uploading</span>
 							{:else if row.status.kind === "uploaded"}
-								<span class="text-[#6fcf8e]">
+								<span class="text-success">
 									{row.status.reimported ? "Updated" : "Uploaded"}
 								</span>
 							{:else if row.status.kind === "duplicate"}
 								<span class="text-gray-400">Duplicate</span>
 							{:else}
-								<span class="text-[#d98a8a]">Failed</span>
+								<span class="text-danger">Failed</span>
 							{/if}
 						</span>
 					</div>
@@ -577,7 +579,7 @@
 						{@const ready = row.status}
 						{#if observerMode}
 							{#if ready.humans.length !== 2}
-								<p class="mb-2 mt-2 text-xs text-[#d98a8a]">
+								<p class="mb-2 mt-2 text-xs text-danger">
 									Tournament matches require exactly 2 humans in the save; got
 									{ready.humans.length}. Cannot upload.
 								</p>
@@ -670,7 +672,7 @@
 										</div>
 										{#if isSuggested}
 											<span
-												class="shrink-0 rounded bg-[#403a33] px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-tan"
+												class="shrink-0 rounded bg-surface-raised-hover px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-tan"
 											>
 												Suggested
 											</span>
@@ -681,8 +683,8 @@
 								{@const obsSel = ready.selected === null}
 								<label
 									class="flex cursor-pointer items-start gap-3 rounded-lg border px-3 py-2 transition-colors {obsSel
-										? 'border-tan/40 bg-[#35302b]'
-										: 'border-transparent hover:border-[#403a33]'}"
+										? 'border-tan/40 bg-surface-raised'
+										: 'border-transparent hover:border-surface-raised-hover'}"
 								>
 									<RadioItem value={OBSERVER_RADIO} class="mt-0.5" />
 									<div class="text-sm">
@@ -716,26 +718,29 @@
 							</a>
 						</p>
 					{:else if row.status.kind === "error"}
-						<p class="mt-2 break-words text-xs text-[#d98a8a]">
+						<p class="mt-2 break-words text-xs text-danger">
 							{row.status.message}
 						</p>
 						{#if row.status.retry !== null && phase !== "uploading"}
 							<button
 								type="button"
 								onclick={() => retryRow(row)}
-								class="mt-2 rounded bg-[#35302b] px-2 py-0.5 text-xs font-bold text-tan transition-colors hover:bg-[#403a33]"
+								class="mt-2 rounded bg-surface-raised px-2 py-0.5 text-xs font-bold text-tan transition-colors hover:bg-surface-raised-hover"
 							>
 								Retry upload
 							</button>
 						{/if}
 					{/if}
 
-					{#if phase === "picking" && (row.status.kind === "ready" || row.status.kind === "error")}
+					<!-- Single-file batch: Remove is redundant with the footer Cancel
+					     (both reset to an empty picker), so only offer it once there
+					     are multiple rows to thin out. See #60. -->
+					{#if rows.length > 1 && phase === "picking" && (row.status.kind === "ready" || row.status.kind === "error")}
 						<div class="mt-3 text-right">
 							<button
 								type="button"
 								onclick={() => removeRow(row)}
-								class="text-xs text-[#c98b8b] underline transition-colors hover:text-[#e0a5a5]"
+								class="text-xs text-danger underline transition-colors hover:text-danger"
 							>
 								Remove this save
 							</button>

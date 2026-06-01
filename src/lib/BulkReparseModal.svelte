@@ -234,12 +234,12 @@
 </script>
 
 <div
-	class="bg-black/70 fixed inset-0 z-50 flex items-center justify-center p-4"
+	class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
 	role="dialog"
 	aria-modal="true"
 	aria-label="Reparse all games"
 >
-	<div class="w-full max-w-2xl rounded border-2 border-black bg-[#2a2622] p-6">
+	<div class="w-full max-w-2xl rounded border-2 border-black bg-surface p-6">
 		<HieroglyphParade active={phase === "running"} />
 		<div class="mb-4 mt-4 flex items-center justify-between">
 			<h2 class="font-serif text-xl text-tan">
@@ -266,7 +266,7 @@
 				<button
 					type="button"
 					onclick={start}
-					class="hover:bg-orange/80 rounded bg-orange px-4 py-2 text-sm font-bold text-white"
+					class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
 				>
 					Start reparsing
 				</button>
@@ -285,7 +285,7 @@
 			<ul class="max-h-96 space-y-1 overflow-y-auto pr-2">
 				{#each rows as row (row.gameId)}
 					<li
-						class="flex items-center gap-2 rounded bg-[#1f1c19] px-2 py-1 text-xs"
+						class="flex items-center gap-2 rounded bg-surface-sunken px-2 py-1 text-xs"
 					>
 						<span class="flex-1 truncate text-tan">{row.gameName}</span>
 						<span class="text-right">
@@ -327,7 +327,7 @@
 					<button
 						type="button"
 						onclick={close}
-						class="hover:bg-orange/80 rounded bg-orange px-4 py-2 text-sm font-bold text-white"
+						class="rounded bg-orange px-4 py-2 text-sm font-bold text-white hover:bg-orange/80"
 					>
 						Close
 					</button>

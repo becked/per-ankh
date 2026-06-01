@@ -30,14 +30,14 @@
 
 	// Shared toggle-item tokens (matches the game-detail ToggleGroup).
 	const itemClass =
-		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-[#2a2622] data-[state=on]:bg-[#35302B]";
+		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
 </script>
 
 {#if !hasData}
 	<p class="p-8 text-center italic text-brown">Not enough data.</p>
 {:else}
 	<Toolbar.Root
-		class="sticky top-1 z-10 -ml-4 mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+		class="sticky top-1 z-10 -ml-4 mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 	>
 		<Toolbar.Group
 			type="single"

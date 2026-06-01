@@ -149,7 +149,10 @@
 	</div>
 
 	<!-- Meta panel: owner/admins, format, players, date — grouped. -->
-	<div class="mt-3 rounded-lg p-3" style="background-color: #2a2622;">
+	<div
+		class="mt-3 rounded-lg p-3"
+		style="background-color: rgb(var(--color-surface));"
+	>
 		<div
 			class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-tan opacity-80"
 		>
@@ -187,12 +190,12 @@
 	<!-- Hero strip: per-status content + primary CTA. -->
 	<div
 		class="mt-3 rounded-lg py-3 pl-3 pr-4"
-		style="background-color: #2a2622;"
+		style="background-color: rgb(var(--color-surface));"
 	>
 		{#if hero.kind === "setup"}
 			<div class="flex flex-wrap items-center gap-4">
 				<span
-					class="border-tan/30 grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border"
+					class="grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border border-white"
 					aria-hidden="true"
 				>
 					<SpriteIcon category="icons" value="TOOL_SETTINGS" size={22} />
@@ -208,7 +211,7 @@
 				{#if isAdmin}
 					<button
 						type="button"
-						class="bg-orange/20 hover:bg-orange/40 whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+						class="whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 						onclick={onStart}
 						disabled={busy || !startReady}
 						title={startReady
@@ -222,7 +225,7 @@
 		{:else if hero.kind === "signups"}
 			<div class="flex flex-wrap items-center gap-4">
 				<span
-					class="border-orange/50 grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border"
+					class="grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border border-white"
 					aria-hidden="true"
 				>
 					<SpriteIcon category="icons" value="PENDING_CRITICAL" size={22} />
@@ -244,7 +247,7 @@
 				{#if isAdmin}
 					<button
 						type="button"
-						class="bg-orange/20 hover:bg-orange/40 whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+						class="whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 						onclick={onStart}
 						disabled={busy || !startReady}
 						title={startReady
@@ -261,7 +264,7 @@
 		{:else if hero.kind === "in-progress"}
 			<div class="flex flex-wrap items-center gap-4">
 				<span
-					class="border-orange/50 grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border"
+					class="grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border border-white"
 					aria-hidden="true"
 				>
 					<SpriteIcon category="icons" value="PENDING_CRITICAL" size={22} />
@@ -301,10 +304,10 @@
 			<div class="flex flex-wrap items-stretch gap-3">
 				<div
 					class="flex min-w-[15rem] flex-[1.6] items-center gap-4 rounded-lg p-3"
-					style="background-color: #35302b;"
+					style="background-color: rgb(var(--color-surface-raised));"
 				>
 					<span
-						class="border-orange/60 grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border"
+						class="grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border border-white"
 						aria-hidden="true"
 					>
 						<SpriteIcon category="icons" value="ACHIEVEMENT" size={24} />
@@ -326,10 +329,10 @@
 				{#if hero.champion && hero.finalist}
 					<div
 						class="flex min-w-[12rem] flex-1 items-center gap-4 rounded-lg p-3"
-						style="background-color: #35302b;"
+						style="background-color: rgb(var(--color-surface-raised));"
 					>
 						<span
-							class="border-tan/40 grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border"
+							class="grid h-12 w-12 flex-shrink-0 place-items-center rounded-full border border-white"
 							aria-hidden="true"
 						>
 							<SpriteIcon category="icons" value="GOAL_STARTED" size={22} />

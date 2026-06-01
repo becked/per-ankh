@@ -317,7 +317,7 @@
 						<button
 							type="button"
 							onclick={confirmToggleVisibility}
-							class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors"
+							class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
 						>
 							{isPublic ? "Make private" : "Make public"}
 						</button>
@@ -369,7 +369,7 @@
 						placeholder={gameName ?? "Save title"}
 						autofocus
 						disabled={renaming}
-						class="w-full rounded border border-[#4a433b] bg-[#35302b] px-2 py-1 text-sm text-tan placeholder:text-[#c5c3c2] focus:border-[#5a524a] focus:outline-none"
+						class="w-full rounded border border-input bg-surface-raised px-2 py-1 text-sm text-tan placeholder:text-placeholder focus:border-input-focus focus:outline-none"
 						onkeydown={(e) => {
 							if (e.key === "Enter") submitRename();
 							if (e.key === "Escape") closePopover();
@@ -401,7 +401,7 @@
 							type="button"
 							onclick={submitRename}
 							disabled={renaming}
-							class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors disabled:opacity-50"
+							class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10 disabled:opacity-50"
 						>
 							Save
 						</button>
@@ -465,8 +465,8 @@
 								type="button"
 								onclick={() => moveToCollection(c.collection_id)}
 								disabled={moving}
-								class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50 {isCurrent
-									? 'bg-[#35302b]'
+								class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised disabled:opacity-50 {isCurrent
+									? 'bg-surface-raised'
 									: ''}"
 							>
 								<span class="truncate">{c.name}</span>
@@ -497,7 +497,7 @@
 								bind:value={newCollectionName}
 								placeholder="Collection name"
 								autofocus
-								class="w-full rounded border border-[#4a433b] bg-[#35302b] px-2 py-1 text-xs text-tan placeholder:text-[#c5c3c2] focus:border-[#5a524a] focus:outline-none"
+								class="w-full rounded border border-input bg-surface-raised px-2 py-1 text-xs text-tan placeholder:text-placeholder focus:border-input-focus focus:outline-none"
 								onkeydown={(e) => {
 									if (e.key === "Enter") createAndMoveToCollection();
 									if (e.key === "Escape") {
@@ -526,7 +526,7 @@
 									type="button"
 									onclick={createAndMoveToCollection}
 									disabled={!newCollectionName.trim() || moving}
-									class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors disabled:opacity-50"
+									class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10 disabled:opacity-50"
 								>
 									Create
 								</button>
@@ -537,7 +537,7 @@
 								onclick={() => {
 									showNewCollectionInput = true;
 								}}
-								class="w-full rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+								class="w-full rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
 							>
 								+ New collection…
 							</button>
@@ -617,7 +617,7 @@
 						<button
 							type="button"
 							onclick={confirmDownload}
-							class="hover:bg-orange/10 rounded border border-orange px-2 py-1 text-xs text-orange transition-colors"
+							class="rounded border border-orange px-2 py-1 text-xs text-orange transition-colors hover:bg-orange/10"
 						>
 							Download
 						</button>

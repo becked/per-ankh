@@ -88,7 +88,7 @@
 			{#if !user}
 				<section
 					class="mb-4 rounded-lg p-6 sm:p-8"
-					style="background-color: #35302b;"
+					style="background-color: rgb(var(--color-surface-raised));"
 				>
 					<h1 class="text-3xl font-bold text-gray-200 sm:text-4xl">
 						Parse, analyze and share your Old World games
@@ -185,7 +185,7 @@
 			<!--
 			Discovery grid: recently shared saves (dominant, two-up) beside the
 			right rail (profile card + active tournaments). When the rail is
-			empty the saves span the full row. No wrapper panel — the #35302b
+			empty the saves span the full row. No wrapper panel — the
 			RecentSaveCards float directly on the page background, matching the
 			tournaments-listing pattern.
 		-->
@@ -222,8 +222,8 @@
 							<!-- Whole card links to the viewer's own profile/library. -->
 							<a
 								href={resolve(`/users/${user.user_id}`)}
-								class="block rounded-lg p-3 transition-colors hover:bg-[#3e3833]"
-								style="background-color: #35302B;"
+								class="block rounded-lg p-3 transition-colors hover:bg-surface-hover"
+								style="background-color: rgb(var(--color-surface-raised));"
 							>
 								<div class="flex items-center gap-2">
 									<img
@@ -243,31 +243,31 @@
 									<div class="mt-3 grid grid-cols-2 gap-1.5">
 										<div
 											class="rounded px-2 py-1"
-											style="background-color: #2a2622;"
+											style="background-color: rgb(var(--color-surface));"
 										>
 											<p class="mb-0.5 text-[10px] font-bold text-gray-400">
 												Saves
 											</p>
-											<p class="text-[10px] font-bold text-[#DBDEE3]">
+											<p class="text-[10px] font-bold text-bright">
 												{summary.total_games}
 											</p>
 										</div>
 
 										<div
 											class="rounded px-2 py-1"
-											style="background-color: #2a2622;"
+											style="background-color: rgb(var(--color-surface));"
 										>
 											<p class="mb-0.5 text-[10px] font-bold text-gray-400">
 												Win Rate
 											</p>
-											<p class="text-[10px] font-bold text-[#DBDEE3]">
+											<p class="text-[10px] font-bold text-bright">
 												{#if winRatePct != null}{winRatePct}%{:else}—{/if}
 											</p>
 										</div>
 
 										<div
 											class="rounded px-2 py-1"
-											style="background-color: #2a2622;"
+											style="background-color: rgb(var(--color-surface));"
 										>
 											<p
 												class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
@@ -282,7 +282,7 @@
 												{/if}
 												Favorite Nation
 											</p>
-											<p class="text-[10px] font-bold text-[#DBDEE3]">
+											<p class="text-[10px] font-bold text-bright">
 												{summary.favorite_nation
 													? formatEnum(summary.favorite_nation, "NATION_")
 													: "—"}
@@ -291,12 +291,12 @@
 
 										<div
 											class="rounded px-2 py-1"
-											style="background-color: #2a2622;"
+											style="background-color: rgb(var(--color-surface));"
 										>
 											<p class="mb-0.5 text-[10px] font-bold text-gray-400">
 												Favorite Day
 											</p>
-											<p class="text-[10px] font-bold text-[#DBDEE3]">
+											<p class="text-[10px] font-bold text-bright">
 												{favoriteDay ?? "—"}
 											</p>
 										</div>
@@ -306,7 +306,10 @@
 						{/if}
 
 						{#if activeTournaments.length > 0}
-							<div class="rounded-lg p-3" style="background-color: #35302b;">
+							<div
+								class="rounded-lg p-3"
+								style="background-color: rgb(var(--color-surface-raised));"
+							>
 								<a
 									href={resolve("/tournaments")}
 									class="mb-2 flex items-center gap-1.5 text-sm font-bold text-gray-200 hover:text-orange"

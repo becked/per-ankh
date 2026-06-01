@@ -313,12 +313,18 @@
 </script>
 
 <!-- Nation cards -->
-<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
+<div
+	class="mb-4 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h3 class="mb-3 text-base font-bold text-tan">Nations</h3>
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2 xl:grid-cols-3">
 		{#each playerOverviews as player (player.playerId)}
 			{@const borderColor = player.color}
-			<div class="relative rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="relative rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
 				{#if player.isWinner}
 					<span
 						class="absolute right-3 top-3 rounded bg-amber-700/40 px-1.5 py-0.5 text-xs text-amber-300"
@@ -384,18 +390,18 @@
 				<!-- Stats grid -->
 				<div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
 					<span class="font-bold text-gray-400">Cities</span>
-					<span class="font-medium text-[#DBDEE3]">{player.cityCount}</span>
+					<span class="font-medium text-bright">{player.cityCount}</span>
 
 					<span class="font-bold text-gray-400">Techs</span>
-					<span class="font-medium text-[#DBDEE3]">{player.techCount}</span>
+					<span class="font-medium text-bright">{player.techCount}</span>
 
 					<span class="font-bold text-gray-400">Laws</span>
-					<span class="font-medium text-[#DBDEE3]">{player.lawCount}</span>
+					<span class="font-medium text-bright">{player.lawCount}</span>
 
 					{#if player.religions.length > 0}
 						<span class="font-bold text-gray-400">Religions</span>
 						<span
-							class="flex flex-wrap items-center gap-y-0.5 font-medium text-[#DBDEE3]"
+							class="flex flex-wrap items-center gap-y-0.5 font-medium text-bright"
 						>
 							{#each player.religions as rel, i (rel.religion_name)}
 								<span class="flex items-center gap-0.5">
@@ -414,7 +420,7 @@
 						</span>
 					{:else if player.religion}
 						<span class="font-bold text-gray-400">Religion</span>
-						<span class="flex items-center gap-0.5 font-medium text-[#DBDEE3]">
+						<span class="flex items-center gap-0.5 font-medium text-bright">
 							<SpriteIcon
 								category="religions"
 								value={player.religion}
@@ -427,7 +433,7 @@
 
 					{#if player.wonders.length > 0}
 						<span class="font-bold text-gray-400">Wonders</span>
-						<span class="font-medium text-[#DBDEE3]">
+						<span class="font-medium text-bright">
 							{player.wonders
 								.map(
 									(w) =>
@@ -444,13 +450,19 @@
 </div>
 
 <!-- Key Metrics -->
-<div class="rounded-lg p-4" style="background-color: #2a2622;">
+<div
+	class="rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h3 class="mb-3 text-base font-bold text-tan">Key Metrics</h3>
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
 		<!-- Column 1 -->
 		<div class="space-y-3">
 			{#each metricsCol1 as metric (metric.label)}
-				<div class="rounded-lg p-3" style="background-color: #35302B;">
+				<div
+					class="rounded-lg p-3"
+					style="background-color: rgb(var(--color-surface-raised));"
+				>
 					<p
 						class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400"
 					>
@@ -476,7 +488,7 @@
 									></div>
 								</div>
 								<span
-									class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]"
+									class="w-10 text-right text-[11px] font-medium text-bright"
 								>
 									{formatValue(player.value)}
 								</span>
@@ -489,7 +501,10 @@
 		<!-- Column 2 -->
 		<div class="space-y-3">
 			{#each metricsCol2 as metric (metric.label)}
-				<div class="rounded-lg p-3" style="background-color: #35302B;">
+				<div
+					class="rounded-lg p-3"
+					style="background-color: rgb(var(--color-surface-raised));"
+				>
 					<p
 						class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400"
 					>
@@ -515,7 +530,7 @@
 									></div>
 								</div>
 								<span
-									class="w-10 text-right text-[11px] font-medium text-[#DBDEE3]"
+									class="w-10 text-right text-[11px] font-medium text-bright"
 								>
 									{formatValue(player.value)}
 								</span>

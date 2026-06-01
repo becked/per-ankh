@@ -101,15 +101,15 @@
 	}
 
 	// Subtabs styled as rounded chips matching the yields toolbar buttons:
-	// borderless, fill-based state (active = #35302B "on", inactive =
-	// #2a2622 "off"), separated by a gap on the list.
+	// borderless, fill-based state (active = surface-raised "on", inactive =
+	// surface "off"), separated by a gap on the list.
 	const triggerClass =
-		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622]";
+		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-surface-raised data-[state=inactive]:bg-surface";
 </script>
 
 <Tabs.Root value={activeCategory} onValueChange={onCategoryChange}>
 	<Tabs.List
-		class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+		class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 	>
 		{#each sections as s (s.id)}
 			<Tabs.Trigger value={s.id} class={triggerClass}>{s.label}</Tabs.Trigger>

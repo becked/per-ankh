@@ -252,7 +252,7 @@
 					{#if user}
 						<a
 							href={resolve("/account")}
-							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
 							onclick={closeMenu}
 						>
 							Settings
@@ -261,21 +261,21 @@
 							<div class="border-t border-black"></div>
 							<a
 								href={resolve("/admin/reparse")}
-								class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+								class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
 								onclick={closeMenu}
 							>
 								Admin
 							</a>
 						{/if}
 						<button
-							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
 							type="button"
 							onclick={openAbout}
 						>
 							About
 						</button>
 						<button
-							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b] disabled:opacity-50"
+							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised disabled:opacity-50"
 							type="button"
 							onclick={handleSignOut}
 							disabled={signingOut}
@@ -284,7 +284,7 @@
 						</button>
 					{:else}
 						<button
-							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-[#35302b]"
+							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
 							type="button"
 							onclick={openAbout}
 						>

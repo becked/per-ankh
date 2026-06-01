@@ -1770,14 +1770,12 @@ export async function handleGameList(
 		viewerOwnsTarget = true;
 	}
 
-	const limit = Math.min(
-		parseInt(url.searchParams.get("limit") ?? "50", 10) || 50,
-		500,
-	);
-	const offset = Math.max(
-		parseInt(url.searchParams.get("offset") ?? "0", 10) || 0,
-		0,
-	);
+	// Number.isFinite (not || / ??) so an explicit limit=0 isn't silently
+	// bumped to 50 — parseInt yields NaN on bad input, and `0 || 50` is 50.
+	const limitRaw = parseInt(url.searchParams.get("limit") ?? "50", 10);
+	const limit = Math.min(Number.isFinite(limitRaw) ? limitRaw : 50, 500);
+	const offsetRaw = parseInt(url.searchParams.get("offset") ?? "0", 10);
+	const offset = Math.max(Number.isFinite(offsetRaw) ? offsetRaw : 0, 0);
 
 	// Scope: the single selection the home-page scope row drives (and that
 	// resolveUserCorpus applies to the stats bundle), so the table and the

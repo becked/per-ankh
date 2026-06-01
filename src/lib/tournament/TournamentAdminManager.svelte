@@ -5,7 +5,7 @@
 	// allowed but warned about — they can't reach the tournament until granted
 	// beta separately.
 
-	import { invalidateAll } from "$app/navigation";
+	import { runAction } from "$lib/tournament/async-action";
 	import {
 		ApiError,
 		cloudApi,
@@ -51,54 +51,38 @@
 
 	async function add() {
 		if (!canAdd || pendingUser === null) return;
-		busy = true;
-		try {
-			const res = await cloudApi.grantTournamentAdmin(
-				tournament.tournament_id,
-				pendingUser.user_id,
-			);
-			if (!res.is_beta) {
-				toast.info(
-					`@${pendingUser.discord_username} was added, but isn't in the tournament beta yet — they can't open the tournament until granted beta access.`,
-				);
-			} else {
-				toast.info(`@${pendingUser.discord_username} is now an admin.`);
-			}
+		const target = pendingUser;
+		// runAction's invalidateAll refreshes the header's owner/admins strip.
+		const ok = await runAction(
+			() =>
+				cloudApi.grantTournamentAdmin(tournament.tournament_id, target.user_id),
+			{
+				setBusy: (b) => (busy = b),
+				failMessage: "Couldn't add admin",
+				success: (res) =>
+					res.is_beta
+						? `@${target.discord_username} is now an admin.`
+						: `@${target.discord_username} was added, but isn't in the tournament beta yet — they can't open the tournament until granted beta access.`,
+			},
+		);
+		if (ok !== null) {
 			addValue = "";
 			pendingUser = null;
 			await reload();
-			// Refresh the header's owner/admins meta strip.
-			await invalidateAll();
-		} catch (err) {
-			let message = "Couldn't add admin";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-		} finally {
-			busy = false;
 		}
 	}
 
 	async function remove(admin: TournamentAdmin) {
-		busy = true;
-		try {
-			await cloudApi.revokeTournamentAdmin(
-				tournament.tournament_id,
-				admin.user_id,
-			);
-			toast.info(`Removed ${admin.display_name} as admin.`);
-			await reload();
-			await invalidateAll();
-		} catch (err) {
-			let message = "Couldn't remove admin";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-		} finally {
-			busy = false;
-		}
+		const ok = await runAction(
+			() =>
+				cloudApi.revokeTournamentAdmin(tournament.tournament_id, admin.user_id),
+			{
+				setBusy: (b) => (busy = b),
+				success: `Removed ${admin.display_name} as admin.`,
+				failMessage: "Couldn't remove admin",
+			},
+		);
+		if (ok !== null) await reload();
 	}
 </script>
 
@@ -111,7 +95,7 @@
 		<ul class="flex flex-col gap-1.5">
 			{#each admins as admin (admin.user_id)}
 				<li
-					class="flex items-center justify-between gap-3 rounded border border-black bg-[#35302b] p-2"
+					class="flex items-center justify-between gap-3 rounded border border-black bg-surface-raised p-2"
 				>
 					<span class="flex items-center gap-2">
 						<img
@@ -155,7 +139,7 @@
 			</div>
 			<button
 				type="button"
-				class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-tan disabled:opacity-50"
+				class="rounded border border-tan px-3 py-1.5 text-tan disabled:opacity-50"
 				onclick={add}
 				disabled={!canAdd}
 			>

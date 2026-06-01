@@ -153,7 +153,7 @@
 		<button
 			{...props}
 			type="button"
-			class="bg-orange/20 hover:bg-orange/40 whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+			class="whitespace-nowrap rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 			disabled={busy}
 		>
 			Transition to Championship
@@ -197,7 +197,7 @@
 				{/each}
 			</ol>
 			{#if r1Preview.length > 0}
-				<div class="mt-2 rounded bg-[#35302b] p-2">
+				<div class="mt-2 rounded bg-surface-raised p-2">
 					<h4 class="mb-1 text-[11px] font-bold uppercase opacity-70">
 						Round 1 pairings
 					</h4>
@@ -326,7 +326,7 @@
 		</button>
 		<button
 			type="button"
-			class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+			class="rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 			onclick={confirm}
 			disabled={!canConfirm}
 		>

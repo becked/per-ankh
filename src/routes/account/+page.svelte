@@ -30,7 +30,7 @@
 	// Subtab triggers styled as chip-bar pills, matching the game-detail and
 	// aggregate-stats tab bars.
 	const triggerClass =
-		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622]";
+		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-surface-raised data-[state=inactive]:bg-surface";
 
 	async function handleLogout() {
 		loggingOut = true;
@@ -73,7 +73,7 @@
 	<div class="mx-auto max-w-xl">
 		<Tabs.Root bind:value={activeTab}>
 			<Tabs.List
-				class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+				class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 			>
 				<Tabs.Trigger value="account" class={triggerClass}>Account</Tabs.Trigger
 				>
@@ -86,8 +86,14 @@
 			</Tabs.List>
 
 			<Tabs.Content value="account">
-				<div class="rounded-lg p-4" style="background-color: #2a2622;">
-					<div class="rounded-lg p-3" style="background-color: #35302B;">
+				<div
+					class="rounded-lg p-4"
+					style="background-color: rgb(var(--color-surface));"
+				>
+					<div
+						class="rounded-lg p-3"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
 						<!-- Header: avatar + display name -->
 						<div class="mb-3 flex items-center gap-3">
 							<img
@@ -110,7 +116,7 @@
 						<!-- Stats grid -->
 						<div class="grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 text-xs">
 							<span class="font-bold text-gray-400">Discord ID</span>
-							<span class="font-mono font-medium text-[#DBDEE3]"
+							<span class="font-mono font-medium text-bright"
 								>{data.user.discord_id}</span
 							>
 						</div>
@@ -121,7 +127,7 @@
 							type="button"
 							onclick={handleLogout}
 							disabled={loggingOut}
-							class="cursor-pointer rounded bg-[#35302b] px-3 py-1 text-sm text-tan transition-colors hover:bg-[#453e37] disabled:opacity-50"
+							class="cursor-pointer rounded bg-surface-raised px-3 py-1 text-sm text-tan transition-colors hover:bg-surface-raised-hover disabled:opacity-50"
 						>
 							{loggingOut ? "Logging out…" : "Log out"}
 						</button>
@@ -130,8 +136,14 @@
 			</Tabs.Content>
 
 			<Tabs.Content value="preferences">
-				<div class="rounded-lg p-4" style="background-color: #2a2622;">
-					<div class="rounded-lg p-3" style="background-color: #35302B;">
+				<div
+					class="rounded-lg p-4"
+					style="background-color: rgb(var(--color-surface));"
+				>
+					<div
+						class="rounded-lg p-3"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
 						<div class="flex items-center justify-between gap-4">
 							<div class="min-w-0">
 								<div class="text-sm font-bold text-tan">
@@ -152,7 +164,7 @@
 								disabled={savingPref}
 								class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 {defaultPublic
 									? 'bg-orange'
-									: 'bg-[#4a433b]'}"
+									: 'bg-input'}"
 							>
 								<span
 									class="inline-block h-3.5 w-3.5 transform rounded-full bg-tan transition-transform {defaultPublic
@@ -166,8 +178,14 @@
 			</Tabs.Content>
 
 			<Tabs.Content value="maintenance">
-				<div class="rounded-lg p-4" style="background-color: #2a2622;">
-					<div class="rounded-lg p-3" style="background-color: #35302B;">
+				<div
+					class="rounded-lg p-4"
+					style="background-color: rgb(var(--color-surface));"
+				>
+					<div
+						class="rounded-lg p-3"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
 						<!-- Reparse outdated games. Always rendered so the button is
 						     discoverable; disabled when nothing is out of date. -->
 						<div class="mb-2 text-xs text-tan">

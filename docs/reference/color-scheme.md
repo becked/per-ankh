@@ -4,27 +4,58 @@ This document defines the color palettes used throughout the Per-Ankh applicatio
 
 ## UI Color Palette
 
-The application's UI color scheme is defined in `src/app.css:6-17` using CSS custom properties (the single source of truth). Tailwind CSS is configured to reference these variables in `tailwind.config.js`.
+The UI color scheme is defined in `src/app.css` (`:root`) as the single source of truth; `tailwind.config.js` references these variables. Colors are stored as **space-separated RGB channels** (e.g. `--color-tan: 210 180 140`) and wired into Tailwind as `rgb(var(--color-x) / <alpha-value>)`, so every token takes opacity modifiers (`bg-tan/15`).
 
-| Color           | Hex Code  | CSS Variable          | Tailwind Class                              | Usage                    |
-| --------------- | --------- | --------------------- | ------------------------------------------- | ------------------------ |
-| **Black**       | `#000000` | `--color-black`       | `bg-black`, `text-black`, `border-black`    | Borders, outlines, text  |
-| **Brown**       | `#A52A2A` | `--color-brown`       | `bg-brown`, `text-brown`, `border-brown`    | Labels, accents          |
-| **Orange**      | `#FFA500` | `--color-orange`      | `bg-orange`, `text-orange`, `border-orange` | Highlights, borders      |
-| **Tan**         | `#D2B48C` | `--color-tan`         | `bg-tan`, `text-tan`, `border-tan`          | Tabs, backgrounds        |
-| **Tan Hover**   | `#dfcaae` | `--color-tan-hover`   | `bg-tan-hover`, `hover:bg-tan-hover`        | Hover states             |
-| **White**       | `#FFFFFF` | `--color-white`       | `bg-white`, `text-white`, `border-white`    | Text on dark backgrounds |
-| **Yellow**      | `#FFFF00` | `--color-yellow`      | `bg-yellow`, `text-yellow`, `border-yellow` | Reserved for future use  |
-| **Blue-Gray**   | `#211A12` | `--color-blue-gray`   | `bg-blue-gray`                              | Main background          |
-| **Border Gray** | `#1C160F` | `--color-border-gray` | `bg-border-gray`, `border-border-gray`      | Alternative borders      |
-| **Gray 200**    | `#eeeeee` | `--color-gray-200`    | `bg-gray-200`, `text-gray-200`              | Light backgrounds        |
+> Because the variables hold channels, not hex, a **direct** CSS use must wrap them in `rgb()`: `color: rgb(var(--color-tan));` or `rgb(var(--color-tan) / 0.4)`. Plain `var(--color-tan)` will not resolve to a color.
+
+### Base palette
+
+| Color           | RGB           | CSS Variable          | Tailwind Class                              | Usage                    |
+| --------------- | ------------- | --------------------- | ------------------------------------------- | ------------------------ |
+| **Black**       | `0 0 0`       | `--color-black`       | `bg-black`, `text-black`, `border-black`    | Borders, outlines, text  |
+| **Brown**       | `165 42 42`   | `--color-brown`       | `bg-brown`, `text-brown`, `border-brown`    | Labels, accents          |
+| **Dark Brown**  | `121 38 29`   | `--color-dark-brown`  | `bg-dark-brown`                             | Accents                  |
+| **Orange**      | `255 165 0`   | `--color-orange`      | `bg-orange`, `text-orange`, `border-orange` | Highlights, borders      |
+| **Tan**         | `210 180 140` | `--color-tan`         | `bg-tan`, `text-tan`, `border-tan`          | Tabs, primary text       |
+| **Tan Hover**   | `210 180 140` | `--color-tan-hover`   | `bg-tan-hover`, `hover:bg-tan-hover`        | Hover states             |
+| **White**       | `255 255 255` | `--color-white`       | `bg-white`, `text-white`, `border-white`    | Text on dark backgrounds |
+| **Yellow**      | `255 255 0`   | `--color-yellow`      | `bg-yellow`, `text-yellow`, `border-yellow` | Reserved for future use  |
+| **Blue-Gray**   | `33 26 18`    | `--color-blue-gray`   | `bg-blue-gray`                              | Main background          |
+| **Border Gray** | `28 22 15`    | `--color-border-gray` | `bg-border-gray`, `border-border-gray`      | Alternative borders      |
+| **Gray 200**    | `238 238 238` | `--color-gray-200`    | `bg-gray-200`, `text-gray-200`              | Skeletons, light text    |
+
+### Surface ramp & semantic tokens
+
+Dark-brown chrome consolidated from drift during fast iteration. The `surface-*`
+ramp goes darkest → lightest, each base with its hover step.
+
+| Token                  | RGB           | (was)     | Tailwind                       | Usage                                    |
+| ---------------------- | ------------- | --------- | ------------------------------ | ---------------------------------------- |
+| `surface-deep`         | `26 21 16`    | `#1a1510` | `bg-surface-deep`              | Deepest inset (sprite-map backdrop)      |
+| `surface-sunken`       | `36 31 27`    | `#241f1b` | `bg-surface-sunken`            | Recessed: dropdowns, calendars, fields   |
+| `surface-sunken-hover` | `50 44 38`    | `#322c26` | `bg-surface-sunken-hover`      | Hover on sunken                          |
+| `surface`              | `42 38 34`    | `#2a2622` | `bg-surface`                   | Cards, sections, stat tiles              |
+| `surface-hover`        | `62 56 51`    | `#3e3833` | `bg-surface-hover`             | Row/cell/card hover                      |
+| `surface-raised`       | `53 48 43`    | `#35302b` | `bg-surface-raised`            | Inputs, raised cards, menus, popovers    |
+| `surface-raised-hover` | `64 58 51`    | `#403a33` | `bg-surface-raised-hover`      | Hover on raised                          |
+| `bright`               | `219 222 227` | `#DBDEE3` | `text-bright`                  | Bright value / title text                |
+| `muted`                | `122 106 85`  | `#7a6a55` | `text-muted`                   | Muted labels                             |
+| `placeholder`          | `197 195 194` | `#c5c3c2` | `placeholder:text-placeholder` | Input placeholders                       |
+| `input`                | `74 67 59`    | `#4a433b` | `border-input`                 | Input borders                            |
+| `input-focus`          | `90 82 74`    | `#5a524a` | `focus:border-input-focus`     | Input focus / selected                   |
+| `border-subtle`        | `58 53 47`    | `#3a352f` | `border-border-subtle`         | Subtle dividers                          |
+| `border-tooltip`       | `58 47 36`    | `#3a2f24` | `border-border-tooltip`        | Tooltip header border                    |
+| `track`                | `74 69 64`    | `#4a4540` | `bg-track`                     | Slider track                             |
+| `tan-light`            | `232 216 184` | `#e8d8b8` | `text-tan-light`, `bg-tan-light` | Bracket strokes/borders (low opacity)  |
+| `success`              | `140 200 120` | —         | `text-success`, `bg-success`   | Advance / win                            |
+| `success-surface`      | `42 58 36`    | `#2a3a24` | `bg-success-surface`           | Success badge background                 |
+| `danger`               | `200 110 90`  | —         | `text-danger`, `bg-danger`     | Eliminate / loss                         |
+| `danger-surface`       | `58 38 34`    | `#3a2622` | `bg-danger-surface`            | Danger badge background                  |
 
 ### Default Theme
 
-The application uses the following default colors:
-
-- **Background**: Blue-Gray (`#211A12` / `var(--color-blue-gray)`)
-- **Text**: White (`#FFFFFF` / `var(--color-white)`)
+- **Background**: Blue-Gray (`var(--color-blue-gray)`)
+- **Text**: White (`var(--color-white)`)
 
 ### Using UI Colors
 
@@ -32,17 +63,20 @@ The application uses the following default colors:
 
 ```svelte
 <!-- Example: Using Tailwind classes -->
-<div class="border-2 border-black bg-brown text-tan">Content here</div>
+<div class="border-2 border-black bg-surface text-tan">Content here</div>
 ```
 
-For custom CSS where Tailwind isn't available, reference the CSS variables directly:
+For custom CSS where Tailwind isn't available, wrap the channel variable in `rgb()`:
 
 ```css
-/* Example: Custom scrollbar styling */
 .custom-scrollbar::-webkit-scrollbar-thumb {
-	background: var(--color-tan);
+	background-color: rgb(var(--color-tan) / 0.55);
 }
 ```
+
+> **Chart/canvas colors are not these tokens.** ECharts renders to `<canvas>`,
+> which cannot resolve CSS variables, so the chart palette (below) and the
+> terrain / nation color maps in `src/lib/config/` stay literal hex.
 
 ---
 

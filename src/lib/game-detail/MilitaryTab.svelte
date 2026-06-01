@@ -268,7 +268,10 @@
 </script>
 
 {#if militaryChartOption || armyPieCharts.length > 0}
-	<div class="mb-4 rounded-lg p-4" style="background-color: #2a2622;">
+	<div
+		class="mb-4 rounded-lg p-4"
+		style="background-color: rgb(var(--color-surface));"
+	>
 		<!-- Military Power Chart -->
 		{#if militaryChartOption}
 			<ChartContainer

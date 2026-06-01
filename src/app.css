@@ -17,19 +17,61 @@
 	unicode-range: U+13000-13455, U+13460-143FA;
 }
 
-/* Global CSS Variables and Base Styles */
+/*
+ * Global CSS Variables and Base Styles.
+ *
+ * Colors are stored as space-separated RGB channels (not hex) so they compose
+ * with alpha in two ways: Tailwind's opacity modifiers (bg-tan/15) via the
+ * rgb(var(--x) / <alpha-value>) wiring in tailwind.config.js, and direct
+ * rgb(var(--color-x) / 0.4) usage inside component <style> blocks. Any direct
+ * use of a --color-* var as a CSS value must therefore be wrapped in rgb().
+ */
 :root {
-	--color-black: #000000;
-	--color-brown: #a52a2a;
-	--color-dark-brown: #79261d;
-	--color-orange: #ffa500;
-	--color-tan: #d2b48c;
-	--color-tan-hover: #d2b48c;
-	--color-white: #ffffff;
-	--color-yellow: #ffff00;
-	--color-blue-gray: #211a12;
-	--color-border-gray: #1c160f;
-	--color-gray-200: #eeeeee;
+	--color-black: 0 0 0;
+	--color-brown: 165 42 42;
+	--color-dark-brown: 121 38 29;
+	--color-orange: 255 165 0;
+	--color-tan: 210 180 140;
+	--color-tan-hover: 210 180 140;
+	--color-white: 255 255 255;
+	--color-yellow: 255 255 0;
+	--color-blue-gray: 33 26 18;
+	--color-border-gray: 28 22 15;
+	--color-gray-200: 238 238 238;
+
+	/*
+	 * Dark-brown surface ramp, darkest → lightest, each with its hover step.
+	 * Consolidates the drift of near-identical shades that accumulated during
+	 * fast iteration (e.g. #2a2622/#2a2623, #35302b/#35302a/#36302a/#34302a).
+	 */
+	--color-surface-deep: 26 21 16; /* #1a1510 — deepest (sprite-map backdrop) */
+	--color-surface-sunken: 36 31 27; /* #241f1b — recessed: dropdowns, calendars, lists, fields */
+	--color-surface-sunken-hover: 50 44 38; /* #322c26 */
+	--color-surface: 42 38 34; /* #2a2622 — primary cards, sections, stat boxes */
+	--color-surface-hover: 62 56 51; /* #3e3833 — row/cell/card hover */
+	--color-surface-raised: 53 48 43; /* #35302b — inputs, raised cards, menus, popover bodies */
+	--color-surface-raised-hover: 64 58 51; /* #403a33 */
+
+	/* Text */
+	--color-bright: 219 222 227; /* #DBDEE3 — bright value/title text */
+	--color-muted: 122 106 85; /* #7a6a55 — muted label text */
+	--color-placeholder: 197 195 194; /* #c5c3c2 — input placeholder */
+
+	/* Borders */
+	--color-input: 74 67 59; /* #4a433b — input border */
+	--color-input-focus: 90 82 74; /* #5a524a — input focus / selected */
+	--color-border-subtle: 58 53 47; /* #3a352f — subtle divider */
+	--color-border-tooltip: 58 47 36; /* #3a2f24 — tooltip header border */
+	--color-track: 74 69 64; /* #4a4540 — slider track */
+
+	/* A lighter tan used for bracket strokes/borders at low opacity */
+	--color-tan-light: 232 216 184; /* #e8d8b8 */
+
+	/* Semantic status (advance/win = success, eliminate/loss = danger) */
+	--color-success: 140 200 120;
+	--color-success-surface: 42 58 36; /* #2a3a24 — dark-tinted success badge bg */
+	--color-danger: 200 110 90;
+	--color-danger-surface: 58 38 34; /* #3a2622 — dark-tinted danger badge bg */
 }
 
 * {
@@ -43,8 +85,8 @@ body {
 	font-family:
 		-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue",
 		Arial, sans-serif;
-	background-color: var(--color-blue-gray);
-	color: var(--color-white);
+	background-color: rgb(var(--color-blue-gray));
+	color: rgb(var(--color-white));
 	height: 100%;
 	overflow: hidden;
 }
@@ -76,10 +118,10 @@ body {
 	transition: background-color 200ms ease;
 }
 .cloud-scroll[data-scrolling="1"]::-webkit-scrollbar-thumb {
-	background-color: rgba(210, 180, 140, 0.55);
+	background-color: rgb(var(--color-tan) / 0.55);
 }
 .cloud-scroll[data-scrolling="1"]::-webkit-scrollbar-thumb:hover {
-	background-color: rgba(210, 180, 140, 0.85);
+	background-color: rgb(var(--color-tan) / 0.85);
 }
 
 /*

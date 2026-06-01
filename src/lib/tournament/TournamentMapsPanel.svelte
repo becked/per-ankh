@@ -1,7 +1,5 @@
 <script lang="ts">
-	import { invalidateAll } from "$app/navigation";
 	import {
-		ApiError,
 		cloudApi,
 		type MapPoolEntry,
 		type TournamentDetail,
@@ -19,7 +17,7 @@
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
-	import { toast } from "$lib/ui/toast";
+	import { runAction } from "$lib/tournament/async-action";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -61,24 +59,17 @@
 	}
 
 	async function commit(next: MapPoolEntry[]) {
-		saving = true;
-		try {
-			await cloudApi.patchTournament(tournament.tournament_id, {
-				map_pool: next,
-			});
-			await invalidateAll();
-			toast.info("Saved");
-		} catch (err) {
-			let message = "Save failed";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-			// Roll back optimistic state so the visible pool matches the server.
-			mapPool = clonePool(tournament.map_pool);
-		} finally {
-			saving = false;
-		}
+		const ok = await runAction(
+			() =>
+				cloudApi.patchTournament(tournament.tournament_id, { map_pool: next }),
+			{
+				setBusy: (b) => (saving = b),
+				success: "Saved",
+				failMessage: "Save failed",
+			},
+		);
+		// Roll back optimistic state so the visible pool matches the server.
+		if (ok === null) mapPool = clonePool(tournament.map_pool);
 	}
 
 	function addMapScript(script: string) {
@@ -107,7 +98,10 @@
 	}
 </script>
 
-<section class="mb-6 rounded-lg p-4" style="background-color: #2a2622;">
+<section
+	class="mb-6 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	<h2 class="mb-3 text-sm font-bold text-tan">Maps</h2>
 
 	<div class="flex flex-col gap-2 text-xs text-tan">
@@ -122,13 +116,13 @@
 					{@const isExpanded = expanded[entry.id] === true}
 					{@const expandable = optsCount > 0}
 					<li
-						class="overflow-hidden rounded border border-black bg-[#35302b]"
+						class="overflow-hidden rounded border border-black bg-surface-raised"
 						title={entry.script}
 					>
 						<div class="flex items-stretch">
 							<button
 								type="button"
-								class="flex flex-1 items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-[#3d3832] disabled:cursor-default disabled:hover:bg-transparent"
+								class="flex flex-1 items-center gap-2 px-3 py-2 text-left transition-colors hover:bg-surface-hover disabled:cursor-default disabled:hover:bg-transparent"
 								onclick={() => expandable && toggleExpanded(entry.id)}
 								disabled={!expandable}
 								aria-expanded={expandable ? isExpanded : undefined}
@@ -177,7 +171,7 @@
 							</button>
 							<button
 								type="button"
-								class="flex shrink-0 items-center justify-center border-l border-black px-3 text-tan opacity-60 transition-colors hover:bg-[#3d3832] hover:text-red-400 hover:opacity-100 disabled:opacity-30"
+								class="flex shrink-0 items-center justify-center border-l border-black px-3 text-tan opacity-60 transition-colors hover:bg-surface-hover hover:text-red-400 hover:opacity-100 disabled:opacity-30"
 								onclick={() => removeInstance(entry.id)}
 								disabled={saving}
 								aria-label="Remove {mapScriptLabel(entry.script)}"
@@ -200,7 +194,7 @@
 							</button>
 						</div>
 						{#if isExpanded && expandable}
-							<div class="border-t border-black bg-[#2a2622] px-3 py-2">
+							<div class="border-t border-black bg-surface px-3 py-2">
 								<MapScriptOptionsBlock
 									script={entry.script}
 									options={entry.options}

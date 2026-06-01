@@ -68,7 +68,7 @@
 			{#if tournament.status === "setup"}
 				<button
 					type="button"
-					class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+					class="rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
 					onclick={withdraw}
 					disabled={busy}
 				>

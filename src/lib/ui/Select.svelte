@@ -74,7 +74,7 @@
 >
 	<Select.Trigger
 		aria-label={ariaLabel}
-		class="flex cursor-pointer items-center justify-between gap-2 rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan disabled:opacity-50 {klass}"
+		class="flex cursor-pointer items-center justify-between gap-2 rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan disabled:opacity-50 {klass}"
 	>
 		<span class="truncate {isPlaceholder ? 'opacity-60' : ''}"
 			>{selectedLabel}</span
@@ -83,14 +83,14 @@
 	</Select.Trigger>
 	<Select.Portal>
 		<Select.Content
-			class="z-50 max-h-72 overflow-y-auto rounded-lg border border-[#2a2622] bg-[#241f1b] shadow-lg"
+			class="z-50 max-h-72 overflow-y-auto rounded-lg border border-surface bg-surface-sunken shadow-lg"
 		>
 			<Select.Viewport>
 				{#each options as entry (isSelectGroup(entry) ? entry.heading : entry.value)}
 					{#if isSelectGroup(entry)}
 						<Select.Group>
 							<Select.GroupHeading
-								class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
+								class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
 							>
 								{entry.heading}
 							</Select.GroupHeading>
@@ -112,7 +112,7 @@
 		value={opt.value}
 		label={opt.label}
 		disabled={opt.disabled}
-		class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm text-tan data-[disabled]:cursor-default data-[highlighted]:bg-[#35302B] data-[disabled]:opacity-40"
+		class="flex cursor-pointer items-center justify-between px-3 py-1.5 text-sm text-tan data-[disabled]:cursor-default data-[highlighted]:bg-surface-raised data-[disabled]:opacity-40"
 	>
 		{#snippet children({ selected })}
 			{opt.label}

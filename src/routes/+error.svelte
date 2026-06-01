@@ -36,12 +36,15 @@
 <main class="flex flex-1 items-center justify-center p-4">
 	<div
 		class="w-full max-w-sm rounded-lg p-4"
-		style="background-color: #2a2622;"
+		style="background-color: rgb(var(--color-surface));"
 	>
 		<h3 class="mb-3 text-base font-bold text-tan">
 			{status} — {heading}
 		</h3>
-		<div class="rounded-lg p-3" style="background-color: #35302B;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<p class="mb-3 text-xs text-gray-400">
 				{message || "The page you were looking for isn't here."}
 			</p>

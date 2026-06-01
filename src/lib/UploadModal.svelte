@@ -271,7 +271,10 @@
 	}
 </script>
 
-<div class="rounded-lg p-4" style="background-color: #2a2622;">
+<div
+	class="rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
 	{#if isReimportMode && prefilled}
 		<p class="mb-3 text-xs uppercase tracking-wide text-gray-400">
 			Re-importing {prefilled.fileName}
@@ -279,7 +282,10 @@
 	{/if}
 	{#if status.kind === "idle"}
 		{#if !isReimportMode}
-			<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
 				<label class="block">
 					<span class="mb-2 block text-xs font-bold text-gray-400">
 						Pick a save zip
@@ -293,15 +299,15 @@
 				</label>
 			</div>
 		{:else}
-			<p class="text-sm" style="color: #DBDEE3;">Starting…</p>
+			<p class="text-sm" style="color: rgb(var(--color-bright));">Starting…</p>
 		{/if}
 	{:else if status.kind === "parsing"}
-		<p class="mb-2 text-sm" style="color: #DBDEE3;">
+		<p class="mb-2 text-sm" style="color: rgb(var(--color-bright));">
 			{status.phase} — {status.percent}%
 		</p>
 		<progress value={status.percent} max={100} class="w-full"></progress>
 	{:else if status.kind === "picker"}
-		<h2 class="mb-1 text-lg font-bold" style="color: #DBDEE3;">
+		<h2 class="mb-1 text-lg font-bold" style="color: rgb(var(--color-bright));">
 			{isReimportMode ? "Confirm your player" : "Which player is you?"}
 		</h2>
 		<p class="mb-4 text-xs text-gray-400">
@@ -323,11 +329,11 @@
 			{#each status.humans as human (human.player_index)}
 				<label
 					class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
-					style="background-color: #35302B;"
+					style="background-color: rgb(var(--color-surface-raised));"
 				>
 					<RadioItem value={String(human.player_index)} />
 					<div class="flex-1 text-sm text-tan">
-						<div class="font-bold" style="color: #DBDEE3;">
+						<div class="font-bold" style="color: rgb(var(--color-bright));">
 							{human.player_name || formatEnum(human.nation, "NATION_") || "—"}
 						</div>
 						{#if human.player_name}
@@ -349,11 +355,13 @@
 			{/each}
 			<label
 				class="flex cursor-pointer items-center gap-3 rounded-lg p-3"
-				style="background-color: #35302B;"
+				style="background-color: rgb(var(--color-surface-raised));"
 			>
 				<RadioItem value={OBSERVER_RADIO} />
 				<div class="flex-1 text-sm text-tan">
-					<div class="font-bold" style="color: #DBDEE3;">Observer</div>
+					<div class="font-bold" style="color: rgb(var(--color-bright));">
+						Observer
+					</div>
 				</div>
 			</label>
 		</RadioGroup>
@@ -361,25 +369,25 @@
 			<button
 				type="button"
 				onclick={reset}
-				class="bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown"
+				class="rounded bg-brown/40 px-3 py-1 text-sm text-tan hover:bg-brown"
 			>
 				Cancel
 			</button>
 			<button
 				type="button"
 				onclick={submitPicker}
-				class="hover:bg-orange/80 rounded bg-orange px-4 py-1 text-sm font-bold text-white"
+				class="rounded bg-orange px-4 py-1 text-sm font-bold text-white hover:bg-orange/80"
 			>
 				{submitLabel}
 			</button>
 		</div>
 	{:else if status.kind === "uploading"}
-		<p class="text-sm" style="color: #DBDEE3;">
+		<p class="text-sm" style="color: rgb(var(--color-bright));">
 			{isReimportMode ? "Updating" : "Uploading"}
 			{status.fileName}…
 		</p>
 	{:else if status.kind === "duplicate"}
-		<p class="mb-3 text-sm" style="color: #DBDEE3;">
+		<p class="mb-3 text-sm" style="color: rgb(var(--color-bright));">
 			{#if isReimportMode}
 				This save is already at the current parser version — nothing to refresh.
 			{:else}
@@ -397,19 +405,22 @@
 				<button
 					type="button"
 					onclick={reset}
-					class="bg-brown/40 rounded px-3 py-1 text-sm text-tan hover:bg-brown"
+					class="rounded bg-brown/40 px-3 py-1 text-sm text-tan hover:bg-brown"
 				>
 					Pick another file
 				</button>
 			</div>
 		{/if}
 	{:else if status.kind === "done"}
-		<p class="text-sm" style="color: #DBDEE3;">
+		<p class="text-sm" style="color: rgb(var(--color-bright));">
 			{status.reimported ? "Updated" : "Uploaded"}. Redirecting…
 		</p>
 	{:else}
 		<p class="mb-2 font-bold text-orange">Upload failed</p>
-		<p class="mb-4 break-words text-sm" style="color: #DBDEE3;">
+		<p
+			class="mb-4 break-words text-sm"
+			style="color: rgb(var(--color-bright));"
+		>
 			{status.message}
 		</p>
 		<button

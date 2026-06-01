@@ -94,7 +94,7 @@
 		onclick={() => (open = !open)}
 		aria-haspopup="menu"
 		aria-expanded={open}
-		class="flex items-center gap-2 rounded bg-[#2a2622] px-2 py-1 text-sm text-tan transition-colors hover:bg-[#3e362f]"
+		class="flex items-center gap-2 rounded bg-surface px-2 py-1 text-sm text-tan transition-colors hover:bg-surface-hover"
 	>
 		<span>{currentLabel}</span>
 		<span class="text-[9px] text-tan opacity-60">▼</span>
@@ -121,8 +121,8 @@
 						role="menuitemradio"
 						aria-checked={isCurrent}
 						onclick={() => select(o.value)}
-						class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-[#35302b] {isCurrent
-							? 'bg-[#35302b]'
+						class="flex w-full items-center justify-between rounded px-2 py-1 text-left text-xs text-tan transition-colors hover:bg-surface-raised {isCurrent
+							? 'bg-surface-raised'
 							: ''}"
 					>
 						<span class="truncate">{o.label}</span>

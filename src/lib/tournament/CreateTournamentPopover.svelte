@@ -7,6 +7,7 @@
 		type CreateTournamentBody,
 	} from "$lib/api-cloud";
 	import Popover from "$lib/ui/Popover.svelte";
+	import FormFooter from "$lib/tournament/FormFooter.svelte";
 	import { toast } from "$lib/ui/toast";
 
 	let open = $state(false);
@@ -55,7 +56,7 @@
 		<button
 			{...props}
 			type="button"
-			class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan"
+			class="rounded border border-tan px-3 py-1.5 text-xs text-tan"
 		>
 			New tournament
 		</button>
@@ -97,7 +98,7 @@
 				bind:value={name}
 				autofocus
 				maxlength="120"
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 			/>
 		</label>
 
@@ -107,27 +108,18 @@
 				bind:value={description}
 				rows="3"
 				maxlength="2000"
-				class="rounded border border-[#4a433b] bg-[#35302b] p-1.5 focus:border-[#5a524a] focus:outline-none"
+				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 			></textarea>
 		</label>
 	</div>
 
-	<div class="mt-4 flex justify-end gap-2">
-		<button
-			type="button"
-			class="rounded border border-tan px-3 py-1.5 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-			onclick={() => (open = false)}
-			disabled={busy}
-		>
-			Cancel
-		</button>
-		<button
-			type="button"
-			class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-			onclick={submit}
-			disabled={!canSubmit}
-		>
-			{busy ? "Creating…" : "Create"}
-		</button>
-	</div>
+	<FormFooter
+		class="mt-4"
+		onCancel={() => (open = false)}
+		onConfirm={submit}
+		confirmLabel="Create"
+		busyLabel="Creating…"
+		{busy}
+		confirmDisabled={!canSubmit}
+	/>
 </Popover>

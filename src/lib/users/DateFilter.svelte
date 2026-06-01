@@ -28,17 +28,17 @@
 	onValueChange={(v) => onChange(v ? v.toString() : null)}
 >
 	<div
-		class="flex w-full items-center gap-1 rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+		class="flex w-full items-center gap-1 rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
 	>
 		<DatePicker.Input class="flex flex-1 items-center">
 			{#snippet children({ segments })}
 				{#each segments as segment, i (i)}
 					{#if segment.part === "literal"}
-						<span class="text-tan/50 px-0.5">{segment.value}</span>
+						<span class="px-0.5 text-tan/50">{segment.value}</span>
 					{:else}
 						<DatePicker.Segment
 							part={segment.part}
-							class="data-[placeholder]:text-tan/40 rounded px-0.5 tabular-nums focus:bg-orange focus:text-black focus:outline-none"
+							class="rounded px-0.5 tabular-nums focus:bg-orange focus:text-black focus:outline-none data-[placeholder]:text-tan/40"
 						>
 							{segment.value}
 						</DatePicker.Segment>
@@ -50,7 +50,7 @@
 		{#if value}
 			<button
 				type="button"
-				class="text-tan/60 rounded px-1 leading-none hover:text-orange"
+				class="rounded px-1 leading-none text-tan/60 hover:text-orange"
 				aria-label="Clear date filter"
 				onclick={() => onChange(null)}
 			>
@@ -59,7 +59,7 @@
 		{/if}
 
 		<DatePicker.Trigger
-			class="text-tan/70 flex items-center rounded px-0.5 hover:text-orange"
+			class="flex items-center rounded px-0.5 text-tan/70 hover:text-orange"
 			aria-label="Open calendar"
 		>
 			<svg
@@ -81,18 +81,18 @@
 
 	<DatePicker.Content sideOffset={6} class="z-50">
 		<DatePicker.Calendar
-			class="rounded-lg border border-[#2a2622] bg-[#241f1b] p-3 shadow-lg"
+			class="rounded-lg border border-surface bg-surface-sunken p-3 shadow-lg"
 		>
 			{#snippet children({ months, weekdays })}
 				<DatePicker.Header class="mb-2 flex items-center justify-between">
 					<DatePicker.PrevButton
-						class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+						class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
 					>
 						‹
 					</DatePicker.PrevButton>
 					<DatePicker.Heading class="text-xs font-bold text-tan" />
 					<DatePicker.NextButton
-						class="rounded px-2 py-1 text-tan hover:bg-[#35302B]"
+						class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
 					>
 						›
 					</DatePicker.NextButton>
@@ -104,7 +104,7 @@
 							<DatePicker.GridRow class="flex">
 								{#each weekdays as day (day)}
 									<DatePicker.HeadCell
-										class="text-tan/50 w-8 text-center text-[10px] font-bold uppercase"
+										class="w-8 text-center text-[10px] font-bold uppercase text-tan/50"
 									>
 										{day.slice(0, 2)}
 									</DatePicker.HeadCell>
@@ -117,7 +117,7 @@
 									{#each weekDates as date (date)}
 										<DatePicker.Cell {date} month={month.value} class="p-0">
 											<DatePicker.Day
-												class="data-[outside-month]:text-tan/30 flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-[#35302B] data-[selected]:bg-orange data-[selected]:font-bold data-[selected]:text-black data-[today]:underline data-[disabled]:opacity-30"
+												class="flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-surface-raised data-[selected]:bg-orange data-[selected]:font-bold data-[outside-month]:text-tan/30 data-[selected]:text-black data-[today]:underline data-[disabled]:opacity-30"
 											/>
 										</DatePicker.Cell>
 									{/each}

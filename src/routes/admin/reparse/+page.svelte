@@ -27,9 +27,15 @@
 
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<div class="mx-auto max-w-xl space-y-4">
-		<div class="rounded-lg p-4" style="background-color: #2a2622;">
+		<div
+			class="rounded-lg p-4"
+			style="background-color: rgb(var(--color-surface));"
+		>
 			<h3 class="mb-3 text-base font-bold text-tan">Admin — Reparse</h3>
-			<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
 				<p class="mb-3 text-xs text-tan">
 					Reparse every game whose stored parser version is older than the
 					current build. Downloads, parses, and re-uploads each game in this
@@ -49,7 +55,7 @@
 					type="button"
 					onclick={() => (reparseOpen = true)}
 					disabled={data.outOfDateGames.length === 0}
-					class="hover:bg-orange/80 rounded bg-orange px-3 py-1 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
+					class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
 				>
 					{data.outOfDateGames.length === 0
 						? "Nothing to reparse"
@@ -58,9 +64,15 @@
 			</div>
 		</div>
 
-		<div class="rounded-lg p-4" style="background-color: #2a2622;">
+		<div
+			class="rounded-lg p-4"
+			style="background-color: rgb(var(--color-surface));"
+		>
 			<h3 class="mb-3 text-base font-bold text-tan">Admin — Reindex</h3>
-			<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
 				<p class="mb-3 text-xs text-tan">
 					Rebuild every game's derived D1 tables (summaries, per-turn series,
 					tech &amp; law events) from its stored blob. No re-parse — reads each
@@ -82,7 +94,7 @@
 					type="button"
 					onclick={() => (reindexOpen = true)}
 					disabled={data.allGames.length === 0}
-					class="hover:bg-orange/80 rounded bg-orange px-3 py-1 text-xs font-bold text-white disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
+					class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
 				>
 					{data.allGames.length === 0
 						? "Nothing to reindex"

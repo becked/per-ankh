@@ -6,14 +6,12 @@
 	// (no overlay / escape / positioning of its own).
 	import { resolve } from "$app/paths";
 	import {
-		ApiError,
 		cloudApi,
 		type TournamentDetail,
 		type TournamentMatch,
 		type UserMe,
 		type UserSearchResult,
 	} from "$lib/api-cloud";
-	import { invalidateAll } from "$app/navigation";
 	import type { EChartsOption } from "echarts";
 	import type { FullGameData } from "$lib/parser/types";
 	import Chart from "$lib/Chart.svelte";
@@ -41,7 +39,8 @@
 		poolEntryById,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
-	import { toast } from "$lib/ui/toast";
+	import { runAction } from "$lib/tournament/async-action";
+	import FormFooter from "$lib/tournament/FormFooter.svelte";
 	import type { SelectOption } from "$lib/ui/types";
 
 	const MAP_ICON = SPRITE_MANIFEST["icons/MAP_OVERVIEW"];
@@ -300,7 +299,7 @@
 	const statusChipClass = $derived(
 		match.status === "complete" || match.status === "bye"
 			? "border-amber-300 bg-amber-700/40 text-amber-300"
-			: "border-[#4a433b] text-tan opacity-70",
+			: "border-input text-tan opacity-70",
 	);
 
 	// Lazily load the match's game blob (all tournament games are public) so the
@@ -340,7 +339,7 @@
 
 	function playerColor(nation: string | null, idx: number): string {
 		if (nation) {
-			const c = getCivilizationColor(nation.replace(/^NATION_/, ""));
+			const c = getCivilizationColor(nation);
 			if (c) return c;
 		}
 		return getChartColor(idx);
@@ -429,40 +428,18 @@
 		{ value: "pending", label: "pending" },
 	];
 
-	async function withBusy<T>(
-		op: () => Promise<T>,
-		successMessage: string,
-	): Promise<T | null> {
-		busy = true;
-		try {
-			const out = await op();
-			toast.info(successMessage);
-			await invalidateAll();
-			return out;
-		} catch (err) {
-			let message = "Action failed";
-			if (err instanceof ApiError) {
-				message = err.message + (err.code ? ` (${err.code})` : "");
-			}
-			toast.error(message);
-			return null;
-		} finally {
-			busy = false;
-		}
-	}
-
 	function openMapEdit() {
 		mapPoolIdInput = match.map_pool_id ?? "";
 		editMode = "map";
 	}
 
 	async function saveMapEdit() {
-		const ok = await withBusy(
+		const ok = await runAction(
 			() =>
 				cloudApi.patchMatchMap(tournament.tournament_id, match.match_id, {
 					map_pool_id: mapPoolIdInput || undefined,
 				}),
-			"Map updated",
+			{ setBusy: (b) => (busy = b), success: "Map updated" },
 		);
 		if (ok !== null) editMode = "none";
 	}
@@ -477,13 +454,13 @@
 	}
 
 	async function saveRetroEdit() {
-		const ok = await withBusy(
+		const ok = await runAction(
 			() =>
 				cloudApi.retroEditMatch(tournament.tournament_id, match.match_id, {
 					winner_slot_id: retroWinnerSlotId,
 					status: retroStatus,
 				}),
-			"Match edited",
+			{ setBusy: (b) => (busy = b), success: "Match edited" },
 		);
 		if (ok !== null) editMode = "none";
 	}
@@ -582,9 +559,12 @@
 {/snippet}
 
 <!-- Header styled like the bracket section bar (e.g. the "West" / "Championship"
-     headers): a #35302b rounded bar carrying the matchup, the status badge to
+     headers): a surface-raised rounded bar carrying the matchup, the status badge to
      its right, the controls far-right, and bracket · round on a second line. -->
-<header class="mb-3 rounded-lg px-3 py-2" style="background-color: #35302b;">
+<header
+	class="mb-3 rounded-lg px-3 py-2"
+	style="background-color: rgb(var(--color-surface-raised));"
+>
 	<div class="flex items-start justify-between gap-3">
 		<div class="min-w-0 flex-1">
 			<div class="flex flex-wrap items-center gap-x-2 gap-y-1">
@@ -662,7 +642,7 @@
 	{#if isPlaceholder}
 		<div
 			class="rounded-lg p-3 text-xs text-tan opacity-70"
-			style="background-color: #35302a;"
+			style="background-color: rgb(var(--color-surface-raised));"
 		>
 			This match is generated once the prior round finishes. Map, result, and
 			uploads aren't available yet — once both feeders report, the real match
@@ -670,7 +650,10 @@
 		</div>
 	{:else if match.game_id}
 		<!-- Result card: save-derived stats in three plain columns. -->
-		<div class="rounded-lg p-3" style="background-color: #35302a;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			{#if gameLoading && !gameData}
 				<p class="text-xs text-tan opacity-60">Loading game…</p>
 			{:else if gameData}
@@ -688,7 +671,7 @@
 							Winner
 						</p>
 						<p
-							class="flex items-center justify-center gap-1.5 text-sm font-bold text-[#DBDEE3]"
+							class="flex items-center justify-center gap-1.5 text-sm font-bold text-bright"
 						>
 							{#if winnerLabel}
 								<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
@@ -708,7 +691,7 @@
 							/>
 							Victory Type
 						</p>
-						<p class="truncate text-sm font-bold text-[#DBDEE3]">
+						<p class="truncate text-sm font-bold text-bright">
 							{victoryType ?? "—"}
 						</p>
 					</div>
@@ -719,7 +702,7 @@
 							<SpriteIcon category="icons" value="TURN" size={10} alt="Turns" />
 							Turns
 						</p>
-						<p class="truncate text-sm font-bold text-[#DBDEE3]">
+						<p class="truncate text-sm font-bold text-bright">
 							{totalTurns ?? "—"}
 						</p>
 					</div>
@@ -727,14 +710,20 @@
 			{/if}
 		</div>
 		{#if hasSparkline}
-			<div class="rounded-lg p-3" style="background-color: #35302a;">
+			<div
+				class="rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
 				<Chart option={sparklineOption} height="60px" />
 			</div>
 		{/if}
 	{:else if winnerLabel}
 		<!-- Decided without a save (forfeit / admin-set result): show only the
 		     winner — no save card with empty "—" stats. -->
-		<div class="rounded-lg p-3" style="background-color: #35302a;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<p
 				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
 			>
@@ -746,7 +735,7 @@
 				/>
 				Winner
 			</p>
-			<p class="flex items-center gap-1.5 text-sm font-bold text-[#DBDEE3]">
+			<p class="flex items-center gap-1.5 text-sm font-bold text-bright">
 				<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
 				<span class="truncate">{winnerLabel}</span>
 			</p>
@@ -754,7 +743,10 @@
 	{/if}
 
 	{#if mapName || canEditMap}
-		<div class="rounded-lg p-3" style="background-color: #35302a;">
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
 			<div class="flex items-center gap-1.5 text-sm text-tan">
 				<img src={MAP_ICON} alt="" class="h-4 w-4 shrink-0 opacity-80" />
 				<span class="truncate" title={mapName ?? undefined}>
@@ -797,7 +789,7 @@
 	{#if !isPlaceholder && (match.scheduled_at || match.stream_url || match.caster_name)}
 		<div
 			class="flex items-start gap-3 rounded-lg p-3"
-			style="background-color: #35302a;"
+			style="background-color: rgb(var(--color-surface-raised));"
 		>
 			{#if match.scheduled_at}
 				<div class="flex items-center gap-1.5 text-xs text-tan">
@@ -865,7 +857,7 @@
 	{#if editMode === "map"}
 		<div
 			class="flex flex-col gap-2 rounded-lg p-3"
-			style="background-color: #35302a;"
+			style="background-color: rgb(var(--color-surface-raised));"
 		>
 			<h3 class="text-xs font-bold text-tan">Change map</h3>
 			<label class="text-xs text-tan">
@@ -879,29 +871,17 @@
 					class="mt-1 w-full"
 				/>
 			</label>
-			<div class="flex justify-end gap-2">
-				<button
-					type="button"
-					class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-					onclick={() => (editMode = "none")}
-					disabled={busy}
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
-					class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
-					onclick={saveMapEdit}
-					disabled={busy}
-				>
-					Save
-				</button>
-			</div>
+			<FormFooter
+				onCancel={() => (editMode = "none")}
+				onConfirm={saveMapEdit}
+				confirmLabel="Save"
+				{busy}
+			/>
 		</div>
 	{:else if editMode === "retro"}
 		<div
 			class="flex flex-col gap-2 rounded-lg p-3"
-			style="background-color: #35302a;"
+			style="background-color: rgb(var(--color-surface-raised));"
 		>
 			<h3 class="text-xs font-bold text-tan">{retroEditLabel}</h3>
 			<label class="text-xs text-tan">
@@ -930,24 +910,12 @@
 					class="mt-1 w-full"
 				/>
 			</label>
-			<div class="flex justify-end gap-2">
-				<button
-					type="button"
-					class="rounded border border-tan px-3 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-					onclick={() => (editMode = "none")}
-					disabled={busy}
-				>
-					Cancel
-				</button>
-				<button
-					type="button"
-					class="bg-orange/20 hover:bg-orange/40 rounded border border-tan px-3 py-1 text-xs text-tan disabled:opacity-50"
-					onclick={saveRetroEdit}
-					disabled={busy}
-				>
-					Save
-				</button>
-			</div>
+			<FormFooter
+				onCancel={() => (editMode = "none")}
+				onConfirm={saveRetroEdit}
+				confirmLabel="Save"
+				{busy}
+			/>
 		</div>
 	{/if}
 
@@ -961,7 +929,7 @@
 				{/if}
 				{#if canUploadAsParticipant}
 					<a
-						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+						class="inline-flex items-center gap-1.5 rounded border border-input px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 						href="{resolve(
 							'/upload',
 						)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}"
@@ -986,7 +954,7 @@
 				{/if}
 				{#if canUploadAsObserver}
 					<a
-						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+						class="inline-flex items-center gap-1.5 rounded border border-input px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 						href="{resolve(
 							'/upload',
 						)}?tournament_match_id={match.match_id}&return_slug={tournament.slug}&observer=1"
@@ -1012,7 +980,7 @@
 				{#if canRetroEdit}
 					<button
 						type="button"
-						class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+						class="inline-flex items-center gap-1.5 rounded border border-input px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
 						onclick={openRetroEdit}
 						disabled={busy}
 					>
@@ -1037,7 +1005,7 @@
 			</div>
 			{#if match.game_id}
 				<a
-					class="inline-flex items-center gap-1.5 rounded border border-[#4a433b] px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+					class="inline-flex items-center gap-1.5 rounded border border-input px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 					href={resolve("/games/[id]", { id: match.game_id })}
 				>
 					View full game

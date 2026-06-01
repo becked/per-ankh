@@ -28,7 +28,7 @@
 		sideOffset = 8,
 		customAnchor = null,
 		contentClass = "w-[min(92vw,28rem)]",
-		frameClass = "border-4 border-[#35302B] bg-blue-gray p-5 shadow-lg",
+		frameClass = "border-4 border-surface-raised bg-blue-gray p-5 shadow-lg",
 		ariaLabel,
 		onOpenChange,
 		trigger,

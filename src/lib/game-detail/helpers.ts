@@ -199,15 +199,15 @@ export const YIELD_CHART_CONFIG: YieldChartConfig[] = [
 
 // ─── Shared data-table styling (game-detail data tabs) ───────────────
 // Visual tokens matching the player games table: a dark blue-gray frame
-// holding #2a2622 rounded card rows under a #241f1b toolbar-style header
+// holding surface rounded card rows under a surface-sunken toolbar-style header
 // bar. Round the first/last cell of each row inline with
 // `rounded-l-lg border-l` / `rounded-r-lg border-r`.
 export const TABLE_FRAME_CLASS = "flex gap-4 rounded-lg bg-blue-gray p-3";
 export const TABLE_CLASS = "w-full border-separate border-spacing-y-1.5";
 export const TABLE_HEADER_TH_CLASS =
-	"sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap border-y border-[#2a2622] bg-[#241f1b] px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg transition-colors hover:text-orange";
+	"sticky -top-4 z-10 cursor-pointer select-none whitespace-nowrap border-y border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg transition-colors hover:text-orange";
 export const TABLE_CELL_TD_CLASS =
-	"bg-[#2a2622] p-3 text-left text-tan transition-colors duration-200 group-hover:bg-[#3e362f]";
+	"bg-surface p-3 text-left text-tan transition-colors duration-200 group-hover:bg-surface-hover";
 
 // Column order: Nation, Name, Family, Founded, Culture, Specialists, Growth, Population, Tiles Bought
 // Default visible: Nation, Name, Family, Founded, Culture

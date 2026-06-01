@@ -502,7 +502,7 @@
 
 <style>
 	.flow-bracket {
-		background-color: #2a2622;
+		background-color: rgb(var(--color-surface));
 		border-radius: 0.5rem;
 		/* No left/right padding: the bracket sits inside the division card,
 		   which already supplies the horizontal gutter. */
@@ -537,7 +537,7 @@
 
 	.connector {
 		fill: none;
-		stroke: rgba(232, 216, 184, 0.25);
+		stroke: rgb(var(--color-tan-light) / 0.25);
 		stroke-width: 1.5;
 	}
 
@@ -551,14 +551,14 @@
 	}
 
 	.round-header {
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 		opacity: 0.75;
 		font-size: 0.75rem;
 		font-weight: 700;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		padding: 0 0.25rem 0.25rem;
-		border-bottom: 1px solid rgba(232, 216, 184, 0.15);
+		border-bottom: 1px solid rgb(var(--color-tan-light) / 0.15);
 	}
 
 	.gutter-header {
@@ -566,8 +566,8 @@
 	}
 
 	.bucket {
-		background-color: #35302b;
-		border: 1px solid rgba(232, 216, 184, 0.08);
+		background-color: rgb(var(--color-surface-raised));
+		border: 1px solid rgb(var(--color-tan-light) / 0.08);
 		border-radius: 0.375rem;
 		padding: 0.4rem 0.5rem;
 		display: flex;
@@ -577,7 +577,7 @@
 	}
 
 	.record-label {
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 		font-size: 0.7rem;
 		font-weight: 700;
 		opacity: 0.6;
@@ -596,8 +596,8 @@
 		gap: 0.15rem;
 		padding: 0.3rem 0.4rem;
 		border-radius: 0.25rem;
-		background-color: #2a2622;
-		color: var(--color-tan, #e8d8b8);
+		background-color: rgb(var(--color-surface));
+		color: rgb(var(--color-tan));
 		font-size: 0.75rem;
 		text-decoration: none;
 		transition: background-color 0.1s;
@@ -605,7 +605,7 @@
 	}
 
 	.match:hover {
-		background-color: #1f1c19;
+		background-color: rgb(var(--color-surface-sunken));
 	}
 
 	/* Hover-trace: a player's card stays lit on its path while every other
@@ -616,15 +616,15 @@
 	}
 
 	.match.on-path {
-		background-color: #34302a;
-		box-shadow: inset 0 0 0 1px rgba(232, 216, 184, 0.25);
+		background-color: rgb(var(--color-surface-raised));
+		box-shadow: inset 0 0 0 1px rgb(var(--color-tan-light) / 0.25);
 	}
 
 	.match-row.row-active {
 		margin: -0.1rem -0.2rem;
 		padding: 0.1rem 0.2rem;
 		border-radius: 0.2rem;
-		background-color: rgba(232, 216, 184, 0.1);
+		background-color: rgb(var(--color-tan-light) / 0.1);
 	}
 
 	.match-row {
@@ -654,7 +654,7 @@
 	}
 
 	.slot.winner {
-		color: var(--color-orange, #d97706);
+		color: rgb(var(--color-orange));
 		font-weight: 700;
 	}
 
@@ -681,11 +681,11 @@
 		white-space: nowrap;
 		font-size: 0.6rem;
 		opacity: 0.6;
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 	}
 
 	.gutter {
-		background-color: #35302b;
+		background-color: rgb(var(--color-surface-raised));
 		border-radius: 0.375rem;
 		padding: 0.5rem 0.6rem;
 		display: flex;
@@ -702,15 +702,15 @@
 	}
 
 	.gutter-label-advance {
-		color: rgba(140, 200, 120, 0.95);
+		color: rgb(var(--color-success) / 0.95);
 	}
 
 	.gutter-label-eliminate {
-		color: rgba(200, 110, 90, 0.95);
+		color: rgb(var(--color-danger) / 0.95);
 	}
 
 	.gutter-empty {
-		color: var(--color-tan, #e8d8b8);
+		color: rgb(var(--color-tan));
 		opacity: 0.4;
 		font-size: 0.75rem;
 		margin: 0;
@@ -742,15 +742,15 @@
 	}
 
 	.chip-advance {
-		background-color: rgba(120, 180, 100, 0.15);
-		border-color: rgba(120, 180, 100, 0.5);
-		color: rgba(180, 220, 170, 1);
+		background-color: rgb(var(--color-success) / 0.15);
+		border-color: rgb(var(--color-success) / 0.5);
+		color: rgb(var(--color-success));
 	}
 
 	.chip-eliminate {
-		background-color: rgba(180, 90, 70, 0.12);
-		border-color: rgba(180, 90, 70, 0.45);
-		color: rgba(220, 170, 160, 1);
+		background-color: rgb(var(--color-danger) / 0.12);
+		border-color: rgb(var(--color-danger) / 0.45);
+		color: rgb(var(--color-danger));
 		opacity: 0.85;
 	}
 

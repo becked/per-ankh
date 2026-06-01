@@ -32,11 +32,8 @@
 	} = $props();
 
 	const nationColor = $derived.by(() => {
-		if (!tile.owner_nation) return "var(--color-tan)";
-		return (
-			getCivilizationColor(tile.owner_nation.replace("NATION_", "")) ??
-			"var(--color-tan)"
-		);
+		if (!tile.owner_nation) return "rgb(var(--color-tan))";
+		return getCivilizationColor(tile.owner_nation) ?? "rgb(var(--color-tan))";
 	});
 
 	const cityName = $derived(
@@ -154,23 +151,23 @@
 <style>
 	.map-tooltip {
 		position: absolute;
-		background: rgba(26, 21, 16, 0.97);
-		border: 2px solid var(--color-black);
+		background: rgb(var(--color-surface-deep) / 0.97);
+		border: 2px solid rgb(var(--color-black));
 		border-radius: 6px;
 		padding: 8px 10px;
-		color: var(--color-tan);
+		color: rgb(var(--color-tan));
 		font-size: 11px;
 		line-height: 1.4;
 		pointer-events: none;
 		z-index: 100;
 		min-width: 160px;
 		max-width: 240px;
-		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+		box-shadow: 0 4px 12px rgb(var(--color-black) / 0.5);
 	}
 	.map-tooltip.pinned {
 		pointer-events: auto;
-		border-color: var(--color-tan);
-		box-shadow: 0 4px 16px rgba(0, 0, 0, 0.7);
+		border-color: rgb(var(--color-tan));
+		box-shadow: 0 4px 16px rgb(var(--color-black) / 0.7);
 	}
 	.header {
 		display: flex;
@@ -178,7 +175,7 @@
 		gap: 6px;
 		margin-bottom: 6px;
 		padding-bottom: 6px;
-		border-bottom: 1px solid #3a2f24;
+		border-bottom: 1px solid rgb(var(--color-border-tooltip));
 	}
 	.crests {
 		display: flex;
@@ -193,7 +190,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		text-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+		text-shadow: 0 1px 2px rgb(var(--color-black) / 0.6);
 	}
 	.capital-marker {
 		margin-left: 4px;
@@ -203,7 +200,7 @@
 	.close-btn {
 		background: none;
 		border: none;
-		color: var(--color-brown);
+		color: rgb(var(--color-brown));
 		cursor: pointer;
 		font-size: 16px;
 		line-height: 1;
@@ -212,7 +209,7 @@
 		flex-shrink: 0;
 	}
 	.close-btn:hover {
-		color: var(--color-tan);
+		color: rgb(var(--color-tan));
 	}
 	.close-btn.floating {
 		position: absolute;
@@ -227,12 +224,12 @@
 		align-items: baseline;
 	}
 	.label {
-		color: #7a6a55;
+		color: rgb(var(--color-muted));
 		font-size: 9.5px;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
 	.value {
-		color: var(--color-tan);
+		color: rgb(var(--color-tan));
 	}
 </style>

@@ -32,8 +32,14 @@
 	>
 		<!-- Left column: the overview flow. -->
 		<div>
-			<div class="rounded-lg p-4" style="background-color: #2a2622;">
-				<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="rounded-lg p-4"
+				style="background-color: rgb(var(--color-surface));"
+			>
+				<div
+					class="rounded-lg p-3"
+					style="background-color: rgb(var(--color-surface-raised));"
+				>
 					<div class="space-y-3 text-xs text-tan">
 						<section>
 							<h3 class="mb-1 text-sm font-bold">The short version</h3>
@@ -119,8 +125,14 @@
 
 		<!-- Right column: seeding + maps. -->
 		<div class="space-y-12">
-			<div class="rounded-lg p-4" style="background-color: #2a2622;">
-				<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="rounded-lg p-4"
+				style="background-color: rgb(var(--color-surface));"
+			>
+				<div
+					class="rounded-lg p-3"
+					style="background-color: rgb(var(--color-surface-raised));"
+				>
 					<div class="space-y-3 text-xs text-tan">
 						<section>
 							<h3 class="mb-1 text-sm font-bold">Seeding cascade</h3>
@@ -165,8 +177,14 @@
 				</div>
 			</div>
 
-			<div class="rounded-lg p-4" style="background-color: #2a2622;">
-				<div class="rounded-lg p-3" style="background-color: #35302B;">
+			<div
+				class="rounded-lg p-4"
+				style="background-color: rgb(var(--color-surface));"
+			>
+				<div
+					class="rounded-lg p-3"
+					style="background-color: rgb(var(--color-surface-raised));"
+				>
 					<div class="space-y-3 text-xs text-tan">
 						<section>
 							<h3 class="mb-1 text-sm font-bold">How maps are chosen</h3>

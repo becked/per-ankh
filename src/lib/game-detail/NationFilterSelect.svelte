@@ -20,20 +20,20 @@
 
 <Select.Root type="multiple" bind:value>
 	<Select.Trigger
-		class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+		class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
 	>
 		<span class="truncate">{label}</span>
 		<span class="ml-2 text-tan opacity-60">▼</span>
 	</Select.Trigger>
 	<Select.Portal>
 		<Select.Content
-			class="z-50 max-h-64 overflow-y-auto rounded bg-[#241f1b] shadow-lg"
+			class="z-50 max-h-64 overflow-y-auto rounded bg-surface-sunken shadow-lg"
 		>
 			<Select.Viewport>
 				{#if nations.length > 0}
 					<Select.Group>
 						<Select.GroupHeading
-							class="border-b border-[#2a2622] px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
+							class="border-b border-surface px-3 py-2 text-xs font-bold uppercase tracking-wide text-tan"
 						>
 							{heading}
 						</Select.GroupHeading>
@@ -41,7 +41,7 @@
 							<Select.Item
 								value={`nation:${nation}`}
 								label={formatEnum(nation, "NATION_")}
-								class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+								class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
 							>
 								{#snippet children({ selected })}
 									{formatEnum(nation, "NATION_")}

@@ -20,7 +20,7 @@
 	// Nation accent color for the Nation cell, mirroring the games table.
 	function nationColor(nation: string | null): string | undefined {
 		if (!nation) return undefined;
-		return getCivilizationColor(nation.replace(/^NATION_/, "")) ?? undefined;
+		return getCivilizationColor(nation) ?? undefined;
 	}
 
 	let {
@@ -157,21 +157,21 @@
 					onValueChange={handleColumnVisibilityChange}
 				>
 					<Select.Trigger
-						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+						class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
 					>
 						<span class="truncate">Columns</span>
 						<span class="ml-2 text-tan opacity-60">▼</span>
 					</Select.Trigger>
 					<Select.Portal>
 						<Select.Content
-							class="z-50 max-h-80 overflow-y-auto rounded bg-[#241f1b] shadow-lg"
+							class="z-50 max-h-80 overflow-y-auto rounded bg-surface-sunken shadow-lg"
 						>
 							<Select.Viewport>
 								{#each CITY_COLUMNS as column (column.key)}
 									<Select.Item
 										value={column.key}
 										label={column.label}
-										class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+										class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
 									>
 										{#snippet children({ selected })}
 											<span>{column.label}</span>

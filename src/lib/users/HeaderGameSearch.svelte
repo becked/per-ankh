@@ -169,7 +169,7 @@
 
 	{#if open}
 		<div
-			class="absolute right-0 z-50 mt-1 w-72 overflow-hidden rounded-lg border-2 border-black bg-[#2a2622] shadow-lg"
+			class="absolute right-0 z-50 mt-1 w-72 overflow-hidden rounded-lg border-2 border-black bg-surface shadow-lg"
 		>
 			{#if results.length === 0}
 				<div class="px-3 py-2 text-xs text-tan opacity-70">No games match</div>
@@ -180,9 +180,9 @@
 						<button
 							bind:this={rowEls[i]}
 							type="button"
-							class="flex w-full flex-col items-start gap-0.5 border-b border-black px-3 py-2 text-left last:border-b-0 hover:bg-[#35302b] {i ===
+							class="flex w-full flex-col items-start gap-0.5 border-b border-black px-3 py-2 text-left last:border-b-0 hover:bg-surface-raised {i ===
 							highlighted
-								? 'bg-[#35302b]'
+								? 'bg-surface-raised'
 								: ''}"
 							onclick={() => pick(g)}
 							onmouseenter={() => (highlighted = i)}

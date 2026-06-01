@@ -6,9 +6,10 @@ src/lib/types/
 src-tauri/target/
 *.db
 
-# Hand-authored HTML containing mermaid blocks with `<id>` placeholders
-# that prettier's HTML parser misreads as unclosed tags.
-docs/flow-security-walkthrough.html
+# docs/ is hand-authored — design notes plus HTML walkthroughs whose mermaid
+# `<id>` placeholders prettier's HTML parser misreads as unclosed tags. Keep
+# prettier (incl. its Tailwind class sorter) out of it entirely.
+docs/
 
 # Markdown is hand-authored. Prettier's table realignment and emphasis
 # escaping are high-churn, low-value for prose — and non-idempotent on some

@@ -1,6 +1,7 @@
 // Shared helpers used by both legacy share endpoints and the new cloud
 // auth/games endpoints.
 
+import * as v from "valibot";
 import { logWarn, setErrorCode } from "./log";
 
 export interface CommonEnv {
@@ -136,6 +137,55 @@ export function errorResponse(
 	if (code) body.code = code;
 	if (extra) Object.assign(body, extra);
 	return jsonResponse(body, status, cors);
+}
+
+// Parse + validate a JSON request body against a Valibot schema, returning a
+// discriminated union the caller can branch on. Shared by the tournament
+// admin/player handlers (and available to any JSON endpoint).
+//
+// Defense-in-depth against CSRF: SameSite=Lax already blocks cross-origin POST
+// in modern browsers, but an explicit Content-Type check rejects form-encoded
+// submissions that could otherwise reach a JSON endpoint with a non-empty body.
+export async function parseJsonBody<T>(
+	request: Request,
+	schema: v.GenericSchema<unknown, T>,
+	cors: Record<string, string>,
+): Promise<{ ok: true; body: T } | { ok: false; response: Response }> {
+	const rawType = request.headers.get("Content-Type") ?? "";
+	const baseType = rawType.split(";", 1)[0].trim().toLowerCase();
+	if (baseType !== "application/json") {
+		return {
+			ok: false,
+			response: errorResponse(
+				"Content-Type must be application/json",
+				415,
+				cors,
+				"UNSUPPORTED_MEDIA_TYPE",
+			),
+		};
+	}
+	let parsed: unknown;
+	try {
+		parsed = await request.json();
+	} catch {
+		return {
+			ok: false,
+			response: errorResponse("Invalid JSON body", 400, cors, "INVALID_JSON"),
+		};
+	}
+	const result = v.safeParse(schema, parsed);
+	if (!result.success) {
+		return {
+			ok: false,
+			response: errorResponse(
+				`Invalid body: ${result.issues[0]?.message ?? "unknown"}`,
+				400,
+				cors,
+				"INVALID_BODY",
+			),
+		};
+	}
+	return { ok: true, body: result.output };
 }
 
 // True if the inbound request was made over HTTPS. Determines whether we

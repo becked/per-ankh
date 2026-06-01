@@ -92,7 +92,7 @@
 
 <section
 	class="mx-auto mb-2 w-fit rounded-lg p-3"
-	style="background-color: #35302B;"
+	style="background-color: rgb(var(--color-surface-raised));"
 >
 	{#if rows.length === 0}
 		<p class="text-xs text-tan opacity-70">No participants yet.</p>

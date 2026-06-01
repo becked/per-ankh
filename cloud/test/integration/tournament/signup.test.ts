@@ -163,7 +163,7 @@ describe("POST /v1/tournaments/:id/signup", () => {
 			as: player,
 			body: { division: "C" },
 		});
-		await expectErrorCode(res, { status: 400, code: "VALIDATION_ERROR" });
+		await expectErrorCode(res, { status: 400, code: "INVALID_BODY" });
 	});
 
 	it("emits a tournament_self_signup event for audit", async () => {

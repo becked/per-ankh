@@ -30,13 +30,13 @@
 			icon: "text-tan opacity-50",
 			input:
 				"py-1 border-none rounded-full text-tan text-sm font-normal placeholder-tan placeholder:opacity-50",
-			bg: "background-color: #403A33;",
+			bg: "background-color: rgb(var(--color-surface-raised-hover));",
 		},
 		field: {
 			icon: "text-brown",
 			input:
 				"py-2 rounded text-tan text-sm placeholder-brown placeholder:opacity-70",
-			bg: "background-color: #201a13;",
+			bg: "background-color: rgb(var(--color-surface-sunken));",
 		},
 	};
 

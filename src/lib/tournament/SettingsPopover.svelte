@@ -136,7 +136,10 @@
 	panels are gone); in setup the modal is just Admins + Delete below. -->
 	{#if tournament.status !== "setup"}
 		<div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
-			<div class="rounded-lg p-4" style="background-color: #2a2622;">
+			<div
+				class="rounded-lg p-4"
+				style="background-color: rgb(var(--color-surface));"
+			>
 				<TournamentSettingsForm {tournament} canEdit={isAdmin} />
 			</div>
 			<div>
@@ -149,7 +152,10 @@
 	{/if}
 
 	{#if isAdmin}
-		<div class="mt-4 rounded-lg p-4" style="background-color: #2a2622;">
+		<div
+			class="mt-4 rounded-lg p-4"
+			style="background-color: rgb(var(--color-surface));"
+		>
 			<TournamentAdminManager {tournament} />
 		</div>
 	{/if}
@@ -157,7 +163,7 @@
 	{#if isAdmin}
 		<div
 			class="mt-4 flex items-center justify-between gap-3 rounded-lg p-4"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			<div class="text-xs text-tan">
 				<p class="font-bold">Export CSV</p>
@@ -179,7 +185,7 @@
 	{#if canDelete}
 		<div
 			class="mt-4 flex items-center justify-between gap-3 rounded-lg p-4"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			<div class="text-xs text-tan">
 				<p class="font-bold">Delete tournament</p>

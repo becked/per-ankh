@@ -415,7 +415,7 @@
 
 <div
 	class="rounded-lg border border-tan p-4"
-	style="background-color: #2a2622;"
+	style="background-color: rgb(var(--color-surface));"
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Timeline</h3>
 
@@ -458,13 +458,13 @@
 	{:else}
 		<div
 			class="overflow-x-auto rounded-lg p-3"
-			style="background-color: #201a13;"
+			style="background-color: rgb(var(--color-surface-sunken));"
 		>
 			<table class="border-collapse">
 				<thead>
 					<tr>
 						<th
-							class="sticky left-0 z-20 bg-[#201a13] px-2 py-1 text-left text-xs font-bold text-brown"
+							class="sticky left-0 z-20 bg-surface-sunken px-2 py-1 text-left text-xs font-bold text-brown"
 						>
 							Turn
 						</th>
@@ -500,10 +500,10 @@
 						{/each}
 					</tr>
 					<tr>
-						<td class="sticky left-0 z-20 h-0.5 bg-[#201a13]"></td>
+						<td class="sticky left-0 z-20 h-0.5 bg-surface-sunken"></td>
 						{#if showMetrics}
 							{#each METRIC_COLUMNS as _ (_.key)}
-								<td class="bg-brown/30 h-0.5"></td>
+								<td class="h-0.5 bg-brown/30"></td>
 							{/each}
 						{/if}
 						{#each playerColumns as player (player.nation ?? player.index)}
@@ -520,9 +520,9 @@
 				<tbody>
 					{#each tableRows as row (row.turn)}
 						{@const metrics = turnMetricsMap.get(row.turn)}
-						<tr class="border-brown/30 hover:bg-brown/10 border-b">
+						<tr class="border-b border-brown/30 hover:bg-brown/10">
 							<td
-								class="sticky left-0 z-10 bg-[#201a13] px-2 py-0.5 align-top text-xs font-bold text-tan"
+								class="sticky left-0 z-10 bg-surface-sunken px-2 py-0.5 align-top text-xs font-bold text-tan"
 							>
 								{row.turn}
 							</td>

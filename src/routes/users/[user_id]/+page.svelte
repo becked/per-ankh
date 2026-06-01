@@ -54,7 +54,7 @@
 	);
 
 	const triggerClass =
-		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-[#35302B] data-[state=inactive]:bg-[#2a2622]";
+		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-surface-raised data-[state=inactive]:bg-surface";
 
 	async function onTabChange(value: string) {
 		if (value === data.tab) return;
@@ -99,27 +99,27 @@
 					<div class="flex flex-wrap gap-2">
 						<div
 							class="min-w-[88px] rounded px-2 py-1"
-							style="background-color: #2a2622;"
+							style="background-color: rgb(var(--color-surface));"
 						>
 							<p class="mb-0.5 text-[10px] font-bold text-gray-400">Saves</p>
-							<p class="text-[10px] font-bold text-[#DBDEE3]">
+							<p class="text-[10px] font-bold text-bright">
 								{summary.total_games}
 							</p>
 						</div>
 
 						<div
 							class="min-w-[88px] rounded px-2 py-1"
-							style="background-color: #2a2622;"
+							style="background-color: rgb(var(--color-surface));"
 						>
 							<p class="mb-0.5 text-[10px] font-bold text-gray-400">Win Rate</p>
-							<p class="text-[10px] font-bold text-[#DBDEE3]">
+							<p class="text-[10px] font-bold text-bright">
 								{#if winRatePct != null}{winRatePct}%{:else}—{/if}
 							</p>
 						</div>
 
 						<div
 							class="min-w-[88px] rounded px-2 py-1"
-							style="background-color: #2a2622;"
+							style="background-color: rgb(var(--color-surface));"
 						>
 							<p
 								class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
@@ -134,7 +134,7 @@
 								{/if}
 								Favorite Nation
 							</p>
-							<p class="text-[10px] font-bold text-[#DBDEE3]">
+							<p class="text-[10px] font-bold text-bright">
 								{summary.favorite_nation
 									? formatEnum(summary.favorite_nation, "NATION_")
 									: "—"}
@@ -143,12 +143,12 @@
 
 						<div
 							class="min-w-[88px] rounded px-2 py-1"
-							style="background-color: #2a2622;"
+							style="background-color: rgb(var(--color-surface));"
 						>
 							<p class="mb-0.5 text-[10px] font-bold text-gray-400">
 								Favorite Day
 							</p>
-							<p class="text-[10px] font-bold text-[#DBDEE3]">
+							<p class="text-[10px] font-bold text-bright">
 								{favoriteDay ?? "—"}
 							</p>
 						</div>
@@ -168,9 +168,12 @@
 				<Tabs.Root value={data.tab} onValueChange={onTabChange}>
 					<!-- Tabs live inside the light-brown panel; the list is a floating
 				     chip bar matching the stats subtabs. -->
-					<div class="rounded-lg p-4" style="background-color: #35302B;">
+					<div
+						class="rounded-lg p-4"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
 						<Tabs.List
-							class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-[#2a2622] bg-[#241f1b] p-2 shadow-lg"
+							class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 						>
 							<Tabs.Trigger value="overview" class={triggerClass}
 								>Overview</Tabs.Trigger

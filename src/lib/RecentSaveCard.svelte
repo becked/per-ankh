@@ -3,6 +3,7 @@
 	import { resolve } from "$app/paths";
 	import Chart from "$lib/Chart.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import StatTile from "$lib/StatTile.svelte";
 	import type { PublicRecentGame } from "$lib/api-cloud";
 	import {
 		formatEnum,
@@ -20,8 +21,7 @@
 
 	function playerColor(nation: string | null, idx: number): string {
 		if (nation) {
-			const stripped = nation.replace(/^NATION_/, "");
-			const c = getCivilizationColor(stripped);
+			const c = getCivilizationColor(nation);
 			if (c) return c;
 		}
 		return getChartColor(idx);
@@ -144,8 +144,8 @@
 </script>
 
 <div
-	class="relative rounded-lg p-3 transition-colors hover:bg-[#3e3833]"
-	style="background-color: #35302b;"
+	class="relative rounded-lg p-3 transition-colors hover:bg-surface-hover"
+	style="background-color: rgb(var(--color-surface-raised));"
 >
 	<!-- Stretched-link overlay: the whole card navigates to the game, but the
 	     uploader link below sits above this overlay (higher z-index) so it wins
@@ -199,10 +199,8 @@
 	     featured-player row below). Inner boxes use the section bg color
 	     so they sit visually "inside" the card. -->
 	<div class="mb-2 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Player">
+			{#snippet icon()}
 				{#if humanNation}
 					<SpriteIcon
 						category="crests"
@@ -211,93 +209,69 @@
 						alt={formatEnum(humanNation, "NATION_")}
 					/>
 				{/if}
-				Player
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">
-				{humanNation ? formatEnum(humanNation, "NATION_") : "—"}
-			</p>
-		</div>
+			{/snippet}
+			{humanNation ? formatEnum(humanNation, "NATION_") : "—"}
+		</StatTile>
 
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Winner">
+			{#snippet icon()}
 				<SpriteIcon
 					category="icons"
 					value="ACHIEVEMENT_WIN"
 					size={10}
 					alt="Winner"
 				/>
-				Winner
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">{winnerLabel}</p>
-		</div>
+			{/snippet}
+			{winnerLabel}
+		</StatTile>
 
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Victory Type">
+			{#snippet icon()}
 				<SpriteIcon
 					category="icons"
 					value="VICTORY_NORMAL"
 					size={10}
 					alt="Victory Type"
 				/>
-				Victory Type
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">
-				{game.victory_type ? formatEnum(game.victory_type, "VICTORY_") : "—"}
-			</p>
-		</div>
+			{/snippet}
+			{game.victory_type ? formatEnum(game.victory_type, "VICTORY_") : "—"}
+		</StatTile>
 
-		<div class="rounded p-2" style="background-color: #2a2622;">
-			<p
-				class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-			>
+		<StatTile label="Map">
+			{#snippet icon()}
 				<SpriteIcon category="icons" value="MAP_OVERVIEW" size={10} alt="Map" />
-				Map
-			</p>
-			<p class="truncate text-sm font-bold text-[#DBDEE3]">
-				{game.map_class
-					? formatMapClass(game.map_class)
-					: game.map_size
-						? formatEnum(game.map_size, "MAPSIZE_")
-						: "—"}
-			</p>
-		</div>
+			{/snippet}
+			{game.map_class
+				? formatMapClass(game.map_class)
+				: game.map_size
+					? formatEnum(game.map_size, "MAPSIZE_")
+					: "—"}
+		</StatTile>
 
 		{#if isMultiplayer}
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+			<StatTile label="Multiplayer">
+				{#snippet icon()}
 					<SpriteIcon
 						category="icons"
 						value="MULTIPLAYER"
 						size={10}
 						alt="Multiplayer"
 					/>
-					Multiplayer
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">Multiplayer</p>
-			</div>
+				{/snippet}
+				Multiplayer
+			</StatTile>
 		{:else}
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+			<StatTile label="Difficulty">
+				{#snippet icon()}
 					<SpriteIcon
 						category="crests"
 						value="TRIBE_REBELS"
 						size={10}
 						alt="Difficulty"
 					/>
-					Difficulty
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">
-					{game.difficulty ? formatEnum(game.difficulty, "DIFFICULTY_") : "—"}
-				</p>
-			</div>
+				{/snippet}
+				{game.difficulty ? formatEnum(game.difficulty, "DIFFICULTY_") : "—"}
+			</StatTile>
 		{/if}
 	</div>
 
@@ -306,76 +280,51 @@
 	     CITY_FOUNDED / TECH_DISCOVERED / LAW_ADOPTED / STATS. -->
 	{#if featured && (featured.cities_total != null || featured.techs_completed != null || featured.laws_count != null || featured.final_points != null)}
 		<div class="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-5">
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+			<StatTile label="Cities">
+				{#snippet icon()}
 					<SpriteIcon
 						category="icons"
 						value="CITY_FOUNDED"
 						size={10}
 						alt="Cities"
 					/>
-					Cities
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">
-					{featured.cities_total ?? "—"}
-				</p>
-			</div>
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+				{/snippet}
+				{featured.cities_total ?? "—"}
+			</StatTile>
+			<StatTile label="Techs">
+				{#snippet icon()}
 					<SpriteIcon
 						category="techs"
 						value="TECH_DISCOVERED"
 						size={10}
 						alt="Techs"
 					/>
-					Techs
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">
-					{featured.techs_completed ?? "—"}
-				</p>
-			</div>
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+				{/snippet}
+				{featured.techs_completed ?? "—"}
+			</StatTile>
+			<StatTile label="Laws">
+				{#snippet icon()}
 					<SpriteIcon
 						category="laws"
 						value="LAW_ADOPTED"
 						size={10}
 						alt="Laws"
 					/>
-					Laws
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">
-					{featured.laws_count ?? "—"}
-				</p>
-			</div>
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+				{/snippet}
+				{featured.laws_count ?? "—"}
+			</StatTile>
+			<StatTile label="VP">
+				{#snippet icon()}
 					<SpriteIcon category="icons" value="STATS" size={10} alt="VP" />
-					VP
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">
-					{featured.final_points ?? "—"}
-				</p>
-			</div>
-			<div class="rounded p-2" style="background-color: #2a2622;">
-				<p
-					class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-				>
+				{/snippet}
+				{featured.final_points ?? "—"}
+			</StatTile>
+			<StatTile label="Turns">
+				{#snippet icon()}
 					<SpriteIcon category="icons" value="TURN" size={10} alt="Turns" />
-					Turns
-				</p>
-				<p class="truncate text-sm font-bold text-[#DBDEE3]">
-					{game.total_turns}
-				</p>
-			</div>
+				{/snippet}
+				{game.total_turns}
+			</StatTile>
 		</div>
 	{/if}
 
@@ -383,7 +332,10 @@
 		<!-- Dark chart background matches CHART_THEME.backgroundColor used
 		     by the game-detail charts, so this sparkline reads as the same
 		     visual family. -->
-		<div class="rounded p-1" style="background-color: #211a12;">
+		<div
+			class="rounded p-1"
+			style="background-color: rgb(var(--color-surface-sunken));"
+		>
 			<Chart option={sparklineOption} height="60px" />
 		</div>
 	{/if}

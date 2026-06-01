@@ -11,7 +11,7 @@
 	<!-- Summary Section - use fixed min-widths to prevent layout shift -->
 	<div
 		class="mb-6 rounded-lg border-2 border-black p-2"
-		style="background-color: #36302a;"
+		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		<div class="flex justify-evenly">
 			<!-- Left Column: Player, Winner & Victory Type -->
@@ -22,24 +22,27 @@
 					class="text-right text-xs font-bold uppercase tracking-wide text-brown"
 					>Player:</span
 				>
-				<span class="invisible text-xl font-bold" style="color: #EEEEEE;"
-					>X</span
+				<span
+					class="invisible text-xl font-bold"
+					style="color: rgb(var(--color-gray-200));">X</span
 				>
 
 				<span
 					class="text-right text-xs font-bold uppercase tracking-wide text-brown"
 					>Winner:</span
 				>
-				<span class="invisible text-xl font-bold" style="color: #EEEEEE;"
-					>X</span
+				<span
+					class="invisible text-xl font-bold"
+					style="color: rgb(var(--color-gray-200));">X</span
 				>
 
 				<span
 					class="text-right text-xs font-bold uppercase tracking-wide text-brown"
 					>Victory Type:</span
 				>
-				<span class="invisible text-xl font-bold" style="color: #EEEEEE;"
-					>X</span
+				<span
+					class="invisible text-xl font-bold"
+					style="color: rgb(var(--color-gray-200));">X</span
 				>
 			</div>
 
@@ -51,24 +54,27 @@
 					class="text-right text-xs font-bold uppercase tracking-wide text-brown"
 					>Map:</span
 				>
-				<span class="invisible text-xl font-bold" style="color: #EEEEEE;"
-					>X</span
+				<span
+					class="invisible text-xl font-bold"
+					style="color: rgb(var(--color-gray-200));">X</span
 				>
 
 				<span
 					class="text-right text-xs font-bold uppercase tracking-wide text-brown"
 					>Turns:</span
 				>
-				<span class="invisible text-xl font-bold" style="color: #EEEEEE;"
-					>X</span
+				<span
+					class="invisible text-xl font-bold"
+					style="color: rgb(var(--color-gray-200));">X</span
 				>
 
 				<span
 					class="text-right text-xs font-bold uppercase tracking-wide text-brown"
 					>Nations:</span
 				>
-				<span class="invisible text-xl font-bold" style="color: #EEEEEE;"
-					>X</span
+				<span
+					class="invisible text-xl font-bold"
+					style="color: rgb(var(--color-gray-200));">X</span
 				>
 			</div>
 		</div>
@@ -78,61 +84,61 @@
 	<div class="flex">
 		<div
 			class="rounded-tl-lg border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #35302B;"
+			style="background-color: rgb(var(--color-surface-raised));"
 		>
 			Overview
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Events
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Laws
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Techs
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Yields
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Military
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Cities
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Improvements
 		</div>
 		<div
 			class="border-2 border-b-0 border-r-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Map
 		</div>
 		<div
 			class="rounded-tr-lg border-2 border-b-0 border-black px-3 py-2 text-sm font-bold text-tan"
-			style="background-color: #2a2622;"
+			style="background-color: rgb(var(--color-surface));"
 		>
 			Settings
 		</div>
@@ -141,6 +147,6 @@
 	<!-- Tab Content area -->
 	<div
 		class="min-h-[400px] rounded-b-lg border-2 border-t-0 border-black p-8"
-		style="background-color: #35302B;"
+		style="background-color: rgb(var(--color-surface-raised));"
 	></div>
 </main>
