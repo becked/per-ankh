@@ -133,8 +133,14 @@ export function formatScheduledWithLocal(
 		hour12: false,
 	};
 
-	const utcDate = d.toLocaleDateString("en-CA", { ...dateOpts, timeZone: "UTC" });
-	const utcTime = d.toLocaleTimeString("en-CA", { ...timeOpts, timeZone: "UTC" });
+	const utcDate = d.toLocaleDateString("en-CA", {
+		...dateOpts,
+		timeZone: "UTC",
+	});
+	const utcTime = d.toLocaleTimeString("en-CA", {
+		...timeOpts,
+		timeZone: "UTC",
+	});
 	const localDate = d.toLocaleDateString("en-CA", dateOpts);
 	const localTime = d.toLocaleTimeString("en-CA", timeOpts);
 
