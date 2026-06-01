@@ -161,6 +161,44 @@ export function formatScheduledWithLocal(
 }
 
 /**
+ * Formats an ISO instant in a single chosen timezone, e.g. "May 30, 14:30 UTC"
+ * (zone="utc") or "May 30, 07:30 PDT" (zone="local"). Unlike
+ * {@link formatScheduledWithLocal}, which always shows both, this renders one
+ * zone — for surfaces with an explicit UTC/Local toggle where the viewer has
+ * already chosen which clock to read.
+ *
+ * @param iso - ISO-8601 instant string, or null/undefined
+ * @param zone - "utc" for the canonical UTC clock, "local" for the viewer's
+ * @returns "MMM D, HH:MM <TZ>", or "" when the input is empty/invalid
+ */
+export function formatScheduledInZone(
+	iso: string | null | undefined,
+	zone: "utc" | "local",
+): string {
+	if (!iso) return "";
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return "";
+
+	if (zone === "utc") {
+		const utc = formatScheduledUtc(iso);
+		return utc ? `${utc} UTC` : "";
+	}
+
+	const dateTime = d.toLocaleString("en-CA", {
+		month: "short",
+		day: "numeric",
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
+	});
+	const tzName =
+		new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+			.formatToParts(d)
+			.find((p) => p.type === "timeZoneName")?.value ?? "";
+	return tzName ? `${dateTime} ${tzName}` : dateTime;
+}
+
+/**
  * Formats a game title for display, using intelligent fallbacks.
  *
  * Rules (first match wins):

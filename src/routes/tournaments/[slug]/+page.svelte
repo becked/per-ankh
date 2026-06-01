@@ -25,6 +25,7 @@
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
 	import TournamentHeader from "$lib/tournament/TournamentHeader.svelte";
+	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import {
 		headerStatusMeta,
 		type HeaderHero,
@@ -122,59 +123,11 @@
 
 	// Slot identity maps. Union of swiss standings (per-division) and
 	// championship bracket slots — a slot can appear in both during the
-	// championship phase.
-	const slotLabels = $derived.by(() => {
-		const out: Record<string, string> = {};
-		for (const div of ["A", "B"] as const) {
-			for (const s of data.standings.divisions[div].standings) {
-				if (s.discord_username) out[s.slot_id] = s.discord_username;
-			}
-		}
-		for (const s of data.bracket.slots) {
-			if (s.discord_username) out[s.slot_id] = s.discord_username;
-		}
-		return out;
-	});
-
-	const slotUserIds = $derived.by(() => {
-		const out: Record<string, string | null> = {};
-		for (const div of ["A", "B"] as const) {
-			for (const s of data.standings.divisions[div].standings) {
-				out[s.slot_id] = s.user_id;
-			}
-		}
-		for (const s of data.bracket.slots) {
-			out[s.slot_id] = s.user_id;
-		}
-		return out;
-	});
-
-	// Avatar URL per slot (null → unclaimed → enlist-icon fallback). Same
-	// standings ∪ bracket union as slotLabels; consumed by the match modal.
-	const slotAvatars = $derived.by(() => {
-		const out: Record<string, string | null> = {};
-		for (const div of ["A", "B"] as const) {
-			for (const s of data.standings.divisions[div].standings) {
-				out[s.slot_id] = s.avatar_url;
-			}
-		}
-		for (const s of data.bracket.slots) {
-			out[s.slot_id] = s.avatar_url;
-		}
-		return out;
-	});
-
-	// Upcoming scheduled matches across every bracket/division, for the header
-	// Schedule view: still-pending matches that carry a scheduled time, soonest
-	// first. scheduled_at is an ISO-8601 instant, so lexical order is chrono.
-	const scheduledMatches = $derived(
-		data.matches
-			.filter((m) => m.status === "pending" && m.scheduled_at != null)
-			.slice()
-			.sort((a, b) =>
-				(a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""),
-			),
-	);
+	// championship phase. Consumed by the match popover and slotLabelFor.
+	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
+	const slotLabels = $derived(slotMaps.labels);
+	const slotUserIds = $derived(slotMaps.userIds);
+	const slotAvatars = $derived(slotMaps.avatars);
 
 	// --- Match modal state. pushState is shallow routing — page.url updates
 	// in the browser but page.state is the actually-reactive source. So we
@@ -733,11 +686,6 @@
 					{isAdmin}
 					{canSignUp}
 					hasViewerSlot={viewerSlot !== null}
-					{scheduledMatches}
-					{slotLabels}
-					{slotUserIds}
-					{slotAvatars}
-					onSubstitute={isAdmin ? substituteSlot : undefined}
 					{busy}
 					{startReady}
 					{transitionReady}

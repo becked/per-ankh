@@ -1,14 +1,13 @@
 <script lang="ts">
+	import { resolve } from "$app/paths";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import type {
 		CombinedQualifier,
 		TournamentDetail,
-		TournamentMatch,
 		UserMe,
 	} from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import Progress from "$lib/ui/Progress.svelte";
-	import ScheduleListPopover from "./ScheduleListPopover.svelte";
 	import SettingsPopover from "./SettingsPopover.svelte";
 	import SignedUpPopover from "./SignedUpPopover.svelte";
 	import SignupPopover from "./SignupPopover.svelte";
@@ -32,21 +31,6 @@
 		isAdmin: boolean;
 		canSignUp: boolean;
 		hasViewerSlot: boolean;
-		// Upcoming (pending, time-set) matches across all brackets, for the
-		// header Schedule view, plus the slot identity maps and substitute
-		// handler the match detail it opens needs (user is threaded above).
-		scheduledMatches: TournamentMatch[];
-		slotLabels: Record<string, string>;
-		slotUserIds: Record<string, string | null>;
-		slotAvatars: Record<string, string | null>;
-		onSubstitute?: (
-			// eslint-disable-next-line no-unused-vars -- param names are documentary
-			slotId: string,
-			// eslint-disable-next-line no-unused-vars -- param names are documentary
-			newUsername: string,
-			// eslint-disable-next-line no-unused-vars -- param names are documentary
-			userId: string | null,
-		) => void;
 		busy: boolean;
 		startReady: boolean;
 		transitionReady: boolean;
@@ -70,11 +54,6 @@
 		isAdmin,
 		canSignUp,
 		hasViewerSlot,
-		scheduledMatches,
-		slotLabels,
-		slotUserIds,
-		slotAvatars,
-		onSubstitute,
 		busy,
 		startReady,
 		transitionReady,
@@ -139,15 +118,17 @@
 
 		<div class="flex flex-shrink-0 items-center gap-2">
 			{#if tournament.status !== "setup"}
-				<ScheduleListPopover
-					{scheduledMatches}
-					{slotLabels}
-					{slotUserIds}
-					{slotAvatars}
-					{tournament}
-					{user}
-					{onSubstitute}
-				/>
+				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() result; rule doesn't see resolve() through the href expression -->
+				<a
+					href={resolve("/tournaments/[slug]/matches", {
+						slug: tournament.slug,
+					})}
+					class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
+					aria-label="Matches"
+					title="Matches"
+				>
+					Matches
+				</a>
 			{/if}
 			{#if hasViewerSlot}
 				<SignedUpPopover {tournament} {busy} {onWithdraw} />

@@ -1,0 +1,755 @@
+<script lang="ts">
+	// Tournament matches page. Two views, switched by the segmented control the
+	// bracket/standings cards use: a sortable, filterable matches table (styled
+	// like the game-detail Cities tab) and a monthly Calendar. A UTC/Local toggle
+	// picks the active clock (times render in one zone; the calendar buckets days
+	// by it). Clicking any match opens the match card anchored at the click point.
+	import { fade } from "svelte/transition";
+	import { invalidateAll } from "$app/navigation";
+	import { resolve } from "$app/paths";
+	import { page } from "$app/state";
+	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
+	import {
+		ApiError,
+		cloudApi,
+		type TournamentMatch,
+		type UserMe,
+	} from "$lib/api-cloud";
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import TableFilterColumn from "$lib/game-detail/TableFilterColumn.svelte";
+	import {
+		type TableState,
+		toggleSort,
+		TABLE_FRAME_CLASS,
+		TABLE_CLASS,
+		TABLE_HEADER_TH_CLASS,
+		TABLE_CELL_TD_CLASS,
+	} from "$lib/game-detail/helpers";
+	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
+	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import {
+		matchSlotAvatarUrl,
+		matchSlotNation,
+		matchSlotUsername,
+	} from "$lib/tournament/match-occupant";
+	import {
+		MATCH_COLUMNS,
+		matchStatusGroup,
+		DEFAULT_MATCHES_TABLE_STATE,
+		type MatchSortContext,
+		type MatchStatusGroup,
+	} from "$lib/tournament/matches-table";
+	import {
+		partitionSchedule,
+		scheduledDayKey,
+		type ScheduleZone,
+	} from "$lib/tournament/schedule";
+	import { buildSlotMaps } from "$lib/tournament/slot-identity";
+	import Popover from "$lib/ui/Popover.svelte";
+	import { toast } from "$lib/ui/toast";
+	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
+	import { Select, Tabs, ToggleGroup } from "bits-ui";
+	import type { PageData } from "./$types";
+
+	let { data }: { data: PageData } = $props();
+
+	const user = $derived(page.data.user as UserMe | null);
+	const isAdmin = $derived(data.tournament.is_viewer_admin === true);
+
+	const crumbs: Crumb[] = $derived([
+		{ label: "Home", href: resolve("/") },
+		{ label: "Tournaments", href: resolve("/tournaments") },
+		{
+			label: data.tournament.name,
+			href: resolve("/tournaments/[slug]", { slug: data.tournament.slug }),
+		},
+		{ label: "Matches" },
+	]);
+
+	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
+	const partition = $derived(partitionSchedule(data.matches));
+
+	// View + zone controls. zone picks the single clock everything reads in.
+	let view = $state<"list" | "calendar">("list");
+	let zone = $state<ScheduleZone>("utc");
+	const viewTriggerClass =
+		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
+
+	// The bracket a match belongs to, as a display label (Championship or the
+	// tournament's division name). Drives the Bracket column + bracket filter.
+	function phaseLabel(m: TournamentMatch): string {
+		if (m.phase === "championship") return "Championship";
+		if (m.division)
+			return m.division === "A"
+				? data.tournament.division_a_name
+				: data.tournament.division_b_name;
+		return "";
+	}
+	// Stable bracket key for filtering ("championship" | "A" | "B").
+	function bracketKey(m: TournamentMatch): string {
+		return m.phase === "championship" ? "championship" : (m.division ?? "");
+	}
+
+	// --- Table state. tableState (search + sort) follows the Cities pattern;
+	// statusFilter is a separate multi-toggle (completed off by default).
+	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
+	let statusFilter = $state<MatchStatusGroup[]>(["scheduled", "unscheduled"]);
+	const statusItemClass =
+		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-[#35302B]";
+
+	// Bracket filter: only offer brackets that actually have (non-bye) matches.
+	const bracketOptions = $derived.by(() => {
+		const present: Record<string, true> = {};
+		for (const m of data.matches) {
+			if (matchStatusGroup(m) === null) continue;
+			present[bracketKey(m)] = true;
+		}
+		return [
+			{ value: "championship", label: "Championship" },
+			{ value: "A", label: data.tournament.division_a_name },
+			{ value: "B", label: data.tournament.division_b_name },
+		].filter((o) => present[o.value]);
+	});
+	// Bracket selections live in tableState.filters as "bracket:<key>" entries.
+	const selectedBracketEntries = $derived(
+		tableState.filters.filter((f) => f.startsWith("bracket:")),
+	);
+	const selectedBrackets = $derived(
+		selectedBracketEntries.map((f) => f.slice("bracket:".length)),
+	);
+	const bracketChips = $derived(
+		selectedBrackets.map(
+			(v) => bracketOptions.find((o) => o.value === v)?.label ?? v,
+		),
+	);
+	function setBracketFilter(entries: string[]) {
+		const others = tableState.filters.filter((f) => !f.startsWith("bracket:"));
+		tableState.filters = [...others, ...entries];
+	}
+
+	// Non-bye matches — the table's universe (denominator for the count).
+	const tableEligible = $derived(
+		data.matches.filter((m) => matchStatusGroup(m) !== null),
+	);
+
+	const sortCtx = $derived<MatchSortContext>({
+		slotLabels: slotMaps.labels,
+		phaseLabel,
+	});
+
+	// Status toggle → bracket filter → search → sort, in one pass. Sort mirrors
+	// the Cities comparator: nulls last, localeCompare for strings, numeric diff
+	// otherwise, direction applied after.
+	const rows = $derived.by(() => {
+		let list = tableEligible.filter((m) =>
+			statusFilter.includes(matchStatusGroup(m) as MatchStatusGroup),
+		);
+
+		if (selectedBrackets.length > 0) {
+			list = list.filter((m) => selectedBrackets.includes(bracketKey(m)));
+		}
+
+		if (tableState.search) {
+			const term = tableState.search.toLowerCase();
+			const nationMatch = (n: string | null) =>
+				n != null && formatEnum(n, "NATION_").toLowerCase().includes(term);
+			list = list.filter(
+				(m) =>
+					(matchSlotUsername(m, "a", slotMaps.labels) ?? "")
+						.toLowerCase()
+						.includes(term) ||
+					(matchSlotUsername(m, "b", slotMaps.labels) ?? "")
+						.toLowerCase()
+						.includes(term) ||
+					nationMatch(matchSlotNation(m, "a")) ||
+					nationMatch(matchSlotNation(m, "b")) ||
+					(m.caster_name ?? "").toLowerCase().includes(term),
+			);
+		}
+
+		const column = MATCH_COLUMNS.find((c) => c.key === tableState.sortColumn);
+		if (column) {
+			list = [...list].sort((a, b) => {
+				const aVal = column.sortValue(a, sortCtx);
+				const bVal = column.sortValue(b, sortCtx);
+				if (aVal == null && bVal == null) return 0;
+				if (aVal == null) return 1;
+				if (bVal == null) return -1;
+				const cmp =
+					typeof aVal === "string" && typeof bVal === "string"
+						? aVal.localeCompare(bVal)
+						: (aVal as number) - (bVal as number);
+				return tableState.sortDirection === "asc" ? cmp : -cmp;
+			});
+		}
+		return list;
+	});
+
+	// --- Match card. Anchored at the click point via a floating-ui virtual
+	// anchor so it opens beside the cursor. detailMatch resolves live from the
+	// match list so an edit reflects at once.
+	let detailMatchId = $state<string | null>(null);
+	let detailAnchor = $state<{ getBoundingClientRect: () => DOMRect } | null>(
+		null,
+	);
+	const detailMatch = $derived(
+		detailMatchId
+			? (data.matches.find((m) => m.match_id === detailMatchId) ?? null)
+			: null,
+	);
+
+	function pick(matchId: string, e: MouseEvent) {
+		const x = e.clientX;
+		const y = e.clientY;
+		detailAnchor = { getBoundingClientRect: () => new DOMRect(x, y, 0, 0) };
+		detailMatchId = matchId;
+	}
+
+	// Admin substitute, threaded into the match card (parity with the overview
+	// page's handler). Renames the slot's occupant and refreshes via invalidate.
+	async function substituteSlot(
+		slotId: string,
+		newUsername: string,
+		userId: string | null = null,
+	) {
+		if (!newUsername.trim()) return;
+		try {
+			await cloudApi.patchSlot(data.tournament.tournament_id, slotId, {
+				discord_username: newUsername.trim(),
+				...(userId ? { user_id: userId } : {}),
+			});
+			toast.info(`Substituted slot to ${newUsername}`);
+			await invalidateAll();
+		} catch (err) {
+			toast.error(err instanceof ApiError ? err.message : "Action failed");
+		}
+	}
+
+	// --- Calendar. The grid is plain calendar dates; only which day cell an
+	// event lands in depends on the zone (via scheduledDayKey). The month is a
+	// zone-independent label. UTC-based Date math avoids local-offset surprises.
+	const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+	const pad = (n: number) => String(n).padStart(2, "0");
+
+	function initialMonth(): { year: number; month: number } {
+		const first = partition.scheduled[0]?.scheduled_at;
+		const key = first ? scheduledDayKey(first, zone) : null;
+		if (key) {
+			const [y, m] = key.split("-").map(Number);
+			return { year: y, month: m - 1 };
+		}
+		const now = new Date();
+		return { year: now.getFullYear(), month: now.getMonth() };
+	}
+	let monthCursor = $state(initialMonth());
+
+	function stepMonth(delta: number) {
+		const d = new Date(
+			Date.UTC(monthCursor.year, monthCursor.month + delta, 1),
+		);
+		monthCursor = { year: d.getUTCFullYear(), month: d.getUTCMonth() };
+	}
+
+	const monthLabel = $derived(
+		new Date(
+			Date.UTC(monthCursor.year, monthCursor.month, 1),
+		).toLocaleDateString("en-US", {
+			month: "long",
+			year: "numeric",
+			timeZone: "UTC",
+		}),
+	);
+
+	const eventsByDay = $derived.by(() => {
+		const byDay: Record<string, TournamentMatch[]> = {};
+		for (const m of partition.scheduled) {
+			const key = scheduledDayKey(m.scheduled_at, zone);
+			if (!key) continue;
+			(byDay[key] ??= []).push(m);
+		}
+		return byDay;
+	});
+
+	const calendarCells = $derived.by(() => {
+		const { year, month } = monthCursor;
+		const firstWeekday = new Date(Date.UTC(year, month, 1)).getUTCDay();
+		const daysInMonth = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+		const cells: ({ day: number; key: string } | null)[] = [];
+		for (let i = 0; i < firstWeekday; i++) cells.push(null);
+		for (let d = 1; d <= daysInMonth; d++) {
+			cells.push({ day: d, key: `${year}-${pad(month + 1)}-${pad(d)}` });
+		}
+		while (cells.length % 7 !== 0) cells.push(null);
+		return cells;
+	});
+
+	// Compact time ("HH:MM" in the active zone) and matchup for calendar chips.
+	function chipTime(iso: string | null): string {
+		if (!iso) return "";
+		const d = new Date(iso);
+		if (Number.isNaN(d.getTime())) return "";
+		return d.toLocaleTimeString("en-CA", {
+			timeZone: zone === "utc" ? "UTC" : undefined,
+			hour: "2-digit",
+			minute: "2-digit",
+			hour12: false,
+		});
+	}
+
+	function shortMatchup(m: TournamentMatch): string {
+		const a = matchSlotUsername(m, "a", slotMaps.labels) ?? "—";
+		const b =
+			m.slot_b_id !== null
+				? (matchSlotUsername(m, "b", slotMaps.labels) ?? "—")
+				: "Bye";
+		return `${a} v ${b}`;
+	}
+</script>
+
+<!-- One player's table cell: crest + avatar + name. Side B renders "Bye" when
+     there's no opponent slot. -->
+{#snippet playerCell(m: TournamentMatch, side: "a" | "b")}
+	{@const slotId = side === "a" ? m.slot_a_id : m.slot_b_id}
+	{#if side === "b" && slotId === null}
+		<span>Bye</span>
+	{:else}
+		{@const nation = matchSlotNation(m, side)}
+		{@const name = matchSlotUsername(m, side, slotMaps.labels) ?? "—"}
+		<span class="inline-flex items-center gap-1.5">
+			{#if nation}
+				<SpriteIcon
+					category="crests"
+					value={nation}
+					size={16}
+					alt={formatEnum(nation, "NATION_")}
+				/>
+			{/if}
+			<PlayerAvatar
+				avatarUrl={matchSlotAvatarUrl(m, side, slotMaps.avatars)}
+				size={16}
+			/>
+			<span>{name}</span>
+		</span>
+	{/if}
+{/snippet}
+
+<div class="flex flex-1 overflow-hidden">
+	<main class="isolate flex flex-1 flex-col overflow-hidden">
+		<div
+			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
+			use:autohideScroll
+		>
+			<div class="mx-auto max-w-screen-2xl">
+				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
+
+				<!-- Controls card: title + zone toggle + view toggle. -->
+				<div
+					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
+					style="background-color: #35302b;"
+				>
+					<h1 class="text-lg font-bold text-tan">Matches</h1>
+					<div class="flex items-center gap-2">
+						<!-- UTC / Local: a segmented toggle picking the active clock. -->
+						<div
+							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
+							style="background-color: #2a2622;"
+							role="group"
+							aria-label="Timezone"
+						>
+							<div
+								class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+								style:background-color="#35302B"
+								style:transform={zone === "local"
+									? "translateX(100%)"
+									: "translateX(0)"}
+							></div>
+							<button
+								type="button"
+								class={viewTriggerClass}
+								aria-pressed={zone === "utc"}
+								onclick={() => (zone = "utc")}
+							>
+								UTC
+							</button>
+							<button
+								type="button"
+								class={viewTriggerClass}
+								aria-pressed={zone === "local"}
+								onclick={() => (zone = "local")}
+							>
+								Local
+							</button>
+						</div>
+
+						<!-- List / Calendar view switch (bracket-card pattern). -->
+						<Tabs.Root bind:value={view}>
+							<Tabs.List
+								class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-[#2a2623]"
+								style="background-color: #2a2622;"
+							>
+								<div
+									class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+									style:background-color="#35302B"
+									style:transform={view === "calendar"
+										? "translateX(100%)"
+										: "translateX(0)"}
+								></div>
+								<Tabs.Trigger value="list" class={viewTriggerClass}
+									>List</Tabs.Trigger
+								>
+								<Tabs.Trigger value="calendar" class={viewTriggerClass}>
+									Calendar
+								</Tabs.Trigger>
+							</Tabs.List>
+						</Tabs.Root>
+					</div>
+				</div>
+
+				<div class="view-stack">
+					{#key view}
+						<div
+							class="view-pane"
+							in:fade={{ duration: 200 }}
+							out:fade={{ duration: 200 }}
+						>
+							{#if view === "list"}
+								<!-- Cities-style sortable table: search + bracket filter on the
+								     left, status toggle + table on the right. -->
+								<div class={TABLE_FRAME_CLASS}>
+									<TableFilterColumn
+										bind:search={tableState.search}
+										searchPlaceholder="Player, nation, or caster"
+										count={`${rows.length} / ${tableEligible.length} matches`}
+										chips={bracketChips}
+									>
+										{#snippet filters()}
+											{#if bracketOptions.length > 0}
+												<Select.Root
+													type="multiple"
+													value={selectedBracketEntries}
+													onValueChange={setBracketFilter}
+												>
+													<Select.Trigger
+														class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-[#35302b] px-2 py-1.5 text-xs text-tan"
+													>
+														<span class="truncate">Bracket</span>
+														<span class="ml-2 text-tan opacity-60">▼</span>
+													</Select.Trigger>
+													<Select.Portal>
+														<Select.Content
+															class="z-50 max-h-80 overflow-y-auto rounded bg-[#241f1b] shadow-lg"
+														>
+															<Select.Viewport>
+																{#each bracketOptions as opt (opt.value)}
+																	<Select.Item
+																		value={`bracket:${opt.value}`}
+																		label={opt.label}
+																		class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-[#35302b] data-[highlighted]:bg-[#35302b]"
+																	>
+																		{#snippet children({ selected })}
+																			<span>{opt.label}</span>
+																			{#if selected}
+																				<span class="font-bold text-orange"
+																					>✓</span
+																				>
+																			{/if}
+																		{/snippet}
+																	</Select.Item>
+																{/each}
+															</Select.Viewport>
+														</Select.Content>
+													</Select.Portal>
+												</Select.Root>
+											{/if}
+										{/snippet}
+									</TableFilterColumn>
+
+									<div class="min-w-0 flex-1">
+										<!-- Status filter above the table, styled like the bracket view tabs. -->
+										<div class="mb-3 flex justify-end">
+											<ToggleGroup.Root
+												type="multiple"
+												value={statusFilter}
+												onValueChange={(v) =>
+													(statusFilter = v as MatchStatusGroup[])}
+												class="flex overflow-hidden rounded-lg border-2 border-[#2a2623]"
+												style="background-color: #2a2622;"
+												aria-label="Match status"
+											>
+												<ToggleGroup.Item
+													value="scheduled"
+													class={statusItemClass}
+												>
+													Scheduled
+												</ToggleGroup.Item>
+												<ToggleGroup.Item
+													value="unscheduled"
+													class={statusItemClass}
+												>
+													Unscheduled
+												</ToggleGroup.Item>
+												<ToggleGroup.Item
+													value="completed"
+													class={statusItemClass}
+												>
+													Completed
+												</ToggleGroup.Item>
+											</ToggleGroup.Root>
+										</div>
+
+										<div class="overflow-x-auto">
+											<table class={TABLE_CLASS}>
+												<thead>
+													<tr>
+														{#each MATCH_COLUMNS as column, i (column.key)}
+															<th
+																class="{TABLE_HEADER_TH_CLASS} {i === 0
+																	? 'rounded-l-lg border-l'
+																	: ''} {i === MATCH_COLUMNS.length - 1
+																	? 'rounded-r-lg border-r'
+																	: ''}"
+																onclick={() =>
+																	toggleSort(tableState, column.key)}
+															>
+																<span class="inline-flex items-center gap-1">
+																	{column.label}
+																	{#if tableState.sortColumn === column.key}
+																		<span class="text-orange">
+																			{tableState.sortDirection === "asc"
+																				? "↑"
+																				: "↓"}
+																		</span>
+																	{/if}
+																</span>
+															</th>
+														{/each}
+													</tr>
+												</thead>
+												<tbody>
+													{#each rows as m (m.match_id)}
+														<tr
+															class="group cursor-pointer"
+															onclick={(e) => pick(m.match_id, e)}
+														>
+															{#each MATCH_COLUMNS as column, i (column.key)}
+																<td
+																	class="{TABLE_CELL_TD_CLASS} {i === 0
+																		? 'rounded-l-lg'
+																		: ''} {i === MATCH_COLUMNS.length - 1
+																		? 'rounded-r-lg'
+																		: ''} whitespace-nowrap"
+																>
+																	{#if column.key === "scheduled_at"}
+																		{@const t = formatScheduledInZone(
+																			m.scheduled_at,
+																			zone,
+																		)}
+																		{#if t}
+																			{t}
+																		{:else if m.status === "complete" || m.status === "forfeit"}
+																			Completed
+																		{:else}
+																			Not scheduled
+																		{/if}
+																	{:else if column.key === "player_a"}
+																		{@render playerCell(m, "a")}
+																	{:else if column.key === "player_b"}
+																		{@render playerCell(m, "b")}
+																	{:else if column.key === "bracket"}
+																		{phaseLabel(m) || "—"}
+																	{:else if column.key === "round"}
+																		{m.round_number ?? "—"}
+																	{:else if column.key === "caster"}
+																		{#if m.caster_name}
+																			<span
+																				class="inline-flex items-center gap-1.5"
+																			>
+																				<PlayerAvatar
+																					avatarUrl={m.caster_avatar_url}
+																					size={16}
+																				/>
+																				{m.caster_name}
+																			</span>
+																		{:else}
+																			—
+																		{/if}
+																	{:else if column.key === "stream"}
+																		{#if m.stream_url}
+																			<!-- External stream URL (youtube/twitch),
+																			     validated host-side; not an app route, so
+																			     resolve() doesn't apply. Stop propagation so
+																			     the link doesn't also open the match card. -->
+																			<!-- eslint-disable svelte/no-navigation-without-resolve -->
+																			<a
+																				href={m.stream_url}
+																				target="_blank"
+																				rel="noopener noreferrer"
+																				class="inline-flex items-center gap-1 text-orange hover:underline"
+																				onclick={(e) => e.stopPropagation()}
+																			>
+																				<svg
+																					xmlns="http://www.w3.org/2000/svg"
+																					class="h-3 w-3"
+																					fill="none"
+																					viewBox="0 0 24 24"
+																					stroke="currentColor"
+																					stroke-width="2"
+																					aria-hidden="true"
+																				>
+																					<path
+																						stroke-linecap="round"
+																						stroke-linejoin="round"
+																						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+																					/>
+																				</svg>
+																				Stream
+																			</a>
+																			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+																		{:else}
+																			—
+																		{/if}
+																	{/if}
+																</td>
+															{/each}
+														</tr>
+													{:else}
+														<tr>
+															<td
+																colspan={MATCH_COLUMNS.length}
+																class="p-8 text-center italic text-tan"
+															>
+																No matches
+															</td>
+														</tr>
+													{/each}
+												</tbody>
+											</table>
+										</div>
+									</div>
+								</div>
+							{:else}
+								<!-- Monthly calendar. -->
+								<section
+									class="mb-6 rounded-lg p-4"
+									style="background-color: #2a2622;"
+								>
+									<div class="mb-3 flex items-center justify-between gap-3">
+										<button
+											type="button"
+											class="rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
+											onclick={() => stepMonth(-1)}
+											aria-label="Previous month"
+										>
+											‹ Prev
+										</button>
+										<h2 class="text-sm font-bold text-tan">{monthLabel}</h2>
+										<button
+											type="button"
+											class="rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
+											onclick={() => stepMonth(1)}
+											aria-label="Next month"
+										>
+											Next ›
+										</button>
+									</div>
+
+									<div class="grid grid-cols-7 gap-1">
+										{#each WEEKDAYS as wd (wd)}
+											<div
+												class="px-1 py-1 text-center text-[11px] font-bold uppercase text-tan opacity-60"
+											>
+												{wd}
+											</div>
+										{/each}
+										{#each calendarCells as cell, i (i)}
+											{#if cell === null}
+												<div
+													class="min-h-[5rem] rounded-lg"
+													style="background-color: #221d18;"
+												></div>
+											{:else}
+												{@const events = eventsByDay[cell.key] ?? []}
+												<div
+													class="flex min-h-[5rem] flex-col gap-1 rounded-lg p-1.5"
+													style="background-color: #35302b;"
+												>
+													<span
+														class="text-[11px] font-bold text-tan opacity-70"
+													>
+														{cell.day}
+													</span>
+													{#each events as m (m.match_id)}
+														<button
+															type="button"
+															class="flex flex-col rounded px-1.5 py-1 text-left text-[11px] text-tan transition-colors hover:bg-[#4a443c]"
+															style="background-color: #2a2622;"
+															onclick={(e) => pick(m.match_id, e)}
+														>
+															<span class="font-bold"
+																>{chipTime(m.scheduled_at)}</span
+															>
+															<span class="truncate opacity-80"
+																>{shortMatchup(m)}</span
+															>
+														</button>
+													{/each}
+												</div>
+											{/if}
+										{/each}
+									</div>
+								</section>
+							{/if}
+						</div>
+					{/key}
+				</div>
+			</div>
+		</div>
+	</main>
+</div>
+
+<!-- Match card, anchored at the click point and shared by both views. -->
+<Popover
+	open={detailMatchId !== null}
+	onOpenChange={(o) => {
+		if (!o) detailMatchId = null;
+	}}
+	customAnchor={detailAnchor}
+	side="right"
+	align="start"
+	contentClass={detailMatch?.game_id
+		? "w-[min(92vw,35.2rem)]"
+		: "w-fit max-w-[92vw]"}
+	frameClass="bg-[#2a2623] p-3 shadow-[0_24px_64px_-12px_rgba(0,0,0,0.85)]"
+	ariaLabel="Match detail"
+>
+	{#if detailMatch}
+		{#key detailMatch.match_id}
+			<MatchPopover
+				match={detailMatch}
+				tournament={data.tournament}
+				slotLabels={slotMaps.labels}
+				slotUserIds={slotMaps.userIds}
+				slotAvatars={slotMaps.avatars}
+				{user}
+				onSubstitute={isAdmin ? substituteSlot : undefined}
+				onClose={() => (detailMatchId = null)}
+			/>
+		{/key}
+	{/if}
+</Popover>
+
+<style>
+	/* Crossfade the two views: both panes share the grid cell so the outgoing
+	   and incoming overlap in place (no transform, nothing shifts). Mirrors the
+	   overview page's bracket/standings switch. */
+	.view-stack {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+
+	.view-stack > :global(.view-pane) {
+		grid-area: 1 / 1;
+		min-width: 0;
+	}
+</style>
