@@ -48,12 +48,6 @@
 	function slotLabel(s: SlotStanding): string {
 		return s.discord_username ?? `slot ${s.slot_id.slice(0, 6)}`;
 	}
-
-	// Surface H2H only when this slot is part of a tied group — outside of
-	// ties, H2H is 0 and uninformative.
-	function showH2H(s: SlotStanding): boolean {
-		return s.tied_with.length > 0;
-	}
 </script>
 
 <section class="rounded-lg p-3" style="background-color: #35302B;">
@@ -87,20 +81,16 @@
 					<th class="py-1 pr-2 text-right">W-L</th>
 					<th
 						class="py-1 pr-2 text-right"
-						title="Head-to-head within tied group">H2H</th
+						title="Buchholz cut-1 (strength of schedule)">Buchholz</th
 					>
 					<th
 						class="py-1 pr-2 text-right"
-						title="Buchholz cut-1 (strength of schedule)">B1</th
+						title="Opponents' Buchholz (depth of schedule)"
+						>Opponents Strength</th
 					>
-					<th
-						class="py-1 pr-2 text-right"
-						title="Opponents' Buchholz (depth of schedule)">B2</th
+					<th class="py-1 text-right" title="Cumulative running win total"
+						>Cumulative</th
 					>
-					<th class="py-1 pr-2 text-right" title="Cumulative running win total"
-						>Cum</th
-					>
-					<th class="py-1 text-right">St</th>
 				</tr>
 			</thead>
 			<tbody>
@@ -124,32 +114,23 @@
 								{:else}
 									<span>{slotLabel(s)}</span>
 								{/if}
+								<span
+									class="text-orange"
+									class:opacity-50={s.status === "active"}
+									title={statusTitle(s.status)}
+								>
+									{statusBadge(s.status)}
+								</span>
 							</span>
 						</td>
 						<td class="py-1 pr-2 text-right font-mono">
 							{s.wins}-{s.losses}
 						</td>
-						<td class="py-1 pr-2 text-right font-mono">
-							{#if showH2H(s)}
-								{s.h2h}
-							{:else}
-								<span class="opacity-30">–</span>
-							{/if}
-						</td>
 						<td class="py-1 pr-2 text-right font-mono">{s.buchholz_cut1}</td>
 						<td class="py-1 pr-2 text-right font-mono"
 							>{s.opponents_buchholz}</td
 						>
-						<td class="py-1 pr-2 text-right font-mono">{s.cumulative}</td>
-						<td class="py-1 text-right">
-							<span
-								class="text-orange"
-								class:opacity-50={s.status === "active"}
-								title={statusTitle(s.status)}
-							>
-								{statusBadge(s.status)}
-							</span>
-						</td>
+						<td class="py-1 text-right font-mono">{s.cumulative}</td>
 					</tr>
 				{/each}
 			</tbody>
