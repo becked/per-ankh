@@ -16,7 +16,7 @@
 	} from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
-	import { formatEnum, formatScheduledUtc } from "$lib/utils/formatting";
+	import { formatEnum, formatScheduledWithLocal } from "$lib/utils/formatting";
 	import MatchPopover from "./MatchPopover.svelte";
 	import PlayerAvatar from "./PlayerAvatar.svelte";
 	import {
@@ -131,7 +131,7 @@
 						>
 							<div class="flex items-center justify-between gap-2">
 								<span class="text-xs font-bold text-tan">
-									{formatScheduledUtc(m.scheduled_at)} UTC
+									{formatScheduledWithLocal(m.scheduled_at)}
 								</span>
 								{#if phaseLabel(m)}
 									<span class="text-[11px] text-tan opacity-60">

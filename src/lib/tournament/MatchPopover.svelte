@@ -27,7 +27,7 @@
 		getChartColor,
 		getCivilizationColor,
 	} from "$lib/config";
-	import { formatEnum, formatScheduledUtc } from "$lib/utils/formatting";
+	import { formatEnum, formatScheduledWithLocal } from "$lib/utils/formatting";
 	import {
 		matchSlotAvatarUrl,
 		matchSlotNation,
@@ -813,7 +813,7 @@
 						<rect x="3" y="4" width="18" height="18" rx="2" />
 						<path d="M16 2v4M8 2v4M3 10h18" />
 					</svg>
-					<span>{formatScheduledUtc(match.scheduled_at)} UTC</span>
+					<span>{formatScheduledWithLocal(match.scheduled_at)}</span>
 				</div>
 			{/if}
 			{#if match.caster_name || match.stream_url}

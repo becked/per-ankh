@@ -100,6 +100,61 @@ export function formatScheduledUtc(iso: string | null | undefined): string {
 }
 
 /**
+ * Formats an ISO instant as the UTC display (see {@link formatScheduledUtc})
+ * followed by the same instant in the viewer's local timezone, e.g.
+ * "May 30, 14:30 UTC (07:30 PDT)". The local part is appended inline so a
+ * viewer never has to do the timezone math themselves.
+ *
+ * Two refinements keep the parenthetical honest and uncluttered:
+ * - It is omitted entirely when the viewer is effectively on UTC (zero offset,
+ *   e.g. GMT/Iceland), since "(14:30 UTC)" would just echo the primary value.
+ * - The local date is included only when it differs from the UTC date — far
+ *   eastern/western zones can roll the instant onto a neighbouring day, and a
+ *   bare "(00:30 JST)" next to "May 30" would be misleading.
+ *
+ * @param iso - ISO-8601 instant string, or null/undefined
+ * @returns "MMM D, HH:MM UTC (HH:MM TZ)" (date in the local part only when it
+ *   differs), or "" when the input is empty/invalid
+ */
+export function formatScheduledWithLocal(
+	iso: string | null | undefined,
+): string {
+	const utc = formatScheduledUtc(iso);
+	if (!utc) return "";
+	const d = new Date(iso as string);
+
+	const dateOpts: Intl.DateTimeFormatOptions = {
+		month: "short",
+		day: "numeric",
+	};
+	const timeOpts: Intl.DateTimeFormatOptions = {
+		hour: "2-digit",
+		minute: "2-digit",
+		hour12: false,
+	};
+
+	const utcDate = d.toLocaleDateString("en-CA", { ...dateOpts, timeZone: "UTC" });
+	const utcTime = d.toLocaleTimeString("en-CA", { ...timeOpts, timeZone: "UTC" });
+	const localDate = d.toLocaleDateString("en-CA", dateOpts);
+	const localTime = d.toLocaleTimeString("en-CA", timeOpts);
+
+	// Viewer is effectively on UTC — the local part would just echo the primary.
+	if (localDate === utcDate && localTime === utcTime) return `${utc} UTC`;
+
+	const tzName =
+		new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+			.formatToParts(d)
+			.find((p) => p.type === "timeZoneName")?.value ?? "";
+
+	const local =
+		localDate === utcDate
+			? `${localTime} ${tzName}`
+			: `${localDate}, ${localTime} ${tzName}`;
+
+	return `${utc} UTC (${local.trim()})`;
+}
+
+/**
  * Formats a game title for display, using intelligent fallbacks.
  *
  * Rules (first match wins):
