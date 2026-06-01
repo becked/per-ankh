@@ -361,4 +361,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.6.0";
+export const PARSER_VERSION = "2.6.1";

@@ -60,6 +60,11 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         .owner_player_xml_id, game_religions[].founder_player_xml_id,
 //         improvement_data.improvements[].owner_player_xml_id. Lets the
 //         detail view distinguish same-nation players in mirror matches.
+// 2.6.1 — map_tiles[].river_w/sw/se parse correctly. The flags were compared
+//         against "true", so they were always false. The tag value is actually
+//         a RotationType flow-direction enum (0/1) — presence means a river,
+//         an absent tag means none — so we now test presence. Powers river
+//         rendering on the map.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -71,13 +76,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.5.0",
 	"2.5.1",
 	"2.6.0",
+	"2.6.1",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.6.0";
+export const CURRENT_PARSER_VERSION = "2.6.1";
 
 // ----- Reusable atoms -----
 

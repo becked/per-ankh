@@ -157,9 +157,14 @@ export function parseTiles(root: Record<string, unknown>): Tile[] {
 			terrain: optStr(node.Terrain),
 			height: optStr(node.Height),
 			vegetation: optStr(node.Vegetation),
-			riverW: optStr(node.RiverW) === "true",
-			riverSw: optStr(node.RiverSW) === "true",
-			riverSe: optStr(node.RiverSE) === "true",
+			// River edge presence. The tag value is a RotationType flow-direction
+			// enum (0 = clockwise, 1 = counter-clockwise) — BOTH mean a river is
+			// present; only an absent tag means no river. So test for presence,
+			// not value (a "0" edge is a real river, just flowing the other way).
+			// We don't render flow direction, so a boolean suffices.
+			riverW: optStr(node.RiverW) != null,
+			riverSw: optStr(node.RiverSW) != null,
+			riverSe: optStr(node.RiverSE) != null,
 			resource: optStr(node.Resource),
 			improvement: optStr(node.Improvement),
 			improvementPillaged: optStr(node.ImprovementPillaged) === "true",

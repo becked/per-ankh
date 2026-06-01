@@ -4,7 +4,7 @@
 	import { IconLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityInfo } from "$lib/types/CityInfo";
-	import { getCivilizationColor } from "$lib/config";
+	import { getCivilizationColor, getMutedTerrainColor } from "$lib/config";
 	import {
 		ATLAS_MANIFEST,
 		NATION_ALIASES_URL,
@@ -1026,6 +1026,159 @@
 		return fills;
 	}
 
+	interface RiverSegment {
+		path: [number, number][];
+	}
+
+	// Rivers run along hex edges. Each tile flags only its W/SW/SE edges
+	// (river_w/river_sw/river_se); the matching NE/E/NW edges belong to the
+	// neighbour's W/SW/SE flags, so iterating every tile's three flags yields
+	// each river edge exactly once — no dedup needed. The flag → edge-index
+	// mapping follows hexPolygon's convention (edge i connects verts[i] →
+	// verts[i+1] and faces neighbour i, where neighbours = [NE, E, SE, SW, W,
+	// NW]): river_se = edge 2, river_sw = edge 3, river_w = edge 4.
+	//
+	// Colour reuses the muted water tone (the same de-emphasised blue used for
+	// unclaimed water tiles) at low alpha, so rivers stay subtle against the
+	// terrain rather than reading as an opaque UI line; width/hue may be tuned.
+	const RIVER_COLOR_RGBA: [number, number, number, number] = [
+		...hexToRgb(getMutedTerrainColor("TERRAIN_COAST", null, null)),
+		170,
+	];
+	const RIVER_WIDTH = 2;
+	const RIVER_SMOOTH_ITERATIONS = 3;
+
+	function computeRivers(mapTiles: MapTile[]): RiverSegment[] {
+		interface RiverEdge {
+			a: [number, number];
+			b: [number, number];
+			aKey: string;
+			bKey: string;
+		}
+
+		// Collect every flagged river edge as an undirected segment.
+		const edges: RiverEdge[] = [];
+		for (const tile of mapTiles) {
+			if (!tile.river_se && !tile.river_sw && !tile.river_w) continue;
+			const [cx, cy] = hexToPixel(tile.x, tile.y);
+			const verts = hexPolygon(cx, cy);
+			const add = (a: [number, number], b: [number, number]) =>
+				edges.push({ a, b, aKey: vertexKey(a), bKey: vertexKey(b) });
+			if (tile.river_se) add(verts[2], verts[3]);
+			if (tile.river_sw) add(verts[3], verts[4]);
+			if (tile.river_w) add(verts[4], verts[5]);
+		}
+
+		// Chain edges into polylines and Chaikin-smooth so they read as flowing
+		// waterways rather than angular hex fragments. Same branch-aware
+		// undirected walk as the city sub-borders: from each unvisited edge,
+		// walk both directions and stop at any vertex that isn't exactly one
+		// unvisited neighbour (a junction where rivers meet, or a terminal).
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+		const adj = new Map<string, RiverEdge[]>();
+		for (const e of edges) {
+			const aList = adj.get(e.aKey);
+			if (aList) aList.push(e);
+			else adj.set(e.aKey, [e]);
+			const bList = adj.get(e.bKey);
+			if (bList) bList.push(e);
+			else adj.set(e.bKey, [e]);
+		}
+
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Set used locally in function, not as reactive state
+		const visited = new Set<RiverEdge>();
+		const segments: RiverSegment[] = [];
+		for (const start of edges) {
+			if (visited.has(start)) continue;
+			visited.add(start);
+
+			const walk = (
+				fromKey: string,
+			): { edges: RiverEdge[]; endKey: string } => {
+				const out: RiverEdge[] = [];
+				let cur = fromKey;
+				for (;;) {
+					const candidates = adj.get(cur)?.filter((e) => !visited.has(e));
+					if (!candidates || candidates.length !== 1) break;
+					const next = candidates[0];
+					visited.add(next);
+					out.push(next);
+					cur = next.aKey === cur ? next.bKey : next.aKey;
+				}
+				return { edges: out, endKey: cur };
+			};
+
+			const forward = walk(start.bKey);
+			const backward = walk(start.aKey);
+
+			// Assemble the ordered vertex list: backward edges in reverse, then
+			// the start edge, then forward edges, tracking the previous vertex
+			// key to know which endpoint to append next.
+			const path: [number, number][] = [];
+			let prevKey: string;
+			if (backward.edges.length > 0) {
+				const outermost = backward.edges[backward.edges.length - 1];
+				path.push(
+					outermost.aKey === backward.endKey ? outermost.a : outermost.b,
+				);
+				prevKey = backward.endKey;
+				for (let k = backward.edges.length - 1; k >= 0; k--) {
+					const e = backward.edges[k];
+					if (e.aKey === prevKey) {
+						path.push(e.b);
+						prevKey = e.bKey;
+					} else {
+						path.push(e.a);
+						prevKey = e.aKey;
+					}
+				}
+				if (start.aKey === prevKey) {
+					path.push(start.b);
+					prevKey = start.bKey;
+				} else {
+					path.push(start.a);
+					prevKey = start.aKey;
+				}
+			} else {
+				path.push(start.a);
+				path.push(start.b);
+				prevKey = start.bKey;
+			}
+			for (const e of forward.edges) {
+				if (e.aKey === prevKey) {
+					path.push(e.b);
+					prevKey = e.bKey;
+				} else {
+					path.push(e.a);
+					prevKey = e.aKey;
+				}
+			}
+
+			const closed =
+				path.length >= 3 &&
+				Math.abs(path[0][0] - path[path.length - 1][0]) < 0.01 &&
+				Math.abs(path[0][1] - path[path.length - 1][1]) < 0.01;
+
+			let smoothed: [number, number][];
+			if (closed) {
+				const unique = path.slice(0, -1);
+				smoothed =
+					unique.length >= 4
+						? chaikinSmoothClosed(unique, RIVER_SMOOTH_ITERATIONS)
+						: unique;
+				smoothed.push(smoothed[0]);
+			} else if (path.length >= 3) {
+				smoothed = chaikinSmoothOpen(path, RIVER_SMOOTH_ITERATIONS);
+			} else {
+				smoothed = path;
+			}
+
+			segments.push({ path: smoothed });
+		}
+
+		return segments;
+	}
+
 	// Memoized derivatives — recomputed only when `tiles` change, not on
 	// layer-toggle flips. The console.time blocks are DEV-only so we can
 	// profile during turn-slider scrubbing without shipping log spam.
@@ -1041,6 +1194,13 @@
 		if (import.meta.env.DEV) console.time("computeReligionFills");
 		const result = computeReligionFills(tiles);
 		if (import.meta.env.DEV) console.timeEnd("computeReligionFills");
+		return result;
+	});
+	const rivers = $derived.by<RiverSegment[]>(() => {
+		if (tiles.length === 0) return [];
+		if (import.meta.env.DEV) console.time("computeRivers");
+		const result = computeRivers(tiles);
+		if (import.meta.env.DEV) console.timeEnd("computeRivers");
 		return result;
 	});
 
@@ -1362,6 +1522,7 @@
 		if (!t3d || !ibm || !rm) return null;
 		const political = politicalData;
 		const fills = religionFills;
+		const riv = rivers;
 		const pol = showPolitical;
 		const rel = showReligion;
 
@@ -1527,6 +1688,21 @@
 				pickable: false,
 			}),
 			...compositeLayers,
+			// Rivers sit on tile edges, above terrain/improvements but below the
+			// political/religion overlays. Rounded joints/caps let the per-edge
+			// segments read as continuous waterways where they share vertices.
+			new PathLayer<RiverSegment>({
+				id: "rivers",
+				data: riv,
+				getPath: (d: RiverSegment) => d.path,
+				getColor: RIVER_COLOR_RGBA,
+				getWidth: RIVER_WIDTH,
+				widthUnits: "pixels",
+				widthMinPixels: 1,
+				jointRounded: true,
+				capRounded: true,
+				pickable: false,
+			}),
 			new PolygonLayer<ReligionFill>({
 				id: "religion-layer",
 				data: fills,
@@ -1601,6 +1777,7 @@
 		void tiles;
 		void politicalData;
 		void religionFills;
+		void rivers;
 		void showPolitical;
 		void showReligion;
 
