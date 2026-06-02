@@ -49,6 +49,7 @@
 
 import { execFileSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
+import { readFileSync } from "node:fs";
 import { mkdir, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import process from "node:process";
@@ -194,9 +195,7 @@ function lookupAuthUser(userId) {
 	}
 	let adminDiscordId = null;
 	try {
-		const env = execFileSync("cat", [path.join(CLOUD_DIR, ".dev.vars")], {
-			encoding: "utf8",
-		});
+		const env = readFileSync(path.join(CLOUD_DIR, ".dev.vars"), "utf8");
 		adminDiscordId = env.match(/^ADMIN_DISCORD_ID=(.+)$/m)?.[1]?.trim() ?? null;
 	} catch {
 		/* no .dev.vars — treat as no admin */
