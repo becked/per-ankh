@@ -514,6 +514,7 @@
 	<Tabs.Content value="cities" class="tab-pane min-h-[400px]">
 		<CitiesTab
 			{cityStatistics}
+			{playerNations}
 			bind:tableState={tables.cities}
 			bind:cityVisibleColumns
 		/>

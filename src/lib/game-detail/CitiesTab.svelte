@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { CityStatistics } from "$lib/types/CityStatistics";
+	import type { PlayerNationEntry } from "$lib/parser/types";
 	import { Select } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { getCivilizationColor } from "$lib/config";
@@ -14,6 +15,7 @@
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
 		formatCityCell,
+		resolveCityRows,
 		toggleSort,
 	} from "./helpers";
 
@@ -25,6 +27,7 @@
 
 	let {
 		cityStatistics,
+		playerNations = [],
 		tableState = $bindable<TableState>({
 			search: "",
 			sortColumn: "owner_nation",
@@ -38,9 +41,16 @@
 		),
 	}: {
 		cityStatistics: CityStatistics;
+		playerNations?: PlayerNationEntry[];
 		tableState?: TableState;
 		cityVisibleColumns?: Record<string, boolean>;
 	} = $props();
+
+	// Augment each city with its resolved founding nation, so the Founder column
+	// reads it like any other field. founder_nation is blank when unresolvable.
+	const cityRows = $derived(
+		resolveCityRows(cityStatistics.cities, playerNations),
+	);
 
 	// Get visible columns in order
 	const visibleCityColumns = $derived(
@@ -80,7 +90,7 @@
 
 	// Filtered and sorted cities
 	const filteredSortedCities = $derived.by(() => {
-		let cities = cityStatistics.cities;
+		let cities = cityRows;
 
 		if (selectedCityNations.length > 0) {
 			cities = cities.filter(

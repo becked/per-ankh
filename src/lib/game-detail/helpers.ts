@@ -1,4 +1,5 @@
 import type { CityInfo } from "$lib/types/CityInfo";
+import type { PlayerNationEntry } from "$lib/parser/types";
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { PlayerInfo } from "$lib/types/PlayerInfo";
@@ -45,21 +46,26 @@ export type TableName =
 	| "techs"
 	| "units";
 
+// The display row for the cities table: a CityInfo augmented with the resolved
+// founding nation (see resolveCityRows). founder_nation is derived from the
+// player_nations sidecar, not present on the blob's CityInfo, so it lives here.
+export type CityRow = CityInfo & { founder_nation: string | null };
+
 // format function receives the value AND the city object for context (e.g., capital star)
 export type CityColumn = {
 	key: string;
 	label: string;
 	defaultVisible: boolean;
-	getValue: (city: CityInfo) => string | number | boolean | null;
-	format?: (value: string | number | boolean | null, city: CityInfo) => string;
-	sortValue?: (city: CityInfo) => string | number;
+	getValue: (city: CityRow) => string | number | boolean | null;
+	format?: (value: string | number | boolean | null, city: CityRow) => string;
+	sortValue?: (city: CityRow) => string | number;
 	// When set, the cell prefixes a SpriteIcon resolved from the raw getValue()
 	// enum (e.g. "crests" for NATION_*/FAMILY_*, "culture" for CULTURE_*).
 	iconCategory?: SpriteCategory;
 	// Overrides the icon's enum value (defaults to getValue()). Used by Family
 	// to fall back from the per-family crest to the archetype crest. Returning
 	// null renders no icon.
-	iconValue?: (city: CityInfo) => string | null;
+	iconValue?: (city: CityRow) => string | null;
 };
 
 export type YieldMode = "rate" | "cumulative";
@@ -218,6 +224,16 @@ export const CITY_COLUMNS: CityColumn[] = [
 		defaultVisible: true,
 		getValue: (c) => c.owner_nation,
 		format: (v) => formatEnum(v as string | null, "NATION_"),
+		iconCategory: "crests",
+	},
+	{
+		key: "founder_nation",
+		label: "Founder",
+		defaultVisible: false,
+		getValue: (c) => c.founder_nation,
+		// Blank (not "Unknown") when the founder can't be resolved — pre-2.6.0
+		// blobs and the legacy share viewer ship no player_nations sidecar.
+		format: (v) => (v ? formatEnum(v as string, "NATION_") : ""),
 		iconCategory: "crests",
 	},
 	{
@@ -773,12 +789,32 @@ export function createDefaultSelection(
 	);
 }
 
-export function formatCityCell(column: CityColumn, city: CityInfo): string {
+export function formatCityCell(column: CityColumn, city: CityRow): string {
 	const value = column.getValue(city);
 	if (column.format) {
 		return column.format(value, city);
 	}
 	return value?.toString() ?? "—";
+}
+
+// Augment each city with its founding nation, resolved through the player_nations
+// sidecar via CityInfo.first_owner_player_xml_id (the same lookup the hex map uses
+// for architecture). founder_nation is null when player_nations is absent (legacy
+// share viewer) or the city predates first_owner_player_xml_id (pre-2.6.0 blob).
+export function resolveCityRows(
+	cities: CityInfo[],
+	playerNations: PlayerNationEntry[],
+): CityRow[] {
+	const nationByPlayer = new Map<number, string | null>(
+		playerNations.map((p) => [p.player_xml_id, p.nation]),
+	);
+	return cities.map((c) => ({
+		...c,
+		founder_nation:
+			c.first_owner_player_xml_id != null
+				? (nationByPlayer.get(c.first_owner_player_xml_id) ?? null)
+				: null,
+	}));
 }
 
 export function createYieldChartOption(
