@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-06-01-4411084] - 2026-06-01
+
+### Fixes
+
+- (games) derive head/OG title from formatGameTitle — [8eb4851](https://github.com/becked/per-ankh/commit/8eb4851f5931c30fb7800a09be485450a24ef38f)
+- (map) render city tiles in their founding nation's architecture — [4411084](https://github.com/becked/per-ankh/commit/4411084db503f6614e5e4098d26e5908fe677c39)
+
+### Other
+
+- add tournament beta-gate release plan — [af013aa](https://github.com/becked/per-ankh/commit/af013aaf2b87ea9b5709444fe898b8b878c191e4)
+
 ## [2026-06-01-dfdf8de] - 2026-06-01
 
 ### Features
