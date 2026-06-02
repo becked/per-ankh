@@ -403,6 +403,21 @@ export const cloudApi = {
 		return res.json() as Promise<GameListResponse>;
 	},
 
+	// Every game in the signed-in user's library whose stored parser_version
+	// differs from `currentVersion`. Unpaginated — drives the account-page
+	// bulk reparse, which must cover the whole library (listGames defaults to
+	// 50 rows, so it can't be used here).
+	listOutOfDate: async (
+		currentVersion: string,
+		opts?: CallOpts,
+	): Promise<GameListResponse> => {
+		const res = await request(
+			`/games/out-of-date?version=${encodeURIComponent(currentVersion)}`,
+			opts,
+		);
+		return res.json() as Promise<GameListResponse>;
+	},
+
 	// Public profile lookup. Returns null on 404 so the /users/[user_id]
 	// page can render its own not-found view without exceptions.
 	getUserProfile: async (

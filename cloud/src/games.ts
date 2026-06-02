@@ -2646,6 +2646,76 @@ export async function handleGameDownload(
 	});
 }
 
+// Lists every game in the session user's own library whose stored
+// parser_version differs from the supplied current version. Drives the
+// account-page bulk reparse. Unlike handleGameList this is not paginated —
+// reparse must cover the whole library, not just the first page. Mirrors
+// handleAdminListOutOfDate but scoped to the session user (no cross-user join).
+export async function handleGamesOutOfDate(
+	request: Request,
+	env: GamesEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	if (!session) {
+		return errorResponse("Unauthorized", 401, cors, "UNAUTHORIZED");
+	}
+	const url = new URL(request.url);
+	const version = url.searchParams.get("version");
+	if (!version) {
+		return errorResponse(
+			"Missing 'version' query param",
+			400,
+			cors,
+			"INVALID_QUERY",
+		);
+	}
+	// parser_version is NOT NULL (migration 0002), so the plain `!= ?`
+	// predicate matches every out-of-date row.
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT game_id, game_name, display_name, save_date, total_turns,
+		        user_nation, user_won, winner_nation, victory_type, map_size,
+		        is_public, collection_id, created_at, parser_version
+		 FROM games
+		 WHERE user_id = ? AND parser_version != ?
+		 ORDER BY created_at DESC`,
+	)
+		.bind(session.data.user_id, version)
+		.all<{
+			game_id: string;
+			game_name: string | null;
+			display_name: string | null;
+			save_date: string | null;
+			total_turns: number;
+			user_nation: string | null;
+			user_won: number | null;
+			winner_nation: string | null;
+			victory_type: string | null;
+			map_size: string | null;
+			is_public: number;
+			collection_id: number | null;
+			created_at: string;
+			parser_version: string;
+		}>();
+	const games = (rows.results ?? []).map((r) => ({
+		game_id: r.game_id,
+		game_name: r.game_name,
+		display_name: r.display_name,
+		save_date: r.save_date,
+		total_turns: r.total_turns,
+		user_nation: r.user_nation,
+		user_won: coerceD1Bool(r.user_won),
+		winner_nation: r.winner_nation,
+		victory_type: r.victory_type,
+		map_size: r.map_size,
+		is_public: r.is_public === 1,
+		collection_id: r.collection_id,
+		created_at: r.created_at,
+		parser_version: r.parser_version,
+	}));
+	return jsonResponse({ games, total: games.length }, 200, cors);
+}
+
 // ---------- Admin handlers ----------
 //
 // Gated by isSiteAdmin (Discord-ID match against ADMIN_DISCORD_ID secret).

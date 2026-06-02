@@ -5,7 +5,6 @@
 	import { cloudApi } from "$lib/api-cloud";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
-	import { PARSER_VERSION } from "$lib/parser/types";
 	import { toast } from "$lib/ui/toast";
 	import type { PageData } from "./$types";
 
@@ -23,9 +22,9 @@
 	let defaultPublic = $state(data.user.default_game_public);
 	let savingPref = $state(false);
 
-	const outOfDateGames = $derived(
-		data.games.filter((g) => g.parser_version !== PARSER_VERSION),
-	);
+	// Already filtered to out-of-date games server-side (see +page.ts), so the
+	// count and modal list cover the user's entire library, not just a page.
+	const outOfDateGames = $derived(data.outOfDateGames);
 
 	// Subtab triggers styled as chip-bar pills, matching the game-detail and
 	// aggregate-stats tab bars.

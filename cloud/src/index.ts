@@ -49,6 +49,7 @@ import {
 	handleAdminReparseUpload,
 	handleGameDownload,
 	handleGameList,
+	handleGamesOutOfDate,
 	handleGamePatch,
 	handlePublicRecentGames,
 	handleGameUpload,
@@ -658,6 +659,12 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/games/public-recent" },
 		route: "GET /v1/games/public-recent",
 		handler: (r, e) => handlePublicRecentGames(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/games/out-of-date" },
+		route: "GET /v1/games/out-of-date",
+		handler: (r, e) => handleGamesOutOfDate(r, e),
 	},
 	{
 		method: "GET",

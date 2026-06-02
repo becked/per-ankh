@@ -1,5 +1,6 @@
 import { redirect } from "@sveltejs/kit";
 import { cloudApi } from "$lib/api-cloud";
+import { PARSER_VERSION } from "$lib/parser/types";
 import { loginBounce } from "$lib/utils/safe-next";
 import type { PageLoad } from "./$types";
 
@@ -11,10 +12,16 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (!user) {
 		throw redirect(303, loginBounce(url));
 	}
-	const { games } = await cloudApi.listGames({ fetch });
+	// Server-side filtered + unpaginated: the whole out-of-date set, not just
+	// the first page of the games list. The Maintenance tab's bulk reparse
+	// needs every eligible game.
+	const { games: outOfDateGames } = await cloudApi.listOutOfDate(
+		PARSER_VERSION,
+		{ fetch },
+	);
 	return {
 		user,
-		games,
+		outOfDateGames,
 		meta: {
 			title: "Settings - Per-Ankh",
 			description: "Manage your Per-Ankh account settings.",
