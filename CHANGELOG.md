@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-06-01-9243edd] - 2026-06-01
+
+### Features
+
+- (game-detail) add optional Founder column to cities table — [9243edd](https://github.com/becked/per-ankh/commit/9243edd66d5d16e9315ddb08d80b9b0388eaf337)
+
 ## [2026-06-01-4411084] - 2026-06-01
 
 ### Fixes
