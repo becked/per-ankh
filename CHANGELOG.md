@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-06-01-3667cdf] - 2026-06-01
+
+### Fixes
+
+- (scripts) read .dev.vars with fs.readFileSync instead of cat — [54626ab](https://github.com/becked/per-ankh/commit/54626abc3909d1378c9824912cf5d792de1e2608)
+- (account) reparse the whole library, not just the first 50 games — [3667cdf](https://github.com/becked/per-ankh/commit/3667cdfc72d085190bbecfc067bc8294e33ee9e5)
+
 ## [2026-06-01-9243edd] - 2026-06-01
 
 ### Features
