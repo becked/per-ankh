@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-06-01-dfdf8de] - 2026-06-01
+
+### Features
+
+- (map) render rivers on the hex map — [1b028d0](https://github.com/becked/per-ankh/commit/1b028d016b1129a4f1db1ef2b6fb1d2b34447819)
+- (map) outline contested/unowned cities on the map — [dfdf8de](https://github.com/becked/per-ankh/commit/dfdf8de48b5dd2d20d02d6dd9e307df231a2ff79)
+
+### Other
+
+- (tournament) drop search placeholder on matches table filter — [6b7bdcf](https://github.com/becked/per-ankh/commit/6b7bdcf2dc7f474334ed483f8398081bf9393c9e)
+- (tournament) cover PR#49 review coverage gaps (#54) — [f81b7dc](https://github.com/becked/per-ankh/commit/f81b7dc5c26fdccf7657917b06432eb66bf6b1bc)
+
 ## [2026-06-01-26b6c1b] - 2026-06-01
 
 ### Other
