@@ -54,7 +54,7 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<div class="mb-4 flex items-center justify-between gap-3">
 					<h1 class="text-2xl font-bold text-gray-200">Tournaments</h1>
-					{#if data.user}
+					{#if data.user?.is_beta}
 						<CreateTournamentPopover />
 					{/if}
 				</div>

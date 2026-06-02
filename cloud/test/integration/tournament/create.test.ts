@@ -83,7 +83,7 @@ async function seedCreateEvents(userId: string, count: number): Promise<void> {
 }
 
 describe("POST /v1/tournaments — auth", () => {
-	it("returns 404 when no session cookie is present (beta gate hides existence)", async () => {
+	it("returns 401 when no session cookie is present", async () => {
 		const res = await request.post({
 			path: "/v1/tournaments",
 			body: {
@@ -93,8 +93,25 @@ describe("POST /v1/tournaments — auth", () => {
 			} satisfies CreateBody,
 		});
 		await expectErrorCode(res, {
-			status: 404,
-			code: "TOURNAMENT_NOT_FOUND",
+			status: 401,
+			code: "UNAUTHORIZED",
+		});
+	});
+
+	it("returns 403 TOURNAMENT_CREATE_FORBIDDEN for a non-allowlisted user", async () => {
+		const stranger = await makeUser({ omitBeta: true });
+		const res = await request.post({
+			path: "/v1/tournaments",
+			as: stranger,
+			body: {
+				slug: uniqueSlug("nonbeta"),
+				name: "Non-beta",
+				map_pool: pool(VALID_MAP),
+			} satisfies CreateBody,
+		});
+		await expectErrorCode(res, {
+			status: 403,
+			code: "TOURNAMENT_CREATE_FORBIDDEN",
 		});
 	});
 });

@@ -5,9 +5,9 @@
 // deriving the winner from the save data. Admin manual overrides go through
 // the admin retro-edit endpoint in admin.ts.
 //
-// All handlers gate on the tournament beta allowlist via
-// requireTournamentBeta. Non-beta users get 404 so they can't tell the
-// feature exists.
+// All handlers require an authenticated session (anonymous → 401). They no
+// longer gate on the tournament beta allowlist — participation is open to
+// any logged-in user.
 
 import { nanoid } from "nanoid";
 import { logError } from "../log";
@@ -24,35 +24,25 @@ import {
 	loadTournamentById,
 	type TournamentEnv,
 } from "./data";
-import { AuthzError, requireTournamentBeta } from "./authz";
 
-// Wraps the session lookup and the beta-gate check. Returns the session
-// for handler use, or an errorResponse-ready 404 on miss.
-async function authedBetaSession(
+// Wraps the session lookup for the authenticated player endpoints. Returns
+// the caller's user_id, or an errorResponse-ready 401 when anonymous.
+async function authedSession(
 	env: TournamentPlayerEnv,
 	request: Request,
 	cors: Record<string, string>,
 ): Promise<{ ok: true; userId: string } | { ok: false; response: Response }> {
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
-		// Anonymous → 404 from the beta gate; preserve the original 401
-		// shape would leak that signed-in users can reach the endpoint.
-		// Aligned with the rest of the beta-gated surface.
 		return {
 			ok: false,
-			response: errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND"),
+			response: errorResponse(
+				"Authentication required",
+				401,
+				cors,
+				"UNAUTHORIZED",
+			),
 		};
-	}
-	try {
-		await requireTournamentBeta(env, session.data);
-	} catch (e) {
-		if (e instanceof AuthzError) {
-			return {
-				ok: false,
-				response: errorResponse(e.message, e.status, cors, e.code),
-			};
-		}
-		throw e;
 	}
 	return { ok: true, userId: session.data.user_id };
 }
@@ -66,7 +56,7 @@ export async function handleMyTournaments(
 	env: TournamentPlayerEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
-	const gate = await authedBetaSession(env, request, cors);
+	const gate = await authedSession(env, request, cors);
 	if (!gate.ok) return gate.response;
 	const res = await env.SHARE_DB.prepare(
 		`SELECT DISTINCT t.tournament_id, t.slug, t.name, t.status,
@@ -94,7 +84,7 @@ export async function handleMyAdminTournaments(
 	env: TournamentPlayerEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
-	const gate = await authedBetaSession(env, request, cors);
+	const gate = await authedSession(env, request, cors);
 	if (!gate.ok) return gate.response;
 	const res = await env.SHARE_DB.prepare(
 		`SELECT t.tournament_id, t.slug, t.name, t.status
@@ -118,7 +108,7 @@ export async function handleMyMatches(
 	env: TournamentPlayerEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
-	const gate = await authedBetaSession(env, request, cors);
+	const gate = await authedSession(env, request, cors);
 	if (!gate.ok) return gate.response;
 	// Match by slot.user_id (after slot claim). Returns all matches a
 	// caller's slots have participated in, across all tournaments. DISTINCT
@@ -151,7 +141,7 @@ export async function handleDismissBanner(
 	env: TournamentPlayerEnv,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
-	const gate = await authedBetaSession(env, request, cors);
+	const gate = await authedSession(env, request, cors);
 	if (!gate.ok) return gate.response;
 	// 404 when the user has no slot in the tournament — keeps the API
 	// consistent with the rest of the surface (every other endpoint that
@@ -199,18 +189,7 @@ export async function handleTournamentSignup(
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
-		// 404 not 401 — keep the player-signup surface consistent with the rest
-		// of the beta-gated API, which never tells anonymous callers that
-		// signed-in users would reach a different result.
-		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
-	}
-	try {
-		await requireTournamentBeta(env, session.data);
-	} catch (e) {
-		if (e instanceof AuthzError) {
-			return errorResponse(e.message, e.status, cors, e.code);
-		}
-		throw e;
+		return errorResponse("Authentication required", 401, cors, "UNAUTHORIZED");
 	}
 
 	const body = await parseJsonBody(request, TournamentSignupSchema, cors);
@@ -354,15 +333,7 @@ export async function handleTournamentWithdraw(
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
-		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
-	}
-	try {
-		await requireTournamentBeta(env, session.data);
-	} catch (e) {
-		if (e instanceof AuthzError) {
-			return errorResponse(e.message, e.status, cors, e.code);
-		}
-		throw e;
+		return errorResponse("Authentication required", 401, cors, "UNAUTHORIZED");
 	}
 
 	const tournament = await loadTournamentById(env, tournamentId);

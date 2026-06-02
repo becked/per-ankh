@@ -1,8 +1,9 @@
 // Tournament authorization helpers.
 //
-// requireTournamentBeta — the caller must own a row in tournament_beta_users
-// (operator-managed allowlist for the private beta). Throws 404, not 403,
-// so non-beta callers can't tell the feature exists.
+// isTournamentBeta — whether the caller owns a row in tournament_beta_users
+// (operator-managed allowlist). Gates tournament *creation* only; reads,
+// signup, and admin actions are open. Returns a boolean — callers decide the
+// failure response (create returns 403 TOURNAMENT_CREATE_FORBIDDEN).
 //
 // requireTournamentAdmin — the caller must own a row in tournament_admins
 // for the target tournament. Throws AuthzError with a status code; handlers
@@ -22,27 +23,9 @@ export class AuthzError extends Error {
 	}
 }
 
-// Beta gate. Throws 404 (not 403) so non-members can't distinguish "feature
-// hidden from me" from "feature doesn't exist." Lookup is keyed on user_id
-// after the login-time pin in handleDiscordCallback runs; pre-login grants
-// (keyed only on discord_id) become reachable on the user's next sign-in.
-export async function requireTournamentBeta(
-	env: TournamentEnv,
-	session: SessionData | null,
-): Promise<void> {
-	if (!session) {
-		throw new AuthzError(404, "TOURNAMENT_NOT_FOUND", "Not found");
-	}
-	const row = await env.SHARE_DB.prepare(
-		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
-	)
-		.bind(session.user_id)
-		.first<{ ok: number }>();
-	if (!row) {
-		throw new AuthzError(404, "TOURNAMENT_NOT_FOUND", "Not found");
-	}
-}
-
+// Allowlist check, keyed on user_id after the login-time pin in
+// handleDiscordCallback runs; pre-login grants (keyed only on discord_id)
+// become reachable on the user's next sign-in.
 export async function isTournamentBeta(
 	env: TournamentEnv,
 	session: SessionData | null,

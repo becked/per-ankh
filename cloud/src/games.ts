@@ -34,11 +34,7 @@ import { isSiteAdmin } from "./admin";
 import { buildAvatarUrl } from "./auth";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
-import {
-	AuthzError,
-	isTournamentAdmin,
-	requireTournamentBeta,
-} from "./tournament/authz";
+import { isTournamentAdmin } from "./tournament/authz";
 import { maybeAdvanceAfterMatchReport } from "./tournament/admin";
 import {
 	buildSummaryGameContext,
@@ -1050,17 +1046,8 @@ export async function handleGameUpload(
 				"INVALID_FORM",
 			);
 		}
-		// Beta gate before the match lookup — a non-beta user with a
-		// guessed match ID gets the same 404 they'd get on the tournament
-		// list, not a "match not found" that hints the feature exists.
-		try {
-			await requireTournamentBeta(env, sessionData!);
-		} catch (e) {
-			if (e instanceof AuthzError) {
-				return errorResponse(e.message, e.status, cors, e.code);
-			}
-			throw e;
-		}
+		// Authorization is the isParticipant-or-isAdmin check below; match
+		// reporting is open to any logged-in participant (no beta gate).
 		const match = await env.SHARE_DB.prepare(
 			`SELECT m.slot_a_id, m.slot_b_id, r.tournament_id, t.name AS tournament_name,
 			        t.status AS tournament_status,

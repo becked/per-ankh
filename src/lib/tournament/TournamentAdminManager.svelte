@@ -59,10 +59,7 @@
 			{
 				setBusy: (b) => (busy = b),
 				failMessage: "Couldn't add admin",
-				success: (res) =>
-					res.is_beta
-						? `@${target.discord_username} is now an admin.`
-						: `@${target.discord_username} was added, but isn't in the tournament beta yet — they can't open the tournament until granted beta access.`,
+				success: `@${target.discord_username} is now an admin.`,
 			},
 		);
 		if (ok !== null) {

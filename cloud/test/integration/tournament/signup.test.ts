@@ -34,7 +34,7 @@ async function openSignups(tournamentId: string): Promise<void> {
 }
 
 describe("POST /v1/tournaments/:id/signup", () => {
-	it("returns 404 to an unauthenticated request (beta-gate consistency)", async () => {
+	it("returns 401 to an unauthenticated request", async () => {
 		const t = await makeTournament();
 		await openSignups(t.tournamentId);
 		const res = await request.post({
@@ -42,8 +42,8 @@ describe("POST /v1/tournaments/:id/signup", () => {
 			body: { division: "A" },
 		});
 		await expectErrorCode(res, {
-			status: 404,
-			code: "TOURNAMENT_NOT_FOUND",
+			status: 401,
+			code: "UNAUTHORIZED",
 		});
 	});
 

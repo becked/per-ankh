@@ -50,10 +50,11 @@ export interface UserMe {
 	// be entered under.
 	discord_username: string;
 	avatar_url: string;
-	// True iff the user is on the tournament beta allowlist. Drives the
-	// header's Tournaments link visibility and skips layout-load tournament
-	// fetches for non-beta users. Not load-bearing for security — the
-	// worker re-checks on every tournament endpoint.
+	// True iff the user is on the tournament allowlist, i.e. may *create*
+	// tournaments. Drives the create-button visibility on /tournaments.
+	// (Reads, signup, and granted-admin actions are open to all users.)
+	// Not load-bearing for security — the worker re-checks create on the
+	// server. The "beta" name is retained from the private-beta era.
 	is_beta: boolean;
 	// True iff the user's discord_id matches the ADMIN_DISCORD_ID secret on
 	// the Worker. Gates the /admin/* SvelteKit routes. Not load-bearing for
@@ -850,7 +851,7 @@ export const cloudApi = {
 		return res.json() as Promise<{ matches: MyMatchEntry[] }>;
 	},
 
-	// --- Tournaments (create — any signed-in user) ---
+	// --- Tournaments (create — allowlisted users only) ---
 	createTournament: async (
 		body: CreateTournamentBody,
 		opts?: CallOpts,
@@ -893,22 +894,20 @@ export const cloudApi = {
 		return res.json() as Promise<{ admins: TournamentAdmin[] }>;
 	},
 
-	// Grant another Per-Ankh user admin on this tournament. is_beta in the
-	// response is false when the new admin isn't on the beta allowlist (and so
-	// can't reach the tournament yet) — the UI surfaces a warning, but the
-	// grant still lands. Beta is not auto-granted.
+	// Grant another Per-Ankh user admin on this tournament. A granted admin can
+	// act regardless of beta status — beta now gates only tournament creation.
 	grantTournamentAdmin: async (
 		tournamentId: string,
 		userId: string,
 		opts?: CallOpts,
-	): Promise<{ admin: TournamentAdmin; is_beta: boolean }> => {
+	): Promise<{ admin: TournamentAdmin }> => {
 		const res = await request(`/tournaments/${tournamentId}/admins`, {
 			...opts,
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify({ user_id: userId }),
 		});
-		return res.json() as Promise<{ admin: TournamentAdmin; is_beta: boolean }>;
+		return res.json() as Promise<{ admin: TournamentAdmin }>;
 	},
 
 	// Revoke an admin. Server returns 409 CANNOT_REMOVE_CREATOR if userId is

@@ -4,12 +4,10 @@
 // Anything more user-table-shaped that grows beyond a few hundred lines
 // can split into its own subdir.
 //
-// Auth model mirrors the rest of the beta surface:
-//   1. session required (anonymous → 404, not 401 — keeps the surface
-//      consistent with /v1/tournaments/* which never tells anonymous
-//      callers that authed callers would see different results)
-//   2. requireTournamentBeta gate (404 on miss for the same reason)
-//   3. per-user rate limit on the user_id, audited via the shared
+// Auth model:
+//   1. session required (anonymous → 401) — the search returns user
+//      identity fields, so it's logged-in only.
+//   2. per-user rate limit on the user_id, audited via the shared
 //      `events` table — same engine as the tournament_view limit.
 //
 // Privacy: only the four fields the autocomplete needs are returned
@@ -22,15 +20,14 @@ import { countEventsSince } from "./games";
 import { logError } from "./log";
 import { UserSearchQuerySchema } from "./schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "./session";
-import { AuthzError, requireTournamentBeta } from "./tournament/authz";
 import type { TournamentEnv } from "./tournament/data";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "./util";
 
 // Generous ceiling — typing 5 chars to find someone, picking from the
 // dropdown, costs ~4 requests per slot. An admin adding a 16-player
 // tournament makes ~64 requests; 60/hour limits that to one full slot
-// list per hour from a single account. The beta gate already bounds
-// the actor population, so we mostly want to bound runaway scripts.
+// list per hour from a single account. Any logged-in user can search, so
+// the limit mostly bounds runaway scripts.
 export const USER_SEARCH_PER_USER_PER_HOUR = 60;
 
 const DEFAULT_LIMIT = 10;
@@ -46,15 +43,7 @@ export async function handleUserSearch(
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
-		return errorResponse("Not found", 404, cors, "USER_SEARCH_NOT_FOUND");
-	}
-	try {
-		await requireTournamentBeta(env, session.data);
-	} catch (e) {
-		if (e instanceof AuthzError) {
-			return errorResponse(e.message, e.status, cors, e.code);
-		}
-		throw e;
+		return errorResponse("Authentication required", 401, cors, "UNAUTHORIZED");
 	}
 
 	// Rate limit per user. Check BEFORE doing any DB work or audit-row

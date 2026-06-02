@@ -16,11 +16,11 @@ beforeAll(async () => {
 const EXPECTED_KEYS = ["name", "slug", "status", "tournament_id"].sort();
 
 describe("GET /v1/users/me/admin-tournaments", () => {
-	it("returns 404 to an unauthenticated request (beta gate hides existence)", async () => {
+	it("returns 401 to an unauthenticated request", async () => {
 		const res = await request.get({ path: "/v1/users/me/admin-tournaments" });
 		await expectErrorCode(res, {
-			status: 404,
-			code: "TOURNAMENT_NOT_FOUND",
+			status: 401,
+			code: "UNAUTHORIZED",
 		});
 	});
 

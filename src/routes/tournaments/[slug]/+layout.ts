@@ -1,20 +1,13 @@
-import { error, redirect } from "@sveltejs/kit";
+import { error } from "@sveltejs/kit";
 import { ApiError, cloudApi } from "$lib/api-cloud";
-import { loginBounce } from "$lib/utils/safe-next";
 import type { LayoutLoad } from "./$types";
 
 // Shared tournament data for every page under /tournaments/[slug] (the overview
 // and the schedule view both need the tournament, standings, bracket, and match
 // list). Loaded once here so child pages don't refetch; each page contributes
 // only its own page meta. SvelteKit merges this layout data into page data.
-export const load: LayoutLoad = async ({ params, fetch, url }) => {
-	// Anonymous visitors bounce to login with ?next= so a shared tournament
-	// URL works as a "log in to see this" entry point, matching /tournaments
-	// and /dashboard. After login they land back here.
-	const me = await cloudApi.getMe({ fetch });
-	if (!me) {
-		throw redirect(303, loginBounce(url));
-	}
+export const load: LayoutLoad = async ({ params, fetch }) => {
+	// Public — shared tournament URLs render for anonymous visitors.
 	let tournament;
 	try {
 		tournament = await cloudApi.getTournament(params.slug, { fetch });

@@ -44,11 +44,11 @@ const EXPECTED_MY_MATCH_KEYS = [
 ].sort();
 
 describe("GET /v1/users/me/matches", () => {
-	it("returns 404 to an unauthenticated request (beta gate hides existence)", async () => {
+	it("returns 401 to an unauthenticated request", async () => {
 		const res = await request.get({ path: "/v1/users/me/matches" });
 		await expectErrorCode(res, {
-			status: 404,
-			code: "TOURNAMENT_NOT_FOUND",
+			status: 401,
+			code: "UNAUTHORIZED",
 		});
 	});
 

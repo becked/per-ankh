@@ -46,11 +46,7 @@ import {
 import { assignMapsToPairings } from "./maps";
 import { pairSwissRound, type Pairing } from "./pairing";
 import { computeStandings, rankStandings } from "./standings";
-import {
-	AuthzError,
-	requireTournamentAdmin,
-	requireTournamentBeta,
-} from "./authz";
+import { AuthzError, isTournamentBeta, requireTournamentAdmin } from "./authz";
 import {
 	bumpTournamentUpdatedAt,
 	loadMatch,
@@ -234,10 +230,8 @@ export interface TournamentAdminEnv extends TournamentEnv, SessionEnv {
 // any failure mode after sending the appropriate response back through the
 // `respond` callback pattern. Saves ~10 lines per handler.
 //
-// Gate order: anon → beta → admin. Anon and non-beta both collapse to a
-// 404 TOURNAMENT_NOT_FOUND to keep the URL existence hidden from outside
-// the beta cohort; only an authed beta caller who isn't an admin gets the
-// distinguishing 403 NOT_TOURNAMENT_ADMIN.
+// Gate order: anon → admin. Anonymous callers get 401; an authed non-admin
+// gets 403 NOT_TOURNAMENT_ADMIN.
 async function authedTournament(
 	tournamentId: string,
 	request: Request,
@@ -251,11 +245,15 @@ async function authedTournament(
 	if (!session) {
 		return {
 			ok: false,
-			response: errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND"),
+			response: errorResponse(
+				"Authentication required",
+				401,
+				cors,
+				"UNAUTHORIZED",
+			),
 		};
 	}
 	try {
-		await requireTournamentBeta(env, session.data);
 		await requireTournamentAdmin(env, session.data, tournamentId);
 	} catch (e) {
 		if (e instanceof AuthzError) {
@@ -448,18 +446,18 @@ export async function handleCreateTournament(
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
-		// 404 to anon, not 401 — keeps consistent with the rest of the
-		// gated surface, which hides the tournament URL space entirely
-		// from non-beta callers.
-		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+		return errorResponse("Authentication required", 401, cors, "UNAUTHORIZED");
 	}
-	try {
-		await requireTournamentBeta(env, session.data);
-	} catch (e) {
-		if (e instanceof AuthzError) {
-			return errorResponse(e.message, e.status, cors, e.code);
-		}
-		throw e;
+	// Create stays allowlist-only — the one surviving beta gate. A logged-in
+	// caller who isn't on the allowlist gets a plain 403 (not the 404 the
+	// hidden-feature gate used to throw).
+	if (!(await isTournamentBeta(env, session.data))) {
+		return errorResponse(
+			"Tournament creation is limited to approved organizers",
+			403,
+			cors,
+			"TOURNAMENT_CREATE_FORBIDDEN",
+		);
 	}
 
 	// Per-user create-tournament rate limit. Bounds spam from a single
@@ -827,9 +825,8 @@ export async function handleListTournamentAdmins(
 
 // POST /v1/tournaments/:id/admins { user_id } — grant another Per-Ankh user
 // admin on this tournament. The target must already exist as a user (the
-// autocomplete sources from /v1/users/search). Beta is deliberately NOT
-// auto-granted — the response reports the target's beta status so the UI can
-// warn that a non-beta admin can't actually reach the tournament yet.
+// autocomplete sources from /v1/users/search). A granted admin can act
+// regardless of beta status — beta now gates only tournament creation.
 export async function handleGrantTournamentAdmin(
 	tournamentId: string,
 	request: Request,
@@ -864,13 +861,6 @@ export async function handleGrantTournamentAdmin(
 		.bind(tournamentId, targetUserId)
 		.run();
 
-	const betaRow = await env.SHARE_DB.prepare(
-		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
-	)
-		.bind(targetUserId)
-		.first<{ ok: number }>();
-	const is_beta = betaRow !== null;
-
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	logTournamentAdminAction(env, a.userId, tournamentId, "admin_granted", {
 		granted_user_id: targetUserId,
@@ -884,7 +874,6 @@ export async function handleGrantTournamentAdmin(
 				avatar_url: buildAvatarUrl(target.discord_id, target.avatar_hash),
 				is_creator: target.user_id === a.tournament.created_by_user_id,
 			},
-			is_beta,
 		},
 		201,
 		cors,
@@ -952,7 +941,7 @@ export async function handleDeleteTournament(
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
 	if (!session) {
-		return errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND");
+		return errorResponse("Authentication required", 401, cors, "UNAUTHORIZED");
 	}
 
 	const tournament = await loadTournamentById(env, tournamentId);
@@ -967,17 +956,8 @@ export async function handleDeleteTournament(
 
 	const siteAdmin = await isSiteAdmin(env, session);
 	if (!siteAdmin) {
-		// Non-site-admins must be inside the beta cohort (404 hides existence)
-		// and must be the creator specifically (403 for any other beta user,
-		// including co-admins).
-		try {
-			await requireTournamentBeta(env, session.data);
-		} catch (e) {
-			if (e instanceof AuthzError) {
-				return errorResponse(e.message, e.status, cors, e.code);
-			}
-			throw e;
-		}
+		// Non-site-admins must be the tournament creator specifically (403 for
+		// any other admin, including co-admins).
 		if (tournament.created_by_user_id !== session.data.user_id) {
 			return errorResponse(
 				"Only the tournament creator or a site admin can delete a tournament",
@@ -1680,8 +1660,8 @@ export async function handlePatchMatchMap(
 // participant may use it in addition to a tournament admin. Loads + scopes the
 // match to the URL's tournament (404 hides existence cross-tournament) before
 // the authz branch, then authorizes the caller as admin OR owner of either
-// slot, and enforces the per-user schedule rate limit. Anon/non-beta collapse
-// to 404 to keep the URL space hidden, matching authedTournament.
+// slot, and enforces the per-user schedule rate limit. Anonymous callers get
+// 401, matching authedTournament.
 async function authedMatchScheduler(
 	tournamentId: string,
 	matchId: string,
@@ -1696,19 +1676,13 @@ async function authedMatchScheduler(
 	if (!session) {
 		return {
 			ok: false,
-			response: errorResponse("Not found", 404, cors, "TOURNAMENT_NOT_FOUND"),
+			response: errorResponse(
+				"Authentication required",
+				401,
+				cors,
+				"UNAUTHORIZED",
+			),
 		};
-	}
-	try {
-		await requireTournamentBeta(env, session.data);
-	} catch (e) {
-		if (e instanceof AuthzError) {
-			return {
-				ok: false,
-				response: errorResponse(e.message, e.status, cors, e.code),
-			};
-		}
-		throw e;
 	}
 
 	const match = await loadMatch(env, matchId);

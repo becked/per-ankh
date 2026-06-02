@@ -110,7 +110,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/map", () => {
 	});
 
 	describe("authentication & authorization regression", () => {
-		it("returns 404 to an unauthenticated request (beta gate hides existence)", async () => {
+		it("returns 401 to an unauthenticated request", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 			const m = await firstPendingMatchOf(t);
 
@@ -120,8 +120,8 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/map", () => {
 			});
 
 			await expectErrorCode(res, {
-				status: 404,
-				code: "TOURNAMENT_NOT_FOUND",
+				status: 401,
+				code: "UNAUTHORIZED",
 			});
 		});
 

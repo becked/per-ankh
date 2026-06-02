@@ -16,14 +16,14 @@ beforeAll(async () => {
 });
 
 describe("POST /v1/users/me/tournaments/:id/dismiss-banner", () => {
-	it("returns 404 to an unauthenticated request (beta gate hides existence)", async () => {
+	it("returns 401 to an unauthenticated request", async () => {
 		const t = await makeTournament();
 		const res = await request.post({
 			path: `/v1/users/me/tournaments/${t.tournamentId}/dismiss-banner`,
 		});
 		await expectErrorCode(res, {
-			status: 404,
-			code: "TOURNAMENT_NOT_FOUND",
+			status: 401,
+			code: "UNAUTHORIZED",
 		});
 	});
 

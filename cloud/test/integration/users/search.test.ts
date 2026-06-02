@@ -2,7 +2,7 @@
 // the tournament admin's slot-creation form.
 //
 // Covers:
-//   * Auth + beta-gate (anonymous and non-beta both 404)
+//   * Auth (anonymous → 401; any logged-in user may search)
 //   * "Still typing" floor (q.length < 2 returns empty, no audit row)
 //   * Prefix-only matching on display_name (suffix queries don't match)
 //   * Case-insensitive (q lowercased, display_name lowered server-side)
@@ -44,21 +44,21 @@ async function seedSearchEvents(userId: string, count: number): Promise<void> {
 }
 
 describe("GET /v1/users/search — auth", () => {
-	it("returns 404 to an unauthenticated request", async () => {
+	it("returns 401 to an unauthenticated request", async () => {
 		const res = await request.get({ path: "/v1/users/search?q=ab" });
 		await expectErrorCode(res, {
-			status: 404,
-			code: "USER_SEARCH_NOT_FOUND",
+			status: 401,
+			code: "UNAUTHORIZED",
 		});
 	});
 
-	it("returns 404 to a signed-in non-beta user (gate hides existence)", async () => {
+	it("succeeds for a signed-in non-allowlisted user", async () => {
 		const stranger = await makeUser({ omitBeta: true });
 		const res = await request.get({
 			path: "/v1/users/search?q=ab",
 			as: stranger,
 		});
-		await expectErrorCode(res, { status: 404, code: "TOURNAMENT_NOT_FOUND" });
+		await expectOk<SearchResponse>(res);
 	});
 });
 

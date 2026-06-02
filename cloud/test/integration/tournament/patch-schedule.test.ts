@@ -187,7 +187,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 	});
 
 	describe("authentication & authorization", () => {
-		it("returns 404 to an unauthenticated request (beta gate hides existence)", async () => {
+		it("returns 401 to an unauthenticated request", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 			const m = await firstPendingMatchOf(t);
 
@@ -195,7 +195,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}/schedule`,
 				body: { scheduled_at: WHEN },
 			});
-			await expectErrorCode(res, { status: 404, code: "TOURNAMENT_NOT_FOUND" });
+			await expectErrorCode(res, { status: 401, code: "UNAUTHORIZED" });
 		});
 
 		it("returns 403 to a beta user who is neither admin nor participant", async () => {

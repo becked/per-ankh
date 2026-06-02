@@ -1,6 +1,6 @@
 // TO-only CSV export. GET /v1/tournaments/:id/export returns a zip of
 // standings.csv + matches.csv for tournament organizers to keep, share, or
-// analyze. Gated identically to the admin mutation handlers (beta + admin),
+// analyze. Gated identically to the admin mutation handlers (admin-only),
 // with a generous per-user rate limit whose audit event doubles as an export
 // log. The work is cheap — bounded D1 reads, no R2 — so this is a backstop,
 // not a real constraint.
@@ -12,11 +12,7 @@ import { cloudCorsHeaders, errorResponse } from "../util";
 import { countEventsSince } from "../games";
 import { logError } from "../log";
 import { TOURNAMENT_EXPORT_PER_HOUR } from "./limits";
-import {
-	AuthzError,
-	requireTournamentAdmin,
-	requireTournamentBeta,
-} from "./authz";
+import { AuthzError, requireTournamentAdmin } from "./authz";
 import {
 	loadSlots,
 	loadTournamentById,
@@ -180,7 +176,6 @@ export async function handleTournamentExport(
 		return errorResponse("Authentication required", 401, cors, "UNAUTHORIZED");
 	}
 	try {
-		await requireTournamentBeta(env, session.data);
 		await requireTournamentAdmin(env, session.data, tournamentId);
 	} catch (e) {
 		if (e instanceof AuthzError) {

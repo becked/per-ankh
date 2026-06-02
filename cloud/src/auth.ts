@@ -493,13 +493,13 @@ export async function handleDiscordCallback(
 		.bind(upsert.user_id)
 		.run();
 
-	// Tournament beta-allowlist pin. Operators can pre-grant beta access by
+	// Tournament beta-allowlist pin. Operators can pre-grant create access by
 	// discord_id before a user first signs in (see
 	// `./per-ankh admin tournament beta-grant`). On login we fill in the
-	// user_id so the request-time check (requireTournamentBeta in
+	// user_id so the request-time check (isTournamentBeta in
 	// tournament/authz.ts) can use the fast PK lookup. Mirrors the slot-
 	// claim pattern below. Fire-and-forget — failure just means the user
-	// has to re-login before they see tournaments.
+	// has to re-login before they can create tournaments.
 	try {
 		await env.SHARE_DB.prepare(
 			`UPDATE tournament_beta_users SET user_id = ?
@@ -743,9 +743,9 @@ export async function handleMe(
 		session.data.discord_username,
 	);
 
-	// is_beta lets the frontend hide tournament UI (header link, layout
-	// fetches) for non-beta users. Not load-bearing for authz — the
-	// worker re-checks on every tournament endpoint.
+	// is_beta gates the create-tournament button on the frontend (allowlisted
+	// users only). Not load-bearing for authz — the worker re-checks create
+	// on the server.
 	const beta = await env.SHARE_DB.prepare(
 		"SELECT 1 AS ok FROM tournament_beta_users WHERE user_id = ? LIMIT 1",
 	)

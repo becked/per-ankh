@@ -38,9 +38,9 @@ let discordIdCounter = 1_000_000_000_000_000_000n;
 
 export async function makeUser(opts?: {
 	discordUsername?: string;
-	// Skip the default tournament_beta_users seed. Every cloud test suite is
-	// tournament-related so the default is "yes, in the beta" — only
-	// beta-gate tests opt out.
+	// Skip the default tournament_beta_users seed. Beta now only gates
+	// tournament *creation*; the default is "allowlisted" so created users
+	// can create tournaments. Tests of the create gate opt out.
 	omitBeta?: boolean;
 }): Promise<TestUser> {
 	const userId = nanoid(21);
@@ -69,12 +69,11 @@ export async function makeUser(opts?: {
 	return user;
 }
 
-// Insert a tournament_beta_users row for the user. Required for any
-// tournament endpoint to return 2xx — the production gate (see
-// cloud/src/tournament/authz.ts requireTournamentBeta) returns 404 for
-// non-members. `makeTournament` calls this for its admin + slot owners by
-// default, so tests that exercise the happy path don't need to call it
-// themselves; tests of the gate itself opt out via `omitBeta: true`.
+// Insert a tournament_beta_users row for the user. The allowlist now gates
+// only tournament creation (see handleCreateTournament); reads, signup, and
+// admin actions don't require it. `makeUser` seeds it by default so created
+// users can create tournaments; tests of the create gate opt out via
+// `omitBeta: true`.
 export async function seedBetaUser(user: TestUser): Promise<void> {
 	await env.SHARE_DB.prepare(
 		`INSERT INTO tournament_beta_users (discord_id, user_id) VALUES (?, ?)
@@ -131,9 +130,9 @@ export interface MakeTournamentOpts {
 	};
 	readonly allowedMaps?: readonly string[]; // default ["MAP_SEASIDE", "MAP_RIVER"]
 	readonly advanceTo?: TournamentPhase; // default "setup"
-	// Skip the default seedBetaUser call for the admin + slot owners. Used
-	// by tests that want to verify the beta gate's 404 behavior with a
-	// realistic tournament setup.
+	// Skip the default seedBetaUser call for the admin + slot owners (so the
+	// admin can't create *new* tournaments). The tournament built here works
+	// regardless, since admin actions no longer require beta.
 	readonly omitBeta?: boolean;
 }
 
@@ -150,10 +149,9 @@ export async function makeTournament(
 	const allowedMaps = opts.allowedMaps ?? ["MAP_SEASIDE", "MAP_RIVER"];
 	const advanceTo: TournamentPhase = opts.advanceTo ?? "setup";
 
-	// Beta-seed every user this tournament will touch via API. Done before
-	// the admin INSERT so the (now beta-gated) /slots handler call below
-	// passes. Tests that exercise the gate itself set omitBeta: true and
-	// call seedBetaUser themselves on the users that should pass.
+	// Beta-seed the admin + slot owners by default so they can also create
+	// their own tournaments in follow-on assertions. Not required for the
+	// /slots or /start calls below — those need admin, not beta.
 	if (!opts.omitBeta) {
 		await seedBetaUser(admin);
 		for (const u of opts.slotOwners?.A ?? []) await seedBetaUser(u);
