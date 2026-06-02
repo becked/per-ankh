@@ -14,7 +14,7 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { MapTile } from "$lib/types/MapTile";
-	import type { PlayerRosterEntry } from "$lib/parser/types";
+	import type { PlayerRosterEntry, PlayerNationEntry } from "$lib/parser/types";
 	import { Tabs } from "bits-ui";
 	import {
 		formatEnum,
@@ -60,6 +60,7 @@
 		gameReligions,
 		playerWonders,
 		playerRoster = [],
+		playerNations = [],
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -89,6 +90,9 @@
 		// every blob; used to recover player ids for pre-2.6.0 game_details
 		// rows that lack them. Defaults to [] for legacy callers.
 		playerRoster?: PlayerRosterEntry[];
+		// player_xml_id → nation, used by the map to resolve each city's founding
+		// nation for architecture rendering. Defaults to [] for legacy callers.
+		playerNations?: PlayerNationEntry[];
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -532,6 +536,7 @@
 		<MapTab
 			{mapTiles}
 			cities={cityStatistics.cities}
+			{playerNations}
 			totalTurns={gameDetails.total_turns}
 			selectedTurn={selectedMapTurn}
 			onTurnChange={onMapTurnChange}

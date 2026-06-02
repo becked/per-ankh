@@ -4,6 +4,7 @@
 	import { IconLayer, PathLayer, PolygonLayer } from "@deck.gl/layers";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityInfo } from "$lib/types/CityInfo";
+	import type { PlayerNationEntry } from "$lib/parser/types";
 	import { getCivilizationColor, getMutedTerrainColor } from "$lib/config";
 	import {
 		ATLAS_MANIFEST,
@@ -90,6 +91,24 @@
 		return aliases.get(owner)?.capital ?? null;
 	}
 
+	// The nation whose architecture a tile renders in. The game styles a city by
+	// its FOUNDING nation regardless of later captures — and keeps that style
+	// even while the city is unowned mid-capture (owner_nation === null on every
+	// tile). So resolve the founder nation for the tile's city; fall back to the
+	// tile's current owner when the founder is unknown (pre-2.6.0 blob with no
+	// first_owner_player_xml_id, or the legacy share viewer, which ships no
+	// player_nations — both leave founderByCity empty).
+	function renderNationFor(
+		tile: MapTile,
+		founderByCity: Map<string, string | null>,
+	): string | null {
+		if (tile.owner_city) {
+			const founder = founderByCity.get(tile.owner_city);
+			if (founder) return founder;
+		}
+		return tile.owner_nation;
+	}
+
 	// Returns the urban family whose composite atlas covers (tile.improvement,
 	// owner_nation), or null. Used both to filter tiles into per-family
 	// composite IconLayers AND to decide whether the urban-empty / base /
@@ -98,9 +117,11 @@
 		tile: MapTile,
 		aliases: Map<string, NationAliasEntry>,
 		familyManifests: Record<string, AtlasManifest>,
+		founderByCity: Map<string, string | null>,
 	): string | null {
-		if (!tile.improvement || !tile.owner_nation) return null;
-		const family = urbanFamilyFor(tile.owner_nation, aliases);
+		const nation = renderNationFor(tile, founderByCity);
+		if (!tile.improvement || !nation) return null;
+		const family = urbanFamilyFor(nation, aliases);
 		if (!family) return null;
 		const fm = familyManifests[family];
 		return fm?.sprites[tile.improvement] ? family : null;
@@ -114,9 +135,11 @@
 		tile: MapTile,
 		aliases: Map<string, NationAliasEntry>,
 		baseManifest: AtlasManifest,
+		founderByCity: Map<string, string | null>,
 	): string | null {
-		if (!tile.is_capital || !tile.owner_nation) return null;
-		const cf = capitalFamilyFor(tile.owner_nation, aliases);
+		const nation = renderNationFor(tile, founderByCity);
+		if (!tile.is_capital || !nation) return null;
+		const cf = capitalFamilyFor(nation, aliases);
 		if (!cf) return null;
 		const key = `CAPITAL_${cf}`;
 		return baseManifest.sprites[key] ? key : null;
@@ -155,6 +178,7 @@
 		tile: MapTile,
 		aliases: Map<string, NationAliasEntry>,
 		manifest: AtlasManifest,
+		founderByCity: Map<string, string | null>,
 	): string | null {
 		const t = tile.terrain;
 		if (!t) return null;
@@ -168,7 +192,10 @@
 			return manifest.sprites[key] ? key : null;
 		}
 		if (biomePart === "URBAN") {
-			const family = urbanFamilyFor(tile.owner_nation, aliases);
+			const family = urbanFamilyFor(
+				renderNationFor(tile, founderByCity),
+				aliases,
+			);
 			if (family) {
 				return manifest.sprites.TERRAIN_3D_TEMPERATE_FLAT
 					? "TERRAIN_3D_TEMPERATE_FLAT"
@@ -186,6 +213,7 @@
 		tile: MapTile,
 		aliases: Map<string, NationAliasEntry>,
 		manifest: AtlasManifest,
+		founderByCity: Map<string, string | null>,
 	): string | null {
 		const t = tile.terrain;
 		if (!t) return null;
@@ -203,7 +231,10 @@
 			t === "TERRAIN_FROST" ? "TUNDRA" : t.replace(/^TERRAIN_/, "");
 		if (biomePart === "WATER") return null;
 		if (biomePart === "URBAN") {
-			const family = urbanFamilyFor(tile.owner_nation, aliases);
+			const family = urbanFamilyFor(
+				renderNationFor(tile, founderByCity),
+				aliases,
+			);
 			if (!family) return null;
 			const key = `TERRAIN_3D_TEMPERATE_${heightPart}`;
 			return manifest.sprites[key] ? key : null;
@@ -233,6 +264,7 @@
 	let {
 		tiles,
 		cities = [],
+		playerNations = [],
 		height = "600px",
 		totalTurns = null,
 		selectedTurn = null,
@@ -242,6 +274,10 @@
 		// Used to resolve owner_city → family for the tooltip's family crest.
 		// Empty array is fine — tooltip just omits the family crest.
 		cities?: CityInfo[];
+		// player_xml_id → nation, used to resolve each city's founding nation
+		// (CityInfo.first_owner_player_xml_id) for architecture rendering. Empty
+		// is fine — rendering then falls back to the tile's current owner_nation.
+		playerNations?: PlayerNationEntry[];
 		height?: string;
 		totalTurns?: number | null;
 		selectedTurn?: number | null;
@@ -271,6 +307,29 @@
 				key = c.family_class.replace(/^FAMILYCLASS_/, "ARCHETYPE_");
 			}
 			map.set(c.city_name, key);
+		}
+		return map;
+	});
+
+	// city_name → founding nation, the nation whose architecture the city renders
+	// in (see renderNationFor). Resolves each city's first_owner_player_xml_id
+	// through the player_nations sidecar. Empty when player_nations is absent
+	// (the legacy share viewer ships none), so callers fall back to owner_nation.
+	const cityFounderNationByName = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
+		const map = new Map<string, string | null>();
+		if (playerNations.length === 0) return map;
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
+		const nationByPlayer = new Map<number, string | null>();
+		for (const p of playerNations) {
+			nationByPlayer.set(p.player_xml_id, p.nation);
+		}
+		for (const c of cities) {
+			const founder =
+				c.first_owner_player_xml_id != null
+					? (nationByPlayer.get(c.first_owner_player_xml_id) ?? null)
+					: null;
+			map.set(c.city_name, founder);
 		}
 		return map;
 	});
@@ -1572,17 +1631,21 @@
 	}
 
 	// React to tile changes by ensuring every present-on-map nation's urban
-	// family atlas is loaded. Reads `tiles` and `nationAliases`; mutates
-	// `familyManifests` (which the layers effect tracks separately). Doesn't
-	// re-trigger on its own writes since it doesn't read familyManifests.
+	// family atlas is loaded. Reads `tiles`, `nationAliases`, and the founder
+	// map; mutates `familyManifests` (which the layers effect tracks separately).
+	// Doesn't re-trigger on its own writes since it doesn't read familyManifests.
+	// Keys on the founding nation (see renderNationFor) so a captured/contested
+	// city's founder family atlas is fetched even when no playing nation uses it.
 	$effect(() => {
 		if (nationAliases.size === 0) return;
 		const al = nationAliases;
+		const founderByCity = cityFounderNationByName;
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Set, not reactive state
 		const needed = new Set<string>();
 		for (const tile of tiles) {
-			if (!tile.owner_nation) continue;
-			const family = al.get(tile.owner_nation)?.urban;
+			const nation = renderNationFor(tile, founderByCity);
+			if (!nation) continue;
+			const family = al.get(nation)?.urban;
 			if (family) needed.add(family);
 		}
 		for (const f of needed) {
@@ -1602,6 +1665,7 @@
 		const rm = resourcesManifest;
 		const al = nationAliases;
 		const fms = familyManifests;
+		const founderByCity = cityFounderNationByName;
 		if (!t3d || !ibm || !rm) return null;
 		const political = politicalData;
 		const fills = religionFills;
@@ -1618,7 +1682,9 @@
 			const fm = fms[family];
 			return new IconLayer<MapTile>({
 				id: `urban-composite-${family}`,
-				data: tiles.filter((t) => compositeFamilyFor(t, al, fms) === family),
+				data: tiles.filter(
+					(t) => compositeFamilyFor(t, al, fms, founderByCity) === family,
+				),
 				iconAtlas: familyAtlasUrl(family),
 				iconMapping: fm.sprites,
 				getIcon: (d: MapTile) => d.improvement as string,
@@ -1639,10 +1705,13 @@
 			// overlays whose hex-clip leaves the cell corners transparent.
 			new IconLayer<MapTile>({
 				id: "terrain-3d-base",
-				data: tiles.filter((t) => terrain3dBaseKey(t, al, t3d) != null),
+				data: tiles.filter(
+					(t) => terrain3dBaseKey(t, al, t3d, founderByCity) != null,
+				),
 				iconAtlas: TERRAIN_3D_ATLAS_URL,
 				iconMapping: t3d.sprites,
-				getIcon: (d: MapTile) => terrain3dBaseKey(d, al, t3d) as string,
+				getIcon: (d: MapTile) =>
+					terrain3dBaseKey(d, al, t3d, founderByCity) as string,
 				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 				getSize: () => t3d.cellWidth,
 				sizeUnits: "common",
@@ -1658,10 +1727,13 @@
 			// the actual mountain/hill content on top.
 			new IconLayer<MapTile>({
 				id: "terrain-3d-relief",
-				data: tiles.filter((t) => terrain3dReliefKey(t, al, t3d) != null),
+				data: tiles.filter(
+					(t) => terrain3dReliefKey(t, al, t3d, founderByCity) != null,
+				),
 				iconAtlas: TERRAIN_3D_ATLAS_URL,
 				iconMapping: t3d.sprites,
-				getIcon: (d: MapTile) => terrain3dReliefKey(d, al, t3d) as string,
+				getIcon: (d: MapTile) =>
+					terrain3dReliefKey(d, al, t3d, founderByCity) as string,
 				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 				getSize: () => t3d.cellWidth,
 				sizeUnits: "common",
@@ -1677,20 +1749,21 @@
 			new IconLayer<MapTile>({
 				id: "nation-tile-icons",
 				data: tiles.filter((t) => {
-					const cap = capitalSpriteKeyFor(t, al, ibm);
+					const cap = capitalSpriteKeyFor(t, al, ibm, founderByCity);
 					if (cap != null) return true;
 					if (t.terrain !== "TERRAIN_URBAN") return false;
-					const family = urbanFamilyFor(t.owner_nation, al);
+					const family = urbanFamilyFor(renderNationFor(t, founderByCity), al);
 					if (family == null) return false;
-					if (compositeFamilyFor(t, al, fms) != null) return false;
+					if (compositeFamilyFor(t, al, fms, founderByCity) != null)
+						return false;
 					return ibm.sprites[`URBAN_${family}`] != null;
 				}),
 				iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,
 				iconMapping: ibm.sprites,
 				getIcon: (d: MapTile) => {
-					const cap = capitalSpriteKeyFor(d, al, ibm);
+					const cap = capitalSpriteKeyFor(d, al, ibm, founderByCity);
 					if (cap != null) return cap;
-					return `URBAN_${urbanFamilyFor(d.owner_nation, al)}`;
+					return `URBAN_${urbanFamilyFor(renderNationFor(d, founderByCity), al)}`;
 				},
 				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
 				getSize: () => ibm.cellWidth,
@@ -1719,7 +1792,7 @@
 					if (resourceSpriteKeyFor(t, rm) == null) return false;
 					if (
 						t.terrain === "TERRAIN_URBAN" &&
-						urbanFamilyFor(t.owner_nation, al) != null
+						urbanFamilyFor(renderNationFor(t, founderByCity), al) != null
 					) {
 						return false;
 					}
@@ -1751,8 +1824,10 @@
 					) {
 						return false;
 					}
-					if (capitalSpriteKeyFor(t, al, ibm) != null) return false;
-					if (compositeFamilyFor(t, al, fms) != null) return false;
+					if (capitalSpriteKeyFor(t, al, ibm, founderByCity) != null)
+						return false;
+					if (compositeFamilyFor(t, al, fms, founderByCity) != null)
+						return false;
 					return true;
 				}),
 				iconAtlas: IMPROVEMENTS_BASE_ATLAS_URL,

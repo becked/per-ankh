@@ -2,11 +2,13 @@
 	import type { Snippet } from "svelte";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityInfo } from "$lib/types/CityInfo";
+	import type { PlayerNationEntry } from "$lib/parser/types";
 	import SpriteMap from "$lib/SpriteMap.svelte";
 
 	let {
 		mapTiles,
 		cities = [],
+		playerNations = [],
 		totalTurns = null,
 		selectedTurn = null,
 		onTurnChange = null,
@@ -14,6 +16,7 @@
 	}: {
 		mapTiles: MapTile[] | null;
 		cities?: CityInfo[];
+		playerNations?: PlayerNationEntry[];
 		totalTurns?: number | null;
 		selectedTurn?: number | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
@@ -34,6 +37,7 @@
 	<SpriteMap
 		tiles={mapTiles}
 		{cities}
+		{playerNations}
 		height="600px"
 		totalTurns={onTurnChange ? totalTurns : null}
 		selectedTurn={onTurnChange ? selectedTurn : null}

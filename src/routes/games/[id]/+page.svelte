@@ -123,6 +123,7 @@
 					gameReligions={game.game_religions}
 					playerWonders={game.player_wonders}
 					playerRoster={game.player_roster}
+					playerNations={game.player_nations}
 					userNation={game.user_nation ?? null}
 					userDisplayName={game.user_display_name ?? null}
 					userWon={game.user_won ?? null}
