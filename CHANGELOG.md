@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-06-02-5e19cb4] - 2026-06-02
+
+### Features
+
+- (tournament) open tournament feature to the public — [5e19cb4](https://github.com/becked/per-ankh/commit/5e19cb49353bbfbacce0fae4453748fde99256d7)
+
 ## [2026-06-01-3667cdf] - 2026-06-01
 
 ### Fixes
