@@ -580,9 +580,21 @@
 		width: number;
 	}
 
+	// Callback shapes for buildTerritoryOutline: which group a tile belongs to,
+	// and the stroke colour for a group (null drops it). The param-name labels
+	// trip the base no-unused-vars rule (it runs on .svelte files and mis-reads
+	// TS type-annotation labels as bindings), so scope-disable it here.
+	/* eslint-disable no-unused-vars */
+	type TerritoryKeyFn = (tile: MapTile) => string | null;
+	type TerritoryColorFn = (
+		key: string,
+	) => [number, number, number, number] | null;
+	/* eslint-enable no-unused-vars */
+
 	interface PoliticalData {
 		borders: NationBorder[];
 		subBorders: NationBorder[];
+		contestedBorders: NationBorder[];
 	}
 
 	interface ReligionFill {
@@ -604,6 +616,17 @@
 	const NATION_BORDER_SMOOTH_ITERATIONS = 3;
 	const SUB_BORDER_ALPHA = 200;
 	const SUB_BORDER_WIDTH = 1.5;
+	// Cities not held by a playing nation (being captured, or in revolt/anarchy)
+	// resolve to owner_nation === null, which is why their urban tiles fall back
+	// to the generic sprite. We outline such a city's territory matching the
+	// in-game "border turns black while capturing" treatment — kept thin and
+	// very translucent (more so than the rivers) so it's a faint marker, and
+	// tinted toward the in-game rebel red (#c84732 darkened toward black) to hint
+	// at the contested/revolt state rather than drawing a hard black line.
+	const CONTESTED_BORDER_COLOR: [number, number, number, number] = [
+		56, 20, 14, 100,
+	];
+	const CONTESTED_BORDER_WIDTH = 2;
 
 	// Stable key for a hex vertex pixel coord. Hex tessellation is exact, so the
 	// same physical vertex computed from neighboring tiles produces identical (or
@@ -665,26 +688,23 @@
 		return current;
 	}
 
-	function computePoliticalData(mapTiles: MapTile[]): PoliticalData {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const tileMap = new Map<string, MapTile>();
-		for (const t of mapTiles) tileMap.set(`${t.x},${t.y}`, t);
-
-		// Per-vertex list of meeting tiles, so adjacent same-nation tiles converge
-		// on the same inset position at shared corners. Adjacent tiles' boundary
-		// edges then share endpoints, which lets us chain them into closed paths.
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const vertexMap = new Map<string, MapTile[]>();
-		for (const tile of mapTiles) {
-			const [cx, cy] = hexToPixel(tile.x, tile.y);
-			const verts = hexPolygon(cx, cy);
-			for (let i = 0; i < 6; i++) {
-				const k = vertexKey(verts[i]);
-				const list = vertexMap.get(k);
-				if (list) list.push(tile);
-				else vertexMap.set(k, [tile]);
-			}
-		}
+	// Build inset, smoothed territory outlines for tiles grouped by `keyOf`.
+	// A tile joins the group `keyOf(tile)` (or is skipped when that returns
+	// null). Each group's outer boundary is inset toward the group's centroid
+	// at every vertex — so adjacent same-group tiles share inset corners and
+	// their boundary edges chain into closed loops — then Chaikin-smoothed.
+	// Used for both nation borders (keyed on owner_nation) and contested-city
+	// borders (keyed on owner_city); `colorFor` returns the stroke colour for a
+	// group, or null to drop it.
+	function buildTerritoryOutline(opts: {
+		mapTiles: MapTile[];
+		tileMap: Map<string, MapTile>;
+		vertexMap: Map<string, MapTile[]>;
+		keyOf: TerritoryKeyFn;
+		colorFor: TerritoryColorFn;
+		width: number;
+	}): NationBorder[] {
+		const { mapTiles, tileMap, vertexMap, keyOf, colorFor, width } = opts;
 
 		interface BoundaryEdge {
 			source: [number, number];
@@ -693,32 +713,19 @@
 			targetKey: string;
 		}
 
-		interface SubBorderEdge {
-			a: [number, number];
-			b: [number, number];
-			aKey: string;
-			bKey: string;
-		}
-
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const edgesByNation = new Map<string, BoundaryEdge[]>();
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const subEdgesByNation = new Map<string, SubBorderEdge[]>();
-
+		const edgesByGroup = new Map<string, BoundaryEdge[]>();
 		for (const tile of mapTiles) {
-			if (!tile.owner_nation) continue;
-			const nationKey = tile.owner_nation;
-			const colorHex = getCivilizationColor(nationKey);
-			if (!colorHex) continue;
+			const key = keyOf(tile);
+			if (key == null) continue;
 
 			const [cx, cy] = hexToPixel(tile.x, tile.y);
 			const verts = hexPolygon(cx, cy);
 			const neighbors = hexNeighbors(tile.x, tile.y);
 
-			// Inset position for each of this tile's 6 vertices: toward the centroid
-			// of same-nation tiles meeting at that vertex. Adjacent same-nation tiles
-			// compute identical centroids → identical inset positions at shared
-			// corners → adjacent boundary edges chain cleanly.
+			// Inset each of this tile's 6 vertices toward the centroid of
+			// same-group tiles meeting there, so adjacent tiles converge on the
+			// same inset position at shared corners and chain cleanly.
 			const insetPos: [number, number][] = [];
 			for (let i = 0; i < 6; i++) {
 				const v = verts[i];
@@ -727,7 +734,7 @@
 				let sumY = 0;
 				let count = 0;
 				for (const t of meetingTiles) {
-					if (t.owner_nation !== nationKey) continue;
+					if (keyOf(t) !== key) continue;
 					const [tcx, tcy] = hexToPixel(t.x, t.y);
 					sumX += tcx;
 					sumY += tcy;
@@ -749,52 +756,28 @@
 			for (let i = 0; i < 6; i++) {
 				const [nx, ny] = neighbors[i];
 				const neighbor = tileMap.get(`${nx},${ny}`);
-				const sameNation = neighbor && neighbor.owner_nation === nationKey;
-
-				if (!sameNation) {
-					const src = insetPos[i];
-					const dst = insetPos[(i + 1) % 6];
-					const edge: BoundaryEdge = {
-						source: src,
-						target: dst,
-						sourceKey: vertexKey(src),
-						targetKey: vertexKey(dst),
-					};
-					const list = edgesByNation.get(nationKey);
-					if (list) list.push(edge);
-					else edgesByNation.set(nationKey, [edge]);
-				} else if (
-					tile.owner_city &&
-					neighbor.owner_city &&
-					neighbor.owner_city !== tile.owner_city &&
-					(tile.x < nx || (tile.x === nx && tile.y < ny))
-				) {
-					// Sub-border: collect as undirected edge for per-nation chaining.
-					// Stays on the actual hex edge (no inset) so it sits between the
-					// two cities visually, like the in-game style.
-					const a = verts[i];
-					const b = verts[i + 1];
-					const edge: SubBorderEdge = {
-						a,
-						b,
-						aKey: vertexKey(a),
-						bKey: vertexKey(b),
-					};
-					const list = subEdgesByNation.get(nationKey);
-					if (list) list.push(edge);
-					else subEdgesByNation.set(nationKey, [edge]);
-				}
+				if (neighbor && keyOf(neighbor) === key) continue;
+				const src = insetPos[i];
+				const dst = insetPos[(i + 1) % 6];
+				const edge: BoundaryEdge = {
+					source: src,
+					target: dst,
+					sourceKey: vertexKey(src),
+					targetKey: vertexKey(dst),
+				};
+				const list = edgesByGroup.get(key);
+				if (list) list.push(edge);
+				else edgesByGroup.set(key, [edge]);
 			}
 		}
 
-		// Chain each nation's boundary edges into closed paths (one per territory
-		// island). Walks the directed-edge graph; each boundary vertex has exactly
-		// one in-edge and one out-edge (per island), so the chain is unambiguous.
-		const borders: NationBorder[] = [];
-		for (const [nationKey, edges] of edgesByNation) {
-			const colorHex = getCivilizationColor(nationKey);
-			if (!colorHex) continue;
-			const rgb = hexToRgb(colorHex);
+		// Chain each group's boundary edges into closed paths (one per island).
+		// Walks the directed-edge graph; each boundary vertex has exactly one
+		// in-edge and one out-edge per island, so the chain is unambiguous.
+		const out: NationBorder[] = [];
+		for (const [key, edges] of edgesByGroup) {
+			const color = colorFor(key);
+			if (!color) continue;
 
 			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 			const adjacency = new Map<string, BoundaryEdge[]>();
@@ -808,8 +791,6 @@
 			const visited = new Set<BoundaryEdge>();
 			for (const startEdge of edges) {
 				if (visited.has(startEdge)) continue;
-				// Build the chain as unique vertices (don't repeat start at end yet —
-				// Chaikin operates on a closed-path point list with no duplicate).
 				const chain: [number, number][] = [startEdge.source];
 				let current: BoundaryEdge | undefined = startEdge;
 				while (current && !visited.has(current)) {
@@ -823,14 +804,115 @@
 					chain.length >= 4
 						? chaikinSmoothClosed(chain, NATION_BORDER_SMOOTH_ITERATIONS)
 						: chain;
-				// PathLayer treats the path as a polyline; repeat the first point at
-				// the end so it renders the closing segment.
-				const path = [...smoothed, smoothed[0]];
-				borders.push({
-					path,
-					color: [rgb[0], rgb[1], rgb[2], 255],
-					width: NATION_BORDER_WIDTH,
-				});
+				out.push({ path: [...smoothed, smoothed[0]], color, width });
+			}
+		}
+		return out;
+	}
+
+	function computePoliticalData(mapTiles: MapTile[]): PoliticalData {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+		const tileMap = new Map<string, MapTile>();
+		for (const t of mapTiles) tileMap.set(`${t.x},${t.y}`, t);
+
+		// Per-vertex list of meeting tiles, so adjacent same-nation tiles converge
+		// on the same inset position at shared corners. Adjacent tiles' boundary
+		// edges then share endpoints, which lets us chain them into closed paths.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+		const vertexMap = new Map<string, MapTile[]>();
+		for (const tile of mapTiles) {
+			const [cx, cy] = hexToPixel(tile.x, tile.y);
+			const verts = hexPolygon(cx, cy);
+			for (let i = 0; i < 6; i++) {
+				const k = vertexKey(verts[i]);
+				const list = vertexMap.get(k);
+				if (list) list.push(tile);
+				else vertexMap.set(k, [tile]);
+			}
+		}
+
+		interface SubBorderEdge {
+			a: [number, number];
+			b: [number, number];
+			aKey: string;
+			bKey: string;
+		}
+
+		// Nation territory borders, keyed on owner_nation and coloured by the
+		// nation's civ colour. Nations without a known colour are skipped.
+		const borders = buildTerritoryOutline({
+			mapTiles,
+			tileMap,
+			vertexMap,
+			keyOf: (t) =>
+				t.owner_nation && getCivilizationColor(t.owner_nation)
+					? t.owner_nation
+					: null,
+			colorFor: (key) => {
+				const rgb = hexToRgb(getCivilizationColor(key)!);
+				return [rgb[0], rgb[1], rgb[2], 255];
+			},
+			width: NATION_BORDER_WIDTH,
+		});
+
+		// Contested-city borders: a city whose centre tile is owner_nation === null
+		// (being captured, or in revolt/anarchy — the same condition that makes its
+		// urban tiles fall back to the generic sprite). Outline that city's
+		// null-owned tiles, keyed on owner_city, in solid black.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Set used locally in function, not as reactive state
+		const contestedCities = new Set<string>();
+		for (const t of mapTiles) {
+			if (t.is_city_center && !t.owner_nation && t.owner_city)
+				contestedCities.add(t.owner_city);
+		}
+		const contestedBorders = buildTerritoryOutline({
+			mapTiles,
+			tileMap,
+			vertexMap,
+			keyOf: (t) =>
+				!t.owner_nation && t.owner_city && contestedCities.has(t.owner_city)
+					? t.owner_city
+					: null,
+			colorFor: () => CONTESTED_BORDER_COLOR,
+			width: CONTESTED_BORDER_WIDTH,
+		});
+
+		// Sub-borders: boundaries between two different cities within the same
+		// nation. Collected as undirected edges on the actual hex edge (no inset)
+		// so they sit between the two cities, like the in-game style. The (x,y)
+		// tie-break collects each shared edge from only one of the two tiles.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+		const subEdgesByNation = new Map<string, SubBorderEdge[]>();
+		for (const tile of mapTiles) {
+			if (!tile.owner_nation || !getCivilizationColor(tile.owner_nation))
+				continue;
+			const nationKey = tile.owner_nation;
+			const [cx, cy] = hexToPixel(tile.x, tile.y);
+			const verts = hexPolygon(cx, cy);
+			const neighbors = hexNeighbors(tile.x, tile.y);
+			for (let i = 0; i < 6; i++) {
+				const [nx, ny] = neighbors[i];
+				const neighbor = tileMap.get(`${nx},${ny}`);
+				if (
+					neighbor &&
+					neighbor.owner_nation === nationKey &&
+					tile.owner_city &&
+					neighbor.owner_city &&
+					neighbor.owner_city !== tile.owner_city &&
+					(tile.x < nx || (tile.x === nx && tile.y < ny))
+				) {
+					const a = verts[i];
+					const b = verts[i + 1];
+					const edge: SubBorderEdge = {
+						a,
+						b,
+						aKey: vertexKey(a),
+						bKey: vertexKey(b),
+					};
+					const list = subEdgesByNation.get(nationKey);
+					if (list) list.push(edge);
+					else subEdgesByNation.set(nationKey, [edge]);
+				}
 			}
 		}
 
@@ -956,7 +1038,7 @@
 			}
 		}
 
-		return { borders, subBorders };
+		return { borders, subBorders, contestedBorders };
 	}
 
 	function computeReligionFills(mapTiles: MapTile[]): ReligionFill[] {
@@ -1183,7 +1265,8 @@
 	// layer-toggle flips. The console.time blocks are DEV-only so we can
 	// profile during turn-slider scrubbing without shipping log spam.
 	const politicalData = $derived.by<PoliticalData>(() => {
-		if (tiles.length === 0) return { borders: [], subBorders: [] };
+		if (tiles.length === 0)
+			return { borders: [], subBorders: [], contestedBorders: [] };
 		if (import.meta.env.DEV) console.time("computePoliticalData");
 		const result = computePoliticalData(tiles);
 		if (import.meta.env.DEV) console.timeEnd("computePoliticalData");
@@ -1738,6 +1821,21 @@
 				capRounded: true,
 				pickable: false,
 				visible: pol,
+			}),
+			// Contested (being-captured / in-revolt) city outlines, in black.
+			// Always visible — they flag a city in flux regardless of the political
+			// overlay toggle, matching the in-game black capture border.
+			new PathLayer<NationBorder>({
+				id: "contested-city-borders",
+				data: political.contestedBorders,
+				getPath: (d: NationBorder) => d.path,
+				getColor: (d: NationBorder) => d.color,
+				getWidth: (d: NationBorder) => d.width,
+				widthUnits: "pixels",
+				widthMinPixels: 1,
+				jointRounded: true,
+				capRounded: true,
+				pickable: false,
 			}),
 			// Invisible pickable layer so hover/right-click resolve to the
 			// correct hex regardless of which sprite layer happens to draw
