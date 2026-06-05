@@ -495,6 +495,8 @@ All commands from `cloud/` unless noted. Each authenticates via `wrangler login`
    npx wrangler secret put ADMIN_DISCORD_ID --env staging   # optional: staging site-admin
    ```
 
+   Wrangler stores secrets on a worker, and the staging worker doesn't exist before the first deploy — so the first `secret put` asks *"There doesn't seem to be a Worker called per-ankh-share-api-staging — create it?"*. Answer **yes**: it creates an empty worker shell that the real deploy then overwrites. (Declining silently discards the secret, and staging preflight then blocks on `secrets.required`.)
+
 3. **Cloudflare Access** (Zero Trust dashboard): create an Access application covering `staging.per-ankh.app` **only**. Do not put `api-staging.per-ankh.app` behind Access — the staging frontend's browser `fetch()` calls and SSR fetches can't carry an Access session, so gating the API hostname breaks the app; the API protects itself with Discord sessions exactly like prod. Two policies:
    - **Allow** — your identity (interactive login).
    - **Service Auth** — a new service token (Access → Service auth → create). Paste its credentials into a gitignored `.staging.vars` at the repo root:
@@ -509,11 +511,10 @@ All commands from `cloud/` unless noted. Each authenticates via `wrangler login`
 4. **First boot:**
 
    ```bash
-   (cd cloud && npm run migrate:staging)   # schema
-   ./per-ankh staging deploy               # worker + frontend (+ smoke)
+   ./per-ankh staging deploy   # migrations → worker → frontend → smoke
    ```
 
-   Then log in once via the staging Discord app. Tournament *creation* is the one surviving beta gate — grant it only if needed: `./per-ankh admin --staging tournament beta-grant <discord_id>`.
+   The deploy applies all pending migrations itself (they're listed in the confirm summary); `npm run migrate:staging` exists for standalone use but isn't a required pre-step. Then log in once via the staging Discord app. Tournament *creation* is the one surviving beta gate — grant it only if needed: `./per-ankh admin --staging tournament beta-grant <discord_id>`.
 
 ### 9.2 Notes
 

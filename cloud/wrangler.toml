@@ -15,6 +15,7 @@ routes = [{ pattern = "api.per-ankh.app", custom_domain = true }]
 # D1 migrations live in cloud/migrations/ (wrangler's default location),
 # applied via:
 #   npm run migrate:local    (local sqlite under .wrangler/)
+#   npm run migrate:staging  (staging D1)
 #   npm run migrate:remote   (production D1)
 
 # R2 blob storage for shared game data

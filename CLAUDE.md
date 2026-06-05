@@ -196,8 +196,9 @@ Run from `cloud/`: `npm test` (both projects), or filter with `--project unit` /
 
 - `cloud/migrations/` is numbered (`0001_*.sql`, `0002_*.sql`, …) and forward-only. There is no `down`.
 - Apply locally: `(cd cloud && npm run migrate:local)`.
+- Apply to staging: `(cd cloud && npm run migrate:staging)`.
 - Apply remote: `(cd cloud && npm run migrate:remote)`.
-- Always rehearse a new migration on a throwaway D1 before running it on production.
+- Always rehearse a new migration on staging (or a `./per-ankh staging deploy`, which applies pending migrations itself) before running it on production.
 
 ### Investigating tournament data locally
 
