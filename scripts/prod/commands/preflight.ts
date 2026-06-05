@@ -8,12 +8,16 @@ import { runSecretChecks } from "../checks/secrets";
 import { runMigrationChecks } from "../checks/migrations";
 import { blockingFailures } from "../types";
 import type { CheckContext, CheckResult, ProdOpts } from "../types";
+import type { CloudEnv } from "../../lib/environments";
 import { printResults } from "../results";
 import { info } from "../../lib/format";
 import { printJson } from "../../lib/cli";
 
 // Exported so `deploy` can reuse the orchestration as its first phase.
-export async function runAllChecks(opts: ProdOpts): Promise<CheckResult[]> {
+export async function runAllChecks(
+	opts: ProdOpts,
+	env: CloudEnv,
+): Promise<CheckResult[]> {
 	const ctx: CheckContext = {
 		allowDirty: opts.allowDirty,
 		allowBranch: opts.allowBranch,
@@ -22,16 +26,20 @@ export async function runAllChecks(opts: ProdOpts): Promise<CheckResult[]> {
 	info("Running pre-flight checks...");
 	// Fast / dependency-free checks first so early failures surface quickly.
 	results.push(...(await runGitChecks(ctx)));
-	results.push(...(await runSecretChecks()));
-	results.push(...(await runMigrationChecks()));
+	results.push(...(await runSecretChecks(env)));
+	results.push(...(await runMigrationChecks(env)));
 	// Slow checks last (these spawn npm/tsc and take seconds each).
 	results.push(...(await runNpmChecks()));
 	results.push(...(await runTypescriptChecks()));
 	return results;
 }
 
-export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
-	const results = await runAllChecks(opts);
+export async function run(
+	_argv: string[],
+	opts: ProdOpts,
+	env: CloudEnv,
+): Promise<void> {
+	const results = await runAllChecks(opts, env);
 	if (opts.json) {
 		printJson(results);
 	} else {

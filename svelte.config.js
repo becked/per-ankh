@@ -9,17 +9,17 @@ import { vitePreprocess } from "@sveltejs/vite-plugin-svelte";
 // hashes change too frequently to enumerate. Tighten only after CSP-report
 // data shows it's safe.
 //
-// CSP here describes the PRODUCTION policy. In `vite dev` the cloud
-// Worker runs on http://localhost:8787 (a different origin from the
-// frontend on :1420), so the dev CSP additionally needs localhost:8787
-// in connect-src and the dev report endpoint. That delta is applied at
-// SSR time by src/hooks.server.ts using `$app/environment`'s `dev`
-// import. We tried detecting dev here (first via process.argv, then via
+// CSP here describes the PRODUCTION policy. Builds that talk to a
+// different API origin — `vite dev` (the wrangler dev Worker on
+// http://localhost:8787) and staging (api-staging.per-ankh.app) — get
+// their connect-src / report-uri rewritten at SSR time by
+// src/hooks.server.ts, keyed off the build-time `VITE_API_URL` constant.
+// We tried branching here instead (first via process.argv, then via
 // PER_ANKH_DEV) and both were unreliable — `svelte.config.js` is loaded
 // in a context where `process.env` and `process.argv` aren't what we
-// expect, so the dev branch silently never fires. `dev` from
-// `$app/environment` is the source of truth Vite sets per session and
-// works correctly at request time.
+// expect, so the branch silently never fires. `import.meta.env` baked by
+// Vite into the bundle is the source of truth and works correctly at
+// request time.
 //
 // `cloudflareinsights.com` is the POST target for the Cloudflare Web
 // Analytics beacon (the script itself loads from

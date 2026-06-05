@@ -4,7 +4,11 @@
 // tournaments stay admin-only unless signups_open=1 (see setupGateHides).
 
 import { buildAvatarUrl } from "../auth";
-import { sessionFromRequest, type SessionData } from "../session";
+import {
+	sessionFromRequest,
+	type SessionData,
+	type SessionEnv,
+} from "../session";
 import {
 	cloudCorsHeaders,
 	errorResponse,
@@ -39,9 +43,8 @@ import {
 	type RankedStanding,
 } from "./standings";
 
-export interface TournamentPublicEnv extends TournamentEnv {
+export interface TournamentPublicEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
-	SESSIONS_KV: KVNamespace;
 }
 
 const LIST_LIMIT_MAX = 100;

@@ -45,6 +45,9 @@ vite.config.ts.timestamp-*
 .env.*
 !.env.development
 !.env.example
+# Cloudflare Access service-token credentials for staging smoke probes
+# (CF_ACCESS_CLIENT_ID / CF_ACCESS_CLIENT_SECRET) — see CLAUDE.md Deploy CLI.
+.staging.vars
 
 # Bake outputs — derived from a local pinacotheca checkout via `npm run bake:all`.
 # These are visual assets owned by Mohawk Games (see LICENSE "Third-Party

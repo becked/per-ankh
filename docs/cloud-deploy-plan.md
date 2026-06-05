@@ -470,3 +470,55 @@ Ship after deploy when there's a reason to. None block launch.
 | Mobile-width header layout           | `/games/[id]` may need a collapse menu on narrow screens.                                                                                                          |
 | Prune `anon_read` rows from `events` | Scheduled Worker cron: `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily. Other event types stay (audit log). |
 | `_routes.json` tuning                | adapter-cloudflare warns about dropped exclude rules; static asset paths invoke the SSR Worker unnecessarily.                                                      |
+
+## 9. Staging environment (issue #41)
+
+A parallel deployment — `staging.per-ankh.app` (frontend) + `api-staging.per-ankh.app` (API) — defined by the `[env.staging]` blocks in both wrangler.tomls, with fully separate D1/KV/R2 and a separate Discord OAuth app. Deploys run through `./per-ankh staging <preflight|deploy|migrate|smoke|status>` (same pipeline as `prod`, minus the changelog/version/tag step). The `secrets.parity` preflight check enforces that `[env.staging.vars]` and the staging binding names stay in lockstep with the top level, because wrangler does not inherit either into named envs.
+
+### 9.1 One-time provisioning (operator)
+
+All commands from `cloud/` unless noted. Each authenticates via `wrangler login` (1Password-gated on the dev machine).
+
+1. **Create the staging resources**, then paste the returned IDs over the `__STAGING_*__` placeholders in `cloud/wrangler.toml`:
+
+   ```bash
+   npx wrangler d1 create per-ankh-share-index-staging
+   npx wrangler kv namespace create SESSIONS_KV --env staging
+   npx wrangler kv namespace create SESSIONS_KV --env staging --preview
+   npx wrangler r2 bucket create per-ankh-shares-staging
+   ```
+
+2. **Register the staging Discord application** at <https://discord.com/developers/applications> with OAuth2 redirect `https://staging.per-ankh.app/auth/callback`. Paste its client ID over `__STAGING_DISCORD_CLIENT_ID__` in `[env.staging.vars]`, then:
+
+   ```bash
+   npx wrangler secret put DISCORD_CLIENT_SECRET --env staging
+   npx wrangler secret put ADMIN_DISCORD_ID --env staging   # optional: staging site-admin
+   ```
+
+3. **Cloudflare Access** (Zero Trust dashboard): create an Access application covering `staging.per-ankh.app` **only**. Do not put `api-staging.per-ankh.app` behind Access — the staging frontend's browser `fetch()` calls and SSR fetches can't carry an Access session, so gating the API hostname breaks the app; the API protects itself with Discord sessions exactly like prod. Two policies:
+   - **Allow** — your identity (interactive login).
+   - **Service Auth** — a new service token (Access → Service auth → create). Paste its credentials into a gitignored `.staging.vars` at the repo root:
+
+     ```
+     CF_ACCESS_CLIENT_ID=<token client id>
+     CF_ACCESS_CLIENT_SECRET=<token client secret>
+     ```
+
+     `./per-ankh staging smoke` sends these as `CF-Access-Client-Id`/`CF-Access-Client-Secret` headers; without them the frontend probe only asserts the Access login redirect (degraded, warned).
+
+4. **First boot:**
+
+   ```bash
+   (cd cloud && npm run migrate:staging)   # schema
+   ./per-ankh staging deploy               # worker + frontend (+ smoke)
+   ```
+
+   Then log in once via the staging Discord app. Tournament *creation* is the one surviving beta gate — grant it only if needed: `./per-ankh admin --staging tournament beta-grant <discord_id>`.
+
+### 9.2 Notes
+
+- **Custom domains:** wrangler attaches `staging.per-ankh.app` / `api-staging.per-ankh.app` and creates DNS automatically on first deploy, same as prod (§3.8).
+- **Session cookies:** both envs set `Domain=per-ankh.app` (sibling subdomains' only shared ancestor), so the cookie *name* is per-env (`SESSION_COOKIE_NAME` var: `session` / `session_staging`) — a staging login would otherwise clobber the prod session in the same browser.
+- **Frontend builds:** `./per-ankh staging deploy` injects `VITE_API_URL` / `VITE_PUBLIC_ORIGIN`; CSP `connect-src` and the report endpoints follow `VITE_API_URL` via the SSR-time rewrite in `src/hooks.server.ts`. A bare `npm run build` stays a correct prod build.
+- **No staging legacy viewer:** `web/` is frozen and prod-only; staging smoke has no legacy probe.
+- **routes inheritance footgun:** wrangler *does* inherit `routes` into named envs — never delete the `routes` line from an `[env.staging]` block, or a staging deploy will attach the prod custom domain (the toml comments call this out).

@@ -4,7 +4,7 @@
 
 import { err, info } from "../lib/format";
 import type { CommandOpts } from "../lib/cli";
-import { setLocal } from "./wrangler";
+import { setTarget } from "./wrangler";
 
 import * as stats from "./commands/stats";
 import * as users from "./commands/users";
@@ -21,7 +21,7 @@ function printHelp(): void {
 			"per-ankh admin — cloud admin & monitoring CLI",
 			"",
 			"Usage:",
-			"  ./per-ankh admin <command> [args] [--json] [--yes]",
+			"  ./per-ankh admin <command> [args] [--json] [--yes] [--local | --staging]",
 			"",
 			"Monitoring:",
 			"  stats                            Global counts + recent activity",
@@ -68,6 +68,7 @@ function printHelp(): void {
 			"  --json                           Raw JSON output (skips tables)",
 			"  --yes                            Skip confirmation prompts",
 			"  --local                          Target local .wrangler state",
+			"  --staging                        Target staging D1 + R2 (remote)",
 			"                                   (default: remote production)",
 			"",
 		].join("\n"),
@@ -79,17 +80,28 @@ export async function main(argv: string[]): Promise<void> {
 	// or command-specific.
 	const opts: CommandOpts = { json: false, yes: false };
 	let local = false;
+	let staging = false;
 	const rest: string[] = [];
 	for (const a of argv) {
 		if (a === "--json") opts.json = true;
 		else if (a === "--yes") opts.yes = true;
 		else if (a === "--local") local = true;
+		else if (a === "--staging") staging = true;
 		else rest.push(a);
 	}
-	setLocal(local);
+	if (local && staging) {
+		err("--local and --staging are mutually exclusive.");
+		process.exit(1);
+	}
+	setTarget(local ? "local" : staging ? "staging" : "prod");
 	if (local && !opts.json) {
 		info(
 			"Targeting local .wrangler state (D1 + R2). Drop --local to hit production.",
+		);
+	}
+	if (staging && !opts.json) {
+		info(
+			"Targeting staging (D1 + R2, remote). Drop --staging to hit production.",
 		);
 	}
 

@@ -1,28 +1,35 @@
 // Security headers emitted on every SSR'd response.
 //
 // CSP is configured in svelte.config.js with PRODUCTION values so
-// SvelteKit can inject hashes for its inline hydration script. In dev
-// we widen the emitted CSP header here (see patchCspForDev below) —
-// `dev` from `$app/environment` is the reliable signal; the dev branch
-// in svelte.config.js itself can't be trusted because that file is
-// loaded in a context where neither process.argv nor process.env is
-// what we expect.
+// SvelteKit can inject hashes for its inline hydration script. When this
+// build talks to a non-prod API — vite dev (localhost:8787) or a staging
+// build (api-staging) — we rewrite the emitted CSP header here (see
+// patchCspApiOrigin below). The build-time `VITE_API_URL` constant is the
+// reliable signal; a branch in svelte.config.js itself can't be trusted
+// because that file is loaded in a context where neither process.argv
+// nor process.env is what we expect.
 //
 // Other hardening — XFO, Referrer-Policy, Permissions-Policy, X-Content-
 // Type-Options — applies regardless of the request type.
 
 import type { Handle, HandleFetch } from "@sveltejs/kit";
-import { dev } from "$app/environment";
 
-const DEV_API_ORIGIN = "http://localhost:8787";
-const DEV_REPORT_URI = `${DEV_API_ORIGIN}/v1/csp-report`;
+// Build-time API base — the same var the API client reads
+// (src/lib/api-cloud.ts) and the staging deploy injects, so connect-src,
+// both CSP report endpoints, and the SSR cookie-forward check all follow
+// one origin. Defaults to prod; `vite dev` gets localhost:8787 from the
+// committed .env.development.
+const PROD_API_ORIGIN = "https://api.per-ankh.app";
+const API_ORIGIN = new URL(
+	(import.meta.env.VITE_API_URL ?? `${PROD_API_ORIGIN}/v1`) as string,
+).origin;
+const REPORT_URI = `${API_ORIGIN}/v1/csp-report`;
 
-// Rewrite the production CSP header SvelteKit emits to the variant we
-// need in `vite dev`: add the wrangler-dev API origin to connect-src
-// (cross-origin fetches from :1420 → :8787) and swap report-uri to the
-// dev worker. Idempotent — re-running on an already-patched header is a
-// no-op.
-function patchCspForDev(header: string): string {
+// Rewrite the production CSP header SvelteKit emits so it points at this
+// build's actual API origin: swap the prod origin in connect-src and
+// retarget report-uri. Idempotent — re-running on an already-patched
+// header is a no-op.
+function patchCspApiOrigin(header: string): string {
 	const directives = new Map<string, string[]>();
 	for (const part of header.split(";")) {
 		const trimmed = part.trim();
@@ -31,12 +38,16 @@ function patchCspForDev(header: string): string {
 		directives.set(name, values);
 	}
 	const connectSrc = directives.get("connect-src") ?? [];
-	if (!connectSrc.includes(DEV_API_ORIGIN)) {
-		connectSrc.push(DEV_API_ORIGIN);
+	const prodIdx = connectSrc.indexOf(PROD_API_ORIGIN);
+	if (prodIdx >= 0) {
+		connectSrc[prodIdx] = API_ORIGIN;
+		directives.set("connect-src", connectSrc);
+	} else if (!connectSrc.includes(API_ORIGIN)) {
+		connectSrc.push(API_ORIGIN);
 		directives.set("connect-src", connectSrc);
 	}
 	if (directives.has("report-uri")) {
-		directives.set("report-uri", [DEV_REPORT_URI]);
+		directives.set("report-uri", [REPORT_URI]);
 	}
 	return [...directives.entries()]
 		.map(([name, values]) => `${name} ${values.join(" ")}`)
@@ -62,13 +73,7 @@ const ALLOWED_RESPONSE_HEADERS = new Set([
 const reportToHeader = JSON.stringify({
 	group: "csp-endpoint",
 	max_age: 10886400,
-	endpoints: [
-		{
-			url: dev
-				? "http://localhost:8787/v1/csp-report"
-				: "https://api.per-ankh.app/v1/csp-report",
-		},
-	],
+	endpoints: [{ url: REPORT_URI }],
 });
 
 // Cross-origin SSR fetch to the API needs the incoming request's Cookie
@@ -79,14 +84,10 @@ const reportToHeader = JSON.stringify({
 // despite the user having a valid session cookie.
 //
 // Pairs with cloud/src/session.ts setting Domain=per-ankh.app on the
-// session cookie — that's what makes the cookie visible on per-ankh.app
-// (where SSR reads it) in the first place.
+// session cookie — that's what makes the cookie visible on the frontend
+// hostname (where SSR reads it) in the first place.
 export const handleFetch: HandleFetch = ({ event, request, fetch }) => {
-	const target = new URL(request.url);
-	const isApi =
-		target.hostname === "api.per-ankh.app" ||
-		(dev && target.hostname === "localhost" && target.port === "8787");
-	if (isApi) {
+	if (new URL(request.url).origin === API_ORIGIN) {
 		const cookie = event.request.headers.get("cookie");
 		if (cookie) request.headers.set("cookie", cookie);
 	}
@@ -108,10 +109,12 @@ export const handle: Handle = async ({ event, resolve }) => {
 			ALLOWED_RESPONSE_HEADERS.has(name.toLowerCase()),
 	});
 
-	if (dev) {
+	// Prod builds already carry the right origin in the baked CSP — only
+	// dev (localhost API) and staging builds need the rewrite.
+	if (API_ORIGIN !== PROD_API_ORIGIN) {
 		const csp = response.headers.get("content-security-policy");
 		if (csp)
-			response.headers.set("content-security-policy", patchCspForDev(csp));
+			response.headers.set("content-security-policy", patchCspApiOrigin(csp));
 	}
 
 	response.headers.set("X-Content-Type-Options", "nosniff");

@@ -85,3 +85,69 @@ ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
 DISCORD_CLIENT_ID = "1500901451034263604"
 # DISCORD_CLIENT_SECRET is set out-of-band:
 #   npx wrangler secret put DISCORD_CLIENT_SECRET
+# Session cookie name. A var (not a code const) so staging can use a distinct
+# name: both environments set Domain=per-ankh.app on the session cookie (the
+# only shared ancestor of their sibling subdomains), so a staging cookie named
+# "session" would clobber the prod session in the same browser. The Miniflare
+# test harness loads this top-level [vars] block, and the integration tests
+# hardcode `session=` — keep this value "session".
+SESSION_COOKIE_NAME = "session"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Staging environment (api-staging.per-ankh.app).
+#
+# Wrangler 4 inheritance rules (verified against wrangler's config source):
+#   - vars, d1_databases, kv_namespaces, r2_buckets are NOT inherited — every
+#     binding and var below is a deliberate full duplicate of the top level.
+#     The `secrets.parity` preflight check enforces that the key sets match.
+#   - routes IS inherited — this block MUST declare its own routes. If it were
+#     removed, `wrangler deploy --env staging` would inherit the prod route and
+#     attach api.per-ankh.app to the staging worker.
+#   - main / compatibility_date / compatibility_flags are inherited; not
+#     repeated here.
+#
+# Secrets are per-environment: DISCORD_CLIENT_SECRET (and optionally
+# ADMIN_DISCORD_ID) must be set with `wrangler secret put <NAME> --env staging`.
+# ─────────────────────────────────────────────────────────────────────────────
+[env.staging]
+routes = [{ pattern = "api-staging.per-ankh.app", custom_domain = true }]
+
+[[env.staging.r2_buckets]]
+binding = "SHARE_BUCKET"
+bucket_name = "per-ankh-shares-staging"
+
+[[env.staging.d1_databases]]
+binding = "SHARE_DB"
+database_name = "per-ankh-share-index-staging"
+# Paste from `wrangler d1 create per-ankh-share-index-staging`:
+database_id = "74cb5f03-fe51-4770-81dc-da7ac600b911"
+
+[[env.staging.kv_namespaces]]
+binding = "SESSIONS_KV"
+# Paste from `wrangler kv namespace create SESSIONS_KV --env staging` (+ --preview):
+id = "1db613e81532484189d37ad410584264"
+preview_id = "be620b722e444391bc73cfed9b2863c8"
+
+[env.staging.vars]
+# Every top-level [vars] key is duplicated here (wrangler does not inherit
+# vars; secrets.parity enforces the key sets match). Values differ only where
+# the environment differs.
+MAX_COMPRESSED_SIZE = "5242880"
+MAX_DECOMPRESSED_SIZE = "20971520"
+# Legacy share viewer has no staging deployment; the staging frontend origin
+# is the sanest value for the legacy single-origin CORS var.
+ALLOWED_ORIGIN = "https://staging.per-ankh.app"
+RATE_LIMIT_PER_HOUR = "10"
+DOWNLOAD_RATE_LIMIT_PER_HOUR = "200"
+IP_RATE_LIMIT_PER_HOUR = "20"
+GLOBAL_UPLOAD_LIMIT_PER_HOUR = "200"
+UPLOADS_ENABLED = "true"
+PER_USER_UPLOADS_PER_HOUR = "100"
+PER_IP_UPLOADS_PER_HOUR = "200"
+GLOBAL_UPLOADS_PER_HOUR = "5000"
+ALLOWED_ORIGINS = "https://staging.per-ankh.app"
+# Separate staging Discord OAuth app — paste its client ID:
+DISCORD_CLIENT_ID = "1512545079493922927"
+# Distinct cookie name so staging logins can't clobber the prod session
+# (both envs share Domain=per-ankh.app — see the top-level comment).
+SESSION_COOKIE_NAME = "session_staging"

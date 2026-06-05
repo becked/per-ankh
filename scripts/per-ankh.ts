@@ -7,7 +7,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
 
 import { main as adminMain } from "./admin/index";
-import { main as prodMain } from "./prod/index";
+import { prodMain, stagingMain } from "./prod/index";
 import { main as backupMain } from "./backup";
 
 // scripts/per-ankh.ts → repo root is one level up.
@@ -168,6 +168,7 @@ function printHelp(): void {
 			"  dev               Run Worker (:8787) + SvelteKit (:1420) locally, foreground.",
 			"  admin <sub>...    Cloud admin & monitoring (see `./per-ankh admin --help`).",
 			"  prod <sub>...     Production deploy & preflight (see `./per-ankh prod --help`).",
+			"  staging <sub>...  Staging deploy & preflight (see `./per-ankh staging --help`).",
 			"  backup [--local]  Snapshot D1 to a .sql + .sqlite file (see `./per-ankh backup --help`).",
 			"  --help,-h         Show this help.",
 			"",
@@ -192,6 +193,9 @@ async function main(): Promise<void> {
 			return;
 		case "prod":
 			await prodMain(process.argv.slice(3));
+			return;
+		case "staging":
+			await stagingMain(process.argv.slice(3));
 			return;
 		case "backup":
 			await backupMain(process.argv.slice(3));

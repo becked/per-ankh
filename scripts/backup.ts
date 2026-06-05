@@ -30,7 +30,11 @@ import { dirname, resolve, join } from "node:path";
 
 import { parseFlags, flagString } from "./lib/cli";
 import { info, ok, warn, err, formatBytes, printTable } from "./lib/format";
-import { DB_NAME } from "./admin/wrangler";
+import { getEnv } from "./lib/environments";
+
+// Backup targets production D1 (or the local .wrangler state that simulates
+// it) — there's no staging backup; staging data is throwaway by design.
+const DB_NAME = getEnv("prod").dbName;
 
 // scripts/backup.ts → repo root is one level up. Mirrors the path derivation
 // in admin/wrangler.ts (whose CLOUD_DIR/WRANGLER_BIN are module-private).

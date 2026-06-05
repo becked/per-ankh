@@ -44,11 +44,12 @@ per-ankh/
 
 This is a web app deployed to Cloudflare. There is no desktop runtime, no DuckDB, no Rust. Assume browser semantics for the frontend and Cloudflare Worker semantics for the API.
 
-The `./per-ankh` script at repo root is the project CLI (`scripts/per-ankh.ts`). It has four top-level subcommands:
+The `./per-ankh` script at repo root is the project CLI (`scripts/per-ankh.ts`). It has five top-level subcommands:
 
 - `./per-ankh dev` — spawns SvelteKit dev (port 1420) and Wrangler dev (port 8787) together.
 - `./per-ankh admin` — operator CLI for the live app (see [Cloud Admin CLI](#cloud-admin-cli)).
 - `./per-ankh prod` — deploy runbook automation (see [Deploy CLI](#deploy-cli)).
+- `./per-ankh staging` — same deploy automation targeting the staging environment (see [Deploy CLI](#deploy-cli)).
 - `./per-ankh backup [--local]` — snapshots D1 to portable `.sql` + `.sqlite` artifacts under `backups/`. **Defaults to remote/production D1** (operator-run, wrangler/1Password-gated); `--local` exports dev `.wrangler` state. The default remote path is covered by the prod-command rule in [Deploy CLI](#deploy-cli).
 
 ## Coding Standards
@@ -255,7 +256,7 @@ The list below is illustrative, not exhaustive — `./per-ankh admin --help` gro
 
 **Dev** — `./per-ankh admin --local dev-login [--username NAME]` provisions a fake local user + 30-day session cookie (and beta-grants them) for testing a second account. Both `tournament seed` and `dev-login` are **local-only** and refuse to run against remote.
 
-Add `--json` to any read command for pipeable output; add `--yes` to skip confirmation on destructive ops.
+Add `--json` to any read command for pipeable output; add `--yes` to skip confirmation on destructive ops. `--local` targets the local `.wrangler` state; `--staging` targets the staging D1/R2 (remote, mutually exclusive with `--local`); the default is production. The dev-only commands (`dev-login`, `tournament seed`) refuse both remote targets, staging included.
 
 ### Deploy CLI
 
@@ -271,13 +272,15 @@ Add `--json` to any read command for pipeable output; add `--yes` to skip confir
 ./per-ankh prod changelog   # Preview the next changelog entry; --write to persist + tag
 ```
 
-Flags: `--dry-run`, `--yes`, `--allow-dirty`, `--allow-branch`, `--skip-checks`, `--skip-worker`, `--skip-frontend`, `--skip-smoke`, `--skip-changelog`, `--edit-changelog`, `--json`. Preflight blocks on uncommitted changes, off-main, behind origin, secret leaks, `[vars]` keys with secret-shaped names, missing prod secrets on the Worker, format/lint/typecheck/audit failures. Functional smoke (OAuth flow, upload, share visibility) stays manual — see deploy plan §5.
+Flags: `--dry-run`, `--yes`, `--allow-dirty`, `--allow-branch`, `--skip-checks`, `--skip-worker`, `--skip-frontend`, `--skip-smoke`, `--skip-changelog`, `--edit-changelog`, `--json`. Preflight blocks on uncommitted changes, off-main, behind origin, secret leaks, `[vars]` keys with secret-shaped names, prod/staging wrangler-config drift (vars key sets + binding names — wrangler doesn't inherit either into `[env.staging]`), missing required secrets on the target Worker env, format/lint/typecheck/audit failures. Functional smoke (OAuth flow, upload, share visibility) stays manual — see deploy plan §5.
+
+**Staging** — `./per-ankh staging <sub>` runs the same pipeline against the staging environment (`staging.per-ankh.app` + `api-staging.per-ankh.app`, separate D1/KV/R2, separate Discord app — see `docs/cloud-deploy-plan.md` §9 for one-time provisioning). Same subcommands and flags minus `changelog`: staging deploys never write `CHANGELOG.md`, bump the version, or tag. Preflight blocks on the same checks as prod — staging is a staging environment, not a dev playground. `staging.per-ankh.app` sits behind Cloudflare Access; the smoke frontend probe authenticates with the Access service token from the gitignored `.staging.vars` at repo root (`CF_ACCESS_CLIENT_ID` / `CF_ACCESS_CLIENT_SECRET`), and degrades to asserting the Access login redirect (with a warning) when the file is absent. The session cookie name is per-environment (`SESSION_COOKIE_NAME` var: `session` prod, `session_staging` staging) because both share `Domain=per-ankh.app` — see `cloud/src/session.ts`.
 
 ### Changelog & deploy stamps
 
 Each `prod deploy` generates a new entry in `CHANGELOG.md` from the conventional-commit log since the last `deploy/*` tag, groups it by `feat`/`fix`/`perf`/other, bumps `package.json` `version` to a calver stamp (`YYYY-MM-DD-<shortsha>`), commits as `chore(release): deploy <stamp>`, and tags `deploy/<stamp>`. The deploy script does **not** push to GitHub — the next deploy finds the previous `deploy/*` tag locally via `git describe`, so pushing is optional bookkeeping (handy for a GitHub-visible deploy history, but not load-bearing). Use `--edit-changelog` to open `$EDITOR` on the file before the commit lands, `--skip-changelog` to bypass entirely, or run `./per-ankh prod changelog` standalone to preview without writing. If there are no new commits since the last deploy tag, the changelog step skips silently.
 
-**Never run a prod-targeting command without a specific ask from the user.** This covers every `./per-ankh prod <sub>` subcommand (including read-only ones like `preflight`, `status`, and `smoke`) and any direct `wrangler` / `npx wrangler` call against the live worker, D1, R2, or KV. These commands authenticate against the user's Cloudflare account — on this machine that triggers a 1Password prompt — and can hit prod resources even when nominally read-only. If something appears to need prod state, ask first.
+**Never run a prod- or staging-targeting command without a specific ask from the user.** Claude never deploys anywhere unprompted. This covers every `./per-ankh prod <sub>` and `./per-ankh staging <sub>` subcommand (including read-only ones like `preflight`, `status`, and `smoke`), `./per-ankh admin --staging`, and any direct `wrangler` / `npx wrangler` call against a live worker, D1, R2, or KV. These commands authenticate against the user's Cloudflare account — on this machine that triggers a 1Password prompt — and can hit live resources even when nominally read-only. If something appears to need prod or staging state, ask first.
 
 ## Tournament subsystem
 

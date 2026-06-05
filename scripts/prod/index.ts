@@ -1,7 +1,11 @@
-// Router for `./per-ankh prod <subcommand>`. Mirrors scripts/admin/index.ts.
+// Router for `./per-ankh prod <subcommand>` and `./per-ankh staging
+// <subcommand>` — the same command set parameterized by a CloudEnv. The only
+// surface difference: changelog (CHANGELOG.md + version bump + deploy tag) is
+// prod release bookkeeping and isn't offered for staging.
 
 import { err } from "../lib/format";
 import type { ProdOpts } from "./types";
+import { getEnv, type CloudEnv } from "../lib/environments";
 
 import * as preflight from "./commands/preflight";
 import * as deploy from "./commands/deploy";
@@ -10,21 +14,36 @@ import * as smoke from "./commands/smoke";
 import * as status from "./commands/status";
 import * as changelog from "./commands/changelog";
 
-function printHelp(): void {
+function printHelp(env: CloudEnv): void {
+	const title =
+		env.name === "prod"
+			? "per-ankh prod — production deploy & monitoring"
+			: "per-ankh staging — staging deploy & monitoring";
+	const smokeTargets =
+		env.name === "prod"
+			? "per-ankh.app, api, legacy"
+			: "staging.per-ankh.app, api-staging";
+	const deploySteps = env.runsChangelog
+		? "preflight → changelog → migrate → worker → frontend → smoke"
+		: "preflight → migrate → worker → frontend → smoke";
 	process.stdout.write(
 		[
-			"per-ankh prod — production deploy & monitoring",
+			title,
 			"",
 			"Usage:",
-			"  ./per-ankh prod <command> [flags]",
+			`  ./per-ankh ${env.name} <command> [flags]`,
 			"",
 			"Commands:",
 			"  preflight     Run every safety check, exit non-zero on any failure.",
-			"  deploy        Full deploy: preflight → changelog → migrate → worker → frontend → smoke.",
+			`  deploy        Full deploy: ${deploySteps}.`,
 			"  migrate       Apply pending D1 migrations (with confirm + preview).",
-			"  smoke         Live HTTP probes against per-ankh.app, api, legacy.",
+			`  smoke         Live HTTP probes against ${smokeTargets}.`,
 			"  status        Show local git, deployed versions, secrets, pending migrations.",
-			"  changelog     Preview (default) or --write the deploy changelog entry.",
+			...(env.runsChangelog
+				? [
+						"  changelog     Preview (default) or --write the deploy changelog entry.",
+					]
+				: []),
 			"",
 			"Global flags:",
 			"  --dry-run         Run checks + print plan; skip side effects.",
@@ -35,8 +54,12 @@ function printHelp(): void {
 			"  --skip-worker     Skip the API Worker deploy step.",
 			"  --skip-frontend   Skip the frontend build + deploy step.",
 			"  --skip-smoke      Skip post-deploy smoke probes.",
-			"  --skip-changelog  Skip changelog generation during deploy.",
-			"  --edit-changelog  Open $EDITOR on the changelog before committing.",
+			...(env.runsChangelog
+				? [
+						"  --skip-changelog  Skip changelog generation during deploy.",
+						"  --edit-changelog  Open $EDITOR on the changelog before committing.",
+					]
+				: []),
 			"  --json            Machine-readable output for preflight/smoke/status.",
 			"",
 		].join("\n"),
@@ -100,34 +123,42 @@ function parseProdOpts(argv: string[]): { opts: ProdOpts; rest: string[] } {
 	return { opts, rest };
 }
 
-export async function main(argv: string[]): Promise<void> {
+async function main(argv: string[], env: CloudEnv): Promise<void> {
 	const { opts, rest } = parseProdOpts(argv);
 	const sub = rest[0];
 	const subArgs = rest.slice(1);
 
 	switch (sub) {
 		case "preflight":
-			return preflight.run(subArgs, opts);
+			return preflight.run(subArgs, opts, env);
 		case "deploy":
-			return deploy.run(subArgs, opts);
+			return deploy.run(subArgs, opts, env);
 		case "migrate":
-			return migrate.run(subArgs, opts);
+			return migrate.run(subArgs, opts, env);
 		case "smoke":
-			return smoke.run(subArgs, opts);
+			return smoke.run(subArgs, opts, env);
 		case "status":
-			return status.run(subArgs, opts);
+			return status.run(subArgs, opts, env);
 		case "changelog":
-			return changelog.run(subArgs, opts);
+			if (env.runsChangelog) return changelog.run(subArgs, opts);
+			break; // falls out to the unknown-subcommand error for staging
 		case undefined:
 		case "help":
 		case "--help":
 		case "-h":
-			printHelp();
+			printHelp(env);
 			return;
-		default:
-			err(`Unknown prod subcommand: ${sub}`);
-			process.stderr.write("\n");
-			printHelp();
-			process.exit(1);
 	}
+	err(`Unknown ${env.name} subcommand: ${sub}`);
+	process.stderr.write("\n");
+	printHelp(env);
+	process.exit(1);
+}
+
+export async function prodMain(argv: string[]): Promise<void> {
+	return main(argv, getEnv("prod"));
+}
+
+export async function stagingMain(argv: string[]): Promise<void> {
+	return main(argv, getEnv("staging"));
 }

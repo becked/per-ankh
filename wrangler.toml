@@ -19,3 +19,18 @@ routes = [{ pattern = "per-ankh.app", custom_domain = true }]
 [assets]
 directory = ".svelte-kit/cloudflare"
 binding = "ASSETS"
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Staging frontend (staging.per-ankh.app).
+#
+# Wrangler 4 inherits `routes` into named envs — this block MUST declare its
+# own routes. If it were removed, `wrangler deploy --env staging` would
+# inherit the prod route and attach per-ankh.app to the staging worker.
+# main / compatibility_date / [assets] are inherited from the top level.
+#
+# Build for staging with the staging env vars (the staging deploy command
+# does this): VITE_API_URL=https://api-staging.per-ankh.app/v1
+#             VITE_PUBLIC_ORIGIN=https://staging.per-ankh.app
+# ─────────────────────────────────────────────────────────────────────────────
+[env.staging]
+routes = [{ pattern = "staging.per-ankh.app", custom_domain = true }]

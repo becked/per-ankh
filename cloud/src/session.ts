@@ -13,6 +13,12 @@ import { isSecureRequest, parseCookies } from "./util";
 
 export interface SessionEnv {
 	SESSIONS_KV: KVNamespace;
+	// Session cookie name — a wrangler var ("session" in prod,
+	// "session_staging" in staging), not a const. Both environments share
+	// Domain=per-ankh.app (see sessionCookieDomain), so the NAME is the only
+	// thing that keeps a staging login from clobbering the prod session in
+	// the same browser.
+	SESSION_COOKIE_NAME: string;
 	// Optional Discord ID of the site admin. Set via `wrangler secret put
 	// ADMIN_DISCORD_ID` in prod and `cloud/.dev.vars` locally. When unset,
 	// isSiteAdmin returns false for everyone — admin endpoints are dark.
@@ -27,7 +33,6 @@ export interface SessionData {
 	discord_username: string;
 }
 
-const SESSION_COOKIE = "session";
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 30; // 30 days
 
 function sessionKey(token: string): string {
@@ -94,7 +99,7 @@ export async function sessionFromRequest(
 	request: Request,
 ): Promise<{ token: string; data: SessionData } | null> {
 	const cookies = parseCookies(request.headers.get("Cookie"));
-	const token = cookies[SESSION_COOKIE];
+	const token = cookies[env.SESSION_COOKIE_NAME];
 	if (!token) return null;
 	const data = await readSession(env, token);
 	if (!data) return null;
@@ -120,6 +125,11 @@ export async function sessionFromRequest(
 // `routes`), so request.url's host is unreliable as a dev/prod signal —
 // it would silently apply Domain=per-ankh.app to a localhost response,
 // which the browser rejects. Prod is always HTTPS; dev is HTTP.
+//
+// Staging uses this same domain — staging.per-ankh.app and
+// api-staging.per-ankh.app are siblings, so per-ankh.app is their only
+// shared ancestor. Both environments' cookies therefore travel to both
+// API hosts; the per-env SESSION_COOKIE_NAME is what disambiguates.
 function sessionCookieDomain(request: Request): string | null {
 	if (!isSecureRequest(request)) return null;
 	return "per-ankh.app";
@@ -127,9 +137,13 @@ function sessionCookieDomain(request: Request): string | null {
 
 // Build a Set-Cookie value for the session token. Secure flag conditional
 // on the request being HTTPS so localhost dev (HTTP) works.
-export function sessionCookie(token: string, request: Request): string {
+export function sessionCookie(
+	env: SessionEnv,
+	token: string,
+	request: Request,
+): string {
 	const parts = [
-		`${SESSION_COOKIE}=${token}`,
+		`${env.SESSION_COOKIE_NAME}=${token}`,
 		"HttpOnly",
 		"SameSite=Lax",
 		"Path=/",
@@ -143,9 +157,9 @@ export function sessionCookie(token: string, request: Request): string {
 
 // Domain must match the original Set-Cookie or the browser treats this
 // as a different cookie and won't clear the real one.
-export function clearSessionCookie(request: Request): string {
+export function clearSessionCookie(env: SessionEnv, request: Request): string {
 	const parts = [
-		`${SESSION_COOKIE}=`,
+		`${env.SESSION_COOKIE_NAME}=`,
 		"HttpOnly",
 		"SameSite=Lax",
 		"Path=/",

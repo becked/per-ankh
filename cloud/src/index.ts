@@ -125,6 +125,7 @@ interface Env
 	UPLOADS_ENABLED: string;
 	DISCORD_CLIENT_ID: string;
 	DISCORD_CLIENT_SECRET: string;
+	SESSION_COOKIE_NAME: string;
 }
 
 // UUID v4 format: 8-4-4-4-12 hex chars

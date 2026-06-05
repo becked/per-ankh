@@ -2,38 +2,60 @@
 // Spawns the wrangler binary in cloud/ and parses --json output. Used by every
 // admin subcommand.
 //
-// Targets remote (production D1 + R2) by default. Callers can opt into local
-// via setLocal(true) at startup — toggled by the `--local` global flag in
-// the CLI router. Useful for testing the tournament admin commands against
-// the local .wrangler state during development.
+// Targets remote (production D1 + R2) by default. Callers can opt into the
+// local .wrangler state (`--local`, useful for testing tournament admin
+// commands during development) or the staging environment (`--staging`) —
+// toggled by the global flags in the CLI router via setTarget().
 
 import { spawn } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { dirname, resolve } from "node:path";
+import { getEnv } from "../lib/environments";
 
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
 const CLOUD_DIR = resolve(REPO_ROOT, "cloud");
 const WRANGLER_BIN = resolve(CLOUD_DIR, "node_modules/.bin/wrangler");
 
-let useLocal = false;
+export type AdminTarget = "local" | "prod" | "staging";
 
-export function setLocal(value: boolean): void {
-	useLocal = value;
+let target: AdminTarget = "prod";
+
+export function setTarget(value: AdminTarget): void {
+	target = value;
 }
 
+export function getTarget(): AdminTarget {
+	return target;
+}
+
+// The dev-only commands (dev-login, tournament seed) gate on this — both
+// prod and staging count as "remote" and are refused.
 export function isLocal(): boolean {
-	return useLocal;
+	return target === "local";
 }
 
-function targetFlag(): string {
-	return useLocal ? "--local" : "--remote";
+function targetFlags(): string[] {
+	switch (target) {
+		case "local":
+			return ["--local"];
+		case "prod":
+			return ["--remote"];
+		case "staging":
+			// --env selects the [env.staging] bindings; the resources live remote.
+			return ["--env", "staging", "--remote"];
+	}
 }
 
-// Matches cloud/wrangler.toml [d1_databases].database_name and
-// [r2_buckets].bucket_name. Hardcoded — there's only one environment, and
-// parsing wrangler.toml adds nothing for phase 1.
-export const DB_NAME = "per-ankh-share-index";
-export const R2_BUCKET = "per-ankh-shares";
+// D1 database_name / R2 bucket_name for the current target, from the shared
+// environment table. The local .wrangler state simulates prod, so `local`
+// resolves to the prod names.
+function dbName(): string {
+	return getEnv(target === "staging" ? "staging" : "prod").dbName;
+}
+
+function r2Bucket(): string {
+	return getEnv(target === "staging" ? "staging" : "prod").r2Bucket;
+}
 
 interface SpawnResult {
 	stdout: string;
@@ -85,8 +107,8 @@ export async function d1Query<T = Record<string, unknown>>(
 	const { stdout, stderr, code } = await runWrangler([
 		"d1",
 		"execute",
-		DB_NAME,
-		targetFlag(),
+		dbName(),
+		...targetFlags(),
 		"--json",
 		"--command",
 		sql,
@@ -110,8 +132,8 @@ export async function d1Batch(sqls: string[]): Promise<unknown[][]> {
 	const { stdout, stderr, code } = await runWrangler([
 		"d1",
 		"execute",
-		DB_NAME,
-		targetFlag(),
+		dbName(),
+		...targetFlags(),
 		"--json",
 		"--command",
 		sql,
@@ -130,8 +152,8 @@ export async function d1Exec(sql: string): Promise<void> {
 	const { stdout, stderr, code } = await runWrangler([
 		"d1",
 		"execute",
-		DB_NAME,
-		targetFlag(),
+		dbName(),
+		...targetFlags(),
 		"--json",
 		"--command",
 		sql,
@@ -176,7 +198,7 @@ export async function kvPutSession(
 		"--preview",
 		"--ttl",
 		String(ttlSeconds),
-		targetFlag(),
+		...targetFlags(),
 		key,
 		value,
 	]);
@@ -192,8 +214,8 @@ export async function r2Delete(key: string): Promise<void> {
 		"r2",
 		"object",
 		"delete",
-		`${R2_BUCKET}/${key}`,
-		targetFlag(),
+		`${r2Bucket()}/${key}`,
+		...targetFlags(),
 	]);
 	if (code !== 0) {
 		throw new Error(

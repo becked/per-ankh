@@ -4,13 +4,18 @@
 import { listPendingMigrations } from "../checks/migrations";
 import { applyRemoteMigrations } from "../deploy/migrate";
 import type { ProdOpts } from "../types";
+import type { CloudEnv } from "../../lib/environments";
 import { bold, info, ok } from "../../lib/format";
 import { confirmYesNo } from "../../lib/confirm";
 import { printJson } from "../../lib/cli";
 
-export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
-	info("Listing pending migrations...");
-	const r = await listPendingMigrations();
+export async function run(
+	_argv: string[],
+	opts: ProdOpts,
+	env: CloudEnv,
+): Promise<void> {
+	info(`Listing pending ${env.name} migrations...`);
+	const r = await listPendingMigrations(env);
 	if (r.error) {
 		throw new Error(`Could not list pending migrations: ${r.error}`);
 	}
@@ -39,13 +44,13 @@ export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 	}
 
 	if (!opts.yes) {
-		const yes = await confirmYesNo("Apply these to remote D1?");
+		const yes = await confirmYesNo(`Apply these to ${env.name} D1?`);
 		if (!yes) {
 			info("Cancelled.");
 			return;
 		}
 	}
 
-	await applyRemoteMigrations();
+	await applyRemoteMigrations(env);
 	ok(`Applied ${r.pending.length} migration(s).`);
 }

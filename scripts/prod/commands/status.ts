@@ -1,9 +1,11 @@
-// `./per-ankh prod status` — local git state, deployed worker versions, secret
-// presence, pending migrations. Doesn't run checks, doesn't make changes.
+// `./per-ankh prod|staging status` — local git state, deployed worker
+// versions, secret presence, pending migrations. Doesn't run checks, doesn't
+// make changes.
 
 import { runCaptured } from "../../lib/shell";
 import { listPendingMigrations } from "../checks/migrations";
 import type { ProdOpts } from "../types";
+import type { CloudEnv } from "../../lib/environments";
 import { bold, dim, info } from "../../lib/format";
 import { printJson } from "../../lib/cli";
 import { fileURLToPath } from "node:url";
@@ -30,10 +32,17 @@ async function git(args: string[]) {
 	return runCaptured("git", args, { cwd: REPO_ROOT });
 }
 
-async function getLatestWorkerVersion(cwd: string): Promise<string | null> {
-	const r = await runCaptured("npx", ["wrangler", "deployments", "list"], {
-		cwd,
-	});
+async function getLatestWorkerVersion(
+	cwd: string,
+	env: CloudEnv,
+): Promise<string | null> {
+	const r = await runCaptured(
+		"npx",
+		["wrangler", "deployments", "list", ...env.wranglerEnvFlag],
+		{
+			cwd,
+		},
+	);
 	if (r.code !== 0) return null;
 	// `wrangler deployments list` prints one block per deployment, newest at
 	// the bottom. Each block has a line like:
@@ -50,8 +59,15 @@ interface SecretRow {
 	name: string;
 }
 
-async function listSecrets(cwd: string): Promise<string[] | null> {
-	const r = await runCaptured("npx", ["wrangler", "secret", "list"], { cwd });
+async function listSecrets(
+	cwd: string,
+	env: CloudEnv,
+): Promise<string[] | null> {
+	const r = await runCaptured(
+		"npx",
+		["wrangler", "secret", "list", ...env.wranglerEnvFlag],
+		{ cwd },
+	);
 	if (r.code !== 0) return null;
 	const idx = r.stdout.indexOf("[");
 	if (idx < 0) return null;
@@ -62,17 +78,21 @@ async function listSecrets(cwd: string): Promise<string[] | null> {
 	}
 }
 
-export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
-	info("Gathering prod status...");
+export async function run(
+	_argv: string[],
+	opts: ProdOpts,
+	env: CloudEnv,
+): Promise<void> {
+	info(`Gathering ${env.name} status...`);
 	const [branch, sha, porcelain, workerVer, frontendVer, secrets, mig] =
 		await Promise.all([
 			git(["rev-parse", "--abbrev-ref", "HEAD"]),
 			git(["rev-parse", "--short", "HEAD"]),
 			git(["status", "--porcelain"]),
-			getLatestWorkerVersion(CLOUD_DIR),
-			getLatestWorkerVersion(REPO_ROOT),
-			listSecrets(CLOUD_DIR),
-			listPendingMigrations(),
+			getLatestWorkerVersion(CLOUD_DIR, env),
+			getLatestWorkerVersion(REPO_ROOT, env),
+			listSecrets(CLOUD_DIR, env),
+			listPendingMigrations(env),
 		]);
 
 	const data = {
@@ -94,7 +114,9 @@ export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
 		return;
 	}
 
-	process.stdout.write(`\n${bold("Per-Ankh Prod Status")}\n`);
+	process.stdout.write(
+		`\n${bold(`Per-Ankh ${env.name === "prod" ? "Prod" : "Staging"} Status`)}\n`,
+	);
 	process.stdout.write(`${"─".repeat(33)}\n`);
 	process.stdout.write(
 		`  Branch:           ${data.git.branch}  (${data.git.sha})${data.git.dirty ? "  " + dim("(dirty)") : ""}\n`,

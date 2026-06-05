@@ -1,13 +1,18 @@
-// `./per-ankh prod smoke` — HTTP probes against live prod URLs.
+// `./per-ankh prod|staging smoke` — HTTP probes against the live environment.
 
 import { runSmokeProbes } from "../deploy/smoke";
 import type { ProdOpts } from "../types";
+import type { CloudEnv } from "../../lib/environments";
 import { bold, dim, green, info, red } from "../../lib/format";
 import { printJson } from "../../lib/cli";
 
-export async function run(_argv: string[], opts: ProdOpts): Promise<void> {
-	info("Running smoke probes against prod...");
-	const results = await runSmokeProbes();
+export async function run(
+	_argv: string[],
+	opts: ProdOpts,
+	env: CloudEnv,
+): Promise<void> {
+	info(`Running smoke probes against ${env.name}...`);
+	const results = await runSmokeProbes(env);
 
 	if (opts.json) {
 		printJson(results);

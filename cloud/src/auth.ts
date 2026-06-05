@@ -547,7 +547,7 @@ export async function handleDiscordCallback(
 		"Content-Type": "application/json",
 		...cors,
 	});
-	headers.append("Set-Cookie", sessionCookie(sessionToken, request));
+	headers.append("Set-Cookie", sessionCookie(env, sessionToken, request));
 	// Also clear the now-consumed pending cookie.
 	const isHttps = new URL(request.url).protocol === "https:";
 	const clearPending = [
@@ -704,7 +704,7 @@ export async function handleDevLogin(
 	const next = safeNext(url.searchParams.get("next"));
 
 	const headers = new Headers(cors);
-	headers.append("Set-Cookie", sessionCookie(sessionToken, request));
+	headers.append("Set-Cookie", sessionCookie(env, sessionToken, request));
 	headers.set("Location", `${frontendOrigin}${next}`);
 	return new Response(null, { status: 302, headers });
 }
@@ -843,7 +843,7 @@ export async function handleLogout(
 	return new Response(null, {
 		status: 204,
 		headers: {
-			"Set-Cookie": clearSessionCookie(request),
+			"Set-Cookie": clearSessionCookie(env, request),
 			...cors,
 		},
 	});
