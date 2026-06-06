@@ -18,12 +18,18 @@ import {
 	loadTournamentById,
 	MapConfigError,
 	parseMapPool,
+	slotDisplayName,
 	type MatchRow,
 	type RoundRow,
 	type TournamentEnv,
 	type TournamentRow,
 } from "./data";
-import { computeStandingsResponse, loadMatchesWithRound } from "./public";
+import {
+	computeStandingsResponse,
+	loadMatchesWithRound,
+	loadUserIdentitiesForMatches,
+	type UserIdentity,
+} from "./public";
 
 export interface TournamentExportEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
@@ -78,7 +84,7 @@ export function buildStandingsCsv(resp: StandingsResponse): string {
 			rows.push([
 				s.rank,
 				name,
-				s.discord_username,
+				s.display_name,
 				s.user_id != null ? "yes" : "no",
 				s.wins,
 				s.losses,
@@ -110,10 +116,26 @@ function nameForSlot(
 	return snapshot ?? slotNames.get(slotId) ?? "";
 }
 
+// Display label for a report-time occupant snapshot: the snapshot user's
+// current display name when they have an account, else the username snapshot
+// itself (never-claimed occupants). Mirrors serializeMatch in public.ts so
+// the CSV shows the same names as the site.
+function snapshotDisplayName(
+	userId: string | null,
+	usernameSnapshot: string | null,
+	identityByUserId: Map<string, UserIdentity>,
+): string | null {
+	const resolved = userId
+		? identityByUserId.get(userId)?.display_name
+		: undefined;
+	return resolved ?? usernameSnapshot;
+}
+
 export function buildMatchesCsv(
 	rows: MatchWithRound[],
 	slotNames: Map<string, string | null>,
 	mapLabels: Map<string, string>,
+	identityByUserId: Map<string, UserIdentity>,
 ): string {
 	const header = [
 		"phase",
@@ -131,8 +153,24 @@ export function buildMatchesCsv(
 	];
 	const out: (string | number | null)[][] = [];
 	for (const { match: m, round: r } of rows) {
-		const nameA = nameForSlot(m.slot_a_id, m.slot_a_username, slotNames);
-		const nameB = nameForSlot(m.slot_b_id, m.slot_b_username, slotNames);
+		const nameA = nameForSlot(
+			m.slot_a_id,
+			snapshotDisplayName(
+				m.slot_a_user_id,
+				m.slot_a_username,
+				identityByUserId,
+			),
+			slotNames,
+		);
+		const nameB = nameForSlot(
+			m.slot_b_id,
+			snapshotDisplayName(
+				m.slot_b_user_id,
+				m.slot_b_username,
+				identityByUserId,
+			),
+			slotNames,
+		);
 		// Winner is whichever participant slot won; resolve via the same
 		// snapshot-preferred names so it matches player_a/player_b.
 		let winner = "";
@@ -214,9 +252,13 @@ export async function handleTournamentExport(
 		loadMatchesWithRound(env, tournament.tournament_id),
 		loadSlots(env, tournament.tournament_id),
 	]);
+	const identityByUserId = await loadUserIdentitiesForMatches(
+		env,
+		matchesWithRound.map(({ match }) => match),
+	);
 
 	const slotNames = new Map<string, string | null>();
-	for (const s of slotRows) slotNames.set(s.slot_id, s.discord_username);
+	for (const s of slotRows) slotNames.set(s.slot_id, slotDisplayName(s));
 
 	// map_pool_id → played map script (label). Corrupt pools degrade to no
 	// label rather than failing the whole export — matches still show
@@ -232,7 +274,12 @@ export async function handleTournamentExport(
 	}
 
 	const standingsCsv = buildStandingsCsv(standingsResp);
-	const matchesCsv = buildMatchesCsv(matchesWithRound, slotNames, mapLabels);
+	const matchesCsv = buildMatchesCsv(
+		matchesWithRound,
+		slotNames,
+		mapLabels,
+		identityByUserId,
+	);
 
 	const zip = zipSync({
 		"standings.csv": strToU8(standingsCsv),

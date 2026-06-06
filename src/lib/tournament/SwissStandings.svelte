@@ -46,7 +46,7 @@
 	}
 
 	function slotLabel(s: SlotStanding): string {
-		return s.discord_username ?? `slot ${s.slot_id.slice(0, 6)}`;
+		return s.display_name ?? `slot ${s.slot_id.slice(0, 6)}`;
 	}
 </script>
 
@@ -109,7 +109,7 @@
 								{#if isViewerAdmin && onSubstitute}
 									<SlotUsernameCell
 										slotId={s.slot_id}
-										username={s.discord_username}
+										username={s.display_name}
 										disabled={busy}
 										onSubstitute={(u, userId) =>
 											onSubstitute(s.slot_id, u, userId)}

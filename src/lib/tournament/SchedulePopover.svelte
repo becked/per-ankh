@@ -96,17 +96,21 @@
 			timeValue = undefined;
 		}
 		streamValue = match.stream_url ?? "";
-		casterValue = match.caster_name ?? "";
+		// Edit the display label, not the stored caster_name: for a linked
+		// caster the worker re-resolves the canonical stored value from
+		// caster_user_id on save, so the input can safely show the name
+		// people recognize.
+		casterValue = match.caster_display_name ?? "";
 		casterUserId = match.caster_user_id;
 		casterLinkedName = match.caster_user_id
-			? (match.caster_name ?? null)
+			? (match.caster_display_name ?? null)
 			: null;
 		calendarOpen = false;
 	}
 
 	function onCasterValueChange(next: string) {
 		casterValue = next;
-		// Editing away from the linked handle forgets the link → free text.
+		// Editing away from the linked name forgets the link → free text.
 		if (casterUserId !== null && next !== casterLinkedName) {
 			casterUserId = null;
 			casterLinkedName = null;
@@ -115,7 +119,7 @@
 
 	function onCasterSelectUser(user: UserSearchResult | null) {
 		casterUserId = user?.user_id ?? null;
-		casterLinkedName = user?.discord_username ?? null;
+		casterLinkedName = user?.display_name ?? null;
 	}
 
 	function scheduledToIso(): string | null {

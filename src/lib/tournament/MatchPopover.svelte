@@ -29,7 +29,7 @@
 	import {
 		matchSlotAvatarUrl,
 		matchSlotNation,
-		matchSlotUsername,
+		matchSlotDisplayName,
 	} from "$lib/tournament/match-occupant";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
@@ -125,11 +125,11 @@
 	const slotALabel = $derived(
 		isPlaceholder && !isSlotAResolved
 			? "TBD"
-			: (matchSlotUsername(match, "a", slotLabels) ?? "—"),
+			: (matchSlotDisplayName(match, "a", slotLabels) ?? "—"),
 	);
 	const slotBLabel = $derived(
 		match.slot_b_id !== null
-			? (matchSlotUsername(match, "b", slotLabels) ?? "—")
+			? (matchSlotDisplayName(match, "b", slotLabels) ?? "—")
 			: isPlaceholder
 				? "TBD"
 				: "Bye",
@@ -147,14 +147,14 @@
 	const winnerLabel = $derived(
 		winnerSide === null
 			? null
-			: (matchSlotUsername(match, winnerSide, slotLabels) ?? null),
+			: (matchSlotDisplayName(match, winnerSide, slotLabels) ?? null),
 	);
 	// The slot that didn't win — used for the dimmed half of the title.
 	const loserLabel = $derived.by(() => {
 		if (loserSide === null) return null;
 		const loserId = loserSide === "a" ? match.slot_a_id : match.slot_b_id;
 		if (loserId === null) return "Bye";
-		return matchSlotUsername(match, loserSide, slotLabels) ?? "—";
+		return matchSlotDisplayName(match, loserSide, slotLabels) ?? "—";
 	});
 
 	const slotAAvatar = $derived(matchSlotAvatarUrl(match, "a", slotAvatars));
@@ -786,7 +786,7 @@
 
 	<!-- Read-only schedule (time / stream / caster), shown when any is set on a
 	     real match. Editing happens behind the Schedule button below. -->
-	{#if !isPlaceholder && (match.scheduled_at || match.stream_url || match.caster_name)}
+	{#if !isPlaceholder && (match.scheduled_at || match.stream_url || match.caster_display_name)}
 		<div
 			class="flex items-start gap-3 rounded-lg p-3"
 			style="background-color: rgb(var(--color-surface-raised));"
@@ -808,7 +808,7 @@
 					<span>{formatScheduledWithLocal(match.scheduled_at)}</span>
 				</div>
 			{/if}
-			{#if match.caster_name || match.stream_url}
+			{#if match.caster_display_name || match.stream_url}
 				<!-- Caster avatar + name, with the stream link to the right. -->
 				<div class="ml-auto flex flex-col items-end gap-1.5">
 					{#if match.stream_url}
@@ -822,8 +822,8 @@
 							class="inline-flex items-center gap-1.5 text-xs text-tan hover:underline"
 						>
 							<PlayerAvatar avatarUrl={match.caster_avatar_url} size={14} />
-							{#if match.caster_name}
-								<span class="truncate">{match.caster_name}</span>
+							{#if match.caster_display_name}
+								<span class="truncate">{match.caster_display_name}</span>
 							{/if}
 							stream
 							<svg
@@ -843,10 +843,10 @@
 							</svg>
 						</a>
 						<!-- eslint-enable svelte/no-navigation-without-resolve -->
-					{:else if match.caster_name}
+					{:else if match.caster_display_name}
 						<div class="flex items-center gap-1.5 text-xs text-tan">
 							<PlayerAvatar avatarUrl={match.caster_avatar_url} size={14} />
-							<span class="truncate">{match.caster_name}</span>
+							<span class="truncate">{match.caster_display_name}</span>
 						</div>
 					{/if}
 				</div>

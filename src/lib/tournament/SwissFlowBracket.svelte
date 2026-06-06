@@ -10,8 +10,8 @@
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import {
 		matchSlotAvatarUrl,
+		matchSlotDisplayName,
 		matchSlotNation,
-		matchSlotUsername,
 	} from "$lib/tournament/match-occupant";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
@@ -145,7 +145,7 @@
 	const labelOf = $derived.by(() => {
 		const out: Record<string, string> = {};
 		for (const s of standings) {
-			out[s.slot_id] = s.discord_username ?? `slot ${s.slot_id.slice(0, 6)}`;
+			out[s.slot_id] = s.display_name ?? `slot ${s.slot_id.slice(0, 6)}`;
 		}
 		return out;
 	});
@@ -295,7 +295,7 @@
 	function matchSlotLabel(m: TournamentMatch, side: "a" | "b"): string {
 		const slotId = side === "a" ? m.slot_a_id : m.slot_b_id;
 		if (!slotId) return "BYE";
-		return matchSlotUsername(m, side, labelOf) ?? "—";
+		return matchSlotDisplayName(m, side, labelOf) ?? "—";
 	}
 </script>
 

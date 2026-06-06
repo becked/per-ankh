@@ -3,12 +3,12 @@
 // bracket matches use a slot_a_id of null (TBD feeder cell) — the helpers
 // resolve that to a null label/avatar before any snapshot lookup.
 
-interface MatchUsernameLike {
+interface MatchDisplayNameLike {
 	status: "pending" | "complete" | "forfeit" | "bye";
 	slot_a_id: string | null;
 	slot_b_id: string | null;
-	slot_a_username: string | null;
-	slot_b_username: string | null;
+	slot_a_display_name: string | null;
+	slot_b_display_name: string | null;
 }
 
 interface MatchAvatarLike {
@@ -36,20 +36,22 @@ export function matchSlotNation(
 	return side === "a" ? match.slot_a_nation : match.slot_b_nation;
 }
 
-// Returns the username to display for one side of a match. For non-pending
-// matches we prefer the snapshot column written at report time so a later
-// substitution doesn't rewrite the historical name. Pending matches fall
-// through to live data — a substitute paired into an upcoming round should
-// appear under the new name immediately. The live map is keyed by slot_id.
-export function matchSlotUsername(
-	match: MatchUsernameLike,
+// Returns the display name for one side of a match. For non-pending matches
+// we prefer the snapshot-derived label (server-resolved from the occupant
+// pinned at report time) so a later substitution doesn't rewrite who played.
+// Pending matches fall through to live data — a substitute paired into an
+// upcoming round should appear under the new name immediately. The live map
+// is keyed by slot_id.
+export function matchSlotDisplayName(
+	match: MatchDisplayNameLike,
 	side: "a" | "b",
 	liveBySlotId: Record<string, string | null | undefined>,
 ): string | null {
 	const slotId = side === "a" ? match.slot_a_id : match.slot_b_id;
 	if (slotId === null) return null;
 	if (match.status !== "pending") {
-		const snap = side === "a" ? match.slot_a_username : match.slot_b_username;
+		const snap =
+			side === "a" ? match.slot_a_display_name : match.slot_b_display_name;
 		if (snap !== null && snap !== undefined) return snap;
 	}
 	return liveBySlotId[slotId] ?? null;

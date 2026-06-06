@@ -114,6 +114,54 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 			expect(body.match.caster_name).toBe("official_caster");
 		});
 
+		it("public match payloads label a linked caster by display name, a free-text caster as typed", async () => {
+			const caster = await makeUser({
+				discordUsername: "caster_handle",
+				displayName: "The Caster",
+			});
+			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
+			const m = await firstPendingMatchOf(t);
+
+			// Linked caster: caster_name stores the canonical handle, but the
+			// rendered label is the linked user's display name.
+			await expectOk(
+				await request.patch({
+					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}/schedule`,
+					as: t.admin,
+					body: { caster_user_id: caster.userId, caster_name: "ignored" },
+				}),
+			);
+			const linked = await expectOk<{
+				caster_name: string | null;
+				caster_display_name: string | null;
+			}>(
+				await request.get({
+					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
+					as: t.admin,
+				}),
+			);
+			expect(linked.caster_name).toBe("caster_handle");
+			expect(linked.caster_display_name).toBe("The Caster");
+
+			// Free-text caster: the typed name is both stored value and label.
+			await expectOk(
+				await request.patch({
+					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}/schedule`,
+					as: t.admin,
+					body: { caster_user_id: null, caster_name: "Freetext Fred" },
+				}),
+			);
+			const freetext = await expectOk<{
+				caster_display_name: string | null;
+			}>(
+				await request.get({
+					path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}`,
+					as: t.admin,
+				}),
+			);
+			expect(freetext.caster_display_name).toBe("Freetext Fred");
+		});
+
 		it("clears scheduling fields when sent null", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 			const m = await firstPendingMatchOf(t);

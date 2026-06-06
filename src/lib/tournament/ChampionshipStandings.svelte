@@ -79,7 +79,7 @@
 				return {
 					slot_id: s.slot_id,
 					seed: s.championship_seed,
-					name: s.discord_username ?? `seed ${s.championship_seed ?? "?"}`,
+					name: s.display_name ?? `seed ${s.championship_seed ?? "?"}`,
 					avatarUrl: s.avatar_url,
 					round: roundCell(p),
 					eliminated: p?.outcome === "lost",

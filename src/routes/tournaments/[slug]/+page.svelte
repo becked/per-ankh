@@ -726,7 +726,7 @@
 								style="background-color: rgb(var(--color-surface-raised));"
 							>
 								<label class="block min-w-[14rem] text-xs text-tan">
-									Discord username
+									Player
 									<div class="mt-1">
 										<UserAutocomplete
 											value={newSlotUsername}
@@ -818,7 +818,7 @@
 														<th class="w-4"></th>
 													{/if}
 													<th class="py-1 pr-2 text-left">#</th>
-													<th class="py-1 pr-2 text-left">Username</th>
+													<th class="py-1 pr-2 text-left">Player</th>
 													<th class="py-1 text-right">Claimed</th>
 													{#if isAdmin}
 														<th class="py-1 pl-2 text-right"></th>
@@ -864,7 +864,7 @@
 																{#if isAdmin}
 																	<SlotUsernameCell
 																		slotId={s.slot_id}
-																		username={s.discord_username}
+																		username={s.display_name}
 																		answer={s.signup_answer}
 																		editAnswer
 																		disabled={busy}
@@ -878,7 +878,7 @@
 																	/>
 																{:else}
 																	<span>
-																		{s.discord_username ??
+																		{s.display_name ??
 																			`slot ${s.slot_id.slice(0, 6)}`}
 																	</span>
 																{/if}

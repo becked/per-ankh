@@ -31,6 +31,7 @@ export interface TestUser {
 	readonly userId: string;
 	readonly discordId: string;
 	readonly discordUsername: string;
+	readonly displayName: string;
 	readonly sessionToken: string;
 }
 
@@ -38,6 +39,11 @@ let discordIdCounter = 1_000_000_000_000_000_000n;
 
 export async function makeUser(opts?: {
 	discordUsername?: string;
+	// users.display_name. Defaults to a value derived from — but distinct
+	// from — the handle, so an assertion (or handler) reading the wrong
+	// field fails loudly. Tournament labels are display names site-wide;
+	// the handle is storage-level only.
+	displayName?: string;
 	// Skip the default tournament_beta_users seed. Beta now only gates
 	// tournament *creation*; the default is "allowlisted" so created users
 	// can create tournaments. Tests of the create gate opt out.
@@ -48,11 +54,12 @@ export async function makeUser(opts?: {
 	const discordId = String(discordIdCounter++);
 	const discordUsername =
 		opts?.discordUsername ?? `user-${nanoid(8).toLowerCase()}`;
+	const displayName = opts?.displayName ?? `Display ${discordUsername}`;
 
 	await env.SHARE_DB.prepare(
 		`INSERT INTO users (user_id, discord_id, display_name, discord_username) VALUES (?, ?, ?, ?)`,
 	)
-		.bind(userId, discordId, discordUsername, discordUsername)
+		.bind(userId, discordId, displayName, discordUsername)
 		.run();
 
 	const sessionToken = nanoid(32);
@@ -62,7 +69,13 @@ export async function makeUser(opts?: {
 		{ expirationTtl: SESSION_TTL_SECONDS },
 	);
 
-	const user = { userId, discordId, discordUsername, sessionToken };
+	const user = {
+		userId,
+		discordId,
+		discordUsername,
+		displayName,
+		sessionToken,
+	};
 	if (!opts?.omitBeta) {
 		await seedBetaUser(user);
 	}

@@ -1,7 +1,7 @@
 <script lang="ts">
 	// Self-service tournament signup. Built for non-technical participants:
 	// one decision (division), live counts so they can see the field, and a
-	// reassurance line showing the exact Discord handle they'll appear under
+	// reassurance line showing the display name they'll appear under
 	// in the slot list.
 
 	import {
@@ -139,10 +139,8 @@
 		{/if}
 
 		<p class="text-[11px] text-tan opacity-60">
-			Signed in as <span class="font-mono text-tan opacity-90"
-				>@{user.discord_username}</span
-			>
-			— we'll use this Discord handle to identify you in pairings.
+			Signed in as <span class="text-tan opacity-90">{user.display_name}</span>
+			— this is how you'll appear in pairings.
 		</p>
 
 		<FormFooter

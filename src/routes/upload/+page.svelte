@@ -65,7 +65,7 @@
 				const labelById: Record<string, string> = {};
 				for (const div of ["A", "B"] as const) {
 					for (const s of standings.divisions[div].standings) {
-						if (s.discord_username) labelById[s.slot_id] = s.discord_username;
+						if (s.display_name) labelById[s.slot_id] = s.display_name;
 					}
 				}
 				slotALabel = labelById[match.slot_a_id] ?? "Slot A";

@@ -69,6 +69,9 @@ export interface SlotRow {
 	// loaders below. NULL when the slot is unclaimed (no user_id) or the
 	// claiming user has no custom Discord avatar. Feeds slotAvatarUrl().
 	user_avatar_hash: string | null;
+	// display_name of the claiming user, LEFT JOINed the same way. NULL when
+	// the slot is unclaimed. Feeds slotDisplayName().
+	user_display_name: string | null;
 	claim_banner_dismissed_at: string | null;
 	// The player's answer to the tournament's optional signup_question, captured
 	// at signup (migration 0023). NULL when unanswered or the slot predates the
@@ -165,7 +168,8 @@ export async function loadSlots(
 	tournamentId: string,
 ): Promise<SlotRow[]> {
 	const res = await env.SHARE_DB.prepare(
-		`SELECT s.*, u.avatar_hash AS user_avatar_hash
+		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
+		        u.display_name AS user_display_name
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.tournament_id = ?
@@ -230,7 +234,8 @@ export async function loadSlot(
 	slotId: string,
 ): Promise<SlotRow | null> {
 	return env.SHARE_DB.prepare(
-		`SELECT s.*, u.avatar_hash AS user_avatar_hash
+		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
+		        u.display_name AS user_display_name
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.slot_id = ?`,
@@ -249,7 +254,8 @@ export async function loadSlotInTournament(
 	tournamentId: string,
 ): Promise<SlotRow | null> {
 	return env.SHARE_DB.prepare(
-		`SELECT s.*, u.avatar_hash AS user_avatar_hash
+		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
+		        u.display_name AS user_display_name
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.slot_id = ? AND s.tournament_id = ?`,
@@ -280,6 +286,16 @@ export function slotAvatarUrl(row: SlotRow): string | null {
 	return row.discord_id
 		? buildAvatarUrl(row.discord_id, row.user_avatar_hash)
 		: null;
+}
+
+// Public display label for a slot's occupant: the claiming user's Discord
+// display name, falling back to the stored discord_username for unclaimed
+// slots (for free-text admin adds that's whatever name the admin typed, so
+// the fallback shows it verbatim). The site labels people by display_name
+// everywhere; the raw @handle stays storage-level (claim matching, pre-link
+// canonicalization) and is never the rendered label.
+export function slotDisplayName(row: SlotRow): string | null {
+	return row.user_display_name ?? row.discord_username;
 }
 
 // Convert D1 rows → in-memory refs used by the pure-function algorithms.

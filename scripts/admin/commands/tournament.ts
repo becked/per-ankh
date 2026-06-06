@@ -282,12 +282,17 @@ async function runSeed(argv: string[], opts: CommandOpts): Promise<void> {
 
 	// Idempotent: clear any prior tournament with this slug first (children →
 	// parent; don't rely on FK cascade, which D1's execute path may not apply).
+	// Fixture users are slug-namespaced (`seed-<slug>-<n>`) and deleted after
+	// the slots that reference them; the NOT LIKE excludes ids belonging to a
+	// longer slug that shares this one as a prefix (`seed-abc-…` must not
+	// delete `seed-abc-2-…`). Real accounts (nanoid user_ids) never match.
 	const slugLit = sqlStr(slug);
 	const childOf = `tournament_id IN (SELECT tournament_id FROM tournaments WHERE slug = ${slugLit})`;
 	const cleanup = [
 		`DELETE FROM tournament_matches WHERE round_id IN (SELECT round_id FROM tournament_rounds WHERE ${childOf})`,
 		`DELETE FROM tournament_rounds WHERE ${childOf}`,
 		`DELETE FROM tournament_slots WHERE ${childOf}`,
+		`DELETE FROM users WHERE user_id LIKE ${sqlStr(`seed-${slug}-%`)} AND user_id NOT LIKE ${sqlStr(`seed-${slug}-%-%`)}`,
 		`DELETE FROM tournaments WHERE slug = ${slugLit}`,
 	];
 
@@ -337,16 +342,28 @@ function planToInserts(plan: SeedPlan): string[] {
 		 ${num(t.swiss_losses_to_eliminate)}, ${num(t.swiss_max_rounds)},
 		 ${sqlStr(JSON.stringify(t.map_pool))}, ${t.completed ? now : "NULL"})`;
 
+	// Fixture users go in before slots — tournament_slots.user_id REFERENCES
+	// users(user_id). created_at / last_login_at take their schema defaults.
+	const users = `INSERT INTO users
+		(user_id, discord_id, display_name, discord_username)
+		VALUES ${plan.users
+			.map(
+				(u) =>
+					`(${str(u.user_id)}, ${str(u.discord_id)}, ` +
+					`${str(u.display_name)}, ${str(u.discord_username)})`,
+			)
+			.join(", ")}`;
+
 	const slots = `INSERT INTO tournament_slots
 		(slot_id, tournament_id, phase, division, swiss_seed, championship_seed,
-		 discord_username)
+		 discord_username, discord_id, user_id)
 		VALUES ${plan.slots
 			.map(
 				(s) =>
 					`(${str(s.slot_id)}, ${str(t.tournament_id)}, ${str(s.phase)}, ` +
 					`${str(s.division)}, ${s.swiss_seed === null ? "NULL" : num(s.swiss_seed)}, ` +
 					`${s.championship_seed === null ? "NULL" : num(s.championship_seed)}, ` +
-					`${str(s.discord_username)})`,
+					`${str(s.discord_username)}, ${str(s.discord_id)}, ${str(s.user_id)})`,
 			)
 			.join(", ")}`;
 
@@ -365,7 +382,8 @@ function planToInserts(plan: SeedPlan): string[] {
 	const matches = `INSERT INTO tournament_matches
 		(match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 		 pick_order_winner_slot_id, status, winner_slot_id, match_index,
-		 slot_a_username, slot_b_username, reported_at)
+		 slot_a_username, slot_b_username, slot_a_user_id, slot_b_user_id,
+		 reported_at)
 		VALUES ${plan.matches
 			.map(
 				(m) =>
@@ -374,11 +392,12 @@ function planToInserts(plan: SeedPlan): string[] {
 					`${str(m.pick_order_winner_slot_id)}, ${str(m.status)}, ` +
 					`${str(m.winner_slot_id)}, ${num(m.match_index)}, ` +
 					`${str(m.slot_a_username)}, ${str(m.slot_b_username)}, ` +
+					`${str(m.slot_a_user_id)}, ${str(m.slot_b_user_id)}, ` +
 					`${m.status === "complete" ? now : "NULL"})`,
 			)
 			.join(", ")}`;
 
-	return [tournament, slots, rounds, matches];
+	return [tournament, users, slots, rounds, matches];
 }
 
 async function runList(argv: string[], opts: CommandOpts): Promise<void> {

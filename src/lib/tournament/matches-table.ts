@@ -1,6 +1,6 @@
 import type { TournamentMatch } from "$lib/api-cloud";
 import type { TableState } from "$lib/game-detail/helpers";
-import { matchSlotUsername } from "./match-occupant";
+import { matchSlotDisplayName } from "./match-occupant";
 
 // The three status buckets the matches table can show. Byes are excluded
 // (auto-resolved, never scheduled or played) — matchStatusGroup returns null
@@ -64,18 +64,18 @@ export const MATCH_COLUMNS: MatchColumn[] = [
 		key: "player_a",
 		label: "First player",
 		sortValue: (m, ctx) =>
-			(matchSlotUsername(m, "a", ctx.slotLabels) ?? "").toLowerCase(),
+			(matchSlotDisplayName(m, "a", ctx.slotLabels) ?? "").toLowerCase(),
 	},
 	{
 		key: "player_b",
 		label: "Second player",
 		sortValue: (m, ctx) =>
-			(matchSlotUsername(m, "b", ctx.slotLabels) ?? "").toLowerCase(),
+			(matchSlotDisplayName(m, "b", ctx.slotLabels) ?? "").toLowerCase(),
 	},
 	{
 		key: "caster",
 		label: "Caster",
-		sortValue: (m) => (m.caster_name ?? "").toLowerCase(),
+		sortValue: (m) => (m.caster_display_name ?? "").toLowerCase(),
 	},
 	{
 		key: "stream",

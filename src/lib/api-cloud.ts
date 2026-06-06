@@ -1394,7 +1394,10 @@ export interface SlotStanding {
 	h2h: number;
 	rank: number;
 	tied_with: string[];
-	discord_username: string | null;
+	// Display label resolved server-side: the claiming user's Discord display
+	// name, falling back to the slot's stored name for unclaimed slots (the
+	// name the admin typed when adding the player).
+	display_name: string | null;
 	user_id: string | null;
 	// Discord avatar URL of the claiming user, or null when the slot is
 	// unclaimed (render the EFFECTUNIT_ENLIST_ICON fallback in that case).
@@ -1420,7 +1423,8 @@ export interface CombinedQualifier {
 	opponents_buchholz: number;
 	cumulative: number;
 	division: "A" | "B" | null;
-	discord_username: string | null;
+	// Same server-resolved display label as SlotStanding.display_name.
+	display_name: string | null;
 	avatar_url: string | null;
 	swiss_seed: number | null;
 }
@@ -1438,7 +1442,8 @@ export interface StandingsResponse {
 export interface BracketSlot {
 	slot_id: string;
 	championship_seed: number | null;
-	discord_username: string | null;
+	// Same server-resolved display label as SlotStanding.display_name.
+	display_name: string | null;
 	user_id: string | null;
 	avatar_url: string | null;
 }
@@ -1479,13 +1484,17 @@ export interface TournamentMatch {
 	// header's "won the final in N turns" line). Null when no game was uploaded
 	// for the match, and absent from non-bracket match payloads.
 	total_turns?: number | null;
-	// Slot occupant snapshot at report time (migration 0024). Populated when
-	// the match flipped out of 'pending', cleared on retro-edit back to
-	// 'pending'. Renderers prefer the snapshot for non-pending matches so a
-	// later substitution doesn't rewrite historical names/avatars.
-	slot_a_username: string | null;
+	// Display labels for the slot-occupant snapshot taken at report time
+	// (migration 0024): resolved server-side from the snapshot user_id (the
+	// occupant's *current* display name — presentation follows the profile,
+	// identity stays pinned), falling back to the report-time name for
+	// occupants who never claimed an account. Null for pending matches (no
+	// snapshot) — renderers prefer these for non-pending matches and fall
+	// through to the live slot-identity maps otherwise, so a later
+	// substitution doesn't rewrite historical names/avatars.
+	slot_a_display_name: string | null;
 	slot_a_user_id: string | null;
-	slot_b_username: string | null;
+	slot_b_display_name: string | null;
 	slot_b_user_id: string | null;
 	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
 	// pending matches (no snapshot) and for slots whose occupant had no
@@ -1502,14 +1511,17 @@ export interface TournamentMatch {
 	// Scheduling metadata (migration 0025). Editable on pending matches by an
 	// admin or either participant. scheduled_at is a full ISO-8601 instant
 	// (UTC); stream_url a youtube/twitch link. Caster is modeled like a slot
-	// occupant: caster_user_id links a Per-Ankh user when picked (else null),
-	// caster_name is the canonical username when linked or free text otherwise,
-	// and caster_avatar_url resolves server-side from caster_user_id (null for
+	// occupant: caster_user_id links a Per-Ankh user when picked (else null);
+	// caster_name is the storage/edit value (canonical username when linked,
+	// free text otherwise). caster_display_name is the rendered label — the
+	// linked user's display name, falling back to caster_name — and
+	// caster_avatar_url resolves server-side from caster_user_id (null for
 	// a free-text caster or one with no claimed avatar).
 	scheduled_at: string | null;
 	stream_url: string | null;
 	caster_user_id: string | null;
 	caster_name: string | null;
+	caster_display_name: string | null;
 	caster_avatar_url: string | null;
 	// Client-only flag: true for synthesized future-round bracket cells that
 	// don't yet correspond to a real tournament_matches row. The server never
@@ -1576,7 +1588,9 @@ export interface GameTournamentLink {
 		slot_a_id: string;
 		slot_b_id: string | null;
 		winner_slot_id: string | null;
-		slot_a_username: string | null;
-		slot_b_username: string | null;
+		// Server-resolved display labels (claiming user's display name, stored
+		// name fallback for unclaimed slots).
+		slot_a_display_name: string | null;
+		slot_b_display_name: string | null;
 	};
 }

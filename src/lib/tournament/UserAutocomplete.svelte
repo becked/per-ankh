@@ -16,9 +16,13 @@
 	//   * ↑/↓ navigates, Enter on a row picks it, Esc closes, Tab/blur closes.
 	//   * Click selects.
 	//   * Selecting a row fires onSelectUser(row) and sets value to its
-	//     discord_username. Subsequently typing diverges → onSelectUser(null)
+	//     display_name. Subsequently typing diverges → onSelectUser(null)
 	//     so the parent forgets the linked user_id.
 	//   * Enter with no row highlighted calls onEnter (free-text path).
+	//
+	// The server matches the query against both display names and Discord
+	// handles, but rows render (and the picked value is) the display name —
+	// the site never surfaces raw @handles.
 
 	import { ApiError, cloudApi, type UserSearchResult } from "$lib/api-cloud";
 	import { autofocus } from "$lib/actions/autofocus";
@@ -63,10 +67,10 @@
 	let suggestions = $state<UserSearchResult[]>([]);
 	let highlight = $state(-1);
 	let open = $state(false);
-	// True when the input's current value came from picking a row. Lets us
+	// Set when the input's current value came from picking a row. Lets us
 	// suppress the next fetch (it would just return the picked user) and
 	// reset cleanly when the admin starts editing.
-	let pickedUsername = $state<string | null>(null);
+	let pickedName = $state<string | null>(null);
 	let fetchTimer: ReturnType<typeof setTimeout> | null = null;
 	// Monotonic counter so an in-flight stale fetch can't clobber fresher
 	// results.
@@ -120,16 +124,16 @@
 		const next = (e.target as HTMLInputElement).value;
 		onValueChange(next);
 		// If the admin edits a previously-picked value, forget the link.
-		if (pickedUsername !== null && next !== pickedUsername) {
-			pickedUsername = null;
+		if (pickedName !== null && next !== pickedName) {
+			pickedName = null;
 			onSelectUser(null);
 		}
 		scheduleSearch(next);
 	}
 
 	function pick(user: UserSearchResult) {
-		pickedUsername = user.discord_username;
-		onValueChange(user.discord_username);
+		pickedName = user.display_name;
+		onValueChange(user.display_name);
 		onSelectUser(user);
 		close();
 		clearTimer();
@@ -203,7 +207,7 @@
 		>
 			{#each suggestions as user, i (user.user_id)}
 				<li
-					class="flex cursor-pointer items-baseline justify-between gap-3 px-2 py-1.5 text-xs text-tan"
+					class="flex cursor-pointer items-baseline px-2 py-1.5 text-xs text-tan"
 					class:text-orange={i === highlight}
 					style:background-color={i === highlight
 						? "rgb(var(--color-surface-raised))"
@@ -218,10 +222,7 @@
 					}}
 					onmouseenter={() => (highlight = i)}
 				>
-					<span class="font-mono">@{user.discord_username}</span>
-					{#if user.display_name && user.display_name !== user.discord_username}
-						<span class="truncate opacity-60">{user.display_name}</span>
-					{/if}
+					<span class="truncate">{user.display_name}</span>
 				</li>
 			{/each}
 		</ul>

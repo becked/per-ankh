@@ -70,8 +70,7 @@
 					: c.division === "B"
 						? tournament.division_b_name
 						: "—";
-			out[c.slot_id] =
-				`${c.discord_username ?? c.slot_id.slice(0, 6)} (${div})`;
+			out[c.slot_id] = `${c.display_name ?? c.slot_id.slice(0, 6)} (${div})`;
 		}
 		return out;
 	});
@@ -256,12 +255,12 @@
 									<Checkbox
 										checked={idx >= 0}
 										onCheckedChange={() => toggleSlot(c.slot_id)}
-										ariaLabel={`Include ${c.discord_username ?? c.slot_id.slice(0, 6)}`}
+										ariaLabel={`Include ${c.display_name ?? c.slot_id.slice(0, 6)}`}
 									/>
 								</td>
 								<td class="py-1 pr-2 font-mono">{idx >= 0 ? idx + 1 : "—"}</td>
 								<td class="py-1 pr-2">
-									{c.discord_username ?? c.slot_id.slice(0, 6)}
+									{c.display_name ?? c.slot_id.slice(0, 6)}
 									<span class="opacity-50">({c.division ?? "—"})</span>
 								</td>
 								<td class="py-1 pr-2 text-right font-mono">

@@ -59,7 +59,7 @@
 			{
 				setBusy: (b) => (busy = b),
 				failMessage: "Couldn't add admin",
-				success: `@${target.discord_username} is now an admin.`,
+				success: `${target.display_name} is now an admin.`,
 			},
 		);
 		if (ok !== null) {

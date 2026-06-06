@@ -106,7 +106,7 @@ describe("buildMatchesCsv", () => {
 			match: match({ match_id: "m2", status: "pending", match_index: 2 }),
 		};
 		const rows = dataRows(
-			buildMatchesCsv([completed, pending], slotNames, new Map()),
+			buildMatchesCsv([completed, pending], slotNames, new Map(), new Map()),
 		);
 		// columns: phase,division,round,match_index,player_a,player_b,map,status,winner,reported_at,notes,game_id
 		expect(rows[0][4]).toBe("alice_old");
@@ -128,7 +128,9 @@ describe("buildMatchesCsv", () => {
 				winner_slot_id: "sa",
 			}),
 		};
-		const rows = dataRows(buildMatchesCsv([bye], slotNames, new Map()));
+		const rows = dataRows(
+			buildMatchesCsv([bye], slotNames, new Map(), new Map()),
+		);
 		expect(rows[0][5]).toBe(""); // player_b empty
 		expect(rows[0][7]).toBe("bye");
 		expect(rows[0][8]).toBe("alice"); // winner resolved from current slot
@@ -140,7 +142,32 @@ describe("buildMatchesCsv", () => {
 			match: match({ map_pool_id: "pool1", map_script: null }),
 		};
 		const labels = new Map([["pool1", "MAPCLASS_SEASIDE"]]);
-		const rows = dataRows(buildMatchesCsv([m], slotNames, labels));
+		const rows = dataRows(buildMatchesCsv([m], slotNames, labels, new Map()));
 		expect(rows[0][6]).toBe("MAPCLASS_SEASIDE");
+	});
+
+	it("renders snapshot occupants by current display name, keeping the username snapshot for never-claimed players", () => {
+		const completed: MatchWithRound = {
+			round: round(),
+			match: match({
+				// Slot A's occupant claimed an account → label is their current
+				// display name, not the handle snapshot. Slot B never claimed →
+				// the report-time username snapshot stands.
+				slot_a_username: "alice_handle",
+				slot_a_user_id: "ua",
+				slot_b_username: "bob_handle",
+				slot_b_user_id: null,
+				winner_slot_id: "sa",
+			}),
+		};
+		const identities = new Map([
+			["ua", { avatar_url: null, display_name: "Alice Display" }],
+		]);
+		const rows = dataRows(
+			buildMatchesCsv([completed], slotNames, new Map(), identities),
+		);
+		expect(rows[0][4]).toBe("Alice Display");
+		expect(rows[0][5]).toBe("bob_handle");
+		expect(rows[0][8]).toBe("Alice Display"); // winner uses the same label
 	});
 });

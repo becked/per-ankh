@@ -29,6 +29,7 @@ import {
 	matchRowToRef,
 	parseMapPool,
 	slotAvatarUrl,
+	slotDisplayName,
 	slotRowToRef,
 	tournamentConfig,
 	type MatchRow,
@@ -600,7 +601,7 @@ export async function computeStandingsResponse(
 	const slotIdentity = new Map<
 		string,
 		{
-			discord_username: string | null;
+			display_name: string | null;
 			user_id: string | null;
 			avatar_url: string | null;
 			swiss_seed: number | null;
@@ -610,7 +611,7 @@ export async function computeStandingsResponse(
 	>();
 	for (const s of swissSlots) {
 		slotIdentity.set(s.slot_id, {
-			discord_username: s.discord_username,
+			display_name: slotDisplayName(s),
 			user_id: s.user_id,
 			avatar_url: slotAvatarUrl(s),
 			swiss_seed: s.swiss_seed,
@@ -625,7 +626,7 @@ export async function computeStandingsResponse(
 		"A" | "B",
 		Array<
 			RankedStanding & {
-				discord_username: string | null;
+				display_name: string | null;
 				user_id: string | null;
 				avatar_url: string | null;
 				swiss_seed: number | null;
@@ -645,7 +646,7 @@ export async function computeStandingsResponse(
 		const ranked = rankStandings(standings, divMatches);
 		const enriched = ranked.map((r) => {
 			const id = slotIdentity.get(r.slot_id) ?? {
-				discord_username: null,
+				display_name: null,
 				user_id: null,
 				avatar_url: null,
 				swiss_seed: null,
@@ -685,7 +686,7 @@ export async function computeStandingsResponse(
 				opponents_buchholz: number;
 				cumulative: number;
 				division: "A" | "B" | null;
-				discord_username: string | null;
+				display_name: string | null;
 				avatar_url: string | null;
 				swiss_seed: number | null;
 		  }>
@@ -711,7 +712,7 @@ export async function computeStandingsResponse(
 				opponents_buchholz: r.opponents_buchholz,
 				cumulative: r.cumulative,
 				division: id?.division ?? null,
-				discord_username: id?.discord_username ?? null,
+				display_name: id?.display_name ?? null,
 				avatar_url: id?.avatar_url ?? null,
 				swiss_seed: id?.swiss_seed ?? null,
 			};
@@ -781,7 +782,7 @@ export async function handleTournamentBracket(
 		}
 	}
 
-	const avatarByUserId = await loadHistoricalAvatarsForMatches(env, matches);
+	const identityByUserId = await loadUserIdentitiesForMatches(env, matches);
 	const nationByGamePlayer = await loadNationsForMatches(env, matches);
 
 	const body = {
@@ -789,7 +790,7 @@ export async function handleTournamentBracket(
 		slots: champSlots.map((s) => ({
 			slot_id: s.slot_id,
 			championship_seed: s.championship_seed,
-			discord_username: s.discord_username,
+			display_name: slotDisplayName(s),
 			user_id: s.user_id,
 			avatar_url: slotAvatarUrl(s),
 		})),
@@ -798,7 +799,7 @@ export async function handleTournamentBracket(
 			round_number: r.round_number,
 			status: r.status,
 			matches: (matchesByRound.get(r.round_id) ?? []).map((m) => ({
-				...serializeMatch(m, avatarByUserId, nationByGamePlayer),
+				...serializeMatch(m, identityByUserId, nationByGamePlayer),
 				total_turns: m.game_id ? (turnsByGame.get(m.game_id) ?? null) : null,
 			})),
 		})),
@@ -869,7 +870,7 @@ export async function handleTournamentMatches(
 		return true;
 	});
 
-	const avatarByUserId = await loadHistoricalAvatarsForMatches(
+	const identityByUserId = await loadUserIdentitiesForMatches(
 		env,
 		filtered.map(({ match }) => match),
 	);
@@ -882,7 +883,7 @@ export async function handleTournamentMatches(
 		{
 			tournament_id: tournament.tournament_id,
 			matches: filtered.map(({ match, round }) => ({
-				...serializeMatch(match, avatarByUserId, nationByGamePlayer),
+				...serializeMatch(match, identityByUserId, nationByGamePlayer),
 				round_id: round.round_id,
 				round_number: round.round_number,
 				phase: round.phase,
@@ -926,11 +927,11 @@ export async function handleTournamentMatchDetail(
 	if (!round || round.tournament_id !== tournament.tournament_id) {
 		return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
 	}
-	const avatarByUserId = await loadHistoricalAvatarsForMatches(env, [match]);
+	const identityByUserId = await loadUserIdentitiesForMatches(env, [match]);
 	const nationByGamePlayer = await loadNationsForMatches(env, [match]);
 	return jsonResponse(
 		{
-			...serializeMatch(match, avatarByUserId, nationByGamePlayer),
+			...serializeMatch(match, identityByUserId, nationByGamePlayer),
 			round_id: round.round_id,
 			round_number: round.round_number,
 			phase: round.phase,
@@ -985,16 +986,21 @@ export async function handleGameTournamentLink(
 		return jsonResponse({ link: null }, 200, cors);
 	}
 	// Pull slot identity for both slots so the frontend can render names
-	// without a second roundtrip.
+	// without a second roundtrip. Display-name resolution mirrors
+	// slotDisplayName(): the claiming user's display_name, falling back to
+	// the stored discord_username for unclaimed slots.
 	const slots = await env.SHARE_DB.prepare(
-		`SELECT slot_id, discord_username FROM tournament_slots
-		 WHERE slot_id = ? OR slot_id = ?`,
+		`SELECT s.slot_id,
+		        COALESCE(u.display_name, s.discord_username) AS display_name
+		 FROM tournament_slots s
+		 LEFT JOIN users u ON u.user_id = s.user_id
+		 WHERE s.slot_id = ? OR s.slot_id = ?`,
 	)
 		.bind(row.slot_a_id, row.slot_b_id ?? row.slot_a_id)
-		.all<{ slot_id: string; discord_username: string | null }>();
-	const usernameById = new Map<string, string | null>();
+		.all<{ slot_id: string; display_name: string | null }>();
+	const displayNameById = new Map<string, string | null>();
 	for (const s of slots.results ?? []) {
-		usernameById.set(s.slot_id, s.discord_username);
+		displayNameById.set(s.slot_id, s.display_name);
 	}
 	return jsonResponse(
 		{
@@ -1015,9 +1021,9 @@ export async function handleGameTournamentLink(
 					slot_a_id: row.slot_a_id,
 					slot_b_id: row.slot_b_id,
 					winner_slot_id: row.winner_slot_id,
-					slot_a_username: usernameById.get(row.slot_a_id) ?? null,
-					slot_b_username: row.slot_b_id
-						? (usernameById.get(row.slot_b_id) ?? null)
+					slot_a_display_name: displayNameById.get(row.slot_a_id) ?? null,
+					slot_b_display_name: row.slot_b_id
+						? (displayNameById.get(row.slot_b_id) ?? null)
 						: null,
 				},
 			},
@@ -1029,17 +1035,21 @@ export async function handleGameTournamentLink(
 
 function serializeMatch(
 	m: MatchRow,
-	avatarByUserId?: Map<string, string | null>,
+	identityByUserId?: Map<string, UserIdentity>,
 	nationByGamePlayer?: Map<string, string>,
 ) {
-	const slotAAvatar =
-		m.slot_a_user_id && avatarByUserId
-			? (avatarByUserId.get(m.slot_a_user_id) ?? null)
-			: null;
-	const slotBAvatar =
-		m.slot_b_user_id && avatarByUserId
-			? (avatarByUserId.get(m.slot_b_user_id) ?? null)
-			: null;
+	const slotAIdentity =
+		m.slot_a_user_id && identityByUserId
+			? identityByUserId.get(m.slot_a_user_id)
+			: undefined;
+	const slotBIdentity =
+		m.slot_b_user_id && identityByUserId
+			? identityByUserId.get(m.slot_b_user_id)
+			: undefined;
+	const casterIdentity =
+		m.caster_user_id && identityByUserId
+			? identityByUserId.get(m.caster_user_id)
+			: undefined;
 	// Nation each slot played, resolved via the slot↔player_index mapping
 	// (migration 0007) against player_summaries. Null when no save is linked
 	// or the index/nation is unknown (bye, forfeit, admin-set, legacy match).
@@ -1066,25 +1076,28 @@ function serializeMatch(
 		reported_by_user_id: m.reported_by_user_id,
 		reported_at: m.reported_at,
 		notes: m.notes,
-		slot_a_username: m.slot_a_username,
+		// Display labels resolved live from the snapshot user_id, falling back
+		// to the report-time username snapshot for occupants who never claimed
+		// an account. Null for pending matches (no snapshot yet) — the client
+		// falls through to its live slot-identity maps, same shape as avatars.
+		slot_a_display_name: slotAIdentity?.display_name ?? m.slot_a_username,
 		slot_a_user_id: m.slot_a_user_id,
-		slot_a_avatar_url: slotAAvatar,
+		slot_a_avatar_url: slotAIdentity?.avatar_url ?? null,
 		slot_a_nation: slotANation,
-		slot_b_username: m.slot_b_username,
+		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
-		slot_b_avatar_url: slotBAvatar,
+		slot_b_avatar_url: slotBIdentity?.avatar_url ?? null,
 		slot_b_nation: slotBNation,
-		// Scheduling metadata (migration 0025). caster_avatar_url resolves from
-		// the same user_id→avatar batch as the slot occupants; null for a
-		// free-text caster or one whose user has no claimed discord_id.
+		// Scheduling metadata (migration 0025). The caster renders by display
+		// name when linked to a user; caster_name stays the storage/edit value
+		// (canonical handle when linked, free text otherwise) and doubles as
+		// the display fallback for free-text casters.
 		scheduled_at: m.scheduled_at,
 		stream_url: m.stream_url,
 		caster_user_id: m.caster_user_id,
 		caster_name: m.caster_name,
-		caster_avatar_url:
-			m.caster_user_id && avatarByUserId
-				? (avatarByUserId.get(m.caster_user_id) ?? null)
-				: null,
+		caster_display_name: casterIdentity?.display_name ?? m.caster_name,
+		caster_avatar_url: casterIdentity?.avatar_url ?? null,
 	};
 }
 
@@ -1117,40 +1130,53 @@ async function loadNationsForMatches(
 	return map;
 }
 
-// Resolve avatar URLs for every distinct snapshot user_id referenced by the
-// supplied matches. One batched SELECT per call. Returns a Map keyed by
-// user_id; missing rows or NULL discord_id map to null (placeholder avatar
-// on the client). For pending matches (snapshot user_ids are NULL) callers
-// can pass an empty match list — no users → no query.
-async function loadHistoricalAvatarsForMatches(
+export interface UserIdentity {
+	avatar_url: string | null;
+	display_name: string | null;
+}
+
+// Resolve avatar URL + display name for every distinct snapshot user_id
+// referenced by the supplied matches. One batched SELECT per call. Returns a
+// Map keyed by user_id; missing rows map to nothing (callers fall back), a
+// NULL discord_id maps to a null avatar (placeholder on the client). The
+// snapshot pins WHO played (user_id, substitution-proof); presentation —
+// avatar and display name — follows that user's current profile, matching
+// how the rest of the site renders people. For pending matches (snapshot
+// user_ids are NULL) callers can pass an empty match list — no users → no
+// query.
+export async function loadUserIdentitiesForMatches(
 	env: TournamentEnv,
 	matches: MatchRow[],
-): Promise<Map<string, string | null>> {
+): Promise<Map<string, UserIdentity>> {
 	const userIds = new Set<string>();
 	for (const m of matches) {
 		if (m.slot_a_user_id) userIds.add(m.slot_a_user_id);
 		if (m.slot_b_user_id) userIds.add(m.slot_b_user_id);
-		// Caster avatar (migration 0025) resolves from the same batch.
+		// Caster identity (migration 0025) resolves from the same batch.
 		if (m.caster_user_id) userIds.add(m.caster_user_id);
 	}
-	const map = new Map<string, string | null>();
+	const map = new Map<string, UserIdentity>();
 	if (userIds.size === 0) return map;
 	const ids = [...userIds];
 	const placeholders = ids.map(() => "?").join(",");
 	const res = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, avatar_hash FROM users WHERE user_id IN (${placeholders})`,
+		`SELECT user_id, discord_id, display_name, avatar_hash
+		 FROM users WHERE user_id IN (${placeholders})`,
 	)
 		.bind(...ids)
 		.all<{
 			user_id: string;
 			discord_id: string | null;
+			display_name: string | null;
 			avatar_hash: string | null;
 		}>();
 	for (const row of res.results ?? []) {
-		map.set(
-			row.user_id,
-			row.discord_id ? buildAvatarUrl(row.discord_id, row.avatar_hash) : null,
-		);
+		map.set(row.user_id, {
+			avatar_url: row.discord_id
+				? buildAvatarUrl(row.discord_id, row.avatar_hash)
+				: null,
+			display_name: row.display_name,
+		});
 	}
 	return map;
 }

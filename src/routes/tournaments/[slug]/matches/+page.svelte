@@ -30,8 +30,8 @@
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import {
 		matchSlotAvatarUrl,
+		matchSlotDisplayName,
 		matchSlotNation,
-		matchSlotUsername,
 	} from "$lib/tournament/match-occupant";
 	import {
 		MATCH_COLUMNS,
@@ -156,15 +156,15 @@
 				n != null && formatEnum(n, "NATION_").toLowerCase().includes(term);
 			list = list.filter(
 				(m) =>
-					(matchSlotUsername(m, "a", slotMaps.labels) ?? "")
+					(matchSlotDisplayName(m, "a", slotMaps.labels) ?? "")
 						.toLowerCase()
 						.includes(term) ||
-					(matchSlotUsername(m, "b", slotMaps.labels) ?? "")
+					(matchSlotDisplayName(m, "b", slotMaps.labels) ?? "")
 						.toLowerCase()
 						.includes(term) ||
 					nationMatch(matchSlotNation(m, "a")) ||
 					nationMatch(matchSlotNation(m, "b")) ||
-					(m.caster_name ?? "").toLowerCase().includes(term),
+					(m.caster_display_name ?? "").toLowerCase().includes(term),
 			);
 		}
 
@@ -298,10 +298,10 @@
 	}
 
 	function shortMatchup(m: TournamentMatch): string {
-		const a = matchSlotUsername(m, "a", slotMaps.labels) ?? "—";
+		const a = matchSlotDisplayName(m, "a", slotMaps.labels) ?? "—";
 		const b =
 			m.slot_b_id !== null
-				? (matchSlotUsername(m, "b", slotMaps.labels) ?? "—")
+				? (matchSlotDisplayName(m, "b", slotMaps.labels) ?? "—")
 				: "Bye";
 		return `${a} v ${b}`;
 	}
@@ -315,7 +315,7 @@
 		<span>Bye</span>
 	{:else}
 		{@const nation = matchSlotNation(m, side)}
-		{@const name = matchSlotUsername(m, side, slotMaps.labels) ?? "—"}
+		{@const name = matchSlotDisplayName(m, side, slotMaps.labels) ?? "—"}
 		<span class="inline-flex items-center gap-1.5">
 			{#if nation}
 				<SpriteIcon
@@ -560,7 +560,7 @@
 																	{:else if column.key === "round"}
 																		{m.round_number ?? "—"}
 																	{:else if column.key === "caster"}
-																		{#if m.caster_name}
+																		{#if m.caster_display_name}
 																			<span
 																				class="inline-flex items-center gap-1.5"
 																			>
@@ -568,7 +568,7 @@
 																					avatarUrl={m.caster_avatar_url}
 																					size={16}
 																				/>
-																				{m.caster_name}
+																				{m.caster_display_name}
 																			</span>
 																		{:else}
 																			—

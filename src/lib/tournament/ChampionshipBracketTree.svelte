@@ -7,8 +7,8 @@
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import {
 		matchSlotAvatarUrl,
+		matchSlotDisplayName,
 		matchSlotNation,
-		matchSlotUsername,
 	} from "$lib/tournament/match-occupant";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
@@ -57,8 +57,7 @@
 	const liveLabelBySlot = $derived.by(() => {
 		const out: Record<string, string> = {};
 		for (const s of bracket.slots) {
-			out[s.slot_id] =
-				s.discord_username ?? `seed ${s.championship_seed ?? "?"}`;
+			out[s.slot_id] = s.display_name ?? `seed ${s.championship_seed ?? "?"}`;
 		}
 		return out;
 	});
@@ -72,7 +71,7 @@
 	});
 
 	function matchLabel(m: PositionedMatch, side: "a" | "b"): string {
-		return matchSlotUsername(m, side, liveLabelBySlot) ?? "—";
+		return matchSlotDisplayName(m, side, liveLabelBySlot) ?? "—";
 	}
 
 	function matchAvatar(m: PositionedMatch, side: "a" | "b"): string | null {
@@ -109,13 +108,14 @@
 		centerY: number;
 		status: "pending" | "complete" | "forfeit" | "bye";
 		is_placeholder: boolean;
-		// Snapshot fields propagated from the underlying real match (migration
-		// 0024). NULL on synthesized placeholders and on still-pending matches.
-		slot_a_username: string | null;
+		// Snapshot-derived fields propagated from the underlying real match
+		// (migration 0024). NULL on synthesized placeholders and on
+		// still-pending matches.
+		slot_a_display_name: string | null;
 		slot_a_user_id: string | null;
 		slot_a_avatar_url: string | null;
 		slot_a_nation: string | null;
-		slot_b_username: string | null;
+		slot_b_display_name: string | null;
 		slot_b_user_id: string | null;
 		slot_b_avatar_url: string | null;
 		slot_b_nation: string | null;
@@ -132,11 +132,11 @@
 		map_script: string | null;
 		status: "pending" | "complete" | "forfeit" | "bye";
 		is_placeholder: boolean;
-		slot_a_username: string | null;
+		slot_a_display_name: string | null;
 		slot_a_user_id: string | null;
 		slot_a_avatar_url: string | null;
 		slot_a_nation: string | null;
-		slot_b_username: string | null;
+		slot_b_display_name: string | null;
 		slot_b_user_id: string | null;
 		slot_b_avatar_url: string | null;
 		slot_b_nation: string | null;
@@ -180,11 +180,11 @@
 				map_script: m.map_script,
 				status: m.status,
 				is_placeholder: false,
-				slot_a_username: m.slot_a_username,
+				slot_a_display_name: m.slot_a_display_name,
 				slot_a_user_id: m.slot_a_user_id,
 				slot_a_avatar_url: m.slot_a_avatar_url,
 				slot_a_nation: m.slot_a_nation,
-				slot_b_username: m.slot_b_username,
+				slot_b_display_name: m.slot_b_display_name,
 				slot_b_user_id: m.slot_b_user_id,
 				slot_b_avatar_url: m.slot_b_avatar_url,
 				slot_b_nation: m.slot_b_nation,
@@ -216,11 +216,11 @@
 					map_script: null,
 					status: "pending",
 					is_placeholder: true,
-					slot_a_username: null,
+					slot_a_display_name: null,
 					slot_a_user_id: null,
 					slot_a_avatar_url: null,
 					slot_a_nation: null,
-					slot_b_username: null,
+					slot_b_display_name: null,
 					slot_b_user_id: null,
 					slot_b_avatar_url: null,
 					slot_b_nation: null,
@@ -275,11 +275,11 @@
 					centerY,
 					status: m.status,
 					is_placeholder: m.is_placeholder,
-					slot_a_username: m.slot_a_username,
+					slot_a_display_name: m.slot_a_display_name,
 					slot_a_user_id: m.slot_a_user_id,
 					slot_a_avatar_url: m.slot_a_avatar_url,
 					slot_a_nation: m.slot_a_nation,
-					slot_b_username: m.slot_b_username,
+					slot_b_display_name: m.slot_b_display_name,
 					slot_b_user_id: m.slot_b_user_id,
 					slot_b_avatar_url: m.slot_b_avatar_url,
 					slot_b_nation: m.slot_b_nation,

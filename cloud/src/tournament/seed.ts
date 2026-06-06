@@ -50,6 +50,18 @@ export interface SeedTournamentRow {
 	completed: boolean; // → completed_at = datetime('now') when true
 }
 
+// Fixture account backing a claimed slot. user_id is slug-namespaced
+// (`seed-<slug>-<n>`) so re-seeding can idempotently delete prior fixture
+// users without touching real (dev-login) accounts; discord_id is a fake but
+// numeric snowflake — buildAvatarUrl BigInt-parses it for the default-avatar
+// index, so it must stay numeric.
+export interface SeedUserRow {
+	user_id: string;
+	discord_id: string;
+	discord_username: string;
+	display_name: string;
+}
+
 export interface SeedSlotRow {
 	slot_id: string;
 	phase: Phase;
@@ -57,6 +69,11 @@ export interface SeedSlotRow {
 	swiss_seed: number | null;
 	championship_seed: number | null;
 	discord_username: string;
+	// Claim state. Most fixture slots are claimed by a SeedUserRow so the UI
+	// exercises the display-name path (users.display_name); the last seed per
+	// division stays unclaimed to exercise the stored-name fallback.
+	discord_id: string | null;
+	user_id: string | null;
 }
 
 export interface SeedRoundRow {
@@ -80,10 +97,16 @@ export interface SeedMatchRow {
 	match_index: number;
 	slot_a_username: string | null;
 	slot_b_username: string | null;
+	// Occupant user_id snapshots (migration 0024), set alongside the username
+	// snapshots on decided matches. Null for unclaimed occupants — the read
+	// path then falls back to the username snapshot, same as production.
+	slot_a_user_id: string | null;
+	slot_b_user_id: string | null;
 }
 
 export interface SeedPlan {
 	tournament: SeedTournamentRow;
+	users: SeedUserRow[];
 	slots: SeedSlotRow[];
 	rounds: SeedRoundRow[];
 	matches: SeedMatchRow[];
@@ -160,6 +183,37 @@ function playerName(globalIndex: number): string {
 	return wrap === 0 ? base : `${base} ${wrap + 1}`;
 }
 
+// Discord-handle-style counterpart to playerName ("Athena" → "athena_0").
+// Deliberately divergent from the display name so a label accidentally
+// rendered from the stored handle instead of users.display_name is visible
+// at a glance in local testing.
+function playerHandle(globalIndex: number): string {
+	return `${playerName(globalIndex).toLowerCase().replace(/\s+/g, "_")}_${globalIndex}`;
+}
+
+// FNV-1a 32-bit — tiny deterministic hash for namespacing fake discord_ids
+// per slug.
+function fnv1a32(s: string): number {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < s.length; i++) {
+		h ^= s.charCodeAt(i);
+		h = Math.imul(h, 0x01000193) >>> 0;
+	}
+	return h >>> 0;
+}
+
+// Fake-but-numeric Discord snowflake, unique per (slug, player) — 1000
+// players of headroom per slug hash before adjacent slugs could collide,
+// far beyond any fixture. Numeric because buildAvatarUrl BigInt-parses
+// discord_id for the default-avatar index.
+function seedDiscordId(slug: string, globalIndex: number): string {
+	return String(
+		9_000_000_000_000_000_000n +
+			BigInt(fnv1a32(slug)) * 1_000n +
+			BigInt(globalIndex),
+	);
+}
+
 // ---------------------------------------------------------------------------
 // Planner
 // ---------------------------------------------------------------------------
@@ -208,34 +262,57 @@ export function planSeededTournament(
 	const tournamentId = makeId();
 
 	// Mutable accumulators.
+	const users: SeedUserRow[] = [];
 	const slots: SeedSlotRow[] = [];
 	const rounds: SeedRoundRow[] = [];
 	const matches: SeedMatchRow[] = [];
 	// Refs for the pure algorithms — decided matches only (complete/bye). Pending
 	// matches contribute nothing to records and would confuse anti-repeat.
 	const refs: MatchRef[] = [];
-	// slot_id → display name and → seed (swiss or championship, by phase).
+	// slot_id → stored name (the @handle for claimed slots — what the username
+	// snapshots record, mirroring production), → claiming user_id (for the
+	// user-id snapshots), and → seed (swiss or championship, by phase).
 	const nameBySlot = new Map<string, string>();
+	const userIdBySlot = new Map<string, string | null>();
 	const swissSeedBySlot = new Map<string, number>();
 	const champSeedBySlot = new Map<string, number>();
 
 	// --- Swiss slots, two divisions, seeds 1..N each ---
+	// Every seed except the last per division is claimed by a fixture user
+	// whose display_name differs from the handle, so the UI's display-name
+	// path and the unclaimed stored-name fallback are both visible locally.
 	const divisions: Division[] = ["A", "B"];
 	const swissSlotsByDivision: Record<Division, SlotRef[]> = { A: [], B: [] };
 	let globalIndex = 0;
 	for (const division of divisions) {
 		for (let seed = 1; seed <= playersPerDivision; seed++) {
 			const slotId = makeId();
-			const username = playerName(globalIndex++);
+			const handle = playerHandle(globalIndex);
+			const claimed = seed < playersPerDivision;
+			let userId: string | null = null;
+			let discordId: string | null = null;
+			if (claimed) {
+				userId = `seed-${opts.slug}-${globalIndex}`;
+				discordId = seedDiscordId(opts.slug, globalIndex);
+				users.push({
+					user_id: userId,
+					discord_id: discordId,
+					discord_username: handle,
+					display_name: playerName(globalIndex),
+				});
+			}
 			slots.push({
 				slot_id: slotId,
 				phase: "swiss",
 				division,
 				swiss_seed: seed,
 				championship_seed: null,
-				discord_username: username,
+				discord_username: handle,
+				discord_id: discordId,
+				user_id: userId,
 			});
-			nameBySlot.set(slotId, username);
+			nameBySlot.set(slotId, handle);
+			userIdBySlot.set(slotId, userId);
 			swissSeedBySlot.set(slotId, seed);
 			swissSlotsByDivision[division].push({
 				slot_id: slotId,
@@ -244,6 +321,7 @@ export function planSeededTournament(
 				swiss_seed: seed,
 				championship_seed: null,
 			});
+			globalIndex++;
 		}
 	}
 
@@ -279,6 +357,7 @@ export function planSeededTournament(
 				mapSeed: `${tournamentId}|swiss|${division}|r${roundNumber}`,
 				seedBySlot: swissSeedBySlot,
 				nameBySlot,
+				userIdBySlot,
 				matches,
 				refs,
 				makeId,
@@ -323,12 +402,17 @@ export function planSeededTournament(
 		const ranked = rankStandings(standings, allSwissRefs);
 		const seedOrder = ranked.slice(0, qualifiers).map((r) => r.slot_id);
 
-		// Championship slots: seeds 1..N, identity copied from the source Swiss slot.
+		// Championship slots: seeds 1..N, identity (stored name + claim state)
+		// copied from the source Swiss slot.
 		const champSlotIdBySeed: Record<number, string> = {};
 		seedOrder.forEach((sourceSlotId, i) => {
 			const seed = i + 1;
 			const slotId = makeId();
-			const username = nameBySlot.get(sourceSlotId) ?? playerName(i);
+			const source = slots.find((s) => s.slot_id === sourceSlotId);
+			const username =
+				source?.discord_username ??
+				nameBySlot.get(sourceSlotId) ??
+				playerHandle(i);
 			slots.push({
 				slot_id: slotId,
 				phase: "championship",
@@ -336,8 +420,11 @@ export function planSeededTournament(
 				swiss_seed: null,
 				championship_seed: seed,
 				discord_username: username,
+				discord_id: source?.discord_id ?? null,
+				user_id: source?.user_id ?? null,
 			});
 			nameBySlot.set(slotId, username);
+			userIdBySlot.set(slotId, source?.user_id ?? null);
 			champSeedBySlot.set(slotId, seed);
 			champSlotIdBySeed[seed] = slotId;
 		});
@@ -372,6 +459,7 @@ export function planSeededTournament(
 			mapSeed: `${tournamentId}|championship|r1`,
 			seedBySlot: champSeedBySlot,
 			nameBySlot,
+			userIdBySlot,
 			matches,
 			refs,
 			makeId,
@@ -416,6 +504,7 @@ export function planSeededTournament(
 				mapSeed: `${tournamentId}|championship|r${roundNumber}`,
 				seedBySlot: champSeedBySlot,
 				nameBySlot,
+				userIdBySlot,
 				matches,
 				refs,
 				makeId,
@@ -445,6 +534,7 @@ export function planSeededTournament(
 
 	return {
 		tournament,
+		users,
 		slots,
 		rounds,
 		matches,
@@ -472,6 +562,7 @@ interface EmitRoundArgs {
 	mapSeed: string;
 	seedBySlot: Map<string, number>;
 	nameBySlot: Map<string, string>;
+	userIdBySlot: Map<string, string | null>;
 	matches: SeedMatchRow[];
 	refs: MatchRef[];
 	makeId: () => string;
@@ -537,6 +628,13 @@ function emitDecidedRound(args: EmitRoundArgs): void {
 			// Snapshot occupants on decided matches only; pending resolve live.
 			slot_a_username: decided ? aName : null,
 			slot_b_username: decided ? bName : null,
+			slot_a_user_id: decided
+				? (args.userIdBySlot.get(p.slot_a_id) ?? null)
+				: null,
+			slot_b_user_id:
+				decided && p.slot_b_id
+					? (args.userIdBySlot.get(p.slot_b_id) ?? null)
+					: null,
 		});
 
 		if (decided) {
@@ -587,6 +685,8 @@ function makeRoundPending(
 		m.winner_slot_id = null;
 		m.slot_a_username = null;
 		m.slot_b_username = null;
+		m.slot_a_user_id = null;
+		m.slot_b_user_id = null;
 	}
 	// Drop this round's now-pending matches from the algorithm refs.
 	for (let i = refs.length - 1; i >= 0; i--) {
