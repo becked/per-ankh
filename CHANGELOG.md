@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-06-06-293a30b] - 2026-06-06
+
+### Features
+
+- (staging) add staging environment with deploy CLI and separate resources — [b6b07ca](https://github.com/becked/per-ankh/commit/b6b07ca943b0e5cca44accc280e92a854927be0b)
+- (tournament) label players by display name everywhere — [6eb9259](https://github.com/becked/per-ankh/commit/6eb9259f533a21ac4cba0ab06149e7462ef605df)
+- (staging) add prod → staging reclone command (D1 + R2) — [293a30b](https://github.com/becked/per-ankh/commit/293a30bc1c7cde4e046428dc24711905ca2a8630)
+
+### Other
+
+- (staging) close documentation gaps found during provisioning — [71e0d5b](https://github.com/becked/per-ankh/commit/71e0d5bf559b86a3479f715d791347dedb1d62ec)
+
 ## [2026-06-02-5e19cb4] - 2026-06-02
 
 ### Features
