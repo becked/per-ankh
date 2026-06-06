@@ -523,3 +523,34 @@ All commands from `cloud/` unless noted. Each authenticates via `wrangler login`
 - **Frontend builds:** `./per-ankh staging deploy` injects `VITE_API_URL` / `VITE_PUBLIC_ORIGIN`; CSP `connect-src` and the report endpoints follow `VITE_API_URL` via the SSR-time rewrite in `src/hooks.server.ts`. A bare `npm run build` stays a correct prod build.
 - **No staging legacy viewer:** `web/` is frozen and prod-only; staging smoke has no legacy probe.
 - **routes inheritance footgun:** wrangler *does* inherit `routes` into named envs — never delete the `routes` line from an `[env.staging]` block, or a staging deploy will attach the prod custom domain (the toml comments call this out).
+
+### 9.3 Recloning staging from prod (issue #64)
+
+`./per-ankh staging reclone` destroys all staging data and replaces it with production's: D1 via a fresh `./per-ankh backup` export imported over a dropped schema, R2 via `rclone sync` (staging-only objects are deleted). The import file is re-emitted in FK dependency order first — wrangler's raw dump orders tables by creation, and the schema's forward FK reference (`games` → `collections`) makes it unreplayable under D1's FK enforcement. Staging data is **disposable by design** — never curate it, re-clone it. KV is never synced: sessions and OAuth state are per-environment, and a stale staging session 401s and clears itself on the next request (log in again).
+
+The migration-rehearsal ordering is the point. The dump carries prod's `d1_migrations` bookkeeping, so right after a reclone, staging reports exactly the migrations prod hasn't applied yet — `./per-ankh staging migrate` (or `staging deploy`) then rehearses them against real-shaped data. When a rehearsal fails, fix the migration and re-run cheaply against the same artifact instead of re-exporting:
+
+```bash
+./per-ankh staging reclone                                  # fresh prod export (default)
+./per-ankh staging reclone --from backups/<dump>.sql        # retry loop after a failed rehearsal
+./per-ankh staging migrate                                  # rehearse the pending migrations
+```
+
+**One-time provisioning.** `rclone` and `sqlite3` on PATH (`brew install rclone`; macOS ships sqlite3), plus two R2 API tokens (dashboard → R2 → Manage API tokens). R2 tokens carry a single permission level across their bucket scope, so least privilege requires two:
+
+- **Object Read only**, scoped to `per-ankh-shares` (prod source).
+- **Object Read & Write**, scoped to `per-ankh-shares-staging` (staging destination).
+
+Add their credentials — plus the account id for the S3 endpoint (`<id>.r2.cloudflarestorage.com`) — to the gitignored `.staging.vars`, alongside the Access service token:
+
+```
+CF_ACCOUNT_ID=<cloudflare account id>
+R2_PROD_RO_ACCESS_KEY_ID=<prod read-only token key id>
+R2_PROD_RO_SECRET_ACCESS_KEY=<prod read-only token secret>
+R2_STAGING_RW_ACCESS_KEY_ID=<staging read-write token key id>
+R2_STAGING_RW_SECRET_ACCESS_KEY=<staging read-write token secret>
+```
+
+The command synthesizes both rclone remotes from env vars — no rclone config file. Missing credentials fail the reclone preflight (listing the keys) before anything is touched.
+
+**PII / lifecycle.** A reclone copies production user data (Discord ids, usernames, game blobs) into staging — a copy that `nuke-user` and any future account-deletion path don't know about. The policy that makes this acceptable: staging is disposable and periodically re-cloned, never curated, so prod deletions propagate at the next reclone. The legacy share viewer is prod-only and unaffected.

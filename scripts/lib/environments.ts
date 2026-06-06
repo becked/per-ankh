@@ -30,6 +30,11 @@ export interface CloudEnv {
 	// Whether deploys write CHANGELOG.md / bump version / tag. Prod-only
 	// release bookkeeping; staging deploys are throwaway.
 	runsChangelog: boolean;
+	// Whether this environment's data is throwaway — destroyed and replaced
+	// wholesale by `reclone` (and the natural gate for any future tooling
+	// that treats the env as a fixture target, e.g. seed --staging). Never
+	// true for prod.
+	disposableData: boolean;
 }
 
 export const ENVIRONMENTS: Record<CloudEnvName, CloudEnv> = {
@@ -44,6 +49,7 @@ export const ENVIRONMENTS: Record<CloudEnvName, CloudEnv> = {
 		legacyOrigin: "https://legacy.per-ankh.app",
 		frontendBuildEnv: {},
 		runsChangelog: true,
+		disposableData: false,
 	},
 	staging: {
 		name: "staging",
@@ -59,6 +65,7 @@ export const ENVIRONMENTS: Record<CloudEnvName, CloudEnv> = {
 			VITE_PUBLIC_ORIGIN: "https://staging.per-ankh.app",
 		},
 		runsChangelog: false,
+		disposableData: true,
 	},
 };
 

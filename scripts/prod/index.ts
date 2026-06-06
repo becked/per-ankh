@@ -1,7 +1,9 @@
 // Router for `./per-ankh prod <subcommand>` and `./per-ankh staging
-// <subcommand>` — the same command set parameterized by a CloudEnv. The only
-// surface difference: changelog (CHANGELOG.md + version bump + deploy tag) is
-// prod release bookkeeping and isn't offered for staging.
+// <subcommand>` — the same command set parameterized by a CloudEnv. Two
+// surface differences: changelog (CHANGELOG.md + version bump + deploy tag)
+// is prod release bookkeeping and isn't offered for staging; reclone
+// (destroy + re-clone data from prod) only makes sense for an environment
+// with disposable data and isn't offered for prod.
 
 import { err } from "../lib/format";
 import type { ProdOpts } from "./types";
@@ -13,6 +15,7 @@ import * as migrate from "./commands/migrate";
 import * as smoke from "./commands/smoke";
 import * as status from "./commands/status";
 import * as changelog from "./commands/changelog";
+import * as reclone from "./commands/reclone";
 
 function printHelp(env: CloudEnv): void {
 	const title =
@@ -42,6 +45,12 @@ function printHelp(env: CloudEnv): void {
 			...(env.runsChangelog
 				? [
 						"  changelog     Preview (default) or --write the deploy changelog entry.",
+					]
+				: []),
+			...(env.disposableData
+				? [
+						"  reclone       Destroy staging data; re-clone D1 + R2 from prod.",
+						"                --from FILE reuses a backups/*.sql dump instead of a fresh export.",
 					]
 				: []),
 			"",
@@ -142,6 +151,9 @@ async function main(argv: string[], env: CloudEnv): Promise<void> {
 		case "changelog":
 			if (env.runsChangelog) return changelog.run(subArgs, opts);
 			break; // falls out to the unknown-subcommand error for staging
+		case "reclone":
+			if (env.disposableData) return reclone.run(subArgs, opts, env);
+			break; // falls out to the unknown-subcommand error for prod
 		case undefined:
 		case "help":
 		case "--help":
