@@ -66,21 +66,6 @@ function errorResponse(
 
 // === Audit events ===
 
-// Probabilistic cleanup of old events (runs ~2% of the time)
-async function maybeCleanupEvents(db: D1Database): Promise<void> {
-	if (Math.random() > 0.02) return;
-
-	try {
-		await db
-			.prepare(
-				"DELETE FROM events WHERE created_at < datetime('now', '-90 days')",
-			)
-			.run();
-	} catch (e) {
-		logError("event_cleanup_failed", e);
-	}
-}
-
 async function logEvent(
 	db: D1Database,
 	eventType: "upload" | "delete",
@@ -102,8 +87,6 @@ async function logEvent(
 				metadata ? JSON.stringify(metadata) : null,
 			)
 			.run();
-
-		await maybeCleanupEvents(db);
 	} catch (e) {
 		// Log failure is non-critical — don't fail the request
 		logError("audit_event_log_failed", e, { event_type: eventType });

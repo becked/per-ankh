@@ -229,6 +229,13 @@ Shape: `tournaments` (1) → `tournament_rounds` → `tournament_matches`; match
 
 When you bump `PARSER_VERSION` in `src/lib/parser/types.ts`, also add the new string to `KNOWN_PARSER_VERSIONS` in `cloud/src/schemas/game.ts` with a one-line changelog entry above the set. The Worker rejects unknown versions with `INVALID_BLOB: Unknown parser_version`, so a frontend that ships ahead of the Worker breaks all uploads. Deploy ordering: Worker first, frontend second.
 
+### Events retention
+
+A nightly cron (03:47 UTC, `[triggers]` in `cloud/wrangler.toml`) prunes the `events` table per the policy in `cloud/src/retention.ts`: 24h for rate-limit counters, 90d for general audit, never for tournament audit. Two rules when touching events:
+
+- **Adding a new `event_type`:** give it a home in `retention.ts` (a bucket or `KEEP_FOREVER`). Unlisted types are never deleted and are logged nightly as `unknown_types` until a policy decision is made.
+- **Adding a reader of `events`:** its query window must fit inside the type's retention bucket — the floors are pinned in `cloud/src/retention.test.ts` (rate-limit reads 1h, admin stats 30d); raise them there if a longer window is needed.
+
 ### Cloud Admin CLI
 
 `./per-ankh admin` is the operator CLI for the live app — covers both the cloud-rewrite world (users, games, events) and the frozen legacy share world. Implementation lives under `scripts/admin/`. Calls `wrangler` directly (no API key — relies on `wrangler login`). Run `./per-ankh admin --help` for the full list. Common usage:

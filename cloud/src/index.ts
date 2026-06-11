@@ -12,15 +12,20 @@
 //   POST   /v1/auth/logout
 //
 // Storage: R2 for blobs, D1 for indices/users, KV for sessions+OAuth state.
+//
+// Besides `fetch`, the Worker exports a `scheduled` handler: the nightly
+// events-retention sweep (cron in wrangler.toml, policy in retention.ts).
 
 import { cloudCorsHeaders, legacyCorsHeaders } from "./util";
 import {
 	emitAccessLog,
 	getRequestId,
 	logError,
+	logEvent,
 	runWithLogContext,
 	setRoute,
 } from "./log";
+import { sweepEvents } from "./retention";
 import { handleDelete, handleDownload, handleUpload } from "./share-legacy";
 import type { ShareLegacyEnv } from "./share-legacy";
 import {
@@ -742,5 +747,28 @@ export default {
 			emitAccessLog(response);
 			return response;
 		});
+	},
+
+	async scheduled(
+		controller: ScheduledController,
+		env: Env,
+		_ctx: ExecutionContext,
+	): Promise<void> {
+		// No runWithLogContext: log.ts is safe without a request context
+		// (request_id logs as null, which is accurate for a cron run).
+		logEvent("info", "retention_sweep_started", { cron: controller.cron });
+		try {
+			const result = await sweepEvents(env.SHARE_DB);
+			logEvent("info", "retention_sweep_completed", {
+				deleted: result.deleted,
+				unknown_types: result.unknownTypes,
+			});
+		} catch (err) {
+			logError("retention_sweep_failed", err);
+			// Rethrow so the run records as failed in the Workers dashboard's
+			// cron history — there's no client awaiting a response, and a
+			// swallowed error would leave no signal beyond the log line.
+			throw err;
+		}
 	},
 } satisfies ExportedHandler<Env>;

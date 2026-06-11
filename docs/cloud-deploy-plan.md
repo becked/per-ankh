@@ -468,7 +468,6 @@ Ship after deploy when there's a reason to. None block launch.
 | Unlink-Discord                       | Intentionally not offered — Discord is the only auth provider. Add when a second provider exists.                                                                  |
 | Dynamic per-game OG image            | satori + resvg-wasm Worker route. Replaces static `og-default.png`.                                                                                                |
 | Mobile-width header layout           | `/games/[id]` may need a collapse menu on narrow screens.                                                                                                          |
-| Prune `anon_read` rows from `events` | Scheduled Worker cron: `DELETE FROM events WHERE event_type = 'anon_read' AND created_at < datetime('now', '-2 hours')` daily. Other event types stay (audit log). |
 | `_routes.json` tuning                | adapter-cloudflare warns about dropped exclude rules; static asset paths invoke the SSR Worker unnecessarily.                                                      |
 
 ## 9. Staging environment (issue #41)

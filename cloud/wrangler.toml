@@ -40,6 +40,13 @@ binding = "SESSIONS_KV"
 id = "b7029ad65b8f410b84b4b55623b25e56"
 preview_id = "e4725d2a3a324ec98580f6d6cae1f209"
 
+# Nightly retention sweep over the D1 `events` table — see the `scheduled`
+# handler in src/index.ts and the per-event-type policy in src/retention.ts.
+# 03:47 UTC is off-peak for the player base and deliberately off the hour
+# boundary.
+[triggers]
+crons = ["47 3 * * *"]
+
 [vars]
 # === Legacy share endpoints ===
 # Max compressed payload size (5 MB)
@@ -104,6 +111,9 @@ SESSION_COOKIE_NAME = "session"
 #   - routes IS inherited — this block MUST declare its own routes. If it were
 #     removed, `wrangler deploy --env staging` would inherit the prod route and
 #     attach api.per-ankh.app to the staging worker.
+#   - triggers IS inherited — the empty [env.staging.triggers] below opts
+#     staging out of the nightly retention cron. Staging D1 is recloned from
+#     prod; an independent sweep there would skew prod/staging diffs.
 #   - main / compatibility_date / compatibility_flags are inherited; not
 #     repeated here.
 #
@@ -112,6 +122,10 @@ SESSION_COOKIE_NAME = "session"
 # ─────────────────────────────────────────────────────────────────────────────
 [env.staging]
 routes = [{ pattern = "api-staging.per-ankh.app", custom_domain = true }]
+
+# Opt out of the inherited nightly retention cron (see top-level comment).
+[env.staging.triggers]
+crons = []
 
 [[env.staging.r2_buckets]]
 binding = "SHARE_BUCKET"
