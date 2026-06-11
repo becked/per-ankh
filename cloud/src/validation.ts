@@ -4,10 +4,20 @@
 // Bounds are calibrated from real Old World game data (200-turn games,
 // 4-8 players, various map sizes).
 
-export interface ValidationResult {
-	valid: boolean;
-	error?: string;
+// The subset of a validated share payload that callers read directly. The
+// rest of the blob is preserved but stays `unknown`-typed — validation only
+// vouches for the fields below plus the structural checks in
+// validateSharePayload.
+export interface SharePayload extends Record<string, unknown> {
+	version: number;
 }
+
+// Discriminated union: on success the caller gets the validated payload back
+// typed, so it doesn't have to re-cast `parsed` to reach `version` or the
+// metadata fields.
+export type ValidationResult =
+	| { valid: true; data: SharePayload }
+	| { valid: false; error: string };
 
 // Known schema versions that this Worker accepts.
 // When the desktop app adds a new version, deploy a Worker update
@@ -167,7 +177,9 @@ export function validateSharePayload(data: unknown): ValidationResult {
 		};
 	}
 
-	return { valid: true };
+	// All structural checks passed. Hand the payload back typed so the caller
+	// reads `version`/`game_details` without re-asserting the shape.
+	return { valid: true, data: data as SharePayload };
 }
 
 // Extract metadata from a validated payload for the D1 shares index
