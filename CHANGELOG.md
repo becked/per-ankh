@@ -1,5 +1,19 @@
 # Changelog
 
+## [2026-06-11-3bd87d0] - 2026-06-11
+
+### Features
+
+- (cloud) add nightly events retention cron — [43023d7](https://github.com/becked/per-ankh/commit/43023d7a33f2203ad4440f83ecc73d139c4f51f7)
+- (cloud) emit security_events tee draining to Skiff (#71) — [6db5f4e](https://github.com/becked/per-ankh/commit/6db5f4e43ac48d449e7846f48c3a86781ccd5cfa)
+
+### Other
+
+- add performance architecture blog post — [7b1ad8b](https://github.com/becked/per-ankh/commit/7b1ad8b48e1d24704247955a6128813dd099f81f)
+- (cloud) extract legacy share stack into share-legacy.ts — [a430c13](https://github.com/becked/per-ankh/commit/a430c1346b0c1629eac7bf63890bfa3eb4e759ae)
+- drop stale invite-code references — [c4e18f0](https://github.com/becked/per-ankh/commit/c4e18f02be4559c049d9ea51e3bb52099186fa44)
+- (cloud) set SECURITY_DB database ids — [3bd87d0](https://github.com/becked/per-ankh/commit/3bd87d074bed530f60e5b380f0766610911579c9)
+
 ## [2026-06-06-293a30b] - 2026-06-06
 
 ### Features
