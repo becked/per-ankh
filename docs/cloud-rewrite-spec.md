@@ -1163,7 +1163,7 @@ To add Steam, GOG, Epic, or Google OAuth later:
 2. Add corresponding callback endpoints (Steam uses OpenID 2.0; the others use OAuth 2.0)
 3. Account linking: same user can connect multiple providers
 
-Sign-up is gated by an invite-code passphrase to keep out drive-by abuse. The OAuth scope is just `identify email` — the Worker requests no Discord guild/server access, so the consent screen lists only username/avatar/banner + email. New accounts must submit the code (a Worker secret, `INVITE_CODE`, rotatable via `wrangler secret put`) on the login form; the Worker plumbs it through the `oauth_pending` KV entry and validates at the callback after Discord identifies the user. Existing users (Discord ID already in `users`) bypass the check entirely. Failed attempts log an `invite_code_failed` event keyed by client IP; 10 failures in 10 minutes from one IP returns 429 `RATE_LIMITED` before the next code is even read. The gate runs before the users-table upsert, so rejected callers don't create orphan rows.
+The OAuth scope is just `identify email` — the Worker requests no Discord guild/server access, so the consent screen lists only username/avatar/banner + email. Sign-up is open: anyone who completes Discord OAuth gets an account. The callback upserts on `discord_id` (existing users updated, new ones created) with no invite-code or allowlist gate. An `INVITE_CODE` passphrase guarded sign-up before launch and was removed at release; account-creation abuse is now bounded by the per-user/per-IP/global upload rate limits plus Discord's own anti-abuse.
 
 ---
 

@@ -395,13 +395,13 @@ the cloud rewrite. New surfaces in this branch warrant a fresh pass:
    was audited; the new endpoints inherit it). Discord usernames are
    public-by-design; OK to expose. Verify Discord IDs are NOT exposed
    on any public endpoint (they aren't — only stored internally).
-4. **Upload abuse**: signup is gated by the invite-code passphrase
-   (commit `a12d6cd`; `cloud/src/auth.ts` validates at OAuth callback,
-   per-IP throttle on `invite_code_failed` events). Per-user/per-IP/global
-   upload rate limits still apply on top. Account creation is bounded
-   by invite-code knowledge + Discord's own anti-abuse. Spam vector
-   narrowed; worth confirming the invite-code per-IP throttle is tight
-   enough and the per-IP upload limit holds if a code leaks publicly.
+4. **Upload abuse**: sign-up is open — anyone who completes Discord OAuth
+   gets an account (the `INVITE_CODE` passphrase that once gated sign-up was
+   removed at release). Account creation is bounded only by Discord's own
+   anti-abuse; the real backstop is the per-user/per-IP/global upload rate
+   limits, which apply regardless of how the account was created. Spam vector:
+   confirm the per-IP upload limit holds against many fresh accounts from one
+   source.
 5. **Admin retro-edit downstream guard**: for championship matches,
    the guard refuses if _any_ later-round championship match has
    non-pending status. This is the coarser-but-safe variant
@@ -441,8 +441,7 @@ this is the tournament-specific addendum.
 4. [ ] Land timezone-capture issue #48 (helpful for admin's division
        assignments but not blocking)
 5. [ ] Land issue #43 (account deletion + data export) — separate from
-       tournament work; less urgent now that invite-code gating bounds
-       account creation
+       tournament work
 6. [ ] Walk a 4-slot mock tournament end-to-end on prod before opening
        signups (use throwaway Discord accounts)
 7. [ ] Create the tournament via CLI:
