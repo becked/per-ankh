@@ -28,6 +28,23 @@ bucket_name = "per-ankh-shares"
 binding = "SHARE_DB"
 database_name = "per-ankh-share-index"
 database_id = "e57449fd-6c9f-4b16-a013-322f9669182b"
+# Explicit (this is the default) now that a second DB has its own dir — keeps
+# the two unambiguous: `migrate:*` targets this one, `migrate:security:*` the
+# other.
+migrations_dir = "migrations"
+
+# D1 database for the Skiff security_events drain (issue #71). Dedicated, NOT
+# SHARE_DB, so probe-flood write bursts can't contend with live app queries on
+# D1's single-threaded-per-database engine. Drained read-only over the D1 REST
+# API; emit chokepoint in src/security-events.ts. Migrations live in
+# cloud/migrations-security/, applied out-of-band via `migrate:security:*`
+# (deliberately NOT wired into the deploy pipeline — the schema is static).
+# database_id is a placeholder until `wrangler d1 create per-ankh-security-events`.
+[[d1_databases]]
+binding = "SECURITY_DB"
+database_name = "per-ankh-security-events"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "migrations-security"
 
 # KV namespace for OAuth pending state (5min TTL) and sessions (30d TTL).
 # Keys are prefixed `oauth:<id>` and `session:<token>` respectively.
@@ -136,6 +153,18 @@ binding = "SHARE_DB"
 database_name = "per-ankh-share-index-staging"
 # Paste from `wrangler d1 create per-ankh-share-index-staging`:
 database_id = "74cb5f03-fe51-4770-81dc-da7ac600b911"
+migrations_dir = "migrations"
+
+# Staging security_events DB (see top-level SECURITY_DB comment). Binding name
+# must match prod — the secrets.parity preflight enforces it. Staging is opted
+# out of the nightly cron, so this DB won't auto-prune (fine: low volume,
+# disposable, recloned). database_id placeholder until
+# `wrangler d1 create per-ankh-security-events-staging`.
+[[env.staging.d1_databases]]
+binding = "SECURITY_DB"
+database_name = "per-ankh-security-events-staging"
+database_id = "00000000-0000-0000-0000-000000000001"
+migrations_dir = "migrations-security"
 
 [[env.staging.kv_namespaces]]
 binding = "SESSIONS_KV"

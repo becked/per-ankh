@@ -25,7 +25,9 @@ import {
 	runWithLogContext,
 	setRoute,
 } from "./log";
-import { sweepEvents } from "./retention";
+import { sweepEvents, sweepSecurityEvents } from "./retention";
+import { emitSecurityEvent } from "./security-events";
+import type { SecurityEventsEnv } from "./security-events";
 import { handleDelete, handleDownload, handleUpload } from "./share-legacy";
 import type { ShareLegacyEnv } from "./share-legacy";
 import {
@@ -109,7 +111,8 @@ interface Env
 		TournamentPublicEnv,
 		TournamentPlayerEnv,
 		TournamentAdminEnv,
-		ShareLegacyEnv {
+		ShareLegacyEnv,
+		SecurityEventsEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
 	SESSIONS_KV: KVNamespace;
@@ -745,6 +748,11 @@ export default {
 			response = new Response(response.body, response);
 			response.headers.set("X-Request-Id", getRequestId() ?? "");
 			emitAccessLog(response);
+			// Skiff security-event tee (issue #71). Reads the same log context,
+			// writes to the dedicated SECURITY_DB via ctx.waitUntil. Fully
+			// wrapped — runs on the safety-net 500 path too, and can never alter
+			// or fail the response above.
+			emitSecurityEvent(request, response, env, ctx);
 			return response;
 		});
 	},
@@ -759,9 +767,12 @@ export default {
 		logEvent("info", "retention_sweep_started", { cron: controller.cron });
 		try {
 			const result = await sweepEvents(env.SHARE_DB);
+			// Safety-floor age-out for the Skiff drain table (separate DB).
+			const securityDeleted = await sweepSecurityEvents(env.SECURITY_DB);
 			logEvent("info", "retention_sweep_completed", {
 				deleted: result.deleted,
 				unknown_types: result.unknownTypes,
+				security_events_deleted: securityDeleted,
 			});
 		} catch (err) {
 			logError("retention_sweep_failed", err);

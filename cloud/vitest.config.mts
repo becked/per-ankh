@@ -6,6 +6,10 @@ import {
 import { defineConfig } from "vitest/config";
 
 const MIGRATIONS_PATH = path.resolve(import.meta.dirname, "./migrations");
+const SECURITY_MIGRATIONS_PATH = path.resolve(
+	import.meta.dirname,
+	"./migrations-security",
+);
 
 // Two projects:
 //   - "unit" runs the existing pure-function tests on the default Node pool.
@@ -35,6 +39,9 @@ export default defineConfig({
 						miniflare: {
 							bindings: {
 								TEST_MIGRATIONS: await readD1Migrations(MIGRATIONS_PATH),
+								TEST_SECURITY_MIGRATIONS: await readD1Migrations(
+									SECURITY_MIGRATIONS_PATH,
+								),
 								// Enable the local Discord-free login bypass
 								// (GET /v1/auth/dev/login) so integration tests can drive
 								// the real claimTournamentSlots path. Mirrors

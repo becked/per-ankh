@@ -51,6 +51,11 @@ export interface LogContext {
 	route: string | null;
 	user_id: string | null;
 	error_code: string | null;
+	// Security-event reason set by a handler when it can't be derived from
+	// status+route at the emit chokepoint (currently only "signup"). Read by
+	// emitSecurityEvent in security-events.ts; takes precedence over the
+	// status/route-derived reasons. See issue #71.
+	security_reason: string | null;
 	started_at: number;
 	fields: Record<string, unknown>;
 }
@@ -67,6 +72,7 @@ function newContext(request: Request): LogContext {
 		route: null,
 		user_id: null,
 		error_code: null,
+		security_reason: null,
 		started_at: performance.now(),
 		fields: {},
 	};
@@ -90,6 +96,14 @@ export function getRequestId(): string | null {
 export function setRoute(route: string): void {
 	const ctx = als.getStore();
 	if (ctx) ctx.route = route;
+}
+
+// Tag a security-event reason that the emit chokepoint can't infer from
+// status+route (currently only "signup", set on new-account creation). The
+// access log itself doesn't use this — it's consumed by emitSecurityEvent.
+export function setSecurityReason(reason: string): void {
+	const ctx = als.getStore();
+	if (ctx) ctx.security_reason = reason;
 }
 
 export function setUserId(userId: string): void {

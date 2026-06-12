@@ -13,11 +13,11 @@ the old doc stays as historical context.
 - Tauri is gone. v0.2.0 GitHub Release is the desktop-final artifact.
 - Cloud Worker is feature-complete (auth, upload, games, dashboard, sharing,
   reparse, downloads, observability, audit log, CSP reporting).
-- Sign-up is gated by a single shared invite-code passphrase, the
-  `INVITE_CODE` Worker secret. Only new accounts are checked (existing
-  `discord_id` in `users` bypasses); failed attempts are per-IP rate-limited.
-  Rotate by `wrangler secret put INVITE_CODE` with a new value — no
-  redeploy, new logins pick it up immediately.
+- Sign-up is open to anyone who completes Discord OAuth — there is no
+  invite-code or allowlist gate on account creation. (A shared `INVITE_CODE`
+  passphrase gated sign-up before launch and was removed at release.) Abuse is
+  bounded downstream by the per-user/per-IP/global upload rate limits plus
+  Discord's own anti-abuse.
 - **Tournament feature is in private beta.** Every tournament endpoint
   (public reads, player endpoints, admin endpoints, the tournament-link
   branch of game upload) 404s unless the caller's discord_id is in the
@@ -72,12 +72,10 @@ Paste the returned `id` and `preview_id` into `cloud/wrangler.toml`.
 ```bash
 cd cloud
 npx wrangler secret put DISCORD_CLIENT_SECRET   # from Discord developer portal
-npx wrangler secret put INVITE_CODE             # sign-up passphrase, share OOB
 ```
 
-`./per-ankh prod preflight` will fail if either is unset on the production
-Worker. Rotate `INVITE_CODE` later with the same command — new value, no
-redeploy.
+`./per-ankh prod preflight` will fail if `DISCORD_CLIENT_SECRET` is unset on the
+production Worker (it's the only entry in the preflight's required-secrets list).
 
 ### 3.3. Discord OAuth app
 
@@ -327,6 +325,50 @@ post-cutover they hit the new SSR Worker, get 302'd to
 `legacy.per-ankh.app`, and resolve normally. No changes to `/v1/share/*`
 on the API Worker — endpoints stay live until the desktop installed base
 has migrated.
+
+### 3.9. Security-events drain database (issue #71)
+
+Skiff (external, read-only security triage) drains one row per
+security-relevant request from a `security_events` table over the D1 REST API,
+cursoring on the AUTOINCREMENT `id`. It lives in its **own** D1 (binding
+`SECURITY_DB`), **not** `SHARE_DB`, so write bursts under a probe flood can't
+contend with live app queries (D1 is single-threaded per database). The emit
+chokepoint is `cloud/src/security-events.ts`; the schema is
+`cloud/migrations-security/0001_security_events.sql`.
+
+`cloud/wrangler.toml` has placeholder `database_id`s (`00000000-…`) for the
+prod and staging `SECURITY_DB` bindings. Provision and wire it up in this order
+— **the database must exist before the Worker deploys** (wrangler validates
+bindings), and Skiff's drain errors on a missing database (but tolerates a
+missing table):
+
+```bash
+cd cloud
+npx wrangler d1 create per-ankh-security-events           # prod
+npx wrangler d1 create per-ankh-security-events-staging   # staging
+# Paste both database_id values into cloud/wrangler.toml (top-level + [env.staging]).
+```
+
+1. Create both databases (above); paste the IDs into `wrangler.toml`.
+2. Send both `database_id`s to Skiff; they point their read-only drain at them.
+3. Staging: `npm run migrate:security:staging` → `./per-ankh staging deploy` →
+   observe (rows emit, drain works, no app impact).
+4. Prod: `npm run migrate:security:remote` → `./per-ankh prod deploy`.
+
+**This database is deliberately outside the deploy automation.** The schema is
+static (one table), so the migration is a one-time manual `migrate:security:*`
+step rather than a change to the safety-critical deploy pipeline (which targets
+`per-ankh-share-index` only). Consequences, all intentional:
+
+- `./per-ankh prod deploy` / `staging deploy` do **not** detect or apply
+  `migrations-security/` — apply it by hand (steps 3–4).
+- `./per-ankh backup` and `staging reclone` ignore `SECURITY_DB` (they hardcode
+  the share DB). Fine: the table is Skiff-drained and age-pruned, not a
+  source of truth.
+- Retention is a nightly age-out sweep (`sweepSecurityEvents`, 30-day floor) on
+  the existing cron. Staging is opted out of the cron (`crons = []`), so staging
+  rows don't auto-prune — fine (low volume, disposable, recloned). Skiff's
+  credential stays read-only; deletion is ours, never the drain's.
 
 ## 4. Deploy
 

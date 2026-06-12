@@ -11,9 +11,11 @@ declare global {
 	namespace Cloudflare {
 		interface Env {
 			SHARE_DB: D1Database;
+			SECURITY_DB: D1Database;
 			SESSIONS_KV: KVNamespace;
 			SHARE_BUCKET: R2Bucket;
 			TEST_MIGRATIONS: D1Migration[];
+			TEST_SECURITY_MIGRATIONS: D1Migration[];
 			ALLOWED_ORIGINS: string;
 			ALLOWED_ORIGIN: string;
 		}

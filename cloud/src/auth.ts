@@ -37,7 +37,7 @@ import {
 } from "./session";
 import type { SessionEnv } from "./session";
 import { isSiteAdmin } from "./admin";
-import { logError } from "./log";
+import { logError, setSecurityReason } from "./log";
 
 export interface AuthEnv extends SessionEnv {
 	SHARE_DB: D1Database;
@@ -481,6 +481,15 @@ export async function handleDiscordCallback(
 			cors,
 			"UPSERT_FAILED",
 		);
+	}
+
+	// Tag a security event when this login CREATED a new account. The minted
+	// nanoid survives only on INSERT; an existing user keeps their user_id via
+	// ON CONFLICT, so equality here ⟺ first-ever signup. Signup is fully open
+	// (no invite gate), so new-account volume is the abuse signal Skiff watches.
+	// See cloud/src/security-events.ts and issue #71.
+	if (upsert.user_id === newUserId) {
+		setSecurityReason("signup");
 	}
 
 	// Idempotent Personal-collection seed. First login inserts; subsequent

@@ -16,6 +16,9 @@ import { sweepEvents } from "../../../src/retention";
 
 beforeAll(async () => {
 	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
+	// The scheduled handler now sweeps security_events too (separate DB), so
+	// that table must exist for the end-to-end cron test below.
+	await applyD1Migrations(env.SECURITY_DB, env.TEST_SECURITY_MIGRATIONS);
 });
 
 // created_at is TEXT defaulting to datetime('now') (UTC, no T/Z). Backdate

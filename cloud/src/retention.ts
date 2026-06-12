@@ -115,3 +115,18 @@ export async function sweepEvents(
 
 	return { deleted, unknownTypes };
 }
+
+// Skiff drains the `security_events` table (a separate D1, SECURITY_DB)
+// continuously over the D1 REST API. This nightly sweep is only a safety floor
+// so the table can't grow unbounded if that drain stalls — Skiff's credential
+// is read-only by design, so deletion is ours. Unlike `events`, every row ages
+// out uniformly (no per-type buckets). See cloud/src/security-events.ts.
+export const SECURITY_EVENTS_RETENTION = "-30 days";
+
+export async function sweepSecurityEvents(db: D1Database): Promise<number> {
+	const result = await db
+		.prepare("DELETE FROM security_events WHERE ts < datetime('now', ?)")
+		.bind(SECURITY_EVENTS_RETENTION)
+		.run();
+	return result.meta.changes;
+}

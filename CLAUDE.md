@@ -32,7 +32,8 @@ per-ankh/
 │   ├── src/                  # Domain handlers (games, users, auth, admin, …) +
 │   │                         #   tournament/, stats/, routes/, schemas/, lib/
 │   ├── test/                 # Vitest: unit/ (Node) + integration/ (Miniflare)
-│   ├── migrations/           # D1 migrations (numbered, forward-only)
+│   ├── migrations/           # D1 migrations for SHARE_DB (numbered, forward-only)
+│   ├── migrations-security/  # D1 migrations for SECURITY_DB (Skiff drain; see docs)
 │   └── wrangler.toml         # Worker config
 ├── web/                      # Legacy share viewer (static SvelteKit, frozen)
 ├── scripts/                  # Asset bake scripts + ./per-ankh CLI (admin/, prod/, backup)
@@ -199,6 +200,7 @@ Run from `cloud/`: `npm test` (both projects), or filter with `--project unit` /
 - Apply to staging: `(cd cloud && npm run migrate:staging)`.
 - Apply remote: `(cd cloud && npm run migrate:remote)`.
 - Always rehearse a new migration on staging (or a `./per-ankh staging deploy`, which applies pending migrations itself) before running it on production.
+- A **second** D1 (`SECURITY_DB`, the Skiff security-events drain) has its own migrations dir `cloud/migrations-security/`, applied out-of-band via `npm run migrate:security:{local,remote,staging}`. It is **deliberately not** wired into `./per-ankh prod deploy` (which targets `SHARE_DB` only) — apply it by hand. See [`docs/security-events.md`](docs/security-events.md).
 
 ### Investigating tournament data locally
 
@@ -393,6 +395,7 @@ Deploy the Worker schema change before releasing the frontend that depends on it
 - `docs/tournament-feature-spec.md` + `docs/tournament-implementation-notes.md` — tournament design and build record.
 - `docs/c4-model.html` — C4 architecture overview.
 - `docs/cloud-deploy-plan.md` — deploy runbook (the [Deploy CLI](#deploy-cli) automates it).
+- `docs/security-events.md` — the `security_events` tee + Skiff drain (reason vocabulary, dedicated `SECURITY_DB`, retention).
 - `docs/dev-login.md` — local Discord-free auth bypass.
 - `docs/owreference-data-extraction.md` + `docs/reference-popup-data-approaches.md` — Reference/XML extraction approach.
 - `docs/reference/color-scheme.md` — chart/UI color reference.
