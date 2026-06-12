@@ -43,7 +43,7 @@ migrations_dir = "migrations"
 [[d1_databases]]
 binding = "SECURITY_DB"
 database_name = "per-ankh-security-events"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "a1c4b60b-d967-497f-864c-f451364aa9a1"
 migrations_dir = "migrations-security"
 
 # KV namespace for OAuth pending state (5min TTL) and sessions (30d TTL).
@@ -163,7 +163,7 @@ migrations_dir = "migrations"
 [[env.staging.d1_databases]]
 binding = "SECURITY_DB"
 database_name = "per-ankh-security-events-staging"
-database_id = "00000000-0000-0000-0000-000000000001"
+database_id = "ee9c92dc-0f4f-4fbe-a033-5f87c58d37f5"
 migrations_dir = "migrations-security"
 
 [[env.staging.kv_namespaces]]
