@@ -1275,6 +1275,13 @@ export type MapPoolEntryInput = {
 	options?: Record<string, string | boolean>;
 };
 
+// One external link in a tournament's "Links" menu. `url` is always an http(s)
+// link (server-validated; see cloud LinkUrlSchema), rendered as an <a href>.
+export interface TournamentLink {
+	label: string;
+	url: string;
+}
+
 export interface TournamentDetail {
 	tournament_id: string;
 	slug: string;
@@ -1287,6 +1294,9 @@ export interface TournamentDetail {
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
 	map_pool: MapPoolEntry[];
+	// Admin-curated external links shown in the header's "Links" menu (empty
+	// array when none configured).
+	links: TournamentLink[];
 	slot_counts: {
 		swiss: number;
 		championship: number;
@@ -1344,6 +1354,9 @@ export interface PatchTournamentBody {
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
 	map_pool?: MapPoolEntryInput[];
+	// Full replacement of the tournament's links list (≤16). Each url must be an
+	// http(s) link (server-enforced). Editable in every phase.
+	links?: TournamentLink[];
 	// Toggle self-service signups. Only valid in setup; PATCH rejects
 	// re-opening once status moves past setup. handleStartTournament auto-
 	// clears the flag on the setup → swiss transition.

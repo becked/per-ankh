@@ -14,6 +14,7 @@
 		type TournamentDetail,
 	} from "$lib/api-cloud";
 	import { toast } from "$lib/ui/toast";
+	import TournamentLinksEditor from "./TournamentLinksEditor.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -299,5 +300,7 @@
 				class="rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none"
 			/>
 		</label>
+
+		<TournamentLinksEditor {tournament} />
 	</div>
 </section>

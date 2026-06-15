@@ -745,12 +745,19 @@ export async function handlePatchTournament(
 		nextMapPoolJson = JSON.stringify(built.pool);
 	}
 
+	// Links are deliberately NOT phase-locked: admins add/edit them in every
+	// status (e.g. a stream/VOD link mid-tournament, results after completion).
+	// Already validated + trimmed by LinksSchema; just serialize the whole list.
+	const nextLinksJson =
+		patch.links !== undefined ? JSON.stringify(patch.links) : undefined;
+
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
 	for (const [key, value] of Object.entries(patch)) {
 		if (value === undefined) continue;
-		if (key === "map_pool") {
-			// Skip — handled below from nextMapPoolJson (validated + reconciled).
+		if (key === "map_pool" || key === "links") {
+			// Skip — JSON blob fields, handled below from their *Json vars (arrays
+			// can't bind to D1 directly).
 			continue;
 		} else if (key === "signups_open") {
 			// SQLite has no boolean; the column is INTEGER 0/1.
@@ -764,6 +771,10 @@ export async function handlePatchTournament(
 	if (nextMapPoolJson !== undefined) {
 		fragments.push("map_pool = ?");
 		binds.push(nextMapPoolJson);
+	}
+	if (nextLinksJson !== undefined) {
+		fragments.push("links = ?");
+		binds.push(nextLinksJson);
 	}
 	if (fragments.length === 0) {
 		return jsonResponse({ tournament }, 200, cors);

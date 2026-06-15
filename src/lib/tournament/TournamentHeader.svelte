@@ -10,6 +10,7 @@
 	import Progress from "$lib/ui/Progress.svelte";
 	import SettingsPopover from "./SettingsPopover.svelte";
 	import SignedUpPopover from "./SignedUpPopover.svelte";
+	import TournamentLinksMenu from "./TournamentLinksMenu.svelte";
 	import SignupPopover from "./SignupPopover.svelte";
 	import TransitionPopover from "./TransitionPopover.svelte";
 	import type { HeaderHero, HeaderStatusMeta } from "./header-status";
@@ -133,15 +134,7 @@
 			{#if hasViewerSlot}
 				<SignedUpPopover {tournament} {busy} {onWithdraw} />
 			{/if}
-			<button
-				type="button"
-				class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
-				onclick={onGuide}
-				aria-label="How the tournament works"
-				title="How the tournament works"
-			>
-				Guide
-			</button>
+			<TournamentLinksMenu {tournament} {onGuide} />
 			{#if showSettings}
 				<SettingsPopover {tournament} disabled={settingsDisabled} />
 			{/if}

@@ -27,6 +27,7 @@ import {
 	loadTournamentBySlug,
 	MapConfigError,
 	matchRowToRef,
+	parseLinks,
 	parseMapPool,
 	slotAvatarUrl,
 	slotDisplayName,
@@ -484,6 +485,8 @@ export async function handleTournamentDetail(
 		if (!(e instanceof MapConfigError)) throw e;
 		map_pool = [];
 	}
+	// Links parse leniently (never throws), so no try/catch needed.
+	const links = parseLinks(tournament);
 	return jsonResponse(
 		{
 			tournament_id: tournament.tournament_id,
@@ -497,6 +500,7 @@ export async function handleTournamentDetail(
 			swiss_losses_to_eliminate: tournament.swiss_losses_to_eliminate,
 			swiss_max_rounds: tournament.swiss_max_rounds,
 			map_pool,
+			links,
 			slot_counts: {
 				swiss: counts["swiss"] ?? 0,
 				championship: counts["championship"] ?? 0,
