@@ -1,5 +1,20 @@
 # Changelog
 
+## [2026-06-15-8ec6898] - 2026-06-15
+
+### Features
+
+- (tournament) add admin-editable links with a Links menu — [3002d75](https://github.com/becked/per-ankh/commit/3002d754969690db1c236f814f912879ed599920)
+
+### Fixes
+
+- (build) stop esbuild lowering destructuring instead of bumping Safari — [8ec6898](https://github.com/becked/per-ankh/commit/8ec6898865dfa7577ab208456a1f0f60f7d62ce3)
+
+### Other
+
+- (tournament) prettier-format links files — [a5975fc](https://github.com/becked/per-ankh/commit/a5975fc0d10471811cc3b9712599beeb5623d0dc)
+- (deps) pin esbuild to 0.28.1, raise Vite Safari target to 15 — [11f67ed](https://github.com/becked/per-ankh/commit/11f67ed25b61e093873cc91d58e1ca6f5153c6af)
+
 ## [2026-06-11-3bd87d0] - 2026-06-11
 
 ### Features
