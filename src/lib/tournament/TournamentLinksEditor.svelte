@@ -99,12 +99,17 @@
 
 {#if canEdit || rows.length > 0}
 	<div class="flex flex-col gap-2">
-		<span>Links</span>
+		<span class="text-sm font-bold text-tan">Tournament Links</span>
+		{#if rows.length > 0}
+			<div class="flex items-center gap-2 text-xs text-tan opacity-70">
+				<span class="w-28 flex-none">Name</span>
+				<span class="flex-1">URL</span>
+			</div>
+		{/if}
 		{#each rows as row, i (row.key)}
 			<div class="flex items-center gap-2">
 				<input
 					type="text"
-					placeholder="Label"
 					bind:value={row.label}
 					onblur={commit}
 					disabled={!canEdit}
@@ -112,7 +117,6 @@
 				/>
 				<input
 					type="url"
-					placeholder="https://example.com"
 					bind:value={row.url}
 					onblur={() => commitUrl(row)}
 					disabled={!canEdit}
@@ -137,7 +141,7 @@
 				class="self-start rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
 				onclick={addRow}
 			>
-				+ Add link
+				Add link
 			</button>
 			<p class="text-[11px] opacity-60">
 				Shown in the Links menu next to Guide.
