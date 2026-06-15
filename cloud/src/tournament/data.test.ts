@@ -30,9 +30,9 @@ describe("parseLinks", () => {
 	});
 
 	it("returns [] when the JSON isn't an array", () => {
-		expect(parseLinks(rowWithLinks('{"label":"x","url":"https://a.com"}'))).toEqual(
-			[],
-		);
+		expect(
+			parseLinks(rowWithLinks('{"label":"x","url":"https://a.com"}')),
+		).toEqual([]);
 	});
 
 	it("skips malformed entries (missing/non-string fields)", () => {
@@ -59,6 +59,8 @@ describe("parseLinks", () => {
 				{ label: "not a url", url: "not a url at all" },
 			]),
 		);
-		expect(parseLinks(row)).toEqual([{ label: "safe", url: "https://safe.com" }]);
+		expect(parseLinks(row)).toEqual([
+			{ label: "safe", url: "https://safe.com" },
+		]);
 	});
 });

@@ -7,7 +7,11 @@
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { expectErrorCode, expectOk } from "../../helpers/assertions";
-import { makeTournament, makeUser, type TestUser } from "../../helpers/builders";
+import {
+	makeTournament,
+	makeUser,
+	type TestUser,
+} from "../../helpers/builders";
 import { request } from "../../helpers/requests";
 
 beforeAll(async () => {
@@ -68,7 +72,9 @@ describe("PATCH /v1/tournaments/:id — links", () => {
 			}),
 		);
 		const detail = await getDetail(t.slug, t.admin);
-		expect(detail.links).toEqual([{ label: "Two", url: "https://two.example" }]);
+		expect(detail.links).toEqual([
+			{ label: "Two", url: "https://two.example" },
+		]);
 	});
 
 	it("rejects a javascript: url (scheme guard)", async () => {

@@ -32,7 +32,11 @@
 	// invalidateAll(); the settings-popover instance remounts on open and re-seeds.
 	// svelte-ignore state_referenced_locally
 	let rows = $state<Row[]>(
-		tournament.links.map((l) => ({ key: nextKey++, label: l.label, url: l.url })),
+		tournament.links.map((l) => ({
+			key: nextKey++,
+			label: l.label,
+			url: l.url,
+		})),
 	);
 
 	// Prepend https:// when the user omits a scheme (so "old-world-map-pics.com"
@@ -54,7 +58,9 @@
 	function sameAsServer(next: TournamentLink[]): boolean {
 		const cur = tournament.links;
 		if (cur.length !== next.length) return false;
-		return next.every((l, i) => l.label === cur[i].label && l.url === cur[i].url);
+		return next.every(
+			(l, i) => l.label === cur[i].label && l.url === cur[i].url,
+		);
 	}
 
 	async function commit() {
@@ -133,7 +139,9 @@
 			>
 				+ Add link
 			</button>
-			<p class="text-[11px] opacity-60">Shown in the Links menu next to Guide.</p>
+			<p class="text-[11px] opacity-60">
+				Shown in the Links menu next to Guide.
+			</p>
 		{/if}
 	</div>
 {/if}
