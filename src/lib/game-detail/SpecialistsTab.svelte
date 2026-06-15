@@ -4,7 +4,9 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
+	import { ToggleGroup } from "bits-ui";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import Checkbox from "$lib/ui/Checkbox.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
 	import {
@@ -19,7 +21,6 @@
 	} from "./helpers";
 	import {
 		type KindFilter,
-		type SpecialistKind,
 		specialistInfo,
 		classLabel,
 		specialistName,
@@ -46,11 +47,11 @@
 	// and whether urban classes expand into their three tiers.
 	let kindFilter = $state<KindFilter>("all");
 	let breakOutByLevel = $state(false);
-	const KIND_OPTIONS: [KindFilter, string][] = [
-		["all", "All"],
-		["urban", "Urban"],
-		["rural", "Rural"],
-	];
+
+	// Segmented-control item styling, matching the Yields tab's
+	// Per Turn / Cumulative toggle.
+	const kindItemClass =
+		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
 
 	// Stacked-bar segment colors: muted brown for rural, a light→dark copper ramp
 	// for the three urban tiers (deeper = more developed).
@@ -115,7 +116,6 @@
 	type SpecialistPivotRow = {
 		key: string;
 		label: string;
-		kind: SpecialistKind;
 		sortKey: string;
 		counts: Record<number, number>;
 		total: number;
@@ -152,7 +152,6 @@
 					meta.set(key, {
 						key,
 						label: breakOutByLevel ? specialistName(imp.specialist!) : cls,
-						kind: info.kind,
 						sortKey: `${order}|${cls}|${tier}`,
 					});
 				}
@@ -311,7 +310,6 @@
 	<div class={TABLE_FRAME_CLASS}>
 		<TableFilterColumn
 			bind:search={tableState.search}
-			searchPlaceholder="Search specialists"
 			count={`${pivotData.length} ${breakOutByLevel ? "specialists" : "classes"}`}
 			chips={selectedNations.map((n) => formatEnum(n, "NATION_"))}
 		>
@@ -320,22 +318,30 @@
 					nations={uniqueNations}
 					bind:value={tableState.filters}
 				/>
-				<div class="flex gap-1">
-					{#each KIND_OPTIONS as [val, lbl] (val)}
-						<button
-							type="button"
-							class="flex-1 cursor-pointer rounded border border-black px-2 py-1 text-xs {kindFilter ===
-							val
-								? 'bg-orange font-semibold text-black'
-								: 'bg-surface-raised text-tan'}"
-							onclick={() => (kindFilter = val)}>{lbl}</button
-						>
-					{/each}
-				</div>
-				<label class="flex cursor-pointer items-center gap-2 text-xs text-tan">
-					<input type="checkbox" bind:checked={breakOutByLevel} />
+				<ToggleGroup.Root
+					type="single"
+					value={kindFilter}
+					onValueChange={(v) => {
+						if (v) kindFilter = v as KindFilter;
+					}}
+					class="flex w-fit overflow-hidden rounded border border-black"
+				>
+					<ToggleGroup.Item value="all" class="rounded-l {kindItemClass}">
+						All
+					</ToggleGroup.Item>
+					<ToggleGroup.Item value="urban" class={kindItemClass}>
+						Urban
+					</ToggleGroup.Item>
+					<ToggleGroup.Item value="rural" class="rounded-r {kindItemClass}">
+						Rural
+					</ToggleGroup.Item>
+				</ToggleGroup.Root>
+				<Checkbox
+					bind:checked={breakOutByLevel}
+					labelClass="gap-1.5 text-xs text-tan"
+				>
 					Break out by level
-				</label>
+				</Checkbox>
 			{/snippet}
 		</TableFilterColumn>
 
@@ -414,11 +420,6 @@
 									: ''}"
 							>
 								{row.label}
-								{#if kindFilter === "all"}
-									<span class="ml-2 text-xs capitalize text-tan opacity-50"
-										>{row.kind}</span
-									>
-								{/if}
 							</td>
 							{#each displayedPlayers as player (player.playerId)}
 								<td
