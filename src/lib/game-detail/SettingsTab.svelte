@@ -2,6 +2,14 @@
 	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { DetailPlayer } from "./helpers";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
+	import {
+		mapScriptLabel,
+		mapSizeLabel,
+		mapAspectRatioLabel,
+		gameModeLabel,
+		nonDefaultMapOptions,
+	} from "$lib/map-settings";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
 	let {
@@ -35,6 +43,16 @@
 	const humansWithDifficulty = $derived(
 		players.filter((p) => p.is_human && p.difficulty != null),
 	);
+
+	// Non-default map options the save recorded (empty on pre-2.7.0 blobs, which
+	// don't carry map_options). Rendered under the Map Settings card.
+	const mapOptions = $derived(nonDefaultMapOptions(gameDetails.map_options));
+	const showMapSettings = $derived(
+		gameDetails.map_class != null ||
+			gameDetails.map_size != null ||
+			gameDetails.map_aspect_ratio != null ||
+			mapOptions.length > 0,
+	);
 </script>
 
 <div
@@ -42,22 +60,7 @@
 	style="background-color: rgb(var(--color-surface));"
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Game Settings</h3>
-	<div class="grid grid-cols-[repeat(auto-fit,minmax(250px,1fr))] gap-3">
-		{#if gameDetails.map_size}
-			<div
-				class="flex flex-col gap-1 rounded-lg p-3"
-				style="background-color: rgb(var(--color-surface-raised));"
-			>
-				<span class="text-xs font-bold text-gray-400">Map Size:</span>
-				<span class="text-sm text-bright"
-					>{formatEnum(
-						gameDetails.map_size,
-						"MAPSIZE_",
-					)}{#if gameDetails.map_width && gameDetails.map_height}&nbsp;({gameDetails.map_width}
-						× {gameDetails.map_height}){/if}</span
-				>
-			</div>
-		{/if}
+	<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
 		{#if gameDetails.game_mode || showDifficultySection}
 			<div
 				class="flex flex-col gap-3 rounded-lg p-3"
@@ -66,26 +69,31 @@
 				{#if gameDetails.game_mode}
 					<div class="flex flex-col gap-1">
 						<span class="text-xs font-bold text-gray-400">Game Mode:</span>
-						<span class="text-sm text-bright">{gameDetails.game_mode}</span>
+						<ul class="list-disc pl-5 text-sm text-bright">
+							<li>{gameModeLabel(gameDetails.game_mode)}</li>
+						</ul>
 					</div>
 				{/if}
 				{#if showDifficultySection}
 					<div class="flex flex-col gap-1">
 						<span class="text-xs font-bold text-gray-400">Difficulty:</span>
-						{#if gameDetails.difficulty}
-							<span class="text-sm text-bright"
-								>{formatEnum(gameDetails.difficulty, "DIFFICULTY_")}</span
-							>
-						{/if}
-						{#if showBreakdown}
-							<ul class="m-0 list-none p-0 text-sm text-bright">
+						<ul class="list-disc pl-5 text-sm text-bright">
+							{#if gameDetails.difficulty && !showBreakdown}
+								<li>
+									{DIFFICULTY_NAMES[gameDetails.difficulty] ??
+										formatEnum(gameDetails.difficulty, "DIFFICULTY_")}
+								</li>
+							{/if}
+							{#if showBreakdown}
 								{#each humansWithDifficulty as p (p.playerId)}
 									<li>
-										{p.player_name}: {formatEnum(p.difficulty, "DIFFICULTY_")}
+										{p.player_name}: {(p.difficulty &&
+											DIFFICULTY_NAMES[p.difficulty]) ??
+											formatEnum(p.difficulty, "DIFFICULTY_")}
 									</li>
 								{/each}
-							</ul>
-						{/if}
+							{/if}
+						</ul>
 					</div>
 				{/if}
 			</div>
@@ -101,6 +109,52 @@
 						<li>{item}</li>
 					{/each}
 				</ul>
+			</div>
+		{/if}
+		{#if showMapSettings}
+			<div
+				class="flex flex-col gap-3 rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
+				{#if gameDetails.map_class}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-bold text-gray-400">Script:</span>
+						<ul class="list-disc pl-5 text-sm text-bright">
+							<li>{mapScriptLabel(gameDetails.map_class)}</li>
+						</ul>
+					</div>
+				{/if}
+				{#if gameDetails.map_size}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-bold text-gray-400">Map Size:</span>
+						<ul class="list-disc pl-5 text-sm text-bright">
+							<li>
+								{mapSizeLabel(
+									gameDetails.map_size,
+								)}{#if gameDetails.map_width && gameDetails.map_height}&nbsp;({gameDetails.map_width}
+									× {gameDetails.map_height}){/if}
+							</li>
+						</ul>
+					</div>
+				{/if}
+				{#if gameDetails.map_aspect_ratio}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-bold text-gray-400">Aspect Ratio:</span>
+						<ul class="list-disc pl-5 text-sm text-bright">
+							<li>{mapAspectRatioLabel(gameDetails.map_aspect_ratio)}</li>
+						</ul>
+					</div>
+				{/if}
+				{#if mapOptions.length > 0}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-bold text-gray-400">Options:</span>
+						<ul class="list-disc pl-5 text-sm text-bright">
+							{#each mapOptions as opt (opt.option)}
+								<li>{opt.label}: {opt.value}</li>
+							{/each}
+						</ul>
+					</div>
+				{/if}
 			</div>
 		{/if}
 		{#if gameDetails.enabled_dlc}

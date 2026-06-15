@@ -74,6 +74,8 @@ export function parseMatchMetadata(
 		map_height: mapHeight,
 		map_size: optAttrStr(root["@_MapSize"]),
 		map_class: optAttrStr(root["@_MapClass"]),
+		map_aspect_ratio: optAttrStr(root["@_MapAspectRatio"]),
+		map_options: parseMapOptions(root),
 		game_mode: optAttrStr(root["@_GameMode"]),
 		// Difficulty is per-player in the save (`<Difficulty><PlayerDifficulty>`);
 		// the match-level "Difficulty" stamp is the save owner's tier, set by
@@ -128,6 +130,47 @@ function parseGameContent(root: Record<string, unknown>): string | null {
 		if (name.startsWith("DLC_")) dlcs.push(name);
 	}
 	return dlcs.length > 0 ? dlcs.join("+") : null;
+}
+
+// ---------- Map options ----------
+
+/**
+ * Read the chosen per-script map options the game persisted, as a flat
+ * `zType → value` map. Mirrors how OW writes them (Game.cs):
+ *
+ *   <MapOptionsMulti>
+ *     <MAP_OPTIONS_MULTI_RESOURCE_DENSITY>MAP_OPTION_HIGH_RESOURCES</...>
+ *   </MapOptionsMulti>
+ *   <MapOptionsSingle>
+ *     <MAP_OPTIONS_SINGLE_MIRROR>true</MAP_OPTIONS_SINGLE_MIRROR>
+ *   </MapOptionsSingle>
+ *
+ * Multi values are MAP_OPTION_* zType strings; Single values are boolean
+ * toggles ("true"/"false", case-insensitive). Both elements are written only
+ * when the player set a non-default option, so a default game yields `{}`.
+ * Map size + aspect ratio are root attributes, not options, so they never
+ * appear here.
+ */
+function parseMapOptions(
+	root: Record<string, unknown>,
+): Record<string, string | boolean> {
+	const out: Record<string, string | boolean> = {};
+
+	const multi = root.MapOptionsMulti;
+	if (isElement(multi)) {
+		for (const [opt, value] of getElementChildren(multi)) {
+			if (typeof value === "string" && value !== "") out[opt] = value;
+		}
+	}
+
+	const single = root.MapOptionsSingle;
+	if (isElement(single)) {
+		for (const [opt, value] of getElementChildren(single)) {
+			if (typeof value === "string") out[opt] = value.toLowerCase() === "true";
+		}
+	}
+
+	return out;
 }
 
 // ---------- Save date ----------

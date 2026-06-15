@@ -65,6 +65,9 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         a RotationType flow-direction enum (0/1) — presence means a river,
 //         an absent tag means none — so we now test presence. Powers river
 //         rendering on the map.
+// 2.7.0 — game_details.map_aspect_ratio (root @_MapAspectRatio) + map_options
+//         (chosen <MapOptionsMulti>/<MapOptionsSingle> as a zType→value map).
+//         Powers the game-detail Map Settings panel (size/aspect/non-defaults).
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -77,13 +80,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.5.1",
 	"2.6.0",
 	"2.6.1",
+	"2.7.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.6.1";
+export const CURRENT_PARSER_VERSION = "2.7.0";
 
 // ----- Reusable atoms -----
 
@@ -124,6 +128,13 @@ const GameDetailsSchema = v.object({
 	),
 	map_size: v.nullable(v.string()),
 	map_class: v.nullable(v.string()),
+	// Added in parser_version 2.7.0. `optional` tolerates the deploy gap where
+	// the Worker is updated but the frontend still emits ≤2.6.1 blobs, and keeps
+	// older R2 blobs passing if they're ever re-validated.
+	map_aspect_ratio: v.optional(v.nullable(v.string())),
+	map_options: v.optional(
+		v.nullable(v.record(v.string(), v.union([v.string(), v.boolean()]))),
+	),
 	game_mode: v.nullable(v.string()),
 	difficulty: v.nullable(v.string()),
 	opponent_level: v.nullable(v.string()),
@@ -159,6 +170,12 @@ const MatchMetadataSchema = v.object({
 	map_height: v.nullable(v.number()),
 	map_size: v.nullable(v.string()),
 	map_class: v.nullable(v.string()),
+	// Added in parser_version 2.7.0; `optional` for the same deploy-gap reason
+	// as in GameDetailsSchema above.
+	map_aspect_ratio: v.optional(v.nullable(v.string())),
+	map_options: v.optional(
+		v.nullable(v.record(v.string(), v.union([v.string(), v.boolean()]))),
+	),
 	game_mode: v.nullable(v.string()),
 	difficulty: v.nullable(v.string()),
 	opponent_level: v.nullable(v.string()),

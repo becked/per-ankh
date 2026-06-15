@@ -88,6 +88,8 @@ export interface MatchMetadata {
 	map_height: number | null;
 	map_size: string | null;
 	map_class: string | null;
+	map_aspect_ratio: string | null;
+	map_options: Record<string, string | boolean>;
 	game_mode: string | null;
 	difficulty: string | null;
 	opponent_level: string | null;
@@ -361,4 +363,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.6.1";
+export const PARSER_VERSION = "2.7.0";
