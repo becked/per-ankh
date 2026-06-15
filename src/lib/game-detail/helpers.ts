@@ -42,6 +42,7 @@ export type TableName =
 	| "events"
 	| "cities"
 	| "improvements"
+	| "specialists"
 	| "laws"
 	| "techs"
 	| "units";
@@ -386,6 +387,12 @@ export function createDefaultTableStates(): Record<TableName, TableState> {
 		improvements: {
 			search: "",
 			sortColumn: "improvement",
+			sortDirection: "asc",
+			filters: [],
+		},
+		specialists: {
+			search: "",
+			sortColumn: "specialist",
 			sortDirection: "asc",
 			filters: [],
 		},

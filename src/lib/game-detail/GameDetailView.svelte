@@ -42,6 +42,7 @@
 	import MilitaryTab from "./MilitaryTab.svelte";
 	import CitiesTab from "./CitiesTab.svelte";
 	import ImprovementsTab from "./ImprovementsTab.svelte";
+	import SpecialistsTab from "./SpecialistsTab.svelte";
 	import MapTab from "./MapTab.svelte";
 	import SettingsTab from "./SettingsTab.svelte";
 
@@ -412,6 +413,10 @@
 			Improvements
 		</Tabs.Trigger>
 
+		<Tabs.Trigger value="specialists" class={triggerClass}>
+			Specialists
+		</Tabs.Trigger>
+
 		<Tabs.Trigger value="map" class={triggerClass}>Map</Tabs.Trigger>
 
 		<Tabs.Trigger value="settings" class={triggerClass}>Settings</Tabs.Trigger>
@@ -526,6 +531,15 @@
 			players={resolvedPlayers}
 			{improvementData}
 			bind:tableState={tables.improvements}
+		/>
+	</Tabs.Content>
+
+	<!-- Tab Content: Specialists -->
+	<Tabs.Content value="specialists" class="tab-pane min-h-[400px]">
+		<SpecialistsTab
+			players={resolvedPlayers}
+			{improvementData}
+			bind:tableState={tables.specialists}
 		/>
 	</Tabs.Content>
 
