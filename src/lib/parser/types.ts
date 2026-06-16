@@ -122,6 +122,12 @@ export interface CharacterInfo {
 	portrait: string | null;
 	xp: number;
 	level: number;
+	// Four Old World character ratings (Wisdom/Charisma/Courage/Discipline),
+	// from the character's <Rating> block. Null when absent. PARSER_VERSION 2.8.0+.
+	wisdom: number | null;
+	charisma: number | null;
+	courage: number | null;
+	discipline: number | null;
 	is_royal: boolean;
 	is_infertile: boolean;
 	became_leader_turn: number | null;
@@ -363,4 +369,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.7.0";
+export const PARSER_VERSION = "2.8.0";

@@ -68,6 +68,11 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 // 2.7.0 — game_details.map_aspect_ratio (root @_MapAspectRatio) + map_options
 //         (chosen <MapOptionsMulti>/<MapOptionsSingle> as a zType→value map).
 //         Powers the game-detail Map Settings panel (size/aspect/non-defaults).
+// 2.8.0 — character leader fields fixed (became_leader_turn from <LeaderTurn>,
+//         is_royal from <Royal/>, abdicated_turn from <AbdicateTurn>,
+//         nation_joined_turn from <NationTurn>, archetype from the *_ARCHETYPE
+//         trait) + new wisdom/charisma/courage/discipline ratings on characters.
+//         Powers the game-detail Leaders tab.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -81,13 +86,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.6.0",
 	"2.6.1",
 	"2.7.0",
+	"2.8.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.7.0";
+export const CURRENT_PARSER_VERSION = "2.8.0";
 
 // ----- Reusable atoms -----
 
