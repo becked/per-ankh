@@ -61,6 +61,10 @@ const MIRROR_CATEGORIES = [
 	"laws",
 	"religions",
 	"yields",
+	// Leader-archetype icons (TRAIT_SCHOLAR, TRAIT_HERO, …). The save records a
+	// character's archetype as a TRAIT_<X>_ARCHETYPE trait; the icon drops the
+	// _ARCHETYPE suffix. Powers the Leaders-tab succession chips.
+	"traits",
 ] as const;
 
 // Pinacotheca's units/ holds both 2D icons (UNIT_*.png) and 3D renders
@@ -137,6 +141,16 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	{
 		source: "mods/dynamic-unit/sprites/EFFECTUNIT_ENLIST_ICON.png",
 		target: "EFFECTUNIT_ENLIST_ICON.png",
+	},
+	// Leaders-tab detail panel: the four character ratings (shown next to each
+	// rating value) and the ambition marker (replaces the checkbox glyph).
+	{ source: "other/RATING_WISDOM.png", target: "RATING_WISDOM.png" },
+	{ source: "other/RATING_CHARISMA.png", target: "RATING_CHARISMA.png" },
+	{ source: "other/RATING_COURAGE.png", target: "RATING_COURAGE.png" },
+	{ source: "other/RATING_DISCIPLINE.png", target: "RATING_DISCIPLINE.png" },
+	{
+		source: "events_images/TURN_SUMMARY_AMBITION.png",
+		target: "TURN_SUMMARY_AMBITION.png",
 	},
 ];
 

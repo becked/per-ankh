@@ -120,9 +120,15 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"icons/MULTIPLAYER": "/sprites/icons/MULTIPLAYER.4f62ad02.png",
 	"icons/PENDING_CRITICAL": "/sprites/icons/PENDING_CRITICAL.093c72e4.png",
 	"icons/PLAYER_DIPLOMACY": "/sprites/icons/PLAYER_DIPLOMACY.d8f52750.png",
+	"icons/RATING_CHARISMA": "/sprites/icons/RATING_CHARISMA.0174df2c.png",
+	"icons/RATING_COURAGE": "/sprites/icons/RATING_COURAGE.5a9886a6.png",
+	"icons/RATING_DISCIPLINE": "/sprites/icons/RATING_DISCIPLINE.6b6a0fe1.png",
+	"icons/RATING_WISDOM": "/sprites/icons/RATING_WISDOM.a9e63d6b.png",
 	"icons/STATS": "/sprites/icons/STATS.ec506166.png",
 	"icons/TOOL_SETTINGS": "/sprites/icons/TOOL_SETTINGS.cb187c2e.png",
 	"icons/TURN": "/sprites/icons/TURN.7b8cdd83.png",
+	"icons/TURN_SUMMARY_AMBITION":
+		"/sprites/icons/TURN_SUMMARY_AMBITION.552bc697.png",
 	"icons/VICTORY_NORMAL": "/sprites/icons/VICTORY_NORMAL.5f8bfc26.png",
 	"laws/LAW_ACADEMIA": "/sprites/laws/LAW_ACADEMIA.bf84bcfb.png",
 	"laws/LAW_ADOPTED": "/sprites/laws/LAW_ADOPTED.891b5020.png",
@@ -389,6 +395,39 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"techs/TECH_TRAPPING": "/sprites/techs/TECH_TRAPPING.106aed9b.png",
 	"techs/TECH_VAULTING": "/sprites/techs/TECH_VAULTING.9e5a6927.png",
 	"techs/TECH_WINDLASS": "/sprites/techs/TECH_WINDLASS.35dd4fd5.png",
+	"traits/TRAIT_BUILDER": "/sprites/traits/TRAIT_BUILDER.5f6408ba.png",
+	"traits/TRAIT_BUILDER_SILVER":
+		"/sprites/traits/TRAIT_BUILDER_SILVER.5bb742f3.png",
+	"traits/TRAIT_COMMANDER": "/sprites/traits/TRAIT_COMMANDER.de8743c9.png",
+	"traits/TRAIT_COMMANDER_SILVER":
+		"/sprites/traits/TRAIT_COMMANDER_SILVER.8b31f2e2.png",
+	"traits/TRAIT_CONNECTION_TACTICAL_ADVANTAGE":
+		"/sprites/traits/TRAIT_CONNECTION_TACTICAL_ADVANTAGE.f8f4bd13.png",
+	"traits/TRAIT_DIPLOMAT": "/sprites/traits/TRAIT_DIPLOMAT.e429c1b1.png",
+	"traits/TRAIT_DIPLOMAT_SILVER":
+		"/sprites/traits/TRAIT_DIPLOMAT_SILVER.3daa5f12.png",
+	"traits/TRAIT_HERO": "/sprites/traits/TRAIT_HERO.68f4de8b.png",
+	"traits/TRAIT_HERO_SILVER": "/sprites/traits/TRAIT_HERO_SILVER.6efbf566.png",
+	"traits/TRAIT_JUDGE": "/sprites/traits/TRAIT_JUDGE.4fdb7c5a.png",
+	"traits/TRAIT_JUDGE_SILVER":
+		"/sprites/traits/TRAIT_JUDGE_SILVER.0933af89.png",
+	"traits/TRAIT_ORATOR": "/sprites/traits/TRAIT_ORATOR.e386c09a.png",
+	"traits/TRAIT_ORATOR_SILVER":
+		"/sprites/traits/TRAIT_ORATOR_SILVER.151a12d9.png",
+	"traits/TRAIT_SCHEMER": "/sprites/traits/TRAIT_SCHEMER.7b421085.png",
+	"traits/TRAIT_SCHEMER_SILVER":
+		"/sprites/traits/TRAIT_SCHEMER_SILVER.cf08c07c.png",
+	"traits/TRAIT_SCHOLAR": "/sprites/traits/TRAIT_SCHOLAR.ba773cd6.png",
+	"traits/TRAIT_SCHOLAR_SILVER":
+		"/sprites/traits/TRAIT_SCHOLAR_SILVER.f28c8231.png",
+	"traits/TRAIT_STRENGTH": "/sprites/traits/TRAIT_STRENGTH.27cbfe68.png",
+	"traits/TRAIT_TACTICIAN": "/sprites/traits/TRAIT_TACTICIAN.73114e7e.png",
+	"traits/TRAIT_TACTICIAN_SILVER":
+		"/sprites/traits/TRAIT_TACTICIAN_SILVER.29d14a76.png",
+	"traits/TRAIT_WEAKNESS": "/sprites/traits/TRAIT_WEAKNESS.1280d768.png",
+	"traits/TRAIT_ZEALOT": "/sprites/traits/TRAIT_ZEALOT.15d6ce56.png",
+	"traits/TRAIT_ZEALOT_SILVER":
+		"/sprites/traits/TRAIT_ZEALOT_SILVER.a7a1db5d.png",
 	"units/UNIT_AFRICAN_ELEPHANT":
 		"/sprites/units/UNIT_AFRICAN_ELEPHANT.bb8ba0fa.png",
 	"units/UNIT_AKKADIAN_ARCHER":

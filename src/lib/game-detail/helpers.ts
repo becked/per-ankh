@@ -432,7 +432,8 @@ export type SpriteCategory =
 	| "yields"
 	| "religions"
 	| "icons"
-	| "units";
+	| "units"
+	| "traits";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
