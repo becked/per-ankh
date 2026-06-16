@@ -1,5 +1,19 @@
 # Changelog
 
+## [2026-06-15-bec2eb5] - 2026-06-15
+
+### Features
+
+- (game-detail) correct setting names and add a Map Settings panel — [00e6454](https://github.com/becked/per-ankh/commit/00e6454523c503668622962e20de807236a3c85a)
+- (game-detail) add Specialists tab — [a3a7666](https://github.com/becked/per-ankh/commit/a3a7666a26e36f442586783573894a02ebf8fb66)
+
+### Other
+
+- (game-detail) restyle Specialists tab filter controls — [b43e995](https://github.com/becked/per-ankh/commit/b43e995ba41c0490dc3577a12ad804ac7185ce99)
+- (tournament) label link fields and drop placeholders — [b0a92a7](https://github.com/becked/per-ankh/commit/b0a92a7636bc2c3966999dc50c8ca27a5930ea52)
+- (deps) apply npm audit fixes for new advisories — [2caa77b](https://github.com/becked/per-ankh/commit/2caa77bd99b7030ffc14c5aec131f768d7668e2e)
+- (deploy) allowlist dev-only ws DoS in preflight audit gate — [bec2eb5](https://github.com/becked/per-ankh/commit/bec2eb5fa607705d9aea0697618d0ab66cdb4676)
+
 ## [2026-06-15-8ec6898] - 2026-06-15
 
 ### Features
