@@ -433,7 +433,8 @@ export type SpriteCategory =
 	| "religions"
 	| "icons"
 	| "units"
-	| "traits";
+	| "traits"
+	| "portraits";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
@@ -490,6 +491,13 @@ export function getSpritePath(
 		const resolved = resolveTechSprite(enumValue);
 		if (resolved == null) return null;
 		return SPRITE_MANIFEST[`${resolved.category}/${resolved.filename}`] ?? null;
+	}
+	if (category === "portraits") {
+		// The save's portrait id is `CHARACTER_PORTRAIT_<base>`; the manifest key
+		// is `portraits/<base>` (age suffix baked away). Null for unmapped/old
+		// portraits — SpriteIcon renders nothing, so it degrades gracefully.
+		const base = enumValue.replace(/^CHARACTER_PORTRAIT_/, "");
+		return SPRITE_MANIFEST[`portraits/${base}`] ?? null;
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }

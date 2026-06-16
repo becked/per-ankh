@@ -10,6 +10,7 @@
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { GOAL_NAMES } from "$lib/generated/goal-names";
 	import { CHART_THEME } from "$lib/config";
 	import type { DetailPlayer } from "./helpers";
 
@@ -173,11 +174,20 @@
 				)
 			: null;
 
+	// Age at death, or at game end if the ruler outlived the save — using the
+	// same turn-as-year convention as the reign length above. birth_turn can be
+	// negative (born before turn 1), which the subtraction handles correctly.
+	const ageAtEnd = (c: CharacterInfo): number =>
+		Math.max(0, (c.death_turn ?? totalTurns) - c.birth_turn);
+
 	const traitLabel = (t: CharacterTraitInfo): string =>
 		formatEnum(t.trait_name, "TRAIT_");
 
+	// Goal enums are internal ids whose token order is meaningless
+	// (GOAL_FIVE_CAPTURE_CITIES → "Five Capture Cities"). Prefer the baked
+	// in-game name ("Capture Five Foreign Cities"), falling back to formatEnum.
 	const goalLabel = (g: PlayerGoalInfo): string =>
-		formatEnum(g.goal_type, "GOAL_");
+		GOAL_NAMES[g.goal_type] ?? formatEnum(g.goal_type, "GOAL_");
 
 	const pct = (turns: number): number => (turns / totalTurns) * 100;
 
@@ -355,7 +365,7 @@
 	<!-- ─── Selected ruler detail ──────────────────────────────────── -->
 	{#if selectedReign}
 		<div
-			class="mb-4 rounded-lg p-4"
+			class="mb-4 w-fit max-w-full rounded-lg p-4"
 			style="background-color: rgb(var(--color-surface));"
 		>
 			<div class="mb-4 flex flex-wrap items-center gap-3">
@@ -367,8 +377,18 @@
 						alt={formatEnum(selectedPlayer.nation, "NATION_")}
 					/>
 				{/if}
+				{#if selectedReign.ruler.portrait}
+					<div class="overflow-hidden rounded">
+						<SpriteIcon
+							category="portraits"
+							value={selectedReign.ruler.portrait}
+							size={28}
+							alt={rulerName(selectedReign.ruler)}
+						/>
+					</div>
+				{/if}
 				<div>
-					<div class="flex items-center gap-1.5 text-base font-bold text-tan">
+					<div class="flex items-center gap-1.5 text-sm font-bold text-tan">
 						{#if archetypeIcon(selectedReign.ruler)}
 							<SpriteIcon
 								category="traits"
@@ -395,38 +415,43 @@
 						{#if deathLabel(selectedReign.ruler.death_reason)}
 							· Died: {deathLabel(selectedReign.ruler.death_reason)}
 						{/if}
+						· Age: {ageAtEnd(selectedReign.ruler)}
 					</div>
 				</div>
 			</div>
 
-			<!-- Headline stats -->
+			<!-- Headline stats: character attributes, then legitimacy -->
 			<div class="mb-4 flex flex-wrap gap-1.5">
-				<div
-					class="flex items-center gap-1.5 rounded px-2 py-1"
-					style="background-color: rgb(var(--color-surface-raised));"
-				>
-					<span class="text-xs font-bold text-gray-400">Legitimacy</span>
-					<span class="text-sm font-bold text-tan">
-						{selectedReign.netLegitimacy != null
-							? signed(selectedReign.netLegitimacy)
-							: "—"}
-					</span>
-				</div>
 				{#each ratingBlocks as block (block.label)}
 					<div
 						class="flex items-center gap-1 rounded px-2 py-1"
 						style="background-color: rgb(var(--color-surface-raised));"
 						title={block.label}
 					>
-						<span class="text-sm font-bold text-tan">{block.value ?? "—"}</span>
+						<span class="text-xs font-bold text-tan">{block.value ?? "—"}</span>
 						<SpriteIcon
 							category="icons"
 							value={block.icon}
-							size={16}
+							size={14}
 							alt={block.label}
 						/>
 					</div>
 				{/each}
+				<div
+					class="flex items-center gap-1 rounded px-2 py-1"
+					style="background-color: rgb(var(--color-surface-raised));"
+					title="Legitimacy"
+				>
+					<span class="text-xs font-bold text-tan">
+						{selectedReign.netLegitimacy ?? "—"}
+					</span>
+					<SpriteIcon
+						category="yields"
+						value="YIELD_LEGITIMACY"
+						size={14}
+						alt="Legitimacy"
+					/>
+				</div>
 			</div>
 
 			<!-- Traits -->
@@ -456,19 +481,17 @@
 					<ul class="flex flex-col gap-1">
 						{#each selectedReign.ambitions as ambition (ambition.goal_xml_id)}
 							{@const done = ambition.completed_turn != null}
-							<li class="flex items-center gap-2 text-sm text-tan">
-								<span class={done ? "" : "opacity-40"}>
+							{@const failed = ambition.failed_turn != null}
+							<li class="flex items-center gap-2 text-xs text-tan">
+								<span class={done || failed ? "" : "opacity-40"}>
 									<SpriteIcon
 										category="icons"
-										value="TURN_SUMMARY_AMBITION"
-										size={16}
-										alt="Ambition"
+										value={failed ? "GOAL_FAILED" : "TURN_SUMMARY_AMBITION"}
+										size={14}
+										alt={failed ? "Failed ambition" : "Ambition"}
 									/>
 								</span>
 								<span>{goalLabel(ambition)}</span>
-								<span class="text-xs text-gray-400">
-									{done ? "completed" : "in progress"}
-								</span>
 							</li>
 						{/each}
 					</ul>
