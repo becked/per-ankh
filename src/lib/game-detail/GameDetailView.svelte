@@ -14,7 +14,13 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { MapTile } from "$lib/types/MapTile";
-	import type { PlayerRosterEntry, PlayerNationEntry } from "$lib/parser/types";
+	import type {
+		PlayerRosterEntry,
+		PlayerNationEntry,
+		CharacterInfo,
+		CharacterTraitInfo,
+		PlayerGoalInfo,
+	} from "$lib/parser/types";
 	import { Tabs } from "bits-ui";
 	import {
 		formatEnum,
@@ -36,6 +42,7 @@
 	// eslint-disable-next-line no-unused-vars -- TimelineTab pending redesign, see commented block below
 	import TimelineTab from "./TimelineTab.svelte";
 	import EventsTab from "./EventsTab.svelte";
+	import LeadersTab from "./LeadersTab.svelte";
 	import LawsTab from "./LawsTab.svelte";
 	import TechsTab from "./TechsTab.svelte";
 	import YieldsTab from "./YieldsTab.svelte";
@@ -62,6 +69,9 @@
 		playerWonders,
 		playerRoster = [],
 		playerNations = [],
+		characters = [],
+		characterTraits = [],
+		playerGoals = [],
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -94,6 +104,11 @@
 		// player_xml_id → nation, used by the map to resolve each city's founding
 		// nation for architecture rendering. Defaults to [] for legacy callers.
 		playerNations?: PlayerNationEntry[];
+		// Leader/character data for the Leaders tab. All default to [] for legacy
+		// callers (frozen web/ viewer) and pre-2.8.0 blobs, where the tab is hidden.
+		characters?: CharacterInfo[];
+		characterTraits?: CharacterTraitInfo[];
+		playerGoals?: PlayerGoalInfo[];
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -144,6 +159,12 @@
 	);
 	const resolvedPlayers = $derived(
 		resolveDetailPlayers(gameDetails.players, effectiveRoster),
+	);
+
+	// The Leaders tab only appears when the blob has rulers — pre-2.8.0 games
+	// (and the frozen web/ viewer, which passes no characters) have none.
+	const hasLeaders = $derived(
+		characters.some((c) => c.became_leader_turn != null),
 	);
 
 	let activeTab = $state<string>("overview");
@@ -399,6 +420,10 @@
 
 		<Tabs.Trigger value="events" class={triggerClass}>Events</Tabs.Trigger>
 
+		{#if hasLeaders}
+			<Tabs.Trigger value="leaders" class={triggerClass}>Leaders</Tabs.Trigger>
+		{/if}
+
 		<Tabs.Trigger value="laws" class={triggerClass}>Laws</Tabs.Trigger>
 
 		<Tabs.Trigger value="techs" class={triggerClass}>Techs</Tabs.Trigger>
@@ -472,10 +497,24 @@
 			players={resolvedPlayers}
 			{victoryPointsEnabled}
 			bind:chartFilter={chartFilters.points}
-			bind:legitimacyChartFilter={chartFilters.legitimacy}
 			bind:tableState={tables.events}
 		/>
 	</Tabs.Content>
+
+	<!-- Tab Content: Leaders -->
+	{#if hasLeaders}
+		<Tabs.Content value="leaders" class="tab-pane min-h-[400px]">
+			<LeadersTab
+				{characters}
+				{characterTraits}
+				{playerGoals}
+				{playerHistory}
+				players={resolvedPlayers}
+				{gameDetails}
+				bind:legitimacyChartFilter={chartFilters.legitimacy}
+			/>
+		</Tabs.Content>
+	{/if}
 
 	<!-- Tab Content: Laws -->
 	<Tabs.Content value="laws" class="tab-pane min-h-[400px]">
