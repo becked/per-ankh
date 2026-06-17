@@ -1,5 +1,23 @@
 # Changelog
 
+## [2026-06-16-bc18335] - 2026-06-16
+
+### Features
+
+- (parser) extract leader fields + ratings, bump PARSER_VERSION 2.8.0 — [2dcd04e](https://github.com/becked/per-ankh/commit/2dcd04e46c684ab122d3a16f46ae74a0e3e3e27f)
+- (assets) bake leader-archetype, rating, and ambition icons — [ec96f63](https://github.com/becked/per-ankh/commit/ec96f632826605d629263004b9bcb1e80f2a9243)
+- (game-detail) add Leaders tab; move legitimacy chart from Events — [77d4d30](https://github.com/becked/per-ankh/commit/77d4d30375d9582a6b369dac9f62f399e272e46a)
+- (game-detail) leader portraits, ambition names, and detail-panel polish — [abdf977](https://github.com/becked/per-ankh/commit/abdf977ce3bbe5be986311eba0399a247b603e5a)
+- (game-detail) replace succession ribbons with leader cards + detail popover — [eee1824](https://github.com/becked/per-ankh/commit/eee1824eccceafd31a94c54e08262f73153d56c3)
+- (game-detail) show leader regnal numerals (e.g. "Meera II the Fountainhead") — [be830b9](https://github.com/becked/per-ankh/commit/be830b921ea6ee9a1c28b2b582ba97191d76d042)
+
+### Other
+
+- (game-detail) roomier leader card padding and inter-nation spacing — [77bb1df](https://github.com/becked/per-ankh/commit/77bb1dff41cc72b5a670538baf424d4730669fd5)
+- (game-detail) refine leader popover layout and accent — [caf0a78](https://github.com/becked/per-ankh/commit/caf0a7875568f73ae332f7952767ef10b8da85cf)
+- (game-detail) recolor leader popover frame and deepen shadow — [31404fd](https://github.com/becked/per-ankh/commit/31404fd72af8d49cdb92590a87d74dd6f698e242)
+- (formatting) wrap ROMAN_HUNDREDS array per prettier — [bc18335](https://github.com/becked/per-ankh/commit/bc18335d730d44f4636bf6b22947ff593c45558c)
+
 ## [2026-06-15-bec2eb5] - 2026-06-15
 
 ### Features
