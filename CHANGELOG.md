@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-06-17-5d1eb22] - 2026-06-17
+
+### Fixes
+
+- (tournament) editing a slot's signup answer no longer unlinks the player — [ee8a8d6](https://github.com/becked/per-ankh/commit/ee8a8d6a4d156685649990001c1802ccc32dea75)
+
+### Other
+
+- (tournament) drop redundant parens in SlotUsernameCell per prettier — [5d1eb22](https://github.com/becked/per-ankh/commit/5d1eb2214e933ccd709e3dba00babed9feeb9503)
+
 ## [2026-06-16-bc18335] - 2026-06-16
 
 ### Features
