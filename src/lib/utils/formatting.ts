@@ -31,6 +31,32 @@ export function formatEnum(
 	return formatted.replace(/\s+\d+$/, "");
 }
 
+// Roman-numeral place-value tables (thousands handled separately as repeated "M").
+// Ported from Old World's RomanNumerals.ToRomanNumeral (Reference NumeralSystems.cs).
+const ROMAN_HUNDREDS = ["", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"];
+const ROMAN_TENS = ["", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"];
+const ROMAN_ONES = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
+
+/**
+ * Converts a positive integer to a Roman numeral, matching Old World's leader
+ * regnal-suffix rendering (e.g. the "II" in "Meera II"). Returns "" for values
+ * below 1, since suffix 1 (first of the name) is shown without a numeral.
+ *
+ * @example
+ * toRomanNumeral(2) // "II"
+ * toRomanNumeral(14) // "XIV"
+ */
+export function toRomanNumeral(value: number): string {
+	if (value < 1) return "";
+	const thousands = "M".repeat(Math.floor(value / 1000));
+	return (
+		thousands +
+		ROMAN_HUNDREDS[Math.floor((value % 1000) / 100)] +
+		ROMAN_TENS[Math.floor((value % 100) / 10)] +
+		ROMAN_ONES[value % 10]
+	);
+}
+
 /**
  * Formats map class values by removing the MAPCLASS prefix and splitting PascalCase.
  *

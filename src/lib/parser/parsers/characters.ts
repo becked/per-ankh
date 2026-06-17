@@ -27,6 +27,7 @@ export interface Character {
 	birthMotherXmlId: number | null;
 	birthCityXmlId: number | null;
 	cognomen: string | null;
+	suffix: number;
 	archetype: string | null;
 	portrait: string | null;
 	xp: number;
@@ -94,6 +95,9 @@ export function parseCharacters(root: Record<string, unknown>): Character[] {
 			birthMotherXmlId: optInt(node.BirthMotherID),
 			birthCityXmlId: optInt(node.BirthCityID),
 			cognomen: optStr(node.Cognomen),
+			// Regnal numeral (the "II" in "Meera II"). Old World serializes
+			// <Suffix> only when > 1, so an absent tag means first-of-the-name.
+			suffix: optInt(node.Suffix) ?? 1,
 			// Archetype is encoded as a *_ARCHETYPE trait; <Archetype> is a
 			// fallback for any save format that carries it as an element.
 			archetype: archetypeFromTraits(node) ?? optStr(node.Archetype),
@@ -139,6 +143,7 @@ export function characterToRow(c: Character): Record<string, unknown> {
 		birth_mother_xml_id: c.birthMotherXmlId,
 		birth_city_xml_id: c.birthCityXmlId,
 		cognomen: c.cognomen,
+		suffix: c.suffix,
 		archetype: c.archetype,
 		portrait: c.portrait,
 		xp: c.xp,

@@ -7,7 +7,7 @@
 	import type { DetailPlayer, Reign } from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
-	import { formatEnum } from "$lib/utils/formatting";
+	import { formatEnum, toRomanNumeral } from "$lib/utils/formatting";
 	import { getCivilizationColor } from "$lib/config";
 	import { GOAL_NAMES } from "$lib/generated/goal-names";
 
@@ -32,8 +32,14 @@
 	);
 
 	// ─── Display helpers ──────────────────────────────────────────────
-	const rulerName = (c: CharacterInfo): string =>
-		formatEnum(c.first_name, "NAME_") || "Unknown";
+	// First name plus the regnal numeral when the leader shares a name with an
+	// earlier ruler (suffix > 1). The first of a name carries no numeral, matching
+	// Old World. The numeral is appended after formatEnum so its trailing-digit
+	// strip can't eat it (and it's Roman letters anyway).
+	const rulerName = (c: CharacterInfo): string => {
+		const name = formatEnum(c.first_name, "NAME_") || "Unknown";
+		return c.suffix > 1 ? `${name} ${toRomanNumeral(c.suffix)}` : name;
+	};
 
 	const cognomen = (c: CharacterInfo): string | null =>
 		c.cognomen ? formatEnum(c.cognomen, "COGNOMEN_") : null;

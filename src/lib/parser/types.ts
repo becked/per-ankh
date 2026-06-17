@@ -118,6 +118,7 @@ export interface CharacterInfo {
 	birth_mother_xml_id: number | null;
 	birth_city_xml_id: number | null;
 	cognomen: string | null;
+	suffix: number;
 	archetype: string | null;
 	portrait: string | null;
 	xp: number;
@@ -369,4 +370,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.8.0";
+export const PARSER_VERSION = "2.9.0";

@@ -73,6 +73,8 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         nation_joined_turn from <NationTurn>, archetype from the *_ARCHETYPE
 //         trait) + new wisdom/charisma/courage/discipline ratings on characters.
 //         Powers the game-detail Leaders tab.
+// 2.9.0 — character suffix (regnal numeral N from <Suffix>N</Suffix>; absent
+//         means 1). Powers leader-name numerals ("Meera II the Fountainhead").
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -87,13 +89,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.6.1",
 	"2.7.0",
 	"2.8.0",
+	"2.9.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.8.0";
+export const CURRENT_PARSER_VERSION = "2.9.0";
 
 // ----- Reusable atoms -----
 
