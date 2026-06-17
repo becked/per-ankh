@@ -91,7 +91,7 @@
 		<button
 			{...props}
 			type="button"
-			class="flex items-center gap-2 rounded bg-[#35302b] px-2.5 py-1.5 text-left transition hover:brightness-125"
+			class="flex items-center gap-2 rounded bg-[#35302b] px-3.5 py-2.5 text-left transition hover:brightness-125"
 		>
 			{#if ruler.portrait}
 				<div class="overflow-hidden rounded">

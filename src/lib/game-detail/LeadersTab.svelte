@@ -172,7 +172,7 @@
 		style="background-color: rgb(var(--color-surface));"
 	>
 		<h3 class="mb-3 text-base font-bold text-tan">Succession</h3>
-		<div class="flex flex-col gap-4">
+		<div class="flex flex-col gap-6">
 			{#each dynasties as dynasty (dynasty.player.playerId)}
 				<div>
 					<!-- Nation name (colored), tight to the leader cards below it -->
