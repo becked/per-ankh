@@ -98,6 +98,7 @@
 	bind:open
 	ariaLabel={rulerName(ruler)}
 	contentClass="w-max max-w-[min(92vw,32rem)]"
+	frameClass="border-2 border-[#211b12] bg-[#2a2623] p-5 shadow-2xl"
 >
 	{#snippet trigger({ props })}
 		<!-- Compact leader card: archetype image, name, years of reign. -->
