@@ -19,7 +19,7 @@
 			// eslint-disable-next-line no-unused-vars -- param names documentary
 			slotId: string,
 			// eslint-disable-next-line no-unused-vars -- param names documentary
-			newUsername: string,
+			newUsername: string | undefined,
 			// eslint-disable-next-line no-unused-vars -- param names documentary
 			userId: string | null,
 		) => void;
@@ -110,6 +110,7 @@
 									<SlotUsernameCell
 										slotId={s.slot_id}
 										username={s.display_name}
+										handle={s.discord_username}
 										disabled={busy}
 										onSubstitute={(u, userId) =>
 											onSubstitute(s.slot_id, u, userId)}

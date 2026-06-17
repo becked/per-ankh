@@ -1420,6 +1420,12 @@ export interface SlotStanding {
 	// populated for admin viewers (null for everyone else); null also when the
 	// player didn't answer. Admin-only display in the roster.
 	signup_answer: string | null;
+	// The slot's raw stored Discord handle. Only populated for admin viewers
+	// (null for everyone else). The occupant editor seeds and compares against
+	// this — never display_name — so editing the signup answer can't rewrite the
+	// handle and unlink the slot. null also for unclaimed slots is fine (the
+	// editor falls back to display_name, which equals the typed name there).
+	discord_username: string | null;
 }
 
 // One entry in the combined-ranking response field. Spans both divisions
@@ -1509,6 +1515,13 @@ export interface TournamentMatch {
 	slot_a_user_id: string | null;
 	slot_b_display_name: string | null;
 	slot_b_user_id: string | null;
+	// Raw stored Discord handle of each side's LIVE slot occupant (not the
+	// snapshot). Only populated for admin viewers (null otherwise, and null for
+	// pending/bye sides). The substitute editor seeds and compares against this
+	// so opening it on a claimed slot can't rewrite the handle to the display
+	// name and unlink the slot.
+	slot_a_discord_username: string | null;
+	slot_b_discord_username: string | null;
 	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
 	// pending matches (no snapshot) and for slots whose occupant had no
 	// claimed discord_id at report time — frontend falls through to live

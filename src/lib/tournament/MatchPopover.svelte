@@ -134,6 +134,13 @@
 				? "TBD"
 				: "Bye",
 	);
+	// The substitute editor seeds/compares against the LIVE slot's raw handle
+	// (admin-only field), never the display label — so opening it on a claimed
+	// slot can't rewrite the handle to the display name and unlink the slot.
+	// Falls back to the label when the handle is absent (non-admins can't
+	// substitute anyway; unclaimed slots have handle == typed name == label).
+	const slotAHandle = $derived(match.slot_a_discord_username ?? slotALabel);
+	const slotBHandle = $derived(match.slot_b_discord_username ?? slotBLabel);
 	const winnerSide = $derived<"a" | "b" | null>(
 		match.winner_slot_id === null
 			? null
@@ -255,9 +262,10 @@
 			match.status === "pending",
 	);
 
-	function openSubstitute(side: "a" | "b", currentLabel: string) {
+	function openSubstitute(side: "a" | "b") {
 		substituteSide = side;
-		substituteValue = currentLabel;
+		// Seed with the real handle, not the display label (see slotAHandle).
+		substituteValue = side === "a" ? slotAHandle : slotBHandle;
 		substitutePickedUserId = null;
 		substituteError = null;
 	}
@@ -280,9 +288,9 @@
 			substituteError = "Bye slot — nothing to substitute";
 			return;
 		}
-		const currentLabel = substituteSide === "a" ? slotALabel : slotBLabel;
-		// No-op when nothing changed and no user was picked to link.
-		if (trimmed === currentLabel && substitutePickedUserId === null) {
+		const currentHandle = substituteSide === "a" ? slotAHandle : slotBHandle;
+		// No-op when the handle is unchanged and no user was picked to link.
+		if (trimmed === currentHandle && substitutePickedUserId === null) {
 			cancelSubstitute();
 			return;
 		}
@@ -536,7 +544,7 @@
 				<button
 					type="button"
 					class="shrink-0 text-tan opacity-40 transition-colors hover:text-orange hover:opacity-100"
-					onclick={() => openSubstitute(side, label)}
+					onclick={() => openSubstitute(side)}
 					disabled={busy}
 					aria-label="Substitute player"
 					title="Substitute player"

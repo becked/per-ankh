@@ -4,7 +4,15 @@
 
 	interface Props {
 		slotId: string;
+		// Displayed label for the occupant (the account display name when claimed,
+		// else the typed name). Shown verbatim when not editing — NOT used to seed
+		// the editor.
 		username: string | null;
+		// The slot's raw stored Discord handle (admin-only). Seeds the edit input
+		// and is what "unchanged" is compared against, so editing the answer never
+		// rewrites the handle. Falls back to `username` when absent (unclaimed
+		// slots, where the handle equals the typed name anyway).
+		handle?: string | null;
 		disabled: boolean;
 		// The player's answer to the tournament's optional signup question.
 		// Only displayed/edited when `editAnswer` is set (the setup-phase slots
@@ -14,12 +22,14 @@
 		editAnswer?: boolean;
 		// Picks up the substitute username and, when the admin chose a real
 		// user from the autocomplete, that user's id so the worker can pre-link
-		// the slot. userId is null for a free-text substitution. answer is the
-		// edited signup answer (null clears it) when editAnswer is on, and
-		// undefined otherwise so the worker leaves the column untouched.
+		// the slot. userId is null for a free-text substitution. newUsername is
+		// undefined when the handle was left unchanged (answer-only edits), so the
+		// worker leaves the occupant columns untouched. answer is the edited
+		// signup answer (null clears it) when editAnswer is on, and undefined
+		// otherwise so the worker leaves the column untouched.
 		onSubstitute: (
 			// eslint-disable-next-line no-unused-vars -- documentary
-			newUsername: string,
+			newUsername: string | undefined,
 			// eslint-disable-next-line no-unused-vars -- documentary
 			userId: string | null,
 			// eslint-disable-next-line no-unused-vars -- documentary
@@ -30,6 +40,7 @@
 	let {
 		slotId,
 		username,
+		handle = null,
 		disabled,
 		answer = null,
 		editAnswer = false,
@@ -45,8 +56,12 @@
 	let pickedUserId = $state<string | null>(null);
 	let error = $state<string | null>(null);
 
+	// The editor operates on the real handle, not the display label, so the
+	// "unchanged" comparison and any genuine edit are about the occupant identity.
+	const baseHandle = $derived((handle ?? username) ?? "");
+
 	function startEdit() {
-		value = username ?? "";
+		value = baseHandle;
 		answerValue = answer ?? "";
 		pickedUserId = null;
 		error = null;
@@ -62,7 +77,7 @@
 		// undefined when not editing answers, so the worker leaves the column
 		// alone; otherwise the trimmed answer (empty → null clears it).
 		const nextAnswer = editAnswer ? answerValue.trim() || null : undefined;
-		const usernameUnchanged = trimmed === username && pickedUserId === null;
+		const usernameUnchanged = trimmed === baseHandle && pickedUserId === null;
 		const answerUnchanged = !editAnswer || nextAnswer === (answer ?? null);
 		// No-op when nothing changed and the admin didn't pick a user to link.
 		if (usernameUnchanged && answerUnchanged) {
@@ -70,7 +85,10 @@
 			error = null;
 			return;
 		}
-		onSubstitute(trimmed, pickedUserId, nextAnswer);
+		// Send the handle only when it actually changed (or a user was picked) —
+		// an answer-only edit passes undefined so the occupant link is untouched.
+		const usernameArg = usernameUnchanged ? undefined : trimmed;
+		onSubstitute(usernameArg, pickedUserId, nextAnswer);
 		editing = false;
 		error = null;
 	}

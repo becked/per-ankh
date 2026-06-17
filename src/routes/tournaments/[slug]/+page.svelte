@@ -460,22 +460,29 @@
 
 	async function substituteSlot(
 		slotId: string,
-		newUsername: string,
+		// undefined when the occupant handle was left unchanged (e.g. an
+		// answer-only edit) — omitted from the patch so the worker leaves the
+		// occupant link intact. A string is a genuine substitution.
+		newUsername: string | undefined,
 		userId: string | null = null,
 		// signup answer edited alongside the username on the slots panel.
 		// undefined leaves the column untouched (the Swiss-standings call site
 		// omits it); null clears it.
 		answer?: string | null,
 	) {
-		if (!newUsername.trim()) return;
+		if (newUsername !== undefined && !newUsername.trim()) return;
 		await withBusy(
 			() =>
 				cloudApi.patchSlot(data.tournament.tournament_id, slotId, {
-					discord_username: newUsername.trim(),
+					...(newUsername !== undefined
+						? { discord_username: newUsername.trim() }
+						: {}),
 					...(userId ? { user_id: userId } : {}),
 					...(answer !== undefined ? { signup_answer: answer } : {}),
 				}),
-			`Substituted slot to ${newUsername}`,
+			newUsername !== undefined
+				? `Substituted slot to ${newUsername}`
+				: "Updated slot",
 		);
 	}
 
@@ -865,6 +872,7 @@
 																	<SlotUsernameCell
 																		slotId={s.slot_id}
 																		username={s.display_name}
+																		handle={s.discord_username}
 																		answer={s.signup_answer}
 																		editAnswer
 																		disabled={busy}

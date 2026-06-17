@@ -161,6 +161,7 @@ describe("public read handlers", () => {
 						h2h: number;
 						display_name: string | null;
 						swiss_seed: number | null;
+						discord_username: string | null;
 					}>;
 				};
 				B: {
@@ -175,6 +176,7 @@ describe("public read handlers", () => {
 						h2h: number;
 						display_name: string | null;
 						swiss_seed: number | null;
+						discord_username: string | null;
 					}>;
 				};
 			};
@@ -240,6 +242,31 @@ describe("public read handlers", () => {
 			(r) => r.slot_id === aliceSlot.slotId,
 		);
 		expect(combinedAlice?.display_name).toBe("Alice The Strategist");
+
+		// discord_username is admin-only: the admin viewer sees the raw stored
+		// handle (so the slots-panel editor can seed from it); a non-admin beta
+		// viewer sees null.
+		expect(aliceRow?.discord_username).toBe(aliceSlot.discordUsername);
+		const viewer = await makeUser(); // beta member, not a tournament admin
+		const publicRes = await request.get({
+			path: `/v1/tournaments/${t.tournamentId}/standings`,
+			as: viewer,
+		});
+		const publicBody = await expectOk<{
+			divisions: {
+				A: {
+					standings: Array<{
+						slot_id: string;
+						discord_username: string | null;
+					}>;
+				};
+			};
+		}>(publicRes);
+		const alicePublicRow = publicBody.divisions.A.standings.find(
+			(r) => r.slot_id === aliceSlot.slotId,
+		);
+		expect(alicePublicRow).toBeDefined();
+		expect(alicePublicRow?.discord_username).toBeNull();
 	});
 
 	it("GET /v1/tournaments/:id/bracket returns championship slots + rounds with nested matches", async () => {
@@ -351,6 +378,8 @@ describe("public read handlers", () => {
 				round_number: number;
 				phase: string;
 				division: string | null;
+				slot_a_discord_username: string | null;
+				slot_b_discord_username: string | null;
 			}>;
 		}>(res);
 
@@ -364,6 +393,26 @@ describe("public read handlers", () => {
 			expect(["A", "B"]).toContain(m.division);
 			expect(m.round_number).toBe(1);
 			expect(m.status).toBe("pending");
+			// Admin viewer sees each live slot's raw handle (every fixture slot
+			// carries a stored name; no byes in a 4-slot division).
+			expect(typeof m.slot_a_discord_username).toBe("string");
+		}
+
+		// A non-admin beta viewer gets null for the admin-only handle field.
+		const viewer = await makeUser();
+		const publicRes = await request.get({
+			path: `/v1/tournaments/${t.tournamentId}/matches`,
+			as: viewer,
+		});
+		const publicBody = await expectOk<{
+			matches: Array<{
+				slot_a_discord_username: string | null;
+				slot_b_discord_username: string | null;
+			}>;
+		}>(publicRes);
+		for (const m of publicBody.matches) {
+			expect(m.slot_a_discord_username).toBeNull();
+			expect(m.slot_b_discord_username).toBeNull();
 		}
 	});
 

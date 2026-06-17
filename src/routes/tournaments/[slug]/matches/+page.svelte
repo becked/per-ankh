@@ -210,16 +210,24 @@
 	// page's handler). Renames the slot's occupant and refreshes via invalidate.
 	async function substituteSlot(
 		slotId: string,
-		newUsername: string,
+		// undefined when the occupant handle was left unchanged — omitted from
+		// the patch so the worker leaves the occupant link intact.
+		newUsername: string | undefined,
 		userId: string | null = null,
 	) {
-		if (!newUsername.trim()) return;
+		if (newUsername !== undefined && !newUsername.trim()) return;
 		try {
 			await cloudApi.patchSlot(data.tournament.tournament_id, slotId, {
-				discord_username: newUsername.trim(),
+				...(newUsername !== undefined
+					? { discord_username: newUsername.trim() }
+					: {}),
 				...(userId ? { user_id: userId } : {}),
 			});
-			toast.info(`Substituted slot to ${newUsername}`);
+			toast.info(
+				newUsername !== undefined
+					? `Substituted slot to ${newUsername}`
+					: "Updated slot",
+			);
 			await invalidateAll();
 		} catch (err) {
 			toast.error(err instanceof ApiError ? err.message : "Action failed");
