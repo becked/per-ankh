@@ -1,5 +1,10 @@
 import type { CityInfo } from "$lib/types/CityInfo";
-import type { PlayerNationEntry } from "$lib/parser/types";
+import type {
+	PlayerNationEntry,
+	CharacterInfo,
+	CharacterTraitInfo,
+	PlayerGoalInfo,
+} from "$lib/parser/types";
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { PlayerInfo } from "$lib/types/PlayerInfo";
@@ -725,6 +730,24 @@ export function resolvePlayers(
 // for the per-player tabs (Overview, Settings, Military).
 export type DetailPlayer = PlayerInfo &
 	Pick<ResolvedPlayer, "playerId" | "label" | "color">;
+
+/**
+ * One ruler's tenure on the Leaders tab: the ruler character plus the derived
+ * reign window [start, end], its length in turns, the legitimacy at each edge,
+ * and the traits/ambitions held during it. Built in `LeadersTab`, consumed by
+ * `LeaderCard`.
+ */
+export type Reign = {
+	ruler: CharacterInfo;
+	start: number;
+	end: number;
+	years: number;
+	legitStart: number | null;
+	legitEnd: number | null;
+	netLegitimacy: number | null;
+	traits: CharacterTraitInfo[];
+	ambitions: PlayerGoalInfo[];
+};
 
 /**
  * Resolve `gameDetails.players` into the iteration source for per-player tabs,
