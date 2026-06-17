@@ -33,7 +33,18 @@ export function formatEnum(
 
 // Roman-numeral place-value tables (thousands handled separately as repeated "M").
 // Ported from Old World's RomanNumerals.ToRomanNumeral (Reference NumeralSystems.cs).
-const ROMAN_HUNDREDS = ["", "C", "CC", "CCC", "CD", "D", "DC", "DCC", "DCCC", "CM"];
+const ROMAN_HUNDREDS = [
+	"",
+	"C",
+	"CC",
+	"CCC",
+	"CD",
+	"D",
+	"DC",
+	"DCC",
+	"DCCC",
+	"CM",
+];
 const ROMAN_TENS = ["", "X", "XX", "XXX", "XL", "L", "LX", "LXX", "LXXX", "XC"];
 const ROMAN_ONES = ["", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX"];
 
