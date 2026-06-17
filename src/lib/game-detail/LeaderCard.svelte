@@ -8,6 +8,7 @@
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { getCivilizationColor } from "$lib/config";
 	import { GOAL_NAMES } from "$lib/generated/goal-names";
 
 	let {
@@ -23,6 +24,12 @@
 	let open = $state(false);
 
 	const ruler = $derived(reign.ruler);
+
+	// Header accent: the player's nation color, falling back to the default
+	// orange border when the nation is unknown/uncolored.
+	const accentColor = $derived(
+		player?.nation ? getCivilizationColor(player.nation) : undefined,
+	);
 
 	// ─── Display helpers ──────────────────────────────────────────────
 	const rulerName = (c: CharacterInfo): string =>
@@ -84,7 +91,7 @@
 <Popover
 	bind:open
 	ariaLabel={rulerName(ruler)}
-	contentClass="w-[min(92vw,32rem)]"
+	contentClass="w-max max-w-[min(92vw,32rem)]"
 >
 	{#snippet trigger({ props })}
 		<!-- Compact leader card: archetype image, name, years of reign. -->
@@ -145,22 +152,15 @@
 	<!-- ─── Full leader detail ──────────────────────────────────────── -->
 	<header
 		class="mb-4 flex items-start justify-between gap-3 border-b-2 border-orange pb-3"
+		style={accentColor ? `border-color: ${accentColor};` : undefined}
 	>
 		<div class="flex flex-wrap items-center gap-3">
-			{#if player?.nation}
-				<SpriteIcon
-					category="crests"
-					value={player.nation}
-					size={28}
-					alt={formatEnum(player.nation, "NATION_")}
-				/>
-			{/if}
 			{#if ruler.portrait}
 				<div class="overflow-hidden rounded">
 					<SpriteIcon
 						category="portraits"
 						value={ruler.portrait}
-						size={28}
+						size={64}
 						alt={rulerName(ruler)}
 					/>
 				</div>
@@ -189,10 +189,12 @@
 						{archetypeLabel(ruler)} ·
 					{/if}
 					{yearsLabel}
+				</div>
+				<div class="text-xs text-gray-400">
 					{#if deathLabel(ruler.death_reason)}
-						· Died: {deathLabel(ruler.death_reason)}
+						Died: {deathLabel(ruler.death_reason)} ·
 					{/if}
-					· Age: {ageAtEnd(ruler)}
+					Age: {ageAtEnd(ruler)}
 				</div>
 			</div>
 		</div>
@@ -227,7 +229,7 @@
 				style="background-color: rgb(var(--color-surface-raised));"
 				title={block.label}
 			>
-				<span class="text-xs font-bold text-tan">{block.value ?? "—"}</span>
+				<span class="text-xs text-tan">{block.value ?? "—"}</span>
 				<SpriteIcon
 					category="icons"
 					value={block.icon}
@@ -241,7 +243,7 @@
 			style="background-color: rgb(var(--color-surface-raised));"
 			title="Legitimacy"
 		>
-			<span class="text-xs font-bold text-tan">
+			<span class="text-xs text-tan">
 				{reign.netLegitimacy ?? "—"}
 			</span>
 			<SpriteIcon
