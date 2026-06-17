@@ -58,7 +58,7 @@
 
 	// The editor operates on the real handle, not the display label, so the
 	// "unchanged" comparison and any genuine edit are about the occupant identity.
-	const baseHandle = $derived((handle ?? username) ?? "");
+	const baseHandle = $derived(handle ?? username ?? "");
 
 	function startEdit() {
 		value = baseHandle;
