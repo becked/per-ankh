@@ -521,7 +521,6 @@
 		<LawsTab
 			players={resolvedPlayers}
 			{lawAdoptionHistory}
-			{currentLaws}
 			bind:chartFilter={chartFilters.laws}
 			bind:tableState={tables.laws}
 		/>

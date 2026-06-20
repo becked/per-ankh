@@ -5,6 +5,7 @@
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
+	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
@@ -22,7 +23,6 @@
 	let {
 		players,
 		lawAdoptionHistory,
-		currentLaws,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
 			search: "",
@@ -33,7 +33,6 @@
 	}: {
 		players: DetailPlayer[];
 		lawAdoptionHistory: LawAdoptionHistory[];
-		currentLaws: PlayerLaw[];
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
 	} = $props();
@@ -41,6 +40,32 @@
 	// Resolved identity lookup (stable label + color per player), keyed by the
 	// player id every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
+
+	// Per-series (same order as lawAdoptionHistory) map of turn → adoption
+	// descriptions for the chart tooltip. Walking each player's adoptions in
+	// order and tracking the current law per class lets a same-class
+	// replacement read as a switch ("Epics → Exploration"); adoptions that
+	// share a turn are grouped so one (possibly overlapping) dot lists them all.
+	const adoptionLabelsBySeries = $derived(
+		lawAdoptionHistory.map((player) => {
+			const currentByClass: Record<string, string> = {};
+			const byTurn: Record<number, string[]> = {};
+			for (const d of player.data) {
+				if (d.law_name == null) continue;
+				const cls = LAW_TO_CLASS[d.law_name];
+				const prior = cls != null ? currentByClass[cls] : undefined;
+				const label =
+					prior != null && prior !== d.law_name
+						? `Switched ${formatEnum(prior, "LAW_")} → ${formatEnum(d.law_name, "LAW_")}`
+						: `Adopted ${formatEnum(d.law_name, "LAW_")}`;
+				const existing = byTurn[d.turn];
+				if (existing) existing.push(label);
+				else byTurn[d.turn] = [label];
+				if (cls != null) currentByClass[cls] = d.law_name;
+			}
+			return byTurn;
+		}),
+	);
 
 	// ─── Chart option ─────────────────────────────────────────────────
 	const lawAdoptionChartOption = $derived(
@@ -74,15 +99,23 @@
 						},
 						tooltip: {
 							trigger: "item",
-							formatter: (params: { data: unknown }) => {
+							formatter: (params: {
+								data: unknown;
+								seriesIndex: number;
+							}) => {
 								const data = params.data as
 									| [number, number, string | null]
 									| undefined;
 								if (!data) return "";
 								const [turn, count, lawName] = data;
 								if (lawName) {
-									const formattedLaw = formatEnum(lawName, "LAW_");
-									return `Turn ${turn}: Adopted ${formattedLaw}`;
+									const labels =
+										adoptionLabelsBySeries[params.seriesIndex]?.[turn];
+									const text =
+										labels && labels.length > 0
+											? labels.join("; ")
+											: `Adopted ${formatEnum(lawName, "LAW_")}`;
+									return `Turn ${turn}: ${text}`;
 								}
 								return `Turn ${turn}: ${count} law classes`;
 							},
@@ -144,12 +177,46 @@
 	);
 
 	// ─── Pivot table logic ────────────────────────────────────────────
+	// The table pivots the SAME data the chart plots — law_adoption_history,
+	// i.e. every LAW_ADOPTED event — rather than the end-state active laws.
+	// So a law the player later switched away from (e.g. Epics → Exploration)
+	// still appears, each with the turn it was adopted. One row per
+	// (player, law); a law re-adopted after a repeal collapses to its earliest
+	// adoption turn. Succession laws are already absent from the history, so
+	// they stay out of the table too.
+	const adoptedLaws = $derived.by(() => {
+		const out: PlayerLaw[] = [];
+		for (const entry of lawAdoptionHistory) {
+			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
+			const firstTurn = new Map<string, number>();
+			for (const d of entry.data) {
+				if (d.law_name == null) continue;
+				const prev = firstTurn.get(d.law_name);
+				if (prev === undefined || d.turn < prev) {
+					firstTurn.set(d.law_name, d.turn);
+				}
+			}
+			for (const [law, turn] of firstTurn) {
+				out.push({
+					player_id: entry.player_id,
+					player_name: entry.player_name,
+					nation: entry.nation,
+					law_category: LAW_TO_CLASS[law] ?? "",
+					law,
+					adopted_turn: turn,
+					change_count: 1,
+				});
+			}
+		}
+		return out;
+	});
+
 	// Columns are per player (mirror-match safe); filtering stays by nation.
 	const lawColumnPlayers = $derived(
 		players.filter(
 			(p) =>
 				ownedByPlayer(
-					currentLaws,
+					adoptedLaws,
 					p,
 					(l) => l.player_id,
 					(l) => l.nation,
@@ -187,14 +254,14 @@
 	};
 
 	const lawPivotData = $derived.by(() => {
-		if (currentLaws.length === 0) return [];
+		if (adoptedLaws.length === 0) return [];
 
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
 		const pivotMap = new Map<string, Record<number, number | null>>();
 
 		for (const p of lawColumnPlayers) {
 			for (const l of ownedByPlayer(
-				currentLaws,
+				adoptedLaws,
 				p,
 				(x) => x.player_id,
 				(x) => x.nation,
@@ -250,8 +317,8 @@
 	<p class="p-8 text-center italic text-tan">No law adoption data available</p>
 {/if}
 
-<!-- Current Laws Table -->
-{#if currentLaws.length === 0}
+<!-- Law Adoptions Table -->
+{#if adoptedLaws.length === 0}
 	<div class="mt-8">
 		<p class="p-8 text-center italic text-tan">No laws data available</p>
 	</div>
