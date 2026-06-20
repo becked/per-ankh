@@ -2,9 +2,12 @@
 	import { Tabs } from "bits-ui";
 	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
-	import { cloudApi } from "$lib/api-cloud";
+	import { cloudApi, type GameListItem } from "$lib/api-cloud";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
+	import { PARSER_VERSION } from "$lib/parser/types";
+	import { formatGameTitle } from "$lib/utils/formatting";
+	import { isNewer } from "$lib/utils/semver";
 	import { toast } from "$lib/ui/toast";
 	import type { PageData } from "./$types";
 
@@ -12,7 +15,11 @@
 
 	let activeTab = $state("account");
 	let loggingOut = $state(false);
-	let reparseOpen = $state(false);
+	// Games handed to the reparse modal. null = closed. The bulk button sets
+	// the whole out-of-date set; a per-save Reparse button sets `[oneGame]`.
+	// BulkReparseModal is generic over the list, so a single-element array
+	// reuses the same download → parse → upload pipeline.
+	let reparseGames = $state<GameListItem[] | null>(null);
 
 	// Default upload visibility — optimistic toggle backed by the worker,
 	// mirroring the lock toggle in GameActions: flip immediately, revert on
@@ -25,6 +32,23 @@
 	// Already filtered to out-of-date games server-side (see +page.ts), so the
 	// count and modal list cover the user's entire library, not just a page.
 	const outOfDateGames = $derived(data.outOfDateGames);
+	// The full library (capped at 500) for the per-save reparse rows.
+	const allGames = $derived(data.allGames);
+
+	const gameTitle = (g: GameListItem): string =>
+		formatGameTitle({
+			display_name: g.display_name,
+			game_name: g.game_name,
+			save_owner_nation: g.user_nation,
+			total_turns: g.total_turns,
+			match_id: 0,
+		});
+
+	// A save is behind when the current parser is newer than the one it was
+	// last parsed with — same check that drives the bulk set and the
+	// detail-page reparse banner.
+	const isOutdated = (g: GameListItem): boolean =>
+		isNewer(PARSER_VERSION, g.parser_version);
 
 	// Subtab triggers styled as chip-bar pills, matching the game-detail and
 	// aggregate-stats tab bars.
@@ -63,7 +87,7 @@
 	}
 
 	async function onReparseClose(didReparse: boolean) {
-		reparseOpen = false;
+		reparseGames = null;
 		if (didReparse) await invalidateAll();
 	}
 </script>
@@ -198,7 +222,7 @@
 						</div>
 						<button
 							type="button"
-							onclick={() => (reparseOpen = true)}
+							onclick={() => (reparseGames = outOfDateGames)}
 							disabled={outOfDateGames.length === 0}
 							class="cursor-pointer rounded bg-[#ab9978] px-3 py-1 text-sm font-bold text-black transition-colors hover:bg-[#9a8a6c] disabled:cursor-not-allowed disabled:opacity-50"
 						>
@@ -207,12 +231,60 @@
 								: `Reparse ${outOfDateGames.length} ${outOfDateGames.length === 1 ? "game" : "games"}`}
 						</button>
 					</div>
+
+					<!-- Per-save reparse. Lists the whole library so a single save
+					     can be force-reparsed even when it's already current (the
+					     bulk button only touches out-of-date games). -->
+					<div
+						class="mt-3 rounded-lg p-3"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
+						<div class="mb-2 text-sm font-bold text-tan">Reparse a single save</div>
+						{#if allGames.length === 0}
+							<div class="text-xs text-gray-400">No saves yet.</div>
+						{:else}
+							<ul class="max-h-96 space-y-1 overflow-y-auto pr-1">
+								{#each allGames as game (game.game_id)}
+									<li
+										class="flex items-center gap-2 rounded bg-surface-sunken px-2 py-1.5 text-xs"
+									>
+										<span class="flex-1 truncate text-tan" title={gameTitle(game)}>
+											{gameTitle(game)}
+										</span>
+										{#if isOutdated(game)}
+											<span
+												class="shrink-0 rounded bg-orange/20 px-1.5 py-0.5 text-[10px] font-bold text-orange"
+											>
+												outdated
+											</span>
+										{:else}
+											<span class="shrink-0 text-[10px] text-gray-400">
+												v{game.parser_version}
+											</span>
+										{/if}
+										<button
+											type="button"
+											onclick={() => (reparseGames = [game])}
+											class="shrink-0 cursor-pointer rounded bg-orange px-2 py-1 text-[11px] font-bold text-white transition-colors hover:bg-orange/80"
+										>
+											Reparse
+										</button>
+									</li>
+								{/each}
+							</ul>
+							{#if data.totalGames > allGames.length}
+								<div class="mt-2 text-[11px] text-gray-400">
+									Showing the {allGames.length} most recent of {data.totalGames} saves.
+								</div>
+							{/if}
+						{/if}
+					</div>
 				</div>
 			</Tabs.Content>
 		</Tabs.Root>
 	</div>
 </main>
 
-{#if reparseOpen}
-	<BulkReparseModal games={outOfDateGames} onClose={onReparseClose} />
+{#if reparseGames}
+	<BulkReparseModal games={reparseGames} onClose={onReparseClose} />
 {/if}
