@@ -239,7 +239,9 @@
 						class="mt-3 rounded-lg p-3"
 						style="background-color: rgb(var(--color-surface-raised));"
 					>
-						<div class="mb-2 text-sm font-bold text-tan">Reparse a single save</div>
+						<div class="mb-2 text-sm font-bold text-tan">
+							Reparse a single save
+						</div>
 						{#if allGames.length === 0}
 							<div class="text-xs text-gray-400">No saves yet.</div>
 						{:else}
@@ -248,7 +250,10 @@
 									<li
 										class="flex items-center gap-2 rounded bg-surface-sunken px-2 py-1.5 text-xs"
 									>
-										<span class="flex-1 truncate text-tan" title={gameTitle(game)}>
+										<span
+											class="flex-1 truncate text-tan"
+											title={gameTitle(game)}
+										>
 											{gameTitle(game)}
 										</span>
 										{#if isOutdated(game)}

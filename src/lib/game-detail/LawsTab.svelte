@@ -99,10 +99,7 @@
 						},
 						tooltip: {
 							trigger: "item",
-							formatter: (params: {
-								data: unknown;
-								seriesIndex: number;
-							}) => {
+							formatter: (params: { data: unknown; seriesIndex: number }) => {
 								const data = params.data as
 									| [number, number, string | null]
 									| undefined;
