@@ -701,6 +701,7 @@ export async function computeStandingsResponse(
 				display_name: string | null;
 				avatar_url: string | null;
 				swiss_seed: number | null;
+				withdrawn: boolean;
 		  }>
 		| undefined = undefined;
 	if (tournament.status !== "setup") {
@@ -727,6 +728,7 @@ export async function computeStandingsResponse(
 				display_name: id?.display_name ?? null,
 				avatar_url: id?.avatar_url ?? null,
 				swiss_seed: id?.swiss_seed ?? null,
+				withdrawn: r.withdrawn,
 			};
 		});
 	}

@@ -1390,6 +1390,161 @@ export async function handleDeleteSlot(
 }
 
 // ----------------------------------------------------------------------
+// POST   /v1/tournaments/:id/slots/:slot_id/withdraw — withdraw a player
+// DELETE /v1/tournaments/:id/slots/:slot_id/withdraw — reinstate a player
+//
+// Admin-initiated mid-tournament drop. Setting withdrawn_at excludes the slot
+// from all *future* pairing (the pure engine skips withdrawn slots) and from
+// championship qualifiers, while already-played matches stand. The slot's one
+// in-flight pending match (if any) is forfeited to the opponent and routed
+// through the normal advance path, so the round can close and the next round
+// generates without the withdrawn player. If both slots in that match are
+// withdrawn the forfeit lands on one side and is inert (both are excluded
+// downstream). Deliberately admin-only — players can't drop themselves once a
+// tournament has started, which avoids accidental self-withdrawals. During
+// 'setup' a slot is hard-deleted (handleDeleteSlot) rather than withdrawn.
+// ----------------------------------------------------------------------
+
+export async function handleWithdrawSlot(
+	tournamentId: string,
+	slotId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+	const { tournament } = a;
+	if (tournament.status !== "swiss" && tournament.status !== "championship") {
+		return errorResponse(
+			tournament.status === "setup"
+				? "Delete the slot during setup; withdraw applies after the tournament has started"
+				: "Tournament is complete",
+			409,
+			cors,
+			"INVALID_PHASE",
+		);
+	}
+	const slot = await loadSlotInTournament(env, slotId, tournamentId);
+	if (!slot) {
+		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
+	}
+	if (slot.withdrawn_at != null) {
+		// Idempotent: already withdrawn, nothing left to forfeit.
+		return jsonResponse({ slot }, 200, cors);
+	}
+
+	await env.SHARE_DB.prepare(
+		"UPDATE tournament_slots SET withdrawn_at = datetime('now') WHERE slot_id = ?",
+	)
+		.bind(slotId)
+		.run();
+
+	const forfeitedMatchIds = await forfeitPendingMatchesForSlot(
+		env,
+		tournamentId,
+		slotId,
+	);
+
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "slot_withdrawn", {
+		slot_id: slotId,
+		division: slot.division,
+		forfeited_match_ids: forfeitedMatchIds,
+	});
+	const updated = await loadSlotInTournament(env, slotId, tournamentId);
+	return jsonResponse({ slot: updated }, 200, cors);
+}
+
+export async function handleReinstateSlot(
+	tournamentId: string,
+	slotId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+	const slot = await loadSlotInTournament(env, slotId, tournamentId);
+	if (!slot) {
+		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
+	}
+	if (slot.withdrawn_at == null) {
+		// Idempotent: not withdrawn.
+		return jsonResponse({ slot }, 200, cors);
+	}
+	// Clear the flag. Takes effect from the NEXT round generated: a round
+	// already paired without this slot is not retroactively repaired, and the
+	// auto-forfeit applied on withdrawal is not undone (an admin can retro-edit
+	// that match if the player returns to an in-progress round).
+	await env.SHARE_DB.prepare(
+		"UPDATE tournament_slots SET withdrawn_at = NULL WHERE slot_id = ?",
+	)
+		.bind(slotId)
+		.run();
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	logTournamentAdminAction(env, a.userId, tournamentId, "slot_reinstated", {
+		slot_id: slotId,
+		division: slot.division,
+	});
+	const updated = await loadSlotInTournament(env, slotId, tournamentId);
+	return jsonResponse({ slot: updated }, 200, cors);
+}
+
+// Forfeit every pending match the slot is currently in, awarding the win to
+// the opponent, and route each through maybeAdvanceAfterMatchReport so the
+// round closes / the next round generates (now excluding the withdrawn slot).
+// Normally there is at most one such match (the current in_progress round);
+// the set is handled defensively. Mirrors handleRetroEditMatch's forward
+// transition: snapshot both occupants so the forfeited card keeps correct
+// names. Returns the forfeited match IDs for the audit log.
+async function forfeitPendingMatchesForSlot(
+	env: TournamentAdminEnv,
+	tournamentId: string,
+	slotId: string,
+): Promise<string[]> {
+	const res = await env.SHARE_DB.prepare(
+		`SELECT m.* FROM tournament_matches m
+		 JOIN tournament_rounds r ON r.round_id = m.round_id
+		 WHERE r.tournament_id = ?
+		   AND m.status = 'pending'
+		   AND (m.slot_a_id = ? OR m.slot_b_id = ?)`,
+	)
+		.bind(tournamentId, slotId, slotId)
+		.all<MatchRow>();
+	const pending = res.results ?? [];
+	const forfeitedIds: string[] = [];
+	for (const m of pending) {
+		// A pending match always has two real slots (byes are status='bye'),
+		// so the opponent is non-null. The forfeit is inert if the opponent is
+		// itself withdrawn — both are excluded from pairing and qualifiers.
+		const opponentId = m.slot_a_id === slotId ? m.slot_b_id : m.slot_a_id;
+		if (opponentId === null) continue;
+		const slotA = await loadSlot(env, m.slot_a_id);
+		const slotB = m.slot_b_id ? await loadSlot(env, m.slot_b_id) : null;
+		await env.SHARE_DB.prepare(
+			`UPDATE tournament_matches
+			   SET status = 'forfeit', winner_slot_id = ?,
+			       slot_a_username = ?, slot_a_user_id = ?,
+			       slot_b_username = ?, slot_b_user_id = ?
+			 WHERE match_id = ?`,
+		)
+			.bind(
+				opponentId,
+				slotA?.discord_username ?? null,
+				slotA?.user_id ?? null,
+				slotB?.discord_username ?? null,
+				slotB?.user_id ?? null,
+				m.match_id,
+			)
+			.run();
+		forfeitedIds.push(m.match_id);
+		await maybeAdvanceAfterMatchReport(env, m.match_id);
+	}
+	return forfeitedIds;
+}
+
+// ----------------------------------------------------------------------
 // POST /v1/tournaments/:id/slots/reorder — reseed swiss-phase slots
 //
 // Admin reorders the seed list (drag-and-drop in the setup UI). Body carries
@@ -2158,7 +2313,12 @@ export async function handleTransitionChampionship(
 			.map(slotRowToRef);
 		const standings = computeStandings(swissSlots, matchRefs, config);
 		const ranked = rankStandings(standings, matchRefs);
-		const qualifiers = ranked.filter((r) => r.status === "advanced");
+		// Withdrawn slots are excluded even if they'd clinched the win
+		// threshold — an admin-withdrawn player won't play the bracket, so
+		// they must not be seeded into it.
+		const qualifiers = ranked.filter(
+			(r) => r.status === "advanced" && !r.withdrawn,
+		);
 
 		if (qualifiers.length < 2) {
 			// Surface near-qualifiers (the full ranked list) so the admin's

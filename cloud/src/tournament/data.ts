@@ -82,6 +82,10 @@ export interface SlotRow {
 	// at signup (migration 0023). NULL when unanswered or the slot predates the
 	// question. Admin-only display in the roster.
 	signup_answer: string | null;
+	// Set (ISO-8601) when an admin withdraws the slot mid-tournament; NULL
+	// otherwise (migration 0027). Drives the `withdrawn` flag on SlotRef, which
+	// excludes the slot from future pairing and from championship qualifiers.
+	withdrawn_at: string | null;
 	created_at: string;
 }
 
@@ -311,6 +315,7 @@ export function slotRowToRef(row: SlotRow): SlotRef {
 		division: row.division,
 		swiss_seed: row.swiss_seed,
 		championship_seed: row.championship_seed,
+		withdrawn: row.withdrawn_at != null,
 	};
 }
 

@@ -320,6 +320,7 @@ export function planSeededTournament(
 				division,
 				swiss_seed: seed,
 				championship_seed: null,
+				withdrawn: false,
 			});
 			globalIndex++;
 		}
@@ -397,6 +398,7 @@ export function planSeededTournament(
 				division: s.division,
 				swiss_seed: s.swiss_seed,
 				championship_seed: null,
+				withdrawn: false,
 			}));
 		const standings = computeStandings(allSwissSlotRefs, allSwissRefs, config);
 		const ranked = rankStandings(standings, allSwissRefs);

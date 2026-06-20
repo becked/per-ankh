@@ -14,6 +14,12 @@ export interface SlotRef {
 	division: Division | null;
 	swiss_seed: number | null;
 	championship_seed: number | null;
+	// True when an admin has withdrawn the slot mid-tournament (D1
+	// tournament_slots.withdrawn_at IS NOT NULL). Withdrawn slots are excluded
+	// from the pairing engine's active pool and from championship qualifiers,
+	// while their already-played matches stand. Orthogonal to the match-derived
+	// SwissStatus — a slot can be 'advanced' and withdrawn.
+	withdrawn: boolean;
 }
 
 export interface MatchRef {

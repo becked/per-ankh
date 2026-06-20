@@ -116,6 +116,11 @@
 									<strong>Eliminated</strong> (<span class="text-orange">✗</span
 									>) — hit the loss threshold; out of contention.
 								</li>
+								<li>
+									<strong>Withdrawn</strong> (<span class="opacity-70">WD</span
+									>) — dropped out and removed by an admin; excluded from all
+									further rounds. Any games already played stand.
+								</li>
 							</ul>
 						</section>
 					</div>

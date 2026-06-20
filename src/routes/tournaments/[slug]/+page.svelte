@@ -506,6 +506,29 @@
 		);
 	}
 
+	async function withdrawSlot(slotId: string) {
+		if (
+			!(await confirmDialog({
+				title: "Withdraw player",
+				message: `Withdraw ${slotLabelFor(slotId)} from the tournament? They're removed from all future rounds and their current pending match (if any) is forfeited to their opponent. You can reinstate them later.`,
+				confirmLabel: "Withdraw",
+				destructive: true,
+			}))
+		)
+			return;
+		await withBusy(
+			() => cloudApi.withdrawSlot(data.tournament.tournament_id, slotId),
+			"Withdrew player",
+		);
+	}
+
+	async function reinstateSlot(slotId: string) {
+		await withBusy(
+			() => cloudApi.reinstateSlot(data.tournament.tournament_id, slotId),
+			"Reinstated player",
+		);
+	}
+
 	// Drag-and-drop reorder of swiss-phase slots (setup only). localOrder is
 	// a writable derived: it re-projects from slotsA/slotsB whenever server
 	// data refreshes, but we can also assign to it directly to show the
@@ -1058,6 +1081,12 @@
 													"championship"
 														? undefined
 														: substituteSlot}
+													onWithdraw={data.tournament.status === "swiss"
+														? withdrawSlot
+														: undefined}
+													onReinstate={data.tournament.status === "swiss"
+														? reinstateSlot
+														: undefined}
 												/>
 											{:else}
 												<div class="mb-3">

@@ -1006,6 +1006,33 @@ export const cloudApi = {
 		});
 	},
 
+	// Admin-only mid-tournament withdrawal: removes the player from all future
+	// pairing and from championship qualifiers; their current pending match is
+	// forfeited to the opponent. Server returns 409 during "setup" (delete the
+	// slot instead) or "complete". reinstateSlot clears it (takes effect from
+	// the next round generated).
+	withdrawSlot: async (
+		tournamentId: string,
+		slotId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/${slotId}/withdraw`, {
+			...opts,
+			method: "POST",
+		});
+	},
+
+	reinstateSlot: async (
+		tournamentId: string,
+		slotId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/${slotId}/withdraw`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
 	// Drag-and-drop reorder of swiss-phase slots. divisions.A and .B are the
 	// desired display order (slot_ids); server renumbers swiss_seed = 1..N
 	// within each and reassigns division for slots that moved across.
@@ -1401,6 +1428,10 @@ export interface SlotStanding {
 	wins: number;
 	losses: number;
 	status: "active" | "advanced" | "eliminated";
+	// True when an admin has withdrawn the player mid-tournament. Orthogonal to
+	// `status` (a withdrawn player keeps their frozen record and may even be
+	// 'advanced'); the UI renders a "Withdrawn" badge that takes precedence.
+	withdrawn: boolean;
 	buchholz_cut1: number;
 	opponents_buchholz: number;
 	cumulative: number;
@@ -1437,6 +1468,7 @@ export interface CombinedQualifier {
 	wins: number;
 	losses: number;
 	status: "active" | "advanced" | "eliminated";
+	withdrawn: boolean;
 	h2h: number;
 	buchholz_cut1: number;
 	opponents_buchholz: number;
