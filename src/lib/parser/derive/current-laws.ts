@@ -1,14 +1,22 @@
 // derive/current-laws.ts — port of get_current_laws (match_data.rs:80–134).
 //
-// Each row in `laws` becomes a PlayerLaw. The adopted_turn comes from the
-// most recent LAW_ADOPTED event_log for that (player, law); falls back to 0
-// if no event found (matches the SQL COALESCE).
+// Each non-succession law in `laws` becomes a PlayerLaw. The adopted_turn
+// comes from the most recent LAW_ADOPTED event_log for that (player, law);
+// falls back to 0 if no event found (matches the SQL COALESCE). Succession
+// laws (LAWCLASS_ORDER — Primogeniture etc.) are realm defaults, not civic
+// adoptions, so they're excluded here (and from law-adoption-history) — a
+// deliberate divergence from the Rust port.
 
 import type { EventLog as ParsedEventLog } from "../parsers/events.js";
 import type { Law } from "../parsers/player-data.js";
 import type { Player } from "../parsers/players.js";
 import type { PlayerLaw } from "../types.js";
-import { extractLawName, playerByXmlId, strCmp } from "./_helpers.js";
+import {
+	extractLawName,
+	isSuccessionLaw,
+	playerByXmlId,
+	strCmp,
+} from "./_helpers.js";
 
 export function deriveCurrentLaws(
 	laws: Law[],
@@ -32,6 +40,9 @@ export function deriveCurrentLaws(
 
 	const out: PlayerLaw[] = [];
 	for (const l of laws) {
+		// Succession laws (LAWCLASS_ORDER) are realm defaults, not adoptions —
+		// keep them out of the table (mirrors law-adoption-history).
+		if (isSuccessionLaw(l.law)) continue;
 		const player = playerMap.get(l.playerXmlId);
 		if (!player) continue;
 		const adoptedFromEvents = latestByKey.get(`${l.playerXmlId}:${l.law}`) ?? 0;

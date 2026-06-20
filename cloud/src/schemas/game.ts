@@ -75,6 +75,13 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         Powers the game-detail Leaders tab.
 // 2.9.0 — character suffix (regnal numeral N from <Suffix>N</Suffix>; absent
 //         means 1). Powers leader-name numerals ("Meera II the Fountainhead").
+// 2.9.1 — law-adoption history resolves each LAW_ADOPTED event's class via the
+//         static LAW_TO_CLASS table instead of the save's active laws, so a law
+//         later switched away from (e.g. Epics → Exploration) no longer drops
+//         from the "Law Adoption Over Time" chart or mis-dates its class.
+//         Succession laws (LAWCLASS_ORDER, e.g. Primogeniture) are excluded
+//         from current_laws + law_adoption_history (and so from law_events /
+//         laws_count) — they're realm defaults, not civic adoptions.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -90,13 +97,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.7.0",
 	"2.8.0",
 	"2.9.0",
+	"2.9.1",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.9.0";
+export const CURRENT_PARSER_VERSION = "2.9.1";
 
 // ----- Reusable atoms -----
 

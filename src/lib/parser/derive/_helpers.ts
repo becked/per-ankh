@@ -3,6 +3,7 @@
 // over parsed entity arrays.
 
 import type { Player } from "../parsers/players.js";
+import { LAW_CLASSES, LAW_TO_CLASS } from "../../generated/law-classes.js";
 
 /**
  * Build a player_xml_id → Player map for fast lookups. Rust queries do this
@@ -53,4 +54,18 @@ export function extractLawName(description: string): string | null {
  */
 export function strCmp(a: string, b: string): number {
 	return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/**
+ * True if `law` belongs to a succession law-class (LAWCLASS_ORDER —
+ * Primogeniture, Seniority, etc.). Succession laws are the realm's default
+ * order-of-succession rule, not a civic adoption: every nation starts with
+ * one and the default is never logged as a LAW_ADOPTED event. They're
+ * excluded from both the current-laws table and the adoption-history chart
+ * (and so from the downstream law_events / laws_count). Unknown laws (future
+ * DLC not yet in Reference) return false and are kept.
+ */
+export function isSuccessionLaw(law: string): boolean {
+	const cls = LAW_TO_CLASS[law];
+	return cls !== undefined && (LAW_CLASSES[cls]?.succession ?? false);
 }
