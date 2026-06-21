@@ -1,5 +1,24 @@
 # Changelog
 
+## [2026-06-20-0791f86] - 2026-06-20
+
+### Features
+
+- (tournament) admin-initiated mid-tournament player withdrawal — [48a2026](https://github.com/becked/per-ankh/commit/48a20261e61993c9c038a974f06191f152efadf7)
+- (account) reparse individual saves from Settings -> Maintenance — [f25ef68](https://github.com/becked/per-ankh/commit/f25ef6812ca22e5ff9f46b7064acb8711d13e15c)
+- (game-detail) law table shows full adoption history; swap-aware tooltip — [b9c8f9a](https://github.com/becked/per-ankh/commit/b9c8f9af5817e84ce0b5124749e4998a6cfb2035)
+- (deploy) assert frontend bundle API origin after build — [0791f86](https://github.com/becked/per-ankh/commit/0791f86c7517af2670335076e1366d96e6845159)
+
+### Fixes
+
+- (game-detail) correct overview metric bars for non-positive values — [f3a85b7](https://github.com/becked/per-ankh/commit/f3a85b79ea26134b60d8f0b4a011fef486072728)
+- (parser) correct law-adoption history; exclude succession laws (2.9.1) — [7ef3539](https://github.com/becked/per-ankh/commit/7ef3539e8f0aab1eadae6650d4d3da9051de1ad3)
+- (deps) resolve high-severity npm audit advisories — [1559152](https://github.com/becked/per-ankh/commit/1559152fd91fa35303127d5e392dac4d6874b3d4)
+
+### Other
+
+- apply prettier formatting — [39e8e4b](https://github.com/becked/per-ankh/commit/39e8e4bc18564df4d4e9674a10dc43770eb2010c)
+
 ## [2026-06-17-5d1eb22] - 2026-06-17
 
 ### Fixes
