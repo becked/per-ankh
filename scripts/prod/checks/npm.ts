@@ -73,19 +73,7 @@ interface AuditException {
 	ghsa: string;
 	reason: string;
 }
-const AUDIT_EXCEPTIONS: AuditException[] = [
-	{
-		ghsa: "GHSA-96hv-2xvq-fx4p",
-		// `ws` memory-exhaustion DoS, reachable only via wrangler → miniflare —
-		// the local dev/test simulator, which never runs in production (the
-		// deployed Worker uses Cloudflare's runtime, not miniflare). miniflare
-		// pins ws@8.20.1 exactly; the fix is ws@8.21.0. Remove once
-		// wrangler/miniflare bumps its ws pin (follow-up to
-		// cloudflare/workers-sdk#13978, which only reached 8.20.1).
-		reason:
-			"ws DoS reachable only via miniflare (dev/test sim, no prod reach); fixed in ws@8.21.0, awaiting a wrangler/miniflare bump",
-	},
-];
+const AUDIT_EXCEPTIONS: AuditException[] = [];
 
 async function npmAudit(cwd: string, resultName: string): Promise<CheckResult> {
 	const start = Date.now();
