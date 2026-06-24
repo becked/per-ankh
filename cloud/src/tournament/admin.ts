@@ -299,23 +299,27 @@ async function authedTournament(
 	return { ok: true, tournament, userId: session.data.user_id };
 }
 
-// Fire-and-forget audit + rate-limit insert. Logged at the end of an admin
+// Durable audit + rate-limit insert. Awaited (not fire-and-forget) so the write
+// can't be canceled by response teardown on the Workers runtime — an audit log
+// must not silently drop events (issue #75). Logged at the end of an admin
 // handler's happy path so failed mutations don't leave audit ghosts. The
 // same event_type drives the per-user rate limit (countEventsSince above),
-// so every successful mutation counts toward the next hour's budget.
-function logTournamentAdminAction(
+// so every successful mutation counts toward the next hour's budget. The .catch
+// stays a backstop: a failed audit must not 500 a mutation that already
+// committed, but await gives the write a full chance to land first.
+async function logTournamentAdminAction(
 	env: TournamentAdminEnv,
 	userId: string,
 	tournamentId: string,
 	action: string,
 	extra?: Record<string, unknown>,
-): void {
+): Promise<void> {
 	const metadata = JSON.stringify({
 		action,
 		tournament_id: tournamentId,
 		...(extra ?? {}),
 	});
-	env.SHARE_DB.prepare(
+	await env.SHARE_DB.prepare(
 		`INSERT INTO events (event_type, user_id, metadata)
 		 VALUES ('tournament_admin', ?, ?)`,
 	)
@@ -786,7 +790,7 @@ export async function handlePatchTournament(
 		.bind(...binds)
 		.run();
 	const updated = await loadTournamentById(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_patched", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "tournament_patched", {
 		fields_changed: Object.keys(patch).filter(
 			(k) => patch[k as keyof typeof patch] !== undefined,
 		),
@@ -873,7 +877,7 @@ export async function handleGrantTournamentAdmin(
 		.run();
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "admin_granted", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "admin_granted", {
 		granted_user_id: targetUserId,
 	});
 
@@ -928,7 +932,7 @@ export async function handleRevokeTournamentAdmin(
 	}
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "admin_revoked", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "admin_revoked", {
 		revoked_user_id: targetUserId,
 	});
 	return jsonResponse({ revoked: true }, 200, cors);
@@ -995,7 +999,7 @@ export async function handleDeleteTournament(
 
 	// Audit. The tournament row is gone, but events.metadata is plain text
 	// (not an FK), so the record survives the delete.
-	logTournamentAdminAction(env, session.data.user_id, tournamentId, "deleted", {
+	await logTournamentAdminAction(env, session.data.user_id, tournamentId, "deleted", {
 		slug: tournament.slug,
 		status: tournament.status,
 		by_site_admin: siteAdmin,
@@ -1175,7 +1179,7 @@ export async function handleBulkCreateSlots(
 		).bind(tournamentId),
 	);
 	await env.SHARE_DB.batch(statements);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slots_bulk_created", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slots_bulk_created", {
 		count: created.length,
 	});
 	return jsonResponse({ created }, 201, cors);
@@ -1348,7 +1352,7 @@ export async function handlePatchSlot(
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadSlot(env, slotId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slot_patched", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_patched", {
 		slot_id: slotId,
 		username_changed: occupantChanged,
 		prelinked: prelink !== null,
@@ -1383,7 +1387,7 @@ export async function handleDeleteSlot(
 		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
 	}
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slot_deleted", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_deleted", {
 		slot_id: slotId,
 	});
 	return new Response(null, { status: 204, headers: cors });
@@ -1447,7 +1451,7 @@ export async function handleWithdrawSlot(
 	);
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slot_withdrawn", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_withdrawn", {
 		slot_id: slotId,
 		division: slot.division,
 		forfeited_match_ids: forfeitedMatchIds,
@@ -1483,7 +1487,7 @@ export async function handleReinstateSlot(
 		.bind(slotId)
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slot_reinstated", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_reinstated", {
 		slot_id: slotId,
 		division: slot.division,
 	});
@@ -1631,7 +1635,7 @@ export async function handleReorderSlots(
 	);
 	await env.SHARE_DB.batch(statements);
 
-	logTournamentAdminAction(env, a.userId, tournamentId, "slots_reordered", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slots_reordered", {
 		count: requested.length,
 		division_a: divisions.A.length,
 		division_b: divisions.B.length,
@@ -1744,7 +1748,7 @@ export async function handleStartTournament(
 	}
 	await env.SHARE_DB.batch(statements);
 	const updated = await loadTournamentById(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_started", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "tournament_started", {
 		rounds: summaries,
 	});
 	return jsonResponse({ tournament: updated, rounds: summaries }, 201, cors);
@@ -1811,7 +1815,7 @@ export async function handlePatchMatchMap(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "match_map_patched", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "match_map_patched", {
 		match_id: matchId,
 	});
 	return jsonResponse({ match: updated }, 200, cors);
@@ -1997,7 +2001,7 @@ export async function handlePatchMatchSchedule(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	logTournamentAdminAction(
+	await logTournamentAdminAction(
 		env,
 		a.userId,
 		tournamentId,
@@ -2164,7 +2168,7 @@ export async function handleRetroEditMatch(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "match_retro_edited", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "match_retro_edited", {
 		match_id: matchId,
 		fields_changed: Object.keys(patch).filter(
 			(k) => patch[k as keyof typeof patch] !== undefined,
@@ -2475,7 +2479,7 @@ export async function handleTransitionChampionship(
 		).bind(tournamentId),
 	);
 	await env.SHARE_DB.batch(statements);
-	logTournamentAdminAction(
+	await logTournamentAdminAction(
 		env,
 		a.userId,
 		tournamentId,
@@ -2684,18 +2688,20 @@ function buildChampionshipRoundStatements(
 // System-triggered audit entry (no admin user_id). event_type is distinct
 // from 'tournament_admin' so per-admin rate-limit queries naturally skip
 // these rows and log inspection can separate human from automatic actions.
-function logSystemTournamentAction(
+// Awaited for durability for the same reason as logTournamentAdminAction
+// (issue #75); the .catch keeps a failed audit from breaking auto-advance.
+async function logSystemTournamentAction(
 	env: TournamentEnv,
 	tournamentId: string,
 	action: string,
 	extra?: Record<string, unknown>,
-): void {
+): Promise<void> {
 	const metadata = JSON.stringify({
 		action,
 		tournament_id: tournamentId,
 		...(extra ?? {}),
 	});
-	env.SHARE_DB.prepare(
+	await env.SHARE_DB.prepare(
 		`INSERT INTO events (event_type, user_id, metadata)
 		 VALUES ('tournament_system', NULL, ?)`,
 	)
@@ -2883,7 +2889,7 @@ export async function maybeAdvanceAfterMatchReport(
 			).bind(tournament.tournament_id),
 		);
 		await env.SHARE_DB.batch(statements);
-		logSystemTournamentAction(
+		await logSystemTournamentAction(
 			env,
 			tournament.tournament_id,
 			auditAction,
