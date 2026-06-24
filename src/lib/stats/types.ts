@@ -32,7 +32,14 @@ export interface ChartBundle {
 	// --- Overview (user corpus) — folded from the retired /v1/stats ---
 	win_rate: Nullable<number>;
 	games_with_outcome: number;
-	save_dates: Array<{ date: string; nation: string | null }>;
+	save_dates: Array<{
+		date: string;
+		nation: string | null;
+		game_id: string;
+		game_name: string | null;
+		display_name: string | null;
+		total_turns: number;
+	}>;
 	favorite_day_of_week: Nullable<number>;
 	nations: Array<{ nation: string; games_played: number }>;
 

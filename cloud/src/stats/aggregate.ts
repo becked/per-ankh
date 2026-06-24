@@ -335,6 +335,14 @@ interface SaveDateRow {
 	date: string;
 	weekday: number | null;
 	nation: string | null;
+	// Identity + title inputs for the Overview calendar's click-through. The
+	// last three feed formatGameTitle on the frontend so a calendar cell links
+	// to the same heading the game page shows; nation doubles as
+	// save_owner_nation. total_turns is NOT NULL in the schema.
+	game_id: string;
+	game_name: string | null;
+	display_name: string | null;
+	total_turns: number;
 }
 
 // One row per in-scope game with a save_date — feeds the Overview
@@ -351,6 +359,10 @@ async function loadSaveDates(
 		const res = await env.SHARE_DB.prepare(
 			`SELECT substr(g.save_date, 1, 10) AS date,
 			        CAST(strftime('%w', g.save_date) AS INTEGER) AS weekday,
+			        g.game_id AS game_id,
+			        g.game_name AS game_name,
+			        g.display_name AS display_name,
+			        g.total_turns AS total_turns,
 			        COALESCE(g.user_nation, (
 			            SELECT ps.nation FROM player_summaries ps
 			            WHERE ps.game_id = g.game_id AND ps.is_human = 1
@@ -454,6 +466,10 @@ export async function buildChartBundle(
 	const saveDates = saveDateRows.map((r) => ({
 		date: r.date,
 		nation: r.nation,
+		game_id: r.game_id,
+		game_name: r.game_name,
+		display_name: r.display_name,
+		total_turns: r.total_turns,
 	}));
 	const weekdayCount = new Map<number, number>();
 	for (const r of saveDateRows) {

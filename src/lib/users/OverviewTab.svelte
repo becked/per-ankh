@@ -4,9 +4,13 @@
 	// single scoped ChartBundle. (The headline tiles live in the profile
 	// card, where they're intentionally unscoped.) No chart-click cross-filter.
 
-	import type { EChartsOption } from "echarts";
+	import type { ECElementEvent, EChartsOption } from "echarts";
+	import { goto } from "$app/navigation";
+	import { resolve } from "$app/paths";
 	import ChartContainer from "$lib/ChartContainer.svelte";
-	import { formatEnum } from "$lib/utils/formatting";
+	import Popover from "$lib/ui/Popover.svelte";
+	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import { formatEnum, formatGameTitle } from "$lib/utils/formatting";
 	import {
 		CHART_THEME,
 		getChartColor,
@@ -16,6 +20,68 @@
 	import type { ChartBundle } from "$lib/stats/types";
 
 	let { bundle }: { bundle: ChartBundle } = $props();
+
+	// One clickable game per calendar cell. A date can hold several games
+	// (different nations the same day, and re-uploads create distinct records),
+	// so we key a list per date. The title mirrors the game page heading
+	// exactly — same formatGameTitle, with nation as save_owner_nation and the
+	// match_id: 0 sentinel (unreachable since total_turns is NOT NULL), matching
+	// the other D1-list callers (RecentSaveCard, HeaderGameSearch).
+	type DayGame = { game_id: string; nation: string | null; title: string };
+	const dateToGames = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- plain Map in a derived, not reactive state
+		const m = new Map<string, DayGame[]>();
+		for (const e of bundle.save_dates) {
+			const games = m.get(e.date) ?? [];
+			games.push({
+				game_id: e.game_id,
+				nation: e.nation,
+				title: formatGameTitle({
+					display_name: e.display_name,
+					game_name: e.game_name,
+					save_owner_nation: e.nation,
+					total_turns: e.total_turns,
+					match_id: 0,
+				}),
+			});
+			m.set(e.date, games);
+		}
+		return m;
+	});
+
+	// Picker popover state. A single-game day navigates straight to the game; a
+	// multi-game day anchors a chooser at the click point (floating-ui virtual
+	// anchor — same pattern as the tournament matches page).
+	let pickerOpen = $state(false);
+	let pickerGames = $state<DayGame[]>([]);
+	let pickerAnchor = $state<{ getBoundingClientRect: () => DOMRect } | null>(
+		null,
+	);
+
+	async function onCalendarClick(params: ECElementEvent) {
+		// Custom calendar series: the clicked cell's data item is our
+		// [date, nations, colors] tuple, so the date is value[0].
+		const value = params.value as [string, string, string] | undefined;
+		const date = Array.isArray(value) ? value[0] : undefined;
+		if (!date) return;
+		const games = dateToGames.get(date) ?? [];
+		if (games.length === 0) return;
+		if (games.length === 1) {
+			await goto(resolve("/games/[id]", { id: games[0].game_id }));
+			return;
+		}
+		// Anchor the chooser at the cursor. The ECharts event wraps the native
+		// browser event, whose clientX/clientY are the viewport coords floating-ui
+		// expects.
+		const native = (
+			params.event as unknown as { event?: MouseEvent } | undefined
+		)?.event;
+		const x = native?.clientX ?? 0;
+		const y = native?.clientY ?? 0;
+		pickerAnchor = { getBoundingClientRect: () => new DOMRect(x, y, 0, 0) };
+		pickerGames = games;
+		pickerOpen = true;
+	}
 
 	const nationChartOption = $derived<EChartsOption>({
 		...CHART_THEME,
@@ -140,6 +206,8 @@
 									height: cellHeight,
 								},
 								style: { fill: colors[0] },
+								// Cells are click-through to the game page.
+								cursor: "pointer",
 							};
 						}
 						const sliceWidth = cellWidth / numColors;
@@ -154,6 +222,7 @@
 									height: cellHeight,
 								},
 								style: { fill: color },
+								cursor: "pointer",
 							})),
 						};
 					},
@@ -182,6 +251,7 @@
 				option={calendarChartOption}
 				height="250px"
 				title="Calendar"
+				onItemClick={onCalendarClick}
 			/>
 		{/key}
 	{/if}
@@ -200,3 +270,39 @@
 		No games in this scope yet.
 	</div>
 {/if}
+
+<!-- Multi-game day chooser. A calendar cell can hold several games; clicking
+     one opens this list anchored at the cursor (single-game days navigate
+     directly and never reach here). -->
+<Popover
+	open={pickerOpen}
+	onOpenChange={(o) => {
+		if (!o) pickerOpen = false;
+	}}
+	customAnchor={pickerAnchor}
+	side="bottom"
+	align="center"
+	contentClass="w-fit max-w-[min(92vw,22rem)]"
+	frameClass="border-4 border-surface-raised bg-blue-gray p-2 shadow-lg"
+	ariaLabel="Games on this day"
+>
+	<div class="flex flex-col gap-1">
+		{#each pickerGames as game (game.game_id)}
+			<a
+				href={resolve("/games/[id]", { id: game.game_id })}
+				onclick={() => (pickerOpen = false)}
+				class="inline-flex items-center gap-1.5 rounded border border-input px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+			>
+				{#if game.nation}
+					<SpriteIcon
+						category="crests"
+						value={game.nation}
+						size={16}
+						alt={formatEnum(game.nation, "NATION_")}
+					/>
+				{/if}
+				<span class="truncate">{game.title}</span>
+			</a>
+		{/each}
+	</div>
+</Popover>

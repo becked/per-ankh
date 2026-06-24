@@ -53,8 +53,17 @@ export interface ChartBundle {
 
 	// One entry per in-scope game with a save_date, for the calendar
 	// heatmap. nation falls back to the first human when user_nation is
-	// null (matching the games-list COALESCE).
-	save_dates: Array<{ date: string; nation: string | null }>;
+	// null (matching the games-list COALESCE). The id + title inputs let a
+	// calendar cell link through to the game page; the frontend titles each
+	// game with formatGameTitle (nation = save_owner_nation).
+	save_dates: Array<{
+		date: string;
+		nation: string | null;
+		game_id: string;
+		game_name: string | null;
+		display_name: string | null;
+		total_turns: number;
+	}>;
 
 	// Modal weekday of save dates (0=Sunday..6=Saturday), or null.
 	favorite_day_of_week: Nullable<number>;
