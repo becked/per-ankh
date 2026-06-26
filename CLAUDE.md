@@ -55,6 +55,10 @@ The `./per-ankh` script at repo root is the project CLI (`scripts/per-ankh.ts`).
 
 ## Coding Standards
 
+### Documentation & Markdown
+
+- Prose in Markdown (`*.md`, including everything under `docs/`) is **soft-wrapped: one paragraph per line.** Never hard-wrap prose to a fixed column width — column wrapping is a code convention and is wrong for prose; let it wrap at display time. Lists and table rows still break per item/row, and fenced code blocks keep their own formatting. (Prettier is deliberately disabled for `*.md` and `docs/`, so nothing auto-reflows these — don't introduce the wrapping in the first place.)
+
 ### TypeScript / Svelte
 
 - Use TypeScript with strict mode.
@@ -316,6 +320,8 @@ Build a full local fixture (Swiss + championship via the real planner) with `./p
 
 **Authoritative design docs:** `docs/tournament-feature-spec.md` and `docs/tournament-implementation-notes.md`.
 
+**Rules & mechanics reference:** `docs/tournament-rules.md` is the current-behavior source of truth. Answer any question about how tournaments actually behave (Swiss pairing, byes, divisions/sizing, advancement, tiebreakers/seeding, championship bracket, maps, reporting, withdrawals) from it — not from generic Swiss knowledge, which differs from ours. The `tournament-rules` skill in `.claude/skills/` carries the answering protocol. Keep the doc in sync with the engine in `cloud/src/tournament/`; code wins on conflict.
+
 ## Asset Bake Pipeline
 
 The sprite map's terrain, hex, resource, and improvement atlases are baked from a local [pinacotheca](https://github.com/becked/pinacotheca) checkout. Both source PNGs (`assets/atlas-sources/`) and outputs (`static/atlases/`, `static/sprites/`) are gitignored — bake locally on demand.
@@ -392,6 +398,7 @@ Deploy the Worker schema change before releasing the frontend that depends on it
 
 `docs/` holds many historical analyses; these are the current, authoritative references a contributor should trust:
 
+- `docs/tournament-rules.md` — current, code-grounded tournament **rules & mechanics** reference (the rules source of truth; design and build history are in the two docs below).
 - `docs/tournament-feature-spec.md` + `docs/tournament-implementation-notes.md` — tournament design and build record.
 - `docs/c4-model.html` — C4 architecture overview.
 - `docs/cloud-deploy-plan.md` — deploy runbook (the [Deploy CLI](#deploy-cli) automates it).
