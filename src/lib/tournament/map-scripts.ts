@@ -18,6 +18,10 @@ export type MapScriptDlc = "base" | "wrath_of_gods" | "empires_of_the_indus";
 export interface MapScriptInfo {
 	value: string;
 	label: string;
+	// Short form for the compact map-pool label (e.g. "CRB", "AridP", "DOTA").
+	// Kept terse but recognizable so a pool reads at a glance; the full `label`
+	// is still shown in tooltips and the read-only summary.
+	abbrev: string;
 	dlc: MapScriptDlc;
 }
 
@@ -28,95 +32,151 @@ export const DLC_GROUP_LABELS: Record<MapScriptDlc, string> = {
 };
 
 export const KNOWN_MAP_SCRIPTS: MapScriptInfo[] = [
-	{ value: "MAPCLASS_MapScriptArchipelago", label: "Archipelago", dlc: "base" },
+	{
+		value: "MAPCLASS_MapScriptArchipelago",
+		label: "Archipelago",
+		abbrev: "Arch",
+		dlc: "base",
+	},
 	{
 		value: "MAPCLASS_MapScriptAridPlateau",
 		label: "Arid Plateau",
+		abbrev: "AridP",
 		dlc: "base",
 	},
-	{ value: "MAPCLASS_MapScriptBay", label: "Bay", dlc: "base" },
+	{ value: "MAPCLASS_MapScriptBay", label: "Bay", abbrev: "Bay", dlc: "base" },
 	{
 		value: "MAPCLASS_MapScriptCoastalRainBasin",
 		label: "Coastal Rain Basin",
+		abbrev: "CRB",
 		dlc: "base",
 	},
-	{ value: "MAPCLASS_MapScriptContinent", label: "Continent", dlc: "base" },
-	{ value: "MAPCLASS_MapScriptDesert", label: "Desert", dlc: "base" },
-	{ value: "MAPCLASS_MapScriptDisjunction", label: "Disjunction", dlc: "base" },
-	{ value: "MAPCLASS_MapScriptDonut", label: "Donut", dlc: "base" },
+	{
+		value: "MAPCLASS_MapScriptContinent",
+		label: "Continent",
+		abbrev: "Cont",
+		dlc: "base",
+	},
+	{
+		value: "MAPCLASS_MapScriptDesert",
+		label: "Desert",
+		abbrev: "Desert",
+		dlc: "base",
+	},
+	{
+		value: "MAPCLASS_MapScriptDisjunction",
+		label: "Disjunction",
+		abbrev: "Disj",
+		dlc: "base",
+	},
+	{
+		value: "MAPCLASS_MapScriptDonut",
+		label: "Donut",
+		abbrev: "Donut",
+		dlc: "base",
+	},
 	{
 		value: "MAPCLASS_MapScriptHardwoodForest",
 		label: "Hardwood Forest",
+		abbrev: "Hardwood",
 		dlc: "base",
 	},
-	{ value: "MAPCLASS_MapScriptHighlands", label: "Highlands", dlc: "base" },
-	{ value: "MAPCLASS_MapScriptInlandSea2", label: "Inland Sea", dlc: "base" },
+	{
+		value: "MAPCLASS_MapScriptHighlands",
+		label: "Highlands",
+		abbrev: "Highlands",
+		dlc: "base",
+	},
+	{
+		value: "MAPCLASS_MapScriptInlandSea2",
+		label: "Inland Sea",
+		abbrev: "InlSea",
+		dlc: "base",
+	},
 	{
 		value: "MAPCLASS_MapScripLakesAndGulfs",
 		label: "Lakes and Gulfs",
+		abbrev: "L&G",
 		dlc: "base",
 	},
 	{
 		value: "MAPCLASS_MapScriptMediterrancean",
 		label: "Mediterranean",
+		abbrev: "Med",
 		dlc: "base",
 	},
 	{
 		value: "MAPCLASS_MapScriptContinents",
 		label: "Multiple Continents",
+		abbrev: "MultiC",
 		dlc: "base",
 	},
 	{
 		value: "MAPCLASS_MapScriptNorthernOcean",
 		label: "Northern Ocean",
+		abbrev: "NOcean",
 		dlc: "base",
 	},
 	{
 		value: "MAPCLASS_MapScriptPlayerIslands",
 		label: "Player Islands",
+		abbrev: "Islands",
 		dlc: "base",
 	},
-	{ value: "MAPCLASS_MapScriptSeaside", label: "Seaside", dlc: "base" },
+	{
+		value: "MAPCLASS_MapScriptSeaside",
+		label: "Seaside",
+		abbrev: "Seaside",
+		dlc: "base",
+	},
 
 	{
 		value: "MAPCLASS_MapScriptDesolation",
 		label: "Desolation",
+		abbrev: "Desol",
 		dlc: "wrath_of_gods",
 	},
 	{
 		value: "MAPCLASS_MapScriptEbbingSea",
 		label: "Ebbing Sea",
+		abbrev: "Ebbing",
 		dlc: "wrath_of_gods",
 	},
 	{
 		value: "MAPCLASS_MapScriptRejuvenation",
 		label: "Rejuvenation",
+		abbrev: "Rejuv",
 		dlc: "wrath_of_gods",
 	},
 	{
 		value: "MAPCLASS_MapScriptTumblingMountain",
 		label: "Tumbling Mountain",
+		abbrev: "Tumbling",
 		dlc: "wrath_of_gods",
 	},
 
 	{
 		value: "MAPCLASS_MapscriptJungle",
 		label: "Deep Jungle",
+		abbrev: "Jungle",
 		dlc: "empires_of_the_indus",
 	},
 	{
 		value: "MAPCLASS_MapScriptDota",
 		label: "Duel of the Ancients",
+		abbrev: "DOTA",
 		dlc: "empires_of_the_indus",
 	},
 	{
 		value: "MAPCLASS_MapscriptMountainPass",
 		label: "Mountain Pass",
+		abbrev: "MtnPass",
 		dlc: "empires_of_the_indus",
 	},
 	{
 		value: "MAPCLASS_MapscriptWetlands",
 		label: "Wetlands",
+		abbrev: "Wetlands",
 		dlc: "empires_of_the_indus",
 	},
 ];
@@ -125,12 +185,24 @@ const labelByValue: Record<string, string> = Object.fromEntries(
 	KNOWN_MAP_SCRIPTS.map((s) => [s.value, s.label]),
 );
 
+const abbrevByValue: Record<string, string> = Object.fromEntries(
+	KNOWN_MAP_SCRIPTS.map((s) => [s.value, s.abbrev]),
+);
+
 // Friendly display name for any map_script. Falls back to the generic
 // PascalCase-split formatter for unknown values (legacy data, future DLCs
 // not yet added to this table).
 export function mapScriptLabel(value: string | null | undefined): string {
 	if (!value) return "Unknown";
 	return labelByValue[value] ?? formatMapClass(value);
+}
+
+// Short form of a map_script name for compact pool labels (e.g. "CRB").
+// Falls back to the full friendly label for unknown values, so a future
+// DLC script still renders something sensible until it's added above.
+export function mapScriptAbbrev(value: string | null | undefined): string {
+	if (!value) return "Unknown";
+	return abbrevByValue[value] ?? mapScriptLabel(value);
 }
 
 // Returns map scripts grouped by DLC, with already-allowed values excluded.

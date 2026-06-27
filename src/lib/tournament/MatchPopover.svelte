@@ -33,9 +33,8 @@
 	} from "$lib/tournament/match-occupant";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
-		effectiveOptionValue,
-		mapFullName,
-		mapOptionChoiceLabel,
+		distinguishingOptions,
+		mapPoolLabel,
 		poolEntryById,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
@@ -181,12 +180,14 @@
 	const matchEntry = $derived(
 		poolEntryById(tournament.map_pool, match.map_pool_id),
 	);
-	// Full map name in our format ("Duel Continent Mirror …"), falling back to
-	// the bare script label if the instance is no longer in the pool.
+	// Options that vary across the pool — drives the variant shown in map labels.
+	const distinguishing = $derived(distinguishingOptions(tournament.map_pool));
+	// Full map label ("Square Duel Coastal Rain Basin PS"), falling back to the
+	// bare script label if the instance is no longer in the pool.
 	const mapName = $derived(
 		match.map_script
 			? matchEntry
-				? mapFullName(matchEntry.options, matchEntry.script)
+				? mapPoolLabel(matchEntry, distinguishing, false)
 				: mapScriptLabel(match.map_script)
 			: null,
 	);
@@ -394,28 +395,12 @@
 		})),
 	});
 
-	// Short label that disambiguates instances of the same script by their
-	// aspect + size (e.g. "Continent · Wide Duel").
-	function instanceLabel(e: {
-		script: string;
-		options: Record<string, string | boolean>;
-	}): string {
-		const aspect = mapOptionChoiceLabel(
-			"MAPASPECTRATIO",
-			effectiveOptionValue(e.options, "MAPASPECTRATIO"),
-		);
-		const size = mapOptionChoiceLabel(
-			"MAPSIZE",
-			effectiveOptionValue(e.options, "MAPSIZE"),
-		);
-		return `${mapScriptLabel(e.script)} · ${aspect} ${size}`;
-	}
-
-	// Map-instance dropdown: one option per map_pool entry.
+	// Map-instance dropdown: one option per map_pool entry, labelled with the
+	// canonical full map label so it matches the rest of the UI.
 	const mapSelectOptions = $derived<SelectOption[]>(
 		tournament.map_pool.map((e) => ({
 			value: e.id,
-			label: instanceLabel(e),
+			label: mapPoolLabel(e, distinguishing, false),
 		})),
 	);
 	const winnerOptions = $derived<SelectOption[]>([

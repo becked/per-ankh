@@ -7,11 +7,12 @@
 	import {
 		allMapScriptsByDlc,
 		DLC_GROUP_LABELS,
-		mapScriptLabel,
 	} from "$lib/tournament/map-scripts";
 	import MapScriptOptionsBlock from "$lib/tournament/MapScriptOptionsBlock.svelte";
 	import {
 		defaultsForScript,
+		distinguishingOptions,
+		mapPoolLabel,
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
@@ -41,6 +42,24 @@
 
 	const draftHasOptions = $derived(
 		draft !== null && optionsForScript(draft.script).length > 0,
+	);
+
+	// Preview label for the staged instance, using the same canonical label as
+	// the rest of the UI. The draft is included in the pool when computing which
+	// options vary, so its variant shows when it differs from existing maps.
+	const draftEntry = $derived<MapPoolEntry | null>(
+		draft
+			? { id: "draft", script: draft.script, options: draft.options }
+			: null,
+	);
+	const draftLabel = $derived(
+		draftEntry
+			? mapPoolLabel(
+					draftEntry,
+					distinguishingOptions([...tournament.map_pool, draftEntry]),
+					false,
+				)
+			: "",
 	);
 
 	// Client-side instance id (16 hex chars), regex-safe for the server schema;
@@ -109,7 +128,7 @@
 	{:else}
 		<div class="rounded border border-black bg-surface-raised p-3">
 			<p class="mb-2 text-xs font-bold text-tan">
-				{mapScriptLabel(draft.script)}
+				{draftLabel}
 			</p>
 			{#if draftHasOptions}
 				<div class="mb-3 border-t border-black pt-2">

@@ -12,8 +12,8 @@
 	import MapScriptOptionsBlock from "$lib/tournament/MapScriptOptionsBlock.svelte";
 	import {
 		defaultsForScript,
-		effectiveOptionValue,
-		mapOptionChoiceLabel,
+		distinguishingOptions,
+		mapPoolLabel,
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
 	import Select from "$lib/ui/Select.svelte";
@@ -32,6 +32,11 @@
 	let mapPool = $state<MapPoolEntry[]>(clonePool(tournament.map_pool));
 
 	let saving = $state(false);
+
+	// Options that vary across the current pool — the only ones the compact
+	// row label surfaces, so a uniform tournament-wide setting doesn't clutter
+	// every row. Recomputed as maps are added/removed/edited.
+	const distinguishing = $derived(distinguishingOptions(mapPool));
 
 	// The picker always lists every script — the same script can be added
 	// multiple times with different options (e.g. Continent @ Duel + @ Tiny).
@@ -117,7 +122,7 @@
 					{@const expandable = optsCount > 0}
 					<li
 						class="overflow-hidden rounded border border-black bg-surface-raised"
-						title={entry.script}
+						title={mapPoolLabel(entry, distinguishing, false)}
 					>
 						<div class="flex items-stretch">
 							<button
@@ -150,19 +155,8 @@
 									></span>
 								{/if}
 								<span class="flex-1 text-xs"
-									>{mapScriptLabel(entry.script)}</span
+									>{mapPoolLabel(entry, distinguishing, true)}</span
 								>
-								{#if !isExpanded}
-									{@const aspect = effectiveOptionValue(
-										entry.options,
-										"MAPASPECTRATIO",
-									)}
-									{@const size = effectiveOptionValue(entry.options, "MAPSIZE")}
-									<span class="text-[11px] text-tan opacity-70">
-										{mapOptionChoiceLabel("MAPASPECTRATIO", aspect)}
-										{mapOptionChoiceLabel("MAPSIZE", size)}
-									</span>
-								{/if}
 								{#if expandable}
 									<span class="text-[10px] text-tan opacity-50">
 										{optsCount} option{optsCount === 1 ? "" : "s"}

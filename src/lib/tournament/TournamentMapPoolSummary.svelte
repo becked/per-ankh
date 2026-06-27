@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { MapPoolEntry } from "$lib/api-cloud";
-	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
-		effectiveOptionValue,
-		mapOptionChoiceLabel,
+		distinguishingOptions,
+		labelConsumedOptions,
+		mapPoolLabel,
 		nonDefaultOptions,
 	} from "$lib/tournament/map-script-options";
 
@@ -13,26 +13,18 @@
 
 	let { mapPool }: Props = $props();
 
-	// Size and aspect ratio are shown inline in each map's headline
-	// (e.g. "Square Continent Duel"), so they're excluded from the
-	// per-map list of non-default settings below.
-	const HEADLINE_OPTIONS = ["MAPSIZE", "MAPASPECTRATIO"];
+	// Options that vary across the pool — drives which variant option the
+	// headline label surfaces.
+	const distinguishing = $derived(distinguishingOptions(mapPool));
 
-	function headline(entry: MapPoolEntry): string {
-		const aspect = mapOptionChoiceLabel(
-			"MAPASPECTRATIO",
-			effectiveOptionValue(entry.options, "MAPASPECTRATIO"),
-		);
-		const size = mapOptionChoiceLabel(
-			"MAPSIZE",
-			effectiveOptionValue(entry.options, "MAPSIZE"),
-		);
-		return `${aspect} ${mapScriptLabel(entry.script)} ${size}`;
-	}
-
+	// Non-default settings the headline label doesn't already show, listed as
+	// detail beneath it (e.g. resource density, city sites). Aspect, size,
+	// point symmetry, and the distinguishing variant option are excluded since
+	// the label covers them.
 	function extras(entry: MapPoolEntry) {
+		const consumed = labelConsumedOptions(entry, distinguishing);
 		return nonDefaultOptions(entry.options, entry.script).filter(
-			(o) => !HEADLINE_OPTIONS.includes(o.option),
+			(o) => !consumed.has(o.option),
 		);
 	}
 </script>
@@ -50,7 +42,7 @@
 					class="rounded border border-black bg-surface-raised px-3 py-2"
 					title={entry.script}
 				>
-					<span class="font-bold">{headline(entry)}</span>
+					<span class="font-bold">{mapPoolLabel(entry, distinguishing)}</span>
 					{#if settings.length > 0}
 						<dl
 							class="mt-1.5 grid grid-cols-[max-content_1fr] gap-x-3 gap-y-0.5"

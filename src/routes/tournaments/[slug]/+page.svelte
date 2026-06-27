@@ -32,7 +32,8 @@
 	} from "$lib/tournament/header-status";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
-		mapFullName,
+		distinguishingOptions,
+		mapPoolLabel,
 		poolEntryById,
 	} from "$lib/tournament/map-script-options";
 	import TournamentConfigurationPanel from "$lib/tournament/TournamentConfigurationPanel.svelte";
@@ -281,7 +282,11 @@
 				finalMatch.map_pool_id,
 			);
 			const mapName = entry
-				? mapFullName(entry.options, entry.script)
+				? mapPoolLabel(
+						entry,
+						distinguishingOptions(data.tournament.map_pool),
+						false,
+					)
 				: finalMatch.map_script
 					? mapScriptLabel(finalMatch.map_script)
 					: null;
