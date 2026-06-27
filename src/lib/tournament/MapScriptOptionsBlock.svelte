@@ -5,6 +5,7 @@
 		optionDef,
 		optionsForScript,
 	} from "$lib/tournament/map-script-options";
+	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 	import Select from "$lib/ui/Select.svelte";
 
@@ -33,6 +34,15 @@
 </script>
 
 <div class="flex flex-col gap-1.5">
+	<!-- Read-only in-game Map Script name. The row above shows the descriptive
+	     pool label (e.g. "Sq Duel Arch PS"); this anchors it to the actual
+	     script as it reads in the game's map setup screen. -->
+	<div
+		class="flex items-center justify-between gap-2 border-b border-black pb-1.5 text-xs text-tan"
+	>
+		<span class="opacity-80">Map Script</span>
+		<span class="font-bold">{mapScriptLabel(script)}</span>
+	</div>
 	{#if scriptOptions.length === 0}
 		<p class="text-xs text-tan opacity-60">No options for this script.</p>
 	{:else}
