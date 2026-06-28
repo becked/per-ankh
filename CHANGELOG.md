@@ -1,5 +1,23 @@
 # Changelog
 
+## [2026-06-27-987bab3] - 2026-06-27
+
+### Features
+
+- (users) make Overview calendar cells clickable — [f3c0922](https://github.com/becked/per-ankh/commit/f3c0922fa8e1838b3325202fe2e7faa87aee4dcb)
+- (admin) add find-user subcommand to search users by handle/name/email — [8e4b718](https://github.com/becked/per-ankh/commit/8e4b718cb058fb0ae48f1204bc1efdbac2249560)
+- (tournament) compact map-config labels across the map pool — [03e012c](https://github.com/becked/per-ankh/commit/03e012cfe1bd3ef5fb360980a338998da6938a19)
+- (tournament) name the in-game Map Script in the options editor — [bed6cee](https://github.com/becked/per-ankh/commit/bed6cee3e04b570d961581295ec9cd3d35d24963)
+
+### Fixes
+
+- (tournament) make audit event writes durable (#75) — [a792279](https://github.com/becked/per-ankh/commit/a7922795332497121b53e248f7d7edf9517f62ec)
+
+### Other
+
+- add tournament rules reference, skill, and markdown soft-wrap rule — [ff1ca15](https://github.com/becked/per-ankh/commit/ff1ca15232a76164b1132f392f3d3ee095971d08)
+- apply prettier formatting to tournament admin handlers — [987bab3](https://github.com/becked/per-ankh/commit/987bab3082afeba59aad3173e8488ccc3e3f9c6a)
+
 ## [2026-06-20-0791f86] - 2026-06-20
 
 ### Features
