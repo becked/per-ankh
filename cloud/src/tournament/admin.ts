@@ -790,11 +790,17 @@ export async function handlePatchTournament(
 		.bind(...binds)
 		.run();
 	const updated = await loadTournamentById(env, tournamentId);
-	await logTournamentAdminAction(env, a.userId, tournamentId, "tournament_patched", {
-		fields_changed: Object.keys(patch).filter(
-			(k) => patch[k as keyof typeof patch] !== undefined,
-		),
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"tournament_patched",
+		{
+			fields_changed: Object.keys(patch).filter(
+				(k) => patch[k as keyof typeof patch] !== undefined,
+			),
+		},
+	);
 	return jsonResponse({ tournament: updated }, 200, cors);
 }
 
@@ -999,11 +1005,17 @@ export async function handleDeleteTournament(
 
 	// Audit. The tournament row is gone, but events.metadata is plain text
 	// (not an FK), so the record survives the delete.
-	await logTournamentAdminAction(env, session.data.user_id, tournamentId, "deleted", {
-		slug: tournament.slug,
-		status: tournament.status,
-		by_site_admin: siteAdmin,
-	});
+	await logTournamentAdminAction(
+		env,
+		session.data.user_id,
+		tournamentId,
+		"deleted",
+		{
+			slug: tournament.slug,
+			status: tournament.status,
+			by_site_admin: siteAdmin,
+		},
+	);
 	return jsonResponse({ deleted: true }, 200, cors);
 }
 
@@ -1179,9 +1191,15 @@ export async function handleBulkCreateSlots(
 		).bind(tournamentId),
 	);
 	await env.SHARE_DB.batch(statements);
-	await logTournamentAdminAction(env, a.userId, tournamentId, "slots_bulk_created", {
-		count: created.length,
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"slots_bulk_created",
+		{
+			count: created.length,
+		},
+	);
 	return jsonResponse({ created }, 201, cors);
 }
 
@@ -1451,11 +1469,17 @@ export async function handleWithdrawSlot(
 	);
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_withdrawn", {
-		slot_id: slotId,
-		division: slot.division,
-		forfeited_match_ids: forfeitedMatchIds,
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"slot_withdrawn",
+		{
+			slot_id: slotId,
+			division: slot.division,
+			forfeited_match_ids: forfeitedMatchIds,
+		},
+	);
 	const updated = await loadSlotInTournament(env, slotId, tournamentId);
 	return jsonResponse({ slot: updated }, 200, cors);
 }
@@ -1487,10 +1511,16 @@ export async function handleReinstateSlot(
 		.bind(slotId)
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_reinstated", {
-		slot_id: slotId,
-		division: slot.division,
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"slot_reinstated",
+		{
+			slot_id: slotId,
+			division: slot.division,
+		},
+	);
 	const updated = await loadSlotInTournament(env, slotId, tournamentId);
 	return jsonResponse({ slot: updated }, 200, cors);
 }
@@ -1635,11 +1665,17 @@ export async function handleReorderSlots(
 	);
 	await env.SHARE_DB.batch(statements);
 
-	await logTournamentAdminAction(env, a.userId, tournamentId, "slots_reordered", {
-		count: requested.length,
-		division_a: divisions.A.length,
-		division_b: divisions.B.length,
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"slots_reordered",
+		{
+			count: requested.length,
+			division_a: divisions.A.length,
+			division_b: divisions.B.length,
+		},
+	);
 	const updated = await loadSlots(env, tournamentId);
 	return jsonResponse(
 		{ slots: updated.filter((s) => s.phase === "swiss").map(slotRowToRef) },
@@ -1748,9 +1784,15 @@ export async function handleStartTournament(
 	}
 	await env.SHARE_DB.batch(statements);
 	const updated = await loadTournamentById(env, tournamentId);
-	await logTournamentAdminAction(env, a.userId, tournamentId, "tournament_started", {
-		rounds: summaries,
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"tournament_started",
+		{
+			rounds: summaries,
+		},
+	);
 	return jsonResponse({ tournament: updated, rounds: summaries }, 201, cors);
 }
 
@@ -1815,9 +1857,15 @@ export async function handlePatchMatchMap(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	await logTournamentAdminAction(env, a.userId, tournamentId, "match_map_patched", {
-		match_id: matchId,
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"match_map_patched",
+		{
+			match_id: matchId,
+		},
+	);
 	return jsonResponse({ match: updated }, 200, cors);
 }
 
@@ -2168,12 +2216,18 @@ export async function handleRetroEditMatch(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	await logTournamentAdminAction(env, a.userId, tournamentId, "match_retro_edited", {
-		match_id: matchId,
-		fields_changed: Object.keys(patch).filter(
-			(k) => patch[k as keyof typeof patch] !== undefined,
-		),
-	});
+	await logTournamentAdminAction(
+		env,
+		a.userId,
+		tournamentId,
+		"match_retro_edited",
+		{
+			match_id: matchId,
+			fields_changed: Object.keys(patch).filter(
+				(k) => patch[k as keyof typeof patch] !== undefined,
+			),
+		},
+	);
 	// Forward transition (pending → non-pending) may complete the round.
 	// Reverse transitions are intentional admin un-reports; leave any
 	// already-auto-generated next round alone (admin can manually fix or
