@@ -16,7 +16,8 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
-		mapFullName,
+		distinguishingOptions,
+		mapPoolLabel,
 		poolEntryById,
 	} from "$lib/tournament/map-script-options";
 
@@ -48,6 +49,10 @@
 		mapPool,
 		onMatchClick,
 	}: Props = $props();
+
+	// Options that vary across the pool — drives which variant the compact
+	// map label on each match cell surfaces.
+	const distinguishing = $derived(distinguishingOptions(mapPool));
 
 	// Hover-trace: the slot whose path through the bracket is currently
 	// highlighted. A slot plays exactly one match per round, so setting this
@@ -426,12 +431,15 @@
 									</div>
 									{#if m.map_script}
 										{@const entry = poolEntryById(mapPool, m.map_pool_id)}
-										{@const mapName = entry
-											? mapFullName(entry.options, entry.script)
+										{@const fullName = entry
+											? mapPoolLabel(entry, distinguishing, false)
 											: mapScriptLabel(m.map_script)}
-										<div class="map-row" title={mapName}>
+										{@const shortName = entry
+											? mapPoolLabel(entry, distinguishing, true)
+											: mapScriptLabel(m.map_script)}
+										<div class="map-row" title={fullName}>
 											<img class="map-icon" src={MAP_ICON} alt="" />
-											<span class="map-name">{mapName}</span>
+											<span class="map-name">{shortName}</span>
 										</div>
 									{/if}
 								</a>
