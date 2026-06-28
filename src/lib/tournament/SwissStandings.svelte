@@ -9,6 +9,8 @@
 		isViewerAdmin = false,
 		busy = false,
 		onSubstitute,
+		onWithdraw,
+		onReinstate,
 		onOpenInfo,
 	}: {
 		divisionName: string;
@@ -19,10 +21,14 @@
 			// eslint-disable-next-line no-unused-vars -- param names documentary
 			slotId: string,
 			// eslint-disable-next-line no-unused-vars -- param names documentary
-			newUsername: string,
+			newUsername: string | undefined,
 			// eslint-disable-next-line no-unused-vars -- param names documentary
 			userId: string | null,
 		) => void;
+		// eslint-disable-next-line no-unused-vars -- param name documentary
+		onWithdraw?: (slotId: string) => void;
+		// eslint-disable-next-line no-unused-vars -- param name documentary
+		onReinstate?: (slotId: string) => void;
 		onOpenInfo?: () => void;
 	} = $props();
 
@@ -100,7 +106,7 @@
 				{#each standings as s (s.slot_id)}
 					<tr
 						class="border-b border-black border-opacity-30 last:border-0"
-						class:opacity-60={s.status === "eliminated"}
+						class:opacity-60={s.status === "eliminated" || s.withdrawn}
 					>
 						<td class="py-1 pr-2 font-mono">{s.rank}</td>
 						<td class="py-1 pr-2">
@@ -110,20 +116,55 @@
 									<SlotUsernameCell
 										slotId={s.slot_id}
 										username={s.display_name}
+										handle={s.discord_username}
 										disabled={busy}
 										onSubstitute={(u, userId) =>
 											onSubstitute(s.slot_id, u, userId)}
 									/>
 								{:else}
-									<span>{slotLabel(s)}</span>
+									<span class:line-through={s.withdrawn}>{slotLabel(s)}</span>
 								{/if}
-								<span
-									class="text-orange"
-									class:opacity-50={s.status === "active"}
-									title={statusTitle(s.status)}
-								>
-									{statusBadge(s.status)}
-								</span>
+								{#if s.withdrawn}
+									<!-- Withdrawn takes display precedence over the W/L-derived
+									     status: a withdrawn player is out regardless of record. -->
+									<span
+										class="rounded border border-black border-opacity-40 px-1 text-[10px] uppercase leading-tight opacity-70"
+										title="Withdrawn by an admin — excluded from future rounds"
+									>
+										WD
+									</span>
+								{:else}
+									<span
+										class="text-orange"
+										class:opacity-50={s.status === "active"}
+										title={statusTitle(s.status)}
+									>
+										{statusBadge(s.status)}
+									</span>
+								{/if}
+								{#if isViewerAdmin && onWithdraw && onReinstate}
+									{#if s.withdrawn}
+										<button
+											type="button"
+											class="ml-auto rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
+											disabled={busy}
+											onclick={() => onReinstate(s.slot_id)}
+											title="Reinstate this player (takes effect from the next round)"
+										>
+											Reinstate
+										</button>
+									{:else}
+										<button
+											type="button"
+											class="ml-auto rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
+											disabled={busy}
+											onclick={() => onWithdraw(s.slot_id)}
+											title="Withdraw this player — removes them from all future rounds"
+										>
+											Withdraw
+										</button>
+									{/if}
+								{/if}
 							</span>
 						</td>
 						<td class="py-1 pr-2 text-right font-mono">

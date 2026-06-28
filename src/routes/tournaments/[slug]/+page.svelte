@@ -465,22 +465,29 @@
 
 	async function substituteSlot(
 		slotId: string,
-		newUsername: string,
+		// undefined when the occupant handle was left unchanged (e.g. an
+		// answer-only edit) — omitted from the patch so the worker leaves the
+		// occupant link intact. A string is a genuine substitution.
+		newUsername: string | undefined,
 		userId: string | null = null,
 		// signup answer edited alongside the username on the slots panel.
 		// undefined leaves the column untouched (the Swiss-standings call site
 		// omits it); null clears it.
 		answer?: string | null,
 	) {
-		if (!newUsername.trim()) return;
+		if (newUsername !== undefined && !newUsername.trim()) return;
 		await withBusy(
 			() =>
 				cloudApi.patchSlot(data.tournament.tournament_id, slotId, {
-					discord_username: newUsername.trim(),
+					...(newUsername !== undefined
+						? { discord_username: newUsername.trim() }
+						: {}),
 					...(userId ? { user_id: userId } : {}),
 					...(answer !== undefined ? { signup_answer: answer } : {}),
 				}),
-			`Substituted slot to ${newUsername}`,
+			newUsername !== undefined
+				? `Substituted slot to ${newUsername}`
+				: "Updated slot",
 		);
 	}
 
@@ -501,6 +508,29 @@
 		await withBusy(
 			() => cloudApi.deleteSlot(data.tournament.tournament_id, slotId),
 			"Deleted slot",
+		);
+	}
+
+	async function withdrawSlot(slotId: string) {
+		if (
+			!(await confirmDialog({
+				title: "Withdraw player",
+				message: `Withdraw ${slotLabelFor(slotId)} from the tournament? They're removed from all future rounds and their current pending match (if any) is forfeited to their opponent. You can reinstate them later.`,
+				confirmLabel: "Withdraw",
+				destructive: true,
+			}))
+		)
+			return;
+		await withBusy(
+			() => cloudApi.withdrawSlot(data.tournament.tournament_id, slotId),
+			"Withdrew player",
+		);
+	}
+
+	async function reinstateSlot(slotId: string) {
+		await withBusy(
+			() => cloudApi.reinstateSlot(data.tournament.tournament_id, slotId),
+			"Reinstated player",
 		);
 	}
 
@@ -870,6 +900,7 @@
 																	<SlotUsernameCell
 																		slotId={s.slot_id}
 																		username={s.display_name}
+																		handle={s.discord_username}
 																		answer={s.signup_answer}
 																		editAnswer
 																		disabled={busy}
@@ -1055,6 +1086,12 @@
 													"championship"
 														? undefined
 														: substituteSlot}
+													onWithdraw={data.tournament.status === "swiss"
+														? withdrawSlot
+														: undefined}
+													onReinstate={data.tournament.status === "swiss"
+														? reinstateSlot
+														: undefined}
 												/>
 											{:else}
 												<div class="mb-3">

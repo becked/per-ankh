@@ -88,6 +88,8 @@ export interface MatchMetadata {
 	map_height: number | null;
 	map_size: string | null;
 	map_class: string | null;
+	map_aspect_ratio: string | null;
+	map_options: Record<string, string | boolean>;
 	game_mode: string | null;
 	difficulty: string | null;
 	opponent_level: string | null;
@@ -116,10 +118,17 @@ export interface CharacterInfo {
 	birth_mother_xml_id: number | null;
 	birth_city_xml_id: number | null;
 	cognomen: string | null;
+	suffix: number;
 	archetype: string | null;
 	portrait: string | null;
 	xp: number;
 	level: number;
+	// Four Old World character ratings (Wisdom/Charisma/Courage/Discipline),
+	// from the character's <Rating> block. Null when absent. PARSER_VERSION 2.8.0+.
+	wisdom: number | null;
+	charisma: number | null;
+	courage: number | null;
+	discipline: number | null;
 	is_royal: boolean;
 	is_infertile: boolean;
 	became_leader_turn: number | null;
@@ -361,4 +370,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.6.1";
+export const PARSER_VERSION = "2.9.1";

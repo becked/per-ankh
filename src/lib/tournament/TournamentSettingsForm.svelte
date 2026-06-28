@@ -7,6 +7,7 @@
 		type TournamentDetail,
 	} from "$lib/api-cloud";
 	import { toast } from "$lib/ui/toast";
+	import TournamentLinksEditor from "./TournamentLinksEditor.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -183,4 +184,6 @@
 			</label>
 		</div>
 	</fieldset>
+
+	<TournamentLinksEditor {tournament} {canEdit} />
 </div>

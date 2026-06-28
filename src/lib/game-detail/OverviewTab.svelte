@@ -231,6 +231,9 @@
 				value: getValue(p),
 				color: p.color,
 			}))
+			// Omit zero-value players: an empty bar beside a "0" reads as a render
+			// glitch. Negatives are kept (clamped to an empty bar, real value shown).
+			.filter((p) => p.value !== 0)
 			.sort((a, b) => b.value - a.value);
 		const maxVal = Math.max(...bars.map((p) => p.value), 1);
 		return { label, sprite, players: bars, maxValue: maxVal };
@@ -305,6 +308,23 @@
 			{ category: "icons", value: "IMPROVEMENT_FINISHED" },
 		),
 	]);
+
+	// Pair the two columns row-major so each left panel renders beside its right
+	// counterpart in a shared grid row (equal height, aligned tops). Panels can
+	// now differ in row count (zero-value players are dropped), so two
+	// independent column stacks would drift out of vertical alignment. Columns
+	// may also differ in length (Victory Points is conditional), so a slot can be
+	// undefined — the markup renders a spacer to hold the column.
+	const metricRows = $derived(
+		Array.from(
+			{ length: Math.max(metricsCol1.length, metricsCol2.length) },
+			(_, i) => {
+				const left: MetricBar | undefined = metricsCol1[i];
+				const right: MetricBar | undefined = metricsCol2[i];
+				return { left, right, key: left?.label ?? right?.label ?? String(i) };
+			},
+		),
+	);
 
 	function formatValue(value: number): string {
 		if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
@@ -455,90 +475,57 @@
 	style="background-color: rgb(var(--color-surface));"
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Key Metrics</h3>
+	{#snippet metricPanel(metric: MetricBar)}
+		<div
+			class="rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
+			<p class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400">
+				{#if metric.sprite}
+					<SpriteIcon
+						category={metric.sprite.category}
+						value={metric.sprite.value}
+						size={14}
+						alt={metric.label}
+					/>
+				{/if}
+				{metric.label}
+			</p>
+			<div class="space-y-1">
+				{#each metric.players as player (player.playerId)}
+					<div class="flex items-center gap-2">
+						<div class="relative h-2.5 flex-1 overflow-hidden rounded">
+							<div
+								class="h-full rounded"
+								style="width: {Math.max(
+									0,
+									(player.value / metric.maxValue) * 100,
+								)}%; background-color: {player.color};"
+								title="{player.label}: {formatValue(player.value)}"
+							></div>
+						</div>
+						<span class="w-10 text-right text-[11px] font-medium text-bright">
+							{formatValue(player.value)}
+						</span>
+					</div>
+				{/each}
+			</div>
+		</div>
+	{/snippet}
+	<!-- Row-major grid: each row pairs a left + right panel so they share a
+	     height and stay aligned even when their row counts differ. -->
 	<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-		<!-- Column 1 -->
-		<div class="space-y-3">
-			{#each metricsCol1 as metric (metric.label)}
-				<div
-					class="rounded-lg p-3"
-					style="background-color: rgb(var(--color-surface-raised));"
-				>
-					<p
-						class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400"
-					>
-						{#if metric.sprite}
-							<SpriteIcon
-								category={metric.sprite.category}
-								value={metric.sprite.value}
-								size={14}
-								alt={metric.label}
-							/>
-						{/if}
-						{metric.label}
-					</p>
-					<div class="space-y-1">
-						{#each metric.players as player (player.playerId)}
-							<div class="flex items-center gap-2">
-								<div class="relative h-2.5 flex-1 overflow-hidden rounded">
-									<div
-										class="h-full rounded"
-										style="width: {(player.value / metric.maxValue) *
-											100}%; background-color: {player.color};"
-										title="{player.label}: {formatValue(player.value)}"
-									></div>
-								</div>
-								<span
-									class="w-10 text-right text-[11px] font-medium text-bright"
-								>
-									{formatValue(player.value)}
-								</span>
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/each}
-		</div>
-		<!-- Column 2 -->
-		<div class="space-y-3">
-			{#each metricsCol2 as metric (metric.label)}
-				<div
-					class="rounded-lg p-3"
-					style="background-color: rgb(var(--color-surface-raised));"
-				>
-					<p
-						class="mb-1 flex items-center gap-1 text-xs font-bold text-gray-400"
-					>
-						{#if metric.sprite}
-							<SpriteIcon
-								category={metric.sprite.category}
-								value={metric.sprite.value}
-								size={14}
-								alt={metric.label}
-							/>
-						{/if}
-						{metric.label}
-					</p>
-					<div class="space-y-1">
-						{#each metric.players as player (player.playerId)}
-							<div class="flex items-center gap-2">
-								<div class="relative h-2.5 flex-1 overflow-hidden rounded">
-									<div
-										class="h-full rounded"
-										style="width: {(player.value / metric.maxValue) *
-											100}%; background-color: {player.color};"
-										title="{player.label}: {formatValue(player.value)}"
-									></div>
-								</div>
-								<span
-									class="w-10 text-right text-[11px] font-medium text-bright"
-								>
-									{formatValue(player.value)}
-								</span>
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/each}
-		</div>
+		{#each metricRows as row (row.key)}
+			{#if row.left}
+				{@render metricPanel(row.left)}
+			{:else}
+				<div class="hidden lg:block"></div>
+			{/if}
+			{#if row.right}
+				{@render metricPanel(row.right)}
+			{:else}
+				<div class="hidden lg:block"></div>
+			{/if}
+		{/each}
 	</div>
 </div>

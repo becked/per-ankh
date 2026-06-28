@@ -34,6 +34,23 @@ async function loadSlotUserId(slotId: string): Promise<string | null> {
 	return row?.user_id ?? null;
 }
 
+interface SlotIdentity {
+	user_id: string | null;
+	discord_id: string | null;
+	discord_username: string | null;
+	signup_answer: string | null;
+}
+
+async function loadSlotIdentity(slotId: string): Promise<SlotIdentity> {
+	const row = await env.SHARE_DB.prepare(
+		"SELECT user_id, discord_id, discord_username, signup_answer FROM tournament_slots WHERE slot_id = ?",
+	)
+		.bind(slotId)
+		.first<SlotIdentity>();
+	if (!row) throw new Error(`Slot ${slotId} not found`);
+	return row;
+}
+
 describe("end-to-end slot substitution", () => {
 	it("transfers a claimed slot's match participation from the original to the substituted occupant", async () => {
 		// Original occupant owns division-A slot 0 (claimed); the other slots
@@ -89,5 +106,57 @@ describe("end-to-end slot substitution", () => {
 		// the original still does not.
 		expect(await myMatchIds(replacement)).toContain(origMatch.match_id);
 		expect(await myMatchIds(original)).not.toContain(origMatch.match_id);
+	});
+});
+
+// A slot's occupant link (user_id/discord_id) must only be cleared by a genuine
+// occupant change. These pin the invariant the slots-panel answer-edit bug
+// violated: editing other fields, or re-sending the same handle, must not unlink.
+describe("slot PATCH occupant-link invariants", () => {
+	it("editing only the signup answer leaves the occupant link intact", async () => {
+		const owner = await makeUser({ discordUsername: "answer-editor" });
+		const t = await makeTournament({ slotOwners: { A: [owner] } });
+		const slot = t.slotsByDivision.A[0];
+		const before = await loadSlotIdentity(slot.slotId);
+		expect(before.user_id).toBe(owner.userId);
+		expect(before.discord_id).toBe(owner.discordId);
+
+		await expectOk(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/slots/${slot.slotId}`,
+				as: t.admin,
+				body: { signup_answer: "I main Babylonia" },
+			}),
+		);
+
+		const after = await loadSlotIdentity(slot.slotId);
+		// The link survives; only the answer changed.
+		expect(after.user_id).toBe(owner.userId);
+		expect(after.discord_id).toBe(owner.discordId);
+		expect(after.discord_username).toBe(before.discord_username);
+		expect(after.signup_answer).toBe("I main Babylonia");
+	});
+
+	it("re-sending the current handle (unchanged) leaves the occupant link intact", async () => {
+		const owner = await makeUser({ discordUsername: "same-handle" });
+		const t = await makeTournament({ slotOwners: { A: [owner] } });
+		const slot = t.slotsByDivision.A[0];
+		const before = await loadSlotIdentity(slot.slotId);
+		expect(before.user_id).toBe(owner.userId);
+		expect(before.discord_username).toBe(owner.discordUsername);
+
+		// Post-fix #2 the editor seeds from the real handle, so a no-op-ish save
+		// can re-send the same handle — it must not be treated as a substitution.
+		await expectOk(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/slots/${slot.slotId}`,
+				as: t.admin,
+				body: { discord_username: owner.discordUsername },
+			}),
+		);
+
+		const after = await loadSlotIdentity(slot.slotId);
+		expect(after.user_id).toBe(owner.userId);
+		expect(after.discord_id).toBe(owner.discordId);
 	});
 });

@@ -1,5 +1,7 @@
-// npm-script-based checks: lint, svelte-check, prettier format check,
-// `npm audit --audit-level=high` for both root and cloud/.
+// npm-script-based checks: lint, svelte-check, prettier format check, and an
+// npm-audit gate for both root and cloud/. The audit gate blocks the deploy on
+// any high/critical advisory except those explicitly allowlisted in
+// AUDIT_EXCEPTIONS (reported as a non-blocking WARN, never hidden).
 
 import { runCaptured } from "../../lib/shell";
 import { fileURLToPath } from "node:url";
@@ -42,18 +44,42 @@ async function npmScript(
 	};
 }
 
-interface AuditAdvisory {
-	severity: "info" | "low" | "moderate" | "high" | "critical";
+type Severity = "info" | "low" | "moderate" | "high" | "critical";
+
+// One link in a vulnerability's `via` chain from `npm audit --json`. A string
+// references another vulnerable package by name (a transitive hop up the tree);
+// an object is the actual advisory — it carries the GHSA url + severity and
+// appears only on the leaf package that is genuinely vulnerable.
+interface AuditVia {
+	title?: string;
+	url?: string;
+	severity?: Severity;
+}
+interface AuditVulnerability {
+	severity: Severity;
+	via?: (string | AuditVia)[];
 }
 interface AuditReport {
-	vulnerabilities?: Record<string, AuditAdvisory>;
+	vulnerabilities?: Record<string, AuditVulnerability>;
 }
+
+// High/critical advisories intentionally exempted from the deploy gate. Each
+// entry is scoped to a single GHSA id, with the reason and the condition that
+// retires it. The gate still blocks on any high/critical advisory NOT listed
+// here — including a *different* future advisory on the same package, since a
+// new advisory carries a new id. Exempted advisories surface as a WARN, never
+// hidden. Keep this list short and delete entries the moment the real fix ships.
+interface AuditException {
+	ghsa: string;
+	reason: string;
+}
+const AUDIT_EXCEPTIONS: AuditException[] = [];
 
 async function npmAudit(cwd: string, resultName: string): Promise<CheckResult> {
 	const start = Date.now();
-	// `npm audit --json` exits non-zero when vulnerabilities exist, but the
-	// JSON is still printed. We treat any high+critical as failure regardless
-	// of the exit code, so we ignore code and rely on parsed counts.
+	// `npm audit --json` exits non-zero whenever any vulnerability exists, but
+	// still prints the report. We classify advisories ourselves and ignore the
+	// exit code.
 	const r = await runCaptured("npm", ["audit", "--json"], { cwd });
 	const durationMs = Date.now() - start;
 	let parsed: AuditReport;
@@ -68,29 +94,56 @@ async function npmAudit(cwd: string, resultName: string): Promise<CheckResult> {
 			durationMs,
 		};
 	}
-	const vulns = parsed.vulnerabilities ?? {};
-	const high: string[] = [];
-	const critical: string[] = [];
-	for (const [pkg, info] of Object.entries(vulns)) {
-		if (info.severity === "high") high.push(pkg);
-		else if (info.severity === "critical") critical.push(pkg);
+
+	const allowed = new Set(AUDIT_EXCEPTIONS.map((e) => e.ghsa));
+	// Walk every vulnerability's `via` chain and collect the distinct high/
+	// critical *advisories*. The advisory object lives only on the leaf package
+	// that is actually vulnerable; transitive packages reference it by name, so
+	// counting advisories (not packages) yields each one exactly once and
+	// collapses an inherited chain (ws → miniflare → wrangler) to its single
+	// root advisory.
+	const blocking: string[] = [];
+	const exempted: string[] = [];
+	const seen = new Set<string>();
+	for (const info of Object.values(parsed.vulnerabilities ?? {})) {
+		for (const via of info.via ?? []) {
+			if (typeof via === "string") continue;
+			if (via.severity !== "high" && via.severity !== "critical") continue;
+			const id = via.url?.split("/").pop() ?? via.title ?? "unknown";
+			if (seen.has(id)) continue;
+			seen.add(id);
+			const label = `${id} (${via.severity})${via.title ? ` ${via.title}` : ""}`;
+			if (allowed.has(id)) exempted.push(label);
+			else blocking.push(label);
+		}
 	}
-	if (high.length === 0 && critical.length === 0) {
+
+	if (blocking.length > 0) {
 		return {
 			name: resultName,
-			status: "pass",
+			status: "fail",
 			blocking: true,
+			details: `High/critical advisories:\n${blocking.map((b) => `  ${b}`).join("\n")}`,
 			durationMs,
 		};
 	}
-	const detail =
-		(critical.length > 0 ? `Critical: ${critical.join(", ")}\n` : "") +
-		(high.length > 0 ? `High: ${high.join(", ")}` : "");
+	if (exempted.length > 0) {
+		// Every high/critical advisory present is explicitly allowlisted: pass the
+		// gate but warn so the exemptions stay visible in every preflight.
+		return {
+			name: resultName,
+			status: "warn",
+			blocking: true,
+			details: `Allowlisted advisories (AUDIT_EXCEPTIONS — remove when upstream fixes land):\n${exempted
+				.map((e) => `  ${e}`)
+				.join("\n")}`,
+			durationMs,
+		};
+	}
 	return {
 		name: resultName,
-		status: "fail",
+		status: "pass",
 		blocking: true,
-		details: detail.trim(),
 		durationMs,
 	};
 }

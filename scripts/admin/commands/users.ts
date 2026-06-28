@@ -1,9 +1,13 @@
 // `./per-ankh admin users` — list users (recent login first by default).
 // `./per-ankh admin user <id>` — full detail for one user.
+// `./per-ankh admin find-user <query>` — search users by handle / display name
+//   / email, with their tournament-slot involvement.
 
 import { d1Batch, d1Query, sqlStr } from "../wrangler";
 import {
+	bold,
 	type Column,
+	dim,
 	emdash,
 	formatBytes,
 	formatDate,
@@ -69,6 +73,32 @@ interface RecentEventRow {
 	share_id: string | null;
 	ip_address: string | null;
 	created_at: string;
+}
+
+interface UserMatchRow {
+	user_id: string;
+	discord_username: string | null;
+	display_name: string;
+	discord_id: string;
+	email: string | null;
+	created_at: string;
+	last_login_at: string;
+	game_count: number;
+}
+
+interface SlotMatchRow {
+	slot_id: string;
+	tournament_id: string;
+	slug: string;
+	tournament_name: string;
+	tournament_status: string;
+	phase: string;
+	division: string | null;
+	swiss_seed: number | null;
+	championship_seed: number | null;
+	discord_username: string | null;
+	discord_id: string | null;
+	user_id: string | null;
 }
 
 const SORT_CLAUSES: Record<string, string> = {
@@ -272,5 +302,123 @@ export async function runDetail(
 				formatDate(e.created_at),
 			]),
 		);
+	}
+}
+
+export async function runFind(
+	argv: string[],
+	opts: CommandOpts,
+): Promise<void> {
+	const { positional, flags } = parseFlags(argv);
+	const query = positional[0];
+	if (!query) {
+		throw new Error(
+			"Usage: ./per-ankh admin find-user <query>  (matches discord handle, display name, or email)",
+		);
+	}
+	const limit = flagInt(flags, "limit", 25);
+
+	info(`Searching users matching "${query}"...`);
+
+	// Case-insensitive substring match. discord_username is stored lowercase
+	// (auth.ts), display_name/email are mixed-case, so we lower() both sides.
+	// Any `%` / `_` in the query stay live wildcards — useful for operators.
+	const like = sqlStr(`%${query.toLowerCase()}%`);
+	const userPredicate =
+		`lower(u.discord_username) LIKE ${like} ` +
+		`OR lower(u.display_name) LIKE ${like} ` +
+		`OR lower(u.email) LIKE ${like}`;
+
+	const batch = await d1Batch([
+		`SELECT
+		   u.user_id, u.discord_username, u.display_name, u.discord_id, u.email,
+		   u.created_at, u.last_login_at,
+		   (SELECT COUNT(*) FROM games g WHERE g.user_id = u.user_id) AS game_count
+		 FROM users u
+		 WHERE ${userPredicate}
+		 ORDER BY u.last_login_at DESC
+		 LIMIT ${limit}`,
+		// Slots matched by handle text catch admin-prefilled, still-unclaimed
+		// slots that have no users row yet; the user_id IN (...) arm also
+		// catches slots claimed by a user we matched on display name or email.
+		`SELECT
+		   s.slot_id, s.tournament_id, t.slug, t.name AS tournament_name,
+		   t.status AS tournament_status, s.phase, s.division,
+		   s.swiss_seed, s.championship_seed,
+		   s.discord_username, s.discord_id, s.user_id
+		 FROM tournament_slots s
+		 JOIN tournaments t ON t.tournament_id = s.tournament_id
+		 WHERE lower(s.discord_username) LIKE ${like}
+		    OR s.user_id IN (SELECT u.user_id FROM users u WHERE ${userPredicate})
+		 ORDER BY t.slug, s.phase, s.division, s.swiss_seed
+		 LIMIT ${limit}`,
+	]);
+	const users = batch[0] as UserMatchRow[];
+	const slots = batch[1] as SlotMatchRow[];
+
+	if (opts.json) {
+		printJson({ users, slots });
+		return;
+	}
+
+	if (users.length === 0 && slots.length === 0) {
+		process.stderr.write(`No users or slots match "${query}".\n`);
+		return;
+	}
+
+	if (users.length > 0) {
+		process.stdout.write(`\n${bold("Matching users")}\n`);
+		printTable(
+			[
+				{ header: "USER_ID", width: 22 },
+				{ header: "HANDLE", width: 20 },
+				{ header: "NAME", width: 18 },
+				{ header: "EMAIL", width: 26 },
+				{ header: "GAMES", width: 5, align: "right" },
+				{ header: "LAST LOGIN", width: 16 },
+			],
+			users.map((u) => [
+				u.user_id,
+				emdash(u.discord_username),
+				emdash(u.display_name),
+				emdash(u.email),
+				String(u.game_count),
+				formatDate(u.last_login_at),
+			]),
+		);
+		printCount(users.length, "users matched");
+	} else {
+		process.stdout.write(`\n${dim("No matching user accounts.")}\n`);
+	}
+
+	if (slots.length > 0) {
+		process.stdout.write(`\n${bold("Tournament slots")}\n`);
+		printTable(
+			[
+				{ header: "SLOT_ID", width: 22 },
+				{ header: "TOURNAMENT", width: 24 },
+				{ header: "STATUS", width: 12 },
+				{ header: "PHASE", width: 12 },
+				{ header: "DIV", width: 3 },
+				{ header: "SEED", width: 5, align: "right" },
+				{ header: "HANDLE", width: 16 },
+				{ header: "CLAIMED", width: 7 },
+			],
+			slots.map((s) => [
+				s.slot_id,
+				emdash(s.slug),
+				s.tournament_status,
+				s.phase,
+				emdash(s.division),
+				s.swiss_seed != null
+					? String(s.swiss_seed)
+					: s.championship_seed != null
+						? String(s.championship_seed)
+						: "—",
+				emdash(s.discord_username),
+				s.user_id ? "yes" : "no",
+			]),
+		);
+		printCount(slots.length, "slots matched");
 	}
 }

@@ -64,6 +64,10 @@ export interface SlotStanding extends SlotRecord {
 	// Tier 6 fallback. Null for slots without a swiss seed (shouldn't happen
 	// for swiss-phase slots, but the column is nullable).
 	swiss_seed: number | null;
+	// Carried from the SlotRef. Withdrawn slots still appear in standings (with
+	// their frozen record) for display, but are excluded from championship
+	// qualifiers — see the filter in handleTransitionChampionship.
+	withdrawn: boolean;
 }
 
 export function computeRecord(
@@ -223,6 +227,7 @@ export function computeStandings(
 			opponents_buchholz,
 			cumulative,
 			swiss_seed: s.swiss_seed,
+			withdrawn: s.withdrawn,
 		});
 	}
 	return standings;

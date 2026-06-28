@@ -6,6 +6,8 @@
 // SOURCES (all under <pinacotheca>/extracted/sprites/):
 //   crests/, techs/, laws/, religions/, yields/  → 1:1 copy by category dir
 //   units/                                       → UNIT_*.png minus UNIT_3D_*
+//   portraits/                                   → leader ADULT portraits, keyed
+//                                                  by portrait zType (see below)
 //   improvements/IMPROVEMENT_FINISHED.png        → icons/IMPROVEMENT_FINISHED.png
 //   other/Cycle_Military_Normal.png              → icons/MILITARY.png
 //   other/VICTORY_Normal.png                     → icons/VICTORY_NORMAL.png
@@ -21,7 +23,18 @@
 //   other/PENDING_CRITICAL.png                   → icons/PENDING_CRITICAL.png
 //   tools/TOOL_SETTINGS.png                      → icons/TOOL_SETTINGS.png
 //   other/GOAL_STARTED.png                       → icons/GOAL_STARTED.png
+//   other/GOAL_FAILED.png                        → icons/GOAL_FAILED.png
 //   mods/dynamic-unit/sprites/EFFECTUNIT_ENLIST_ICON.png → icons/EFFECTUNIT_ENLIST_ICON.png
+//
+// PORTRAITS also read the OW Reference XML (Reference/XML/Infos/
+// characterPortrait*.xml) — like bake-improvements, this baker needs BOTH a
+// pinacotheca checkout and a Reference/XML tree. A save stores a character's
+// portrait as a zType (CHARACTER_PORTRAIT_<base>), which is NOT always the art
+// filename: e.g. CHARACTER_PORTRAIT_ROMAN_LEADER_MALE_06 → art ROME_LEADER_
+// MALE_06 (ROMAN vs ROME), and one Hittite portrait → lowercase Hittite_* art.
+// The zType→art mapping is the entry's <azAgeGroupSpriteNames> (per age group),
+// so we key the manifest by zType base and the runtime's strip-prefix lookup
+// resolves every portrait id the game can emit.
 //
 // OUTPUT:
 //   static/sprites/<category>/<basename>.<hash>.png
@@ -34,17 +47,21 @@
 //
 // Run: npm run bake:sprites
 
+import { existsSync } from "node:fs";
 import { mkdir, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+
+import sharp from "sharp";
+import { XMLParser } from "fast-xml-parser";
 
 import {
 	readPinacothecaVersion,
 	writeSpriteSidecar,
 	type SpriteSidecar,
 } from "./lib/atlas-bake.js";
-import { resolvePinacotheca } from "./lib/paths.js";
+import { resolvePinacotheca, resolveReferenceXml } from "./lib/paths.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -61,6 +78,10 @@ const MIRROR_CATEGORIES = [
 	"laws",
 	"religions",
 	"yields",
+	// Leader-archetype icons (TRAIT_SCHOLAR, TRAIT_HERO, …). The save records a
+	// character's archetype as a TRAIT_<X>_ARCHETYPE trait; the icon drops the
+	// _ARCHETYPE suffix. Powers the Leaders-tab succession chips.
+	"traits",
 ] as const;
 
 // Pinacotheca's units/ holds both 2D icons (UNIT_*.png) and 3D renders
@@ -105,6 +126,9 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	{ source: "other/PENDING_CRITICAL.png", target: "PENDING_CRITICAL.png" },
 	{ source: "tools/TOOL_SETTINGS.png", target: "TOOL_SETTINGS.png" },
 	{ source: "other/GOAL_STARTED.png", target: "GOAL_STARTED.png" },
+	// Failed-ambition marker in the Leaders-tab detail panel (replaces the
+	// generic ambition glyph when a goal's failed_turn is set).
+	{ source: "other/GOAL_FAILED.png", target: "GOAL_FAILED.png" },
 	{
 		source: "city/CITY_FOUNDED.png",
 		target: "CITY_FOUNDED.png",
@@ -137,6 +161,16 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	{
 		source: "mods/dynamic-unit/sprites/EFFECTUNIT_ENLIST_ICON.png",
 		target: "EFFECTUNIT_ENLIST_ICON.png",
+	},
+	// Leaders-tab detail panel: the four character ratings (shown next to each
+	// rating value) and the ambition marker (replaces the checkbox glyph).
+	{ source: "other/RATING_WISDOM.png", target: "RATING_WISDOM.png" },
+	{ source: "other/RATING_CHARISMA.png", target: "RATING_CHARISMA.png" },
+	{ source: "other/RATING_COURAGE.png", target: "RATING_COURAGE.png" },
+	{ source: "other/RATING_DISCIPLINE.png", target: "RATING_DISCIPLINE.png" },
+	{
+		source: "events_images/TURN_SUMMARY_AMBITION.png",
+		target: "TURN_SUMMARY_AMBITION.png",
 	},
 ];
 
@@ -221,6 +255,143 @@ async function copyIcons(sidecar: SpriteSidecar): Promise<number> {
 	return ICON_MAPPINGS.length;
 }
 
+// Display size for leader portraits. Sources are 256×256; the Leaders-tab
+// detail panel shows them small, so 128px is a comfortable ~2× for sharpness
+// while keeping each webp tiny. Bump here if a larger portrait surface appears.
+const PORTRAIT_SIZE = 128;
+
+// The age variant we ship — a reigning ruler's natural look. Each portrait
+// zType lists one art sprite per age group; we take this one.
+const PORTRAIT_AGE_GROUP = "CHARACTER_AGE_GROUP_ADULT";
+
+const portraitXmlParser = new XMLParser({
+	ignoreAttributes: true,
+	parseTagValue: false,
+	ignoreDeclaration: true,
+	ignorePiTags: true,
+});
+
+interface PortraitAgePair {
+	zIndex?: string;
+	zValue?: string;
+}
+interface PortraitEntry {
+	zType?: string;
+	azAgeGroupSpriteNames?:
+		| { Pair?: PortraitAgePair | PortraitAgePair[] }
+		| string;
+}
+
+// The portrait-definition files: the base table plus hyphenated DLC variants
+// (characterPortrait-eoti.xml, …). Deliberately NOT the camelCase siblings
+// (characterPortraitOpinion.xml, …FeaturePoints, …AgeInterpolation), which key
+// unrelated data and carry no <azAgeGroupSpriteNames>.
+function isPortraitDefFile(name: string): boolean {
+	return (
+		name === "characterPortrait.xml" || /^characterPortrait-.*\.xml$/.test(name)
+	);
+}
+
+// Map every leader portrait zType (CHARACTER_PORTRAIT_ stripped) → its ADULT-age
+// art sprite name, from the Reference XML. Base file loads first so DLC files
+// override by zType. This is the bridge that lets us key the manifest by the
+// zType a save actually stores, instead of assuming it equals the art filename.
+async function loadLeaderPortraitArt(
+	infosDir: string,
+): Promise<Map<string, string>> {
+	const defFiles = (await readdir(infosDir)).filter(isPortraitDefFile);
+	const ordered = [
+		...defFiles.filter((f) => f === "characterPortrait.xml"),
+		...defFiles.filter((f) => f !== "characterPortrait.xml").sort(),
+	];
+
+	const artByZType = new Map<string, string>();
+	for (const file of ordered) {
+		const xml = await readFile(resolve(infosDir, file), "utf-8");
+		const parsed = portraitXmlParser.parse(xml) as {
+			Root?: { Entry?: PortraitEntry | PortraitEntry[] };
+		};
+		const entry = parsed.Root?.Entry;
+		const entries = Array.isArray(entry) ? entry : entry ? [entry] : [];
+		for (const e of entries) {
+			const zType = e.zType;
+			if (!zType || !zType.includes("_LEADER_")) continue;
+			const group = e.azAgeGroupSpriteNames;
+			if (!group || typeof group === "string") continue;
+			const pairs = Array.isArray(group.Pair)
+				? group.Pair
+				: group.Pair
+					? [group.Pair]
+					: [];
+			const adult = pairs.find((p) => p.zIndex === PORTRAIT_AGE_GROUP)?.zValue;
+			if (!adult) continue;
+			artByZType.set(zType.replace(/^CHARACTER_PORTRAIT_/, ""), adult);
+		}
+	}
+	return artByZType;
+}
+
+// Downscale + re-encode an art PNG to webp, content-hash the *output* bytes, and
+// write it. Returns the public URL. `stem` names the file (the art sprite name).
+async function bakePortrait(
+	srcPath: string,
+	dstDir: string,
+	stem: string,
+): Promise<string> {
+	const png = await readFile(srcPath);
+	const webp = await sharp(png)
+		.resize(PORTRAIT_SIZE, PORTRAIT_SIZE)
+		.webp({ quality: 80 })
+		.toBuffer();
+	const hash = contentHash(webp);
+	const filename = `${stem}.${hash}.webp`;
+	await writeFile(resolve(dstDir, filename), webp);
+	return `/sprites/portraits/${filename}`;
+}
+
+// Loose webp files (like units/crests), NOT a packed atlas — a game page must
+// download only the handful of leader portraits it references, never all ~500.
+// Keyed by portrait zType (resolved through the Reference XML, above), so e.g.
+// CHARACTER_PORTRAIT_ROMAN_LEADER_MALE_06 resolves to the ROME_* art it names.
+async function copyPortraits(sidecar: SpriteSidecar): Promise<number> {
+	const src = resolve(PINACOTHECA_SPRITES, "portraits");
+	const dst = resolve(SPRITES_OUT, "portraits");
+	await wipeAndRecreate(dst);
+
+	const artByZType = await loadLeaderPortraitArt(
+		resolve(resolveReferenceXml(), "Infos"),
+	);
+
+	// Several zTypes can name the same art sprite — encode each art file once
+	// (cache by name) but register a manifest key per zType.
+	const urlByArt = new Map<string, string>();
+	let baked = 0;
+	const missing: string[] = [];
+	for (const [zBase, artName] of artByZType) {
+		let url = urlByArt.get(artName);
+		if (url == null) {
+			const srcPath = resolve(src, `${artName}.png`);
+			if (!existsSync(srcPath)) {
+				// zType names art not present in this pinacotheca build — skip it;
+				// the runtime falls back to no portrait. Reported in the summary.
+				missing.push(artName);
+				continue;
+			}
+			url = await bakePortrait(srcPath, dst, artName);
+			urlByArt.set(artName, url);
+			baked += 1;
+		}
+		sidecar[`portraits/${zBase}`] = url;
+	}
+	if (missing.length > 0) {
+		const uniq = [...new Set(missing)].sort();
+		console.log(
+			`[sprites] portraits: ${uniq.length} art file(s) missing from pinacotheca, skipped: ${uniq.slice(0, 8).join(", ")}${uniq.length > 8 ? " …" : ""}`,
+		);
+	}
+	return baked;
+}
+
 async function main(): Promise<void> {
 	const pinacothecaVersion = await readPinacothecaVersion(
 		PINACOTHECA_PYPROJECT,
@@ -244,6 +415,7 @@ async function main(): Promise<void> {
 	}
 	counts[UNITS_CATEGORY] = await copyUnits(sidecar);
 	counts.icons = await copyIcons(sidecar);
+	counts.portraits = await copyPortraits(sidecar);
 
 	// Sort keys so the resulting JSON is deterministic across runs.
 	const sortedSidecar: SpriteSidecar = {};

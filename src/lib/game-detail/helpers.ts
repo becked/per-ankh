@@ -1,5 +1,10 @@
 import type { CityInfo } from "$lib/types/CityInfo";
-import type { PlayerNationEntry } from "$lib/parser/types";
+import type {
+	PlayerNationEntry,
+	CharacterInfo,
+	CharacterTraitInfo,
+	PlayerGoalInfo,
+} from "$lib/parser/types";
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { PlayerInfo } from "$lib/types/PlayerInfo";
@@ -42,6 +47,7 @@ export type TableName =
 	| "events"
 	| "cities"
 	| "improvements"
+	| "specialists"
 	| "laws"
 	| "techs"
 	| "units";
@@ -389,6 +395,12 @@ export function createDefaultTableStates(): Record<TableName, TableState> {
 			sortDirection: "asc",
 			filters: [],
 		},
+		specialists: {
+			search: "",
+			sortColumn: "specialist",
+			sortDirection: "asc",
+			filters: [],
+		},
 		laws: {
 			search: "",
 			sortColumn: "nation",
@@ -425,7 +437,9 @@ export type SpriteCategory =
 	| "yields"
 	| "religions"
 	| "icons"
-	| "units";
+	| "units"
+	| "traits"
+	| "portraits";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
@@ -482,6 +496,13 @@ export function getSpritePath(
 		const resolved = resolveTechSprite(enumValue);
 		if (resolved == null) return null;
 		return SPRITE_MANIFEST[`${resolved.category}/${resolved.filename}`] ?? null;
+	}
+	if (category === "portraits") {
+		// The save's portrait id is `CHARACTER_PORTRAIT_<base>`; the manifest key
+		// is `portraits/<base>` (age suffix baked away). Null for unmapped/old
+		// portraits — SpriteIcon renders nothing, so it degrades gracefully.
+		const base = enumValue.replace(/^CHARACTER_PORTRAIT_/, "");
+		return SPRITE_MANIFEST[`portraits/${base}`] ?? null;
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }
@@ -709,6 +730,24 @@ export function resolvePlayers(
 // for the per-player tabs (Overview, Settings, Military).
 export type DetailPlayer = PlayerInfo &
 	Pick<ResolvedPlayer, "playerId" | "label" | "color">;
+
+/**
+ * One ruler's tenure on the Leaders tab: the ruler character plus the derived
+ * reign window [start, end], its length in turns, the legitimacy at each edge,
+ * and the traits/ambitions held during it. Built in `LeadersTab`, consumed by
+ * `LeaderCard`.
+ */
+export type Reign = {
+	ruler: CharacterInfo;
+	start: number;
+	end: number;
+	years: number;
+	legitStart: number | null;
+	legitEnd: number | null;
+	netLegitimacy: number | null;
+	traits: CharacterTraitInfo[];
+	ambitions: PlayerGoalInfo[];
+};
 
 /**
  * Resolve `gameDetails.players` into the iteration source for per-player tabs,

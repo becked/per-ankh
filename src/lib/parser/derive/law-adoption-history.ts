@@ -2,30 +2,25 @@
 // (history.rs:211–325).
 //
 // Per player, walk LAW_ADOPTED events with their law name extracted from
-// description, look up each law's law_category from the laws table, and
-// emit a series with running cumulative-distinct-class count. Prepend a
-// turn 0 starting point and append a final-turn endpoint.
+// description, look up each law's law_category from the static LAW_TO_CLASS
+// table, and emit a series with running cumulative-distinct-class count.
+// Prepend a turn 0 starting point and append a final-turn endpoint.
 
 import type { EventLog as ParsedEventLog } from "../parsers/events.js";
-import type { Law } from "../parsers/player-data.js";
 import type { Player } from "../parsers/players.js";
 import type { LawAdoptionDataPoint, LawAdoptionHistory } from "../types.js";
-import { extractLawName, playersOrderedByName } from "./_helpers.js";
+import { LAW_TO_CLASS } from "../../generated/law-classes.js";
+import {
+	extractLawName,
+	isSuccessionLaw,
+	playersOrderedByName,
+} from "./_helpers.js";
 
 export function deriveLawAdoptionHistory(
 	eventLogs: ParsedEventLog[],
-	laws: Law[],
 	players: Player[],
 	totalTurns: number,
 ): LawAdoptionHistory[] {
-	// Build a global law → law_category map (Rust uses DISTINCT across all
-	// games' laws table; we only have this game's laws, but that's the same
-	// data source).
-	const lawToCategory = new Map<string, string>();
-	for (const l of laws) {
-		if (!lawToCategory.has(l.law)) lawToCategory.set(l.law, l.lawCategory);
-	}
-
 	const result: LawAdoptionHistory[] = [];
 
 	for (const player of playersOrderedByName(players)) {
@@ -46,7 +41,16 @@ export function deriveLawAdoptionHistory(
 			if (log.description === null) continue;
 			const lawName = extractLawName(log.description);
 			if (lawName === null) continue;
-			const category = lawToCategory.get(lawName);
+			// Succession laws (LAWCLASS_ORDER) are realm defaults, not civic
+			// adoptions — keep them out of the adoption series entirely.
+			if (isSuccessionLaw(lawName)) continue;
+			// Resolve via the static LAW→class table, not this game's active
+			// laws: a law the player later switched away from (e.g. Epics →
+			// Exploration, same class) is gone from <ActiveLaw>, so a per-game
+			// map would drop its LAW_ADOPTED event and mis-date the class's
+			// first adoption. An unmapped law (future DLC not yet in Reference)
+			// falls through and is skipped.
+			const category = LAW_TO_CLASS[lawName];
 			if (category === undefined) continue;
 			events.push({
 				turn: log.turn,

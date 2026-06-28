@@ -3,6 +3,7 @@
 
 import {
 	asArray,
+	getElementChildren,
 	isElement,
 	optAttrStr,
 	optInt,
@@ -26,10 +27,17 @@ export interface Character {
 	birthMotherXmlId: number | null;
 	birthCityXmlId: number | null;
 	cognomen: string | null;
+	suffix: number;
 	archetype: string | null;
 	portrait: string | null;
 	xp: number;
 	level: number;
+	// The four Old World character ratings (RATING_WISDOM/CHARISMA/COURAGE/
+	// DISCIPLINE), read from the character's <Rating> block. Null when absent.
+	wisdom: number | null;
+	charisma: number | null;
+	courage: number | null;
+	discipline: number | null;
 	isRoyal: boolean;
 	isInfertile: boolean;
 	becameLeaderTurn: number | null;
@@ -40,6 +48,18 @@ export interface Character {
 	// i64 in Rust; emitted as a JSON string at the dump boundary when set.
 	// The Rust parser currently hardcodes None, so this is always null here.
 	seed: string | null;
+}
+
+// A character's archetype is recorded as a self-named trait ending in
+// `_ARCHETYPE` (e.g. TRAIT_SCHOLAR_ARCHETYPE) inside <TraitTurn>, not as a
+// dedicated element. Returns the raw trait token, or null if none.
+function archetypeFromTraits(node: Record<string, unknown>): string | null {
+	const traitTurn = node.TraitTurn;
+	if (!isElement(traitTurn)) return null;
+	for (const [name] of getElementChildren(traitTurn)) {
+		if (name.endsWith("_ARCHETYPE")) return name;
+	}
+	return null;
 }
 
 export function parseCharacters(root: Record<string, unknown>): Character[] {
@@ -54,6 +74,10 @@ export function parseCharacters(root: Record<string, unknown>): Character[] {
 		// Player="-1" means tribal/unowned; preserve null for those.
 		const playerRaw = optInt(node["@_Player"]);
 		const playerXmlId = playerRaw === null || playerRaw < 0 ? null : playerRaw;
+
+		// Ratings live in a <Rating> block keyed by RATING_*; read the four
+		// fixed character ratings when present.
+		const ratingNode = isElement(node.Rating) ? node.Rating : null;
 
 		characters.push({
 			xmlId,
@@ -71,19 +95,30 @@ export function parseCharacters(root: Record<string, unknown>): Character[] {
 			birthMotherXmlId: optInt(node.BirthMotherID),
 			birthCityXmlId: optInt(node.BirthCityID),
 			cognomen: optStr(node.Cognomen),
-			archetype: optStr(node.Archetype),
+			// Regnal numeral (the "II" in "Meera II"). Old World serializes
+			// <Suffix> only when > 1, so an absent tag means first-of-the-name.
+			suffix: optInt(node.Suffix) ?? 1,
+			// Archetype is encoded as a *_ARCHETYPE trait; <Archetype> is a
+			// fallback for any save format that carries it as an element.
+			archetype: archetypeFromTraits(node) ?? optStr(node.Archetype),
 			portrait: optStr(node.Portrait),
 			xp: optInt(node.XP) ?? 0,
 			level: optInt(node.Level) ?? 1,
-			isRoyal: optStr(node.IsRoyal) === "true",
+			wisdom: ratingNode ? optInt(ratingNode.RATING_WISDOM) : null,
+			charisma: ratingNode ? optInt(ratingNode.RATING_CHARISMA) : null,
+			courage: ratingNode ? optInt(ratingNode.RATING_COURAGE) : null,
+			discipline: ratingNode ? optInt(ratingNode.RATING_DISCIPLINE) : null,
+			// Presence flag: <Royal/> marks royalty (any dynasty member), not
+			// just rulers — leaders are identified by becameLeaderTurn.
+			isRoyal: "Royal" in node,
 			isInfertile: optStr(node.IsInfertile) === "true",
-			becameLeaderTurn: optInt(node.BecameLeaderTurn),
-			// Hardcoded in the Rust parser — these fields exist on the struct
-			// but aren't extracted from XML.
-			abdicatedTurn: null,
+			// Accession turn: the real tag is <LeaderTurn> (not BecameLeaderTurn).
+			becameLeaderTurn: optInt(node.LeaderTurn),
+			abdicatedTurn: optInt(node.AbdicateTurn),
+			// Still hardcoded — these aren't extracted from XML.
 			wasReligionHead: false,
 			wasFamilyHead: false,
-			nationJoinedTurn: null,
+			nationJoinedTurn: optInt(node.NationTurn),
 			seed: null,
 		});
 	}
@@ -108,10 +143,15 @@ export function characterToRow(c: Character): Record<string, unknown> {
 		birth_mother_xml_id: c.birthMotherXmlId,
 		birth_city_xml_id: c.birthCityXmlId,
 		cognomen: c.cognomen,
+		suffix: c.suffix,
 		archetype: c.archetype,
 		portrait: c.portrait,
 		xp: c.xp,
 		level: c.level,
+		wisdom: c.wisdom,
+		charisma: c.charisma,
+		courage: c.courage,
+		discipline: c.discipline,
 		is_royal: c.isRoyal,
 		is_infertile: c.isInfertile,
 		became_leader_turn: c.becameLeaderTurn,

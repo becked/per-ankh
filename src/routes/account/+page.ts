@@ -12,16 +12,22 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	if (!user) {
 		throw redirect(303, loginBounce(url));
 	}
-	// Server-side filtered + unpaginated: the whole out-of-date set, not just
-	// the first page of the games list. The Maintenance tab's bulk reparse
-	// needs every eligible game.
-	const { games: outOfDateGames } = await cloudApi.listOutOfDate(
-		PARSER_VERSION,
-		{ fetch },
-	);
+	// Two reparse surfaces in the Maintenance tab:
+	//   - outOfDateGames: the whole out-of-date set (server-filtered +
+	//     unpaginated), powering the bulk "reparse N games" button.
+	//   - allGames: the library list (capped at the Worker's 500 max),
+	//     powering the per-save "reparse this one" rows — these let the user
+	//     force a reparse of a save that's already on the current version.
+	const [{ games: outOfDateGames }, { games: allGames, total: totalGames }] =
+		await Promise.all([
+			cloudApi.listOutOfDate(PARSER_VERSION, { fetch }),
+			cloudApi.listGames({ limit: 500, fetch }),
+		]);
 	return {
 		user,
 		outOfDateGames,
+		allGames,
+		totalGames,
 		meta: {
 			title: "Settings - Per-Ankh",
 			description: "Manage your Per-Ankh account settings.",

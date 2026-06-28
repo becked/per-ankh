@@ -1,5 +1,95 @@
 # Changelog
 
+## [2026-06-20-0791f86] - 2026-06-20
+
+### Features
+
+- (tournament) admin-initiated mid-tournament player withdrawal — [48a2026](https://github.com/becked/per-ankh/commit/48a20261e61993c9c038a974f06191f152efadf7)
+- (account) reparse individual saves from Settings -> Maintenance — [f25ef68](https://github.com/becked/per-ankh/commit/f25ef6812ca22e5ff9f46b7064acb8711d13e15c)
+- (game-detail) law table shows full adoption history; swap-aware tooltip — [b9c8f9a](https://github.com/becked/per-ankh/commit/b9c8f9af5817e84ce0b5124749e4998a6cfb2035)
+- (deploy) assert frontend bundle API origin after build — [0791f86](https://github.com/becked/per-ankh/commit/0791f86c7517af2670335076e1366d96e6845159)
+
+### Fixes
+
+- (game-detail) correct overview metric bars for non-positive values — [f3a85b7](https://github.com/becked/per-ankh/commit/f3a85b79ea26134b60d8f0b4a011fef486072728)
+- (parser) correct law-adoption history; exclude succession laws (2.9.1) — [7ef3539](https://github.com/becked/per-ankh/commit/7ef3539e8f0aab1eadae6650d4d3da9051de1ad3)
+- (deps) resolve high-severity npm audit advisories — [1559152](https://github.com/becked/per-ankh/commit/1559152fd91fa35303127d5e392dac4d6874b3d4)
+
+### Other
+
+- apply prettier formatting — [39e8e4b](https://github.com/becked/per-ankh/commit/39e8e4bc18564df4d4e9674a10dc43770eb2010c)
+
+## [2026-06-17-5d1eb22] - 2026-06-17
+
+### Fixes
+
+- (tournament) editing a slot's signup answer no longer unlinks the player — [ee8a8d6](https://github.com/becked/per-ankh/commit/ee8a8d6a4d156685649990001c1802ccc32dea75)
+
+### Other
+
+- (tournament) drop redundant parens in SlotUsernameCell per prettier — [5d1eb22](https://github.com/becked/per-ankh/commit/5d1eb2214e933ccd709e3dba00babed9feeb9503)
+
+## [2026-06-16-bc18335] - 2026-06-16
+
+### Features
+
+- (parser) extract leader fields + ratings, bump PARSER_VERSION 2.8.0 — [2dcd04e](https://github.com/becked/per-ankh/commit/2dcd04e46c684ab122d3a16f46ae74a0e3e3e27f)
+- (assets) bake leader-archetype, rating, and ambition icons — [ec96f63](https://github.com/becked/per-ankh/commit/ec96f632826605d629263004b9bcb1e80f2a9243)
+- (game-detail) add Leaders tab; move legitimacy chart from Events — [77d4d30](https://github.com/becked/per-ankh/commit/77d4d30375d9582a6b369dac9f62f399e272e46a)
+- (game-detail) leader portraits, ambition names, and detail-panel polish — [abdf977](https://github.com/becked/per-ankh/commit/abdf977ce3bbe5be986311eba0399a247b603e5a)
+- (game-detail) replace succession ribbons with leader cards + detail popover — [eee1824](https://github.com/becked/per-ankh/commit/eee1824eccceafd31a94c54e08262f73153d56c3)
+- (game-detail) show leader regnal numerals (e.g. "Meera II the Fountainhead") — [be830b9](https://github.com/becked/per-ankh/commit/be830b921ea6ee9a1c28b2b582ba97191d76d042)
+
+### Other
+
+- (game-detail) roomier leader card padding and inter-nation spacing — [77bb1df](https://github.com/becked/per-ankh/commit/77bb1dff41cc72b5a670538baf424d4730669fd5)
+- (game-detail) refine leader popover layout and accent — [caf0a78](https://github.com/becked/per-ankh/commit/caf0a7875568f73ae332f7952767ef10b8da85cf)
+- (game-detail) recolor leader popover frame and deepen shadow — [31404fd](https://github.com/becked/per-ankh/commit/31404fd72af8d49cdb92590a87d74dd6f698e242)
+- (formatting) wrap ROMAN_HUNDREDS array per prettier — [bc18335](https://github.com/becked/per-ankh/commit/bc18335d730d44f4636bf6b22947ff593c45558c)
+
+## [2026-06-15-bec2eb5] - 2026-06-15
+
+### Features
+
+- (game-detail) correct setting names and add a Map Settings panel — [00e6454](https://github.com/becked/per-ankh/commit/00e6454523c503668622962e20de807236a3c85a)
+- (game-detail) add Specialists tab — [a3a7666](https://github.com/becked/per-ankh/commit/a3a7666a26e36f442586783573894a02ebf8fb66)
+
+### Other
+
+- (game-detail) restyle Specialists tab filter controls — [b43e995](https://github.com/becked/per-ankh/commit/b43e995ba41c0490dc3577a12ad804ac7185ce99)
+- (tournament) label link fields and drop placeholders — [b0a92a7](https://github.com/becked/per-ankh/commit/b0a92a7636bc2c3966999dc50c8ca27a5930ea52)
+- (deps) apply npm audit fixes for new advisories — [2caa77b](https://github.com/becked/per-ankh/commit/2caa77bd99b7030ffc14c5aec131f768d7668e2e)
+- (deploy) allowlist dev-only ws DoS in preflight audit gate — [bec2eb5](https://github.com/becked/per-ankh/commit/bec2eb5fa607705d9aea0697618d0ab66cdb4676)
+
+## [2026-06-15-8ec6898] - 2026-06-15
+
+### Features
+
+- (tournament) add admin-editable links with a Links menu — [3002d75](https://github.com/becked/per-ankh/commit/3002d754969690db1c236f814f912879ed599920)
+
+### Fixes
+
+- (build) stop esbuild lowering destructuring instead of bumping Safari — [8ec6898](https://github.com/becked/per-ankh/commit/8ec6898865dfa7577ab208456a1f0f60f7d62ce3)
+
+### Other
+
+- (tournament) prettier-format links files — [a5975fc](https://github.com/becked/per-ankh/commit/a5975fc0d10471811cc3b9712599beeb5623d0dc)
+- (deps) pin esbuild to 0.28.1, raise Vite Safari target to 15 — [11f67ed](https://github.com/becked/per-ankh/commit/11f67ed25b61e093873cc91d58e1ca6f5153c6af)
+
+## [2026-06-11-3bd87d0] - 2026-06-11
+
+### Features
+
+- (cloud) add nightly events retention cron — [43023d7](https://github.com/becked/per-ankh/commit/43023d7a33f2203ad4440f83ecc73d139c4f51f7)
+- (cloud) emit security_events tee draining to Skiff (#71) — [6db5f4e](https://github.com/becked/per-ankh/commit/6db5f4e43ac48d449e7846f48c3a86781ccd5cfa)
+
+### Other
+
+- add performance architecture blog post — [7b1ad8b](https://github.com/becked/per-ankh/commit/7b1ad8b48e1d24704247955a6128813dd099f81f)
+- (cloud) extract legacy share stack into share-legacy.ts — [a430c13](https://github.com/becked/per-ankh/commit/a430c1346b0c1629eac7bf63890bfa3eb4e759ae)
+- drop stale invite-code references — [c4e18f0](https://github.com/becked/per-ankh/commit/c4e18f02be4559c049d9ea51e3bb52099186fa44)
+- (cloud) set SECURITY_DB database ids — [3bd87d0](https://github.com/becked/per-ankh/commit/3bd87d074bed530f60e5b380f0766610911579c9)
+
 ## [2026-06-06-293a30b] - 2026-06-06
 
 ### Features

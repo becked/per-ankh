@@ -43,6 +43,8 @@ export function deriveGameDetails(
 		map_width: metadata.map_width,
 		map_height: metadata.map_height,
 		map_class: metadata.map_class,
+		map_aspect_ratio: metadata.map_aspect_ratio,
+		map_options: metadata.map_options,
 		game_mode: metadata.game_mode,
 		opponent_level: metadata.opponent_level,
 		difficulty: metadata.difficulty,

@@ -27,6 +27,7 @@ import {
 	loadTournamentBySlug,
 	MapConfigError,
 	matchRowToRef,
+	parseLinks,
 	parseMapPool,
 	slotAvatarUrl,
 	slotDisplayName,
@@ -484,6 +485,8 @@ export async function handleTournamentDetail(
 		if (!(e instanceof MapConfigError)) throw e;
 		map_pool = [];
 	}
+	// Links parse leniently (never throws), so no try/catch needed.
+	const links = parseLinks(tournament);
 	return jsonResponse(
 		{
 			tournament_id: tournament.tournament_id,
@@ -497,6 +500,7 @@ export async function handleTournamentDetail(
 			swiss_losses_to_eliminate: tournament.swiss_losses_to_eliminate,
 			swiss_max_rounds: tournament.swiss_max_rounds,
 			map_pool,
+			links,
 			slot_counts: {
 				swiss: counts["swiss"] ?? 0,
 				championship: counts["championship"] ?? 0,
@@ -607,6 +611,7 @@ export async function computeStandingsResponse(
 			swiss_seed: number | null;
 			division: "A" | "B" | null;
 			signup_answer: string | null;
+			discord_username: string | null;
 		}
 	>();
 	for (const s of swissSlots) {
@@ -619,6 +624,11 @@ export async function computeStandingsResponse(
 			// Admin-only — omitted for non-admin viewers so signup answers don't
 			// leak into the public standings payload.
 			signup_answer: viewerIsAdmin ? s.signup_answer : null,
+			// Admin-only — the raw Discord handle is storage-level (claim
+			// matching, pre-link). Exposed only to admins so the slots panel /
+			// standings pencil can seed the occupant editor with the real handle
+			// rather than the display name (which would unlink the slot on save).
+			discord_username: viewerIsAdmin ? s.discord_username : null,
 		});
 	}
 
@@ -631,6 +641,7 @@ export async function computeStandingsResponse(
 				avatar_url: string | null;
 				swiss_seed: number | null;
 				signup_answer: string | null;
+				discord_username: string | null;
 			}
 		>
 	> = {
@@ -652,6 +663,7 @@ export async function computeStandingsResponse(
 				swiss_seed: null,
 				division: null,
 				signup_answer: null,
+				discord_username: null,
 			};
 			// Strip `division` — division grouping is communicated by the
 			// containing key in the response, not by a per-row field. The
@@ -689,6 +701,7 @@ export async function computeStandingsResponse(
 				display_name: string | null;
 				avatar_url: string | null;
 				swiss_seed: number | null;
+				withdrawn: boolean;
 		  }>
 		| undefined = undefined;
 	if (tournament.status !== "setup") {
@@ -715,6 +728,7 @@ export async function computeStandingsResponse(
 				display_name: id?.display_name ?? null,
 				avatar_url: id?.avatar_url ?? null,
 				swiss_seed: id?.swiss_seed ?? null,
+				withdrawn: r.withdrawn,
 			};
 		});
 	}
@@ -784,6 +798,19 @@ export async function handleTournamentBracket(
 
 	const identityByUserId = await loadUserIdentitiesForMatches(env, matches);
 	const nationByGamePlayer = await loadNationsForMatches(env, matches);
+	const viewerIsAdmin = await isTournamentAdmin(
+		env,
+		session?.data ?? null,
+		tournament.tournament_id,
+	);
+	const handleBySlotId = viewerIsAdmin
+		? new Map<string, string | null>(
+				slots.map((s): [string, string | null] => [
+					s.slot_id,
+					s.discord_username,
+				]),
+			)
+		: new Map<string, string | null>();
 
 	const body = {
 		tournament_id: tournament.tournament_id,
@@ -799,7 +826,12 @@ export async function handleTournamentBracket(
 			round_number: r.round_number,
 			status: r.status,
 			matches: (matchesByRound.get(r.round_id) ?? []).map((m) => ({
-				...serializeMatch(m, identityByUserId, nationByGamePlayer),
+				...serializeMatch(
+					m,
+					identityByUserId,
+					nationByGamePlayer,
+					handleBySlotId,
+				),
 				total_turns: m.game_id ? (turnsByGame.get(m.game_id) ?? null) : null,
 			})),
 		})),
@@ -878,12 +910,29 @@ export async function handleTournamentMatches(
 		env,
 		filtered.map(({ match }) => match),
 	);
+	const viewerIsAdmin = await isTournamentAdmin(
+		env,
+		session?.data ?? null,
+		tournament.tournament_id,
+	);
+	const handleBySlotId = viewerIsAdmin
+		? new Map<string, string | null>(
+				(await loadSlots(env, tournament.tournament_id)).map(
+					(s): [string, string | null] => [s.slot_id, s.discord_username],
+				),
+			)
+		: new Map<string, string | null>();
 
 	return jsonResponse(
 		{
 			tournament_id: tournament.tournament_id,
 			matches: filtered.map(({ match, round }) => ({
-				...serializeMatch(match, identityByUserId, nationByGamePlayer),
+				...serializeMatch(
+					match,
+					identityByUserId,
+					nationByGamePlayer,
+					handleBySlotId,
+				),
 				round_id: round.round_id,
 				round_number: round.round_number,
 				phase: round.phase,
@@ -929,9 +978,26 @@ export async function handleTournamentMatchDetail(
 	}
 	const identityByUserId = await loadUserIdentitiesForMatches(env, [match]);
 	const nationByGamePlayer = await loadNationsForMatches(env, [match]);
+	const viewerIsAdmin = await isTournamentAdmin(
+		env,
+		session?.data ?? null,
+		tournament.tournament_id,
+	);
+	const handleBySlotId = viewerIsAdmin
+		? new Map<string, string | null>(
+				(await loadSlots(env, tournament.tournament_id)).map(
+					(s): [string, string | null] => [s.slot_id, s.discord_username],
+				),
+			)
+		: new Map<string, string | null>();
 	return jsonResponse(
 		{
-			...serializeMatch(match, identityByUserId, nationByGamePlayer),
+			...serializeMatch(
+				match,
+				identityByUserId,
+				nationByGamePlayer,
+				handleBySlotId,
+			),
 			round_id: round.round_id,
 			round_number: round.round_number,
 			phase: round.phase,
@@ -1037,6 +1103,11 @@ function serializeMatch(
 	m: MatchRow,
 	identityByUserId?: Map<string, UserIdentity>,
 	nationByGamePlayer?: Map<string, string>,
+	// Admin-only map slot_id → raw discord_username for the LIVE slots (not the
+	// frozen snapshot). Populated only for admin viewers; lets the match popover
+	// seed its substitute editor with the real handle instead of the display
+	// name, which would unlink the slot on save. Empty/undefined → fields null.
+	handleBySlotId?: Map<string, string | null>,
 ) {
 	const slotAIdentity =
 		m.slot_a_user_id && identityByUserId
@@ -1084,10 +1155,16 @@ function serializeMatch(
 		slot_a_user_id: m.slot_a_user_id,
 		slot_a_avatar_url: slotAIdentity?.avatar_url ?? null,
 		slot_a_nation: slotANation,
+		// Admin-only — raw handle of the live slot occupant (null for public
+		// viewers and pending/bye sides). Used to seed the substitute editor.
+		slot_a_discord_username: handleBySlotId?.get(m.slot_a_id) ?? null,
 		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_avatar_url: slotBIdentity?.avatar_url ?? null,
 		slot_b_nation: slotBNation,
+		slot_b_discord_username: m.slot_b_id
+			? (handleBySlotId?.get(m.slot_b_id) ?? null)
+			: null,
 		// Scheduling metadata (migration 0025). The caster renders by display
 		// name when linked to a user; caster_name stays the storage/edit value
 		// (canonical handle when linked, free text otherwise) and doubles as

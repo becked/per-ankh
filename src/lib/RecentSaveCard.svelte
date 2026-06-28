@@ -9,8 +9,9 @@
 		formatEnum,
 		formatDate,
 		formatGameTitle,
-		formatMapClass,
 	} from "$lib/utils/formatting";
+	import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
+	import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
 	import {
 		CHART_THEME,
 		getChartColor,
@@ -242,9 +243,9 @@
 				<SpriteIcon category="icons" value="MAP_OVERVIEW" size={10} alt="Map" />
 			{/snippet}
 			{game.map_class
-				? formatMapClass(game.map_class)
+				? mapScriptLabel(game.map_class)
 				: game.map_size
-					? formatEnum(game.map_size, "MAPSIZE_")
+					? mapSizeLabel(game.map_size)
 					: "—"}
 		</StatTile>
 
@@ -270,7 +271,10 @@
 						alt="Difficulty"
 					/>
 				{/snippet}
-				{game.difficulty ? formatEnum(game.difficulty, "DIFFICULTY_") : "—"}
+				{game.difficulty
+					? (DIFFICULTY_NAMES[game.difficulty] ??
+						formatEnum(game.difficulty, "DIFFICULTY_"))
+					: "—"}
 			</StatTile>
 		{/if}
 	</div>

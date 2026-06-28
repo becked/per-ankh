@@ -281,9 +281,10 @@ export async function handleTournamentSignup(
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
 
-	// Audit, fire-and-forget — matches the tournament_slot_substituted
-	// pattern in admin.ts (audit failures don't break the operation).
-	env.SHARE_DB.prepare(
+	// Durable audit — awaited so the write can't be canceled by response
+	// teardown (issue #75). The .catch keeps a failed audit from breaking the
+	// signup, which has already committed.
+	await env.SHARE_DB.prepare(
 		`INSERT INTO events (event_type, user_id, metadata)
 		 VALUES ('tournament_self_signup', ?, ?)`,
 	)
@@ -381,7 +382,12 @@ export async function handleTournamentWithdraw(
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
 
-	env.SHARE_DB.prepare(
+	// Durable audit — awaited so the write can't be canceled by response
+	// teardown (issue #75). This is the event that distinguishes a self-withdraw
+	// from an admin delete; losing it means we can't tell which path removed the
+	// player. The .catch keeps a failed audit from breaking the withdraw, which
+	// has already committed.
+	await env.SHARE_DB.prepare(
 		`INSERT INTO events (event_type, user_id, metadata)
 		 VALUES ('tournament_self_withdraw', ?, ?)`,
 	)

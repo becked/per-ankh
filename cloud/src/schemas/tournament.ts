@@ -68,6 +68,37 @@ const MapPoolEntrySchema = v.object({
 // schema.)
 const MapPoolSchema = v.pipe(v.array(MapPoolEntrySchema), v.maxLength(64));
 
+// A single external link in a tournament's "Links" menu: a display label and
+// an http(s) URL. The label is what shows in the menu; the URL is rendered as
+// an <a href> the public can click.
+const LinkLabelSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.minLength(1, "link label cannot be empty"),
+	v.maxLength(80),
+);
+// SECURITY: v.url() alone is NOT enough — it just runs the URL constructor, and
+// `new URL("javascript:alert(1)")` is a *valid* URL. Since these are rendered as
+// hrefs, an unrestricted scheme is stored XSS. Pin the protocol to http(s). (The
+// StreamUrlSchema below is safe only incidentally, via its host allowlist; a
+// general link can't use one, so the scheme check is the load-bearing guard.)
+const LinkUrlSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.maxLength(500),
+	v.url("url must be a valid URL"),
+	v.check((s) => {
+		try {
+			return ["https:", "http:"].includes(new URL(s).protocol);
+		} catch {
+			return false;
+		}
+	}, "url must be an http(s) link"),
+);
+const LinkSchema = v.object({ label: LinkLabelSchema, url: LinkUrlSchema });
+// Capped to bound the stored blob. The whole list is replaced on each PATCH.
+const LinksSchema = v.pipe(v.array(LinkSchema), v.maxLength(16));
+
 export const CreateTournamentSchema = v.object({
 	// Optional. When absent, the handler derives a slug from `name` and
 	// disambiguates collisions with a short random suffix. The admin CLI
@@ -120,6 +151,10 @@ export const PatchTournamentSchema = v.object({
 		v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(20)),
 	),
 	map_pool: v.optional(MapPoolSchema),
+	// Ordered list of external links shown in the tournament's "Links" menu.
+	// Replaces the whole list on each PATCH (like map_pool). Not phase-locked —
+	// editable in every status. See LinksSchema for the per-link rules.
+	links: v.optional(LinksSchema),
 	signups_open: v.optional(v.boolean()),
 	// Admin-announced start time. Full ISO-8601 instant (the settings form
 	// sends new Date(local).toISOString()); displayed date-only. `null` clears

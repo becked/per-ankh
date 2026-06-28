@@ -167,7 +167,6 @@ export function extractAllGameData(
 	const derivedEventLogs = deriveEventLogs(eventLogs, players);
 	const lawAdoptionHistory = deriveLawAdoptionHistory(
 		eventLogs,
-		laws,
 		players,
 		matchMetadata.total_turns,
 	);

@@ -32,6 +32,11 @@ export interface TournamentRow {
 	// parseMapPool. (Replaced allowed_map_scripts + map_script_options in
 	// migration 0019.)
 	map_pool: string;
+	// JSON array of external links: [{ label, url }]. Shown in the tournament's
+	// "Links" menu alongside the Guide button. Parsed by parseLinks. Editable in
+	// every phase (not frozen like map_pool). Added in migration 0026; defaults
+	// to '[]'.
+	links: string;
 	// 0/1 (SQLite has no real bool). When 1 AND status='setup', the tournament
 	// is visible to all beta users and POST /signup is enabled. Auto-flipped
 	// to 0 on the setup → swiss transition in handleStartTournament.
@@ -77,6 +82,10 @@ export interface SlotRow {
 	// at signup (migration 0023). NULL when unanswered or the slot predates the
 	// question. Admin-only display in the roster.
 	signup_answer: string | null;
+	// Set (ISO-8601) when an admin withdraws the slot mid-tournament; NULL
+	// otherwise (migration 0027). Drives the `withdrawn` flag on SlotRef, which
+	// excludes the slot from future pairing and from championship qualifiers.
+	withdrawn_at: string | null;
 	created_at: string;
 }
 
@@ -306,6 +315,7 @@ export function slotRowToRef(row: SlotRow): SlotRef {
 		division: row.division,
 		swiss_seed: row.swiss_seed,
 		championship_seed: row.championship_seed,
+		withdrawn: row.withdrawn_at != null,
 	};
 }
 
@@ -379,6 +389,39 @@ export function parseMapPool(t: TournamentRow): MapPoolEntry[] {
 			}
 		}
 		out.push({ id: e.id, script: e.script, options });
+	}
+	return out;
+}
+
+// Parse the JSON-encoded links column into [{ label, url }]. Lenient: returns []
+// on any hard corruption (bad JSON / not an array) rather than throwing — links
+// aren't load-bearing for tournament integrity (unlike map_pool), so a bad blob
+// should degrade to "no links", never break the page. Individual malformed
+// entries are skipped.
+//
+// SECURITY: also drops any entry whose url isn't http(s). The write path already
+// enforces this (LinkUrlSchema), but these are rendered as hrefs, so this is
+// defense-in-depth against a hand-edited or otherwise corrupted blob ever
+// surfacing a javascript:/data: URL to a clicker.
+export function parseLinks(t: TournamentRow): { label: string; url: string }[] {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(t.links);
+	} catch {
+		return [];
+	}
+	if (!Array.isArray(parsed)) return [];
+	const out: { label: string; url: string }[] = [];
+	for (const raw of parsed) {
+		if (typeof raw !== "object" || raw === null) continue;
+		const e = raw as Record<string, unknown>;
+		if (typeof e.label !== "string" || typeof e.url !== "string") continue;
+		try {
+			if (!["https:", "http:"].includes(new URL(e.url).protocol)) continue;
+		} catch {
+			continue;
+		}
+		out.push({ label: e.label, url: e.url });
 	}
 	return out;
 }

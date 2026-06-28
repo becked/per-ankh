@@ -8,13 +8,14 @@ const CONFIG: TournamentConfig = {
 	swiss_max_rounds: 5,
 };
 
-function slot(id: string, seed: number): SlotRef {
+function slot(id: string, seed: number, withdrawn = false): SlotRef {
 	return {
 		slot_id: id,
 		phase: "swiss",
 		division: "A",
 		swiss_seed: seed,
 		championship_seed: null,
+		withdrawn,
 	};
 }
 
@@ -211,5 +212,52 @@ describe("pairSwissRound — round 2+", () => {
 		expect(allIds.size).toBe(6);
 		// No byes (count was even).
 		expect(pairings.filter((p) => p.slot_b_id === null)).toHaveLength(0);
+	});
+});
+
+describe("pairSwissRound — withdrawn slots", () => {
+	it("excludes a withdrawn slot from round 1 folding", () => {
+		// 4 slots but C is withdrawn → only A, B, D enter the fold. Odd count
+		// (3) → the lowest remaining seed (D) takes the bye, A vs B paired.
+		const slots = [
+			slot("A", 1),
+			slot("B", 2),
+			slot("C", 3, true),
+			slot("D", 4),
+		];
+		const pairings = pairSwissRound(slots, [], 1, CONFIG);
+		const ids = new Set<string>();
+		for (const p of pairings) {
+			ids.add(p.slot_a_id);
+			if (p.slot_b_id) ids.add(p.slot_b_id);
+		}
+		expect(ids.has("C")).toBe(false);
+		expect(pairings).toHaveLength(2); // 1 pairing + 1 bye
+		const byes = pairings.filter((p) => p.slot_b_id === null);
+		expect(byes).toHaveLength(1);
+		expect(byes[0].slot_a_id).toBe("D");
+	});
+
+	it("excludes a withdrawn slot from round 2+ even when its record is active", () => {
+		// A,B win R1; C,D lose R1 (all still active at 0-1/1-0). D is withdrawn,
+		// so the round-2 active pool is just A, B, C → odd → exactly one bye.
+		// This is the mass-dropout guard: withdrawn players never re-enter
+		// pairing, so they can't cluster into ghost matches.
+		const slots = [
+			slot("A", 1),
+			slot("B", 2),
+			slot("C", 3),
+			slot("D", 4, true),
+		];
+		const r1 = [match("m1", 1, "A", "C", "A"), match("m2", 1, "B", "D", "B")];
+		const pairings = pairSwissRound(slots, r1, 2, CONFIG);
+		const ids = new Set<string>();
+		for (const p of pairings) {
+			ids.add(p.slot_a_id);
+			if (p.slot_b_id) ids.add(p.slot_b_id);
+		}
+		expect(ids.has("D")).toBe(false);
+		expect(pairings).toHaveLength(2); // A,B,C → 1 pairing + 1 bye
+		expect(pairings.filter((p) => p.slot_b_id === null)).toHaveLength(1);
 	});
 });

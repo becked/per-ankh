@@ -299,23 +299,27 @@ async function authedTournament(
 	return { ok: true, tournament, userId: session.data.user_id };
 }
 
-// Fire-and-forget audit + rate-limit insert. Logged at the end of an admin
+// Durable audit + rate-limit insert. Awaited (not fire-and-forget) so the write
+// can't be canceled by response teardown on the Workers runtime — an audit log
+// must not silently drop events (issue #75). Logged at the end of an admin
 // handler's happy path so failed mutations don't leave audit ghosts. The
 // same event_type drives the per-user rate limit (countEventsSince above),
-// so every successful mutation counts toward the next hour's budget.
-function logTournamentAdminAction(
+// so every successful mutation counts toward the next hour's budget. The .catch
+// stays a backstop: a failed audit must not 500 a mutation that already
+// committed, but await gives the write a full chance to land first.
+async function logTournamentAdminAction(
 	env: TournamentAdminEnv,
 	userId: string,
 	tournamentId: string,
 	action: string,
 	extra?: Record<string, unknown>,
-): void {
+): Promise<void> {
 	const metadata = JSON.stringify({
 		action,
 		tournament_id: tournamentId,
 		...(extra ?? {}),
 	});
-	env.SHARE_DB.prepare(
+	await env.SHARE_DB.prepare(
 		`INSERT INTO events (event_type, user_id, metadata)
 		 VALUES ('tournament_admin', ?, ?)`,
 	)
@@ -745,12 +749,19 @@ export async function handlePatchTournament(
 		nextMapPoolJson = JSON.stringify(built.pool);
 	}
 
+	// Links are deliberately NOT phase-locked: admins add/edit them in every
+	// status (e.g. a stream/VOD link mid-tournament, results after completion).
+	// Already validated + trimmed by LinksSchema; just serialize the whole list.
+	const nextLinksJson =
+		patch.links !== undefined ? JSON.stringify(patch.links) : undefined;
+
 	const fragments: string[] = [];
 	const binds: unknown[] = [];
 	for (const [key, value] of Object.entries(patch)) {
 		if (value === undefined) continue;
-		if (key === "map_pool") {
-			// Skip — handled below from nextMapPoolJson (validated + reconciled).
+		if (key === "map_pool" || key === "links") {
+			// Skip — JSON blob fields, handled below from their *Json vars (arrays
+			// can't bind to D1 directly).
 			continue;
 		} else if (key === "signups_open") {
 			// SQLite has no boolean; the column is INTEGER 0/1.
@@ -765,6 +776,10 @@ export async function handlePatchTournament(
 		fragments.push("map_pool = ?");
 		binds.push(nextMapPoolJson);
 	}
+	if (nextLinksJson !== undefined) {
+		fragments.push("links = ?");
+		binds.push(nextLinksJson);
+	}
 	if (fragments.length === 0) {
 		return jsonResponse({ tournament }, 200, cors);
 	}
@@ -775,7 +790,7 @@ export async function handlePatchTournament(
 		.bind(...binds)
 		.run();
 	const updated = await loadTournamentById(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_patched", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "tournament_patched", {
 		fields_changed: Object.keys(patch).filter(
 			(k) => patch[k as keyof typeof patch] !== undefined,
 		),
@@ -862,7 +877,7 @@ export async function handleGrantTournamentAdmin(
 		.run();
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "admin_granted", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "admin_granted", {
 		granted_user_id: targetUserId,
 	});
 
@@ -917,7 +932,7 @@ export async function handleRevokeTournamentAdmin(
 	}
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "admin_revoked", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "admin_revoked", {
 		revoked_user_id: targetUserId,
 	});
 	return jsonResponse({ revoked: true }, 200, cors);
@@ -984,7 +999,7 @@ export async function handleDeleteTournament(
 
 	// Audit. The tournament row is gone, but events.metadata is plain text
 	// (not an FK), so the record survives the delete.
-	logTournamentAdminAction(env, session.data.user_id, tournamentId, "deleted", {
+	await logTournamentAdminAction(env, session.data.user_id, tournamentId, "deleted", {
 		slug: tournament.slug,
 		status: tournament.status,
 		by_site_admin: siteAdmin,
@@ -1164,7 +1179,7 @@ export async function handleBulkCreateSlots(
 		).bind(tournamentId),
 	);
 	await env.SHARE_DB.batch(statements);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slots_bulk_created", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slots_bulk_created", {
 		count: created.length,
 	});
 	return jsonResponse({ created }, 201, cors);
@@ -1337,7 +1352,7 @@ export async function handlePatchSlot(
 
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadSlot(env, slotId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slot_patched", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_patched", {
 		slot_id: slotId,
 		username_changed: occupantChanged,
 		prelinked: prelink !== null,
@@ -1372,10 +1387,165 @@ export async function handleDeleteSlot(
 		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
 	}
 	await bumpTournamentUpdatedAt(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "slot_deleted", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_deleted", {
 		slot_id: slotId,
 	});
 	return new Response(null, { status: 204, headers: cors });
+}
+
+// ----------------------------------------------------------------------
+// POST   /v1/tournaments/:id/slots/:slot_id/withdraw — withdraw a player
+// DELETE /v1/tournaments/:id/slots/:slot_id/withdraw — reinstate a player
+//
+// Admin-initiated mid-tournament drop. Setting withdrawn_at excludes the slot
+// from all *future* pairing (the pure engine skips withdrawn slots) and from
+// championship qualifiers, while already-played matches stand. The slot's one
+// in-flight pending match (if any) is forfeited to the opponent and routed
+// through the normal advance path, so the round can close and the next round
+// generates without the withdrawn player. If both slots in that match are
+// withdrawn the forfeit lands on one side and is inert (both are excluded
+// downstream). Deliberately admin-only — players can't drop themselves once a
+// tournament has started, which avoids accidental self-withdrawals. During
+// 'setup' a slot is hard-deleted (handleDeleteSlot) rather than withdrawn.
+// ----------------------------------------------------------------------
+
+export async function handleWithdrawSlot(
+	tournamentId: string,
+	slotId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+	const { tournament } = a;
+	if (tournament.status !== "swiss" && tournament.status !== "championship") {
+		return errorResponse(
+			tournament.status === "setup"
+				? "Delete the slot during setup; withdraw applies after the tournament has started"
+				: "Tournament is complete",
+			409,
+			cors,
+			"INVALID_PHASE",
+		);
+	}
+	const slot = await loadSlotInTournament(env, slotId, tournamentId);
+	if (!slot) {
+		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
+	}
+	if (slot.withdrawn_at != null) {
+		// Idempotent: already withdrawn, nothing left to forfeit.
+		return jsonResponse({ slot }, 200, cors);
+	}
+
+	await env.SHARE_DB.prepare(
+		"UPDATE tournament_slots SET withdrawn_at = datetime('now') WHERE slot_id = ?",
+	)
+		.bind(slotId)
+		.run();
+
+	const forfeitedMatchIds = await forfeitPendingMatchesForSlot(
+		env,
+		tournamentId,
+		slotId,
+	);
+
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_withdrawn", {
+		slot_id: slotId,
+		division: slot.division,
+		forfeited_match_ids: forfeitedMatchIds,
+	});
+	const updated = await loadSlotInTournament(env, slotId, tournamentId);
+	return jsonResponse({ slot: updated }, 200, cors);
+}
+
+export async function handleReinstateSlot(
+	tournamentId: string,
+	slotId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+	const slot = await loadSlotInTournament(env, slotId, tournamentId);
+	if (!slot) {
+		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
+	}
+	if (slot.withdrawn_at == null) {
+		// Idempotent: not withdrawn.
+		return jsonResponse({ slot }, 200, cors);
+	}
+	// Clear the flag. Takes effect from the NEXT round generated: a round
+	// already paired without this slot is not retroactively repaired, and the
+	// auto-forfeit applied on withdrawal is not undone (an admin can retro-edit
+	// that match if the player returns to an in-progress round).
+	await env.SHARE_DB.prepare(
+		"UPDATE tournament_slots SET withdrawn_at = NULL WHERE slot_id = ?",
+	)
+		.bind(slotId)
+		.run();
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slot_reinstated", {
+		slot_id: slotId,
+		division: slot.division,
+	});
+	const updated = await loadSlotInTournament(env, slotId, tournamentId);
+	return jsonResponse({ slot: updated }, 200, cors);
+}
+
+// Forfeit every pending match the slot is currently in, awarding the win to
+// the opponent, and route each through maybeAdvanceAfterMatchReport so the
+// round closes / the next round generates (now excluding the withdrawn slot).
+// Normally there is at most one such match (the current in_progress round);
+// the set is handled defensively. Mirrors handleRetroEditMatch's forward
+// transition: snapshot both occupants so the forfeited card keeps correct
+// names. Returns the forfeited match IDs for the audit log.
+async function forfeitPendingMatchesForSlot(
+	env: TournamentAdminEnv,
+	tournamentId: string,
+	slotId: string,
+): Promise<string[]> {
+	const res = await env.SHARE_DB.prepare(
+		`SELECT m.* FROM tournament_matches m
+		 JOIN tournament_rounds r ON r.round_id = m.round_id
+		 WHERE r.tournament_id = ?
+		   AND m.status = 'pending'
+		   AND (m.slot_a_id = ? OR m.slot_b_id = ?)`,
+	)
+		.bind(tournamentId, slotId, slotId)
+		.all<MatchRow>();
+	const pending = res.results ?? [];
+	const forfeitedIds: string[] = [];
+	for (const m of pending) {
+		// A pending match always has two real slots (byes are status='bye'),
+		// so the opponent is non-null. The forfeit is inert if the opponent is
+		// itself withdrawn — both are excluded from pairing and qualifiers.
+		const opponentId = m.slot_a_id === slotId ? m.slot_b_id : m.slot_a_id;
+		if (opponentId === null) continue;
+		const slotA = await loadSlot(env, m.slot_a_id);
+		const slotB = m.slot_b_id ? await loadSlot(env, m.slot_b_id) : null;
+		await env.SHARE_DB.prepare(
+			`UPDATE tournament_matches
+			   SET status = 'forfeit', winner_slot_id = ?,
+			       slot_a_username = ?, slot_a_user_id = ?,
+			       slot_b_username = ?, slot_b_user_id = ?
+			 WHERE match_id = ?`,
+		)
+			.bind(
+				opponentId,
+				slotA?.discord_username ?? null,
+				slotA?.user_id ?? null,
+				slotB?.discord_username ?? null,
+				slotB?.user_id ?? null,
+				m.match_id,
+			)
+			.run();
+		forfeitedIds.push(m.match_id);
+		await maybeAdvanceAfterMatchReport(env, m.match_id);
+	}
+	return forfeitedIds;
 }
 
 // ----------------------------------------------------------------------
@@ -1465,7 +1635,7 @@ export async function handleReorderSlots(
 	);
 	await env.SHARE_DB.batch(statements);
 
-	logTournamentAdminAction(env, a.userId, tournamentId, "slots_reordered", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slots_reordered", {
 		count: requested.length,
 		division_a: divisions.A.length,
 		division_b: divisions.B.length,
@@ -1578,7 +1748,7 @@ export async function handleStartTournament(
 	}
 	await env.SHARE_DB.batch(statements);
 	const updated = await loadTournamentById(env, tournamentId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "tournament_started", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "tournament_started", {
 		rounds: summaries,
 	});
 	return jsonResponse({ tournament: updated, rounds: summaries }, 201, cors);
@@ -1645,7 +1815,7 @@ export async function handlePatchMatchMap(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "match_map_patched", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "match_map_patched", {
 		match_id: matchId,
 	});
 	return jsonResponse({ match: updated }, 200, cors);
@@ -1831,7 +2001,7 @@ export async function handlePatchMatchSchedule(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	logTournamentAdminAction(
+	await logTournamentAdminAction(
 		env,
 		a.userId,
 		tournamentId,
@@ -1998,7 +2168,7 @@ export async function handleRetroEditMatch(
 		.run();
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
-	logTournamentAdminAction(env, a.userId, tournamentId, "match_retro_edited", {
+	await logTournamentAdminAction(env, a.userId, tournamentId, "match_retro_edited", {
 		match_id: matchId,
 		fields_changed: Object.keys(patch).filter(
 			(k) => patch[k as keyof typeof patch] !== undefined,
@@ -2147,7 +2317,12 @@ export async function handleTransitionChampionship(
 			.map(slotRowToRef);
 		const standings = computeStandings(swissSlots, matchRefs, config);
 		const ranked = rankStandings(standings, matchRefs);
-		const qualifiers = ranked.filter((r) => r.status === "advanced");
+		// Withdrawn slots are excluded even if they'd clinched the win
+		// threshold — an admin-withdrawn player won't play the bracket, so
+		// they must not be seeded into it.
+		const qualifiers = ranked.filter(
+			(r) => r.status === "advanced" && !r.withdrawn,
+		);
 
 		if (qualifiers.length < 2) {
 			// Surface near-qualifiers (the full ranked list) so the admin's
@@ -2304,7 +2479,7 @@ export async function handleTransitionChampionship(
 		).bind(tournamentId),
 	);
 	await env.SHARE_DB.batch(statements);
-	logTournamentAdminAction(
+	await logTournamentAdminAction(
 		env,
 		a.userId,
 		tournamentId,
@@ -2513,18 +2688,20 @@ function buildChampionshipRoundStatements(
 // System-triggered audit entry (no admin user_id). event_type is distinct
 // from 'tournament_admin' so per-admin rate-limit queries naturally skip
 // these rows and log inspection can separate human from automatic actions.
-function logSystemTournamentAction(
+// Awaited for durability for the same reason as logTournamentAdminAction
+// (issue #75); the .catch keeps a failed audit from breaking auto-advance.
+async function logSystemTournamentAction(
 	env: TournamentEnv,
 	tournamentId: string,
 	action: string,
 	extra?: Record<string, unknown>,
-): void {
+): Promise<void> {
 	const metadata = JSON.stringify({
 		action,
 		tournament_id: tournamentId,
 		...(extra ?? {}),
 	});
-	env.SHARE_DB.prepare(
+	await env.SHARE_DB.prepare(
 		`INSERT INTO events (event_type, user_id, metadata)
 		 VALUES ('tournament_system', NULL, ?)`,
 	)
@@ -2712,7 +2889,7 @@ export async function maybeAdvanceAfterMatchReport(
 			).bind(tournament.tournament_id),
 		);
 		await env.SHARE_DB.batch(statements);
-		logSystemTournamentAction(
+		await logSystemTournamentAction(
 			env,
 			tournament.tournament_id,
 			auditAction,

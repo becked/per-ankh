@@ -49,6 +49,7 @@ export function pairSwissRound(
 
 	const active: ActiveSlot[] = [];
 	for (const s of slots) {
+		if (s.withdrawn) continue; // admin-withdrawn: out of all future pairing
 		const rec = computeRecord(s.slot_id, priorMatches, config);
 		if (rec.status === "active") {
 			active.push({ slot: s, wins: rec.wins, losses: rec.losses });
@@ -100,12 +101,15 @@ function pairRound1(slots: SlotRef[]): Pairing[] {
 	// Every slot is 0-0, so compareForPairing reduces to swiss_seed asc: the
 	// field ends up sorted best-seed-first. pairBucket then folds top half
 	// against bottom half (seed 1 vs seed N/2+1, …) — no prior matches, so no
-	// rematch avoidance is needed.
-	const active: ActiveSlot[] = slots.map((s) => ({
-		slot: s,
-		wins: 0,
-		losses: 0,
-	}));
+	// rematch avoidance is needed. Withdrawn slots are excluded up front (an
+	// admin can withdraw a player before round 1 is generated).
+	const active: ActiveSlot[] = slots
+		.filter((s) => !s.withdrawn)
+		.map((s) => ({
+			slot: s,
+			wins: 0,
+			losses: 0,
+		}));
 	active.sort(compareForPairing);
 
 	let byeSlot: SlotRef | null = null;

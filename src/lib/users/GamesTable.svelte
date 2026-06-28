@@ -19,6 +19,7 @@
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import { getCivilizationColor } from "$lib/config";
 	import { formatDate, formatEnum } from "$lib/utils/formatting";
+	import { mapSizeLabel } from "$lib/map-settings";
 
 	// Nation accent color for the name cell (falls back to inheriting the
 	// row's text color when a nation has no defined color).
@@ -349,7 +350,7 @@
 								: "—"}
 						</span>
 						<span class="truncate text-tan opacity-80">
-							{game.map_size ? formatEnum(game.map_size, "MAPSIZE_") : "—"}
+							{game.map_size ? mapSizeLabel(game.map_size) : "—"}
 						</span>
 						<span class="text-right font-semibold text-tan opacity-80">
 							{game.total_turns}

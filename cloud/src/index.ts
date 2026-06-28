@@ -94,11 +94,13 @@ import {
 	handlePatchMatchSchedule,
 	handlePatchSlot,
 	handlePatchTournament,
+	handleReinstateSlot,
 	handleReorderSlots,
 	handleRevokeTournamentAdmin,
 	handleRetroEditMatch,
 	handleStartTournament,
 	handleTransitionChampionship,
+	handleWithdrawSlot,
 } from "./tournament/admin";
 import type { TournamentAdminEnv } from "./tournament/admin";
 
@@ -468,6 +470,26 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "DELETE /v1/tournaments/:id/slots/:slot_id",
 		handler: (r, e, m) => handleDeleteSlot(m![1], m![2], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/slots\/([A-Za-z0-9_-]{21})\/withdraw$/,
+		},
+		route: "POST /v1/tournaments/:id/slots/:slot_id/withdraw",
+		handler: (r, e, m) => handleWithdrawSlot(m![1], m![2], r, e),
+	},
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/slots\/([A-Za-z0-9_-]{21})\/withdraw$/,
+		},
+		route: "DELETE /v1/tournaments/:id/slots/:slot_id/withdraw",
+		handler: (r, e, m) => handleReinstateSlot(m![1], m![2], r, e),
 	},
 	// Lifecycle — single admin gate (the second is /transition-championship).
 	// Round 1 for both Swiss divisions is generated in this same call;

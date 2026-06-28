@@ -1,6 +1,6 @@
 {
 	"name": "per-ankh",
-	"version": "2026-06-06-293a30b",
+	"version": "2026-06-20-0791f86",
 	"description": "Web analytics for Old World save files",
 	"type": "module",
 	"scripts": {
@@ -19,15 +19,18 @@
 		"bake:sprites": "tsx scripts/bake-sprites.ts",
 		"bake:tech-names": "tsx scripts/bake-tech-names.ts",
 		"bake:improvement-names": "tsx scripts/bake-improvement-names.ts",
+		"bake:difficulty-names": "tsx scripts/bake-difficulty-names.ts",
+		"bake:goal-names": "tsx scripts/bake-goal-names.ts",
 		"bake:victory-ordering": "tsx scripts/bake-victory-ordering.ts",
 		"bake:map-options": "tsx scripts/bake-map-options.ts",
 		"bake:law-classes": "tsx scripts/bake-law-classes.ts",
+		"bake:specialists": "tsx scripts/bake-specialists.ts",
 		"bake:finalize": "tsx scripts/build-manifests.ts",
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",
 		"bake:screenshots": "node scripts/capture-home-screenshots.mjs",
 		"ux:review": "node scripts/capture-ux-review.mjs",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:finalize"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:difficulty-names && npm run bake:goal-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:specialists && npm run bake:finalize"
 	},
 	"license": "MIT",
 	"dependencies": {
@@ -65,5 +68,8 @@
 		"tsx": "^4.21.0",
 		"typescript": "~5.6.2",
 		"vite": "^6.0.3"
+	},
+	"overrides": {
+		"esbuild": "0.28.1"
 	}
 }

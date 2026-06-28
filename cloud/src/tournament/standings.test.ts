@@ -13,13 +13,14 @@ const CONFIG: TournamentConfig = {
 	swiss_max_rounds: 5,
 };
 
-function slot(id: string, seed = 0): SlotRef {
+function slot(id: string, seed = 0, withdrawn = false): SlotRef {
 	return {
 		slot_id: id,
 		phase: "swiss",
 		division: "A",
 		swiss_seed: seed,
 		championship_seed: null,
+		withdrawn,
 	};
 }
 
@@ -46,6 +47,7 @@ function standing(
 		opponents_buchholz: 0,
 		cumulative: 0,
 		swiss_seed: 0,
+		withdrawn: false,
 		...extra,
 	};
 }
@@ -224,6 +226,20 @@ describe("computeStandings — Buchholz cut-1 and Cumulative", () => {
 		expect(get("B").opponents_buchholz).toBe(13);
 		expect(get("C").opponents_buchholz).toBe(12);
 		expect(get("D").opponents_buchholz).toBe(12);
+	});
+
+	it("carries the withdrawn flag while keeping the match-derived record", () => {
+		// A beat W in round 1; W then withdrew. W still appears in standings
+		// with its frozen 0-1 record (so the table can show it), flagged
+		// withdrawn so the championship qualifier filter can drop it.
+		const slots = [slot("A", 1), slot("W", 2, true)];
+		const matches = [match("m1", 1, "A", "W", "A")];
+		const standings = computeStandings(slots, matches, CONFIG);
+		const w = standings.find((s) => s.slot_id === "W")!;
+		expect(w.withdrawn).toBe(true);
+		expect(w.wins).toBe(0);
+		expect(w.losses).toBe(1);
+		expect(standings.find((s) => s.slot_id === "A")!.withdrawn).toBe(false);
 	});
 });
 

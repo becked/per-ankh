@@ -124,6 +124,9 @@
 					playerWonders={game.player_wonders}
 					playerRoster={game.player_roster}
 					playerNations={game.player_nations}
+					characters={game.characters}
+					characterTraits={game.character_traits}
+					playerGoals={game.player_goals}
 					userNation={game.user_nation ?? null}
 					userDisplayName={game.user_display_name ?? null}
 					userWon={game.user_won ?? null}

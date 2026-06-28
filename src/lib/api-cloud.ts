@@ -1006,6 +1006,33 @@ export const cloudApi = {
 		});
 	},
 
+	// Admin-only mid-tournament withdrawal: removes the player from all future
+	// pairing and from championship qualifiers; their current pending match is
+	// forfeited to the opponent. Server returns 409 during "setup" (delete the
+	// slot instead) or "complete". reinstateSlot clears it (takes effect from
+	// the next round generated).
+	withdrawSlot: async (
+		tournamentId: string,
+		slotId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/${slotId}/withdraw`, {
+			...opts,
+			method: "POST",
+		});
+	},
+
+	reinstateSlot: async (
+		tournamentId: string,
+		slotId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/${slotId}/withdraw`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
 	// Drag-and-drop reorder of swiss-phase slots. divisions.A and .B are the
 	// desired display order (slot_ids); server renumbers swiss_seed = 1..N
 	// within each and reassigns division for slots that moved across.
@@ -1275,6 +1302,13 @@ export type MapPoolEntryInput = {
 	options?: Record<string, string | boolean>;
 };
 
+// One external link in a tournament's "Links" menu. `url` is always an http(s)
+// link (server-validated; see cloud LinkUrlSchema), rendered as an <a href>.
+export interface TournamentLink {
+	label: string;
+	url: string;
+}
+
 export interface TournamentDetail {
 	tournament_id: string;
 	slug: string;
@@ -1287,6 +1321,9 @@ export interface TournamentDetail {
 	swiss_losses_to_eliminate: number;
 	swiss_max_rounds: number;
 	map_pool: MapPoolEntry[];
+	// Admin-curated external links shown in the header's "Links" menu (empty
+	// array when none configured).
+	links: TournamentLink[];
 	slot_counts: {
 		swiss: number;
 		championship: number;
@@ -1344,6 +1381,9 @@ export interface PatchTournamentBody {
 	swiss_losses_to_eliminate?: number;
 	swiss_max_rounds?: number;
 	map_pool?: MapPoolEntryInput[];
+	// Full replacement of the tournament's links list (≤16). Each url must be an
+	// http(s) link (server-enforced). Editable in every phase.
+	links?: TournamentLink[];
 	// Toggle self-service signups. Only valid in setup; PATCH rejects
 	// re-opening once status moves past setup. handleStartTournament auto-
 	// clears the flag on the setup → swiss transition.
@@ -1388,6 +1428,10 @@ export interface SlotStanding {
 	wins: number;
 	losses: number;
 	status: "active" | "advanced" | "eliminated";
+	// True when an admin has withdrawn the player mid-tournament. Orthogonal to
+	// `status` (a withdrawn player keeps their frozen record and may even be
+	// 'advanced'); the UI renders a "Withdrawn" badge that takes precedence.
+	withdrawn: boolean;
 	buchholz_cut1: number;
 	opponents_buchholz: number;
 	cumulative: number;
@@ -1407,6 +1451,12 @@ export interface SlotStanding {
 	// populated for admin viewers (null for everyone else); null also when the
 	// player didn't answer. Admin-only display in the roster.
 	signup_answer: string | null;
+	// The slot's raw stored Discord handle. Only populated for admin viewers
+	// (null for everyone else). The occupant editor seeds and compares against
+	// this — never display_name — so editing the signup answer can't rewrite the
+	// handle and unlink the slot. null also for unclaimed slots is fine (the
+	// editor falls back to display_name, which equals the typed name there).
+	discord_username: string | null;
 }
 
 // One entry in the combined-ranking response field. Spans both divisions
@@ -1418,6 +1468,7 @@ export interface CombinedQualifier {
 	wins: number;
 	losses: number;
 	status: "active" | "advanced" | "eliminated";
+	withdrawn: boolean;
 	h2h: number;
 	buchholz_cut1: number;
 	opponents_buchholz: number;
@@ -1496,6 +1547,13 @@ export interface TournamentMatch {
 	slot_a_user_id: string | null;
 	slot_b_display_name: string | null;
 	slot_b_user_id: string | null;
+	// Raw stored Discord handle of each side's LIVE slot occupant (not the
+	// snapshot). Only populated for admin viewers (null otherwise, and null for
+	// pending/bye sides). The substitute editor seeds and compares against this
+	// so opening it on a claimed slot can't rewrite the handle to the display
+	// name and unlink the slot.
+	slot_a_discord_username: string | null;
+	slot_b_discord_username: string | null;
 	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
 	// pending matches (no snapshot) and for slots whose occupant had no
 	// claimed discord_id at report time — frontend falls through to live
