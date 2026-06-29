@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-06-28-e9925a3] - 2026-06-28
+
+### Features
+
+- (users) operator-set display alias overriding Discord name — [e9925a3](https://github.com/becked/per-ankh/commit/e9925a343aeb89f0b2e2bddf49f96cc2bb6e0a8c)
+
 ## [2026-06-27-987bab3] - 2026-06-27
 
 ### Features
