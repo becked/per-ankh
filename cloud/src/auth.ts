@@ -37,6 +37,7 @@ import {
 } from "./session";
 import type { SessionEnv } from "./session";
 import { isSiteAdmin } from "./admin";
+import { displayNameSql } from "./identity";
 import { logError, setSecurityReason } from "./log";
 
 export interface AuthEnv extends SessionEnv {
@@ -461,7 +462,9 @@ export async function handleDiscordCallback(
 		   email = excluded.email,
 		   email_verified = excluded.email_verified,
 		   last_login_at = datetime('now')
-		 RETURNING user_id, discord_id, display_name, avatar_hash`,
+		 -- alias (operator override) wins over the Discord display_name; bare
+		 -- column names because RETURNING can't be table-qualified.
+		 RETURNING user_id, discord_id, COALESCE(alias, display_name) AS display_name, avatar_hash`,
 	)
 		.bind(
 			newUserId,
@@ -664,7 +667,9 @@ export async function handleDevLogin(
 		   display_name = excluded.display_name,
 		   discord_username = excluded.discord_username,
 		   last_login_at = datetime('now')
-		 RETURNING user_id, discord_id, display_name, avatar_hash`,
+		 -- alias (operator override) wins over the Discord display_name; bare
+		 -- column names because RETURNING can't be table-qualified.
+		 RETURNING user_id, discord_id, COALESCE(alias, display_name) AS display_name, avatar_hash`,
 	)
 		.bind(newUserId, discord_id, displayName, username)
 		.first<UserRow>();
@@ -730,7 +735,7 @@ export async function handleMe(
 	}
 
 	const row = await env.SHARE_DB.prepare(
-		"SELECT user_id, discord_id, display_name, avatar_hash, default_game_public FROM users WHERE user_id = ?",
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, default_game_public FROM users WHERE user_id = ?`,
 	)
 		.bind(session.data.user_id)
 		.first<UserRow & { default_game_public: number }>();

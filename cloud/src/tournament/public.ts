@@ -4,6 +4,7 @@
 // tournaments stay admin-only unless signups_open=1 (see setupGateHides).
 
 import { buildAvatarUrl } from "../auth";
+import { displayNameSql } from "../identity";
 import {
 	sessionFromRequest,
 	type SessionData,
@@ -279,7 +280,7 @@ async function loadListAggregates(
 		// JS from (discord_id, avatar_hash) since the column isn't stored.
 		env.SHARE_DB.prepare(
 			`SELECT r.tournament_id,
-			        COALESCE(u.display_name, s.discord_username) AS display_name,
+			        COALESCE(${displayNameSql("u")}, s.discord_username) AS display_name,
 			        u.discord_id,
 			        u.avatar_hash
 			 FROM tournament_rounds r
@@ -455,7 +456,7 @@ export async function handleTournamentDetail(
 	// users for display_name + avatar — both always present (display_name is
 	// NOT NULL; discord_id always yields a buildAvatarUrl result).
 	const adminRows = await env.SHARE_DB.prepare(
-		`SELECT u.display_name, u.discord_id, u.avatar_hash
+		`SELECT ${displayNameSql("u")} AS display_name, u.discord_id, u.avatar_hash
 		 FROM tournament_admins ta
 		 JOIN users u ON u.user_id = ta.user_id
 		 WHERE ta.tournament_id = ?
@@ -1057,7 +1058,7 @@ export async function handleGameTournamentLink(
 	// the stored discord_username for unclaimed slots.
 	const slots = await env.SHARE_DB.prepare(
 		`SELECT s.slot_id,
-		        COALESCE(u.display_name, s.discord_username) AS display_name
+		        COALESCE(${displayNameSql("u")}, s.discord_username) AS display_name
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.slot_id = ? OR s.slot_id = ?`,
@@ -1237,7 +1238,7 @@ export async function loadUserIdentitiesForMatches(
 	const ids = [...userIds];
 	const placeholders = ids.map(() => "?").join(",");
 	const res = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, display_name, avatar_hash
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash
 		 FROM users WHERE user_id IN (${placeholders})`,
 	)
 		.bind(...ids)

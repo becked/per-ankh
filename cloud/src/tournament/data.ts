@@ -6,6 +6,7 @@
 // invalidation key for /standings and /bracket.
 
 import { buildAvatarUrl } from "../auth";
+import { displayNameSql } from "../identity";
 import type {
 	Division,
 	MapPoolEntry,
@@ -178,7 +179,7 @@ export async function loadSlots(
 ): Promise<SlotRow[]> {
 	const res = await env.SHARE_DB.prepare(
 		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
-		        u.display_name AS user_display_name
+		        ${displayNameSql("u")} AS user_display_name
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.tournament_id = ?
@@ -244,7 +245,7 @@ export async function loadSlot(
 ): Promise<SlotRow | null> {
 	return env.SHARE_DB.prepare(
 		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
-		        u.display_name AS user_display_name
+		        ${displayNameSql("u")} AS user_display_name
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.slot_id = ?`,
@@ -264,7 +265,7 @@ export async function loadSlotInTournament(
 ): Promise<SlotRow | null> {
 	return env.SHARE_DB.prepare(
 		`SELECT s.*, u.avatar_hash AS user_avatar_hash,
-		        u.display_name AS user_display_name
+		        ${displayNameSql("u")} AS user_display_name
 		 FROM tournament_slots s
 		 LEFT JOIN users u ON u.user_id = s.user_id
 		 WHERE s.slot_id = ? AND s.tournament_id = ?`,

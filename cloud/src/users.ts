@@ -17,6 +17,7 @@
 import * as v from "valibot";
 import { buildAvatarUrl } from "./auth";
 import { countEventsSince } from "./games";
+import { displayNameSql } from "./identity";
 import { logError } from "./log";
 import { UserSearchQuerySchema } from "./schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "./session";
@@ -117,15 +118,18 @@ export async function handleUserSearch(
 	// index. Table is small enough that the scan is fine — promote to a
 	// functional index if user count grows past a few thousand.
 	const rows = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, discord_username, display_name
+		`SELECT user_id, discord_id, discord_username,
+		        ${displayNameSql("users")} AS display_name
 		 FROM users
-		 WHERE (LOWER(display_name) LIKE ? OR LOWER(discord_username) LIKE ?)
+		 WHERE (LOWER(display_name) LIKE ?
+		        OR LOWER(discord_username) LIKE ?
+		        OR LOWER(alias) LIKE ?)
 		   AND discord_username IS NOT NULL
 		   AND display_name IS NOT NULL
 		 ORDER BY display_name
 		 LIMIT ?`,
 	)
-		.bind(q + "%", q + "%", limit)
+		.bind(q + "%", q + "%", q + "%", limit)
 		.all<{
 			user_id: string;
 			discord_id: string;
@@ -161,7 +165,7 @@ export async function handleUserProfile(
 	const cors = cloudCorsHeaders(env, request);
 
 	const row = await env.SHARE_DB.prepare(
-		"SELECT user_id, discord_id, display_name, avatar_hash FROM users WHERE user_id = ?",
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash FROM users WHERE user_id = ?`,
 	)
 		.bind(userId)
 		.first<UserProfileRow>();

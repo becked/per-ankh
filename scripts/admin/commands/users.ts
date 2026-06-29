@@ -3,7 +3,7 @@
 // `./per-ankh admin find-user <query>` — search users by handle / display name
 //   / email, with their tournament-slot involvement.
 
-import { d1Batch, d1Query, sqlStr } from "../wrangler";
+import { d1Batch, d1Exec, d1Query, sqlStr } from "../wrangler";
 import {
 	bold,
 	type Column,
@@ -12,6 +12,7 @@ import {
 	formatBytes,
 	formatDate,
 	info,
+	ok,
 	printCount,
 	printDetail,
 	printTable,
@@ -38,6 +39,7 @@ interface UserListRow {
 interface UserRow {
 	user_id: string;
 	display_name: string;
+	alias: string | null;
 	discord_id: string;
 	avatar_hash: string | null;
 	email: string | null;
@@ -79,6 +81,7 @@ interface UserMatchRow {
 	user_id: string;
 	discord_username: string | null;
 	display_name: string;
+	alias: string | null;
 	discord_id: string;
 	email: string | null;
 	created_at: string;
@@ -223,6 +226,7 @@ export async function runDetail(
 	printDetail("User", [
 		["User ID", user.user_id],
 		["Display name", emdash(user.display_name)],
+		["Alias", emdash(user.alias)],
 		["Discord ID", user.discord_id],
 		["Email", emdash(user.email)],
 		["Email verified", user.email_verified ? "yes" : "no"],
@@ -327,11 +331,12 @@ export async function runFind(
 	const userPredicate =
 		`lower(u.discord_username) LIKE ${like} ` +
 		`OR lower(u.display_name) LIKE ${like} ` +
+		`OR lower(u.alias) LIKE ${like} ` +
 		`OR lower(u.email) LIKE ${like}`;
 
 	const batch = await d1Batch([
 		`SELECT
-		   u.user_id, u.discord_username, u.display_name, u.discord_id, u.email,
+		   u.user_id, u.discord_username, u.display_name, u.alias, u.discord_id, u.email,
 		   u.created_at, u.last_login_at,
 		   (SELECT COUNT(*) FROM games g WHERE g.user_id = u.user_id) AS game_count
 		 FROM users u
@@ -373,6 +378,7 @@ export async function runFind(
 				{ header: "USER_ID", width: 22 },
 				{ header: "HANDLE", width: 20 },
 				{ header: "NAME", width: 18 },
+				{ header: "ALIAS", width: 16 },
 				{ header: "EMAIL", width: 26 },
 				{ header: "GAMES", width: 5, align: "right" },
 				{ header: "LAST LOGIN", width: 16 },
@@ -381,6 +387,7 @@ export async function runFind(
 				u.user_id,
 				emdash(u.discord_username),
 				emdash(u.display_name),
+				emdash(u.alias),
 				emdash(u.email),
 				String(u.game_count),
 				formatDate(u.last_login_at),
@@ -421,4 +428,110 @@ export async function runFind(
 		);
 		printCount(slots.length, "slots matched");
 	}
+}
+
+// Cap matches the migration's intent (a display label, not free text) and
+// keeps the alias from blowing out table layouts wherever it's rendered.
+const MAX_ALIAS_LEN = 64;
+
+interface AliasUserRow {
+	user_id: string;
+	display_name: string;
+	alias: string | null;
+}
+
+// `./per-ankh admin set-alias <user_id> <alias>` — set an operator display
+// alias that overrides the Discord display_name everywhere the app renders
+// this account (resolved server-side via COALESCE; see cloud/src/identity.ts).
+export async function runSetAlias(
+	argv: string[],
+	opts: CommandOpts,
+): Promise<void> {
+	const { positional } = parseFlags(argv);
+	const userId = positional[0];
+	const rawAlias = positional[1];
+	if (!userId || rawAlias === undefined) {
+		throw new Error("Usage: ./per-ankh admin set-alias <user_id> <alias>");
+	}
+	const alias = rawAlias.trim();
+	if (alias.length === 0) {
+		throw new Error("Alias is empty (use clear-alias to remove an alias).");
+	}
+	if (alias.length > MAX_ALIAS_LEN) {
+		throw new Error(
+			`Alias too long (${alias.length} > ${MAX_ALIAS_LEN} chars).`,
+		);
+	}
+	for (const ch of alias) {
+		const code = ch.charCodeAt(0);
+		if (code < 0x20 || code === 0x7f) {
+			throw new Error("Alias contains control characters.");
+		}
+	}
+
+	const rows = await d1Query<AliasUserRow>(
+		`SELECT user_id, display_name, alias FROM users WHERE user_id = ${sqlStr(userId)}`,
+	);
+	const user = rows[0];
+	if (!user) {
+		throw new Error(`User not found: ${userId}`);
+	}
+
+	await d1Exec(
+		`UPDATE users SET alias = ${sqlStr(alias)} WHERE user_id = ${sqlStr(userId)}`,
+	);
+
+	if (opts.json) {
+		printJson({
+			user_id: userId,
+			display_name: user.display_name,
+			alias,
+			previous_alias: user.alias,
+		});
+		return;
+	}
+	ok(
+		`Alias set: ${user.display_name} (${userId}) → "${alias}"` +
+			(user.alias ? ` (was "${user.alias}")` : ""),
+	);
+}
+
+// `./per-ankh admin clear-alias <user_id>` — drop the operator alias, reverting
+// the account to its Discord display_name everywhere.
+export async function runClearAlias(
+	argv: string[],
+	opts: CommandOpts,
+): Promise<void> {
+	const { positional } = parseFlags(argv);
+	const userId = positional[0];
+	if (!userId) {
+		throw new Error("Usage: ./per-ankh admin clear-alias <user_id>");
+	}
+
+	const rows = await d1Query<AliasUserRow>(
+		`SELECT user_id, display_name, alias FROM users WHERE user_id = ${sqlStr(userId)}`,
+	);
+	const user = rows[0];
+	if (!user) {
+		throw new Error(`User not found: ${userId}`);
+	}
+	if (user.alias === null) {
+		info(`User ${user.display_name} (${userId}) has no alias set.`);
+		return;
+	}
+
+	await d1Exec(
+		`UPDATE users SET alias = NULL WHERE user_id = ${sqlStr(userId)}`,
+	);
+
+	if (opts.json) {
+		printJson({
+			user_id: userId,
+			display_name: user.display_name,
+			alias: null,
+			previous_alias: user.alias,
+		});
+		return;
+	}
+	ok(`Alias cleared: ${user.display_name} (${userId}) (was "${user.alias}")`);
 }

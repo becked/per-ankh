@@ -26,6 +26,7 @@ import {
 import { sessionFromRequest, type SessionEnv } from "../session";
 import { isSiteAdmin } from "../admin";
 import { buildAvatarUrl } from "../auth";
+import { displayNameSql } from "../identity";
 import {
 	cloudCorsHeaders,
 	errorResponse,
@@ -822,7 +823,7 @@ export async function handleListTournamentAdmins(
 	if (!a.ok) return a.response;
 
 	const rows = await env.SHARE_DB.prepare(
-		`SELECT ta.user_id, u.display_name, u.discord_id, u.avatar_hash
+		`SELECT ta.user_id, ${displayNameSql("u")} AS display_name, u.discord_id, u.avatar_hash
 		 FROM tournament_admins ta
 		 JOIN users u ON u.user_id = ta.user_id
 		 WHERE ta.tournament_id = ?
@@ -862,7 +863,7 @@ export async function handleGrantTournamentAdmin(
 	const targetUserId = body.body.user_id;
 
 	const target = await env.SHARE_DB.prepare(
-		"SELECT user_id, display_name, discord_id, avatar_hash FROM users WHERE user_id = ?",
+		`SELECT user_id, ${displayNameSql("users")} AS display_name, discord_id, avatar_hash FROM users WHERE user_id = ?`,
 	)
 		.bind(targetUserId)
 		.first<{

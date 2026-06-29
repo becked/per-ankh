@@ -32,6 +32,7 @@ import { buildUserScopeWhere, parseScopeParam } from "./games-scope";
 import type { SessionData, SessionEnv } from "./session";
 import { isSiteAdmin } from "./admin";
 import { buildAvatarUrl } from "./auth";
+import { displayNameSql } from "./identity";
 import { captureOnlineIds } from "./online-ids";
 import { logError, logWarn } from "./log";
 import { isTournamentAdmin } from "./tournament/authz";
@@ -1923,7 +1924,7 @@ export async function handlePublicRecentGames(
 		        g.map_size, g.map_class, g.difficulty, g.total_turns,
 		        g.save_date, g.created_at,
 		        g.user_id AS uploader_user_id,
-		        u.display_name AS uploader_display_name,
+		        ${displayNameSql("u")} AS uploader_display_name,
 		        u.discord_id AS uploader_discord_id,
 		        u.avatar_hash AS uploader_avatar_hash
 		 FROM games g
@@ -2118,7 +2119,7 @@ export async function handleGameDetail(
 		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
 		            ORDER BY ps.player_index ASC LIMIT 1
 		        )) AS user_nation,
-		        u.display_name AS user_display_name
+		        ${displayNameSql("u")} AS user_display_name
 		 FROM games g
 		 JOIN users u ON g.user_id = u.user_id
 		 WHERE g.game_id = ?`,
@@ -2734,7 +2735,7 @@ export async function handleAdminListOutOfDate(
 		        g.total_turns, g.user_nation, g.user_won, g.winner_nation,
 		        g.victory_type, g.map_size, g.is_public, g.collection_id,
 		        g.created_at, g.parser_version,
-		        u.display_name AS owner_display_name
+		        ${displayNameSql("u")} AS owner_display_name
 		 FROM games g
 		 JOIN users u ON g.user_id = u.user_id
 		 WHERE g.parser_version != ?

@@ -28,6 +28,8 @@ function printHelp(): void {
 			"  users [--limit N] [--sort K]     List users (sort: recent|uploads|created)",
 			"  user <user_id>                   Show one user's detail",
 			"  find-user <query> [--limit N]    Find users by handle / name / email (+ slots)",
+			"  set-alias <user_id> <alias>      Set an operator display alias (overrides name)",
+			"  clear-alias <user_id>            Remove a user's display alias",
 			"  games [--limit N] [--user U]     List recent cloud games",
 			"  game <game_id>                   Show one game's detail",
 			"  delete-game <game_id>            Delete one game (D1 + R2); account stays",
@@ -118,6 +120,10 @@ export async function main(argv: string[]): Promise<void> {
 			return users.runDetail(subArgs, opts);
 		case "find-user":
 			return users.runFind(subArgs, opts);
+		case "set-alias":
+			return users.runSetAlias(subArgs, opts);
+		case "clear-alias":
+			return users.runClearAlias(subArgs, opts);
 		case "games":
 			return games.runList(subArgs, opts);
 		case "game":
