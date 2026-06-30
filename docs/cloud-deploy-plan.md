@@ -58,7 +58,7 @@ One-time setup. Everything below blocked the original deploy.
 
 ### 3.1. Sessions KV namespace
 
-`cloud/wrangler.toml:39-40` currently has `REPLACE_WITH_PROD_KV_ID` placeholders.
+`cloud/wrangler.toml` now has real `SESSIONS_KV` namespace IDs — this one-time step is done (it originally shipped `REPLACE_WITH_PROD_KV_ID` placeholders).
 
 ```bash
 cd cloud
@@ -337,8 +337,9 @@ contend with live app queries (D1 is single-threaded per database). The emit
 chokepoint is `cloud/src/security-events.ts`; the schema is
 `cloud/migrations-security/0001_security_events.sql`.
 
-`cloud/wrangler.toml` has placeholder `database_id`s (`00000000-…`) for the
-prod and staging `SECURITY_DB` bindings. Provision and wire it up in this order
+Both the **prod** and **staging** `SECURITY_DB` bindings in `cloud/wrangler.toml`
+now carry real `database_id`s — both databases are provisioned. The steps below
+remain as the provisioning procedure of record. Provision and wire it up in this order
 — **the database must exist before the Worker deploys** (wrangler validates
 bindings), and Skiff's drain errors on a missing database (but tolerates a
 missing table):

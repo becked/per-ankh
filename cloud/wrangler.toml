@@ -39,7 +39,6 @@ migrations_dir = "migrations"
 # API; emit chokepoint in src/security-events.ts. Migrations live in
 # cloud/migrations-security/, applied out-of-band via `migrate:security:*`
 # (deliberately NOT wired into the deploy pipeline — the schema is static).
-# database_id is a placeholder until `wrangler d1 create per-ankh-security-events`.
 [[d1_databases]]
 binding = "SECURITY_DB"
 database_name = "per-ankh-security-events"
@@ -158,8 +157,7 @@ migrations_dir = "migrations"
 # Staging security_events DB (see top-level SECURITY_DB comment). Binding name
 # must match prod — the secrets.parity preflight enforces it. Staging is opted
 # out of the nightly cron, so this DB won't auto-prune (fine: low volume,
-# disposable, recloned). database_id placeholder until
-# `wrangler d1 create per-ankh-security-events-staging`.
+# disposable, recloned).
 [[env.staging.d1_databases]]
 binding = "SECURITY_DB"
 database_name = "per-ankh-security-events-staging"
