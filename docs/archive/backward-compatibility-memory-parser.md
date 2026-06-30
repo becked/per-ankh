@@ -1,5 +1,7 @@
 # Backward Compatibility: Memory Parser (2024 Save Format)
 
+> **⚠️ Historical — archived 2026-06-30.** The fallback it plans is implemented now in `src/lib/parser/parsers/events.ts`; the Rust/DuckDB guidance below is dead. Superseded by `src/lib/parser/parsers/events.ts`. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 **Date:** November 6, 2025
 **Status:** Not Implemented
 **Priority:** Medium

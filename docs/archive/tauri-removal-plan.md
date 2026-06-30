@@ -1,5 +1,7 @@
 # Tauri Removal — Implementation Plan
 
+> **⚠️ Historical — archived 2026-06-30.** A completed migration plan — the Tauri/Rust removal is done. Superseded by `CLAUDE.md` for the current single cloud build. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 Replaces Phase F + G of [`cloud-productionization-plan.md`](./cloud-productionization-plan.md). The user has decided not to wait for a bake window before pulling out Tauri — we move to Cloudflare and fix issues as they surface.
 
 ## Goals

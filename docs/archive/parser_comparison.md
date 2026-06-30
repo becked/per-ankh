@@ -1,5 +1,7 @@
 # Parser Architecture Comparison Report
 
+> **⚠️ Historical — archived 2026-06-30.** Compares the removed Rust parser; that architecture is gone. Superseded by the production parser, now TypeScript under `src/lib/parser/`. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 **Date:** 2025-11-06
 **Author:** Research Analysis
 **Subject:** Comparing Python Tournament Parser vs. Rust Per-Ankh Parser

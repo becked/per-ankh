@@ -1,5 +1,7 @@
 # XML Parser Implementation Plan - Milestones 4-6 Updates
 
+> **⚠️ Historical — archived 2026-06-30.** A pre-rewrite Rust/DuckDB milestone plan; the format facts live in the current parser. Superseded by `docs/xml-parser-gap-analysis.md` + `src/lib/parser/`. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 **Based on actual XML structure analysis**
 
 This document updates Milestones 4-6 of the XML parser implementation plan based on learnings from the actual Old World save file XML structure.

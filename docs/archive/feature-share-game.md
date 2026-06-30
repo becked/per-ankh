@@ -1,5 +1,7 @@
 # Feature Design: Share Game
 
+> **⚠️ Historical — archived 2026-06-30.** Design spec for the removed desktop Share Game feature. Superseded by `cloud/src/share-legacy.ts` + CLAUDE.md “Legacy share viewer”. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 ## 1. Problem Statement
 
 Per-Ankh is a desktop-only application. When a user finishes an Old World game and wants to share their analytics with friends, forum posts, or the community, they have no way to do so. Screenshots lose interactivity. The raw DuckDB database is not portable.

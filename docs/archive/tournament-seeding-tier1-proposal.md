@@ -1,5 +1,7 @@
 # Tournament Seeding: Replace Tier 1 ("Match Wins") with Losses Ascending
 
+> **⚠️ Historical — archived 2026-06-30.** Implemented May 2026; preserved as the rationale for the seeding cascade. Superseded by `cloud/src/tournament/standings.ts` + `docs/tournament-rules.md`. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 ## Status
 
 **Implemented** (May 2026). Drafted after investigating siontific's seed-12 result in 2025-redux.

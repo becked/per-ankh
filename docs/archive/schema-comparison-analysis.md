@@ -1,5 +1,7 @@
 # Schema Comparison: Per-Ankh vs Prospector
 
+> **⚠️ Historical — archived 2026-06-30.** Compares the pre-rewrite DuckDB schema, which no longer exists. Superseded by `docs/save-file-format.md` for the durable format facts. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 A detailed analysis of how two applications model Old World save file data, based on inspection of both codebases and the prospector production database (49 tournament matches).
 
 ---

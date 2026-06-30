@@ -1,5 +1,7 @@
 # Tile Ownership Implementation - Hybrid Approach
 
+> **⚠️ Historical — archived 2026-06-30.** Pre-rewrite DuckDB/Rust design; the format facts are correct but the solution is dead. Superseded by `src/lib/parser/parsers/tiles.ts` (current equivalent). Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 **Date:** November 6, 2025
 **Status:** Implemented (requires deduplication fix)
 

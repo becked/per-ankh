@@ -1,5 +1,7 @@
 # Schema vs Save File Format Alignment Analysis
 
+> **⚠️ Historical — archived 2026-06-30.** Pre-rewrite DuckDB schema-alignment analysis (its core claim was retracted). Superseded by `docs/unit-location-in-xml.md` for the one durable correction. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 > **Historical document — pre-rewrite (Tauri/Rust/DuckDB era).** Written
 > 2025-11-06, before the project was rewritten as a SvelteKit +
 > Cloudflare web app. The DuckDB schema and `src/parser/entities/...`

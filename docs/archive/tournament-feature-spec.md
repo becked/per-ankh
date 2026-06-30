@@ -1,5 +1,7 @@
 # Per-Ankh Tournaments: Technical Specification
 
+> **⚠️ Historical — archived 2026-06-30.** A pre-build design spec with large as-built divergences (endpoints/schema/rate-limits that never shipped as written). Superseded by `docs/tournament-rules.md` (rules) + `docs/tournament-implementation-notes.md` (as-built). Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 > **Status:** Feature shipped on the `tournament` branch (commit `8de96ff` and follow-ups). The implementation diverges from this spec in several places — schema details, the registration flow, and a few endpoint shapes. See callouts at the top of §3 and §5, and [`tournament-implementation-notes.md`](./tournament-implementation-notes.md) for the as-built design. The authorization matrix (§7), tiebreaker cascade (§6), and overall lifecycle FSM are accurate.
 
 This document specifies the architecture for layering tournament functionality on top of the cloud rewrite described in [`cloud-rewrite-spec.md`](./cloud-rewrite-spec.md). It assumes the cloud rewrite has shipped: Discord OAuth auth, D1 `users`/`games`/`player_summaries`/`events` tables, R2 blobs at `games/{id}.json.gz` and `saves/{id}.zip`, KV-backed sessions, and the Worker patterns established in `cloud/src/`.

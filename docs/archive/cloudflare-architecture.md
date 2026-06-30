@@ -1,5 +1,7 @@
 # Cloudflare Infrastructure Architecture
 
+> **⚠️ Historical — archived 2026-06-30.** Describes the pre-rewrite Tauri/desktop architecture. Superseded by `CLAUDE.md` + `docs/c4-model.html` (current architecture); `cloud/src/share-legacy.ts` (surviving legacy-share endpoints). Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 ## System Overview
 
 The Cloudflare infrastructure powers the "Share Game" feature, allowing desktop app users to upload game analytics and share them via a public URL. Three Cloudflare services work together:

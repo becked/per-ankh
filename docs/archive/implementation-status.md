@@ -1,5 +1,7 @@
 # XML Parser Implementation Status
 
+> **⚠️ Historical — archived 2026-06-30.** A pre-rewrite (Tauri/Rust/DuckDB) milestone tracker. Superseded by the current parser under `src/lib/parser/`. Audit: [`doc-audit-2026-06-30`](../doc-audit-2026-06-30.md).
+
 > **Historical document — pre-rewrite (Tauri/Rust/DuckDB era).** This
 > file was written 2025-11-05, before the project was rewritten as a
 > SvelteKit + Cloudflare web app with the parser ported to TypeScript
