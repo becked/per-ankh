@@ -7,6 +7,7 @@
 	// it to two players.
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
+	import { toRgba } from "$lib/utils/color";
 
 	export type BuildItem = { unitType: string; count: number };
 
@@ -132,7 +133,10 @@
 								<div
 									class="h-[11px] rounded-l-[3px]"
 									style="width:{(r.ca / max) *
-										100}%;background:linear-gradient(90deg,{ca}30,{ca})"
+										100}%;background:linear-gradient(90deg,{toRgba(
+										ca,
+										0.19,
+									)},{ca})"
 								></div>
 							{/if}
 						</div>
@@ -142,7 +146,10 @@
 								<div
 									class="h-[11px] rounded-r-[3px]"
 									style="width:{(r.cb / max) *
-										100}%;background:linear-gradient(90deg,{cb},{cb}30)"
+										100}%;background:linear-gradient(90deg,{cb},{toRgba(
+										cb,
+										0.19,
+									)})"
 								></div>
 							{/if}
 						</div>

@@ -26,7 +26,9 @@ const OUT = resolve(REPO_ROOT, "src/lib/generated/unit-stats.ts");
 interface UnitEntry {
 	zType?: string;
 	iStrength?: string;
-	TechPrereq?: string;
+	// fast-xml-parser collapses a single <TechPrereq> to a string but yields an
+	// array if the tag ever repeats; take the first prereq in that case.
+	TechPrereq?: string | string[];
 	zAudioMovementType?: string;
 }
 
@@ -39,7 +41,9 @@ const parser = new XMLParser({
 
 async function loadEntries(path: string): Promise<UnitEntry[]> {
 	const xml = await readFile(path, "utf-8");
-	const parsed = parser.parse(xml) as { Root?: { Entry?: UnitEntry | UnitEntry[] } };
+	const parsed = parser.parse(xml) as {
+		Root?: { Entry?: UnitEntry | UnitEntry[] };
+	};
 	const entry = parsed.Root?.Entry;
 	if (entry == null) return [];
 	return Array.isArray(entry) ? entry : [entry];
@@ -61,7 +65,8 @@ async function main(): Promise<void> {
 		stats[zType] = {
 			// Displayed strength = <iStrength> / 10 (milpower = strength × 10).
 			strength: iStrength / 10,
-			tech: u.TechPrereq ?? null,
+			tech:
+				(Array.isArray(u.TechPrereq) ? u.TechPrereq[0] : u.TechPrereq) ?? null,
 			naval: u.zAudioMovementType === "NAVAL",
 		};
 	}

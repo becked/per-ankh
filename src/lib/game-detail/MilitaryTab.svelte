@@ -8,7 +8,8 @@
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import Chart from "$lib/Chart.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { CHART_THEME } from "$lib/config";
+	import { toRgba } from "$lib/utils/color";
+	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
 	import { UNIT_STATS } from "$lib/generated/unit-stats";
 	import SpriteIcon from "./SpriteIcon.svelte";
@@ -59,6 +60,11 @@
 		tableState?: TableState;
 	} = $props();
 
+	// Secondary / muted text shades for the event tooltips (hex literals are the
+	// norm inside chart/tooltip option objects in this codebase).
+	const TOOLTIP_TEXT = "#cfc9bd";
+	const TOOLTIP_MUTED = "#9b948a";
+
 	// Resolved identity lookup (stable label + color per player), keyed by the
 	// player id that every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
@@ -86,9 +92,9 @@
 		orderedPlayers.length === 2 ? [orderedPlayers[0], orderedPlayers[1]] : null,
 	);
 
-	// Units built by a player, split into combat (classifyUnit != null) vs
-	// civilian/support (null), aggregated by unit type.
-	function builtUnits(p: DetailPlayer, combat: boolean): BuildItem[] {
+	// Combat units built by a player (civilian/support units — classifyUnit
+	// null — are excluded), aggregated by unit type.
+	function builtUnits(p: DetailPlayer): BuildItem[] {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
 		const m = new Map<string, number>();
 		for (const u of ownedByPlayer(
@@ -97,7 +103,7 @@
 			(x) => x.player_id,
 			(x) => x.nation,
 		)) {
-			if ((classifyUnit(u.unit_type) != null) !== combat) continue;
+			if (classifyUnit(u.unit_type) == null) continue;
 			m.set(u.unit_type, (m.get(u.unit_type) ?? 0) + u.count);
 		}
 		return [...m].map(([unitType, count]) => ({ unitType, count }));
@@ -154,11 +160,9 @@
 		matchup
 			? (() => {
 					const [a, b] = matchup;
-					const armyA = endingArmy(a);
-					const armyB = endingArmy(b);
-					const milA = builtUnits(a, true);
-					const milB = builtUnits(b, true);
-					return [
+					const milA = builtUnits(a);
+					const milB = builtUnits(b);
+					const blocks: BuildBlock[] = [
 						{
 							title: "Military Built",
 							sub: `${sum(milA)} v ${sum(milB)} total · ${num(
@@ -169,7 +173,16 @@
 							donutA: makeDonut(a.label, a.color, milA),
 							donutB: makeDonut(b.label, b.color, milB),
 						},
-						{
+					];
+					// Ending Army only when the blob carries the ending unit roster
+					// (`units`); without it the counts would read "0 v 0 alive" next
+					// to real power numbers. The roster is the save's full game state
+					// (all units, not fog-limited — fog is a separate per-tile mask),
+					// so the counts are complete for both sides.
+					if (units.length > 0) {
+						const armyA = endingArmy(a);
+						const armyB = endingArmy(b);
+						blocks.push({
 							title: "Ending Army",
 							sub: `${armyA.total} v ${armyB.total} alive · ${num(
 								endingPower(a),
@@ -178,8 +191,9 @@
 							b: armyB.items,
 							donutA: makeDonut(a.label, a.color, armyA.items),
 							donutB: makeDonut(b.label, b.color, armyB.items),
-						},
-					];
+						});
+					}
+					return blocks;
 				})()
 			: [],
 	);
@@ -189,25 +203,6 @@
 	// look) but stays uncluttered: game-event annotations — leader successions
 	// (incl. the starting ruler) and the 4th/7th-law milestones — live in the
 	// per-nation event bars above the chart, aligned to the turn axis.
-	// Player color → rgba at a given alpha, for the gradient area fill.
-	function toRgba(c: string, a: number): string {
-		if (c.startsWith("#")) {
-			let h = c.slice(1);
-			if (h.length === 3)
-				h = h
-					.split("")
-					.map((x) => x + x)
-					.join("");
-			const n = parseInt(h, 16);
-			return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
-		}
-		const m = c.match(/rgba?\(([^)]+)\)/);
-		if (m) {
-			const [r, g, b] = m[1].split(",").map((x) => x.trim());
-			return `rgba(${r},${g},${b},${a})`;
-		}
-		return c;
-	}
 
 	// Turn values of the shared x-axis (category type), used to snap an event
 	// turn onto a real category so the guide line lands at the right place.
@@ -257,7 +252,7 @@
 		return (
 			`<div style="font-size:12px;line-height:1.5">` +
 			`<div style="font-weight:700;color:${color}">${name}${cog}</div>` +
-			`<div style="color:#cfc9bd">${arch ? `${arch} · ` : ""}crowned T${turn}</div>` +
+			`<div style="color:${TOOLTIP_TEXT}">${arch ? `${arch} · ` : ""}crowned T${turn}</div>` +
 			(ratings
 				? `<div style="display:flex;gap:11px;margin-top:4px">${ratings}</div>`
 				: "") +
@@ -284,14 +279,14 @@
 				const ic = url
 					? `<img src="${url}" alt="" style="width:14px;height:14px"/>`
 					: "";
-				return `<div style="display:flex;align-items:center;gap:6px;color:#cfc9bd">${ic}<span>${formatEnum(l, "LAW_")}</span></div>`;
+				return `<div style="display:flex;align-items:center;gap:6px;color:${TOOLTIP_TEXT}">${ic}<span>${formatEnum(l, "LAW_")}</span></div>`;
 			})
 			.join("");
 		return (
 			`<div style="font-size:12px;line-height:1.55">` +
 			`<div style="font-weight:700;color:${color}">${header}</div>` +
-			`<div style="color:#9b948a">Law ${count} · T${turn}</div>` +
-			`<div style="color:#9b948a;margin:3px 0 2px">Laws active</div>` +
+			`<div style="color:${TOOLTIP_MUTED}">Law ${count} · T${turn}</div>` +
+			`<div style="color:${TOOLTIP_MUTED};margin:3px 0 2px">Laws active</div>` +
 			items +
 			`</div>`
 		);
@@ -314,11 +309,15 @@
 	// that first fields a 5/6/8/10-str unit is a military power spike.
 	const TARGET_STRENGTHS = new Set([5, 6, 8, 10]);
 
-	// Naval is "relevant" only when a sea unit was actually built — otherwise
-	// boat techs (Navigation, etc.) are noise and stay hidden.
-	const navalRelevant = $derived(
-		unitsProduced.some((u) => UNIT_STATS[u.unit_type]?.naval),
-	);
+	// Naval is "relevant" for a player only when THAT player actually built a
+	// sea unit — otherwise their boat techs (Navigation, etc.) are noise and
+	// stay hidden. Gated per-player, not whole-game, so one side's navy doesn't
+	// surface the other's boat-tech markers.
+	function navalRelevantFor(playerId: number): boolean {
+		return unitsProduced.some(
+			(u) => u.player_id === playerId && UNIT_STATS[u.unit_type]?.naval,
+		);
+	}
 
 	// Tooltip for a unit-tech-unlock marker: the tech + the qualifying units it
 	// unlocks (with strength).
@@ -334,13 +333,13 @@
 				const ic = url
 					? `<img src="${url}" alt="" style="width:15px;height:15px"/>`
 					: "";
-				return `<div style="display:flex;align-items:center;gap:6px;color:#cfc9bd">${ic}<span>${formatEnum(u.unitType, "UNIT_")}</span><span style="color:#9b948a">str ${u.strength}${u.naval ? " · sea" : ""}</span></div>`;
+				return `<div style="display:flex;align-items:center;gap:6px;color:${TOOLTIP_TEXT}">${ic}<span>${formatEnum(u.unitType, "UNIT_")}</span><span style="color:${TOOLTIP_MUTED}">str ${u.strength}${u.naval ? " · sea" : ""}</span></div>`;
 			})
 			.join("");
 		return (
 			`<div style="font-size:12px;line-height:1.55">` +
 			`<div style="font-weight:700;color:${color}">${formatEnum(tech, "TECH_")} · T${turn}</div>` +
-			`<div style="color:#9b948a;margin:3px 0 2px">Unlocks</div>` +
+			`<div style="color:${TOOLTIP_MUTED};margin:3px 0 2px">Unlocks</div>` +
 			items +
 			`</div>`
 		);
@@ -356,8 +355,11 @@
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
 		const byPlayer = new Map<number, RailEvent[]>();
 
-		for (const player of playerHistory) {
-			const color = playerById.get(player.player_id)?.color ?? "#888888";
+		playerHistory.forEach((player, playerIdx) => {
+			const color =
+				playerById.get(player.player_id)?.color ??
+				getNationChartColor(player.nation, playerIdx);
+			const playerNaval = navalRelevantFor(player.player_id);
 			const events: RailEvent[] = [];
 
 			// Leaders, including the starting ruler.
@@ -430,7 +432,7 @@
 							([, s]) =>
 								s.tech === d.tech_name &&
 								TARGET_STRENGTHS.has(s.strength) &&
-								(navalRelevant || !s.naval),
+								(playerNaval || !s.naval),
 						)
 						.map(([unitType, s]) => ({
 							unitType,
@@ -452,7 +454,7 @@
 
 			events.sort((a, b) => a.frac - b.frac);
 			byPlayer.set(player.player_id, events);
-		}
+		});
 
 		return byPlayer;
 	});
@@ -532,14 +534,18 @@
 						type: "value",
 						name: "Military Power",
 					},
-					series: playerHistory.map((player) => {
+					series: playerHistory.map((player, i) => {
 						const rp = playerById.get(player.player_id);
-						const color = rp?.color ?? "#888888";
+						// Concrete color for the gradient stops; itemStyle stays
+						// `rp?.color` so ECharts' palette fills in when a player has no
+						// resolved color (matching the other game-detail tabs).
+						const fillColor =
+							rp?.color ?? getNationChartColor(player.nation, i);
 						return {
 							name: rp?.label ?? formatEnum(player.nation, "NATION_"),
 							type: "line",
 							data: player.history.map((h) => h.military_power),
-							itemStyle: { color },
+							itemStyle: { color: rp?.color },
 							lineStyle: { width: 2 },
 							showSymbol: false,
 							// owglick-style gradient fill under each curve.
@@ -551,8 +557,8 @@
 									x2: 0,
 									y2: 1,
 									colorStops: [
-										{ offset: 0, color: toRgba(color, 0.22) },
-										{ offset: 1, color: toRgba(color, 0) },
+										{ offset: 0, color: toRgba(fillColor, 0.22) },
+										{ offset: 1, color: toRgba(fillColor, 0) },
 									],
 								},
 							},
@@ -767,76 +773,80 @@
 			</div>
 
 			<!-- Event rail: per-nation timeline below the plot (turn axis sits just
-			     above). One row per event type so icons never overlap across types. -->
-			<div class="mt-1 flex flex-col gap-1.5">
-				{#each orderedPlayers as rp (rp.playerId)}
-					{@const evs = eventRail.get(rp.playerId) ?? []}
-					{@const kinds = RAIL_KINDS.filter((k) =>
-						evs.some((e) => e.kind === k),
-					)}
-					{#if evs.length > 0}
-						<div
-							class="rounded py-0.5"
-							style="background: {toRgba(rp?.color ?? '#888888', 0.1)};"
-						>
-							{#each kinds as kind, ki (kind)}
-								<div class="relative h-6">
-									{#if ki === 0}
-										<div
-											class="absolute inset-y-0 left-0 flex items-center pl-1.5"
-											style="width: {EVENT_RAIL_LEFT}px;"
-										>
-											{#if rp?.nation}
-												<SpriteIcon
-													category="crests"
-													value={rp.nation}
-													size={18}
-													alt={rp.label}
-												/>
-											{:else}
-												<span
-													class="truncate text-[10px] font-semibold"
-													style="color: {rp?.color};">{rp?.label}</span
-												>
-											{/if}
-										</div>
-									{/if}
-									{#each evs.filter((e) => e.kind === kind) as ev, i (i)}
-										<div
-											class="absolute top-1/2 flex cursor-default items-center"
-											style="left: calc({EVENT_RAIL_LEFT}px + {ev.frac} * (100% - {EVENT_RAIL_LEFT +
-												EVENT_RAIL_RIGHT}px)); transform: translate(-50%, -50%);"
-											role="img"
-											aria-label={ev.kind}
-											onmousemove={(e) => enterEvent(ev, e)}
-											onmouseleave={leaveEvent}
-										>
-											{#if ev.iconUrl}
-												<img
-													src={ev.iconUrl}
-													alt=""
-													style="width:18px;height:18px;"
-												/>
-											{:else}
-												<span
-													class="inline-block h-2.5 w-2.5 rounded-full"
-													style="background: {ev.color};"
-												></span>
-											{/if}
-											{#if ev.num}
-												<span
-													class="ml-0.5 font-mono text-[10px] font-bold leading-none text-bright"
-													>{ev.num}</span
-												>
-											{/if}
-										</div>
-									{/each}
-								</div>
-							{/each}
-						</div>
-					{/if}
-				{/each}
-			</div>
+			     above). One row per event type so icons never overlap across types.
+			     Two-player matchups only — the rail is a 1v1 framing; FFA keeps the
+			     standalone donuts + pivot table below. -->
+			{#if matchup}
+				<div class="mt-1 flex flex-col gap-1.5">
+					{#each orderedPlayers as rp (rp.playerId)}
+						{@const evs = eventRail.get(rp.playerId) ?? []}
+						{@const kinds = RAIL_KINDS.filter((k) =>
+							evs.some((e) => e.kind === k),
+						)}
+						{#if evs.length > 0}
+							<div
+								class="rounded py-0.5"
+								style="background: {toRgba(rp.color, 0.1)};"
+							>
+								{#each kinds as kind, ki (kind)}
+									<div class="relative h-6">
+										{#if ki === 0}
+											<div
+												class="absolute inset-y-0 left-0 flex items-center pl-1.5"
+												style="width: {EVENT_RAIL_LEFT}px;"
+											>
+												{#if rp?.nation}
+													<SpriteIcon
+														category="crests"
+														value={rp.nation}
+														size={18}
+														alt={rp.label}
+													/>
+												{:else}
+													<span
+														class="truncate text-[10px] font-semibold"
+														style="color: {rp?.color};">{rp?.label}</span
+													>
+												{/if}
+											</div>
+										{/if}
+										{#each evs.filter((e) => e.kind === kind) as ev, i (i)}
+											<div
+												class="absolute top-1/2 flex cursor-default items-center"
+												style="left: calc({EVENT_RAIL_LEFT}px + {ev.frac} * (100% - {EVENT_RAIL_LEFT +
+													EVENT_RAIL_RIGHT}px)); transform: translate(-50%, -50%);"
+												role="img"
+												aria-label={ev.kind}
+												onmousemove={(e) => enterEvent(ev, e)}
+												onmouseleave={leaveEvent}
+											>
+												{#if ev.iconUrl}
+													<img
+														src={ev.iconUrl}
+														alt=""
+														style="width:18px;height:18px;"
+													/>
+												{:else}
+													<span
+														class="inline-block h-2.5 w-2.5 rounded-full"
+														style="background: {ev.color};"
+													></span>
+												{/if}
+												{#if ev.num}
+													<span
+														class="ml-0.5 font-mono text-[10px] font-bold leading-none text-bright"
+														>{ev.num}</span
+													>
+												{/if}
+											</div>
+										{/each}
+									</div>
+								{/each}
+							</div>
+						{/if}
+					{/each}
+				</div>
+			{/if}
 		{/if}
 
 		<!-- Standalone army-composition donuts: only for FFA / non-matchup
