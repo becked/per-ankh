@@ -14,14 +14,16 @@
 //   4. If a pairing is a rematch, try swapping one bottom-half slot with
 //      another bottom-half slot to eliminate it without creating a new
 //      rematch.
-//   5. If no clean swap exists, accept the rematch (algorithm is advisory;
-//      admin can override the pairing before starting the round).
+//   5. If no clean swap exists, accept the rematch — an unavoidable rematch
+//      stands; there is no manual re-pair step.
 //   6. Odd-sized buckets: the lowest-ranked slot floats down to the next
 //      bucket.
 //   7. Odd total active in division: lowest-ranked-no-bye-yet gets the bye.
 //
-// All output is advisory — the handler returns it; admin reviews and edits
-// before calling /start.
+// The handler writes this pairing straight into the round's matches when the
+// round is generated — there is no pairing-review/edit step and no endpoint to
+// re-pair a round or reassign a bye. Seeding and division assignment (both set
+// before the tournament starts) are the only levers that shape pairings.
 
 import { computeRecord } from "./standings";
 import type { MatchRef, SlotRef, TournamentConfig } from "./types";
