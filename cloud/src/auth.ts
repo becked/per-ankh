@@ -689,8 +689,9 @@ export async function handleDevLogin(
 		.bind(upsert.user_id)
 		.run();
 
-	// Auto-grant tournament beta so the dev user can actually exercise the
-	// tournament surface (the point of this bypass). Unlike the real callback
+	// Auto-add the dev user to the tournament create-allowlist so they can
+	// create tournaments without an operator grant (the point of this bypass;
+	// the rest of the tournament surface is public). Unlike the real callback
 	// — which only PINS an operator-created row — this inserts one.
 	await env.SHARE_DB.prepare(
 		`INSERT INTO tournament_beta_users (discord_id, user_id, note)

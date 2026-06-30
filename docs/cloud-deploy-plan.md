@@ -18,12 +18,12 @@ the old doc stays as historical context.
   passphrase gated sign-up before launch and was removed at release.) Abuse is
   bounded downstream by the per-user/per-IP/global upload rate limits plus
   Discord's own anti-abuse.
-- **Tournament feature is in private beta.** Every tournament endpoint
-  (public reads, player endpoints, admin endpoints, the tournament-link
-  branch of game upload) 404s unless the caller's discord_id is in the
-  `tournament_beta_users` table. The first deploy that includes migration
-  `0012_tournament_beta_users.sql` ships with an EMPTY allowlist — nobody
-  can see the tournament UI until the operator grants themselves access:
+- **The tournament feature is public.** Anonymous visitors can browse
+  tournaments and view standings/brackets/matches; any logged-in user can
+  sign up, report matches, and act as a granted admin. The
+  `tournament_beta_users` allowlist now gates tournament **creation** only —
+  a non-allowlisted logged-in caller gets `403 TOURNAMENT_CREATE_FORBIDDEN`.
+  Grant a creator with `./per-ankh admin tournament beta-grant <discord-id>`:
   ```
   ./per-ankh admin tournament beta-grant <your-discord-id> --note "self"
   ./per-ankh admin tournament beta-list   # confirm
@@ -31,8 +31,9 @@ the old doc stays as historical context.
   Grants take effect on the next request — no re-login required for users
   whose `user_id` is already in the row (CLI auto-pins on grant when the
   user has signed in). Grants by raw `discord_id` for users who haven't
-  signed in yet get pinned on their first OAuth callback. To exit the
-  beta later, drop the gate or default-grant everyone.
+  signed in yet get pinned on their first OAuth callback. (The feature
+  originally 404-gated every endpoint behind this allowlist; it was opened
+  to the public in `5e19cb4`.)
 - Legacy `/v1/share/*` endpoints stay live on the API Worker (desktop
   v0.2.0 still mints share URLs against it). At cutover, deploy moved
   `per-ankh.app` from the Pages project to the new SSR Worker,
@@ -393,14 +394,13 @@ In order:
    cd cloud && npm run migrate:remote
    ```
    After this lands, **if migration `0012_tournament_beta_users.sql` was
-   in the batch**, the tournament UI is invisible to everyone until at
-   least one beta user is granted:
+   in the batch**, grant yourself the tournament create-allowlist so you
+   can create tournaments (it gates creation only — browsing, signup, and
+   admin actions are public):
    ```bash
    ./per-ankh admin tournament beta-grant <your-discord-id> --note "self"
    ./per-ankh admin tournament beta-list
    ```
-   Do this before announcing — otherwise the operator's own login can't
-   reach the tournament pages.
 4. **Deploy the API Worker.**
    ```bash
    cd cloud && npx wrangler deploy

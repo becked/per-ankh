@@ -234,7 +234,7 @@ Selection is seeded by a deterministic per-round PRNG so retries are stable. Bye
 
 - **Scheduling metadata** (`scheduled_at`, `stream_url`, `caster_user_id`, `caster_name`) can be set on **pending** matches by an admin or either participant; it's display-only and not phase-locked (`handlePatchMatchSchedule`).
 - **Export:** admins can `GET …/export` for a zip of `standings.csv` + `matches.csv` (`export.ts`), rate-limited per hour.
-- **Access (beta gate):** every tournament endpoint is gated behind the `tournament_beta_users` allowlist; non-members get **404, not 403**, so the feature stays hidden (`authz.ts`). Beta grants are CLI-only. This is why tournament endpoints can "404 unexpectedly" in dev.
+- **Access:** the tournament feature is public — anonymous visitors can browse, and any logged-in user can sign up, report, and act as a granted admin. The `tournament_beta_users` allowlist gates tournament **creation** only; a non-allowlisted caller gets **403 `TOURNAMENT_CREATE_FORBIDDEN`** (`authz.ts` + `admin.ts`), and create-allowlist grants are CLI-only. The only tournament 404s are the *setup-gate* (`setupGateHides` in `public.ts`), which hides setup-phase tournaments with signups closed from non-admins.
 - **Rate limits** apply per-user/per-IP per hour to create, admin actions, scheduling, export, and anonymous views (`limits.ts`).
 
 ---
@@ -274,7 +274,7 @@ Non-power-of-two qualifier counts give the top seeds round-1 byes by standard 1-
 Yes — Swiss pairings (including the bye) are advisory; an admin edits them before the round starts. Reported results can be admin-edited too, but not once a downstream round has reported matches.
 
 **Why does a tournament 404 in dev?**
-The beta gate returns 404 to non-allowlisted users by design. Beta-grant the user (`./per-ankh admin tournament beta-grant`) or use a dev-login that auto-grants.
+Setup-phase tournaments with signups closed are hidden from non-admins by the *setup-gate* (`setupGateHides` in `public.ts`): they 404 so the tournament's existence doesn't leak. Open signups on it, or view it as an admin, to make it visible. (Tournaments are no longer beta-gated, so create-allowlist membership doesn't affect visibility.)
 
 ---
 

@@ -39,7 +39,7 @@ export interface TournamentRow {
 	// to '[]'.
 	links: string;
 	// 0/1 (SQLite has no real bool). When 1 AND status='setup', the tournament
-	// is visible to all beta users and POST /signup is enabled. Auto-flipped
+	// is visible to everyone and POST /signup is enabled. Auto-flipped
 	// to 0 on the setup → swiss transition in handleStartTournament.
 	signups_open: number;
 	// Admin-announced start time (full ISO-8601 instant), shown as "Starts

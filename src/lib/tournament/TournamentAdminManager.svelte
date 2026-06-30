@@ -1,9 +1,9 @@
 <script lang="ts">
 	// Admin-only roster management: list current admins, add another Per-Ankh
 	// user by autocomplete, remove co-admins. The creator is shown but can't be
-	// removed. Adding a user who isn't on the tournament beta allowlist is
-	// allowed but warned about — they can't reach the tournament until granted
-	// beta separately.
+	// removed. Any Per-Ankh user can be added as a co-admin — the tournament
+	// feature is public, so a newly-granted admin can manage it immediately
+	// (the create-allowlist gates only creating tournaments, not admin duties).
 
 	import { runAction } from "$lib/tournament/async-action";
 	import {

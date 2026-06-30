@@ -57,10 +57,10 @@ origin, so the browser lands logged in.
 | `display_name` | no       | Human-facing name. Defaults to `username` when omitted.                |
 | `next`         | no       | Same-origin path to land on after login. Defaults to `/`.              |
 
-The endpoint also seeds the Personal collection and **auto-grants tournament
-beta** for the user, so the dev account can use the tournament surface
-immediately (unlike the real callback, which only pins an operator-created beta
-row).
+The endpoint also seeds the Personal collection and **adds the user to the
+tournament create-allowlist** (`tournament_beta_users`), so the dev account can
+create tournaments immediately — the rest of the feature is public (unlike the
+real callback, which only pins an operator-created allowlist row).
 
 ### Examples
 
@@ -120,7 +120,9 @@ row, after which they're findable in the substitute autocomplete.
   `:8788`); use whatever it logs. A connection error (not a 404) means you have
   the wrong port.
 - **A 404 on the redirected page** (`/tournaments/<slug>`) usually means the
-  slug doesn't exist locally, not a beta problem — the dev user is granted beta.
+  slug doesn't exist locally — tournaments aren't beta-gated. (A setup-phase
+  tournament with signups closed also 404s to non-admins; open signups or view
+  it as an admin.)
 
 ## Safety
 

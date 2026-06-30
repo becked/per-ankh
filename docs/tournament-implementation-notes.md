@@ -18,8 +18,9 @@ bracket + W-L flow viz (`336c5af`, `a242f8a`), admin/match routes
 collapsed into modal-driven public page (`5972110`), admin result entry
 on pending matches (`c1d9baf`), match status rename `reported → complete`
 (`0ec0c75` + migration `0010`), admin-configurable per-script map options
-(`535cf38` + migration `0011`), private-beta allowlist gating every
-tournament surface (`457e406` + migration `0012`), and the matching
+(`535cf38` + migration `0011`), the private-beta allowlist that originally
+gated every tournament surface (`457e406` + migration `0012`, since opened
+to the public in `5e19cb4` — now gates creation only), and the matching
 `LINKED_TO_ACTIVE_TOURNAMENT` lockout + post-completion SET NULL trigger
 on `handleGameDelete` (migration `0013`). Remaining open items below are
 operational deploy steps, not code.
@@ -66,9 +67,12 @@ Eight migrations applied locally; not yet remote.
   when present. Backwards compatible: an empty object means "use XML
   defaults," which is what every existing tournament does.
 - `0012_tournament_beta_users.sql` — adds `tournament_beta_users` (PK
-  `discord_id`, optional `user_id` filled in at login). Backs the
-  `requireTournamentBeta` gate that hides the entire tournament product
-  from non-beta callers (404, not 403). Operator-managed only via
+  `discord_id`, optional `user_id` filled in at login). Originally backed
+  the `requireTournamentBeta` gate that hid the entire tournament product
+  from non-beta callers (404, not 403); since `5e19cb4` the feature is
+  public and this allowlist gates tournament *creation* only
+  (`isTournamentBeta` → 403 `TOURNAMENT_CREATE_FORBIDDEN`).
+  Operator-managed only via
   `./per-ankh admin tournament beta-{grant,revoke,list}`. Claim flow
   mirrors `tournament_slots`: operator pre-inserts by `discord_id`, login
   pins `user_id` so later checks use the fast PK lookup.

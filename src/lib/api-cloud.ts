@@ -1051,7 +1051,8 @@ export const cloudApi = {
 	},
 
 	// User-prefix search — powers the UserAutocomplete on the
-	// admin's add-slot form. Beta-gated; returns up to `limit` users whose
+	// admin's add-slot form. Requires a logged-in session (anonymous → 401);
+	// returns up to `limit` users whose
 	// lowercased discord_username starts with `q`. Returns an empty list
 	// for q.length < 2 (still-typing floor; doesn't burn the per-user rate
 	// limit). Throws ApiError(429, RATE_LIMIT_USER_SEARCH) past the ceiling.

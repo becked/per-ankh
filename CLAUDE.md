@@ -263,12 +263,12 @@ The list below is illustrative, not exhaustive — `./per-ankh admin --help` gro
 **Tournaments** — `./per-ankh admin tournament <sub>` (create, list, show, delete, grant-admin, revoke-admin, seed, beta-grant, beta-revoke, beta-list):
 
 ```bash
-./per-ankh admin tournament beta-grant <discord_id>   # Add to private-beta allowlist (CLI-only)
-./per-ankh admin tournament beta-list                 # Show the beta allowlist
+./per-ankh admin tournament beta-grant <discord_id>   # Add to the tournament create-allowlist (CLI-only)
+./per-ankh admin tournament beta-list                 # Show the create-allowlist
 ./per-ankh admin --local tournament seed <slug> [name] # Build a full local fixture (see Tournament subsystem)
 ```
 
-**Dev** — `./per-ankh admin --local dev-login [--username NAME]` provisions a fake local user + 30-day session cookie (and beta-grants them) for testing a second account. Both `tournament seed` and `dev-login` are **local-only** and refuse to run against remote.
+**Dev** — `./per-ankh admin --local dev-login [--username NAME]` provisions a fake local user + 30-day session cookie (and adds them to the tournament create-allowlist) for testing a second account. Both `tournament seed` and `dev-login` are **local-only** and refuse to run against remote.
 
 Add `--json` to any read command for pipeable output; add `--yes` to skip confirmation on destructive ops. `--local` targets the local `.wrangler` state; `--staging` targets the staging D1/R2 (remote, mutually exclusive with `--local`); the default is production. The dev-only commands (`dev-login`, `tournament seed`) refuse both remote targets, staging included.
 
@@ -302,16 +302,16 @@ A Swiss-into-championship competition system layered on the save-analysis core. 
 
 **Lifecycle.** A tournament moves through a status machine: `setup → swiss → championship → complete`. Most config (slots, maps) can only change in `setup`; later phases lock it.
 
-**Data model.** `tournaments` (1) → `tournament_rounds` → `tournament_matches`; matches reference `tournament_slots` by id. Supporting tables: `tournament_admins` (per-tournament admin grants — a UI creator auto-becomes admin of their own tournament), `tournament_signups`, `tournament_beta_users` (the private-beta allowlist). `map_pool` is JSON on the tournament. Migrations `0006`–`0025` are largely tournament-specific.
+**Data model.** `tournaments` (1) → `tournament_rounds` → `tournament_matches`; matches reference `tournament_slots` by id. Supporting tables: `tournament_admins` (per-tournament admin grants — a UI creator auto-becomes admin of their own tournament), `tournament_signups`, `tournament_beta_users` (the create-only allowlist — see Access control). `map_pool` is JSON on the tournament. Migrations `0006`–`0025` are largely tournament-specific.
 
 **Code map.**
 
 - Frontend: `src/lib/tournament/` (bracket/standings/match UI) + routes `src/routes/tournaments/` (`/[slug]`, `/guide`).
 - Worker: `cloud/src/tournament/` — `admin.ts` (mutations), `public.ts` (reads), `player.ts`, and the engine: `seed.ts`, `pairing.ts`, `standings.ts`, `bracket.ts`, `export.ts`, `authz.ts`.
 
-**Access control (beta gate).** Every tournament endpoint is gated behind the `tournament_beta_users` allowlist. Non-members get **404, not 403** (`cloud/src/tournament/authz.ts`) — deliberate, so the feature's existence stays hidden; this is why tournament endpoints "404 unexpectedly" in local dev. Authz helpers: `requireTournamentBeta` and `requireTournamentAdmin`. Beta grants are **CLI-only** (`./per-ankh admin tournament beta-grant`) — the API doesn't expose them.
+**Access control.** The tournament feature is public: anonymous visitors can browse tournaments and view standings/brackets/matches, and any logged-in user can sign up, report matches, and act as a granted admin. The `tournament_beta_users` allowlist gates tournament **creation** only — a non-allowlisted logged-in caller gets **403 `TOURNAMENT_CREATE_FORBIDDEN`** from `handleCreateTournament` (`cloud/src/tournament/admin.ts`). Authz helpers (`cloud/src/tournament/authz.ts`): `isTournamentBeta` (boolean, used only by create) and `requireTournamentAdmin` (per-tournament admin grants). Create-allowlist grants are **CLI-only** (`./per-ankh admin tournament beta-grant`) — the API doesn't expose them. The remaining tournament 404s are the *setup-gate* in `public.ts` (`setupGateHides`), which hides setup-phase tournaments with signups closed from non-admins — this is why a freshly-seeded tournament can "404 unexpectedly" in local dev.
 
-**Local dev.** Two distinct dev-auth mechanisms, both local-only and both auto-granting tournament beta:
+**Local dev.** Two distinct dev-auth mechanisms, both local-only and both auto-adding the user to the tournament create-allowlist:
 
 - The Worker endpoint `/v1/auth/dev/login` (`handleDevLogin` in `cloud/src/auth.ts`), gated on `DEV_LOGIN` in `cloud/.dev.vars` + non-HTTPS, mints a browser session — see `docs/dev-login.md`.
 - `./per-ankh admin --local dev-login` mints a session cookie for impersonating a second account from the CLI.

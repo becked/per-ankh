@@ -534,8 +534,8 @@ export async function handleTournamentDetail(
 // match detail) returns 404 (not 403) to non-admins so we don't leak the
 // tournament's existence.
 //
-// Exception: when signups_open=1, the tournament is visible to every beta
-// user (the whole point of the toggle). The companion endpoints return
+// Exception: when signups_open=1, the tournament is visible to everyone
+// (the whole point of the toggle). The companion endpoints return
 // effectively-empty payloads in setup (no rounds → no standings → no
 // matches), but the page load on /tournaments/[slug] expects them not to
 // 404, so we mirror the detail-endpoint predicate here.
