@@ -20,6 +20,7 @@
 		CharacterInfo,
 		CharacterTraitInfo,
 		PlayerGoalInfo,
+		UnitInfo,
 	} from "$lib/parser/types";
 	import { Tabs } from "bits-ui";
 	import {
@@ -63,6 +64,7 @@
 		techDiscoveryHistory,
 		completedTechs,
 		unitsProduced,
+		units = [],
 		cityStatistics,
 		improvementData,
 		gameReligions,
@@ -93,6 +95,10 @@
 		techDiscoveryHistory: TechDiscoveryHistory[];
 		completedTechs: PlayerTech[];
 		unitsProduced: PlayerUnitProduced[];
+		// Ending unit roster (units alive at game end) — drives the Military tab's
+		// Ending Army comparison. Defaults to [] for legacy callers (frozen web/
+		// viewer) and any blob without it.
+		units?: UnitInfo[];
 		cityStatistics: CityStatistics;
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
@@ -168,6 +174,27 @@
 	);
 
 	let activeTab = $state<string>("overview");
+
+	// Deep-link the active tab via the URL hash (#military), so a reload or a
+	// shared link restores the tab instead of falling back to Overview. The
+	// hash isn't sent to the server, so SSR renders Overview and the client
+	// switches on mount (one frame); a clean, non-history-polluting replaceState
+	// keeps the URL in sync as the user changes tabs.
+	$effect(() => {
+		const fromHash = window.location.hash.replace(/^#/, "");
+		if (fromHash) activeTab = fromHash;
+	});
+	$effect(() => {
+		const target = activeTab === "overview" ? "" : `#${activeTab}`;
+		if (window.location.hash !== target) {
+			history.replaceState(
+				history.state,
+				"",
+				`${window.location.pathname}${window.location.search}${target}`,
+			);
+		}
+	});
+
 	let chartFilters = $state(createDefaultChartFilters());
 	let tables = $state(createDefaultTableStates());
 	let cityVisibleColumns = $state(createDefaultCityVisibleColumns());
@@ -548,6 +575,11 @@
 			players={resolvedPlayers}
 			{playerHistory}
 			{unitsProduced}
+			{units}
+			{characters}
+			{lawAdoptionHistory}
+			{techDiscoveryHistory}
+			{userNation}
 			bind:chartFilter={chartFilters.military}
 			bind:tableState={tables.units}
 		/>
