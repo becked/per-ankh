@@ -1,5 +1,7 @@
 # XML Parser Gap Analysis
 
+> **⚠️ Partially stale (as of 2026-06-30).** The element/attribute/version **catalog** is accurate. The “Currently Parsed / Not Parsed / Coverage %” columns describe the retired DuckDB schema and do not reflect the current TypeScript parser under `src/lib/parser/`. See `docs/doc-audit-2026-06-30.md`.
+
 **Generated:** 2025-12-06
 **Save Files Analyzed:** 2022-01 (v1.0.56632) through 2025-08 (v1.0.79004)
 

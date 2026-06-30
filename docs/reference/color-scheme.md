@@ -154,19 +154,23 @@ The application uses specific colors for each Old World nation and tribe. These 
 | **Greece**    | `#2360BC` | Dark Blue         | `NATION_COLORS.GREECE`    |
 | **Hittite**   | `#80E3E8` | Cyan              | `NATION_COLORS.HITTITE`   |
 | **Kush**      | `#FFFFB6` | Light Yellow      | `NATION_COLORS.KUSH`      |
+| **Maurya**    | `#A749FF` | Purple            | `NATION_COLORS.MAURYA`    |
 | **Persia**    | `#C04E4A` | Red               | `NATION_COLORS.PERSIA`    |
 | **Rome**      | `#880D56` | Purple/Burgundy   | `NATION_COLORS.ROME`      |
+| **Tamil**     | `#00B281` | Teal/Green        | `NATION_COLORS.TAMIL`     |
+| **Yuezhi**    | `#AD7E00` | Mustard/Gold      | `NATION_COLORS.YUEZHI`    |
 
 ### Tribes
 
 | Tribe         | Hex Code  | Color Description | Export                   |
 | ------------- | --------- | ----------------- | ------------------------ |
-| **Gauls**     | `#C84732` | Red-Orange        | `TRIBE_COLORS.GAULS`     |
-| **Vandals**   | `#87DB40` | Lime Green        | `TRIBE_COLORS.VANDALS`   |
-| **Danes**     | `#9C5DFF` | Purple            | `TRIBE_COLORS.DANES`     |
-| **Thracians** | `#3CCDC2` | Teal              | `TRIBE_COLORS.THRACIANS` |
-| **Scythians** | `#D89A18` | Orange/Gold       | `TRIBE_COLORS.SCYTHIANS` |
-| **Numidians** | `#E6E1CA` | Beige/Light Tan   | `TRIBE_COLORS.NUMIDIANS` |
+| **Gauls**     | `#87DB40` | Lime Green        | `TRIBE_COLORS.GAULS`     |
+| **Vandals**   | `#9C5DFF` | Purple            | `TRIBE_COLORS.VANDALS`   |
+| **Danes**     | `#3CCDC2` | Teal              | `TRIBE_COLORS.DANES`     |
+| **Thracians** | `#D89A18` | Orange/Gold       | `TRIBE_COLORS.THRACIANS` |
+| **Scythians** | `#E6E1CA` | Beige/Light Tan   | `TRIBE_COLORS.SCYTHIANS` |
+| **Numidians** | `#FFDD67` | Light Yellow      | `TRIBE_COLORS.NUMIDIANS` |
+| **Huns**      | `#AB3157` | Dark Pink/Magenta | `TRIBE_COLORS.HUNS`      |
 
 ### Using Nation and Tribe Colors
 
@@ -178,22 +182,25 @@ import {
 	TRIBE_COLORS,
 	getNationColor,
 	getCivilizationColor,
+	getNationChartColor,
 } from "$lib/config";
 
 // Use directly with type safety
 const egyptColor = NATION_COLORS.EGYPT; // "#BC6304"
-const gaulsColor = TRIBE_COLORS.GAULS; // "#C84732"
+const gaulsColor = TRIBE_COLORS.GAULS; // "#87DB40"
 
 // Use helper functions (handles string conversion and lookup)
 const color = getNationColor("EGYPT"); // "#BC6304"
-const color2 = getCivilizationColor("GAULS"); // "#C84732" (checks both nations and tribes)
+const color2 = getCivilizationColor("GAULS"); // "#87DB40" (checks both nations and tribes)
 
-// Example: Use in chart series
+// Chart series: getNationChartColor is the canonical helper — the nation's
+// color, or a palette color by index when the nation is unknown/missing.
+// Single source of truth shared by game-detail and aggregate-stats charts.
 series: playerHistory.map((player, i) => ({
 	name: player.player_name,
 	type: "line",
 	data: player.history.map((h) => h.points),
-	itemStyle: { color: getCivilizationColor(player.nation) ?? getChartColor(i) },
+	itemStyle: { color: getNationChartColor(player.nation, i) },
 }));
 ```
 

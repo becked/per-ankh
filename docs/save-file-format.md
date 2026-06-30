@@ -1,5 +1,7 @@
 # Old World Save File Format Reference
 
+> **⚠️ Partially stale (as of 2026-06-30).** This is the durable save-**format** reference and most of it is verified accurate against the current TypeScript parser. Three known-stale spots: the "Player ID Mapping" `database_player_id = xml_id + 1` rule is a dead DuckDB convention — the current parser stores the XML id as-is (`src/lib/parser/parsers/players.ts`); the "Questions to Ask User" section is a leftover drafting artifact; and the version/date stamps just below are from 2025. See `docs/doc-audit-2026-06-30.md`.
+
 **Version:** 1.0.79513 (as of October 2025)
 **Last Updated:** October 8, 2025
 
@@ -1284,7 +1286,7 @@ database_player_id = int(xml_id) + 1
 ## Format Quirks & Parsing Gotchas
 
 The save-format-bearing nuggets distilled from the larger 2025 docs cleanup
-(see `doc-audit.html`). Each subsection captures a non-obvious behaviour or
+(see `archive/doc-audit.html`). Each subsection captures a non-obvious behaviour or
 invariant that the TS parser at `src/lib/parser/` has either had to handle, or
 will when the unparsed XML it points at is wired up.
 
@@ -1414,7 +1416,7 @@ numeric IDs:
 </MemoryList>
 ```
 
-Parser must support both. See `backward-compatibility-memory-parser.md` for
+Parser must support both. See `archive/backward-compatibility-memory-parser.md` for
 the fallback pattern and full event-type catalogue.
 
 ### DLCs vs mods

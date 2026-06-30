@@ -1,6 +1,6 @@
 -- Tournament feature: Swiss qualifier → championship bracket.
 --
--- Spec reference: docs/tournament-feature-spec.md (goals; implementation
+-- Spec reference: docs/archive/tournament-feature-spec.md (goals; implementation
 -- details are the plan, not this doc), and the implementation plan at
 -- /Users/jeff/.claude/plans/luminous-coalescing-hearth.md.
 --

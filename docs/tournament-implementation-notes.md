@@ -1,6 +1,8 @@
 # Per-Ankh Tournament Implementation Notes
 
-Companion to [`tournament-feature-spec.md`](./tournament-feature-spec.md). The
+> **⚠️ Partially stale (as of 2026-06-30).** The **Status**, **Open Work**, and **Operational checklist** sections are pre-launch and superseded — the feature is live and there are 28 migrations (not the 8 local-only this doc describes). The “What landed” and “Workflow shape” content is still accurate. See `docs/doc-audit-2026-06-30.md`.
+
+Companion to [`tournament-feature-spec.md`](./archive/tournament-feature-spec.md). The
 spec describes _what_ the tournament feature does at the goal level; this
 file records _what was built_, _what we deferred_, and _what still needs to
 happen_ before the feature is production-ready.
@@ -369,8 +371,9 @@ Things worth a fresh look:
 
 ### Cybersecurity review
 
-The Pre-existing [security-review.html](./security-review.html) covered
-the cloud rewrite. New surfaces in this branch warrant a fresh pass:
+The pre-existing cloud-rewrite security review (since removed from the public
+repo; open findings now tracked in private security advisories) covered the core
+app. New surfaces in this branch warrant a fresh pass:
 
 **New attack surface**:
 

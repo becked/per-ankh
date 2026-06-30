@@ -535,7 +535,8 @@
 					service. Two tiers are Cloudflare Workers (SSR + API); a third
 					"container" is the parser, which runs as a Web Worker
 					<em>inside the user's browser</em> on the upload page; the storage
-					tier is three sibling bindings on the same Cloudflare account. The
+					tier is four sibling bindings on the same Cloudflare account (two D1,
+					R2, KV). The
 					legacy share viewer is a frozen static SvelteKit app sharing UI code
 					via symlinks.
 				</p>
@@ -606,7 +607,7 @@
 						<span class="label">API Worker</span>
 						<span class="desc"
 							>Under <code>cloud/</code>. Hand-rolled URL routing, Valibot
-							validation, nanoid IDs. Owns all three storage bindings — the
+							validation, nanoid IDs. Owns all four storage bindings (two D1, R2, KV) — the
 							browser never touches D1/R2/KV directly.</span
 						>
 					</div>
@@ -852,7 +853,19 @@
 							</td>
 							<td>
 								Forward-only numbered migrations in
-								<code>cloud/migrations/</code> (24 to date).
+								<code>cloud/migrations/</code> (28 to date).
+							</td>
+						</tr>
+						<tr>
+							<td><code>SECURITY_DB</code></td>
+							<td><strong>D1</strong> (SQLite)</td>
+							<td>
+								Second D1 — the security-events drain (Skiff). Append-only
+								<code>security_events</code> tee, isolated from app data.
+							</td>
+							<td>
+								Own migrations in <code>cloud/migrations-security/</code>,
+								applied out-of-band.
 							</td>
 						</tr>
 						<tr>

@@ -318,7 +318,7 @@ A Swiss-into-championship competition system layered on the save-analysis core. 
 
 Build a full local fixture (Swiss + championship via the real planner) with `./per-ankh admin --local tournament seed <slug> [name]`, flags `--qualifiers N` (default 6), `--players-per-division N` (default 8), `--fill mid-swiss|swiss-done|mid-championship|complete` (default `mid-championship`).
 
-**Authoritative design docs:** `docs/tournament-feature-spec.md` and `docs/tournament-implementation-notes.md`.
+**As-built record:** `docs/tournament-implementation-notes.md`. The original design spec is archived at `docs/archive/tournament-feature-spec.md` — it diverged substantially from what shipped, so trust `docs/tournament-rules.md` (rules) and the as-built notes over it.
 
 **Rules & mechanics reference:** `docs/tournament-rules.md` is the current-behavior source of truth. Answer any question about how tournaments actually behave (Swiss pairing, byes, divisions/sizing, advancement, tiebreakers/seeding, championship bracket, maps, reporting, withdrawals) from it — not from generic Swiss knowledge, which differs from ours. The `tournament-rules` skill in `.claude/skills/` carries the answering protocol. Keep the doc in sync with the engine in `cloud/src/tournament/`; code wins on conflict.
 
@@ -398,8 +398,8 @@ Deploy the Worker schema change before releasing the frontend that depends on it
 
 `docs/` holds many historical analyses; these are the current, authoritative references a contributor should trust:
 
-- `docs/tournament-rules.md` — current, code-grounded tournament **rules & mechanics** reference (the rules source of truth; design and build history are in the two docs below).
-- `docs/tournament-feature-spec.md` + `docs/tournament-implementation-notes.md` — tournament design and build record.
+- `docs/tournament-rules.md` — current, code-grounded tournament **rules & mechanics** reference (the rules source of truth).
+- `docs/tournament-implementation-notes.md` — tournament as-built record (design history: `docs/archive/tournament-feature-spec.md`, archived).
 - `docs/c4-model.html` — C4 architecture overview.
 - `docs/cloud-deploy-plan.md` — deploy runbook (the [Deploy CLI](#deploy-cli) automates it).
 - `docs/security-events.md` — the `security_events` tee + Skiff drain (reason vocabulary, dedicated `SECURITY_DB`, retention).

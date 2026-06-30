@@ -1,6 +1,6 @@
 # Per-Ankh Cloud Rewrite: Technical Specification
 
-> **Historical context:** This document captured the design for moving Per-Ankh from a Tauri desktop app (Rust + DuckDB) to a Cloudflare-hosted web app (TypeScript + D1/R2). The desktop runtime has since been removed (see [`tauri-removal-plan.md`](./tauri-removal-plan.md)). Sections describing how the cloud build works are still accurate. Sections about parity with the Rust parser and the dual-build switch are historical — see §2's parity-harness note.
+> **Historical context:** This document captured the design for moving Per-Ankh from a Tauri desktop app (Rust + DuckDB) to a Cloudflare-hosted web app (TypeScript + D1/R2). The desktop runtime has since been removed (see [`tauri-removal-plan.md`](./archive/tauri-removal-plan.md)). Sections describing how the cloud build works are still accurate. Sections about parity with the Rust parser and the dual-build switch are historical — see §2's parity-harness note. Two further drift points (found 2026-06-30): **§11 (Map Assets)** describes an R2 `per-ankh-assets` bucket + `assets.per-ankh.app` versioned-prefix scheme that **never shipped** — atlases are content-hashed and served from the app at `/atlases/*` (see CLAUDE.md "Content-hashed paths"); and **§3 (D1 Schema)** is the v1 snapshot — the live schema has since grown via numbered migrations `0001`–`0028`.
 
 ## Table of Contents
 

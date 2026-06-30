@@ -267,31 +267,24 @@ The ÷10 rule exists at the **boundary between game logic and display** - the ga
 We mirror the game's architecture:
 
 ```
-XML (raw)  →  Parser  →  Database (raw)  →  View (display)  →  Frontend
-   215          ↓           215              ÷10 → 21.5          charts
-             no-op
+XML (raw)  →  Parser  →  derive layer (÷10)  →  game blob  →  Frontend
+   215         215          21.5                  21.5         charts
 ```
 
-```rust
-// Parser: Store raw integers from XML (no conversion)
-let amount: i32 = xml_value.parse()?;  // 215
-
-// Database: Store raw integers in base tables
-INSERT INTO yield_history (amount) VALUES (?);  // 215
-
-// View: Convert to display values (single source of truth)
-CREATE VIEW yield_history_display AS
-SELECT amount / 10.0 AS amount FROM yield_history;  // 21.5
-
-// Queries: Use the view for display
-SELECT amount FROM yield_history_display;  // 21.5
+```typescript
+// The game stores yields ×10; divide by 10 once, at the parse/derive
+// boundary, in src/lib/parser/derive/yield-history.ts:
+lastRate = r / 10; // 215 → 21.5
+lastCumul = c / 10;
 ```
+
+The ÷10 lives in exactly one place — the derive layer — so the game blob and every chart downstream already hold display values.
 
 **Benefits:**
 
 - Raw integers preserved for potential future calculations
-- Conversion happens in exactly one place (the view)
-- Queries don't repeat `/10.0` everywhere (DRY)
+- Conversion happens in exactly one place (the derive layer)
+- The blob and charts downstream never repeat `/ 10` (DRY)
 
 ---
 

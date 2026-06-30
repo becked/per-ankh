@@ -26,7 +26,7 @@
 // the entire seeding job onto Tiers 2+ across a population that played
 // different numbers of rounds. Losses-asc separates qualifiers directly and,
 // as a side effect, restricts each downstream tier to a single rounds-played
-// cohort. See docs/tournament-seeding-tier1-proposal.md.
+// cohort. See docs/archive/tournament-seeding-tier1-proposal.md.
 //
 // Tiebreakers only seed the bracket — qualification is purely "did you
 // reach `swiss_wins_to_advance` wins." A 3-0 player never gets cut by

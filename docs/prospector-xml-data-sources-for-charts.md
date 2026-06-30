@@ -1,5 +1,7 @@
 # XML Data Sources for Old World Save File Charts
 
+> **⚠️ Partially stale (as of 2026-06-30).** The XML data-source catalog (XPaths, element shapes, transforms) is accurate and language-agnostic. The page/tab/chart **framing** — “tournament visualizer”, a Pixi.js hex map, Challonge — describes a *different* application, not per-ankh's current UI. See `docs/doc-audit-2026-06-30.md`.
+
 This document catalogs all charts in the tournament visualizer, organized by page and tab, with complete documentation of the underlying XML data sources from Old World save files.
 
 **Purpose:** This reference is for development teams building applications that analyze Old World save files. It documents what data exists in save files and how it can be used to create similar visualizations.

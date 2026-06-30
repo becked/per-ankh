@@ -36,7 +36,7 @@
 	// Atlas paths come from the bake-pipeline manifest. URLs are content-
 	// hashed (e.g. /atlases/terrain-3d.a1b2c3d4.webp), so they're safe to
 	// serve with Cache-Control: immutable, max-age=1y. See
-	// docs/section-3.4-content-hashing.html.
+	// docs/archive/section-3.4-content-hashing.html.
 	const TERRAIN_3D_ATLAS_URL = ATLAS_MANIFEST["terrain-3d"].webp;
 	const IMPROVEMENTS_BASE_ATLAS_URL = ATLAS_MANIFEST["improvements-base"].webp;
 	const RESOURCES_ATLAS_URL = ATLAS_MANIFEST["resources"].webp;

@@ -2,7 +2,7 @@
 
 **The single source of truth for how Per-Ankh tournaments _actually behave_.**
 
-This document describes the **current, implemented** rules of the tournament subsystem — not the design intent (that's `docs/tournament-feature-spec.md`) and not the build history (that's `docs/tournament-implementation-notes.md`). When this document and the code disagree, **the code wins** — fix this document.
+This document describes the **current, implemented** rules of the tournament subsystem — not the design intent (that's `docs/archive/tournament-feature-spec.md`) and not the build history (that's `docs/tournament-implementation-notes.md`). When this document and the code disagree, **the code wins** — fix this document.
 
 ## How to use this document
 
@@ -78,7 +78,7 @@ The rationale: a player who alternates win-loss-win-loss… is the slowest to re
 
 **Rule:** The two divisions are **independent Swiss pools** that exist only so rounds can run in parallel and finish faster. They carry **no competitive weight** once Swiss ends — there is no per-division bracket, quota, or bonus.
 
-- *In code:* `pairSwissRound` pairs within a single division's slots; spec `docs/tournament-feature-spec.md` §2: divisions are "purely as a parallelization mechanism."
+- *In code:* `pairSwissRound` pairs within a single division's slots; spec `docs/archive/tournament-feature-spec.md` §2: divisions are "purely as a parallelization mechanism."
 
 **Sizing — the rule operators actually ask about:**
 
@@ -280,7 +280,7 @@ Setup-phase tournaments with signups closed are hidden from non-admins by the *s
 
 ## Related references
 
-- `docs/tournament-feature-spec.md` — design intent and rationale.
+- `docs/archive/tournament-feature-spec.md` — design intent and rationale.
 - `docs/tournament-implementation-notes.md` — build record / decisions.
 - `src/routes/tournaments/guide/+page.svelte` — the player-facing guide.
 - Engine: `cloud/src/tournament/` — `pairing.ts`, `standings.ts`, `bracket.ts`, `seed.ts`, `admin.ts`, `public.ts`, `player.ts`, `maps.ts`, `authz.ts`.
