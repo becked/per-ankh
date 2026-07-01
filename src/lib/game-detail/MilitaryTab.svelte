@@ -459,12 +459,12 @@
 	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
 
 	// Per-marker render sizes (bare icons, no tile). The nation crest reads as
-	// the row label at 20; the archetype (traits-trimmed) and the generic
+	// the row label at 24; the archetype (traits-trimmed) and the generic
 	// law/tech glyphs (icons category) sit at 14. Unmapped categories fall back
 	// to the default.
 	const RAIL_ICON_SIZE_DEFAULT = 16;
 	const RAIL_ICON_SIZE: Partial<Record<SpriteCategory, number>> = {
-		crests: 20,
+		crests: 24,
 		"traits-trimmed": 14,
 		icons: 14,
 	};
@@ -565,6 +565,34 @@
 		// Reads layoutTick so it recomputes on every chart re-layout.
 		if (!c || layoutTick < 0) return null;
 		return c.convertToPixel({ xAxisIndex: 0 }, 0) as number;
+	});
+
+	// X pixels of the chart's interior x-axis tick labels (the turn values ECharts
+	// labels on the plot). The rail drops a faint vertical rule under each so it
+	// reads as a grid aligned to those labels above. ECharts picks these ticks
+	// dynamically, so they're read from the live axis model, then mapped through
+	// the same convertToPixel the markers use. The first and last ticks (turn 0
+	// and the final turn) are dropped so no rule hugs the plot's left/right edges.
+	// Reads layoutTick so it recomputes on every chart re-layout.
+	const railTickLefts = $derived.by<number[]>(() => {
+		const c = chart;
+		if (!c || layoutTick < 0) return [];
+		// getModel()/axis.scale.getTicks() is ECharts-internal (not in the public
+		// typings, hence the cast); guarded so a shape change degrades to no rules
+		// rather than throwing.
+		const axis = (c as any).getModel?.()?.getComponent?.("xAxis", 0)?.axis;
+		const ticks: unknown[] = axis?.scale?.getTicks?.() ?? [];
+		const turns = ticks
+			.map((t) =>
+				typeof t === "object" && t !== null
+					? (t as { value: number }).value
+					: (t as number),
+			)
+			.filter((v) => Number.isFinite(v) && v >= 0)
+			.sort((a, b) => a - b);
+		return turns
+			.slice(1, -1)
+			.map((v) => c.convertToPixel({ xAxisIndex: 0 }, v) as number);
 	});
 
 	function enterEvent(ev: RailEvent, e: MouseEvent) {
@@ -853,12 +881,26 @@
 					{/if}
 				</div>
 
-				<div class="mt-1 flex flex-col gap-1.5">
+				<div class="mt-1.5 flex flex-col gap-1">
 					{#each railView as group (group.player.playerId)}
 						<div class="relative rounded bg-blue-gray py-0.5">
-							<!-- Nation crest, vertically centered across the whole band. -->
+							<!-- Faint vertical rules under each chart x-axis label, so the
+							     rail reads as a grid aligned to the plot's turn labels above.
+							     Same tint/opacity as the inter-kind separators. -->
+							{#each railTickLefts as tx, i (i)}
+								<div
+									class="pointer-events-none absolute inset-y-0 w-px bg-[#2a2623]/50"
+									style="left: {tx}px;"
+								></div>
+							{/each}
+							<!-- Nation crest, centered in the left gutter — turn 0 marks the
+							     gutter's right edge, so the crest sits under the chart's
+							     y-axis inset above. -->
 							<div
-								class="absolute inset-y-0 left-0 z-20 flex items-center pl-1.5"
+								class="absolute inset-y-0 left-0 z-20 flex items-center justify-center"
+								style="width: {railSepLeft != null
+									? railSepLeft + 'px'
+									: 'auto'};"
 							>
 								{#if group.player.nation}
 									<SpriteIcon
