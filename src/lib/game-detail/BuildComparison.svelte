@@ -91,7 +91,9 @@
 					style="grid-template-columns: 110px 1fr;"
 				>
 					<div class="flex min-w-0 items-center gap-1.5">
-						<SpriteIcon category="units" value={r.unitType} size={14} />
+						<span class="flex w-3.5 flex-none">
+							<SpriteIcon category="units" value={r.unitType} size={14} />
+						</span>
 						<span class="truncate text-[11px] text-bright"
 							>{formatEnum(r.unitType, "UNIT_")}</span
 						>
@@ -99,11 +101,6 @@
 					<div class="flex items-center">
 						<span
 							class="w-5 flex-none text-center font-mono text-[11px] text-white"
-							style="opacity:{r.ca === 0
-								? 0
-								: r.ca >= r.cb
-									? 1
-									: 0.5};font-weight:{r.ca > r.cb ? 700 : 500}"
 							>{r.ca || ""}</span
 						>
 						<div class="flex flex-1 justify-end">
@@ -125,11 +122,6 @@
 						</div>
 						<span
 							class="w-5 flex-none text-center font-mono text-[11px] text-white"
-							style="opacity:{r.cb === 0
-								? 0
-								: r.cb >= r.ca
-									? 1
-									: 0.5};font-weight:{r.cb > r.ca ? 700 : 500}"
 							>{r.cb || ""}</span
 						>
 					</div>
