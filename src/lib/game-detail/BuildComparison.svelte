@@ -18,6 +18,7 @@
 		b,
 		ca,
 		cb,
+		unitTypes,
 	}: {
 		title: string;
 		statA?: string;
@@ -26,6 +27,12 @@
 		b: BuildItem[];
 		ca: string;
 		cb: string;
+		// Optional fixed row order. When the caller renders several panels that
+		// should line up (Military Built vs Ending Army), it passes the shared
+		// union of unit types so every panel draws the same rows in the same
+		// order — a type absent from this panel's rosters renders as a blank
+		// placeholder row. Omitted, the panel derives its own union from a/b.
+		unitTypes?: string[];
 	} = $props();
 
 	function byType(items: BuildItem[]): Map<string, number> {
@@ -43,21 +50,21 @@
 		ca: number;
 		cb: number;
 	};
-	// One row per unit type either player built (union of both rosters),
-	// listed alphabetically by display name. A side that never built a type
-	// carries a 0 and renders a blank bar/count on its half.
+	// One row per unit type, listed alphabetically by display name. A side that
+	// never built a type carries a 0 and renders a blank bar/count on its half.
+	// Rows come from the caller's shared `unitTypes` order when given (so panels
+	// line up); otherwise from this panel's own union of both rosters.
 	const rows = $derived<Row[]>(
-		[...new Set([...aM.keys(), ...bM.keys()])]
-			.map((t) => ({
-				unitType: t,
-				ca: aM.get(t) ?? 0,
-				cb: bM.get(t) ?? 0,
-			}))
-			.sort((p, q) =>
-				formatEnum(p.unitType, "UNIT_").localeCompare(
-					formatEnum(q.unitType, "UNIT_"),
-				),
-			),
+		(
+			unitTypes ??
+			[...new Set([...aM.keys(), ...bM.keys()])].sort((p, q) =>
+				formatEnum(p, "UNIT_").localeCompare(formatEnum(q, "UNIT_")),
+			)
+		).map((t) => ({
+			unitType: t,
+			ca: aM.get(t) ?? 0,
+			cb: bM.get(t) ?? 0,
+		})),
 	);
 	// Bar scale: longest single-side count across all rows.
 	const max = $derived(Math.max(1, ...rows.map((r) => Math.max(r.ca, r.cb))));
@@ -111,7 +118,7 @@
 								></div>
 							{/if}
 						</div>
-						<div class="mx-1.5 h-3.5 w-px bg-border-subtle"></div>
+						<div class="mx-0.5"></div>
 						<div class="flex flex-1">
 							{#if r.cb > 0}
 								<div
@@ -129,21 +136,21 @@
 			{/each}
 			<!-- Totals: per-side sums aligned under the count columns. -->
 			<div
-				class="grid items-center gap-2 border-t border-border-subtle px-2.5 py-1"
+				class="grid items-center gap-2 px-2.5 py-1"
 				style="grid-template-columns: 110px 1fr;"
 			>
 				<div class="text-[10px] font-semibold text-muted">Total</div>
 				<div class="flex items-center">
 					<span
-						class="w-5 flex-none text-center font-mono text-[11px] font-bold text-white"
-						>{totalA}</span
+						class="w-5 flex-none text-center font-mono text-[10px]"
+						style="color:{ca}">{totalA}</span
 					>
 					<div class="flex flex-1"></div>
-					<div class="mx-1.5 h-3.5 w-px bg-border-subtle"></div>
+					<div class="mx-0.5"></div>
 					<div class="flex flex-1"></div>
 					<span
-						class="w-5 flex-none text-center font-mono text-[11px] font-bold text-white"
-						>{totalB}</span
+						class="w-5 flex-none text-center font-mono text-[10px]"
+						style="color:{cb}">{totalB}</span
 					>
 				</div>
 			</div>

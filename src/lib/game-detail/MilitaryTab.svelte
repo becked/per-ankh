@@ -197,6 +197,24 @@
 			: [],
 	);
 
+	// Shared row order for the H2H build panels: the union of every unit type
+	// appearing in any block (Military Built + Ending Army, both sides), sorted
+	// by display name. Passing this into each BuildComparison lines the panels
+	// up so a given unit sits on the same row in both — a type absent from one
+	// panel shows there as a blank placeholder row.
+	const sharedBuildUnitTypes = $derived<string[]>(
+		[
+			...new Set(
+				buildBlocks.flatMap((bl) => [
+					...bl.a.map((it) => it.unitType),
+					...bl.b.map((it) => it.unitType),
+				]),
+			),
+		].sort((p, q) =>
+			formatEnum(p, "UNIT_").localeCompare(formatEnum(q, "UNIT_")),
+		),
+	);
+
 	// ─── Annotation layer ─────────────────────────────────────────────
 	// The military-power chart stays a clean single plot; game-event annotations
 	// (leader successions, law changes, unit-tech unlocks) render as a DOM rail
@@ -1015,6 +1033,7 @@
 						b={block.b}
 						ca={matchup[0].color}
 						cb={matchup[1].color}
+						unitTypes={sharedBuildUnitTypes}
 					/>
 					{#if block.donutA || block.donutB}
 						<div class="grid grid-cols-2 gap-2">
