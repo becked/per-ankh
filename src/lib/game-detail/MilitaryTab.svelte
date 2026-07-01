@@ -533,6 +533,8 @@
 					yAxis: {
 						type: "value",
 						name: "Military Power",
+						nameLocation: "middle",
+						nameGap: 40,
 					},
 					series: playerHistory.map((player, i) => {
 						const rp = playerById.get(player.player_id);
