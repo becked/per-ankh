@@ -5,8 +5,6 @@
 //
 // SOURCES (all under <pinacotheca>/extracted/sprites/):
 //   crests/, techs/, laws/, religions/, yields/  → 1:1 copy by category dir
-//   techs/ (2nd pass)                            → techs-cropped/ inset-cropped
-//                                                  copy, Military-rail only
 //   traits/ (2nd pass)                           → traits-trimmed/ content-
 //                                                  trimmed+squared, rail only
 //   units/                                       → UNIT_*.png minus UNIT_3D_*
@@ -141,6 +139,11 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 		source: "other/STATS_Normal.png",
 		target: "STATS.png",
 	},
+	// Generic laws / techs glyphs for the Military-tab event rail: every law
+	// change and unit-tech unlock shows one of these single icons (the specifics
+	// are in the hover tooltip) instead of a distinct per-law / per-tech icon.
+	{ source: "other/LAWS_Normal.png", target: "LAWS_Normal.png" },
+	{ source: "other/TECHS_Normal.png", target: "TECHS_Normal.png" },
 	{
 		source: "other/GAME_HELP.png",
 		target: "GAME_HELP.png",
@@ -221,56 +224,6 @@ async function copyMirrorCategory(
 	return pngs.length;
 }
 
-// The Military-tab event rail (src/lib/game-detail/MilitaryTab.svelte) renders
-// tech icons next to law and archetype icons at a uniform size. A tech glyph
-// fills only ~55% of its opaque ~219² plate, so it reads noticeably smaller than
-// a law disc (fills its box) or an archetype glyph (~90% fill). We keep the
-// full-bleed gold plate — it's an opaque gradient, so it can't be trimmed to
-// content deterministically — and instead shave a fixed inset off every edge,
-// enlarging the glyph toward the law/archetype size. 10% is from a rendered
-// sweep and is clip-safe: the tightest glyph (TECH_ARCHITECTURE's compass)
-// reaches the tile edge only past ~18%. Rail-only, so it can't affect any other
-// sprite surface.
-const TECH_CROP_INSET = 0.1;
-
-// Emit a second, inset-cropped copy of every tech sprite under techs-cropped/,
-// leaving the raw techs/ mirror byte-identical. Only the Military rail reads this
-// category (via the "techs-cropped" SpriteCategory); every other tech-icon
-// consumer keeps the uncropped techs/ set.
-async function copyCroppedTechs(sidecar: SpriteSidecar): Promise<number> {
-	const src = resolve(PINACOTHECA_SPRITES, "techs");
-	const dst = resolve(SPRITES_OUT, "techs-cropped");
-	await wipeAndRecreate(dst);
-	const entries = await readdir(src);
-	const pngs = entries.filter((f) => f.endsWith(".png"));
-	for (const filename of pngs) {
-		const basename = filename.slice(0, -".png".length);
-		const input = await readFile(resolve(src, filename));
-		const { width, height } = await sharp(input).metadata();
-		if (width == null || height == null) {
-			throw new Error(`[sprites] techs-cropped: no dimensions for ${filename}`);
-		}
-		// Symmetric, bounds-safe window: width = w - 2*left guarantees
-		// left + width <= w for any rounding of the inset (same for height).
-		const left = Math.round(width * TECH_CROP_INSET);
-		const top = Math.round(height * TECH_CROP_INSET);
-		const buf = await sharp(input)
-			.extract({
-				left,
-				top,
-				width: width - 2 * left,
-				height: height - 2 * top,
-			})
-			.png()
-			.toBuffer();
-		const hash = contentHash(buf);
-		const outName = `${basename}.${hash}.png`;
-		await writeFile(resolve(dst, outName), buf);
-		sidecar[`techs-cropped/${basename}`] = `/sprites/techs-cropped/${outName}`;
-	}
-	return pngs.length;
-}
-
 // The archetype (trait) glyphs are bare line-art on a transparent field with
 // inconsistent padding — e.g. TRAIT_SCHOLAR fills 96% of a 28² box, TRAIT_SCHEMER
 // only 75% of a 64² box — so at a fixed render size they read smaller than the
@@ -314,7 +267,8 @@ async function copyTrimmedTraits(sidecar: SpriteSidecar): Promise<number> {
 		const hash = contentHash(buf);
 		const outName = `${basename}.${hash}.png`;
 		await writeFile(resolve(dst, outName), buf);
-		sidecar[`traits-trimmed/${basename}`] = `/sprites/traits-trimmed/${outName}`;
+		sidecar[`traits-trimmed/${basename}`] =
+			`/sprites/traits-trimmed/${outName}`;
 	}
 	return pngs.length;
 }
@@ -515,7 +469,6 @@ async function main(): Promise<void> {
 	for (const cat of MIRROR_CATEGORIES) {
 		counts[cat] = await copyMirrorCategory(cat, sidecar);
 	}
-	counts["techs-cropped"] = await copyCroppedTechs(sidecar);
 	counts["traits-trimmed"] = await copyTrimmedTraits(sidecar);
 	counts[UNITS_CATEGORY] = await copyUnits(sidecar);
 	counts.icons = await copyIcons(sidecar);

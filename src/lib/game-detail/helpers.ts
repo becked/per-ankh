@@ -433,7 +433,6 @@ export function createDefaultCityVisibleColumns(): Record<string, boolean> {
 export type SpriteCategory =
 	| "crests"
 	| "techs"
-	| "techs-cropped"
 	| "laws"
 	| "yields"
 	| "religions"
@@ -497,26 +496,6 @@ export function getSpritePath(
 	if (category === "techs") {
 		const resolved = resolveTechSprite(enumValue);
 		if (resolved == null) return null;
-		return SPRITE_MANIFEST[`${resolved.category}/${resolved.filename}`] ?? null;
-	}
-	if (category === "techs-cropped") {
-		// The Military-tab event rail renders techs alongside laws/traits at a
-		// uniform size; tech glyphs fill only ~55% of their opaque tile, so they
-		// read too small. `techs-cropped` is a rail-only inset-cropped copy of the
-		// tech tiles (baked by scripts/bake-sprites.ts). Reuse resolveTechSprite,
-		// then remap only real tech tiles to the cropped namespace — unit-fallback
-		// techs (nation unit-techs → units/UNIT_*) have no cropped variant and
-		// render as-is. The `?? techs/` fallback keeps the rail working before a
-		// re-bake regenerates the manifest.
-		const resolved = resolveTechSprite(enumValue);
-		if (resolved == null) return null;
-		if (resolved.category === "techs") {
-			return (
-				SPRITE_MANIFEST[`techs-cropped/${resolved.filename}`] ??
-				SPRITE_MANIFEST[`techs/${resolved.filename}`] ??
-				null
-			);
-		}
 		return SPRITE_MANIFEST[`${resolved.category}/${resolved.filename}`] ?? null;
 	}
 	if (category === "traits-trimmed") {

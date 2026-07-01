@@ -116,6 +116,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"icons/GOAL_STARTED": "/sprites/icons/GOAL_STARTED.202fc07c.png",
 	"icons/IMPROVEMENT_FINISHED":
 		"/sprites/icons/IMPROVEMENT_FINISHED.f131e64d.png",
+	"icons/LAWS_Normal": "/sprites/icons/LAWS_Normal.bcd65937.png",
 	"icons/MAP_OVERVIEW": "/sprites/icons/MAP_OVERVIEW.5c63299a.png",
 	"icons/MILITARY": "/sprites/icons/MILITARY.cad1b950.png",
 	"icons/MULTIPLAYER": "/sprites/icons/MULTIPLAYER.4f62ad02.png",
@@ -126,6 +127,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"icons/RATING_DISCIPLINE": "/sprites/icons/RATING_DISCIPLINE.6b6a0fe1.png",
 	"icons/RATING_WISDOM": "/sprites/icons/RATING_WISDOM.a9e63d6b.png",
 	"icons/STATS": "/sprites/icons/STATS.ec506166.png",
+	"icons/TECHS_Normal": "/sprites/icons/TECHS_Normal.752625de.png",
 	"icons/TOOL_SETTINGS": "/sprites/icons/TOOL_SETTINGS.cb187c2e.png",
 	"icons/TURN": "/sprites/icons/TURN.7b8cdd83.png",
 	"icons/TURN_SUMMARY_AMBITION":
@@ -1310,126 +1312,6 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"religions/RELIGION_ZOROASTRIANISM_HOLY":
 		"/sprites/religions/RELIGION_ZOROASTRIANISM_HOLY.a7cf0b1d.png",
 	"religions/Religion_Frame": "/sprites/religions/Religion_Frame.3357e066.png",
-	"techs-cropped/TECH_ADMINISTRATION":
-		"/sprites/techs-cropped/TECH_ADMINISTRATION.0517f3a4.png",
-	"techs-cropped/TECH_ARCHITECTURE":
-		"/sprites/techs-cropped/TECH_ARCHITECTURE.9e485598.png",
-	"techs-cropped/TECH_ARISTOCRACY":
-		"/sprites/techs-cropped/TECH_ARISTOCRACY.2c59be18.png",
-	"techs-cropped/TECH_BALLISTICS":
-		"/sprites/techs-cropped/TECH_BALLISTICS.69a9a115.png",
-	"techs-cropped/TECH_BARDING":
-		"/sprites/techs-cropped/TECH_BARDING.10acf9e6.png",
-	"techs-cropped/TECH_BATTLELINE":
-		"/sprites/techs-cropped/TECH_BATTLELINE.c992e30f.png",
-	"techs-cropped/TECH_BODKIN_ARROW":
-		"/sprites/techs-cropped/TECH_BODKIN_ARROW.fab27902.png",
-	"techs-cropped/TECH_CAMEL_LANCER":
-		"/sprites/techs-cropped/TECH_CAMEL_LANCER.4c0a0d77.png",
-	"techs-cropped/TECH_CAMEL_RIDER":
-		"/sprites/techs-cropped/TECH_CAMEL_RIDER.a6f7658e.png",
-	"techs-cropped/TECH_CARTOGRAPHY":
-		"/sprites/techs-cropped/TECH_CARTOGRAPHY.845c944e.png",
-	"techs-cropped/TECH_CHAIN_DRIVE":
-		"/sprites/techs-cropped/TECH_CHAIN_DRIVE.e119a4cb.png",
-	"techs-cropped/TECH_CITIZENSHIP":
-		"/sprites/techs-cropped/TECH_CITIZENSHIP.e0637bdd.png",
-	"techs-cropped/TECH_COHORTS":
-		"/sprites/techs-cropped/TECH_COHORTS.4e74c598.png",
-	"techs-cropped/TECH_COINAGE":
-		"/sprites/techs-cropped/TECH_COINAGE.7f2890aa.png",
-	"techs-cropped/TECH_COMPOSITE_BOW":
-		"/sprites/techs-cropped/TECH_COMPOSITE_BOW.8e0037ff.png",
-	"techs-cropped/TECH_DISCOVERED":
-		"/sprites/techs-cropped/TECH_DISCOVERED.f42712ee.png",
-	"techs-cropped/TECH_DIVINATION":
-		"/sprites/techs-cropped/TECH_DIVINATION.89b22fb0.png",
-	"techs-cropped/TECH_DOCTRINE":
-		"/sprites/techs-cropped/TECH_DOCTRINE.8a0bb83a.png",
-	"techs-cropped/TECH_DRAMA": "/sprites/techs-cropped/TECH_DRAMA.506a823a.png",
-	"techs-cropped/TECH_EBONY": "/sprites/techs-cropped/TECH_EBONY.82ea37d3.png",
-	"techs-cropped/TECH_ECONOMIC_REFORM":
-		"/sprites/techs-cropped/TECH_ECONOMIC_REFORM.2f44da32.png",
-	"techs-cropped/TECH_EXOTIC_FUR":
-		"/sprites/techs-cropped/TECH_EXOTIC_FUR.b35f78e9.png",
-	"techs-cropped/TECH_FISCAL_POLICY":
-		"/sprites/techs-cropped/TECH_FISCAL_POLICY.4bb635b4.png",
-	"techs-cropped/TECH_FORESTRY":
-		"/sprites/techs-cropped/TECH_FORESTRY.5bb09c58.png",
-	"techs-cropped/TECH_HUSBANDRY":
-		"/sprites/techs-cropped/TECH_HUSBANDRY.0911d899.png",
-	"techs-cropped/TECH_HYDRAULICS":
-		"/sprites/techs-cropped/TECH_HYDRAULICS.c842793b.png",
-	"techs-cropped/TECH_INDUSTRIAL_PROGRESS":
-		"/sprites/techs-cropped/TECH_INDUSTRIAL_PROGRESS.ecf6707f.png",
-	"techs-cropped/TECH_INFANTRY_SQUARE":
-		"/sprites/techs-cropped/TECH_INFANTRY_SQUARE.c7288ab0.png",
-	"techs-cropped/TECH_IRONWORKING":
-		"/sprites/techs-cropped/TECH_IRONWORKING.f4c2e379.png",
-	"techs-cropped/TECH_JURISPRUDENCE":
-		"/sprites/techs-cropped/TECH_JURISPRUDENCE.b51b6258.png",
-	"techs-cropped/TECH_LABOR_FORCE":
-		"/sprites/techs-cropped/TECH_LABOR_FORCE.0f1f06ea.png",
-	"techs-cropped/TECH_LAND_CONSOLIDATION":
-		"/sprites/techs-cropped/TECH_LAND_CONSOLIDATION.650a9e44.png",
-	"techs-cropped/TECH_LATEEN_SAIL":
-		"/sprites/techs-cropped/TECH_LATEEN_SAIL.9ba3e9da.png",
-	"techs-cropped/TECH_MACHINERY":
-		"/sprites/techs-cropped/TECH_MACHINERY.d75bef08.png",
-	"techs-cropped/TECH_MANOR": "/sprites/techs-cropped/TECH_MANOR.324a9b7d.png",
-	"techs-cropped/TECH_MARTIAL_CODE":
-		"/sprites/techs-cropped/TECH_MARTIAL_CODE.27b3b1f6.png",
-	"techs-cropped/TECH_METAPHYSICS":
-		"/sprites/techs-cropped/TECH_METAPHYSICS.b2c80f23.png",
-	"techs-cropped/TECH_MILITARY_DRILL":
-		"/sprites/techs-cropped/TECH_MILITARY_DRILL.c71de73e.png",
-	"techs-cropped/TECH_MILITARY_PRESTIGE":
-		"/sprites/techs-cropped/TECH_MILITARY_PRESTIGE.9de19fb7.png",
-	"techs-cropped/TECH_MONASTICISM":
-		"/sprites/techs-cropped/TECH_MONASTICISM.34afe49e.png",
-	"techs-cropped/TECH_MOUNTED_ARCHERY":
-		"/sprites/techs-cropped/TECH_MOUNTED_ARCHERY.553384cb.png",
-	"techs-cropped/TECH_NAVIGATION":
-		"/sprites/techs-cropped/TECH_NAVIGATION.9b711b6d.png",
-	"techs-cropped/TECH_PERFUME":
-		"/sprites/techs-cropped/TECH_PERFUME.29b6b6d7.png",
-	"techs-cropped/TECH_PHALANX":
-		"/sprites/techs-cropped/TECH_PHALANX.e7bebbc4.png",
-	"techs-cropped/TECH_POLIS": "/sprites/techs-cropped/TECH_POLIS.b396cb87.png",
-	"techs-cropped/TECH_PORCELAIN":
-		"/sprites/techs-cropped/TECH_PORCELAIN.aa29d178.png",
-	"techs-cropped/TECH_PORTCULLIS":
-		"/sprites/techs-cropped/TECH_PORTCULLIS.b0ad2020.png",
-	"techs-cropped/TECH_PREREQUISITE_ICON":
-		"/sprites/techs-cropped/TECH_PREREQUISITE_ICON.c1cc7380.png",
-	"techs-cropped/TECH_RAMPARTS":
-		"/sprites/techs-cropped/TECH_RAMPARTS.6a1d739e.png",
-	"techs-cropped/TECH_RHETORIC":
-		"/sprites/techs-cropped/TECH_RHETORIC.4d476426.png",
-	"techs-cropped/TECH_SCHOLARSHIP":
-		"/sprites/techs-cropped/TECH_SCHOLARSHIP.2dcdc364.png",
-	"techs-cropped/TECH_SIEGECRAFT":
-		"/sprites/techs-cropped/TECH_SIEGECRAFT.f3118541.png",
-	"techs-cropped/TECH_SILK": "/sprites/techs-cropped/TECH_SILK.c2b8d078.png",
-	"techs-cropped/TECH_SOVEREIGNTY":
-		"/sprites/techs-cropped/TECH_SOVEREIGNTY.cdb9318f.png",
-	"techs-cropped/TECH_SPOKED_WHEEL":
-		"/sprites/techs-cropped/TECH_SPOKED_WHEEL.86a62d78.png",
-	"techs-cropped/TECH_STEEL": "/sprites/techs-cropped/TECH_STEEL.475731d8.png",
-	"techs-cropped/TECH_STIRRUPS":
-		"/sprites/techs-cropped/TECH_STIRRUPS.be9a5e09.png",
-	"techs-cropped/TECH_STONECUTTING":
-		"/sprites/techs-cropped/TECH_STONECUTTING.61ec01e2.png",
-	"techs-cropped/TECH_STRATEGY":
-		"/sprites/techs-cropped/TECH_STRATEGY.244b30cb.png",
-	"techs-cropped/TECH_TORSION":
-		"/sprites/techs-cropped/TECH_TORSION.cba413d0.png",
-	"techs-cropped/TECH_TRAPPING":
-		"/sprites/techs-cropped/TECH_TRAPPING.6c68f498.png",
-	"techs-cropped/TECH_VAULTING":
-		"/sprites/techs-cropped/TECH_VAULTING.37ec1f81.png",
-	"techs-cropped/TECH_WINDLASS":
-		"/sprites/techs-cropped/TECH_WINDLASS.d6e77fbd.png",
 	"techs/TECH_ADMINISTRATION":
 		"/sprites/techs/TECH_ADMINISTRATION.9f7017ec.png",
 	"techs/TECH_ARCHITECTURE": "/sprites/techs/TECH_ARCHITECTURE.866d0ada.png",

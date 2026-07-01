@@ -288,10 +288,9 @@
 		);
 	}
 
-	// Per-player event rail: leader successions (incl. the starting ruler) and
-	// the 4th/7th-law milestones, each positioned by `frac` (its turn as a
-	// fraction of the x-range) so they can be laid out in horizontal nation
-	// bars above the chart — keeping the plot itself uncluttered.
+	// Per-player event rail: leader successions (incl. the starting ruler), law
+	// changes, and unit-tech unlocks. Each event's marker x is convertToPixel(turn)
+	// on the live chart, laid out in a horizontal per-nation band below the plot.
 	type RailEvent = {
 		kind: "leader" | "law" | "tech";
 		// The event's turn; its marker x is convertToPixel(turn) on the live chart.
@@ -300,7 +299,6 @@
 		// A null iconValue (e.g. a ruler with no archetype) renders a colored dot.
 		iconCategory: SpriteCategory;
 		iconValue: string | null;
-		num: string | null;
 		color: string;
 		tooltipHtml: string;
 	};
@@ -375,7 +373,6 @@
 					turn,
 					iconCategory: "traits-trimmed",
 					iconValue: archKey,
-					num: null,
 					color,
 					tooltipHtml: leaderTooltip(c, turn, color),
 				});
@@ -398,9 +395,10 @@
 					events.push({
 						kind: "law",
 						turn: d.turn,
-						iconCategory: "laws",
-						iconValue: d.law_name,
-						num: String(d.law_count),
+						// A single generic laws glyph for every law change; the specific
+						// law (and the full active set) is in the hover tooltip.
+						iconCategory: "icons",
+						iconValue: "LAWS_Normal",
 						color,
 						tooltipHtml: lawEventTooltip(
 							d.law_name,
@@ -440,11 +438,10 @@
 					events.push({
 						kind: "tech",
 						turn: d.turn,
-						// Rail-only inset-cropped tech tiles so the glyph reads at the
-						// same visual size as the law/archetype markers beside it (#85).
-						iconCategory: "techs-cropped",
-						iconValue: d.tech_name,
-						num: String(unlocked[0].strength),
+						// A single generic techs glyph for every unit-tech unlock; the
+						// specific tech (and the units it unlocks) is in the hover tooltip.
+						iconCategory: "icons",
+						iconValue: "TECHS_Normal",
 						color,
 						tooltipHtml: techEventTooltip(d.tech_name, d.turn, unlocked, color),
 					});
@@ -458,21 +455,18 @@
 		return byPlayer;
 	});
 
-	// Event-row order within each nation's band (only rows with events render).
+	// Row order within each nation's band: leaders, then laws, then techs.
 	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
 
-	// Per-marker render sizes, tuned by eye (candidate sweep) so the rail's
-	// different art styles read at the same visual size (#85). Once the archetype
-	// glyphs are trimmed to fill their box, trait/law/tech all sit at 16; the bold
-	// white nation crest is nudged to 15 so it doesn't dominate. Reliable because
-	// each category is internally uniform. Unmapped categories fall back to the
-	// default.
+	// Per-marker render sizes (bare icons, no tile). The nation crest reads as
+	// the row label at 20; the archetype (traits-trimmed) and the generic
+	// law/tech glyphs (icons category) sit at 14. Unmapped categories fall back
+	// to the default.
 	const RAIL_ICON_SIZE_DEFAULT = 16;
 	const RAIL_ICON_SIZE: Partial<Record<SpriteCategory, number>> = {
-		crests: 15,
-		"traits-trimmed": 16,
-		laws: 16,
-		"techs-cropped": 16,
+		crests: 20,
+		"traits-trimmed": 14,
+		icons: 14,
 	};
 
 	// The live ECharts instance (approach B). The rail is DOM, but each marker's
@@ -481,8 +475,56 @@
 	let chart = $state<ECharts | null>(null);
 	let layoutTick = $state(0);
 
-	// Per-nation rail groups, each event's plot-pixel x resolved from the live
-	// chart. Recomputes on the event data and on layoutTick. Matchups only.
+	// ─── Rail layout (one row per event kind) ────────────────────────
+	// Each nation's band splits into up to three rows — leaders, laws, techs — so
+	// every icon type sits on its own line (faint rules separate them; see the
+	// template). Recomputes on the event data; live-chart x lands in `railView`.
+
+	// Divider between the stacked per-event tooltips of a collapsed marker.
+	const TOOLTIP_SEP = `<div style="border-top:1px solid #4a453d;margin:7px 0 6px"></div>`;
+
+	// Collapse events sharing a turn within one kind's row into a single marker:
+	// laws/techs use one generic glyph, so N on a turn would be N identical icons.
+	// Show one icon and concatenate the tooltips so hover keeps every detail. Input
+	// is a single kind sorted by turn, so same-turn events are adjacent.
+	function collapseSameTurn(sorted: RailEvent[]): RailEvent[] {
+		const out: RailEvent[] = [];
+		for (const ev of sorted) {
+			const last = out[out.length - 1];
+			if (last && last.turn === ev.turn) {
+				last.tooltipHtml += TOOLTIP_SEP + ev.tooltipHtml;
+			} else {
+				out.push({ ...ev });
+			}
+		}
+		return out;
+	}
+
+	type RailRow = { kind: RailEvent["kind"]; markers: RailEvent[] };
+	const railGroups = $derived.by<{ player: DetailPlayer; rows: RailRow[] }[]>(
+		() => {
+			if (!matchup) return [];
+			return orderedPlayers
+				.map((player) => {
+					const evs = eventRail.get(player.playerId) ?? [];
+					const rows = RAIL_KINDS.filter((k) =>
+						evs.some((e) => e.kind === k),
+					).map((kind) => ({
+						kind,
+						markers: collapseSameTurn(
+							evs
+								.filter((e) => e.kind === kind)
+								.sort((a, b) => a.turn - b.turn),
+						),
+					}));
+					return { player, rows };
+				})
+				.filter((g) => g.rows.length > 0);
+		},
+	);
+
+	// Per-nation rows with each marker's plot-pixel x resolved from the live chart
+	// (chart + layoutTick declared above); recomputes on every re-layout.
 	type RailIcon = RailEvent & { left: number | null };
 	type RailGroup = {
 		player: DetailPlayer;
@@ -496,21 +538,13 @@
 		const ready = c != null && layoutTick >= 0;
 		const xPixel = (turn: number): number | null =>
 			ready ? (c!.convertToPixel({ xAxisIndex: 0 }, turn) as number) : null;
-		return orderedPlayers
-			.map((player) => {
-				const evs = eventRail.get(player.playerId) ?? [];
-				const rows = RAIL_KINDS.filter((k) =>
-					evs.some((e) => e.kind === k),
-				).map((kind) => ({
-					kind,
-					icons: evs
-						.filter((e) => e.kind === kind)
-						.map((e) => ({ ...e, left: xPixel(e.turn) })),
-				}));
-				return { player, rows, hasEvents: evs.length > 0 };
-			})
-			.filter((g) => g.hasEvents)
-			.map(({ player, rows }) => ({ player, rows }));
+		return railGroups.map((g) => ({
+			player: g.player,
+			rows: g.rows.map((r) => ({
+				kind: r.kind,
+				icons: r.markers.map((m) => ({ ...m, left: xPixel(m.turn) })),
+			})),
+		}));
 	});
 
 	// Hovering a rail marker shows its rich tooltip and drops a vertical guide
@@ -524,6 +558,15 @@
 		if (!c || !h || layoutTick < 0) return null;
 		return c.convertToPixel({ xAxisIndex: 0 }, h.turn) as number;
 	});
+	// Turn-0 x where the inter-kind separators begin, so they don't run back
+	// under the nation crest in the y-axis inset. Tracks the live chart.
+	const railSepLeft = $derived.by<number | null>(() => {
+		const c = chart;
+		// Reads layoutTick so it recomputes on every chart re-layout.
+		if (!c || layoutTick < 0) return null;
+		return c.convertToPixel({ xAxisIndex: 0 }, 0) as number;
+	});
+
 	function enterEvent(ev: RailEvent, e: MouseEvent) {
 		tip = {
 			html: ev.tooltipHtml,
@@ -571,6 +614,11 @@
 			},
 			yAxis: {
 				type: "value",
+				// Draw the y-axis at the left edge, not at x=0. The turn axis min is
+				// negative (minTurn − pad, with minTurn = 0), so the default onZero
+				// behaviour would otherwise render the axis line inside the plot at
+				// turn 0.
+				axisLine: { onZero: false },
 			},
 			series: playerHistory.map((player, i) => {
 				const rp = playerById.get(player.player_id);
@@ -789,10 +837,7 @@
 		<!-- Military Power Chart -->
 		{#if militaryChartOption}
 			{#if matchup}
-				<!-- Approach B: a single power plot (Chart, not ChartContainer, so we
-				     hold the instance) with a DOM event rail below. Marker x and the
-				     hover guide line come from convertToPixel(turn) on the live chart —
-				     no fixed insets; the rail tracks the plot on resize. -->
+				<!-- Approach B: a single power plot (Chart, not ChartContainer, so we hold the instance) with a DOM event rail below — one row per event kind per nation (leader / law / tech), each marker at its event's true turn-x (convertToPixel). -->
 				<div class="relative">
 					<Chart
 						option={militaryChartOption}
@@ -808,37 +853,37 @@
 					{/if}
 				</div>
 
-				<!-- Event rail: one tinted band per nation, one row per event kind.
-				     Markers are real <SpriteIcon>s (identical to other tabs); their x
-				     is resolved from the live chart, so they track the plot. -->
 				<div class="mt-1 flex flex-col gap-1.5">
 					{#each railView as group (group.player.playerId)}
-						<div
-							class="relative rounded py-0.5"
-							style="background: {toRgba(group.player.color, 0.1)};"
-						>
+						<div class="relative rounded bg-blue-gray py-0.5">
+							<!-- Nation crest, vertically centered across the whole band. -->
+							<div
+								class="absolute inset-y-0 left-0 z-20 flex items-center pl-1.5"
+							>
+								{#if group.player.nation}
+									<SpriteIcon
+										category="crests"
+										value={group.player.nation}
+										size={RAIL_ICON_SIZE.crests ?? RAIL_ICON_SIZE_DEFAULT}
+										alt={group.player.label}
+									/>
+								{:else}
+									<span
+										class="truncate text-[10px] font-semibold"
+										style="color: {group.player.color};"
+										>{group.player.label}</span
+									>
+								{/if}
+							</div>
 							{#each group.rows as row, ri (row.kind)}
+								<!-- One row per event kind; faint rules separate the kinds. -->
 								<div class="relative h-6">
-									{#if ri === 0}
+									{#if ri > 0 && railSepLeft != null}
+										<!-- Faint inter-kind separator; starts at turn 0 so it clears the crest. -->
 										<div
-											class="absolute inset-y-0 left-0 z-10 flex items-center pl-1.5"
-										>
-											{#if group.player.nation}
-												<SpriteIcon
-													category="crests"
-													value={group.player.nation}
-													size={RAIL_ICON_SIZE.crests ??
-														RAIL_ICON_SIZE_DEFAULT}
-													alt={group.player.label}
-												/>
-											{:else}
-												<span
-													class="truncate text-[10px] font-semibold"
-													style="color: {group.player.color};"
-													>{group.player.label}</span
-												>
-											{/if}
-										</div>
+											class="pointer-events-none absolute right-0 top-0 h-px bg-[#2a2623]/50"
+											style="left: {railSepLeft}px;"
+										></div>
 									{/if}
 									{#each row.icons as icon, i (i)}
 										{#if icon.left != null}
@@ -855,21 +900,14 @@
 													<SpriteIcon
 														category={icon.iconCategory}
 														value={v}
-														size={RAIL_ICON_SIZE[
-															icon.iconCategory
-														] ?? RAIL_ICON_SIZE_DEFAULT}
+														size={RAIL_ICON_SIZE[icon.iconCategory] ??
+															RAIL_ICON_SIZE_DEFAULT}
 													/>
 												{:else}
 													<span
 														class="inline-block h-2.5 w-2.5 rounded-full"
 														style="background: {icon.color};"
 													></span>
-												{/if}
-												{#if icon.num}
-													<span
-														class="ml-0.5 font-mono text-[10px] font-bold leading-none text-bright"
-														>{icon.num}</span
-													>
 												{/if}
 											</div>
 										{/if}
