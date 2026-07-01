@@ -438,10 +438,11 @@
 					events.push({
 						kind: "tech",
 						turn: d.turn,
-						// A single generic techs glyph for every unit-tech unlock; the
-						// specific tech (and the units it unlocks) is in the hover tooltip.
-						iconCategory: "icons",
-						iconValue: "TECHS_Normal",
+						// The sprite of the strongest unit this tech unlocks (`unlocked` is
+						// sorted by strength desc); the tech and the full unit list are in
+						// the hover tooltip.
+						iconCategory: "units",
+						iconValue: unlocked[0].unitType,
 						color,
 						tooltipHtml: techEventTooltip(d.tech_name, d.turn, unlocked, color),
 					});
@@ -459,14 +460,16 @@
 	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
 
 	// Per-marker render sizes (bare icons, no tile). The nation crest reads as
-	// the row label at 24; the archetype (traits-trimmed) and the generic
-	// law/tech glyphs (icons category) sit at 14. Unmapped categories fall back
-	// to the default.
+	// the row label at 24; the archetype (traits-trimmed), the generic law glyph
+	// (icons category), and the unit-unlock sprites (units) sit at 14 so every
+	// marker kind reads at the same weight. Unmapped categories fall back to the
+	// default.
 	const RAIL_ICON_SIZE_DEFAULT = 16;
 	const RAIL_ICON_SIZE: Partial<Record<SpriteCategory, number>> = {
 		crests: 24,
 		"traits-trimmed": 14,
 		icons: 14,
+		units: 14,
 	};
 
 	// The live ECharts instance (approach B). The rail is DOM, but each marker's
@@ -480,25 +483,8 @@
 	// every icon type sits on its own line (faint rules separate them; see the
 	// template). Recomputes on the event data; live-chart x lands in `railView`.
 
-	// Divider between the stacked per-event tooltips of a collapsed marker.
+	// Divider between the stacked per-event tooltips of a merged marker.
 	const TOOLTIP_SEP = `<div style="border-top:1px solid #4a453d;margin:7px 0 6px"></div>`;
-
-	// Collapse events sharing a turn within one kind's row into a single marker:
-	// laws/techs use one generic glyph, so N on a turn would be N identical icons.
-	// Show one icon and concatenate the tooltips so hover keeps every detail. Input
-	// is a single kind sorted by turn, so same-turn events are adjacent.
-	function collapseSameTurn(sorted: RailEvent[]): RailEvent[] {
-		const out: RailEvent[] = [];
-		for (const ev of sorted) {
-			const last = out[out.length - 1];
-			if (last && last.turn === ev.turn) {
-				last.tooltipHtml += TOOLTIP_SEP + ev.tooltipHtml;
-			} else {
-				out.push({ ...ev });
-			}
-		}
-		return out;
-	}
 
 	type RailRow = { kind: RailEvent["kind"]; markers: RailEvent[] };
 	const railGroups = $derived.by<{ player: DetailPlayer; rows: RailRow[] }[]>(
@@ -511,11 +497,9 @@
 						evs.some((e) => e.kind === k),
 					).map((kind) => ({
 						kind,
-						markers: collapseSameTurn(
-							evs
-								.filter((e) => e.kind === kind)
-								.sort((a, b) => a.turn - b.turn),
-						),
+						markers: evs
+							.filter((e) => e.kind === kind)
+							.sort((a, b) => a.turn - b.turn),
 					}));
 					return { player, rows };
 				})
@@ -530,6 +514,33 @@
 		player: DetailPlayer;
 		rows: { kind: RailEvent["kind"]; icons: RailIcon[] }[];
 	};
+
+	// Merge same-row markers whose resolved centers land within ~a marker width
+	// (markers are 14px, centered on their turn) so near-overlapping icons
+	// collapse into one — the first marker's icon/turn is kept and the rest are
+	// concatenated into its tooltip. This must run on pixel positions, not turn
+	// gaps: whether two events overlap depends on the live chart width (a turn gap
+	// that's clear on a 40-turn game collides on a 200-turn one), so it recomputes
+	// with the layout. Same-turn markers (identical x) are the degenerate case.
+	// Input is one kind sorted by turn, so mergeable markers are adjacent.
+	const RAIL_MERGE_PX = 16;
+	function mergeByProximity(icons: RailIcon[]): RailIcon[] {
+		const out: RailIcon[] = [];
+		for (const icon of icons) {
+			const last = out[out.length - 1];
+			if (
+				last &&
+				last.left != null &&
+				icon.left != null &&
+				Math.abs(icon.left - last.left) < RAIL_MERGE_PX
+			) {
+				last.tooltipHtml += TOOLTIP_SEP + icon.tooltipHtml;
+			} else {
+				out.push({ ...icon });
+			}
+		}
+		return out;
+	}
 	const railView = $derived.by<RailGroup[]>(() => {
 		if (!matchup) return [];
 		const c = chart;
@@ -542,7 +553,9 @@
 			player: g.player,
 			rows: g.rows.map((r) => ({
 				kind: r.kind,
-				icons: r.markers.map((m) => ({ ...m, left: xPixel(m.turn) })),
+				icons: mergeByProximity(
+					r.markers.map((m) => ({ ...m, left: xPixel(m.turn) })),
+				),
 			})),
 		}));
 	});
