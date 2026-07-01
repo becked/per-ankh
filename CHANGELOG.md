@@ -1,5 +1,37 @@
 # Changelog
 
+## [2026-07-01-436f9ad] - 2026-07-01
+
+### Features
+
+- (game-detail) head-to-head matchup view on the Military tab — [2a76cd9](https://github.com/becked/per-ankh/commit/2a76cd9571ff632ddef5467cf7fb7516f041a850)
+- (skills) add doc-audit skill — [89d5d4b](https://github.com/becked/per-ankh/commit/89d5d4b70439557f0b651e82d1e2e832a4047387)
+- (military) rework event rail into per-kind rows — [a4df8be](https://github.com/becked/per-ankh/commit/a4df8be165338371511da634561364862b654330)
+- (military) grid the event rail to the power chart's x labels — [647c74a](https://github.com/becked/per-ankh/commit/647c74a3a10a5788af34066a86ee56c17dd41361)
+- (military) unit icons for tech markers, merge overlapping ones — [25b47c0](https://github.com/becked/per-ankh/commit/25b47c0487e41cd95ac79eb805c2adecf5e4cae7)
+- (military) use each law's own icon for event-rail law markers — [b28405f](https://github.com/becked/per-ankh/commit/b28405fec8182c00c40d268d90669c965a47618d)
+- (military) restyle head-to-head build boxes inline with app — [31ef3a9](https://github.com/becked/per-ankh/commit/31ef3a970b7de9a14e84f8365ed5305905b17255)
+- (military) align build panels on a shared unit-row order — [436f9ad](https://github.com/becked/per-ankh/commit/436f9ad717974da4656d2cf182a955c1552c8404)
+
+### Fixes
+
+- (military) center y-axis title to match sibling chart tabs — [e6cec07](https://github.com/becked/per-ankh/commit/e6cec0788570eea8b7581ea1c46127ac49dbfc04)
+- (military) equalize event-rail marker sizes across categories — [95d5ef0](https://github.com/becked/per-ankh/commit/95d5ef0ea3bbcc7691668f72721b2582c309dbe0)
+- (military) align build-box labels and flatten count styling — [213a747](https://github.com/becked/per-ankh/commit/213a747a1974e90d8bfefba6983edff6c203c705)
+
+### Other
+
+- correct stale tournament beta-gate language to create-only allowlist — [5ac3d2d](https://github.com/becked/per-ankh/commit/5ac3d2dba379d7bfd7798b0a44ac1e01dd9df3f6)
+- archive historical docs and delete obsolete pre-rewrite ones — [fe480c4](https://github.com/becked/per-ankh/commit/fe480c4c541c10bb1fb818375b06db077218766c)
+- correct stale claims in retained docs and refresh Key docs — [a4b21a8](https://github.com/becked/per-ankh/commit/a4b21a8613c5bd25baa3e5931024461f3a1c36e5)
+- remove public security/code review HTMLs — [067cbfe](https://github.com/becked/per-ankh/commit/067cbfe6d159f3cd4534a61d551360ea94c700d2)
+- drop stale SECURITY_DB/KV provisioning comments — [0f7da77](https://github.com/becked/per-ankh/commit/0f7da775ae0ffdd398f1afcfc7a3ecc284bd9b95)
+- add 2026-06-30 doc audit report — [05a5b6f](https://github.com/becked/per-ankh/commit/05a5b6f45b8ce8b36bd5b0d6a66ecc1daab90fc8)
+- correct stale 'advisory' pairing/bye editing claim to match engine — [95ccccf](https://github.com/becked/per-ankh/commit/95ccccf27fd0eed1d3dfbcb005e14bb29885d37b)
+- (military) address review feedback on matchup view — [de11ee9](https://github.com/becked/per-ankh/commit/de11ee9640037083bcbae538794fddd3e43a8c60)
+- (military) position the event rail via convertToPixel — [52ed7fc](https://github.com/becked/per-ankh/commit/52ed7fc9c6d66eb94ccace977daad605d3429108)
+- remove unused static/laws-icon.png — [cb49efa](https://github.com/becked/per-ankh/commit/cb49efa5d0cad7039255319c8753cfa907e8d2c1)
+
 ## [2026-06-28-e9925a3] - 2026-06-28
 
 ### Features
