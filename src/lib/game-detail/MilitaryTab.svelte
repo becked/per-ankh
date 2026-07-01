@@ -4,7 +4,7 @@
 	import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 	import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
 	import type { CharacterInfo, UnitInfo } from "$lib/parser/types";
-	import type { EChartsOption } from "echarts";
+	import type { EChartsOption, ECharts } from "echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import Chart from "$lib/Chart.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -20,6 +20,7 @@
 		type TableState,
 		type UnitClass,
 		type DetailPlayer,
+		type SpriteCategory,
 		TABLE_FRAME_CLASS,
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
@@ -199,22 +200,17 @@
 	);
 
 	// ─── Annotation layer ─────────────────────────────────────────────
-	// The military-power chart keeps gradient area fills (owglick's milStory
-	// look) but stays uncluttered: game-event annotations — leader successions
-	// (incl. the starting ruler) and the 4th/7th-law milestones — live in the
-	// per-nation event bars above the chart, aligned to the turn axis.
+	// The military-power chart stays a clean single plot; game-event annotations
+	// (leader successions, law changes, unit-tech unlocks) render as a DOM rail
+	// below it — one tinted band per nation, one row per event kind. Each marker
+	// is a real <SpriteIcon> (identical to every other tab), and its x comes from
+	// the live chart via convertToPixel(turn) (see `railView`), so it tracks the
+	// plot on resize with no fixed pixel insets.
 
-	// Turn values of the shared x-axis (category type), used to snap an event
-	// turn onto a real category so the guide line lands at the right place.
+	// Turn range of the plot's value x-axis (min/max in militaryChartOption).
 	const axisTurns = $derived<number[]>(
 		playerHistory[0]?.history.map((h) => h.turn) ?? [],
 	);
-	function nearest(turns: number[], turn: number): number {
-		if (turns.length === 0) return turn;
-		return turns.reduce((best, t) =>
-			Math.abs(t - turn) < Math.abs(best - turn) ? t : best,
-		);
-	}
 
 	// Rating chip for the leader tooltip: the in-game stat icon + value.
 	function ratingChip(
@@ -298,8 +294,12 @@
 	// bars above the chart — keeping the plot itself uncluttered.
 	type RailEvent = {
 		kind: "leader" | "law" | "tech";
-		frac: number;
-		iconUrl: string | null;
+		// The event's turn; its marker x is convertToPixel(turn) on the live chart.
+		turn: number;
+		// Sprite for the marker, drawn with <SpriteIcon> like every other tab.
+		// A null iconValue (e.g. a ruler with no archetype) renders a colored dot.
+		iconCategory: SpriteCategory;
+		iconValue: string | null;
 		num: string | null;
 		color: string;
 		tooltipHtml: string;
@@ -346,12 +346,6 @@
 	}
 
 	const eventRail = $derived.by(() => {
-		const n = axisTurns.length;
-		const fracOf = (turn: number): number => {
-			if (n <= 1) return 0;
-			const i = axisTurns.indexOf(nearest(axisTurns, turn));
-			return i < 0 ? 0 : i / (n - 1);
-		};
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
 		const byPlayer = new Map<number, RailEvent[]>();
 
@@ -378,8 +372,9 @@
 					: null;
 				events.push({
 					kind: "leader",
-					frac: fracOf(turn),
-					iconUrl: archKey ? getSpritePath("traits", archKey) : null,
+					turn,
+					iconCategory: "traits",
+					iconValue: archKey,
 					num: null,
 					color,
 					tooltipHtml: leaderTooltip(c, turn, color),
@@ -402,8 +397,9 @@
 					currentByClass[cls ?? `_${d.law_name}`] = d.law_name;
 					events.push({
 						kind: "law",
-						frac: fracOf(d.turn),
-						iconUrl: getSpritePath("laws", d.law_name),
+						turn: d.turn,
+						iconCategory: "laws",
+						iconValue: d.law_name,
 						num: String(d.law_count),
 						color,
 						tooltipHtml: lawEventTooltip(
@@ -443,8 +439,9 @@
 					if (unlocked.length === 0) continue;
 					events.push({
 						kind: "tech",
-						frac: fracOf(d.turn),
-						iconUrl: getSpritePath("techs", d.tech_name),
+						turn: d.turn,
+						iconCategory: "techs",
+						iconValue: d.tech_name,
 						num: String(unlocked[0].strength),
 						color,
 						tooltipHtml: techEventTooltip(d.tech_name, d.turn, unlocked, color),
@@ -452,123 +449,140 @@
 				}
 			}
 
-			events.sort((a, b) => a.frac - b.frac);
+			events.sort((a, b) => a.turn - b.turn);
 			byPlayer.set(player.player_id, events);
 		});
 
 		return byPlayer;
 	});
 
-	// Hovering a rail icon shows its rich tooltip (via {@html}) and drops a
-	// vertical guide line on the chart at that turn.
+	// Event-row order within each nation's band (only rows with events render).
+	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
+
+	// The live ECharts instance (approach B). The rail is DOM, but each marker's
+	// x-position comes from the chart via convertToPixel; `layoutTick` bumps on
+	// every chart re-layout (init / option change / resize) so positions refresh.
+	let chart = $state<ECharts | null>(null);
+	let layoutTick = $state(0);
+
+	// Per-nation rail groups, each event's plot-pixel x resolved from the live
+	// chart. Recomputes on the event data and on layoutTick. Matchups only.
+	type RailIcon = RailEvent & { left: number | null };
+	type RailGroup = {
+		player: DetailPlayer;
+		rows: { kind: RailEvent["kind"]; icons: RailIcon[] }[];
+	};
+	const railView = $derived.by<RailGroup[]>(() => {
+		if (!matchup) return [];
+		const c = chart;
+		// `layoutTick >= 0` is always true but reads the signal, so positions
+		// recompute whenever the chart re-lays-out.
+		const ready = c != null && layoutTick >= 0;
+		const xPixel = (turn: number): number | null =>
+			ready ? (c!.convertToPixel({ xAxisIndex: 0 }, turn) as number) : null;
+		return orderedPlayers
+			.map((player) => {
+				const evs = eventRail.get(player.playerId) ?? [];
+				const rows = RAIL_KINDS.filter((k) =>
+					evs.some((e) => e.kind === k),
+				).map((kind) => ({
+					kind,
+					icons: evs
+						.filter((e) => e.kind === kind)
+						.map((e) => ({ ...e, left: xPixel(e.turn) })),
+				}));
+				return { player, rows, hasEvents: evs.length > 0 };
+			})
+			.filter((g) => g.hasEvents)
+			.map(({ player, rows }) => ({ player, rows }));
+	});
+
+	// Hovering a rail marker shows its rich tooltip and drops a vertical guide
+	// line on the plot at that turn (x resolved from the live chart).
 	let tip = $state<{ html: string; x: number; y: number } | null>(null);
-	let highlight = $state<{ frac: number; color: string } | null>(null);
+	let highlight = $state<{ turn: number; color: string } | null>(null);
+	const highlightLeft = $derived.by<number | null>(() => {
+		const c = chart;
+		const h = highlight;
+		// `layoutTick < 0` is always false but reads the signal to track re-layout.
+		if (!c || !h || layoutTick < 0) return null;
+		return c.convertToPixel({ xAxisIndex: 0 }, h.turn) as number;
+	});
 	function enterEvent(ev: RailEvent, e: MouseEvent) {
 		tip = {
 			html: ev.tooltipHtml,
 			x: Math.min(e.clientX + 14, window.innerWidth - 300),
 			y: Math.min(e.clientY + 14, window.innerHeight - 170),
 		};
-		highlight = { frac: ev.frac, color: ev.color };
+		highlight = { turn: ev.turn, color: ev.color };
 	}
 	function leaveEvent() {
 		tip = null;
 		highlight = null;
 	}
 
-	// Event-row order within each nation's group (only rows with events render).
-	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
-
-	// Pixel insets matching the chart grid (grid.left / grid.right), so a rail
-	// icon at fraction f — and the hover guide line — sit directly above the
-	// matching turn on the plot. Also the plot's top/bottom insets for the line.
-	const EVENT_RAIL_LEFT = 52;
-	const EVENT_RAIL_RIGHT = 20;
-	const PLOT_TOP = 48;
-	const PLOT_BOTTOM = 46;
-
 	// ─── Chart option ─────────────────────────────────────────────────
-	const militaryChartOption = $derived<EChartsOption | null>(
-		playerHistory
-			? {
-					...CHART_THEME,
-					title: {
-						...CHART_THEME.title,
-						text: "Military Power",
+	// A single power plot (approach B): the event rail is separate DOM below,
+	// positioned from this chart via convertToPixel — so nothing here reserves
+	// fixed pixel edges. A little turn-axis padding keeps the first/last event
+	// markers clear of the axis lines.
+	const militaryChartOption = $derived.by<EChartsOption | null>(() => {
+		if (!playerHistory) return null;
+		const turns = axisTurns;
+		const minTurn = turns[0] ?? 0;
+		const maxTurn = turns[turns.length - 1] ?? 0;
+		const pad = Math.max(1, (maxTurn - minTurn) * 0.02);
+		return {
+			...CHART_THEME,
+			title: { ...CHART_THEME.title, text: "Military Power" },
+			legend: {
+				show: false,
+				data: playerHistory.map(
+					(p) =>
+						playerById.get(p.player_id)?.label ??
+						formatEnum(p.nation, "NATION_"),
+				),
+				selected: chartFilter,
+			},
+			grid: { top: 44, left: 8, right: 20, bottom: 24, containLabel: true },
+			tooltip: { trigger: "axis" },
+			xAxis: {
+				type: "value",
+				min: minTurn - pad,
+				max: maxTurn + pad,
+				minInterval: 1,
+				splitLine: { show: false },
+			},
+			yAxis: {
+				type: "value",
+			},
+			series: playerHistory.map((player, i) => {
+				const rp = playerById.get(player.player_id);
+				const fillColor = rp?.color ?? getNationChartColor(player.nation, i);
+				return {
+					name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+					type: "line" as const,
+					data: player.history.map((h) => [h.turn, h.military_power]),
+					itemStyle: { color: rp?.color },
+					lineStyle: { width: 2 },
+					showSymbol: false,
+					areaStyle: {
+						color: {
+							type: "linear" as const,
+							x: 0,
+							y: 0,
+							x2: 0,
+							y2: 1,
+							colorStops: [
+								{ offset: 0, color: toRgba(fillColor, 0.22) },
+								{ offset: 1, color: toRgba(fillColor, 0) },
+							],
+						},
 					},
-					legend: {
-						show: false,
-						data: playerHistory.map(
-							(p) =>
-								playerById.get(p.player_id)?.label ??
-								formatEnum(p.nation, "NATION_"),
-						),
-						selected: chartFilter,
-					},
-					// Fixed plot insets (containLabel off) so the plot's left/right
-					// edges are at known pixel offsets — the event bars above use the
-					// same insets to line up with the turn axis. EVENT_RAIL_LEFT /
-					// EVENT_RAIL_RIGHT below must match grid.left / grid.right.
-					grid: {
-						top: 48,
-						left: 52,
-						right: 20,
-						bottom: 46,
-						containLabel: false,
-					},
-					// Axis-trigger tooltip: hovering anywhere on the plot shows both
-					// players' power at that turn. Event detail lives in the nation
-					// bars above the chart, not on the plot.
-					tooltip: { trigger: "axis" },
-					xAxis: {
-						type: "category",
-						name: "Turn",
-						nameLocation: "middle",
-						nameGap: 28,
-						// No end padding so turn → x maps linearly edge-to-edge,
-						// keeping the event bars above aligned with the plot.
-						boundaryGap: false,
-						data: playerHistory[0]?.history.map((h) => h.turn) ?? [],
-					},
-					yAxis: {
-						type: "value",
-						name: "Military Power",
-						nameLocation: "middle",
-						nameGap: 40,
-					},
-					series: playerHistory.map((player, i) => {
-						const rp = playerById.get(player.player_id);
-						// Concrete color for the gradient stops; itemStyle stays
-						// `rp?.color` so ECharts' palette fills in when a player has no
-						// resolved color (matching the other game-detail tabs).
-						const fillColor =
-							rp?.color ?? getNationChartColor(player.nation, i);
-						return {
-							name: rp?.label ?? formatEnum(player.nation, "NATION_"),
-							type: "line",
-							data: player.history.map((h) => h.military_power),
-							itemStyle: { color: rp?.color },
-							lineStyle: { width: 2 },
-							showSymbol: false,
-							// owglick-style gradient fill under each curve.
-							areaStyle: {
-								color: {
-									type: "linear",
-									x: 0,
-									y: 0,
-									x2: 0,
-									y2: 1,
-									colorStops: [
-										{ offset: 0, color: toRgba(fillColor, 0.22) },
-										{ offset: 1, color: toRgba(fillColor, 0) },
-									],
-								},
-							},
-						};
-					}),
-				}
-			: null,
-	);
+				};
+			}),
+		} as EChartsOption;
+	});
 
 	// ─── Army composition donuts ──────────────────────────────────────
 	// Build a class-composition donut (Infantry/Ranged/Cavalry/Siege/Naval)
@@ -758,96 +772,100 @@
 	>
 		<!-- Military Power Chart -->
 		{#if militaryChartOption}
-			<!-- Chart, with a hover guide line overlaid at the event's turn. -->
-			<div class="relative">
+			{#if matchup}
+				<!-- Approach B: a single power plot (Chart, not ChartContainer, so we
+				     hold the instance) with a DOM event rail below. Marker x and the
+				     hover guide line come from convertToPixel(turn) on the live chart —
+				     no fixed insets; the rail tracks the plot on resize. -->
+				<div class="relative">
+					<Chart
+						option={militaryChartOption}
+						height="360px"
+						onReady={(c) => (chart = c)}
+						onLayout={() => (layoutTick += 1)}
+					/>
+					{#if highlight && highlightLeft != null}
+						<div
+							class="pointer-events-none absolute inset-y-0 z-10"
+							style="left: {highlightLeft}px; width: 0; border-left: 1px dashed {highlight.color};"
+						></div>
+					{/if}
+				</div>
+
+				<!-- Event rail: one tinted band per nation, one row per event kind.
+				     Markers are real <SpriteIcon>s (identical to other tabs); their x
+				     is resolved from the live chart, so they track the plot. -->
+				<div class="mt-1 flex flex-col gap-1.5">
+					{#each railView as group (group.player.playerId)}
+						<div
+							class="relative rounded py-0.5"
+							style="background: {toRgba(group.player.color, 0.1)};"
+						>
+							{#each group.rows as row, ri (row.kind)}
+								<div class="relative h-6">
+									{#if ri === 0}
+										<div
+											class="absolute inset-y-0 left-0 z-10 flex items-center pl-1.5"
+										>
+											{#if group.player.nation}
+												<SpriteIcon
+													category="crests"
+													value={group.player.nation}
+													size={18}
+													alt={group.player.label}
+												/>
+											{:else}
+												<span
+													class="truncate text-[10px] font-semibold"
+													style="color: {group.player.color};"
+													>{group.player.label}</span
+												>
+											{/if}
+										</div>
+									{/if}
+									{#each row.icons as icon, i (i)}
+										{#if icon.left != null}
+											{@const v = icon.iconValue}
+											<div
+												class="absolute top-1/2 flex cursor-default items-center"
+												style="left: {icon.left}px; transform: translate(-50%, -50%);"
+												role="img"
+												aria-label={icon.kind}
+												onmousemove={(e) => enterEvent(icon, e)}
+												onmouseleave={leaveEvent}
+											>
+												{#if v}
+													<SpriteIcon
+														category={icon.iconCategory}
+														value={v}
+														size={18}
+													/>
+												{:else}
+													<span
+														class="inline-block h-2.5 w-2.5 rounded-full"
+														style="background: {icon.color};"
+													></span>
+												{/if}
+												{#if icon.num}
+													<span
+														class="ml-0.5 font-mono text-[10px] font-bold leading-none text-bright"
+														>{icon.num}</span
+													>
+												{/if}
+											</div>
+										{/if}
+									{/each}
+								</div>
+							{/each}
+						</div>
+					{/each}
+				</div>
+			{:else}
 				<ChartContainer
 					option={militaryChartOption}
 					height="400px"
 					title="Military Power"
 				/>
-				{#if highlight}
-					<div
-						class="pointer-events-none absolute z-10"
-						style="left: calc({EVENT_RAIL_LEFT}px + {highlight.frac} * (100% - {EVENT_RAIL_LEFT +
-							EVENT_RAIL_RIGHT}px)); top: {PLOT_TOP}px; bottom: {PLOT_BOTTOM}px; width: 0; border-left: 1px dashed {highlight.color};"
-					></div>
-				{/if}
-			</div>
-
-			<!-- Event rail: per-nation timeline below the plot (turn axis sits just
-			     above). One row per event type so icons never overlap across types.
-			     Two-player matchups only — the rail is a 1v1 framing; FFA keeps the
-			     standalone donuts + pivot table below. -->
-			{#if matchup}
-				<div class="mt-1 flex flex-col gap-1.5">
-					{#each orderedPlayers as rp (rp.playerId)}
-						{@const evs = eventRail.get(rp.playerId) ?? []}
-						{@const kinds = RAIL_KINDS.filter((k) =>
-							evs.some((e) => e.kind === k),
-						)}
-						{#if evs.length > 0}
-							<div
-								class="rounded py-0.5"
-								style="background: {toRgba(rp.color, 0.1)};"
-							>
-								{#each kinds as kind, ki (kind)}
-									<div class="relative h-6">
-										{#if ki === 0}
-											<div
-												class="absolute inset-y-0 left-0 flex items-center pl-1.5"
-												style="width: {EVENT_RAIL_LEFT}px;"
-											>
-												{#if rp?.nation}
-													<SpriteIcon
-														category="crests"
-														value={rp.nation}
-														size={18}
-														alt={rp.label}
-													/>
-												{:else}
-													<span
-														class="truncate text-[10px] font-semibold"
-														style="color: {rp?.color};">{rp?.label}</span
-													>
-												{/if}
-											</div>
-										{/if}
-										{#each evs.filter((e) => e.kind === kind) as ev, i (i)}
-											<div
-												class="absolute top-1/2 flex cursor-default items-center"
-												style="left: calc({EVENT_RAIL_LEFT}px + {ev.frac} * (100% - {EVENT_RAIL_LEFT +
-													EVENT_RAIL_RIGHT}px)); transform: translate(-50%, -50%);"
-												role="img"
-												aria-label={ev.kind}
-												onmousemove={(e) => enterEvent(ev, e)}
-												onmouseleave={leaveEvent}
-											>
-												{#if ev.iconUrl}
-													<img
-														src={ev.iconUrl}
-														alt=""
-														style="width:18px;height:18px;"
-													/>
-												{:else}
-													<span
-														class="inline-block h-2.5 w-2.5 rounded-full"
-														style="background: {ev.color};"
-													></span>
-												{/if}
-												{#if ev.num}
-													<span
-														class="ml-0.5 font-mono text-[10px] font-bold leading-none text-bright"
-														>{ev.num}</span
-													>
-												{/if}
-											</div>
-										{/each}
-									</div>
-								{/each}
-							</div>
-						{/if}
-					{/each}
-				</div>
 			{/if}
 		{/if}
 
@@ -858,9 +876,9 @@
 				class="{militaryChartOption ? 'mt-4 ' : ''}grid gap-4"
 				style="grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));"
 			>
-				{#each armyPieCharts as chart (chart.playerId)}
+				{#each armyPieCharts as pie (pie.playerId)}
 					<div class="overflow-hidden rounded-lg">
-						<Chart option={chart.pieOption} height="200px" />
+						<Chart option={pie.pieOption} height="200px" />
 					</div>
 				{/each}
 			</div>
@@ -1043,7 +1061,7 @@
 	</p>
 {/if}
 
-<!-- Floating tooltip for the event-rail icons. -->
+<!-- Floating tooltip for the event-rail markers. -->
 {#if tip}
 	<div
 		class="pointer-events-none fixed z-50 max-w-[290px] rounded-md border border-border-subtle bg-surface-deep px-2.5 py-2 shadow-xl"
