@@ -21,11 +21,20 @@
 		option,
 		height = "400px",
 		onItemClick,
+		onReady,
+		onLayout,
 	}: {
 		option: EChartsOption;
 		height?: string;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onItemClick?: (params: ECElementEvent) => void;
+		// Fired once with the ECharts instance (approach-B overlays use it to map
+		// data values to plot pixels via convertToPixel).
+		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
+		onReady?: (chart: echarts.ECharts) => void;
+		// Fired whenever the chart (re-)lays out — init, option change, resize — so
+		// a parent can recompute DOM positions that track the plot.
+		onLayout?: () => void;
 	} = $props();
 
 	let chartContainer: HTMLDivElement;
@@ -52,6 +61,8 @@
 				chart.on("click", (params) => {
 					onItemClick?.(params as ECElementEvent);
 				});
+				onReady?.(chart);
+				onLayout?.();
 			}
 		};
 
@@ -68,6 +79,7 @@
 				}
 				// Resize existing chart
 				chart?.resize();
+				if (chart) onLayout?.();
 			});
 
 			resizeObserver.observe(chartContainer);
@@ -94,6 +106,7 @@
 			chart.setOption(currentOption, true);
 			// Force resize to handle tab visibility changes
 			chart.resize();
+			onLayout?.();
 		}
 	});
 </script>

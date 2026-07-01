@@ -118,6 +118,7 @@
 					techDiscoveryHistory={game.tech_discovery_history}
 					completedTechs={game.completed_techs}
 					unitsProduced={game.units_produced}
+					units={game.units}
 					cityStatistics={game.city_statistics}
 					improvementData={game.improvement_data}
 					gameReligions={game.game_religions}
