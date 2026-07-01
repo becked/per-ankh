@@ -138,7 +138,6 @@
 		return null;
 	}
 
-	const sum = (items: BuildItem[]) => items.reduce((t, it) => t + it.count, 0);
 	const num = (n: number | null) => (n == null ? "—" : n.toLocaleString());
 
 	// Total military power built = Σ (units built × strength × 10), since a
@@ -151,7 +150,8 @@
 
 	type BuildBlock = {
 		title: string;
-		sub?: string;
+		statA?: string;
+		statB?: string;
 		a: BuildItem[];
 		b: BuildItem[];
 		donutA: EChartsOption | null;
@@ -166,9 +166,8 @@
 					const blocks: BuildBlock[] = [
 						{
 							title: "Military Built",
-							sub: `${sum(milA)} v ${sum(milB)} total · ${num(
-								milpowerBuilt(milA),
-							)} v ${num(milpowerBuilt(milB))} power built`,
+							statA: num(milpowerBuilt(milA)),
+							statB: num(milpowerBuilt(milB)),
 							a: milA,
 							b: milB,
 							donutA: makeDonut(a.label, a.color, milA),
@@ -185,9 +184,8 @@
 						const armyB = endingArmy(b);
 						blocks.push({
 							title: "Ending Army",
-							sub: `${armyA.total} v ${armyB.total} alive · ${num(
-								endingPower(a),
-							)} v ${num(endingPower(b))} power`,
+							statA: num(endingPower(a)),
+							statB: num(endingPower(b)),
 							a: armyA.items,
 							b: armyB.items,
 							donutA: makeDonut(a.label, a.color, armyA.items),
@@ -1004,16 +1002,17 @@
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
-		<div class="grid gap-4 md:grid-cols-2">
+		<div class="grid gap-4 md:grid-cols-2 md:grid-rows-[auto_auto]">
 			{#each buildBlocks as block (block.title)}
-				<div class="flex flex-col gap-3">
+				<div
+					class="flex flex-col gap-3 md:row-span-2 md:grid md:grid-rows-subgrid"
+				>
 					<BuildComparison
 						title={block.title}
-						sub={block.sub}
+						statA={block.statA}
+						statB={block.statB}
 						a={block.a}
 						b={block.b}
-						aLabel={matchup[0].label}
-						bLabel={matchup[1].label}
 						ca={matchup[0].color}
 						cb={matchup[1].color}
 					/>
