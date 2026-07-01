@@ -395,10 +395,10 @@
 					events.push({
 						kind: "law",
 						turn: d.turn,
-						// A single generic laws glyph for every law change; the specific
-						// law (and the full active set) is in the hover tooltip.
-						iconCategory: "icons",
-						iconValue: "LAWS_Normal",
+						// The adopted law's own icon; the full active set for the class
+						// (and any swap-out) is in the hover tooltip.
+						iconCategory: "laws",
+						iconValue: d.law_name,
 						color,
 						tooltipHtml: lawEventTooltip(
 							d.law_name,
@@ -460,15 +460,14 @@
 	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
 
 	// Per-marker render sizes (bare icons, no tile). The nation crest reads as
-	// the row label at 24; the archetype (traits-trimmed), the generic law glyph
-	// (icons category), and the unit-unlock sprites (units) sit at 14 so every
-	// marker kind reads at the same weight. Unmapped categories fall back to the
-	// default.
+	// the row label at 24; the archetype (traits-trimmed), the adopted-law icon
+	// (laws), and the unit-unlock sprite (units) sit at 14 so every marker kind
+	// reads at the same weight. Unmapped categories fall back to the default.
 	const RAIL_ICON_SIZE_DEFAULT = 16;
 	const RAIL_ICON_SIZE: Partial<Record<SpriteCategory, number>> = {
 		crests: 24,
 		"traits-trimmed": 14,
-		icons: 14,
+		laws: 14,
 		units: 14,
 	};
 
