@@ -373,7 +373,7 @@
 				events.push({
 					kind: "leader",
 					turn,
-					iconCategory: "traits",
+					iconCategory: "traits-trimmed",
 					iconValue: archKey,
 					num: null,
 					color,
@@ -440,7 +440,9 @@
 					events.push({
 						kind: "tech",
 						turn: d.turn,
-						iconCategory: "techs",
+						// Rail-only inset-cropped tech tiles so the glyph reads at the
+						// same visual size as the law/archetype markers beside it (#85).
+						iconCategory: "techs-cropped",
 						iconValue: d.tech_name,
 						num: String(unlocked[0].strength),
 						color,
@@ -458,6 +460,20 @@
 
 	// Event-row order within each nation's band (only rows with events render).
 	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
+
+	// Per-marker render sizes, tuned by eye (candidate sweep) so the rail's
+	// different art styles read at the same visual size (#85). Once the archetype
+	// glyphs are trimmed to fill their box, trait/law/tech all sit at 16; the bold
+	// white nation crest is nudged to 15 so it doesn't dominate. Reliable because
+	// each category is internally uniform. Unmapped categories fall back to the
+	// default.
+	const RAIL_ICON_SIZE_DEFAULT = 16;
+	const RAIL_ICON_SIZE: Partial<Record<SpriteCategory, number>> = {
+		crests: 15,
+		"traits-trimmed": 16,
+		laws: 16,
+		"techs-cropped": 16,
+	};
 
 	// The live ECharts instance (approach B). The rail is DOM, but each marker's
 	// x-position comes from the chart via convertToPixel; `layoutTick` bumps on
@@ -811,7 +827,8 @@
 												<SpriteIcon
 													category="crests"
 													value={group.player.nation}
-													size={18}
+													size={RAIL_ICON_SIZE.crests ??
+														RAIL_ICON_SIZE_DEFAULT}
 													alt={group.player.label}
 												/>
 											{:else}
@@ -838,7 +855,9 @@
 													<SpriteIcon
 														category={icon.iconCategory}
 														value={v}
-														size={18}
+														size={RAIL_ICON_SIZE[
+															icon.iconCategory
+														] ?? RAIL_ICON_SIZE_DEFAULT}
 													/>
 												{:else}
 													<span
