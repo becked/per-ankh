@@ -806,13 +806,13 @@ export async function handleTournamentBracket(
 		tournament.tournament_id,
 	);
 	const handleBySlotId = viewerIsAdmin
-		? new Map<string, string | null>(
-				slots.map((s): [string, string | null] => [
+		? new Map<string, AdminSlotIdentity>(
+				slots.map((s): [string, AdminSlotIdentity] => [
 					s.slot_id,
-					s.discord_username,
+					{ discord_username: s.discord_username, discord_id: s.discord_id },
 				]),
 			)
-		: new Map<string, string | null>();
+		: new Map<string, AdminSlotIdentity>();
 
 	const body = {
 		tournament_id: tournament.tournament_id,
@@ -918,12 +918,15 @@ export async function handleTournamentMatches(
 		tournament.tournament_id,
 	);
 	const handleBySlotId = viewerIsAdmin
-		? new Map<string, string | null>(
+		? new Map<string, AdminSlotIdentity>(
 				(await loadSlots(env, tournament.tournament_id)).map(
-					(s): [string, string | null] => [s.slot_id, s.discord_username],
+					(s): [string, AdminSlotIdentity] => [
+						s.slot_id,
+						{ discord_username: s.discord_username, discord_id: s.discord_id },
+					],
 				),
 			)
-		: new Map<string, string | null>();
+		: new Map<string, AdminSlotIdentity>();
 
 	return jsonResponse(
 		{
@@ -986,12 +989,15 @@ export async function handleTournamentMatchDetail(
 		tournament.tournament_id,
 	);
 	const handleBySlotId = viewerIsAdmin
-		? new Map<string, string | null>(
+		? new Map<string, AdminSlotIdentity>(
 				(await loadSlots(env, tournament.tournament_id)).map(
-					(s): [string, string | null] => [s.slot_id, s.discord_username],
+					(s): [string, AdminSlotIdentity] => [
+						s.slot_id,
+						{ discord_username: s.discord_username, discord_id: s.discord_id },
+					],
 				),
 			)
-		: new Map<string, string | null>();
+		: new Map<string, AdminSlotIdentity>();
 	return jsonResponse(
 		{
 			...serializeMatch(
@@ -1108,8 +1114,9 @@ function serializeMatch(
 	// Admin-only map slot_id → raw discord handle + numeric id for the LIVE slots
 	// (not the frozen snapshot). Populated only for admin viewers: the handle
 	// seeds the substitute editor with the real handle (the display name would
-	// unlink the slot on save). Empty/undefined → field null.
-	handleBySlotId?: Map<string, string | null>,
+	// unlink the slot on save); the discord_id lets the sesh export emit real
+	// `<@id>` mentions. Empty/undefined → fields null.
+	handleBySlotId?: Map<string, AdminSlotIdentity>,
 ) {
 	const slotAIdentity =
 		m.slot_a_user_id && identityByUserId
@@ -1178,13 +1185,18 @@ function serializeMatch(
 		// (null for public viewers, pending/bye sides, and unclaimed slots with
 		// no linked account). The handle seeds the substitute editor; the id backs
 		// `<@id>` mentions in the sesh export.
-		slot_a_discord_username: handleBySlotId?.get(m.slot_a_id) ?? null,
+		slot_a_discord_username:
+			handleBySlotId?.get(m.slot_a_id)?.discord_username ?? null,
+		slot_a_discord_id: handleBySlotId?.get(m.slot_a_id)?.discord_id ?? null,
 		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_avatar_url: slotBIdentity?.avatar_url ?? null,
 		slot_b_nation: slotBNation,
 		slot_b_discord_username: m.slot_b_id
-			? (handleBySlotId?.get(m.slot_b_id) ?? null)
+			? (handleBySlotId?.get(m.slot_b_id)?.discord_username ?? null)
+			: null,
+		slot_b_discord_id: m.slot_b_id
+			? (handleBySlotId?.get(m.slot_b_id)?.discord_id ?? null)
 			: null,
 		// Scheduled parts (migration 0029). Each carries its own time, caster
 		// (rendered by display name when linked, else caster_name), and VOD
@@ -1285,6 +1297,14 @@ export async function loadUserIdentitiesForMatches(
 interface MatchWithRound {
 	match: MatchRow;
 	round: RoundRow;
+}
+
+// Admin-only live-slot identity: the raw discord_username seeds the
+// substitute editor; the numeric discord_id backs real `<@id>` mentions in
+// the sesh export. Neither is exposed to non-admin viewers.
+interface AdminSlotIdentity {
+	discord_username: string | null;
+	discord_id: string | null;
 }
 
 async function loadMatchesWithRound(

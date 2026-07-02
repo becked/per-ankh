@@ -126,3 +126,22 @@ export function vodDisplayLabel(vod: {
 	}
 	return "VOD";
 }
+
+// Upcoming scheduled parts of still-pending, non-bye matches, soonest first.
+// graceMs keeps a just-started sitting visible (e.g. the cast surfaces use a
+// 2h grace so a match that began 20 minutes ago is still claimable); 0 means
+// strictly future. The one definition of "upcoming" shared by every surface
+// that lists it (sesh export, caster sign-up), so they can't drift apart.
+export function upcomingScheduledParts(
+	matches: TournamentMatch[],
+	graceMs = 0,
+): NumberedPart[] {
+	const cutoff = Date.now() - graceMs;
+	const pending = matches.filter(
+		(m) => m.status === "pending" && m.slot_b_id != null,
+	);
+	return scheduledParts(pending).filter((np) => {
+		const t = Date.parse(np.part.scheduled_at as string);
+		return !Number.isNaN(t) && t >= cutoff;
+	});
+}

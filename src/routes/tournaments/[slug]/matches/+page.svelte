@@ -48,7 +48,14 @@
 		scheduledDayKey,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
-	import { matchParts, type NumberedPart } from "$lib/tournament/parts";
+	import {
+		matchParts,
+		matchDisplayStatus,
+		upcomingScheduledParts,
+		type NumberedPart,
+	} from "$lib/tournament/parts";
+	import { matchNumbers, padMatchNumber } from "$lib/tournament/match-numbers";
+	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
@@ -73,6 +80,62 @@
 
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const partition = $derived(partitionSchedule(data.matches));
+
+	// Global "Match N" numbering (server-assigned), for the sesh export lines.
+	const matchNumberById = $derived(matchNumbers(data.matches));
+
+	// Admin "sesh.fyi"-style copy of upcoming (scheduled, still-pending) matches,
+	// soonest first, with Discord timestamps — paste into a Discord scheduling
+	// post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>` the relative
+	// "in X hours/days". A split match contributes one line per scheduled part,
+	// tagged "(Part N)"; single-session matches read as just "Match NNN".
+	function seshText(): string {
+		const num = (m: TournamentMatch) =>
+			padMatchNumber(matchNumberById.get(m.match_id));
+		// Prefer a real Discord `<@id>` mention (pings the player) when the slot is
+		// a claimed account whose id we have (admin-only field); fall back to the
+		// display name for unclaimed slots.
+		const who = (m: TournamentMatch, side: "a" | "b") => {
+			const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
+			if (id) return `<@${id}>`;
+			return matchSlotDisplayName(m, side, slotMaps.labels) ?? "?";
+		};
+		const vs = (m: TournamentMatch) => `${who(m, "a")} v ${who(m, "b")}`;
+
+		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
+		// already passed (no grace: this is a forward-looking schedule post).
+		const scheduled = upcomingScheduledParts(data.matches).map(
+			({ match, part, partNumber, split }) => {
+				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
+				const partTag = split ? `(Part ${partNumber}) ` : "";
+				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)`;
+			},
+		);
+		// "To be scheduled" = genuinely unscheduled matches only; a match that has
+		// already started (in progress, awaiting result) doesn't belong here.
+		const unscheduled = data.matches
+			.filter(
+				(m) =>
+					m.status === "pending" &&
+					m.slot_b_id != null &&
+					matchDisplayStatus(m) === "unscheduled",
+			)
+			.sort(
+				(a, b) =>
+					(matchNumberById.get(a.match_id) ?? 0) -
+					(matchNumberById.get(b.match_id) ?? 0),
+			)
+			.map((m) => `Match ${num(m)} - ${vs(m)}`);
+
+		const blocks = [
+			"Upcoming matches\n\n" +
+				(scheduled.length ? scheduled.join("\n") : "(none scheduled)"),
+		];
+		if (unscheduled.length) {
+			blocks.push("To be scheduled\n\n" + unscheduled.join("\n"));
+		}
+		return blocks.join("\n\n");
+	}
 
 	// View + zone controls. zone picks the single clock everything reads in.
 	let view = $state<"list" | "calendar">("list");
@@ -373,6 +436,14 @@
 				>
 					<h1 class="text-lg font-bold text-tan">Matches</h1>
 					<div class="flex items-center gap-2">
+						{#if isAdmin}
+							<CopyButton
+								text={seshText}
+								label="Copy upcoming (sesh)"
+								title="Copy upcoming scheduled matches (soonest first) with Discord timestamps, for a sesh.fyi / Discord post"
+								class="rounded border border-surface px-2 py-1 text-xs text-tan hover:bg-surface-hover"
+							/>
+						{/if}
 						<!-- UTC / Local: a segmented toggle picking the active clock. -->
 						<div
 							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"

@@ -129,6 +129,8 @@
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	// Global "Match N" numbering, shared by the bracket cards + the popover.
 	const matchNumberById = $derived(matchNumbers(data.matches));
+	// Admin-only signup answers (timezone/availability), for the Copy DM tool.
+	const slotSignupAnswers = $derived(slotMaps.signupAnswers);
 	const slotLabels = $derived(slotMaps.labels);
 	const slotUserIds = $derived(slotMaps.userIds);
 	const slotAvatars = $derived(slotMaps.avatars);
@@ -1151,6 +1153,7 @@
 				{slotUserIds}
 				{slotAvatars}
 				{user}
+				{slotSignupAnswers}
 				matchNumber={matchNumberById.get(currentMatch.match_id)}
 				onSubstitute={isAdmin ? substituteSlot : undefined}
 				onClose={closeMatch}
