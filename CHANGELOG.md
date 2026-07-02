@@ -1,5 +1,22 @@
 # Changelog
 
+## [2026-07-02-9e763b4] - 2026-07-02
+
+### Features
+
+- (tournament) match parts — per-sitting schedule, casters, VODs — [256afbf](https://github.com/becked/per-ankh/commit/256afbf7f5eb525de92bc7fc0716042c264c6a5e)
+- (tournament) refine match popup casting layout and matches list — [d7f31c4](https://github.com/becked/per-ankh/commit/d7f31c40d2968a4a66723512d1651dbe0f236c47)
+
+### Fixes
+
+- (tournament) reconcile up-next panel with match parts model — [6fc2324](https://github.com/becked/per-ankh/commit/6fc23244eeeba660f7c49cb7341653693dbf8060)
+- (tournament) recompute match status/schedule against a live clock — [6bfb883](https://github.com/becked/per-ankh/commit/6bfb883feeb49a70d0d0e954dd51053a697480b0)
+
+### Other
+
+- (tournament) rename match-part VOD→Stream and apply parts-core review fixes — [edb4e47](https://github.com/becked/per-ankh/commit/edb4e4709764e19cba68acfc6b48db8f07937e09)
+- (tournament) title-case the "In Progress" status toggle — [6b759d6](https://github.com/becked/per-ankh/commit/6b759d6b71fd70e61c9fd48760abbd9ec40e2f47)
+
 ## [2026-07-02-34951a2] - 2026-07-02
 
 ### Features
