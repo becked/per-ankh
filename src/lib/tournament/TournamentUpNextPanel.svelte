@@ -1,10 +1,9 @@
 <script lang="ts">
 	// "Up next" panel for the tournament overview page: the next handful of
-	// upcoming (scheduled, not-yet-reported) matches, soonest first, plus a
-	// count of matches still awaiting a time. Surfaces the most-used view during
-	// a running tournament without a trip to the full /matches page (which the
-	// title links to). Times render in the viewer's local zone — the compact
-	// panel has no room for the full page's UTC/Local toggle.
+	// upcoming (scheduled, not-yet-reported) matches, soonest first — the
+	// most-used view during a running tournament. The title row carries a
+	// UTC/Local toggle (picks the clock every row reads; defaults to local) and a
+	// Matches button linking to the full /matches page.
 	import { resolve } from "$app/paths";
 	import {
 		type TournamentDetail,
@@ -19,7 +18,10 @@
 		matchSlotDisplayName,
 		matchSlotNation,
 	} from "$lib/tournament/match-occupant";
-	import { partitionSchedule } from "$lib/tournament/schedule";
+	import {
+		partitionSchedule,
+		type ScheduleZone,
+	} from "$lib/tournament/schedule";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
 
@@ -56,21 +58,19 @@
 
 	const partition = $derived(partitionSchedule(matches));
 	const upNext = $derived(partition.scheduled.slice(0, MAX_ROWS));
-	const unscheduledCount = $derived(partition.unscheduled.length);
 
 	const matchesHref = $derived(
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
 	);
 
-	// Bracket label for a match: "Championship" or the tournament's division name.
-	function phaseLabel(m: TournamentMatch): string {
-		if (m.phase === "championship") return "Championship";
-		if (m.division)
-			return m.division === "A"
-				? tournament.division_a_name
-				: tournament.division_b_name;
-		return "";
-	}
+	// Active clock every row's time reads. The title-row toggle flips it;
+	// defaults to local (the full matches page offers the same toggle, defaulting
+	// to UTC there for a shared reference).
+	let zone = $state<ScheduleZone>("local");
+	// Segmented UTC/Local control, mirroring the matches page: transparent text
+	// buttons over a sliding highlight thumb.
+	const viewTriggerClass =
+		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
 	// --- Match card, anchored at the click point (mirrors the matches page). A
 	// virtual anchor from the pointer keeps the card beside the clicked row.
@@ -121,59 +121,134 @@
 {/snippet}
 
 <section
-	class="mb-8 rounded-lg p-4"
+	class="mb-3 rounded-lg p-4"
 	style="background-color: rgb(var(--color-surface));"
 >
 	<div
 		class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
 		style="background-color: rgb(var(--color-surface-raised));"
 	>
-		<h2 class="text-lg font-bold text-tan">Matches</h2>
-		<!-- matchesHref is a resolve() result; the rule can't trace it through the
-		local var, so disable around the two links that use it. -->
-		<!-- eslint-disable svelte/no-navigation-without-resolve -->
-		<a
-			href={matchesHref}
-			class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+		<div class="flex items-center gap-3">
+			<h2 class="text-lg font-bold text-tan">Upcoming Matches</h2>
+			<!-- Link to the full matches page, bordered button like the others. -->
+			<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
+			<a
+				href={matchesHref}
+				class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+			>
+				View All
+			</a>
+			<!-- eslint-enable svelte/no-navigation-without-resolve -->
+		</div>
+		<!-- UTC / Local: a segmented toggle picking the clock every row reads. -->
+		<div
+			class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+			style="background-color: rgb(var(--color-surface));"
+			role="group"
+			aria-label="Timezone"
 		>
-			View all →
-		</a>
-		<!-- eslint-enable svelte/no-navigation-without-resolve -->
+			<div
+				class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+				style:background-color="rgb(var(--color-surface-raised))"
+				style:transform={zone === "local"
+					? "translateX(100%)"
+					: "translateX(0)"}
+			></div>
+			<button
+				type="button"
+				class={viewTriggerClass}
+				aria-pressed={zone === "utc"}
+				onclick={() => (zone = "utc")}
+			>
+				UTC
+			</button>
+			<button
+				type="button"
+				class={viewTriggerClass}
+				aria-pressed={zone === "local"}
+				onclick={() => (zone = "local")}
+			>
+				Local
+			</button>
+		</div>
 	</div>
 
 	{#if upNext.length > 0}
-		<ul class="flex flex-col gap-1">
+		<ul class="overflow-hidden rounded-lg">
 			{#each upNext as m (m.match_id)}
-				<li>
+				<!-- Zebra striping on the <li> (every second row a raised tint); the
+				     row hover (surface-hover) reads over either band. The caster/channel
+				     link is a sibling of the button, not nested, so the <a> stays valid
+				     and its click doesn't also open the match card. -->
+				<li
+					class="flex cursor-pointer items-center transition-colors even:bg-surface-raised hover:bg-surface-hover"
+				>
 					<button
 						type="button"
-						class="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-tan transition-colors hover:bg-surface-raised"
+						class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm text-tan"
 						onclick={(e) => pick(m.match_id, e)}
 					>
 						<span
 							class="min-w-[9rem] shrink-0 whitespace-nowrap text-xs text-tan opacity-80"
 						>
-							{formatScheduledInZone(m.scheduled_at, "local")}
+							{formatScheduledInZone(m.scheduled_at, zone)}
 						</span>
 						<span class="flex min-w-0 flex-1 items-center gap-2">
 							{@render playerCell(m, "a")}
 							<span class="shrink-0 opacity-60">v</span>
 							{@render playerCell(m, "b")}
 						</span>
-						<span
-							class="hidden shrink-0 whitespace-nowrap text-xs text-tan opacity-70 sm:inline"
-						>
-							{phaseLabel(m)}
-						</span>
-						{#if m.stream_url}
-							<span
-								class="inline-flex shrink-0 items-center gap-1 rounded bg-orange bg-opacity-20 px-1.5 py-0.5 text-[11px] font-bold text-orange"
-								title="Stream available"
-							>
-								▶ Live
-							</span>
-						{/if}
 					</button>
+					<!-- Caster / channel: a fixed-width, left-aligned column so casters
+					     line up across rows (a shrink-to-content cell wanders left-edge).
+					     A link to the stream when there's a channel, labelled with the
+					     caster (or "Watch"); the caster's name alone otherwise. Uses the
+					     page's usual tan text, not an accent color. -->
+					{#if m.stream_url || m.caster_display_name}
+						<div class="flex w-44 shrink-0 items-center px-3 py-2 text-xs">
+							{#if m.stream_url}
+								<!-- eslint-disable svelte/no-navigation-without-resolve -- external stream URL (youtube/twitch), host-validated; not an app route -->
+								<a
+									href={m.stream_url}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="flex min-w-0 items-center gap-1.5 text-tan opacity-80 transition-opacity hover:underline hover:opacity-100"
+								>
+									{#if m.caster_avatar_url}
+										<PlayerAvatar avatarUrl={m.caster_avatar_url} size={16} />
+									{/if}
+									<span class="min-w-0 truncate"
+										>{m.caster_display_name ?? "Watch"}</span
+									>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-3 w-3 shrink-0"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+										aria-hidden="true"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+										/>
+									</svg>
+								</a>
+								<!-- eslint-enable svelte/no-navigation-without-resolve -->
+							{:else}
+								<span
+									class="flex min-w-0 items-center gap-1.5 text-tan opacity-70"
+								>
+									{#if m.caster_avatar_url}
+										<PlayerAvatar avatarUrl={m.caster_avatar_url} size={16} />
+									{/if}
+									<span class="min-w-0 truncate">{m.caster_display_name}</span>
+								</span>
+							{/if}
+						</div>
+					{/if}
 				</li>
 			{/each}
 		</ul>
@@ -181,19 +256,6 @@
 		<p class="px-3 py-2 text-sm text-tan opacity-70">
 			No matches scheduled yet.
 		</p>
-	{/if}
-
-	{#if unscheduledCount > 0}
-		<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
-		<a
-			href={matchesHref}
-			class="mt-1 block rounded-lg px-3 py-2 text-xs text-tan opacity-70 transition-opacity hover:opacity-100"
-		>
-			{unscheduledCount}
-			{unscheduledCount === 1 ? "match still needs" : "matches still need"} scheduling
-			→
-		</a>
-		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 	{/if}
 </section>
 

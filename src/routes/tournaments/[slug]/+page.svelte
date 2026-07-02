@@ -992,7 +992,7 @@
 						     toggled (not stacked), matching the Swiss divisions. -->
 						<Tabs.Root
 							bind:value={championshipView}
-							class="mb-8 rounded-lg p-4 pb-2"
+							class="mb-3 rounded-lg p-4 pb-2"
 							style="background-color: rgb(var(--color-surface));"
 						>
 							<div
@@ -1056,7 +1056,7 @@
 							     toggled (not stacked) to keep the page compact. -->
 							<Tabs.Root
 								bind:value={swissView[division]}
-								class="mb-8 rounded-lg p-4"
+								class="mb-3 rounded-lg p-4"
 								style="background-color: rgb(var(--color-surface));"
 							>
 								<div

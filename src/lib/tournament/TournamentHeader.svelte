@@ -103,7 +103,7 @@
 	const showSettings = $derived(isAdmin || tournament.status !== "setup");
 </script>
 
-<header class="mb-6">
+<header class="mb-3">
 	<!-- Nav trail with the status badge to its right; actions on the far right.
 	     The tournament name already lives in the trail, so no separate title. -->
 	<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
