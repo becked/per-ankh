@@ -25,6 +25,7 @@
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
 	import TournamentHeader from "$lib/tournament/TournamentHeader.svelte";
+	import TournamentUpNextPanel from "$lib/tournament/TournamentUpNextPanel.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import {
 		headerStatusMeta,
@@ -730,6 +731,21 @@
 					onWithdraw={withdraw}
 					onConfirmTransition={transitionChampionship}
 				/>
+
+				<!-- "Up next" matches, surfaced on the overview page while the
+				tournament is running — the most-used view mid-tournament. Hidden in
+				setup (no matches) and complete (bracket/standings tell that story). -->
+				{#if data.tournament.status === "swiss" || data.tournament.status === "championship"}
+					<TournamentUpNextPanel
+						tournament={data.tournament}
+						matches={data.matches}
+						{slotLabels}
+						{slotUserIds}
+						{slotAvatars}
+						{user}
+						onSubstitute={isAdmin ? substituteSlot : undefined}
+					/>
+				{/if}
 
 				{#if data.tournament.status === "setup"}
 					{#if isAdmin}
