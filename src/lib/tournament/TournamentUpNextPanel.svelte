@@ -1,9 +1,10 @@
 <script lang="ts">
 	// "Up next" panel for the tournament overview page: the next handful of
-	// upcoming (scheduled, not-yet-reported) matches, soonest first — the
-	// most-used view during a running tournament. The title row carries a
-	// UTC/Local toggle (picks the clock every row reads; defaults to local) and a
-	// Matches button linking to the full /matches page.
+	// upcoming (scheduled, not-yet-reported) sittings, soonest first — the
+	// most-used view during a running tournament. A match split across days shows
+	// one row per sitting. The title row carries a UTC/Local toggle (picks the
+	// clock every row reads; defaults to local) and a Matches button linking to
+	// the full /matches page.
 	import { resolve } from "$app/paths";
 	import {
 		type TournamentDetail,
@@ -22,6 +23,7 @@
 		partitionSchedule,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
+	import { nowMs } from "$lib/stores/now.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
 
@@ -53,11 +55,25 @@
 		onSubstitute,
 	}: Props = $props();
 
-	// How many upcoming matches to preview before deferring to the full page.
+	// How many upcoming sittings (parts) to preview before deferring to the full
+	// page. A match split across days contributes one row per scheduled sitting.
 	const MAX_ROWS = 5;
 
 	const partition = $derived(partitionSchedule(matches));
-	const upNext = $derived(partition.scheduled.slice(0, MAX_ROWS));
+	// Only sittings still ahead belong in "up next" — a part whose time has
+	// passed (an already-played earlier sitting of a split match, or a fully
+	// overdue match) isn't upcoming and would otherwise sort to the top under a
+	// panel titled "Upcoming". Reactive via nowMs(), so a sitting drops off as
+	// its scheduled time arrives. Overdue/in-progress matches surface on the full
+	// matches page (its "In progress" filter) and the bracket status chips.
+	const upNext = $derived(
+		partition.scheduled
+			.filter((np) => {
+				const t = Date.parse(np.part.scheduled_at ?? "");
+				return !Number.isNaN(t) && t >= nowMs();
+			})
+			.slice(0, MAX_ROWS),
+	);
 
 	const matchesHref = $derived(
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
@@ -175,7 +191,13 @@
 
 	{#if upNext.length > 0}
 		<ul class="overflow-hidden rounded-lg">
-			{#each upNext as m (m.match_id)}
+			<!-- Each row is one scheduled *sitting* (part): a match split across days
+			     appears once per sitting, so key by match+part (part ids are only
+			     unique within a match). The streamer-first caster (casters[0]) and
+			     the sitting's first stream drive the channel column. -->
+			{#each upNext as np (`${np.match.match_id}:${np.part.id}`)}
+				{@const caster = np.part.casters[0]}
+				{@const stream = np.part.streams[0]}
 				<!-- Zebra striping on the <li> (every second row a raised tint); the
 				     row hover (surface-hover) reads over either band. The caster/channel
 				     link is a sibling of the button, not nested, so the <a> stays valid
@@ -186,39 +208,44 @@
 					<button
 						type="button"
 						class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm text-tan"
-						onclick={(e) => pick(m.match_id, e)}
+						onclick={(e) => pick(np.match.match_id, e)}
 					>
 						<span
 							class="min-w-[9rem] shrink-0 whitespace-nowrap text-xs text-tan opacity-80"
 						>
-							{formatScheduledInZone(m.scheduled_at, zone)}
+							{formatScheduledInZone(
+								np.part.scheduled_at,
+								zone,
+							)}{#if np.split}<span class="ml-1 opacity-60"
+									>· Pt {np.partNumber}</span
+								>{/if}
 						</span>
 						<span class="flex min-w-0 flex-1 items-center gap-2">
-							{@render playerCell(m, "a")}
+							{@render playerCell(np.match, "a")}
 							<span class="shrink-0 opacity-60">v</span>
-							{@render playerCell(m, "b")}
+							{@render playerCell(np.match, "b")}
 						</span>
 					</button>
 					<!-- Caster / channel: a fixed-width, left-aligned column so casters
 					     line up across rows (a shrink-to-content cell wanders left-edge).
-					     A link to the stream when there's a channel, labelled with the
-					     caster (or "Watch"); the caster's name alone otherwise. Uses the
+					     A link to the stream when the sitting has one, labelled with the
+					     streamer (or "Watch"); the caster's name alone otherwise. Uses the
 					     page's usual tan text, not an accent color. -->
-					{#if m.stream_url || m.caster_display_name}
+					{#if stream || caster}
 						<div class="flex w-44 shrink-0 items-center px-3 py-2 text-xs">
-							{#if m.stream_url}
+							{#if stream}
 								<!-- eslint-disable svelte/no-navigation-without-resolve -- external stream URL (youtube/twitch), host-validated; not an app route -->
 								<a
-									href={m.stream_url}
+									href={stream.url}
 									target="_blank"
 									rel="noopener noreferrer"
 									class="flex min-w-0 items-center gap-1.5 text-tan opacity-80 transition-opacity hover:underline hover:opacity-100"
 								>
-									{#if m.caster_avatar_url}
-										<PlayerAvatar avatarUrl={m.caster_avatar_url} size={16} />
+									{#if caster?.avatar_url}
+										<PlayerAvatar avatarUrl={caster.avatar_url} size={16} />
 									{/if}
 									<span class="min-w-0 truncate"
-										>{m.caster_display_name ?? "Watch"}</span
+										>{caster?.display_name ?? caster?.name ?? "Watch"}</span
 									>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
@@ -241,10 +268,12 @@
 								<span
 									class="flex min-w-0 items-center gap-1.5 text-tan opacity-70"
 								>
-									{#if m.caster_avatar_url}
-										<PlayerAvatar avatarUrl={m.caster_avatar_url} size={16} />
+									{#if caster?.avatar_url}
+										<PlayerAvatar avatarUrl={caster.avatar_url} size={16} />
 									{/if}
-									<span class="min-w-0 truncate">{m.caster_display_name}</span>
+									<span class="min-w-0 truncate"
+										>{caster?.display_name ?? caster?.name}</span
+									>
 								</span>
 							{/if}
 						</div>
@@ -270,9 +299,7 @@
 	customAnchor={detailAnchor}
 	side="right"
 	align="start"
-	contentClass={detailMatch?.game_id
-		? "w-[min(92vw,35.2rem)]"
-		: "w-fit max-w-[92vw]"}
+	contentClass="w-[min(92vw,35.2rem)]"
 	frameClass="bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
 	ariaLabel="Match detail"
 >

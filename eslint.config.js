@@ -39,6 +39,22 @@ export default [
 			},
 		},
 	},
+	{
+		// Svelte 5 rune modules (reactive $state/$derived shared outside a
+		// component). svelte-eslint-parser handles them, but needs the TS parser
+		// wired in as its sub-parser to read type annotations.
+		files: ["**/*.svelte.{js,ts}"],
+		languageOptions: {
+			parser: svelteParser,
+			parserOptions: {
+				parser: tsParser,
+				project: "./tsconfig.json",
+			},
+			globals: {
+				...globals.browser,
+			},
+		},
+	},
 	prettier,
 	{
 		ignores: [

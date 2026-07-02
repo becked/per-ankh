@@ -1,29 +1,33 @@
 <script lang="ts">
-	// Per-match scheduling form, opened as a nested popover off the "Schedule"
-	// button in the match popover footer. Lets a tournament admin or either
-	// participant set the match's scheduled time (UTC), stream link, and caster.
-	// Styled to mirror the match popover (surface frame, surface-raised header
-	// bar, surface-raised body card). Self-contained: owns its own busy/toast/invalidate
-	// cycle, so the parent only decides whether to render it.
+	import { invalidateAll } from "$app/navigation";
+	// Per-match schedule editor, opened as a nested popover off the "Schedule"
+	// button in the match popover footer. A match is one game played across one
+	// or more "parts" (sittings); this edits the ordered list of parts, each with
+	// its own time (entered in the viewer's zone), casters (streamer + co-casters),
+	// and stream links. Replace-all: Save sends the full parts list. Open to an admin
+	// or either participant on any non-bye match — scheduling ahead while pending,
+	// attaching streams after it's played. Self-contained: owns its own
+	// busy/toast/invalidate cycle, so the parent only decides whether to render it.
 	import {
 		cloudApi,
 		type TournamentDetail,
 		type TournamentMatch,
-		type UserSearchResult,
 	} from "$lib/api-cloud";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { runAction } from "$lib/tournament/async-action";
 	import FormFooter from "$lib/tournament/FormFooter.svelte";
-	import UserAutocomplete from "./UserAutocomplete.svelte";
-	import { DatePicker, TimeField } from "bits-ui";
+	import SchedulePartEditor, {
+		isValidStreamUrl,
+		type EditCaster,
+		type EditPart,
+	} from "./SchedulePartEditor.svelte";
 	import {
-		CalendarDateTime,
-		now,
+		getLocalTimeZone,
 		parseAbsolute,
 		Time,
 		toCalendarDate,
-		type DateValue,
 	} from "@internationalized/date";
+	import { partToIso } from "$lib/tournament/parts";
 
 	let {
 		match,
@@ -36,116 +40,144 @@
 	let open = $state(false);
 	let busy = $state(false);
 
-	// Mirror of the Worker's StreamUrlSchema host allow-list (cloud schema is the
-	// real gate; this just surfaces the error inline before Save).
-	const STREAM_HOSTS = new Set([
-		"youtube.com",
-		"www.youtube.com",
-		"m.youtube.com",
-		"youtu.be",
-		"twitch.tv",
-		"www.twitch.tv",
-		"m.twitch.tv",
-	]);
-	function isValidStreamUrl(s: string): boolean {
-		const trimmed = s.trim();
-		if (!trimmed) return true; // empty clears the stream — allowed
-		try {
-			return STREAM_HOSTS.has(new URL(trimmed).hostname.toLowerCase());
-		} catch {
-			return false;
-		}
-	}
+	// Times are entered/displayed in the viewer's own timezone and stored as the
+	// resulting UTC instant, so a match reads correctly in everyone's zone.
+	const tz = getLocalTimeZone();
 
-	// Date and time are independent controls (a date-only calendar + a TimeField)
-	// so picking a calendar day never changes the entered time. Both are treated
-	// as UTC and recombined into the stored instant on save; localization later.
-	let calendarOpen = $state(false);
-	let fieldEl = $state<HTMLElement>();
-	const nowUtc = now("UTC");
-	const datePlaceholder = toCalendarDate(nowUtc);
-	const timePlaceholder = new Time(nowUtc.hour, nowUtc.minute);
-
-	// Form state — seeded from the match each time the popover opens (see
-	// reset()), so an invalidateAll from elsewhere can't clobber an in-progress
-	// edit and reopening always starts from the persisted values.
-	let dateValue = $state<DateValue | undefined>(undefined);
-	let timeValue = $state<Time | undefined>(undefined);
-	let streamValue = $state("");
-	// Caster, modeled like a slot occupant: casterUserId links a Per-Ankh user
-	// (set only via the autocomplete dropdown), casterValue is the visible text.
-	// casterLinkedName is the username the current link corresponds to — typing
-	// away from it drops the link so the save goes out as free text.
-	let casterValue = $state("");
-	let casterUserId = $state<string | null>(null);
-	let casterLinkedName = $state<string | null>(null);
-
-	const streamError = $derived(
-		isValidStreamUrl(streamValue)
-			? null
-			: "Enter a youtube.com or twitch.tv link",
+	// On a decided match the editor is about attaching streams/casters after the
+	// fact, so the affordance reads "Streams" rather than "Schedule".
+	const editorLabel = $derived(
+		match.status === "pending" ? "Schedule" : "Streams",
+	);
+	const editorTitle = $derived(
+		match.status === "pending" ? "Schedule match" : "Match Streams & casters",
 	);
 
+	// Parts editor state — seeded from the match each time the popover opens (see
+	// reset()), so an invalidateAll from elsewhere can't clobber an in-progress
+	// edit and reopening always starts from the persisted values.
+	let parts = $state<EditPart[]>([]);
+
+	// One blank caster row so the editor always shows a "Streamer" field.
+	function emptyCaster(): EditCaster {
+		return { value: "", userId: null, linkedName: null };
+	}
+
+	function emptyPart(): EditPart {
+		return {
+			// Client-side key only — stripped on save so the server mints the
+			// real id. A stable key (vs index) keeps each editor's local UI state
+			// (open calendar, focused segment) with its part when one is removed.
+			id: `tmp-${crypto.randomUUID()}`,
+			date: undefined,
+			time: undefined,
+			casters: [emptyCaster()],
+			streams: [],
+		};
+	}
+
+	// The parts_rev the editor loaded, echoed back on save so a concurrent
+	// writer (another admin, a caster sign-up) turns into a 409 instead of
+	// being silently erased by this editor's replace-all.
+	let loadedRev = $state(0);
+
 	function reset() {
-		if (match.scheduled_at) {
-			const z = parseAbsolute(match.scheduled_at, "UTC");
-			dateValue = toCalendarDate(z);
-			timeValue = new Time(z.hour, z.minute);
-		} else {
-			dateValue = undefined;
-			timeValue = undefined;
-		}
-		streamValue = match.stream_url ?? "";
-		// Edit the display label, not the stored caster_name: for a linked
-		// caster the worker re-resolves the canonical stored value from
-		// caster_user_id on save, so the input can safely show the name
-		// people recognize.
-		casterValue = match.caster_display_name ?? "";
-		casterUserId = match.caster_user_id;
-		casterLinkedName = match.caster_user_id
-			? (match.caster_display_name ?? null)
-			: null;
-		calendarOpen = false;
+		loadedRev = match.parts_rev ?? 0;
+		// A never-scheduled match starts with a single blank part ready to fill.
+		parts =
+			match.parts.length > 0
+				? match.parts.map((p) => {
+						let date: EditPart["date"] = undefined;
+						let time: EditPart["time"] = undefined;
+						if (p.scheduled_at) {
+							try {
+								const z = parseAbsolute(p.scheduled_at, tz);
+								date = toCalendarDate(z);
+								time = new Time(z.hour, z.minute);
+							} catch {
+								// Malformed stored instant (the API stores ISO, so this only
+								// hits hand-edited/legacy data) — start the picker blank
+								// rather than throwing the whole editor.
+							}
+						}
+						// Edit the display label, not the stored name: for a linked caster
+						// the worker re-resolves the canonical value from user_id on save,
+						// so the input can show the friendly name. Always keep at least one
+						// (blank) row so the streamer field is present.
+						const casters: EditCaster[] =
+							p.casters.length > 0
+								? p.casters.map((c) => ({
+										value: c.display_name ?? "",
+										userId: c.user_id,
+										linkedName: c.user_id ? (c.display_name ?? null) : null,
+									}))
+								: [emptyCaster()];
+						return {
+							id: p.id,
+							date,
+							time,
+							casters,
+							streams: p.streams.map((v) => ({
+								url: v.url,
+								label: v.label ?? "",
+							})),
+						};
+					})
+				: [emptyPart()];
 	}
 
-	function onCasterValueChange(next: string) {
-		casterValue = next;
-		// Editing away from the linked name forgets the link → free text.
-		if (casterUserId !== null && next !== casterLinkedName) {
-			casterUserId = null;
-			casterLinkedName = null;
-		}
-	}
-
-	function onCasterSelectUser(user: UserSearchResult | null) {
-		casterUserId = user?.user_id ?? null;
-		casterLinkedName = user?.display_name ?? null;
-	}
-
-	function scheduledToIso(): string | null {
-		// A date is required for a schedule; time defaults to midnight if cleared.
-		if (!dateValue) return null;
-		const t = timeValue ?? new Time(0, 0);
-		const dt = new CalendarDateTime(
-			dateValue.year,
-			dateValue.month,
-			dateValue.day,
-			t.hour,
-			t.minute,
-		);
-		return dt.toDate("UTC").toISOString();
-	}
+	// Save is blocked while any stream url is malformed; the cloud schema is the real
+	// gate but this stops an obviously-bad submit.
+	const hasInvalidStream = $derived(
+		parts.some((p) => p.streams.some((v) => !isValidStreamUrl(v.url))),
+	);
 
 	async function save() {
+		const payload = parts
+			.map((p) => ({
+				// Temp (client-key) ids are stripped; the server mints real ones.
+				id: p.id?.startsWith("tmp-") ? undefined : p.id,
+				scheduled_at: partToIso(p.date, p.time, tz),
+				// Keep caster order (streamer first); drop rows left blank.
+				casters: p.casters
+					.map((c) => ({
+						user_id: c.userId,
+						name: c.value.trim() ? c.value.trim() : null,
+					}))
+					.filter((c) => c.user_id !== null || c.name !== null),
+				streams: p.streams
+					.filter((v) => v.url.trim())
+					.map((v) => ({
+						url: v.url.trim(),
+						label: v.label.trim() ? v.label.trim() : null,
+					})),
+			}))
+			// Drop parts the editor left entirely blank so an accidental empty row
+			// doesn't persist as a phantom sitting.
+			.filter(
+				(p) =>
+					p.scheduled_at !== null ||
+					p.casters.length > 0 ||
+					p.streams.length > 0,
+			);
 		const ok = await runAction(
 			() =>
 				cloudApi.patchMatchSchedule(tournament.tournament_id, match.match_id, {
-					scheduled_at: scheduledToIso(),
-					stream_url: streamValue.trim() ? streamValue.trim() : null,
-					caster_user_id: casterUserId,
-					caster_name: casterValue.trim() ? casterValue.trim() : null,
+					parts: payload,
+					expected_rev: loadedRev,
 				}),
-			{ setBusy: (b) => (busy = b), success: "Schedule updated" },
+			{
+				setBusy: (b) => (busy = b),
+				success: "Schedule updated",
+				// A 409 means someone else changed the schedule mid-edit (another
+				// admin, a caster). Refresh the page data so reopening the editor
+				// shows the current state (runAction only invalidates on success).
+				onError: (err) => {
+					if (err.code !== "CONFLICT") return undefined;
+					void invalidateAll();
+					return "Schedule changed while you were editing — reopen to see the latest";
+				},
+			},
 		);
 		if (ok !== null) open = false;
 	}
@@ -158,9 +190,9 @@
 	}}
 	side="bottom"
 	align="start"
-	contentClass="w-[min(92vw,24rem)]"
+	contentClass="w-[min(92vw,28rem)]"
 	frameClass="bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
-	ariaLabel="Schedule match"
+	ariaLabel={editorTitle}
 >
 	{#snippet trigger({ props })}
 		<button
@@ -180,7 +212,7 @@
 				<rect x="3" y="4" width="18" height="18" rx="2" />
 				<path d="M16 2v4M8 2v4M3 10h18" />
 			</svg>
-			Schedule
+			{editorLabel}
 		</button>
 	{/snippet}
 
@@ -190,7 +222,7 @@
 		class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
 		style="background-color: rgb(var(--color-surface-raised));"
 	>
-		<h2 class="text-lg font-bold text-tan">Schedule match</h2>
+		<h2 class="text-lg font-bold text-tan">{editorTitle}</h2>
 		<button
 			type="button"
 			class="text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100"
@@ -214,218 +246,25 @@
 		</button>
 	</header>
 
-	<div
-		class="flex flex-col gap-3 rounded-lg p-3 text-xs text-tan"
-		style="background-color: rgb(var(--color-surface-raised));"
-	>
-		<!-- Scheduled time (UTC): a date-only themed calendar plus a separate
-		     TimeField. They're independent, so choosing a calendar day leaves the
-		     time untouched. -->
-		<div class="flex flex-col gap-1">
-			<span class="opacity-70">Scheduled time</span>
-			<div class="flex flex-wrap items-center gap-2">
-				<DatePicker.Root
-					bind:open={calendarOpen}
-					locale="en-CA"
-					weekdayFormat="short"
-					fixedWeeks
-					granularity="day"
-					bind:value={dateValue}
-					placeholder={datePlaceholder}
-				>
-					<div>
-						<!-- Field-chrome click opens the calendar; segment + button clicks
-						     are excluded so typing/clearing still works. -->
-						<!-- svelte-ignore a11y_click_events_have_key_events -->
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div
-							bind:this={fieldEl}
-							class="flex items-center gap-1 rounded border border-input bg-surface p-1.5 text-tan focus-within:border-input-focus"
-							onclick={(e) => {
-								const t = e.target as HTMLElement;
-								if (!t.closest("button") && !t.closest('[role="spinbutton"]')) {
-									calendarOpen = true;
-								}
-							}}
-						>
-							<DatePicker.Trigger
-								class="flex items-center rounded px-0.5 text-tan/70 hover:text-tan"
-								aria-label="Open calendar"
-							>
-								<svg
-									width="14"
-									height="14"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									aria-hidden="true"
-								>
-									<rect x="3" y="4" width="18" height="18" rx="2" />
-									<path d="M16 2v4M8 2v4M3 10h18" />
-								</svg>
-							</DatePicker.Trigger>
-
-							<DatePicker.Input class="flex items-center">
-								{#snippet children({ segments })}
-									{#each segments as segment, i (i)}
-										{#if segment.part === "literal"}
-											<span class="px-0.5 text-tan/50">{segment.value}</span>
-										{:else}
-											<DatePicker.Segment
-												part={segment.part}
-												class="rounded px-0.5 tabular-nums focus:bg-input-focus focus:text-tan focus:outline-none data-[placeholder]:text-tan/40"
-											>
-												{segment.value}
-											</DatePicker.Segment>
-										{/if}
-									{/each}
-								{/snippet}
-							</DatePicker.Input>
-
-							{#if dateValue}
-								<button
-									type="button"
-									class="rounded px-1 leading-none text-tan/60 hover:text-tan"
-									aria-label="Clear scheduled date"
-									onclick={(e) => {
-										e.stopPropagation();
-										dateValue = undefined;
-										timeValue = undefined;
-									}}
-								>
-									×
-								</button>
-							{/if}
-						</div>
-
-						<DatePicker.Content
-							customAnchor={fieldEl}
-							side="bottom"
-							align="start"
-							sideOffset={6}
-							class="z-50"
-						>
-							<DatePicker.Calendar
-								class="rounded-lg border border-surface bg-surface-sunken p-3 shadow-lg"
-							>
-								{#snippet children({ months, weekdays })}
-									<DatePicker.Header
-										class="mb-2 flex items-center justify-between"
-									>
-										<DatePicker.PrevButton
-											class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
-										>
-											‹
-										</DatePicker.PrevButton>
-										<DatePicker.Heading class="text-xs font-bold text-tan" />
-										<DatePicker.NextButton
-											class="rounded px-2 py-1 text-tan hover:bg-surface-raised"
-										>
-											›
-										</DatePicker.NextButton>
-									</DatePicker.Header>
-
-									{#each months as month (month.value)}
-										<DatePicker.Grid class="w-full border-collapse select-none">
-											<DatePicker.GridHead>
-												<DatePicker.GridRow class="flex">
-													{#each weekdays as day (day)}
-														<DatePicker.HeadCell
-															class="w-8 text-center text-[10px] font-bold uppercase text-tan/50"
-														>
-															{day.slice(0, 2)}
-														</DatePicker.HeadCell>
-													{/each}
-												</DatePicker.GridRow>
-											</DatePicker.GridHead>
-											<DatePicker.GridBody>
-												{#each month.weeks as weekDates (weekDates)}
-													<DatePicker.GridRow class="flex w-full">
-														{#each weekDates as date (date)}
-															<DatePicker.Cell
-																{date}
-																month={month.value}
-																class="p-0"
-															>
-																<DatePicker.Day
-																	class="flex h-8 w-8 items-center justify-center rounded text-xs text-tan hover:bg-surface-raised data-[selected]:bg-input-focus data-[selected]:font-bold data-[outside-month]:text-tan/30 data-[selected]:text-tan data-[today]:underline data-[disabled]:opacity-30"
-																/>
-															</DatePicker.Cell>
-														{/each}
-													</DatePicker.GridRow>
-												{/each}
-											</DatePicker.GridBody>
-										</DatePicker.Grid>
-									{/each}
-								{/snippet}
-							</DatePicker.Calendar>
-						</DatePicker.Content>
-					</div>
-				</DatePicker.Root>
-
-				<TimeField.Root
-					locale="en-CA"
-					granularity="minute"
-					hourCycle={24}
-					value={timeValue}
-					placeholder={timePlaceholder}
-					onValueChange={(v) => (timeValue = v instanceof Time ? v : undefined)}
-				>
-					<TimeField.Input
-						class="flex items-center gap-0.5 rounded border border-input bg-surface p-1.5 text-tan focus-within:border-input-focus"
-					>
-						{#snippet children({ segments })}
-							{#each segments as segment, i (i)}
-								{#if segment.part === "literal"}
-									<span class="text-tan/50">{segment.value}</span>
-								{:else}
-									<TimeField.Segment
-										part={segment.part}
-										class="rounded px-0.5 tabular-nums focus:bg-input-focus focus:text-tan focus:outline-none data-[placeholder]:text-tan/40"
-									>
-										{segment.value}
-									</TimeField.Segment>
-								{/if}
-							{/each}
-						{/snippet}
-					</TimeField.Input>
-				</TimeField.Root>
-
-				<span class="text-[11px] uppercase text-tan/60">UTC</span>
-			</div>
-		</div>
-
-		<!-- Caster. Pick a Per-Ankh user (links the account) or type a free-text
-		     name. Clearing the field removes the caster. -->
-		<div class="flex flex-col gap-1">
-			<span class="opacity-70">Caster</span>
-			<UserAutocomplete
-				value={casterValue}
-				onValueChange={onCasterValueChange}
-				onSelectUser={onCasterSelectUser}
-				disabled={busy}
-				inputClass="border border-black bg-surface"
+	<div class="flex max-h-[70vh] flex-col gap-3 overflow-y-auto">
+		{#each parts as part, i (part.id)}
+			<SchedulePartEditor
+				{part}
+				index={i}
+				count={parts.length}
+				{busy}
+				onRemove={() => parts.splice(i, 1)}
 			/>
-		</div>
+		{/each}
 
-		<!-- Stream link. Restricted to youtube/twitch (server is the real gate;
-		     streamError surfaces it inline). -->
-		<label class="flex flex-col gap-1">
-			<span class="opacity-70">Stream</span>
-			<input
-				type="url"
-				bind:value={streamValue}
-				disabled={busy}
-				class="block w-full rounded border border-black bg-surface p-1.5 text-xs text-tan"
-				autocomplete="off"
-			/>
-			{#if streamError}
-				<span class="text-[10px] text-red-400">{streamError}</span>
-			{/if}
-		</label>
+		<button
+			type="button"
+			class="self-start rounded border border-input px-2.5 py-1 text-xs text-tan/80 hover:border-orange hover:text-orange"
+			onclick={() => parts.push(emptyPart())}
+			disabled={busy}
+		>
+			+ Add part
+		</button>
 
 		<FormFooter
 			class="pt-1"
@@ -433,7 +272,7 @@
 			onConfirm={save}
 			confirmLabel="Save"
 			{busy}
-			confirmDisabled={busy || streamError !== null}
+			confirmDisabled={busy || hasInvalidStream}
 		/>
 	</div>
 </Popover>
