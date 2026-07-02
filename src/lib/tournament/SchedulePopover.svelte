@@ -63,8 +63,9 @@
 		return { value: "", userId: null, linkedName: null };
 	}
 
-	function emptyPart(): EditPart {
+	function emptyPart(added = false): EditPart {
 		return {
+			added,
 			// Client-side key only — stripped on save so the server mints the
 			// real id. A stable key (vs index) keeps each editor's local UI state
 			// (open calendar, focused segment) with its part when one is removed.
@@ -135,6 +136,9 @@
 	async function save() {
 		const payload = parts
 			.map((p) => ({
+				// Threads through for the blank-part filter below; stripped before
+				// the request.
+				keepIfBlank: p.added === true || !p.id?.startsWith("tmp-"),
 				// Temp (client-key) ids are stripped; the server mints real ones.
 				id: p.id?.startsWith("tmp-") ? undefined : p.id,
 				scheduled_at: partToIso(p.date, p.time, tz),
@@ -152,14 +156,18 @@
 						label: v.label.trim() ? v.label.trim() : null,
 					})),
 			}))
-			// Drop parts the editor left entirely blank so an accidental empty row
-			// doesn't persist as a phantom sitting.
+			// Drop a blank part only when it's the pristine seeded row (a
+			// never-scheduled match opens with one) — an explicitly added part, or
+			// one that already exists server-side, is a deliberate "Part N, time
+			// TBD" and must survive the save.
 			.filter(
 				(p) =>
+					p.keepIfBlank ||
 					p.scheduled_at !== null ||
 					p.casters.length > 0 ||
 					p.streams.length > 0,
-			);
+			)
+			.map(({ keepIfBlank: _keep, ...p }) => p);
 		const ok = await runAction(
 			() =>
 				cloudApi.patchMatchSchedule(tournament.tournament_id, match.match_id, {
@@ -260,7 +268,7 @@
 		<button
 			type="button"
 			class="self-start rounded border border-input px-2.5 py-1 text-xs text-tan/80 hover:border-orange hover:text-orange"
-			onclick={() => parts.push(emptyPart())}
+			onclick={() => parts.push(emptyPart(true))}
 			disabled={busy}
 		>
 			+ Add part
