@@ -322,6 +322,10 @@ const MatchPartVodSchema = v.object({
 // Per-Ankh user (the handler snapshots that user's canonical username into name,
 // ignoring any client-sent name), while name alone is free text. Casters are
 // ordered — index 0 is the streamer, the rest co-casters.
+// Single source for the per-part caster cap: the schema's maxLength and the
+// caster self-service endpoints both read it.
+export const MAX_CASTERS_PER_PART = 10;
+
 const MatchPartCasterSchema = v.object({
 	user_id: v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),
 	name: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(80))),
@@ -336,7 +340,10 @@ const MatchPartSchema = v.object({
 	// stored part stays addressable by the self-service endpoints.
 	id: v.optional(v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{1,40}$/))),
 	scheduled_at: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
-	casters: v.pipe(v.array(MatchPartCasterSchema), v.maxLength(10)),
+	casters: v.pipe(
+		v.array(MatchPartCasterSchema),
+		v.maxLength(MAX_CASTERS_PER_PART),
+	),
 	vods: v.pipe(v.array(MatchPartVodSchema), v.maxLength(20)),
 });
 
@@ -351,6 +358,14 @@ export const PatchMatchPartsSchema = v.object({
 	// erase a concurrent writer's changes. Omitted → last-write-wins (used by
 	// tests and non-editor callers).
 	expected_rev: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
+});
+
+// POST /v1/tournaments/:id/matches/:match_id/parts/:part_id/casters/me body.
+// A caster adds/moves THEMSELVES on a part. role picks their slot: "streamer"
+// takes index 0 (bumping the current streamer to co-caster); "cocaster"
+// appends. Omitted → streamer when the part has no caster yet, else co-caster.
+export const CastMatchPartSchema = v.object({
+	role: v.optional(v.picklist(["streamer", "cocaster"])),
 });
 
 export const ReportMatchSchema = v.object({
