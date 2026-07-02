@@ -20,10 +20,10 @@
 		onGuide();
 	}
 
-	// Shared button styling for the header's action row, so the Links/Guide
-	// trigger lines up with the Matches / Settings buttons next to it.
+	// Shared button styling for the header's action row — full opacity with an
+	// orange hover, matching the Settings trigger next to it.
 	const triggerClass =
-		"whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100";
+		"whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange";
 </script>
 
 {#if links.length === 0}
