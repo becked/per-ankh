@@ -498,7 +498,7 @@
 													value="in_progress"
 													class={statusItemClass}
 												>
-													In progress
+													In Progress
 												</ToggleGroup.Item>
 												<ToggleGroup.Item
 													value="unscheduled"
