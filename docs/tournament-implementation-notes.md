@@ -227,6 +227,8 @@ The biggest design-shape decisions, in case anyone needs to remember why:
   System-triggered audit entries (auto-generation, auto-completion)
   land under `event_type='tournament_system'` with `user_id=NULL`,
   keeping them out of the per-admin rate-limit count.
+- **Transition validates before mutating (#50).** `handleTransitionChampionship` parses the request body (`TransitionChampionshipSchema`) before it auto-closes any in-progress Swiss rounds via `autoCloseRoundIfReady`, so a malformed body is rejected (400) before any round state is written. Authz runs before both; valid requests (`{}` or `{override_ranks:[...]}` — all the UI sends) are unaffected, since a successful parse has no side effects.
+- **User deletion must clear tournament FKs.** `tournament_admins`, `tournament_slots.user_id`, `tournament_matches.reported_by_user_id`, and `tournament_beta_users.user_id`/`granted_by_user_id` reference `users(user_id)` with **no `ON DELETE CASCADE`**, so a bare `DELETE FROM users` hits an FK error for anyone who ever touched a tournament. `nuke-user` (`scripts/admin/commands/security.ts`) clears these first — deleting the NOT NULL / own-row references and nulling the nullable ones. The `slot_a/b_user_id` and `caster_user_id` snapshot columns (migrations 0024/0025) are plain TEXT with no FK and are left intact.
 - **Known retro-edit edge.** `downstreamBlocked` still only blocks on
   _non-pending_ downstream matches, so a retro-edit on a complete
   round is permitted even after auto-advance has spawned the next
