@@ -5,7 +5,7 @@
 	// picks the active clock (times render in one zone; the calendar buckets days
 	// by it). Clicking any match opens the match card anchored at the click point.
 	import { fade } from "svelte/transition";
-	import { invalidateAll } from "$app/navigation";
+	import { invalidateAll, replaceState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
@@ -37,6 +37,7 @@
 		MATCH_COLUMNS,
 		matchStatusGroup,
 		matchCasterGroup,
+		matchSortInstant,
 		DEFAULT_MATCHES_TABLE_STATE,
 		type MatchSortContext,
 		type MatchStatusGroup,
@@ -47,6 +48,15 @@
 		scheduledDayKey,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
+	import {
+		matchParts,
+		matchDisplayStatus,
+		upcomingScheduledParts,
+		type NumberedPart,
+	} from "$lib/tournament/parts";
+	import { matchNumbers, padMatchNumber } from "$lib/tournament/match-numbers";
+	import CastView from "$lib/tournament/CastView.svelte";
+	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
@@ -72,9 +82,86 @@
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const partition = $derived(partitionSchedule(data.matches));
 
+	// Global "Match N" numbering (server-assigned), for the sesh export lines.
+	const matchNumberById = $derived(matchNumbers(data.matches));
+
+	// Admin "sesh.fyi"-style copy of upcoming (scheduled, still-pending) matches,
+	// soonest first, with Discord timestamps — paste into a Discord scheduling
+	// post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>` the relative
+	// "in X hours/days". A split match contributes one line per scheduled part,
+	// tagged "(Part N)"; single-session matches read as just "Match NNN".
+	function seshText(): string {
+		const num = (m: TournamentMatch) =>
+			padMatchNumber(matchNumberById.get(m.match_id));
+		// Prefer a real Discord `<@id>` mention (pings the player) when the slot is
+		// a claimed account whose id we have (admin-only field); fall back to the
+		// display name for unclaimed slots.
+		const who = (m: TournamentMatch, side: "a" | "b") => {
+			const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
+			if (id) return `<@${id}>`;
+			return matchSlotDisplayName(m, side, slotMaps.labels) ?? "?";
+		};
+		const vs = (m: TournamentMatch) => `${who(m, "a")} v ${who(m, "b")}`;
+
+		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
+		// already passed (no grace: this is a forward-looking schedule post).
+		const scheduled = upcomingScheduledParts(data.matches).map(
+			({ match, part, partNumber, split }) => {
+				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
+				const partTag = split ? `(Part ${partNumber}) ` : "";
+				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)`;
+			},
+		);
+		// "To be scheduled" = genuinely unscheduled matches only; a match that has
+		// already started (in progress, awaiting result) doesn't belong here.
+		const unscheduled = data.matches
+			.filter(
+				(m) =>
+					m.status === "pending" &&
+					m.slot_b_id != null &&
+					matchDisplayStatus(m) === "unscheduled",
+			)
+			.sort(
+				(a, b) =>
+					(matchNumberById.get(a.match_id) ?? 0) -
+					(matchNumberById.get(b.match_id) ?? 0),
+			)
+			.map((m) => `Match ${num(m)} - ${vs(m)}`);
+
+		const blocks = [
+			"Upcoming matches\n\n" +
+				(scheduled.length ? scheduled.join("\n") : "(none scheduled)"),
+		];
+		if (unscheduled.length) {
+			blocks.push("To be scheduled\n\n" + unscheduled.join("\n"));
+		}
+		return blocks.join("\n\n");
+	}
+
 	// View + zone controls. zone picks the single clock everything reads in.
-	let view = $state<"list" | "calendar">("list");
-	let zone = $state<ScheduleZone>("utc");
+	// View, zone, and the two filters below are deep-linkable via query params
+	// (?view=cast, ?caster=uncasted, ?status=scheduled, ?zone=local) so an admin
+	// can point people straight at e.g. "scheduled matches that need a caster".
+	// Defaults stay out of the URL; state changes replace (not push) history.
+	const params = new URLSearchParams(page.url.search);
+	const VIEWS = ["list", "calendar", "cast"] as const;
+	type MatchesView = (typeof VIEWS)[number];
+	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "list";
+	let view = $state<MatchesView>(initialView);
+	let zone = $state<ScheduleZone>(
+		params.get("zone") === "local" ? "local" : "utc",
+	);
+	function csvParam<T extends string>(
+		name: string,
+		all: readonly T[],
+	): T[] | null {
+		const raw = params.get(name);
+		if (!raw) return null;
+		const picked = raw
+			.split(",")
+			.filter((x): x is T => (all as readonly string[]).includes(x));
+		return picked.length > 0 ? picked : null;
+	}
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
@@ -96,10 +183,43 @@
 	// --- Table state. tableState (search + sort) follows the Cities pattern;
 	// statusFilter is a separate multi-toggle (completed off by default).
 	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
-	let statusFilter = $state<MatchStatusGroup[]>(["scheduled", "unscheduled"]);
+	let statusFilter = $state<MatchStatusGroup[]>(
+		csvParam("status", [
+			"scheduled",
+			"in_progress",
+			"unscheduled",
+			"completed",
+		] as const) ?? ["scheduled", "in_progress", "unscheduled"],
+	);
 	// Caster presence toggle — both on by default (show every match regardless
 	// of whether a caster is assigned).
-	let casterFilter = $state<MatchCasterGroup[]>(["casted", "uncasted"]);
+	let casterFilter = $state<MatchCasterGroup[]>(
+		csvParam("caster", ["casted", "uncasted"] as const) ?? [
+			"casted",
+			"uncasted",
+		],
+	);
+
+	// Reflect the current view/zone/filters into the URL (defaults omitted) so
+	// the address bar is always a shareable deep link to what's on screen.
+	$effect(() => {
+		const q = new URLSearchParams();
+		if (view !== "list") q.set("view", view);
+		if (zone !== "utc") q.set("zone", zone);
+		const defaultStatus = ["scheduled", "in_progress", "unscheduled"];
+		if (
+			statusFilter.length !== defaultStatus.length ||
+			defaultStatus.some((g) => !statusFilter.includes(g as MatchStatusGroup))
+		) {
+			q.set("status", statusFilter.join(","));
+		}
+		if (casterFilter.length !== 2) q.set("caster", casterFilter.join(","));
+		const search = q.toString();
+		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
+		if (`${page.url.pathname}${page.url.search}` !== target) {
+			replaceState(target, page.state);
+		}
+	});
 	const statusItemClass =
 		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-surface-raised";
 
@@ -171,7 +291,11 @@
 						.includes(term) ||
 					nationMatch(matchSlotNation(m, "a")) ||
 					nationMatch(matchSlotNation(m, "b")) ||
-					(m.caster_display_name ?? "").toLowerCase().includes(term),
+					matchParts(m).some((p) =>
+						p.casters.some((c) =>
+							(c.display_name ?? c.name ?? "").toLowerCase().includes(term),
+						),
+					),
 			);
 		}
 
@@ -275,11 +399,11 @@
 	);
 
 	const eventsByDay = $derived.by(() => {
-		const byDay: Record<string, TournamentMatch[]> = {};
-		for (const m of partition.scheduled) {
-			const key = scheduledDayKey(m.scheduled_at, zone);
+		const byDay: Record<string, NumberedPart[]> = {};
+		for (const np of partition.scheduled) {
+			const key = scheduledDayKey(np.part.scheduled_at, zone);
 			if (!key) continue;
-			(byDay[key] ??= []).push(m);
+			(byDay[key] ??= []).push(np);
 		}
 		return byDay;
 	});
@@ -363,6 +487,14 @@
 				>
 					<h1 class="text-lg font-bold text-tan">Matches</h1>
 					<div class="flex items-center gap-2">
+						{#if isAdmin}
+							<CopyButton
+								text={seshText}
+								label="Copy upcoming (sesh)"
+								title="Copy upcoming scheduled matches (soonest first) with Discord timestamps, for a sesh.fyi / Discord post"
+								class="rounded border border-surface px-2 py-1 text-xs text-tan hover:bg-surface-hover"
+							/>
+						{/if}
 						<!-- UTC / Local: a segmented toggle picking the active clock. -->
 						<div
 							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
@@ -395,24 +527,29 @@
 							</button>
 						</div>
 
-						<!-- List / Calendar view switch (bracket-card pattern). -->
+						<!-- List / Calendar / Cast view switch (bracket-card pattern). -->
 						<Tabs.Root bind:value={view}>
 							<Tabs.List
-								class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+								class="relative grid shrink-0 grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
 								style="background-color: rgb(var(--color-surface));"
 							>
 								<div
-									class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+									class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
 									style:background-color="rgb(var(--color-surface-raised))"
 									style:transform={view === "calendar"
 										? "translateX(100%)"
-										: "translateX(0)"}
+										: view === "cast"
+											? "translateX(200%)"
+											: "translateX(0)"}
 								></div>
 								<Tabs.Trigger value="list" class={viewTriggerClass}
 									>List</Tabs.Trigger
 								>
 								<Tabs.Trigger value="calendar" class={viewTriggerClass}>
 									Calendar
+								</Tabs.Trigger>
+								<Tabs.Trigger value="cast" class={viewTriggerClass}>
+									Cast
 								</Tabs.Trigger>
 							</Tabs.List>
 						</Tabs.Root>
@@ -496,6 +633,12 @@
 													Scheduled
 												</ToggleGroup.Item>
 												<ToggleGroup.Item
+													value="in_progress"
+													class={statusItemClass}
+												>
+													In progress
+												</ToggleGroup.Item>
+												<ToggleGroup.Item
 													value="unscheduled"
 													class={statusItemClass}
 												>
@@ -576,13 +719,23 @@
 																		: ''} whitespace-nowrap"
 																>
 																	{#if column.key === "scheduled_at"}
+																		{@const g = matchStatusGroup(m)}
 																		{@const t = formatScheduledInZone(
-																			m.scheduled_at,
+																			matchSortInstant(m),
 																			zone,
 																		)}
-																		{#if t}
+																		{#if g === "in_progress"}
+																			<!-- Overdue: time passed, result unreported. Keep the
+																			     last-started sitting's time visible so an admin
+																			     chasing reports can see how overdue it is. -->
+																			{t || "In progress"}{#if t}<span
+																					class="opacity-60"
+																				>
+																					· in progress</span
+																				>{/if}
+																		{:else if t}
 																			{t}
-																		{:else if m.status === "complete" || m.status === "forfeit"}
+																		{:else if g === "completed"}
 																			Completed
 																		{:else}
 																			Not scheduled
@@ -600,28 +753,35 @@
 																	{:else if column.key === "round"}
 																		{m.round_number ?? "—"}
 																	{:else if column.key === "caster"}
-																		{#if m.caster_display_name}
+																		{@const firstCast = matchParts(m).find(
+																			(part) => part.casters.length > 0,
+																		)?.casters[0]}
+																		{#if firstCast}
 																			<span
 																				class="inline-flex items-center gap-1.5"
 																			>
 																				<PlayerAvatar
-																					avatarUrl={m.caster_avatar_url}
+																					avatarUrl={firstCast.avatar_url}
 																					size={16}
 																				/>
-																				{m.caster_display_name}
+																				{firstCast.display_name ??
+																					firstCast.name}
 																			</span>
 																		{:else}
 																			—
 																		{/if}
-																	{:else if column.key === "stream"}
-																		{#if m.stream_url}
-																			<!-- External stream URL (youtube/twitch),
-																			     validated host-side; not an app route, so
-																			     resolve() doesn't apply. Stop propagation so
-																			     the link doesn't also open the match card. -->
+																	{:else if column.key === "vods"}
+																		{@const firstVod = matchParts(m)
+																			.flatMap((part) => part.vods)
+																			.at(0)}
+																		{#if firstVod}
+																			<!-- External VOD URL (youtube/twitch), validated
+																			     host-side; not an app route, so resolve() doesn't
+																			     apply. Stop propagation so the link doesn't also
+																			     open the match card. -->
 																			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 																			<a
-																				href={m.stream_url}
+																				href={firstVod.url}
 																				target="_blank"
 																				rel="noopener noreferrer"
 																				class="inline-flex items-center gap-1 text-orange hover:underline"
@@ -642,7 +802,7 @@
 																						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 																					/>
 																				</svg>
-																				Stream
+																				VOD
 																			</a>
 																			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 																		{:else}
@@ -667,6 +827,15 @@
 										</div>
 									</div>
 								</div>
+							{:else if view === "cast"}
+								<CastView
+									matches={data.matches}
+									tournament={data.tournament}
+									{zone}
+									{user}
+									slotLabels={slotMaps.labels}
+									{matchNumberById}
+								/>
 							{:else}
 								<!-- Monthly calendar. -->
 								<section
@@ -718,18 +887,25 @@
 													>
 														{cell.day}
 													</span>
-													{#each events as m (m.match_id)}
+													<!-- Key by match+part: part ids are only unique within a
+													     match (the 0029 backfill mints "p1" per migrated match). -->
+													{#each events as np (`${np.match.match_id}:${np.part.id}`)}
 														<button
 															type="button"
 															class="flex flex-col rounded px-1.5 py-1 text-left text-[11px] text-tan transition-colors hover:bg-track"
 															style="background-color: rgb(var(--color-surface));"
-															onclick={(e) => pick(m.match_id, e)}
+															onclick={(e) => pick(np.match.match_id, e)}
 														>
 															<span class="font-bold"
-																>{chipTime(m.scheduled_at)}</span
+																>{chipTime(
+																	np.part.scheduled_at,
+																)}{#if np.split}<span
+																		class="ml-1 font-normal opacity-60"
+																		>· Pt {np.partNumber}</span
+																	>{/if}</span
 															>
 															<span class="truncate opacity-80"
-																>{shortMatchup(m)}</span
+																>{shortMatchup(np.match)}</span
 															>
 														</button>
 													{/each}

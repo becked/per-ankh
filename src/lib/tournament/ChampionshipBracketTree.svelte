@@ -11,6 +11,11 @@
 		matchSlotNation,
 	} from "$lib/tournament/match-occupant";
 	import { formatEnum } from "$lib/utils/formatting";
+	import {
+		matchDisplayStatus,
+		type MatchDisplayStatus,
+		MATCH_STATUS_LABEL,
+	} from "$lib/tournament/parts";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		distinguishingOptions,
@@ -19,6 +24,9 @@
 	} from "$lib/tournament/map-script-options";
 
 	const MAP_ICON = SPRITE_MANIFEST["icons/MAP_OVERVIEW"];
+
+	// Card status chip labels (see SwissFlowBracket). "unscheduled" is absent —
+	// the default pending state shows no chip.
 
 	let {
 		bracket,
@@ -53,7 +61,7 @@
 	// Box / spacing geometry. Match-box height is fixed so the bracket math
 	// stays exact regardless of slot name length (long names ellipsize).
 	const MATCH_W = 200;
-	const MATCH_H = 78; // two slot rows + a full-width map-name row
+	const MATCH_H = 94; // two slot rows + map-name row + status chip row
 	const COL_GAP = 64;
 	const R1_GAP = 16; // extra vertical gap between adjacent R1 matches
 
@@ -112,6 +120,8 @@
 		top: number;
 		centerY: number;
 		status: "pending" | "complete" | "forfeit" | "bye";
+		// Parts-refined status for the card chip (null on placeholders/byes).
+		display_status: MatchDisplayStatus | null;
 		is_placeholder: boolean;
 		// Snapshot-derived fields propagated from the underlying real match
 		// (migration 0024). NULL on synthesized placeholders and on
@@ -136,6 +146,7 @@
 		map_pool_id: string | null;
 		map_script: string | null;
 		status: "pending" | "complete" | "forfeit" | "bye";
+		display_status: MatchDisplayStatus | null;
 		is_placeholder: boolean;
 		slot_a_display_name: string | null;
 		slot_a_user_id: string | null;
@@ -184,6 +195,7 @@
 				map_pool_id: m.map_pool_id,
 				map_script: m.map_script,
 				status: m.status,
+				display_status: matchDisplayStatus(m),
 				is_placeholder: false,
 				slot_a_display_name: m.slot_a_display_name,
 				slot_a_user_id: m.slot_a_user_id,
@@ -220,6 +232,7 @@
 					map_pool_id: null,
 					map_script: null,
 					status: "pending",
+					display_status: null,
 					is_placeholder: true,
 					slot_a_display_name: null,
 					slot_a_user_id: null,
@@ -279,6 +292,7 @@
 					top,
 					centerY,
 					status: m.status,
+					display_status: m.display_status,
 					is_placeholder: m.is_placeholder,
 					slot_a_display_name: m.slot_a_display_name,
 					slot_a_user_id: m.slot_a_user_id,
@@ -445,6 +459,11 @@
 			<span class="map-name">{shortName}</span>
 		</div>
 	{/if}
+	{#if m.display_status && m.display_status !== "unscheduled"}
+		<span class="cm-status cm-status-{m.display_status}"
+			>{MATCH_STATUS_LABEL[m.display_status]}</span
+		>
+	{/if}
 {/snippet}
 
 <style>
@@ -606,5 +625,32 @@
 		font-size: 0.6rem;
 		opacity: 0.6;
 		color: rgb(var(--color-tan));
+	}
+
+	/* Per-match status chip — scheduled / in progress / completed (see
+	   SwissFlowBracket for the shared palette). Unscheduled renders none. */
+	.cm-status {
+		align-self: flex-start;
+		margin: 0.15rem 0.4rem 0;
+		padding: 0.02rem 0.3rem;
+		border-radius: 0.2rem;
+		font-size: 0.55rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		line-height: 1.5;
+	}
+	.cm-status-scheduled {
+		background-color: rgb(var(--color-tan-light) / 0.14);
+		color: rgb(var(--color-tan-light));
+	}
+	.cm-status-in_progress {
+		background-color: rgb(var(--color-orange) / 0.18);
+		color: rgb(var(--color-orange));
+	}
+	.cm-status-completed {
+		background-color: rgb(var(--color-success) / 0.14);
+		color: rgb(var(--color-success));
+		opacity: 0.85;
 	}
 </style>

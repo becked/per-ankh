@@ -380,6 +380,8 @@ describe("public read handlers", () => {
 				division: string | null;
 				slot_a_discord_username: string | null;
 				slot_b_discord_username: string | null;
+				slot_a_discord_id: string | null;
+				slot_b_discord_id: string | null;
 			}>;
 		}>(res);
 
@@ -398,7 +400,7 @@ describe("public read handlers", () => {
 			expect(typeof m.slot_a_discord_username).toBe("string");
 		}
 
-		// A non-admin beta viewer gets null for the admin-only handle field.
+		// A non-admin beta viewer gets null for the admin-only handle + id fields.
 		const viewer = await makeUser();
 		const publicRes = await request.get({
 			path: `/v1/tournaments/${t.tournamentId}/matches`,
@@ -408,12 +410,70 @@ describe("public read handlers", () => {
 			matches: Array<{
 				slot_a_discord_username: string | null;
 				slot_b_discord_username: string | null;
+				slot_a_discord_id: string | null;
+				slot_b_discord_id: string | null;
 			}>;
 		}>(publicRes);
 		for (const m of publicBody.matches) {
 			expect(m.slot_a_discord_username).toBeNull();
 			expect(m.slot_b_discord_username).toBeNull();
+			expect(m.slot_a_discord_id).toBeNull();
+			expect(m.slot_b_discord_id).toBeNull();
 		}
+	});
+
+	it("exposes a claimed slot's numeric Discord id to admins only", async () => {
+		// A claimed slot pins the owner's discord_id; the sesh export mentions it.
+		const player = await makeUser();
+		const t = await makeTournament({
+			advanceTo: "swiss-round-1-generated",
+			slotOwners: { A: [player] },
+		});
+		const slotId = t.slotsByDivision.A.find(
+			(s) => s.owner?.userId === player.userId,
+		)?.slotId;
+		expect(slotId).toBeDefined();
+
+		const findRow = (rows: Array<{ slot_a_id: string; slot_b_id: string | null }>) =>
+			rows.find((m) => m.slot_a_id === slotId || m.slot_b_id === slotId)!;
+		const sideId = (m: {
+			slot_a_id: string;
+			slot_a_discord_id: string | null;
+			slot_b_discord_id: string | null;
+		}) => (m.slot_a_id === slotId ? m.slot_a_discord_id : m.slot_b_discord_id);
+
+		// Admin sees the owner's real numeric id.
+		const adminBody = await expectOk<{
+			matches: Array<{
+				slot_a_id: string;
+				slot_b_id: string | null;
+				slot_a_discord_id: string | null;
+				slot_b_discord_id: string | null;
+			}>;
+		}>(
+			await request.get({
+				path: `/v1/tournaments/${t.tournamentId}/matches`,
+				as: t.admin,
+			}),
+		);
+		expect(sideId(findRow(adminBody.matches))).toBe(player.discordId);
+
+		// A non-admin beta viewer gets null.
+		const viewer = await makeUser();
+		const publicBody = await expectOk<{
+			matches: Array<{
+				slot_a_id: string;
+				slot_b_id: string | null;
+				slot_a_discord_id: string | null;
+				slot_b_discord_id: string | null;
+			}>;
+		}>(
+			await request.get({
+				path: `/v1/tournaments/${t.tournamentId}/matches`,
+				as: viewer,
+			}),
+		);
+		expect(sideId(findRow(publicBody.matches))).toBeNull();
 	});
 
 	it("GET /v1/tournaments/:id/matches/:match_id returns a single match with tournament context", async () => {

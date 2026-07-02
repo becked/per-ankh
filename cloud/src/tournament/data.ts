@@ -137,16 +137,49 @@ export interface MatchRow {
 	slot_a_user_id: string | null;
 	slot_b_username: string | null;
 	slot_b_user_id: string | null;
-	// Scheduling metadata (migration 0025). Editable on pending matches by an
-	// admin or either participant. scheduled_at is a full ISO-8601 instant
-	// (UTC); stream_url is a youtube/twitch link. Caster is modeled like a slot
-	// occupant: caster_user_id links a Per-Ankh user when picked, else NULL;
-	// caster_name is the canonical username when linked or free text otherwise.
-	scheduled_at: string | null;
-	stream_url: string | null;
-	caster_user_id: string | null;
-	caster_name: string | null;
+	// Scheduled parts (migration 0029), a raw JSON array parsed by parseParts.
+	// A match is one game played across one or more sittings ("parts"); each
+	// part carries its own schedule, casters, and VOD links. Editable by an admin
+	// or either participant on any non-bye match (scheduling ahead while pending,
+	// attaching VODs after it's played). Supersedes the per-match 0025 schedule
+	// columns (scheduled_at/stream_url/caster_*), which still exist on the row but
+	// are backfilled into parts and no longer read (omitted here so nothing
+	// reaches for them by mistake).
+	parts: string;
+	// Optimistic-concurrency version for `parts`: bumped on every write, and
+	// writers condition their UPDATE on the value they read (see 0029).
+	parts_rev: number;
+	// Persisted global "Match N" (migration 0030): assigned append-only per
+	// tournament at round-generation; NULL for byes (never numbered).
+	match_number: number | null;
 	created_at: string;
+}
+
+// One VOD recording for a part: a URL plus an optional human tag distinguishing
+// it from the others on the same part ("alcaras POV", "Cast"). label is null
+// when untagged.
+export interface MatchPartVod {
+	url: string;
+	label: string | null;
+}
+
+// One caster on a part. Mirrors the 0025 occupant model: user_id links a
+// Per-Ankh user (else null); name is the canonical username when linked or free
+// text otherwise. A part's casters are ordered — index 0 is the streamer, the
+// rest co-casters.
+export interface MatchPartCaster {
+	user_id: string | null;
+	name: string | null;
+}
+
+// One sitting of a match (migration 0029). id is stable within the match so
+// edits/deletes can target a part. scheduled_at is a full ISO-8601 UTC instant
+// or null (not yet scheduled).
+export interface MatchPart {
+	id: string;
+	scheduled_at: string | null;
+	casters: MatchPartCaster[];
+	vods: MatchPartVod[];
 }
 
 export interface TournamentEnv {
@@ -202,12 +235,47 @@ export async function loadRounds(
 	return res.results ?? [];
 }
 
+// Explicit column list matching MatchRow. Not `SELECT *`: the row still
+// physically carries the dead 0025 schedule columns (superseded by `parts`,
+// see migration 0029), and a `*` would spread their frozen backfill-era
+// values into handler responses alongside the live `parts`.
+const MATCH_COLUMN_NAMES = [
+	"match_id",
+	"round_id",
+	"slot_a_id",
+	"slot_b_id",
+	"map_pool_id",
+	"map_script",
+	"pick_order_winner_slot_id",
+	"status",
+	"winner_slot_id",
+	"game_id",
+	"reported_by_user_id",
+	"reported_at",
+	"notes",
+	"slot_a_player_index",
+	"slot_b_player_index",
+	"match_index",
+	"slot_a_username",
+	"slot_a_user_id",
+	"slot_b_username",
+	"slot_b_user_id",
+	"parts",
+	"parts_rev",
+	"match_number",
+	"created_at",
+] as const;
+const MATCH_COLUMNS = MATCH_COLUMN_NAMES.join(", ");
+// Qualified for JOIN queries where round columns would shadow (round_id,
+// status exist on both tables).
+const MATCH_COLUMNS_M = MATCH_COLUMN_NAMES.map((c) => `m.${c}`).join(", ");
+
 export async function loadMatches(
 	env: TournamentEnv,
 	tournamentId: string,
 ): Promise<MatchRow[]> {
 	const res = await env.SHARE_DB.prepare(
-		`SELECT m.* FROM tournament_matches m
+		`SELECT ${MATCH_COLUMNS_M} FROM tournament_matches m
 		 JOIN tournament_rounds r ON r.round_id = m.round_id
 		 WHERE r.tournament_id = ?
 		 ORDER BY r.phase, r.division, r.round_number, m.match_index, m.created_at`,
@@ -222,7 +290,7 @@ export async function loadMatch(
 	matchId: string,
 ): Promise<MatchRow | null> {
 	return env.SHARE_DB.prepare(
-		"SELECT * FROM tournament_matches WHERE match_id = ?",
+		`SELECT ${MATCH_COLUMNS} FROM tournament_matches WHERE match_id = ?`,
 	)
 		.bind(matchId)
 		.first<MatchRow>();
@@ -400,6 +468,17 @@ export function parseMapPool(t: TournamentRow): MapPoolEntry[] {
 // should degrade to "no links", never break the page. Individual malformed
 // entries are skipped.
 //
+// Only plain web URLs are allowed anywhere a stored link is rendered as an
+// href (tournament links, part VODs) — anything else (javascript:, data:,
+// mailto:, …) is dropped on read as defense-in-depth against hand-edited rows.
+function isSafeHttpUrl(url: string): boolean {
+	try {
+		return ["https:", "http:"].includes(new URL(url).protocol);
+	} catch {
+		return false;
+	}
+}
+
 // SECURITY: also drops any entry whose url isn't http(s). The write path already
 // enforces this (LinkUrlSchema), but these are rendered as hrefs, so this is
 // defense-in-depth against a hand-edited or otherwise corrupted blob ever
@@ -418,11 +497,71 @@ export function parseLinks(t: TournamentRow): { label: string; url: string }[] {
 		const e = raw as Record<string, unknown>;
 		if (typeof e.label !== "string" || typeof e.url !== "string") continue;
 		try {
-			if (!["https:", "http:"].includes(new URL(e.url).protocol)) continue;
+			if (!isSafeHttpUrl(e.url)) continue;
 		} catch {
 			continue;
 		}
 		out.push({ label: e.label, url: e.url });
+	}
+	return out;
+}
+
+// Parse the JSON-encoded parts column (migration 0029) into MatchPart[].
+// Lenient like parseLinks: bad JSON / non-array degrades to [] rather than
+// throwing (parts aren't load-bearing for tournament integrity), and malformed
+// entries/VODs are skipped. Order is preserved — it's the part display order.
+//
+// SECURITY: drops any VOD whose url isn't http(s). The write path already
+// enforces a youtube/twitch host allowlist (PatchMatchPartsSchema), but VOD
+// urls render as hrefs, so this is defense-in-depth against a hand-edited or
+// corrupted blob surfacing a javascript:/data: URL to a clicker.
+export function parseParts(m: MatchRow): MatchPart[] {
+	let parsed: unknown;
+	try {
+		parsed = JSON.parse(m.parts);
+	} catch {
+		return [];
+	}
+	if (!Array.isArray(parsed)) return [];
+	const out: MatchPart[] = [];
+	for (const raw of parsed) {
+		if (typeof raw !== "object" || raw === null) continue;
+		const e = raw as Record<string, unknown>;
+		if (typeof e.id !== "string") continue;
+		const casters: MatchPartCaster[] = [];
+		if (Array.isArray(e.casters)) {
+			for (const rawCaster of e.casters) {
+				if (typeof rawCaster !== "object" || rawCaster === null) continue;
+				const c = rawCaster as Record<string, unknown>;
+				const user_id = typeof c.user_id === "string" ? c.user_id : null;
+				const name = typeof c.name === "string" ? c.name : null;
+				if (user_id === null && name === null) continue; // empty caster
+				casters.push({ user_id, name });
+			}
+		}
+		const vods: MatchPartVod[] = [];
+		if (Array.isArray(e.vods)) {
+			for (const rawVod of e.vods) {
+				if (typeof rawVod !== "object" || rawVod === null) continue;
+				const v = rawVod as Record<string, unknown>;
+				if (typeof v.url !== "string") continue;
+				try {
+					if (!isSafeHttpUrl(v.url)) continue;
+				} catch {
+					continue;
+				}
+				vods.push({
+					url: v.url,
+					label: typeof v.label === "string" ? v.label : null,
+				});
+			}
+		}
+		out.push({
+			id: e.id,
+			scheduled_at: typeof e.scheduled_at === "string" ? e.scheduled_at : null,
+			casters,
+			vods,
+		});
 	}
 	return out;
 }

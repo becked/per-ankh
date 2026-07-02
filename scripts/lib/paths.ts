@@ -52,6 +52,20 @@ export function resolvePinacotheca(): string {
 	});
 }
 
+// owtournamentatlas checkout (https://github.com/alcaras/owtournamentatlas) —
+// the community map atlas. bake-map-caveats.ts reads its generation-stats data
+// (src/data/atlas-dist.json) and the published pool (src/pages/index.astro).
+export function resolveAtlas(): string {
+	return resolvePath({
+		envVar: "OWTOURNAMENTATLAS_DIR",
+		candidates: [
+			resolve(REPO_ROOT, "../owtournamentatlas"),
+			resolve(REPO_ROOT, "../../../../owtournamentatlas"),
+		],
+		label: "owtournamentatlas",
+	});
+}
+
 // Old World reference XML — the OW install's XML/ directory (or a checkout of
 // it). bake-improvements.ts reads improvement.xml + nation.xml + mods/. The
 // env var points at the checkout root; we return the XML/ subdir to match

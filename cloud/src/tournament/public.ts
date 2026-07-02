@@ -30,6 +30,7 @@ import {
 	matchRowToRef,
 	parseLinks,
 	parseMapPool,
+	parseParts,
 	slotAvatarUrl,
 	slotDisplayName,
 	slotRowToRef,
@@ -805,13 +806,13 @@ export async function handleTournamentBracket(
 		tournament.tournament_id,
 	);
 	const handleBySlotId = viewerIsAdmin
-		? new Map<string, string | null>(
-				slots.map((s): [string, string | null] => [
+		? new Map<string, AdminSlotIdentity>(
+				slots.map((s): [string, AdminSlotIdentity] => [
 					s.slot_id,
-					s.discord_username,
+					{ discord_username: s.discord_username, discord_id: s.discord_id },
 				]),
 			)
-		: new Map<string, string | null>();
+		: new Map<string, AdminSlotIdentity>();
 
 	const body = {
 		tournament_id: tournament.tournament_id,
@@ -917,12 +918,15 @@ export async function handleTournamentMatches(
 		tournament.tournament_id,
 	);
 	const handleBySlotId = viewerIsAdmin
-		? new Map<string, string | null>(
+		? new Map<string, AdminSlotIdentity>(
 				(await loadSlots(env, tournament.tournament_id)).map(
-					(s): [string, string | null] => [s.slot_id, s.discord_username],
+					(s): [string, AdminSlotIdentity] => [
+						s.slot_id,
+						{ discord_username: s.discord_username, discord_id: s.discord_id },
+					],
 				),
 			)
-		: new Map<string, string | null>();
+		: new Map<string, AdminSlotIdentity>();
 
 	return jsonResponse(
 		{
@@ -985,12 +989,15 @@ export async function handleTournamentMatchDetail(
 		tournament.tournament_id,
 	);
 	const handleBySlotId = viewerIsAdmin
-		? new Map<string, string | null>(
+		? new Map<string, AdminSlotIdentity>(
 				(await loadSlots(env, tournament.tournament_id)).map(
-					(s): [string, string | null] => [s.slot_id, s.discord_username],
+					(s): [string, AdminSlotIdentity] => [
+						s.slot_id,
+						{ discord_username: s.discord_username, discord_id: s.discord_id },
+					],
 				),
 			)
-		: new Map<string, string | null>();
+		: new Map<string, AdminSlotIdentity>();
 	return jsonResponse(
 		{
 			...serializeMatch(
@@ -1104,11 +1111,12 @@ function serializeMatch(
 	m: MatchRow,
 	identityByUserId?: Map<string, UserIdentity>,
 	nationByGamePlayer?: Map<string, string>,
-	// Admin-only map slot_id → raw discord_username for the LIVE slots (not the
-	// frozen snapshot). Populated only for admin viewers; lets the match popover
-	// seed its substitute editor with the real handle instead of the display
-	// name, which would unlink the slot on save. Empty/undefined → fields null.
-	handleBySlotId?: Map<string, string | null>,
+	// Admin-only map slot_id → raw discord handle + numeric id for the LIVE slots
+	// (not the frozen snapshot). Populated only for admin viewers: the handle
+	// seeds the substitute editor with the real handle (the display name would
+	// unlink the slot on save); the discord_id lets the sesh export emit real
+	// `<@id>` mentions. Empty/undefined → fields null.
+	handleBySlotId?: Map<string, AdminSlotIdentity>,
 ) {
 	const slotAIdentity =
 		m.slot_a_user_id && identityByUserId
@@ -1118,10 +1126,27 @@ function serializeMatch(
 		m.slot_b_user_id && identityByUserId
 			? identityByUserId.get(m.slot_b_user_id)
 			: undefined;
-	const casterIdentity =
-		m.caster_user_id && identityByUserId
-			? identityByUserId.get(m.caster_user_id)
-			: undefined;
+	// Scheduled parts (migration 0029). Each part's casters resolve from the
+	// same batch identity map as the slots (index 0 is the streamer, the rest
+	// co-casters); the VOD list passes through as stored (already url-sanitized
+	// by parseParts).
+	const parts = parseParts(m).map((p) => ({
+		id: p.id,
+		scheduled_at: p.scheduled_at,
+		casters: p.casters.map((c) => {
+			const identity =
+				c.user_id && identityByUserId
+					? identityByUserId.get(c.user_id)
+					: undefined;
+			return {
+				user_id: c.user_id,
+				name: c.name,
+				display_name: identity?.display_name ?? c.name,
+				avatar_url: identity?.avatar_url ?? null,
+			};
+		}),
+		vods: p.vods,
+	}));
 	// Nation each slot played, resolved via the slot↔player_index mapping
 	// (migration 0007) against player_summaries. Null when no save is linked
 	// or the index/nation is unknown (bye, forfeit, admin-set, legacy match).
@@ -1156,26 +1181,30 @@ function serializeMatch(
 		slot_a_user_id: m.slot_a_user_id,
 		slot_a_avatar_url: slotAIdentity?.avatar_url ?? null,
 		slot_a_nation: slotANation,
-		// Admin-only — raw handle of the live slot occupant (null for public
-		// viewers and pending/bye sides). Used to seed the substitute editor.
-		slot_a_discord_username: handleBySlotId?.get(m.slot_a_id) ?? null,
+		// Admin-only — raw handle + numeric Discord id of the live slot occupant
+		// (null for public viewers, pending/bye sides, and unclaimed slots with
+		// no linked account). The handle seeds the substitute editor; the id backs
+		// `<@id>` mentions in the sesh export.
+		slot_a_discord_username:
+			handleBySlotId?.get(m.slot_a_id)?.discord_username ?? null,
+		slot_a_discord_id: handleBySlotId?.get(m.slot_a_id)?.discord_id ?? null,
 		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_avatar_url: slotBIdentity?.avatar_url ?? null,
 		slot_b_nation: slotBNation,
 		slot_b_discord_username: m.slot_b_id
-			? (handleBySlotId?.get(m.slot_b_id) ?? null)
+			? (handleBySlotId?.get(m.slot_b_id)?.discord_username ?? null)
 			: null,
-		// Scheduling metadata (migration 0025). The caster renders by display
-		// name when linked to a user; caster_name stays the storage/edit value
-		// (canonical handle when linked, free text otherwise) and doubles as
-		// the display fallback for free-text casters.
-		scheduled_at: m.scheduled_at,
-		stream_url: m.stream_url,
-		caster_user_id: m.caster_user_id,
-		caster_name: m.caster_name,
-		caster_display_name: casterIdentity?.display_name ?? m.caster_name,
-		caster_avatar_url: casterIdentity?.avatar_url ?? null,
+		slot_b_discord_id: m.slot_b_id
+			? (handleBySlotId?.get(m.slot_b_id)?.discord_id ?? null)
+			: null,
+		// Scheduled parts (migration 0029). Each carries its own time, caster
+		// (rendered by display name when linked, else caster_name), and VOD
+		// links. An empty array means the match has no scheduled sittings yet.
+		parts,
+		parts_rev: m.parts_rev,
+		// Stable global "Match N" handle (null for byes).
+		match_number: m.match_number,
 	};
 }
 
@@ -1230,8 +1259,12 @@ export async function loadUserIdentitiesForMatches(
 	for (const m of matches) {
 		if (m.slot_a_user_id) userIds.add(m.slot_a_user_id);
 		if (m.slot_b_user_id) userIds.add(m.slot_b_user_id);
-		// Caster identity (migration 0025) resolves from the same batch.
-		if (m.caster_user_id) userIds.add(m.caster_user_id);
+		// Every part's casters (migration 0029) resolve from the same batch.
+		for (const p of parseParts(m)) {
+			for (const c of p.casters) {
+				if (c.user_id) userIds.add(c.user_id);
+			}
+		}
 	}
 	const map = new Map<string, UserIdentity>();
 	if (userIds.size === 0) return map;
@@ -1259,9 +1292,19 @@ export async function loadUserIdentitiesForMatches(
 	return map;
 }
 
+// Admin-only per-slot Discord identity threaded into serializeMatch: the raw
+// handle (substitute editor) plus the numeric id (sesh `<@id>` mentions).
 interface MatchWithRound {
 	match: MatchRow;
 	round: RoundRow;
+}
+
+// Admin-only live-slot identity: the raw discord_username seeds the
+// substitute editor; the numeric discord_id backs real `<@id>` mentions in
+// the sesh export. Neither is exposed to non-admin viewers.
+interface AdminSlotIdentity {
+	discord_username: string | null;
+	discord_id: string | null;
 }
 
 async function loadMatchesWithRound(
@@ -1275,7 +1318,9 @@ async function loadMatchesWithRound(
 		   m.reported_by_user_id, m.reported_at, m.notes,
 		   m.slot_a_player_index, m.slot_b_player_index, m.match_index,
 		   m.slot_a_username, m.slot_a_user_id, m.slot_b_username, m.slot_b_user_id,
-		   m.scheduled_at, m.stream_url, m.caster_user_id, m.caster_name,
+		   m.parts,
+		   m.parts_rev,
+		   m.match_number,
 		   m.created_at,
 		   r.tournament_id, r.phase, r.division, r.round_number,
 		   r.status AS round_status,
@@ -1309,10 +1354,9 @@ async function loadMatchesWithRound(
 			slot_a_user_id: row.slot_a_user_id,
 			slot_b_username: row.slot_b_username,
 			slot_b_user_id: row.slot_b_user_id,
-			scheduled_at: row.scheduled_at,
-			stream_url: row.stream_url,
-			caster_user_id: row.caster_user_id,
-			caster_name: row.caster_name,
+			parts: row.parts,
+			parts_rev: row.parts_rev,
+			match_number: row.match_number,
 			created_at: row.created_at,
 		},
 		round: {

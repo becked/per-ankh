@@ -73,12 +73,14 @@ import {
 import type { TournamentPublicEnv } from "./tournament/public";
 import { handleTournamentExport } from "./tournament/export";
 import {
+	handleCastMatchPart,
 	handleDismissBanner,
 	handleMyAdminTournaments,
 	handleMyMatches,
 	handleMyTournaments,
 	handleTournamentSignup,
 	handleTournamentWithdraw,
+	handleUncastMatchPart,
 } from "./tournament/player";
 import { handleUserStats } from "./stats/handlers";
 import { handleUserProfile, handleUserSearch } from "./users";
@@ -421,6 +423,28 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "PATCH /v1/tournaments/:id/matches/:match_id/schedule",
 		handler: (r, e, m) => handlePatchMatchSchedule(m![1], m![2], r, e),
+	},
+	{
+		method: "POST",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})\/parts\/([A-Za-z0-9_-]{1,40})\/casters\/me$/,
+		},
+		route:
+			"POST /v1/tournaments/:id/matches/:match_id/parts/:part_id/casters/me",
+		handler: (r, e, m) => handleCastMatchPart(m![1], m![2], m![3], r, e),
+	},
+	{
+		method: "DELETE",
+		match: {
+			kind: "regex",
+			regex:
+				/^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/matches\/([A-Za-z0-9_-]{21})\/parts\/([A-Za-z0-9_-]{1,40})\/casters\/me$/,
+		},
+		route:
+			"DELETE /v1/tournaments/:id/matches/:match_id/parts/:part_id/casters/me",
+		handler: (r, e, m) => handleUncastMatchPart(m![1], m![2], m![3], r, e),
 	},
 	{
 		method: "PATCH",

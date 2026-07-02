@@ -11,7 +11,11 @@
 
 import { nanoid } from "nanoid";
 import { logError } from "../log";
-import { TournamentSignupSchema } from "../schemas/tournament";
+import {
+	CastMatchPartSchema,
+	MAX_CASTERS_PER_PART,
+	TournamentSignupSchema,
+} from "../schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "../session";
 import {
 	cloudCorsHeaders,
@@ -19,11 +23,18 @@ import {
 	jsonResponse,
 	parseJsonBody,
 } from "../util";
+import { countEventsSince } from "../games";
 import {
 	bumpTournamentUpdatedAt,
+	loadMatch,
+	loadRound,
 	loadTournamentById,
+	parseParts,
+	type MatchPart,
+	type MatchPartCaster,
 	type TournamentEnv,
 } from "./data";
+import { TOURNAMENT_SCHEDULE_ACTIONS_PER_HOUR } from "./limits";
 
 // Wraps the session lookup for the authenticated player endpoints. Returns
 // the caller's user_id, or an errorResponse-ready 401 when anonymous.
@@ -408,4 +419,189 @@ export async function handleTournamentWithdraw(
 		});
 
 	return new Response(null, { status: 204, headers: cors });
+}
+
+// ----------------------------------------------------------------------
+// Caster self-service — a caster adds/moves/removes THEMSELVES on a scheduled
+// part's caster list (index 0 = streamer, the rest co-casters). Open to any
+// logged-in user (no admin/participant gate); scoped so a caster only ever
+// touches their own entry, never the whole list like the admin schedule
+// endpoint. Casting is pending-only; UNcasting also works on decided matches
+// so someone who signed up but never actually cast isn't stuck credited.
+// ----------------------------------------------------------------------
+
+// Concurrent casters are the expected case (several people reacting to the
+// same match announcement), so a plain read-modify-write would lose updates.
+// Every attempt CASes on parts_rev and retries against fresh state.
+const CASTER_CAS_ATTEMPTS = 3;
+
+async function mutateMyCasterEntry(
+	tournamentId: string,
+	matchId: string,
+	partId: string,
+	request: Request,
+	env: TournamentPlayerEnv,
+	opts: {
+		// Casting requires a pending match; self-removal is also allowed on
+		// decided ones (byes rejected either way).
+		allowDecided: boolean;
+		// Runs once after auth + the rate-limit gate (so a 429'd call does no
+		// extra work); the result is handed to every mutate attempt.
+		prepare?: (
+			// eslint-disable-next-line no-unused-vars -- param names are documentary
+			userId: string,
+		) => Promise<MatchPartCaster>;
+		mutate: (
+			// eslint-disable-next-line no-unused-vars -- param names are documentary
+			part: MatchPart,
+			// eslint-disable-next-line no-unused-vars -- param names are documentary
+			userId: string,
+			// eslint-disable-next-line no-unused-vars -- param names are documentary
+			me: MatchPartCaster | undefined,
+		) => Response | null;
+	},
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const auth = await authedSession(env, request, cors);
+	if (!auth.ok) return auth.response;
+	const userId = auth.userId;
+
+	const count = await countEventsSince(
+		env.SHARE_DB,
+		"tournament_schedule",
+		"user_id",
+		userId,
+	);
+	if (count >= TOURNAMENT_SCHEDULE_ACTIONS_PER_HOUR) {
+		return errorResponse(
+			"Tournament schedule rate limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_TOURNAMENT_SCHEDULE",
+		);
+	}
+	const me = opts.prepare ? await opts.prepare(userId) : undefined;
+
+	for (let attempt = 0; attempt < CASTER_CAS_ATTEMPTS; attempt++) {
+		const match = await loadMatch(env, matchId);
+		if (!match) {
+			return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
+		}
+		const round = await loadRound(env, match.round_id);
+		if (!round || round.tournament_id !== tournamentId) {
+			return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
+		}
+		if (match.status === "bye") {
+			return errorResponse(
+				"Byes are never cast",
+				409,
+				cors,
+				"MATCH_NOT_PENDING",
+			);
+		}
+		if (match.status !== "pending" && !opts.allowDecided) {
+			return errorResponse(
+				"Can only cast an upcoming match",
+				409,
+				cors,
+				"MATCH_NOT_PENDING",
+			);
+		}
+		const parts = parseParts(match);
+		const part = parts.find((p) => p.id === partId);
+		if (!part) {
+			return errorResponse("Part not found", 404, cors, "PART_NOT_FOUND");
+		}
+
+		const rejection = opts.mutate(part, userId, me);
+		if (rejection) return rejection;
+
+		const result = await env.SHARE_DB.prepare(
+			"UPDATE tournament_matches SET parts = ?, parts_rev = parts_rev + 1 WHERE match_id = ? AND parts_rev = ?",
+		)
+			.bind(JSON.stringify(parts), matchId, match.parts_rev)
+			.run();
+		if (result.meta.changes === 0) continue; // raced another writer — retry
+
+		await bumpTournamentUpdatedAt(env, tournamentId);
+		// Rate-limit ledger (24h retention bucket; the budget reads a 1h window).
+		await env.SHARE_DB.prepare(
+			"INSERT INTO events (event_type, user_id) VALUES ('tournament_schedule', ?)",
+		)
+			.bind(userId)
+			.run()
+			.catch((e: unknown) => {
+				logError("tournament_cast_ledger_failed", e, { user_id: userId });
+			});
+		// 204: the caller refreshes via invalidateAll — no raw-row shape to
+		// mistake for the GET serialization.
+		return new Response(null, { status: 204, headers: cors });
+	}
+	return errorResponse(
+		"The match was updated concurrently — try again",
+		409,
+		cors,
+		"CONFLICT",
+	);
+}
+
+export async function handleCastMatchPart(
+	tournamentId: string,
+	matchId: string,
+	partId: string,
+	request: Request,
+	env: TournamentPlayerEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const body = await parseJsonBody(request, CastMatchPartSchema, cors);
+	if (!body.ok) return body.response;
+	const role = body.body.role;
+
+	return mutateMyCasterEntry(tournamentId, matchId, partId, request, env, {
+		allowDecided: false,
+		// Snapshot the caller's canonical handle as the caster name, mirroring
+		// the admin schedule path (linked caster → canonical username).
+		prepare: async (userId) => {
+			const u = await env.SHARE_DB.prepare(
+				"SELECT discord_username FROM users WHERE user_id = ?",
+			)
+				.bind(userId)
+				.first<{ discord_username: string | null }>();
+			return { user_id: userId, name: u?.discord_username ?? null };
+		},
+		mutate: (part, userId, me) => {
+			// Drop any existing self entry, then re-insert at the chosen slot.
+			const others = part.casters.filter((c) => c.user_id !== userId);
+			if (others.length + 1 > MAX_CASTERS_PER_PART) {
+				return errorResponse(
+					"This part already has the maximum number of casters",
+					409,
+					cors,
+					"TOO_MANY_CASTERS",
+				);
+			}
+			const asStreamer =
+				role === "streamer" || (role === undefined && others.length === 0);
+			part.casters = asStreamer ? [me!, ...others] : [...others, me!];
+			return null;
+		},
+	});
+}
+
+export async function handleUncastMatchPart(
+	tournamentId: string,
+	matchId: string,
+	partId: string,
+	request: Request,
+	env: TournamentPlayerEnv,
+): Promise<Response> {
+	return mutateMyCasterEntry(tournamentId, matchId, partId, request, env, {
+		// A caster who signed up but never actually cast shouldn't stay credited
+		// on a decided match; removal of your OWN entry is always additive-safe.
+		allowDecided: true,
+		mutate: (part, userId) => {
+			part.casters = part.casters.filter((c) => c.user_id !== userId);
+			return null;
+		},
+	});
 }

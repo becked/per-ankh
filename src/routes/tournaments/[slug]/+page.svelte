@@ -19,6 +19,7 @@
 	import ChampionshipStandings from "$lib/tournament/ChampionshipStandings.svelte";
 	import PickPreferenceNote from "$lib/tournament/PickPreferenceNote.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
+	import { matchNumbers } from "$lib/tournament/match-numbers";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
@@ -126,6 +127,10 @@
 	// championship bracket slots — a slot can appear in both during the
 	// championship phase. Consumed by the match popover and slotLabelFor.
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
+	// Global "Match N" numbering, shared by the bracket cards + the popover.
+	const matchNumberById = $derived(matchNumbers(data.matches));
+	// Admin-only signup answers (timezone/availability), for the Copy DM tool.
+	const slotSignupAnswers = $derived(slotMaps.signupAnswers);
 	const slotLabels = $derived(slotMaps.labels);
 	const slotUserIds = $derived(slotMaps.userIds);
 	const slotAvatars = $derived(slotMaps.avatars);
@@ -1105,6 +1110,7 @@
 													standings={divisionData.standings}
 													matches={matchesByDivision[division]}
 													tournamentSlug={data.tournament.slug}
+													{matchNumberById}
 													mapPool={data.tournament.map_pool}
 													onMatchClick={openMatch}
 												/>
@@ -1147,6 +1153,8 @@
 				{slotUserIds}
 				{slotAvatars}
 				{user}
+				{slotSignupAnswers}
+				matchNumber={matchNumberById.get(currentMatch.match_id)}
 				onSubstitute={isAdmin ? substituteSlot : undefined}
 				onClose={closeMatch}
 			/>
