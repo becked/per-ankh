@@ -379,3 +379,32 @@ export function formatGameTitle(game: {
 
 	return `Game ${game.match_id}`;
 }
+
+/**
+ * Relative "in X" / "X ago" string for a scheduled instant, matching Discord's
+ * `<t:…:R>` style: "in 2 days", "in 5 hours", "in 30 minutes", "3 days ago".
+ * Computed at render time from the current clock — not a live-ticking countdown
+ * (it refreshes whenever the surface re-renders, e.g. reopening the popover).
+ * The unit steps up as the gap widens (minutes → hours → days → months →
+ * years), always picking the coarsest unit that still reads naturally.
+ *
+ * @param iso - ISO-8601 instant string, or null/undefined
+ * @returns e.g. "in 2 days", or "" when the input is empty/invalid
+ */
+export function formatRelativeToNow(iso: string | null | undefined): string {
+	if (!iso) return "";
+	const d = new Date(iso);
+	if (Number.isNaN(d.getTime())) return "";
+	const diffMs = d.getTime() - Date.now();
+	const abs = Math.abs(diffMs);
+	const MIN = 60_000;
+	const HOUR = 60 * MIN;
+	const DAY = 24 * HOUR;
+	const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: "auto" });
+	if (abs < HOUR) return rtf.format(Math.round(diffMs / MIN), "minute");
+	if (abs < DAY) return rtf.format(Math.round(diffMs / HOUR), "hour");
+	if (abs < 30 * DAY) return rtf.format(Math.round(diffMs / DAY), "day");
+	if (abs < 365 * DAY)
+		return rtf.format(Math.round(diffMs / (30 * DAY)), "month");
+	return rtf.format(Math.round(diffMs / (365 * DAY)), "year");
+}

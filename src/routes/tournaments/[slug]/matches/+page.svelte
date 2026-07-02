@@ -37,6 +37,7 @@
 		MATCH_COLUMNS,
 		matchStatusGroup,
 		matchCasterGroup,
+		matchSortInstant,
 		DEFAULT_MATCHES_TABLE_STATE,
 		type MatchSortContext,
 		type MatchStatusGroup,
@@ -47,6 +48,14 @@
 		scheduledDayKey,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
+	import {
+		matchParts,
+		matchDisplayStatus,
+		upcomingScheduledParts,
+		type NumberedPart,
+	} from "$lib/tournament/parts";
+	import { matchNumbers, padMatchNumber } from "$lib/tournament/match-numbers";
+	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
@@ -72,6 +81,62 @@
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const partition = $derived(partitionSchedule(data.matches));
 
+	// Global "Match N" numbering (server-assigned), for the sesh export lines.
+	const matchNumberById = $derived(matchNumbers(data.matches));
+
+	// Admin "sesh.fyi"-style copy of upcoming (scheduled, still-pending) matches,
+	// soonest first, with Discord timestamps — paste into a Discord scheduling
+	// post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>` the relative
+	// "in X hours/days". A split match contributes one line per scheduled part,
+	// tagged "(Part N)"; single-session matches read as just "Match NNN".
+	function seshText(): string {
+		const num = (m: TournamentMatch) =>
+			padMatchNumber(matchNumberById.get(m.match_id));
+		// Prefer a real Discord `<@id>` mention (pings the player) when the slot is
+		// a claimed account whose id we have (admin-only field); fall back to the
+		// display name for unclaimed slots.
+		const who = (m: TournamentMatch, side: "a" | "b") => {
+			const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
+			if (id) return `<@${id}>`;
+			return matchSlotDisplayName(m, side, slotMaps.labels) ?? "?";
+		};
+		const vs = (m: TournamentMatch) => `${who(m, "a")} v ${who(m, "b")}`;
+
+		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
+		// already passed (no grace: this is a forward-looking schedule post).
+		const scheduled = upcomingScheduledParts(data.matches).map(
+			({ match, part, partNumber, split }) => {
+				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
+				const partTag = split ? `(Part ${partNumber}) ` : "";
+				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)`;
+			},
+		);
+		// "To be scheduled" = genuinely unscheduled matches only; a match that has
+		// already started (in progress, awaiting result) doesn't belong here.
+		const unscheduled = data.matches
+			.filter(
+				(m) =>
+					m.status === "pending" &&
+					m.slot_b_id != null &&
+					matchDisplayStatus(m) === "unscheduled",
+			)
+			.sort(
+				(a, b) =>
+					(matchNumberById.get(a.match_id) ?? 0) -
+					(matchNumberById.get(b.match_id) ?? 0),
+			)
+			.map((m) => `Match ${num(m)} - ${vs(m)}`);
+
+		const blocks = [
+			"Upcoming matches\n\n" +
+				(scheduled.length ? scheduled.join("\n") : "(none scheduled)"),
+		];
+		if (unscheduled.length) {
+			blocks.push("To be scheduled\n\n" + unscheduled.join("\n"));
+		}
+		return blocks.join("\n\n");
+	}
+
 	// View + zone controls. zone picks the single clock everything reads in.
 	let view = $state<"list" | "calendar">("list");
 	let zone = $state<ScheduleZone>("utc");
@@ -96,7 +161,11 @@
 	// --- Table state. tableState (search + sort) follows the Cities pattern;
 	// statusFilter is a separate multi-toggle (completed off by default).
 	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
-	let statusFilter = $state<MatchStatusGroup[]>(["scheduled", "unscheduled"]);
+	let statusFilter = $state<MatchStatusGroup[]>([
+		"scheduled",
+		"in_progress",
+		"unscheduled",
+	]);
 	// Caster presence toggle — both on by default (show every match regardless
 	// of whether a caster is assigned).
 	let casterFilter = $state<MatchCasterGroup[]>(["casted", "uncasted"]);
@@ -171,7 +240,11 @@
 						.includes(term) ||
 					nationMatch(matchSlotNation(m, "a")) ||
 					nationMatch(matchSlotNation(m, "b")) ||
-					(m.caster_display_name ?? "").toLowerCase().includes(term),
+					matchParts(m).some((p) =>
+						p.casters.some((c) =>
+							(c.display_name ?? c.name ?? "").toLowerCase().includes(term),
+						),
+					),
 			);
 		}
 
@@ -275,11 +348,11 @@
 	);
 
 	const eventsByDay = $derived.by(() => {
-		const byDay: Record<string, TournamentMatch[]> = {};
-		for (const m of partition.scheduled) {
-			const key = scheduledDayKey(m.scheduled_at, zone);
+		const byDay: Record<string, NumberedPart[]> = {};
+		for (const np of partition.scheduled) {
+			const key = scheduledDayKey(np.part.scheduled_at, zone);
 			if (!key) continue;
-			(byDay[key] ??= []).push(m);
+			(byDay[key] ??= []).push(np);
 		}
 		return byDay;
 	});
@@ -363,6 +436,14 @@
 				>
 					<h1 class="text-lg font-bold text-tan">Matches</h1>
 					<div class="flex items-center gap-2">
+						{#if isAdmin}
+							<CopyButton
+								text={seshText}
+								label="Copy upcoming (sesh)"
+								title="Copy upcoming scheduled matches (soonest first) with Discord timestamps, for a sesh.fyi / Discord post"
+								class="rounded border border-surface px-2 py-1 text-xs text-tan hover:bg-surface-hover"
+							/>
+						{/if}
 						<!-- UTC / Local: a segmented toggle picking the active clock. -->
 						<div
 							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
@@ -496,6 +577,12 @@
 													Scheduled
 												</ToggleGroup.Item>
 												<ToggleGroup.Item
+													value="in_progress"
+													class={statusItemClass}
+												>
+													In progress
+												</ToggleGroup.Item>
+												<ToggleGroup.Item
 													value="unscheduled"
 													class={statusItemClass}
 												>
@@ -576,13 +663,23 @@
 																		: ''} whitespace-nowrap"
 																>
 																	{#if column.key === "scheduled_at"}
+																		{@const g = matchStatusGroup(m)}
 																		{@const t = formatScheduledInZone(
-																			m.scheduled_at,
+																			matchSortInstant(m),
 																			zone,
 																		)}
-																		{#if t}
+																		{#if g === "in_progress"}
+																			<!-- Overdue: time passed, result unreported. Keep the
+																			     last-started sitting's time visible so an admin
+																			     chasing reports can see how overdue it is. -->
+																			{t || "In progress"}{#if t}<span
+																					class="opacity-60"
+																				>
+																					· in progress</span
+																				>{/if}
+																		{:else if t}
 																			{t}
-																		{:else if m.status === "complete" || m.status === "forfeit"}
+																		{:else if g === "completed"}
 																			Completed
 																		{:else}
 																			Not scheduled
@@ -600,28 +697,35 @@
 																	{:else if column.key === "round"}
 																		{m.round_number ?? "—"}
 																	{:else if column.key === "caster"}
-																		{#if m.caster_display_name}
+																		{@const firstCast = matchParts(m).find(
+																			(part) => part.casters.length > 0,
+																		)?.casters[0]}
+																		{#if firstCast}
 																			<span
 																				class="inline-flex items-center gap-1.5"
 																			>
 																				<PlayerAvatar
-																					avatarUrl={m.caster_avatar_url}
+																					avatarUrl={firstCast.avatar_url}
 																					size={16}
 																				/>
-																				{m.caster_display_name}
+																				{firstCast.display_name ??
+																					firstCast.name}
 																			</span>
 																		{:else}
 																			—
 																		{/if}
-																	{:else if column.key === "stream"}
-																		{#if m.stream_url}
-																			<!-- External stream URL (youtube/twitch),
-																			     validated host-side; not an app route, so
-																			     resolve() doesn't apply. Stop propagation so
-																			     the link doesn't also open the match card. -->
+																	{:else if column.key === "vods"}
+																		{@const firstVod = matchParts(m)
+																			.flatMap((part) => part.vods)
+																			.at(0)}
+																		{#if firstVod}
+																			<!-- External VOD URL (youtube/twitch), validated
+																			     host-side; not an app route, so resolve() doesn't
+																			     apply. Stop propagation so the link doesn't also
+																			     open the match card. -->
 																			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 																			<a
-																				href={m.stream_url}
+																				href={firstVod.url}
 																				target="_blank"
 																				rel="noopener noreferrer"
 																				class="inline-flex items-center gap-1 text-orange hover:underline"
@@ -642,7 +746,7 @@
 																						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 																					/>
 																				</svg>
-																				Stream
+																				VOD
 																			</a>
 																			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 																		{:else}
@@ -718,18 +822,25 @@
 													>
 														{cell.day}
 													</span>
-													{#each events as m (m.match_id)}
+													<!-- Key by match+part: part ids are only unique within a
+													     match (the 0029 backfill mints "p1" per migrated match). -->
+													{#each events as np (`${np.match.match_id}:${np.part.id}`)}
 														<button
 															type="button"
 															class="flex flex-col rounded px-1.5 py-1 text-left text-[11px] text-tan transition-colors hover:bg-track"
 															style="background-color: rgb(var(--color-surface));"
-															onclick={(e) => pick(m.match_id, e)}
+															onclick={(e) => pick(np.match.match_id, e)}
 														>
 															<span class="font-bold"
-																>{chipTime(m.scheduled_at)}</span
+																>{chipTime(
+																	np.part.scheduled_at,
+																)}{#if np.split}<span
+																		class="ml-1 font-normal opacity-60"
+																		>· Pt {np.partNumber}</span
+																	>{/if}</span
 															>
 															<span class="truncate opacity-80"
-																>{shortMatchup(m)}</span
+																>{shortMatchup(np.match)}</span
 															>
 														</button>
 													{/each}

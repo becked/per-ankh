@@ -1147,31 +1147,39 @@ export const cloudApi = {
 		});
 	},
 
-	// Set scheduling metadata on a pending match (admin or participant). Every
-	// field is optional; send null to clear. caster_user_id pre-links a
-	// Per-Ankh user (server snapshots the canonical username); caster_name
-	// alone is a free-text caster.
+	// Replace the scheduled parts of a match. Pending matches: admin or either
+	// participant; decided matches (attach VODs after the game): admin only.
+	// Replace-all: send the full ordered parts list. Each caster's user_id
+	// pre-links a Per-Ankh user (server snapshots the canonical username); name
+	// alone is free text. Casters are ordered (streamer first). A part may omit
+	// id when added (the server mints one). vods are youtube/twitch links with
+	// optional labels. expected_rev echoes the parts_rev the editor loaded — the
+	// worker 409s (CONFLICT) when the row moved on, instead of silently erasing
+	// a concurrent writer's change.
+	//
+	// The response's `match` is the raw updated row plus the parsed parts we
+	// wrote — NOT the fully-serialized GET shape (no display names/avatars).
+	// Callers refresh via invalidateAll rather than consuming the body.
 	patchMatchSchedule: async (
 		tournamentId: string,
 		matchId: string,
 		body: {
-			scheduled_at?: string | null;
-			stream_url?: string | null;
-			caster_user_id?: string | null;
-			caster_name?: string | null;
+			parts: {
+				id?: string;
+				scheduled_at: string | null;
+				casters: { user_id: string | null; name: string | null }[];
+				vods: { url: string; label?: string | null }[];
+			}[];
+			expected_rev?: number;
 		},
 		opts?: CallOpts,
-	): Promise<{ match: TournamentMatch }> => {
-		const res = await request(
-			`/tournaments/${tournamentId}/matches/${matchId}/schedule`,
-			{
-				...opts,
-				method: "PATCH",
-				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(body),
-			},
-		);
-		return res.json() as Promise<{ match: TournamentMatch }>;
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/matches/${matchId}/schedule`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
 	},
 
 	retroEditMatch: async (
@@ -1513,6 +1521,37 @@ export interface BracketResponse {
 	rounds: BracketRound[];
 }
 
+// One VOD recording on a part: a stream/recording URL plus an optional human
+// tag distinguishing it from the others ("alcaras POV", "Cast"). label is null
+// when untagged.
+export interface TournamentMatchPartVod {
+	url: string;
+	label: string | null;
+}
+
+// One caster on a part. Mirrors the slot-occupant model: user_id links a
+// Per-Ankh user when picked (else null); name is the storage/edit value
+// (canonical username when linked, free text otherwise); display_name is the
+// rendered label and avatar_url resolves server-side from user_id (null for
+// free-text casters). A part's casters are ordered — index 0 is the streamer,
+// the rest co-casters.
+export interface TournamentMatchPartCaster {
+	user_id: string | null;
+	name: string | null;
+	display_name: string | null;
+	avatar_url: string | null;
+}
+
+// One sitting of a match (migration 0029). id is stable within the match so
+// edits/deletes target a part. scheduled_at is a full ISO-8601 UTC instant or
+// null (not yet scheduled).
+export interface TournamentMatchPart {
+	id: string;
+	scheduled_at: string | null;
+	casters: TournamentMatchPartCaster[];
+	vods: TournamentMatchPartVod[];
+}
+
 export interface TournamentMatch {
 	match_id: string;
 	round_id?: string;
@@ -1555,6 +1594,11 @@ export interface TournamentMatch {
 	// name and unlink the slot.
 	slot_a_discord_username: string | null;
 	slot_b_discord_username: string | null;
+	// Numeric Discord id of each side's LIVE slot occupant. Admin-only (null
+	// otherwise, for pending/bye sides, and for unclaimed slots with no linked
+	// account). Backs real `<@id>` mentions in the sesh export.
+	slot_a_discord_id: string | null;
+	slot_b_discord_id: string | null;
 	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
 	// pending matches (no snapshot) and for slots whose occupant had no
 	// claimed discord_id at report time — frontend falls through to live
@@ -1567,21 +1611,17 @@ export interface TournamentMatch {
 	// the crest is shown only when this is present.
 	slot_a_nation: string | null;
 	slot_b_nation: string | null;
-	// Scheduling metadata (migration 0025). Editable on pending matches by an
-	// admin or either participant. scheduled_at is a full ISO-8601 instant
-	// (UTC); stream_url a youtube/twitch link. Caster is modeled like a slot
-	// occupant: caster_user_id links a Per-Ankh user when picked (else null);
-	// caster_name is the storage/edit value (canonical username when linked,
-	// free text otherwise). caster_display_name is the rendered label — the
-	// linked user's display name, falling back to caster_name — and
-	// caster_avatar_url resolves server-side from caster_user_id (null for
-	// a free-text caster or one with no claimed avatar).
-	scheduled_at: string | null;
-	stream_url: string | null;
-	caster_user_id: string | null;
-	caster_name: string | null;
-	caster_display_name: string | null;
-	caster_avatar_url: string | null;
+	// Scheduled parts (migration 0029). A match is one game played across one or
+	// more sittings; each part carries its own time, caster, and VOD links.
+	// Empty until the match is scheduled. Editable by an admin or (while the
+	// match is pending) either participant; decided matches are admin-only.
+	parts: TournamentMatchPart[];
+	// Optimistic-concurrency version of `parts`. Editors echo it back as
+	// expected_rev on save; the worker 409s when the row moved on.
+	parts_rev: number;
+	// Persisted global "Match N" — a stable public handle assigned append-only
+	// at round-generation (admins paste it into Discord). Null for byes.
+	match_number: number | null;
 	// Client-only flag: true for synthesized future-round bracket cells that
 	// don't yet correspond to a real tournament_matches row. The server never
 	// sets this. MatchPopover uses it to render a stripped-down preview view
