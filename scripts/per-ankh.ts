@@ -9,6 +9,7 @@ import { dirname, resolve } from "node:path";
 import { main as adminMain } from "./admin/index";
 import { prodMain, stagingMain } from "./prod/index";
 import { main as backupMain } from "./backup";
+import { main as restoreMain } from "./restore";
 
 // scripts/per-ankh.ts → repo root is one level up.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -170,6 +171,7 @@ function printHelp(): void {
 			"  prod <sub>...     Production deploy & preflight (see `./per-ankh prod --help`).",
 			"  staging <sub>...  Staging deploy & preflight (see `./per-ankh staging --help`).",
 			"  backup [--local]  Snapshot D1 to a .sql + .sqlite file (see `./per-ankh backup --help`).",
+			"  restore --local   Load a D1 backup into local .wrangler state (see `./per-ankh restore --help`).",
 			"  --help,-h         Show this help.",
 			"",
 			"Preconditions for `dev`:",
@@ -199,6 +201,9 @@ async function main(): Promise<void> {
 			return;
 		case "backup":
 			await backupMain(process.argv.slice(3));
+			return;
+		case "restore":
+			await restoreMain(process.argv.slice(3));
 			return;
 		case "--help":
 		case "-h":

@@ -8,6 +8,13 @@ import { existsSync, rmSync, statSync } from "node:fs";
 import { resolve } from "node:path";
 
 import { runBackup } from "../../lib/d1-backup";
+import {
+	checkSqlite3Installed,
+	prepareOrderedImport,
+	resetD1,
+	importDump,
+	remoteTarget,
+} from "../../lib/d1-import";
 import { parseFlags, flagString } from "../../lib/cli";
 import { bold, dim, formatBytes, info, ok, warn } from "../../lib/format";
 import { confirmTyping } from "../../lib/confirm";
@@ -16,11 +23,7 @@ import type { ProdOpts } from "../types";
 import { listPendingMigrations } from "../checks/migrations";
 import {
 	checkRcloneInstalled,
-	checkSqlite3Installed,
 	loadRecloneCreds,
-	prepareOrderedImport,
-	resetStagingD1,
-	importDump,
 	syncR2FromProd,
 } from "../deploy/reclone";
 
@@ -141,8 +144,9 @@ export async function run(
 	const prepared = prepareOrderedImport(sqlPath);
 	try {
 		// ─── 5. Reset + import D1 ────────────────────────────────────────
+		const target = remoteTarget(env);
 		info(`Resetting ${env.dbName} (drop all tables)...`);
-		const dropped = await resetStagingD1(env);
+		const dropped = await resetD1(target);
 		ok(
 			dropped === 0
 				? "Nothing to drop (empty database)."
@@ -150,7 +154,7 @@ export async function run(
 		);
 
 		info(`Importing dump into ${env.dbName}...`);
-		await importDump(env, prepared.orderedPath);
+		await importDump(target, prepared.orderedPath);
 		ok("D1 import complete.");
 
 		// ─── 6. Sync R2 ──────────────────────────────────────────────────

@@ -18,7 +18,7 @@
 //                     schema's forward FK reference (games → collections)
 //                     fails compile-time parent resolution under D1's FK
 //                     enforcement. Restore by re-emitting it in FK order —
-//                     prepareOrderedImport in scripts/prod/deploy/reclone.ts.
+//                     prepareOrderedImport in scripts/lib/d1-import.ts.
 //   - <base>.sqlite — the dump materialized into a real binary DB you can open
 //                     and query directly.
 //
