@@ -1,5 +1,17 @@
 # Changelog
 
+## [2026-07-02-34951a2] - 2026-07-02
+
+### Features
+
+- (tournament) surface upcoming matches in an overview panel — [31eb4a6](https://github.com/becked/per-ankh/commit/31eb4a608c3777984f023afa9331cb4ddf4efeb4)
+- (scripts) add `restore --local` to load a D1 backup into local dev — [17c088f](https://github.com/becked/per-ankh/commit/17c088ff5079448c4a0d5d0aa8b13575244d8c64)
+- (tournament) refine upcoming-matches panel — [34951a2](https://github.com/becked/per-ankh/commit/34951a2b63e21e21cf2474e83f34fc05c715226b)
+
+### Fixes
+
+- (tournament) give the Links button full opacity to match Settings — [c271fb8](https://github.com/becked/per-ankh/commit/c271fb82fc046803eb2e1fd59806788a6048fc51)
+
 ## [2026-07-02-18f6fb3] - 2026-07-02
 
 ### Features
