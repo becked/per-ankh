@@ -80,16 +80,6 @@
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
-	// The bracket a match belongs to, as a display label (Championship or the
-	// tournament's division name). Drives the Bracket column + bracket filter.
-	function phaseLabel(m: TournamentMatch): string {
-		if (m.phase === "championship") return "Championship";
-		if (m.division)
-			return m.division === "A"
-				? data.tournament.division_a_name
-				: data.tournament.division_b_name;
-		return "";
-	}
 	// Stable bracket key for filtering ("championship" | "A" | "B").
 	function bracketKey(m: TournamentMatch): string {
 		return m.phase === "championship" ? "championship" : (m.division ?? "");
@@ -146,7 +136,6 @@
 
 	const sortCtx = $derived<MatchSortContext>({
 		slotLabels: slotMaps.labels,
-		phaseLabel,
 	});
 
 	// Status toggle → bracket filter → search → sort, in one pass. Sort mirrors
@@ -621,10 +610,6 @@
 																			<span class="opacity-60">v</span>
 																			{@render playerCell(m, "b")}
 																		</span>
-																	{:else if column.key === "bracket"}
-																		{phaseLabel(m) || "—"}
-																	{:else if column.key === "round"}
-																		{m.round_number ?? "—"}
 																	{:else if column.key === "caster"}
 																		{@const firstCast = matchParts(m).find(
 																			(part) => part.casters.length > 0,
@@ -657,7 +642,7 @@
 																				href={firstStream.url}
 																				target="_blank"
 																				rel="noopener noreferrer"
-																				class="inline-flex items-center gap-1 text-orange hover:underline"
+																				class="inline-flex items-center gap-1 text-tan hover:underline"
 																				onclick={(e) => e.stopPropagation()}
 																			>
 																				<svg
@@ -675,7 +660,7 @@
 																						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 																					/>
 																				</svg>
-																				Stream
+																				{firstStream.label?.trim() || "Stream"}
 																			</a>
 																			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 																		{:else}
@@ -796,9 +781,7 @@
 	customAnchor={detailAnchor}
 	side="right"
 	align="start"
-	contentClass={detailMatch?.game_id
-		? "w-[min(92vw,35.2rem)]"
-		: "w-fit max-w-[92vw]"}
+	contentClass="w-[min(92vw,35.2rem)]"
 	frameClass="bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
 	ariaLabel="Match detail"
 >

@@ -135,20 +135,3 @@ export function partToIso(
 	);
 	return dt.toDate(tz).toISOString();
 }
-
-// The label to render for a stream link: the author's tag when set, else a hint
-// from the host ("YouTube"/"Twitch"), else a bare "stream".
-export function streamDisplayLabel(stream: {
-	url: string;
-	label: string | null;
-}): string {
-	if (stream.label && stream.label.trim()) return stream.label.trim();
-	try {
-		const host = new URL(stream.url).hostname.replace(/^(www|m)\./, "");
-		if (host.includes("youtu")) return "YouTube";
-		if (host.includes("twitch")) return "Twitch";
-	} catch {
-		/* fall through to the generic label */
-	}
-	return "stream";
-}

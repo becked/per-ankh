@@ -51,11 +51,9 @@ export function matchSortInstant(m: TournamentMatch): string | null {
 }
 
 // Context the sort comparators need beyond the match itself: the live slot→name
-// map (player-name columns) and the bracket label fn (depends on the tournament's
-// division names, so it's supplied by the page rather than hardcoded here).
+// map, for the player-name column.
 export interface MatchSortContext {
 	slotLabels: Record<string, string>;
-	phaseLabel: (m: TournamentMatch) => string;
 }
 
 export interface MatchColumn {
@@ -96,16 +94,6 @@ export const MATCH_COLUMNS: MatchColumn[] = [
 			const instant = matchSortInstant(m);
 			return instant ? new Date(instant).getTime() : null;
 		},
-	},
-	{
-		key: "bracket",
-		label: "Bracket",
-		sortValue: (m, ctx) => ctx.phaseLabel(m).toLowerCase(),
-	},
-	{
-		key: "round",
-		label: "Round",
-		sortValue: (m) => m.round_number ?? null,
 	},
 	{
 		key: "caster",

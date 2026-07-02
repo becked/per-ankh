@@ -20,7 +20,6 @@
 	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SchedulePopover from "$lib/tournament/SchedulePopover.svelte";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
-	import { streamDisplayLabel } from "$lib/tournament/parts";
 	import {
 		CHART_THEME,
 		getChartColor,
@@ -245,6 +244,16 @@
 	// Suppressed on placeholder cells (no real match row yet).
 	const canSchedule = $derived(
 		!isPlaceholder && match.status !== "bye" && (isAdmin || isParticipant),
+	);
+	// Read view splits the old combined parts block into two stacked panels: the
+	// schedule (per-part times) and casting (per-part casters + stream links).
+	// castingParts keeps each part's original 1-based number so a split match
+	// labels "Part N" consistently in both panels, and drops parts with no
+	// broadcast info so the casting panel only lists sittings that have some.
+	const castingParts = $derived(
+		match.parts
+			.map((part, i) => ({ part, partNumber: i + 1 }))
+			.filter(({ part }) => part.casters.length > 0 || part.streams.length > 0),
 	);
 	const hasSecondaryActions = $derived(
 		canSchedule ||
@@ -786,10 +795,10 @@
 		</div>
 	{/if}
 
-	<!-- Read-only parts (per-sitting time / caster / stream links), shown when the
-	     match has any scheduled part. The "Part N" header appears only for a
-	     split match; a single-session match reads as one unlabeled row. Editing
-	     happens behind the Schedule button below. -->
+	<!-- Schedule: per-sitting time(s). "Part N" appears only for a split match;
+	     a single-session match reads as one unlabeled row. Casters and stream
+	     links live in the Casting panel below. Editing both happens behind the
+	     Schedule button. -->
 	{#if !isPlaceholder && match.parts.length > 0}
 		<div
 			class="flex flex-col gap-2 rounded-lg p-3"
@@ -797,45 +806,73 @@
 		>
 			{#each match.parts as part, i (part.id)}
 				<div
-					class="flex items-start gap-3 {i > 0
+					class="flex items-center gap-2 {i > 0
 						? 'border-t border-border-subtle pt-2'
 						: ''}"
 				>
-					<div class="flex min-w-0 flex-1 flex-col gap-1">
-						{#if match.parts.length > 1}
-							<span
-								class="text-[10px] font-bold uppercase tracking-wider text-muted"
-								>Part {i + 1}</span
+					{#if match.parts.length > 1}
+						<span
+							class="shrink-0 text-[10px] font-bold uppercase tracking-wider text-muted"
+							>Part {i + 1}</span
+						>
+					{/if}
+					{#if part.scheduled_at}
+						<div class="flex items-center gap-1.5 text-xs text-tan">
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-4 w-4 shrink-0 opacity-80"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+								aria-hidden="true"
 							>
-						{/if}
-						{#if part.scheduled_at}
-							<div class="flex items-center gap-1.5 text-xs text-tan">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									class="h-4 w-4 shrink-0 opacity-80"
-									fill="none"
-									viewBox="0 0 24 24"
-									stroke="currentColor"
-									stroke-width="2"
-									aria-hidden="true"
+								<rect x="3" y="4" width="18" height="18" rx="2" />
+								<path d="M16 2v4M8 2v4M3 10h18" />
+							</svg>
+							<span
+								>{formatScheduledWithLocal(part.scheduled_at)}<span
+									class="text-muted"
 								>
-									<rect x="3" y="4" width="18" height="18" rx="2" />
-									<path d="M16 2v4M8 2v4M3 10h18" />
-								</svg>
-								<span
-									>{formatScheduledWithLocal(part.scheduled_at)}<span
-										class="text-muted"
-									>
-										· {formatRelativeToNow(part.scheduled_at)}</span
-									></span
-								>
-							</div>
-						{:else}
-							<span class="text-xs text-muted">Not yet scheduled</span>
-						{/if}
+									· {formatRelativeToNow(part.scheduled_at)}</span
+								></span
+							>
+						</div>
+					{:else}
+						<span class="text-xs text-muted">Not yet scheduled</span>
+					{/if}
+				</div>
+			{/each}
+		</div>
+	{/if}
+
+	<!-- Casting: per-sitting casters and their stream links (the broadcast), split
+	     out from the schedule above. Only sittings that have a caster or stream
+	     appear; "Part N" labels them when the match is split. -->
+	{#if !isPlaceholder && castingParts.length > 0}
+		<div
+			class="flex flex-col gap-2 rounded-lg p-3"
+			style="background-color: rgb(var(--color-surface-raised));"
+		>
+			{#each castingParts as { part, partNumber }, i (part.id)}
+				<div
+					class="flex flex-col gap-1.5 {i > 0
+						? 'border-t border-border-subtle pt-2'
+						: ''}"
+				>
+					{#if match.parts.length > 1}
+						<span
+							class="text-[10px] font-bold uppercase tracking-wider text-muted"
+							>Part {partNumber}</span
+						>
+					{/if}
+					<!-- Caster on the left, its stream link(s) to the right. -->
+					<div class="flex items-start gap-3">
 						{#if part.casters.length > 0}
 							<!-- Streamer first (with avatar), co-casters appended. -->
-							<div class="flex items-center gap-1.5 text-xs text-tan">
+							<div
+								class="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-tan"
+							>
 								<PlayerAvatar
 									avatarUrl={part.casters[0].avatar_url}
 									size={14}
@@ -844,7 +881,7 @@
 									Cast by {part.casters[0]
 										.display_name}{#if part.casters.length > 1}
 										<span class="text-muted"
-											>with {part.casters
+											>&nbsp;with {part.casters
 												.slice(1)
 												.map((c) => c.display_name)
 												.join(", ")}</span
@@ -852,43 +889,45 @@
 								</span>
 							</div>
 						{/if}
-					</div>
-					{#if part.streams.length > 0}
-						<!-- Stream links (youtube/twitch), validated host-side; external
-						     URLs, so resolve() doesn't apply. -->
-						<!-- eslint-disable svelte/no-navigation-without-resolve -->
-						<div class="flex shrink-0 flex-col items-end gap-1">
-							<!-- Keyed by index: the same URL may legitimately appear twice (two
-							     labels), and order is the identity — the list is replaced
-							     wholesale on save. -->
-							{#each part.streams as stream, vi (vi)}
-								<a
-									href={stream.url}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="inline-flex items-center gap-1.5 text-xs text-tan hover:underline"
-								>
-									<span class="truncate">{streamDisplayLabel(stream)}</span>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										class="h-4 w-4 shrink-0"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										stroke-width="2"
-										aria-hidden="true"
+						{#if part.streams.length > 0}
+							<!-- Stream links (youtube/twitch), validated host-side; external
+							     URLs, so resolve() doesn't apply. ml-auto pins them right even
+							     when a sitting has a stream but no named caster. Keyed by index:
+							     the same URL may legitimately appear twice (two labels), and
+							     order is the identity — the list is replaced wholesale on save. -->
+							<!-- eslint-disable svelte/no-navigation-without-resolve -->
+							<div class="ml-auto flex shrink-0 flex-col items-end gap-1">
+								{#each part.streams as stream, vi (vi)}
+									<a
+										href={stream.url}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="inline-flex items-center gap-1.5 text-xs text-tan hover:underline"
 									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-										/>
-									</svg>
-								</a>
-							{/each}
-						</div>
-						<!-- eslint-enable svelte/no-navigation-without-resolve -->
-					{/if}
+										<span class="truncate"
+											>{stream.label?.trim() || "Stream"}</span
+										>
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-4 w-4 shrink-0"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+											/>
+										</svg>
+									</a>
+								{/each}
+							</div>
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
+						{/if}
+					</div>
 				</div>
 			{/each}
 		</div>

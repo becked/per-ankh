@@ -285,9 +285,7 @@
 	customAnchor={detailAnchor}
 	side="right"
 	align="start"
-	contentClass={detailMatch?.game_id
-		? "w-[min(92vw,35.2rem)]"
-		: "w-fit max-w-[92vw]"}
+	contentClass="w-[min(92vw,35.2rem)]"
 	frameClass="bg-surface p-3 shadow-[0_24px_64px_-12px_rgb(var(--color-black)/0.85)]"
 	ariaLabel="Match detail"
 >
