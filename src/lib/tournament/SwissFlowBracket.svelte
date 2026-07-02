@@ -14,6 +14,11 @@
 		matchSlotNation,
 	} from "$lib/tournament/match-occupant";
 	import { formatEnum } from "$lib/utils/formatting";
+	import {
+		matchDisplayStatus,
+		type MatchDisplayStatus,
+		MATCH_STATUS_LABEL,
+	} from "$lib/tournament/parts";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		distinguishingOptions,
@@ -22,6 +27,9 @@
 	} from "$lib/tournament/map-script-options";
 
 	const MAP_ICON = SPRITE_MANIFEST["icons/MAP_OVERVIEW"];
+
+	// Card status chip labels. "unscheduled" is intentionally absent — the most
+	// common pending state shows no chip, so only meaningful statuses stand out.
 
 	type Props = {
 		winsToAdvance: number;
@@ -35,6 +43,7 @@
 		// The tournament's map_pool — used to resolve each match's assigned
 		// instance (by map_pool_id) for the options tooltip on its map name.
 		mapPool: MapPoolEntry[];
+		// Global "Match N" numbers (match_id -> number) for the card badge.
 		// eslint-disable-next-line no-unused-vars -- param name is documentary
 		onMatchClick: (matchId: string) => void;
 	};
@@ -350,6 +359,7 @@
 							{#each b.matches as m (m.match_id)}
 								{@const aWon = m.winner_slot_id === m.slot_a_id}
 								{@const bWon = m.winner_slot_id === m.slot_b_id}
+								{@const dstatus = matchDisplayStatus(m)}
 								{@const aOnPath =
 									highlightedSlot !== null && m.slot_a_id === highlightedSlot}
 								{@const bOnPath =
@@ -441,6 +451,11 @@
 											<img class="map-icon" src={MAP_ICON} alt="" />
 											<span class="map-name">{shortName}</span>
 										</div>
+									{/if}
+									{#if dstatus && dstatus !== "unscheduled"}
+										<span class="status-chip status-{dstatus}"
+											>{MATCH_STATUS_LABEL[dstatus]}</span
+										>
 									{/if}
 								</a>
 							{/each}
@@ -599,6 +614,7 @@
 	}
 
 	.match {
+		position: relative;
 		display: flex;
 		flex-direction: column;
 		gap: 0.15rem;
@@ -611,7 +627,6 @@
 		transition: background-color 0.1s;
 		min-width: 0;
 	}
-
 	.match:hover {
 		background-color: rgb(var(--color-surface-sunken));
 	}
@@ -690,6 +705,33 @@
 		font-size: 0.6rem;
 		opacity: 0.6;
 		color: rgb(var(--color-tan));
+	}
+
+	/* Per-match status chip — scheduled / in progress / completed. Sits at the
+	   card's bottom edge; unscheduled matches render none. */
+	.status-chip {
+		align-self: flex-start;
+		margin-top: 0.15rem;
+		padding: 0.02rem 0.3rem;
+		border-radius: 0.2rem;
+		font-size: 0.55rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		line-height: 1.5;
+	}
+	.status-scheduled {
+		background-color: rgb(var(--color-tan-light) / 0.14);
+		color: rgb(var(--color-tan-light));
+	}
+	.status-in_progress {
+		background-color: rgb(var(--color-orange) / 0.18);
+		color: rgb(var(--color-orange));
+	}
+	.status-completed {
+		background-color: rgb(var(--color-success) / 0.14);
+		color: rgb(var(--color-success));
+		opacity: 0.85;
 	}
 
 	.gutter {

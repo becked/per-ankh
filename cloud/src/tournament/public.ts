@@ -30,6 +30,7 @@ import {
 	matchRowToRef,
 	parseLinks,
 	parseMapPool,
+	parseParts,
 	slotAvatarUrl,
 	slotDisplayName,
 	slotRowToRef,
@@ -1104,10 +1105,10 @@ function serializeMatch(
 	m: MatchRow,
 	identityByUserId?: Map<string, UserIdentity>,
 	nationByGamePlayer?: Map<string, string>,
-	// Admin-only map slot_id → raw discord_username for the LIVE slots (not the
-	// frozen snapshot). Populated only for admin viewers; lets the match popover
-	// seed its substitute editor with the real handle instead of the display
-	// name, which would unlink the slot on save. Empty/undefined → fields null.
+	// Admin-only map slot_id → raw discord handle + numeric id for the LIVE slots
+	// (not the frozen snapshot). Populated only for admin viewers: the handle
+	// seeds the substitute editor with the real handle (the display name would
+	// unlink the slot on save). Empty/undefined → field null.
 	handleBySlotId?: Map<string, string | null>,
 ) {
 	const slotAIdentity =
@@ -1118,10 +1119,27 @@ function serializeMatch(
 		m.slot_b_user_id && identityByUserId
 			? identityByUserId.get(m.slot_b_user_id)
 			: undefined;
-	const casterIdentity =
-		m.caster_user_id && identityByUserId
-			? identityByUserId.get(m.caster_user_id)
-			: undefined;
+	// Scheduled parts (migration 0029). Each part's casters resolve from the
+	// same batch identity map as the slots (index 0 is the streamer, the rest
+	// co-casters); the VOD list passes through as stored (already url-sanitized
+	// by parseParts).
+	const parts = parseParts(m).map((p) => ({
+		id: p.id,
+		scheduled_at: p.scheduled_at,
+		casters: p.casters.map((c) => {
+			const identity =
+				c.user_id && identityByUserId
+					? identityByUserId.get(c.user_id)
+					: undefined;
+			return {
+				user_id: c.user_id,
+				name: c.name,
+				display_name: identity?.display_name ?? c.name,
+				avatar_url: identity?.avatar_url ?? null,
+			};
+		}),
+		vods: p.vods,
+	}));
 	// Nation each slot played, resolved via the slot↔player_index mapping
 	// (migration 0007) against player_summaries. Null when no save is linked
 	// or the index/nation is unknown (bye, forfeit, admin-set, legacy match).
@@ -1156,8 +1174,10 @@ function serializeMatch(
 		slot_a_user_id: m.slot_a_user_id,
 		slot_a_avatar_url: slotAIdentity?.avatar_url ?? null,
 		slot_a_nation: slotANation,
-		// Admin-only — raw handle of the live slot occupant (null for public
-		// viewers and pending/bye sides). Used to seed the substitute editor.
+		// Admin-only — raw handle + numeric Discord id of the live slot occupant
+		// (null for public viewers, pending/bye sides, and unclaimed slots with
+		// no linked account). The handle seeds the substitute editor; the id backs
+		// `<@id>` mentions in the sesh export.
 		slot_a_discord_username: handleBySlotId?.get(m.slot_a_id) ?? null,
 		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
@@ -1166,16 +1186,11 @@ function serializeMatch(
 		slot_b_discord_username: m.slot_b_id
 			? (handleBySlotId?.get(m.slot_b_id) ?? null)
 			: null,
-		// Scheduling metadata (migration 0025). The caster renders by display
-		// name when linked to a user; caster_name stays the storage/edit value
-		// (canonical handle when linked, free text otherwise) and doubles as
-		// the display fallback for free-text casters.
-		scheduled_at: m.scheduled_at,
-		stream_url: m.stream_url,
-		caster_user_id: m.caster_user_id,
-		caster_name: m.caster_name,
-		caster_display_name: casterIdentity?.display_name ?? m.caster_name,
-		caster_avatar_url: casterIdentity?.avatar_url ?? null,
+		// Scheduled parts (migration 0029). Each carries its own time, caster
+		// (rendered by display name when linked, else caster_name), and VOD
+		// links. An empty array means the match has no scheduled sittings yet.
+		parts,
+		parts_rev: m.parts_rev,
 	};
 }
 
@@ -1230,8 +1245,12 @@ export async function loadUserIdentitiesForMatches(
 	for (const m of matches) {
 		if (m.slot_a_user_id) userIds.add(m.slot_a_user_id);
 		if (m.slot_b_user_id) userIds.add(m.slot_b_user_id);
-		// Caster identity (migration 0025) resolves from the same batch.
-		if (m.caster_user_id) userIds.add(m.caster_user_id);
+		// Every part's casters (migration 0029) resolve from the same batch.
+		for (const p of parseParts(m)) {
+			for (const c of p.casters) {
+				if (c.user_id) userIds.add(c.user_id);
+			}
+		}
 	}
 	const map = new Map<string, UserIdentity>();
 	if (userIds.size === 0) return map;
@@ -1259,6 +1278,8 @@ export async function loadUserIdentitiesForMatches(
 	return map;
 }
 
+// Admin-only per-slot Discord identity threaded into serializeMatch: the raw
+// handle (substitute editor) plus the numeric id (sesh `<@id>` mentions).
 interface MatchWithRound {
 	match: MatchRow;
 	round: RoundRow;
@@ -1275,7 +1296,8 @@ async function loadMatchesWithRound(
 		   m.reported_by_user_id, m.reported_at, m.notes,
 		   m.slot_a_player_index, m.slot_b_player_index, m.match_index,
 		   m.slot_a_username, m.slot_a_user_id, m.slot_b_username, m.slot_b_user_id,
-		   m.scheduled_at, m.stream_url, m.caster_user_id, m.caster_name,
+		   m.parts,
+		   m.parts_rev,
 		   m.created_at,
 		   r.tournament_id, r.phase, r.division, r.round_number,
 		   r.status AS round_status,
@@ -1309,10 +1331,8 @@ async function loadMatchesWithRound(
 			slot_a_user_id: row.slot_a_user_id,
 			slot_b_username: row.slot_b_username,
 			slot_b_user_id: row.slot_b_user_id,
-			scheduled_at: row.scheduled_at,
-			stream_url: row.stream_url,
-			caster_user_id: row.caster_user_id,
-			caster_name: row.caster_name,
+			parts: row.parts,
+			parts_rev: row.parts_rev,
 			created_at: row.created_at,
 		},
 		round: {
