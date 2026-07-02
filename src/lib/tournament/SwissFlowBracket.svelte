@@ -40,12 +40,9 @@
 		// filtering by division before passing in.
 		matches: TournamentMatch[];
 		tournamentSlug: string;
-		// Global "Match N" map (server-assigned match_number); byes absent.
-		matchNumberById: Map<string, number>;
 		// The tournament's map_pool — used to resolve each match's assigned
 		// instance (by map_pool_id) for the options tooltip on its map name.
 		mapPool: MapPoolEntry[];
-		// Global "Match N" numbers (match_id -> number) for the card badge.
 		// eslint-disable-next-line no-unused-vars -- param name is documentary
 		onMatchClick: (matchId: string) => void;
 	};
@@ -57,7 +54,6 @@
 		standings,
 		matches,
 		tournamentSlug,
-		matchNumberById,
 		mapPool,
 		onMatchClick,
 	}: Props = $props();
@@ -378,9 +374,9 @@
 									})}?match={m.match_id}"
 									onclick={(e) => handleMatchClick(m.match_id, e)}
 								>
-									{#if matchNumberById.get(m.match_id) != null}
+									{#if m.match_number != null}
 										<span class="match-num"
-											>{padMatchNumber(matchNumberById.get(m.match_id))}</span
+											>{padMatchNumber(m.match_number)}</span
 										>
 									{/if}
 									<div
