@@ -59,15 +59,15 @@ export const MATCH_COLUMNS: MatchColumn[] = [
 	{
 		key: "scheduled_at",
 		label: "Scheduled start",
-		// Default ordering: scheduled matches first (by date, future → past), then
-		// unscheduled, then completed. Encoded as one ascending numeric key —
-		// scheduled → -epoch (later dates first), the others → sentinels after them.
+		// Only scheduled matches get a sort key (-epoch → later dates first).
+		// Unscheduled and completed return null so the comparator's nulls-last
+		// rule — which runs before the asc/desc flip — pins them to the bottom in
+		// both sort directions rather than floating them to the top on descending.
 		sortValue: (m) => {
 			const g = matchStatusGroup(m);
 			if (g === "scheduled")
 				return -new Date(m.scheduled_at as string).getTime();
-			if (g === "unscheduled") return 1e15;
-			return 2e15; // completed
+			return null; // unscheduled + completed → always last
 		},
 	},
 	{
