@@ -1,4 +1,5 @@
 import type { TournamentMatch, TournamentMatchPart } from "$lib/api-cloud";
+import { nowMs } from "$lib/stores/now.svelte";
 import {
 	CalendarDateTime,
 	Time,
@@ -50,9 +51,10 @@ export function matchDisplayStatus(
 }
 
 // True once any scheduled part's time has passed — the match is underway (or
-// awaiting its result). Recomputed at render (depends on now).
+// awaiting its result). Reactive: reads the shared clock (nowMs), so consumers
+// reclassify as the current time crosses a part's scheduled instant.
 export function hasStartedPart(m: TournamentMatch): boolean {
-	const now = Date.now();
+	const now = nowMs();
 	return matchParts(m).some((p) => {
 		if (p.scheduled_at == null) return false;
 		const t = Date.parse(p.scheduled_at);
@@ -64,9 +66,10 @@ export function hasStartedPart(m: TournamentMatch): boolean {
 // no part is still ahead. A match reads by when it will NEXT be played, so
 // parts already in the past are skipped — a fully-past schedule with no result
 // shows no time (and reads as in_progress via matchDisplayStatus, which checks
-// hasStartedPart first). Recomputed at render (depends on now).
+// hasStartedPart first). Reactive: reads the shared clock (nowMs), so a part
+// drops out of "next" as its scheduled instant passes.
 export function nextScheduledAt(m: TournamentMatch): string | null {
-	const now = Date.now();
+	const now = nowMs();
 	let next: string | null = null;
 	let nextT = Infinity;
 	for (const p of matchParts(m)) {

@@ -23,6 +23,7 @@
 		partitionSchedule,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
+	import { nowMs } from "$lib/stores/now.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
 
@@ -59,7 +60,20 @@
 	const MAX_ROWS = 5;
 
 	const partition = $derived(partitionSchedule(matches));
-	const upNext = $derived(partition.scheduled.slice(0, MAX_ROWS));
+	// Only sittings still ahead belong in "up next" — a part whose time has
+	// passed (an already-played earlier sitting of a split match, or a fully
+	// overdue match) isn't upcoming and would otherwise sort to the top under a
+	// panel titled "Upcoming". Reactive via nowMs(), so a sitting drops off as
+	// its scheduled time arrives. Overdue/in-progress matches surface on the full
+	// matches page (its "In progress" filter) and the bracket status chips.
+	const upNext = $derived(
+		partition.scheduled
+			.filter((np) => {
+				const t = Date.parse(np.part.scheduled_at ?? "");
+				return !Number.isNaN(t) && t >= nowMs();
+			})
+			.slice(0, MAX_ROWS),
+	);
 
 	const matchesHref = $derived(
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
