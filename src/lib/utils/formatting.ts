@@ -115,12 +115,31 @@ export function formatDate(dateStr: string | null | undefined): string {
 }
 
 /**
+ * Whether an instant's year, read in the given timezone, differs from the
+ * current year in that same zone. Schedule displays normally omit the year (it's
+ * almost always "this year" and clutters the line), but that hides an off-by-a-
+ * year date — a match mistakenly set to 2025 instead of 2026 renders as a bare
+ * "Jul 2" and masquerades as a same-year date. Callers add the year only when
+ * this returns true, so a wrong year is immediately visible.
+ *
+ * @param d - the instant
+ * @param timeZone - IANA zone name, or undefined for the viewer's local zone
+ */
+function isDifferentYear(d: Date, timeZone: string | undefined): boolean {
+	const yearOf = (x: Date) =>
+		x.toLocaleDateString("en-US", { timeZone, year: "numeric" });
+	return yearOf(d) !== yearOf(new Date());
+}
+
+/**
  * Formats an ISO instant as a UTC date + 24h time for display, e.g.
  * "May 30, 14:30". Tournament match scheduling is entered and shown in UTC
- * (localization is a later iteration); callers append a " UTC" label.
+ * (localization is a later iteration); callers append a " UTC" label. The year
+ * is shown only when it isn't the current year (see {@link isDifferentYear}).
  *
  * @param iso - ISO-8601 instant string, or null/undefined
- * @returns "MMM D, HH:MM" in UTC, or "" when the input is empty/invalid
+ * @returns "MMM D, HH:MM" (or "MMM D, YYYY, HH:MM" off-year) in UTC, or "" when
+ *   the input is empty/invalid
  */
 export function formatScheduledUtc(iso: string | null | undefined): string {
 	if (!iso) return "";
@@ -130,6 +149,7 @@ export function formatScheduledUtc(iso: string | null | undefined): string {
 		timeZone: "UTC",
 		month: "short",
 		day: "numeric",
+		...(isDifferentYear(d, "UTC") ? { year: "numeric" as const } : {}),
 		hour: "2-digit",
 		minute: "2-digit",
 		hour12: false,
@@ -189,10 +209,19 @@ export function formatScheduledWithLocal(
 			.formatToParts(d)
 			.find((p) => p.type === "timeZoneName")?.value ?? "";
 
+	// The local date is shown only on a day rollover; include its year when it
+	// isn't the current year, mirroring the UTC primary (formatScheduledUtc).
+	// The rollover check itself stays year-agnostic — a same-instant UTC/local
+	// year gap only happens across the New Year boundary, which already differs
+	// by day, so the day comparison catches it.
+	const localDateDisplay = isDifferentYear(d, undefined)
+		? d.toLocaleDateString("en-CA", { ...dateOpts, year: "numeric" })
+		: localDate;
+
 	const local =
 		localDate === utcDate
 			? `${localTime} ${tzName}`
-			: `${localDate}, ${localTime} ${tzName}`;
+			: `${localDateDisplay}, ${localTime} ${tzName}`;
 
 	return `${utc} UTC (${local.trim()})`;
 }
@@ -224,6 +253,7 @@ export function formatScheduledInZone(
 	const dateTime = d.toLocaleString("en-CA", {
 		month: "short",
 		day: "numeric",
+		...(isDifferentYear(d, undefined) ? { year: "numeric" as const } : {}),
 		hour: "2-digit",
 		minute: "2-digit",
 		hour12: false,

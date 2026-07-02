@@ -240,13 +240,11 @@
 	const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 	const pad = (n: number) => String(n).padStart(2, "0");
 
+	// Seed the calendar on the current month. (It used to open on the earliest
+	// scheduled match's month, but a single stray/mis-dated match — e.g. one set
+	// to the wrong year — could park the calendar on an empty month far from the
+	// real schedule, hiding every other match behind the month pager.)
 	function initialMonth(): { year: number; month: number } {
-		const first = partition.scheduled[0]?.scheduled_at;
-		const key = first ? scheduledDayKey(first, zone) : null;
-		if (key) {
-			const [y, m] = key.split("-").map(Number);
-			return { year: y, month: m - 1 };
-		}
 		const now = new Date();
 		return { year: now.getFullYear(), month: now.getMonth() };
 	}
