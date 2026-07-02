@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { resolve } from "$app/paths";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import type {
 		CombinedQualifier,
@@ -104,7 +103,7 @@
 	const showSettings = $derived(isAdmin || tournament.status !== "setup");
 </script>
 
-<header class="mb-6">
+<header class="mb-3">
 	<!-- Nav trail with the status badge to its right; actions on the far right.
 	     The tournament name already lives in the trail, so no separate title. -->
 	<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
@@ -118,19 +117,6 @@
 		</div>
 
 		<div class="flex flex-shrink-0 items-center gap-2">
-			{#if tournament.status !== "setup"}
-				<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -- resolve() result; rule doesn't see resolve() through the href expression -->
-				<a
-					href={resolve("/tournaments/[slug]/matches", {
-						slug: tournament.slug,
-					})}
-					class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan opacity-80 transition-opacity hover:opacity-100"
-					aria-label="Matches"
-					title="Matches"
-				>
-					Matches
-				</a>
-			{/if}
 			{#if hasViewerSlot}
 				<SignedUpPopover {tournament} {busy} {onWithdraw} />
 			{/if}
