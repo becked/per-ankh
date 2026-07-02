@@ -18,6 +18,7 @@
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
+	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SchedulePopover from "$lib/tournament/SchedulePopover.svelte";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
@@ -38,7 +39,10 @@
 	} from "$lib/tournament/match-occupant";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
+		atlasMapUrl,
 		distinguishingOptions,
+		mapCaveatNote,
+		mapInAtlas,
 		mapPoolLabel,
 		poolEntryById,
 	} from "$lib/tournament/map-script-options";
@@ -55,6 +59,9 @@
 		slotLabels: Record<string, string>;
 		slotUserIds: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
+		// Each slot's signup answer (timezone/availability), admin-only — drives
+		// the "Copy DM" scheduling template. Empty/null when unavailable.
+		slotSignupAnswers?: Record<string, string | null>;
 		user: UserMe | null;
 		// Global "Match N" (server-assigned match_number), supplied by parents
 		// that have the full match list. Omitted for byes / placeholder matches
@@ -81,6 +88,7 @@
 		slotLabels,
 		slotUserIds,
 		slotAvatars,
+		slotSignupAnswers,
 		user,
 		matchNumber,
 		onSubstitute,
@@ -150,6 +158,72 @@
 	// substitute anyway; unclaimed slots have handle == typed name == label).
 	const slotAHandle = $derived(match.slot_a_discord_username ?? slotALabel);
 	const slotBHandle = $derived(match.slot_b_discord_username ?? slotBLabel);
+
+	// Copy-paste of the Discord thread title — "Match N - Player1 v Player2" —
+	// using each side's display name. Only offered when the parent supplied a
+	// (global) match number.
+	const threadTitle = $derived(
+		matchNumber != null
+			? `Match ${padMatchNumber(matchNumber)} - ${slotALabel} v ${slotBLabel}`
+			: null,
+	);
+
+	// Admin "easy DM" — a ready-to-paste Discord message pairing the two players
+	// for their round: match number, map (name + atlas deep link), scheduling +
+	// DLC/host instructions, each player's timezone (from their signup answer),
+	// and the caster-thread nudge. Only for a real, two-player match with a
+	// number; timezones fall back to a placeholder when the answer is missing.
+	const dmText = $derived.by(() => {
+		if (matchNumber == null || isPlaceholder || match.slot_b_id == null) {
+			return null;
+		}
+		const round = match.round_number ?? "?";
+		const caveat = matchEntry ? mapCaveatNote(matchEntry) : "";
+		const caveatSuffix = caveat ? `\n${caveat}` : "";
+		let mapLine: string;
+		if (!mapName) {
+			mapLine = "Your map is **TBD**";
+		} else if (matchEntry && mapInAtlas(matchEntry)) {
+			// Link the map name straight to its atlas page (Discord masked link).
+			mapLine = `Your map is [**${mapName}**](${atlasMapUrl(matchEntry)})${caveatSuffix}`;
+		} else {
+			// Not on the atlas — show the name plain, no dead link.
+			mapLine = `Your map is **${mapName}**${caveatSuffix}`;
+		}
+		const tzA =
+			slotSignupAnswers?.[match.slot_a_id]?.trim() || "(timezone TBD)";
+		const tzB =
+			slotSignupAnswers?.[match.slot_b_id]?.trim() || "(timezone TBD)";
+		// Caster-thread link, resolved from the tournament's admin-curated Links
+		// (first label containing "cast", e.g. "Caster thread") rather than a
+		// hardcoded channel — each tournament points at its own thread. The
+		// caster paragraph appears whenever the link is configured.
+		const casterLink = tournament.links.find((l) => /cast/i.test(l.label))?.url;
+		return [
+			`Match ${padMatchNumber(matchNumber)} - ${slotALabel} v ${slotBLabel}`,
+			"",
+			`Hello! You're matched in Round ${round} of ${tournament.name}.`,
+			"",
+			mapLine,
+			"",
+			"Please work together to schedule a time for your match",
+			"",
+			"(Also please confirm at least one of you has all the DLC and thus can host; if both of you have all the DLC, the second listed player can host if they prefer)",
+			"",
+			`${slotALabel} is ${tzA}`,
+			`and ${slotBLabel} is ${tzB}`,
+			...(casterLink
+				? [
+						"",
+						"Once you confirm a time, please post in the caster thread to help find a caster!",
+						"",
+						casterLink,
+						"",
+						"We want to cast as many matches as we can!",
+					]
+				: []),
+		].join("\n");
+	});
 
 	const winnerSide = $derived<"a" | "b" | null>(
 		match.winner_slot_id === null
@@ -626,7 +700,26 @@
 					{#if match.round_number}
 						· Round {match.round_number}
 					{/if}
+					{#if matchNumber != null}
+						· Match {padMatchNumber(matchNumber)}
+					{/if}
 				</span>
+				{#if threadTitle}
+					<CopyButton
+						text={() => threadTitle}
+						label="Copy thread title"
+						title={`Copy "${threadTitle}" for the Discord thread`}
+						class="inline-flex items-center gap-1 rounded border border-surface px-1.5 py-0.5 text-[11px] text-tan hover:bg-surface-hover"
+					/>
+				{/if}
+				{#if isAdmin && dmText}
+					<CopyButton
+						text={() => dmText}
+						label="Copy DM"
+						title="Copy a ready-to-paste Discord DM pairing these two players for their match"
+						class="inline-flex items-center gap-1 rounded border border-surface px-1.5 py-0.5 text-[11px] text-tan hover:bg-surface-hover"
+					/>
+				{/if}
 			</div>
 		</div>
 		<div class="flex flex-shrink-0 items-start gap-2">
@@ -767,9 +860,20 @@
 			<div class="flex items-center gap-1.5 text-sm text-tan">
 				<img src={MAP_ICON} alt="" class="h-4 w-4 shrink-0 opacity-80" />
 				<span class="truncate" title={mapName ?? undefined}>
-					{#if mapName}{mapName}{:else}<span class="opacity-60"
-							>(no map set)</span
-						>{/if}
+					{#if mapName}
+						{#if matchEntry && mapInAtlas(matchEntry)}
+							<!-- Link the map name to its atlas page (external; not an app
+							     route, so resolve() doesn't apply). -->
+							<!-- eslint-disable svelte/no-navigation-without-resolve -->
+							<a
+								href={atlasMapUrl(matchEntry)}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="hover:text-orange hover:underline">{mapName}</a
+							>
+							<!-- eslint-enable svelte/no-navigation-without-resolve -->
+						{:else}{mapName}{/if}
+					{:else}<span class="opacity-60">(no map set)</span>{/if}
 				</span>
 				{#if canEditMap}
 					<button
