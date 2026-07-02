@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import { resolve } from "$app/paths";
 	import type {
 		MapPoolEntry,
@@ -39,6 +40,8 @@
 		// filtering by division before passing in.
 		matches: TournamentMatch[];
 		tournamentSlug: string;
+		// Global "Match N" map (server-assigned match_number); byes absent.
+		matchNumberById: Map<string, number>;
 		// The tournament's map_pool — used to resolve each match's assigned
 		// instance (by map_pool_id) for the options tooltip on its map name.
 		mapPool: MapPoolEntry[];
@@ -54,6 +57,7 @@
 		standings,
 		matches,
 		tournamentSlug,
+		matchNumberById,
 		mapPool,
 		onMatchClick,
 	}: Props = $props();
@@ -374,6 +378,11 @@
 									})}?match={m.match_id}"
 									onclick={(e) => handleMatchClick(m.match_id, e)}
 								>
+									{#if matchNumberById.get(m.match_id) != null}
+										<span class="match-num"
+											>{padMatchNumber(matchNumberById.get(m.match_id))}</span
+										>
+									{/if}
 									<div
 										class="match-row"
 										class:row-active={aOnPath}
@@ -626,6 +635,20 @@
 		transition: background-color 0.1s;
 		min-width: 0;
 	}
+	.match-num {
+		position: absolute;
+		top: 0.2rem;
+		right: 0.35rem;
+		font-family:
+			ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+			monospace;
+		font-size: 0.6rem;
+		line-height: 1;
+		color: rgb(var(--color-tan));
+		opacity: 0.45;
+		pointer-events: none;
+	}
+
 	.match:hover {
 		background-color: rgb(var(--color-surface-sunken));
 	}

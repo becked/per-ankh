@@ -70,6 +70,7 @@ function match(over: Partial<MatchRow> = {}): MatchRow {
 		slot_b_user_id: null,
 		parts: "[]",
 		parts_rev: 0,
+		match_number: null,
 		created_at: "2026-01-01",
 		...over,
 	};
