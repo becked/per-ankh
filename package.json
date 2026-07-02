@@ -38,7 +38,7 @@
 		"@deck.gl/core": "^9.2.3",
 		"@deck.gl/layers": "^9.2.3",
 		"bits-ui": "^2.14.2",
-		"echarts": "^6.0.0",
+		"echarts": "^6.1.0",
 		"fast-xml-parser": "^5.7.3",
 		"fflate": "^0.8.2"
 	},
@@ -71,6 +71,7 @@
 		"vite": "^6.0.3"
 	},
 	"overrides": {
-		"esbuild": "0.28.1"
+		"esbuild": "0.28.1",
+		"cookie": "^0.7.0"
 	}
 }
