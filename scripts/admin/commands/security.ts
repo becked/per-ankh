@@ -3,7 +3,7 @@
 //   nuke-user <user_id>  — delete every cloud game owned by the user, their R2
 //                          blobs, and the user record itself
 
-import { d1Exec, d1Query, r2DeleteMany, sqlStr } from "../wrangler";
+import { d1Batch, d1Exec, d1Query, r2DeleteMany, sqlStr } from "../wrangler";
 import { deleteGames } from "./games";
 import { confirmNuke } from "../../lib/confirm";
 import {
@@ -206,6 +206,14 @@ export async function runNukeKey(
 // delete games BEFORE users. Cascades handle player_summaries, game_player_turn,
 // tech_events, law_events (from games), and collections, user_online_ids
 // (from users).
+//
+// Tournament tables ALSO reference users(user_id) but WITHOUT ON DELETE CASCADE
+// (tournament_admins, tournament_slots, tournament_matches.reported_by_user_id,
+// tournament_beta_users.user_id/granted_by_user_id). D1 enforces FKs, so a bare
+// DELETE FROM users throws for anyone who ever touched a tournament — we clear
+// those references first (null the nullable ones, delete the NOT NULL / own
+// rows). The 0024/0025 slot_a/b_user_id and caster_user_id columns are plain
+// TEXT with no FK, so they don't block and are left as a historical snapshot.
 
 export async function runNukeUser(
 	argv: string[],
@@ -238,8 +246,10 @@ export async function runNukeUser(
 		const yes = await confirmNuke(
 			`NUKE USER: ${user.display_name} (${userId})\n` +
 				`  1. Delete ${gameCount} game(s) + their R2 blobs (json.gz + zip)\n` +
-				`  2. Delete the user record + collections + online_ids\n` +
-				`  3. KV sessions are NOT cleared — stale tokens will 401 on next call`,
+				`  2. Clear tournament references (admin grants + own beta grant removed;\n` +
+				`     slot claims, reported-by, and granted-by nulled)\n` +
+				`  3. Delete the user record + collections + online_ids\n` +
+				`  4. KV sessions are NOT cleared — stale tokens will 401 on next call`,
 		);
 		if (!yes) {
 			info("Cancelled.");
@@ -252,6 +262,19 @@ export async function runNukeUser(
 	} else {
 		info("User has no games.");
 	}
+
+	// Clear non-cascading tournament references before the user delete (see the
+	// header comment). Null the nullable references to preserve tournament
+	// history; delete the rows keyed NOT NULL on this user (their admin grants)
+	// and their own beta-allowlist entry.
+	info("Clearing tournament references...");
+	await d1Batch([
+		`DELETE FROM tournament_admins WHERE user_id = ${sqlStr(userId)}`,
+		`DELETE FROM tournament_beta_users WHERE user_id = ${sqlStr(userId)}`,
+		`UPDATE tournament_beta_users SET granted_by_user_id = NULL WHERE granted_by_user_id = ${sqlStr(userId)}`,
+		`UPDATE tournament_slots SET user_id = NULL WHERE user_id = ${sqlStr(userId)}`,
+		`UPDATE tournament_matches SET reported_by_user_id = NULL WHERE reported_by_user_id = ${sqlStr(userId)}`,
+	]);
 
 	info("Deleting user record...");
 	await d1Exec(`DELETE FROM users WHERE user_id = ${sqlStr(userId)}`);
