@@ -1,10 +1,15 @@
 import { describe, expect, it } from "vitest";
-import { parseLinks } from "./data";
-import type { TournamentRow } from "./data";
+import { parseLinks, parseParts } from "./data";
+import type { MatchRow, TournamentRow } from "./data";
 
 // parseLinks only reads t.links; build a minimal row carrying just that column.
 function rowWithLinks(links: string): TournamentRow {
 	return { links } as TournamentRow;
+}
+
+// parseParts only reads m.parts; build a minimal match row carrying just that.
+function rowWithParts(parts: string): MatchRow {
+	return { parts } as MatchRow;
 }
 
 describe("parseLinks", () => {
@@ -61,6 +66,114 @@ describe("parseLinks", () => {
 		);
 		expect(parseLinks(row)).toEqual([
 			{ label: "safe", url: "https://safe.com" },
+		]);
+	});
+});
+
+describe("parseParts", () => {
+	it("parses a well-formed parts array with casters and vods", () => {
+		const row = rowWithParts(
+			JSON.stringify([
+				{
+					id: "p1",
+					scheduled_at: "2026-06-15T14:30:00.000Z",
+					casters: [
+						{ user_id: null, name: "Bob" },
+						{ user_id: "u".repeat(21), name: "handle" },
+					],
+					vods: [
+						{ url: "https://youtube.com/watch?v=a", label: "POV" },
+						{ url: "https://twitch.tv/x", label: null },
+					],
+				},
+				{
+					id: "p2",
+					scheduled_at: null,
+					casters: [],
+					vods: [],
+				},
+			]),
+		);
+		expect(parseParts(row)).toEqual([
+			{
+				id: "p1",
+				scheduled_at: "2026-06-15T14:30:00.000Z",
+				casters: [
+					{ user_id: null, name: "Bob" },
+					{ user_id: "u".repeat(21), name: "handle" },
+				],
+				vods: [
+					{ url: "https://youtube.com/watch?v=a", label: "POV" },
+					{ url: "https://twitch.tv/x", label: null },
+				],
+			},
+			{
+				id: "p2",
+				scheduled_at: null,
+				casters: [],
+				vods: [],
+			},
+		]);
+	});
+
+	it("drops empty caster entries (neither user_id nor name)", () => {
+		const row = rowWithParts(
+			JSON.stringify([
+				{
+					id: "p1",
+					casters: [
+						{ user_id: null, name: null }, // empty → dropped
+						{ user_id: null, name: "Keeper" },
+						"nope", // non-object → dropped
+					],
+					vods: [],
+				},
+			]),
+		);
+		expect(parseParts(row)[0].casters).toEqual([{ user_id: null, name: "Keeper" }]);
+	});
+
+	it("returns [] for the empty-array default and on corruption", () => {
+		expect(parseParts(rowWithParts("[]"))).toEqual([]);
+		expect(parseParts(rowWithParts("{not json"))).toEqual([]);
+		expect(parseParts(rowWithParts('{"id":"p1"}'))).toEqual([]);
+	});
+
+	it("skips entries without a string id and coerces bad fields to null", () => {
+		const row = rowWithParts(
+			JSON.stringify([
+				{ scheduled_at: "x", vods: [] }, // no id → dropped
+				{ id: 5, vods: [] }, // non-string id → dropped
+				{ id: "ok", scheduled_at: 123, casters: "nope", vods: "nope" },
+			]),
+		);
+		expect(parseParts(row)).toEqual([
+			{
+				id: "ok",
+				scheduled_at: null,
+				casters: [],
+				vods: [],
+			},
+		]);
+	});
+
+	it("drops vods whose url isn't http(s) — defense-in-depth", () => {
+		const row = rowWithParts(
+			JSON.stringify([
+				{
+					id: "p1",
+					vods: [
+						{ url: "https://safe.com", label: null },
+						// eslint-disable-next-line no-script-url
+						{ url: "javascript:alert(1)", label: "xss" },
+						{ url: "data:text/html,x", label: null },
+						{ label: "no url" },
+					],
+				},
+			]),
+		);
+		expect(parseParts(row)[0].vods).toEqual([
+			{ url: "https://safe.com", label: null },
 		]);
 	});
 });
