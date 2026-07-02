@@ -36,9 +36,11 @@
 	import {
 		MATCH_COLUMNS,
 		matchStatusGroup,
+		matchCasterGroup,
 		DEFAULT_MATCHES_TABLE_STATE,
 		type MatchSortContext,
 		type MatchStatusGroup,
+		type MatchCasterGroup,
 	} from "$lib/tournament/matches-table";
 	import {
 		partitionSchedule,
@@ -95,6 +97,9 @@
 	// statusFilter is a separate multi-toggle (completed off by default).
 	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
 	let statusFilter = $state<MatchStatusGroup[]>(["scheduled", "unscheduled"]);
+	// Caster presence toggle — both on by default (show every match regardless
+	// of whether a caster is assigned).
+	let casterFilter = $state<MatchCasterGroup[]>(["casted", "uncasted"]);
 	const statusItemClass =
 		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-surface-raised";
 
@@ -145,6 +150,8 @@
 		let list = tableEligible.filter((m) =>
 			statusFilter.includes(matchStatusGroup(m) as MatchStatusGroup),
 		);
+
+		list = list.filter((m) => casterFilter.includes(matchCasterGroup(m)));
 
 		if (selectedBrackets.length > 0) {
 			list = list.filter((m) => selectedBrackets.includes(bracketKey(m)));
@@ -471,8 +478,8 @@
 									</TableFilterColumn>
 
 									<div class="min-w-0 flex-1">
-										<!-- Status filter above the table, styled like the bracket view tabs. -->
-										<div class="mb-3 flex justify-end">
+										<!-- Status + caster filters above the table, styled like the bracket view tabs. -->
+										<div class="mb-3 flex flex-wrap justify-end gap-2">
 											<ToggleGroup.Root
 												type="multiple"
 												value={statusFilter}
@@ -499,6 +506,29 @@
 													class={statusItemClass}
 												>
 													Completed
+												</ToggleGroup.Item>
+											</ToggleGroup.Root>
+
+											<ToggleGroup.Root
+												type="multiple"
+												value={casterFilter}
+												onValueChange={(v) =>
+													(casterFilter = v as MatchCasterGroup[])}
+												class="flex overflow-hidden rounded-lg border-2 border-surface"
+												style="background-color: rgb(var(--color-surface));"
+												aria-label="Caster"
+											>
+												<ToggleGroup.Item
+													value="casted"
+													class={statusItemClass}
+												>
+													Casted
+												</ToggleGroup.Item>
+												<ToggleGroup.Item
+													value="uncasted"
+													class={statusItemClass}
+												>
+													Uncasted
 												</ToggleGroup.Item>
 											</ToggleGroup.Root>
 										</div>
@@ -557,10 +587,14 @@
 																		{:else}
 																			Not scheduled
 																		{/if}
-																	{:else if column.key === "player_a"}
-																		{@render playerCell(m, "a")}
-																	{:else if column.key === "player_b"}
-																		{@render playerCell(m, "b")}
+																	{:else if column.key === "match"}
+																		<span
+																			class="inline-flex items-center gap-2"
+																		>
+																			{@render playerCell(m, "a")}
+																			<span class="opacity-60">v</span>
+																			{@render playerCell(m, "b")}
+																		</span>
 																	{:else if column.key === "bracket"}
 																		{phaseLabel(m) || "—"}
 																	{:else if column.key === "round"}

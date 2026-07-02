@@ -15,6 +15,14 @@ export function matchStatusGroup(m: TournamentMatch): MatchStatusGroup | null {
 	return null; // bye
 }
 
+// Caster presence, as a filter group parallel to the status toggle: a match
+// either has a caster assigned or it doesn't.
+export type MatchCasterGroup = "casted" | "uncasted";
+
+export function matchCasterGroup(m: TournamentMatch): MatchCasterGroup {
+	return m.caster_display_name ? "casted" : "uncasted";
+}
+
 // Context the sort comparators need beyond the match itself: the live slot→name
 // map (player-name columns) and the bracket label fn (depends on the tournament's
 // division names, so it's supplied by the page rather than hardcoded here).
@@ -37,14 +45,16 @@ export interface MatchColumn {
 // config from rendering. Order here is the rendered column order.
 export const MATCH_COLUMNS: MatchColumn[] = [
 	{
-		key: "bracket",
-		label: "Bracket",
-		sortValue: (m, ctx) => ctx.phaseLabel(m).toLowerCase(),
-	},
-	{
-		key: "round",
-		label: "Round",
-		sortValue: (m) => m.round_number ?? null,
+		key: "match",
+		label: "Match",
+		// One matchup column ("A v B"); sorts by the pairing text so the two
+		// players sort together. Byes never reach the table (filtered out), so
+		// both sides always resolve to a real name here.
+		sortValue: (m, ctx) => {
+			const a = matchSlotDisplayName(m, "a", ctx.slotLabels) ?? "";
+			const b = matchSlotDisplayName(m, "b", ctx.slotLabels) ?? "";
+			return `${a} v ${b}`.toLowerCase();
+		},
 	},
 	{
 		key: "scheduled_at",
@@ -61,16 +71,14 @@ export const MATCH_COLUMNS: MatchColumn[] = [
 		},
 	},
 	{
-		key: "player_a",
-		label: "First player",
-		sortValue: (m, ctx) =>
-			(matchSlotDisplayName(m, "a", ctx.slotLabels) ?? "").toLowerCase(),
+		key: "bracket",
+		label: "Bracket",
+		sortValue: (m, ctx) => ctx.phaseLabel(m).toLowerCase(),
 	},
 	{
-		key: "player_b",
-		label: "Second player",
-		sortValue: (m, ctx) =>
-			(matchSlotDisplayName(m, "b", ctx.slotLabels) ?? "").toLowerCase(),
+		key: "round",
+		label: "Round",
+		sortValue: (m) => m.round_number ?? null,
 	},
 	{
 		key: "caster",
