@@ -1,5 +1,24 @@
 # Changelog
 
+## [2026-07-02-18f6fb3] - 2026-07-02
+
+### Features
+
+- (tournament) rework matches list columns and add caster filter — [fe26995](https://github.com/becked/per-ankh/commit/fe26995a77d9426e08afbdd08e5124533636b34c)
+- (home) add 2026 tournament banner and reorder mobile sections — [18f6fb3](https://github.com/becked/per-ankh/commit/18f6fb339b3c85c9ca722583c7166e1d943560ee)
+
+### Fixes
+
+- (admin) clear tournament references in nuke-user before deleting user — [2644703](https://github.com/becked/per-ankh/commit/264470310fb712478728b20b3d166db057cbd6d6)
+- (tournament) validate transition-championship body before closing rounds — [d78d84f](https://github.com/becked/per-ankh/commit/d78d84fa0947e237e97faa4960a32919870f291a)
+- (tournament) surface off-year match dates and seed calendar on current month — [8b703e8](https://github.com/becked/per-ankh/commit/8b703e81c69dbed22f85328cf4afdf1f83fd58a7)
+- (tournament) keep non-scheduled matches last in both sort directions — [cf141f1](https://github.com/becked/per-ankh/commit/cf141f1b681a5a24bdb10a219e01fc854c866f5c)
+
+### Other
+
+- (deps) bump echarts to 6.1.0 and force cookie >=0.7.0 — [c747e6e](https://github.com/becked/per-ankh/commit/c747e6ea03f20a1e2a58284ba94e783344b5a95a)
+- (tournament) note #50 transition-validation fix and user-deletion FK gotcha — [9668850](https://github.com/becked/per-ankh/commit/966885048f5e213d547be3244a7ae469f8bcb898)
+
 ## [2026-07-01-436f9ad] - 2026-07-01
 
 ### Features
