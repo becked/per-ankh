@@ -62,11 +62,12 @@ import {
 	MapConfigError,
 	matchRowToRef,
 	parseMapPool,
+	parseParts,
 	slotRowToRef,
 	tournamentConfig,
 	type MatchPart,
 	type MatchPartCaster,
-	type MatchPartVod,
+	type MatchPartStream,
 	type MatchRow,
 	type RoundRow,
 	type SlotRow,
@@ -1876,7 +1877,7 @@ export async function handlePatchMatchMap(
 // ----------------------------------------------------------------------
 // PATCH /v1/tournaments/:id/matches/:match_id/schedule — replace the match's
 // scheduled parts (migration 0029): each part carries its own time, caster, and
-// VOD links. Replace-all over the full parts list. Admin OR participant (see
+// stream links. Replace-all over the full parts list. Admin OR participant (see
 // authedMatchScheduler).
 // ----------------------------------------------------------------------
 
@@ -1986,8 +1987,8 @@ export async function handlePatchMatchSchedule(
 	const { match, isAdmin } = a;
 
 	// Byes are auto-resolved and never played, so there's nothing to schedule or
-	// attach VODs to. Every other status is editable: pending to coordinate the
-	// upcoming game, complete/forfeit to attach VODs and casters after the fact.
+	// attach streams to. Every other status is editable: pending to coordinate the
+	// upcoming game, complete/forfeit to attach streams and casters after the fact.
 	if (match.status === "bye") {
 		return errorResponse(
 			"Can't schedule a bye match",
@@ -1996,8 +1997,8 @@ export async function handlePatchMatchSchedule(
 			"MATCH_NOT_PENDING",
 		);
 	}
-	// Decided matches are an archive (VODs, caster credits): editing them is
-	// admin-only. A participant could otherwise wipe every VOD on a match they
+	// Decided matches are an archive (streams, caster credits): editing them is
+	// admin-only. A participant could otherwise wipe every stream on a match they
 	// just lost — replace-all has no notion of an additive-only edit.
 	if (match.status !== "pending" && !isAdmin) {
 		return errorResponse(
@@ -2055,9 +2056,9 @@ export async function handlePatchMatchSchedule(
 		let id = p.id;
 		if (!id || seenIds.has(id)) id = nanoid(12);
 		seenIds.add(id);
-		const vods: MatchPartVod[] = p.vods.map((vod) => ({
-			url: vod.url,
-			label: vod.label?.trim() ? vod.label.trim() : null,
+		const streams: MatchPartStream[] = p.streams.map((stream) => ({
+			url: stream.url,
+			label: stream.label?.trim() ? stream.label.trim() : null,
 		}));
 		// Linked casters snapshot the canonical username; free-text casters keep
 		// their typed name. Empty entries (neither set) are dropped.
@@ -2073,29 +2074,20 @@ export async function handlePatchMatchSchedule(
 				return { user_id: null, name: name ? name : null };
 			})
 			.filter((c) => c.user_id !== null || c.name !== null);
-		return { id, scheduled_at: p.scheduled_at, casters, vods };
+		return { id, scheduled_at: p.scheduled_at, casters, streams };
 	});
 
-	// Optimistic concurrency: when the client sends the parts_rev its editor
-	// loaded, reject if the row has moved on (another admin's save, or any
-	// concurrent parts writer) instead of silently erasing their change. The
-	// UPDATE itself is also conditioned on the rev we just read, closing the
-	// read-check-write gap within this request.
-	if (
-		patch.expected_rev !== undefined &&
-		patch.expected_rev !== match.parts_rev
-	) {
-		return errorResponse(
-			"The match schedule changed while you were editing — reload and retry",
-			409,
-			cors,
-			"CONFLICT",
-		);
-	}
+	// Optimistic concurrency in a single conditional write: the UPDATE lands only
+	// while the row is still at the rev the caller expected — the parts_rev the
+	// editor loaded (expected_rev) or, for non-editor callers that omit it, the
+	// rev we just read. A concurrent writer (another admin's save, a caster
+	// sign-up) has since bumped parts_rev, so the WHERE matches nothing and we
+	// 409 instead of silently erasing their change.
+	const expectedRev = patch.expected_rev ?? match.parts_rev;
 	const write = await env.SHARE_DB.prepare(
 		"UPDATE tournament_matches SET parts = ?, parts_rev = parts_rev + 1 WHERE match_id = ? AND parts_rev = ?",
 	)
-		.bind(JSON.stringify(parts), matchId, match.parts_rev)
+		.bind(JSON.stringify(parts), matchId, expectedRev)
 		.run();
 	if (write.meta.changes === 0) {
 		return errorResponse(
@@ -2112,7 +2104,15 @@ export async function handlePatchMatchSchedule(
 		a.userId,
 		tournamentId,
 		"match_schedule_patched",
-		{ match_id: matchId },
+		// Replace-all over a curated archive (stream/caster credits) with no
+		// history table: record enough to spot and diagnose a destructive save —
+		// the rev overwritten and the before/after part counts.
+		{
+			match_id: matchId,
+			prev_parts_rev: match.parts_rev,
+			prev_part_count: parseParts(match).length,
+			new_part_count: parts.length,
+		},
 	);
 	// Return the parsed parts we just wrote (canonical caster_name snapshotted)
 	// rather than the raw row, whose `parts` is a JSON string. Caster display

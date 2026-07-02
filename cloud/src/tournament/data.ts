@@ -139,9 +139,9 @@ export interface MatchRow {
 	slot_b_user_id: string | null;
 	// Scheduled parts (migration 0029), a raw JSON array parsed by parseParts.
 	// A match is one game played across one or more sittings ("parts"); each
-	// part carries its own schedule, casters, and VOD links. Editable by an admin
+	// part carries its own schedule, casters, and stream links. Editable by an admin
 	// or either participant on any non-bye match (scheduling ahead while pending,
-	// attaching VODs after it's played). Supersedes the per-match 0025 schedule
+	// attaching streams after it's played). Supersedes the per-match 0025 schedule
 	// columns (scheduled_at/stream_url/caster_*), which still exist on the row but
 	// are backfilled into parts and no longer read (omitted here so nothing
 	// reaches for them by mistake).
@@ -152,10 +152,10 @@ export interface MatchRow {
 	created_at: string;
 }
 
-// One VOD recording for a part: a URL plus an optional human tag distinguishing
+// One stream recording for a part: a URL plus an optional human tag distinguishing
 // it from the others on the same part ("alcaras POV", "Cast"). label is null
 // when untagged.
-export interface MatchPartVod {
+export interface MatchPartStream {
 	url: string;
 	label: string | null;
 }
@@ -176,7 +176,7 @@ export interface MatchPart {
 	id: string;
 	scheduled_at: string | null;
 	casters: MatchPartCaster[];
-	vods: MatchPartVod[];
+	streams: MatchPartStream[];
 }
 
 export interface TournamentEnv {
@@ -465,7 +465,7 @@ export function parseMapPool(t: TournamentRow): MapPoolEntry[] {
 // entries are skipped.
 //
 // Only plain web URLs are allowed anywhere a stored link is rendered as an
-// href (tournament links, part VODs) — anything else (javascript:, data:,
+// href (tournament links, part streams) — anything else (javascript:, data:,
 // mailto:, …) is dropped on read as defense-in-depth against hand-edited rows.
 function isSafeHttpUrl(url: string): boolean {
 	try {
@@ -492,11 +492,7 @@ export function parseLinks(t: TournamentRow): { label: string; url: string }[] {
 		if (typeof raw !== "object" || raw === null) continue;
 		const e = raw as Record<string, unknown>;
 		if (typeof e.label !== "string" || typeof e.url !== "string") continue;
-		try {
-			if (!isSafeHttpUrl(e.url)) continue;
-		} catch {
-			continue;
-		}
+		if (!isSafeHttpUrl(e.url)) continue;
 		out.push({ label: e.label, url: e.url });
 	}
 	return out;
@@ -505,10 +501,10 @@ export function parseLinks(t: TournamentRow): { label: string; url: string }[] {
 // Parse the JSON-encoded parts column (migration 0029) into MatchPart[].
 // Lenient like parseLinks: bad JSON / non-array degrades to [] rather than
 // throwing (parts aren't load-bearing for tournament integrity), and malformed
-// entries/VODs are skipped. Order is preserved — it's the part display order.
+// entries/streams are skipped. Order is preserved — it's the part display order.
 //
-// SECURITY: drops any VOD whose url isn't http(s). The write path already
-// enforces a youtube/twitch host allowlist (PatchMatchPartsSchema), but VOD
+// SECURITY: drops any stream whose url isn't http(s). The write path already
+// enforces a youtube/twitch host allowlist (PatchMatchPartsSchema), but stream
 // urls render as hrefs, so this is defense-in-depth against a hand-edited or
 // corrupted blob surfacing a javascript:/data: URL to a clicker.
 export function parseParts(m: MatchRow): MatchPart[] {
@@ -535,18 +531,14 @@ export function parseParts(m: MatchRow): MatchPart[] {
 				casters.push({ user_id, name });
 			}
 		}
-		const vods: MatchPartVod[] = [];
-		if (Array.isArray(e.vods)) {
-			for (const rawVod of e.vods) {
-				if (typeof rawVod !== "object" || rawVod === null) continue;
-				const v = rawVod as Record<string, unknown>;
+		const streams: MatchPartStream[] = [];
+		if (Array.isArray(e.streams)) {
+			for (const rawStream of e.streams) {
+				if (typeof rawStream !== "object" || rawStream === null) continue;
+				const v = rawStream as Record<string, unknown>;
 				if (typeof v.url !== "string") continue;
-				try {
-					if (!isSafeHttpUrl(v.url)) continue;
-				} catch {
-					continue;
-				}
-				vods.push({
+				if (!isSafeHttpUrl(v.url)) continue;
+				streams.push({
 					url: v.url,
 					label: typeof v.label === "string" ? v.label : null,
 				});
@@ -556,7 +548,7 @@ export function parseParts(m: MatchRow): MatchPart[] {
 			id: e.id,
 			scheduled_at: typeof e.scheduled_at === "string" ? e.scheduled_at : null,
 			casters,
-			vods,
+			streams,
 		});
 	}
 	return out;

@@ -35,6 +35,7 @@ import {
 	slotDisplayName,
 	slotRowToRef,
 	tournamentConfig,
+	type MatchPart,
 	type MatchRow,
 	type RoundRow,
 	type TournamentEnv,
@@ -798,7 +799,14 @@ export async function handleTournamentBracket(
 		}
 	}
 
-	const identityByUserId = await loadUserIdentitiesForMatches(env, matches);
+	const partsByMatchId = new Map(
+		matches.map((m) => [m.match_id, parseParts(m)]),
+	);
+	const identityByUserId = await loadUserIdentitiesForMatches(
+		env,
+		matches,
+		partsByMatchId,
+	);
 	const nationByGamePlayer = await loadNationsForMatches(env, matches);
 	const viewerIsAdmin = await isTournamentAdmin(
 		env,
@@ -833,6 +841,7 @@ export async function handleTournamentBracket(
 					identityByUserId,
 					nationByGamePlayer,
 					handleBySlotId,
+					partsByMatchId.get(m.match_id),
 				),
 				total_turns: m.game_id ? (turnsByGame.get(m.game_id) ?? null) : null,
 			})),
@@ -904,9 +913,13 @@ export async function handleTournamentMatches(
 		return true;
 	});
 
+	const partsByMatchId = new Map(
+		filtered.map(({ match }) => [match.match_id, parseParts(match)]),
+	);
 	const identityByUserId = await loadUserIdentitiesForMatches(
 		env,
 		filtered.map(({ match }) => match),
+		partsByMatchId,
 	);
 	const nationByGamePlayer = await loadNationsForMatches(
 		env,
@@ -934,6 +947,7 @@ export async function handleTournamentMatches(
 					identityByUserId,
 					nationByGamePlayer,
 					handleBySlotId,
+					partsByMatchId.get(match.match_id),
 				),
 				round_id: round.round_id,
 				round_number: round.round_number,
@@ -978,7 +992,13 @@ export async function handleTournamentMatchDetail(
 	if (!round || round.tournament_id !== tournament.tournament_id) {
 		return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
 	}
-	const identityByUserId = await loadUserIdentitiesForMatches(env, [match]);
+	const parts = parseParts(match);
+	const partsByMatchId = new Map([[match.match_id, parts]]);
+	const identityByUserId = await loadUserIdentitiesForMatches(
+		env,
+		[match],
+		partsByMatchId,
+	);
 	const nationByGamePlayer = await loadNationsForMatches(env, [match]);
 	const viewerIsAdmin = await isTournamentAdmin(
 		env,
@@ -999,6 +1019,7 @@ export async function handleTournamentMatchDetail(
 				identityByUserId,
 				nationByGamePlayer,
 				handleBySlotId,
+				parts,
 			),
 			round_id: round.round_id,
 			round_number: round.round_number,
@@ -1110,6 +1131,10 @@ function serializeMatch(
 	// seeds the substitute editor with the real handle (the display name would
 	// unlink the slot on save). Empty/undefined → field null.
 	handleBySlotId?: Map<string, string | null>,
+	// This match's parts, parsed once by the caller and shared with
+	// loadUserIdentitiesForMatches, so each parts blob is walked once per request
+	// rather than twice. Falls back to parsing here when a caller doesn't pre-parse.
+	preParsedParts?: MatchPart[],
 ) {
 	const slotAIdentity =
 		m.slot_a_user_id && identityByUserId
@@ -1121,9 +1146,9 @@ function serializeMatch(
 			: undefined;
 	// Scheduled parts (migration 0029). Each part's casters resolve from the
 	// same batch identity map as the slots (index 0 is the streamer, the rest
-	// co-casters); the VOD list passes through as stored (already url-sanitized
+	// co-casters); the stream list passes through as stored (already url-sanitized
 	// by parseParts).
-	const parts = parseParts(m).map((p) => ({
+	const parts = (preParsedParts ?? parseParts(m)).map((p) => ({
 		id: p.id,
 		scheduled_at: p.scheduled_at,
 		casters: p.casters.map((c) => {
@@ -1138,7 +1163,7 @@ function serializeMatch(
 				avatar_url: identity?.avatar_url ?? null,
 			};
 		}),
-		vods: p.vods,
+		streams: p.streams,
 	}));
 	// Nation each slot played, resolved via the slot↔player_index mapping
 	// (migration 0007) against player_summaries. Null when no save is linked
@@ -1187,7 +1212,7 @@ function serializeMatch(
 			? (handleBySlotId?.get(m.slot_b_id) ?? null)
 			: null,
 		// Scheduled parts (migration 0029). Each carries its own time, caster
-		// (rendered by display name when linked, else caster_name), and VOD
+		// (rendered by display name when linked, else caster_name), and stream
 		// links. An empty array means the match has no scheduled sittings yet.
 		parts,
 		parts_rev: m.parts_rev,
@@ -1240,13 +1265,16 @@ export interface UserIdentity {
 export async function loadUserIdentitiesForMatches(
 	env: TournamentEnv,
 	matches: MatchRow[],
+	// Parts parsed once by the caller (shared with serializeMatch). Omitted →
+	// parsed here (the export path, which doesn't also re-serialize).
+	partsByMatchId?: Map<string, MatchPart[]>,
 ): Promise<Map<string, UserIdentity>> {
 	const userIds = new Set<string>();
 	for (const m of matches) {
 		if (m.slot_a_user_id) userIds.add(m.slot_a_user_id);
 		if (m.slot_b_user_id) userIds.add(m.slot_b_user_id);
 		// Every part's casters (migration 0029) resolve from the same batch.
-		for (const p of parseParts(m)) {
+		for (const p of partsByMatchId?.get(m.match_id) ?? parseParts(m)) {
 			for (const c of p.casters) {
 				if (c.user_id) userIds.add(c.user_id);
 			}

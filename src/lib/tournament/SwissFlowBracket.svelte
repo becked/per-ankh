@@ -16,7 +16,6 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
 		matchDisplayStatus,
-		type MatchDisplayStatus,
 		MATCH_STATUS_LABEL,
 	} from "$lib/tournament/parts";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";

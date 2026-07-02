@@ -20,7 +20,7 @@
 	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SchedulePopover from "$lib/tournament/SchedulePopover.svelte";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
-	import { vodDisplayLabel } from "$lib/tournament/parts";
+	import { streamDisplayLabel } from "$lib/tournament/parts";
 	import {
 		CHART_THEME,
 		getChartColor,
@@ -239,9 +239,9 @@
 	const retroEditLabel = $derived(
 		match.status === "pending" ? "Set result" : "Edit result",
 	);
-	// Scheduling/VODs (time / casters / VOD links) is open to admins and
+	// Scheduling/streams (time / casters / stream links) is open to admins and
 	// participants on any real, non-bye match: pending to coordinate the upcoming
-	// game, complete/forfeit to attach VOD links and casters after it's played.
+	// game, complete/forfeit to attach stream links and casters after it's played.
 	// Suppressed on placeholder cells (no real match row yet).
 	const canSchedule = $derived(
 		!isPlaceholder && match.status !== "bye" && (isAdmin || isParticipant),
@@ -786,7 +786,7 @@
 		</div>
 	{/if}
 
-	<!-- Read-only parts (per-sitting time / caster / VOD links), shown when the
+	<!-- Read-only parts (per-sitting time / caster / stream links), shown when the
 	     match has any scheduled part. The "Part N" header appears only for a
 	     split match; a single-session match reads as one unlabeled row. Editing
 	     happens behind the Schedule button below. -->
@@ -853,22 +853,22 @@
 							</div>
 						{/if}
 					</div>
-					{#if part.vods.length > 0}
-						<!-- VOD/stream links (youtube/twitch), validated host-side; external
+					{#if part.streams.length > 0}
+						<!-- Stream links (youtube/twitch), validated host-side; external
 						     URLs, so resolve() doesn't apply. -->
 						<!-- eslint-disable svelte/no-navigation-without-resolve -->
 						<div class="flex shrink-0 flex-col items-end gap-1">
 							<!-- Keyed by index: the same URL may legitimately appear twice (two
 							     labels), and order is the identity — the list is replaced
 							     wholesale on save. -->
-							{#each part.vods as vod, vi (vi)}
+							{#each part.streams as stream, vi (vi)}
 								<a
-									href={vod.url}
+									href={stream.url}
 									target="_blank"
 									rel="noopener noreferrer"
 									class="inline-flex items-center gap-1.5 text-xs text-tan hover:underline"
 								>
-									<span class="truncate">{vodDisplayLabel(vod)}</span>
+									<span class="truncate">{streamDisplayLabel(stream)}</span>
 									<svg
 										xmlns="http://www.w3.org/2000/svg"
 										class="h-4 w-4 shrink-0"

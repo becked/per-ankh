@@ -29,11 +29,13 @@ export function matchCasterGroup(m: TournamentMatch): MatchCasterGroup {
 		: "uncasted";
 }
 
-// The instant a timed match sorts by: a scheduled match by its next upcoming
-// part, an in-progress one by its most recently started part (there's no
-// future part, but WHEN it went overdue is exactly what an admin chasing
-// reports needs). Null for unscheduled/completed — and for the table cell,
-// which renders it for overdue rows so "In progress" keeps its timestamp.
+// The instant a timed match sorts by: any match with an upcoming part sorts by
+// that next sitting (a scheduled match, or a split match mid-schedule whose next
+// part is still ahead). Only when no part is still future — the true-overdue
+// case — does an in-progress match fall back to its most recently started part,
+// since WHEN it went overdue is exactly what an admin chasing reports needs.
+// Null for unscheduled/completed — and for the table cell, which renders it for
+// overdue rows so "In progress" keeps its timestamp.
 export function matchSortInstant(m: TournamentMatch): string | null {
 	const group = matchStatusGroup(m);
 	if (group !== "scheduled" && group !== "in_progress") return null;
@@ -66,7 +68,7 @@ export interface MatchColumn {
 }
 
 // Column identity + sort values only; the bespoke cell markup (crests, avatars,
-// VOD links) lives in the page, mirroring how the Cities tab splits column
+// stream links) lives in the page, mirroring how the Cities tab splits column
 // config from rendering. Order here is the rendered column order.
 export const MATCH_COLUMNS: MatchColumn[] = [
 	{
@@ -115,9 +117,9 @@ export const MATCH_COLUMNS: MatchColumn[] = [
 		},
 	},
 	{
-		key: "vods",
-		label: "VODs",
-		sortValue: (m) => (matchParts(m).some((p) => p.vods.length > 0) ? 1 : 0),
+		key: "streams",
+		label: "Streams",
+		sortValue: (m) => (matchParts(m).some((p) => p.streams.length > 0) ? 1 : 0),
 	},
 ];
 

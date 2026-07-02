@@ -2,9 +2,9 @@
 	import type { DateValue } from "@internationalized/date";
 	import { Time } from "@internationalized/date";
 
-	// One VOD row in the editor. Kept as plain strings (label "" = untagged);
+	// One stream row in the editor. Kept as plain strings (label "" = untagged);
 	// the popover trims + drops empties on save.
-	export interface EditVod {
+	export interface EditStream {
 		url: string;
 		label: string;
 	}
@@ -28,7 +28,7 @@
 		date: DateValue | undefined;
 		time: Time | undefined;
 		casters: EditCaster[];
-		vods: EditVod[];
+		streams: EditStream[];
 	}
 
 	// Mirror of the Worker's StreamUrlSchema host allow-list. The cloud schema is
@@ -42,7 +42,7 @@
 		"www.twitch.tv",
 		"m.twitch.tv",
 	]);
-	export function isValidVodUrl(s: string): boolean {
+	export function isValidStreamUrl(s: string): boolean {
 		const trimmed = s.trim();
 		if (!trimmed) return true; // empty is dropped on save — allowed
 		try {
@@ -56,7 +56,7 @@
 <script lang="ts">
 	// One part's controls inside the schedule popover: a scheduled time entered
 	// in the editor's OWN timezone (the popover converts to/from the stored UTC
-	// instant), a caster, and a list of VOD links. Mutates the passed-in EditPart
+	// instant), a caster, and a list of stream links. Mutates the passed-in EditPart
 	// in place (the popover owns the parts array as $state, so field writes
 	// propagate through the reactive proxy).
 	import type { UserSearchResult } from "$lib/api-cloud";
@@ -67,11 +67,11 @@
 	} from "$lib/utils/formatting";
 	import { DatePicker, TimeField } from "bits-ui";
 	import {
-		CalendarDateTime,
 		getLocalTimeZone,
 		now,
 		toCalendarDate,
 	} from "@internationalized/date";
+	import { partToIso } from "$lib/tournament/parts";
 
 	let {
 		part,
@@ -113,18 +113,7 @@
 	// The stored UTC instant the entered local date/time maps to, so the editor
 	// can confirm the canonical time + countdown as it's typed. Null until a date
 	// is picked (time defaults to midnight, mirroring the popover's save).
-	const previewIso = $derived.by(() => {
-		if (!part.date) return null;
-		const t = part.time ?? new Time(0, 0);
-		const dt = new CalendarDateTime(
-			part.date.year,
-			part.date.month,
-			part.date.day,
-			t.hour,
-			t.minute,
-		);
-		return dt.toDate(tz).toISOString();
-	});
+	const previewIso = $derived.by(() => partToIso(part.date, part.time, tz));
 
 	function onCasterValueChange(ci: number, next: string) {
 		const c = part.casters[ci];
@@ -397,42 +386,40 @@
 		</button>
 	</div>
 
-	<!-- VOD links. Multiple per part (each player's POV, the cast). Restricted to
+	<!-- stream links. Multiple per part (each player's POV, the cast). Restricted to
 	     youtube/twitch (server is the real gate); the optional label distinguishes
 	     them ("alcaras POV", "Cast"). -->
 	<div class="flex flex-col gap-1.5">
-		<span class="opacity-70">VOD links</span>
-		{#each part.vods as vod, vi (vi)}
-			{@const vodError = !isValidVodUrl(vod.url)}
+		<span class="opacity-70">Streams</span>
+		{#each part.streams as stream, vi (vi)}
+			{@const streamError = !isValidStreamUrl(stream.url)}
 			<div class="flex flex-col gap-1">
 				<div class="flex items-center gap-1.5">
 					<input
 						type="url"
-						bind:value={vod.url}
+						bind:value={stream.url}
 						disabled={busy}
-						placeholder="youtube.com / twitch.tv link"
 						class="block w-full rounded border border-black bg-surface p-1.5 text-xs text-tan"
 						autocomplete="off"
 					/>
 					<input
 						type="text"
-						bind:value={vod.label}
+						bind:value={stream.label}
 						disabled={busy}
-						placeholder="Label (optional)"
 						class="block w-32 shrink-0 rounded border border-black bg-surface p-1.5 text-xs text-tan"
 						autocomplete="off"
 					/>
 					<button
 						type="button"
 						class="shrink-0 rounded px-1.5 text-tan/60 hover:text-red-400"
-						aria-label="Remove VOD"
-						onclick={() => part.vods.splice(vi, 1)}
+						aria-label="Remove stream"
+						onclick={() => part.streams.splice(vi, 1)}
 						disabled={busy}
 					>
 						×
 					</button>
 				</div>
-				{#if vodError}
+				{#if streamError}
 					<span class="text-[10px] text-red-400"
 						>Enter a youtube.com or twitch.tv link</span
 					>
@@ -442,10 +429,10 @@
 		<button
 			type="button"
 			class="self-start rounded border border-input px-2 py-1 text-[11px] text-tan/80 hover:border-orange hover:text-orange"
-			onclick={() => part.vods.push({ url: "", label: "" })}
+			onclick={() => part.streams.push({ url: "", label: "" })}
 			disabled={busy}
 		>
-			+ Add VOD
+			+ Add stream
 		</button>
 	</div>
 </div>

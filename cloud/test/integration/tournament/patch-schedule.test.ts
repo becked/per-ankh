@@ -3,7 +3,7 @@
 // Unlike the other match mutations, this endpoint is open to a tournament
 // admin OR either participant in the match (authedMatchScheduler). It replaces
 // the match's scheduled "parts" (migration 0029) — each part carries its own
-// time, caster, and VOD links — on pending matches only. Caster is modeled like
+// time, caster, and stream links — on pending matches only. Caster is modeled like
 // a slot occupant: a linked Per-Ankh user pre-links (server snapshots the
 // canonical username) or free text. Replace-all over the parts list.
 
@@ -24,7 +24,7 @@ beforeAll(async () => {
 
 const WHEN = "2026-06-15T14:30:00.000Z";
 const LATER = "2026-06-17T18:00:00.000Z";
-const VOD = "https://twitch.tv/perankh";
+const STREAM = "https://twitch.tv/perankh";
 const POV = "https://youtube.com/watch?v=abc";
 
 interface CasterPayload {
@@ -35,7 +35,7 @@ interface PartPayload {
 	id?: string;
 	scheduled_at: string | null;
 	casters: CasterPayload[];
-	vods: { url: string; label?: string | null }[];
+	streams: { url: string; label?: string | null }[];
 }
 interface CasterResponse {
 	user_id: string | null;
@@ -46,14 +46,14 @@ interface PartResponse {
 	id: string;
 	scheduled_at: string | null;
 	casters: CasterResponse[];
-	vods: { url: string; label: string | null }[];
+	streams: { url: string; label: string | null }[];
 }
 
 function part(overrides: Partial<PartPayload> = {}): PartPayload {
 	return {
 		scheduled_at: null,
 		casters: [],
-		vods: [],
+		streams: [],
 		...overrides,
 	};
 }
@@ -81,7 +81,7 @@ async function matchForOwner(t: TestTournament, owner: TestUser) {
 
 describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 	describe("happy path", () => {
-		it("an admin sets a part's time, VODs, and a free-text caster", async () => {
+		it("an admin sets a part's time, streams, and a free-text caster", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 			const m = await firstPendingMatchOf(t);
 
@@ -93,7 +93,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 						part({
 							scheduled_at: WHEN,
 							casters: [{ user_id: null, name: "CasterBob" }],
-							vods: [{ url: VOD, label: "Cast" }],
+							streams: [{ url: STREAM, label: "Cast" }],
 						}),
 					],
 				},
@@ -107,7 +107,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 			expect(p.casters).toHaveLength(1);
 			expect(p.casters[0].user_id).toBeNull();
 			expect(p.casters[0].name).toBe("CasterBob");
-			expect(p.vods).toEqual([{ url: VOD, label: "Cast" }]);
+			expect(p.streams).toEqual([{ url: STREAM, label: "Cast" }]);
 		});
 
 		it("supports a streamer plus co-casters, streamer first", async () => {
@@ -141,7 +141,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 			expect(casters[1].name).toBe("Coco");
 		});
 
-		it("supports several parts, each scheduled separately, with multiple VODs", async () => {
+		it("supports several parts, each scheduled separately, with multiple streams", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 			const m = await firstPendingMatchOf(t);
 
@@ -152,9 +152,9 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 					parts: [
 						part({
 							scheduled_at: WHEN,
-							vods: [
+							streams: [
 								{ url: POV, label: "P1 POV" },
-								{ url: VOD, label: "Cast" },
+								{ url: STREAM, label: "Cast" },
 							],
 						}),
 						part({ scheduled_at: LATER }),
@@ -165,7 +165,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 			const body = await expectOk<{ match: { parts: PartResponse[] } }>(res);
 			expect(body.match.parts).toHaveLength(2);
 			expect(body.match.parts[0].scheduled_at).toBe(WHEN);
-			expect(body.match.parts[0].vods).toHaveLength(2);
+			expect(body.match.parts[0].streams).toHaveLength(2);
 			expect(body.match.parts[1].scheduled_at).toBe(LATER);
 			// Distinct minted ids so later edits can target each part.
 			expect(body.match.parts[0].id).not.toBe(body.match.parts[1].id);
@@ -290,7 +290,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 			expect(body.match.parts).toEqual([]);
 		});
 
-		it("attaches VODs to a COMPLETED match (post-game)", async () => {
+		it("attaches streams to a COMPLETED match (post-game)", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-complete" });
 			const reported = (await t.matches()).find(
 				(mm) => mm.status === "complete",
@@ -305,18 +305,20 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 					parts: [
 						part({
 							scheduled_at: WHEN,
-							vods: [{ url: POV, label: "P1 POV" }],
+							streams: [{ url: POV, label: "P1 POV" }],
 						}),
 					],
 				},
 			});
 
 			const body = await expectOk<{ match: { parts: PartResponse[] } }>(res);
-			expect(body.match.parts[0].vods).toEqual([{ url: POV, label: "P1 POV" }]);
+			expect(body.match.parts[0].streams).toEqual([
+				{ url: POV, label: "P1 POV" },
+			]);
 		});
 
 		it("rejects a PARTICIPANT editing a decided match (admin-only archive)", async () => {
-			// A losing player must not be able to wipe the VODs/caster credits
+			// A losing player must not be able to wipe the streams/caster credits
 			// attached to a match after it was played.
 			const player = await makeUser();
 			const t = await makeTournament({
@@ -372,7 +374,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 	});
 
 	describe("validation", () => {
-		it("rejects a non-youtube/twitch VOD host", async () => {
+		it("rejects a non-youtube/twitch stream host", async () => {
 			const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 			const m = await firstPendingMatchOf(t);
 
@@ -380,7 +382,7 @@ describe("PATCH /v1/tournaments/:id/matches/:match_id/schedule", () => {
 				path: `/v1/tournaments/${t.tournamentId}/matches/${m.match_id}/schedule`,
 				as: t.admin,
 				body: {
-					parts: [part({ vods: [{ url: "https://example.com/watch" }] })],
+					parts: [part({ streams: [{ url: "https://example.com/watch" }] })],
 				},
 			});
 			await expectErrorCode(res, { status: 400, code: "INVALID_BODY" });

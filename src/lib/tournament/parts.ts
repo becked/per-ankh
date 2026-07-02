@@ -1,8 +1,13 @@
 import type { TournamentMatch, TournamentMatchPart } from "$lib/api-cloud";
+import {
+	CalendarDateTime,
+	Time,
+	type DateValue,
+} from "@internationalized/date";
 
 // Part-aware helpers over a match's scheduled parts (migration 0029). A match
 // is one game played across one or more "parts" (sittings); each part carries
-// its own time, caster, and VOD links. The single-schedule surfaces (schedule
+// its own time, caster, and stream links. The single-schedule surfaces (schedule
 // page, matches table, sesh export) read a match's schedule through these.
 
 export function matchParts(m: TournamentMatch): TournamentMatchPart[] {
@@ -110,19 +115,40 @@ export function scheduledParts(matches: TournamentMatch[]): NumberedPart[] {
 	return out;
 }
 
-// The label to render for a VOD link: the author's tag when set, else a hint
-// from the host ("YouTube"/"Twitch"), else a bare "VOD".
-export function vodDisplayLabel(vod: {
+// Combine a part's independent date + time controls into the stored UTC instant
+// (ISO-8601) — the single source of truth shared by the editor's live preview
+// and the popover's save, so the two can never disagree. A date is required; a
+// cleared time defaults to midnight.
+export function partToIso(
+	date: DateValue | undefined,
+	time: Time | undefined,
+	tz: string,
+): string | null {
+	if (!date) return null;
+	const t = time ?? new Time(0, 0);
+	const dt = new CalendarDateTime(
+		date.year,
+		date.month,
+		date.day,
+		t.hour,
+		t.minute,
+	);
+	return dt.toDate(tz).toISOString();
+}
+
+// The label to render for a stream link: the author's tag when set, else a hint
+// from the host ("YouTube"/"Twitch"), else a bare "stream".
+export function streamDisplayLabel(stream: {
 	url: string;
 	label: string | null;
 }): string {
-	if (vod.label && vod.label.trim()) return vod.label.trim();
+	if (stream.label && stream.label.trim()) return stream.label.trim();
 	try {
-		const host = new URL(vod.url).hostname.replace(/^(www|m)\./, "");
+		const host = new URL(stream.url).hostname.replace(/^(www|m)\./, "");
 		if (host.includes("youtu")) return "YouTube";
 		if (host.includes("twitch")) return "Twitch";
 	} catch {
 		/* fall through to the generic label */
 	}
-	return "VOD";
+	return "stream";
 }

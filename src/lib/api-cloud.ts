@@ -1148,11 +1148,11 @@ export const cloudApi = {
 	},
 
 	// Replace the scheduled parts of a match. Pending matches: admin or either
-	// participant; decided matches (attach VODs after the game): admin only.
+	// participant; decided matches (attach streams after the game): admin only.
 	// Replace-all: send the full ordered parts list. Each caster's user_id
 	// pre-links a Per-Ankh user (server snapshots the canonical username); name
 	// alone is free text. Casters are ordered (streamer first). A part may omit
-	// id when added (the server mints one). vods are youtube/twitch links with
+	// id when added (the server mints one). streams are youtube/twitch links with
 	// optional labels. expected_rev echoes the parts_rev the editor loaded — the
 	// worker 409s (CONFLICT) when the row moved on, instead of silently erasing
 	// a concurrent writer's change.
@@ -1168,7 +1168,7 @@ export const cloudApi = {
 				id?: string;
 				scheduled_at: string | null;
 				casters: { user_id: string | null; name: string | null }[];
-				vods: { url: string; label?: string | null }[];
+				streams: { url: string; label?: string | null }[];
 			}[];
 			expected_rev?: number;
 		},
@@ -1521,10 +1521,10 @@ export interface BracketResponse {
 	rounds: BracketRound[];
 }
 
-// One VOD recording on a part: a stream/recording URL plus an optional human
+// One stream recording on a part: a stream/recording URL plus an optional human
 // tag distinguishing it from the others ("alcaras POV", "Cast"). label is null
 // when untagged.
-export interface TournamentMatchPartVod {
+export interface TournamentMatchPartStream {
 	url: string;
 	label: string | null;
 }
@@ -1549,7 +1549,7 @@ export interface TournamentMatchPart {
 	id: string;
 	scheduled_at: string | null;
 	casters: TournamentMatchPartCaster[];
-	vods: TournamentMatchPartVod[];
+	streams: TournamentMatchPartStream[];
 }
 
 export interface TournamentMatch {
@@ -1607,7 +1607,7 @@ export interface TournamentMatch {
 	slot_a_nation: string | null;
 	slot_b_nation: string | null;
 	// Scheduled parts (migration 0029). A match is one game played across one or
-	// more sittings; each part carries its own time, caster, and VOD links.
+	// more sittings; each part carries its own time, caster, and stream links.
 	// Empty until the match is scheduled. Editable by an admin or (while the
 	// match is pending) either participant; decided matches are admin-only.
 	parts: TournamentMatchPart[];

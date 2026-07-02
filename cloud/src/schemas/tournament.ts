@@ -294,26 +294,27 @@ const STREAM_HOSTS = new Set([
 	"m.twitch.tv",
 ]);
 
-// A VOD (or live-stream) URL for a part — same youtube/twitch host allowlist
-// the single stream link used before parts (migration 0025 → 0029).
+// A stream URL for a part — a live stream or an after-the-fact recording, held to
+// the same youtube/twitch host allowlist as the single stream link used before
+// parts (migration 0025 → 0029).
 const StreamUrlSchema = v.pipe(
 	v.string(),
 	v.trim(),
 	v.maxLength(500),
-	v.url("VOD url must be a valid URL"),
+	v.url("stream url must be a valid URL"),
 	v.check((s) => {
 		try {
 			return STREAM_HOSTS.has(new URL(s).hostname.toLowerCase());
 		} catch {
 			return false;
 		}
-	}, "VOD url must be a youtube.com or twitch.tv link"),
+	}, "stream url must be a youtube.com or twitch.tv link"),
 );
 
-// One VOD on a part: a stream/recording URL plus an optional human tag
+// One stream on a part: a stream/recording URL plus an optional human tag
 // distinguishing it from the others ("alcaras POV", "Cast"). label omitted or
 // blank → untagged.
-const MatchPartVodSchema = v.object({
+const MatchPartStreamSchema = v.object({
 	url: StreamUrlSchema,
 	label: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(80)))),
 });
@@ -328,16 +329,17 @@ const MatchPartCasterSchema = v.object({
 });
 
 // One part of a match: an optional scheduled instant, an ordered caster list
-// (streamer first + co-casters), and a list of VODs. id is stable within the
+// (streamer first + co-casters), and a list of streams. id is stable within the
 // match so edits/deletes target a part; a client may omit it when adding a new
 // part (the handler mints one).
 const MatchPartSchema = v.object({
-	// Charset matches the caster routes' :part_id segment (index.ts) so every
-	// stored part stays addressable by the self-service endpoints.
+	// A stable, URL-safe token (kept broader than the server-minted nanoid so a
+	// client can echo an existing part's id) used to target a part for edit or
+	// delete within the replace-all parts list.
 	id: v.optional(v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{1,40}$/))),
 	scheduled_at: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
 	casters: v.pipe(v.array(MatchPartCasterSchema), v.maxLength(10)),
-	vods: v.pipe(v.array(MatchPartVodSchema), v.maxLength(20)),
+	streams: v.pipe(v.array(MatchPartStreamSchema), v.maxLength(20)),
 });
 
 // PATCH /v1/tournaments/:id/matches/:match_id/schedule body. Replace-all: the

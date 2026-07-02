@@ -71,7 +71,7 @@ describe("parseLinks", () => {
 });
 
 describe("parseParts", () => {
-	it("parses a well-formed parts array with casters and vods", () => {
+	it("parses a well-formed parts array with casters and streams", () => {
 		const row = rowWithParts(
 			JSON.stringify([
 				{
@@ -81,7 +81,7 @@ describe("parseParts", () => {
 						{ user_id: null, name: "Bob" },
 						{ user_id: "u".repeat(21), name: "handle" },
 					],
-					vods: [
+					streams: [
 						{ url: "https://youtube.com/watch?v=a", label: "POV" },
 						{ url: "https://twitch.tv/x", label: null },
 					],
@@ -90,7 +90,7 @@ describe("parseParts", () => {
 					id: "p2",
 					scheduled_at: null,
 					casters: [],
-					vods: [],
+					streams: [],
 				},
 			]),
 		);
@@ -102,7 +102,7 @@ describe("parseParts", () => {
 					{ user_id: null, name: "Bob" },
 					{ user_id: "u".repeat(21), name: "handle" },
 				],
-				vods: [
+				streams: [
 					{ url: "https://youtube.com/watch?v=a", label: "POV" },
 					{ url: "https://twitch.tv/x", label: null },
 				],
@@ -111,7 +111,7 @@ describe("parseParts", () => {
 				id: "p2",
 				scheduled_at: null,
 				casters: [],
-				vods: [],
+				streams: [],
 			},
 		]);
 	});
@@ -126,11 +126,13 @@ describe("parseParts", () => {
 						{ user_id: null, name: "Keeper" },
 						"nope", // non-object → dropped
 					],
-					vods: [],
+					streams: [],
 				},
 			]),
 		);
-		expect(parseParts(row)[0].casters).toEqual([{ user_id: null, name: "Keeper" }]);
+		expect(parseParts(row)[0].casters).toEqual([
+			{ user_id: null, name: "Keeper" },
+		]);
 	});
 
 	it("returns [] for the empty-array default and on corruption", () => {
@@ -142,9 +144,9 @@ describe("parseParts", () => {
 	it("skips entries without a string id and coerces bad fields to null", () => {
 		const row = rowWithParts(
 			JSON.stringify([
-				{ scheduled_at: "x", vods: [] }, // no id → dropped
-				{ id: 5, vods: [] }, // non-string id → dropped
-				{ id: "ok", scheduled_at: 123, casters: "nope", vods: "nope" },
+				{ scheduled_at: "x", streams: [] }, // no id → dropped
+				{ id: 5, streams: [] }, // non-string id → dropped
+				{ id: "ok", scheduled_at: 123, casters: "nope", streams: "nope" },
 			]),
 		);
 		expect(parseParts(row)).toEqual([
@@ -152,17 +154,17 @@ describe("parseParts", () => {
 				id: "ok",
 				scheduled_at: null,
 				casters: [],
-				vods: [],
+				streams: [],
 			},
 		]);
 	});
 
-	it("drops vods whose url isn't http(s) — defense-in-depth", () => {
+	it("drops streams whose url isn't http(s) — defense-in-depth", () => {
 		const row = rowWithParts(
 			JSON.stringify([
 				{
 					id: "p1",
-					vods: [
+					streams: [
 						{ url: "https://safe.com", label: null },
 						// eslint-disable-next-line no-script-url
 						{ url: "javascript:alert(1)", label: "xss" },
@@ -172,7 +174,7 @@ describe("parseParts", () => {
 				},
 			]),
 		);
-		expect(parseParts(row)[0].vods).toEqual([
+		expect(parseParts(row)[0].streams).toEqual([
 			{ url: "https://safe.com", label: null },
 		]);
 	});

@@ -643,18 +643,18 @@
 																		{:else}
 																			—
 																		{/if}
-																	{:else if column.key === "vods"}
-																		{@const firstVod = matchParts(m)
-																			.flatMap((part) => part.vods)
+																	{:else if column.key === "streams"}
+																		{@const firstStream = matchParts(m)
+																			.flatMap((part) => part.streams)
 																			.at(0)}
-																		{#if firstVod}
-																			<!-- External VOD URL (youtube/twitch), validated
+																		{#if firstStream}
+																			<!-- External stream URL (youtube/twitch), validated
 																			     host-side; not an app route, so resolve() doesn't
 																			     apply. Stop propagation so the link doesn't also
 																			     open the match card. -->
 																			<!-- eslint-disable svelte/no-navigation-without-resolve -->
 																			<a
-																				href={firstVod.url}
+																				href={firstStream.url}
 																				target="_blank"
 																				rel="noopener noreferrer"
 																				class="inline-flex items-center gap-1 text-orange hover:underline"
@@ -675,7 +675,7 @@
 																						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
 																					/>
 																				</svg>
-																				VOD
+																				Stream
 																			</a>
 																			<!-- eslint-enable svelte/no-navigation-without-resolve -->
 																		{:else}

@@ -4,9 +4,9 @@
 	// button in the match popover footer. A match is one game played across one
 	// or more "parts" (sittings); this edits the ordered list of parts, each with
 	// its own time (entered in the viewer's zone), casters (streamer + co-casters),
-	// and VOD links. Replace-all: Save sends the full parts list. Open to an admin
+	// and stream links. Replace-all: Save sends the full parts list. Open to an admin
 	// or either participant on any non-bye match — scheduling ahead while pending,
-	// attaching VODs after it's played. Self-contained: owns its own
+	// attaching streams after it's played. Self-contained: owns its own
 	// busy/toast/invalidate cycle, so the parent only decides whether to render it.
 	import {
 		cloudApi,
@@ -17,17 +17,17 @@
 	import { runAction } from "$lib/tournament/async-action";
 	import FormFooter from "$lib/tournament/FormFooter.svelte";
 	import SchedulePartEditor, {
-		isValidVodUrl,
+		isValidStreamUrl,
 		type EditCaster,
 		type EditPart,
 	} from "./SchedulePartEditor.svelte";
 	import {
-		CalendarDateTime,
 		getLocalTimeZone,
 		parseAbsolute,
 		Time,
 		toCalendarDate,
 	} from "@internationalized/date";
+	import { partToIso } from "$lib/tournament/parts";
 
 	let {
 		match,
@@ -44,13 +44,13 @@
 	// resulting UTC instant, so a match reads correctly in everyone's zone.
 	const tz = getLocalTimeZone();
 
-	// On a decided match the editor is about attaching VODs/casters after the
-	// fact, so the affordance reads "VODs" rather than "Schedule".
+	// On a decided match the editor is about attaching streams/casters after the
+	// fact, so the affordance reads "Streams" rather than "Schedule".
 	const editorLabel = $derived(
-		match.status === "pending" ? "Schedule" : "VODs",
+		match.status === "pending" ? "Schedule" : "Streams",
 	);
 	const editorTitle = $derived(
-		match.status === "pending" ? "Schedule match" : "Match VODs & casters",
+		match.status === "pending" ? "Schedule match" : "Match Streams & casters",
 	);
 
 	// Parts editor state — seeded from the match each time the popover opens (see
@@ -72,7 +72,7 @@
 			date: undefined,
 			time: undefined,
 			casters: [emptyCaster()],
-			vods: [],
+			streams: [],
 		};
 	}
 
@@ -117,39 +117,27 @@
 							date,
 							time,
 							casters,
-							vods: p.vods.map((v) => ({ url: v.url, label: v.label ?? "" })),
+							streams: p.streams.map((v) => ({
+								url: v.url,
+								label: v.label ?? "",
+							})),
 						};
 					})
 				: [emptyPart()];
 	}
 
-	// Save is blocked while any VOD url is malformed; the cloud schema is the real
+	// Save is blocked while any stream url is malformed; the cloud schema is the real
 	// gate but this stops an obviously-bad submit.
-	const hasInvalidVod = $derived(
-		parts.some((p) => p.vods.some((v) => !isValidVodUrl(v.url))),
+	const hasInvalidStream = $derived(
+		parts.some((p) => p.streams.some((v) => !isValidStreamUrl(v.url))),
 	);
-
-	// Combine a part's independent date + time controls into the stored instant.
-	// A date is required for a schedule; time defaults to midnight if cleared.
-	function partScheduledIso(p: EditPart): string | null {
-		if (!p.date) return null;
-		const t = p.time ?? new Time(0, 0);
-		const dt = new CalendarDateTime(
-			p.date.year,
-			p.date.month,
-			p.date.day,
-			t.hour,
-			t.minute,
-		);
-		return dt.toDate(tz).toISOString();
-	}
 
 	async function save() {
 		const payload = parts
 			.map((p) => ({
 				// Temp (client-key) ids are stripped; the server mints real ones.
 				id: p.id?.startsWith("tmp-") ? undefined : p.id,
-				scheduled_at: partScheduledIso(p),
+				scheduled_at: partToIso(p.date, p.time, tz),
 				// Keep caster order (streamer first); drop rows left blank.
 				casters: p.casters
 					.map((c) => ({
@@ -157,7 +145,7 @@
 						name: c.value.trim() ? c.value.trim() : null,
 					}))
 					.filter((c) => c.user_id !== null || c.name !== null),
-				vods: p.vods
+				streams: p.streams
 					.filter((v) => v.url.trim())
 					.map((v) => ({
 						url: v.url.trim(),
@@ -168,7 +156,9 @@
 			// doesn't persist as a phantom sitting.
 			.filter(
 				(p) =>
-					p.scheduled_at !== null || p.casters.length > 0 || p.vods.length > 0,
+					p.scheduled_at !== null ||
+					p.casters.length > 0 ||
+					p.streams.length > 0,
 			);
 		const ok = await runAction(
 			() =>
@@ -282,7 +272,7 @@
 			onConfirm={save}
 			confirmLabel="Save"
 			{busy}
-			confirmDisabled={busy || hasInvalidVod}
+			confirmDisabled={busy || hasInvalidStream}
 		/>
 	</div>
 </Popover>
