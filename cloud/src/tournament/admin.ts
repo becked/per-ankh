@@ -2735,6 +2735,7 @@ function buildSwissRoundStatements(
 		const p = withMaps[i];
 		const matchId = nanoid(21);
 		const isBye = p.slot_b_id === null;
+		const status = isBye ? "bye" : "pending";
 		const aIdentity = isBye ? slotIdentityById.get(p.slot_a_id) : null;
 		statements.push(
 			env.SHARE_DB.prepare(
@@ -2756,12 +2757,12 @@ function buildSwissRoundStatements(
 				p.map_pool_id,
 				p.map_script,
 				isBye ? null : p.slot_b_id, // default pick-order to slot_b
-				isBye ? "bye" : "pending",
+				status,
 				isBye ? p.slot_a_id : null,
 				i + 1,
 				aIdentity?.discord_username ?? null,
 				aIdentity?.user_id ?? null,
-				isBye ? "bye" : "pending",
+				status,
 				tournament.tournament_id,
 			),
 		);

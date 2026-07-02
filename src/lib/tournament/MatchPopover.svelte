@@ -56,10 +56,6 @@
 		slotUserIds: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
 		user: UserMe | null;
-		// Global "Match N" (server-assigned match_number), supplied by parents
-		// that have the full match list. Omitted for byes / placeholder matches
-		// and views without the list.
-		matchNumber?: number;
 		// Admin substitute: rename the named slot's occupant, optionally pre-
 		// linking to a registered user (userId from the autocomplete; null for
 		// free text). Wired by the parent to the same handler that drives the
@@ -82,7 +78,6 @@
 		slotUserIds,
 		slotAvatars,
 		user,
-		matchNumber,
 		onSubstitute,
 		onClose,
 	}: Props = $props();
@@ -625,6 +620,9 @@
 					{/if}
 					{#if match.round_number}
 						· Round {match.round_number}
+					{/if}
+					{#if match.match_number != null}
+						· Match {padMatchNumber(match.match_number)}
 					{/if}
 				</span>
 			</div>

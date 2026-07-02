@@ -639,9 +639,7 @@
 		position: absolute;
 		top: 0.2rem;
 		right: 0.35rem;
-		font-family:
-			ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
-			monospace;
+		font-family: ui-monospace, monospace;
 		font-size: 0.6rem;
 		line-height: 1;
 		color: rgb(var(--color-tan));

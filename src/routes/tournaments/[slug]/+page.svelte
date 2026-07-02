@@ -1165,7 +1165,6 @@
 				{slotUserIds}
 				{slotAvatars}
 				{user}
-				matchNumber={matchNumberById.get(currentMatch.match_id)}
 				onSubstitute={isAdmin ? substituteSlot : undefined}
 				onClose={closeMatch}
 			/>
