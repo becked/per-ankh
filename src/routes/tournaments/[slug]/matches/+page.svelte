@@ -5,7 +5,7 @@
 	// picks the active clock (times render in one zone; the calendar buckets days
 	// by it). Clicking any match opens the match card anchored at the click point.
 	import { fade } from "svelte/transition";
-	import { invalidateAll } from "$app/navigation";
+	import { invalidateAll, replaceState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
@@ -55,6 +55,7 @@
 		type NumberedPart,
 	} from "$lib/tournament/parts";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
+	import CastView from "$lib/tournament/CastView.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
@@ -131,8 +132,29 @@
 	}
 
 	// View + zone controls. zone picks the single clock everything reads in.
-	let view = $state<"list" | "calendar">("list");
-	let zone = $state<ScheduleZone>("utc");
+	// View, zone, and the two filters below are deep-linkable via query params
+	// (?view=cast, ?caster=uncasted, ?status=scheduled, ?zone=local) so an admin
+	// can point people straight at e.g. "scheduled matches that need a caster".
+	// Defaults stay out of the URL; state changes replace (not push) history.
+	const params = new URLSearchParams(page.url.search);
+	const VIEWS = ["list", "calendar", "cast"] as const;
+	type MatchesView = (typeof VIEWS)[number];
+	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "list";
+	let view = $state<MatchesView>(initialView);
+	let zone = $state<ScheduleZone>(
+		params.get("zone") === "local" ? "local" : "utc",
+	);
+	function csvParam<T extends string>(
+		name: string,
+		all: readonly T[],
+	): T[] | null {
+		const raw = params.get(name);
+		if (!raw) return null;
+		const picked = raw
+			.split(",")
+			.filter((x): x is T => (all as readonly string[]).includes(x));
+		return picked.length > 0 ? picked : null;
+	}
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
@@ -144,14 +166,43 @@
 	// --- Table state. tableState (search + sort) follows the Cities pattern;
 	// statusFilter is a separate multi-toggle (completed off by default).
 	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
-	let statusFilter = $state<MatchStatusGroup[]>([
-		"scheduled",
-		"in_progress",
-		"unscheduled",
-	]);
+	let statusFilter = $state<MatchStatusGroup[]>(
+		csvParam("status", [
+			"scheduled",
+			"in_progress",
+			"unscheduled",
+			"completed",
+		] as const) ?? ["scheduled", "in_progress", "unscheduled"],
+	);
 	// Caster presence toggle — both on by default (show every match regardless
 	// of whether a caster is assigned).
-	let casterFilter = $state<MatchCasterGroup[]>(["casted", "uncasted"]);
+	let casterFilter = $state<MatchCasterGroup[]>(
+		csvParam("caster", ["casted", "uncasted"] as const) ?? [
+			"casted",
+			"uncasted",
+		],
+	);
+
+	// Reflect the current view/zone/filters into the URL (defaults omitted) so
+	// the address bar is always a shareable deep link to what's on screen.
+	$effect(() => {
+		const q = new URLSearchParams();
+		if (view !== "list") q.set("view", view);
+		if (zone !== "utc") q.set("zone", zone);
+		const defaultStatus = ["scheduled", "in_progress", "unscheduled"];
+		if (
+			statusFilter.length !== defaultStatus.length ||
+			defaultStatus.some((g) => !statusFilter.includes(g as MatchStatusGroup))
+		) {
+			q.set("status", statusFilter.join(","));
+		}
+		if (casterFilter.length !== 2) q.set("caster", casterFilter.join(","));
+		const search = q.toString();
+		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
+		if (`${page.url.pathname}${page.url.search}` !== target) {
+			replaceState(target, page.state);
+		}
+	});
 	const statusItemClass =
 		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-surface-raised";
 
@@ -496,24 +547,29 @@
 							</button>
 						</div>
 
-						<!-- List / Calendar view switch (bracket-card pattern). -->
+						<!-- List / Calendar / Cast view switch (bracket-card pattern). -->
 						<Tabs.Root bind:value={view}>
 							<Tabs.List
-								class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+								class="relative grid shrink-0 grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
 								style="background-color: rgb(var(--color-surface));"
 							>
 								<div
-									class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+									class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
 									style:background-color="rgb(var(--color-surface-raised))"
 									style:transform={view === "calendar"
 										? "translateX(100%)"
-										: "translateX(0)"}
+										: view === "cast"
+											? "translateX(200%)"
+											: "translateX(0)"}
 								></div>
 								<Tabs.Trigger value="list" class={viewTriggerClass}
 									>List</Tabs.Trigger
 								>
 								<Tabs.Trigger value="calendar" class={viewTriggerClass}>
 									Calendar
+								</Tabs.Trigger>
+								<Tabs.Trigger value="cast" class={viewTriggerClass}>
+									Cast
 								</Tabs.Trigger>
 							</Tabs.List>
 						</Tabs.Root>
@@ -787,6 +843,14 @@
 										</div>
 									</div>
 								</div>
+							{:else if view === "cast"}
+								<CastView
+									matches={data.matches}
+									tournament={data.tournament}
+									{zone}
+									{user}
+									slotLabels={slotMaps.labels}
+								/>
 							{:else}
 								<!-- Monthly calendar. -->
 								<section

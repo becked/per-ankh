@@ -22,7 +22,14 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 		// display — verified before choosing the window.
 		name: "rate_limit_counters",
 		olderThan: "-24 hours",
-		types: ["anon_read", "tournament_view", "user_search"],
+		types: [
+			"anon_read",
+			"tournament_view",
+			"user_search",
+			// Caster self-service ledger (player.ts): inserted per cast/uncast,
+			// read only by the 1h schedule budget. Metadata-free by design.
+			"tournament_schedule",
+		],
 	},
 	{
 		// General audit trail. Must stay >= 30 days: `./per-ankh admin
@@ -54,8 +61,7 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 // Tournament rows are an accountability record (retro-edits, slot
 // substitutions) and trivially small. delete_game / nuke_user are written
 // by the admin CLI (scripts/admin), not the Worker — destructive-admin
-// audit. tournament_schedule is currently only referenced by a rate
-// limiter, never inserted; listed for future-proofing.
+// audit.
 export const KEEP_FOREVER: readonly string[] = [
 	"tournament_admin",
 	"tournament_create",
@@ -64,7 +70,6 @@ export const KEEP_FOREVER: readonly string[] = [
 	"tournament_self_signup",
 	"tournament_self_withdraw",
 	"tournament_export",
-	"tournament_schedule",
 	"delete_game",
 	"nuke_user",
 ];

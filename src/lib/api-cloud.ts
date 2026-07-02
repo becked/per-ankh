@@ -1182,6 +1182,44 @@ export const cloudApi = {
 		});
 	},
 
+	// Caster self-service: add/move the CURRENT USER on a part's caster list.
+	// role picks the slot ("streamer" takes index 0, bumping the current
+	// streamer to co-caster; "cocaster" appends); omitted → streamer when the
+	// part has no caster, else co-caster. Open to any logged-in user; pending
+	// matches only. Responds 204 — callers refresh via invalidateAll.
+	castMatchPart: async (
+		tournamentId: string,
+		matchId: string,
+		partId: string,
+		role?: "streamer" | "cocaster",
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(
+			`/tournaments/${tournamentId}/matches/${matchId}/parts/${partId}/casters/me`,
+			{
+				...opts,
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify(role ? { role } : {}),
+			},
+		);
+	},
+
+	// Remove the current user from a part's caster list. Also allowed on
+	// decided matches (dropping yourself is always additive-safe), so a caster
+	// who never actually cast isn't stuck credited. Responds 204.
+	uncastMatchPart: async (
+		tournamentId: string,
+		matchId: string,
+		partId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(
+			`/tournaments/${tournamentId}/matches/${matchId}/parts/${partId}/casters/me`,
+			{ ...opts, method: "DELETE" },
+		);
+	},
+
 	retroEditMatch: async (
 		tournamentId: string,
 		matchId: string,
