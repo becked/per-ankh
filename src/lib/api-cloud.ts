@@ -1614,6 +1614,9 @@ export interface TournamentMatch {
 	// Optimistic-concurrency version of `parts`. Editors echo it back as
 	// expected_rev on save; the worker 409s when the row moved on.
 	parts_rev: number;
+	// Persisted global "Match N" — a stable public handle assigned append-only
+	// at round-generation (admins paste it into Discord). Null for byes.
+	match_number: number | null;
 	// Client-only flag: true for synthesized future-round bracket cells that
 	// don't yet correspond to a real tournament_matches row. The server never
 	// sets this. MatchPopover uses it to render a stripped-down preview view

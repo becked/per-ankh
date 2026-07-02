@@ -1191,6 +1191,8 @@ function serializeMatch(
 		// links. An empty array means the match has no scheduled sittings yet.
 		parts,
 		parts_rev: m.parts_rev,
+		// Stable global "Match N" handle (null for byes).
+		match_number: m.match_number,
 	};
 }
 
@@ -1298,6 +1300,7 @@ async function loadMatchesWithRound(
 		   m.slot_a_username, m.slot_a_user_id, m.slot_b_username, m.slot_b_user_id,
 		   m.parts,
 		   m.parts_rev,
+		   m.match_number,
 		   m.created_at,
 		   r.tournament_id, r.phase, r.division, r.round_number,
 		   r.status AS round_status,
@@ -1333,6 +1336,7 @@ async function loadMatchesWithRound(
 			slot_b_user_id: row.slot_b_user_id,
 			parts: row.parts,
 			parts_rev: row.parts_rev,
+			match_number: row.match_number,
 			created_at: row.created_at,
 		},
 		round: {

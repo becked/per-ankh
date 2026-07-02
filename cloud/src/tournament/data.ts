@@ -149,6 +149,9 @@ export interface MatchRow {
 	// Optimistic-concurrency version for `parts`: bumped on every write, and
 	// writers condition their UPDATE on the value they read (see 0029).
 	parts_rev: number;
+	// Persisted global "Match N" (migration 0030): assigned append-only per
+	// tournament at round-generation; NULL for byes (never numbered).
+	match_number: number | null;
 	created_at: string;
 }
 
@@ -259,6 +262,7 @@ const MATCH_COLUMN_NAMES = [
 	"slot_b_user_id",
 	"parts",
 	"parts_rev",
+	"match_number",
 	"created_at",
 ] as const;
 const MATCH_COLUMNS = MATCH_COLUMN_NAMES.join(", ");

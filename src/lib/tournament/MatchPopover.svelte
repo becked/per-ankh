@@ -17,6 +17,7 @@
 	import Chart from "$lib/Chart.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SchedulePopover from "$lib/tournament/SchedulePopover.svelte";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
@@ -56,6 +57,10 @@
 		slotUserIds: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
 		user: UserMe | null;
+		// Global "Match N" (server-assigned match_number), supplied by parents
+		// that have the full match list. Omitted for byes / placeholder matches
+		// and views without the list.
+		matchNumber?: number;
 		// Admin substitute: rename the named slot's occupant, optionally pre-
 		// linking to a registered user (userId from the autocomplete; null for
 		// free text). Wired by the parent to the same handler that drives the
@@ -78,6 +83,7 @@
 		slotUserIds,
 		slotAvatars,
 		user,
+		matchNumber,
 		onSubstitute,
 		onClose,
 	}: Props = $props();
