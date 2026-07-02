@@ -374,4 +374,44 @@ describe("POST /v1/tournaments/:id/transition-championship", () => {
 			expect(parsed!).not.toHaveProperty("advance_count");
 		});
 	});
+
+	describe("body validation precedes side effects (issue #50)", () => {
+		it("rejects a malformed body before auto-closing Swiss rounds", async () => {
+			const t = await makeSwissDoneTournament();
+
+			// Reporting all matches already closed the final Swiss round. Reopen
+			// it so autoCloseRoundIfReady WOULD fire during a transition — this is
+			// the state that distinguishes body-parse-first from side-effect-first.
+			await env.SHARE_DB.prepare(
+				`UPDATE tournament_rounds SET status = 'in_progress', completed_at = NULL
+				   WHERE tournament_id = ? AND phase = 'swiss'`,
+			)
+				.bind(t.tournamentId)
+				.run();
+
+			// override_ranks must be an array of nanoids; a string fails the schema.
+			const res = await request.post({
+				path: `/v1/tournaments/${t.tournamentId}/transition-championship`,
+				as: t.admin,
+				body: { override_ranks: "not-an-array" },
+			});
+			await expectErrorCode(res, { status: 400, code: "INVALID_BODY" });
+
+			// The rejected request must not have mutated any state: tournament is
+			// still swiss and the reopened round is still in_progress (before the
+			// fix, autoClose ran first and flipped it to complete).
+			expect((await t.refresh()).status).toBe("swiss");
+			const rounds =
+				(
+					await env.SHARE_DB.prepare(
+						`SELECT status FROM tournament_rounds
+						   WHERE tournament_id = ? AND phase = 'swiss'`,
+					)
+						.bind(t.tournamentId)
+						.all<{ status: string }>()
+				).results ?? [];
+			expect(rounds.length).toBeGreaterThan(0);
+			expect(rounds.every((r) => r.status === "in_progress")).toBe(true);
+		});
+	});
 });

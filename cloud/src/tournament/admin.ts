@@ -2301,6 +2301,13 @@ export async function handleTransitionChampionship(
 		);
 	}
 
+	// Validate the request body before any state mutation. autoCloseRoundIfReady
+	// below writes Swiss-round state, so a malformed body must be rejected first
+	// — otherwise a bad request still mutates the tournament.
+	const body = await parseJsonBody(request, TransitionChampionshipSchema, cors);
+	if (!body.ok) return body.response;
+	const override = body.body.override_ranks;
+
 	// Auto-close any in_progress Swiss rounds that have all matches
 	// reported. Pending matches (or pending-status rounds) still block.
 	const rounds = await loadRounds(env, tournamentId);
@@ -2312,10 +2319,6 @@ export async function handleTransitionChampionship(
 			return errorResponse(closeResult.reason, 409, cors, closeResult.code);
 		}
 	}
-
-	const body = await parseJsonBody(request, TransitionChampionshipSchema, cors);
-	if (!body.ok) return body.response;
-	const override = body.body.override_ranks;
 
 	const slots = await loadSlots(env, tournamentId);
 	const matchRefs = await matchRefsForTournament(env, tournamentId, matches);
