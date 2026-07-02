@@ -1,27 +1,22 @@
 import type { TournamentMatch } from "$lib/api-cloud";
+import { scheduledParts, type NumberedPart } from "./parts";
 
 export type ScheduleZone = "utc" | "local";
 
 export interface SchedulePartition {
-	// Pending matches that carry a time, soonest first.
-	scheduled: TournamentMatch[];
-	// Pending matches still awaiting a time (no scheduled_at yet).
-	unscheduled: TournamentMatch[];
+	// Individual scheduled parts of pending matches, soonest first. A match
+	// split across several days contributes one entry per scheduled part.
+	scheduled: NumberedPart[];
 }
 
-// Splits the match list into the two schedule-page sections. Only pending
-// matches are relevant — completed/forfeit/bye matches have already happened.
-// scheduled_at is an ISO-8601 instant, so lexical order is chronological.
+// The calendar's data: every scheduled part of a still-pending match, flattened
+// so a multi-part match appears on each day it's played. Completed/forfeit/bye
+// matches have already happened and stay off the calendar.
 export function partitionSchedule(
 	matches: TournamentMatch[],
 ): SchedulePartition {
 	const pending = matches.filter((m) => m.status === "pending");
-	const scheduled = pending
-		.filter((m) => m.scheduled_at != null)
-		.slice()
-		.sort((a, b) => (a.scheduled_at ?? "").localeCompare(b.scheduled_at ?? ""));
-	const unscheduled = pending.filter((m) => m.scheduled_at == null);
-	return { scheduled, unscheduled };
+	return { scheduled: scheduledParts(pending) };
 }
 
 // Calendar bucketing key: the day an instant falls on in the active zone, as

@@ -294,35 +294,63 @@ const STREAM_HOSTS = new Set([
 	"m.twitch.tv",
 ]);
 
+// A VOD (or live-stream) URL for a part — same youtube/twitch host allowlist
+// the single stream link used before parts (migration 0025 → 0029).
 const StreamUrlSchema = v.pipe(
 	v.string(),
 	v.trim(),
 	v.maxLength(500),
-	v.url("stream_url must be a valid URL"),
+	v.url("VOD url must be a valid URL"),
 	v.check((s) => {
 		try {
 			return STREAM_HOSTS.has(new URL(s).hostname.toLowerCase());
 		} catch {
 			return false;
 		}
-	}, "stream_url must be a youtube.com or twitch.tv link"),
+	}, "VOD url must be a youtube.com or twitch.tv link"),
 );
 
-// PATCH /v1/tournaments/:id/matches/:match_id/schedule body. Every field is
-// optional (partial update) and nullable (send null to clear). Caster is
-// modeled like a slot occupant: caster_user_id pre-links a Per-Ankh user when
-// picked, while caster_name carries free text when no account is linked (the
-// handler overwrites it with the canonical username when caster_user_id is
-// set, mirroring handlePatchSlot's prelink branch).
-export const PatchMatchScheduleSchema = v.object({
-	scheduled_at: v.optional(v.nullable(v.pipe(v.string(), v.isoTimestamp()))),
-	stream_url: v.optional(v.nullable(StreamUrlSchema)),
-	caster_user_id: v.optional(
-		v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),
-	),
-	caster_name: v.optional(
-		v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(80))),
-	),
+// One VOD on a part: a stream/recording URL plus an optional human tag
+// distinguishing it from the others ("alcaras POV", "Cast"). label omitted or
+// blank → untagged.
+const MatchPartVodSchema = v.object({
+	url: StreamUrlSchema,
+	label: v.optional(v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(80)))),
+});
+
+// One caster on a part. Mirrors the slot-occupant model: user_id pre-links a
+// Per-Ankh user (the handler snapshots that user's canonical username into name,
+// ignoring any client-sent name), while name alone is free text. Casters are
+// ordered — index 0 is the streamer, the rest co-casters.
+const MatchPartCasterSchema = v.object({
+	user_id: v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),
+	name: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(80))),
+});
+
+// One part of a match: an optional scheduled instant, an ordered caster list
+// (streamer first + co-casters), and a list of VODs. id is stable within the
+// match so edits/deletes target a part; a client may omit it when adding a new
+// part (the handler mints one).
+const MatchPartSchema = v.object({
+	// Charset matches the caster routes' :part_id segment (index.ts) so every
+	// stored part stays addressable by the self-service endpoints.
+	id: v.optional(v.pipe(v.string(), v.regex(/^[A-Za-z0-9_-]{1,40}$/))),
+	scheduled_at: v.nullable(v.pipe(v.string(), v.isoTimestamp())),
+	casters: v.pipe(v.array(MatchPartCasterSchema), v.maxLength(10)),
+	vods: v.pipe(v.array(MatchPartVodSchema), v.maxLength(20)),
+});
+
+// PATCH /v1/tournaments/:id/matches/:match_id/schedule body. Replace-all: the
+// client sends the full ordered parts list, which the handler validates,
+// resolves casters for, and writes over the match's `parts`. Capped so a single
+// match can't accumulate an unbounded number of sittings.
+export const PatchMatchPartsSchema = v.object({
+	parts: v.pipe(v.array(MatchPartSchema), v.maxLength(30)),
+	// The parts_rev the client's editor loaded. The handler rejects with 409
+	// CONFLICT when the row has moved on, so a stale editor can't silently
+	// erase a concurrent writer's changes. Omitted → last-write-wins (used by
+	// tests and non-editor callers).
+	expected_rev: v.optional(v.pipe(v.number(), v.integer(), v.minValue(0))),
 });
 
 export const ReportMatchSchema = v.object({

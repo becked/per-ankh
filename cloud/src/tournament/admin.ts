@@ -17,7 +17,7 @@ import {
 	GrantAdminSchema,
 	PatchMatchSchema,
 	PatchMatchMapSchema,
-	PatchMatchScheduleSchema,
+	PatchMatchPartsSchema,
 	PatchSlotSchema,
 	PatchTournamentSchema,
 	ReorderSlotsSchema,
@@ -64,6 +64,9 @@ import {
 	parseMapPool,
 	slotRowToRef,
 	tournamentConfig,
+	type MatchPart,
+	type MatchPartCaster,
+	type MatchPartVod,
 	type MatchRow,
 	type RoundRow,
 	type SlotRow,
@@ -1871,8 +1874,10 @@ export async function handlePatchMatchMap(
 }
 
 // ----------------------------------------------------------------------
-// PATCH /v1/tournaments/:id/matches/:match_id/schedule — set scheduled time,
-// stream link, and caster. Admin OR participant (see authedMatchScheduler).
+// PATCH /v1/tournaments/:id/matches/:match_id/schedule — replace the match's
+// scheduled parts (migration 0029): each part carries its own time, caster, and
+// VOD links. Replace-all over the full parts list. Admin OR participant (see
+// authedMatchScheduler).
 // ----------------------------------------------------------------------
 
 // Like authedTournament, but widened for the schedule endpoint: a match
@@ -1887,7 +1892,7 @@ async function authedMatchScheduler(
 	request: Request,
 	env: TournamentAdminEnv,
 ): Promise<
-	| { ok: true; match: MatchRow; userId: string }
+	| { ok: true; match: MatchRow; userId: string; isAdmin: boolean }
 	| { ok: false; response: Response }
 > {
 	const cors = cloudCorsHeaders(env, request);
@@ -1922,9 +1927,11 @@ async function authedMatchScheduler(
 	// Admin OR participant. Try admin first (reuses requireTournamentAdmin);
 	// on its 403 fall back to checking whether the caller owns either slot.
 	let authorized = false;
+	let isAdmin = false;
 	try {
 		await requireTournamentAdmin(env, session.data, tournamentId);
 		authorized = true;
+		isAdmin = true;
 	} catch (e) {
 		if (!(e instanceof AuthzError)) throw e;
 		const slotA = await loadSlot(env, match.slot_a_id);
@@ -1964,7 +1971,7 @@ async function authedMatchScheduler(
 		};
 	}
 
-	return { ok: true, match, userId: session.data.user_id };
+	return { ok: true, match, userId: session.data.user_id, isAdmin };
 }
 
 export async function handlePatchMatchSchedule(
@@ -1976,78 +1983,128 @@ export async function handlePatchMatchSchedule(
 	const cors = cloudCorsHeaders(env, request);
 	const a = await authedMatchScheduler(tournamentId, matchId, request, env);
 	if (!a.ok) return a.response;
-	const { match } = a;
+	const { match, isAdmin } = a;
 
-	// Only pending matches can be scheduled — a decided or bye match has
-	// nothing upcoming to coordinate.
-	if (match.status !== "pending") {
+	// Byes are auto-resolved and never played, so there's nothing to schedule or
+	// attach VODs to. Every other status is editable: pending to coordinate the
+	// upcoming game, complete/forfeit to attach VODs and casters after the fact.
+	if (match.status === "bye") {
 		return errorResponse(
-			"Can only schedule a pending match",
+			"Can't schedule a bye match",
 			409,
 			cors,
 			"MATCH_NOT_PENDING",
 		);
 	}
+	// Decided matches are an archive (VODs, caster credits): editing them is
+	// admin-only. A participant could otherwise wipe every VOD on a match they
+	// just lost — replace-all has no notion of an additive-only edit.
+	if (match.status !== "pending" && !isAdmin) {
+		return errorResponse(
+			"Only a tournament admin can edit a decided match's schedule",
+			403,
+			cors,
+			"NOT_TOURNAMENT_ADMIN",
+		);
+	}
 
-	const body = await parseJsonBody(request, PatchMatchScheduleSchema, cors);
+	const body = await parseJsonBody(request, PatchMatchPartsSchema, cors);
 	if (!body.ok) return body.response;
 	const patch = body.body;
 
-	const fragments: string[] = [];
-	const binds: unknown[] = [];
-
-	// Each field is provided iff its key is present with a non-undefined value;
-	// an explicit null clears it. (Mirrors the retro-edit handler's tolerance
-	// for Valibot emitting undefined for absent optionals.)
-	if (patch.scheduled_at !== undefined) {
-		fragments.push("scheduled_at = ?");
-		binds.push(patch.scheduled_at);
-	}
-	if (patch.stream_url !== undefined) {
-		fragments.push("stream_url = ?");
-		binds.push(patch.stream_url);
-	}
-
-	// Caster resolution mirrors handlePatchSlot's prelink branch: a non-null
-	// caster_user_id must reference a linkable user, and we snapshot that
-	// user's canonical username into caster_name (ignoring any client-sent
-	// name). Otherwise caster_name is free text (or null to clear), with no
-	// linked account.
-	const casterTouched =
-		patch.caster_user_id !== undefined || patch.caster_name !== undefined;
-	if (casterTouched) {
-		if (patch.caster_user_id) {
-			const u = await env.SHARE_DB.prepare(
-				"SELECT discord_username FROM users WHERE user_id = ?",
-			)
-				.bind(patch.caster_user_id)
-				.first<{ discord_username: string | null }>();
-			if (!u || !u.discord_username) {
+	// Resolve every linked caster across all parts in one batch: a non-null
+	// user_id must reference a linkable user, and we snapshot that user's
+	// canonical username into name (ignoring any client-sent name), mirroring
+	// handlePatchSlot's prelink branch. Free-text casters keep their name.
+	const casterIds = [
+		...new Set(
+			patch.parts
+				.flatMap((p) => p.casters)
+				.map((c) => c.user_id)
+				.filter((id): id is string => id !== null),
+		),
+	];
+	const canonicalByUserId = new Map<string, string>();
+	if (casterIds.length > 0) {
+		const placeholders = casterIds.map(() => "?").join(",");
+		const res = await env.SHARE_DB.prepare(
+			`SELECT user_id, discord_username FROM users WHERE user_id IN (${placeholders})`,
+		)
+			.bind(...casterIds)
+			.all<{ user_id: string; discord_username: string | null }>();
+		for (const row of res.results ?? []) {
+			if (row.discord_username)
+				canonicalByUserId.set(row.user_id, row.discord_username);
+		}
+		for (const id of casterIds) {
+			if (!canonicalByUserId.has(id)) {
 				return errorResponse(
-					`Unknown or unlinkable user_id: ${patch.caster_user_id}`,
+					`Unknown or unlinkable user_id: ${id}`,
 					400,
 					cors,
 					"INVALID_USER_ID",
 				);
 			}
-			fragments.push("caster_user_id = ?", "caster_name = ?");
-			binds.push(patch.caster_user_id, u.discord_username);
-		} else {
-			const name = patch.caster_name?.trim();
-			fragments.push("caster_user_id = NULL", "caster_name = ?");
-			binds.push(name ? name : null);
 		}
 	}
 
-	if (fragments.length === 0) {
-		return jsonResponse({ match }, 200, cors);
+	// Mint a stable id for any part the client added without one; dedupe against
+	// ids already in the payload so an add can't collide with an existing part.
+	const seenIds = new Set<string>();
+	const parts: MatchPart[] = patch.parts.map((p) => {
+		let id = p.id;
+		if (!id || seenIds.has(id)) id = nanoid(12);
+		seenIds.add(id);
+		const vods: MatchPartVod[] = p.vods.map((vod) => ({
+			url: vod.url,
+			label: vod.label?.trim() ? vod.label.trim() : null,
+		}));
+		// Linked casters snapshot the canonical username; free-text casters keep
+		// their typed name. Empty entries (neither set) are dropped.
+		const casters: MatchPartCaster[] = p.casters
+			.map((c) => {
+				if (c.user_id) {
+					return {
+						user_id: c.user_id,
+						name: canonicalByUserId.get(c.user_id) ?? null,
+					};
+				}
+				const name = c.name?.trim();
+				return { user_id: null, name: name ? name : null };
+			})
+			.filter((c) => c.user_id !== null || c.name !== null);
+		return { id, scheduled_at: p.scheduled_at, casters, vods };
+	});
+
+	// Optimistic concurrency: when the client sends the parts_rev its editor
+	// loaded, reject if the row has moved on (another admin's save, or any
+	// concurrent parts writer) instead of silently erasing their change. The
+	// UPDATE itself is also conditioned on the rev we just read, closing the
+	// read-check-write gap within this request.
+	if (
+		patch.expected_rev !== undefined &&
+		patch.expected_rev !== match.parts_rev
+	) {
+		return errorResponse(
+			"The match schedule changed while you were editing — reload and retry",
+			409,
+			cors,
+			"CONFLICT",
+		);
 	}
-	binds.push(matchId);
-	await env.SHARE_DB.prepare(
-		`UPDATE tournament_matches SET ${fragments.join(", ")} WHERE match_id = ?`,
+	const write = await env.SHARE_DB.prepare(
+		"UPDATE tournament_matches SET parts = ?, parts_rev = parts_rev + 1 WHERE match_id = ? AND parts_rev = ?",
 	)
-		.bind(...binds)
+		.bind(JSON.stringify(parts), matchId, match.parts_rev)
 		.run();
+	if (write.meta.changes === 0) {
+		return errorResponse(
+			"The match schedule changed while you were editing — reload and retry",
+			409,
+			cors,
+			"CONFLICT",
+		);
+	}
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	const updated = await loadMatch(env, matchId);
 	await logTournamentAdminAction(
@@ -2057,7 +2114,10 @@ export async function handlePatchMatchSchedule(
 		"match_schedule_patched",
 		{ match_id: matchId },
 	);
-	return jsonResponse({ match: updated }, 200, cors);
+	// Return the parsed parts we just wrote (canonical caster_name snapshotted)
+	// rather than the raw row, whose `parts` is a JSON string. Caster display
+	// names/avatars resolve on the GET/list serialize path, not here.
+	return jsonResponse({ match: { ...updated, parts } }, 200, cors);
 }
 
 // ----------------------------------------------------------------------
@@ -2511,8 +2571,13 @@ export async function handleTransitionChampionship(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
-				    slot_a_username, slot_a_user_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				    slot_a_username, slot_a_user_id, match_number)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+				         CASE WHEN ? = 'bye' THEN NULL ELSE
+				           (SELECT COALESCE(MAX(m2.match_number), 0) + 1
+				            FROM tournament_matches m2
+				            JOIN tournament_rounds r2 ON r2.round_id = m2.round_id
+				            WHERE r2.tournament_id = ?) END)`,
 			).bind(
 				matchId,
 				roundId,
@@ -2526,6 +2591,8 @@ export async function handleTransitionChampionship(
 				i + 1,
 				slotAUsername,
 				slotAUserId,
+				status,
+				tournamentId,
 			),
 		);
 	}
@@ -2674,8 +2741,13 @@ function buildSwissRoundStatements(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
-				    slot_a_username, slot_a_user_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				    slot_a_username, slot_a_user_id, match_number)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+				         CASE WHEN ? = 'bye' THEN NULL ELSE
+				           (SELECT COALESCE(MAX(m2.match_number), 0) + 1
+				            FROM tournament_matches m2
+				            JOIN tournament_rounds r2 ON r2.round_id = m2.round_id
+				            WHERE r2.tournament_id = ?) END)`,
 			).bind(
 				matchId,
 				roundId,
@@ -2689,6 +2761,8 @@ function buildSwissRoundStatements(
 				i + 1,
 				aIdentity?.discord_username ?? null,
 				aIdentity?.user_id ?? null,
+				isBye ? "bye" : "pending",
+				tournament.tournament_id,
 			),
 		);
 	}
@@ -2726,8 +2800,13 @@ function buildChampionshipRoundStatements(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
+				    match_number)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?,
+				         (SELECT COALESCE(MAX(m2.match_number), 0) + 1
+				          FROM tournament_matches m2
+				          JOIN tournament_rounds r2 ON r2.round_id = m2.round_id
+				          WHERE r2.tournament_id = ?))`,
 			).bind(
 				matchId,
 				roundId,
@@ -2737,6 +2816,7 @@ function buildChampionshipRoundStatements(
 				p.map_script,
 				p.slot_b_id,
 				i + 1,
+				tournament.tournament_id,
 			),
 		);
 	}

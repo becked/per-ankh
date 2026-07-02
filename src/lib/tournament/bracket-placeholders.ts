@@ -77,12 +77,9 @@ export function synthesizeChampionshipPlaceholders(
 				slot_b_avatar_url: null,
 				slot_b_nation: null,
 				slot_b_discord_username: null,
-				scheduled_at: null,
-				stream_url: null,
-				caster_user_id: null,
-				caster_name: null,
-				caster_display_name: null,
-				caster_avatar_url: null,
+				parts: [],
+				parts_rev: 0,
+				match_number: null,
 				is_placeholder: true,
 			});
 		}
