@@ -185,4 +185,61 @@ describe("planSeededTournament", () => {
 		);
 		expect(pending.length).toBeGreaterThan(0);
 	});
+
+	it("numbers matches densely in canonical order, byes unnumbered, swiss before championship", () => {
+		const plan = planSeededTournament(
+			{
+				slug: "num",
+				qualifiers: 6,
+				playersPerDivision: 8,
+				fill: "mid-championship",
+			},
+			idFactory(),
+		);
+		const roundById = new Map(plan.rounds.map((r) => [r.round_id, r]));
+
+		// Byes are never numbered; every non-bye match (pending included) is.
+		for (const m of plan.matches) {
+			if (m.status === "bye") expect(m.match_number).toBeNull();
+			else expect(m.match_number).not.toBeNull();
+		}
+
+		// Dense 1..N over the numbered matches — no gaps, no duplicates.
+		const numbered = plan.matches.filter((m) => m.match_number !== null);
+		const nums = numbered.map((m) => m.match_number!).sort((a, b) => a - b);
+		expect(nums).toEqual(numbered.map((_, i) => i + 1));
+
+		// Numbering follows phase → round → division → within-round index: sorting
+		// the numbered matches by that key must recover ascending match_numbers.
+		const rank = (m: (typeof numbered)[number]): number[] => {
+			const r = roundById.get(m.round_id)!;
+			return [
+				r.phase === "swiss" ? 0 : 1,
+				r.round_number,
+				r.division === "A" ? 0 : r.division === "B" ? 1 : 2,
+				m.match_index,
+			];
+		};
+		const canonical = [...numbered].sort((a, b) => {
+			const ra = rank(a);
+			const rb = rank(b);
+			for (let i = 0; i < ra.length; i++) {
+				if (ra[i] !== rb[i]) return ra[i] - rb[i];
+			}
+			return 0;
+		});
+		expect(canonical.map((m) => m.match_number)).toEqual(
+			canonical.map((_, i) => i + 1),
+		);
+
+		// Append-only across phases: every swiss number precedes every
+		// championship number.
+		const numsOfPhase = (phase: "swiss" | "championship") =>
+			numbered
+				.filter((m) => roundById.get(m.round_id)!.phase === phase)
+				.map((m) => m.match_number!);
+		expect(Math.max(...numsOfPhase("swiss"))).toBeLessThan(
+			Math.min(...numsOfPhase("championship")),
+		);
+	});
 });

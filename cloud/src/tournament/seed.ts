@@ -95,6 +95,11 @@ export interface SeedMatchRow {
 	status: MatchStatus;
 	winner_slot_id: string | null;
 	match_index: number;
+	// Persisted global "Match N" (migration 0030). Assigned by a final pass in
+	// the planner in canonical phase→round→division→index order — dense and
+	// append-only, byes left null — mirroring what the Worker's round-generation
+	// builders and the 0030 backfill produce.
+	match_number: number | null;
 	slot_a_username: string | null;
 	slot_b_username: string | null;
 	// Occupant user_id snapshots (migration 0024), set alongside the username
@@ -519,6 +524,32 @@ export function planSeededTournament(
 		}
 	}
 
+	// Assign persisted global "Match N" as a final pass: dense, append-only,
+	// byes unnumbered, in the same canonical order the Worker's round-generation
+	// builders and the migration-0030 backfill use (phase → round → division →
+	// within-round index). A pass rather than inline during emission because the
+	// Swiss rounds above are emitted division-by-division (all of A, then all of
+	// B), not in that interleaved order.
+	const roundById = new Map(rounds.map((r) => [r.round_id, r]));
+	const phaseRank = (p: Phase): number => (p === "swiss" ? 0 : 1);
+	const divisionRank = (d: Division | null): number =>
+		d === "A" ? 0 : d === "B" ? 1 : 2;
+	matches
+		.filter((m) => m.status !== "bye")
+		.sort((a, b) => {
+			const ra = roundById.get(a.round_id)!;
+			const rb = roundById.get(b.round_id)!;
+			return (
+				phaseRank(ra.phase) - phaseRank(rb.phase) ||
+				ra.round_number - rb.round_number ||
+				divisionRank(ra.division) - divisionRank(rb.division) ||
+				a.match_index - b.match_index
+			);
+		})
+		.forEach((m, i) => {
+			m.match_number = i + 1;
+		});
+
 	const tournament: SeedTournamentRow = {
 		tournament_id: tournamentId,
 		slug: opts.slug,
@@ -627,6 +658,9 @@ function emitDecidedRound(args: EmitRoundArgs): void {
 			status,
 			winner_slot_id: winner,
 			match_index: i + 1,
+			// Filled by the canonical-order numbering pass in the planner; byes
+			// stay null (never numbered).
+			match_number: null,
 			// Snapshot occupants on decided matches only; pending resolve live.
 			slot_a_username: decided ? aName : null,
 			slot_b_username: decided ? bName : null,
