@@ -134,40 +134,44 @@
 	);
 
 	async function save() {
+		// Pair each source part with its request payload so the blank-part filter
+		// can read both the editor-only state (added? / temp id) and the computed
+		// payload, then project down to just the payloads.
 		const payload = parts
 			.map((p) => ({
-				// Threads through for the blank-part filter below; stripped before
-				// the request.
-				keepIfBlank: p.added === true || !p.id?.startsWith("tmp-"),
-				// Temp (client-key) ids are stripped; the server mints real ones.
-				id: p.id?.startsWith("tmp-") ? undefined : p.id,
-				scheduled_at: partToIso(p.date, p.time, tz),
-				// Keep caster order (streamer first); drop rows left blank.
-				casters: p.casters
-					.map((c) => ({
-						user_id: c.userId,
-						name: c.value.trim() ? c.value.trim() : null,
-					}))
-					.filter((c) => c.user_id !== null || c.name !== null),
-				streams: p.streams
-					.filter((v) => v.url.trim())
-					.map((v) => ({
-						url: v.url.trim(),
-						label: v.label.trim() ? v.label.trim() : null,
-					})),
+				part: p,
+				payload: {
+					// Temp (client-key) ids are stripped; the server mints real ones.
+					id: p.id?.startsWith("tmp-") ? undefined : p.id,
+					scheduled_at: partToIso(p.date, p.time, tz),
+					// Keep caster order (streamer first); drop rows left blank.
+					casters: p.casters
+						.map((c) => ({
+							user_id: c.userId,
+							name: c.value.trim() ? c.value.trim() : null,
+						}))
+						.filter((c) => c.user_id !== null || c.name !== null),
+					streams: p.streams
+						.filter((v) => v.url.trim())
+						.map((v) => ({
+							url: v.url.trim(),
+							label: v.label.trim() ? v.label.trim() : null,
+						})),
+				},
 			}))
 			// Drop a blank part only when it's the pristine seeded row (a
 			// never-scheduled match opens with one) — an explicitly added part, or
 			// one that already exists server-side, is a deliberate "Part N, time
 			// TBD" and must survive the save.
 			.filter(
-				(p) =>
-					p.keepIfBlank ||
-					p.scheduled_at !== null ||
-					p.casters.length > 0 ||
-					p.streams.length > 0,
+				({ part, payload }) =>
+					part.added === true ||
+					!part.id?.startsWith("tmp-") ||
+					payload.scheduled_at !== null ||
+					payload.casters.length > 0 ||
+					payload.streams.length > 0,
 			)
-			.map(({ keepIfBlank: _keep, ...p }) => p);
+			.map(({ payload }) => payload);
 		const ok = await runAction(
 			() =>
 				cloudApi.patchMatchSchedule(tournament.tournament_id, match.match_id, {
