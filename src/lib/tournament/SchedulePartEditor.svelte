@@ -29,6 +29,12 @@
 		time: Time | undefined;
 		casters: EditCaster[];
 		streams: EditStream[];
+		// True when the user explicitly clicked "+ Add part" (vs the blank row
+		// the editor seeds for a never-scheduled match). A deliberately added
+		// part saves even while still blank — "this match is going to a Part 2,
+		// time TBD" is real state — while the pristine seeded row stays a
+		// throwaway that saving won't persist.
+		added?: boolean;
 	}
 
 	// Mirror of the Worker's StreamUrlSchema host allow-list. The cloud schema is
