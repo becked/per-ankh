@@ -1594,6 +1594,11 @@ export interface TournamentMatch {
 	// name and unlink the slot.
 	slot_a_discord_username: string | null;
 	slot_b_discord_username: string | null;
+	// Numeric Discord id of each side's LIVE slot occupant. Admin-only (null
+	// otherwise, for pending/bye sides, and for unclaimed slots with no linked
+	// account). Backs real `<@id>` mentions in the sesh export.
+	slot_a_discord_id: string | null;
+	slot_b_discord_id: string | null;
 	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
 	// pending matches (no snapshot) and for slots whose occupant had no
 	// claimed discord_id at report time — frontend falls through to live

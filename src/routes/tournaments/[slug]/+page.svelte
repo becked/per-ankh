@@ -127,6 +127,8 @@
 	// championship bracket slots — a slot can appear in both during the
 	// championship phase. Consumed by the match popover and slotLabelFor.
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
+	// Admin-only signup answers (timezone/availability), for the Copy DM tool.
+	const slotSignupAnswers = $derived(slotMaps.signupAnswers);
 	const slotLabels = $derived(slotMaps.labels);
 	const slotUserIds = $derived(slotMaps.userIds);
 	const slotAvatars = $derived(slotMaps.avatars);
@@ -1161,6 +1163,7 @@
 				{slotUserIds}
 				{slotAvatars}
 				{user}
+				{slotSignupAnswers}
 				onSubstitute={isAdmin ? substituteSlot : undefined}
 				onClose={closeMatch}
 			/>

@@ -48,7 +48,14 @@
 		scheduledDayKey,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
-	import { matchParts, type NumberedPart } from "$lib/tournament/parts";
+	import {
+		matchParts,
+		matchDisplayStatus,
+		upcomingScheduledParts,
+		type NumberedPart,
+	} from "$lib/tournament/parts";
+	import { padMatchNumber } from "$lib/tournament/match-numbers";
+	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
@@ -73,6 +80,55 @@
 
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const partition = $derived(partitionSchedule(data.matches));
+
+	// Admin "sesh.fyi"-style copy of upcoming (scheduled, still-pending) matches,
+	// soonest first, with Discord timestamps — paste into a Discord scheduling
+	// post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>` the relative
+	// "in X hours/days". A split match contributes one line per scheduled part,
+	// tagged "(Part N)"; single-session matches read as just "Match NNN".
+	function seshText(): string {
+		const num = (m: TournamentMatch) =>
+			m.match_number != null ? padMatchNumber(m.match_number) : "?";
+		// Prefer a real Discord `<@id>` mention (pings the player) when the slot is
+		// a claimed account whose id we have (admin-only field); fall back to the
+		// display name for unclaimed slots.
+		const who = (m: TournamentMatch, side: "a" | "b") => {
+			const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
+			if (id) return `<@${id}>`;
+			return matchSlotDisplayName(m, side, slotMaps.labels) ?? "?";
+		};
+		const vs = (m: TournamentMatch) => `${who(m, "a")} v ${who(m, "b")}`;
+
+		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
+		// already passed (no grace: this is a forward-looking schedule post).
+		const scheduled = upcomingScheduledParts(data.matches).map(
+			({ match, part, partNumber, split }) => {
+				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
+				const partTag = split ? `(Part ${partNumber}) ` : "";
+				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)`;
+			},
+		);
+		// "To be scheduled" = genuinely unscheduled matches only; a match that has
+		// already started (in progress, awaiting result) doesn't belong here.
+		const unscheduled = data.matches
+			.filter(
+				(m) =>
+					m.status === "pending" &&
+					m.slot_b_id != null &&
+					matchDisplayStatus(m) === "unscheduled",
+			)
+			.sort((a, b) => (a.match_number ?? 0) - (b.match_number ?? 0))
+			.map((m) => `Match ${num(m)} - ${vs(m)}`);
+
+		const blocks = [
+			"Upcoming matches\n\n" +
+				(scheduled.length ? scheduled.join("\n") : "(none scheduled)"),
+		];
+		if (unscheduled.length) {
+			blocks.push("To be scheduled\n\n" + unscheduled.join("\n"));
+		}
+		return blocks.join("\n\n");
+	}
 
 	// View + zone controls. zone picks the single clock everything reads in.
 	let view = $state<"list" | "calendar">("list");
@@ -355,12 +411,58 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
 
-				<!-- Controls card: title + zone toggle + view toggle. -->
+				<!-- Controls card: title + sesh-copy on the left, zone + view toggles on the right. -->
 				<div
 					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
 					style="background-color: rgb(var(--color-surface-raised));"
 				>
-					<h1 class="text-lg font-bold text-tan">Matches</h1>
+					<div class="flex items-center gap-2">
+						<h1 class="text-lg font-bold text-tan">Matches</h1>
+						{#if isAdmin}
+							<CopyButton
+								text={seshText}
+								label="Copy upcoming (sesh)"
+								title="Copy upcoming scheduled matches (soonest first) with Discord timestamps, for a sesh.fyi / Discord post"
+								class="inline-flex items-center justify-center rounded border border-surface p-1 text-tan transition-colors hover:bg-surface-hover hover:text-orange"
+							>
+								{#snippet children(copied)}
+									{#if copied}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M5 13l4 4L19 7"
+											/>
+										</svg>
+									{:else}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+											/>
+										</svg>
+									{/if}
+								{/snippet}
+							</CopyButton>
+						{/if}
+					</div>
 					<div class="flex items-center gap-2">
 						<!-- UTC / Local: a segmented toggle picking the active clock. -->
 						<div

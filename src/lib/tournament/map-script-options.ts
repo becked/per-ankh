@@ -4,12 +4,17 @@
 
 import type { MapPoolEntry } from "$lib/api-cloud";
 import {
+	LOW_CITY_SITES_THRESHOLD,
+	MAP_MIN_CITY_SITES,
+} from "$lib/generated/map-caveats";
+import {
 	MAP_OPTION_DEFS,
 	type MapOptionDef,
 } from "$lib/generated/map-option-defs";
 import { MAP_SCRIPT_OPTIONS } from "$lib/generated/map-script-options";
 import { mapOptionChoiceLabel, mapOptionLabel } from "$lib/map-settings";
 import { mapScriptAbbrev, mapScriptLabel } from "$lib/tournament/map-scripts";
+import { slugify } from "$lib/utils/slug";
 
 // The generic option-label helpers live in $lib/map-settings (shared with the
 // game-detail Settings tab and save cards); re-export them so existing
@@ -243,6 +248,63 @@ export function mapPoolLabel(
 		parts.push("PS");
 	}
 	return parts.join(" ");
+}
+
+// Base URL of the community map atlas (owtournamentatlas). The map anchor is
+// appended as a `#fragment`. Kept as a constant so a fork can repoint it.
+export const ATLAS_BASE_URL = "https://alcaras.github.io/owtournamentatlas/";
+
+// The owtournamentatlas URL anchor for a map instance: its canonical compact
+// label, slugged — matching the atlas' own `slugify(cfgLabel(short))` — e.g.
+// "Sq Duel Sm Seas AridP PS" → "sq-duel-sm-seas-aridp-ps". The variant trait is
+// forced in so the anchor carries it even for a script whose trait doesn't vary
+// elsewhere in the pool. slugify is the same function the map-caveat bake keys
+// its table with, so an anchor here and a baked key can't diverge on slugging.
+export function atlasAnchor(entry: MapPoolEntry): string {
+	const variant = VARIANT_OPTION_BY_SCRIPT[entry.script];
+	const forced = variant ? new Set([variant]) : new Set<string>();
+	return slugify(mapPoolLabel(entry, forced, true));
+}
+
+// A deep link to a map instance on owtournamentatlas (base + #anchor).
+export function atlasMapUrl(entry: MapPoolEntry): string {
+	return `${ATLAS_BASE_URL}#${atlasAnchor(entry)}`;
+}
+
+// Whether the map is covered by owtournamentatlas (its anchor resolves to a
+// real section). Keyed off the baked caveat table, which enumerates exactly the
+// atlas' PUBLISHED pool — the only maps the atlas index page creates anchors
+// for — so a map outside it never links to a dead anchor. Re-bake
+// (scripts/bake-map-caveats.ts) when the atlas pool changes.
+export function mapInAtlas(entry: MapPoolEntry): boolean {
+	return atlasAnchor(entry) in MAP_MIN_CITY_SITES;
+}
+
+const ARCHIPELAGO_SCRIPT = "MAPCLASS_MapScriptArchipelago";
+
+// A one-line generation caveat for the scheduling DM, or "" when the map has
+// none. Two independent risks (see map-caveats): Archipelago can spawn with the
+// capitals on separate landmasses (no land connection), and any map whose
+// observed minimum city sites is ≤ the threshold can spawn short on sites.
+// Either or both fold into a single "…if that happens, a caster will let you
+// know and you can reroll (or play on)" note, matching how casters handle it.
+export function mapCaveatNote(entry: MapPoolEntry): string {
+	const landRisk = entry.script === ARCHIPELAGO_SCRIPT;
+	const min = MAP_MIN_CITY_SITES[atlasAnchor(entry)];
+	const siteRisk = min != null && min <= LOW_CITY_SITES_THRESHOLD;
+	if (!landRisk && !siteRisk) return "";
+	const lowSites = `with ${LOW_CITY_SITES_THRESHOLD} or fewer city sites`;
+	const cause =
+		landRisk && siteRisk
+			? `without a land connection between capitals or ${lowSites}`
+			: landRisk
+				? "without a land connection between capitals"
+				: lowSites;
+	return (
+		`(this map can sometimes spawn ${cause} -- if that happens, a caster ` +
+		"will let you know and you can reroll the map. Or, if both players want " +
+		"to play on, you can play on)"
+	);
 }
 
 // Compact human-readable summary of an instance's options, one "Label: Value"
