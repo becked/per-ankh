@@ -447,16 +447,10 @@ async function mutateMyCasterEntry(
 		allowDecided: boolean;
 		// Runs once after auth + the rate-limit gate (so a 429'd call does no
 		// extra work); the result is handed to every mutate attempt.
-		prepare?: (
-			// eslint-disable-next-line no-unused-vars -- param names are documentary
-			userId: string,
-		) => Promise<MatchPartCaster>;
+		prepare?: (userId: string) => Promise<MatchPartCaster>;
 		mutate: (
-			// eslint-disable-next-line no-unused-vars -- param names are documentary
 			part: MatchPart,
-			// eslint-disable-next-line no-unused-vars -- param names are documentary
 			userId: string,
-			// eslint-disable-next-line no-unused-vars -- param names are documentary
 			me: MatchPartCaster | undefined,
 		) => Response | null;
 	},

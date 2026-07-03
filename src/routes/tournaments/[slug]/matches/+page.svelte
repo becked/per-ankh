@@ -186,20 +186,29 @@
 	// Reflect the current view/zone/filters into the URL (defaults omitted) so
 	// the address bar is always a shareable deep link to what's on screen.
 	$effect(() => {
-		const q = new URLSearchParams();
-		if (view !== "list") q.set("view", view);
-		if (zone !== "utc") q.set("zone", zone);
+		// Build the query from plain string parts rather than a mutable
+		// URLSearchParams — svelte/prefer-svelte-reactivity flags the built-in
+		// class inside an effect. Every value is a closed enum of URL-safe
+		// characters, so no encoding is needed.
+		const parts: string[] = [];
+		if (view !== "list") parts.push(`view=${view}`);
+		if (zone !== "utc") parts.push(`zone=${zone}`);
 		const defaultStatus = ["scheduled", "in_progress", "unscheduled"];
 		if (
 			statusFilter.length !== defaultStatus.length ||
 			defaultStatus.some((g) => !statusFilter.includes(g as MatchStatusGroup))
 		) {
-			q.set("status", statusFilter.join(","));
+			parts.push(`status=${statusFilter.join(",")}`);
 		}
-		if (casterFilter.length !== 2) q.set("caster", casterFilter.join(","));
-		const search = q.toString();
+		if (casterFilter.length !== 2) parts.push(`caster=${casterFilter.join(",")}`);
+		const search = parts.join("&");
 		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
 		if (`${page.url.pathname}${page.url.search}` !== target) {
+			// Same-page shallow URL sync — the filters live entirely client-side,
+			// so this replaces the address bar without re-running load. resolve()
+			// brands typed routes and can't express a dynamic query string; this
+			// mirrors the dynamic-search precedent in upload/+page.svelte.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic filter query string; resolve()'s branded types don't admit it
 			replaceState(target, page.state);
 		}
 	});
