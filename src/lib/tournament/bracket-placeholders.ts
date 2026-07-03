@@ -79,6 +79,7 @@ export function synthesizeChampionshipPlaceholders(
 				slot_b_discord_username: null,
 				parts: [],
 				parts_rev: 0,
+				match_number: null,
 				is_placeholder: true,
 			});
 		}

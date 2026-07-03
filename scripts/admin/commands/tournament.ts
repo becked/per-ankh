@@ -383,7 +383,7 @@ function planToInserts(plan: SeedPlan): string[] {
 		(match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 		 pick_order_winner_slot_id, status, winner_slot_id, match_index,
 		 slot_a_username, slot_b_username, slot_a_user_id, slot_b_user_id,
-		 reported_at)
+		 reported_at, match_number)
 		VALUES ${plan.matches
 			.map(
 				(m) =>
@@ -393,7 +393,8 @@ function planToInserts(plan: SeedPlan): string[] {
 					`${str(m.winner_slot_id)}, ${num(m.match_index)}, ` +
 					`${str(m.slot_a_username)}, ${str(m.slot_b_username)}, ` +
 					`${str(m.slot_a_user_id)}, ${str(m.slot_b_user_id)}, ` +
-					`${m.status === "complete" ? now : "NULL"})`,
+					`${m.status === "complete" ? now : "NULL"}, ` +
+					`${m.match_number === null ? "NULL" : num(m.match_number)})`,
 			)
 			.join(", ")}`;
 

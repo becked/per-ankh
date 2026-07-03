@@ -2328,6 +2328,22 @@ async function downstreamBlocked(
 	return null;
 }
 
+// Correlated subquery assigning the next dense global match_number for a
+// tournament: MAX(existing) + 1. Evaluated per-INSERT inside the
+// round-generation D1 batch, so each statement sees the rows the prior
+// statements in the batch inserted — dense and append-only by construction.
+// Binds one param: the tournament_id.
+const NEXT_MATCH_NUMBER_SQL = `(SELECT COALESCE(MAX(m2.match_number), 0) + 1
+	FROM tournament_matches m2
+	JOIN tournament_rounds r2 ON r2.round_id = m2.round_id
+	WHERE r2.tournament_id = ?)`;
+
+// Swiss / championship-transition variant: byes are never numbered (NULL).
+// Championship rounds 2+ can't bye, so buildChampionshipRoundStatements uses
+// the bare NEXT_MATCH_NUMBER_SQL instead. Binds two params in order: the match
+// status, then the tournament_id.
+const NEXT_MATCH_NUMBER_OR_NULL_FOR_BYE_SQL = `CASE WHEN ? = 'bye' THEN NULL ELSE ${NEXT_MATCH_NUMBER_SQL} END`;
+
 // ----------------------------------------------------------------------
 // POST /v1/tournaments/:id/transition-championship
 //
@@ -2571,8 +2587,9 @@ export async function handleTransitionChampionship(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
-				    slot_a_username, slot_a_user_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				    slot_a_username, slot_a_user_id, match_number)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+				         ${NEXT_MATCH_NUMBER_OR_NULL_FOR_BYE_SQL})`,
 			).bind(
 				matchId,
 				roundId,
@@ -2586,6 +2603,8 @@ export async function handleTransitionChampionship(
 				i + 1,
 				slotAUsername,
 				slotAUserId,
+				status,
+				tournamentId,
 			),
 		);
 	}
@@ -2728,14 +2747,16 @@ function buildSwissRoundStatements(
 		const p = withMaps[i];
 		const matchId = nanoid(21);
 		const isBye = p.slot_b_id === null;
+		const status = isBye ? "bye" : "pending";
 		const aIdentity = isBye ? slotIdentityById.get(p.slot_a_id) : null;
 		statements.push(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
 				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
-				    slot_a_username, slot_a_user_id)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+				    slot_a_username, slot_a_user_id, match_number)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+				         ${NEXT_MATCH_NUMBER_OR_NULL_FOR_BYE_SQL})`,
 			).bind(
 				matchId,
 				roundId,
@@ -2744,11 +2765,13 @@ function buildSwissRoundStatements(
 				p.map_pool_id,
 				p.map_script,
 				isBye ? null : p.slot_b_id, // default pick-order to slot_b
-				isBye ? "bye" : "pending",
+				status,
 				isBye ? p.slot_a_id : null,
 				i + 1,
 				aIdentity?.discord_username ?? null,
 				aIdentity?.user_id ?? null,
+				status,
+				tournament.tournament_id,
 			),
 		);
 	}
@@ -2786,8 +2809,10 @@ function buildChampionshipRoundStatements(
 			env.SHARE_DB.prepare(
 				`INSERT INTO tournament_matches
 				   (match_id, round_id, slot_a_id, slot_b_id, map_pool_id, map_script,
-				    pick_order_winner_slot_id, status, winner_slot_id, match_index)
-				 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?)`,
+				    pick_order_winner_slot_id, status, winner_slot_id, match_index,
+				    match_number)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, 'pending', NULL, ?,
+				         ${NEXT_MATCH_NUMBER_SQL})`,
 			).bind(
 				matchId,
 				roundId,
@@ -2797,6 +2822,7 @@ function buildChampionshipRoundStatements(
 				p.map_script,
 				p.slot_b_id,
 				i + 1,
+				tournament.tournament_id,
 			),
 		);
 	}

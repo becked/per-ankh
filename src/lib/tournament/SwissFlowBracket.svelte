@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import { resolve } from "$app/paths";
 	import type {
 		MapPoolEntry,
@@ -42,7 +43,6 @@
 		// The tournament's map_pool — used to resolve each match's assigned
 		// instance (by map_pool_id) for the options tooltip on its map name.
 		mapPool: MapPoolEntry[];
-		// Global "Match N" numbers (match_id -> number) for the card badge.
 		// eslint-disable-next-line no-unused-vars -- param name is documentary
 		onMatchClick: (matchId: string) => void;
 	};
@@ -374,6 +374,11 @@
 									})}?match={m.match_id}"
 									onclick={(e) => handleMatchClick(m.match_id, e)}
 								>
+									{#if m.match_number != null}
+										<span class="match-num"
+											>{padMatchNumber(m.match_number)}</span
+										>
+									{/if}
 									<div
 										class="match-row"
 										class:row-active={aOnPath}
@@ -626,6 +631,18 @@
 		transition: background-color 0.1s;
 		min-width: 0;
 	}
+	.match-num {
+		position: absolute;
+		top: 0.2rem;
+		right: 0.35rem;
+		font-family: ui-monospace, monospace;
+		font-size: 0.6rem;
+		line-height: 1;
+		color: rgb(var(--color-tan));
+		opacity: 0.45;
+		pointer-events: none;
+	}
+
 	.match:hover {
 		background-color: rgb(var(--color-surface-sunken));
 	}

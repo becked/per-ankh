@@ -620,6 +620,9 @@
 					{#if match.round_number}
 						· Round {match.round_number}
 					{/if}
+					{#if match.match_number != null}
+						· Match {match.match_number}
+					{/if}
 				</span>
 			</div>
 		</div>
