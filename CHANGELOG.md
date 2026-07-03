@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-07-02-8925e9b] - 2026-07-02
+
+### Fixes
+
+- (tournament) let a deliberately added blank part survive save — [d01026e](https://github.com/becked/per-ankh/commit/d01026e1abdd05cbcad85db55bfd25f5d1eadd29)
+
+### Other
+
+- (tournament) pair-and-project the schedule save filter — [b6f3f79](https://github.com/becked/per-ankh/commit/b6f3f79e7cd317270510714a5663ba1df480d0bf)
+
 ## [2026-07-02-3cfc3c2] - 2026-07-02
 
 ### Features
