@@ -17,7 +17,6 @@
 	import Chart from "$lib/Chart.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
-	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SchedulePopover from "$lib/tournament/SchedulePopover.svelte";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
@@ -622,7 +621,7 @@
 						· Round {match.round_number}
 					{/if}
 					{#if match.match_number != null}
-						· Match {padMatchNumber(match.match_number)}
+						· Match {match.match_number}
 					{/if}
 				</span>
 			</div>
