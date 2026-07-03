@@ -411,21 +411,59 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
 
-				<!-- Controls card: title + zone toggle + view toggle. -->
+				<!-- Controls card: title + sesh-copy on the left, zone + view toggles on the right. -->
 				<div
 					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
 					style="background-color: rgb(var(--color-surface-raised));"
 				>
-					<h1 class="text-lg font-bold text-tan">Matches</h1>
 					<div class="flex items-center gap-2">
+						<h1 class="text-lg font-bold text-tan">Matches</h1>
 						{#if isAdmin}
 							<CopyButton
 								text={seshText}
 								label="Copy upcoming (sesh)"
 								title="Copy upcoming scheduled matches (soonest first) with Discord timestamps, for a sesh.fyi / Discord post"
-								class="rounded border border-surface px-2 py-1 text-xs text-tan hover:bg-surface-hover"
-							/>
+								class="inline-flex items-center justify-center rounded border border-surface p-1 text-tan transition-colors hover:bg-surface-hover hover:text-orange"
+							>
+								{#snippet children(copied)}
+									{#if copied}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M5 13l4 4L19 7"
+											/>
+										</svg>
+									{:else}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+											/>
+										</svg>
+									{/if}
+								{/snippet}
+							</CopyButton>
 						{/if}
+					</div>
+					<div class="flex items-center gap-2">
 						<!-- UTC / Local: a segmented toggle picking the active clock. -->
 						<div
 							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
