@@ -56,9 +56,9 @@ describe("persisted match numbers", () => {
 		// Every OTHER match keeps its exact number — nothing shifts down.
 		for (const b of before) {
 			if (b.match_id === victim.match_id) continue;
-			expect(
-				after.find((a) => a.match_id === b.match_id)?.match_number,
-			).toBe(b.match_number);
+			expect(after.find((a) => a.match_id === b.match_id)?.match_number).toBe(
+				b.match_number,
+			);
 		}
 	});
 
