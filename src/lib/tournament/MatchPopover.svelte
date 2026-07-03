@@ -63,10 +63,6 @@
 		// the "Copy DM" scheduling template. Empty/null when unavailable.
 		slotSignupAnswers?: Record<string, string | null>;
 		user: UserMe | null;
-		// Global "Match N" (server-assigned match_number), supplied by parents
-		// that have the full match list. Omitted for byes / placeholder matches
-		// and views without the list.
-		matchNumber?: number;
 		// Admin substitute: rename the named slot's occupant, optionally pre-
 		// linking to a registered user (userId from the autocomplete; null for
 		// free text). Wired by the parent to the same handler that drives the
@@ -90,7 +86,6 @@
 		slotAvatars,
 		slotSignupAnswers,
 		user,
-		matchNumber,
 		onSubstitute,
 		onClose,
 	}: Props = $props();
@@ -163,8 +158,8 @@
 	// using each side's display name. Only offered when the parent supplied a
 	// (global) match number.
 	const threadTitle = $derived(
-		matchNumber != null
-			? `Match ${padMatchNumber(matchNumber)} - ${slotALabel} v ${slotBLabel}`
+		match.match_number != null
+			? `Match ${padMatchNumber(match.match_number)} - ${slotALabel} v ${slotBLabel}`
 			: null,
 	);
 
@@ -174,7 +169,8 @@
 	// and the caster-thread nudge. Only for a real, two-player match with a
 	// number; timezones fall back to a placeholder when the answer is missing.
 	const dmText = $derived.by(() => {
-		if (matchNumber == null || isPlaceholder || match.slot_b_id == null) {
+		const num = match.match_number;
+		if (num == null || isPlaceholder || match.slot_b_id == null) {
 			return null;
 		}
 		const round = match.round_number ?? "?";
@@ -200,7 +196,7 @@
 		// caster paragraph appears whenever the link is configured.
 		const casterLink = tournament.links.find((l) => /cast/i.test(l.label))?.url;
 		return [
-			`Match ${padMatchNumber(matchNumber)} - ${slotALabel} v ${slotBLabel}`,
+			`Match ${padMatchNumber(num)} - ${slotALabel} v ${slotBLabel}`,
 			"",
 			`Hello! You're matched in Round ${round} of ${tournament.name}.`,
 			"",
@@ -700,8 +696,8 @@
 					{#if match.round_number}
 						· Round {match.round_number}
 					{/if}
-					{#if matchNumber != null}
-						· Match {padMatchNumber(matchNumber)}
+					{#if match.match_number != null}
+						· Match {match.match_number}
 					{/if}
 				</span>
 				{#if threadTitle}

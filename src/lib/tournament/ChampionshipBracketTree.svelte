@@ -17,6 +17,7 @@
 		MATCH_STATUS_LABEL,
 	} from "$lib/tournament/parts";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
+	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import {
 		distinguishingOptions,
 		mapPoolLabel,
@@ -123,6 +124,8 @@
 		// Parts-refined status for the card chip (null on placeholders/byes).
 		display_status: MatchDisplayStatus | null;
 		is_placeholder: boolean;
+		// Server-assigned "Match N" (null on byes and synthesized placeholders).
+		match_number: number | null;
 		// Snapshot-derived fields propagated from the underlying real match
 		// (migration 0024). NULL on synthesized placeholders and on
 		// still-pending matches.
@@ -148,6 +151,8 @@
 		status: "pending" | "complete" | "forfeit" | "bye";
 		display_status: MatchDisplayStatus | null;
 		is_placeholder: boolean;
+		// Server-assigned "Match N" (null on byes and synthesized placeholders).
+		match_number: number | null;
 		slot_a_display_name: string | null;
 		slot_a_user_id: string | null;
 		slot_a_avatar_url: string | null;
@@ -197,6 +202,7 @@
 				status: m.status,
 				display_status: matchDisplayStatus(m),
 				is_placeholder: false,
+				match_number: m.match_number,
 				slot_a_display_name: m.slot_a_display_name,
 				slot_a_user_id: m.slot_a_user_id,
 				slot_a_avatar_url: m.slot_a_avatar_url,
@@ -234,6 +240,7 @@
 					status: "pending",
 					display_status: null,
 					is_placeholder: true,
+					match_number: null,
 					slot_a_display_name: null,
 					slot_a_user_id: null,
 					slot_a_avatar_url: null,
@@ -294,6 +301,7 @@
 					status: m.status,
 					display_status: m.display_status,
 					is_placeholder: m.is_placeholder,
+					match_number: m.match_number,
 					slot_a_display_name: m.slot_a_display_name,
 					slot_a_user_id: m.slot_a_user_id,
 					slot_a_avatar_url: m.slot_a_avatar_url,
@@ -408,6 +416,9 @@
 	{@const bWon = m.winner_slot_id === m.slot_b_id && m.winner_slot_id !== null}
 	{@const aNation = matchSlotNation(m, "a")}
 	{@const bNation = matchSlotNation(m, "b")}
+	{#if m.match_number != null}
+		<span class="match-num">{padMatchNumber(m.match_number)}</span>
+	{/if}
 	<div
 		class="slot"
 		class:winner={aWon}
@@ -541,6 +552,22 @@
 		text-decoration: none;
 		overflow: hidden;
 		transition: background-color 0.1s;
+	}
+
+	/* Server-assigned "Match N" badge, mirrored from SwissFlowBracket so the
+	   two bracket surfaces read the same. Absolutely positioned in the card's
+	   top-right (the card is position:absolute, so it's the containing block);
+	   sits above the slot rows and stays out of hit-testing. */
+	.match-num {
+		position: absolute;
+		top: 0.2rem;
+		right: 0.35rem;
+		font-family: ui-monospace, monospace;
+		font-size: 0.6rem;
+		line-height: 1;
+		color: rgb(var(--color-tan));
+		opacity: 0.45;
+		pointer-events: none;
 	}
 
 	.match:hover {

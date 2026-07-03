@@ -54,7 +54,7 @@
 		upcomingScheduledParts,
 		type NumberedPart,
 	} from "$lib/tournament/parts";
-	import { matchNumbers, padMatchNumber } from "$lib/tournament/match-numbers";
+	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
@@ -81,9 +81,6 @@
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const partition = $derived(partitionSchedule(data.matches));
 
-	// Global "Match N" numbering (server-assigned), for the sesh export lines.
-	const matchNumberById = $derived(matchNumbers(data.matches));
-
 	// Admin "sesh.fyi"-style copy of upcoming (scheduled, still-pending) matches,
 	// soonest first, with Discord timestamps — paste into a Discord scheduling
 	// post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>` the relative
@@ -91,7 +88,7 @@
 	// tagged "(Part N)"; single-session matches read as just "Match NNN".
 	function seshText(): string {
 		const num = (m: TournamentMatch) =>
-			padMatchNumber(matchNumberById.get(m.match_id));
+			m.match_number != null ? padMatchNumber(m.match_number) : "?";
 		// Prefer a real Discord `<@id>` mention (pings the player) when the slot is
 		// a claimed account whose id we have (admin-only field); fall back to the
 		// display name for unclaimed slots.
@@ -120,11 +117,7 @@
 					m.slot_b_id != null &&
 					matchDisplayStatus(m) === "unscheduled",
 			)
-			.sort(
-				(a, b) =>
-					(matchNumberById.get(a.match_id) ?? 0) -
-					(matchNumberById.get(b.match_id) ?? 0),
-			)
+			.sort((a, b) => (a.match_number ?? 0) - (b.match_number ?? 0))
 			.map((m) => `Match ${num(m)} - ${vs(m)}`);
 
 		const blocks = [
