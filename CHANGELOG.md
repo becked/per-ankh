@@ -1,5 +1,24 @@
 # Changelog
 
+## [2026-07-02-3cfc3c2] - 2026-07-02
+
+### Features
+
+- (tournament) persisted global match numbers — [0d19a44](https://github.com/becked/per-ankh/commit/0d19a4430dbe99a9b85b8351b19d6d86a2f69dc2)
+- (tournament) show the Match N badge on championship bracket cards — [166c942](https://github.com/becked/per-ankh/commit/166c942306b4e5ff99cddc41d2a66834576dd42f)
+
+### Fixes
+
+- (tournament) show Match N in the popover and tidy match-number wiring — [7b17f9c](https://github.com/becked/per-ankh/commit/7b17f9cb271b3e80ef995ada5276c4aa9fb67d85)
+- (tournament) assign match_number when seeding local fixtures — [821ec9f](https://github.com/becked/per-ankh/commit/821ec9f6467cce989b1790b8cc3b52e69011b41e)
+
+### Other
+
+- (tournament) drop the match-number id→number map — [9ace4a0](https://github.com/becked/per-ankh/commit/9ace4a05286096b9c4cad1a5e58f087232225ea0)
+- (tournament) DRY the match_number assignment SQL — [9555b57](https://github.com/becked/per-ankh/commit/9555b57f6b3f0ce85ab9a3348420d24b917b7cb0)
+- (tournament) unpad the popover Match N and narrow padMatchNumber — [a748af8](https://github.com/becked/per-ankh/commit/a748af8c00806a60dc2aa299e35adfb3d476ac3b)
+- fix prettier formatting in match-numbers integration test — [3cfc3c2](https://github.com/becked/per-ankh/commit/3cfc3c29ee70cc63220b4e17691718a8631cea0a)
+
 ## [2026-07-02-9e763b4] - 2026-07-02
 
 ### Features
