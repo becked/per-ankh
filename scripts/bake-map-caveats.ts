@@ -10,18 +10,24 @@
 // key here) and the "can spawn with 10 or fewer city sites" caveat in the
 // admin scheduling DM (mapCaveatNote).
 //
-// The anchor is the atlas' own `slugify(cfgLabel(short))` — the compact label
-// ("Sq Duel Sm Seas AridP PS") lowercased with non-alphanumerics collapsed to
-// hyphens. That logic is replicated below from the atlas' index.astro and MUST
-// stay in sync with both the atlas and per-ankh's atlasAnchor()
-// (src/lib/tournament/map-script-options.ts); the pool (which slugs are
-// published, and therefore which variant options are "distinguishing") is
-// parsed out of the atlas' index.astro rather than duplicated here.
+// The anchor is `slugify(cfgLabelShort(...))` — the compact label ("Sq Duel Sm
+// Seas AridP PS") kebab-slugged. slugify is imported from the app
+// ($lib/utils/slug) — the SAME function per-ankh's atlasAnchor() uses — so the
+// baked keys and the runtime anchors can't drift on how they slug. The label
+// logic (cfgLabelShort) is a separate concern: it's mirrored below from the
+// atlas' own index.astro because it reads the atlas' config shape, and MUST
+// track the atlas (and, transitively, per-ankh's mapPoolLabel compact form).
+// The published pool is parsed out of index.astro rather than duplicated here.
 
 import { readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveAtlas } from "./lib/paths";
+import { slugify } from "../src/lib/utils/slug";
+
+// Single source of the low-city-sites threshold emitted into the generated
+// table (the runtime reads it back from there via mapCaveatNote).
+const LOW_CITY_SITES_THRESHOLD = 10;
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
@@ -82,12 +88,6 @@ function cfgLabelShort(c: AtlasConfig, multiVariant: Set<string>): string {
 		.filter(Boolean)
 		.join(" ");
 }
-
-const slugify = (s: string): string =>
-	s
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
 
 // --- Bake ---
 
@@ -158,14 +158,14 @@ async function main(): Promise<void> {
 		`// slug atlasAnchor() in $lib/tournament/map-script-options produces).\n` +
 		`// Re-run when the atlas pool or its generation stats change.\n\n` +
 		`// Minimum city sites observed across a map's generations. A map "can\n` +
-		`// sometimes spawn with 10 or fewer city sites" when its minimum is at or\n` +
+		`// sometimes spawn with ${LOW_CITY_SITES_THRESHOLD} or fewer city sites" when its minimum is at or\n` +
 		`// below LOW_CITY_SITES_THRESHOLD — surfaced in the admin scheduling DM so\n` +
 		`// players know a low-site roll may be rerolled. Maps absent here are not\n` +
 		`// in the atlas (no caveat, no link).\n` +
 		`export const MAP_MIN_CITY_SITES: Record<string, number> = {\n${body}\n};\n\n` +
 		`// A map can spawn few city sites when its observed minimum is at or below\n` +
 		`// this.\n` +
-		`export const LOW_CITY_SITES_THRESHOLD = 10;\n`;
+		`export const LOW_CITY_SITES_THRESHOLD = ${LOW_CITY_SITES_THRESHOLD};\n`;
 
 	writeFileSync(OUT, out);
 	console.log(`wrote ${OUT} (${rows.length} maps)`);

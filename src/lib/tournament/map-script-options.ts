@@ -14,6 +14,7 @@ import {
 import { MAP_SCRIPT_OPTIONS } from "$lib/generated/map-script-options";
 import { mapOptionChoiceLabel, mapOptionLabel } from "$lib/map-settings";
 import { mapScriptAbbrev, mapScriptLabel } from "$lib/tournament/map-scripts";
+import { slugify } from "$lib/utils/slug";
 
 // The generic option-label helpers live in $lib/map-settings (shared with the
 // game-detail Settings tab and save cards); re-export them so existing
@@ -254,17 +255,15 @@ export function mapPoolLabel(
 export const ATLAS_BASE_URL = "https://alcaras.github.io/owtournamentatlas/";
 
 // The owtournamentatlas URL anchor for a map instance: its canonical compact
-// label, lowercased with non-alphanumerics collapsed to hyphens — matching the
-// atlas' own `slugify(cfgLabel(short))` — e.g. "Sq Duel Sm Seas AridP PS" →
-// "sq-duel-sm-seas-aridp-ps". The variant trait is forced in so the anchor
-// carries it even for a script whose trait doesn't vary elsewhere in the pool.
+// label, slugged — matching the atlas' own `slugify(cfgLabel(short))` — e.g.
+// "Sq Duel Sm Seas AridP PS" → "sq-duel-sm-seas-aridp-ps". The variant trait is
+// forced in so the anchor carries it even for a script whose trait doesn't vary
+// elsewhere in the pool. slugify is the same function the map-caveat bake keys
+// its table with, so an anchor here and a baked key can't diverge on slugging.
 export function atlasAnchor(entry: MapPoolEntry): string {
 	const variant = VARIANT_OPTION_BY_SCRIPT[entry.script];
 	const forced = variant ? new Set([variant]) : new Set<string>();
-	return mapPoolLabel(entry, forced, true)
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, "-")
-		.replace(/^-+|-+$/g, "");
+	return slugify(mapPoolLabel(entry, forced, true));
 }
 
 // A deep link to a map instance on owtournamentatlas (base + #anchor).
@@ -294,12 +293,13 @@ export function mapCaveatNote(entry: MapPoolEntry): string {
 	const min = MAP_MIN_CITY_SITES[atlasAnchor(entry)];
 	const siteRisk = min != null && min <= LOW_CITY_SITES_THRESHOLD;
 	if (!landRisk && !siteRisk) return "";
+	const lowSites = `with ${LOW_CITY_SITES_THRESHOLD} or fewer city sites`;
 	const cause =
 		landRisk && siteRisk
-			? "without a land connection between capitals or with 10 or fewer city sites"
+			? `without a land connection between capitals or ${lowSites}`
 			: landRisk
 				? "without a land connection between capitals"
-				: "with 10 or fewer city sites";
+				: lowSites;
 	return (
 		`(this map can sometimes spawn ${cause} -- if that happens, a caster ` +
 		"will let you know and you can reroll the map. Or, if both players want " +
