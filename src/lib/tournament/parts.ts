@@ -139,11 +139,17 @@ export function partToIso(
 	return dt.toDate(tz).toISOString();
 }
 
+// The grace window the caster-facing surfaces use: a sitting stays "upcoming"
+// (and so still claimable / still listed as needing a caster) for 2h past its
+// start time, because a caster can still hop on to cast a match that began a
+// little while ago. Shared so every cast surface uses the identical window.
+export const CAST_GRACE_MS = 2 * 60 * 60 * 1000;
+
 // Upcoming scheduled parts of still-pending, non-bye matches, soonest first.
-// graceMs keeps a just-started sitting visible (e.g. the cast surfaces use a
-// 2h grace so a match that began 20 minutes ago is still claimable); 0 means
-// strictly future. The one definition of "upcoming" shared by every surface
-// that lists it (sesh export, caster sign-up), so they can't drift apart.
+// graceMs keeps a just-started sitting visible (e.g. the cast surfaces pass
+// CAST_GRACE_MS so a match that began 20 minutes ago is still claimable); 0
+// means strictly future. The one definition of "upcoming" shared by every
+// surface that lists it (sesh export, caster sign-up), so they can't drift.
 export function upcomingScheduledParts(
 	matches: TournamentMatch[],
 	graceMs = 0,

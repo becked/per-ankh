@@ -51,6 +51,7 @@
 		matchParts,
 		matchDisplayStatus,
 		upcomingScheduledParts,
+		CAST_GRACE_MS,
 		type NumberedPart,
 	} from "$lib/tournament/parts";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
@@ -86,7 +87,7 @@
 	// post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>` the relative
 	// "in X hours/days". A split match contributes one line per scheduled part,
 	// tagged "(Part N)"; single-session matches read as just "Match NNN".
-	function seshText(): string {
+	function seshText(scope: "all" | "needs-casters" = "all"): string {
 		const num = (m: TournamentMatch) =>
 			m.match_number != null ? padMatchNumber(m.match_number) : "?";
 		// Each side prefers a real Discord `<@id>` mention (pings the player) when
@@ -100,15 +101,28 @@
 					: (matchSlotDisplayName(m, side, slotMaps.labels) ?? "?");
 			});
 
-		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
-		// already passed (no grace: this is a forward-looking schedule post).
-		const scheduled = upcomingScheduledParts(data.matches).map(
-			({ match, part, partNumber, split }) => {
+		// The "all" (sesh) scope lists only parts still ahead — a forward-looking
+		// schedule post shouldn't name a sitting whose time has passed, so no
+		// grace. The needs-casters scope (the Cast tab's copy) instead mirrors the
+		// tab exactly: same "no caster signed up" rule AND the same CAST_GRACE_MS
+		// window, so a just-started casterless sitting the tab still flags as
+		// needing a caster also shows up in the copied recruit list.
+		const scheduled = upcomingScheduledParts(
+			data.matches,
+			scope === "needs-casters" ? CAST_GRACE_MS : 0,
+		)
+			.filter(({ part }) => scope === "all" || part.casters.length === 0)
+			.map(({ match, part, partNumber, split }) => {
 				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
 				const partTag = split ? `(Part ${partNumber}) ` : "";
 				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)`;
-			},
-		);
+			});
+		if (scope === "needs-casters") {
+			return (
+				"Matches needing casters\n\n" +
+				(scheduled.length ? scheduled.join("\n") : "(none — all covered)")
+			);
+		}
 		// "To be scheduled" = genuinely unscheduled matches only; a match that has
 		// already started (in progress, awaiting result) doesn't belong here.
 		const unscheduled = data.matches
@@ -465,7 +479,7 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
 
-				<!-- Controls card: title + sesh-copy on the left, zone + view toggles on the right. -->
+				<!-- Controls card: title + copy tools on the left (sesh always; needs-casters in the Cast view), zone + view toggles on the right. -->
 				<div
 					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
 					style="background-color: rgb(var(--color-surface-raised));"
@@ -510,6 +524,50 @@
 												stroke-linecap="round"
 												stroke-linejoin="round"
 												d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"
+											/>
+										</svg>
+									{/if}
+								{/snippet}
+							</CopyButton>
+						{/if}
+						{#if isAdmin && view === "cast"}
+							<CopyButton
+								text={() => seshText("needs-casters")}
+								label="Copy matches needing casters"
+								title="Copy upcoming matches that still need a caster (soonest first) with Discord timestamps"
+								class="inline-flex items-center justify-center rounded border border-surface p-1 text-tan transition-colors hover:bg-surface-hover hover:text-orange"
+							>
+								{#snippet children(copied)}
+									{#if copied}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M5 13l4 4L19 7"
+											/>
+										</svg>
+									{:else}
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-4 w-4"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
 											/>
 										</svg>
 									{/if}
