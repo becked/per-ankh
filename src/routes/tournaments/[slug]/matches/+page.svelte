@@ -479,7 +479,7 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
 
-				<!-- Controls card: title + sesh-copy on the left, zone + view toggles on the right. -->
+				<!-- Controls card: title + copy tools on the left (sesh always; needs-casters in the Cast view), zone + view toggles on the right. -->
 				<div
 					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
 					style="background-color: rgb(var(--color-surface-raised));"
