@@ -17,7 +17,7 @@
 		matchSlotDisplayName,
 		matchupLabel,
 	} from "$lib/tournament/match-occupant";
-	import { upcomingScheduledParts } from "$lib/tournament/parts";
+	import { upcomingScheduledParts, CAST_GRACE_MS } from "$lib/tournament/parts";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
 	import {
 		atlasMapUrl,
@@ -52,10 +52,9 @@
 	let needsOnly = $state(true);
 	let busyKey = $state<string | null>(null);
 
-	// Upcoming scheduled parts (shared definition), with a 2h grace so a match
-	// that began minutes ago is still claimable by a late caster.
-	const GRACE_MS = 2 * 60 * 60 * 1000;
-	const upcoming = $derived(upcomingScheduledParts(matches, GRACE_MS));
+	// Upcoming scheduled parts (shared definition), with the shared cast grace
+	// so a match that began minutes ago is still claimable by a late caster.
+	const upcoming = $derived(upcomingScheduledParts(matches, CAST_GRACE_MS));
 	// Header counts are per MATCH (a split match with two upcoming sittings
 	// shouldn't count twice); the rows themselves stay per part.
 	const upcomingMatchCount = $derived(

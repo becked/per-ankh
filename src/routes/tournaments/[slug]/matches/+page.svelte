@@ -51,6 +51,7 @@
 		matchParts,
 		matchDisplayStatus,
 		upcomingScheduledParts,
+		CAST_GRACE_MS,
 		type NumberedPart,
 	} from "$lib/tournament/parts";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
@@ -100,11 +101,16 @@
 					: (matchSlotDisplayName(m, side, slotMaps.labels) ?? "?");
 			});
 
-		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
-		// already passed (no grace: this is a forward-looking schedule post).
-		// The needs-casters scope (the Cast tab's copy) keeps only sittings with
-		// no caster signed up — same rule as the tab's "needs a caster" flag.
-		const scheduled = upcomingScheduledParts(data.matches)
+		// The "all" (sesh) scope lists only parts still ahead — a forward-looking
+		// schedule post shouldn't name a sitting whose time has passed, so no
+		// grace. The needs-casters scope (the Cast tab's copy) instead mirrors the
+		// tab exactly: same "no caster signed up" rule AND the same CAST_GRACE_MS
+		// window, so a just-started casterless sitting the tab still flags as
+		// needing a caster also shows up in the copied recruit list.
+		const scheduled = upcomingScheduledParts(
+			data.matches,
+			scope === "needs-casters" ? CAST_GRACE_MS : 0,
+		)
 			.filter(({ part }) => scope === "all" || part.casters.length === 0)
 			.map(({ match, part, partNumber, split }) => {
 				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
