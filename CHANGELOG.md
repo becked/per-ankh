@@ -1,5 +1,27 @@
 # Changelog
 
+## [2026-07-03-488a3e7] - 2026-07-03
+
+### Features
+
+- (tournament) admin copy tools — DM, thread title, sesh export — [7692395](https://github.com/becked/per-ankh/commit/76923951b6967d97aa5e0587c4f3cceb88c11a08)
+- (tournament) caster self-service + Cast view with shareable filters — [145da4c](https://github.com/becked/per-ankh/commit/145da4ce1d934ed94d51fd5fff898274a8aba120)
+
+### Fixes
+
+- (tournament) lint-clean Cast view URL sync + drop dead eslint directives — [14dbcc8](https://github.com/becked/per-ankh/commit/14dbcc8df83ee81977eb6ba1683f33bf515c53cd)
+- (tournament) record the schedule ledger event on a match schedule PATCH — [de4d000](https://github.com/becked/per-ankh/commit/de4d000b66db8584184b68f34ebf023879c7670c)
+
+### Other
+
+- (tournament) drop the execCommand clipboard fallback — [c579a5b](https://github.com/becked/per-ankh/commit/c579a5bf41fde7683704ca38c6d9bd995a8c507b)
+- (tournament) single-source the atlas-anchor slug and caveat threshold — [a50b502](https://github.com/becked/per-ankh/commit/a50b50255cc07af187a3cfbc02b853ea0428fcba)
+- document OWTOURNAMENTATLAS_DIR in .env.example — [c5c94ff](https://github.com/becked/per-ankh/commit/c5c94ffe28a4c5050d55d35ba807ba9f4d50e847)
+- (tournament) make the copy buttons icon-only — [bb3a97b](https://github.com/becked/per-ankh/commit/bb3a97bab0176c53aa98697f13100edfc00df125)
+- (tournament) consolidate match labels and tidy the matches page — [3998a0d](https://github.com/becked/per-ankh/commit/3998a0d159c6a09ca72051b897527bfd52f222c8)
+- (tournament) fix stale caster deep-link example in rules — [dc998a6](https://github.com/becked/per-ankh/commit/dc998a61439649b3f748b5931cd8052992ce42d0)
+- apply prettier formatting to public-reads test — [488a3e7](https://github.com/becked/per-ankh/commit/488a3e7a2052a9790bfbf9bd61fdf734723a17fe)
+
 ## [2026-07-02-8925e9b] - 2026-07-02
 
 ### Fixes
