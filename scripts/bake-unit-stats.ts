@@ -1,12 +1,13 @@
-// Bake the UNIT_<zType> → { strength, tech, naval } table from the OW reference
-// XML (Infos/unit.xml). Powers the Military tab's "milpower built" figure
-// (milpower per unit = displayed strength × 10 = the XML's <iStrength>) and the
-// unit-tech-unlock markers in the event rail.
+// Bake the UNIT_<zType> → { strength, tech, naval, cycle } table from the OW
+// reference XML (Infos/unit.xml). Powers the Military tab's "milpower built"
+// figure (milpower per unit = displayed strength × 10 = the XML's <iStrength>),
+// the unit-tech-unlock markers in the event rail, and the army-composition
+// breakdown (via the game's own <UnitCycle> grouping — see classifyUnit).
 //
 // SOURCE (local-only, via the Reference/ resolver — set OLD_WORLD_REFERENCE_DIR
 // to an OW install or an XML checkout such as the owtournamentatlas repo):
 //   Reference/XML/Infos/unit.xml — <Entry> with <zType>, <iStrength>,
-//                                   <TechPrereq>, <zAudioMovementType>
+//                                   <TechPrereq>, <zAudioMovementType>, <UnitCycle>
 //
 // Output: src/lib/generated/unit-stats.ts (committed; regenerate on Reference
 // refresh). Deterministic — re-running with the same XML is byte-identical.
@@ -30,6 +31,9 @@ interface UnitEntry {
 	// array if the tag ever repeats; take the first prereq in that case.
 	TechPrereq?: string | string[];
 	zAudioMovementType?: string;
+	// The game's own unit grouping (UNITCYCLE_MILITARY_INFANTRY / _RANGED /
+	// _MOUNTED / _SIEGE / _WATER for combat units, plus civilian cycles).
+	UnitCycle?: string;
 }
 
 const parser = new XMLParser({
@@ -55,7 +59,12 @@ async function main(): Promise<void> {
 
 	const stats: Record<
 		string,
-		{ strength: number; tech: string | null; naval: boolean }
+		{
+			strength: number;
+			tech: string | null;
+			naval: boolean;
+			cycle: string | null;
+		}
 	> = {};
 	for (const u of entries) {
 		const zType = u.zType;
@@ -68,6 +77,9 @@ async function main(): Promise<void> {
 			tech:
 				(Array.isArray(u.TechPrereq) ? u.TechPrereq[0] : u.TechPrereq) ?? null,
 			naval: u.zAudioMovementType === "NAVAL",
+			// Raw <UnitCycle>; classifyUnit maps the military cycles to chart
+			// classes and treats civilian cycles as non-combat.
+			cycle: u.UnitCycle ?? null,
 		};
 	}
 
@@ -76,7 +88,8 @@ async function main(): Promise<void> {
 		.map((k) => {
 			const s = stats[k];
 			const tech = s.tech == null ? "null" : JSON.stringify(s.tech);
-			return `\t${JSON.stringify(k)}: { strength: ${s.strength}, tech: ${tech}, naval: ${s.naval} },`;
+			const cycle = s.cycle == null ? "null" : JSON.stringify(s.cycle);
+			return `\t${JSON.stringify(k)}: { strength: ${s.strength}, tech: ${tech}, naval: ${s.naval}, cycle: ${cycle} },`;
 		})
 		.join("\n");
 
@@ -85,11 +98,13 @@ async function main(): Promise<void> {
 		`// Do not edit by hand — re-run \`npm run bake:unit-stats\`.\n` +
 		`//\n` +
 		`// strength = displayed unit strength (military power per unit = strength × 10).\n` +
-		`// tech = the unit's unlocking tech (TechPrereq), or null. naval = sea unit.\n\n` +
+		`// tech = the unit's unlocking tech (TechPrereq), or null. naval = sea unit.\n` +
+		`// cycle = the game's <UnitCycle> grouping (UNITCYCLE_*), or null.\n\n` +
 		`export interface UnitStat {\n` +
 		`\tstrength: number;\n` +
 		`\ttech: string | null;\n` +
 		`\tnaval: boolean;\n` +
+		`\tcycle: string | null;\n` +
 		`}\n\n` +
 		`export const UNIT_STATS: Readonly<Record<string, UnitStat>> = {\n` +
 		`${body}\n};\n`;

@@ -65,9 +65,9 @@
 	const UNIT_CLASS_ABBREV: Record<UnitClass, string> = {
 		Infantry: "Inf",
 		Ranged: "Ran",
-		Cavalry: "Cav",
+		Mounted: "Mount",
 		Siege: "Siege",
-		Naval: "Nav",
+		Water: "Water",
 	};
 
 	// ─── Player summaries with army composition ──────────────────────

@@ -705,7 +705,7 @@
 	});
 
 	// ─── Army composition donuts ──────────────────────────────────────
-	// Build a class-composition donut (Infantry/Ranged/Cavalry/Siege/Naval)
+	// Build a class-composition donut (Infantry/Ranged/Mounted/Siege/Water)
 	// from a set of units, or null when there are no combat units. Used both
 	// for the standalone per-player donuts (FFA) and the per-block donuts under
 	// each H2H comparison.

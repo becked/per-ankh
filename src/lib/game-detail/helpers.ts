@@ -12,6 +12,7 @@ import type { EChartsOption } from "echarts";
 import { formatEnum } from "$lib/utils/formatting";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+import { UNIT_STATS } from "$lib/generated/unit-stats";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -520,6 +521,24 @@ export function getSpritePath(
 }
 
 // ─── Unit Classification ────────────────────────────────────────────
+//
+// Chart labels follow the game's own military UnitCycle names: Infantry,
+// Ranged, Mounted, Siege, Water (see MILITARY_CYCLE_CLASS below). classifyUnit
+// resolves each unit from its baked <UnitCycle>; the keyword heuristic is only
+// a fallback for units absent from Reference (unreleased DLC / mods).
+
+export type UnitClass = "Infantry" | "Ranged" | "Mounted" | "Siege" | "Water";
+
+// The game's five military unit cycles (unit.xml <UnitCycle>) → our chart
+// labels. Civilian cycles (worker, settler, scout, caravan, disciple) are
+// deliberately absent, so they resolve to null and drop out of the breakdown.
+const MILITARY_CYCLE_CLASS: Record<string, UnitClass> = {
+	UNITCYCLE_MILITARY_INFANTRY: "Infantry",
+	UNITCYCLE_MILITARY_RANGED: "Ranged",
+	UNITCYCLE_MILITARY_MOUNTED: "Mounted",
+	UNITCYCLE_MILITARY_SIEGE: "Siege",
+	UNITCYCLE_MILITARY_WATER: "Water",
+};
 
 const RANGED_KEYWORDS = [
 	"ARCHER",
@@ -530,7 +549,7 @@ const RANGED_KEYWORDS = [
 	"JAVELINEER",
 	"CLUB_THROWER",
 ];
-const CAVALRY_KEYWORDS = [
+const MOUNTED_KEYWORDS = [
 	"CAVALRY",
 	"CHARIOT",
 	"CATAPHRACT",
@@ -549,7 +568,7 @@ const SIEGE_KEYWORDS = [
 	"RAM",
 	"TORSION",
 ];
-const NAVAL_KEYWORDS = [
+const WATER_KEYWORDS = [
 	"BIREME",
 	"TRIREME",
 	"DROMON",
@@ -576,14 +595,22 @@ const SUPPORT_KEYWORDS = [
 	"TRADER",
 ];
 
-export type UnitClass = "Infantry" | "Ranged" | "Cavalry" | "Siege" | "Naval";
-
 export function classifyUnit(unitType: string): UnitClass | null {
+	// Prefer the game's canonical grouping. A unit present in the baked table
+	// with a non-military cycle (caravan/disciple/…) maps to null → excluded.
+	const cycle = UNIT_STATS[unitType]?.cycle;
+	if (cycle != null) return MILITARY_CYCLE_CLASS[cycle] ?? null;
+	// Fallback for units absent from Reference (unreleased DLC / mods not yet
+	// re-baked): approximate the class from the zType name.
+	return classifyByKeyword(unitType);
+}
+
+function classifyByKeyword(unitType: string): UnitClass | null {
 	const upper = unitType.toUpperCase();
 	if (SUPPORT_KEYWORDS.some((k) => upper.includes(k))) return null;
-	if (NAVAL_KEYWORDS.some((k) => upper.includes(k))) return "Naval";
+	if (WATER_KEYWORDS.some((k) => upper.includes(k))) return "Water";
 	if (SIEGE_KEYWORDS.some((k) => upper.includes(k))) return "Siege";
-	if (CAVALRY_KEYWORDS.some((k) => upper.includes(k))) return "Cavalry";
+	if (MOUNTED_KEYWORDS.some((k) => upper.includes(k))) return "Mounted";
 	if (RANGED_KEYWORDS.some((k) => upper.includes(k))) return "Ranged";
 	return "Infantry";
 }
@@ -591,9 +618,9 @@ export function classifyUnit(unitType: string): UnitClass | null {
 export const UNIT_CLASS_COLORS: Record<UnitClass, string> = {
 	Infantry: "#C87941",
 	Ranged: "#B8860B",
-	Cavalry: "#CD853F",
+	Mounted: "#CD853F",
 	Siege: "#A0522D",
-	Naval: "#8B4513",
+	Water: "#8B4513",
 };
 
 // ─── Timeline Types ─────────────────────────────────────────────────
