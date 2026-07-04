@@ -182,6 +182,11 @@
 </script>
 
 <div class="relative">
+	<!-- The data-* attributes below suppress password-manager autofill: Chrome
+	     and the managers ignore autocomplete="off" on name-like fields and
+	     inject the viewer's own name (surfaced as admins finding themselves set
+	     as caster on their own match). They're the documented opt-outs for
+	     1Password / LastPass / Bitwarden / Dashlane respectively. -->
 	<input
 		type="text"
 		{value}
@@ -196,6 +201,10 @@
 		class="block w-full rounded {inputClass} p-1.5 text-xs text-tan"
 		{...inputAttrs}
 		autocomplete="off"
+		data-1p-ignore
+		data-lpignore="true"
+		data-bwignore
+		data-form-type="other"
 		use:maybeAutofocus
 	/>
 
