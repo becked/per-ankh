@@ -18,6 +18,7 @@
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
+	import { matchBracketLabel } from "$lib/tournament/bracket-label";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import UserAutocomplete from "$lib/tournament/UserAutocomplete.svelte";
 	import SchedulePopover from "$lib/tournament/SchedulePopover.svelte";
@@ -738,13 +739,7 @@
 			</div>
 			<div class="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-xs">
 				<span class="text-tan opacity-70">
-					{#if match.phase === "championship"}
-						Championship
-					{:else if match.division}
-						{match.division === "A"
-							? tournament.division_a_name
-							: tournament.division_b_name}
-					{/if}
+					{matchBracketLabel(tournament, match)}
 					{#if match.round_number}
 						· Round {match.round_number}
 					{/if}

@@ -14,6 +14,7 @@
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
 	import { runAction } from "$lib/tournament/async-action";
+	import { divisionName } from "$lib/tournament/bracket-label";
 	import FormFooter from "$lib/tournament/FormFooter.svelte";
 
 	interface Props {
@@ -33,8 +34,7 @@
 	const counts = $derived(tournament.slot_counts.swiss_by_division);
 
 	function divisionLabel(d: Division): string {
-		const name =
-			d === "A" ? tournament.division_a_name : tournament.division_b_name;
+		const name = divisionName(tournament, d);
 		const n = counts[d];
 		const playersLabel = n === 1 ? "1 player" : `${n} players`;
 		return `${name} (${playersLabel})`;

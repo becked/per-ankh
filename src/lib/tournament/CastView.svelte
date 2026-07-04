@@ -12,7 +12,11 @@
 	} from "$lib/api-cloud";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
-	import { matchSlotDisplayName } from "$lib/tournament/match-occupant";
+	import { matchBracketLabel } from "$lib/tournament/bracket-label";
+	import {
+		matchSlotDisplayName,
+		matchupLabel,
+	} from "$lib/tournament/match-occupant";
 	import { upcomingScheduledParts } from "$lib/tournament/parts";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
 	import {
@@ -74,9 +78,10 @@
 		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=on]:bg-surface-raised";
 
 	function vs(m: TournamentMatch): string {
-		return `${matchSlotDisplayName(m, "a", slotLabels) ?? "?"} v ${
-			matchSlotDisplayName(m, "b", slotLabels) ?? "?"
-		}`;
+		return matchupLabel(
+			m,
+			(side) => matchSlotDisplayName(m, side, slotLabels) ?? "?",
+		);
 	}
 	function mapEntry(m: TournamentMatch) {
 		return poolEntryById(tournament.map_pool, m.map_pool_id);
@@ -123,16 +128,6 @@
 				success: "Dropped",
 			},
 		);
-	}
-
-	// The bracket a match belongs to, as a short label.
-	function bracketLabel(m: TournamentMatch): string {
-		if (m.phase === "championship") return "Championship";
-		if (m.division)
-			return m.division === "A"
-				? tournament.division_a_name
-				: tournament.division_b_name;
-		return "";
 	}
 </script>
 
@@ -213,7 +208,7 @@
 							· {vs(m)}
 						</div>
 						<div class="truncate text-xs text-muted">
-							{bracketLabel(m)}
+							{matchBracketLabel(tournament, m)}
 							{#if entry}
 								· {#if mapInAtlas(entry)}
 									<!-- eslint-disable svelte/no-navigation-without-resolve -->

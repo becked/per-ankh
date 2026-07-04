@@ -72,3 +72,19 @@ export function matchSlotAvatarUrl(
 	}
 	return liveBySlotId[slotId] ?? null;
 }
+
+// Builds the "A v B" matchup string — the single home for that shape, shared by
+// the matches table/calendar, the Cast view, and the sesh export. `sideLabel`
+// resolves each side's text (a display name with the caller's own fallback, or a
+// Discord mention in the sesh export); side B collapses to `byeText` when the
+// match has no second slot, so the bye rule lives here rather than being
+// reimplemented (or forgotten) at each call site.
+export function matchupLabel(
+	match: Pick<MatchDisplayNameLike, "slot_b_id">,
+	sideLabel: (side: "a" | "b") => string,
+	byeText = "Bye",
+): string {
+	const a = sideLabel("a");
+	const b = match.slot_b_id === null ? byeText : sideLabel("b");
+	return `${a} v ${b}`;
+}

@@ -5,7 +5,7 @@
 	// picks the active clock (times render in one zone; the calendar buckets days
 	// by it). Clicking any match opens the match card anchored at the click point.
 	import { fade } from "svelte/transition";
-	import { invalidateAll, replaceState } from "$app/navigation";
+	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
@@ -32,16 +32,15 @@
 		matchSlotAvatarUrl,
 		matchSlotDisplayName,
 		matchSlotNation,
+		matchupLabel,
 	} from "$lib/tournament/match-occupant";
 	import {
 		MATCH_COLUMNS,
 		matchStatusGroup,
-		matchCasterGroup,
 		matchSortInstant,
 		DEFAULT_MATCHES_TABLE_STATE,
 		type MatchSortContext,
 		type MatchStatusGroup,
-		type MatchCasterGroup,
 	} from "$lib/tournament/matches-table";
 	import {
 		partitionSchedule,
@@ -90,15 +89,16 @@
 	function seshText(): string {
 		const num = (m: TournamentMatch) =>
 			m.match_number != null ? padMatchNumber(m.match_number) : "?";
-		// Prefer a real Discord `<@id>` mention (pings the player) when the slot is
-		// a claimed account whose id we have (admin-only field); fall back to the
-		// display name for unclaimed slots.
-		const who = (m: TournamentMatch, side: "a" | "b") => {
-			const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
-			if (id) return `<@${id}>`;
-			return matchSlotDisplayName(m, side, slotMaps.labels) ?? "?";
-		};
-		const vs = (m: TournamentMatch) => `${who(m, "a")} v ${who(m, "b")}`;
+		// Each side prefers a real Discord `<@id>` mention (pings the player) when
+		// the slot is a claimed account whose id we have (admin-only field), and
+		// falls back to the display name for unclaimed slots.
+		const vs = (m: TournamentMatch) =>
+			matchupLabel(m, (side) => {
+				const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
+				return id
+					? `<@${id}>`
+					: (matchSlotDisplayName(m, side, slotMaps.labels) ?? "?");
+			});
 
 		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
 		// already passed (no grace: this is a forward-looking schedule post).
@@ -174,14 +174,6 @@
 			"completed",
 		] as const) ?? ["scheduled", "in_progress", "unscheduled"],
 	);
-	// Caster presence toggle — both on by default (show every match regardless
-	// of whether a caster is assigned).
-	let casterFilter = $state<MatchCasterGroup[]>(
-		csvParam("caster", ["casted", "uncasted"] as const) ?? [
-			"casted",
-			"uncasted",
-		],
-	);
 
 	// Reflect the current view/zone/filters into the URL (defaults omitted) so
 	// the address bar is always a shareable deep link to what's on screen.
@@ -200,16 +192,22 @@
 		) {
 			parts.push(`status=${statusFilter.join(",")}`);
 		}
-		if (casterFilter.length !== 2) parts.push(`caster=${casterFilter.join(",")}`);
 		const search = parts.join("&");
 		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
 		if (`${page.url.pathname}${page.url.search}` !== target) {
-			// Same-page shallow URL sync — the filters live entirely client-side,
-			// so this replaces the address bar without re-running load. resolve()
-			// brands typed routes and can't express a dynamic query string; this
-			// mirrors the dynamic-search precedent in upload/+page.svelte.
+			// Same-page filter sync via goto — the app's navigation primitive (see
+			// the URL writers in the stats/games tables): replaceState so filter
+			// toggles don't stack history, keepFocus/noScroll so they don't jump the
+			// page or drop focus. The [slug] layout load reads only route params,
+			// never the query string, so this updates the address bar without
+			// refetching. resolve() brands typed routes and can't express a dynamic
+			// query string, matching the precedent in upload/+page.svelte.
 			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic filter query string; resolve()'s branded types don't admit it
-			replaceState(target, page.state);
+			void goto(target, {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true,
+			});
 		}
 	});
 	const statusItemClass =
@@ -261,8 +259,6 @@
 		let list = tableEligible.filter((m) =>
 			statusFilter.includes(matchStatusGroup(m) as MatchStatusGroup),
 		);
-
-		list = list.filter((m) => casterFilter.includes(matchCasterGroup(m)));
 
 		if (selectedBrackets.length > 0) {
 			list = list.filter((m) => selectedBrackets.includes(bracketKey(m)));
@@ -426,12 +422,10 @@
 	}
 
 	function shortMatchup(m: TournamentMatch): string {
-		const a = matchSlotDisplayName(m, "a", slotMaps.labels) ?? "—";
-		const b =
-			m.slot_b_id !== null
-				? (matchSlotDisplayName(m, "b", slotMaps.labels) ?? "—")
-				: "Bye";
-		return `${a} v ${b}`;
+		return matchupLabel(
+			m,
+			(side) => matchSlotDisplayName(m, side, slotMaps.labels) ?? "—",
+		);
 	}
 </script>
 
@@ -556,7 +550,7 @@
 							</button>
 						</div>
 
-						<!-- List / Calendar / Cast view switch (bracket-card pattern). -->
+						<!-- List / Calendar / Casts view switch (bracket-card pattern). -->
 						<Tabs.Root bind:value={view}>
 							<Tabs.List
 								class="relative grid shrink-0 grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
@@ -578,7 +572,7 @@
 									Calendar
 								</Tabs.Trigger>
 								<Tabs.Trigger value="cast" class={viewTriggerClass}>
-									Cast
+									Casts
 								</Tabs.Trigger>
 							</Tabs.List>
 						</Tabs.Root>
@@ -644,7 +638,7 @@
 									</TableFilterColumn>
 
 									<div class="min-w-0 flex-1">
-										<!-- Status + caster filters above the table, styled like the bracket view tabs. -->
+										<!-- Status filter above the table, styled like the bracket view tabs. -->
 										<div class="mb-3 flex flex-wrap justify-end gap-2">
 											<ToggleGroup.Root
 												type="multiple"
@@ -678,29 +672,6 @@
 													class={statusItemClass}
 												>
 													Completed
-												</ToggleGroup.Item>
-											</ToggleGroup.Root>
-
-											<ToggleGroup.Root
-												type="multiple"
-												value={casterFilter}
-												onValueChange={(v) =>
-													(casterFilter = v as MatchCasterGroup[])}
-												class="flex overflow-hidden rounded-lg border-2 border-surface"
-												style="background-color: rgb(var(--color-surface));"
-												aria-label="Caster"
-											>
-												<ToggleGroup.Item
-													value="casted"
-													class={statusItemClass}
-												>
-													Casted
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="uncasted"
-													class={statusItemClass}
-												>
-													Uncasted
 												</ToggleGroup.Item>
 											</ToggleGroup.Root>
 										</div>

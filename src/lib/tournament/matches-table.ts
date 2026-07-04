@@ -1,6 +1,6 @@
 import type { TournamentMatch } from "$lib/api-cloud";
 import type { TableState } from "$lib/game-detail/helpers";
-import { matchSlotDisplayName } from "./match-occupant";
+import { matchSlotDisplayName, matchupLabel } from "./match-occupant";
 import {
 	matchDisplayStatus,
 	matchParts,
@@ -17,16 +17,6 @@ export type MatchStatusGroup = MatchDisplayStatus;
 
 export function matchStatusGroup(m: TournamentMatch): MatchStatusGroup | null {
 	return matchDisplayStatus(m);
-}
-
-// Caster presence, as a filter group parallel to the status toggle: a match
-// either has a caster signed up on some part or it doesn't.
-export type MatchCasterGroup = "casted" | "uncasted";
-
-export function matchCasterGroup(m: TournamentMatch): MatchCasterGroup {
-	return matchParts(m).some((p) => p.casters.length > 0)
-		? "casted"
-		: "uncasted";
 }
 
 // The instant a timed match sorts by: any match with an upcoming part sorts by
@@ -75,11 +65,11 @@ export const MATCH_COLUMNS: MatchColumn[] = [
 		// One matchup column ("A v B"); sorts by the pairing text so the two
 		// players sort together. Byes never reach the table (filtered out), so
 		// both sides always resolve to a real name here.
-		sortValue: (m, ctx) => {
-			const a = matchSlotDisplayName(m, "a", ctx.slotLabels) ?? "";
-			const b = matchSlotDisplayName(m, "b", ctx.slotLabels) ?? "";
-			return `${a} v ${b}`.toLowerCase();
-		},
+		sortValue: (m, ctx) =>
+			matchupLabel(
+				m,
+				(side) => matchSlotDisplayName(m, side, ctx.slotLabels) ?? "",
+			).toLowerCase(),
 	},
 	{
 		key: "scheduled_at",

@@ -435,6 +435,21 @@ export async function handleTournamentWithdraw(
 // Every attempt CASes on parts_rev and retries against fresh state.
 const CASTER_CAS_ATTEMPTS = 3;
 
+// Resolves the caller's own caster entry once, after the auth + rate-limit gate
+// (so a 429'd call does no extra work) and before the CAS loop (so a retry
+// doesn't re-query it). The cast path uses it to snapshot the caller's username;
+// the uncast path has nothing to prepare.
+type PrepareCasterEntry = (userId: string) => Promise<MatchPartCaster>;
+
+// Applies the caller's intended change to the part's caster list in place,
+// against freshly-loaded state on each CAS attempt. Returns an error Response to
+// reject the request (e.g. too many casters), or null to accept and commit.
+type ApplyCasterMutation = (
+	part: MatchPart,
+	userId: string,
+	me: MatchPartCaster | undefined,
+) => Response | null;
+
 async function mutateMyCasterEntry(
 	tournamentId: string,
 	matchId: string,
@@ -445,14 +460,8 @@ async function mutateMyCasterEntry(
 		// Casting requires a pending match; self-removal is also allowed on
 		// decided ones (byes rejected either way).
 		allowDecided: boolean;
-		// Runs once after auth + the rate-limit gate (so a 429'd call does no
-		// extra work); the result is handed to every mutate attempt.
-		prepare?: (userId: string) => Promise<MatchPartCaster>;
-		mutate: (
-			part: MatchPart,
-			userId: string,
-			me: MatchPartCaster | undefined,
-		) => Response | null;
+		prepare?: PrepareCasterEntry;
+		mutate: ApplyCasterMutation;
 	},
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
