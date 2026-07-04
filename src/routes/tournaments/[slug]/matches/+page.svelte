@@ -5,7 +5,7 @@
 	// picks the active clock (times render in one zone; the calendar buckets days
 	// by it). Clicking any match opens the match card anchored at the click point.
 	import { fade } from "svelte/transition";
-	import { invalidateAll } from "$app/navigation";
+	import { goto, invalidateAll } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
@@ -32,16 +32,15 @@
 		matchSlotAvatarUrl,
 		matchSlotDisplayName,
 		matchSlotNation,
+		matchupLabel,
 	} from "$lib/tournament/match-occupant";
 	import {
 		MATCH_COLUMNS,
 		matchStatusGroup,
-		matchCasterGroup,
 		matchSortInstant,
 		DEFAULT_MATCHES_TABLE_STATE,
 		type MatchSortContext,
 		type MatchStatusGroup,
-		type MatchCasterGroup,
 	} from "$lib/tournament/matches-table";
 	import {
 		partitionSchedule,
@@ -55,6 +54,7 @@
 		type NumberedPart,
 	} from "$lib/tournament/parts";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
+	import CastView from "$lib/tournament/CastView.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
@@ -89,15 +89,16 @@
 	function seshText(): string {
 		const num = (m: TournamentMatch) =>
 			m.match_number != null ? padMatchNumber(m.match_number) : "?";
-		// Prefer a real Discord `<@id>` mention (pings the player) when the slot is
-		// a claimed account whose id we have (admin-only field); fall back to the
-		// display name for unclaimed slots.
-		const who = (m: TournamentMatch, side: "a" | "b") => {
-			const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
-			if (id) return `<@${id}>`;
-			return matchSlotDisplayName(m, side, slotMaps.labels) ?? "?";
-		};
-		const vs = (m: TournamentMatch) => `${who(m, "a")} v ${who(m, "b")}`;
+		// Each side prefers a real Discord `<@id>` mention (pings the player) when
+		// the slot is a claimed account whose id we have (admin-only field), and
+		// falls back to the display name for unclaimed slots.
+		const vs = (m: TournamentMatch) =>
+			matchupLabel(m, (side) => {
+				const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
+				return id
+					? `<@${id}>`
+					: (matchSlotDisplayName(m, side, slotMaps.labels) ?? "?");
+			});
 
 		// Only parts still ahead — "Upcoming" shouldn't list a sitting that has
 		// already passed (no grace: this is a forward-looking schedule post).
@@ -131,8 +132,29 @@
 	}
 
 	// View + zone controls. zone picks the single clock everything reads in.
-	let view = $state<"list" | "calendar">("list");
-	let zone = $state<ScheduleZone>("utc");
+	// View, zone, and the two filters below are deep-linkable via query params
+	// (?view=cast, ?caster=uncasted, ?status=scheduled, ?zone=local) so an admin
+	// can point people straight at e.g. "scheduled matches that need a caster".
+	// Defaults stay out of the URL; state changes replace (not push) history.
+	const params = new URLSearchParams(page.url.search);
+	const VIEWS = ["list", "calendar", "cast"] as const;
+	type MatchesView = (typeof VIEWS)[number];
+	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "list";
+	let view = $state<MatchesView>(initialView);
+	let zone = $state<ScheduleZone>(
+		params.get("zone") === "local" ? "local" : "utc",
+	);
+	function csvParam<T extends string>(
+		name: string,
+		all: readonly T[],
+	): T[] | null {
+		const raw = params.get(name);
+		if (!raw) return null;
+		const picked = raw
+			.split(",")
+			.filter((x): x is T => (all as readonly string[]).includes(x));
+		return picked.length > 0 ? picked : null;
+	}
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
@@ -144,14 +166,50 @@
 	// --- Table state. tableState (search + sort) follows the Cities pattern;
 	// statusFilter is a separate multi-toggle (completed off by default).
 	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
-	let statusFilter = $state<MatchStatusGroup[]>([
-		"scheduled",
-		"in_progress",
-		"unscheduled",
-	]);
-	// Caster presence toggle — both on by default (show every match regardless
-	// of whether a caster is assigned).
-	let casterFilter = $state<MatchCasterGroup[]>(["casted", "uncasted"]);
+	let statusFilter = $state<MatchStatusGroup[]>(
+		csvParam("status", [
+			"scheduled",
+			"in_progress",
+			"unscheduled",
+			"completed",
+		] as const) ?? ["scheduled", "in_progress", "unscheduled"],
+	);
+
+	// Reflect the current view/zone/filters into the URL (defaults omitted) so
+	// the address bar is always a shareable deep link to what's on screen.
+	$effect(() => {
+		// Build the query from plain string parts rather than a mutable
+		// URLSearchParams — svelte/prefer-svelte-reactivity flags the built-in
+		// class inside an effect. Every value is a closed enum of URL-safe
+		// characters, so no encoding is needed.
+		const parts: string[] = [];
+		if (view !== "list") parts.push(`view=${view}`);
+		if (zone !== "utc") parts.push(`zone=${zone}`);
+		const defaultStatus = ["scheduled", "in_progress", "unscheduled"];
+		if (
+			statusFilter.length !== defaultStatus.length ||
+			defaultStatus.some((g) => !statusFilter.includes(g as MatchStatusGroup))
+		) {
+			parts.push(`status=${statusFilter.join(",")}`);
+		}
+		const search = parts.join("&");
+		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
+		if (`${page.url.pathname}${page.url.search}` !== target) {
+			// Same-page filter sync via goto — the app's navigation primitive (see
+			// the URL writers in the stats/games tables): replaceState so filter
+			// toggles don't stack history, keepFocus/noScroll so they don't jump the
+			// page or drop focus. The [slug] layout load reads only route params,
+			// never the query string, so this updates the address bar without
+			// refetching. resolve() brands typed routes and can't express a dynamic
+			// query string, matching the precedent in upload/+page.svelte.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic filter query string; resolve()'s branded types don't admit it
+			void goto(target, {
+				replaceState: true,
+				keepFocus: true,
+				noScroll: true,
+			});
+		}
+	});
 	const statusItemClass =
 		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-surface-raised";
 
@@ -201,8 +259,6 @@
 		let list = tableEligible.filter((m) =>
 			statusFilter.includes(matchStatusGroup(m) as MatchStatusGroup),
 		);
-
-		list = list.filter((m) => casterFilter.includes(matchCasterGroup(m)));
 
 		if (selectedBrackets.length > 0) {
 			list = list.filter((m) => selectedBrackets.includes(bracketKey(m)));
@@ -366,12 +422,10 @@
 	}
 
 	function shortMatchup(m: TournamentMatch): string {
-		const a = matchSlotDisplayName(m, "a", slotMaps.labels) ?? "—";
-		const b =
-			m.slot_b_id !== null
-				? (matchSlotDisplayName(m, "b", slotMaps.labels) ?? "—")
-				: "Bye";
-		return `${a} v ${b}`;
+		return matchupLabel(
+			m,
+			(side) => matchSlotDisplayName(m, side, slotMaps.labels) ?? "—",
+		);
 	}
 </script>
 
@@ -496,24 +550,29 @@
 							</button>
 						</div>
 
-						<!-- List / Calendar view switch (bracket-card pattern). -->
+						<!-- List / Calendar / Casts view switch (bracket-card pattern). -->
 						<Tabs.Root bind:value={view}>
 							<Tabs.List
-								class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+								class="relative grid shrink-0 grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
 								style="background-color: rgb(var(--color-surface));"
 							>
 								<div
-									class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+									class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
 									style:background-color="rgb(var(--color-surface-raised))"
 									style:transform={view === "calendar"
 										? "translateX(100%)"
-										: "translateX(0)"}
+										: view === "cast"
+											? "translateX(200%)"
+											: "translateX(0)"}
 								></div>
 								<Tabs.Trigger value="list" class={viewTriggerClass}
 									>List</Tabs.Trigger
 								>
 								<Tabs.Trigger value="calendar" class={viewTriggerClass}>
 									Calendar
+								</Tabs.Trigger>
+								<Tabs.Trigger value="cast" class={viewTriggerClass}>
+									Casts
 								</Tabs.Trigger>
 							</Tabs.List>
 						</Tabs.Root>
@@ -579,7 +638,7 @@
 									</TableFilterColumn>
 
 									<div class="min-w-0 flex-1">
-										<!-- Status + caster filters above the table, styled like the bracket view tabs. -->
+										<!-- Status filter above the table, styled like the bracket view tabs. -->
 										<div class="mb-3 flex flex-wrap justify-end gap-2">
 											<ToggleGroup.Root
 												type="multiple"
@@ -613,29 +672,6 @@
 													class={statusItemClass}
 												>
 													Completed
-												</ToggleGroup.Item>
-											</ToggleGroup.Root>
-
-											<ToggleGroup.Root
-												type="multiple"
-												value={casterFilter}
-												onValueChange={(v) =>
-													(casterFilter = v as MatchCasterGroup[])}
-												class="flex overflow-hidden rounded-lg border-2 border-surface"
-												style="background-color: rgb(var(--color-surface));"
-												aria-label="Caster"
-											>
-												<ToggleGroup.Item
-													value="casted"
-													class={statusItemClass}
-												>
-													Casted
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="uncasted"
-													class={statusItemClass}
-												>
-													Uncasted
 												</ToggleGroup.Item>
 											</ToggleGroup.Root>
 										</div>
@@ -787,6 +823,14 @@
 										</div>
 									</div>
 								</div>
+							{:else if view === "cast"}
+								<CastView
+									matches={data.matches}
+									tournament={data.tournament}
+									{zone}
+									{user}
+									slotLabels={slotMaps.labels}
+								/>
 							{:else}
 								<!-- Monthly calendar. -->
 								<section

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { TournamentDetail } from "$lib/api-cloud";
+	import { divisionName } from "$lib/tournament/bracket-label";
 	import Popover from "$lib/ui/Popover.svelte";
 
 	interface Props {
@@ -54,9 +55,7 @@
 		<p class="text-xs text-tan">
 			Division:
 			<span class="font-bold"
-				>{viewerSlot.division === "A"
-					? tournament.division_a_name
-					: tournament.division_b_name}</span
+				>{divisionName(tournament, viewerSlot.division)}</span
 			>
 		</p>
 		{#if tournament.status === "setup"}

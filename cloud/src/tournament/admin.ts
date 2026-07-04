@@ -2098,6 +2098,20 @@ export async function handlePatchMatchSchedule(
 		);
 	}
 	await bumpTournamentUpdatedAt(env, tournamentId);
+	// Rate-limit ledger: this is what makes the shared per-user schedule budget
+	// (read above via authedMatchScheduler) actually count PATCH edits. The
+	// self-service caster path writes the same event_type, so scheduling a match
+	// and signing up to cast draw from one 60/hr budget, exactly as limits.ts
+	// describes. Best-effort: the edit already committed, so a ledger failure
+	// must not fail the request. 24h retention bucket; the budget reads a 1h window.
+	await env.SHARE_DB.prepare(
+		"INSERT INTO events (event_type, user_id) VALUES ('tournament_schedule', ?)",
+	)
+		.bind(a.userId)
+		.run()
+		.catch((e: unknown) => {
+			logError("tournament_schedule_ledger_failed", e, { user_id: a.userId });
+		});
 	const updated = await loadMatch(env, matchId);
 	await logTournamentAdminAction(
 		env,
