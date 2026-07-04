@@ -434,8 +434,9 @@ describe("public read handlers", () => {
 		)?.slotId;
 		expect(slotId).toBeDefined();
 
-		const findRow = (rows: Array<{ slot_a_id: string; slot_b_id: string | null }>) =>
-			rows.find((m) => m.slot_a_id === slotId || m.slot_b_id === slotId)!;
+		const findRow = (
+			rows: Array<{ slot_a_id: string; slot_b_id: string | null }>,
+		) => rows.find((m) => m.slot_a_id === slotId || m.slot_b_id === slotId)!;
 		const sideId = (m: {
 			slot_a_id: string;
 			slot_a_discord_id: string | null;
