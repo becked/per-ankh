@@ -109,17 +109,30 @@
 				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)`;
 			},
 		);
-		// "To be scheduled" = genuinely unscheduled matches only; a match that has
-		// already started (in progress, awaiting result) doesn't belong here.
+		// "To be scheduled" = matches still owing a time: never scheduled at all,
+		// or carrying a part without one yet (a split match heading into "Part 2,
+		// time TBD" — see #91). A match that has fully started (in progress,
+		// awaiting result, no open part) doesn't belong here. The part tag mirrors
+		// the "Upcoming" lines: shown only when the match is actually split.
 		const unscheduled = data.matches
-			.filter(
-				(m) =>
-					m.status === "pending" &&
-					m.slot_b_id != null &&
-					matchDisplayStatus(m) === "unscheduled",
-			)
+			.filter((m) => m.status === "pending" && m.slot_b_id != null)
 			.sort((a, b) => (a.match_number ?? 0) - (b.match_number ?? 0))
-			.map((m) => `Match ${num(m)} - ${vs(m)}`);
+			.flatMap((m) => {
+				const parts = matchParts(m);
+				if (parts.length === 0) {
+					return matchDisplayStatus(m) === "unscheduled"
+						? [`Match ${num(m)} - ${vs(m)}`]
+						: [];
+				}
+				const split = parts.length >= 2;
+				return parts
+					.map((part, i) => ({ part, partNumber: i + 1 }))
+					.filter(({ part }) => part.scheduled_at == null)
+					.map(({ partNumber }) => {
+						const partTag = split ? `(Part ${partNumber}) ` : "";
+						return `Match ${num(m)} ${partTag}- ${vs(m)}`;
+					});
+			});
 
 		const blocks = [
 			"Upcoming matches\n\n" +
