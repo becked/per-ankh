@@ -52,6 +52,7 @@
 		onSort,
 		onRowClick,
 		actions,
+		isLive,
 		stickyHeader = false,
 		emptyMessage = "No matches",
 	}: {
@@ -75,6 +76,11 @@
 		// Per-row trailing controls (the Cast view's cast/drop buttons), rendered in
 		// the `actions` column.
 		actions?: Snippet<[MatchRow]>;
+		// Opt-in per-row "live now" flag (the Live & Upcoming panel passes it). When
+		// it returns true the time cell shows a LIVE badge. Undefined for surfaces
+		// that don't distinguish live sittings, so they render unchanged.
+		// eslint-disable-next-line no-unused-vars -- documentary param name
+		isLive?: (row: MatchRow) => boolean;
 		// Sticky header for the full-page table (it scrolls inside its own pane);
 		// off for the compact panel/cast mounts.
 		stickyHeader?: boolean;
@@ -178,8 +184,17 @@
 								</span>
 							{:else if column.key === "time"}
 								{#if row.part}
-									<div>
-										{formatScheduledInZone(row.part.scheduled_at, zone)}
+									{@const live = isLive?.(row) ?? false}
+									<div class="flex items-center gap-2">
+										{#if live}
+											<span
+												class="inline-flex items-center gap-1 rounded bg-red-400/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-400"
+											>
+												<span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>
+												Live
+											</span>
+										{/if}
+										<span>{formatScheduledInZone(row.part.scheduled_at, zone)}</span>
 									</div>
 									<div class="text-xs opacity-60">
 										{formatRelativeToNow(row.part.scheduled_at)}{#if row.split}

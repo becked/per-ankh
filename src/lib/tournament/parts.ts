@@ -145,6 +145,15 @@ export function partToIso(
 // little while ago. Shared so every cast surface uses the identical window.
 export const CAST_GRACE_MS = 2 * 60 * 60 * 1000;
 
+// How long after a sitting's scheduled start it still counts as "live" for the
+// viewer-facing Live & Upcoming panel — roughly the length of a streamed Old
+// World game. A sitting whose start is inside this window is plausibly still
+// being broadcast, so it reads as live; once the window closes the game has
+// almost certainly finished (and its ephemeral youtube/twitch `…/live` link has
+// gone dead), so it ages out of the panel even if nobody has reported the result
+// yet. Bounds how long a finished-but-unreported match can linger as "live".
+export const LIVE_WINDOW_MS = 4 * 60 * 60 * 1000;
+
 // Upcoming scheduled parts of still-pending, non-bye matches, soonest first.
 // graceMs keeps a just-started sitting visible (e.g. the cast surfaces pass
 // CAST_GRACE_MS so a match that began 20 minutes ago is still claimable); 0

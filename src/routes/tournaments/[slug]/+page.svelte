@@ -734,7 +734,7 @@
 					onConfirmTransition={transitionChampionship}
 				/>
 
-				<!-- "Up next" matches, surfaced on the overview page while the
+				<!-- Live & upcoming matches, surfaced on the overview page while the
 				tournament is running — the most-used view mid-tournament. Hidden in
 				setup (no matches) and complete (bracket/standings tell that story). -->
 				{#if data.tournament.status === "swiss" || data.tournament.status === "championship"}

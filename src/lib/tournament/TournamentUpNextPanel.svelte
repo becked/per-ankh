@@ -1,11 +1,13 @@
 <script lang="ts">
-	// "Up next" panel for the tournament overview page: the next handful of
-	// upcoming (scheduled, not-yet-reported) sittings, soonest first — the
-	// most-used view during a running tournament. A match split across days shows
+	// "Live & Upcoming" panel for the tournament overview page — the most-used
+	// view during a running tournament. Lists the sittings that are live right now
+	// (started within the live window, so plausibly still streaming) followed by
+	// the next handful still ahead, soonest first. A match split across days shows
 	// one row per sitting. The title row carries a UTC/Local toggle (picks the
 	// clock every row reads; defaults to local) and a Matches button linking to
 	// the full /matches page. Rows render through the shared MatchTable (part-row
-	// granularity); clicking one opens the match card.
+	// granularity), live ones flagged with a LIVE badge; clicking one opens the
+	// match card.
 	import { resolve } from "$app/paths";
 	import {
 		type TournamentDetail,
@@ -16,7 +18,7 @@
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
 	import {
-		partitionSchedule,
+		liveAndUpcoming,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
 	import { nowMs } from "$lib/stores/now.svelte";
@@ -52,23 +54,22 @@
 
 	// How many upcoming sittings (parts) to preview before deferring to the full
 	// page. A match split across days contributes one row per scheduled sitting.
+	// The cap is on upcoming only — every live sitting always shows.
 	const MAX_ROWS = 5;
 
-	const partition = $derived(partitionSchedule(matches));
-	// Only sittings still ahead belong in "up next" — a part whose time has
-	// passed (an already-played earlier sitting of a split match, or a fully
-	// overdue match) isn't upcoming and would otherwise sort to the top under a
-	// panel titled "Upcoming". Reactive via nowMs(), so a sitting drops off as
-	// its scheduled time arrives. Overdue/in-progress matches surface on the full
-	// matches page (its "In progress" filter) and the bracket status chips.
-	const upNext = $derived<MatchRow[]>(
-		partition.scheduled
-			.filter((np) => {
-				const t = Date.parse(np.part.scheduled_at ?? "");
-				return !Number.isNaN(t) && t >= nowMs();
-			})
-			.slice(0, MAX_ROWS),
-	);
+	// Live sittings (uncapped) + the next few upcoming, from the shared definition
+	// so this panel and the matches page's Live & Upcoming tab can't drift.
+	// Reactive via nowMs(): a sitting crosses upcoming → live → gone as the clock
+	// advances. partition order is soonest-first, so live sittings (earlier,
+	// already-started times) precede the upcoming ones in the concatenation.
+	const split = $derived(liveAndUpcoming(matches, nowMs()));
+	const rows = $derived<MatchRow[]>([
+		...split.live,
+		...split.upcoming.slice(0, MAX_ROWS),
+	]);
+	// Reference-identity set for the LIVE badge: `rows` reuses the same
+	// NumberedPart objects, so membership flags exactly the live sittings.
+	const liveSet = $derived(new Set<MatchRow>(split.live));
 
 	const columns = pickColumns([
 		"number",
@@ -120,7 +121,7 @@
 		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		<div class="flex items-center gap-3">
-			<h2 class="text-lg font-bold text-tan">Upcoming Matches</h2>
+			<h2 class="text-lg font-bold text-tan">Live &amp; Upcoming Matches</h2>
 			<!-- Link to the full matches page, bordered button like the others. -->
 			<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
 			<a
@@ -166,13 +167,14 @@
 
 	<MatchTable
 		{columns}
-		rows={upNext}
+		{rows}
 		{zone}
 		{tournament}
 		{slotLabels}
 		{slotAvatars}
 		onRowClick={pick}
-		emptyMessage="No matches scheduled yet."
+		isLive={(row) => liveSet.has(row)}
+		emptyMessage="No live or upcoming matches."
 	/>
 </section>
 
