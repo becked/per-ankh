@@ -16,7 +16,7 @@
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
-	import SearchInput from "$lib/SearchInput.svelte";
+	import CollapsibleSearch from "$lib/CollapsibleSearch.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import TournamentActions from "$lib/tournament/TournamentActions.svelte";
@@ -189,9 +189,14 @@
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
-	// --- Table state for the All tab: search + sort, following the Cities
-	// pattern. Status/bracket faceting was retired in favour of the view tabs;
-	// richer filters return in a later pass.
+	// --- Free-text search, shared across the three table views (live/all/cast)
+	// via the collapsible control in the page header. Persists as you switch tabs,
+	// so it always filters whichever match table is open.
+	let searchTerm = $state("");
+
+	// --- Sort state for the All tab, following the Cities pattern. Status/bracket
+	// faceting was retired in favour of the view tabs; richer filters return in a
+	// later pass. (Search lives in `searchTerm` above, not here — it's cross-view.)
 	let tableState = $state<MatchTableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
 
 	// Reflect the current view/zone into the URL (defaults omitted) so the
@@ -231,6 +236,15 @@
 		...liveUpcoming.live,
 		...liveUpcoming.upcoming,
 	]);
+	// The header search filters this view too; the filtered list keeps the same
+	// row objects, so the reference-identity LIVE badge below still matches.
+	const filteredLiveUpcomingRows = $derived(
+		searchTerm
+			? liveUpcomingRows.filter((r) =>
+					matchRowMatchesSearch(r, searchTerm, slotMaps.labels),
+				)
+			: liveUpcomingRows,
+	);
 	// Reference-identity set for the LIVE badge (rows reuse the same objects).
 	const liveSet = $derived(new Set<MatchRow>(liveUpcoming.live));
 
@@ -244,9 +258,9 @@
 	});
 	const allRows = $derived.by(() => {
 		let list = tableEligibleRows;
-		if (tableState.search) {
+		if (searchTerm) {
 			list = list.filter((r) =>
-				matchRowMatchesSearch(r, tableState.search, slotMaps.labels),
+				matchRowMatchesSearch(r, searchTerm, slotMaps.labels),
 			);
 		}
 		return sortMatchRows(
@@ -548,9 +562,19 @@
 						</button>
 					</div>
 
-					<!-- Right cluster: Calendar toggle. (The UTC/Local clock moved to the
-					     top-right action cluster.) -->
+					<!-- Right cluster: search + Calendar toggle. (The UTC/Local clock moved
+					     to the top-right action cluster.) -->
 					<div class="flex items-center gap-2 justify-self-end">
+						<!-- Header search: an icon that expands inline to filter whichever
+						     match table is open (live/all/cast). Hidden in the calendar view,
+						     which is not a table. Shares searchTerm across the tabs. -->
+						{#if view !== "calendar"}
+							<CollapsibleSearch
+								bind:value={searchTerm}
+								class="w-44"
+								ariaLabel="Search matches"
+							/>
+						{/if}
 						<!-- Calendar: its own single-cell toggle, pressed in the calendar view. -->
 						<button
 							type="button"
@@ -594,7 +618,7 @@
 								     table — no headers to sort, no filters. -->
 								<MatchTable
 									columns={matchColumns}
-									rows={liveUpcomingRows}
+									rows={filteredLiveUpcomingRows}
 									{zone}
 									tournament={data.tournament}
 									{user}
@@ -607,17 +631,9 @@
 								/>
 							{:else if view === "all"}
 								<!-- All matches, one row each — every status, unscheduled
-								     included. Search + column sort only; richer faceting returns
-								     in a later pass. -->
+								     included. Column sort here; search lives in the header cluster
+								     (shared across views). The census reflects the active filter. -->
 								<div class="mb-3 flex flex-wrap items-center gap-3">
-									<div class="w-full max-w-xs">
-										<SearchInput
-											bind:value={tableState.search}
-											placeholder=""
-											variant="dark"
-											class="w-full"
-										/>
-									</div>
 									<span class="text-xs text-tan opacity-70"
 										>{allRows.length} / {tableEligibleRows.length} matches</span
 									>
@@ -645,6 +661,7 @@
 									{user}
 									slotLabels={slotMaps.labels}
 									slotAvatars={slotMaps.avatars}
+									search={searchTerm}
 									onOpenMatch={(m, e) => pick(m.match_id, e)}
 								/>
 							{:else}

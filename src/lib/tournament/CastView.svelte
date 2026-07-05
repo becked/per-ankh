@@ -10,7 +10,11 @@
 		type UserMe,
 	} from "$lib/api-cloud";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
-	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
+	import {
+		pickColumns,
+		matchRowMatchesSearch,
+		type MatchRow,
+	} from "$lib/tournament/matches-table";
 	import { upcomingScheduledParts, CAST_GRACE_MS } from "$lib/tournament/parts";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
 	import { ToggleGroup } from "bits-ui";
@@ -22,6 +26,7 @@
 		user,
 		slotLabels,
 		slotAvatars,
+		search = "",
 		onOpenMatch,
 	}: {
 		matches: TournamentMatch[];
@@ -30,6 +35,9 @@
 		user: UserMe | null;
 		slotLabels: Record<string, string>;
 		slotAvatars: Record<string, string | null>;
+		// Free-text filter, shared with the other match surfaces via the matches
+		// page header. Empty string = no filter.
+		search?: string;
 		// Opens the match card. Clicking a row calls it (identical to the other
 		// match surfaces); the cast/drop buttons stopPropagation so they don't. The
 		// matches page routes this to its own shared popover.
@@ -55,11 +63,13 @@
 		).size,
 	);
 	// NumberedPart is structurally a part-granularity MatchRow, so the upcoming
-	// list feeds MatchTable directly.
+	// list feeds MatchTable directly. The header search narrows the same rows the
+	// needs-a-caster toggle produces.
 	const rows = $derived<MatchRow[]>(
-		needsOnly
+		(needsOnly
 			? upcoming.filter((np) => np.part.casters.length === 0)
-			: upcoming,
+			: upcoming
+		).filter((np) => !search || matchRowMatchesSearch(np, search, slotLabels)),
 	);
 
 	const columns = pickColumns(["time", "matchup", "broadcast", "actions"]);

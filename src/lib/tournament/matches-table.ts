@@ -276,11 +276,11 @@ export function sortMatchRows(
 
 // ─── Table state ─────────────────────────────────────────────────────
 
-// Search + sort + active filter entries for the matches page. Tournament-owned
-// (was borrowed from game-detail's cities table) so the two tables can evolve
-// independently.
+// Sort + active filter entries for the matches page. Tournament-owned (was
+// borrowed from game-detail's cities table) so the two tables can evolve
+// independently. Search is not table-scoped here — it's page-level state shared
+// across the matches page's view tabs (live/all/cast), so it lives there.
 export interface MatchTableState {
-	search: string;
 	sortColumn: string;
 	sortDirection: "asc" | "desc";
 	filters: string[];
@@ -300,7 +300,6 @@ export function toggleMatchSort(
 }
 
 export const DEFAULT_MATCHES_TABLE_STATE: MatchTableState = {
-	search: "",
 	sortColumn: "time",
 	sortDirection: "asc",
 	filters: [],
