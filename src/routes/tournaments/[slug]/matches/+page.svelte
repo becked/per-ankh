@@ -41,6 +41,10 @@
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
 	import {
+		resolveInitialZone,
+		writeZoneCookie,
+	} from "$lib/tournament/zone-preference";
+	import {
 		matchParts,
 		matchDisplayStatus,
 		upcomingScheduledParts,
@@ -54,7 +58,6 @@
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
-	import { Tabs } from "bits-ui";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -155,14 +158,25 @@
 	// View and zone are deep-linkable via query params (?view=cast, ?zone=local)
 	// so a link can point straight at a given tab/clock. Defaults stay out of the
 	// URL; state changes replace (not push) history.
+	//
+	// The initial zone follows the shared precedence (?zone= param > saved cookie
+	// > UTC); the toggle handlers persist explicit choices to the cookie so the
+	// clock is sticky app-wide. A shared ?zone= link overrides for the visit but
+	// doesn't touch their saved default.
 	const params = new URLSearchParams(page.url.search);
 	const VIEWS = ["live", "calendar", "cast", "all"] as const;
 	type MatchesView = (typeof VIEWS)[number];
 	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "live";
 	let view = $state<MatchesView>(initialView);
-	let zone = $state<ScheduleZone>(
-		params.get("zone") === "local" ? "local" : "utc",
-	);
+	let zone = $state<ScheduleZone>(resolveInitialZone(params.get("zone")));
+
+	// Flip + persist the clock. Cookie writes happen here (explicit user action),
+	// not in the URL-sync effect, so arriving via a deep link never rewrites the
+	// saved preference.
+	function setZone(next: ScheduleZone) {
+		zone = next;
+		writeZoneCookie(next);
+	}
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
@@ -371,12 +385,13 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
 
-				<!-- Controls card: title + copy tools on the left (sesh always; needs-casters in the Cast view), zone + view toggles on the right. -->
+				<!-- Controls card: title + copy tools (left), the Upcoming/Casts/All view
+					     toggle (center), Calendar + the UTC/Local clock (right). -->
 				<div
-					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
+					class="mb-4 grid grid-cols-3 items-center gap-3 rounded-lg px-3 py-2"
 					style="background-color: rgb(var(--color-surface-raised));"
 				>
-					<div class="flex items-center gap-2">
+					<div class="flex items-center gap-2 justify-self-start">
 						<h1 class="text-lg font-bold text-tan">Matches</h1>
 						{#if isAdmin}
 							<CopyButton
@@ -467,7 +482,65 @@
 							</CopyButton>
 						{/if}
 					</div>
-					<div class="flex items-center gap-2">
+					<!-- View toggle (Upcoming / Casts / All), centered. Plain segmented
+					     control matching the clock toggle; Calendar is its own button on
+					     the right, so when it's active none of these read as pressed. -->
+					<div
+						class="relative grid grid-cols-3 justify-self-center overflow-hidden rounded-lg border-2 border-surface"
+						style="background-color: rgb(var(--color-surface));"
+						role="group"
+						aria-label="View"
+					>
+						<div
+							class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
+							style:background-color="rgb(var(--color-surface-raised))"
+							style:opacity={view === "calendar" ? "0" : "1"}
+							style:transform={view === "cast"
+								? "translateX(100%)"
+								: view === "all"
+									? "translateX(200%)"
+									: "translateX(0)"}
+						></div>
+						<button
+							type="button"
+							class={viewTriggerClass}
+							aria-pressed={view === "live"}
+							onclick={() => (view = "live")}
+						>
+							Upcoming
+						</button>
+						<button
+							type="button"
+							class={viewTriggerClass}
+							aria-pressed={view === "cast"}
+							onclick={() => (view = "cast")}
+						>
+							Casts
+						</button>
+						<button
+							type="button"
+							class={viewTriggerClass}
+							aria-pressed={view === "all"}
+							onclick={() => (view = "all")}
+						>
+							All
+						</button>
+					</div>
+
+					<!-- Right cluster: Calendar toggle, then the UTC/Local clock (outermost). -->
+					<div class="flex items-center gap-2 justify-self-end">
+						<!-- Calendar: its own single-cell toggle, pressed in the calendar view. -->
+						<button
+							type="button"
+							class="{viewTriggerClass} rounded-lg border-2 border-surface"
+							style:background-color={view === "calendar"
+								? "rgb(var(--color-surface-raised))"
+								: "rgb(var(--color-surface))"}
+							aria-pressed={view === "calendar"}
+							onclick={() => (view = "calendar")}
+						>
+							Calendar
+						</button>
 						<!-- UTC / Local: a segmented toggle picking the active clock. -->
 						<div
 							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
@@ -486,7 +559,7 @@
 								type="button"
 								class={viewTriggerClass}
 								aria-pressed={zone === "utc"}
-								onclick={() => (zone = "utc")}
+								onclick={() => setZone("utc")}
 							>
 								UTC
 							</button>
@@ -494,44 +567,11 @@
 								type="button"
 								class={viewTriggerClass}
 								aria-pressed={zone === "local"}
-								onclick={() => (zone = "local")}
+								onclick={() => setZone("local")}
 							>
 								Local
 							</button>
 						</div>
-
-						<!-- Live & Upcoming / Calendar / Casts / All view switch
-						     (bracket-card pattern). -->
-						<Tabs.Root bind:value={view}>
-							<Tabs.List
-								class="relative grid shrink-0 grid-cols-4 overflow-hidden rounded-lg border-2 border-surface"
-								style="background-color: rgb(var(--color-surface));"
-							>
-								<div
-									class="pointer-events-none absolute inset-y-0 left-0 w-1/4 transition-transform duration-200 ease-out"
-									style:background-color="rgb(var(--color-surface-raised))"
-									style:transform={view === "calendar"
-										? "translateX(100%)"
-										: view === "cast"
-											? "translateX(200%)"
-											: view === "all"
-												? "translateX(300%)"
-												: "translateX(0)"}
-								></div>
-								<Tabs.Trigger value="live" class={viewTriggerClass}>
-									Live &amp; Upcoming
-								</Tabs.Trigger>
-								<Tabs.Trigger value="calendar" class={viewTriggerClass}>
-									Calendar
-								</Tabs.Trigger>
-								<Tabs.Trigger value="cast" class={viewTriggerClass}>
-									Casts
-								</Tabs.Trigger>
-								<Tabs.Trigger value="all" class={viewTriggerClass}>
-									All
-								</Tabs.Trigger>
-							</Tabs.List>
-						</Tabs.Root>
 					</div>
 				</div>
 

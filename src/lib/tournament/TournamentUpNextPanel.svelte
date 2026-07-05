@@ -18,6 +18,10 @@
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
 	import { liveAndUpcoming, type ScheduleZone } from "$lib/tournament/schedule";
+	import {
+		resolveInitialZone,
+		writeZoneCookie,
+	} from "$lib/tournament/zone-preference";
 	import { nowMs } from "$lib/stores/now.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
 
@@ -74,10 +78,16 @@
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
 	);
 
-	// Active clock every row's time reads. The title-row toggle flips it;
-	// defaults to local (the full matches page offers the same toggle, defaulting
-	// to UTC there for a shared reference).
-	let zone = $state<ScheduleZone>("local");
+	// Active clock every row's time reads. The title-row toggle flips it and
+	// persists the choice; the initial value follows the shared app-wide
+	// preference (saved cookie, else UTC) — no ?zone= param on this surface.
+	let zone = $state<ScheduleZone>(resolveInitialZone(null));
+
+	// Flip + persist, so toggling here sticks on the full matches page too.
+	function setZone(next: ScheduleZone) {
+		zone = next;
+		writeZoneCookie(next);
+	}
 	// Segmented UTC/Local control, mirroring the matches page: transparent text
 	// buttons over a sliding highlight thumb.
 	const viewTriggerClass =
@@ -141,7 +151,7 @@
 				type="button"
 				class={viewTriggerClass}
 				aria-pressed={zone === "utc"}
-				onclick={() => (zone = "utc")}
+				onclick={() => setZone("utc")}
 			>
 				UTC
 			</button>
@@ -149,7 +159,7 @@
 				type="button"
 				class={viewTriggerClass}
 				aria-pressed={zone === "local"}
-				onclick={() => (zone = "local")}
+				onclick={() => setZone("local")}
 			>
 				Local
 			</button>
