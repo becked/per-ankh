@@ -147,7 +147,7 @@
 				avatarUrl={matchSlotAvatarUrl(m, side, slotAvatars)}
 				size={16}
 			/>
-			<span class="truncate">{name}</span>
+			<span class="truncate text-bright">{name}</span>
 		</span>
 	{/if}
 {/snippet}
@@ -188,7 +188,7 @@
 {/snippet}
 
 <div class="overflow-x-auto rounded-lg border border-black">
-	<table class="w-full border-collapse">
+	<table class="w-full border-collapse text-sm">
 		<thead>
 			<tr>
 				{#each columns as column (column.key)}
@@ -229,7 +229,7 @@
 								<div class="flex flex-col gap-0.5">
 									<span class="inline-flex items-center gap-2">
 										{#if m.match_number != null}
-											<span class="shrink-0 font-mono opacity-60">
+											<span class="shrink-0 font-mono opacity-75">
 												{padMatchNumber(m.match_number)}
 											</span>
 										{/if}
@@ -241,7 +241,7 @@
 									     same on every surface (the Cast tab's old two-line layout, now
 									     shared by all match tables). -->
 									{#if bracketLabel || entry}
-										<span class="text-xs opacity-60">
+										<span class="text-xs opacity-75">
 											{bracketLabel}
 											{#if entry}
 												{#if bracketLabel}·{/if}
@@ -285,7 +285,7 @@
 											</span>
 										{/if}
 									</div>
-									<div class="text-xs opacity-60">
+									<div class="text-xs opacity-75">
 										{formatRelativeToNow(row.part.scheduled_at)}{#if row.split}
 											· Pt {row.partNumber}{/if}
 									</div>
@@ -300,7 +300,7 @@
 										     match keeps its last-started time visible; the relative subtext
 										     ("2h ago") is what conveys how overdue it is. -->
 										<div>{t}</div>
-										{#if rel}<div class="text-xs opacity-60">{rel}</div>{/if}
+										{#if rel}<div class="text-xs opacity-75">{rel}</div>{/if}
 									{:else if g === "completed"}
 										<!-- Completed matches get a badge mirroring the Live one (same
 										     pill shape + alpha fill, success color instead of orange). -->
@@ -338,7 +338,7 @@
 											     when a stream precedes. -->
 											{#if casters.length > 0}
 												{#if streams.length > 0}
-													<span class="text-[10px] opacity-50">by</span>
+													<span class="text-[10px] opacity-60">by</span>
 												{/if}
 												<span class="inline-flex items-center gap-1.5">
 													<span class="inline-flex items-center gap-1">
@@ -349,7 +349,7 @@
 														{casters[0].display_name ?? casters[0].name}
 													</span>
 													{#if casters.length > 1}
-														<span class="text-[10px] opacity-50">with</span>
+														<span class="text-[10px] opacity-60">with</span>
 														{#each casters.slice(1) as c, i (i)}
 															{#if i > 0}<span class="opacity-40">,</span>{/if}
 															<span
@@ -377,7 +377,7 @@
 									     that act on it are in the actions column). -->
 									{#if pendingSitting && casters.length === 0}
 										<span
-											class="rounded bg-orange/15 px-2 py-0.5 text-[11px] font-bold uppercase text-orange"
+											class="rounded bg-orange/15 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange"
 											>needs a caster</span
 										>
 									{/if}
