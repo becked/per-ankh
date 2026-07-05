@@ -5,9 +5,9 @@
 //
 // Resolution precedence (see resolveInitialZone): an explicit ?zone= query
 // param wins (so a shared deep link forces a clock for the recipient), then the
-// saved cookie, then UTC as the neutral shared default. The cookie is written
-// only on an explicit toggle, so visiting someone's ?zone= link never silently
-// overwrites your own saved default.
+// saved cookie, then the visitor's local time as the default. The cookie is
+// written only on an explicit toggle, so visiting someone's ?zone= link never
+// silently overwrites your own saved default.
 //
 // Read/written client-side via document.cookie: the tournament routes use
 // universal loads only (no +*.server.ts), so there's no server load to read the
@@ -38,9 +38,9 @@ export function writeZoneCookie(zone: ScheduleZone): void {
 }
 
 // The clock a surface should open on: explicit ?zone= param first (deep-link
-// override), then the saved cookie, then UTC. `param` is the raw query value
+// override), then the saved cookie, then local. `param` is the raw query value
 // (pass null on surfaces without a query param, like the overview panel).
 export function resolveInitialZone(param: string | null): ScheduleZone {
 	if (isZone(param)) return param;
-	return readZoneCookie() ?? "utc";
+	return readZoneCookie() ?? "local";
 }

@@ -208,7 +208,7 @@
 		// characters, so no encoding is needed.
 		const parts: string[] = [];
 		if (view !== "live") parts.push(`view=${view}`);
-		if (zone !== "utc") parts.push(`zone=${zone}`);
+		if (zone !== "local") parts.push(`zone=${zone}`);
 		const search = parts.join("&");
 		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
 		if (`${page.url.pathname}${page.url.search}` !== target) {
