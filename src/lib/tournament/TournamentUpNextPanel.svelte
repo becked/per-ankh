@@ -107,11 +107,13 @@
 		style="background-color: rgb(var(--color-surface-raised));"
 	>
 		<h2 class="text-lg font-bold text-tan">Live &amp; Upcoming Matches</h2>
-		<!-- Link to the full matches page, bordered button like the others. -->
+		<!-- Link to the full matches page. The primary CTA of this panel during a
+		     live tournament, so it's a filled-orange button (not the tan ghost
+		     outline the rest of the UI uses) to stand out as the main action. -->
 		<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
 		<a
 			href={matchesHref}
-			class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
+			class="whitespace-nowrap rounded bg-orange px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-orange/80"
 		>
 			View All
 		</a>
