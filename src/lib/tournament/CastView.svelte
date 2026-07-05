@@ -2,35 +2,20 @@
 	// Caster sign-up view — one of the Matches page's view modes. Lists the
 	// tournament's upcoming scheduled parts (sittings) soonest-first, flags which
 	// still need a caster, and lets any logged-in user add themselves as the
-	// streamer or a co-caster. Writes go through the self-service cast endpoints
-	// (a caster only ever touches their own entry).
+	// streamer or a co-caster. Renders through the shared MatchTable (part-row
+	// granularity) with an inline actions column; writes go through the
+	// self-service cast endpoints (a caster only ever touches their own entry).
 	import {
 		cloudApi,
 		type TournamentDetail,
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
-	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
-	import { padMatchNumber } from "$lib/tournament/match-numbers";
-	import { matchBracketLabel } from "$lib/tournament/bracket-label";
-	import {
-		matchSlotDisplayName,
-		matchupLabel,
-	} from "$lib/tournament/match-occupant";
+	import MatchTable from "$lib/tournament/MatchTable.svelte";
+	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
 	import { upcomingScheduledParts, CAST_GRACE_MS } from "$lib/tournament/parts";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
-	import {
-		atlasMapUrl,
-		distinguishingOptions,
-		mapInAtlas,
-		mapPoolLabel,
-		poolEntryById,
-	} from "$lib/tournament/map-script-options";
 	import { runAction } from "$lib/tournament/async-action";
-	import {
-		formatRelativeToNow,
-		formatScheduledInZone,
-	} from "$lib/utils/formatting";
 	import { ToggleGroup } from "bits-ui";
 
 	let {
@@ -39,15 +24,21 @@
 		zone,
 		user,
 		slotLabels,
+		slotAvatars,
+		onOpenMatch,
 	}: {
 		matches: TournamentMatch[];
 		tournament: TournamentDetail;
 		zone: ScheduleZone;
 		user: UserMe | null;
 		slotLabels: Record<string, string>;
+		slotAvatars: Record<string, string | null>;
+		// Opens the match card. Clicking a row calls it (identical to the other
+		// match surfaces); the cast/drop buttons stopPropagation so they don't.
+		// The matches page routes this to its own shared popover.
+		// eslint-disable-next-line no-unused-vars -- documentary param names
+		onOpenMatch?: (match: TournamentMatch, e: MouseEvent) => void;
 	} = $props();
-
-	const distinguishing = $derived(distinguishingOptions(tournament.map_pool));
 
 	let needsOnly = $state(true);
 	let busyKey = $state<string | null>(null);
@@ -67,24 +58,27 @@
 				.map((np) => np.match.match_id),
 		).size,
 	);
-	const rows = $derived(
+	// NumberedPart is structurally a part-granularity MatchRow, so the upcoming
+	// list feeds MatchTable directly.
+	const rows = $derived<MatchRow[]>(
 		needsOnly
 			? upcoming.filter((np) => np.part.casters.length === 0)
 			: upcoming,
 	);
 
+	// Same columns as the other match surfaces, plus the trailing actions column.
+	const columns = pickColumns([
+		"number",
+		"matchup",
+		"time",
+		"caster",
+		"stream",
+		"actions",
+	]);
+
 	const filterItemClass =
 		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=on]:bg-surface-raised";
 
-	function vs(m: TournamentMatch): string {
-		return matchupLabel(
-			m,
-			(side) => matchSlotDisplayName(m, side, slotLabels) ?? "?",
-		);
-	}
-	function mapEntry(m: TournamentMatch) {
-		return poolEntryById(tournament.map_pool, m.map_pool_id);
-	}
 	function iAmCaster(m: TournamentMatch, partId: string): boolean {
 		if (!user) return false;
 		const part = m.parts.find((p) => p.id === partId);
@@ -166,122 +160,75 @@
 		</p>
 	{/if}
 
-	{#if rows.length === 0}
-		<p class="rounded-lg bg-surface-sunken p-8 text-center italic text-muted">
-			{upcoming.length === 0
-				? "No upcoming scheduled matches."
-				: "Every upcoming match has a caster. 🎉"}
-		</p>
-	{:else}
-		<ul class="flex flex-col gap-2">
-			<!-- Key by match+part: part ids are only unique within a match (the 0029
-			     backfill mints "p1" for every migrated match). -->
-			{#each rows as np (`${np.match.match_id}:${np.part.id}`)}
-				{@const m = np.match}
-				{@const entry = mapEntry(m)}
-				{@const key = `${m.match_id}:${np.part.id}`}
-				{@const busy = busyKey === key}
-				{@const mine = iAmCaster(m, np.part.id)}
-				<li
-					class="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg bg-surface-sunken p-3"
-				>
-					<!-- Time + countdown -->
-					<div class="w-40 shrink-0">
-						<div class="text-sm font-bold text-tan">
-							{formatScheduledInZone(np.part.scheduled_at, zone)}
-						</div>
-						<div class="text-xs text-muted">
-							{formatRelativeToNow(np.part.scheduled_at)}
-							{#if np.split}· Part {np.partNumber}{/if}
-						</div>
-					</div>
-
-					<!-- Match + players + map -->
-					<div class="min-w-0 flex-1">
-						<div class="truncate text-sm text-bright">
-							<span class="font-mono text-muted"
-								>{m.match_number != null
-									? padMatchNumber(m.match_number)
-									: "?"}</span
+	<MatchTable
+		{columns}
+		{rows}
+		{zone}
+		{tournament}
+		{slotLabels}
+		{slotAvatars}
+		onRowClick={onOpenMatch}
+		emptyMessage={upcoming.length === 0
+			? "No upcoming scheduled matches."
+			: "Every upcoming match has a caster. 🎉"}
+	>
+		{#snippet actions(row)}
+			{#if row.part}
+				{@const m = row.match}
+				{@const partId = row.part.id}
+				{@const busy = busyKey === `${m.match_id}:${partId}`}
+				{@const mine = iAmCaster(m, partId)}
+				<div class="flex items-center justify-end gap-1.5">
+					{#if row.part.casters.length === 0}
+						<span
+							class="rounded bg-orange/15 px-2 py-0.5 text-[11px] font-bold uppercase text-orange"
+							>needs a caster</span
+						>
+					{/if}
+					{#if user}
+						<!-- Buttons stopPropagation so acting on a row doesn't also open
+						     the match card behind it. -->
+						{#if !mine}
+							<button
+								type="button"
+								class="rounded border border-input px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+								disabled={busy}
+								onclick={(e) => {
+									e.stopPropagation();
+									cast(m, partId);
+								}}
 							>
-							· {vs(m)}
-						</div>
-						<div class="truncate text-xs text-muted">
-							{matchBracketLabel(tournament, m)}
-							{#if entry}
-								· {#if mapInAtlas(entry)}
-									<!-- eslint-disable svelte/no-navigation-without-resolve -->
-									<a
-										href={atlasMapUrl(entry)}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="hover:text-orange hover:underline"
-										>{mapPoolLabel(entry, distinguishing, true)}</a
-									>
-									<!-- eslint-enable svelte/no-navigation-without-resolve -->
-								{:else}{mapPoolLabel(entry, distinguishing, true)}{/if}
-							{/if}
-						</div>
-					</div>
-
-					<!-- Casters + actions -->
-					<div class="flex shrink-0 items-center gap-2">
-						{#if np.part.casters.length === 0}
-							<span
-								class="rounded bg-orange/15 px-2 py-0.5 text-[11px] font-bold uppercase text-orange"
-								>needs a caster</span
-							>
+								I'll cast
+							</button>
 						{:else}
-							<div class="flex items-center gap-1.5">
-								<!-- Keyed by index: two free-text casters may share a name. -->
-								{#each np.part.casters as c, i (i)}
-									<span
-										class="inline-flex items-center gap-1 text-xs text-tan"
-										title={i === 0 ? "Streamer" : "Co-caster"}
-									>
-										<PlayerAvatar avatarUrl={c.avatar_url} size={16} />
-										<span class="max-w-[8rem] truncate">{c.display_name}</span>
-									</span>
-								{/each}
-							</div>
+							{#if !iAmStreamer(m, partId)}
+								<button
+									type="button"
+									class="rounded border border-input px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+									disabled={busy}
+									onclick={(e) => {
+										e.stopPropagation();
+										cast(m, partId, "streamer");
+									}}
+								>
+									Make me streamer
+								</button>
+							{/if}
+							<button
+								type="button"
+								class="rounded border border-input px-2 py-1 text-xs text-tan/70 transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
+								disabled={busy}
+								onclick={(e) => {
+									e.stopPropagation();
+									drop(m, partId);
+								}}
+							>
+								Drop
+							</button>
 						{/if}
-
-						{#if user}
-							<div class="flex items-center gap-1.5">
-								{#if !mine}
-									<button
-										type="button"
-										class="rounded border border-input px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-										disabled={busy}
-										onclick={() => cast(m, np.part.id)}
-									>
-										I'll cast
-									</button>
-								{:else}
-									{#if !iAmStreamer(m, np.part.id)}
-										<button
-											type="button"
-											class="rounded border border-input px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-											disabled={busy}
-											onclick={() => cast(m, np.part.id, "streamer")}
-										>
-											Make me streamer
-										</button>
-									{/if}
-									<button
-										type="button"
-										class="rounded border border-input px-2 py-1 text-xs text-tan/70 transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
-										disabled={busy}
-										onclick={() => drop(m, np.part.id)}
-									>
-										Drop
-									</button>
-								{/if}
-							</div>
-						{/if}
-					</div>
-				</li>
-			{/each}
-		</ul>
-	{/if}
+					{/if}
+				</div>
+			{/if}
+		{/snippet}
+	</MatchTable>
 </section>

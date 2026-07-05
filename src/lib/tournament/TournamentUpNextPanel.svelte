@@ -4,28 +4,23 @@
 	// most-used view during a running tournament. A match split across days shows
 	// one row per sitting. The title row carries a UTC/Local toggle (picks the
 	// clock every row reads; defaults to local) and a Matches button linking to
-	// the full /matches page.
+	// the full /matches page. Rows render through the shared MatchTable (part-row
+	// granularity); clicking one opens the match card.
 	import { resolve } from "$app/paths";
 	import {
 		type TournamentDetail,
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
-	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
-	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
-	import {
-		matchSlotAvatarUrl,
-		matchSlotDisplayName,
-		matchSlotNation,
-	} from "$lib/tournament/match-occupant";
+	import MatchTable from "$lib/tournament/MatchTable.svelte";
+	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
 	import {
 		partitionSchedule,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
 	import { nowMs } from "$lib/stores/now.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
-	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -66,7 +61,7 @@
 	// panel titled "Upcoming". Reactive via nowMs(), so a sitting drops off as
 	// its scheduled time arrives. Overdue/in-progress matches surface on the full
 	// matches page (its "In progress" filter) and the bracket status chips.
-	const upNext = $derived(
+	const upNext = $derived<MatchRow[]>(
 		partition.scheduled
 			.filter((np) => {
 				const t = Date.parse(np.part.scheduled_at ?? "");
@@ -74,6 +69,14 @@
 			})
 			.slice(0, MAX_ROWS),
 	);
+
+	const columns = pickColumns([
+		"number",
+		"matchup",
+		"time",
+		"caster",
+		"stream",
+	]);
 
 	const matchesHref = $derived(
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
@@ -100,41 +103,13 @@
 			: null,
 	);
 
-	function pick(matchId: string, e: MouseEvent) {
+	function pick(match: TournamentMatch, e: MouseEvent) {
 		const x = e.clientX;
 		const y = e.clientY;
 		detailAnchor = { getBoundingClientRect: () => new DOMRect(x, y, 0, 0) };
-		detailMatchId = matchId;
+		detailMatchId = match.match_id;
 	}
 </script>
-
-<!-- One player's cell: crest + avatar + name. slot_b_id is null only for an
-     as-yet-undetermined feeder in a synthesized bracket cell — but those carry
-     no scheduled_at, so a scheduled row always has both sides. -->
-{#snippet playerCell(m: TournamentMatch, side: "a" | "b")}
-	{@const slotId = side === "a" ? m.slot_a_id : m.slot_b_id}
-	{#if slotId === null}
-		<span class="opacity-60">TBD</span>
-	{:else}
-		{@const nation = matchSlotNation(m, side)}
-		{@const name = matchSlotDisplayName(m, side, slotLabels) ?? "—"}
-		<span class="inline-flex min-w-0 items-center gap-1.5">
-			{#if nation}
-				<SpriteIcon
-					category="crests"
-					value={nation}
-					size={16}
-					alt={formatEnum(nation, "NATION_")}
-				/>
-			{/if}
-			<PlayerAvatar
-				avatarUrl={matchSlotAvatarUrl(m, side, slotAvatars)}
-				size={16}
-			/>
-			<span class="truncate">{name}</span>
-		</span>
-	{/if}
-{/snippet}
 
 <section
 	class="mb-3 rounded-lg p-4"
@@ -189,103 +164,16 @@
 		</div>
 	</div>
 
-	{#if upNext.length > 0}
-		<ul class="overflow-hidden rounded-lg">
-			<!-- Each row is one scheduled *sitting* (part): a match split across days
-			     appears once per sitting, so key by match+part (part ids are only
-			     unique within a match). The streamer-first caster (casters[0]) and
-			     the sitting's first stream drive the channel column. -->
-			{#each upNext as np (`${np.match.match_id}:${np.part.id}`)}
-				{@const caster = np.part.casters[0]}
-				{@const stream = np.part.streams[0]}
-				<!-- Zebra striping on the <li> (every second row a raised tint); the
-				     row hover (surface-hover) reads over either band. The caster/channel
-				     link is a sibling of the button, not nested, so the <a> stays valid
-				     and its click doesn't also open the match card. -->
-				<li
-					class="flex cursor-pointer items-center transition-colors even:bg-surface-raised hover:bg-surface-hover"
-				>
-					<button
-						type="button"
-						class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm text-tan"
-						onclick={(e) => pick(np.match.match_id, e)}
-					>
-						<span
-							class="min-w-[9rem] shrink-0 whitespace-nowrap text-xs text-tan opacity-80"
-						>
-							{formatScheduledInZone(
-								np.part.scheduled_at,
-								zone,
-							)}{#if np.split}<span class="ml-1 opacity-60"
-									>· Pt {np.partNumber}</span
-								>{/if}
-						</span>
-						<span class="flex min-w-0 flex-1 items-center gap-2">
-							{@render playerCell(np.match, "a")}
-							<span class="shrink-0 opacity-60">v</span>
-							{@render playerCell(np.match, "b")}
-						</span>
-					</button>
-					<!-- Caster / channel: a fixed-width, left-aligned column so casters
-					     line up across rows (a shrink-to-content cell wanders left-edge).
-					     A link to the stream when the sitting has one, labelled with the
-					     streamer (or "Watch"); the caster's name alone otherwise. Uses the
-					     page's usual tan text, not an accent color. -->
-					{#if stream || caster}
-						<div class="flex w-44 shrink-0 items-center px-3 py-2 text-xs">
-							{#if stream}
-								<!-- eslint-disable svelte/no-navigation-without-resolve -- external stream URL (youtube/twitch), host-validated; not an app route -->
-								<a
-									href={stream.url}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex min-w-0 items-center gap-1.5 text-tan opacity-80 transition-opacity hover:underline hover:opacity-100"
-								>
-									{#if caster?.avatar_url}
-										<PlayerAvatar avatarUrl={caster.avatar_url} size={16} />
-									{/if}
-									<span class="min-w-0 truncate"
-										>{caster?.display_name ?? caster?.name ?? "Watch"}</span
-									>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										class="h-3 w-3 shrink-0"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										stroke-width="2"
-										aria-hidden="true"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-										/>
-									</svg>
-								</a>
-								<!-- eslint-enable svelte/no-navigation-without-resolve -->
-							{:else}
-								<span
-									class="flex min-w-0 items-center gap-1.5 text-tan opacity-70"
-								>
-									{#if caster?.avatar_url}
-										<PlayerAvatar avatarUrl={caster.avatar_url} size={16} />
-									{/if}
-									<span class="min-w-0 truncate"
-										>{caster?.display_name ?? caster?.name}</span
-									>
-								</span>
-							{/if}
-						</div>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	{:else}
-		<p class="px-3 py-2 text-sm text-tan opacity-70">
-			No matches scheduled yet.
-		</p>
-	{/if}
+	<MatchTable
+		{columns}
+		rows={upNext}
+		{zone}
+		{tournament}
+		{slotLabels}
+		{slotAvatars}
+		onRowClick={pick}
+		emptyMessage="No matches scheduled yet."
+	/>
 </section>
 
 <!-- Match card, anchored at the click point. Independent of the overview page's

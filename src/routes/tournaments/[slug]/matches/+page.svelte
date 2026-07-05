@@ -16,31 +16,24 @@
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
-	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
-	import TableFilterColumn from "$lib/game-detail/TableFilterColumn.svelte";
-	import {
-		type TableState,
-		toggleSort,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
-	} from "$lib/game-detail/helpers";
+	import SearchInput from "$lib/SearchInput.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
-	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import {
-		matchSlotAvatarUrl,
 		matchSlotDisplayName,
-		matchSlotNation,
 		matchupLabel,
 	} from "$lib/tournament/match-occupant";
 	import {
-		MATCH_COLUMNS,
+		toMatchRows,
+		pickColumns,
+		sortMatchRows,
+		matchRowMatchesSearch,
+		toggleMatchSort,
 		matchStatusGroup,
-		matchSortInstant,
 		DEFAULT_MATCHES_TABLE_STATE,
 		type MatchSortContext,
 		type MatchStatusGroup,
+		type MatchTableState,
 	} from "$lib/tournament/matches-table";
 	import {
 		partitionSchedule,
@@ -60,7 +53,6 @@
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
-	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
 	import { Select, Tabs, ToggleGroup } from "bits-ui";
 	import type { PageData } from "./$types";
 
@@ -192,7 +184,7 @@
 
 	// --- Table state. tableState (search + sort) follows the Cities pattern;
 	// statusFilter is a separate multi-toggle (completed off by default).
-	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
+	let tableState = $state<MatchTableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
 	let statusFilter = $state<MatchStatusGroup[]>(
 		csvParam("status", [
 			"scheduled",
@@ -270,66 +262,45 @@
 		tableState.filters = [...others, ...entries];
 	}
 
-	// Non-bye matches — the table's universe (denominator for the count).
-	const tableEligible = $derived(
-		data.matches.filter((m) => matchStatusGroup(m) !== null),
-	);
+	// Non-bye matches, as table rows (the census — includes unscheduled and
+	// completed). Denominator for the count.
+	const tableEligibleRows = $derived(toMatchRows(data.matches));
 
 	const sortCtx = $derived<MatchSortContext>({
 		slotLabels: slotMaps.labels,
 	});
 
-	// Status toggle → bracket filter → search → sort, in one pass. Sort mirrors
-	// the Cities comparator: nulls last, localeCompare for strings, numeric diff
-	// otherwise, direction applied after.
+	// Status toggle → bracket filter → search → sort, in one pass, through the
+	// shared matches-table helpers so the comparator + search rule stay one
+	// definition across every match surface.
 	const rows = $derived.by(() => {
-		let list = tableEligible.filter((m) =>
-			statusFilter.includes(matchStatusGroup(m) as MatchStatusGroup),
+		let list = tableEligibleRows.filter((r) =>
+			statusFilter.includes(matchStatusGroup(r.match) as MatchStatusGroup),
 		);
-
 		if (selectedBrackets.length > 0) {
-			list = list.filter((m) => selectedBrackets.includes(bracketKey(m)));
+			list = list.filter((r) => selectedBrackets.includes(bracketKey(r.match)));
 		}
-
 		if (tableState.search) {
-			const term = tableState.search.toLowerCase();
-			const nationMatch = (n: string | null) =>
-				n != null && formatEnum(n, "NATION_").toLowerCase().includes(term);
-			list = list.filter(
-				(m) =>
-					(matchSlotDisplayName(m, "a", slotMaps.labels) ?? "")
-						.toLowerCase()
-						.includes(term) ||
-					(matchSlotDisplayName(m, "b", slotMaps.labels) ?? "")
-						.toLowerCase()
-						.includes(term) ||
-					nationMatch(matchSlotNation(m, "a")) ||
-					nationMatch(matchSlotNation(m, "b")) ||
-					matchParts(m).some((p) =>
-						p.casters.some((c) =>
-							(c.display_name ?? c.name ?? "").toLowerCase().includes(term),
-						),
-					),
+			list = list.filter((r) =>
+				matchRowMatchesSearch(r, tableState.search, slotMaps.labels),
 			);
 		}
-
-		const column = MATCH_COLUMNS.find((c) => c.key === tableState.sortColumn);
-		if (column) {
-			list = [...list].sort((a, b) => {
-				const aVal = column.sortValue(a, sortCtx);
-				const bVal = column.sortValue(b, sortCtx);
-				if (aVal == null && bVal == null) return 0;
-				if (aVal == null) return 1;
-				if (bVal == null) return -1;
-				const cmp =
-					typeof aVal === "string" && typeof bVal === "string"
-						? aVal.localeCompare(bVal)
-						: (aVal as number) - (bVal as number);
-				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			});
-		}
-		return list;
+		return sortMatchRows(
+			list,
+			tableState.sortColumn,
+			tableState.sortDirection,
+			sortCtx,
+		);
 	});
+
+	// The columns the matches page shows, in order.
+	const matchColumns = pickColumns([
+		"number",
+		"matchup",
+		"time",
+		"caster",
+		"stream",
+	]);
 
 	// --- Match card. Anchored at the click point via a floating-ui virtual
 	// anchor so it opens beside the cursor. detailMatch resolves live from the
@@ -455,33 +426,6 @@
 		);
 	}
 </script>
-
-<!-- One player's table cell: crest + avatar + name. Side B renders "Bye" when
-     there's no opponent slot. -->
-{#snippet playerCell(m: TournamentMatch, side: "a" | "b")}
-	{@const slotId = side === "a" ? m.slot_a_id : m.slot_b_id}
-	{#if side === "b" && slotId === null}
-		<span>Bye</span>
-	{:else}
-		{@const nation = matchSlotNation(m, side)}
-		{@const name = matchSlotDisplayName(m, side, slotMaps.labels) ?? "—"}
-		<span class="inline-flex items-center gap-1.5">
-			{#if nation}
-				<SpriteIcon
-					category="crests"
-					value={nation}
-					size={16}
-					alt={formatEnum(nation, "NATION_")}
-				/>
-			{/if}
-			<PlayerAvatar
-				avatarUrl={matchSlotAvatarUrl(m, side, slotMaps.avatars)}
-				size={16}
-			/>
-			<span>{name}</span>
-		</span>
-	{/if}
-{/snippet}
 
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
@@ -658,242 +602,108 @@
 							out:fade={{ duration: 200 }}
 						>
 							{#if view === "list"}
-								<!-- Cities-style sortable table: search + bracket filter on the
-								     left, status toggle + table on the right. -->
-								<div class={TABLE_FRAME_CLASS}>
-									<TableFilterColumn
-										bind:search={tableState.search}
-										count={`${rows.length} / ${tableEligible.length} matches`}
-										chips={bracketChips}
-									>
-										{#snippet filters()}
-											{#if bracketOptions.length > 0}
-												<Select.Root
-													type="multiple"
-													value={selectedBracketEntries}
-													onValueChange={setBracketFilter}
-												>
-													<Select.Trigger
-														class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
-													>
-														<span class="truncate">Bracket</span>
-														<span class="ml-2 text-tan opacity-60">▼</span>
-													</Select.Trigger>
-													<Select.Portal>
-														<Select.Content
-															class="z-50 max-h-80 overflow-y-auto rounded bg-surface-sunken shadow-lg"
-														>
-															<Select.Viewport>
-																{#each bracketOptions as opt (opt.value)}
-																	<Select.Item
-																		value={`bracket:${opt.value}`}
-																		label={opt.label}
-																		class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-																	>
-																		{#snippet children({ selected })}
-																			<span>{opt.label}</span>
-																			{#if selected}
-																				<span class="font-bold text-orange"
-																					>✓</span
-																				>
-																			{/if}
-																		{/snippet}
-																	</Select.Item>
-																{/each}
-															</Select.Viewport>
-														</Select.Content>
-													</Select.Portal>
-												</Select.Root>
-											{/if}
-										{/snippet}
-									</TableFilterColumn>
-
-									<div class="min-w-0 flex-1">
-										<!-- Status filter above the table, styled like the bracket view tabs. -->
-										<div class="mb-3 flex flex-wrap justify-end gap-2">
-											<ToggleGroup.Root
-												type="multiple"
-												value={statusFilter}
-												onValueChange={(v) =>
-													(statusFilter = v as MatchStatusGroup[])}
-												class="flex overflow-hidden rounded-lg border-2 border-surface"
-												style="background-color: rgb(var(--color-surface));"
-												aria-label="Match status"
-											>
-												<ToggleGroup.Item
-													value="scheduled"
-													class={statusItemClass}
-												>
-													Scheduled
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="in_progress"
-													class={statusItemClass}
-												>
-													In Progress
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="unscheduled"
-													class={statusItemClass}
-												>
-													Unscheduled
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="completed"
-													class={statusItemClass}
-												>
-													Completed
-												</ToggleGroup.Item>
-											</ToggleGroup.Root>
-										</div>
-
-										<div class="overflow-x-auto">
-											<table class={TABLE_CLASS}>
-												<thead>
-													<tr>
-														{#each MATCH_COLUMNS as column, i (column.key)}
-															<th
-																class="{TABLE_HEADER_TH_CLASS} {i === 0
-																	? 'rounded-l-lg border-l'
-																	: ''} {i === MATCH_COLUMNS.length - 1
-																	? 'rounded-r-lg border-r'
-																	: ''}"
-																onclick={() =>
-																	toggleSort(tableState, column.key)}
-															>
-																<span class="inline-flex items-center gap-1">
-																	{column.label}
-																	{#if tableState.sortColumn === column.key}
-																		<span class="text-orange">
-																			{tableState.sortDirection === "asc"
-																				? "↑"
-																				: "↓"}
-																		</span>
-																	{/if}
-																</span>
-															</th>
-														{/each}
-													</tr>
-												</thead>
-												<tbody>
-													{#each rows as m (m.match_id)}
-														<tr
-															class="group cursor-pointer"
-															onclick={(e) => pick(m.match_id, e)}
-														>
-															{#each MATCH_COLUMNS as column, i (column.key)}
-																<td
-																	class="{TABLE_CELL_TD_CLASS} {i === 0
-																		? 'rounded-l-lg'
-																		: ''} {i === MATCH_COLUMNS.length - 1
-																		? 'rounded-r-lg'
-																		: ''} whitespace-nowrap"
-																>
-																	{#if column.key === "scheduled_at"}
-																		{@const g = matchStatusGroup(m)}
-																		{@const t = formatScheduledInZone(
-																			matchSortInstant(m),
-																			zone,
-																		)}
-																		{#if g === "in_progress"}
-																			<!-- Overdue: time passed, result unreported. Keep the
-																			     last-started sitting's time visible so an admin
-																			     chasing reports can see how overdue it is. -->
-																			{t || "In progress"}{#if t}<span
-																					class="opacity-60"
-																				>
-																					· in progress</span
-																				>{/if}
-																		{:else if t}
-																			{t}
-																		{:else if g === "completed"}
-																			Completed
-																		{:else}
-																			Not scheduled
-																		{/if}
-																	{:else if column.key === "match"}
-																		<span
-																			class="inline-flex items-center gap-2"
-																		>
-																			{@render playerCell(m, "a")}
-																			<span class="opacity-60">v</span>
-																			{@render playerCell(m, "b")}
-																		</span>
-																	{:else if column.key === "caster"}
-																		{@const firstCast = matchParts(m).find(
-																			(part) => part.casters.length > 0,
-																		)?.casters[0]}
-																		{#if firstCast}
-																			<span
-																				class="inline-flex items-center gap-1.5"
-																			>
-																				<PlayerAvatar
-																					avatarUrl={firstCast.avatar_url}
-																					size={16}
-																				/>
-																				{firstCast.display_name ??
-																					firstCast.name}
-																			</span>
-																		{:else}
-																			—
-																		{/if}
-																	{:else if column.key === "streams"}
-																		{@const firstStream = matchParts(m)
-																			.flatMap((part) => part.streams)
-																			.at(0)}
-																		{#if firstStream}
-																			<!-- External stream URL (youtube/twitch), validated
-																			     host-side; not an app route, so resolve() doesn't
-																			     apply. Stop propagation so the link doesn't also
-																			     open the match card. -->
-																			<!-- eslint-disable svelte/no-navigation-without-resolve -->
-																			<a
-																				href={firstStream.url}
-																				target="_blank"
-																				rel="noopener noreferrer"
-																				class="inline-flex items-center gap-1 text-tan hover:underline"
-																				onclick={(e) => e.stopPropagation()}
-																			>
-																				<svg
-																					xmlns="http://www.w3.org/2000/svg"
-																					class="h-3 w-3"
-																					fill="none"
-																					viewBox="0 0 24 24"
-																					stroke="currentColor"
-																					stroke-width="2"
-																					aria-hidden="true"
-																				>
-																					<path
-																						stroke-linecap="round"
-																						stroke-linejoin="round"
-																						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-																					/>
-																				</svg>
-																				{firstStream.label?.trim() || "Stream"}
-																			</a>
-																			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-																		{:else}
-																			—
-																		{/if}
-																	{/if}
-																</td>
-															{/each}
-														</tr>
-													{:else}
-														<tr>
-															<td
-																colspan={MATCH_COLUMNS.length}
-																class="p-8 text-center italic text-tan"
-															>
-																No matches
-															</td>
-														</tr>
-													{/each}
-												</tbody>
-											</table>
-										</div>
+								<!-- Control bar: search + bracket filter + count on the left,
+								     status toggle on the right. Inline (no cities-table sidebar)
+								     so all three match surfaces share one look. -->
+								<div class="mb-3 flex flex-wrap items-center gap-3">
+									<div class="w-full max-w-xs">
+										<SearchInput
+											bind:value={tableState.search}
+											placeholder=""
+											variant="dark"
+											class="w-full"
+										/>
 									</div>
+									{#if bracketOptions.length > 0}
+										<Select.Root
+											type="multiple"
+											value={selectedBracketEntries}
+											onValueChange={setBracketFilter}
+										>
+											<Select.Trigger
+												class="flex cursor-pointer items-center justify-between gap-2 rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
+											>
+												<span class="truncate">Bracket</span>
+												<span class="text-tan opacity-60">▼</span>
+											</Select.Trigger>
+											<Select.Portal>
+												<Select.Content
+													class="z-50 max-h-80 overflow-y-auto rounded bg-surface-sunken shadow-lg"
+												>
+													<Select.Viewport>
+														{#each bracketOptions as opt (opt.value)}
+															<Select.Item
+																value={`bracket:${opt.value}`}
+																label={opt.label}
+																class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
+															>
+																{#snippet children({ selected })}
+																	<span>{opt.label}</span>
+																	{#if selected}
+																		<span class="font-bold text-orange">✓</span>
+																	{/if}
+																{/snippet}
+															</Select.Item>
+														{/each}
+													</Select.Viewport>
+												</Select.Content>
+											</Select.Portal>
+										</Select.Root>
+									{/if}
+									{#each bracketChips as chip (chip)}
+										<span
+											class="rounded bg-surface-raised px-2 py-1 text-xs text-tan"
+											>{chip}</span
+										>
+									{/each}
+									<span class="text-xs text-tan opacity-70"
+										>{rows.length} / {tableEligibleRows.length} matches</span
+									>
+
+									<!-- Status filter, right-aligned; styled like the bracket view tabs. -->
+									<ToggleGroup.Root
+										type="multiple"
+										value={statusFilter}
+										onValueChange={(v) =>
+											(statusFilter = v as MatchStatusGroup[])}
+										class="ml-auto flex overflow-hidden rounded-lg border-2 border-surface"
+										style="background-color: rgb(var(--color-surface));"
+										aria-label="Match status"
+									>
+										<ToggleGroup.Item value="scheduled" class={statusItemClass}>
+											Scheduled
+										</ToggleGroup.Item>
+										<ToggleGroup.Item
+											value="in_progress"
+											class={statusItemClass}
+										>
+											In Progress
+										</ToggleGroup.Item>
+										<ToggleGroup.Item
+											value="unscheduled"
+											class={statusItemClass}
+										>
+											Unscheduled
+										</ToggleGroup.Item>
+										<ToggleGroup.Item value="completed" class={statusItemClass}>
+											Completed
+										</ToggleGroup.Item>
+									</ToggleGroup.Root>
 								</div>
+
+								<MatchTable
+									columns={matchColumns}
+									{rows}
+									{zone}
+									tournament={data.tournament}
+									slotLabels={slotMaps.labels}
+									slotAvatars={slotMaps.avatars}
+									sortColumn={tableState.sortColumn}
+									sortDirection={tableState.sortDirection}
+									onSort={(key) => toggleMatchSort(tableState, key)}
+									onRowClick={(m, e) => pick(m.match_id, e)}
+									stickyHeader
+								/>
 							{:else if view === "cast"}
 								<CastView
 									matches={data.matches}
@@ -901,6 +711,8 @@
 									{zone}
 									{user}
 									slotLabels={slotMaps.labels}
+									slotAvatars={slotMaps.avatars}
+									onOpenMatch={(m, e) => pick(m.match_id, e)}
 								/>
 							{:else}
 								<!-- Monthly calendar. -->
