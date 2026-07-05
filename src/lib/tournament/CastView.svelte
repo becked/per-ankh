@@ -111,5 +111,5 @@
 	onRowClick={onOpenMatch}
 	emptyMessage={upcoming.length === 0
 		? "No upcoming scheduled matches."
-		: "Every upcoming match has a caster. 🎉"}
+		: "No upcoming matches need a caster."}
 />
