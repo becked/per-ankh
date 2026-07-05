@@ -31,6 +31,11 @@
 		headerStatusMeta,
 		type HeaderHero,
 	} from "$lib/tournament/header-status";
+	import type { ScheduleZone } from "$lib/tournament/schedule";
+	import {
+		resolveInitialZone,
+		writeZoneCookie,
+	} from "$lib/tournament/zone-preference";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		distinguishingOptions,
@@ -67,6 +72,23 @@
 
 	const isAdmin = $derived(data.tournament.is_viewer_admin === true);
 	const user = $derived(page.data.user as UserMe | null);
+
+	// The Live & Upcoming panel is the only time-bearing content on this page, so
+	// it's shown (and its clock toggle offered) only while the tournament is
+	// running. Setup/complete have no schedule to clock.
+	const showLiveMatches = $derived(
+		data.tournament.status === "swiss" ||
+			data.tournament.status === "championship",
+	);
+
+	// Active clock for the Live & Upcoming panel, owned here so the header's
+	// top-right toggle and the panel below it read one value. Follows the shared
+	// app-wide preference (saved cookie, else UTC); the toggle persists changes.
+	let zone = $state<ScheduleZone>(resolveInitialZone(null));
+	function setZone(next: ScheduleZone) {
+		zone = next;
+		writeZoneCookie(next);
+	}
 
 	// Per-division Swiss view toggle: the bracket diagram and the standings table
 	// occupy one card and are switched (not stacked) to tighten the page. Each
@@ -728,6 +750,8 @@
 					{startReady}
 					{transitionReady}
 					settingsDisabled={busy || openMatchId !== null}
+					zone={showLiveMatches ? zone : undefined}
+					onZoneChange={setZone}
 					onGuide={openGuide}
 					onStart={startTournament}
 					onWithdraw={withdraw}
@@ -737,10 +761,11 @@
 				<!-- Live & upcoming matches, surfaced on the overview page while the
 				tournament is running — the most-used view mid-tournament. Hidden in
 				setup (no matches) and complete (bracket/standings tell that story). -->
-				{#if data.tournament.status === "swiss" || data.tournament.status === "championship"}
+				{#if showLiveMatches}
 					<TournamentUpNextPanel
 						tournament={data.tournament}
 						matches={data.matches}
+						{zone}
 						{slotLabels}
 						{slotUserIds}
 						{slotAvatars}

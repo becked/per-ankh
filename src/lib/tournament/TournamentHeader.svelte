@@ -7,12 +7,12 @@
 	} from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import Progress from "$lib/ui/Progress.svelte";
-	import SettingsPopover from "./SettingsPopover.svelte";
 	import SignedUpPopover from "./SignedUpPopover.svelte";
-	import TournamentLinksMenu from "./TournamentLinksMenu.svelte";
+	import TournamentActions from "./TournamentActions.svelte";
 	import SignupPopover from "./SignupPopover.svelte";
 	import TransitionPopover from "./TransitionPopover.svelte";
 	import type { HeaderHero, HeaderStatusMeta } from "./header-status";
+	import type { ScheduleZone } from "./schedule";
 
 	interface Props {
 		crumbs: Crumb[];
@@ -36,6 +36,11 @@
 		transitionReady: boolean;
 		// Settings is disabled while a match popover is open (shallow-routing guard).
 		settingsDisabled: boolean;
+		// Active clock for the top-right toggle, and its flip handler. Omitted when
+		// the page has no time-bearing content (setup/complete), hiding the toggle.
+		zone?: ScheduleZone;
+		// eslint-disable-next-line no-unused-vars -- callback signature
+		onZoneChange?: (zone: ScheduleZone) => void;
 		onGuide: () => void;
 		onStart: () => void;
 		onWithdraw: () => void;
@@ -58,6 +63,8 @@
 		startReady,
 		transitionReady,
 		settingsDisabled,
+		zone,
+		onZoneChange,
 		onGuide,
 		onStart,
 		onWithdraw,
@@ -99,8 +106,6 @@
 		}
 		return out;
 	});
-
-	const showSettings = $derived(isAdmin || tournament.status !== "setup");
 </script>
 
 <header class="mb-3">
@@ -120,10 +125,13 @@
 			{#if hasViewerSlot}
 				<SignedUpPopover {tournament} {busy} {onWithdraw} />
 			{/if}
-			<TournamentLinksMenu {tournament} {onGuide} />
-			{#if showSettings}
-				<SettingsPopover {tournament} disabled={settingsDisabled} />
-			{/if}
+			<TournamentActions
+				{tournament}
+				{onGuide}
+				{settingsDisabled}
+				{zone}
+				{onZoneChange}
+			/>
 		</div>
 	</div>
 

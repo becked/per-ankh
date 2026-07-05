@@ -3,11 +3,11 @@
 	// view during a running tournament. Lists the sittings that are live right now
 	// (started within the live window, so plausibly still streaming) followed by
 	// the next handful still ahead, soonest first. A match split across days shows
-	// one row per sitting. The title row carries a UTC/Local toggle (picks the
-	// clock every row reads; defaults to local) and a Matches button linking to
-	// the full /matches page. Rows render through the shared MatchTable (part-row
-	// granularity), live ones flagged with a LIVE badge; clicking one opens the
-	// match card.
+	// one row per sitting. The title row carries a Matches button linking to the
+	// full /matches page; the active clock comes from the page (whose top-right
+	// toggle owns it), so this panel and that toggle can't drift. Rows render
+	// through the shared MatchTable (part-row granularity), live ones flagged with
+	// a LIVE badge; clicking one opens the match card.
 	import { resolve } from "$app/paths";
 	import {
 		type TournamentDetail,
@@ -18,16 +18,15 @@
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
 	import { liveAndUpcoming, type ScheduleZone } from "$lib/tournament/schedule";
-	import {
-		resolveInitialZone,
-		writeZoneCookie,
-	} from "$lib/tournament/zone-preference";
 	import { nowMs } from "$lib/stores/now.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
 
 	interface Props {
 		tournament: TournamentDetail;
 		matches: TournamentMatch[];
+		// The active clock every row's time reads, owned by the page's top-right
+		// toggle so this panel stays in lockstep with it.
+		zone: ScheduleZone;
 		slotLabels: Record<string, string>;
 		slotUserIds: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
@@ -46,6 +45,7 @@
 	let {
 		tournament,
 		matches,
+		zone,
 		slotLabels,
 		slotUserIds,
 		slotAvatars,
@@ -78,21 +78,6 @@
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
 	);
 
-	// Active clock every row's time reads. The title-row toggle flips it and
-	// persists the choice; the initial value follows the shared app-wide
-	// preference (saved cookie, else UTC) — no ?zone= param on this surface.
-	let zone = $state<ScheduleZone>(resolveInitialZone(null));
-
-	// Flip + persist, so toggling here sticks on the full matches page too.
-	function setZone(next: ScheduleZone) {
-		zone = next;
-		writeZoneCookie(next);
-	}
-	// Segmented UTC/Local control, mirroring the matches page: transparent text
-	// buttons over a sliding highlight thumb.
-	const viewTriggerClass =
-		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
-
 	// --- Match card, anchored at the click point (mirrors the matches page). A
 	// virtual anchor from the pointer keeps the card beside the clicked row.
 	let detailMatchId = $state<string | null>(null);
@@ -118,52 +103,19 @@
 	style="background-color: rgb(var(--color-surface));"
 >
 	<div
-		class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+		class="mb-3 flex items-center gap-3 rounded-lg px-3 py-2"
 		style="background-color: rgb(var(--color-surface-raised));"
 	>
-		<div class="flex items-center gap-3">
-			<h2 class="text-lg font-bold text-tan">Live &amp; Upcoming Matches</h2>
-			<!-- Link to the full matches page, bordered button like the others. -->
-			<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
-			<a
-				href={matchesHref}
-				class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-			>
-				View All
-			</a>
-			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-		</div>
-		<!-- UTC / Local: a segmented toggle picking the clock every row reads. -->
-		<div
-			class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
-			style="background-color: rgb(var(--color-surface));"
-			role="group"
-			aria-label="Timezone"
+		<h2 class="text-lg font-bold text-tan">Live &amp; Upcoming Matches</h2>
+		<!-- Link to the full matches page, bordered button like the others. -->
+		<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
+		<a
+			href={matchesHref}
+			class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
 		>
-			<div
-				class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-				style:background-color="rgb(var(--color-surface-raised))"
-				style:transform={zone === "local"
-					? "translateX(100%)"
-					: "translateX(0)"}
-			></div>
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={zone === "utc"}
-				onclick={() => setZone("utc")}
-			>
-				UTC
-			</button>
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={zone === "local"}
-				onclick={() => setZone("local")}
-			>
-				Local
-			</button>
-		</div>
+			View All
+		</a>
+		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 	</div>
 
 	<MatchTable

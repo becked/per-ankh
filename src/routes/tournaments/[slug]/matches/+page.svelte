@@ -19,6 +19,7 @@
 	import SearchInput from "$lib/SearchInput.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
+	import TournamentActions from "$lib/tournament/TournamentActions.svelte";
 	import {
 		matchSlotDisplayName,
 		matchupLabel,
@@ -74,6 +75,14 @@
 		},
 		{ label: "Matches" },
 	]);
+
+	// Open the shared guide, carrying this tournament as origin (mirrors the
+	// overview page) so the guide breadcrumb can link back here.
+	function openGuide() {
+		const dest = `${resolve("/tournaments/guide")}?from=${data.tournament.slug}&name=${encodeURIComponent(data.tournament.name)}`;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path
+		goto(dest);
+	}
 
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const partition = $derived(partitionSchedule(data.matches));
@@ -383,10 +392,22 @@
 			use:autohideScroll
 		>
 			<div class="mx-auto max-w-screen-2xl">
-				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
+				<!-- Trail on the left, the shared action cluster (Links · Settings ·
+				     clock toggle) top-right, matching the overview header. -->
+				<div class="mb-4 flex items-center justify-between gap-3">
+					<Breadcrumb {crumbs} class="min-w-0" />
+					<TournamentActions
+						tournament={data.tournament}
+						onGuide={openGuide}
+						settingsDisabled={detailMatchId !== null}
+						{zone}
+						onZoneChange={setZone}
+					/>
+				</div>
 
 				<!-- Controls card: title + copy tools (left), the Upcoming/Casts/All view
-					     toggle (center), Calendar + the UTC/Local clock (right). -->
+					     toggle (center), Calendar (right). The UTC/Local clock now lives in
+					     the top-right action cluster with Links/Settings. -->
 				<div
 					class="mb-4 grid grid-cols-3 items-center gap-3 rounded-lg px-3 py-2"
 					style="background-color: rgb(var(--color-surface-raised));"
@@ -527,51 +548,36 @@
 						</button>
 					</div>
 
-					<!-- Right cluster: Calendar toggle, then the UTC/Local clock (outermost). -->
+					<!-- Right cluster: Calendar toggle. (The UTC/Local clock moved to the
+					     top-right action cluster.) -->
 					<div class="flex items-center gap-2 justify-self-end">
 						<!-- Calendar: its own single-cell toggle, pressed in the calendar view. -->
 						<button
 							type="button"
-							class="{viewTriggerClass} rounded-lg border-2 border-surface"
+							class="{viewTriggerClass} inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-surface"
 							style:background-color={view === "calendar"
 								? "rgb(var(--color-surface-raised))"
 								: "rgb(var(--color-surface))"}
 							aria-pressed={view === "calendar"}
 							onclick={() => (view = "calendar")}
 						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-3.5 w-3.5 opacity-80"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+								aria-hidden="true"
+							>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+								/>
+							</svg>
 							Calendar
 						</button>
-						<!-- UTC / Local: a segmented toggle picking the active clock. -->
-						<div
-							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
-							style="background-color: rgb(var(--color-surface));"
-							role="group"
-							aria-label="Timezone"
-						>
-							<div
-								class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-								style:background-color="rgb(var(--color-surface-raised))"
-								style:transform={zone === "local"
-									? "translateX(100%)"
-									: "translateX(0)"}
-							></div>
-							<button
-								type="button"
-								class={viewTriggerClass}
-								aria-pressed={zone === "utc"}
-								onclick={() => setZone("utc")}
-							>
-								UTC
-							</button>
-							<button
-								type="button"
-								class={viewTriggerClass}
-								aria-pressed={zone === "local"}
-								onclick={() => setZone("local")}
-							>
-								Local
-							</button>
-						</div>
 					</div>
 				</div>
 
