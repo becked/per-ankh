@@ -51,7 +51,11 @@
 <div class="collapsible-search">
 	{#if expanded}
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class={className} onkeydown={handleKeydown} onfocusout={handleFocusOut}>
+		<div
+			class={className}
+			onkeydown={handleKeydown}
+			onfocusout={handleFocusOut}
+		>
 			<SearchInput bind:value variant="dark" {placeholder} autofocus />
 		</div>
 	{:else}
