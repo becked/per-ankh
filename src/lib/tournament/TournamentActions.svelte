@@ -6,6 +6,7 @@
 	// page chrome — so the overview header renders it alongside this cluster.
 	import type { TournamentDetail } from "$lib/api-cloud";
 	import type { ScheduleZone } from "./schedule";
+	import { shortTimeZoneName } from "$lib/utils/formatting";
 	import SettingsPopover from "./SettingsPopover.svelte";
 	import TournamentLinksMenu from "./TournamentLinksMenu.svelte";
 
@@ -41,6 +42,12 @@
 	// room for the leading clock icon.
 	const zoneTriggerClass =
 		"inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange";
+
+	// The local button shows the viewer's actual zone (e.g. "PDT") rather than a
+	// bare "Local", matching the abbreviation on the match times themselves. Falls
+	// back to "Local" if the environment can't resolve one (also the SSR case,
+	// where it would otherwise read "UTC" — corrected on hydration).
+	const localZoneLabel = $derived(shortTimeZoneName() || "Local");
 </script>
 
 <div class="flex flex-shrink-0 items-center gap-2">
@@ -76,7 +83,7 @@
 					d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
 				/>
 			</svg>
-			{zone === "utc" ? "UTC" : "Local"}
+			{zone === "utc" ? "UTC" : localZoneLabel}
 		</button>
 	{/if}
 </div>

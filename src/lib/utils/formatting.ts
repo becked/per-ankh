@@ -132,6 +132,23 @@ function isDifferentYear(d: Date, timeZone: string | undefined): boolean {
 }
 
 /**
+ * The short name of the viewer's local timezone for a given instant, e.g.
+ * "PDT" / "EST" — the same abbreviation the scheduled-time helpers append to a
+ * local clock. It is DST-dependent, so it resolves for a specific instant
+ * (defaulting to now). Returns "" when the environment can't produce one (and
+ * on the UTC worker during SSR, where it resolves to "UTC"/"GMT").
+ *
+ * @param date - the instant to read the zone name for (defaults to now)
+ */
+export function shortTimeZoneName(date: Date = new Date()): string {
+	return (
+		new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
+			.formatToParts(date)
+			.find((p) => p.type === "timeZoneName")?.value ?? ""
+	);
+}
+
+/**
  * Formats an ISO instant as a UTC date + 24h time for display, e.g.
  * "May 30, 14:30". Tournament match scheduling is entered and shown in UTC
  * (localization is a later iteration); callers append a " UTC" label. The year
@@ -204,10 +221,7 @@ export function formatScheduledWithLocal(
 	// Viewer is effectively on UTC — the local part would just echo the primary.
 	if (localDate === utcDate && localTime === utcTime) return `${utc} UTC`;
 
-	const tzName =
-		new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
-			.formatToParts(d)
-			.find((p) => p.type === "timeZoneName")?.value ?? "";
+	const tzName = shortTimeZoneName(d);
 
 	// The local date is shown only on a day rollover; include its year when it
 	// isn't the current year, mirroring the UTC primary (formatScheduledUtc).
@@ -258,10 +272,7 @@ export function formatScheduledInZone(
 		minute: "2-digit",
 		hour12: false,
 	});
-	const tzName =
-		new Intl.DateTimeFormat("en-US", { timeZoneName: "short" })
-			.formatToParts(d)
-			.find((p) => p.type === "timeZoneName")?.value ?? "";
+	const tzName = shortTimeZoneName(d);
 	return tzName ? `${dateTime} ${tzName}` : dateTime;
 }
 
