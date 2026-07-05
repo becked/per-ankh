@@ -134,7 +134,7 @@
 	{:else}
 		{@const nation = matchSlotNation(m, side)}
 		{@const name = matchSlotDisplayName(m, side, slotLabels) ?? "—"}
-		<span class="inline-flex min-w-0 items-center gap-1.5">
+		<span class="inline-flex min-w-0 items-center gap-1">
 			{#if nation}
 				<SpriteIcon
 					category="crests"

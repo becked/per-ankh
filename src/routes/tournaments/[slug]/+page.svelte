@@ -934,7 +934,7 @@
 															{s.swiss_seed ?? s.rank}
 														</td>
 														<td class="py-1 pr-2">
-															<span class="flex items-start gap-1.5">
+															<span class="flex items-start gap-1">
 																<PlayerAvatar
 																	avatarUrl={s.avatar_url}
 																	size={15}

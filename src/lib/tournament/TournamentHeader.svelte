@@ -144,7 +144,7 @@
 			class="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-tan opacity-80"
 		>
 			{#if tournament.owner}
-				<span class="flex items-center gap-1.5">
+				<span class="flex items-center gap-1">
 					<img
 						src={tournament.owner.avatar_url}
 						alt=""

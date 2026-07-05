@@ -110,7 +110,7 @@
 					>
 						<td class="py-1 pr-2 font-mono">{s.rank}</td>
 						<td class="py-1 pr-2">
-							<span class="flex items-center gap-1.5">
+							<span class="flex items-center gap-1">
 								<PlayerAvatar avatarUrl={s.avatar_url} size={15} />
 								{#if isViewerAdmin && onSubstitute}
 									<SlotUsernameCell
