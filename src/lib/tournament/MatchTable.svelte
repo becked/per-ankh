@@ -105,15 +105,19 @@
 			: row.match.match_id;
 	}
 
-	// Striped rows: no per-cell rounding or row gaps — a contiguous zebra table.
-	// The row <tr> carries the stripe + hover background; the cells stay
-	// transparent so it shows through.
+	// The table sits in a framed box (rounded border on the wrapper below); rows
+	// are a contiguous zebra — no per-cell rounding or gaps. The header is a
+	// raised bar (surface-raised-hover), deliberately *lighter* than both zebra
+	// tones (surface / surface-raised) so it reads as chrome and never blends into
+	// a stripe: the page itself is the ramp's darkest tone (blue-gray), so a dark
+	// recessed header would hug it. The row <tr> carries the stripe + hover
+	// background; the cells stay transparent so it shows through.
 	function thClass(sortable: boolean): string {
 		const sticky = stickyHeader ? "sticky -top-4 z-10 " : "";
 		const s = sortable
 			? "cursor-pointer transition-colors hover:text-orange "
 			: "";
-		return `${sticky}${s}select-none whitespace-nowrap border-b border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg`;
+		return `${sticky}${s}select-none whitespace-nowrap border-b border-black bg-surface-raised-hover px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg`;
 	}
 
 	// align-top so the multi-line Match/Time/Casters cells don't vertically center
@@ -183,7 +187,7 @@
 	<!-- eslint-enable svelte/no-navigation-without-resolve -->
 {/snippet}
 
-<div class="overflow-x-auto">
+<div class="overflow-x-auto rounded-lg border border-black">
 	<table class="w-full border-collapse">
 		<thead>
 			<tr>
@@ -274,10 +278,9 @@
 										>
 										{#if live}
 											<span
-												class="inline-flex items-center gap-1 rounded bg-red-400/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-400"
+												class="inline-flex items-center gap-1 rounded bg-orange/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange"
 											>
-												<span class="h-1.5 w-1.5 rounded-full bg-red-400"
-												></span>
+												<span class="h-1.5 w-1.5 rounded-full bg-orange"></span>
 												Live
 											</span>
 										{/if}
@@ -300,9 +303,9 @@
 										{#if rel}<div class="text-xs opacity-60">{rel}</div>{/if}
 									{:else if g === "completed"}
 										<!-- Completed matches get a badge mirroring the Live one (same
-										     pill shape, success color instead of red). -->
+										     pill shape + alpha fill, success color instead of orange). -->
 										<span
-											class="inline-flex items-center gap-1 rounded bg-success-surface px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success"
+											class="inline-flex items-center gap-1 rounded bg-success/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success"
 										>
 											<span class="h-1.5 w-1.5 rounded-full bg-success"></span>
 											Completed

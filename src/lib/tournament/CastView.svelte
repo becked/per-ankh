@@ -68,53 +68,48 @@
 		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=on]:bg-surface-raised";
 </script>
 
-<section
-	class="mb-6 rounded-lg p-4"
-	style="background-color: rgb(var(--color-surface));"
->
-	<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
-		<p class="text-sm text-muted">
-			{needsCasterCount} of {upcomingMatchCount} upcoming {upcomingMatchCount ===
-			1
-				? "match needs"
-				: "matches need"} a caster
-		</p>
-		<ToggleGroup.Root
-			type="single"
-			value={needsOnly ? "needs" : "all"}
-			onValueChange={(v) => v && (needsOnly = v === "needs")}
-			class="flex overflow-hidden rounded-lg border-2 border-surface"
-			style="background-color: rgb(var(--color-surface-sunken));"
-			aria-label="Filter"
+<div class="mb-3 flex flex-wrap items-center justify-between gap-3">
+	<p class="text-sm text-muted">
+		{needsCasterCount} of {upcomingMatchCount} upcoming {upcomingMatchCount ===
+		1
+			? "match needs"
+			: "matches need"} a caster
+	</p>
+	<ToggleGroup.Root
+		type="single"
+		value={needsOnly ? "needs" : "all"}
+		onValueChange={(v) => v && (needsOnly = v === "needs")}
+		class="flex overflow-hidden rounded-lg border-2 border-surface"
+		style="background-color: rgb(var(--color-surface-sunken));"
+		aria-label="Filter"
+	>
+		<ToggleGroup.Item value="needs" class={filterItemClass}
+			>Needs a caster</ToggleGroup.Item
 		>
-			<ToggleGroup.Item value="needs" class={filterItemClass}
-				>Needs a caster</ToggleGroup.Item
-			>
-			<ToggleGroup.Item value="all" class={filterItemClass}
-				>All scheduled</ToggleGroup.Item
-			>
-		</ToggleGroup.Root>
-	</div>
-
-	{#if !user}
-		<p
-			class="mb-3 rounded-lg border border-border-subtle bg-surface-sunken p-3 text-sm text-muted"
+		<ToggleGroup.Item value="all" class={filterItemClass}
+			>All scheduled</ToggleGroup.Item
 		>
-			Log in to sign up as a caster.
-		</p>
-	{/if}
+	</ToggleGroup.Root>
+</div>
 
-	<MatchTable
-		{columns}
-		{rows}
-		{zone}
-		{tournament}
-		{user}
-		{slotLabels}
-		{slotAvatars}
-		onRowClick={onOpenMatch}
-		emptyMessage={upcoming.length === 0
-			? "No upcoming scheduled matches."
-			: "Every upcoming match has a caster. 🎉"}
-	/>
-</section>
+{#if !user}
+	<p
+		class="mb-3 rounded-lg border border-border-subtle bg-surface-sunken p-3 text-sm text-muted"
+	>
+		Log in to sign up as a caster.
+	</p>
+{/if}
+
+<MatchTable
+	{columns}
+	{rows}
+	{zone}
+	{tournament}
+	{user}
+	{slotLabels}
+	{slotAvatars}
+	onRowClick={onOpenMatch}
+	emptyMessage={upcoming.length === 0
+		? "No upcoming scheduled matches."
+		: "Every upcoming match has a caster. 🎉"}
+/>
