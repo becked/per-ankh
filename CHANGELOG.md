@@ -1,5 +1,40 @@
 # Changelog
 
+## [2026-07-05-12082ee] - 2026-07-05
+
+### Features
+
+- (tournament) copy button for matches still needing casters — [67fdc28](https://github.com/becked/per-ankh/commit/67fdc2846ad7a6fe2cb4e0a28ee0a8d39bc1bb69)
+- (tournament) surface live matches in a Live & Upcoming panel — [59bf017](https://github.com/becked/per-ankh/commit/59bf0176316d32e231fc861858bd401d6b32ea76)
+- (tournament) restructure matches page into Live & Upcoming / All tabs — [2b7cf6e](https://github.com/becked/per-ankh/commit/2b7cf6eceb783ae7b552d704ef175776c4ceebfe)
+- (tournament) unify match table row style across surfaces — [8792d14](https://github.com/becked/per-ankh/commit/8792d147e91b85965e64ff97d1da415d83557911)
+- (tournament) merge caster & stream into one Casters & Streams column — [2b98ef3](https://github.com/becked/per-ankh/commit/2b98ef34959b5ddfaa4003e4ab25a14476930a51)
+- (tournament) tidy inline caster display on match rows — [1287226](https://github.com/becked/per-ankh/commit/128722614bcd7ac6b39f2a2b600f3f11cacc26b2)
+- (tournament) frame shared match table, align status colors — [dac6580](https://github.com/becked/per-ankh/commit/dac658070623ecdaf6c98d97ebba1c3b6dada945)
+- (tournament) sticky UTC/local clock and restructured matches header — [4fdf3c0](https://github.com/becked/per-ankh/commit/4fdf3c0b35f06b5bee487e4e183619dd1e6eba1e)
+- (tournament) refine match table row typography and contrast — [c8725c7](https://github.com/becked/per-ankh/commit/c8725c794df1aa3d24412e72049ec6dad3cee9f2)
+- (tournament) unify clock/links/settings into a top-right action cluster — [8838a15](https://github.com/becked/per-ankh/commit/8838a15e5b1a6de4209461679607758807914484)
+- (tournament) move match search into the header, share it across views — [43d248e](https://github.com/becked/per-ankh/commit/43d248e2bd7d58db16ab6953f2069c9a9767d930)
+- (tournament) make Live & Upcoming 'View All' a filled-orange primary — [265d587](https://github.com/becked/per-ankh/commit/265d5874aefb3f9d491c1660c3cd5268d70741d6)
+- (tournament) default the match clock to local time — [650fd63](https://github.com/becked/per-ankh/commit/650fd638270d40d53692086507fd83a7367f6e5c)
+- (tournament) caster status in the sesh export + distinct needs-casters icon (#101) — [12082ee](https://github.com/becked/per-ankh/commit/12082ee6e60f7c33978bc87b78d3554282baab38)
+
+### Fixes
+
+- (game-detail) classify army units by the game's UnitCycle — [04e94db](https://github.com/becked/per-ankh/commit/04e94db437d3bef4fa8202fffd41c30d648eb43e)
+- (tournament) list unscheduled parts under "To be scheduled" — [ce8785c](https://github.com/becked/per-ankh/commit/ce8785cd14c72a790be1d99a4698739cbf4a07f8)
+- (tournament) suppress password-manager autofill in user autocomplete — [0fee5b6](https://github.com/becked/per-ankh/commit/0fee5b6b059322798061dbc396cab69dcf298ffa)
+- (tournament) match cast grace in the needs-casters copy — [e2f359b](https://github.com/becked/per-ankh/commit/e2f359b327a0500056b2db00d625d694828667f0)
+- (tournament) drop celebratory empty state from the Cast view table — [d6825ac](https://github.com/becked/per-ankh/commit/d6825acdaa1538a87548618bd11acc38cd6a2f3f)
+
+### Other
+
+- (tournament) note both copy tools in the controls-card comment — [1a6985b](https://github.com/becked/per-ankh/commit/1a6985b06354de8159328ad31bd78c4ee7f7b2a7)
+- (release) deploy 2026-07-05-e34d7d8 — [9f7f4ba](https://github.com/becked/per-ankh/commit/9f7f4ba0345e635e564d9a04ef9d20ddf7b357ae)
+- (tournament) unify match lists into one shared MatchTable — [db87bb7](https://github.com/becked/per-ankh/commit/db87bb7f19cdc472f9e696210871a68dcf200d9e)
+- (tournament) tighten Discord avatar↔name gap from 1.5 to 1 — [5d47e66](https://github.com/becked/per-ankh/commit/5d47e66649161994477bfa6ffd0ff7811434c82e)
+- apply prettier formatting to CollapsibleSearch — [cb42926](https://github.com/becked/per-ankh/commit/cb429260920502d671210f81d8d2587987e2d27e)
+
 ## [2026-07-05-e34d7d8] - 2026-07-05
 
 ### Features
