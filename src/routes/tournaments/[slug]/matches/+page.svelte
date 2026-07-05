@@ -14,6 +14,7 @@
 		ApiError,
 		cloudApi,
 		type TournamentMatch,
+		type TournamentMatchPart,
 		type UserMe,
 	} from "$lib/api-cloud";
 	import CollapsibleSearch from "$lib/CollapsibleSearch.svelte";
@@ -88,10 +89,13 @@
 	const partition = $derived(partitionSchedule(data.matches));
 
 	// Admin "sesh.fyi"-style copy of upcoming (scheduled, still-pending) matches,
-	// soonest first, with Discord timestamps — paste into a Discord scheduling
-	// post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>` the relative
-	// "in X hours/days". A split match contributes one line per scheduled part,
-	// tagged "(Part N)"; single-session matches read as just "Match NNN".
+	// soonest first, with Discord timestamps — paste into a Discord scheduling /
+	// announcement post. `<t:UNIX:F>` renders the full local date; `<t:UNIX:R>`
+	// the relative "in X hours/days". A split match contributes one line per
+	// scheduled part, tagged "(Part N)"; single-session matches read as just
+	// "Match NNN". Each "all"-scope line also carries its caster status —
+	// "[cast by X]" (with any stream links) or "[needs a caster]" — so the post
+	// doubles as a watch-and-recruit announcement.
 	function seshText(scope: "all" | "needs-casters" = "all"): string {
 		const num = (m: TournamentMatch) =>
 			m.match_number != null ? padMatchNumber(m.match_number) : "?";
@@ -105,6 +109,20 @@
 					? `<@${id}>`
 					: (matchSlotDisplayName(m, side, slotMaps.labels) ?? "?");
 			});
+
+		// Caster status suffix for a scheduled part in the "all" post: the
+		// streamer (first caster) and any co-casters, plus their stream links, or
+		// "[needs a caster]" when nobody's signed up. Stream URLs are wrapped in
+		// <> so Discord suppresses the giant link-preview embeds — a column of
+		// them would be unreadable.
+		const casterTag = (part: TournamentMatchPart) => {
+			if (part.casters.length === 0) return " [needs a caster]";
+			const names = part.casters.map((c) => c.display_name ?? c.name ?? "?");
+			const [streamer, ...co] = names;
+			const by = co.length ? `${streamer} with ${co.join(", ")}` : streamer;
+			const links = part.streams.map((s) => `<${s.url}>`).join(" ");
+			return ` [cast by ${by}]${links ? ` ${links}` : ""}`;
+		};
 
 		// The "all" (sesh) scope lists only parts still ahead — a forward-looking
 		// schedule post shouldn't name a sitting whose time has passed, so no
@@ -120,7 +138,10 @@
 			.map(({ match, part, partNumber, split }) => {
 				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
 				const partTag = split ? `(Part ${partNumber}) ` : "";
-				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)`;
+				// The needs-casters scope is already filtered to casterless parts,
+				// so the "[needs a caster]" tag there would just be noise.
+				const tag = scope === "all" ? casterTag(part) : "";
+				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)${tag}`;
 			});
 		if (scope === "needs-casters") {
 			return (
@@ -432,7 +453,7 @@
 							<CopyButton
 								text={seshText}
 								label="Copy upcoming (sesh)"
-								title="Copy upcoming scheduled matches (soonest first) with Discord timestamps, for a sesh.fyi / Discord post"
+								title="Copy upcoming scheduled matches (soonest first) with Discord timestamps and caster status, for a sesh.fyi / Discord post"
 								class="inline-flex items-center justify-center rounded border border-surface p-1 text-tan transition-colors hover:bg-surface-hover hover:text-orange"
 							>
 								{#snippet children(copied)}
@@ -509,7 +530,12 @@
 											<path
 												stroke-linecap="round"
 												stroke-linejoin="round"
-												d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"
+												d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+											/>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"
 											/>
 										</svg>
 									{/if}
