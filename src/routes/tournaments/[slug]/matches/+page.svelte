@@ -235,7 +235,7 @@
 	});
 
 	// The columns the matches page shows, in order (shared by both list tabs).
-	const matchColumns = pickColumns(["time", "matchup", "caster", "stream"]);
+	const matchColumns = pickColumns(["time", "matchup", "broadcast", "actions"]);
 
 	// --- Match card. Anchored at the click point via a floating-ui virtual
 	// anchor so it opens beside the cursor. detailMatch resolves live from the
@@ -551,6 +551,7 @@
 									rows={liveUpcomingRows}
 									{zone}
 									tournament={data.tournament}
+									{user}
 									slotLabels={slotMaps.labels}
 									slotAvatars={slotMaps.avatars}
 									isLive={(row) => liveSet.has(row)}
@@ -581,6 +582,7 @@
 									rows={allRows}
 									{zone}
 									tournament={data.tournament}
+									{user}
 									slotLabels={slotMaps.labels}
 									slotAvatars={slotMaps.avatars}
 									sortColumn={tableState.sortColumn}

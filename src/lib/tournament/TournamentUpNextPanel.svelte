@@ -68,7 +68,7 @@
 	// NumberedPart objects, so membership flags exactly the live sittings.
 	const liveSet = $derived(new Set<MatchRow>(split.live));
 
-	const columns = pickColumns(["time", "matchup", "caster", "stream"]);
+	const columns = pickColumns(["time", "matchup", "broadcast", "actions"]);
 
 	const matchesHref = $derived(
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
@@ -161,6 +161,7 @@
 		{rows}
 		{zone}
 		{tournament}
+		{user}
 		{slotLabels}
 		{slotAvatars}
 		onRowClick={pick}

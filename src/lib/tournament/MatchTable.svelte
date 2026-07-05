@@ -1,16 +1,22 @@
 <script lang="ts">
 	// The one match table, shared by every tournament match surface (the matches
-	// page, the Cast view, the overview's Up Next panel). It is purely
-	// presentational: the caller builds + filters + sorts the rows and picks which
-	// columns to show; this renders them, reports header clicks (when sortable) and
-	// row clicks (when clickable), and hosts an optional per-row actions slot.
+	// page, the Cast view, the overview's Up Next panel). The caller builds +
+	// filters + sorts the rows and picks which columns to show; this owns all the
+	// cell markup, so a match row and a part row render identically. It reports
+	// header clicks (when sortable) and row clicks (when clickable), and composes
+	// the shared cast buttons (CastControls) in the trailing actions column for
+	// any pending sitting.
 	//
-	// Columns are keyed off the shared registry (matches-table.ts) — this file
-	// owns the cell markup, so a match row and a part row render identically.
-	import type { Snippet } from "svelte";
-	import type { TournamentDetail, TournamentMatch } from "$lib/api-cloud";
+	// Columns are keyed off the shared registry (matches-table.ts).
+	import type {
+		TournamentDetail,
+		TournamentMatch,
+		TournamentMatchPartStream,
+		UserMe,
+	} from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import CastControls from "$lib/tournament/CastControls.svelte";
 	import { matchBracketLabel } from "$lib/tournament/bracket-label";
 	import {
 		matchSlotAvatarUrl,
@@ -28,8 +34,9 @@
 	import {
 		matchStatusGroup,
 		matchSortInstant,
-		rowCaster,
-		rowStream,
+		rowCasters,
+		rowStreams,
+		rowIsPendingSitting,
 		type MatchColumn,
 		type MatchRow,
 	} from "$lib/tournament/matches-table";
@@ -45,13 +52,13 @@
 		rows,
 		zone,
 		tournament,
+		user,
 		slotLabels,
 		slotAvatars,
 		sortColumn = null,
 		sortDirection = "asc",
 		onSort,
 		onRowClick,
-		actions,
 		isLive,
 		stickyHeader = false,
 		emptyMessage = "No matches",
@@ -60,6 +67,10 @@
 		rows: MatchRow[];
 		zone: ScheduleZone;
 		tournament: TournamentDetail;
+		// The signed-in viewer (null when anonymous), for the inline cast controls
+		// in the Casters & Streams cell. Reads only; anonymous viewers still see the
+		// "needs a caster" flag but no action buttons.
+		user: UserMe | null;
 		slotLabels: Record<string, string>;
 		slotAvatars: Record<string, string | null>;
 		// The active sort column/direction, for the header arrow. Only meaningful
@@ -70,12 +81,9 @@
 		// eslint-disable-next-line no-unused-vars -- documentary param name
 		onSort?: (key: string) => void;
 		// When set, rows are clickable and call this (typically to open the match
-		// card). Action-column controls stopPropagation so they don't also fire it.
+		// card). The cast controls stopPropagation so they don't also fire it.
 		// eslint-disable-next-line no-unused-vars -- documentary param names
 		onRowClick?: (match: TournamentMatch, e: MouseEvent) => void;
-		// Per-row trailing controls (the Cast view's cast/drop buttons), rendered in
-		// the `actions` column.
-		actions?: Snippet<[MatchRow]>;
 		// Opt-in per-row "live now" flag (the Live & Upcoming panel passes it). When
 		// it returns true the time cell shows a LIVE badge. Undefined for surfaces
 		// that don't distinguish live sittings, so they render unchanged.
@@ -100,16 +108,16 @@
 	// Striped rows: no per-cell rounding or row gaps — a contiguous zebra table.
 	// The row <tr> carries the stripe + hover background; the cells stay
 	// transparent so it shows through.
-	function thClass(): string {
+	function thClass(sortable: boolean): string {
 		const sticky = stickyHeader ? "sticky -top-4 z-10 " : "";
-		const sortable = onSort
+		const s = sortable
 			? "cursor-pointer transition-colors hover:text-orange "
 			: "";
-		return `${sticky}${sortable}select-none whitespace-nowrap border-b border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg`;
+		return `${sticky}${s}select-none whitespace-nowrap border-b border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg`;
 	}
 
-	// align-top so the Match/Time cells' subtext lines don't vertically center the
-	// single-line Caster/Stream/actions cells beside them.
+	// align-top so the multi-line Match/Time/Casters cells don't vertically center
+	// the shorter cells beside them.
 	const tdClass = "whitespace-nowrap px-3 py-2 text-left align-top text-tan";
 </script>
 
@@ -140,18 +148,54 @@
 	{/if}
 {/snippet}
 
+<!-- One stream/recording link: external-link icon + the stream's label (or a
+     generic "Stream" when untagged). Repeated per stream so a match's multiple
+     POVs/VODs each keep their own label. -->
+{#snippet streamLink(s: TournamentMatchPartStream)}
+	<!-- External stream URL (youtube/twitch), validated host-side; not an app
+	     route, so resolve() doesn't apply. Stop propagation so the link doesn't
+	     also open the match card. -->
+	<!-- eslint-disable svelte/no-navigation-without-resolve -->
+	<a
+		href={s.url}
+		target="_blank"
+		rel="noopener noreferrer"
+		class="inline-flex items-center gap-1 text-tan hover:underline"
+		onclick={(e) => e.stopPropagation()}
+	>
+		<svg
+			xmlns="http://www.w3.org/2000/svg"
+			class="h-3 w-3"
+			fill="none"
+			viewBox="0 0 24 24"
+			stroke="currentColor"
+			stroke-width="2"
+			aria-hidden="true"
+		>
+			<path
+				stroke-linecap="round"
+				stroke-linejoin="round"
+				d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+			/>
+		</svg>
+		{s.label?.trim() || "Stream"}
+	</a>
+	<!-- eslint-enable svelte/no-navigation-without-resolve -->
+{/snippet}
+
 <div class="overflow-x-auto">
 	<table class="w-full border-collapse">
 		<thead>
 			<tr>
 				{#each columns as column (column.key)}
+					{@const sortable = !!onSort && column.label !== ""}
 					<th
-						class={thClass()}
-						onclick={onSort ? () => onSort(column.key) : undefined}
+						class={thClass(sortable)}
+						onclick={sortable ? () => onSort?.(column.key) : undefined}
 					>
 						<span class="inline-flex items-center gap-1">
 							{column.label}
-							{#if onSort && sortColumn === column.key}
+							{#if sortable && sortColumn === column.key}
 								<span class="text-orange">
 									{sortDirection === "asc" ? "↑" : "↓"}
 								</span>
@@ -267,53 +311,77 @@
 										Not scheduled
 									{/if}
 								{/if}
-							{:else if column.key === "caster"}
-								{@const c = rowCaster(row)}
-								{#if c}
-									<span class="inline-flex items-center gap-1.5">
-										<PlayerAvatar avatarUrl={c.avatar_url} size={16} />
-										{c.display_name ?? c.name}
-									</span>
-								{:else}
-									—
-								{/if}
-							{:else if column.key === "stream"}
-								{@const s = rowStream(row)}
-								{#if s}
-									<!-- External stream URL (youtube/twitch), validated host-side;
-									     not an app route, so resolve() doesn't apply. Stop
-									     propagation so the link doesn't also open the match card. -->
-									<!-- eslint-disable svelte/no-navigation-without-resolve -->
-									<a
-										href={s.url}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="inline-flex items-center gap-1 text-tan hover:underline"
-										onclick={(e) => e.stopPropagation()}
-									>
-										<svg
-											xmlns="http://www.w3.org/2000/svg"
-											class="h-3 w-3"
-											fill="none"
-											viewBox="0 0 24 24"
-											stroke="currentColor"
-											stroke-width="2"
-											aria-hidden="true"
+							{:else if column.key === "broadcast"}
+								{@const casters = rowCasters(row)}
+								{@const streams = rowStreams(row)}
+								{@const pendingSitting = rowIsPendingSitting(row)}
+								<!-- Main line: the first stream + "by {caster}". Further streams (a
+								     match's extra POVs/VODs — often labeled "part 2", "part 3")
+								     stack as subtext beneath. Each piece is optional — a caster-only
+								     row is just the name(s) (no "by"); a casterless pending sitting
+								     shows the "needs a caster" flag; the cast buttons live in the
+								     trailing actions column. -->
+								<div class="flex flex-col items-start gap-0.5">
+									{#if streams.length > 0 || casters.length > 0}
+										<div class="flex items-center gap-x-1.5">
+											<!-- First stream, a little smaller than the caster name. -->
+											{#if streams.length > 0}
+												<span class="text-xs">
+													{@render streamLink(streams[0])}
+												</span>
+											{/if}
+											<!-- Streamer (index 0), then any co-casters, muted and
+											     ·-separated; prefixed with a small "by" when a stream
+											     precedes. -->
+											{#if casters.length > 0}
+												{#if streams.length > 0}
+													<span class="text-[10px] opacity-50">by</span>
+												{/if}
+												<span class="inline-flex items-center gap-1.5">
+													{#each casters as c, i (i)}
+														{#if i > 0}<span class="opacity-40">·</span>{/if}
+														<span
+															class="inline-flex items-center gap-1"
+															class:opacity-70={i > 0}
+														>
+															<PlayerAvatar
+																avatarUrl={c.avatar_url}
+																size={16}
+															/>
+															{c.display_name ?? c.name}
+														</span>
+													{/each}
+												</span>
+											{/if}
+										</div>
+									{/if}
+									<!-- Streams 2..N as muted subtext lines, one per line. -->
+									{#each streams.slice(1) as s, i (i)}
+										<span class="text-xs opacity-70"
+											>{@render streamLink(s)}</span
 										>
-											<path
-												stroke-linecap="round"
-												stroke-linejoin="round"
-												d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-											/>
-										</svg>
-										{s.label?.trim() || "Stream"}
-									</a>
-									<!-- eslint-enable svelte/no-navigation-without-resolve -->
-								{:else}
-									—
-								{/if}
+									{/each}
+									<!-- Casterless pending sitting: the recruiting flag (the buttons
+									     that act on it are in the actions column). -->
+									{#if pendingSitting && casters.length === 0}
+										<span
+											class="rounded bg-orange/15 px-2 py-0.5 text-[11px] font-bold uppercase text-orange"
+											>needs a caster</span
+										>
+									{/if}
+									<!-- Nothing to show: no caster, no stream, and not a castable
+									     sitting (e.g. a completed match with no VOD). -->
+									{#if casters.length === 0 && streams.length === 0 && !pendingSitting}
+										<span>—</span>
+									{/if}
+								</div>
 							{:else if column.key === "actions"}
-								{@render actions?.(row)}
+								<!-- Trailing header-less column: the inline cast buttons,
+								     right-aligned (CastControls justifies to the end) so they line
+								     up across rows. -->
+								{#if rowIsPendingSitting(row)}
+									<CastControls {row} {tournament} {user} />
+								{/if}
 							{/if}
 						</td>
 					{/each}

@@ -84,24 +84,58 @@ export function toMatchRows(matches: TournamentMatch[]): MatchRow[] {
 		}));
 }
 
-// The caster shown for a row: the specific sitting's streamer for a part row,
-// else the first caster across all sittings for a match row. The cell and the
-// sort read this one definition so they can't disagree.
-export function rowCaster(
-	row: MatchRow,
-): TournamentMatchPartCaster | undefined {
-	if (row.part) return row.part.casters[0];
-	return matchParts(row.match).find((p) => p.casters.length > 0)?.casters[0];
+// The sitting a row acts on for casters/streams: for a part row, its own part;
+// for a match row (the All tab's whole-match census), the match's most recent
+// *scheduled* sitting — "who's on now / last" rather than an arbitrary first
+// part. Null when a match row has no scheduled sitting yet.
+function mostRecentScheduledPart(
+	m: TournamentMatch,
+): TournamentMatchPart | null {
+	let best: TournamentMatchPart | null = null;
+	let bestT = -Infinity;
+	for (const p of matchParts(m)) {
+		if (p.scheduled_at == null) continue;
+		const t = Date.parse(p.scheduled_at);
+		if (Number.isNaN(t)) continue;
+		// >= so equal times keep the later part in list order.
+		if (t >= bestT) {
+			bestT = t;
+			best = p;
+		}
+	}
+	return best;
 }
 
-// The stream link shown for a row, with the same part-vs-match rule as rowCaster.
-export function rowStream(
-	row: MatchRow,
-): TournamentMatchPartStream | undefined {
-	if (row.part) return row.part.streams[0];
-	return matchParts(row.match)
-		.flatMap((p) => p.streams)
-		.at(0);
+// The sitting whose casters a row shows and whose id the cast controls target.
+export function rowPart(row: MatchRow): TournamentMatchPart | null {
+	return row.part ?? mostRecentScheduledPart(row.match);
+}
+
+// The casters shown for a row (streamer first, then co-casters), from the row's
+// acted-on sitting. Empty when there's no caster (or no scheduled sitting).
+export function rowCasters(row: MatchRow): TournamentMatchPartCaster[] {
+	return rowPart(row)?.casters ?? [];
+}
+
+// The streams shown for a row: the sitting's own streams for a part row, else
+// every sitting's streams (in part order) for a match row. The cell puts the
+// first stream on the main line beside the caster and stacks the rest — a
+// match's extra POVs/VODs, often labeled "part 2", "part 3" — as subtext below.
+export function rowStreams(row: MatchRow): TournamentMatchPartStream[] {
+	if (row.part) return row.part.streams;
+	return matchParts(row.match).flatMap((p) => p.streams);
+}
+
+// Whether a row is a still-castable sitting: a pending, non-bye match with a
+// concrete scheduled sitting to act on. Backs both the "needs a caster" flag and
+// the inline cast controls (CastControls), so they surface on exactly the same
+// rows across every match surface.
+export function rowIsPendingSitting(row: MatchRow): boolean {
+	return (
+		row.match.status === "pending" &&
+		row.match.slot_b_id != null &&
+		rowPart(row) != null
+	);
 }
 
 // The instant a row displays/sorts by: the sitting's own time for a part row,
@@ -154,19 +188,23 @@ export const MATCH_COLUMN_DEFS: Record<string, MatchColumn> = {
 			return iso ? new Date(iso).getTime() : null;
 		},
 	},
-	caster: {
-		key: "caster",
-		label: "Caster",
+	// Casters + streams on one line ("{stream} by {caster}"), plus the "needs a
+	// caster" flag (MatchTable renders the cell; the cast buttons live in the
+	// separate actions column). Sorts by the streamer's name — the most-recent
+	// scheduled sitting's for a match row — with casterless rows pinned last by
+	// the comparator's nulls-last rule.
+	broadcast: {
+		key: "broadcast",
+		label: "Casters & Streams",
 		sortValue: (row) => {
-			const c = rowCaster(row);
-			return (c?.display_name ?? c?.name ?? "").toLowerCase();
+			const c = rowCasters(row)[0];
+			const name = c?.display_name ?? c?.name;
+			return name ? name.toLowerCase() : null;
 		},
 	},
-	stream: {
-		key: "stream",
-		label: "Streams",
-		sortValue: (row) => (rowStream(row) ? 1 : 0),
-	},
+	// Trailing, header-less column for the inline cast buttons (CastControls),
+	// right-aligned so they line up across rows. Empty label → its header isn't
+	// clickable/sortable.
 	actions: {
 		key: "actions",
 		label: "",
