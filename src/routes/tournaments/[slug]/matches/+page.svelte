@@ -17,37 +17,35 @@
 		type TournamentMatchPart,
 		type UserMe,
 	} from "$lib/api-cloud";
-	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
-	import TableFilterColumn from "$lib/game-detail/TableFilterColumn.svelte";
-	import {
-		type TableState,
-		toggleSort,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
-	} from "$lib/game-detail/helpers";
+	import CollapsibleSearch from "$lib/CollapsibleSearch.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
-	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
+	import MatchTable from "$lib/tournament/MatchTable.svelte";
+	import TournamentActions from "$lib/tournament/TournamentActions.svelte";
 	import {
-		matchSlotAvatarUrl,
 		matchSlotDisplayName,
-		matchSlotNation,
 		matchupLabel,
 	} from "$lib/tournament/match-occupant";
 	import {
-		MATCH_COLUMNS,
-		matchStatusGroup,
-		matchSortInstant,
+		toMatchRows,
+		pickColumns,
+		sortMatchRows,
+		matchRowMatchesSearch,
+		toggleMatchSort,
 		DEFAULT_MATCHES_TABLE_STATE,
+		type MatchRow,
 		type MatchSortContext,
-		type MatchStatusGroup,
+		type MatchTableState,
 	} from "$lib/tournament/matches-table";
 	import {
 		partitionSchedule,
 		scheduledDayKey,
+		liveAndUpcoming,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
+	import {
+		resolveInitialZone,
+		writeZoneCookie,
+	} from "$lib/tournament/zone-preference";
 	import {
 		matchParts,
 		matchDisplayStatus,
@@ -55,14 +53,13 @@
 		CAST_GRACE_MS,
 		type NumberedPart,
 	} from "$lib/tournament/parts";
+	import { nowMs } from "$lib/stores/now.svelte";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import CastView from "$lib/tournament/CastView.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
-	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
-	import { Select, Tabs, ToggleGroup } from "bits-ui";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -79,6 +76,14 @@
 		},
 		{ label: "Matches" },
 	]);
+
+	// Open the shared guide, carrying this tournament as origin (mirrors the
+	// overview page) so the guide breadcrumb can link back here.
+	function openGuide() {
+		const dest = `${resolve("/tournaments/guide")}?from=${data.tournament.slug}&name=${encodeURIComponent(data.tournament.name)}`;
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path
+		goto(dest);
+	}
 
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const partition = $derived(partitionSchedule(data.matches));
@@ -180,77 +185,62 @@
 	}
 
 	// View + zone controls. zone picks the single clock everything reads in.
-	// View, zone, and the two filters below are deep-linkable via query params
-	// (?view=cast, ?caster=uncasted, ?status=scheduled, ?zone=local) so an admin
-	// can point people straight at e.g. "scheduled matches that need a caster".
-	// Defaults stay out of the URL; state changes replace (not push) history.
+	// View and zone are deep-linkable via query params (?view=cast, ?zone=local)
+	// so a link can point straight at a given tab/clock. Defaults stay out of the
+	// URL; state changes replace (not push) history.
+	//
+	// The initial zone follows the shared precedence (?zone= param > saved cookie
+	// > UTC); the toggle handlers persist explicit choices to the cookie so the
+	// clock is sticky app-wide. A shared ?zone= link overrides for the visit but
+	// doesn't touch their saved default.
 	const params = new URLSearchParams(page.url.search);
-	const VIEWS = ["list", "calendar", "cast"] as const;
+	const VIEWS = ["live", "calendar", "cast", "all"] as const;
 	type MatchesView = (typeof VIEWS)[number];
-	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "list";
+	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "live";
 	let view = $state<MatchesView>(initialView);
-	let zone = $state<ScheduleZone>(
-		params.get("zone") === "local" ? "local" : "utc",
-	);
-	function csvParam<T extends string>(
-		name: string,
-		all: readonly T[],
-	): T[] | null {
-		const raw = params.get(name);
-		if (!raw) return null;
-		const picked = raw
-			.split(",")
-			.filter((x): x is T => (all as readonly string[]).includes(x));
-		return picked.length > 0 ? picked : null;
+	let zone = $state<ScheduleZone>(resolveInitialZone(params.get("zone")));
+
+	// Flip + persist the clock. Cookie writes happen here (explicit user action),
+	// not in the URL-sync effect, so arriving via a deep link never rewrites the
+	// saved preference.
+	function setZone(next: ScheduleZone) {
+		zone = next;
+		writeZoneCookie(next);
 	}
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
-	// Stable bracket key for filtering ("championship" | "A" | "B").
-	function bracketKey(m: TournamentMatch): string {
-		return m.phase === "championship" ? "championship" : (m.division ?? "");
-	}
+	// --- Free-text search, shared across the three table views (live/all/cast)
+	// via the collapsible control in the page header. Persists as you switch tabs,
+	// so it always filters whichever match table is open.
+	let searchTerm = $state("");
 
-	// --- Table state. tableState (search + sort) follows the Cities pattern;
-	// statusFilter is a separate multi-toggle (completed off by default).
-	let tableState = $state<TableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
-	let statusFilter = $state<MatchStatusGroup[]>(
-		csvParam("status", [
-			"scheduled",
-			"in_progress",
-			"unscheduled",
-			"completed",
-		] as const) ?? ["scheduled", "in_progress", "unscheduled"],
-	);
+	// --- Sort state for the All tab, following the Cities pattern. Status/bracket
+	// faceting was retired in favour of the view tabs; richer filters return in a
+	// later pass. (Search lives in `searchTerm` above, not here — it's cross-view.)
+	let tableState = $state<MatchTableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
 
-	// Reflect the current view/zone/filters into the URL (defaults omitted) so
-	// the address bar is always a shareable deep link to what's on screen.
+	// Reflect the current view/zone into the URL (defaults omitted) so the
+	// address bar is always a shareable deep link to the tab/clock on screen.
 	$effect(() => {
 		// Build the query from plain string parts rather than a mutable
 		// URLSearchParams — svelte/prefer-svelte-reactivity flags the built-in
 		// class inside an effect. Every value is a closed enum of URL-safe
 		// characters, so no encoding is needed.
 		const parts: string[] = [];
-		if (view !== "list") parts.push(`view=${view}`);
-		if (zone !== "utc") parts.push(`zone=${zone}`);
-		const defaultStatus = ["scheduled", "in_progress", "unscheduled"];
-		if (
-			statusFilter.length !== defaultStatus.length ||
-			defaultStatus.some((g) => !statusFilter.includes(g as MatchStatusGroup))
-		) {
-			parts.push(`status=${statusFilter.join(",")}`);
-		}
+		if (view !== "live") parts.push(`view=${view}`);
+		if (zone !== "local") parts.push(`zone=${zone}`);
 		const search = parts.join("&");
 		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
 		if (`${page.url.pathname}${page.url.search}` !== target) {
-			// Same-page filter sync via goto — the app's navigation primitive (see
-			// the URL writers in the stats/games tables): replaceState so filter
-			// toggles don't stack history, keepFocus/noScroll so they don't jump the
-			// page or drop focus. The [slug] layout load reads only route params,
-			// never the query string, so this updates the address bar without
-			// refetching. resolve() brands typed routes and can't express a dynamic
-			// query string, matching the precedent in upload/+page.svelte.
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic filter query string; resolve()'s branded types don't admit it
+			// Same-page sync via goto — the app's navigation primitive (see the URL
+			// writers in the stats/games tables): replaceState so toggles don't stack
+			// history, keepFocus/noScroll so they don't jump the page or drop focus.
+			// The [slug] layout load reads only route params, never the query string,
+			// so this updates the address bar without refetching. resolve() brands
+			// typed routes and can't express a dynamic query string, matching the
+			// precedent in upload/+page.svelte.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic query string; resolve()'s branded types don't admit it
 			void goto(target, {
 				replaceState: true,
 				keepFocus: true,
@@ -258,99 +248,52 @@
 			});
 		}
 	});
-	const statusItemClass =
-		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-surface-raised";
 
-	// Bracket filter: only offer brackets that actually have (non-bye) matches.
-	const bracketOptions = $derived.by(() => {
-		const present: Record<string, true> = {};
-		for (const m of data.matches) {
-			if (matchStatusGroup(m) === null) continue;
-			present[bracketKey(m)] = true;
-		}
-		return [
-			{ value: "championship", label: "Championship" },
-			{ value: "A", label: data.tournament.division_a_name },
-			{ value: "B", label: data.tournament.division_b_name },
-		].filter((o) => present[o.value]);
-	});
-	// Bracket selections live in tableState.filters as "bracket:<key>" entries.
-	const selectedBracketEntries = $derived(
-		tableState.filters.filter((f) => f.startsWith("bracket:")),
+	// --- Live & Upcoming tab: live sittings (badged) + upcoming, from the shared
+	// definition the overview panel uses. Part-row granularity, soonest-first —
+	// a schedule, not a sortable table. Reactive via nowMs().
+	const liveUpcoming = $derived(liveAndUpcoming(data.matches, nowMs()));
+	const liveUpcomingRows = $derived<MatchRow[]>([
+		...liveUpcoming.live,
+		...liveUpcoming.upcoming,
+	]);
+	// The header search filters this view too; the filtered list keeps the same
+	// row objects, so the reference-identity LIVE badge below still matches.
+	const filteredLiveUpcomingRows = $derived(
+		searchTerm
+			? liveUpcomingRows.filter((r) =>
+					matchRowMatchesSearch(r, searchTerm, slotMaps.labels),
+				)
+			: liveUpcomingRows,
 	);
-	const selectedBrackets = $derived(
-		selectedBracketEntries.map((f) => f.slice("bracket:".length)),
-	);
-	const bracketChips = $derived(
-		selectedBrackets.map(
-			(v) => bracketOptions.find((o) => o.value === v)?.label ?? v,
-		),
-	);
-	function setBracketFilter(entries: string[]) {
-		const others = tableState.filters.filter((f) => !f.startsWith("bracket:"));
-		tableState.filters = [...others, ...entries];
-	}
+	// Reference-identity set for the LIVE badge (rows reuse the same objects).
+	const liveSet = $derived(new Set<MatchRow>(liveUpcoming.live));
 
-	// Non-bye matches — the table's universe (denominator for the count).
-	const tableEligible = $derived(
-		data.matches.filter((m) => matchStatusGroup(m) !== null),
-	);
-
+	// --- All tab: every non-bye match (one row each), search-filtered and sorted
+	// through the shared matches-table helpers so the comparator + search rule
+	// stay one definition across every match surface. tableEligibleRows is the
+	// unfiltered census (the count denominator).
+	const tableEligibleRows = $derived(toMatchRows(data.matches));
 	const sortCtx = $derived<MatchSortContext>({
 		slotLabels: slotMaps.labels,
 	});
-
-	// Status toggle → bracket filter → search → sort, in one pass. Sort mirrors
-	// the Cities comparator: nulls last, localeCompare for strings, numeric diff
-	// otherwise, direction applied after.
-	const rows = $derived.by(() => {
-		let list = tableEligible.filter((m) =>
-			statusFilter.includes(matchStatusGroup(m) as MatchStatusGroup),
-		);
-
-		if (selectedBrackets.length > 0) {
-			list = list.filter((m) => selectedBrackets.includes(bracketKey(m)));
-		}
-
-		if (tableState.search) {
-			const term = tableState.search.toLowerCase();
-			const nationMatch = (n: string | null) =>
-				n != null && formatEnum(n, "NATION_").toLowerCase().includes(term);
-			list = list.filter(
-				(m) =>
-					(matchSlotDisplayName(m, "a", slotMaps.labels) ?? "")
-						.toLowerCase()
-						.includes(term) ||
-					(matchSlotDisplayName(m, "b", slotMaps.labels) ?? "")
-						.toLowerCase()
-						.includes(term) ||
-					nationMatch(matchSlotNation(m, "a")) ||
-					nationMatch(matchSlotNation(m, "b")) ||
-					matchParts(m).some((p) =>
-						p.casters.some((c) =>
-							(c.display_name ?? c.name ?? "").toLowerCase().includes(term),
-						),
-					),
+	const allRows = $derived.by(() => {
+		let list = tableEligibleRows;
+		if (searchTerm) {
+			list = list.filter((r) =>
+				matchRowMatchesSearch(r, searchTerm, slotMaps.labels),
 			);
 		}
-
-		const column = MATCH_COLUMNS.find((c) => c.key === tableState.sortColumn);
-		if (column) {
-			list = [...list].sort((a, b) => {
-				const aVal = column.sortValue(a, sortCtx);
-				const bVal = column.sortValue(b, sortCtx);
-				if (aVal == null && bVal == null) return 0;
-				if (aVal == null) return 1;
-				if (bVal == null) return -1;
-				const cmp =
-					typeof aVal === "string" && typeof bVal === "string"
-						? aVal.localeCompare(bVal)
-						: (aVal as number) - (bVal as number);
-				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			});
-		}
-		return list;
+		return sortMatchRows(
+			list,
+			tableState.sortColumn,
+			tableState.sortDirection,
+			sortCtx,
+		);
 	});
+
+	// The columns the matches page shows, in order (shared by both list tabs).
+	const matchColumns = pickColumns(["time", "matchup", "broadcast", "actions"]);
 
 	// --- Match card. Anchored at the click point via a floating-ui virtual
 	// anchor so it opens beside the cursor. detailMatch resolves live from the
@@ -477,33 +420,6 @@
 	}
 </script>
 
-<!-- One player's table cell: crest + avatar + name. Side B renders "Bye" when
-     there's no opponent slot. -->
-{#snippet playerCell(m: TournamentMatch, side: "a" | "b")}
-	{@const slotId = side === "a" ? m.slot_a_id : m.slot_b_id}
-	{#if side === "b" && slotId === null}
-		<span>Bye</span>
-	{:else}
-		{@const nation = matchSlotNation(m, side)}
-		{@const name = matchSlotDisplayName(m, side, slotMaps.labels) ?? "—"}
-		<span class="inline-flex items-center gap-1.5">
-			{#if nation}
-				<SpriteIcon
-					category="crests"
-					value={nation}
-					size={16}
-					alt={formatEnum(nation, "NATION_")}
-				/>
-			{/if}
-			<PlayerAvatar
-				avatarUrl={matchSlotAvatarUrl(m, side, slotMaps.avatars)}
-				size={16}
-			/>
-			<span>{name}</span>
-		</span>
-	{/if}
-{/snippet}
-
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
 		<div
@@ -511,14 +427,27 @@
 			use:autohideScroll
 		>
 			<div class="mx-auto max-w-screen-2xl">
-				<Breadcrumb {crumbs} class="mb-4 min-w-0" />
+				<!-- Trail on the left, the shared action cluster (Links · Settings ·
+				     clock toggle) top-right, matching the overview header. -->
+				<div class="mb-4 flex items-center justify-between gap-3">
+					<Breadcrumb {crumbs} class="min-w-0" />
+					<TournamentActions
+						tournament={data.tournament}
+						onGuide={openGuide}
+						settingsDisabled={detailMatchId !== null}
+						{zone}
+						onZoneChange={setZone}
+					/>
+				</div>
 
-				<!-- Controls card: title + copy tools on the left (sesh always; needs-casters in the Cast view), zone + view toggles on the right. -->
+				<!-- Controls card: title + copy tools (left), the Upcoming/Casts/All view
+					     toggle (center), Calendar (right). The UTC/Local clock now lives in
+					     the top-right action cluster with Links/Settings. -->
 				<div
-					class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-lg px-3 py-2"
+					class="mb-4 grid grid-cols-3 items-center gap-3 rounded-lg px-3 py-2"
 					style="background-color: rgb(var(--color-surface-raised));"
 				>
-					<div class="flex items-center gap-2">
+					<div class="flex items-center gap-2 justify-self-start">
 						<h1 class="text-lg font-bold text-tan">Matches</h1>
 						{#if isAdmin}
 							<CopyButton
@@ -614,65 +543,91 @@
 							</CopyButton>
 						{/if}
 					</div>
-					<div class="flex items-center gap-2">
-						<!-- UTC / Local: a segmented toggle picking the active clock. -->
+					<!-- View toggle (Upcoming / Casts / All), centered. Plain segmented
+					     control matching the clock toggle; Calendar is its own button on
+					     the right, so when it's active none of these read as pressed. -->
+					<div
+						class="relative grid grid-cols-3 justify-self-center overflow-hidden rounded-lg border-2 border-surface"
+						style="background-color: rgb(var(--color-surface));"
+						role="group"
+						aria-label="View"
+					>
 						<div
-							class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
-							style="background-color: rgb(var(--color-surface));"
-							role="group"
-							aria-label="Timezone"
-						>
-							<div
-								class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-								style:background-color="rgb(var(--color-surface-raised))"
-								style:transform={zone === "local"
-									? "translateX(100%)"
+							class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
+							style:background-color="rgb(var(--color-surface-raised))"
+							style:opacity={view === "calendar" ? "0" : "1"}
+							style:transform={view === "cast"
+								? "translateX(100%)"
+								: view === "all"
+									? "translateX(200%)"
 									: "translateX(0)"}
-							></div>
-							<button
-								type="button"
-								class={viewTriggerClass}
-								aria-pressed={zone === "utc"}
-								onclick={() => (zone = "utc")}
-							>
-								UTC
-							</button>
-							<button
-								type="button"
-								class={viewTriggerClass}
-								aria-pressed={zone === "local"}
-								onclick={() => (zone = "local")}
-							>
-								Local
-							</button>
-						</div>
+						></div>
+						<button
+							type="button"
+							class={viewTriggerClass}
+							aria-pressed={view === "live"}
+							onclick={() => (view = "live")}
+						>
+							Upcoming
+						</button>
+						<button
+							type="button"
+							class={viewTriggerClass}
+							aria-pressed={view === "cast"}
+							onclick={() => (view = "cast")}
+						>
+							Casts
+						</button>
+						<button
+							type="button"
+							class={viewTriggerClass}
+							aria-pressed={view === "all"}
+							onclick={() => (view = "all")}
+						>
+							All
+						</button>
+					</div>
 
-						<!-- List / Calendar / Casts view switch (bracket-card pattern). -->
-						<Tabs.Root bind:value={view}>
-							<Tabs.List
-								class="relative grid shrink-0 grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
-								style="background-color: rgb(var(--color-surface));"
+					<!-- Right cluster: search + Calendar toggle. (The UTC/Local clock moved
+					     to the top-right action cluster.) -->
+					<div class="flex items-center gap-2 justify-self-end">
+						<!-- Header search: an icon that expands inline to filter whichever
+						     match table is open (live/all/cast). Hidden in the calendar view,
+						     which is not a table. Shares searchTerm across the tabs. -->
+						{#if view !== "calendar"}
+							<CollapsibleSearch
+								bind:value={searchTerm}
+								class="w-44"
+								ariaLabel="Search matches"
+							/>
+						{/if}
+						<!-- Calendar: its own single-cell toggle, pressed in the calendar view. -->
+						<button
+							type="button"
+							class="{viewTriggerClass} inline-flex items-center justify-center gap-1.5 rounded-lg border-2 border-surface"
+							style:background-color={view === "calendar"
+								? "rgb(var(--color-surface-raised))"
+								: "rgb(var(--color-surface))"}
+							aria-pressed={view === "calendar"}
+							onclick={() => (view = "calendar")}
+						>
+							<svg
+								xmlns="http://www.w3.org/2000/svg"
+								class="h-3.5 w-3.5 opacity-80"
+								fill="none"
+								viewBox="0 0 24 24"
+								stroke="currentColor"
+								stroke-width="2"
+								aria-hidden="true"
 							>
-								<div
-									class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
-									style:background-color="rgb(var(--color-surface-raised))"
-									style:transform={view === "calendar"
-										? "translateX(100%)"
-										: view === "cast"
-											? "translateX(200%)"
-											: "translateX(0)"}
-								></div>
-								<Tabs.Trigger value="list" class={viewTriggerClass}
-									>List</Tabs.Trigger
-								>
-								<Tabs.Trigger value="calendar" class={viewTriggerClass}>
-									Calendar
-								</Tabs.Trigger>
-								<Tabs.Trigger value="cast" class={viewTriggerClass}>
-									Casts
-								</Tabs.Trigger>
-							</Tabs.List>
-						</Tabs.Root>
+								<path
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
+								/>
+							</svg>
+							Calendar
+						</button>
 					</div>
 				</div>
 
@@ -683,243 +638,47 @@
 							in:fade={{ duration: 200 }}
 							out:fade={{ duration: 200 }}
 						>
-							{#if view === "list"}
-								<!-- Cities-style sortable table: search + bracket filter on the
-								     left, status toggle + table on the right. -->
-								<div class={TABLE_FRAME_CLASS}>
-									<TableFilterColumn
-										bind:search={tableState.search}
-										count={`${rows.length} / ${tableEligible.length} matches`}
-										chips={bracketChips}
+							{#if view === "live"}
+								<!-- Live & Upcoming: live sittings (badged) followed by the
+								     upcoming schedule, soonest-first. A schedule, not a sortable
+								     table — no headers to sort, no filters. -->
+								<MatchTable
+									columns={matchColumns}
+									rows={filteredLiveUpcomingRows}
+									{zone}
+									tournament={data.tournament}
+									{user}
+									slotLabels={slotMaps.labels}
+									slotAvatars={slotMaps.avatars}
+									isLive={(row) => liveSet.has(row)}
+									onRowClick={(m, e) => pick(m.match_id, e)}
+									stickyHeader
+									emptyMessage="No live or upcoming matches."
+								/>
+							{:else if view === "all"}
+								<!-- All matches, one row each — every status, unscheduled
+								     included. Column sort here; search lives in the header cluster
+								     (shared across views). The census reflects the active filter. -->
+								<div class="mb-3 flex flex-wrap items-center gap-3">
+									<span class="text-xs text-tan opacity-70"
+										>{allRows.length} / {tableEligibleRows.length} matches</span
 									>
-										{#snippet filters()}
-											{#if bracketOptions.length > 0}
-												<Select.Root
-													type="multiple"
-													value={selectedBracketEntries}
-													onValueChange={setBracketFilter}
-												>
-													<Select.Trigger
-														class="flex w-full cursor-pointer items-center justify-between rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
-													>
-														<span class="truncate">Bracket</span>
-														<span class="ml-2 text-tan opacity-60">▼</span>
-													</Select.Trigger>
-													<Select.Portal>
-														<Select.Content
-															class="z-50 max-h-80 overflow-y-auto rounded bg-surface-sunken shadow-lg"
-														>
-															<Select.Viewport>
-																{#each bracketOptions as opt (opt.value)}
-																	<Select.Item
-																		value={`bracket:${opt.value}`}
-																		label={opt.label}
-																		class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-																	>
-																		{#snippet children({ selected })}
-																			<span>{opt.label}</span>
-																			{#if selected}
-																				<span class="font-bold text-orange"
-																					>✓</span
-																				>
-																			{/if}
-																		{/snippet}
-																	</Select.Item>
-																{/each}
-															</Select.Viewport>
-														</Select.Content>
-													</Select.Portal>
-												</Select.Root>
-											{/if}
-										{/snippet}
-									</TableFilterColumn>
-
-									<div class="min-w-0 flex-1">
-										<!-- Status filter above the table, styled like the bracket view tabs. -->
-										<div class="mb-3 flex flex-wrap justify-end gap-2">
-											<ToggleGroup.Root
-												type="multiple"
-												value={statusFilter}
-												onValueChange={(v) =>
-													(statusFilter = v as MatchStatusGroup[])}
-												class="flex overflow-hidden rounded-lg border-2 border-surface"
-												style="background-color: rgb(var(--color-surface));"
-												aria-label="Match status"
-											>
-												<ToggleGroup.Item
-													value="scheduled"
-													class={statusItemClass}
-												>
-													Scheduled
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="in_progress"
-													class={statusItemClass}
-												>
-													In Progress
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="unscheduled"
-													class={statusItemClass}
-												>
-													Unscheduled
-												</ToggleGroup.Item>
-												<ToggleGroup.Item
-													value="completed"
-													class={statusItemClass}
-												>
-													Completed
-												</ToggleGroup.Item>
-											</ToggleGroup.Root>
-										</div>
-
-										<div class="overflow-x-auto">
-											<table class={TABLE_CLASS}>
-												<thead>
-													<tr>
-														{#each MATCH_COLUMNS as column, i (column.key)}
-															<th
-																class="{TABLE_HEADER_TH_CLASS} {i === 0
-																	? 'rounded-l-lg border-l'
-																	: ''} {i === MATCH_COLUMNS.length - 1
-																	? 'rounded-r-lg border-r'
-																	: ''}"
-																onclick={() =>
-																	toggleSort(tableState, column.key)}
-															>
-																<span class="inline-flex items-center gap-1">
-																	{column.label}
-																	{#if tableState.sortColumn === column.key}
-																		<span class="text-orange">
-																			{tableState.sortDirection === "asc"
-																				? "↑"
-																				: "↓"}
-																		</span>
-																	{/if}
-																</span>
-															</th>
-														{/each}
-													</tr>
-												</thead>
-												<tbody>
-													{#each rows as m (m.match_id)}
-														<tr
-															class="group cursor-pointer"
-															onclick={(e) => pick(m.match_id, e)}
-														>
-															{#each MATCH_COLUMNS as column, i (column.key)}
-																<td
-																	class="{TABLE_CELL_TD_CLASS} {i === 0
-																		? 'rounded-l-lg'
-																		: ''} {i === MATCH_COLUMNS.length - 1
-																		? 'rounded-r-lg'
-																		: ''} whitespace-nowrap"
-																>
-																	{#if column.key === "scheduled_at"}
-																		{@const g = matchStatusGroup(m)}
-																		{@const t = formatScheduledInZone(
-																			matchSortInstant(m),
-																			zone,
-																		)}
-																		{#if g === "in_progress"}
-																			<!-- Overdue: time passed, result unreported. Keep the
-																			     last-started sitting's time visible so an admin
-																			     chasing reports can see how overdue it is. -->
-																			{t || "In progress"}{#if t}<span
-																					class="opacity-60"
-																				>
-																					· in progress</span
-																				>{/if}
-																		{:else if t}
-																			{t}
-																		{:else if g === "completed"}
-																			Completed
-																		{:else}
-																			Not scheduled
-																		{/if}
-																	{:else if column.key === "match"}
-																		<span
-																			class="inline-flex items-center gap-2"
-																		>
-																			{@render playerCell(m, "a")}
-																			<span class="opacity-60">v</span>
-																			{@render playerCell(m, "b")}
-																		</span>
-																	{:else if column.key === "caster"}
-																		{@const firstCast = matchParts(m).find(
-																			(part) => part.casters.length > 0,
-																		)?.casters[0]}
-																		{#if firstCast}
-																			<span
-																				class="inline-flex items-center gap-1.5"
-																			>
-																				<PlayerAvatar
-																					avatarUrl={firstCast.avatar_url}
-																					size={16}
-																				/>
-																				{firstCast.display_name ??
-																					firstCast.name}
-																			</span>
-																		{:else}
-																			—
-																		{/if}
-																	{:else if column.key === "streams"}
-																		{@const firstStream = matchParts(m)
-																			.flatMap((part) => part.streams)
-																			.at(0)}
-																		{#if firstStream}
-																			<!-- External stream URL (youtube/twitch), validated
-																			     host-side; not an app route, so resolve() doesn't
-																			     apply. Stop propagation so the link doesn't also
-																			     open the match card. -->
-																			<!-- eslint-disable svelte/no-navigation-without-resolve -->
-																			<a
-																				href={firstStream.url}
-																				target="_blank"
-																				rel="noopener noreferrer"
-																				class="inline-flex items-center gap-1 text-tan hover:underline"
-																				onclick={(e) => e.stopPropagation()}
-																			>
-																				<svg
-																					xmlns="http://www.w3.org/2000/svg"
-																					class="h-3 w-3"
-																					fill="none"
-																					viewBox="0 0 24 24"
-																					stroke="currentColor"
-																					stroke-width="2"
-																					aria-hidden="true"
-																				>
-																					<path
-																						stroke-linecap="round"
-																						stroke-linejoin="round"
-																						d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-																					/>
-																				</svg>
-																				{firstStream.label?.trim() || "Stream"}
-																			</a>
-																			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-																		{:else}
-																			—
-																		{/if}
-																	{/if}
-																</td>
-															{/each}
-														</tr>
-													{:else}
-														<tr>
-															<td
-																colspan={MATCH_COLUMNS.length}
-																class="p-8 text-center italic text-tan"
-															>
-																No matches
-															</td>
-														</tr>
-													{/each}
-												</tbody>
-											</table>
-										</div>
-									</div>
 								</div>
+
+								<MatchTable
+									columns={matchColumns}
+									rows={allRows}
+									{zone}
+									tournament={data.tournament}
+									{user}
+									slotLabels={slotMaps.labels}
+									slotAvatars={slotMaps.avatars}
+									sortColumn={tableState.sortColumn}
+									sortDirection={tableState.sortDirection}
+									onSort={(key) => toggleMatchSort(tableState, key)}
+									onRowClick={(m, e) => pick(m.match_id, e)}
+									stickyHeader
+								/>
 							{:else if view === "cast"}
 								<CastView
 									matches={data.matches}
@@ -927,6 +686,9 @@
 									{zone}
 									{user}
 									slotLabels={slotMaps.labels}
+									slotAvatars={slotMaps.avatars}
+									search={searchTerm}
+									onOpenMatch={(m, e) => pick(m.match_id, e)}
 								/>
 							{:else}
 								<!-- Monthly calendar. -->

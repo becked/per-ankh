@@ -605,7 +605,7 @@
 		</span>
 	{:else}
 		<span
-			class="inline-flex min-w-0 items-center gap-1.5"
+			class="inline-flex min-w-0 items-center gap-1"
 			class:text-orange={isWinner}
 		>
 			{#if nation}
@@ -832,7 +832,7 @@
 							Winner
 						</p>
 						<p
-							class="flex items-center justify-center gap-1.5 text-sm font-bold text-bright"
+							class="flex items-center justify-center gap-1 text-sm font-bold text-bright"
 						>
 							{#if winnerLabel}
 								<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
@@ -896,7 +896,7 @@
 				/>
 				Winner
 			</p>
-			<p class="flex items-center gap-1.5 text-sm font-bold text-bright">
+			<p class="flex items-center gap-1 text-sm font-bold text-bright">
 				<PlayerAvatar avatarUrl={winnerAvatar} size={14} />
 				<span class="truncate">{winnerLabel}</span>
 			</p>
@@ -1032,7 +1032,7 @@
 						{#if part.casters.length > 0}
 							<!-- Streamer first (with avatar), co-casters appended. -->
 							<div
-								class="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-tan"
+								class="flex min-w-0 flex-1 items-center gap-1 text-xs text-tan"
 							>
 								<PlayerAvatar
 									avatarUrl={part.casters[0].avatar_url}

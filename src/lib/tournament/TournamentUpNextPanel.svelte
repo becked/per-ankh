@@ -1,35 +1,32 @@
 <script lang="ts">
-	// "Up next" panel for the tournament overview page: the next handful of
-	// upcoming (scheduled, not-yet-reported) sittings, soonest first — the
-	// most-used view during a running tournament. A match split across days shows
-	// one row per sitting. The title row carries a UTC/Local toggle (picks the
-	// clock every row reads; defaults to local) and a Matches button linking to
-	// the full /matches page.
+	// "Live & Upcoming" panel for the tournament overview page — the most-used
+	// view during a running tournament. Lists the sittings that are live right now
+	// (started within the live window, so plausibly still streaming) followed by
+	// the next handful still ahead, soonest first. A match split across days shows
+	// one row per sitting. The title row carries a Matches button linking to the
+	// full /matches page; the active clock comes from the page (whose top-right
+	// toggle owns it), so this panel and that toggle can't drift. Rows render
+	// through the shared MatchTable (part-row granularity), live ones flagged with
+	// a LIVE badge; clicking one opens the match card.
 	import { resolve } from "$app/paths";
 	import {
 		type TournamentDetail,
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
-	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
-	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
-	import {
-		matchSlotAvatarUrl,
-		matchSlotDisplayName,
-		matchSlotNation,
-	} from "$lib/tournament/match-occupant";
-	import {
-		partitionSchedule,
-		type ScheduleZone,
-	} from "$lib/tournament/schedule";
+	import MatchTable from "$lib/tournament/MatchTable.svelte";
+	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
+	import { liveAndUpcoming, type ScheduleZone } from "$lib/tournament/schedule";
 	import { nowMs } from "$lib/stores/now.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
-	import { formatEnum, formatScheduledInZone } from "$lib/utils/formatting";
 
 	interface Props {
 		tournament: TournamentDetail;
 		matches: TournamentMatch[];
+		// The active clock every row's time reads, owned by the page's top-right
+		// toggle so this panel stays in lockstep with it.
+		zone: ScheduleZone;
 		slotLabels: Record<string, string>;
 		slotUserIds: Record<string, string | null>;
 		slotAvatars: Record<string, string | null>;
@@ -48,6 +45,7 @@
 	let {
 		tournament,
 		matches,
+		zone,
 		slotLabels,
 		slotUserIds,
 		slotAvatars,
@@ -57,36 +55,28 @@
 
 	// How many upcoming sittings (parts) to preview before deferring to the full
 	// page. A match split across days contributes one row per scheduled sitting.
+	// The cap is on upcoming only — every live sitting always shows.
 	const MAX_ROWS = 5;
 
-	const partition = $derived(partitionSchedule(matches));
-	// Only sittings still ahead belong in "up next" — a part whose time has
-	// passed (an already-played earlier sitting of a split match, or a fully
-	// overdue match) isn't upcoming and would otherwise sort to the top under a
-	// panel titled "Upcoming". Reactive via nowMs(), so a sitting drops off as
-	// its scheduled time arrives. Overdue/in-progress matches surface on the full
-	// matches page (its "In progress" filter) and the bracket status chips.
-	const upNext = $derived(
-		partition.scheduled
-			.filter((np) => {
-				const t = Date.parse(np.part.scheduled_at ?? "");
-				return !Number.isNaN(t) && t >= nowMs();
-			})
-			.slice(0, MAX_ROWS),
-	);
+	// Live sittings (uncapped) + the next few upcoming, from the shared definition
+	// so this panel and the matches page's Live & Upcoming tab can't drift.
+	// Reactive via nowMs(): a sitting crosses upcoming → live → gone as the clock
+	// advances. partition order is soonest-first, so live sittings (earlier,
+	// already-started times) precede the upcoming ones in the concatenation.
+	const split = $derived(liveAndUpcoming(matches, nowMs()));
+	const rows = $derived<MatchRow[]>([
+		...split.live,
+		...split.upcoming.slice(0, MAX_ROWS),
+	]);
+	// Reference-identity set for the LIVE badge: `rows` reuses the same
+	// NumberedPart objects, so membership flags exactly the live sittings.
+	const liveSet = $derived(new Set<MatchRow>(split.live));
+
+	const columns = pickColumns(["time", "matchup", "broadcast", "actions"]);
 
 	const matchesHref = $derived(
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),
 	);
-
-	// Active clock every row's time reads. The title-row toggle flips it;
-	// defaults to local (the full matches page offers the same toggle, defaulting
-	// to UTC there for a shared reference).
-	let zone = $state<ScheduleZone>("local");
-	// Segmented UTC/Local control, mirroring the matches page: transparent text
-	// buttons over a sliding highlight thumb.
-	const viewTriggerClass =
-		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
 	// --- Match card, anchored at the click point (mirrors the matches page). A
 	// virtual anchor from the pointer keeps the card beside the clicked row.
@@ -100,192 +90,48 @@
 			: null,
 	);
 
-	function pick(matchId: string, e: MouseEvent) {
+	function pick(match: TournamentMatch, e: MouseEvent) {
 		const x = e.clientX;
 		const y = e.clientY;
 		detailAnchor = { getBoundingClientRect: () => new DOMRect(x, y, 0, 0) };
-		detailMatchId = matchId;
+		detailMatchId = match.match_id;
 	}
 </script>
-
-<!-- One player's cell: crest + avatar + name. slot_b_id is null only for an
-     as-yet-undetermined feeder in a synthesized bracket cell — but those carry
-     no scheduled_at, so a scheduled row always has both sides. -->
-{#snippet playerCell(m: TournamentMatch, side: "a" | "b")}
-	{@const slotId = side === "a" ? m.slot_a_id : m.slot_b_id}
-	{#if slotId === null}
-		<span class="opacity-60">TBD</span>
-	{:else}
-		{@const nation = matchSlotNation(m, side)}
-		{@const name = matchSlotDisplayName(m, side, slotLabels) ?? "—"}
-		<span class="inline-flex min-w-0 items-center gap-1.5">
-			{#if nation}
-				<SpriteIcon
-					category="crests"
-					value={nation}
-					size={16}
-					alt={formatEnum(nation, "NATION_")}
-				/>
-			{/if}
-			<PlayerAvatar
-				avatarUrl={matchSlotAvatarUrl(m, side, slotAvatars)}
-				size={16}
-			/>
-			<span class="truncate">{name}</span>
-		</span>
-	{/if}
-{/snippet}
 
 <section
 	class="mb-3 rounded-lg p-4"
 	style="background-color: rgb(var(--color-surface));"
 >
 	<div
-		class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+		class="mb-3 flex items-center gap-3 rounded-lg px-3 py-2"
 		style="background-color: rgb(var(--color-surface-raised));"
 	>
-		<div class="flex items-center gap-3">
-			<h2 class="text-lg font-bold text-tan">Upcoming Matches</h2>
-			<!-- Link to the full matches page, bordered button like the others. -->
-			<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
-			<a
-				href={matchesHref}
-				class="whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-			>
-				View All
-			</a>
-			<!-- eslint-enable svelte/no-navigation-without-resolve -->
-		</div>
-		<!-- UTC / Local: a segmented toggle picking the clock every row reads. -->
-		<div
-			class="relative grid grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
-			style="background-color: rgb(var(--color-surface));"
-			role="group"
-			aria-label="Timezone"
+		<h2 class="text-lg font-bold text-tan">Live &amp; Upcoming Matches</h2>
+		<!-- Link to the full matches page. The primary CTA of this panel during a
+		     live tournament, so it's a filled-orange button (not the tan ghost
+		     outline the rest of the UI uses) to stand out as the main action. -->
+		<!-- eslint-disable svelte/no-navigation-without-resolve -- matchesHref is a resolve() result; not traceable through the local var -->
+		<a
+			href={matchesHref}
+			class="whitespace-nowrap rounded bg-orange px-3 py-1.5 text-xs font-bold text-black transition-colors hover:bg-orange/80"
 		>
-			<div
-				class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-				style:background-color="rgb(var(--color-surface-raised))"
-				style:transform={zone === "local"
-					? "translateX(100%)"
-					: "translateX(0)"}
-			></div>
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={zone === "utc"}
-				onclick={() => (zone = "utc")}
-			>
-				UTC
-			</button>
-			<button
-				type="button"
-				class={viewTriggerClass}
-				aria-pressed={zone === "local"}
-				onclick={() => (zone = "local")}
-			>
-				Local
-			</button>
-		</div>
+			View All
+		</a>
+		<!-- eslint-enable svelte/no-navigation-without-resolve -->
 	</div>
 
-	{#if upNext.length > 0}
-		<ul class="overflow-hidden rounded-lg">
-			<!-- Each row is one scheduled *sitting* (part): a match split across days
-			     appears once per sitting, so key by match+part (part ids are only
-			     unique within a match). The streamer-first caster (casters[0]) and
-			     the sitting's first stream drive the channel column. -->
-			{#each upNext as np (`${np.match.match_id}:${np.part.id}`)}
-				{@const caster = np.part.casters[0]}
-				{@const stream = np.part.streams[0]}
-				<!-- Zebra striping on the <li> (every second row a raised tint); the
-				     row hover (surface-hover) reads over either band. The caster/channel
-				     link is a sibling of the button, not nested, so the <a> stays valid
-				     and its click doesn't also open the match card. -->
-				<li
-					class="flex cursor-pointer items-center transition-colors even:bg-surface-raised hover:bg-surface-hover"
-				>
-					<button
-						type="button"
-						class="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left text-sm text-tan"
-						onclick={(e) => pick(np.match.match_id, e)}
-					>
-						<span
-							class="min-w-[9rem] shrink-0 whitespace-nowrap text-xs text-tan opacity-80"
-						>
-							{formatScheduledInZone(
-								np.part.scheduled_at,
-								zone,
-							)}{#if np.split}<span class="ml-1 opacity-60"
-									>· Pt {np.partNumber}</span
-								>{/if}
-						</span>
-						<span class="flex min-w-0 flex-1 items-center gap-2">
-							{@render playerCell(np.match, "a")}
-							<span class="shrink-0 opacity-60">v</span>
-							{@render playerCell(np.match, "b")}
-						</span>
-					</button>
-					<!-- Caster / channel: a fixed-width, left-aligned column so casters
-					     line up across rows (a shrink-to-content cell wanders left-edge).
-					     A link to the stream when the sitting has one, labelled with the
-					     streamer (or "Watch"); the caster's name alone otherwise. Uses the
-					     page's usual tan text, not an accent color. -->
-					{#if stream || caster}
-						<div class="flex w-44 shrink-0 items-center px-3 py-2 text-xs">
-							{#if stream}
-								<!-- eslint-disable svelte/no-navigation-without-resolve -- external stream URL (youtube/twitch), host-validated; not an app route -->
-								<a
-									href={stream.url}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="flex min-w-0 items-center gap-1.5 text-tan opacity-80 transition-opacity hover:underline hover:opacity-100"
-								>
-									{#if caster?.avatar_url}
-										<PlayerAvatar avatarUrl={caster.avatar_url} size={16} />
-									{/if}
-									<span class="min-w-0 truncate"
-										>{caster?.display_name ?? caster?.name ?? "Watch"}</span
-									>
-									<svg
-										xmlns="http://www.w3.org/2000/svg"
-										class="h-3 w-3 shrink-0"
-										fill="none"
-										viewBox="0 0 24 24"
-										stroke="currentColor"
-										stroke-width="2"
-										aria-hidden="true"
-									>
-										<path
-											stroke-linecap="round"
-											stroke-linejoin="round"
-											d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
-										/>
-									</svg>
-								</a>
-								<!-- eslint-enable svelte/no-navigation-without-resolve -->
-							{:else}
-								<span
-									class="flex min-w-0 items-center gap-1.5 text-tan opacity-70"
-								>
-									{#if caster?.avatar_url}
-										<PlayerAvatar avatarUrl={caster.avatar_url} size={16} />
-									{/if}
-									<span class="min-w-0 truncate"
-										>{caster?.display_name ?? caster?.name}</span
-									>
-								</span>
-							{/if}
-						</div>
-					{/if}
-				</li>
-			{/each}
-		</ul>
-	{:else}
-		<p class="px-3 py-2 text-sm text-tan opacity-70">
-			No matches scheduled yet.
-		</p>
-	{/if}
+	<MatchTable
+		{columns}
+		{rows}
+		{zone}
+		{tournament}
+		{user}
+		{slotLabels}
+		{slotAvatars}
+		onRowClick={pick}
+		isLive={(row) => liveSet.has(row)}
+		emptyMessage="No live or upcoming matches."
+	/>
 </section>
 
 <!-- Match card, anchored at the click point. Independent of the overview page's

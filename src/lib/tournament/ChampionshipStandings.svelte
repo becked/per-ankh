@@ -113,7 +113,7 @@
 					>
 						<td class="px-4 py-1 text-center font-mono">{r.seed ?? "—"}</td>
 						<td class="px-4 py-1">
-							<span class="flex items-center gap-1.5">
+							<span class="flex items-center gap-1">
 								<PlayerAvatar avatarUrl={r.avatarUrl} size={15} />
 								<span>{r.name}</span>
 							</span>

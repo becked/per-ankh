@@ -166,7 +166,7 @@
 		<div class="flex min-w-0 flex-1">
 			<a
 				href={resolve("/users/[user_id]", { user_id: game.uploader_user_id })}
-				class="relative z-20 flex min-w-0 items-center gap-1.5 hover:underline"
+				class="relative z-20 flex min-w-0 items-center gap-1 hover:underline"
 			>
 				<img
 					src={game.uploader_avatar_url}
