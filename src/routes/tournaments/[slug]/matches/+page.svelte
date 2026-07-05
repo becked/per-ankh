@@ -235,13 +235,7 @@
 	});
 
 	// The columns the matches page shows, in order (shared by both list tabs).
-	const matchColumns = pickColumns([
-		"number",
-		"matchup",
-		"time",
-		"caster",
-		"stream",
-	]);
+	const matchColumns = pickColumns(["time", "matchup", "caster", "stream"]);
 
 	// --- Match card. Anchored at the click point via a floating-ui virtual
 	// anchor so it opens beside the cursor. detailMatch resolves live from the

@@ -108,7 +108,9 @@
 		return `${sticky}${sortable}select-none whitespace-nowrap border-b border-surface bg-surface-sunken px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg`;
 	}
 
-	const tdClass = "whitespace-nowrap px-3 py-2 text-left text-tan";
+	// align-top so the Match/Time cells' subtext lines don't vertically center the
+	// single-line Caster/Stream/actions cells beside them.
+	const tdClass = "whitespace-nowrap px-3 py-2 text-left align-top text-tan";
 </script>
 
 <!-- One player's cell: crest + avatar + name. Side B collapses to "Bye" when
@@ -170,31 +172,71 @@
 				>
 					{#each columns as column (column.key)}
 						<td class={tdClass}>
-							{#if column.key === "number"}
-								<span class="font-mono opacity-70">
-									{m.match_number != null
-										? padMatchNumber(m.match_number)
-										: "—"}
-								</span>
-							{:else if column.key === "matchup"}
-								<span class="inline-flex items-center gap-2">
-									{@render playerCell(m, "a")}
-									<span class="opacity-60">v</span>
-									{@render playerCell(m, "b")}
-								</span>
+							{#if column.key === "matchup"}
+								{@const bracketLabel = matchBracketLabel(tournament, m)}
+								{@const entry = poolEntryById(
+									tournament.map_pool,
+									m.map_pool_id,
+								)}
+								<div class="flex flex-col gap-0.5">
+									<span class="inline-flex items-center gap-2">
+										{#if m.match_number != null}
+											<span class="shrink-0 font-mono opacity-60">
+												{padMatchNumber(m.match_number)}
+											</span>
+										{/if}
+										{@render playerCell(m, "a")}
+										<span class="shrink-0 opacity-60">v</span>
+										{@render playerCell(m, "b")}
+									</span>
+									<!-- Bracket + map as subtext under the matchup, so a row reads the
+									     same on every surface (the Cast tab's old two-line layout, now
+									     shared by all match tables). -->
+									{#if bracketLabel || entry}
+										<span class="text-xs opacity-60">
+											{bracketLabel}
+											{#if entry}
+												{#if bracketLabel}·{/if}
+												{#if mapInAtlas(entry)}
+													<!-- External atlas image, not an app route. Stop
+													     propagation so it doesn't also open the match card. -->
+													<!-- eslint-disable svelte/no-navigation-without-resolve -->
+													<a
+														href={atlasMapUrl(entry)}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="hover:text-orange hover:underline"
+														onclick={(e) => e.stopPropagation()}
+													>
+														{mapPoolLabel(entry, distinguishing, true)}
+													</a>
+													<!-- eslint-enable svelte/no-navigation-without-resolve -->
+												{:else}
+													{mapPoolLabel(entry, distinguishing, true)}
+												{/if}
+											{/if}
+										</span>
+									{/if}
+								</div>
 							{:else if column.key === "time"}
 								{#if row.part}
 									{@const live = isLive?.(row) ?? false}
 									<div class="flex items-center gap-2">
+										<span
+											>{formatScheduledInZone(
+												row.part.scheduled_at,
+												zone,
+											)}</span
+										>
 										{#if live}
 											<span
 												class="inline-flex items-center gap-1 rounded bg-red-400/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-400"
 											>
-												<span class="h-1.5 w-1.5 rounded-full bg-red-400"></span>
+												<span class="h-1.5 w-1.5 rounded-full bg-red-400"
+												></span>
 												Live
 											</span>
 										{/if}
-										<span>{formatScheduledInZone(row.part.scheduled_at, zone)}</span>
 									</div>
 									<div class="text-xs opacity-60">
 										{formatRelativeToNow(row.part.scheduled_at)}{#if row.split}
@@ -202,49 +244,28 @@
 									</div>
 								{:else}
 									{@const g = matchStatusGroup(m)}
-									{@const t = formatScheduledInZone(matchSortInstant(m), zone)}
-									{#if g === "in_progress"}
-										<!-- Overdue: time passed, result unreported. Keep the
-										     last-started sitting's time visible so an admin chasing
-										     reports can see how overdue it is. -->
-										{t || "In progress"}{#if t}<span class="opacity-60">
-												· in progress</span
-											>{/if}
-									{:else if t}
-										{t}
+									{@const instant = matchSortInstant(m)}
+									{@const t = formatScheduledInZone(instant, zone)}
+									{#if instant}
+										{@const rel = formatRelativeToNow(instant)}
+										<!-- A real instant (scheduled or overdue): show it with the same
+										     relative subtext the part rows carry. An overdue (in-progress)
+										     match keeps its last-started time visible; the relative subtext
+										     ("2h ago") is what conveys how overdue it is. -->
+										<div>{t}</div>
+										{#if rel}<div class="text-xs opacity-60">{rel}</div>{/if}
 									{:else if g === "completed"}
-										Completed
+										<!-- Completed matches get a badge mirroring the Live one (same
+										     pill shape, success color instead of red). -->
+										<span
+											class="inline-flex items-center gap-1 rounded bg-success-surface px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide text-success"
+										>
+											<span class="h-1.5 w-1.5 rounded-full bg-success"></span>
+											Completed
+										</span>
 									{:else}
 										Not scheduled
 									{/if}
-								{/if}
-							{:else if column.key === "bracket"}
-								{matchBracketLabel(tournament, m) || "—"}
-							{:else if column.key === "map"}
-								{@const entry = poolEntryById(
-									tournament.map_pool,
-									m.map_pool_id,
-								)}
-								{#if entry}
-									{#if mapInAtlas(entry)}
-										<!-- External atlas image, not an app route. Stop propagation
-										     so the link doesn't also open the match card. -->
-										<!-- eslint-disable svelte/no-navigation-without-resolve -->
-										<a
-											href={atlasMapUrl(entry)}
-											target="_blank"
-											rel="noopener noreferrer"
-											class="text-tan hover:text-orange hover:underline"
-											onclick={(e) => e.stopPropagation()}
-										>
-											{mapPoolLabel(entry, distinguishing, true)}
-										</a>
-										<!-- eslint-enable svelte/no-navigation-without-resolve -->
-									{:else}
-										{mapPoolLabel(entry, distinguishing, true)}
-									{/if}
-								{:else}
-									—
 								{/if}
 							{:else if column.key === "caster"}
 								{@const c = rowCaster(row)}

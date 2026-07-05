@@ -68,9 +68,8 @@
 
 	// Same columns as the other match surfaces, plus the trailing actions column.
 	const columns = pickColumns([
-		"number",
-		"matchup",
 		"time",
+		"matchup",
 		"caster",
 		"stream",
 		"actions",

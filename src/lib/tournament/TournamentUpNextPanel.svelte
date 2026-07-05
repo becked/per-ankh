@@ -17,10 +17,7 @@
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import { pickColumns, type MatchRow } from "$lib/tournament/matches-table";
-	import {
-		liveAndUpcoming,
-		type ScheduleZone,
-	} from "$lib/tournament/schedule";
+	import { liveAndUpcoming, type ScheduleZone } from "$lib/tournament/schedule";
 	import { nowMs } from "$lib/stores/now.svelte";
 	import Popover from "$lib/ui/Popover.svelte";
 
@@ -71,13 +68,7 @@
 	// NumberedPart objects, so membership flags exactly the live sittings.
 	const liveSet = $derived(new Set<MatchRow>(split.live));
 
-	const columns = pickColumns([
-		"number",
-		"matchup",
-		"time",
-		"caster",
-		"stream",
-	]);
+	const columns = pickColumns(["time", "matchup", "caster", "stream"]);
 
 	const matchesHref = $derived(
 		resolve("/tournaments/[slug]/matches", { slug: tournament.slug }),

@@ -1,13 +1,10 @@
 import type {
-	TournamentDetail,
 	TournamentMatch,
 	TournamentMatchPart,
 	TournamentMatchPartCaster,
 	TournamentMatchPartStream,
 } from "$lib/api-cloud";
 import { formatEnum } from "$lib/utils/formatting";
-import { matchBracketLabel } from "./bracket-label";
-import { mapPoolLabel, poolEntryById } from "./map-script-options";
 import {
 	matchSlotDisplayName,
 	matchSlotNation,
@@ -115,14 +112,11 @@ export function rowInstant(row: MatchRow): string | null {
 
 // ─── Columns ─────────────────────────────────────────────────────────
 
-// Context the sort comparators (and the map/bracket cells) need beyond the row
-// itself: the live slot→name map for the matchup column, and the tournament for
-// bracket/map resolution. `tournament`/`distinguishing` are optional because the
-// surfaces that sort (the matches page) don't sort by those columns.
+// Context the sort comparators need beyond the row itself: the live slot→name
+// map, for the matchup column. (Match number, bracket, and map render inside the
+// Match cell rather than as sortable columns, so nothing else is needed here.)
 export interface MatchSortContext {
 	slotLabels: Record<string, string>;
-	tournament?: TournamentDetail;
-	distinguishing?: ReadonlySet<string>;
 }
 
 // Column identity + sort value only; the bespoke cell markup (crests, avatars,
@@ -137,11 +131,6 @@ export interface MatchColumn {
 // The full column registry. Each surface picks the subset it shows (in order)
 // via pickColumns; the shared component renders whatever it's handed.
 export const MATCH_COLUMN_DEFS: Record<string, MatchColumn> = {
-	number: {
-		key: "number",
-		label: "#",
-		sortValue: (row) => row.match.match_number ?? null,
-	},
 	matchup: {
 		key: "matchup",
 		label: "Match",
@@ -163,32 +152,6 @@ export const MATCH_COLUMN_DEFS: Record<string, MatchColumn> = {
 		sortValue: (row) => {
 			const iso = rowInstant(row);
 			return iso ? new Date(iso).getTime() : null;
-		},
-	},
-	bracket: {
-		key: "bracket",
-		label: "Bracket",
-		sortValue: (row, ctx) =>
-			ctx.tournament
-				? matchBracketLabel(ctx.tournament, row.match).toLowerCase()
-				: "",
-	},
-	map: {
-		key: "map",
-		label: "Map",
-		sortValue: (row, ctx) => {
-			if (!ctx.tournament) return "";
-			const entry = poolEntryById(
-				ctx.tournament.map_pool,
-				row.match.map_pool_id,
-			);
-			return entry
-				? mapPoolLabel(
-						entry,
-						ctx.distinguishing ?? new Set(),
-						true,
-					).toLowerCase()
-				: "";
 		},
 	},
 	caster: {
