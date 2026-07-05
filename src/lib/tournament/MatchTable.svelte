@@ -315,12 +315,12 @@
 								{@const casters = rowCasters(row)}
 								{@const streams = rowStreams(row)}
 								{@const pendingSitting = rowIsPendingSitting(row)}
-								<!-- Main line: the first stream + "by {caster}". Further streams (a
-								     match's extra POVs/VODs — often labeled "part 2", "part 3")
-								     stack as subtext beneath. Each piece is optional — a caster-only
-								     row is just the name(s) (no "by"); a casterless pending sitting
-								     shows the "needs a caster" flag; the cast buttons live in the
-								     trailing actions column. -->
+								<!-- Main line: the first stream + "by {streamer} with
+								     {co-casters}". Further streams (a match's extra POVs/VODs —
+								     often labeled "part 2", "part 3") stack as subtext beneath. Each
+								     piece is optional — a caster-only row is just the name(s) (no
+								     "by"); a casterless pending sitting shows the "needs a caster"
+								     flag; the cast buttons live in the trailing actions column. -->
 								<div class="flex flex-col items-start gap-0.5">
 									{#if streams.length > 0 || casters.length > 0}
 										<div class="flex items-center gap-x-1.5">
@@ -330,27 +330,36 @@
 													{@render streamLink(streams[0])}
 												</span>
 											{/if}
-											<!-- Streamer (index 0), then any co-casters, muted and
-											     ·-separated; prefixed with a small "by" when a stream
-											     precedes. -->
+											<!-- Streamer (index 0), then any co-casters introduced by a
+											     muted "with"; the whole group prefixed with a small "by"
+											     when a stream precedes. -->
 											{#if casters.length > 0}
 												{#if streams.length > 0}
 													<span class="text-[10px] opacity-50">by</span>
 												{/if}
 												<span class="inline-flex items-center gap-1.5">
-													{#each casters as c, i (i)}
-														{#if i > 0}<span class="opacity-40">·</span>{/if}
-														<span
-															class="inline-flex items-center gap-1"
-															class:opacity-70={i > 0}
-														>
-															<PlayerAvatar
-																avatarUrl={c.avatar_url}
-																size={16}
-															/>
-															{c.display_name ?? c.name}
-														</span>
-													{/each}
+													<span class="inline-flex items-center gap-1">
+														<PlayerAvatar
+															avatarUrl={casters[0].avatar_url}
+															size={16}
+														/>
+														{casters[0].display_name ?? casters[0].name}
+													</span>
+													{#if casters.length > 1}
+														<span class="text-[10px] opacity-50">with</span>
+														{#each casters.slice(1) as c, i (i)}
+															{#if i > 0}<span class="opacity-40">,</span>{/if}
+															<span
+																class="inline-flex items-center gap-1 opacity-70"
+															>
+																<PlayerAvatar
+																	avatarUrl={c.avatar_url}
+																	size={16}
+																/>
+																{c.display_name ?? c.name}
+															</span>
+														{/each}
+													{/if}
 												</span>
 											{/if}
 										</div>

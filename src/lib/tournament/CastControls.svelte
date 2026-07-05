@@ -29,13 +29,10 @@
 	const mine = $derived(
 		user != null && casters.some((c) => c.user_id === user.user_id),
 	);
-	const isStreamer = $derived(
-		user != null && casters[0]?.user_id === user.user_id,
-	);
 
 	let busy = $state(false);
 
-	async function cast(role?: "streamer" | "cocaster") {
+	async function cast() {
 		if (!part) return;
 		const partId = part.id;
 		await runAction(
@@ -44,12 +41,8 @@
 					tournament.tournament_id,
 					row.match.match_id,
 					partId,
-					role,
 				),
-			{
-				setBusy: (b) => (busy = b),
-				success: role === "streamer" ? "You're the streamer" : "You're casting",
-			},
+			{ setBusy: (b) => (busy = b), success: "You're casting" },
 		);
 	}
 	async function drop() {
@@ -90,19 +83,6 @@
 				{casters.length === 0 ? "I'll cast" : "Co-cast"}
 			</button>
 		{:else}
-			{#if !isStreamer}
-				<button
-					type="button"
-					class="rounded border border-input px-2 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
-					disabled={busy}
-					onclick={(e) => {
-						e.stopPropagation();
-						cast("streamer");
-					}}
-				>
-					Make me streamer
-				</button>
-			{/if}
 			<button
 				type="button"
 				class="rounded border border-input px-2 py-1 text-xs text-tan/70 transition-colors hover:border-red-400 hover:text-red-400 disabled:opacity-50"
