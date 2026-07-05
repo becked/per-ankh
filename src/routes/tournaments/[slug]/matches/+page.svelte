@@ -29,15 +29,15 @@
 		sortMatchRows,
 		matchRowMatchesSearch,
 		toggleMatchSort,
-		matchStatusGroup,
 		DEFAULT_MATCHES_TABLE_STATE,
+		type MatchRow,
 		type MatchSortContext,
-		type MatchStatusGroup,
 		type MatchTableState,
 	} from "$lib/tournament/matches-table";
 	import {
 		partitionSchedule,
 		scheduledDayKey,
+		liveAndUpcoming,
 		type ScheduleZone,
 	} from "$lib/tournament/schedule";
 	import {
@@ -47,13 +47,14 @@
 		CAST_GRACE_MS,
 		type NumberedPart,
 	} from "$lib/tournament/parts";
+	import { nowMs } from "$lib/stores/now.svelte";
 	import { padMatchNumber } from "$lib/tournament/match-numbers";
 	import CastView from "$lib/tournament/CastView.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
-	import { Select, Tabs, ToggleGroup } from "bits-ui";
+	import { Tabs } from "bits-ui";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -151,77 +152,46 @@
 	}
 
 	// View + zone controls. zone picks the single clock everything reads in.
-	// View, zone, and the two filters below are deep-linkable via query params
-	// (?view=cast, ?caster=uncasted, ?status=scheduled, ?zone=local) so an admin
-	// can point people straight at e.g. "scheduled matches that need a caster".
-	// Defaults stay out of the URL; state changes replace (not push) history.
+	// View and zone are deep-linkable via query params (?view=cast, ?zone=local)
+	// so a link can point straight at a given tab/clock. Defaults stay out of the
+	// URL; state changes replace (not push) history.
 	const params = new URLSearchParams(page.url.search);
-	const VIEWS = ["list", "calendar", "cast"] as const;
+	const VIEWS = ["live", "calendar", "cast", "all"] as const;
 	type MatchesView = (typeof VIEWS)[number];
-	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "list";
+	const initialView = VIEWS.find((v) => v === params.get("view")) ?? "live";
 	let view = $state<MatchesView>(initialView);
 	let zone = $state<ScheduleZone>(
 		params.get("zone") === "local" ? "local" : "utc",
 	);
-	function csvParam<T extends string>(
-		name: string,
-		all: readonly T[],
-	): T[] | null {
-		const raw = params.get(name);
-		if (!raw) return null;
-		const picked = raw
-			.split(",")
-			.filter((x): x is T => (all as readonly string[]).includes(x));
-		return picked.length > 0 ? picked : null;
-	}
 	const viewTriggerClass =
 		"relative z-10 cursor-pointer px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
 
-	// Stable bracket key for filtering ("championship" | "A" | "B").
-	function bracketKey(m: TournamentMatch): string {
-		return m.phase === "championship" ? "championship" : (m.division ?? "");
-	}
-
-	// --- Table state. tableState (search + sort) follows the Cities pattern;
-	// statusFilter is a separate multi-toggle (completed off by default).
+	// --- Table state for the All tab: search + sort, following the Cities
+	// pattern. Status/bracket faceting was retired in favour of the view tabs;
+	// richer filters return in a later pass.
 	let tableState = $state<MatchTableState>({ ...DEFAULT_MATCHES_TABLE_STATE });
-	let statusFilter = $state<MatchStatusGroup[]>(
-		csvParam("status", [
-			"scheduled",
-			"in_progress",
-			"unscheduled",
-			"completed",
-		] as const) ?? ["scheduled", "in_progress", "unscheduled"],
-	);
 
-	// Reflect the current view/zone/filters into the URL (defaults omitted) so
-	// the address bar is always a shareable deep link to what's on screen.
+	// Reflect the current view/zone into the URL (defaults omitted) so the
+	// address bar is always a shareable deep link to the tab/clock on screen.
 	$effect(() => {
 		// Build the query from plain string parts rather than a mutable
 		// URLSearchParams — svelte/prefer-svelte-reactivity flags the built-in
 		// class inside an effect. Every value is a closed enum of URL-safe
 		// characters, so no encoding is needed.
 		const parts: string[] = [];
-		if (view !== "list") parts.push(`view=${view}`);
+		if (view !== "live") parts.push(`view=${view}`);
 		if (zone !== "utc") parts.push(`zone=${zone}`);
-		const defaultStatus = ["scheduled", "in_progress", "unscheduled"];
-		if (
-			statusFilter.length !== defaultStatus.length ||
-			defaultStatus.some((g) => !statusFilter.includes(g as MatchStatusGroup))
-		) {
-			parts.push(`status=${statusFilter.join(",")}`);
-		}
 		const search = parts.join("&");
 		const target = `${page.url.pathname}${search ? `?${search}` : ""}`;
 		if (`${page.url.pathname}${page.url.search}` !== target) {
-			// Same-page filter sync via goto — the app's navigation primitive (see
-			// the URL writers in the stats/games tables): replaceState so filter
-			// toggles don't stack history, keepFocus/noScroll so they don't jump the
-			// page or drop focus. The [slug] layout load reads only route params,
-			// never the query string, so this updates the address bar without
-			// refetching. resolve() brands typed routes and can't express a dynamic
-			// query string, matching the precedent in upload/+page.svelte.
-			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic filter query string; resolve()'s branded types don't admit it
+			// Same-page sync via goto — the app's navigation primitive (see the URL
+			// writers in the stats/games tables): replaceState so toggles don't stack
+			// history, keepFocus/noScroll so they don't jump the page or drop focus.
+			// The [slug] layout load reads only route params, never the query string,
+			// so this updates the address bar without refetching. resolve() brands
+			// typed routes and can't express a dynamic query string, matching the
+			// precedent in upload/+page.svelte.
+			// eslint-disable-next-line svelte/no-navigation-without-resolve -- dynamic query string; resolve()'s branded types don't admit it
 			void goto(target, {
 				replaceState: true,
 				keepFocus: true,
@@ -229,57 +199,28 @@
 			});
 		}
 	});
-	const statusItemClass =
-		"cursor-pointer px-3 py-1.5 text-xs font-bold text-tan transition-colors data-[state=off]:opacity-50 data-[state=on]:bg-surface-raised";
 
-	// Bracket filter: only offer brackets that actually have (non-bye) matches.
-	const bracketOptions = $derived.by(() => {
-		const present: Record<string, true> = {};
-		for (const m of data.matches) {
-			if (matchStatusGroup(m) === null) continue;
-			present[bracketKey(m)] = true;
-		}
-		return [
-			{ value: "championship", label: "Championship" },
-			{ value: "A", label: data.tournament.division_a_name },
-			{ value: "B", label: data.tournament.division_b_name },
-		].filter((o) => present[o.value]);
-	});
-	// Bracket selections live in tableState.filters as "bracket:<key>" entries.
-	const selectedBracketEntries = $derived(
-		tableState.filters.filter((f) => f.startsWith("bracket:")),
-	);
-	const selectedBrackets = $derived(
-		selectedBracketEntries.map((f) => f.slice("bracket:".length)),
-	);
-	const bracketChips = $derived(
-		selectedBrackets.map(
-			(v) => bracketOptions.find((o) => o.value === v)?.label ?? v,
-		),
-	);
-	function setBracketFilter(entries: string[]) {
-		const others = tableState.filters.filter((f) => !f.startsWith("bracket:"));
-		tableState.filters = [...others, ...entries];
-	}
+	// --- Live & Upcoming tab: live sittings (badged) + upcoming, from the shared
+	// definition the overview panel uses. Part-row granularity, soonest-first —
+	// a schedule, not a sortable table. Reactive via nowMs().
+	const liveUpcoming = $derived(liveAndUpcoming(data.matches, nowMs()));
+	const liveUpcomingRows = $derived<MatchRow[]>([
+		...liveUpcoming.live,
+		...liveUpcoming.upcoming,
+	]);
+	// Reference-identity set for the LIVE badge (rows reuse the same objects).
+	const liveSet = $derived(new Set<MatchRow>(liveUpcoming.live));
 
-	// Non-bye matches, as table rows (the census — includes unscheduled and
-	// completed). Denominator for the count.
+	// --- All tab: every non-bye match (one row each), search-filtered and sorted
+	// through the shared matches-table helpers so the comparator + search rule
+	// stay one definition across every match surface. tableEligibleRows is the
+	// unfiltered census (the count denominator).
 	const tableEligibleRows = $derived(toMatchRows(data.matches));
-
 	const sortCtx = $derived<MatchSortContext>({
 		slotLabels: slotMaps.labels,
 	});
-
-	// Status toggle → bracket filter → search → sort, in one pass, through the
-	// shared matches-table helpers so the comparator + search rule stay one
-	// definition across every match surface.
-	const rows = $derived.by(() => {
-		let list = tableEligibleRows.filter((r) =>
-			statusFilter.includes(matchStatusGroup(r.match) as MatchStatusGroup),
-		);
-		if (selectedBrackets.length > 0) {
-			list = list.filter((r) => selectedBrackets.includes(bracketKey(r.match)));
-		}
+	const allRows = $derived.by(() => {
+		let list = tableEligibleRows;
 		if (tableState.search) {
 			list = list.filter((r) =>
 				matchRowMatchesSearch(r, tableState.search, slotMaps.labels),
@@ -293,7 +234,7 @@
 		);
 	});
 
-	// The columns the matches page shows, in order.
+	// The columns the matches page shows, in order (shared by both list tabs).
 	const matchColumns = pickColumns([
 		"number",
 		"matchup",
@@ -565,29 +506,35 @@
 							</button>
 						</div>
 
-						<!-- List / Calendar / Casts view switch (bracket-card pattern). -->
+						<!-- Live & Upcoming / Calendar / Casts / All view switch
+						     (bracket-card pattern). -->
 						<Tabs.Root bind:value={view}>
 							<Tabs.List
-								class="relative grid shrink-0 grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
+								class="relative grid shrink-0 grid-cols-4 overflow-hidden rounded-lg border-2 border-surface"
 								style="background-color: rgb(var(--color-surface));"
 							>
 								<div
-									class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
+									class="pointer-events-none absolute inset-y-0 left-0 w-1/4 transition-transform duration-200 ease-out"
 									style:background-color="rgb(var(--color-surface-raised))"
 									style:transform={view === "calendar"
 										? "translateX(100%)"
 										: view === "cast"
 											? "translateX(200%)"
-											: "translateX(0)"}
+											: view === "all"
+												? "translateX(300%)"
+												: "translateX(0)"}
 								></div>
-								<Tabs.Trigger value="list" class={viewTriggerClass}
-									>List</Tabs.Trigger
-								>
+								<Tabs.Trigger value="live" class={viewTriggerClass}>
+									Live &amp; Upcoming
+								</Tabs.Trigger>
 								<Tabs.Trigger value="calendar" class={viewTriggerClass}>
 									Calendar
 								</Tabs.Trigger>
 								<Tabs.Trigger value="cast" class={viewTriggerClass}>
 									Casts
+								</Tabs.Trigger>
+								<Tabs.Trigger value="all" class={viewTriggerClass}>
+									All
 								</Tabs.Trigger>
 							</Tabs.List>
 						</Tabs.Root>
@@ -601,10 +548,26 @@
 							in:fade={{ duration: 200 }}
 							out:fade={{ duration: 200 }}
 						>
-							{#if view === "list"}
-								<!-- Control bar: search + bracket filter + count on the left,
-								     status toggle on the right. Inline (no cities-table sidebar)
-								     so all three match surfaces share one look. -->
+							{#if view === "live"}
+								<!-- Live & Upcoming: live sittings (badged) followed by the
+								     upcoming schedule, soonest-first. A schedule, not a sortable
+								     table — no headers to sort, no filters. -->
+								<MatchTable
+									columns={matchColumns}
+									rows={liveUpcomingRows}
+									{zone}
+									tournament={data.tournament}
+									slotLabels={slotMaps.labels}
+									slotAvatars={slotMaps.avatars}
+									isLive={(row) => liveSet.has(row)}
+									onRowClick={(m, e) => pick(m.match_id, e)}
+									stickyHeader
+									emptyMessage="No live or upcoming matches."
+								/>
+							{:else if view === "all"}
+								<!-- All matches, one row each — every status, unscheduled
+								     included. Search + column sort only; richer faceting returns
+								     in a later pass. -->
 								<div class="mb-3 flex flex-wrap items-center gap-3">
 									<div class="w-full max-w-xs">
 										<SearchInput
@@ -614,86 +577,14 @@
 											class="w-full"
 										/>
 									</div>
-									{#if bracketOptions.length > 0}
-										<Select.Root
-											type="multiple"
-											value={selectedBracketEntries}
-											onValueChange={setBracketFilter}
-										>
-											<Select.Trigger
-												class="flex cursor-pointer items-center justify-between gap-2 rounded border border-black bg-surface-raised px-2 py-1.5 text-xs text-tan"
-											>
-												<span class="truncate">Bracket</span>
-												<span class="text-tan opacity-60">▼</span>
-											</Select.Trigger>
-											<Select.Portal>
-												<Select.Content
-													class="z-50 max-h-80 overflow-y-auto rounded bg-surface-sunken shadow-lg"
-												>
-													<Select.Viewport>
-														{#each bracketOptions as opt (opt.value)}
-															<Select.Item
-																value={`bracket:${opt.value}`}
-																label={opt.label}
-																class="flex cursor-pointer items-center justify-between px-3 py-2 text-sm text-tan hover:bg-surface-raised data-[highlighted]:bg-surface-raised"
-															>
-																{#snippet children({ selected })}
-																	<span>{opt.label}</span>
-																	{#if selected}
-																		<span class="font-bold text-orange">✓</span>
-																	{/if}
-																{/snippet}
-															</Select.Item>
-														{/each}
-													</Select.Viewport>
-												</Select.Content>
-											</Select.Portal>
-										</Select.Root>
-									{/if}
-									{#each bracketChips as chip (chip)}
-										<span
-											class="rounded bg-surface-raised px-2 py-1 text-xs text-tan"
-											>{chip}</span
-										>
-									{/each}
 									<span class="text-xs text-tan opacity-70"
-										>{rows.length} / {tableEligibleRows.length} matches</span
+										>{allRows.length} / {tableEligibleRows.length} matches</span
 									>
-
-									<!-- Status filter, right-aligned; styled like the bracket view tabs. -->
-									<ToggleGroup.Root
-										type="multiple"
-										value={statusFilter}
-										onValueChange={(v) =>
-											(statusFilter = v as MatchStatusGroup[])}
-										class="ml-auto flex overflow-hidden rounded-lg border-2 border-surface"
-										style="background-color: rgb(var(--color-surface));"
-										aria-label="Match status"
-									>
-										<ToggleGroup.Item value="scheduled" class={statusItemClass}>
-											Scheduled
-										</ToggleGroup.Item>
-										<ToggleGroup.Item
-											value="in_progress"
-											class={statusItemClass}
-										>
-											In Progress
-										</ToggleGroup.Item>
-										<ToggleGroup.Item
-											value="unscheduled"
-											class={statusItemClass}
-										>
-											Unscheduled
-										</ToggleGroup.Item>
-										<ToggleGroup.Item value="completed" class={statusItemClass}>
-											Completed
-										</ToggleGroup.Item>
-									</ToggleGroup.Root>
 								</div>
 
 								<MatchTable
 									columns={matchColumns}
-									{rows}
+									rows={allRows}
 									{zone}
 									tournament={data.tournament}
 									slotLabels={slotMaps.labels}
