@@ -229,7 +229,7 @@
 								<div class="flex flex-col gap-0.5">
 									<span class="inline-flex items-center gap-2">
 										{#if m.match_number != null}
-											<span class="shrink-0 font-mono opacity-75">
+											<span class="shrink-0 opacity-75">
 												{padMatchNumber(m.match_number)}
 											</span>
 										{/if}

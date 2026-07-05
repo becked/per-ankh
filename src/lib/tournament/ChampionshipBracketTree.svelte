@@ -562,7 +562,7 @@
 		position: absolute;
 		top: 0.2rem;
 		right: 0.35rem;
-		font-family: ui-monospace, monospace;
+		font-variant-numeric: tabular-nums;
 		font-size: 0.6rem;
 		line-height: 1;
 		color: rgb(var(--color-tan));
