@@ -64,11 +64,13 @@ import {
 	handleGameTournamentLink,
 	handleTournamentBracket,
 	handleTournamentDetail,
+	handleTournamentGamesStats,
 	handleTournamentList,
 	handleTournamentMatchDetail,
 	handleTournamentMatches,
 	handleTournamentRounds,
 	handleTournamentStandings,
+	handleTournamentStats,
 } from "./tournament/public";
 import type { TournamentPublicEnv } from "./tournament/public";
 import { handleTournamentExport } from "./tournament/export";
@@ -365,6 +367,24 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "GET /v1/tournaments/:id/bracket",
 		handler: (r, e, m) => handleTournamentBracket(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/stats\/games$/,
+		},
+		route: "GET /v1/tournaments/:id/stats/games",
+		handler: (r, e, m) => handleTournamentGamesStats(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/tournaments\/([A-Za-z0-9_-]{21})\/stats$/,
+		},
+		route: "GET /v1/tournaments/:id/stats",
+		handler: (r, e, m) => handleTournamentStats(m![1], r, e),
 	},
 	{
 		method: "GET",

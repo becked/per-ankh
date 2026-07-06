@@ -30,32 +30,38 @@ export interface ChartBundleMeta {
 	parser_version: string;
 }
 
-export interface ChartBundle {
+// Summary tiles common to both corpora — pure per-game facts that survive the
+// focal widening unchanged.
+export interface ChartBundleSummaryCore {
+	total_games: number;
+	avg_total_turns: Nullable<number>;
+}
+
+// User-corpus summary. Adds the "most X" tiles, which assume one focal player
+// per game — they degrade into "most-played across all participants" once the
+// corpus widens to all humans, so tournament-scope bundles (ChartBundleCore)
+// omit them (replaced by tournament-native summary tiles).
+export interface ChartBundleSummary extends ChartBundleSummaryCore {
+	top_nation: Nullable<{ nation: string; count: number }>;
+	top_archetype: Nullable<{ archetype: string; count: number }>;
+}
+
+// The chart-fields core: every field whose aggregation is correct over either
+// the uploader-only (user) or all-humans (tournament) focal set. Both endpoints
+// return at least this shape. The user endpoint returns ChartBundle, which
+// extends it with the Overview fields that only make sense one-focal-per-game.
+export interface ChartBundleCore {
 	meta: ChartBundleMeta;
 
 	// --- Summary -----------------------------------------------------
-	summary: {
-		total_games: number;
-		avg_total_turns: Nullable<number>;
-		top_nation: Nullable<{ nation: string; count: number }>;
-		top_archetype: Nullable<{ archetype: string; count: number }>;
-	};
-
-	// --- Overview ----------------------------------------------------
-	// These feed the Overview tab and were previously served by the
-	// standalone /v1/stats endpoint. Computed over the scoped corpus so
-	// they track the collection + game-type selectors.
-
-	// Win rate over games with a known outcome (the uploader's own
-	// result). games_with_outcome excludes observer-mode uploads.
-	win_rate: Nullable<number>;
-	games_with_outcome: number;
+	summary: ChartBundleSummaryCore;
 
 	// One entry per in-scope game with a save_date, for the calendar
 	// heatmap. nation falls back to the first human when user_nation is
 	// null (matching the games-list COALESCE). The id + title inputs let a
 	// calendar cell link through to the game page; the frontend titles each
-	// game with formatGameTitle (nation = save_owner_nation).
+	// game with formatGameTitle (nation = save_owner_nation). Per-game, so it
+	// stays in the core (its final home on the tournament page is deferred).
 	save_dates: Array<{
 		date: string;
 		nation: string | null;
@@ -68,7 +74,7 @@ export interface ChartBundle {
 	// Modal weekday of save dates (0=Sunday..6=Saturday), or null.
 	favorite_day_of_week: Nullable<number>;
 
-	// Games played per nation (the user's own picks), for the
+	// Games played per nation (the focal players' picks), for the
 	// games-by-nation bar. Same buckets as nationWinRate.
 	nations: Array<{ nation: string; games_played: number }>;
 
@@ -164,6 +170,24 @@ export interface ChartBundle {
 		median_turn: number;
 		count: number;
 	}>;
+}
+
+// The user-corpus bundle: the core plus the Overview fields that assume one
+// focal player per game (the uploader's own result). A ChartBundle is a
+// structural subtype of ChartBundleCore — no discriminant field, so a builder
+// typed against the core renders either shape.
+export interface ChartBundle extends ChartBundleCore {
+	// Narrows the core summary to include the user-only "most X" tiles.
+	summary: ChartBundleSummary;
+
+	// --- Overview ----------------------------------------------------
+	// Folded from the retired standalone /v1/stats endpoint. Win rate over
+	// games with a known outcome (the uploader's own result);
+	// games_with_outcome excludes observer-mode uploads. Both assume one self
+	// row per game, so they're user-only (a 1v1 tournament corpus would read
+	// ~50% by construction with a doubled game count).
+	win_rate: Nullable<number>;
+	games_with_outcome: number;
 }
 
 // The single scope selection for the user corpus — one mutually-exclusive

@@ -1,6 +1,6 @@
 # Tournament stats — design & build plan
 
-> **Status:** forward-looking design doc, not an as-built record. Written to be *built from* in a future session. Grounded in a code read of the stats layer (`cloud/src/stats/`, `src/lib/stats/`), the tournament tables (`cloud/migrations/0006`–`0030`, `cloud/src/tournament/`), and the save-derivation layer (`cloud/src/derive-player-summary.ts`, `cloud/migrations/0002`). Companion to `docs/aggregate-statistics.md` (the user-stats as-built record), which this extends.
+> **Status:** forward-looking design doc, not an as-built record. Written to be *built from* in a future session. Grounded in a code read of the stats layer (`cloud/src/stats/`, `src/lib/stats/`), the tournament tables (`cloud/migrations/0006`–`0030`, `cloud/src/tournament/`), and the save-derivation layer (`cloud/src/derive-player-summary.ts`, `cloud/migrations/0002`). Companion to `docs/aggregate-statistics.md` (the user-stats as-built record), which this extends. **Update (2026-07-06):** the §7 three-chart MVP is now built on branch `tournament-stats`; everything past it remains forward-looking — see the Build status note at the top of §7.
 
 ## 1. Why this doc exists
 
@@ -175,6 +175,18 @@ The build starts with a deliberately small slice — three charts — chosen so 
 Charts 1–2 share one endpoint; chart 3 stands up the entire ChartBundle-at-tournament-scope pipeline. That asymmetry is deliberate: the MVP is two subsystems' worth of scaffolding for three charts, and the payoff is that chart #4 onward — the rest of B1 plus more Plane A — is mostly option-builders. Stage 1 alone yields a live page with two charts; build it first for the fastest visible result. Stage 2 is independent of stage 1 and can proceed in parallel.
 
 Rendered examples of the chart designs: `docs/tournament-stats-chart-examples.html`.
+
+### Build status (2026-07-06)
+
+**Built** on branch `tournament-stats`: the three-chart MVP — standings visualization + caster leaderboard (Plane A) and nation win rate (B1) — with both endpoints (`GET /v1/tournaments/:id/stats` and `/stats/games`), the focal-mode widening, the core/user type split, the tournament KV cache variant, the `/tournaments/[slug]/stats` route, and the tests below (unit `computeCasterLeaderboard`; Miniflare integration for both endpoints; a regression pin on the unchanged user `/stats` path). `svelte-check`/`tsc` clean; the worker suite is green. Everything under "Explicitly out of the MVP" is unbuilt and still forward-looking.
+
+**As-built deviations from the plan below** (recorded so the doc doesn't silently drift from the code — code wins on conflict):
+
+- **`computeCompetitionStats` lives in `public.ts`, not `cloud/src/tournament/stats.ts`.** It reuses `computeStandingsResponse` + `loadUserIdentitiesForMatches` (both in `public.ts`), so co-locating it there avoids a runtime circular import (`public.ts` ↔ `stats.ts`). Only the genuinely-pure `computeCasterLeaderboard` sits in `stats.ts`, which imports `UserIdentity` from `public.ts` type-only.
+- **The caster leaderboard loads matches via `loadMatches` (`data.ts`), not `loadMatchesWithRound`.** Casters need no round context, and `loadMatches` is already exported and returns exactly the `MatchRow[]` that `parseParts`/`loadUserIdentitiesForMatches` consume. The duplicate match load (vs. `computeStandingsResponse`'s internal one) is still accepted per §8.
+- **`resolveTournamentCorpus` uses `SELECT DISTINCT m.game_id`.** Strictly-safer dedup in case a save ever links to two complete matches; the join, `status = 'complete'`, and non-null `game_id` filters are otherwise the §6 SQL verbatim.
+
+Not yet wired: the `/tournaments/[slug]/stats` page has no link from any tournament nav surface (there's no tournament tab bar — `/matches` is surfaced contextually). Deferred; it wasn't in the stage list below.
 
 ### Stage 1 — Plane A backend (charts 1–2)
 

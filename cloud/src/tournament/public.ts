@@ -47,6 +47,12 @@ import {
 	rankStandings,
 	type RankedStanding,
 } from "./standings";
+import { computeCasterLeaderboard } from "./stats";
+import { CURRENT_PARSER_VERSION } from "../schemas/game";
+import { buildChartBundle } from "../stats/aggregate";
+import { getCached, putCached } from "../stats/cache";
+import { resolveTournamentCorpus } from "../stats/resolve";
+import type { ChartBundleCore } from "../stats/types";
 
 export interface TournamentPublicEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
@@ -559,6 +565,33 @@ async function setupGateHides(
 	return !isAdmin;
 }
 
+// Shared preamble for the public tournament stats endpoints: rate-limit, load,
+// and setup-gate. Returns the loaded tournament, or a Response to return as-is
+// (429 over the view limit, or 404 when missing / hidden during setup) — the
+// same short-circuit idiom enforceTournamentViewRateLimit uses. Mirrors the
+// inline preamble in handleTournamentStandings/handleTournamentBracket, shared
+// here because the two stats handlers need it identically.
+async function loadViewableTournament(
+	env: TournamentPublicEnv,
+	request: Request,
+	tournamentId: string,
+	cors: Record<string, string>,
+	session: { token: string; data: SessionData } | null,
+): Promise<TournamentRow | Response> {
+	const rl = await enforceTournamentViewRateLimit(env, request, cors);
+	if (rl) return rl;
+	const tournament = await loadTournamentById(env, tournamentId);
+	if (!tournament || (await setupGateHides(env, session, tournament))) {
+		return errorResponse(
+			"Tournament not found",
+			404,
+			cors,
+			"TOURNAMENT_NOT_FOUND",
+		);
+	}
+	return tournament;
+}
+
 export async function handleTournamentStandings(
 	tournamentId: string,
 	request: Request,
@@ -744,6 +777,93 @@ export async function computeStandingsResponse(
 		},
 		combined_qualifier_ranking,
 	};
+}
+
+// Plane A competition stats: the standings block (reused verbatim from
+// computeStandingsResponse, so the /stats page needs one Plane-A fetch) plus the
+// caster leaderboard. viewerIsAdmin=false always — the admin-only standings
+// fields (signup_answer, discord_username) are for the standings-page editors,
+// and charts never render them, so the stats payload always uses the public
+// shape. The caster leaderboard does its own match load: computeStandingsResponse
+// loads matches internally, and the duplicate load is accepted for v1 (small
+// table, same cost class as the uncached /standings read).
+export async function computeCompetitionStats(
+	env: TournamentEnv,
+	tournament: TournamentRow,
+) {
+	const standings = await computeStandingsResponse(env, tournament, false);
+	const matches = await loadMatches(env, tournament.tournament_id);
+	const identities = await loadUserIdentitiesForMatches(env, matches);
+	const caster_leaderboard = computeCasterLeaderboard(matches, identities);
+	return { standings, caster_leaderboard };
+}
+
+// GET /v1/tournaments/:id/stats — Plane A competition shape. Same preamble and
+// gates as /standings; uncached in v1 (cost ≈ the already-uncached /standings
+// read, scaling with matches not games).
+export async function handleTournamentStats(
+	tournamentId: string,
+	request: Request,
+	env: TournamentPublicEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	const gated = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (gated instanceof Response) return gated;
+	const body = await computeCompetitionStats(env, gated);
+	return jsonResponse(body, 200, cors);
+}
+
+// GET /v1/tournaments/:id/stats/games — Plane B1 ChartBundleCore over the
+// tournament's completed-match saves. Cached (KV, keyed on tournament_id +
+// updated_at); pinned to CURRENT_PARSER_VERSION like handleUserStats. The
+// "humans" focal widens the aggregator to every human player.
+export async function handleTournamentGamesStats(
+	tournamentId: string,
+	request: Request,
+	env: TournamentPublicEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	const gated = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (gated instanceof Response) return gated;
+
+	const cacheKey = {
+		kind: "tournament" as const,
+		tournament_id: gated.tournament_id,
+		updated_at: gated.updated_at,
+		parser_version: CURRENT_PARSER_VERSION,
+	};
+	const cached = await getCached<ChartBundleCore>(env, cacheKey);
+	if (cached) {
+		return jsonResponse(
+			cached as unknown as Record<string, unknown>,
+			200,
+			cors,
+		);
+	}
+
+	const corpus = await resolveTournamentCorpus(env, gated.tournament_id);
+	const bundle = await buildChartBundle(
+		env,
+		corpus,
+		CURRENT_PARSER_VERSION,
+		"humans",
+	);
+	await putCached(env, cacheKey, bundle);
+	return jsonResponse(bundle as unknown as Record<string, unknown>, 200, cors);
 }
 
 export async function handleTournamentBracket(

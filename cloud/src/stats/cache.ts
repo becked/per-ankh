@@ -9,13 +9,14 @@
 //
 // Key shape:
 //   stats:v{parser_version}:user:{user_id}:{viewerScope}:{scope}
+//   stats:v{parser_version}:tournament:{tournament_id}:{updated_at}
 //
 // We reuse the existing SESSIONS_KV binding (no new infra) — the
 // `stats:` prefix keeps these distinct from `session:` and `oauth:`
 // keys.
 
 import type { SessionEnv } from "../session";
-import type { ChartBundle, UserScope, UserStatsScope } from "./types";
+import type { UserScope, UserStatsScope } from "./types";
 
 // Bumping this is equivalent to a global cache flush — every read
 // becomes a miss and recomputes. Use when the ChartBundle shape itself
@@ -28,33 +29,50 @@ export interface StatsCacheEnv extends SessionEnv {
 	// under the stats: prefix.
 }
 
-// The game-type filter is part of the cache key for user corpus
-// because each filter value selects a different SQL slice.
-export interface StatsCacheKey {
-	kind: "user";
-	user_id: string;
-	// Identity visibility (self/public) — distinct from `scope`,
-	// which is the user-chosen slice.
-	viewerScope: UserStatsScope;
-	scope: UserScope;
-	parser_version: string;
-}
+// The cache key covers both corpora. For the user corpus the game-type filter
+// (scope) is part of the key because each value selects a different SQL slice.
+// For the tournament corpus, tournaments.updated_at is embedded: it's bumped on
+// every tournament mutation (bumpTournamentUpdatedAt), so a mutation drifts the
+// key, the next read recomputes, and the orphaned entry dies by TTL — the same
+// expiry-by-drift the parser-version segment relies on (no explicit invalidate).
+export type StatsCacheKey =
+	| {
+			kind: "user";
+			user_id: string;
+			// Identity visibility (self/public) — distinct from `scope`,
+			// which is the user-chosen slice.
+			viewerScope: UserStatsScope;
+			scope: UserScope;
+			parser_version: string;
+	  }
+	| {
+			kind: "tournament";
+			tournament_id: string;
+			// tournaments.updated_at — drifts on every mutation (see above).
+			updated_at: string;
+			parser_version: string;
+	  };
 
 export function cacheKeyToString(key: StatsCacheKey): string {
 	const v = `v${BUNDLE_SCHEMA_VERSION}-p${key.parser_version}`;
+	if (key.kind === "tournament") {
+		return `stats:${v}:tournament:${key.tournament_id}:${key.updated_at}`;
+	}
 	// The `:user:{id}:` anchor stays early so the prefix walk in
 	// invalidateStatsCache matches every viewerScope × scope variant.
 	return `stats:${v}:user:${key.user_id}:${key.viewerScope}:${key.scope}`;
 }
 
-export async function getCached(
+// Generic over the cached bundle shape: the user corpus caches a ChartBundle,
+// the tournament corpus a ChartBundleCore. The cache is opaque JSON either way.
+export async function getCached<T>(
 	env: StatsCacheEnv,
 	key: StatsCacheKey,
-): Promise<ChartBundle | null> {
+): Promise<T | null> {
 	const raw = await env.SESSIONS_KV.get(cacheKeyToString(key));
 	if (!raw) return null;
 	try {
-		return JSON.parse(raw) as ChartBundle;
+		return JSON.parse(raw) as T;
 	} catch {
 		// Stale or corrupted JSON — fall back to recompute by returning
 		// null. The bad entry will be overwritten on next put.
@@ -62,10 +80,10 @@ export async function getCached(
 	}
 }
 
-export async function putCached(
+export async function putCached<T>(
 	env: StatsCacheEnv,
 	key: StatsCacheKey,
-	bundle: ChartBundle,
+	bundle: T,
 ): Promise<void> {
 	// 24h TTL. Explicit invalidation (KV delete) handles the common
 	// mutation cases; the TTL is the safety net for bugs in the

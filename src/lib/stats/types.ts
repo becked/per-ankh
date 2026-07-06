@@ -19,19 +19,28 @@ export interface ChartBundleMeta {
 	parser_version: string;
 }
 
-export interface ChartBundle {
+// Summary tiles common to both corpora (per-game facts).
+export interface ChartBundleSummaryCore {
+	total_games: number;
+	avg_total_turns: Nullable<number>;
+}
+
+// User-corpus summary adds the "most X" tiles (one-focal-per-game); the
+// tournament bundle (ChartBundleCore) omits them.
+export interface ChartBundleSummary extends ChartBundleSummaryCore {
+	top_nation: Nullable<{ nation: string; count: number }>;
+	top_archetype: Nullable<{ archetype: string; count: number }>;
+}
+
+// Chart-fields core, returned by both the user and tournament stats endpoints.
+// ChartBundle (user) extends it with the Overview fields.
+export interface ChartBundleCore {
 	meta: ChartBundleMeta;
 
-	summary: {
-		total_games: number;
-		avg_total_turns: Nullable<number>;
-		top_nation: Nullable<{ nation: string; count: number }>;
-		top_archetype: Nullable<{ archetype: string; count: number }>;
-	};
+	summary: ChartBundleSummaryCore;
 
-	// --- Overview (user corpus) — folded from the retired /v1/stats ---
-	win_rate: Nullable<number>;
-	games_with_outcome: number;
+	// Per-game; correct over either focal set (final home on the tournament
+	// page is deferred).
 	save_dates: Array<{
 		date: string;
 		nation: string | null;
@@ -95,6 +104,16 @@ export interface ChartBundle {
 		median_turn: number;
 		count: number;
 	}>;
+}
+
+// User-corpus bundle: the core plus the Overview fields (one focal player per
+// game). A structural subtype of ChartBundleCore — no discriminant field.
+export interface ChartBundle extends ChartBundleCore {
+	summary: ChartBundleSummary;
+
+	// --- Overview (user corpus) — folded from the retired /v1/stats ---
+	win_rate: Nullable<number>;
+	games_with_outcome: number;
 }
 
 // The single scope selection for the user corpus (mirrors the Worker's

@@ -35,6 +35,14 @@ export function nationLabel(value: string): string {
 	return value === ALL_NATIONS ? "All nations" : fmtNation(value);
 }
 
+// Win/loss colors for stacked outcome bars (nation win rate, tournament
+// standings). Copper for wins (matches getChartColor(0)) and a muted dark tone
+// for losses — on-theme with the warm palette and distinct from each other
+// without reading as a civ color. Shared so the outcome bars stay consistent
+// wherever they appear.
+export const OUTCOME_WIN_COLOR = "#C87941";
+export const OUTCOME_LOSS_COLOR = "#5a4d3f";
+
 // Common option fragments. Each chart starts from CHART_THEME and
 // overrides as needed; small helpers cut repetition for the most
 // common patterns.

@@ -16,11 +16,19 @@
 
 import { LAW_CLASSES } from "../generated/law-classes";
 import type { StatsCorpus } from "./resolve";
-import type { ChartBundle, Nullable } from "./types";
+import type { ChartBundle, ChartBundleCore, Nullable } from "./types";
 
 export interface AggregateEnv {
 	SHARE_DB: D1Database;
 }
+
+// Which roster rows count as the corpus's "focal" players — the set every
+// per-player aggregate is computed over. "uploader" (user corpus) keeps only
+// the uploader's own row per game; "humans" (tournament corpus) widens to every
+// human, so both sides of a 1v1 contribute. The convention lives in exactly two
+// places (buildSelfMembership + loadYieldCurves' selfClause), threaded from
+// here rather than forked into a parallel aggregation path.
+export type Focal = "uploader" | "humans";
 
 // D1 bind-parameter cap is 100. Leave headroom for joins with literal
 // params (we never need more than a few literals per statement).
@@ -139,13 +147,15 @@ function parseJsonArray(raw: string | null): string[] {
 	}
 }
 
-// Only the user's own player_index per game counts as "self". This
-// builds a set of (game_id, player_index) tuples encoded as
-// `${game_id}|${player_index}` strings for quick membership checks.
-function buildSelfMembership(baseRows: BaseRow[]): Set<string> {
+// The corpus's focal (game_id, player_index) tuples, encoded as
+// `${game_id}|${player_index}` strings for quick membership checks. "uploader"
+// keeps only the uploader's own row per game; "humans" keeps every human row
+// (baseRows are already is_human=1, so that's all of them).
+function buildSelfMembership(baseRows: BaseRow[], focal: Focal): Set<string> {
 	const self = new Set<string>();
 	for (const r of baseRows) {
-		if (r.is_uploader === 1) self.add(`${r.game_id}|${r.player_index}`);
+		const isFocal = focal === "humans" ? r.is_human === 1 : r.is_uploader === 1;
+		if (isFocal) self.add(`${r.game_id}|${r.player_index}`);
 	}
 	return self;
 }
@@ -201,14 +211,15 @@ async function loadBaseRows(
 	return out;
 }
 
-// Per-turn yield distribution curves. Restricted to "self" rows so the
-// curves represent the corpus's focal players, not enemy AI. Returns the
-// median + P25/P75 band per turn for each series (rate and cumulative),
-// plus the sample size (n games) at each turn.
+// Per-turn yield distribution curves. Restricted to the corpus's focal rows so
+// the curves represent the focal players, not enemy AI. Returns the median +
+// P25/P75 band per turn for each series (rate and cumulative), plus the sample
+// size (n games) at each turn.
 async function loadYieldCurves(
 	env: AggregateEnv,
 	gameIds: string[],
-): Promise<ChartBundle["yieldCurves"]> {
+	focal: Focal,
+): Promise<ChartBundleCore["yieldCurves"]> {
 	if (gameIds.length === 0) return { turns: [], counts: [], series: {} };
 
 	// Columns to pull: each series' rate column plus its cumulative column
@@ -220,8 +231,10 @@ async function loadYieldCurves(
 	}
 	const selectList = [...columns].map((c) => `gpt.${c}`).join(", ");
 
-	// Only the uploader's row counts as the focal player.
-	const selfClause = "ps.is_uploader = 1";
+	// The focal-player filter — the second (and last) site the focal
+	// convention lives, mirroring buildSelfMembership.
+	const selfClause =
+		focal === "humans" ? "ps.is_human = 1" : "ps.is_uploader = 1";
 
 	// Per turn: a value sample per field (rate + cumulative) and a row count.
 	type Bucket = {
@@ -267,7 +280,7 @@ async function loadYieldCurves(
 
 	const turns = [...byTurn.keys()].sort((a, b) => a - b);
 	const counts = turns.map((t) => byTurn.get(t)!.count);
-	const series: ChartBundle["yieldCurves"]["series"] = {};
+	const series: ChartBundleCore["yieldCurves"]["series"] = {};
 	for (const [key] of YIELD_COLUMNS) {
 		const band = (which: "rate" | "cum") => {
 			const p25: Nullable<number>[] = [];
@@ -379,26 +392,51 @@ async function loadSaveDates(
 	return out;
 }
 
+// focal "uploader" → the full user ChartBundle (core + Overview extension).
+// focal "humans" → the tournament ChartBundleCore, with the one-focal-per-game
+// Overview fields (win_rate/games_with_outcome, summary.top_nation/top_archetype)
+// excluded by the return type, not nulled at runtime.
+export function buildChartBundle(
+	env: AggregateEnv,
+	corpus: StatsCorpus,
+	parserVersion: string,
+	focal: "uploader",
+): Promise<ChartBundle>;
+export function buildChartBundle(
+	env: AggregateEnv,
+	corpus: StatsCorpus,
+	parserVersion: string,
+	focal: "humans",
+): Promise<ChartBundleCore>;
 export async function buildChartBundle(
 	env: AggregateEnv,
 	corpus: StatsCorpus,
 	parserVersion: string,
-): Promise<ChartBundle> {
+	focal: Focal,
+): Promise<ChartBundle | ChartBundleCore> {
 	// Short-circuit: empty corpus returns a fully-shaped empty bundle.
 	if (corpus.gameIds.length === 0) {
-		return emptyBundle(parserVersion);
+		const core = emptyCore(parserVersion);
+		return focal === "humans"
+			? core
+			: withOverview(core, {
+					top_nation: null,
+					top_archetype: null,
+					win_rate: null,
+					games_with_outcome: 0,
+				});
 	}
 
 	const [baseRows, yieldCurves, techEvents, lawEvents, saveDateRows] =
 		await Promise.all([
 			loadBaseRows(env, corpus.gameIds),
-			loadYieldCurves(env, corpus.gameIds),
+			loadYieldCurves(env, corpus.gameIds, focal),
 			loadTechEvents(env, corpus.gameIds),
 			loadLawEvents(env, corpus.gameIds),
 			loadSaveDates(env, corpus.gameIds),
 		]);
 
-	const selfMembership = buildSelfMembership(baseRows);
+	const selfMembership = buildSelfMembership(baseRows, focal);
 	const selfRows = baseRows.filter((r) =>
 		selfMembership.has(`${r.game_id}|${r.player_index}`),
 	);
@@ -730,7 +768,7 @@ export async function buildChartBundle(
 		rate: s.games > 0 ? s.wins / s.games : 0,
 	}));
 
-	return {
+	const core: ChartBundleCore = {
 		meta: {
 			game_count: totalGames,
 			parser_version: parserVersion,
@@ -738,11 +776,7 @@ export async function buildChartBundle(
 		summary: {
 			total_games: totalGames,
 			avg_total_turns: avgTotalTurns,
-			top_nation: topNation,
-			top_archetype: topArchetype,
 		},
-		win_rate: winRate,
-		games_with_outcome: gamesWithOutcome,
 		save_dates: saveDates,
 		favorite_day_of_week: favoriteDayOfWeek,
 		nations,
@@ -755,6 +789,39 @@ export async function buildChartBundle(
 		expansionWinRate,
 		techFirst,
 		techTiming,
+	};
+	// The tournament corpus stops at the core; the broken-by-widening Overview
+	// fields are excluded by the return type, not carried as misleading values.
+	if (focal === "humans") return core;
+	return withOverview(core, {
+		top_nation: topNation,
+		top_archetype: topArchetype,
+		win_rate: winRate,
+		games_with_outcome: gamesWithOutcome,
+	});
+}
+
+// Extend a core bundle with the user-only Overview fields (the "most X" summary
+// tiles + win rate). One helper so the empty and full paths build the extension
+// identically.
+function withOverview(
+	core: ChartBundleCore,
+	overview: {
+		top_nation: ChartBundle["summary"]["top_nation"];
+		top_archetype: ChartBundle["summary"]["top_archetype"];
+		win_rate: Nullable<number>;
+		games_with_outcome: number;
+	},
+): ChartBundle {
+	return {
+		...core,
+		summary: {
+			...core.summary,
+			top_nation: overview.top_nation,
+			top_archetype: overview.top_archetype,
+		},
+		win_rate: overview.win_rate,
+		games_with_outcome: overview.games_with_outcome,
 	};
 }
 
@@ -773,7 +840,7 @@ function topEntry<T extends "nation" | "archetype">(
 	>;
 }
 
-function emptyBundle(parserVersion: string): ChartBundle {
+function emptyCore(parserVersion: string): ChartBundleCore {
 	return {
 		meta: {
 			game_count: 0,
@@ -782,11 +849,7 @@ function emptyBundle(parserVersion: string): ChartBundle {
 		summary: {
 			total_games: 0,
 			avg_total_turns: null,
-			top_nation: null,
-			top_archetype: null,
 		},
-		win_rate: null,
-		games_with_outcome: 0,
 		save_dates: [],
 		favorite_day_of_week: null,
 		nations: [],

@@ -12,7 +12,7 @@ import { parseScopeParam } from "../games-scope";
 import { buildChartBundle } from "./aggregate";
 import { getCached, putCached } from "./cache";
 import { resolveUserCorpus } from "./resolve";
-import type { UserStatsScope } from "./types";
+import type { ChartBundle, UserStatsScope } from "./types";
 
 export interface UserStatsEnv extends SessionEnv {
 	SHARE_DB: D1Database;
@@ -45,7 +45,7 @@ export async function handleUserStats(
 		scope,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
-	const cached = await getCached(env, cacheKey);
+	const cached = await getCached<ChartBundle>(env, cacheKey);
 	if (cached) {
 		return jsonResponse(
 			cached as unknown as Record<string, unknown>,
@@ -59,7 +59,12 @@ export async function handleUserStats(
 		return errorResponse("User not found", 404, cors, "NOT_FOUND");
 	}
 
-	const bundle = await buildChartBundle(env, corpus, CURRENT_PARSER_VERSION);
+	const bundle = await buildChartBundle(
+		env,
+		corpus,
+		CURRENT_PARSER_VERSION,
+		"uploader",
+	);
 	await putCached(env, cacheKey, bundle);
 	return jsonResponse(bundle as unknown as Record<string, unknown>, 200, cors);
 }

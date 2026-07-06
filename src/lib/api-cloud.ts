@@ -5,7 +5,7 @@
 // Configure via VITE_API_URL (see .env.example).
 
 import type { FullGameData } from "$lib/parser/types";
-import type { ChartBundle, UserScope } from "$lib/stats/types";
+import type { ChartBundle, ChartBundleCore, UserScope } from "$lib/stats/types";
 
 const DEFAULT_API_BASE = "https://api.per-ankh.app/v1";
 const API_BASE = (import.meta.env.VITE_API_URL ?? DEFAULT_API_BASE) as string;
@@ -774,6 +774,26 @@ export const cloudApi = {
 		return res.json() as Promise<BracketResponse>;
 	},
 
+	// Plane A competition stats — standings (embedded, so no separate /standings
+	// fetch) + caster leaderboard. Uncached server-side. See TournamentCompetitionStats.
+	getTournamentStats: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<TournamentCompetitionStats> => {
+		const res = await request(`/tournaments/${tournamentId}/stats`, opts);
+		return res.json() as Promise<TournamentCompetitionStats>;
+	},
+
+	// Plane B1 save-content stats over the tournament's completed-match games —
+	// the ChartBundle core (no user-only Overview fields). Cached server-side.
+	getTournamentGamesStats: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<ChartBundleCore> => {
+		const res = await request(`/tournaments/${tournamentId}/stats/games`, opts);
+		return res.json() as Promise<ChartBundleCore>;
+	},
+
 	// Admin-only CSV export — returns a zip Blob (standings.csv + matches.csv).
 	// Binary, so it returns the Blob rather than parsed JSON; `request` still
 	// applies the shared auth + typed-error handling.
@@ -1535,6 +1555,26 @@ export interface StandingsResponse {
 	};
 	// Present once the tournament is past 'setup'. Undefined during setup.
 	combined_qualifier_ranking?: CombinedQualifier[];
+}
+
+// One row of the caster leaderboard (GET /v1/tournaments/:id/stats). user_id is
+// set when the caster is a linked Per-Ankh user (else null, a free-text caster);
+// display_name is the rendered label (linked user's current name, else `name`),
+// avatar_url null for free-text casters.
+export interface CasterLeaderboardEntry {
+	user_id: string | null;
+	name: string | null;
+	display_name: string | null;
+	avatar_url: string | null;
+	appearances: number;
+}
+
+// GET /v1/tournaments/:id/stats — Plane A competition stats. The standings block
+// is the same shape /standings returns (embedded so the stats page makes one
+// Plane-A fetch), always in the public (non-admin) shape.
+export interface TournamentCompetitionStats {
+	standings: StandingsResponse;
+	caster_leaderboard: CasterLeaderboardEntry[];
 }
 
 export interface BracketSlot {

@@ -56,3 +56,30 @@ export async function resolveUserCorpus(
 		gameIds: (rows.results ?? []).map((r) => r.game_id),
 	};
 }
+
+// Resolve a tournament's corpus: the saves linked to its completed matches.
+// The join through tournament_rounds is required — tournament_matches has no
+// tournament_id column. status='complete' is deliberate: a retro-edit can leave
+// a linked game on a forfeit match, and such a save is an aborted/adjudicated
+// game whose content would pollute the distributions (byes never carry a
+// game_id; the 0013 trigger nulls game_id on game deletion, so nothing dangles).
+// Unlike resolveUserCorpus there's no viewerScope/scope (tournaments are public)
+// and no existence probe — the handler has already loaded the tournament for the
+// setup gate.
+export async function resolveTournamentCorpus(
+	env: ResolveEnv,
+	tournamentId: string,
+): Promise<StatsCorpus> {
+	const rows = await env.SHARE_DB.prepare(
+		`SELECT DISTINCT m.game_id FROM tournament_matches m
+		 JOIN tournament_rounds r ON r.round_id = m.round_id
+		 WHERE r.tournament_id = ? AND m.game_id IS NOT NULL
+		   AND m.status = 'complete'`,
+	)
+		.bind(tournamentId)
+		.all<{ game_id: string }>();
+
+	return {
+		gameIds: (rows.results ?? []).map((r) => r.game_id),
+	};
+}

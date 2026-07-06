@@ -2,23 +2,32 @@
 
 import type { EChartsOption } from "echarts";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
-import type { ChartBundle } from "../types";
-import { CHART_THEME, COMMON_GRID, crestAxisLabel, fmtNation } from "./helpers";
+import type { ChartBundle, ChartBundleCore } from "../types";
+import {
+	CHART_THEME,
+	COMMON_GRID,
+	crestAxisLabel,
+	fmtNation,
+	OUTCOME_LOSS_COLOR,
+	OUTCOME_WIN_COLOR,
+} from "./helpers";
 
 function nationCrestUrl(nation: string): string | undefined {
 	return SPRITE_MANIFEST[`crests/CREST_${nation}`];
 }
 
-// Win/loss colors for the stacked bar. Copper for wins and a muted dark
-// tone for losses — on-theme with the warm palette and distinct from each
-// other without reading as a civ color.
-const WIN_COLOR = "#C87941";
-const LOSS_COLOR = "#5a4d3f";
+// Copper for wins, muted dark for losses — shared with the tournament standings
+// bar so the two outcome charts read consistently.
+const WIN_COLOR = OUTCOME_WIN_COLOR;
+const LOSS_COLOR = OUTCOME_LOSS_COLOR;
 
 // Win rate by nation — stacked wins/losses bar (horizontal): bar length =
 // games played, the wins/losses split shows the rate. Sorted by games
-// played, most at top.
-export function nationWinLossStackedOption(bundle: ChartBundle): EChartsOption {
+// played, most at top. Typed against ChartBundleCore (only reads nationWinRate)
+// so it renders unchanged at tournament scope, where the bundle has no Overview.
+export function nationWinLossStackedOption(
+	bundle: ChartBundleCore,
+): EChartsOption {
 	const rows = [...bundle.nationWinRate].sort((a, b) => a.games - b.games);
 	const nations = rows.map((r) => r.nation);
 	return {
