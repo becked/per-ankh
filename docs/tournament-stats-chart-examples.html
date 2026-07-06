@@ -1,0 +1,814 @@
+<meta charset="utf-8" />
+<title>Tournament stats — chart examples</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    font: 15px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    margin: 0; color: #1c1c1c; background: #f5f5f4;
+  }
+  header.page {
+    padding: 28px 32px 20px; background: #fff; border-bottom: 1px solid #e4e2df;
+  }
+  header.page h1 { margin: 0 0 8px; font-size: 24px; }
+  header.page p { margin: 6px 0; max-width: 900px; color: #444; }
+  .wrap { display: flex; align-items: flex-start; }
+  nav.toc {
+    position: sticky; top: 0; align-self: flex-start;
+    width: 230px; min-width: 230px; height: 100vh; overflow: auto;
+    padding: 20px 16px; background: #fbfbfa; border-right: 1px solid #e4e2df; font-size: 13px;
+  }
+  nav.toc a { display: block; color: #2a4d69; text-decoration: none; padding: 3px 0; }
+  nav.toc a:hover { text-decoration: underline; }
+  nav.toc .grp { font-weight: 600; margin-top: 14px; color: #111; }
+  main { flex: 1; padding: 24px 32px 80px; min-width: 0; }
+  section { margin-bottom: 12px; }
+  section > h2 { font-size: 20px; margin: 28px 0 4px; padding-top: 8px; border-top: 2px solid #ddd; }
+  section > .blurb { color: #555; margin: 0 0 16px; max-width: 860px; }
+  .card {
+    background: #fff; border: 1px solid #e4e2df; border-radius: 8px;
+    padding: 16px 18px 8px; margin: 0 0 20px;
+  }
+  .card-head { display: flex; align-items: baseline; gap: 10px; }
+  .card-head h3 { margin: 0; font-size: 16px; }
+  .meta { color: #555; font-size: 13px; margin: 6px 0 4px; }
+  .meta code { background: #f0efec; padding: 1px 5px; border-radius: 4px; font-size: 12px; color: #333; }
+  .chart { width: 100%; height: 360px; }
+  .chart.tall { height: 440px; }
+  .badge { font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap; }
+  .badge.ready   { background: #e3f3e6; color: #256b34; }
+  .badge.ui      { background: #fdf1dc; color: #8a5a12; }
+  .badge.extract { background: #eee7f7; color: #5c3f8c; }
+  .legend { font-size: 12px; color: #555; margin-top: 6px; }
+  .legend .badge { margin-right: 6px; }
+  #err { display:none; background:#fde7e7; color:#8a1f1f; padding:12px 16px; margin:16px 0; border-radius:8px; }
+  @media (max-width: 820px) { nav.toc { display: none; } main { padding: 16px; } }
+</style>
+
+<header class="page">
+  <h1>Tournament stats — chart examples</h1>
+  <p>One rendered example of <strong>every chart proposed</strong> in <code>docs/tournament-stats-design.md</code> §4. The goal here is to see the <strong>shape of the data</strong> each chart consumes — not styling, colors, or app design. Every chart uses <strong>mock data modeled on the real data shapes</strong> read out of the stats/tournament layer (standings/parts JSON, the <code>ChartBundle</code> fields, <code>game_player_turn</code>/<code>player_summaries</code>, and the parser blob types). Numbers are invented; structure is faithful.</p>
+  <p class="legend">Readiness:
+    <span class="badge ready">Ready</span> data in D1 today ·
+    <span class="badge ui">UI-gated</span> data ready, needs the nation→participant UI generalization ·
+    <span class="badge extract">Extract</span> future — needs a parser bump + reparse-all.
+  </p>
+</header>
+
+<div id="err">Charts failed to load — this page pulls Apache ECharts from a CDN and needs a network connection the first time you open it.</div>
+
+<div class="wrap">
+  <nav class="toc" id="toc"></nav>
+  <main id="app"></main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.1/dist/echarts.min.js"></script>
+<script>
+if (!window.echarts) { document.getElementById('err').style.display = 'block'; }
+
+/* ---------- shared helpers / synthetic data ---------- */
+const AXIS_LABEL = { fontSize: 11 };
+const GRID = { left: 8, right: 16, top: 34, bottom: 24, containLabel: true };
+
+// Cumulative yield curve with a widening P25–P75 band + per-turn sample counts.
+function yieldBand(nTurns) {
+  const turns = [], counts = [], p25 = [], p50 = [], p75 = [];
+  let c25 = 0, c50 = 0, c75 = 0;
+  for (let t = 1; t <= nTurns; t++) {
+    turns.push(t);
+    counts.push(Math.max(3, Math.round(42 * Math.exp(-t / 95))));
+    const base = 2.5 + t * 0.22;
+    c25 += base * (0.78 - t * 0.001);
+    c50 += base;
+    c75 += base * (1.28 + t * 0.002);
+    p25.push(Math.round(c25)); p50.push(Math.round(c50)); p75.push(Math.round(c75));
+  }
+  return { turns, counts, p25, p50, p75 };
+}
+const SCI = yieldBand(70);
+
+// Builds the 3-series (invisible p25 baseline + filled IQR + median line) ribbon.
+function bandSeries(b, color) {
+  return [
+    { name: 'p25 (base)', type: 'line', data: b.p25, stack: 'band', symbol: 'none',
+      lineStyle: { opacity: 0 }, silent: true, smooth: true },
+    { name: 'P25–P75', type: 'line', data: b.p75.map((v, i) => v - b.p25[i]), stack: 'band', symbol: 'none',
+      lineStyle: { opacity: 0 }, areaStyle: { color: color, opacity: 0.18 }, silent: true, smooth: true },
+    { name: 'Median (P50)', type: 'line', data: b.p50, symbol: 'none', smooth: true,
+      lineStyle: { color: color, width: 2 }, z: 3 },
+  ];
+}
+
+const P0 = '#3b6ea5', P1 = '#d98324'; // two-player comparison colors
+
+/* ---------- chart catalog ---------- */
+const SECTIONS = [];
+
+/* ============ PLANE A — competition (tournament-native) ============ */
+SECTIONS.push({
+  key: 'planeA', title: 'Plane A — competition charts (tournament-native)',
+  blurb: 'New chart types with no user-stats analog. Computed from the tournament tables (standings, matches, rounds, slots, the parts JSON) — no save file is opened. All Ready.',
+  charts: [
+
+  { id: 'a1', title: '1. Standings visualization', ready: 'ready',
+    shows: 'W/L, status and tiebreaks per player, ranked',
+    shape: 'RankedStanding[] { rank, wins, losses, status, buchholz_cut1, opponents_buchholz, cumulative, h2h }',
+    chart: 'horizontal stacked bar (Wins|Losses)',
+    option: {
+      tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' },
+        formatter: p => {
+          const i = p[0].dataIndex;
+          const d = [['Zenobia','advanced',7,15,9],['Hannibal','advanced',8,16,8],['Cyrus','advanced',8,16,8],
+            ['Masinissa','active',6,12,6],['Leonidas','active',5,11,4],['Darius','active',5,10,4],
+            ['Fabius','eliminated',4,9,1],['Xerxes','eliminated',3,7,1]][i];
+          return `<b>${d[0]}</b> — ${d[1]}<br/>W ${p[0].value} · L ${p[1].value}<br/>Buchholz-cut1 ${d[2]} · Opp-Buch ${d[3]} · Cumulative ${d[4]}`;
+        } },
+      legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'value', name: 'games', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'category', inverse: true, axisLabel: AXIS_LABEL,
+        data: ['Zenobia','Hannibal','Cyrus','Masinissa','Leonidas','Darius','Fabius','Xerxes'] },
+      series: [
+        { name: 'Wins', type: 'bar', stack: 'g', data: [3,3,3,2,1,1,0,0], itemStyle: { color: '#3f8f4f' },
+          label: { show: true, position: 'inside' } },
+        { name: 'Losses', type: 'bar', stack: 'g', data: [0,1,1,1,2,2,2,3], itemStyle: { color: '#b1503f' } },
+      ],
+    } },
+
+  { id: 'a2', title: '2. Head-to-head matrix', ready: 'ready',
+    shows: 'pairwise win grid across participants',
+    shape: 'computePairwiseH2H → cells { row, col, wins }; diagonal blank',
+    chart: 'heatmap',
+    option: (() => {
+      const players = ['Athena','Boreas','Cyrus','Darius'];
+      // [colIdx, rowIdx, wins-of-row-over-col]
+      const raw = { '0,1':1,'0,2':2,'0,3':0, '1,0':0,'1,2':1,'1,3':1, '2,0':0,'2,1':0,'2,3':2, '3,0':1,'3,1':1,'3,2':0 };
+      const data = [];
+      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) if (r !== c) data.push([c, r, raw[r + ',' + c]]);
+      return {
+        tooltip: { formatter: p => `${players[p.value[1]]} beat ${players[p.value[0]]} — ${p.value[2]}×` },
+        grid: { left: 70, right: 20, top: 40, bottom: 40 },
+        xAxis: { type: 'category', data: players, name: 'opponent', position: 'top', axisLabel: AXIS_LABEL },
+        yAxis: { type: 'category', data: players, inverse: true, axisLabel: AXIS_LABEL },
+        visualMap: { min: 0, max: 2, calculable: true, orient: 'horizontal', left: 'center', bottom: 4,
+          inRange: { color: ['#eef3f7', '#7fb0d6', '#2a5d8a'] } },
+        series: [{ type: 'heatmap', data, label: { show: true }, itemStyle: { borderColor: '#fff', borderWidth: 2 } }],
+      };
+    })() },
+
+  { id: 'a3', title: '3. Standings over rounds', ready: 'ready',
+    shows: "each player's cumulative wins by round",
+    shape: 'per-round-prefix computeRecord → { round, wins, rank } per player',
+    chart: 'multi-series line',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', data: ['R1','R2','R3','R4','R5'], name: 'round', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'cumulative wins', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Zenobia', type: 'line', data: [1,2,3,3,4] },
+        { name: 'Hannibal', type: 'line', data: [0,1,2,3,4] },
+        { name: 'Cyrus', type: 'line', data: [1,1,2,3,3] },
+        { name: 'Leonidas', type: 'line', data: [1,1,1,2,2] },
+        { name: 'Fabius', type: 'line', data: [0,0,1,1,1] },
+      ],
+    } },
+
+  { id: 'a4', title: '4. Per-map win rate', ready: 'ready',
+    shows: 'first-pick win rate by map, with sample size',
+    shape: 'group by map_script × winner_slot_id → { label, games, win_rate }',
+    chart: 'bar (rate) + sample-size labels',
+    option: {
+      tooltip: { trigger: 'axis', formatter: p => `${p[0].name}<br/>Win rate ${(p[0].value*100).toFixed(0)}%<br/>n = ${[12,9,6,4,7][p[0].dataIndex]} games` },
+      grid: GRID,
+      xAxis: { type: 'category', data: ['Continent','Seaside','Inland Sea','Coastal Rain Basin','Bay'], axisLabel: { ...AXIS_LABEL, interval: 0, rotate: 18 } },
+      yAxis: { type: 'value', name: 'first-pick win rate', min: 0, max: 1, axisLabel: { formatter: v => (v*100)+'%' } },
+      series: [{ type: 'bar', data: [0.58,0.44,0.67,0.50,0.53], itemStyle: { color: '#4a7fb0' },
+        label: { show: true, position: 'top', formatter: p => 'n='+[12,9,6,4,7][p.dataIndex] } }],
+    } },
+
+  { id: 'a5', title: '5. Map usage frequency', ready: 'ready',
+    shows: 'how often each map instance was played',
+    shape: 'count matches by map_pool_id / map_script → { label, count }',
+    chart: 'bar',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: GRID,
+      xAxis: { type: 'category', data: ['Continent (S)','Seaside (T)','Inland Sea','Bay','Coastal RB','Highlands'], axisLabel: { ...AXIS_LABEL, interval: 0, rotate: 18 } },
+      yAxis: { type: 'value', name: 'matches', axisLabel: AXIS_LABEL },
+      series: [{ type: 'bar', data: [12,9,6,3,4,2], itemStyle: { color: '#6a8fb5' }, label: { show: true, position: 'top' } }],
+    } },
+
+  { id: 'a6', title: '6. Pick-order advantage', ready: 'ready',
+    shows: 'does the first map-picker win more? (vs 50% line)',
+    shape: 'pick_order_winner_slot_id vs winner_slot_id → first-pick win rate, per map',
+    chart: 'bar with 50% reference line',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: GRID,
+      xAxis: { type: 'category', data: ['Overall','Continent','Seaside','Inland Sea','Bay'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'first-pick win rate', min: 0, max: 1, axisLabel: { formatter: v => (v*100)+'%' } },
+      series: [{ type: 'bar', data: [0.58,0.62,0.47,0.67,0.55], itemStyle: { color: '#5b8c6a' },
+        markLine: { silent: true, symbol: 'none', data: [{ yAxis: 0.5, label: { formatter: 'even (50%)' } }],
+          lineStyle: { type: 'dashed', color: '#999' } } }],
+    } },
+
+  { id: 'a7', title: '7. Bye distribution', ready: 'ready',
+    shows: 'who received byes, in which rounds',
+    shape: "matches status='bye' → { slot, round_number }",
+    chart: 'heatmap (round × player)',
+    option: (() => {
+      const players = ['Zenobia','Masinissa','Cyrus','Leonidas','Fabius'];
+      const rounds = ['R1','R2','R3','R4','R5'];
+      const byes = [[0,0],[1,0],[2,1],[3,2],[0,2],[4,3]]; // [player, round]
+      const data = byes.map(([p, r]) => [r, p, 1]);
+      return {
+        tooltip: { formatter: p => `${players[p.value[1]]} — bye in ${rounds[p.value[0]]}` },
+        grid: { left: 80, right: 20, top: 20, bottom: 40 },
+        xAxis: { type: 'category', data: rounds, axisLabel: AXIS_LABEL },
+        yAxis: { type: 'category', data: players, inverse: true, axisLabel: AXIS_LABEL },
+        visualMap: { show: false, min: 0, max: 1, inRange: { color: ['#f3f3f3', '#c98a3a'] } },
+        series: [{ type: 'heatmap', data, itemStyle: { borderColor: '#fff', borderWidth: 2 } }],
+      };
+    })() },
+
+  { id: 'a8', title: '8. Forfeit rate', ready: 'ready',
+    shows: 'forfeit share by round and division',
+    shape: "matches status='forfeit' → { round, division, forfeit_rate }",
+    chart: 'grouped bar (series = division)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', data: ['R1','R2','R3','R4'], name: 'round', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'forfeit rate', min: 0, max: 0.5, axisLabel: { formatter: v => (v*100)+'%' } },
+      series: [
+        { name: 'Division A', type: 'bar', data: [0,0.125,0.33,0.20], itemStyle: { color: '#4a7fb0' } },
+        { name: 'Division B', type: 'bar', data: [0,0.14,0.25,0.16], itemStyle: { color: '#d98324' } },
+      ],
+    } },
+
+  { id: 'a9', title: '9. Championship upsets', ready: 'ready',
+    shows: 'bracket seed vs finish — who overperformed',
+    shape: 'championship_seed + bracket results → { seed, finish_rank, seed_delta }',
+    chart: 'scatter (seed × finish) with diagonal',
+    option: (() => {
+      // [seed, finish, name]
+      const pts = [[5,1,'Cyrus'],[1,2,'Zenobia'],[2,3,'Hannibal'],[7,3,'Darius'],[3,5,'Leonidas'],[6,5,'Masinissa'],[4,8,'Fabius'],[8,8,'Xerxes']];
+      return {
+        tooltip: { formatter: p => `${p.value[2]}<br/>seed ${p.value[0]} → finish ${p.value[1]}` },
+        grid: { left: 40, right: 30, top: 24, bottom: 40 },
+        xAxis: { type: 'value', name: 'championship seed', min: 0, max: 9, axisLabel: AXIS_LABEL },
+        yAxis: { type: 'value', name: 'finish rank', inverse: true, min: 0, max: 9, axisLabel: AXIS_LABEL },
+        series: [
+          { type: 'line', data: [[1,1],[8,8]], symbol: 'none', lineStyle: { type: 'dashed', color: '#bbb' }, silent: true },
+          { type: 'scatter', symbolSize: 16, data: pts,
+            label: { show: true, formatter: p => p.value[2], position: 'right', fontSize: 10 },
+            itemStyle: { color: p => p.value[1] < p.value[0] ? '#3f8f4f' : (p.value[1] > p.value[0] ? '#b1503f' : '#888') } },
+        ],
+      };
+    })() },
+
+  { id: 'a10', title: '10. Match length distribution', ready: 'ready',
+    shows: 'turns-to-decide across matches',
+    shape: 'games.total_turns (single-column join on complete matches)',
+    chart: 'histogram (bar)',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: GRID,
+      xAxis: { type: 'category', data: ['40–49','50–59','60–69','70–79','80–89','90+'], name: 'total turns', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'matches', axisLabel: AXIS_LABEL },
+      series: [{ type: 'bar', barCategoryGap: '8%', data: [3,9,14,10,5,2], itemStyle: { color: '#6a8fb5' }, label: { show: true, position: 'top' } }],
+    } },
+
+  { id: 'a11', title: '11. Caster / stream coverage', ready: 'ready',
+    shows: '% of matches streamed / casted',
+    shape: 'parts[].casters[] / parts[].streams[] → coverage %',
+    chart: 'bar (percentage)',
+    option: {
+      tooltip: { trigger: 'axis', formatter: p => `${p[0].name}: ${(p[0].value*100).toFixed(0)}%` }, grid: GRID,
+      xAxis: { type: 'category', data: ['Streamed','Casted','Has VOD'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'share of matches', min: 0, max: 1, axisLabel: { formatter: v => (v*100)+'%' } },
+      series: [{ type: 'bar', data: [0.71,0.45,0.61], itemStyle: { color: '#7a6ba8' },
+        label: { show: true, position: 'top', formatter: p => (p.value*100).toFixed(0)+'%' } }],
+    } },
+
+  { id: 'a11b', title: '11b. Caster leaderboard', ready: 'ready',
+    shows: 'most-active casters across the tournament',
+    shape: 'parts[].casters[] appearances (enriched w/ display_name)',
+    chart: 'horizontal bar',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: { ...GRID, left: 60 },
+      xAxis: { type: 'value', name: 'appearances', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'category', inverse: true, data: ['alcaras','Boreas','Zenobia','GuestCo','Darius'], axisLabel: AXIS_LABEL },
+      series: [{ type: 'bar', data: [9,5,3,2,2], itemStyle: { color: '#7a6ba8' }, label: { show: true, position: 'right' } }],
+    } },
+
+  { id: 'a12', title: '12. Schedule view', ready: 'ready',
+    shows: 'reporting lead time (scheduled → reported)',
+    shape: 'parts[].scheduled_at vs reported_at → lead_time_hours per match',
+    chart: 'scatter (scheduled date × lead time)',
+    option: {
+      tooltip: { formatter: p => `Match ${p.value[2]}<br/>${new Date(p.value[0]).toLocaleString()}<br/>lead ${p.value[1]}h` },
+      grid: { left: 40, right: 24, top: 24, bottom: 40 },
+      xAxis: { type: 'time', name: 'scheduled', axisLabel: { ...AXIS_LABEL, rotate: 15 } },
+      yAxis: { type: 'value', name: 'lead time (h)', axisLabel: AXIS_LABEL },
+      series: [{ type: 'scatter', symbolSize: 12, data: [
+        ['2026-07-10T18:00:00Z', 2.2, 1], ['2026-07-11T17:00:00Z', 2.7, 2], ['2026-07-11T20:00:00Z', 4.1, 3],
+        ['2026-07-12T16:00:00Z', 1.5, 4], ['2026-07-13T18:30:00Z', 3.3, 5], ['2026-07-14T17:00:00Z', 5.0, 6],
+        ['2026-07-15T19:00:00Z', 2.0, 7] ], itemStyle: { color: '#4a7fb0' } }],
+    } },
+
+  { id: 'a13', title: '13. Signup funnel — claimed vs unclaimed', ready: 'ready',
+    shows: 'roster fill: claimed vs empty slots',
+    shape: 'tournament_slots.user_id NULL → { claimed, unclaimed }',
+    chart: 'donut',
+    option: {
+      tooltip: { trigger: 'item' }, legend: { top: 4 },
+      series: [{ type: 'pie', radius: ['45%','70%'], center: ['50%','56%'], data: [
+        { value: 27, name: 'Claimed', itemStyle: { color: '#3f8f4f' } },
+        { value: 5, name: 'Unclaimed', itemStyle: { color: '#c9c4bd' } } ], label: { formatter: '{b}: {c}' } }],
+    } },
+
+  { id: 'a13b', title: '13b. Signups over time', ready: 'ready',
+    shows: 'cumulative signups leading into the tournament',
+    shape: "events (tournament_self_signup / _substituted / _withdraw) created_at",
+    chart: 'cumulative area line (series = division)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', data: ['Jun 18','Jun 20','Jun 22','Jun 24','Jun 26','Jun 28','Jun 30'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'cumulative signups', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Division A', type: 'line', areaStyle: {}, stack: 't', data: [2,5,8,11,13,14,15], itemStyle: { color: '#4a7fb0' } },
+        { name: 'Division B', type: 'line', areaStyle: {}, stack: 't', data: [1,3,6,8,10,11,12], itemStyle: { color: '#d98324' } },
+      ],
+    } },
+
+  { id: 'a13c', title: '13c. Signup answer distribution', ready: 'ready',
+    shows: 'distribution of the signup question answer',
+    shape: 'tournament_slots.signup_answer → { answer, count }',
+    chart: 'bar',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: GRID,
+      xAxis: { type: 'category', data: ['NA-East','EU','NA-West','Asia','(blank)'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'signups', axisLabel: AXIS_LABEL },
+      series: [{ type: 'bar', data: [11,9,5,3,7], itemStyle: { color: '#6a8fb5' }, label: { show: true, position: 'top' } }],
+    } },
+
+  { id: 'a14', title: '14. Participation / survival', ready: 'ready',
+    shows: 'population state per round',
+    shape: 'per-round { active, advanced, eliminated, withdrawn }',
+    chart: 'stacked area',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', boundaryGap: false, data: ['R0','R1','R2','R3','R4'], name: 'round', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'slots', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Active', type: 'line', stack: 's', areaStyle: {}, data: [32,30,22,10,0], itemStyle: { color: '#4a7fb0' } },
+        { name: 'Advanced', type: 'line', stack: 's', areaStyle: {}, data: [0,0,4,12,18], itemStyle: { color: '#3f8f4f' } },
+        { name: 'Eliminated', type: 'line', stack: 's', areaStyle: {}, data: [0,0,4,8,12], itemStyle: { color: '#b1503f' } },
+        { name: 'Withdrawn', type: 'line', stack: 's', areaStyle: {}, data: [0,2,2,2,2], itemStyle: { color: '#9a938a' } },
+      ],
+    } },
+]});
+
+/* ============ PLANE B1 — tournament meta (nation dimension) ============ */
+SECTIONS.push({
+  key: 'planeB1', title: 'Plane B1 — tournament meta (save-content, nation dimension)',
+  blurb: "The existing user-stats charts, pointed at the tournament's games via a game-id corpus resolver, after widening the aggregator's self-convention to all humans. These are the ChartBundle fields, unchanged in shape. Ready.",
+  charts: [
+
+  { id: 'b1', title: '1. Nation win rate', ready: 'ready',
+    shows: 'wins vs losses split, per nation',
+    shape: 'nationWinRate { nation, games, wins, rate }[]',
+    chart: 'horizontal stacked bar (Wins|Losses), sorted by games',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: { ...GRID, left: 60 },
+      xAxis: { type: 'value', name: 'games', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'category', data: ['Babylonia','Greece','Carthage','Egypt','Persia','Rome','Assyria'], axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Wins', type: 'bar', stack: 'g', data: [4,5,9,11,15,21,27], itemStyle: { color: '#3f8f4f' } },
+        { name: 'Losses', type: 'bar', stack: 'g', data: [7,9,10,14,15,17,15], itemStyle: { color: '#b1503f' } },
+      ],
+    } },
+
+  { id: 'b2', title: '2. Nation avg points', ready: 'ready',
+    shows: 'average final victory points, per nation',
+    shape: 'nationAvgPoints { nation, games, avg_points }[]',
+    chart: 'horizontal bar',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: { ...GRID, left: 60 },
+      xAxis: { type: 'value', name: 'avg final points', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'category', data: ['Greece','Carthage','Egypt','Kush','Persia','Assyria','Rome'], axisLabel: AXIS_LABEL },
+      series: [{ type: 'bar', data: [198,226,240,255,271,298,312], itemStyle: { color: '#c87941' }, label: { show: true, position: 'right' } }],
+    } },
+
+  { id: 'b3', title: '3. Family pick / win rate (one nation)', ready: 'ready',
+    shows: 'per family class, how often picked and win rate — for Assyria',
+    shape: 'familyByNation { nation, class, count, wins }[] → pickRate, winRate',
+    chart: 'grouped horizontal bar',
+    option: {
+      tooltip: { trigger: 'axis', valueFormatter: v => (v*100).toFixed(0)+'%' }, legend: { top: 4 }, grid: { ...GRID, left: 80 },
+      xAxis: { type: 'value', min: 0, max: 1, axisLabel: { formatter: v => (v*100)+'%' } },
+      yAxis: { type: 'category', data: ['Sages','Clerics','Traders','Landowners','Champions'], axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Pick rate', type: 'bar', data: [0.10,0.14,0.21,0.28,0.35], itemStyle: { color: '#4a7fb0' } },
+        { name: 'Win rate', type: 'bar', data: [0.38,0.58,0.50,0.58,0.67], itemStyle: { color: '#d98324' } },
+      ],
+    } },
+
+  { id: 'b4', title: '4. Law adoption timing (one nation)', ready: 'ready',
+    shows: 'median turn each law is adopted, with P25–P75 spread — for Assyria',
+    shape: 'lawTiming { nation, law, median_turn, p25_turn, p75_turn, count }[]',
+    chart: 'horizontal range bar (P25→P75) + median marker',
+    option: (() => {
+      const laws = ['Slavery','Centralization','Polytheism','Professional Army','Constitution'];
+      const p25 = [5,10,13,24,30], p50 = [8,14,19,33,41], p75 = [13,21,27,45,58];
+      return {
+        tooltip: { formatter: p => {
+          if (p.seriesName !== 'Median') return '';
+          const i = p.dataIndex; return `${laws[i]}<br/>median T${p50[i]} (IQR ${p25[i]}–${p75[i]})`; } },
+        legend: { top: 4, data: ['P25–P75','Median'] }, grid: { ...GRID, left: 110 },
+        xAxis: { type: 'value', name: 'turn', axisLabel: AXIS_LABEL },
+        yAxis: { type: 'category', inverse: true, data: laws, axisLabel: AXIS_LABEL },
+        series: [
+          { name: 'base', type: 'bar', stack: 'r', data: p25, itemStyle: { color: 'transparent' }, silent: true, legendHoverLink: false },
+          { name: 'P25–P75', type: 'bar', stack: 'r', data: p75.map((v, i) => v - p25[i]), itemStyle: { color: 'rgba(74,127,176,0.35)' } },
+          { name: 'Median', type: 'scatter', symbolSize: 12, data: p50.map((v, i) => [v, i]), itemStyle: { color: '#2a5d8a' } },
+        ],
+      };
+    })() },
+
+  { id: 'b5', title: '5. Opening-law sequences (one nation)', ready: 'ready',
+    shows: 'most common first-four-law sets — for Assyria',
+    shape: 'openingLaws { nation, laws: string[4], count }[]',
+    chart: 'horizontal bar (label = law set)',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: { left: 8, right: 40, top: 12, bottom: 24, containLabel: true },
+      xAxis: { type: 'value', name: 'players', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'category', inverse: true, axisLabel: { fontSize: 10, width: 320, overflow: 'truncate' },
+        data: ['Centralization + Polytheism + Slavery + Tyranny',
+               'Centralization + Divine Rule + Polytheism + Slavery',
+               'Freedom + Polytheism + Slavery + Vassalage',
+               'Centralization + Epics + Polytheism + Slavery',
+               'Colonies + Polytheism + Slavery + Vassalage'] },
+      series: [{ type: 'bar', data: [12,9,6,5,4], itemStyle: { color: '#7a6ba8' }, label: { show: true, position: 'right' } }],
+    } },
+
+  { id: 'b6', title: '6. First tech (one nation)', ready: 'ready',
+    shows: 'first tech researched after turn 1 — for Assyria',
+    shape: 'techFirst { nation, tech, count }[]',
+    chart: 'horizontal bar',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: { ...GRID, left: 90 },
+      xAxis: { type: 'value', name: 'players', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'category', inverse: true, data: ['Ironworking','Trapping','Divination','Stoneworking','Husbandry'], axisLabel: AXIS_LABEL },
+      series: [{ type: 'bar', data: [15,11,8,5,3], itemStyle: { color: '#5b8c6a' }, label: { show: true, position: 'right' } }],
+    } },
+
+  { id: 'b7', title: '7. Tech timing (one nation)', ready: 'ready',
+    shows: 'median turn each tech completes — for Assyria',
+    shape: 'techTiming { nation, tech, median_turn, count }[]',
+    chart: 'horizontal bar (median turn)',
+    option: {
+      tooltip: { trigger: 'axis' }, grid: { ...GRID, left: 90 },
+      xAxis: { type: 'value', name: 'median turn', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'category', inverse: true, data: ['Ironworking','Trapping','Husbandry','Aristocracy','Rhetoric','Labor Force'], axisLabel: AXIS_LABEL },
+      series: [{ type: 'bar', data: [4,7,11,16,23,29], itemStyle: { color: '#6a8fb5' }, label: { show: true, position: 'right' } }],
+    } },
+
+  { id: 'b8', title: '8. Per-turn yield curves', ready: 'ready',
+    shows: 'a yield over turns as median + P25–P75 band, with sample count — cumulative science',
+    shape: 'yieldCurves { turns[], counts[], series[key].{rate,cumulative}.{p25,p50,p75} }',
+    chart: 'line with IQR ribbon + count overlay',
+    option: {
+      tooltip: { trigger: 'axis' },
+      legend: { top: 4, data: ['P25–P75','Median (P50)','sample n'] },
+      grid: { ...GRID, right: 48 },
+      xAxis: { type: 'category', boundaryGap: false, data: SCI.turns.map(String), name: 'turn', axisLabel: AXIS_LABEL },
+      yAxis: [
+        { type: 'value', name: 'science (cumulative)', axisLabel: AXIS_LABEL },
+        { type: 'value', name: 'games', position: 'right', splitLine: { show: false }, axisLabel: AXIS_LABEL },
+      ],
+      series: [
+        ...bandSeries(SCI, '#4a7fb0'),
+        { name: 'sample n', type: 'line', yAxisIndex: 1, data: SCI.counts, symbol: 'none',
+          lineStyle: { color: '#c9a24a', opacity: 0.5 }, areaStyle: { color: '#c9a24a', opacity: 0.08 } },
+      ],
+    } },
+
+  { id: 'b9', title: '9. Expansion-speed win rate', ready: 'ready',
+    shows: 'win rate bucketed by the turn the 5th city was founded',
+    shape: 'expansionWinRate { bucket, games, wins, rate }[]',
+    chart: 'vertical bar',
+    option: {
+      tooltip: { trigger: 'axis', formatter: p => `5th city: ${p[0].name}<br/>win rate ${(p[0].value*100).toFixed(0)}%` }, grid: GRID,
+      xAxis: { type: 'category', data: ['≤25','26–50','51–75','76–100','101–150','151+','never'], name: 'turn 5th city founded', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'win rate', min: 0, max: 1, axisLabel: { formatter: v => (v*100)+'%' } },
+      series: [{ type: 'bar', data: [0.72,0.59,0.49,0.38,0.33,0.17,0.21], itemStyle: { color: '#4a7fb0' },
+        label: { show: true, position: 'top', formatter: p => (p.value*100).toFixed(0)+'%' } }],
+    } },
+]});
+
+/* ============ PLANE B2 — participant dimension ============ */
+SECTIONS.push({
+  key: 'planeB2', title: 'Plane B2 — participant dimension (the generalization)',
+  blurb: 'The same save-content charts, grouped by participant instead of nation. Every nation-keyed row shape gains a participant key (user_id / frozen-username). Data is Ready; gated on the nation→entity UI generalization.',
+  charts: [
+
+  { id: 'c1', title: '1. Per-player yield curves', ready: 'ui',
+    shows: 'one cumulative-yield line per participant',
+    shape: 'game_player_turn.<yield>_cumulative grouped by participant',
+    chart: 'multi-series line',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', boundaryGap: false, data: [5,10,15,20,25,30,35,40,45,50].map(String), name: 'turn', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'science (cumulative)', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Meritamun', type: 'line', smooth: true, symbol: 'none', data: [95,245,470,760,1120,1560,2050,2600,3200,3850] },
+        { name: 'Sargon_II', type: 'line', smooth: true, symbol: 'none', data: [80,200,380,590,840,1130,1460,1830,2230,2660] },
+        { name: 'HannibalBarca', type: 'line', smooth: true, symbol: 'none', data: [105,265,510,820,1200,1650,2160,2730,3350,4020] },
+        { name: 'Ozymandias', type: 'line', smooth: true, symbol: 'none', data: [70,180,340,540,815,1090,1400,1740,2110,2510] },
+      ],
+    } },
+
+  { id: 'c2', title: "2. Each player's nation preferences", ready: 'ui',
+    shows: 'which nations each participant picked (games), stacked',
+    shape: '{ participant_key, nation, games, wins, win_rate }',
+    chart: 'stacked bar (series = nation)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', data: ['Meritamun','Sargon_II','HannibalBarca','Ozymandias'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'games', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Egypt', type: 'bar', stack: 'n', data: [5,0,0,3] },
+        { name: 'Rome', type: 'bar', stack: 'n', data: [2,0,0,0] },
+        { name: 'Assyria', type: 'bar', stack: 'n', data: [0,6,0,0] },
+        { name: 'Babylonia', type: 'bar', stack: 'n', data: [0,1,0,0] },
+        { name: 'Carthage', type: 'bar', stack: 'n', data: [0,0,7,0] },
+        { name: 'Persia', type: 'bar', stack: 'n', data: [0,0,0,2] },
+      ],
+    } },
+
+  { id: 'c3', title: "3. Each player's law / tech timing", ready: 'ui',
+    shows: 'average adoption turn of key laws/techs, per participant',
+    shape: '{ participant_key, item, kind, avg_turn, n } (from law_events / tech_events)',
+    chart: 'grouped bar (series = item)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', data: ['Meritamun','Sargon_II','HannibalBarca'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'avg turn adopted', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Slavery (law)', type: 'bar', data: [11,9,13], itemStyle: { color: '#4a7fb0' } },
+        { name: 'Ironworking (tech)', type: 'bar', data: [26,28,22], itemStyle: { color: '#d98324' } },
+        { name: 'Philosophy (tech)', type: 'bar', data: [34,40,31], itemStyle: { color: '#5b8c6a' } },
+      ],
+    } },
+
+  { id: 'c4', title: "4. Each player's win rate", ready: 'ui',
+    shows: 'wins vs losses per participant',
+    shape: '{ participant_key, username, games, wins, losses, win_rate }',
+    chart: 'stacked bar (Wins|Losses)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', data: ['Meritamun','Sargon_II','HannibalBarca','Ozymandias'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'games', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Wins', type: 'bar', stack: 'g', data: [5,4,5,2], itemStyle: { color: '#3f8f4f' }, label: { show: true, position: 'inside' } },
+        { name: 'Losses', type: 'bar', stack: 'g', data: [2,3,2,3], itemStyle: { color: '#b1503f' } },
+      ],
+    } },
+]});
+
+/* ============ PLANE C — match deep-dive ============ */
+SECTIONS.push({
+  key: 'planeC', title: 'Plane C — head-to-head match deep-dive',
+  blurb: 'A per-match surface (not a corpus aggregate). Both players’ summaries and both players’ per-turn curves are in D1, so two-player overlays render directly. Example: Rome/Commander (P0, winner) vs Persia/Schemer (P1). Ready.',
+  charts: [
+
+  { id: 'd1', title: '1. Divergence over the match', ready: 'ready',
+    shows: 'points / military power / legitimacy for both players, per turn',
+    shape: 'game_player_turn per-turn rows for both player_index (points, military_power, legitimacy)',
+    chart: 'multi-line, dual y-axis (solid = P0, dashed = P1)',
+    option: (() => {
+      const turns = Array.from({ length: 20 }, (_, i) => i + 1);
+      const ptsP0 = [2,4,6,9,12,15,19,23,28,33,39,45,52,60,68,77,87,98,110,123];
+      const ptsP1 = [2,3,5,7,10,13,16,19,23,27,31,36,41,46,52,57,63,69,75,81];
+      const milP0 = [40,44,51,58,66,73,85,96,110,121,138,152,169,181,199,214,232,248,265,281];
+      const milP1 = [38,41,45,49,55,60,64,70,77,82,88,95,101,108,112,119,123,128,132,136];
+      const legP0 = [10,12,14,16,18,20,22,24,26,30,32,34,36,38,40,42,44,46,48,50];
+      const legP1 = [10,11,12,13,15,16,18,19,20,21,22,22,24,24,26,26,27,28,28,30];
+      const solid = {}, dash = { type: 'dashed' };
+      return {
+        tooltip: { trigger: 'axis' }, legend: { top: 4, type: 'scroll' }, grid: { ...GRID, right: 52 },
+        xAxis: { type: 'category', boundaryGap: false, data: turns.map(String), name: 'turn', axisLabel: AXIS_LABEL },
+        yAxis: [
+          { type: 'value', name: 'military power', axisLabel: AXIS_LABEL },
+          { type: 'value', name: 'points / legit', position: 'right', splitLine: { show: false }, axisLabel: AXIS_LABEL },
+        ],
+        series: [
+          { name: 'Mil — Rome', type: 'line', symbol: 'none', data: milP0, lineStyle: { ...solid, color: '#b1503f' }, itemStyle: { color: '#b1503f' } },
+          { name: 'Mil — Persia', type: 'line', symbol: 'none', data: milP1, lineStyle: { ...dash, color: '#b1503f' }, itemStyle: { color: '#b1503f' } },
+          { name: 'VP — Rome', type: 'line', yAxisIndex: 1, symbol: 'none', data: ptsP0, lineStyle: { ...solid, color: '#3b6ea5' }, itemStyle: { color: '#3b6ea5' } },
+          { name: 'VP — Persia', type: 'line', yAxisIndex: 1, symbol: 'none', data: ptsP1, lineStyle: { ...dash, color: '#3b6ea5' }, itemStyle: { color: '#3b6ea5' } },
+          { name: 'Legit — Rome', type: 'line', yAxisIndex: 1, symbol: 'none', data: legP0, lineStyle: { ...solid, color: '#5b8c6a' }, itemStyle: { color: '#5b8c6a' } },
+          { name: 'Legit — Persia', type: 'line', yAxisIndex: 1, symbol: 'none', data: legP1, lineStyle: { ...dash, color: '#5b8c6a' }, itemStyle: { color: '#5b8c6a' } },
+        ],
+      };
+    })() },
+
+  { id: 'd2', title: '2. Final-stat comparison', ready: 'ready',
+    shows: 'the two players’ final summaries side by side (per-axis normalized)',
+    shape: 'player_summaries two rows { cities_total, techs_completed, laws_count, final_points, final_military_power, final_legitimacy, succession_count }',
+    chart: 'radar (two series)',
+    option: {
+      tooltip: { trigger: 'item' }, legend: { top: 4 },
+      radar: { center: ['50%','56%'], radius: '62%', indicator: [
+        { name: 'Cities', max: 14 }, { name: 'Techs', max: 45 }, { name: 'Laws', max: 16 },
+        { name: 'Points', max: 130 }, { name: 'Mil. power', max: 300 }, { name: 'Legitimacy', max: 55 }, { name: 'Successions', max: 6 },
+      ] },
+      series: [{ type: 'radar', data: [
+        { value: [11,41,14,123,281,50,3], name: 'Rome / Commander', itemStyle: { color: P0 }, areaStyle: { opacity: 0.1 } },
+        { value: [7,33,11,81,136,30,4], name: 'Persia / Schemer', itemStyle: { color: P1 }, areaStyle: { opacity: 0.1 } },
+      ] }],
+    } },
+
+  { id: 'd3', title: '3. Yield-curve overlay', ready: 'ready',
+    shows: 'one yield (cumulative) for both players in the match',
+    shape: 'game_player_turn.<yield>_cumulative for both player_index',
+    chart: 'two-line overlay',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', boundaryGap: false, data: [5,10,15,20,25,30].map(String), name: 'turn', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'science (cumulative)', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Rome', type: 'line', smooth: true, symbol: 'none', data: [95,245,470,760,1120,1560], lineStyle: { color: P0 }, itemStyle: { color: P0 } },
+        { name: 'Persia', type: 'line', smooth: true, symbol: 'none', data: [88,210,380,590,840,1130], lineStyle: { color: P1 }, itemStyle: { color: P1 } },
+      ],
+    } },
+]});
+
+/* ============ PLANE D — richer meta (Extract / future) ============ */
+SECTIONS.push({
+  key: 'planeD', title: 'Plane D — richer meta (Extract)',
+  blurb: 'Gated on a parser bump + reparse-all: the data lives in the R2 blob (FullGameData), not in D1 yet. §8 batches these; priority is units_produced, then wonders, then ambitions. Shapes drawn from the parser types.',
+  charts: [
+
+  { id: 'e1', title: '1. Event-category timeline', ready: 'extract',
+    shows: 'event volume over turns, by category',
+    shape: 'event_logs { log_type, turn } → turn × category counts',
+    chart: 'stacked area timeline',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4, type: 'scroll' }, grid: GRID,
+      xAxis: { type: 'category', boundaryGap: false, data: [10,20,30,40,50,60].map(String), name: 'turn', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'events', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Tech', type: 'line', stack: 'e', areaStyle: {}, data: [3,2,4,3,2,1] },
+        { name: 'Law', type: 'line', stack: 'e', areaStyle: {}, data: [1,2,1,2,1,0] },
+        { name: 'Wonder', type: 'line', stack: 'e', areaStyle: {}, data: [0,1,2,1,3,2] },
+        { name: 'Character', type: 'line', stack: 'e', areaStyle: {}, data: [2,3,1,2,2,3] },
+        { name: 'Religion', type: 'line', stack: 'e', areaStyle: {}, data: [1,0,2,1,0,1] },
+        { name: 'War', type: 'line', stack: 'e', areaStyle: {}, data: [0,1,3,2,4,3] },
+      ],
+    } },
+
+  { id: 'e2', title: '2. Per-city distribution', ready: 'extract',
+    shows: 'per-city production actions, by city (colored by family class)',
+    shape: 'city_statistics.cities[] { family_class, growth_count, unit_production_count, specialist_count, hurry_* }',
+    chart: 'stacked bar (segments = action)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4, type: 'scroll' }, grid: GRID,
+      xAxis: { type: 'category', data: ['Roma','Ostia','Capua','Neapolis','Antium'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'actions', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Growth', type: 'bar', stack: 'c', data: [9,11,5,7,4] },
+        { name: 'Unit prod.', type: 'bar', stack: 'c', data: [12,2,1,4,6] },
+        { name: 'Specialist', type: 'bar', stack: 'c', data: [6,4,9,3,2] },
+        { name: 'Hurry (civics)', type: 'bar', stack: 'c', data: [3,5,2,1,0] },
+        { name: 'Hurry (money)', type: 'bar', stack: 'c', data: [4,1,6,2,3] },
+      ],
+    } },
+
+  { id: 'e3', title: '3. Military unit-type breakdown', ready: 'extract',
+    shows: 'units produced by type, per player',
+    shape: 'units_produced { player_name, unit_type, count }[]',
+    chart: 'stacked bar (segments = unit type)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4, type: 'scroll' }, grid: GRID,
+      xAxis: { type: 'category', data: ['Rome','Carthage','Persia','Greece'], axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'units produced', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Warrior', type: 'bar', stack: 'u', data: [8,6,7,5] },
+        { name: 'Slinger', type: 'bar', stack: 'u', data: [5,3,4,6] },
+        { name: 'Spearman', type: 'bar', stack: 'u', data: [6,4,5,4] },
+        { name: 'Swordsman', type: 'bar', stack: 'u', data: [4,5,3,2] },
+        { name: 'Horseman', type: 'bar', stack: 'u', data: [3,7,4,2] },
+        { name: 'Chariot', type: 'bar', stack: 'u', data: [1,3,2,1] },
+        { name: 'Catapult', type: 'bar', stack: 'u', data: [2,1,2,1] },
+      ],
+    } },
+
+  { id: 'e4', title: '4. Family / religion opinion', ready: 'extract',
+    shows: 'a player’s opinion of each family over turns',
+    shape: 'family_opinion_history { family_name, turn, opinion }[]',
+    chart: 'multi-line timeline (zero baseline)',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'category', boundaryGap: false, data: [10,20,30,40,50,60].map(String), name: 'turn', axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'opinion', axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Julii', type: 'line', smooth: true, symbol: 'none', data: [12,18,9,14,20,22], markLine: { silent: true, symbol: 'none', data: [{ yAxis: 0 }], lineStyle: { color: '#ccc' } } },
+        { name: 'Cornelii', type: 'line', smooth: true, symbol: 'none', data: [-4,2,15,10,6,-2] },
+        { name: 'Fabii', type: 'line', smooth: true, symbol: 'none', data: [5,3,-8,-3,4,11] },
+      ],
+    } },
+
+  { id: 'e5', title: '5. Ambition completion', ready: 'extract',
+    shows: 'each ambition’s active span (started → completed), colored by outcome',
+    shape: 'player_goals { goal_type, started_turn, completed_turn, max_turns }[]',
+    chart: 'Gantt (floating horizontal bars)',
+    option: (() => {
+      // [name, start, end, outcome] outcome: done | active
+      const rows = [
+        ['Build the Acropolis', 8, 26, 'done'],
+        ['Have 10 cities', 15, 42, 'done'],
+        ['Autarky', 12, 55, 'done'],
+        ['Capture a capital', 30, 60, 'active'],
+        ['Capture 5 cities', 40, 60, 'active'],
+      ];
+      const cats = rows.map(r => r[0]);
+      const base = rows.map(r => r[1]);
+      const dur = rows.map((r, i) => ({ value: r[2] - r[1], itemStyle: { color: r[3] === 'done' ? '#3f8f4f' : '#c9a24a' } }));
+      return {
+        tooltip: { formatter: p => p.seriesName === 'span' ? `${cats[p.dataIndex]}<br/>T${rows[p.dataIndex][1]} → ${rows[p.dataIndex][3] === 'active' ? 'ongoing' : 'T' + rows[p.dataIndex][2]}` : '' },
+        legend: { show: false }, grid: { ...GRID, left: 120 },
+        xAxis: { type: 'value', name: 'turn', axisLabel: AXIS_LABEL },
+        yAxis: { type: 'category', inverse: true, data: cats, axisLabel: AXIS_LABEL },
+        series: [
+          { name: 'base', type: 'bar', stack: 'g', data: base, itemStyle: { color: 'transparent' }, silent: true },
+          { name: 'span', type: 'bar', stack: 'g', data: dur },
+        ],
+      };
+    })() },
+
+  { id: 'e6', title: '6. Wonder race', ready: 'extract',
+    shows: 'cumulative wonders built per player over the game',
+    shape: 'player_wonders { player_name, wonder, completed_turn }[]',
+    chart: 'step line race',
+    option: {
+      tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+      xAxis: { type: 'value', name: 'turn', min: 0, max: 60, axisLabel: AXIS_LABEL },
+      yAxis: { type: 'value', name: 'wonders built', minInterval: 1, axisLabel: AXIS_LABEL },
+      series: [
+        { name: 'Rome', type: 'line', step: 'end', symbol: 'circle', symbolSize: 6, data: [[0,0],[26,1],[41,2],[60,2]] },
+        { name: 'Carthage', type: 'line', step: 'end', symbol: 'circle', symbolSize: 6, data: [[0,0],[33,1],[48,2],[60,2]] },
+        { name: 'Persia', type: 'line', step: 'end', symbol: 'circle', symbolSize: 6, data: [[0,0],[37,1],[60,1]] },
+        { name: 'Greece', type: 'line', step: 'end', symbol: 'circle', symbolSize: 6, data: [[0,0],[52,1],[60,1]] },
+      ],
+    } },
+
+  { id: 'e7', title: '7. Territory-growth', ready: 'extract',
+    shows: 'tiles owned per player over turns',
+    shape: 'tile_ownership_history { tile_xml_id, turn, owner_player_xml_id }[] → tiles-owned series',
+    chart: 'stacked area (aggregate companion to the animated map)',
+    option: (() => {
+      const turns = [], p0 = [], p1 = [];
+      for (let t = 1; t <= 60; t++) { turns.push(t); p0.push(Math.round(6 + t * 0.7 + Math.sin(t / 5) * 2)); p1.push(Math.round(4 + t * 0.85)); }
+      return {
+        tooltip: { trigger: 'axis' }, legend: { top: 4 }, grid: GRID,
+        xAxis: { type: 'category', boundaryGap: false, data: turns.map(String), name: 'turn', axisLabel: AXIS_LABEL },
+        yAxis: { type: 'value', name: 'tiles owned', axisLabel: AXIS_LABEL },
+        series: [
+          { name: 'Rome', type: 'line', stack: 'terr', areaStyle: {}, symbol: 'none', data: p0, itemStyle: { color: P0 } },
+          { name: 'Carthage', type: 'line', stack: 'terr', areaStyle: {}, symbol: 'none', data: p1, itemStyle: { color: P1 } },
+        ],
+      };
+    })() },
+]});
+
+/* ---------- render ---------- */
+function badgeLabel(r) { return r === 'ready' ? 'Ready' : r === 'ui' ? 'UI-gated' : 'Extract'; }
+
+const app = document.getElementById('app');
+const toc = document.getElementById('toc');
+let html = '', tocHtml = '';
+for (const sec of SECTIONS) {
+  tocHtml += `<a class="grp" href="#${sec.key}">${sec.title.split(' — ')[0]}</a>`;
+  html += `<section><h2 id="${sec.key}">${sec.title}</h2><p class="blurb">${sec.blurb}</p>`;
+  for (const c of sec.charts) {
+    tocHtml += `<a href="#${c.id}">${c.title}</a>`;
+    html += `<div class="card" id="${c.id}">
+      <div class="card-head"><h3>${c.title}</h3><span class="badge ${c.ready}">${badgeLabel(c.ready)}</span></div>
+      <div class="meta"><b>Shows</b> ${c.shows} &nbsp;·&nbsp; <b>Chart</b> ${c.chart}<br/><b>Data</b> <code>${c.shape}</code></div>
+      <div class="chart" id="chart-${c.id}"></div>
+    </div>`;
+  }
+  html += `</section>`;
+}
+app.innerHTML = html;
+toc.innerHTML = tocHtml;
+
+if (window.echarts) {
+  const instances = [];
+  for (const sec of SECTIONS) for (const c of sec.charts) {
+    const el = document.getElementById('chart-' + c.id);
+    const chart = echarts.init(el);
+    chart.setOption(c.option);
+    instances.push(chart);
+  }
+  window.addEventListener('resize', () => instances.forEach(i => i.resize()));
+}
+</script>
