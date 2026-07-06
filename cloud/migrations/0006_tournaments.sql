@@ -40,7 +40,7 @@ CREATE TABLE tournaments (
     swiss_max_rounds INTEGER NOT NULL DEFAULT 5,
     allowed_map_scripts TEXT NOT NULL,                    -- JSON array of map_script strings
     created_at TEXT NOT NULL DEFAULT (datetime('now')),
-    updated_at TEXT NOT NULL DEFAULT (datetime('now'))    -- bumped on any mutation; standings/bracket cache key
+    updated_at TEXT NOT NULL DEFAULT (datetime('now'))    -- bumped on any mutation (not yet consumed as a cache key)
 );
 
 CREATE INDEX idx_tournaments_status ON tournaments(status);
