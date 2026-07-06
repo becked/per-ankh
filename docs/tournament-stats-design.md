@@ -147,7 +147,7 @@ Two subsystems, one shared UI shell.
 
 **(2) Tournament competition stats (Plane A) — new, tournament-native.**
 - A separate response shape (not a `ChartBundle`) computed largely by reusing `standings.ts` / `computePairwiseH2H` / bracket logic. Own handler. **Uncached in v1** (settled): its cost ≈ the already-uncached `/standings` compute and scales with matches, not games; the `tournament_id`+`updated_at` key variant is there to add if it measures slow.
-- Renders through the same reused `ChartContainer` + spec-loop shell.
+- Renders through the reused `ChartContainer` shell. (Spec-loop/registry participation is deferred past the MVP — the MVP renders its charts directly; see §7.)
 
 **Wiring (both subsystems).**
 
@@ -162,19 +162,62 @@ Two subsystems, one shared UI shell.
 
 **Mid-tournament (settled):** stats render whenever the tournament is visible, over the games linked so far — no gating on `complete` and no provisional banner. Researching an in-progress tournament's games is a primary use case; everyone knows the tournament isn't done.
 
-## 7. Suggested build phases
+## 7. Build plan — MVP first
 
-1. **Plane A, standings + H2H first** — highest value, data already computed, no aggregator changes. Proves the tournament-native response shape + reused UI shell.
-2. **Plane A remainder** — maps, pick-order, rounds, byes/forfeits, casters, schedule, funnel.
-3. **Plane B1** — tournament corpus resolver + the per-field `is_uploader` widening (§6) + the `kind:"tournament"` cache variant (§6). Lights up the save-content charts at tournament scope, minus the Overview-style self metrics.
-4. **UI dimension generalization + Plane B2** — nation→entity selector, participant grouping keyed per §8 (the 0024 snapshots).
-5. **Plane C** — match deep-dive (per-match, two-player overlays).
-6. **Plane D** — one batched parser bump carrying the settled extraction set (§8: units produced, wonders, ambitions), riding the next organic parser bump if one lands first.
-7. **Ship-sync** — update `docs/aggregate-statistics.md` (its Future-work bullet and History section point at this redo), record the as-built in `docs/tournament-implementation-notes.md`, and retire this doc's forward-looking status (fold into the notes or archive).
+The build starts with a deliberately small slice — three charts — chosen so the set exercises both subsystems, both endpoints, both response shapes, and the shared UI shell. Everything after it is mostly option-builders on infrastructure the slice already proved. All code references below were verified against the code in the 2026-07-05 MVP-scoping review (§8).
+
+| # | Chart | Plane / subsystem | Endpoint | What it de-risks |
+| --- | --- | --- | --- | --- |
+| 1 | Standings visualization | A — tournament-native | `GET /v1/tournaments/:id/stats` | the competition response shape, the new handler + gates, the `/tournaments/[slug]/stats` route, the page rendering a non-ChartBundle shape |
+| 2 | Caster leaderboard | A — tournament-native | same | the `parts`-JSON compute path, and a second builder on the same response shape (proves it generalizes past standings) |
+| 3 | Nation win rate | B1 — ChartBundle | `GET /v1/tournaments/:id/stats/games` | `resolveTournamentCorpus`, the focal-mode widening, the type split, the tournament cache variant — and that an existing user-stats builder renders unchanged at tournament scope |
+
+Charts 1–2 share one endpoint; chart 3 stands up the entire ChartBundle-at-tournament-scope pipeline. That asymmetry is deliberate: the MVP is two subsystems' worth of scaffolding for three charts, and the payoff is that chart #4 onward — the rest of B1 plus more Plane A — is mostly option-builders. Stage 1 alone yields a live page with two charts; build it first for the fastest visible result. Stage 2 is independent of stage 1 and can proceed in parallel.
+
+Rendered examples of the chart designs: `docs/tournament-stats-chart-examples.html`.
+
+### Stage 1 — Plane A backend (charts 1–2)
+
+1. **`cloud/src/tournament/stats.ts` (new)** — pure compute, unit-tested beside source.
+   - `computeCasterLeaderboard(...)` → `{ user_id, name, display_name, avatar_url, appearances }[]`: walk each match's `parseParts(m)` (`data.ts:515`) casters, group by `user_id ?? name`, count appearances, sort descending. Identity enrichment comes from `loadUserIdentitiesForMatches` (`public.ts:1279`, already exported) — the same batch identity map `serializeMatch` uses for casters. **No new users join** (settled — reuse rule #1).
+   - `computeCompetitionStats(env, tournament)` → `{ standings, caster_leaderboard }`: the standings block reuses `computeStandingsResponse` (`public.ts:591`) verbatim, so `/stats` is self-contained and the page makes one Plane-A fetch (settled). Pass `viewerIsAdmin=false`: the admin-only standings fields (`signup_answer`, `discord_username`) exist for the standings-page editors, and charts never render them, so the stats payload always uses the public shape. `computeStandingsResponse` loads slots and matches internally, so the leaderboard performs its own `loadMatchesWithRound` (`public.ts:1416`, exported) — **the duplicate match load is accepted for v1** (settled): matches are a small table and the cost class matches the already-uncached `/standings` read. Don't refactor `computeStandingsResponse` to accept preloaded rows unless it measures slow. Response is uncached in v1 (§6/§8).
+2. **Handler + dispatch** — `handleTournamentStats` lives in `public.ts` beside `handleTournamentStandings` (the shared preamble helpers `enforceTournamentViewRateLimit` and `setupGateHides` are module-private there); it applies the same preamble — CORS, session, rate limit, load tournament, 404 via `setupGateHides` — then delegates to `computeCompetitionStats`. Dispatch `GET /v1/tournaments/:id/stats` in `cloud/src/index.ts` as a regex+route entry modeled on the `/standings` entry (`index.ts:355-357`).
+
+### Stage 2 — Plane B1 backend (chart 3) — independent of stage 1
+
+3. **Corpus resolver** — `resolveTournamentCorpus(env, tournamentId) → StatsCorpus` in `cloud/src/stats/resolve.ts`, the §6 SQL verbatim (join through `tournament_rounds`, `status='complete'`, `game_id IS NOT NULL`). It drops the `viewerScope`/`scope` threading of `resolveUserCorpus` — tournaments are public — and needs no existence probe: the handler has already loaded the tournament for the gate.
+4. **Focal widening** — `buildChartBundle` gains `focal: "uploader" | "humans"`, threaded into exactly the two self-convention sites: `buildSelfMembership` (`aggregate.ts:145-151`) and the `selfClause` in `loadYieldCurves` (`aggregate.ts:224`). The tournament handler passes `"humans"`; the user handler passes `"uploader"` (behavior unchanged — pin with a regression test).
+5. **Type split (minimal)** — split the bundle type into a chart-fields core plus the user-only Overview extension (`win_rate`, `games_with_outcome`, `summary.top_nation`/`top_archetype`), per §6. Its only MVP job is keeping the broken-by-widening fields out of the tournament response — go no further. Fallout to expect: the cache module's `ChartBundle`-typed signatures (`getCached`/`putCached`, `cache.ts`) need the split threaded through, and the frontend mirror lives in `src/lib/stats/types.ts:22`. Builders reused at tournament scope are retyped to the core with logic unchanged. `save_dates`/`favorite_day_of_week` stay in the core for now (correct per-game fields; §6 defers their final home).
+6. **Cache variant** — add `kind: "tournament"` to `StatsCacheKey` (`cache.ts:33-48`), keyed on `tournament_id` + `tournaments.updated_at` (§6). Key-drift is the invalidation; the two uncovered paths (game deletion, same-version re-derivation) are bounded by the 24h TTL (settled).
+7. **Handler + dispatch** — `handleTournamentGamesStats`, same preamble as stage-1's handler (also in `public.ts`), pinned to `CURRENT_PARSER_VERSION` exactly like `handleUserStats` (`stats/handlers.ts:46,62`): check cache → resolve corpus → `buildChartBundle(..., "humans")` → put cache. Dispatch `GET /v1/tournaments/:id/stats/games`.
+
+### Stage 3 — Frontend (all three charts)
+
+8. **API layer** — `getTournamentStats(id)` and `getTournamentGamesStats(id)` on `cloudApi` (`src/lib/api-cloud.ts`), request/response types adjacent, per the API-layer convention.
+9. **Route** — `src/routes/tournaments/[slug]/stats/` (`+page.svelte` + `+page.ts`), mirroring the `/matches` subroute (§6 placement). Public; pre-signup hiding comes free from the endpoints' 404 gate.
+10. **Rendering — no registry (settled).** Three `ChartContainer`s (`$lib/ChartContainer.svelte`) rendered directly in the page, reusing `CHART_THEME`/`getChartColor` (`$lib/config`) and `COMMON_GRID` (`charts/helpers.ts:41`) as-is. Do **not** instantiate a parallel `CHART_SPECS` registry for the tournament shapes, and do not parameterize `ChartSpec`/`StatsView` yet — the spec-loop earns its keep at user-stats scale (~22 charts, category subtabs), not at three charts on one page. The §5 parameterization happens when Plane A grows past a handful of charts.
+11. **Option builders** — `standingsOption` and `casterLeaderboardOption` are new, tournament-native (no user-stats analog; both simple bar charts — see the examples doc), living with the tournament UI code in `src/lib/tournament/`. Chart 3 reuses `nationWinLossStackedOption` (`src/lib/stats/charts/nations.ts:21`) with logic unchanged (retyped to the bundle core per item 5).
+
+### Tests
+
+12. Unit beside source: `computeCasterLeaderboard` (parts walking, `user_id`-vs-`name` grouping, ordering), `resolveTournamentCorpus` (the `status='complete'` + null-`game_id` filters), the focal widening (`"humans"` counts each human row once; `"uploader"` output unchanged from today's). Miniflare integration under `cloud/test/integration/` for both endpoints: 404 pre-signup, rate-limit budget recorded, response shapes, and the `/stats/games` cache write/read path.
+
+### Explicitly out of the MVP (deferred, not dropped)
+
+- Plane A remainder: H2H matrix, standings-over-rounds, per-map win rate / usage, pick-order advantage, bye distribution, forfeit rate, championship upsets, match length, schedule view, signup funnel, participation/survival.
+- The tournament-native summary tiles (§6's settled replacement for the user Overview tiles).
+- Plane B1 remainder — near-free after stage 2: the bundle already carries every B1 field, so the remaining ~9 charts are frontend-only work.
+- Plane B2 (participant dimension + the §5 UI generalization), Plane C (match deep-dive), Plane D (batched parser bump).
+- The Plane A cache (uncached v1; the `tournament_id`+`updated_at` key variant exists to add if it measures slow).
+- The full `ChartSpec`/`StatsView` parameterization (see item 10).
+
+### After the MVP
+
+The original phase ordering still applies to the remainder: Plane A remainder → B1 remainder (option-builders only) → UI dimension generalization + Plane B2 → Plane C → Plane D → ship-sync (update `docs/aggregate-statistics.md` — its Future-work bullet and History section point at this redo — record the as-built in `docs/tournament-implementation-notes.md`, and retire this doc's forward-looking status by folding it into the notes or archiving).
 
 ## 8. Decisions (settled)
 
-All six questions this section used to hold were resolved in a pre-build design review (2026-07-05), verified against the code. Detail lives in §6 where noted; this is the record.
+All six questions this section used to hold were resolved in a pre-build design review (2026-07-05), verified against the code. A follow-up MVP-scoping review (same day, also code-verified) settled four more — those are the last four bullets, with build detail in §7. This is the record.
 
 - **B1 aggregator mechanism — focal-mode parameter + type split, not a forked path** (§6). The self convention is exactly two code sites; the broken-by-widening Overview fields are excluded by splitting the response type (chart core vs. user-only extension), not by nulling at runtime.
 - **Game-id list — `status = 'complete'` only** (§6). Excludes forfeit matches left holding a linked game by retro-edits. Save-vs-official outcome disagreements are **documented, not filtered**: standings show official results, charts show what happened in the games.
@@ -182,3 +225,7 @@ All six questions this section used to hold were resolved in a pre-build design 
 - **Participant identity key — the 0024 match snapshots, grouped by `user_id` with frozen-username fallback.** Slots fail twice as a key: they're per-phase (the championship transition splits one person across two slot rows) and substitution rewrites the live slot (`user_id`/`discord_id` nulled, `discord_username` overwritten). The 0024 snapshots (`slot_a/b_user_id` + `slot_a/b_username`, frozen when a match leaves `pending`, backfilled for all pre-0024 non-pending matches) survive both. Composite key: `user_id` when claimed, else the frozen username; display label from the snapshot username; avatar via the `users` join when `user_id` is present (degrading to placeholder, as 0024 intended). Accepted edges: an unclaimed occupant renamed mid-tournament splits into two participants (rare, admin-fixable); pending matches have no snapshot but contribute no stats. Plane B2 attributes save rows through the same match row: side-A/B snapshot + `slot_a/b_player_index` → `(game_id, player_index)` → person.
 - **Caching — ships in v1 for Plane B; Plane A uncached** (§6). The target tournament's corpus is hundreds of games, putting the bundle compute well past the `/standings` per-read cost that Plane A shares. Key-drift invalidation covers all tournament mutations; the two uncovered paths (game deletion, same-version re-derivation) are bounded by the 24h TTL.
 - **Plane D — one batched parser bump, not per-chart.** Reparse-all is the expensive unit, so batch the chosen extractions into a single bump, riding the next organic parser bump if one lands first. Priority, biased toward the tournament audience (casters, match deep-dive) and extraction cost: (1) military unit-type breakdown (`units_produced`), (2) wonders, (3) ambitions/goals. Deferred: per-city detail, territory/map history, family/religion opinion history, event/story timelines (heavy row volume or niche audience). The dropped `player_summaries.pick_order` re-derivation (`0004`) rides the same bump if it's ever wanted.
+- **MVP slice — three charts** (§7): standings visualization + caster leaderboard (Plane A) and nation win rate (B1), chosen so the set exercises both subsystems, both endpoints, both response shapes, and the shared shell. Charts 1–2 ship alone as a live page; chart 3 stands up the full B1 pipeline that makes the remaining ~9 B1 charts frontend-only.
+- **`/stats` is self-contained.** The Plane A response embeds the standings block by reusing `computeStandingsResponse`, so the stats page makes one Plane-A fetch instead of also hitting `/standings`. The duplicate match load behind it — `computeStandingsResponse` loads internally, the caster leaderboard loads again — is accepted for v1 (small table, same cost class as the uncached `/standings` read); no preloaded-rows refactor unless it measures slow.
+- **Caster identity enrichment reuses the existing batch map** — `parseParts` + `loadUserIdentitiesForMatches`, the same path `serializeMatch` uses for casters. No new users join.
+- **No chart registry in the MVP.** The three charts render as direct `ChartContainer`s in the page. Neither a parallel tournament `CHART_SPECS` registry nor the §5 `ChartSpec`/`StatsView` parameterization ships until Plane A grows past a handful of charts — a parallel registry would be the second idiom this repo's contribution rules warn against, and the parameterization has nothing to earn its keep at n=3.
