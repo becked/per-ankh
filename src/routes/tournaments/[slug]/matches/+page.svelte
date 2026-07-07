@@ -54,7 +54,7 @@
 		type NumberedPart,
 	} from "$lib/tournament/parts";
 	import { nowMs } from "$lib/stores/now.svelte";
-	import { seshMatchLine } from "$lib/tournament/sesh";
+	import { seshMatchLine, seshVersus } from "$lib/tournament/sesh";
 	import CastView from "$lib/tournament/CastView.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
@@ -97,16 +97,7 @@
 	// "[cast by X]" (with any stream links) or "[needs a caster]" — so the post
 	// doubles as a watch-and-recruit announcement.
 	function seshText(scope: "all" | "needs-casters" = "all"): string {
-		// Each side prefers a real Discord `<@id>` mention (pings the player) when
-		// the slot is a claimed account whose id we have (admin-only field), and
-		// falls back to the display name for unclaimed slots.
-		const vs = (m: TournamentMatch) =>
-			matchupLabel(m, (side) => {
-				const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
-				return id
-					? `<@${id}>`
-					: (matchSlotDisplayName(m, side, slotMaps.labels) ?? "?");
-			});
+		const vs = (m: TournamentMatch) => seshVersus(m, slotMaps.labels);
 
 		// Caster status suffix for a scheduled part in the "all" post: the
 		// streamer (first caster) and any co-casters, plus their stream links, or

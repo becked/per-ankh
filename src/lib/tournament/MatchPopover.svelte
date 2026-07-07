@@ -37,10 +37,9 @@
 		matchSlotAvatarUrl,
 		matchSlotNation,
 		matchSlotDisplayName,
-		matchupLabel,
 	} from "$lib/tournament/match-occupant";
 	import { upcomingScheduledParts } from "$lib/tournament/parts";
-	import { seshMatchLine } from "$lib/tournament/sesh";
+	import { seshMatchLine, seshVersus } from "$lib/tournament/sesh";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		atlasMapUrl,
@@ -235,13 +234,7 @@
 	const casterPostText = $derived.by(() => {
 		const parts = upcomingScheduledParts([match]);
 		if (parts.length === 0) return null;
-		const versus = matchupLabel(match, (side) => {
-			const id =
-				side === "a" ? match.slot_a_discord_id : match.slot_b_discord_id;
-			return id
-				? `<@${id}>`
-				: (matchSlotDisplayName(match, side, slotLabels) ?? "?");
-		});
+		const versus = seshVersus(match, slotLabels);
 		const lines = parts.map(({ part, partNumber, split }) =>
 			seshMatchLine({
 				matchNumber: match.match_number,
