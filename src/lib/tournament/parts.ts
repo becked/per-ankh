@@ -159,11 +159,14 @@ export const LIVE_WINDOW_MS = 4 * 60 * 60 * 1000;
 // CAST_GRACE_MS so a match that began 20 minutes ago is still claimable); 0
 // means strictly future. The one definition of "upcoming" shared by every
 // surface that lists it (sesh export, caster sign-up), so they can't drift.
+// Reads the shared reactive clock (nowMs), like its sibling helpers here, so a
+// $derived that lists these (the Cast view, the popover's caster post) drops a
+// sitting as its time passes instead of waiting for the next data refetch.
 export function upcomingScheduledParts(
 	matches: TournamentMatch[],
 	graceMs = 0,
 ): NumberedPart[] {
-	const cutoff = Date.now() - graceMs;
+	const cutoff = nowMs() - graceMs;
 	const pending = matches.filter(
 		(m) => m.status === "pending" && m.slot_b_id != null,
 	);
