@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-07-07-b39f690] - 2026-07-07
+
+### Fixes
+
+- (map) point resources atlas manifest at the baked hash — [9bd949a](https://github.com/becked/per-ankh/commit/9bd949afcd9d59b90ae9ce56b0539bad02e38a31)
+
+### Other
+
+- (assets) refresh XML-derived data tables — [b39f690](https://github.com/becked/per-ankh/commit/b39f690a00ae5c63ce0baf5f686d671ea102b737)
+
 ## [2026-07-07-9a49550] - 2026-07-07
 
 ### Features
