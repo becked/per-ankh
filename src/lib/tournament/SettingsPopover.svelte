@@ -18,11 +18,9 @@
 
 	interface Props {
 		tournament: TournamentDetail;
-		// Disabled while a match popover is open (shallow-routing guard).
-		disabled?: boolean;
 	}
 
-	let { tournament, disabled = false }: Props = $props();
+	let { tournament }: Props = $props();
 
 	let open = $state(false);
 	let deleting = $state(false);
@@ -96,7 +94,6 @@
 			{...props}
 			type="button"
 			class="inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange"
-			{disabled}
 			aria-label="Tournament settings"
 		>
 			<svg

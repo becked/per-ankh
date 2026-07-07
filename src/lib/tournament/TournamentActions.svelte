@@ -14,8 +14,6 @@
 		tournament: TournamentDetail;
 		// Opens the tournament guide (threaded to the links menu).
 		onGuide: () => void;
-		// Settings is disabled while a match popover is open (shallow-routing guard).
-		settingsDisabled?: boolean;
 		// The active clock. Omitted on surfaces with no time-bearing content (e.g. a
 		// setup-phase overview page), where the toggle is hidden entirely.
 		zone?: ScheduleZone;
@@ -24,13 +22,7 @@
 		onZoneChange?: (zone: ScheduleZone) => void;
 	}
 
-	let {
-		tournament,
-		onGuide,
-		settingsDisabled = false,
-		zone,
-		onZoneChange,
-	}: Props = $props();
+	let { tournament, onGuide, zone, onZoneChange }: Props = $props();
 
 	// Settings shows for admins always, and for everyone once the tournament is
 	// past setup (mirrors the gate this cluster replaced in TournamentHeader).
@@ -54,7 +46,7 @@
 <div class="flex flex-shrink-0 items-center gap-2">
 	<TournamentLinksMenu {tournament} {onGuide} />
 	{#if showSettings}
-		<SettingsPopover {tournament} disabled={settingsDisabled} />
+		<SettingsPopover {tournament} />
 	{/if}
 	{#if zone && onZoneChange}
 		<!-- Single toggle button: shows the active clock and flips UTC↔local in

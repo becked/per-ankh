@@ -1,5 +1,9 @@
 <script lang="ts">
-	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
+	// The overview-only body of the tournament header: the meta strip (owner /
+	// format / players / dates) and the per-status hero (setup CTA, sign-ups,
+	// in-progress bar, champion cards). The shared header row above it — trail,
+	// status badge, view toggle, signup, action cluster — now lives in the [slug]
+	// layout; the overview page renders this component as its first content block.
 	import type {
 		CombinedQualifier,
 		TournamentDetail,
@@ -7,16 +11,11 @@
 	} from "$lib/api-cloud";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import Progress from "$lib/ui/Progress.svelte";
-	import SignedUpPopover from "./SignedUpPopover.svelte";
-	import TournamentActions from "./TournamentActions.svelte";
-	import TournamentViewTabs from "./TournamentViewTabs.svelte";
 	import SignupPopover from "./SignupPopover.svelte";
 	import TransitionPopover from "./TransitionPopover.svelte";
 	import type { HeaderHero, HeaderStatusMeta } from "./header-status";
-	import type { ScheduleZone } from "./schedule";
 
 	interface Props {
-		crumbs: Crumb[];
 		tournament: TournamentDetail;
 		statusMeta: HeaderStatusMeta;
 		hero: HeaderHero;
@@ -31,26 +30,15 @@
 		combined: CombinedQualifier[] | null;
 		isAdmin: boolean;
 		canSignUp: boolean;
-		hasViewerSlot: boolean;
 		busy: boolean;
 		startReady: boolean;
 		transitionReady: boolean;
-		// Settings is disabled while a match popover is open (shallow-routing guard).
-		settingsDisabled: boolean;
-		// Active clock for the top-right toggle, and its flip handler. Omitted when
-		// the page has no time-bearing content (setup/complete), hiding the toggle.
-		zone?: ScheduleZone;
-		// eslint-disable-next-line no-unused-vars -- callback signature
-		onZoneChange?: (zone: ScheduleZone) => void;
-		onGuide: () => void;
 		onStart: () => void;
-		onWithdraw: () => void;
 		// eslint-disable-next-line no-unused-vars -- callback signature
 		onConfirmTransition: (overrideRanks?: string[]) => void;
 	}
 
 	let {
-		crumbs,
 		tournament,
 		statusMeta,
 		hero,
@@ -59,16 +47,10 @@
 		combined,
 		isAdmin,
 		canSignUp,
-		hasViewerSlot,
 		busy,
 		startReady,
 		transitionReady,
-		settingsDisabled,
-		zone,
-		onZoneChange,
-		onGuide,
 		onStart,
-		onWithdraw,
 		onConfirmTransition,
 	}: Props = $props();
 
@@ -110,40 +92,11 @@
 </script>
 
 <header class="mb-3">
-	<!-- Nav trail with the status badge to its right; actions on the far right.
-	     The tournament name already lives in the trail, so no separate title. -->
-	<!-- Three zones on one row: title (left), the view-tabs toggle, and the action
-	     cluster (right). justify-between spreads them so the toggle sits equidistant
-	     between the title and the buttons (not page-centred); wraps on narrow widths. -->
-	<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
-		<div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
-			<Breadcrumb {crumbs} class="min-w-0" />
-			<span
-				class="whitespace-nowrap rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide {statusMeta.chipClass}"
-			>
-				{statusMeta.label}
-			</span>
-		</div>
-
-		<TournamentViewTabs {tournament} />
-
-		<div class="flex flex-shrink-0 items-center gap-2">
-			{#if hasViewerSlot}
-				<SignedUpPopover {tournament} {busy} {onWithdraw} />
-			{/if}
-			<TournamentActions
-				{tournament}
-				{onGuide}
-				{settingsDisabled}
-				{zone}
-				{onZoneChange}
-			/>
-		</div>
-	</div>
-
-	<!-- Meta panel: owner/admins, format, players, date — grouped. -->
+	<!-- Meta panel: owner/admins, format, players, date — grouped. First block of
+	     the overview body; the shared header row (trail/toggle/actions) sits above
+	     it in the [slug] layout. -->
 	<div
-		class="mt-3 rounded-lg p-3"
+		class="rounded-lg p-3"
 		style="background-color: rgb(var(--color-surface));"
 	>
 		<div

@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { untrack } from "svelte";
 	import { fade } from "svelte/transition";
-	import { goto, invalidateAll, pushState } from "$app/navigation";
+	import { invalidateAll, pushState } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
-	import { autohideScroll } from "$lib/actions/autohideScroll";
-	import { type Crumb } from "$lib/Breadcrumb.svelte";
 	import {
 		ApiError,
 		cloudApi,
@@ -31,11 +29,7 @@
 		headerStatusMeta,
 		type HeaderHero,
 	} from "$lib/tournament/header-status";
-	import type { ScheduleZone } from "$lib/tournament/schedule";
-	import {
-		resolveInitialZone,
-		writeZoneCookie,
-	} from "$lib/tournament/zone-preference";
+	import { getZoneClock } from "$lib/tournament/zone-context.svelte";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		distinguishingOptions,
@@ -55,21 +49,6 @@
 
 	let { data }: { data: PageData } = $props();
 
-	// Canonical trail: Home › Tournaments › this tournament.
-	const crumbs: Crumb[] = $derived([
-		{ label: "Home", href: resolve("/") },
-		{ label: "Tournaments", href: resolve("/tournaments") },
-		{ label: data.tournament.name },
-	]);
-
-	// Open the shared guide page, carrying this tournament as the origin so the
-	// guide's breadcrumb can link back here (see tournaments/guide/+page.svelte).
-	function openGuide() {
-		const dest = `${resolve("/tournaments/guide")}?from=${data.tournament.slug}&name=${encodeURIComponent(data.tournament.name)}`;
-		// eslint-disable-next-line svelte/no-navigation-without-resolve -- query string appended to a resolved path
-		goto(dest);
-	}
-
 	const isAdmin = $derived(data.tournament.is_viewer_admin === true);
 	const user = $derived(page.data.user as UserMe | null);
 
@@ -81,14 +60,10 @@
 			data.tournament.status === "championship",
 	);
 
-	// Active clock for the Live & Upcoming panel, owned here so the header's
-	// top-right toggle and the panel below it read one value. Follows the shared
-	// app-wide preference (saved cookie, else UTC); the toggle persists changes.
-	let zone = $state<ScheduleZone>(resolveInitialZone(null));
-	function setZone(next: ScheduleZone) {
-		zone = next;
-		writeZoneCookie(next);
-	}
+	// Active clock for the Live & Upcoming panel, read from the layout's shared
+	// context so it stays in lockstep with the header's top-right toggle and
+	// doesn't re-initialise when arriving from another tab.
+	const clock = getZoneClock();
 
 	// Per-division Swiss view toggle: the bracket diagram and the standings table
 	// occupy one card and are switched (not stacked) to tighten the page. Each
@@ -707,15 +682,6 @@
 		);
 	}
 
-	// Invoked from the "Signed up" popover, whose explicit Withdraw button is the
-	// deliberate confirmation — no extra confirm dialog needed.
-	async function withdraw() {
-		await withBusy(
-			() => cloudApi.withdrawFromTournament(data.tournament.tournament_id),
-			"Withdrew from tournament",
-		);
-	}
-
 	async function transitionChampionship(overrideRanks?: string[]) {
 		await withBusy(
 			() =>
@@ -728,442 +694,409 @@
 	}
 </script>
 
-<div class="flex flex-1 overflow-hidden">
-	<main class="isolate flex flex-1 flex-col overflow-hidden">
-		<div
-			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
-			use:autohideScroll
-		>
-			<div class="mx-auto max-w-screen-2xl">
-				<TournamentHeader
-					{crumbs}
+<TournamentHeader
+	tournament={data.tournament}
+	{statusMeta}
+	{hero}
+	{playerCount}
+	{user}
+	combined={data.standings.combined_qualifier_ranking ?? null}
+	{isAdmin}
+	{canSignUp}
+	{busy}
+	{startReady}
+	{transitionReady}
+	onStart={startTournament}
+	onConfirmTransition={transitionChampionship}
+/>
+
+<!-- Live & upcoming matches, surfaced on the overview page while the
+tournament is running — the most-used view mid-tournament. Hidden in
+setup (no matches) and complete (bracket/standings tell that story). -->
+{#if showLiveMatches}
+	<TournamentUpNextPanel
+		tournament={data.tournament}
+		matches={data.matches}
+		zone={clock.zone}
+		{slotLabels}
+		{slotUserIds}
+		{slotAvatars}
+		{user}
+		onSubstitute={isAdmin ? substituteSlot : undefined}
+	/>
+{/if}
+
+{#if data.tournament.status === "setup"}
+	{#if isAdmin}
+		<!-- Left column stacks Overview + Signups; Maps sits in the right
+		column at its natural height (items-start), so there's blank space
+		to the right of Signups until the maps panel grows as maps are added. -->
+		<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
+			<div>
+				<TournamentOverviewPanel tournament={data.tournament} />
+				<TournamentConfigurationPanel
 					tournament={data.tournament}
-					{statusMeta}
-					{hero}
-					{playerCount}
-					{user}
-					combined={data.standings.combined_qualifier_ranking ?? null}
-					{isAdmin}
-					{canSignUp}
-					hasViewerSlot={viewerSlot !== null}
-					{busy}
-					{startReady}
-					{transitionReady}
-					settingsDisabled={busy || openMatchId !== null}
-					zone={showLiveMatches ? zone : undefined}
-					onZoneChange={setZone}
-					onGuide={openGuide}
-					onStart={startTournament}
-					onWithdraw={withdraw}
-					onConfirmTransition={transitionChampionship}
+					divACount={slotsA.length}
+					divBCount={slotsB.length}
 				/>
-
-				<!-- Live & upcoming matches, surfaced on the overview page while the
-				tournament is running — the most-used view mid-tournament. Hidden in
-				setup (no matches) and complete (bracket/standings tell that story). -->
-				{#if showLiveMatches}
-					<TournamentUpNextPanel
-						tournament={data.tournament}
-						matches={data.matches}
-						{zone}
-						{slotLabels}
-						{slotUserIds}
-						{slotAvatars}
-						{user}
-						onSubstitute={isAdmin ? substituteSlot : undefined}
-					/>
-				{/if}
-
-				{#if data.tournament.status === "setup"}
-					{#if isAdmin}
-						<!-- Left column stacks Overview + Signups; Maps sits in the right
-						column at its natural height (items-start), so there's blank space
-						to the right of Signups until the maps panel grows as maps are added. -->
-						<div class="grid grid-cols-1 items-start gap-4 lg:grid-cols-2">
-							<div>
-								<TournamentOverviewPanel tournament={data.tournament} />
-								<TournamentConfigurationPanel
-									tournament={data.tournament}
-									divACount={slotsA.length}
-									divBCount={slotsB.length}
-								/>
-							</div>
-							<TournamentMapsPanel tournament={data.tournament} />
-						</div>
-					{/if}
-
-					<section
-						class="mb-6 rounded-lg p-4"
-						style="background-color: rgb(var(--color-surface));"
-					>
-						<h2 class="mb-3 text-sm font-bold text-tan">Slots</h2>
-
-						{#if isAdmin}
-							<div
-								class="mb-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
-								style="background-color: rgb(var(--color-surface-raised));"
-							>
-								<label class="block min-w-[14rem] text-xs text-tan">
-									Player
-									<div class="mt-1">
-										<UserAutocomplete
-											value={newSlotUsername}
-											onValueChange={(v) => (newSlotUsername = v)}
-											onSelectUser={(u) => (newSlotUserId = u?.user_id ?? null)}
-											disabled={busy}
-											inputClass="bg-surface focus:outline-none"
-											onEnter={() => {
-												if (!busy && newSlotUsername.trim()) addSlot();
-											}}
-											inputAttrs={{
-												"data-1p-ignore": "true",
-												"data-lpignore": "true",
-												"data-bwignore": "true",
-												"data-form-type": "other",
-											}}
-										/>
-									</div>
-								</label>
-								<div class="text-xs text-tan">
-									<span class="block">Division</span>
-									<RadioGroup
-										value={newSlotDivision}
-										onChange={(v) => (newSlotDivision = v as Division)}
-										ariaLabel="Division"
-										class="mt-1 flex gap-3"
-									>
-										<label class="flex cursor-pointer items-center gap-1">
-											<RadioItem value="A" />
-											{data.tournament.division_a_name}
-										</label>
-										<label class="flex cursor-pointer items-center gap-1">
-											<RadioItem value="B" />
-											{data.tournament.division_b_name}
-										</label>
-									</RadioGroup>
-								</div>
-								<button
-									type="button"
-									class="rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
-									onclick={addSlot}
-									disabled={busy || !newSlotUsername.trim()}
-								>
-									Add slot
-								</button>
-							</div>
-						{:else if !hasAnyStandings}
-							<p class="mb-3 text-xs text-tan opacity-70">
-								{#if data.tournament.signups_open}
-									Players will appear here as they sign up.
-								{:else}
-									The tournament hasn't started yet. Players will appear here as
-									they're added.
-								{/if}
-							</p>
-						{/if}
-
-						<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
-							{#each ["A", "B"] as const as div (div)}
-								{@const slots = localOrder[div]}
-								{@const draggable = isAdmin && !busy}
-								<div
-									class="rounded-lg p-3"
-									style="background-color: rgb(var(--color-surface-raised));"
-								>
-									<h3 class="mb-2 text-xs uppercase text-tan opacity-70">
-										{data.standings.divisions[div].name}
-									</h3>
-									{#if slots.length === 0}
-										<p
-											class="text-xs text-tan opacity-50"
-											class:outline={isAdmin &&
-												dragSlotId &&
-												dragOver?.division === div}
-											class:outline-orange={isAdmin &&
-												dragSlotId &&
-												dragOver?.division === div}
-											ondragover={(e) => onSlotDragOverEmpty(div, e)}
-											ondrop={(e) => onSlotDrop(div, e)}
-											role="presentation"
-										>
-											No slots yet.
-										</p>
-									{:else}
-										<table class="w-full text-xs text-tan">
-											<thead>
-												<tr class="border-b border-black">
-													{#if isAdmin}
-														<th class="w-4"></th>
-													{/if}
-													<th class="py-1 pr-2 text-left">#</th>
-													<th class="py-1 pr-2 text-left">Player</th>
-													<th class="py-1 text-right">Claimed</th>
-													{#if isAdmin}
-														<th class="py-1 pl-2 text-right"></th>
-													{/if}
-												</tr>
-											</thead>
-											<tbody>
-												{#each slots as s, idx (s.slot_id)}
-													{@const showRowTarget =
-														dragSlotId !== null &&
-														dragSlotId !== s.slot_id &&
-														dragOver?.division === div &&
-														dragOver.index === idx}
-													<tr
-														class="border-b border-black border-opacity-30 last:border-0"
-														class:opacity-40={dragSlotId === s.slot_id}
-														class:bg-orange={showRowTarget}
-														class:bg-opacity-20={showRowTarget}
-														draggable={draggable ? "true" : "false"}
-														ondragstart={(e) => onSlotDragStart(s.slot_id, e)}
-														ondragend={onSlotDragEnd}
-														ondragover={(e) => onSlotDragOverRow(div, idx, e)}
-														ondrop={(e) => onSlotDrop(div, e)}
-													>
-														{#if isAdmin}
-															<td
-																class="select-none py-1 pr-1 text-center text-tan opacity-40"
-																class:cursor-grab={draggable}
-																aria-label="Drag to reorder"
-															>
-																⋮⋮
-															</td>
-														{/if}
-														<td class="py-1 pr-2 font-mono">
-															{s.swiss_seed ?? s.rank}
-														</td>
-														<td class="py-1 pr-2">
-															<span class="flex items-start gap-1">
-																<PlayerAvatar
-																	avatarUrl={s.avatar_url}
-																	size={15}
-																/>
-																{#if isAdmin}
-																	<SlotUsernameCell
-																		slotId={s.slot_id}
-																		username={s.display_name}
-																		handle={s.discord_username}
-																		answer={s.signup_answer}
-																		editAnswer
-																		disabled={busy}
-																		onSubstitute={(u, userId, answer) =>
-																			substituteSlot(
-																				s.slot_id,
-																				u,
-																				userId,
-																				answer,
-																			)}
-																	/>
-																{:else}
-																	<span>
-																		{s.display_name ??
-																			`slot ${s.slot_id.slice(0, 6)}`}
-																	</span>
-																{/if}
-															</span>
-														</td>
-														<td class="py-1 text-right">
-															{s.user_id ? "✓" : "—"}
-														</td>
-														{#if isAdmin}
-															<td class="py-1 pl-2 text-right">
-																<button
-																	type="button"
-																	class="text-xs text-tan opacity-50 hover:text-red-400 hover:opacity-100 disabled:opacity-20"
-																	onclick={() => deleteSlot(s.slot_id)}
-																	disabled={busy}
-																	aria-label="Delete slot"
-																>
-																	×
-																</button>
-															</td>
-														{/if}
-													</tr>
-												{/each}
-											</tbody>
-										</table>
-										{#if isAdmin && dragSlotId && dragSourceDivision !== div}
-											{@const showEndTarget =
-												dragOver?.division === div &&
-												dragOver.index === slots.length}
-											<div
-												class="mt-1 rounded border border-dashed py-2"
-												class:border-orange={showEndTarget}
-												class:bg-orange={showEndTarget}
-												class:bg-opacity-20={showEndTarget}
-												class:border-black={!showEndTarget}
-												class:opacity-60={!showEndTarget}
-												ondragover={(e) => onSlotDragOverEnd(div, e)}
-												ondrop={(e) => onSlotDrop(div, e)}
-												role="presentation"
-											></div>
-										{/if}
-									{/if}
-								</div>
-							{/each}
-						</div>
-					</section>
-				{:else if !hasAnyStandings}
-					<section
-						class="mb-6 rounded-lg p-6 text-center"
-						style="background-color: rgb(var(--color-surface));"
-					>
-						<p class="text-sm text-tan opacity-70">
-							No standings available yet.
-						</p>
-					</section>
-				{:else}
-					{#if data.bracket.rounds.length > 0}
-						<!-- Bracket diagram and standings share one card and are
-						     toggled (not stacked), matching the Swiss divisions. -->
-						<Tabs.Root
-							bind:value={championshipView}
-							class="mb-3 rounded-lg p-4 pb-2"
-							style="background-color: rgb(var(--color-surface));"
-						>
-							<div
-								class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
-								style="background-color: rgb(var(--color-surface-raised));"
-							>
-								<h2 class="text-lg font-bold text-tan">Championship</h2>
-								<Tabs.List
-									class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
-									style="background-color: rgb(var(--color-surface));"
-								>
-									<div
-										class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-										style:background-color="rgb(var(--color-surface-raised))"
-										style:transform={championshipView === "standings"
-											? "translateX(100%)"
-											: "translateX(0)"}
-									></div>
-									<Tabs.Trigger value="diagram" class={viewTriggerClass}>
-										Bracket
-									</Tabs.Trigger>
-									<Tabs.Trigger value="standings" class={viewTriggerClass}>
-										Standings
-									</Tabs.Trigger>
-								</Tabs.List>
-							</div>
-							<div class="view-stack">
-								{#key championshipView}
-									<div
-										class="view-pane"
-										in:fade={{ duration: 200 }}
-										out:fade={{ duration: 200 }}
-									>
-										{#if championshipView === "standings"}
-											<ChampionshipStandings
-												bracket={data.bracket}
-												isComplete={data.tournament.status === "complete"}
-											/>
-										{:else}
-											<ChampionshipBracketTree
-												bracket={data.bracket}
-												tournamentSlug={data.tournament.slug}
-												mapPool={data.tournament.map_pool}
-												onMatchClick={openMatch}
-											>
-												{#snippet footer()}
-													<PickPreferenceNote />
-												{/snippet}
-											</ChampionshipBracketTree>
-										{/if}
-									</div>
-								{/key}
-							</div>
-						</Tabs.Root>
-					{/if}
-
-					{#each ["A", "B"] as const as division (division)}
-						{@const divisionData = data.standings.divisions[division]}
-						{#if divisionData.standings.length > 0}
-							<!-- Bracket diagram and standings share one card and are
-							     toggled (not stacked) to keep the page compact. -->
-							<Tabs.Root
-								bind:value={swissView[division]}
-								class="mb-3 rounded-lg p-4"
-								style="background-color: rgb(var(--color-surface));"
-							>
-								<div
-									class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
-									style="background-color: rgb(var(--color-surface-raised));"
-								>
-									<h2 class="text-lg font-bold text-tan">
-										{divisionData.name}
-									</h2>
-									<Tabs.List
-										class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
-										style="background-color: rgb(var(--color-surface));"
-									>
-										<div
-											class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
-											style:background-color="rgb(var(--color-surface-raised))"
-											style:transform={swissView[division] === "standings"
-												? "translateX(100%)"
-												: "translateX(0)"}
-										></div>
-										<Tabs.Trigger value="diagram" class={viewTriggerClass}>
-											Rounds
-										</Tabs.Trigger>
-										<Tabs.Trigger value="standings" class={viewTriggerClass}>
-											Standings
-										</Tabs.Trigger>
-									</Tabs.List>
-								</div>
-								<div class="view-stack">
-									{#key swissView[division]}
-										<div
-											class="view-pane"
-											in:fade={{ duration: 200 }}
-											out:fade={{ duration: 200 }}
-										>
-											{#if swissView[division] === "standings"}
-												<SwissStandings
-													divisionName=""
-													standings={divisionData.standings}
-													isViewerAdmin={isAdmin}
-													{busy}
-													onSubstitute={data.tournament.status ===
-													"championship"
-														? undefined
-														: substituteSlot}
-													onWithdraw={data.tournament.status === "swiss"
-														? withdrawSlot
-														: undefined}
-													onReinstate={data.tournament.status === "swiss"
-														? reinstateSlot
-														: undefined}
-												/>
-											{:else}
-												<div class="mb-3">
-													<PickPreferenceNote />
-												</div>
-												<SwissFlowBracket
-													winsToAdvance={data.tournament.swiss_wins_to_advance}
-													lossesToEliminate={data.tournament
-														.swiss_losses_to_eliminate}
-													maxRounds={data.tournament.swiss_max_rounds}
-													standings={divisionData.standings}
-													matches={matchesByDivision[division]}
-													tournamentSlug={data.tournament.slug}
-													mapPool={data.tournament.map_pool}
-													onMatchClick={openMatch}
-												/>
-											{/if}
-										</div>
-									{/key}
-								</div>
-							</Tabs.Root>
-						{/if}
-					{/each}
-				{/if}
 			</div>
+			<TournamentMapsPanel tournament={data.tournament} />
 		</div>
-	</main>
-</div>
+	{/if}
 
+	<section
+		class="mb-6 rounded-lg p-4"
+		style="background-color: rgb(var(--color-surface));"
+	>
+		<h2 class="mb-3 text-sm font-bold text-tan">Slots</h2>
+
+		{#if isAdmin}
+			<div
+				class="mb-3 flex flex-wrap items-end gap-2 rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
+				<label class="block min-w-[14rem] text-xs text-tan">
+					Player
+					<div class="mt-1">
+						<UserAutocomplete
+							value={newSlotUsername}
+							onValueChange={(v) => (newSlotUsername = v)}
+							onSelectUser={(u) => (newSlotUserId = u?.user_id ?? null)}
+							disabled={busy}
+							inputClass="bg-surface focus:outline-none"
+							onEnter={() => {
+								if (!busy && newSlotUsername.trim()) addSlot();
+							}}
+							inputAttrs={{
+								"data-1p-ignore": "true",
+								"data-lpignore": "true",
+								"data-bwignore": "true",
+								"data-form-type": "other",
+							}}
+						/>
+					</div>
+				</label>
+				<div class="text-xs text-tan">
+					<span class="block">Division</span>
+					<RadioGroup
+						value={newSlotDivision}
+						onChange={(v) => (newSlotDivision = v as Division)}
+						ariaLabel="Division"
+						class="mt-1 flex gap-3"
+					>
+						<label class="flex cursor-pointer items-center gap-1">
+							<RadioItem value="A" />
+							{data.tournament.division_a_name}
+						</label>
+						<label class="flex cursor-pointer items-center gap-1">
+							<RadioItem value="B" />
+							{data.tournament.division_b_name}
+						</label>
+					</RadioGroup>
+				</div>
+				<button
+					type="button"
+					class="rounded border border-tan px-3 py-1.5 text-xs text-tan disabled:opacity-50"
+					onclick={addSlot}
+					disabled={busy || !newSlotUsername.trim()}
+				>
+					Add slot
+				</button>
+			</div>
+		{:else if !hasAnyStandings}
+			<p class="mb-3 text-xs text-tan opacity-70">
+				{#if data.tournament.signups_open}
+					Players will appear here as they sign up.
+				{:else}
+					The tournament hasn't started yet. Players will appear here as they're
+					added.
+				{/if}
+			</p>
+		{/if}
+
+		<div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
+			{#each ["A", "B"] as const as div (div)}
+				{@const slots = localOrder[div]}
+				{@const draggable = isAdmin && !busy}
+				<div
+					class="rounded-lg p-3"
+					style="background-color: rgb(var(--color-surface-raised));"
+				>
+					<h3 class="mb-2 text-xs uppercase text-tan opacity-70">
+						{data.standings.divisions[div].name}
+					</h3>
+					{#if slots.length === 0}
+						<p
+							class="text-xs text-tan opacity-50"
+							class:outline={isAdmin &&
+								dragSlotId &&
+								dragOver?.division === div}
+							class:outline-orange={isAdmin &&
+								dragSlotId &&
+								dragOver?.division === div}
+							ondragover={(e) => onSlotDragOverEmpty(div, e)}
+							ondrop={(e) => onSlotDrop(div, e)}
+							role="presentation"
+						>
+							No slots yet.
+						</p>
+					{:else}
+						<table class="w-full text-xs text-tan">
+							<thead>
+								<tr class="border-b border-black">
+									{#if isAdmin}
+										<th class="w-4"></th>
+									{/if}
+									<th class="py-1 pr-2 text-left">#</th>
+									<th class="py-1 pr-2 text-left">Player</th>
+									<th class="py-1 text-right">Claimed</th>
+									{#if isAdmin}
+										<th class="py-1 pl-2 text-right"></th>
+									{/if}
+								</tr>
+							</thead>
+							<tbody>
+								{#each slots as s, idx (s.slot_id)}
+									{@const showRowTarget =
+										dragSlotId !== null &&
+										dragSlotId !== s.slot_id &&
+										dragOver?.division === div &&
+										dragOver.index === idx}
+									<tr
+										class="border-b border-black border-opacity-30 last:border-0"
+										class:opacity-40={dragSlotId === s.slot_id}
+										class:bg-orange={showRowTarget}
+										class:bg-opacity-20={showRowTarget}
+										draggable={draggable ? "true" : "false"}
+										ondragstart={(e) => onSlotDragStart(s.slot_id, e)}
+										ondragend={onSlotDragEnd}
+										ondragover={(e) => onSlotDragOverRow(div, idx, e)}
+										ondrop={(e) => onSlotDrop(div, e)}
+									>
+										{#if isAdmin}
+											<td
+												class="select-none py-1 pr-1 text-center text-tan opacity-40"
+												class:cursor-grab={draggable}
+												aria-label="Drag to reorder"
+											>
+												⋮⋮
+											</td>
+										{/if}
+										<td class="py-1 pr-2 font-mono">
+											{s.swiss_seed ?? s.rank}
+										</td>
+										<td class="py-1 pr-2">
+											<span class="flex items-start gap-1">
+												<PlayerAvatar avatarUrl={s.avatar_url} size={15} />
+												{#if isAdmin}
+													<SlotUsernameCell
+														slotId={s.slot_id}
+														username={s.display_name}
+														handle={s.discord_username}
+														answer={s.signup_answer}
+														editAnswer
+														disabled={busy}
+														onSubstitute={(u, userId, answer) =>
+															substituteSlot(s.slot_id, u, userId, answer)}
+													/>
+												{:else}
+													<span>
+														{s.display_name ?? `slot ${s.slot_id.slice(0, 6)}`}
+													</span>
+												{/if}
+											</span>
+										</td>
+										<td class="py-1 text-right">
+											{s.user_id ? "✓" : "—"}
+										</td>
+										{#if isAdmin}
+											<td class="py-1 pl-2 text-right">
+												<button
+													type="button"
+													class="text-xs text-tan opacity-50 hover:text-red-400 hover:opacity-100 disabled:opacity-20"
+													onclick={() => deleteSlot(s.slot_id)}
+													disabled={busy}
+													aria-label="Delete slot"
+												>
+													×
+												</button>
+											</td>
+										{/if}
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+						{#if isAdmin && dragSlotId && dragSourceDivision !== div}
+							{@const showEndTarget =
+								dragOver?.division === div && dragOver.index === slots.length}
+							<div
+								class="mt-1 rounded border border-dashed py-2"
+								class:border-orange={showEndTarget}
+								class:bg-orange={showEndTarget}
+								class:bg-opacity-20={showEndTarget}
+								class:border-black={!showEndTarget}
+								class:opacity-60={!showEndTarget}
+								ondragover={(e) => onSlotDragOverEnd(div, e)}
+								ondrop={(e) => onSlotDrop(div, e)}
+								role="presentation"
+							></div>
+						{/if}
+					{/if}
+				</div>
+			{/each}
+		</div>
+	</section>
+{:else if !hasAnyStandings}
+	<section
+		class="mb-6 rounded-lg p-6 text-center"
+		style="background-color: rgb(var(--color-surface));"
+	>
+		<p class="text-sm text-tan opacity-70">No standings available yet.</p>
+	</section>
+{:else}
+	{#if data.bracket.rounds.length > 0}
+		<!-- Bracket diagram and standings share one card and are
+		     toggled (not stacked), matching the Swiss divisions. -->
+		<Tabs.Root
+			bind:value={championshipView}
+			class="mb-3 rounded-lg p-4 pb-2"
+			style="background-color: rgb(var(--color-surface));"
+		>
+			<div
+				class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
+				<h2 class="text-lg font-bold text-tan">Championship</h2>
+				<Tabs.List
+					class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+					style="background-color: rgb(var(--color-surface));"
+				>
+					<div
+						class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+						style:background-color="rgb(var(--color-surface-raised))"
+						style:transform={championshipView === "standings"
+							? "translateX(100%)"
+							: "translateX(0)"}
+					></div>
+					<Tabs.Trigger value="diagram" class={viewTriggerClass}>
+						Bracket
+					</Tabs.Trigger>
+					<Tabs.Trigger value="standings" class={viewTriggerClass}>
+						Standings
+					</Tabs.Trigger>
+				</Tabs.List>
+			</div>
+			<div class="view-stack">
+				{#key championshipView}
+					<div
+						class="view-pane"
+						in:fade={{ duration: 200 }}
+						out:fade={{ duration: 200 }}
+					>
+						{#if championshipView === "standings"}
+							<ChampionshipStandings
+								bracket={data.bracket}
+								isComplete={data.tournament.status === "complete"}
+							/>
+						{:else}
+							<ChampionshipBracketTree
+								bracket={data.bracket}
+								tournamentSlug={data.tournament.slug}
+								mapPool={data.tournament.map_pool}
+								onMatchClick={openMatch}
+							>
+								{#snippet footer()}
+									<PickPreferenceNote />
+								{/snippet}
+							</ChampionshipBracketTree>
+						{/if}
+					</div>
+				{/key}
+			</div>
+		</Tabs.Root>
+	{/if}
+
+	{#each ["A", "B"] as const as division (division)}
+		{@const divisionData = data.standings.divisions[division]}
+		{#if divisionData.standings.length > 0}
+			<!-- Bracket diagram and standings share one card and are
+			     toggled (not stacked) to keep the page compact. -->
+			<Tabs.Root
+				bind:value={swissView[division]}
+				class="mb-3 rounded-lg p-4"
+				style="background-color: rgb(var(--color-surface));"
+			>
+				<div
+					class="mb-3 flex items-center justify-between gap-3 rounded-lg px-3 py-2"
+					style="background-color: rgb(var(--color-surface-raised));"
+				>
+					<h2 class="text-lg font-bold text-tan">
+						{divisionData.name}
+					</h2>
+					<Tabs.List
+						class="relative grid shrink-0 grid-cols-2 overflow-hidden rounded-lg border-2 border-surface"
+						style="background-color: rgb(var(--color-surface));"
+					>
+						<div
+							class="pointer-events-none absolute inset-y-0 left-0 w-1/2 transition-transform duration-200 ease-out"
+							style:background-color="rgb(var(--color-surface-raised))"
+							style:transform={swissView[division] === "standings"
+								? "translateX(100%)"
+								: "translateX(0)"}
+						></div>
+						<Tabs.Trigger value="diagram" class={viewTriggerClass}>
+							Rounds
+						</Tabs.Trigger>
+						<Tabs.Trigger value="standings" class={viewTriggerClass}>
+							Standings
+						</Tabs.Trigger>
+					</Tabs.List>
+				</div>
+				<div class="view-stack">
+					{#key swissView[division]}
+						<div
+							class="view-pane"
+							in:fade={{ duration: 200 }}
+							out:fade={{ duration: 200 }}
+						>
+							{#if swissView[division] === "standings"}
+								<SwissStandings
+									divisionName=""
+									standings={divisionData.standings}
+									isViewerAdmin={isAdmin}
+									{busy}
+									onSubstitute={data.tournament.status === "championship"
+										? undefined
+										: substituteSlot}
+									onWithdraw={data.tournament.status === "swiss"
+										? withdrawSlot
+										: undefined}
+									onReinstate={data.tournament.status === "swiss"
+										? reinstateSlot
+										: undefined}
+								/>
+							{:else}
+								<div class="mb-3">
+									<PickPreferenceNote />
+								</div>
+								<SwissFlowBracket
+									winsToAdvance={data.tournament.swiss_wins_to_advance}
+									lossesToEliminate={data.tournament.swiss_losses_to_eliminate}
+									maxRounds={data.tournament.swiss_max_rounds}
+									standings={divisionData.standings}
+									matches={matchesByDivision[division]}
+									tournamentSlug={data.tournament.slug}
+									mapPool={data.tournament.map_pool}
+									onMatchClick={openMatch}
+								/>
+							{/if}
+						</div>
+					{/key}
+				</div>
+			</Tabs.Root>
+		{/if}
+	{/each}
+{/if}
 <!-- Match detail. Page-level (its data bundle is assembled here and both
      brackets link to it) and anchored to the bracket cell carrying the open
      match's id; open is driven by the `?match=` shallow-routing deep link. -->
