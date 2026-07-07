@@ -21,6 +21,7 @@
 	import MatchPopover from "$lib/tournament/MatchPopover.svelte";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import TournamentActions from "$lib/tournament/TournamentActions.svelte";
+	import TournamentViewTabs from "$lib/tournament/TournamentViewTabs.svelte";
 	import {
 		matchSlotDisplayName,
 		matchupLabel,
@@ -429,8 +430,9 @@
 			<div class="mx-auto max-w-screen-2xl">
 				<!-- Trail on the left, the shared action cluster (Links · Settings ·
 				     clock toggle) top-right, matching the overview header. -->
-				<div class="mb-4 flex items-center justify-between gap-3">
+				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<Breadcrumb {crumbs} class="min-w-0" />
+					<TournamentViewTabs tournament={data.tournament} />
 					<TournamentActions
 						tournament={data.tournament}
 						onGuide={openGuide}

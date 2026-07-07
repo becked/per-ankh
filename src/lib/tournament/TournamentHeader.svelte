@@ -9,6 +9,7 @@
 	import Progress from "$lib/ui/Progress.svelte";
 	import SignedUpPopover from "./SignedUpPopover.svelte";
 	import TournamentActions from "./TournamentActions.svelte";
+	import TournamentViewTabs from "./TournamentViewTabs.svelte";
 	import SignupPopover from "./SignupPopover.svelte";
 	import TransitionPopover from "./TransitionPopover.svelte";
 	import type { HeaderHero, HeaderStatusMeta } from "./header-status";
@@ -111,6 +112,9 @@
 <header class="mb-3">
 	<!-- Nav trail with the status badge to its right; actions on the far right.
 	     The tournament name already lives in the trail, so no separate title. -->
+	<!-- Three zones on one row: title (left), the view-tabs toggle, and the action
+	     cluster (right). justify-between spreads them so the toggle sits equidistant
+	     between the title and the buttons (not page-centred); wraps on narrow widths. -->
 	<div class="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
 		<div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
 			<Breadcrumb {crumbs} class="min-w-0" />
@@ -120,6 +124,8 @@
 				{statusMeta.label}
 			</span>
 		</div>
+
+		<TournamentViewTabs {tournament} />
 
 		<div class="flex flex-shrink-0 items-center gap-2">
 			{#if hasViewerSlot}

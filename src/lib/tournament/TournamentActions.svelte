@@ -4,7 +4,6 @@
 	// both. It owns its own flex row (gap-2) and is dropped into a wider header
 	// row. SignedUp deliberately stays out of here — it's a membership action, not
 	// page chrome — so the overview header renders it alongside this cluster.
-	import { resolve } from "$app/paths";
 	import type { TournamentDetail } from "$lib/api-cloud";
 	import type { ScheduleZone } from "./schedule";
 	import { shortTimeZoneName } from "$lib/utils/formatting";
@@ -39,9 +38,9 @@
 		tournament.is_viewer_admin === true || tournament.status !== "setup",
 	);
 
-	// Shared pill styling for this cluster's own triggers (the Stats link and the
-	// clock toggle) — matching the Links/Settings triggers beside them, which
-	// style themselves. inline-flex leaves room for each button's leading icon.
+	// Shared pill styling for this cluster's own trigger (the clock toggle) —
+	// matching the Links/Settings triggers beside it, which style themselves.
+	// inline-flex leaves room for the button's leading icon.
 	const triggerClass =
 		"inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange";
 
@@ -53,28 +52,6 @@
 </script>
 
 <div class="flex flex-shrink-0 items-center gap-2">
-	<a
-		href={resolve("/tournaments/[slug]/stats", { slug: tournament.slug })}
-		class={triggerClass}
-		title="Tournament stats"
-	>
-		<svg
-			xmlns="http://www.w3.org/2000/svg"
-			class="h-3.5 w-3.5 opacity-80"
-			fill="none"
-			viewBox="0 0 24 24"
-			stroke="currentColor"
-			stroke-width="2"
-			aria-hidden="true"
-		>
-			<path
-				stroke-linecap="round"
-				stroke-linejoin="round"
-				d="M3 21h18M7 21V10M12 21V4M17 21V14"
-			/>
-		</svg>
-		Stats
-	</a>
 	<TournamentLinksMenu {tournament} {onGuide} />
 	{#if showSettings}
 		<SettingsPopover {tournament} disabled={settingsDisabled} />

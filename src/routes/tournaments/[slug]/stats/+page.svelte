@@ -13,6 +13,7 @@
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { nationWinLossStackedOption } from "$lib/stats/charts/nations";
 	import TournamentActions from "$lib/tournament/TournamentActions.svelte";
+	import TournamentViewTabs from "$lib/tournament/TournamentViewTabs.svelte";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
 	import {
 		AVATAR_LABEL_SIZE,
@@ -139,8 +140,9 @@
 			use:autohideScroll
 		>
 			<div class="mx-auto max-w-screen-2xl">
-				<div class="mb-4 flex items-center justify-between gap-3">
+				<div class="mb-4 flex flex-wrap items-center justify-between gap-3">
 					<Breadcrumb {crumbs} class="min-w-0" />
+					<TournamentViewTabs tournament={data.tournament} />
 					<TournamentActions
 						tournament={data.tournament}
 						onGuide={openGuide}
