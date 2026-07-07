@@ -124,11 +124,23 @@
 		>
 			<div class="mx-auto max-w-screen-2xl">
 				<!-- Shared header row: trail (+ Overview-only status badge) on the left,
-				     the persistent view toggle centred, the action cluster on the right.
-				     One instance across tabs, so the toggle's pill slides on navigation
-				     instead of remounting. -->
+				     the persistent view toggle between it and the action cluster, the
+				     cluster on the right. One instance across tabs, so the toggle's pill
+				     slides on navigation instead of remounting.
+
+				     On lg+ this is a 2fr/auto/1fr grid rather than a justify-between flex
+				     row. The trail column (2fr) gets the larger share so a long name
+				     doesn't wrap; the toggle sits in the auto middle column and the
+				     cluster in the 1fr right column. Because the outer columns are
+				     proportional — not sized to their content — the toggle's position
+				     depends only on the row and cluster widths, not on the trail's
+				     length, so it (and the cluster) stay put when the trail grows between
+				     tabs (Overview's name-only trail vs. Matches/Stats' longer leafed
+				     trail). Below lg the flex-wrap stack returns, so when space is tight
+				     the toggle/cluster wrap to their own line and the trail keeps the
+				     full width instead of wrapping mid-line. -->
 				<div
-					class="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2"
+					class="mb-4 flex flex-wrap items-center justify-between gap-x-3 gap-y-2 lg:grid lg:grid-cols-[2fr_auto_1fr]"
 				>
 					<div class="flex min-w-0 flex-wrap items-center gap-x-3 gap-y-1">
 						<Breadcrumb {crumbs} class="min-w-0" />
@@ -143,7 +155,9 @@
 
 					<TournamentViewTabs {tournament} />
 
-					<div class="flex flex-shrink-0 items-center gap-2">
+					<div
+						class="flex flex-shrink-0 items-center gap-2 lg:justify-self-end"
+					>
 						{#if isOverview && tournament.viewer_slot != null}
 							<SignedUpPopover
 								{tournament}
