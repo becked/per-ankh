@@ -112,6 +112,7 @@ export function deriveMapTiles(
 			river_sw: t.riverSw,
 			river_se: t.riverSe,
 			owner_nation: tilePlayer?.nation ?? null,
+			owner_player_xml_id: t.ownerPlayerXmlId,
 			owner_city: territoryCity?.cityName ?? null,
 			is_city_center: center !== undefined,
 			is_capital: center?.isCapital ?? false,

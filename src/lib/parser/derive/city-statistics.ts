@@ -62,6 +62,16 @@ export function deriveCityStatistics(
 			c.governorXmlId !== null ? characterMap.get(c.governorXmlId) : undefined;
 		const family = c.family !== null ? familyByName.get(c.family) : undefined;
 
+		// Per-owner family, with its class resolved the same way as the current
+		// family above. Lets the map's turn slider show a captured city's
+		// founder family for turns before the capture — the family only changes
+		// on conquest, so each player's entry is the family during their tenure.
+		const playerFamilies = c.playerFamilies.map((pf) => ({
+			player_xml_id: pf.playerXmlId,
+			family: pf.familyName,
+			family_class: familyByName.get(pf.familyName)?.familyClass ?? null,
+		}));
+
 		return {
 			city_id: c.xmlId,
 			city_name: c.cityName,
@@ -69,6 +79,7 @@ export function deriveCityStatistics(
 			owner_player_xml_id: c.playerXmlId,
 			family: c.family,
 			family_class: family?.familyClass ?? null,
+			player_families: playerFamilies,
 			first_owner_player_xml_id: c.firstOwnerPlayerXmlId,
 			founded_turn: c.foundedTurn,
 			is_capital: c.isCapital,

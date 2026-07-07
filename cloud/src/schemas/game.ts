@@ -82,6 +82,10 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         Succession laws (LAWCLASS_ORDER, e.g. Primogeniture) are excluded
 //         from current_laws + law_adoption_history (and so from law_events /
 //         laws_count) — they're realm defaults, not civic adoptions.
+// 2.10.0 — city_statistics.cities[].player_families (each owning player →
+//         their family, from <PlayerFamily>) + map_tiles[].owner_player_xml_id
+//         (per-turn owning player). Lets the map's turn slider show a captured
+//         city's founder family before the capture instead of the conqueror's.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -98,13 +102,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.8.0",
 	"2.9.0",
 	"2.9.1",
+	"2.10.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.9.1";
+export const CURRENT_PARSER_VERSION = "2.10.0";
 
 // ----- Reusable atoms -----
 

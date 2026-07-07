@@ -285,26 +285,51 @@
 		onTurnChange?: ((turn: number) => Promise<void> | void) | null;
 	} = $props();
 
+	// city_name → the player owning the city's centre tile at the represented
+	// turn, read from the (per-turn reconstructed) tiles. Lets the family crest
+	// track ownership as the turn slider moves. A missing entry means "no
+	// per-turn owner resolvable" (old blobs without owner_player_xml_id, or the
+	// legacy final-state render) — the crest resolver then falls back to the
+	// city's current family.
+	const cityCenterOwnerByTurn = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
+		const map = new Map<string, number | null>();
+		for (const t of tiles) {
+			if (t.is_city_center && t.owner_city) {
+				map.set(t.owner_city, t.owner_player_xml_id ?? null);
+			}
+		}
+		return map;
+	});
+
 	// city_name → resolved crest sprite key (or null when no crest is
 	// renderable). Resolution prefers a per-family crest when we ship the
 	// art; otherwise falls back to the family-class archetype crest, which
-	// always exists for non-null family_class values. Recomputed when the
-	// cities prop changes; tile lookups stay O(1) inside the tooltip resolver.
-	// Existence is checked against the SPRITE_MANIFEST baked from
-	// static/sprites/crests/CREST_FAMILY_*.png.
+	// always exists for non-null family_class values. Existence is checked
+	// against the SPRITE_MANIFEST baked from static/sprites/crests/CREST_FAMILY_*.png.
+	//
+	// The family is resolved for whoever owns the city at the represented turn:
+	// a city's family only changes when another nation conquers it, so
+	// player_families holds each past owner's family and a captured city shows
+	// its founder's family for turns before the capture. Recomputed when the
+	// cities prop or the per-turn tiles change.
 	const cityFamilyCrestByName = $derived.by(() => {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- locally-scoped Map, not reactive state
 		const map = new Map<string, string | null>();
 		for (const c of cities) {
+			const ownerAtTurn = cityCenterOwnerByTurn.get(c.city_name);
+			const pf =
+				ownerAtTurn != null
+					? c.player_families?.find((f) => f.player_xml_id === ownerAtTurn)
+					: undefined;
+			const family = pf?.family ?? c.family;
+			const familyClass = pf?.family_class ?? c.family_class;
 			let key: string | null = null;
-			if (
-				c.family &&
-				SPRITE_MANIFEST[`crests/CREST_FAMILY_${c.family}`] != null
-			) {
-				key = c.family;
-			} else if (c.family_class) {
+			if (family && SPRITE_MANIFEST[`crests/CREST_FAMILY_${family}`] != null) {
+				key = family;
+			} else if (familyClass) {
 				// FAMILYCLASS_CHAMPIONS → ARCHETYPE_CHAMPIONS
-				key = c.family_class.replace(/^FAMILYCLASS_/, "ARCHETYPE_");
+				key = familyClass.replace(/^FAMILYCLASS_/, "ARCHETYPE_");
 			}
 			map.set(c.city_name, key);
 		}

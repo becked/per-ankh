@@ -27,6 +27,12 @@ export interface City {
 	playerXmlId: number | null;
 	tileXmlId: number;
 	family: string | null;
+	// Per-player family associations from <PlayerFamily> (<P.X>FAMILY_Y</P.X>).
+	// Retains each owning player's family across a capture — a city's family
+	// only changes when another nation conquers it, so this is the historical
+	// family record for the map's turn slider. Same shape as unit families
+	// (parsers/units.ts parseUnitFamilies).
+	playerFamilies: { playerXmlId: number; familyName: string }[];
 	firstOwnerPlayerXmlId: number | null;
 	lastOwnerPlayerXmlId: number | null;
 	isCapital: boolean;
@@ -140,6 +146,22 @@ export function parseCities(root: Record<string, unknown>): City[] {
 				? aggregateUpc
 				: sumNamedIntChildren(node.UnitProductionCounts);
 
+		// <PlayerFamily> holds <P.X>FAMILY_Y</P.X> for every player who has
+		// owned this city — the same string-valued prefix-keyed shape as unit
+		// families (units.rs:126–145). Skip non-P.* tags, unparseable player
+		// IDs, and empty values.
+		const playerFamilies: { playerXmlId: number; familyName: string }[] = [];
+		const familyNode = node.PlayerFamily;
+		if (isElement(familyNode)) {
+			for (const [tag, value] of getElementChildren(familyNode)) {
+				if (!tag.startsWith("P.")) continue;
+				const pid = parseInt(tag.slice(2), 10);
+				if (Number.isNaN(pid)) continue;
+				if (typeof value !== "string" || value === "") continue;
+				playerFamilies.push({ playerXmlId: pid, familyName: value });
+			}
+		}
+
 		cities.push({
 			xmlId,
 			cityName,
@@ -147,6 +169,7 @@ export function parseCities(root: Record<string, unknown>): City[] {
 			playerXmlId,
 			tileXmlId,
 			family: optAttrStr(node["@_Family"]),
+			playerFamilies,
 			firstOwnerPlayerXmlId: optInt(node.FirstPlayer),
 			lastOwnerPlayerXmlId: optInt(node.LastPlayer),
 			isCapital,
