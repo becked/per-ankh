@@ -6,7 +6,10 @@
 	// (no chart registry) through the shared ChartContainer, reusing the chart
 	// theme/grid; the tab bar mirrors the user-stats chip tabs.
 	import { Tabs } from "bits-ui";
+	import { goto } from "$app/navigation";
+	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import { barChartHeight } from "$lib/stats/charts/helpers";
 	import { nationWinLossStackedOption } from "$lib/stats/charts/nations";
 	import {
 		AVATAR_LABEL_SIZE,
@@ -37,64 +40,60 @@
 	// Circular avatar images for the players/casters axis labels, rasterized
 	// client-side from the Discord CDN (ECharts rich-text labels can't round
 	// remote images — see $lib/utils/avatars). Undefined until loaded: the
-	// charts first render name-only labels, then rebuild with avatars. The
-	// stale guard drops a late resolution after the rows change (navigation).
+	// charts first render name-only labels, then rebuild with avatars.
 	let standingsAvatars = $state<(string | undefined)[]>();
 	let casterAvatars = $state<(string | undefined)[]>();
 	let playerPicksAvatars = $state<(string | undefined)[]>();
-	$effect(() => {
-		const rows = standingsRows;
+	// Shared $effect body: rasterize the rows' avatars and assign on resolve.
+	// Returns the effect cleanup, whose stale flag drops a late resolution
+	// after the rows change (navigation, data refresh).
+	function trackAvatars(
+		rows: { avatar_url: string | null }[],
+		// eslint-disable-next-line no-unused-vars -- callback signature
+		assign: (imgs: (string | undefined)[]) => void,
+	) {
 		let stale = false;
 		void loadCircularAvatars(
 			rows.map((r) => r.avatar_url),
 			AVATAR_LABEL_SIZE,
 		).then((imgs) => {
-			if (!stale) standingsAvatars = imgs;
+			if (!stale) assign(imgs);
 		});
 		return () => {
 			stale = true;
 		};
-	});
-	$effect(() => {
-		const rows = playerPicks;
-		let stale = false;
-		void loadCircularAvatars(
-			rows.map((p) => p.avatar_url),
-			AVATAR_LABEL_SIZE,
-		).then((imgs) => {
-			if (!stale) playerPicksAvatars = imgs;
-		});
-		return () => {
-			stale = true;
-		};
-	});
-	$effect(() => {
-		const rows = casters;
-		let stale = false;
-		void loadCircularAvatars(
-			rows.map((c) => c.avatar_url),
-			AVATAR_LABEL_SIZE,
-		).then((imgs) => {
-			if (!stale) casterAvatars = imgs;
-		});
-		return () => {
-			stale = true;
-		};
+	}
+	$effect(() =>
+		trackAvatars(standingsRows, (imgs) => (standingsAvatars = imgs)),
+	);
+	$effect(() =>
+		trackAvatars(playerPicks, (imgs) => (playerPicksAvatars = imgs)),
+	);
+	$effect(() => trackAvatars(casters, (imgs) => (casterAvatars = imgs)));
+
+	// The active tab lives in ?category (controlled: value derived from the
+	// URL, change → goto), mirroring the user-stats subtabs (StatsView) so a
+	// tab is deep-linkable and survives refresh.
+	const TABS = ["players", "nations", "casters"] as const;
+	type StatsTab = (typeof TABS)[number];
+	const tab = $derived.by<StatsTab>(() => {
+		const fromUrl = page.url.searchParams.get("category");
+		return TABS.find((t) => t === fromUrl) ?? "players";
 	});
 
-	let tab = $state<"players" | "nations" | "casters">("players");
+	async function onTabChange(value: string) {
+		const next = new URL(page.url);
+		next.searchParams.set("category", value);
+		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
+		await goto(next, { replaceState: true, keepFocus: true, noScroll: true });
+	}
 
 	// Chip-style tab triggers, matching the user-stats subtabs.
 	const triggerClass =
 		"cursor-pointer rounded px-3 py-1.5 text-sm font-bold text-tan transition-colors hover:bg-tan-hover data-[state=active]:bg-surface-raised data-[state=inactive]:bg-surface";
-
-	// Horizontal-bar charts need vertical room scaled to their row count.
-	function barHeight(rowCount: number): string {
-		return `${Math.max(280, rowCount * 30 + 120)}px`;
-	}
 </script>
 
-<Tabs.Root value={tab} onValueChange={(v) => (tab = v as typeof tab)}>
+<Tabs.Root value={tab} onValueChange={onTabChange}>
 	<!-- Tabs live inside the raised panel, matching the user-stats page;
 	     the list is a floating chip bar. -->
 	<div
@@ -116,7 +115,7 @@
 				{#if standingsRows.length > 0}
 					<ChartContainer
 						option={standingsOption(standingsRows, standingsAvatars)}
-						height={barHeight(standingsRows.length)}
+						height={barChartHeight(standingsRows.length)}
 						title="Standings"
 					/>
 				{:else}
@@ -131,7 +130,7 @@
 				{#if playerPicks.length > 0}
 					<ChartContainer
 						option={playerPicksOption(playerPicks, playerPicksAvatars)}
-						height={barHeight(playerPicks.length)}
+						height={barChartHeight(playerPicks.length)}
 						title="Nation picks"
 					/>
 				{:else}
@@ -149,7 +148,7 @@
 				{#if nationWinRate.length > 0}
 					<ChartContainer
 						option={nationWinLossStackedOption(data.games)}
-						height={barHeight(nationWinRate.length)}
+						height={barChartHeight(nationWinRate.length)}
 						title="Nation win rate"
 					/>
 				{:else}
@@ -167,7 +166,7 @@
 				{#if casters.length > 0}
 					<ChartContainer
 						option={casterLeaderboardOption(casters, casterAvatars)}
-						height={barHeight(casters.length)}
+						height={barChartHeight(casters.length)}
 						title="Caster leaderboard"
 					/>
 				{:else}

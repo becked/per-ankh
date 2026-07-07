@@ -18,6 +18,7 @@ import type { CasterLeaderboardEntry, PlayerPicksEntry } from "$lib/api-cloud";
 // (the cross-division ranking) and SlotStanding (per-division), so either
 // source feeds the same option.
 interface StandingRow {
+	slot_id: string;
 	wins: number;
 	losses: number;
 	status: "active" | "advanced" | "eliminated";
@@ -91,7 +92,10 @@ export function standingsOption(
 	rows: StandingRow[],
 	avatarImages?: (string | undefined)[],
 ): EChartsOption {
-	const labels = rows.map((r, i) => r.display_name ?? `Slot ${i + 1}`);
+	// Same unclaimed-slot fallback as the overview standings table.
+	const labels = rows.map(
+		(r) => r.display_name ?? `slot ${r.slot_id.slice(0, 6)}`,
+	);
 	const keys = rows.map((_, i) => rowKey(i));
 	return {
 		...CHART_THEME,
@@ -195,9 +199,7 @@ export function playerPicksOption(
 	players: PlayerPicksEntry[],
 	avatarImages?: (string | undefined)[],
 ): EChartsOption {
-	const labels = players.map(
-		(p, i) => p.display_name ?? p.name ?? `Slot ${i + 1}`,
-	);
+	const labels = players.map((p) => p.display_name ?? p.name ?? "Unknown");
 	const keys = players.map((_, i) => rowKey(i));
 	// Union of nations across all players, ordered by total games fielded so
 	// segment colors are assigned deterministically (dominant civs first).

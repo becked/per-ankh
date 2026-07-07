@@ -31,8 +31,10 @@ export interface AggregateEnv {
 export type Focal = "uploader" | "humans";
 
 // D1 bind-parameter cap is 100. Leave headroom for joins with literal
-// params (we never need more than a few literals per statement).
-const CHUNK_SIZE = 50;
+// params (we never need more than a few literals per statement). Exported
+// (with chunk) for other batched IN-list loaders, e.g. the tournament
+// player_summaries batch in tournament/public.ts.
+export const CHUNK_SIZE = 50;
 
 // Nation key for the cross-nation aggregate rows the bundle carries alongside
 // per-nation rows (tech charts). Mirrors the frontend ALL_NATIONS sentinel in
@@ -122,7 +124,7 @@ interface LawEventRow {
 	turn: number;
 }
 
-function chunk<T>(arr: T[], size: number): T[][] {
+export function chunk<T>(arr: T[], size: number): T[][] {
 	if (arr.length === 0) return [];
 	const out: T[][] = [];
 	for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));

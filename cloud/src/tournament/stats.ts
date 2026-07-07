@@ -5,7 +5,7 @@
 // the env-taking assembly (computeCompetitionStats) lives in public.ts next to
 // computeStandingsResponse, which it reuses.
 
-import { parseParts, type MatchRow } from "./data";
+import { parseParts, type MatchPart, type MatchRow } from "./data";
 import type { UserIdentity } from "./public";
 
 // One row of the caster leaderboard: how many part-appearances a caster racked
@@ -34,13 +34,16 @@ export interface CasterLeaderboardEntry {
 export function computeCasterLeaderboard(
 	matches: MatchRow[],
 	identityByUserId: Map<string, UserIdentity>,
+	// Parts parsed once by the caller (shared with loadUserIdentitiesForMatches).
+	// Omitted → parsed here (unit tests).
+	partsByMatchId?: Map<string, MatchPart[]>,
 ): CasterLeaderboardEntry[] {
 	const byKey = new Map<
 		string,
 		{ user_id: string | null; name: string | null; appearances: number }
 	>();
 	for (const m of matches) {
-		for (const part of parseParts(m)) {
+		for (const part of partsByMatchId?.get(m.match_id) ?? parseParts(m)) {
 			for (const caster of part.casters) {
 				// parseParts drops casters with neither user_id nor name, so the else
 				// branch's name is always present.

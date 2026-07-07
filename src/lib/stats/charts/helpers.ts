@@ -40,6 +40,14 @@ export function nationLabel(value: string): string {
 // common patterns.
 export const COMMON_GRID = { left: 60, right: 30, top: 40, bottom: 60 };
 
+// Container height for a horizontal bar chart: ~34px per row so the
+// icon-bearing axis labels (crests, avatars) have breathing room, plus
+// padding for the grid margins. Shared by the registry specs and the
+// tournament stats charts so the same chart sizes identically everywhere.
+export function barChartHeight(rowCount: number): string {
+	return `${Math.max(rowCount, 1) * 34 + 90}px`;
+}
+
 // Axis-title placement, mirroring the game-detail charts: the title sits
 // centered along the axis (x below it, y reading vertically beside it)
 // rather than ECharts' default corner placement. Spread alongside `name`.

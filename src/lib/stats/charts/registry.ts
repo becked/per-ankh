@@ -5,6 +5,7 @@
 // Order within a category drives the visual order in the grid.
 
 import type { ChartSpec, StatsCategory } from "../types";
+import { barChartHeight } from "./helpers";
 
 export const CATEGORIES: Array<{ id: StatsCategory; label: string }> = [
 	{ id: "yields", label: "Yields" },
@@ -22,15 +23,14 @@ export const CHART_SPECS: ChartSpec[] = [
 		category: "nations",
 		title: "Win rate",
 		hasData: (b) => b.nationWinRate.length > 0,
-		// ~34px per nation row so the enlarged crest labels have breathing room.
-		height: (b) => `${Math.max(b.nationWinRate.length, 1) * 34 + 90}px`,
+		height: (b) => barChartHeight(b.nationWinRate.length),
 	},
 	{
 		id: "nation-avg-points",
 		category: "nations",
 		title: "Average final points",
 		hasData: (b) => b.nationAvgPoints.length > 0,
-		height: (b) => `${Math.max(b.nationAvgPoints.length, 1) * 34 + 90}px`,
+		height: (b) => barChartHeight(b.nationAvgPoints.length),
 	},
 	// Families — category anchor only; rendered by FamilyStatsPanel
 	// (per-nation pick/win bars), not the generic spec loop.

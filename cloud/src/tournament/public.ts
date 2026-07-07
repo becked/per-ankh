@@ -53,7 +53,7 @@ import {
 	type PickSummary,
 } from "./stats";
 import { CURRENT_PARSER_VERSION } from "../schemas/game";
-import { buildChartBundle } from "../stats/aggregate";
+import { buildChartBundle, chunk, CHUNK_SIZE } from "../stats/aggregate";
 import { getCached, putCached } from "../stats/cache";
 import { resolveTournamentCorpus } from "../stats/resolve";
 import type { ChartBundleCore } from "../stats/types";
@@ -569,12 +569,13 @@ async function setupGateHides(
 	return !isAdmin;
 }
 
-// Shared preamble for the public tournament stats endpoints: rate-limit, load,
-// and setup-gate. Returns the loaded tournament, or a Response to return as-is
+// Shared preamble for every public per-tournament read: rate-limit, load, and
+// setup-gate. Returns the loaded tournament, or a Response to return as-is
 // (429 over the view limit, or 404 when missing / hidden during setup) — the
-// same short-circuit idiom enforceTournamentViewRateLimit uses. Mirrors the
-// inline preamble in handleTournamentStandings/handleTournamentBracket, shared
-// here because the two stats handlers need it identically.
+// same short-circuit idiom enforceTournamentViewRateLimit uses. A change to
+// public-read gating (visibility rule, 404 shape, rate limit) lands here once
+// and covers standings, bracket, rounds, matches, match detail, and both stats
+// endpoints alike.
 async function loadViewableTournament(
 	env: TournamentPublicEnv,
 	request: Request,
@@ -603,17 +604,14 @@ export async function handleTournamentStandings(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	const rl = await enforceTournamentViewRateLimit(env, request, cors);
-	if (rl) return rl;
-	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, session, tournament))) {
-		return errorResponse(
-			"Tournament not found",
-			404,
-			cors,
-			"TOURNAMENT_NOT_FOUND",
-		);
-	}
+	const tournament = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (tournament instanceof Response) return tournament;
 	// Signup answers are admin-only — they're collected for the admin's
 	// scheduling use, not for public display alongside the standings.
 	const viewerIsAdmin = await isTournamentAdmin(
@@ -791,14 +789,30 @@ export async function computeStandingsResponse(
 // shape. The caster leaderboard does its own match load: computeStandingsResponse
 // loads matches internally, and the duplicate load is accepted for v1 (small
 // table, same cost class as the uncached /standings read).
-export async function computeCompetitionStats(
+async function computeCompetitionStats(
 	env: TournamentEnv,
 	tournament: TournamentRow,
 ) {
-	const standings = await computeStandingsResponse(env, tournament, false);
-	const matches = await loadMatches(env, tournament.tournament_id);
-	const identities = await loadUserIdentitiesForMatches(env, matches);
-	const caster_leaderboard = computeCasterLeaderboard(matches, identities);
+	// Standings and the raw match rows are independent; the identity and
+	// player_summaries batches both key off the matches. Two parallel stages,
+	// with each match's parts JSON parsed once and shared (the serializeMatch
+	// idiom) between identity collection and the caster tally.
+	const [standings, matches] = await Promise.all([
+		computeStandingsResponse(env, tournament, false),
+		loadMatches(env, tournament.tournament_id),
+	]);
+	const partsByMatchId = new Map(
+		matches.map((m) => [m.match_id, parseParts(m)]),
+	);
+	const [identities, summaries] = await Promise.all([
+		loadUserIdentitiesForMatches(env, matches, partsByMatchId),
+		loadPlayerSummaryFieldsForMatches(env, matches),
+	]);
+	const caster_leaderboard = computeCasterLeaderboard(
+		matches,
+		identities,
+		partsByMatchId,
+	);
 
 	// slot_id → standings rank, so the picks rows read in the same order as the
 	// standings chart. Both divisions plus the combined ranking; the first entry
@@ -812,7 +826,6 @@ export async function computeCompetitionStats(
 	for (const r of standings.divisions.A.standings) addRank(r.slot_id, r.rank);
 	for (const r of standings.divisions.B.standings) addRank(r.slot_id, r.rank);
 
-	const summaries = await loadPlayerSummaryFieldsForMatches(env, matches);
 	const player_picks = computePlayerPicks(
 		matches,
 		summaries,
@@ -832,15 +845,15 @@ export async function handleTournamentStats(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	const gated = await loadViewableTournament(
+	const tournament = await loadViewableTournament(
 		env,
 		request,
 		tournamentId,
 		cors,
 		session,
 	);
-	if (gated instanceof Response) return gated;
-	const body = await computeCompetitionStats(env, gated);
+	if (tournament instanceof Response) return tournament;
+	const body = await computeCompetitionStats(env, tournament);
 	return jsonResponse(body, 200, cors);
 }
 
@@ -855,19 +868,19 @@ export async function handleTournamentGamesStats(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	const gated = await loadViewableTournament(
+	const tournament = await loadViewableTournament(
 		env,
 		request,
 		tournamentId,
 		cors,
 		session,
 	);
-	if (gated instanceof Response) return gated;
+	if (tournament instanceof Response) return tournament;
 
 	const cacheKey = {
 		kind: "tournament" as const,
-		tournament_id: gated.tournament_id,
-		updated_at: gated.updated_at,
+		tournament_id: tournament.tournament_id,
+		updated_at: tournament.updated_at,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
 	const cached = await getCached<ChartBundleCore>(env, cacheKey);
@@ -879,7 +892,7 @@ export async function handleTournamentGamesStats(
 		);
 	}
 
-	const corpus = await resolveTournamentCorpus(env, gated.tournament_id);
+	const corpus = await resolveTournamentCorpus(env, tournament.tournament_id);
 	const bundle = await buildChartBundle(
 		env,
 		corpus,
@@ -897,17 +910,14 @@ export async function handleTournamentBracket(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	const rl = await enforceTournamentViewRateLimit(env, request, cors);
-	if (rl) return rl;
-	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, session, tournament))) {
-		return errorResponse(
-			"Tournament not found",
-			404,
-			cors,
-			"TOURNAMENT_NOT_FOUND",
-		);
-	}
+	const tournament = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (tournament instanceof Response) return tournament;
 
 	const slots = await loadSlots(env, tournament.tournament_id);
 	const rounds = await loadRounds(env, tournament.tournament_id);
@@ -1001,17 +1011,14 @@ export async function handleTournamentRounds(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	const rl = await enforceTournamentViewRateLimit(env, request, cors);
-	if (rl) return rl;
-	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, session, tournament))) {
-		return errorResponse(
-			"Tournament not found",
-			404,
-			cors,
-			"TOURNAMENT_NOT_FOUND",
-		);
-	}
+	const tournament = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (tournament instanceof Response) return tournament;
 	const rounds = await loadRounds(env, tournament.tournament_id);
 	return jsonResponse(
 		{ tournament_id: tournament.tournament_id, rounds },
@@ -1027,17 +1034,14 @@ export async function handleTournamentMatches(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	const rl = await enforceTournamentViewRateLimit(env, request, cors);
-	if (rl) return rl;
-	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, session, tournament))) {
-		return errorResponse(
-			"Tournament not found",
-			404,
-			cors,
-			"TOURNAMENT_NOT_FOUND",
-		);
-	}
+	const tournament = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (tournament instanceof Response) return tournament;
 	const url = new URL(request.url);
 	const roundId = url.searchParams.get("round_id");
 	const phase = url.searchParams.get("phase");
@@ -1115,17 +1119,14 @@ export async function handleTournamentMatchDetail(
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
 	const session = await sessionFromRequest(env, request);
-	const rl = await enforceTournamentViewRateLimit(env, request, cors);
-	if (rl) return rl;
-	const tournament = await loadTournamentById(env, tournamentId);
-	if (!tournament || (await setupGateHides(env, session, tournament))) {
-		return errorResponse(
-			"Tournament not found",
-			404,
-			cors,
-			"TOURNAMENT_NOT_FOUND",
-		);
-	}
+	const tournament = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (tournament instanceof Response) return tournament;
 	const match = await loadMatch(env, matchId);
 	if (!match) {
 		return errorResponse("Match not found", 404, cors, "MATCH_NOT_FOUND");
@@ -1395,9 +1396,7 @@ async function loadPlayerSummaryFieldsForMatches(
 		),
 	];
 	const out = new Map<string, PickSummary>();
-	const CHUNK = 50;
-	for (let i = 0; i < gameIds.length; i += CHUNK) {
-		const ids = gameIds.slice(i, i + CHUNK);
+	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
 		const res = await env.SHARE_DB.prepare(
 			`SELECT game_id, player_index, nation, is_winner FROM player_summaries
 			 WHERE game_id IN (${ids.map(() => "?").join(",")})`,
