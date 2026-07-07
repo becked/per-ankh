@@ -12,11 +12,18 @@ religions: Array<ReligionInfo>, river_w: boolean, river_sw: boolean, river_se: b
 /**
  * Resolved from owner_player_id -> players.nation
  */
-owner_nation: string | null, 
+owner_nation: string | null,
+/**
+ * xml_id of the player owning this tile at the represented turn (the
+ * companion to owner_nation, which loses the player in same-nation mirror
+ * matches). Drives per-turn resolution of a city's ruling family on the map.
+ * Optional: absent on blobs parsed before PARSER_VERSION 2.10.0.
+ */
+owner_player_xml_id?: number | null,
 /**
  * Resolved from owner_city_id -> cities.city_name
  */
-owner_city: string | null, 
+owner_city: string | null,
 /**
  * True if this tile is a city center
  */

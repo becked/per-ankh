@@ -255,25 +255,56 @@ export const MAP_OPTION_DEFS: Readonly<Record<string, MapOptionDef>> = {
 		],
 		default: "MAP_OPTION_DISJUNCTION_CONTINENTS_TEAMS",
 	},
-	MAP_OPTIONS_MULTI_DOTA_BOUNDARY_TERRAIN: {
+	MAP_OPTIONS_MULTI_DOTA_INNER_TERRAIN: {
 		kind: "select",
 		label: "Separating Terrain",
 		choices: [
-			{ value: "MAP_OPTION_TERRAIN_JUNGLE", label: "Terrain Jungle" },
-			{ value: "MAP_OPTION_TERRAIN_MOUNTAINS", label: "Terrain Mountains" },
-			{ value: "MAP_OPTION_TERRAIN_WATER", label: "Terrain Water" },
-			{ value: "MAP_OPTION_TERRAIN_SAND", label: "Terrain Sand" },
+			{
+				value: "MAP_OPTION_TERRAIN_INNER_JUNGLE",
+				label: "Terrain Inner Jungle",
+			},
+			{
+				value: "MAP_OPTION_TERRAIN_INNER_MOUNTAINS",
+				label: "Terrain Inner Mountains",
+			},
+			{ value: "MAP_OPTION_TERRAIN_INNER_WATER", label: "Terrain Inner Water" },
+			{ value: "MAP_OPTION_TERRAIN_INNER_SAND", label: "Terrain Inner Sand" },
+			{
+				value: "MAP_OPTION_TERRAIN_INNER_RANDOM",
+				label: "Terrain Inner Random",
+			},
 		],
-		default: "MAP_OPTION_TERRAIN_JUNGLE",
+		default: "MAP_OPTION_TERRAIN_INNER_JUNGLE",
 	},
-	MAP_OPTIONS_MULTI_DOTA_RIVER_WIDTH: {
+	MAP_OPTIONS_MULTI_DOTA_OUTER_TERRAIN: {
 		kind: "select",
-		label: "Marshlands Width",
+		label: "Outer Terrain",
 		choices: [
-			{ value: "MAP_OPTION_RIVER_NARROW", label: "Narrow" },
-			{ value: "MAP_OPTION_RIVER_WIDE", label: "Wide" },
+			{
+				value: "MAP_OPTION_TERRAIN_OUTER_JUNGLE",
+				label: "Terrain Outer Jungle",
+			},
+			{
+				value: "MAP_OPTION_TERRAIN_OUTER_MOUNTAINS",
+				label: "Terrain Outer Mountains",
+			},
+			{ value: "MAP_OPTION_TERRAIN_OUTER_WATER", label: "Terrain Outer Water" },
+			{ value: "MAP_OPTION_TERRAIN_OUTER_SAND", label: "Terrain Outer Sand" },
+			{
+				value: "MAP_OPTION_TERRAIN_OUTER_RANDOM",
+				label: "Terrain Outer Random",
+			},
 		],
-		default: "MAP_OPTION_RIVER_NARROW",
+		default: "MAP_OPTION_TERRAIN_OUTER_JUNGLE",
+	},
+	MAP_OPTIONS_MULTI_DOTA_PATH_WIDTH: {
+		kind: "select",
+		label: "Path Width",
+		choices: [
+			{ value: "MAP_OPTION_PATH_WIDE", label: "Wide" },
+			{ value: "MAP_OPTION_PATH_NARROW", label: "Narrow" },
+		],
+		default: "MAP_OPTION_PATH_WIDE",
 	},
 	MAP_OPTIONS_MULTI_NORTHERN_OCEAN_TRIBES: {
 		kind: "select",

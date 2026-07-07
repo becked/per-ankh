@@ -16,7 +16,16 @@ owner_player_xml_id?: number | null, family: string | null,
  * isn't in our shipped sprite set — every class has a CREST_ARCHETYPE_X
  * sprite available, but only a small subset of families do.
  */
-family_class: string | null, 
+family_class: string | null,
+/**
+ * Each player who has owned this city, mapped to the family they held it
+ * under (family_class resolved as for the top-level family). A city's family
+ * only changes when another nation conquers it, so this is the historical
+ * family record the map's turn slider uses to show a captured city's founder
+ * family before the capture turn. Optional: absent on blobs parsed before
+ * PARSER_VERSION 2.10.0 — consumers fall back to the current `family`.
+ */
+player_families?: Array<{ player_xml_id: number, family: string | null, family_class: string | null }>,
 /**
  * xml_id of the player who founded this city. Stable across captures, so
  * cross-game milestones (cities_founded, fifth_city_turn, ...) attribute

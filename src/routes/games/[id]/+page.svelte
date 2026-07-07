@@ -12,6 +12,7 @@
 	import { formatGameTitle } from "$lib/utils/formatting";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import ReimportButton from "$lib/ReimportButton.svelte";
+	import AdminReimportButton from "$lib/AdminReimportButton.svelte";
 	import GameActions from "$lib/GameActions.svelte";
 
 	let { data }: { data: PageData } = $props();
@@ -39,9 +40,30 @@
 	// parser_version through from the gzipped JSON in R2, so this works
 	// without a separate API call. Hidden for anonymous viewers (public
 	// games) and non-owner signed-in viewers (`isOwner` is false in both).
-	const isReimportAvailable = $derived(
-		isOwner && isNewer(PARSER_VERSION, game.parser_version),
-	);
+	const needsReparse = $derived(isNewer(PARSER_VERSION, game.parser_version));
+	const isReimportAvailable = $derived(isOwner && needsReparse);
+
+	// Site admins get the same banner on a *public* game they don't own, wired
+	// to the admin reparse path (targets the original owner, reuses the
+	// uploader's original nation choice, no re-prompt) — the same machinery as
+	// the /admin/reparse sweep, for one game. Private games they don't own
+	// return 403 from getGame, so they never reach this page. `game.user_id`
+	// is always present on a loaded game but typed optional, so the target
+	// (owner id + uploader_nation) is derived here and gated null → the banner
+	// only shows when reparse is actually actionable. uploader_nation is the
+	// raw choice (null = observer), not the COALESCE'd display user_nation.
+	// Owners keep the owner path above.
+	const isAdmin = $derived(data.user?.is_admin ?? false);
+	const adminReparseTarget = $derived.by(() => {
+		if (isOwner || !isAdmin || !needsReparse || game.user_id == null)
+			return null;
+		return {
+			game_id: gameId,
+			game_name: game.game_details.game_name ?? null,
+			uploader_nation: game.uploader_nation ?? null,
+			user_id: game.user_id,
+		};
+	});
 
 	// Re-sync state when the route navigates to a different game. Only
 	// the match id is tracked; the body reads via untrack(). This avoids
@@ -156,7 +178,7 @@
 						/>
 					{/snippet}
 					{#snippet preTabs()}
-						{#if isReimportAvailable}
+						{#if isReimportAvailable || adminReparseTarget}
 							<div
 								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 							>
@@ -166,7 +188,11 @@
 									This game was parsed with version {game.parser_version}.
 									Reparse to use the latest version ({PARSER_VERSION}).
 								</p>
-								<ReimportButton {gameId} />
+								{#if isReimportAvailable}
+									<ReimportButton {gameId} />
+								{:else if adminReparseTarget}
+									<AdminReimportButton target={adminReparseTarget} />
+								{/if}
 							</div>
 						{/if}
 					{/snippet}

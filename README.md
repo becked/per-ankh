@@ -66,10 +66,18 @@ npm run bake:all
 
 This populates `static/atlases/` and `static/sprites/` from your pinacotheca checkout. Re-run any time pinacotheca refreshes its renders.
 
-**4. Configure the cloud Worker:** see `cloud/wrangler.toml` and `cloud/.dev.vars` (D1 ids, KV ids, `DISCORD_CLIENT_SECRET`, etc.). Apply local D1 migrations:
+**4. Configure the cloud Worker.** Bindings (D1 ids, KV ids, R2 buckets) live in the committed `cloud/wrangler.toml`. Local secrets go in `cloud/.dev.vars`, which is gitignored — copy the template and edit it:
 
 ```bash
-(cd cloud && npm run migrate:local)
+cp cloud/.dev.vars.example cloud/.dev.vars
+```
+
+For local development you generally only need `DEV_LOGIN=1` (the template's default), which enables the Discord-free login bypass — see [Logging in locally](#logging-in-locally). `DISCORD_CLIENT_SECRET` is only required if you want to exercise real Discord OAuth locally. Wrangler reads `.dev.vars` at startup, so restart `./per-ankh dev` after editing it.
+
+**5. Apply local D1 migrations.** There are two local databases — the main share index and the security-events store — and both need migrating:
+
+```bash
+(cd cloud && npm run migrate:local && npm run migrate:security:local)
 ```
 
 ### Running locally
@@ -87,6 +95,18 @@ npm run dev                      # SvelteKit dev server (port 1420)
 (cd cloud && npm run dev)        # Wrangler dev (port 8787)
 ```
 
+### Logging in locally
+
+The fastest way to get a session is the **dev-login bypass** — no Discord app required. It needs `DEV_LOGIN=1` in `cloud/.dev.vars` (the default in the template). With `./per-ankh dev` running, paste a URL like this into your browser:
+
+```
+http://localhost:8787/v1/auth/dev/login?discord_id=123456789&username=devuser
+```
+
+That mints a session as the given identity and redirects you back logged in. Hit it again with a different `discord_id`/`username` to switch accounts. Full details — query params, account switching, and impersonating existing users — are in [`docs/dev-login.md`](docs/dev-login.md).
+
+To test **real Discord OAuth** instead, set `DISCORD_CLIENT_SECRET` in `cloud/.dev.vars` and register `http://localhost:1420/auth/callback` as a redirect URI on the Discord app.
+
 ### Quality checks
 
 ```bash
@@ -98,6 +118,8 @@ npm run format       # prettier --write .
 ### Cloud Admin CLI
 
 Manage live data on Cloudflare (D1 + R2) with `./per-ankh admin`. Requires `wrangler` auth (`wrangler login`). Targets production by default; `--local` operates on the local `.wrangler` state and `--staging` on the staging environment. Run `./per-ankh admin --help` for the full command list.
+
+Raw `wrangler` D1/KV commands (e.g. `wrangler d1 execute … --local`) must be run from **`cloud/`**, not the repo root. The repo has two configs: root `wrangler.toml` is the frontend worker (no D1/KV bindings, its own separate `.wrangler/` state), and `cloud/wrangler.toml` has the backend bindings. Run them from the root and you'll hit an empty local database and it will look broken.
 
 ### Deploying
 

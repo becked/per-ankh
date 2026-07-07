@@ -46,7 +46,7 @@
 		type NumberedPart,
 	} from "$lib/tournament/parts";
 	import { nowMs } from "$lib/stores/now.svelte";
-	import { padMatchNumber } from "$lib/tournament/match-numbers";
+	import { seshMatchLine, seshVersus } from "$lib/tournament/sesh";
 	import CastView from "$lib/tournament/CastView.svelte";
 	import CopyButton from "$lib/tournament/CopyButton.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
@@ -71,18 +71,7 @@
 	// "[cast by X]" (with any stream links) or "[needs a caster]" — so the post
 	// doubles as a watch-and-recruit announcement.
 	function seshText(scope: "all" | "needs-casters" = "all"): string {
-		const num = (m: TournamentMatch) =>
-			m.match_number != null ? padMatchNumber(m.match_number) : "?";
-		// Each side prefers a real Discord `<@id>` mention (pings the player) when
-		// the slot is a claimed account whose id we have (admin-only field), and
-		// falls back to the display name for unclaimed slots.
-		const vs = (m: TournamentMatch) =>
-			matchupLabel(m, (side) => {
-				const id = side === "a" ? m.slot_a_discord_id : m.slot_b_discord_id;
-				return id
-					? `<@${id}>`
-					: (matchSlotDisplayName(m, side, slotMaps.labels) ?? "?");
-			});
+		const vs = (m: TournamentMatch) => seshVersus(m, slotMaps.labels);
 
 		// Caster status suffix for a scheduled part in the "all" post: the
 		// streamer (first caster) and any co-casters, plus their stream links, or
@@ -110,12 +99,18 @@
 		)
 			.filter(({ part }) => scope === "all" || part.casters.length === 0)
 			.map(({ match, part, partNumber, split }) => {
-				const unix = Math.floor(Date.parse(part.scheduled_at as string) / 1000);
-				const partTag = split ? `(Part ${partNumber}) ` : "";
 				// The needs-casters scope is already filtered to casterless parts,
 				// so the "[needs a caster]" tag there would just be noise.
 				const tag = scope === "all" ? casterTag(part) : "";
-				return `Match ${num(match)} ${partTag}- ${vs(match)} - <t:${unix}:F> (<t:${unix}:R>)${tag}`;
+				return (
+					seshMatchLine({
+						matchNumber: match.match_number,
+						versus: vs(match),
+						partNumber,
+						split,
+						scheduledAt: part.scheduled_at,
+					}) + tag
+				);
 			});
 		if (scope === "needs-casters") {
 			return (
@@ -135,17 +130,28 @@
 				const parts = matchParts(m);
 				if (parts.length === 0) {
 					return matchDisplayStatus(m) === "unscheduled"
-						? [`Match ${num(m)} - ${vs(m)}`]
+						? [
+								seshMatchLine({
+									matchNumber: m.match_number,
+									versus: vs(m),
+									partNumber: 1,
+									split: false,
+								}),
+							]
 						: [];
 				}
 				const split = parts.length >= 2;
 				return parts
 					.map((part, i) => ({ part, partNumber: i + 1 }))
 					.filter(({ part }) => part.scheduled_at == null)
-					.map(({ partNumber }) => {
-						const partTag = split ? `(Part ${partNumber}) ` : "";
-						return `Match ${num(m)} ${partTag}- ${vs(m)}`;
-					});
+					.map(({ partNumber }) =>
+						seshMatchLine({
+							matchNumber: m.match_number,
+							versus: vs(m),
+							partNumber,
+							split,
+						}),
+					);
 			});
 
 		const blocks = [

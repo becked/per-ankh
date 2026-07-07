@@ -39,6 +39,8 @@
 		matchSlotNation,
 		matchSlotDisplayName,
 	} from "$lib/tournament/match-occupant";
+	import { upcomingScheduledParts } from "$lib/tournament/parts";
+	import { seshMatchLine, seshVersus } from "$lib/tournament/sesh";
 	import { mapScriptLabel } from "$lib/tournament/map-scripts";
 	import {
 		atlasMapUrl,
@@ -220,6 +222,34 @@
 						"We want to cast as many matches as we can!",
 					]
 				: []),
+		].join("\n");
+	});
+
+	// "Just scheduled — appreciate a caster!" post for the casters channel: this
+	// match's still-upcoming scheduled sittings, each as a sesh line, with a
+	// caster nudge when any of them still needs one. Open to any viewer (a
+	// player announcing their own match, or a TO) — it's all public info, and
+	// player mentions fall back to display names when discord_id isn't exposed
+	// (admin-only). Null (button hidden) when nothing's scheduled ahead —
+	// there's nothing to announce or cast.
+	const casterPostText = $derived.by(() => {
+		const parts = upcomingScheduledParts([match]);
+		if (parts.length === 0) return null;
+		const versus = seshVersus(match, slotLabels);
+		const lines = parts.map(({ part, partNumber, split }) =>
+			seshMatchLine({
+				matchNumber: match.match_number,
+				versus,
+				partNumber,
+				split,
+				scheduledAt: part.scheduled_at,
+			}),
+		);
+		const needsCaster = parts.some(({ part }) => part.casters.length === 0);
+		return [
+			"Just scheduled:",
+			...lines,
+			...(needsCaster ? ["Appreciate a caster!"] : []),
 		].join("\n");
 	});
 
@@ -697,6 +727,24 @@
 	</svg>
 {/snippet}
 
+{#snippet iconMegaphone()}
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		class="h-3.5 w-3.5"
+		fill="none"
+		viewBox="0 0 24 24"
+		stroke="currentColor"
+		stroke-width="2"
+		aria-hidden="true"
+	>
+		<path
+			stroke-linecap="round"
+			stroke-linejoin="round"
+			d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z"
+		/>
+	</svg>
+{/snippet}
+
 <!-- Header styled like the bracket section bar (e.g. the "West" / "Championship"
      headers): a surface-raised rounded bar carrying the matchup, the status badge to
      its right, the controls far-right, and bracket · round on a second line. -->
@@ -769,6 +817,18 @@
 					>
 						{#snippet children(copied)}
 							{#if copied}{@render iconCheck()}{:else}{@render iconChat()}{/if}
+						{/snippet}
+					</CopyButton>
+				{/if}
+				{#if casterPostText}
+					<CopyButton
+						text={() => casterPostText}
+						label="Copy caster post"
+						title="Copy a 'just scheduled — appreciate a caster!' post for the casters channel"
+						class="inline-flex items-center justify-center rounded border border-surface p-1 text-tan transition-colors hover:bg-surface-hover hover:text-orange"
+					>
+						{#snippet children(copied)}
+							{#if copied}{@render iconCheck()}{:else}{@render iconMegaphone()}{/if}
 						{/snippet}
 					</CopyButton>
 				{/if}

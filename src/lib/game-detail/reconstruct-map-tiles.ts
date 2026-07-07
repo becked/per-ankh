@@ -106,6 +106,7 @@ export function reconstructMapTiles(
 			has_road: owned ? t.has_road : false,
 			specialist: owned ? t.specialist : null,
 			owner_nation: owned ? (playerNation.get(ownerXmlId) ?? null) : null,
+			owner_player_xml_id: owned ? ownerXmlId : null,
 			// City-chrome gated.
 			owner_city: showCityChrome ? t.owner_city : null,
 			religions: showCityChrome ? t.religions : [],

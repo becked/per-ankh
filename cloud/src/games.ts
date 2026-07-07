@@ -1841,6 +1841,7 @@ export async function handleGameList(
 		            WHERE ps.game_id = games.game_id AND ps.is_human = 1
 		            ORDER BY ps.player_index ASC LIMIT 1
 		        )) AS user_nation,
+		        user_nation AS uploader_nation,
 		        user_won, winner_nation, victory_type,
 		        map_size, is_public, collection_id, created_at, parser_version
 		 FROM games WHERE ${where}
@@ -2114,6 +2115,7 @@ export async function handleGameDetail(
 	// players-array fallback now that this query supplies a usable value.
 	const row = await env.SHARE_DB.prepare(
 		`SELECT g.user_id, g.is_public, g.display_name, g.user_won,
+		        g.user_nation AS uploader_nation,
 		        COALESCE(g.user_nation, (
 		            SELECT ps.nation FROM player_summaries ps
 		            WHERE ps.game_id = g.game_id AND ps.is_human = 1
@@ -2130,6 +2132,10 @@ export async function handleGameDetail(
 			is_public: number;
 			display_name: string | null;
 			user_nation: string | null;
+			// Raw uploader choice (un-COALESCE'd) for the reparse round-trip;
+			// null = observer upload. Distinct from user_nation above, which
+			// falls back to the first human for display.
+			uploader_nation: string | null;
 			user_won: number | null;
 			user_display_name: string;
 		}>();
@@ -2220,6 +2226,9 @@ export async function handleGameDetail(
 		...baseBlob,
 		user_id: row.user_id,
 		user_nation: row.user_nation,
+		// Raw uploader nation (null = observer) so a reparse from the detail
+		// page re-claims the same player/observer — see AdminReimportButton.
+		uploader_nation: row.uploader_nation,
 		user_won: coerceD1Bool(row.user_won),
 		user_display_name: row.user_display_name,
 		display_name: row.display_name,
@@ -2692,6 +2701,9 @@ export async function handleGamesOutOfDate(
 		save_date: r.save_date,
 		total_turns: r.total_turns,
 		user_nation: r.user_nation,
+		// Out-of-date lists select the raw user_nation (no display COALESCE),
+		// so it doubles as the uploader's original choice for the reparse.
+		uploader_nation: r.user_nation,
 		user_won: coerceD1Bool(r.user_won),
 		winner_nation: r.winner_nation,
 		victory_type: r.victory_type,
@@ -2769,6 +2781,9 @@ export async function handleAdminListOutOfDate(
 		save_date: r.save_date,
 		total_turns: r.total_turns,
 		user_nation: r.user_nation,
+		// Raw user_nation doubles as the uploader's original choice (no
+		// display COALESCE on the out-of-date query) for the reparse.
+		uploader_nation: r.user_nation,
 		user_won: coerceD1Bool(r.user_won),
 		winner_nation: r.winner_nation,
 		victory_type: r.victory_type,
