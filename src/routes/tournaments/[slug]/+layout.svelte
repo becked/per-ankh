@@ -10,6 +10,7 @@
 	// active clock — flows strictly DOWN via context (see zone-context). Pages
 	// contribute nothing back up.
 	import type { Snippet } from "svelte";
+	import { fade } from "svelte/transition";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
@@ -174,8 +175,36 @@
 					</div>
 				</div>
 
-				{@render children()}
+				<!-- Crossfade the view's content on tab switch, keyed on the pathname
+				     so Overview⇄Matches⇄Stats fades the old page out as the new one
+				     fades in. Reuses the 200ms fade + grid-stacked panes the in-page
+				     view toggles use (matches/overview view-stack): both panes share one
+				     grid cell, so they overlap during the fade instead of shoving each
+				     other down. The persistent header above sits outside the key, so it
+				     doesn't fade — only the pill slides. -->
+				<div class="view-stack">
+					{#key page.url.pathname}
+						<div
+							class="view-pane"
+							in:fade={{ duration: 200 }}
+							out:fade={{ duration: 200 }}
+						>
+							{@render children()}
+						</div>
+					{/key}
+				</div>
 			</div>
 		</div>
 	</main>
 </div>
+
+<style>
+	.view-stack {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+	}
+	.view-stack > :global(.view-pane) {
+		grid-area: 1 / 1;
+		min-width: 0;
+	}
+</style>
