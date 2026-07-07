@@ -165,9 +165,13 @@ describe("GET /v1/tournaments/:id/stats (Plane A)", () => {
 			(p) => (p.display_name ?? p.name) === "Bob",
 		);
 		// slot_a won (winner_slot_id = slot_a_id, player_index 0 is_winner=1).
-		expect(alice?.picks).toEqual([{ nation: "NATION_ROME", games: 1, wins: 1 }]);
+		expect(alice?.picks).toEqual([
+			{ nation: "NATION_ROME", games: 1, wins: 1 },
+		]);
 		expect(alice?.total_wins).toBe(1);
-		expect(bob?.picks).toEqual([{ nation: "NATION_PERSIA", games: 1, wins: 0 }]);
+		expect(bob?.picks).toEqual([
+			{ nation: "NATION_PERSIA", games: 1, wins: 0 },
+		]);
 		expect(bob?.total_wins).toBe(0);
 	});
 

@@ -7,7 +7,11 @@
 import type { EChartsOption } from "echarts";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { toRgba } from "$lib/utils/color";
-import { COMMON_GRID, crestAxisLabel, fmtNation } from "$lib/stats/charts/helpers";
+import {
+	COMMON_GRID,
+	crestAxisLabel,
+	fmtNation,
+} from "$lib/stats/charts/helpers";
 import type { CasterLeaderboardEntry, PlayerPicksEntry } from "$lib/api-cloud";
 
 // Fields the standings chart reads — the common subset of CombinedQualifier
@@ -200,7 +204,10 @@ export function playerPicksOption(
 	const nationTotals = new Map<string, number>();
 	for (const p of players) {
 		for (const pk of p.picks) {
-			nationTotals.set(pk.nation, (nationTotals.get(pk.nation) ?? 0) + pk.games);
+			nationTotals.set(
+				pk.nation,
+				(nationTotals.get(pk.nation) ?? 0) + pk.games,
+			);
 		}
 	}
 	const nations = [...nationTotals.entries()]
