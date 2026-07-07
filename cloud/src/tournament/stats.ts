@@ -104,8 +104,8 @@ export interface PlayerPicksEntry {
 	total_wins: number;
 }
 
-// A roster row's nation + win flag, keyed `${game_id}|${player_index}` — the
-// save-content half of a pick (loaded by loadPlayerSummariesForMatches).
+// A roster row's nation + win flag, keyed `${game_id}:${player_index}` — the
+// save-content half of a pick (loaded by loadPlayerSummaryFieldsForMatches).
 export type PickSummary = { nation: string | null; is_winner: number | null };
 
 // Per-participant nation picks across the completed, game-linked matches. Each
@@ -162,7 +162,7 @@ export function computePlayerPicks(
 			const key = side.user_id ?? side.name;
 			if (key == null) continue; // no occupant to attribute the pick to
 			const summary = summaryByGamePlayer.get(
-				`${m.game_id}|${side.player_index}`,
+				`${m.game_id}:${side.player_index}`,
 			);
 			const nation = summary?.nation;
 			if (!nation) continue; // no roster row / unknown nation — nothing to plot

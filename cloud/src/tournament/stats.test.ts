@@ -176,7 +176,7 @@ function summaries(
 ): Map<string, PickSummary> {
 	return new Map(
 		rows.map(([g, pi, nation, is_winner]) => [
-			`${g}|${pi}`,
+			`${g}:${pi}`,
 			{ nation, is_winner },
 		]),
 	);

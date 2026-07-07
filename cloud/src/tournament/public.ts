@@ -791,48 +791,6 @@ export async function computeStandingsResponse(
 // shape. The caster leaderboard does its own match load: computeStandingsResponse
 // loads matches internally, and the duplicate load is accepted for v1 (small
 // table, same cost class as the uncached /standings read).
-// Batch-load (nation, is_winner) for every roster row a completed match
-// attributes a participant to, keyed `${game_id}|${player_index}` for
-// computePlayerPicks. Only the linked games' rows are pulled; chunked under the
-// D1 100-param cap. Two columns per game, so the cost stays in the /standings
-// class even at full-tournament scale.
-async function loadPlayerSummariesForMatches(
-	env: TournamentEnv,
-	matches: MatchRow[],
-): Promise<Map<string, PickSummary>> {
-	const gameIds = [
-		...new Set(
-			matches
-				.filter((m) => m.status === "complete" && m.game_id)
-				.map((m) => m.game_id as string),
-		),
-	];
-	const out = new Map<string, PickSummary>();
-	const CHUNK = 50;
-	for (let i = 0; i < gameIds.length; i += CHUNK) {
-		const ids = gameIds.slice(i, i + CHUNK);
-		const res = await env.SHARE_DB.prepare(
-			`SELECT game_id, player_index, nation, is_winner
-			 FROM player_summaries
-			 WHERE game_id IN (${ids.map(() => "?").join(",")})`,
-		)
-			.bind(...ids)
-			.all<{
-				game_id: string;
-				player_index: number;
-				nation: string | null;
-				is_winner: number | null;
-			}>();
-		for (const r of res.results ?? []) {
-			out.set(`${r.game_id}|${r.player_index}`, {
-				nation: r.nation,
-				is_winner: r.is_winner,
-			});
-		}
-	}
-	return out;
-}
-
 export async function computeCompetitionStats(
 	env: TournamentEnv,
 	tournament: TournamentRow,
@@ -854,7 +812,7 @@ export async function computeCompetitionStats(
 	for (const r of standings.divisions.A.standings) addRank(r.slot_id, r.rank);
 	for (const r of standings.divisions.B.standings) addRank(r.slot_id, r.rank);
 
-	const summaries = await loadPlayerSummariesForMatches(env, matches);
+	const summaries = await loadPlayerSummaryFieldsForMatches(env, matches);
 	const player_picks = computePlayerPicks(
 		matches,
 		summaries,
@@ -1421,29 +1379,58 @@ function serializeMatch(
 
 // Resolve the nation each slot played for every match with a linked game.
 // Keyed by `${game_id}:${player_index}` → nation enum (e.g. "NATION_ROME").
-// One batched SELECT per call over player_summaries; NULL nations are skipped
-// so a missing key resolves to "unknown" at serialize time. Matches without a
+// Batch-load (nation, is_winner) for every roster row of every game a match set
+// links, keyed `${game_id}:${player_index}`. Chunked under D1's 100-param cap.
+// The shared loader behind both loadNationsForMatches (match serialization) and
+// the competition stats' per-player picks — two columns per game, so the cost
+// stays in the /standings class even at full-tournament scale. Matches without a
 // linked game contribute no game_ids — empty list → no query.
-async function loadNationsForMatches(
+async function loadPlayerSummaryFieldsForMatches(
 	env: TournamentEnv,
 	matches: MatchRow[],
-): Promise<Map<string, string>> {
+): Promise<Map<string, PickSummary>> {
 	const gameIds = [
 		...new Set(
 			matches.map((m) => m.game_id).filter((id): id is string => id !== null),
 		),
 	];
+	const out = new Map<string, PickSummary>();
+	const CHUNK = 50;
+	for (let i = 0; i < gameIds.length; i += CHUNK) {
+		const ids = gameIds.slice(i, i + CHUNK);
+		const res = await env.SHARE_DB.prepare(
+			`SELECT game_id, player_index, nation, is_winner FROM player_summaries
+			 WHERE game_id IN (${ids.map(() => "?").join(",")})`,
+		)
+			.bind(...ids)
+			.all<{
+				game_id: string;
+				player_index: number;
+				nation: string | null;
+				is_winner: number | null;
+			}>();
+		for (const r of res.results ?? []) {
+			out.set(`${r.game_id}:${r.player_index}`, {
+				nation: r.nation,
+				is_winner: r.is_winner,
+			});
+		}
+	}
+	return out;
+}
+
+// Nation per (game_id, player_index) for a match set, keyed
+// `${game_id}:${player_index}`; a projection of loadPlayerSummaryFieldsForMatches
+// that drops the win flag and skips NULL nations, so a missing key resolves to
+// "unknown" at serialize time.
+async function loadNationsForMatches(
+	env: TournamentEnv,
+	matches: MatchRow[],
+): Promise<Map<string, string>> {
+	const fields = await loadPlayerSummaryFieldsForMatches(env, matches);
 	const map = new Map<string, string>();
-	if (gameIds.length === 0) return map;
-	const placeholders = gameIds.map(() => "?").join(",");
-	const res = await env.SHARE_DB.prepare(
-		`SELECT game_id, player_index, nation FROM player_summaries
-		 WHERE game_id IN (${placeholders}) AND nation IS NOT NULL`,
-	)
-		.bind(...gameIds)
-		.all<{ game_id: string; player_index: number; nation: string }>();
-	for (const row of res.results ?? []) {
-		map.set(`${row.game_id}:${row.player_index}`, row.nation);
+	for (const [key, { nation }] of fields) {
+		if (nation != null) map.set(key, nation);
 	}
 	return map;
 }
