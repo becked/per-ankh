@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-07-07-9a49550] - 2026-07-07
+
+### Features
+
+- (games) let admins reparse a public game from its detail page — [3e40aa9](https://github.com/becked/per-ankh/commit/3e40aa95b28999e54f07e354da1b420df5b2ea3f)
+- (tournament) "copy caster post" button on the match popover (#107) — [75085e2](https://github.com/becked/per-ankh/commit/75085e287cc83ecaed9dae640901bc5beac47c94)
+
+### Other
+
+- document local Worker setup (.dev.vars.example, dev-login, migrations) — [9a49550](https://github.com/becked/per-ankh/commit/9a4955048cb06874b23eea69044cd1b628d4f1b6)
+
 ## [2026-07-06-da16328] - 2026-07-06
 
 ### Features
