@@ -6,13 +6,9 @@
 
 import type { EChartsOption } from "echarts";
 import { CHART_THEME, getChartColor } from "$lib/config";
-import {
-	AXIS_NAME_X,
-	COMMON_GRID,
-	OUTCOME_LOSS_COLOR,
-	OUTCOME_WIN_COLOR,
-} from "$lib/stats/charts/helpers";
-import type { CasterLeaderboardEntry, StandingsResponse } from "$lib/api-cloud";
+import { toRgba } from "$lib/utils/color";
+import { COMMON_GRID } from "$lib/stats/charts/helpers";
+import type { CasterLeaderboardEntry } from "$lib/api-cloud";
 
 // Fields the standings chart reads — the common subset of CombinedQualifier
 // (the cross-division ranking) and SlotStanding (per-division), so either
@@ -41,14 +37,11 @@ const CATEGORY_AXIS_LABEL = { width: 120, overflow: "truncate" as const };
 
 // Standings visualization — a horizontal stacked Wins|Losses bar per player,
 // ranked (rank 1 at top). Bar length = games played; the split shows the
-// record, and the tooltip carries status + the tiebreak breakdown. Uses the
-// cross-division combined ranking when present (swiss onward); falls back to
-// concatenated per-division standings for a setup-phase admin preview.
-export function standingsOption(standings: StandingsResponse): EChartsOption {
-	const rows: StandingRow[] = standings.combined_qualifier_ranking ?? [
-		...standings.divisions.A.standings,
-		...standings.divisions.B.standings,
-	];
+// record, and the tooltip carries status + the tiebreak breakdown. Each player
+// gets a distinct palette color: the win segment is the full color, the loss
+// segment a muted (translucent) version of it. The caller selects, orders, and
+// filters the rows (combined cross-division ranking vs. per-division preview).
+export function standingsOption(rows: StandingRow[]): EChartsOption {
 	const labels = rows.map((r, i) => r.display_name ?? `Slot ${i + 1}`);
 	return {
 		...CHART_THEME,
@@ -70,7 +63,7 @@ export function standingsOption(standings: StandingsResponse): EChartsOption {
 			},
 		},
 		grid: { ...COMMON_GRID, left: 140 },
-		xAxis: { type: "value", name: "games", minInterval: 1, ...AXIS_NAME_X },
+		xAxis: { type: "value", minInterval: 1 },
 		yAxis: {
 			type: "category",
 			inverse: true,
@@ -82,23 +75,27 @@ export function standingsOption(standings: StandingsResponse): EChartsOption {
 				name: "Wins",
 				type: "bar",
 				stack: "outcome",
-				data: rows.map((r) => r.wins),
-				itemStyle: { color: OUTCOME_WIN_COLOR },
-				label: { show: true, position: "inside" },
+				data: rows.map((r, i) => ({
+					value: r.wins,
+					itemStyle: { color: getChartColor(i) },
+				})),
 			},
 			{
 				name: "Losses",
 				type: "bar",
 				stack: "outcome",
-				data: rows.map((r) => r.losses),
-				itemStyle: { color: OUTCOME_LOSS_COLOR },
+				data: rows.map((r, i) => ({
+					value: r.losses,
+					itemStyle: { color: toRgba(getChartColor(i), 0.35) },
+				})),
 			},
 		],
 	};
 }
 
 // Caster leaderboard — horizontal bar of part-appearances per caster, most
-// active at top. The list arrives pre-sorted descending from the server.
+// active at top. The list arrives pre-sorted descending from the server; each
+// caster gets a distinct palette color.
 export function casterLeaderboardOption(
 	leaderboard: CasterLeaderboardEntry[],
 ): EChartsOption {
@@ -115,12 +112,7 @@ export function casterLeaderboardOption(
 			},
 		},
 		grid: { ...COMMON_GRID, left: 140 },
-		xAxis: {
-			type: "value",
-			name: "appearances",
-			minInterval: 1,
-			...AXIS_NAME_X,
-		},
+		xAxis: { type: "value", minInterval: 1 },
 		yAxis: {
 			type: "category",
 			inverse: true,
@@ -130,9 +122,10 @@ export function casterLeaderboardOption(
 		series: [
 			{
 				type: "bar",
-				data: leaderboard.map((c) => c.appearances),
-				itemStyle: { color: getChartColor(0) },
-				label: { show: true, position: "right" },
+				data: leaderboard.map((c, i) => ({
+					value: c.appearances,
+					itemStyle: { color: getChartColor(i) },
+				})),
 			},
 		],
 	};
