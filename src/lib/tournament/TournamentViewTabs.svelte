@@ -25,24 +25,36 @@
 			href: resolve("/tournaments/[slug]/stats", { slug: tournament.slug }),
 		},
 	]);
+
+	// Which tab the current route sits on, driving the sliding pill's position.
+	// -1 (no match) parks the pill hidden — defensive only: this control renders
+	// solely on the three view routes, so exactly one tab is normally active.
+	const activeIndex = $derived(
+		navTabs.findIndex((tab) => page.url.pathname === tab.href),
+	);
 </script>
 
-<!-- Active tab uses the app's selected-tab convention — a raised-surface fill with
-     the text staying tan; orange is reserved for hover and emphasis. -->
+<!-- Segmented control matching the matches page's view toggle: an equal-column
+     grid with a raised-surface pill that slides under the active tab. Kept as
+     cross-route links (not buttons) — nav semantics, so aria-current, not
+     aria-pressed. Text stays tan; the pill is the sole active indicator. -->
 <nav
-	class="inline-flex items-center overflow-hidden rounded-lg border-2 border-surface"
+	class="relative grid grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
 	style="background-color: rgb(var(--color-surface));"
 	aria-label="Tournament views"
 >
+	<div
+		class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
+		style:background-color="rgb(var(--color-surface-raised))"
+		style:opacity={activeIndex < 0 ? "0" : "1"}
+		style:transform={`translateX(${(activeIndex < 0 ? 0 : activeIndex) * 100}%)`}
+	></div>
 	<!-- eslint-disable svelte/no-navigation-without-resolve -- tab.href is a resolve() result; not traceable through the array -->
-	{#each navTabs as tab (tab.href)}
-		{@const active = page.url.pathname === tab.href}
+	{#each navTabs as tab, i (tab.href)}
 		<a
 			href={tab.href}
-			aria-current={active ? "page" : undefined}
-			class="px-3 py-1 text-xs font-bold text-tan transition-colors {active
-				? 'bg-surface-raised'
-				: 'hover:bg-tan-hover'}"
+			aria-current={i === activeIndex ? "page" : undefined}
+			class="relative z-10 px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors"
 		>
 			{tab.label}
 		</a>
