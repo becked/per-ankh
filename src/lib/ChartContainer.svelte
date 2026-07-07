@@ -71,13 +71,13 @@
 		<!-- Expand button -->
 		<button
 			onclick={openFullscreen}
-			class="absolute right-3 top-3 z-10 cursor-pointer rounded bg-black/20 px-1.5 pb-2 pt-1.5 transition-colors hover:bg-black/40 focus:outline-none"
+			class="absolute right-3 top-3 z-10 cursor-pointer rounded bg-black/20 p-1.5 transition-colors hover:bg-black/40 focus:outline-none"
 			aria-label="Expand {title} to fullscreen"
 			title="Expand to fullscreen"
 		>
 			<svg
 				xmlns="http://www.w3.org/2000/svg"
-				class="h-4 w-4 text-white"
+				class="block h-4 w-4 text-white"
 				fill="none"
 				viewBox="0 0 24 24"
 				stroke="currentColor"
@@ -121,7 +121,7 @@
 			>
 				<svg
 					xmlns="http://www.w3.org/2000/svg"
-					class="h-4 w-4 text-white"
+					class="block h-4 w-4 text-white"
 					fill="none"
 					viewBox="0 0 24 24"
 					stroke="currentColor"
