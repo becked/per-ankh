@@ -120,7 +120,7 @@
 <div class="flex flex-1 overflow-hidden">
 	<main class="isolate flex flex-1 flex-col overflow-hidden">
 		<div
-			class="cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
+			class="view-scroll cloud-scroll flex-1 overflow-y-auto px-4 pb-8 pt-4"
 			use:autohideScroll
 		>
 			<div class="mx-auto max-w-screen-2xl">
@@ -199,6 +199,15 @@
 </div>
 
 <style>
+	/* Always reserve the scrollbar's gutter on the shared scroll container, so
+	   switching to a view that's short enough not to overflow (no scrollbar)
+	   doesn't widen the centred content and nudge it sideways. Scoped here
+	   rather than on the global .cloud-scroll so only the tournament views get
+	   the reserved gutter. */
+	.view-scroll {
+		scrollbar-gutter: stable;
+	}
+
 	.view-stack {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
