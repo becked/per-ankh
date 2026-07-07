@@ -1,0 +1,23 @@
+# Local Worker secrets, read by `wrangler dev` at startup. Copy this file to
+# `cloud/.dev.vars` (gitignored) and fill in as needed. Production secrets are
+# set out-of-band via `wrangler secret put`, never from this file.
+#
+# After editing cloud/.dev.vars, restart `./per-ankh dev` — wrangler only reads
+# it at startup.
+
+# Enables the Discord-free dev-login bypass (GET /v1/auth/dev/login), the
+# recommended way to get a local session. Local-only: the handler 404s unless
+# this is set AND the request is non-HTTPS, so it stays dark in prod. Full usage
+# in docs/dev-login.md.
+DEV_LOGIN=1
+
+# Only needed for REAL Discord OAuth locally (skip it if you use DEV_LOGIN
+# above). Get the value from the Discord app at
+# https://discord.com/developers/applications. Real OAuth also requires that app
+# to register http://localhost:1420/auth/callback as a redirect URI.
+DISCORD_CLIENT_SECRET=
+
+# Optional: unlocks site-admin actions locally (e.g. bulk reparse). isSiteAdmin
+# (cloud/src/admin.ts) matches the logged-in user's discord_id against this, so
+# set it to the discord_id you log in as.
+ADMIN_DISCORD_ID=
