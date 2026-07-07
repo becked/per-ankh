@@ -15,9 +15,11 @@
 	import TournamentActions from "$lib/tournament/TournamentActions.svelte";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
 	import {
+		AVATAR_LABEL_SIZE,
 		casterLeaderboardOption,
 		standingsOption,
 	} from "$lib/tournament/stats-charts";
+	import { loadCircularAvatars } from "$lib/utils/avatars";
 	import {
 		resolveInitialZone,
 		writeZoneCookie,
@@ -49,6 +51,40 @@
 	);
 	const casters = $derived(data.competition.caster_leaderboard);
 	const nationWinRate = $derived(data.games.nationWinRate);
+
+	// Circular avatar images for the players/casters axis labels, rasterized
+	// client-side from the Discord CDN (ECharts rich-text labels can't round
+	// remote images — see $lib/utils/avatars). Undefined until loaded: the
+	// charts first render name-only labels, then rebuild with avatars. The
+	// stale guard drops a late resolution after the rows change (navigation).
+	let standingsAvatars = $state<(string | undefined)[]>();
+	let casterAvatars = $state<(string | undefined)[]>();
+	$effect(() => {
+		const rows = standingsRows;
+		let stale = false;
+		void loadCircularAvatars(
+			rows.map((r) => r.avatar_url),
+			AVATAR_LABEL_SIZE,
+		).then((imgs) => {
+			if (!stale) standingsAvatars = imgs;
+		});
+		return () => {
+			stale = true;
+		};
+	});
+	$effect(() => {
+		const rows = casters;
+		let stale = false;
+		void loadCircularAvatars(
+			rows.map((c) => c.avatar_url),
+			AVATAR_LABEL_SIZE,
+		).then((imgs) => {
+			if (!stale) casterAvatars = imgs;
+		});
+		return () => {
+			stale = true;
+		};
+	});
 
 	let tab = $state<"players" | "nations" | "casters">("players");
 
@@ -124,7 +160,7 @@
 								<h2 class="mb-3 text-base font-bold text-tan">Standings</h2>
 								{#if standingsRows.length > 0}
 									<ChartContainer
-										option={standingsOption(standingsRows)}
+										option={standingsOption(standingsRows, standingsAvatars)}
 										height={barHeight(standingsRows.length)}
 										title="Standings"
 									/>
@@ -164,7 +200,7 @@
 								</h2>
 								{#if casters.length > 0}
 									<ChartContainer
-										option={casterLeaderboardOption(casters)}
+										option={casterLeaderboardOption(casters, casterAvatars)}
 										height={barHeight(casters.length)}
 										title="Caster leaderboard"
 									/>

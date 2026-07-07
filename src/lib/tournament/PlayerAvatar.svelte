@@ -1,8 +1,9 @@
 <script lang="ts">
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import { UNCLAIMED_AVATAR_ICON } from "$lib/utils/avatars";
 
 	// A player's Discord avatar, or — when the slot hasn't been claimed by a
-	// logged-in user (avatarUrl is null) — the EFFECTUNIT_ENLIST_ICON sprite as
+	// logged-in user (avatarUrl is null) — the UNCLAIMED_AVATAR_ICON sprite as
 	// an "unclaimed" stand-in. Sized via `size` (px) so callers can match the
 	// surrounding text density (dense brackets vs. standings rows).
 	let {
@@ -26,6 +27,6 @@
 		class="inline-flex shrink-0 items-center justify-center"
 		style="width: {size}px; height: {size}px;"
 	>
-		<SpriteIcon category="icons" value="EFFECTUNIT_ENLIST_ICON" {size} {alt} />
+		<SpriteIcon category="icons" value={UNCLAIMED_AVATAR_ICON} {size} {alt} />
 	</span>
 {/if}
