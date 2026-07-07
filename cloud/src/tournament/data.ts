@@ -2,8 +2,9 @@
 //
 // Handlers import these helpers rather than scattering SELECT/INSERT/UPDATE
 // across the codebase. Anything that mutates a tournament also bumps
-// tournaments.updated_at via bumpTournamentUpdatedAt, keeping it a reliable
-// last-mutation marker (nothing consumes it as a cache key yet).
+// tournaments.updated_at via bumpTournamentUpdatedAt — the tournament-stats
+// games-bundle cache keys on it, so a mutation drifts the key and the next read
+// recomputes. (/standings and /bracket don't cache; they recompute per read.)
 
 import { buildAvatarUrl } from "../auth";
 import { displayNameSql } from "../identity";
@@ -342,9 +343,10 @@ export async function loadSlotInTournament(
 		.first<SlotRow>();
 }
 
-// Bump updated_at on any mutation. Nothing consumes this as a cache key yet
-// (/standings and /bracket recompute on every read); the bump-on-every-mutation
-// discipline keeps it usable as one (e.g. for future tournament-stats caching).
+// Bump updated_at on any mutation. The tournament-stats games-bundle cache
+// (cloud/src/stats/cache.ts) embeds this in its key, so a mutation drifts the
+// key, the next read recomputes, and the orphaned entry dies by TTL. /standings
+// and /bracket don't consume it — they recompute on every read.
 export async function bumpTournamentUpdatedAt(
 	env: TournamentEnv,
 	tournamentId: string,

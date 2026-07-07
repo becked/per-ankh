@@ -39,8 +39,9 @@
 		tournament.is_viewer_admin === true || tournament.status !== "setup",
 	);
 
-	// Shared pill styling for this cluster's triggers (Stats link, Links/Settings,
-	// the clock toggle). inline-flex leaves room for each button's leading icon.
+	// Shared pill styling for this cluster's own triggers (the Stats link and the
+	// clock toggle) — matching the Links/Settings triggers beside them, which
+	// style themselves. inline-flex leaves room for each button's leading icon.
 	const triggerClass =
 		"inline-flex items-center gap-1.5 whitespace-nowrap rounded border border-tan px-2.5 py-1 text-xs text-tan transition-colors hover:border-orange hover:text-orange";
 
