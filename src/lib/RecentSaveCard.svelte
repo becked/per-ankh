@@ -9,6 +9,7 @@
 		formatEnum,
 		formatDate,
 		formatGameTitle,
+		escapeHtml,
 	} from "$lib/utils/formatting";
 	import { DIFFICULTY_NAMES } from "$lib/generated/difficulty-names";
 	import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
@@ -98,7 +99,7 @@
 				const rows = arr
 					.map(
 						(p) =>
-							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${p.seriesName}: ${p.value[1]}`,
+							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${escapeHtml(p.seriesName)}: ${p.value[1]}`,
 					)
 					.join("<br/>");
 				return `Victory Points (VP)<br/>Turn ${turn}<br/>${rows}`;

@@ -31,6 +31,27 @@ export function formatEnum(
 	return formatted.replace(/\s+\d+$/, "");
 }
 
+/**
+ * Escapes the five HTML metacharacters so a user-controlled string can be
+ * safely interpolated into an ECharts tooltip `formatter` return value, which
+ * ECharts injects via `innerHTML` (the default `renderMode`). Only needed for
+ * attacker-influenced text — Discord display names, free-text caster names,
+ * save-derived player names — not for enum-derived labels (`formatEnum`,
+ * `fmtNation`) or numbers. `&` is replaced first so the entities the later
+ * rules introduce aren't double-escaped.
+ *
+ * @example
+ * escapeHtml('<img src=x onerror=alert(1)>') // "&lt;img src=x onerror=alert(1)&gt;"
+ */
+export function escapeHtml(value: string): string {
+	return value
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;")
+		.replace(/"/g, "&quot;")
+		.replace(/'/g, "&#39;");
+}
+
 // Roman-numeral place-value tables (thousands handled separately as repeated "M").
 // Ported from Old World's RomanNumerals.ToRomanNumeral (Reference NumeralSystems.cs).
 const ROMAN_HUNDREDS = [

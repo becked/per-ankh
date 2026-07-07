@@ -12,6 +12,7 @@ import {
 	crestAxisLabel,
 	fmtNation,
 } from "$lib/stats/charts/helpers";
+import { escapeHtml } from "$lib/utils/formatting";
 import type { CasterLeaderboardEntry, PlayerPicksEntry } from "$lib/api-cloud";
 
 // Fields the standings chart reads — the common subset of CombinedQualifier
@@ -109,7 +110,7 @@ export function standingsOption(
 				const status = STATUS_LABEL[row.status] ?? row.status;
 				const withdrawn = row.withdrawn ? " · withdrawn" : "";
 				return (
-					`${labels[p.dataIndex]} — ${status}${withdrawn}<br/>` +
+					`${escapeHtml(labels[p.dataIndex])} — ${status}${withdrawn}<br/>` +
 					`W ${row.wins} · L ${row.losses}<br/>` +
 					`Buchholz-cut1 ${row.buchholz_cut1} · Opp-Buch ${row.opponents_buchholz}<br/>` +
 					`Cumulative ${row.cumulative} · H2H ${row.h2h}`
@@ -165,7 +166,7 @@ export function casterLeaderboardOption(
 			formatter: (params: unknown) => {
 				const p = (params as { dataIndex: number; value: number }[])[0];
 				const n = p.value;
-				return `${labels[p.dataIndex]}<br/>${n} appearance${n === 1 ? "" : "s"}`;
+				return `${escapeHtml(labels[p.dataIndex])}<br/>${n} appearance${n === 1 ? "" : "s"}`;
 			},
 		},
 		grid: { ...COMMON_GRID, left: LABEL_GUTTER },
@@ -230,7 +231,7 @@ export function playerPicksOption(
 							`${fmtNation(pk.nation)} — ${pk.games} game${pk.games === 1 ? "" : "s"} (${pk.wins}W ${pk.games - pk.wins}L)`,
 					)
 					.join("<br/>");
-				return `${labels[p.dataIndex]} — ${row.total_wins}W ${row.total_games - row.total_wins}L<br/>${lines}`;
+				return `${escapeHtml(labels[p.dataIndex])} — ${row.total_wins}W ${row.total_games - row.total_wins}L<br/>${lines}`;
 			},
 		},
 		grid: { ...COMMON_GRID, left: LABEL_GUTTER },
