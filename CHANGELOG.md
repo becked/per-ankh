@@ -1,5 +1,54 @@
 # Changelog
 
+## [2026-07-07-0fdd309] - 2026-07-07
+
+### Features
+
+- (tournament) show the viewer's timezone on the clock toggle — [6fa6990](https://github.com/becked/per-ankh/commit/6fa6990e49bc9b2770277b1e603c8d9d5b0d15a1)
+- (tournament) add tournament-stats MVP (standings, casters, nation win rate) — [48c81dc](https://github.com/becked/per-ankh/commit/48c81dc3e3a3be53cf687cf5449a0dd946e17d1c)
+- (tournament) add stats nav link and tab the stats page — [5515cb1](https://github.com/becked/per-ankh/commit/5515cb1da29afa2043e21142a8480cd596e61595)
+- (tournament) render circular Discord avatars in the stats chart labels — [b8c329f](https://github.com/becked/per-ankh/commit/b8c329f99fd2cbe694344500735ec14a08236a1a)
+- (games) let admins reparse a public game from its detail page — [3e40aa9](https://github.com/becked/per-ankh/commit/3e40aa95b28999e54f07e354da1b420df5b2ea3f)
+- (tournament) add per-player nation picks to the stats Players tab — [fbaf0fa](https://github.com/becked/per-ankh/commit/fbaf0fa3c335cd494b7624b05e7232f76bb1a8a9)
+- (tournament) "copy caster post" button on the match popover (#107) — [75085e2](https://github.com/becked/per-ankh/commit/75085e287cc83ecaed9dae640901bc5beac47c94)
+- (tournament) add Matches tab, group header views into a toggle — [253b53d](https://github.com/becked/per-ankh/commit/253b53d88fedc9ef32c29ac2e98d434283ac73bb)
+- (tournament) crossfade view content on tab switch — [624bea6](https://github.com/becked/per-ankh/commit/624bea6c77f989f3d60db3bac5047fea4262d9bd)
+
+### Fixes
+
+- (ui) add bottom padding to the chart expand button — [0e66754](https://github.com/becked/per-ankh/commit/0e667543b934826ac2b7e63413d52ccfa55c9021)
+- (map) resolve a city's family per turn on the map — [da16328](https://github.com/becked/per-ankh/commit/da16328dcba30b793197837824729fbc1c743da9)
+- (map) point resources atlas manifest at the baked hash — [9bd949a](https://github.com/becked/per-ankh/commit/9bd949afcd9d59b90ae9ce56b0539bad02e38a31)
+- (ui) center the chart expand button icon — [c6a4c5b](https://github.com/becked/per-ankh/commit/c6a4c5bcb84aee9b46af1c85bcacfb10fbae6e20)
+- (tournament) pin view-tab header controls so they don't shift — [1045bd2](https://github.com/becked/per-ankh/commit/1045bd2bf792662c96cf9c3d5621b937ec455cae)
+- (tournament) reserve scrollbar gutter so tab switch doesn't shift — [d9a1831](https://github.com/becked/per-ankh/commit/d9a18314bf50b5ad8eec7efafc0f1a19904165d6)
+- (security) escape user-controlled strings in ECharts tooltips — [4ca8daf](https://github.com/becked/per-ankh/commit/4ca8daf1c9f78d54ddabf0a792b4e4b7c0de5d49)
+
+### Other
+
+- restructure CLAUDE.md into root + nested files + skills — [aa576c2](https://github.com/becked/per-ankh/commit/aa576c23e32b3fe629db9cd008b9cd675be5ceca)
+- (tournament) tabular-nums instead of monospace for match numbers — [ee10473](https://github.com/becked/per-ankh/commit/ee1047381e6420abe8d3b71e481738bd5bf1ace6)
+- (header) put Upload icon before its label to match other buttons — [ec718ef](https://github.com/becked/per-ankh/commit/ec718ef59879d72b114c79052f0f872db2300fae)
+- (tournament) add tournament-stats design & build plan — [19728f8](https://github.com/becked/per-ankh/commit/19728f81df38f0695f0f2be4a099783021f6b3ca)
+- (cloud) stop claiming tournaments.updated_at is a cache key — [569f90c](https://github.com/becked/per-ankh/commit/569f90c9fcfe957153cfc4ea80842e91a3bdc491)
+- (tournament) settle the tournament-stats open decisions — [c346e9a](https://github.com/becked/per-ankh/commit/c346e9aaaa478383d85ca39dbfa90a1200b2b8a2)
+- (tournament) add rendered chart examples for the stats design — [820ba9f](https://github.com/becked/per-ankh/commit/820ba9f0781de95edb2aba6f13e5455d08a3f610)
+- (tournament) rework the stats build plan around a three-chart MVP — [4982568](https://github.com/becked/per-ankh/commit/49825683347b6f9e220cb2c18afe686550a9c0c0)
+- (release) deploy 2026-07-06-da16328 — [f99e92d](https://github.com/becked/per-ankh/commit/f99e92dbb607bec67cf98da60f418a68cfe25c5f)
+- (tournament) address tournament-stats MVP review findings — [8cff4a2](https://github.com/becked/per-ankh/commit/8cff4a252bc68a3ea840ea1cc8db378911d71993)
+- document local Worker setup (.dev.vars.example, dev-login, migrations) — [9a49550](https://github.com/becked/per-ankh/commit/9a4955048cb06874b23eea69044cd1b628d4f1b6)
+- (release) deploy 2026-07-07-9a49550 — [611ee89](https://github.com/becked/per-ankh/commit/611ee89a2863173ea75b3cb9f1c294ba6a7b59f7)
+- (assets) refresh XML-derived data tables — [b39f690](https://github.com/becked/per-ankh/commit/b39f690a00ae5c63ce0baf5f686d671ea102b737)
+- (release) deploy 2026-07-07-b39f690 — [7c8655f](https://github.com/becked/per-ankh/commit/7c8655f7a2de891ece3b4ea065d5cf31e4707c0b)
+- (tournament) share one player_summaries batch loader — [a170b90](https://github.com/becked/per-ankh/commit/a170b90f9360a18b427b891a08ff9c86877f50e6)
+- (tournament) correct cache-key comments and record the Plane A cost shift — [033525e](https://github.com/becked/per-ankh/commit/033525e38ab6f8069b228d2d372ddb9a71118861)
+- (tournament) settle Plane A caching — stays uncached, quantified — [dbfd2c9](https://github.com/becked/per-ankh/commit/dbfd2c9d44fd76d401674b2fc927b496b5f97924)
+- apply prettier line-wrapping to tournament stats files — [b9c8424](https://github.com/becked/per-ankh/commit/b9c842477fbf74d7a7e28d066d980973a1dbb29c)
+- (tournament) match view toggle to the matches-page segmented control — [ad16e0d](https://github.com/becked/per-ankh/commit/ad16e0d5150dbddd85d4a2b6460c6c5b757f312e)
+- (tournament) hoist header into a shared [slug] layout — [4e1d0fe](https://github.com/becked/per-ankh/commit/4e1d0fe5f019c8429aa839e3d4866cc59fd76af1)
+- add CONTRIBUTING guide with fork-and-PR workflow — [f78c444](https://github.com/becked/per-ankh/commit/f78c4448fb222512a621f9925635d7045c2b1da2)
+- (tournament) apply stats-review consistency cleanups — [7d7956b](https://github.com/becked/per-ankh/commit/7d7956b9b924e8b79e4d54946d895274cbe3b565)
+
 ## [2026-07-07-b39f690] - 2026-07-07
 
 ### Fixes
