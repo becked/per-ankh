@@ -76,6 +76,11 @@ export interface GameListItem {
 	save_date: string | null;
 	total_turns: number;
 	user_nation: string | null;
+	// The uploader's original player choice as the raw nation enum, or null
+	// for an observer upload — distinct from `user_nation`, which the list
+	// endpoints COALESCE to the first human's nation for display. Reparse
+	// round-trips this so the same player (or observer) is re-claimed.
+	uploader_nation: string | null;
 	user_won: boolean | null;
 	winner_nation: string | null;
 	victory_type: string | null;
@@ -449,6 +454,9 @@ export const cloudApi = {
 			// /users/:id. Optional for legacy/observer-mode safety.
 			user_id?: string | null;
 			user_nation?: string | null;
+			// Raw uploader nation choice (null = observer), un-COALESCE'd —
+			// drives the admin reparse from the detail page.
+			uploader_nation?: string | null;
 			user_won?: boolean | null;
 			user_display_name?: string | null;
 			display_name?: string | null;
@@ -460,6 +468,7 @@ export const cloudApi = {
 				is_public?: boolean;
 				user_id?: string | null;
 				user_nation?: string | null;
+				uploader_nation?: string | null;
 				user_won?: boolean | null;
 				user_display_name?: string | null;
 				display_name?: string | null;

@@ -1,3 +1,22 @@
+<script module lang="ts">
+	// The minimum each game contributes to the reparse pipeline: its id, a
+	// display name for the row, and the uploader's original nation choice used
+	// to recover the uploader index from the freshly parsed roster. This is
+	// the raw `uploader_nation` (null = observer), NOT the COALESCE'd display
+	// `user_nation` — feeding the display value would re-claim the first human
+	// on observer uploads. `user_id` is the owner id, required only in admin
+	// mode for the on-behalf-of upload. The account page's GameListItem and
+	// the admin page's AdminGameListItem both structurally satisfy this; the
+	// game detail page's admin-reparse banner (AdminReimportButton) builds one
+	// directly.
+	export interface ReparseTarget {
+		game_id: string;
+		game_name: string | null;
+		uploader_nation: string | null;
+		user_id?: string;
+	}
+</script>
+
 <script lang="ts">
 	// Bulk reparse — sweep every game whose stored parser_version is older
 	// than the current PARSER_VERSION constant, fetch its raw ZIP, run it
@@ -21,13 +40,7 @@
 		parseSaveFile,
 		ParseFailure,
 	} from "$lib/parser/upload-helpers";
-	import {
-		cloudApi,
-		ApiError,
-		DuplicateUploadError,
-		type AdminGameListItem,
-		type GameListItem,
-	} from "$lib/api-cloud";
+	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
 	import HieroglyphParade from "$lib/HieroglyphParade.svelte";
 
 	type RowStatus =
@@ -54,7 +67,7 @@
 		onClose,
 		adminMode = false,
 	}: {
-		games: GameListItem[] | AdminGameListItem[];
+		games: ReparseTarget[];
 		// eslint-disable-next-line no-unused-vars -- callback type parameter name is documentation
 		onClose: (didReparse: boolean) => void;
 		// When true, downloads + uploads go through the admin endpoints and
@@ -74,7 +87,7 @@
 		games.map((g) => ({
 			gameId: g.game_id,
 			gameName: g.game_name ?? "Unnamed game",
-			userNation: g.user_nation,
+			userNation: g.uploader_nation,
 			userId: "user_id" in g ? g.user_id : undefined,
 			status: { kind: "queued" },
 		})),
