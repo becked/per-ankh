@@ -1569,12 +1569,34 @@ export interface CasterLeaderboardEntry {
 	appearances: number;
 }
 
+// One nation a participant has fielded across the tournament, with their record
+// on it (part of GET /v1/tournaments/:id/stats → player_picks).
+export interface PlayerPickNation {
+	nation: string;
+	games: number;
+	wins: number;
+}
+
+// One participant's civ portfolio. Keyed like the caster leaderboard (user_id
+// when claimed, else the frozen snapshot username); picks are the nations
+// fielded, most-used first. Rows arrive ordered by standings rank.
+export interface PlayerPicksEntry {
+	user_id: string | null;
+	name: string | null;
+	display_name: string | null;
+	avatar_url: string | null;
+	picks: PlayerPickNation[];
+	total_games: number;
+	total_wins: number;
+}
+
 // GET /v1/tournaments/:id/stats — Plane A competition stats. The standings block
 // is the same shape /standings returns (embedded so the stats page makes one
 // Plane-A fetch), always in the public (non-admin) shape.
 export interface TournamentCompetitionStats {
 	standings: StandingsResponse;
 	caster_leaderboard: CasterLeaderboardEntry[];
+	player_picks: PlayerPicksEntry[];
 }
 
 export interface BracketSlot {

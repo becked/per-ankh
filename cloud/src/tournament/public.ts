@@ -47,7 +47,11 @@ import {
 	rankStandings,
 	type RankedStanding,
 } from "./standings";
-import { computeCasterLeaderboard } from "./stats";
+import {
+	computeCasterLeaderboard,
+	computePlayerPicks,
+	type PickSummary,
+} from "./stats";
 import { CURRENT_PARSER_VERSION } from "../schemas/game";
 import { buildChartBundle } from "../stats/aggregate";
 import { getCached, putCached } from "../stats/cache";
@@ -787,6 +791,48 @@ export async function computeStandingsResponse(
 // shape. The caster leaderboard does its own match load: computeStandingsResponse
 // loads matches internally, and the duplicate load is accepted for v1 (small
 // table, same cost class as the uncached /standings read).
+// Batch-load (nation, is_winner) for every roster row a completed match
+// attributes a participant to, keyed `${game_id}|${player_index}` for
+// computePlayerPicks. Only the linked games' rows are pulled; chunked under the
+// D1 100-param cap. Two columns per game, so the cost stays in the /standings
+// class even at full-tournament scale.
+async function loadPlayerSummariesForMatches(
+	env: TournamentEnv,
+	matches: MatchRow[],
+): Promise<Map<string, PickSummary>> {
+	const gameIds = [
+		...new Set(
+			matches
+				.filter((m) => m.status === "complete" && m.game_id)
+				.map((m) => m.game_id as string),
+		),
+	];
+	const out = new Map<string, PickSummary>();
+	const CHUNK = 50;
+	for (let i = 0; i < gameIds.length; i += CHUNK) {
+		const ids = gameIds.slice(i, i + CHUNK);
+		const res = await env.SHARE_DB.prepare(
+			`SELECT game_id, player_index, nation, is_winner
+			 FROM player_summaries
+			 WHERE game_id IN (${ids.map(() => "?").join(",")})`,
+		)
+			.bind(...ids)
+			.all<{
+				game_id: string;
+				player_index: number;
+				nation: string | null;
+				is_winner: number | null;
+			}>();
+		for (const r of res.results ?? []) {
+			out.set(`${r.game_id}|${r.player_index}`, {
+				nation: r.nation,
+				is_winner: r.is_winner,
+			});
+		}
+	}
+	return out;
+}
+
 export async function computeCompetitionStats(
 	env: TournamentEnv,
 	tournament: TournamentRow,
@@ -795,7 +841,27 @@ export async function computeCompetitionStats(
 	const matches = await loadMatches(env, tournament.tournament_id);
 	const identities = await loadUserIdentitiesForMatches(env, matches);
 	const caster_leaderboard = computeCasterLeaderboard(matches, identities);
-	return { standings, caster_leaderboard };
+
+	// slot_id → standings rank, so the picks rows read in the same order as the
+	// standings chart. Both divisions plus the combined ranking; the first entry
+	// for a slot wins (combined and per-division agree on rank per slot).
+	const rankBySlotId = new Map<string, number>();
+	const addRank = (slotId: string, rank: number) => {
+		if (!rankBySlotId.has(slotId)) rankBySlotId.set(slotId, rank);
+	};
+	for (const r of standings.combined_qualifier_ranking ?? [])
+		addRank(r.slot_id, r.rank);
+	for (const r of standings.divisions.A.standings) addRank(r.slot_id, r.rank);
+	for (const r of standings.divisions.B.standings) addRank(r.slot_id, r.rank);
+
+	const summaries = await loadPlayerSummariesForMatches(env, matches);
+	const player_picks = computePlayerPicks(
+		matches,
+		summaries,
+		identities,
+		rankBySlotId,
+	);
+	return { standings, caster_leaderboard, player_picks };
 }
 
 // GET /v1/tournaments/:id/stats — Plane A competition shape. Same preamble and

@@ -27,6 +27,9 @@ async function linkGame(opts: {
 	status: "complete" | "forfeit";
 	ownerId: string;
 	nations: [string, string]; // [slot_a nation, slot_b nation]
+	// Occupant snapshot usernames (0024) — the participant key for player_picks.
+	// Defaults are distinct per game so unrelated links don't merge into one row.
+	usernames?: [string, string];
 }): Promise<string> {
 	const gameId = nanoid(21);
 	await env.SHARE_DB.prepare(
@@ -54,14 +57,19 @@ async function linkGame(opts: {
 			)
 			.run();
 	}
+	const [ua, ub] = opts.usernames ?? [
+		`A-${gameId.slice(0, 6)}`,
+		`B-${gameId.slice(0, 6)}`,
+	];
 	await env.SHARE_DB.prepare(
 		`UPDATE tournament_matches
 		 SET status = ?, game_id = ?, winner_slot_id = slot_a_id,
 		     slot_a_player_index = 0, slot_b_player_index = 1,
+		     slot_a_username = ?, slot_b_username = ?,
 		     reported_by_user_id = ?, reported_at = datetime('now')
 		 WHERE match_id = ?`,
 	)
-		.bind(opts.status, gameId, opts.ownerId, opts.matchId)
+		.bind(opts.status, gameId, ua, ub, opts.ownerId, opts.matchId)
 		.run();
 	return gameId;
 }
@@ -121,6 +129,46 @@ describe("GET /v1/tournaments/:id/stats (Plane A)", () => {
 		expect(row.user_id).toBe(caster.userId);
 		expect(row.display_name).toBe("Caster McCastface");
 		expect(row.appearances).toBe(1);
+	});
+
+	it("attributes per-player nation picks from completed games", async () => {
+		const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
+		const matches = await t.matches();
+		await linkGame({
+			matchId: matches[0].match_id,
+			status: "complete",
+			ownerId: t.admin.userId,
+			nations: ["NATION_ROME", "NATION_PERSIA"], // slot_a (winner) / slot_b
+			usernames: ["Alice", "Bob"],
+		});
+
+		const body = await expectOk<{
+			player_picks: Array<{
+				user_id: string | null;
+				name: string | null;
+				display_name: string | null;
+				picks: Array<{ nation: string; games: number; wins: number }>;
+				total_games: number;
+				total_wins: number;
+			}>;
+		}>(
+			await request.get({
+				path: `/v1/tournaments/${t.tournamentId}/stats`,
+				as: t.admin,
+			}),
+		);
+
+		const alice = body.player_picks.find(
+			(p) => (p.display_name ?? p.name) === "Alice",
+		);
+		const bob = body.player_picks.find(
+			(p) => (p.display_name ?? p.name) === "Bob",
+		);
+		// slot_a won (winner_slot_id = slot_a_id, player_index 0 is_winner=1).
+		expect(alice?.picks).toEqual([{ nation: "NATION_ROME", games: 1, wins: 1 }]);
+		expect(alice?.total_wins).toBe(1);
+		expect(bob?.picks).toEqual([{ nation: "NATION_PERSIA", games: 1, wins: 0 }]);
+		expect(bob?.total_wins).toBe(0);
 	});
 
 	it("404s during setup for a non-admin, but serves the admin", async () => {

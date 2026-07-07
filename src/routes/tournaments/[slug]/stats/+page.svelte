@@ -17,6 +17,7 @@
 	import {
 		AVATAR_LABEL_SIZE,
 		casterLeaderboardOption,
+		playerPicksOption,
 		standingsOption,
 	} from "$lib/tournament/stats-charts";
 	import { loadCircularAvatars } from "$lib/utils/avatars";
@@ -50,6 +51,7 @@
 		).filter((r) => r.wins + r.losses >= 1),
 	);
 	const casters = $derived(data.competition.caster_leaderboard);
+	const playerPicks = $derived(data.competition.player_picks);
 	const nationWinRate = $derived(data.games.nationWinRate);
 
 	// Circular avatar images for the players/casters axis labels, rasterized
@@ -59,6 +61,7 @@
 	// stale guard drops a late resolution after the rows change (navigation).
 	let standingsAvatars = $state<(string | undefined)[]>();
 	let casterAvatars = $state<(string | undefined)[]>();
+	let playerPicksAvatars = $state<(string | undefined)[]>();
 	$effect(() => {
 		const rows = standingsRows;
 		let stale = false;
@@ -67,6 +70,19 @@
 			AVATAR_LABEL_SIZE,
 		).then((imgs) => {
 			if (!stale) standingsAvatars = imgs;
+		});
+		return () => {
+			stale = true;
+		};
+	});
+	$effect(() => {
+		const rows = playerPicks;
+		let stale = false;
+		void loadCircularAvatars(
+			rows.map((p) => p.avatar_url),
+			AVATAR_LABEL_SIZE,
+		).then((imgs) => {
+			if (!stale) playerPicksAvatars = imgs;
 		});
 		return () => {
 			stale = true;
@@ -154,7 +170,7 @@
 							>
 						</Tabs.List>
 
-						<!-- Players — standings (Plane A) -->
+						<!-- Players — standings + per-player nation picks (Plane A) -->
 						<Tabs.Content value="players">
 							<section class="mb-8">
 								<h2 class="mb-3 text-base font-bold text-tan">Standings</h2>
@@ -167,6 +183,21 @@
 								{:else}
 									<p class="p-8 text-center italic text-tan opacity-60">
 										No games played yet.
+									</p>
+								{/if}
+							</section>
+
+							<section class="mb-8">
+								<h2 class="mb-3 text-base font-bold text-tan">Nation picks</h2>
+								{#if playerPicks.length > 0}
+									<ChartContainer
+										option={playerPicksOption(playerPicks, playerPicksAvatars)}
+										height={barHeight(playerPicks.length)}
+										title="Nation picks"
+									/>
+								{:else}
+									<p class="p-8 text-center italic text-tan opacity-60">
+										No completed games yet.
 									</p>
 								{/if}
 							</section>

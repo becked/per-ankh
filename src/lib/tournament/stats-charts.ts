@@ -5,10 +5,10 @@
 // the shared ChartContainer, reusing the chart theme + grid helpers.
 
 import type { EChartsOption } from "echarts";
-import { CHART_THEME, getChartColor } from "$lib/config";
+import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { toRgba } from "$lib/utils/color";
-import { COMMON_GRID, crestAxisLabel } from "$lib/stats/charts/helpers";
-import type { CasterLeaderboardEntry } from "$lib/api-cloud";
+import { COMMON_GRID, crestAxisLabel, fmtNation } from "$lib/stats/charts/helpers";
+import type { CasterLeaderboardEntry, PlayerPicksEntry } from "$lib/api-cloud";
 
 // Fields the standings chart reads — the common subset of CombinedQualifier
 // (the cross-division ranking) and SlotStanding (per-division), so either
@@ -177,5 +177,69 @@ export function casterLeaderboardOption(
 				})),
 			},
 		],
+	};
+}
+
+// Per-player nation picks — one horizontal stacked bar per participant, each
+// segment a civ they've fielded (segment width = games with it), civ-colored.
+// Rows arrive pre-ordered (standings rank) from the server; the caller preloads
+// `avatarImages` (loadCircularAvatars, aligned to the rows). Flat segments — the
+// win/loss split lives in the tooltip, not a second visual axis. One ECharts
+// series per distinct nation (stacked), so a player's row is the sum of their
+// segments; nations a player never fielded contribute a zero-width segment.
+export function playerPicksOption(
+	players: PlayerPicksEntry[],
+	avatarImages?: (string | undefined)[],
+): EChartsOption {
+	const labels = players.map(
+		(p, i) => p.display_name ?? p.name ?? `Slot ${i + 1}`,
+	);
+	const keys = players.map((_, i) => rowKey(i));
+	// Union of nations across all players, ordered by total games fielded so
+	// segment colors are assigned deterministically (dominant civs first).
+	const nationTotals = new Map<string, number>();
+	for (const p of players) {
+		for (const pk of p.picks) {
+			nationTotals.set(pk.nation, (nationTotals.get(pk.nation) ?? 0) + pk.games);
+		}
+	}
+	const nations = [...nationTotals.entries()]
+		.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+		.map(([n]) => n);
+	return {
+		...CHART_THEME,
+		tooltip: {
+			...CHART_THEME.tooltip,
+			axisPointer: { type: "shadow" },
+			formatter: (params: unknown) => {
+				const p = (params as { dataIndex: number }[])[0];
+				const row = players[p.dataIndex];
+				if (!row) return "";
+				const lines = row.picks
+					.map(
+						(pk) =>
+							`${fmtNation(pk.nation)} — ${pk.games} game${pk.games === 1 ? "" : "s"} (${pk.wins}W ${pk.games - pk.wins}L)`,
+					)
+					.join("<br/>");
+				return `${labels[p.dataIndex]} — ${row.total_wins}W ${row.total_games - row.total_wins}L<br/>${lines}`;
+			},
+		},
+		grid: { ...COMMON_GRID, left: LABEL_GUTTER },
+		xAxis: { type: "value", minInterval: 1 },
+		yAxis: {
+			type: "category",
+			inverse: true,
+			data: keys,
+			axisLabel: avatarAxisLabel(keys, labels, avatarImages),
+		},
+		series: nations.map((nation, ni) => ({
+			name: fmtNation(nation),
+			type: "bar" as const,
+			stack: "picks",
+			data: players.map(
+				(p) => p.picks.find((pk) => pk.nation === nation)?.games ?? 0,
+			),
+			itemStyle: { color: getNationChartColor(nation, ni) },
+		})),
 	};
 }
