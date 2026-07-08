@@ -1,5 +1,15 @@
 # Changelog
 
+## [2026-07-08-afa7ee2] - 2026-07-08
+
+### Fixes
+
+- (map) regenerate atlas manifest to the baked resources hash — [afa7ee2](https://github.com/becked/per-ankh/commit/afa7ee24a1a08d87e8e7426baa6151bfdf5130f9)
+
+### Other
+
+- (api) add HTTP API reference with route drift guard — [be89e8a](https://github.com/becked/per-ankh/commit/be89e8a6f36ee73ab5e355eaaf51c0fb8f41c74c)
+
 ## [2026-07-07-0fdd309] - 2026-07-07
 
 ### Features
