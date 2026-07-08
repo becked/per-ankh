@@ -240,7 +240,7 @@ export const GOAL_NAMES: Readonly<Record<string, string>> = {
 	GOAL_PLAYER_ALLIANCE: "Be in an Alliance Players with a Nation",
 	GOAL_PLAYER_GROVE_LUXURIES:
 		"Send Honey, Incense, Lavender, Olive, and Wine to other Nations",
-	GOAL_PLAYER_TWO_WARS: "Make War with Two Tribes or Nations",
+	GOAL_PLAYER_TWO_WARS: "Make War with Three Tribes or Nations",
 	GOAL_POLYTHEISM: "Enact Polytheism",
 	GOAL_POLYTHEISM_FOUR_ELDER_ACOLYTES_PER_SEAT:
 		"Enact Polytheism and have Four Acolytes in each Family Seat",

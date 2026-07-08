@@ -49,8 +49,8 @@ export const ATLAS_MANIFEST: Readonly<
 		json: "/atlases/improvements-urban-ROME.b3852760.json",
 	},
 	resources: {
-		webp: "/atlases/resources.f9b9b172.webp",
-		json: "/atlases/resources.f9b9b172.json",
+		webp: "/atlases/resources.da084c25.webp",
+		json: "/atlases/resources.da084c25.json",
 	},
 	"terrain-3d": {
 		webp: "/atlases/terrain-3d.4cd3ee38.webp",
