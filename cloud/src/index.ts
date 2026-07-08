@@ -718,6 +718,11 @@ const ROUTES: RouteSpec[] = [
 	},
 ];
 
+// The registered "METHOD /path" route keys, exported for the api-reference
+// drift guard (cloud/src/routes-doc.test.ts): every key here must have a
+// matching heading in docs/api-reference.md and vice-versa.
+export const ROUTE_KEYS: readonly string[] = ROUTES.map((r) => r.route);
+
 // Cloud paths use credentialed (echo-Origin) CORS so cookies traverse
 // per-ankh.app ↔ api.per-ankh.app. Legacy /v1/share uses single-origin.
 // /v1/csp-report rides cloud-CORS too — browsers don't preflight CSP
