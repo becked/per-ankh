@@ -655,6 +655,14 @@
 		const entry = ATLAS_MANIFEST[name];
 		if (!entry) throw new Error(`unknown atlas: ${name}`);
 		const response = await fetch(entry.json);
+		// A 404 (e.g. a content-hash that never reached the deployed assets)
+		// returns the SPA fallback HTML, not JSON. Surface it as a clear error
+		// instead of letting response.json() throw a confusing parse error.
+		if (!response.ok) {
+			throw new Error(
+				`atlas "${name}" (${entry.json}) → HTTP ${response.status}`,
+			);
+		}
 		return (await response.json()) as AtlasManifest;
 	}
 
@@ -1691,7 +1699,11 @@
 		const al = nationAliases;
 		const fms = familyManifests;
 		const founderByCity = cityFounderNationByName;
-		if (!t3d || !ibm || !rm) return null;
+		// terrain + improvements are the structural base — without them there is
+		// no meaningful map. resources is a separate, decorative atlas: if it
+		// failed to load (rm == null) the resource-icons layer below is simply
+		// omitted rather than blanking the whole map.
+		if (!t3d || !ibm) return null;
 		const political = politicalData;
 		const fills = religionFills;
 		const riv = rivers;
@@ -1811,27 +1823,34 @@
 			// renders (composites and standalones) already incorporate the
 			// scene without wild-resource visuals, matching the game's own
 			// behavior of replacing the resource model with city imagery.
-			new IconLayer<MapTile>({
-				id: "resource-icons",
-				data: tiles.filter((t) => {
-					if (resourceSpriteKeyFor(t, rm) == null) return false;
-					if (
-						t.terrain === "TERRAIN_URBAN" &&
-						urbanFamilyFor(renderNationFor(t, founderByCity), al) != null
-					) {
-						return false;
-					}
-					return true;
-				}),
-				iconAtlas: RESOURCES_ATLAS_URL,
-				iconMapping: rm.sprites,
-				getIcon: (d: MapTile) => resourceSpriteKeyFor(d, rm) as string,
-				getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
-				getSize: () => rm.cellWidth,
-				sizeUnits: "common",
-				sizeBasis: "width",
-				pickable: false,
-			}),
+			// Conditional: the resources atlas loads independently of terrain and
+			// improvements. If it failed (rm == null) this layer is dropped and
+			// the rest of the map still renders. See settleAtlas above.
+			...(rm
+				? [
+						new IconLayer<MapTile>({
+							id: "resource-icons",
+							data: tiles.filter((t) => {
+								if (resourceSpriteKeyFor(t, rm) == null) return false;
+								if (
+									t.terrain === "TERRAIN_URBAN" &&
+									urbanFamilyFor(renderNationFor(t, founderByCity), al) != null
+								) {
+									return false;
+								}
+								return true;
+							}),
+							iconAtlas: RESOURCES_ATLAS_URL,
+							iconMapping: rm.sprites,
+							getIcon: (d: MapTile) => resourceSpriteKeyFor(d, rm) as string,
+							getPosition: (d: MapTile) => hexToPixel(d.x, d.y),
+							getSize: () => rm.cellWidth,
+							sizeUnits: "common",
+							sizeBasis: "width",
+							pickable: false,
+						}),
+					]
+				: []),
 			// Single-improvement renders (rural, ruins, settlements,
 			// non-urban-buildable wonders). Synthesizes a __FALLBACK__
 			// icon for zTypes the base manifest doesn't know — typically
@@ -2060,6 +2079,11 @@
 
 	async function loadNationAliases(): Promise<Map<string, NationAliasEntry>> {
 		const response = await fetch(NATION_ALIASES_URL);
+		if (!response.ok) {
+			throw new Error(
+				`nation aliases (${NATION_ALIASES_URL}) → HTTP ${response.status}`,
+			);
+		}
 		const payload = (await response.json()) as NationAliasPayload;
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- assigned to $state Map below
 		const map = new Map<string, NationAliasEntry>();
@@ -2069,23 +2093,41 @@
 		return map;
 	}
 
+	// Unwrap one settled atlas load: keep the value on success, log and fall
+	// back to null on failure so a single stale/missing atlas doesn't reject
+	// the whole batch. buildLayers() renders whichever manifests are present.
+	function settleAtlas<T>(
+		result: PromiseSettledResult<T>,
+		label: string,
+	): T | null {
+		if (result.status === "fulfilled") return result.value;
+		console.error(`Failed to load ${label}:`, result.reason);
+		return null;
+	}
+
 	onMount(() => {
-		Promise.all([
+		// Load each atlas independently. A missing atlas degrades only its own
+		// layer instead of blanking the whole map (see the resource-icons
+		// incident). allSettled never rejects, so assetsLoaded always flips and
+		// the map renders whatever loaded. The deploy-time preflight
+		// (assets.atlas/assets.sprites) is the first line of defense against a
+		// manifest that references un-shipped hashes; this is the runtime net.
+		void Promise.allSettled([
 			loadManifest("terrain-3d"),
 			loadManifest("improvements-base"),
 			loadManifest("resources"),
 			loadNationAliases(),
-		])
-			.then(([terrain3d, improvementsBase, resources, aliases]) => {
-				terrain3dManifest = terrain3d;
-				improvementsBaseManifest = improvementsBase;
-				resourcesManifest = resources;
-				nationAliases = aliases;
-				assetsLoaded = true;
-			})
-			.catch((err) => {
-				console.error("Failed to load map atlas manifests:", err);
-			});
+		]).then(([terrain3d, improvementsBase, resources, aliases]) => {
+			terrain3dManifest = settleAtlas(terrain3d, "terrain-3d atlas");
+			improvementsBaseManifest = settleAtlas(
+				improvementsBase,
+				"improvements-base atlas",
+			);
+			resourcesManifest = settleAtlas(resources, "resources atlas");
+			const al = settleAtlas(aliases, "nation aliases");
+			if (al) nationAliases = al;
+			assetsLoaded = true;
+		});
 
 		// Poll for canvas visibility (same pattern as HexMap)
 		const visibilityCheck = setInterval(() => {

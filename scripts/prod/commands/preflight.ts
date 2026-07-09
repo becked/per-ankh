@@ -2,6 +2,7 @@
 // blocking check failed. No side effects.
 
 import { runGitChecks } from "../checks/git";
+import { runAssetChecks } from "../checks/assets";
 import { runNpmChecks } from "../checks/npm";
 import { runTypescriptChecks } from "../checks/typescript";
 import { runSecretChecks } from "../checks/secrets";
@@ -26,6 +27,7 @@ export async function runAllChecks(
 	info("Running pre-flight checks...");
 	// Fast / dependency-free checks first so early failures surface quickly.
 	results.push(...(await runGitChecks(ctx)));
+	results.push(...(await runAssetChecks()));
 	results.push(...(await runSecretChecks(env)));
 	results.push(...(await runMigrationChecks(env)));
 	// Slow checks last (these spawn npm/tsc and take seconds each).
