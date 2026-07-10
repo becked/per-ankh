@@ -1079,6 +1079,29 @@ export const cloudApi = {
 		});
 	},
 
+	// Admin-only occupant swap: trades the identities of two same-phase slots
+	// (discord_username / discord_id / user_id / signup_answer). The seat — seed,
+	// division, and every committed match — stays, so the two people simply trade
+	// places in their pending matches. Used to unblock a pending match by swapping
+	// a stuck player with a same-division player from another pending match. The
+	// server refuses (409 SLOT_HAS_RESULTS) once either seat has any decided match
+	// — including a bye — so results can never be reattributed; 409
+	// TOURNAMENT_LOCKED blocks cross-division swaps after start. Caller refreshes
+	// (invalidateAll) rather than reading the returned pair back.
+	swapSlots: async (
+		tournamentId: string,
+		slotAId: string,
+		slotBId: string,
+		opts?: CallOpts,
+	): Promise<void> => {
+		await request(`/tournaments/${tournamentId}/slots/swap`, {
+			...opts,
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ slot_a_id: slotAId, slot_b_id: slotBId }),
+		});
+	},
+
 	// User-prefix search — powers the UserAutocomplete on the
 	// admin's add-slot form. Requires a logged-in session (anonymous → 401);
 	// returns up to `limit` users whose

@@ -2,6 +2,7 @@
 	import type { SlotStanding } from "$lib/api-cloud";
 	import PlayerAvatar from "$lib/tournament/PlayerAvatar.svelte";
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
+	import SwapPicker from "$lib/tournament/SwapPicker.svelte";
 
 	let {
 		divisionName,
@@ -11,6 +12,8 @@
 		onSubstitute,
 		onWithdraw,
 		onReinstate,
+		onSwap,
+		opponentBySlot = {},
 		onOpenInfo,
 	}: {
 		divisionName: string;
@@ -29,8 +32,64 @@
 		onWithdraw?: (slotId: string) => void;
 		// eslint-disable-next-line no-unused-vars -- param name documentary
 		onReinstate?: (slotId: string) => void;
+		// Trade the occupants of two slots. slotId is this row's player; the
+		// admin picks otherSlotId from the same-division swap picker.
+		onSwap?: (
+			// eslint-disable-next-line no-unused-vars -- param names documentary
+			slotId: string,
+			// eslint-disable-next-line no-unused-vars -- param names documentary
+			otherSlotId: string,
+		) => void;
+		// slot_id → its current pending-opponent slot_id, across this division's
+		// pending swiss matches. Drives the swap picker's "vs <opponent>" labels
+		// and excludes a player's own opponent (that swap is a no-op).
+		opponentBySlot?: Record<string, string>;
 		onOpenInfo?: () => void;
 	} = $props();
+
+	// Which row's swap picker is expanded (only one at a time). Cleared on pick,
+	// cancel, or an outside click.
+	let swapPickingSlotId = $state<string | null>(null);
+
+	// A slot is swap-eligible exactly when it has no decided match this phase —
+	// the client mirror of the server's SLOT_HAS_RESULTS guard. Swiss wins/losses
+	// come only from decided matches (a bye is +1 win), so wins+losses===0 means
+	// nothing has been banked yet; a withdrawn seat's forfeits belong to the
+	// player who withdrew, so it's out too.
+	function isSwapEligible(s: SlotStanding): boolean {
+		return s.wins + s.losses === 0 && !s.withdrawn;
+	}
+
+	function opponentLabelOf(slotId: string): string | null {
+		const oppId = opponentBySlot[slotId];
+		if (!oppId) return null;
+		const opp = standings.find((r) => r.slot_id === oppId);
+		return opp ? slotLabel(opp) : null;
+	}
+
+	// Eligible same-division partners for `s`, minus itself and its own current
+	// opponent (swapping with your own opponent just flips the same match).
+	function swapCandidatesFor(s: SlotStanding) {
+		const ownOpponent = opponentBySlot[s.slot_id];
+		return standings
+			.filter(
+				(c) =>
+					c.slot_id !== s.slot_id &&
+					c.slot_id !== ownOpponent &&
+					isSwapEligible(c),
+			)
+			.map((c) => ({
+				slotId: c.slot_id,
+				label: slotLabel(c),
+				seed: c.swiss_seed,
+				opponentLabel: opponentLabelOf(c.slot_id),
+			}));
+	}
+
+	function handleSwapSelect(slotId: string, otherSlotId: string): void {
+		swapPickingSlotId = null;
+		onSwap?.(slotId, otherSlotId);
+	}
 
 	// Empty divisionName suppresses the heading — used when the parent
 	// section already labels the division (e.g. under SwissFlowBracket).
@@ -142,28 +201,59 @@
 										{statusBadge(s.status)}
 									</span>
 								{/if}
-								{#if isViewerAdmin && onWithdraw && onReinstate}
-									{#if s.withdrawn}
-										<button
-											type="button"
-											class="ml-auto rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
-											disabled={busy}
-											onclick={() => onReinstate(s.slot_id)}
-											title="Reinstate this player (takes effect from the next round)"
-										>
-											Reinstate
-										</button>
-									{:else}
-										<button
-											type="button"
-											class="ml-auto rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
-											disabled={busy}
-											onclick={() => onWithdraw(s.slot_id)}
-											title="Withdraw this player — removes them from all future rounds"
-										>
-											Withdraw
-										</button>
-									{/if}
+								{#if isViewerAdmin && ((onWithdraw && onReinstate) || onSwap)}
+									<span class="ml-auto inline-flex items-center gap-1">
+										{#if onSwap && !s.withdrawn}
+											{#if swapPickingSlotId === s.slot_id}
+												<SwapPicker
+													candidates={swapCandidatesFor(s)}
+													disabled={busy}
+													onSelect={(otherSlotId) =>
+														handleSwapSelect(s.slot_id, otherSlotId)}
+													onCancel={() => (swapPickingSlotId = null)}
+												/>
+											{:else}
+												{@const eligible = isSwapEligible(s)}
+												{@const cands = eligible ? swapCandidatesFor(s) : []}
+												<button
+													type="button"
+													class="rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
+													disabled={busy || !eligible || cands.length === 0}
+													onclick={() => (swapPickingSlotId = s.slot_id)}
+													title={!eligible
+														? "Can't swap — already has a result this phase"
+														: cands.length === 0
+															? "No swap-eligible players (others have results this round)"
+															: "Swap this player's seat with another same-division pending player"}
+												>
+													Swap
+												</button>
+											{/if}
+										{/if}
+										{#if onWithdraw && onReinstate}
+											{#if s.withdrawn}
+												<button
+													type="button"
+													class="rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
+													disabled={busy}
+													onclick={() => onReinstate(s.slot_id)}
+													title="Reinstate this player (takes effect from the next round)"
+												>
+													Reinstate
+												</button>
+											{:else}
+												<button
+													type="button"
+													class="rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
+													disabled={busy}
+													onclick={() => onWithdraw(s.slot_id)}
+													title="Withdraw this player — removes them from all future rounds"
+												>
+													Withdraw
+												</button>
+											{/if}
+										{/if}
+									</span>
 								{/if}
 							</span>
 						</td>
