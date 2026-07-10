@@ -47,10 +47,6 @@
 		onOpenInfo?: () => void;
 	} = $props();
 
-	// Which row's swap picker is expanded (only one at a time). Cleared on pick,
-	// cancel, or an outside click.
-	let swapPickingSlotId = $state<string | null>(null);
-
 	// A slot is swap-eligible exactly when it has no decided match this phase —
 	// the client mirror of the server's SLOT_HAS_RESULTS guard. Swiss wins/losses
 	// come only from decided matches (a bye is +1 win), so wins+losses===0 means
@@ -84,11 +80,6 @@
 				seed: c.swiss_seed,
 				opponentLabel: opponentLabelOf(c.slot_id),
 			}));
-	}
-
-	function handleSwapSelect(slotId: string, otherSlotId: string): void {
-		swapPickingSlotId = null;
-		onSwap?.(slotId, otherSlotId);
 	}
 
 	// Empty divisionName suppresses the heading — used when the parent
@@ -204,31 +195,14 @@
 								{#if isViewerAdmin && ((onWithdraw && onReinstate) || onSwap)}
 									<span class="ml-auto inline-flex items-center gap-1">
 										{#if onSwap && !s.withdrawn}
-											{#if swapPickingSlotId === s.slot_id}
-												<SwapPicker
-													candidates={swapCandidatesFor(s)}
-													disabled={busy}
-													onSelect={(otherSlotId) =>
-														handleSwapSelect(s.slot_id, otherSlotId)}
-													onCancel={() => (swapPickingSlotId = null)}
-												/>
-											{:else}
-												{@const eligible = isSwapEligible(s)}
-												{@const cands = eligible ? swapCandidatesFor(s) : []}
-												<button
-													type="button"
-													class="rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
-													disabled={busy || !eligible || cands.length === 0}
-													onclick={() => (swapPickingSlotId = s.slot_id)}
-													title={!eligible
-														? "Can't swap — already has a result this phase"
-														: cands.length === 0
-															? "No swap-eligible players (others have results this round)"
-															: "Swap this player's seat with another same-division pending player"}
-												>
-													Swap
-												</button>
-											{/if}
+											{@const eligible = isSwapEligible(s)}
+											<SwapPicker
+												candidates={eligible ? swapCandidatesFor(s) : []}
+												{eligible}
+												disabled={busy}
+												onSelect={(otherSlotId) =>
+													onSwap?.(s.slot_id, otherSlotId)}
+											/>
 										{/if}
 										{#if onWithdraw && onReinstate}
 											{#if s.withdrawn}

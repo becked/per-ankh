@@ -1,17 +1,29 @@
 <script lang="ts">
-	// Occupant-swap picker: a searchable dropdown over the swap-eligible players
-	// in the same division. Backs the "Swap" affordance in SwissStandings — the
-	// admin picks the player to trade seats with, unblocking a stuck pending
-	// match by pairing the healthy player against someone from another pending
-	// match.
+	// Occupant-swap picker: the "Swap" affordance in a Swiss standings row. The
+	// button is a Popover trigger; the popover holds a searchable bits-ui Combobox
+	// over the swap-eligible players in the same division. The admin picks the
+	// player to trade seats with, unblocking a stuck pending match by pairing the
+	// healthy player against someone from another pending match.
 	//
-	// Built on bits-ui's Combobox (the app's UI primitive, styled to match
-	// ui/Select.svelte) rather than UserAutocomplete: the candidate set is an
-	// in-memory list of existing slots in this division, not a server user
-	// search. bits-ui filters nothing itself — we render the items matching the
-	// typed query and it owns keyboard nav, ARIA, and the portal'd dropdown (so
-	// the list isn't clipped by the standings table's overflow).
+	// Why Popover + Combobox (two bits-ui floating primitives nested):
+	//   * The Popover portals its content, so the dropdown escapes the standings
+	//     table's overflow (the original reason SwapPicker reached for Combobox at
+	//     all) and anchors to the button like the row's Withdraw/Reinstate siblings
+	//     don't need to — it floats free of the row.
+	//   * The Combobox stays for the searchable, keyboard-navigable candidate list
+	//     (a round-1 division can be ~30 players, so the typeahead filter matters);
+	//     bits-ui owns keyboard nav and ARIA. We render the items matching the typed
+	//     query — bits-ui filters nothing itself.
+	//
+	// Nesting two floating layers safely: the Combobox uses ContentStatic (NOT
+	// Combobox.Portal), so the whole input+list tree lives inside the Popover's DOM
+	// and focus scope — the Popover's focus trap contains it, and a click on a
+	// Combobox item is DOM-inside the popover, so the Popover's outside-click
+	// dismiss never races the item selection. bits-ui's dismiss is topmost-layer
+	// only, so while the Combobox is open it owns Escape / outside-click; we route a
+	// single `open` state through both, so one dismiss collapses the whole picker.
 	import { Combobox } from "bits-ui";
+	import Popover from "$lib/ui/Popover.svelte";
 
 	interface SwapCandidate {
 		slotId: string;
@@ -25,24 +37,25 @@
 
 	let {
 		candidates,
+		eligible,
 		disabled = false,
 		onSelect,
-		onCancel,
 	}: {
 		candidates: SwapCandidate[];
+		// Whether this row's player may swap at all (no banked result this phase).
+		// Drives the disabled-trigger title; candidates is empty when ineligible.
+		eligible: boolean;
 		disabled?: boolean;
 		// eslint-disable-next-line no-unused-vars -- param name documentary
 		onSelect: (otherSlotId: string) => void;
-		onCancel: () => void;
 	} = $props();
 
-	let search = $state("");
-	let inputEl = $state<HTMLInputElement | null>(null);
-	// Open on mount so the candidate list shows immediately; bits-ui owns it
-	// thereafter (Escape / outside click / pick set it false → onOpenChange
-	// collapses the whole picker).
-	let open = $state(true);
+	// One open state, bound to the Popover and passed (controlled) to the
+	// Combobox: any Combobox dismiss (Escape, outside click, pick) flows back
+	// through onOpenChange and collapses the popover in a single step.
+	let open = $state(false);
 
+	let search = $state("");
 	const query = $derived(search.trim().toLowerCase());
 	const filtered = $derived(
 		query
@@ -50,50 +63,62 @@
 			: candidates,
 	);
 
-	// Focus + select on mount so the admin can type immediately (parity with the
-	// substitute editor's toggle-to-edit). Uses the ref rather than the native
-	// autofocus attribute to avoid the a11y-autofocus lint.
-	$effect(() => {
-		inputEl?.focus();
-		inputEl?.select();
-	});
+	// The trigger can't open when the player has already banked a result, when no
+	// eligible partners exist, or while another action is in flight — a disabled
+	// Popover trigger can't open, so this gates the whole picker.
+	const triggerDisabled = $derived(
+		disabled || !eligible || candidates.length === 0,
+	);
+	const triggerTitle = $derived(
+		!eligible
+			? "Can't swap — already has a result this phase"
+			: candidates.length === 0
+				? "No swap-eligible players (others have results this round)"
+				: "Swap this player's seat with another same-division pending player",
+	);
 </script>
 
-<Combobox.Root
-	type="single"
+<Popover
 	bind:open
-	{disabled}
-	onValueChange={(v) => {
-		if (v) onSelect(v);
-	}}
-	onOpenChange={(o) => {
-		// Escape or an outside click closes the dropdown — collapse the whole
-		// picker back to the button. A pick fires onValueChange first, so the
-		// resulting close here is a harmless second cancel.
-		if (!o) onCancel();
-	}}
+	ariaLabel="Swap with player"
+	contentClass="w-72"
+	frameClass="border border-surface bg-surface-sunken p-0 shadow-lg"
 >
-	<span class="inline-flex items-center gap-1">
-		<Combobox.Input
-			bind:ref={inputEl}
-			{disabled}
-			aria-label="Swap with player"
-			oninput={(e) => (search = e.currentTarget.value)}
-			class="w-40 rounded bg-surface px-1.5 py-0.5 text-xs text-tan focus:outline-none disabled:opacity-50"
-		/>
+	{#snippet trigger({ props })}
 		<button
+			{...props}
 			type="button"
-			class="text-xs text-tan opacity-50 hover:opacity-100"
-			onclick={onCancel}
-			{disabled}
-			aria-label="Cancel swap"
+			disabled={triggerDisabled}
+			class="rounded border border-black border-opacity-50 px-1.5 text-[10px] text-tan opacity-60 transition-opacity hover:opacity-100 disabled:opacity-30"
+			title={triggerTitle}
 		>
-			×
+			Swap
 		</button>
-	</span>
-	<Combobox.Portal>
-		<Combobox.Content
-			class="z-50 max-h-72 w-72 overflow-y-auto rounded-lg border border-surface bg-surface-sunken shadow-lg"
+	{/snippet}
+
+	<Combobox.Root
+		type="single"
+		{open}
+		onOpenChange={(o) => {
+			// Escape / outside click / pick all close the Combobox — collapse the
+			// popover with it so the row returns to just the button.
+			if (!o) open = false;
+		}}
+		onValueChange={(v) => {
+			if (v) onSelect(v);
+		}}
+	>
+		<div class="p-1.5">
+			<!-- No autofocus attribute: the Popover's focus scope focuses its first
+			     tabbable (this input) on open, so the admin can type immediately. -->
+			<Combobox.Input
+				aria-label="Swap with player"
+				oninput={(e) => (search = e.currentTarget.value)}
+				class="w-full rounded bg-surface px-1.5 py-1 text-xs text-tan focus:outline-none"
+			/>
+		</div>
+		<Combobox.ContentStatic
+			class="max-h-64 overflow-y-auto border-t border-surface pb-1"
 		>
 			<Combobox.Viewport>
 				{#each filtered as c (c.slotId)}
@@ -112,6 +137,6 @@
 					<div class="px-3 py-2 text-xs text-tan opacity-60">No matches.</div>
 				{/each}
 			</Combobox.Viewport>
-		</Combobox.Content>
-	</Combobox.Portal>
-</Combobox.Root>
+		</Combobox.ContentStatic>
+	</Combobox.Root>
+</Popover>
