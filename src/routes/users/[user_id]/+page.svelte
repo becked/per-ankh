@@ -15,6 +15,7 @@
 	import GamesTable from "$lib/users/GamesTable.svelte";
 	import OverviewTab from "$lib/users/OverviewTab.svelte";
 	import ScopeRow from "$lib/users/ScopeRow.svelte";
+	import VideosTab from "$lib/users/VideosTab.svelte";
 	import StatsView from "$lib/stats/StatsView.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
 	import type { PageData } from "./$types";
@@ -184,6 +185,11 @@
 							<Tabs.Trigger value="stats" class={triggerClass}
 								>Stats</Tabs.Trigger
 							>
+							{#if data.hasChannels}
+								<Tabs.Trigger value="videos" class={triggerClass}
+									>Videos</Tabs.Trigger
+								>
+							{/if}
 						</Tabs.List>
 
 						<Tabs.Content value="overview">
@@ -210,6 +216,12 @@
 						<Tabs.Content value="stats">
 							<StatsView {bundle} />
 						</Tabs.Content>
+
+						{#if data.hasChannels}
+							<Tabs.Content value="videos">
+								<VideosTab videos={data.videos} />
+							</Tabs.Content>
+						{/if}
 					</div>
 				</Tabs.Root>
 			</div>

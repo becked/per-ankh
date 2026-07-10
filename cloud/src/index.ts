@@ -86,6 +86,13 @@ import {
 } from "./tournament/player";
 import { handleUserStats } from "./stats/handlers";
 import { handleUserProfile, handleUserSearch } from "./users";
+import {
+	handleAddChannel,
+	handleDeleteChannel,
+	handleListMyChannels,
+	handleUserVideos,
+} from "./channels";
+import type { ChannelsEnv } from "./channels";
 import type { TournamentPlayerEnv } from "./tournament/player";
 import {
 	handleBulkCreateSlots,
@@ -119,6 +126,7 @@ interface Env
 		TournamentPlayerEnv,
 		TournamentAdminEnv,
 		ShareLegacyEnv,
+		ChannelsEnv,
 		SecurityEventsEnv {
 	SHARE_BUCKET: R2Bucket;
 	SHARE_DB: D1Database;
@@ -188,6 +196,26 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/auth/settings" },
 		route: "POST /v1/auth/settings",
 		handler: (r, e) => handleSettings(r, e),
+	},
+	// Self-service video/stream channels (see cloud/src/channels.ts). Grouped
+	// with /v1/auth/settings — both are session-scoped account writes.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/auth/channels" },
+		route: "GET /v1/auth/channels",
+		handler: (r, e) => handleListMyChannels(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/auth/channels" },
+		route: "POST /v1/auth/channels",
+		handler: (r, e) => handleAddChannel(r, e),
+	},
+	{
+		method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/auth\/channels\/([a-z]+)$/ },
+		route: "DELETE /v1/auth/channels/:platform",
+		handler: (r, e, m) => handleDeleteChannel(m![1], r, e),
 	},
 	{
 		method: "POST",
@@ -676,6 +704,18 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "GET /v1/users/:user_id/stats",
 		handler: (r, e, m) => handleUserStats(m![1], r, e),
+	},
+	// Public recent videos merged across the user's linked channels — feeds
+	// the profile "Videos" tab. Passes ctx so the cache can refresh in the
+	// background (stale-while-revalidate).
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/users\/([A-Za-z0-9_-]{21})\/videos$/,
+		},
+		route: "GET /v1/users/:user_id/videos",
+		handler: (r, e, m, c) => handleUserVideos(m![1], r, e, c),
 	},
 	// User-facing tournament endpoints
 	{

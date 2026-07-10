@@ -18,16 +18,21 @@ export const load: PageLoad = async ({ fetch, url }) => {
 	//   - allGames: the library list (capped at the Worker's 500 max),
 	//     powering the per-save "reparse this one" rows — these let the user
 	//     force a reparse of a save that's already on the current version.
-	const [{ games: outOfDateGames }, { games: allGames, total: totalGames }] =
-		await Promise.all([
-			cloudApi.listOutOfDate(PARSER_VERSION, { fetch }),
-			cloudApi.listGames({ limit: 500, fetch }),
-		]);
+	const [
+		{ games: outOfDateGames },
+		{ games: allGames, total: totalGames },
+		channels,
+	] = await Promise.all([
+		cloudApi.listOutOfDate(PARSER_VERSION, { fetch }),
+		cloudApi.listGames({ limit: 500, fetch }),
+		cloudApi.listMyChannels({ fetch }),
+	]);
 	return {
 		user,
 		outOfDateGames,
 		allGames,
 		totalGames,
+		channels,
 		meta: {
 			title: "Settings - Per-Ankh",
 			description: "Manage your Per-Ankh account settings.",

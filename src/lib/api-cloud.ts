@@ -22,6 +22,26 @@ export interface UserSearchResult {
 	display_name: string;
 }
 
+// A user-linked video/stream channel (public). `channel_id` is present on the
+// self-service CRUD responses; the profile payload carries only platform + URL
+// (all the tab gate and any "manage" link need).
+export interface VideoChannel {
+	platform: string;
+	channel_url: string;
+	channel_id?: string;
+}
+
+// One recent video for the profile "Videos" tab. Merged across the user's
+// linked channels, newest first (GET /v1/users/:id/videos).
+export interface RecentVideo {
+	id: string;
+	title: string;
+	url: string;
+	thumbnail_url: string | null;
+	published_at: string;
+	platform: string;
+}
+
 // Public profile fields returned by GET /v1/users/:user_id. No-auth read;
 // used by the /users/[user_id] page to render the chrome when a visitor
 // views someone else's library.
@@ -38,6 +58,9 @@ export interface UserProfile {
 		favorite_nation: string | null;
 		favorite_day_of_week: number | null;
 	};
+	// Linked channels — drives whether the profile renders the "Videos" tab.
+	// Empty when the user has linked none.
+	channels: { platform: string; channel_url: string }[];
 }
 
 export interface UserMe {
@@ -386,6 +409,31 @@ export const cloudApi = {
 		return res.json() as Promise<{ default_game_public: boolean }>;
 	},
 
+	// --- Video channels (self-service) ---
+	// The signed-in user's linked channels.
+	listMyChannels: async (opts?: CallOpts): Promise<VideoChannel[]> => {
+		const res = await request("/auth/channels", opts);
+		return (await (res.json() as Promise<{ channels: VideoChannel[] }>))
+			.channels;
+	},
+
+	// Add or replace a channel. The Worker detects the platform from the URL
+	// and resolves it to a native id; on bad/unresolvable input it throws an
+	// ApiError whose message is safe to show the user.
+	addChannel: (
+		url: string,
+		opts?: CallOpts,
+	): Promise<{ channel: VideoChannel }> =>
+		postJson<{ channel: VideoChannel }>("/auth/channels", { url }, opts),
+
+	// Remove the user's channel for a platform. Idempotent.
+	removeChannel: async (platform: string, opts?: CallOpts): Promise<void> => {
+		await request(`/auth/channels/${encodeURIComponent(platform)}`, {
+			...opts,
+			method: "DELETE",
+		});
+	},
+
 	// --- Games ---
 	listGames: async (opts?: ListGamesOpts): Promise<GameListResponse> => {
 		const params = new URLSearchParams();
@@ -437,6 +485,16 @@ export const cloudApi = {
 			if (err instanceof ApiError && err.status === 404) return null;
 			throw err;
 		}
+	},
+
+	// Recent videos merged across the target user's linked channels, newest
+	// first. Public read; feeds the profile "Videos" tab.
+	getUserVideos: async (
+		userId: string,
+		opts?: CallOpts,
+	): Promise<RecentVideo[]> => {
+		const res = await request(`/users/${userId}/videos`, opts);
+		return (await (res.json() as Promise<{ videos: RecentVideo[] }>)).videos;
 	},
 
 	// Owner GET — returns the blob with `is_public` and the uploader-identity

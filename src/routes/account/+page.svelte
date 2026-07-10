@@ -5,6 +5,7 @@
 	import { cloudApi, type GameListItem } from "$lib/api-cloud";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
+	import ChannelSettings from "$lib/settings/ChannelSettings.svelte";
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import { formatGameTitle } from "$lib/utils/formatting";
 	import { isNewer } from "$lib/utils/semver";
@@ -103,6 +104,9 @@
 				<Tabs.Trigger value="preferences" class={triggerClass}>
 					Preferences
 				</Tabs.Trigger>
+				<Tabs.Trigger value="channels" class={triggerClass}>
+					Channels
+				</Tabs.Trigger>
 				<Tabs.Trigger value="maintenance" class={triggerClass}>
 					Maintenance
 				</Tabs.Trigger>
@@ -198,6 +202,10 @@
 						</div>
 					</div>
 				</div>
+			</Tabs.Content>
+
+			<Tabs.Content value="channels">
+				<ChannelSettings initialChannels={data.channels} />
 			</Tabs.Content>
 
 			<Tabs.Content value="maintenance">

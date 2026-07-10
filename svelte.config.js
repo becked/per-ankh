@@ -45,7 +45,17 @@ const config = {
 				"default-src": ["self"],
 				"script-src": ["self", "https://static.cloudflareinsights.com"],
 				"style-src": ["self", "unsafe-inline"],
-				"img-src": ["self", "data:", "https://cdn.discordapp.com"],
+				// cdn.discordapp.com: user avatars. *.ytimg.com: YouTube video
+				// thumbnails on the profile Videos tab — YouTube's image CDN rotates
+				// numbered subdomains (i1–i9.ytimg.com), so a wildcard is required.
+				// Add each new video platform's thumbnail host here as providers are
+				// added (e.g. Twitch: https://static-cdn.jtvnw.net).
+				"img-src": [
+					"self",
+					"data:",
+					"https://cdn.discordapp.com",
+					"https://*.ytimg.com",
+				],
 				"connect-src": [
 					"self",
 					"https://api.per-ankh.app",

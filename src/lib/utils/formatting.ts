@@ -138,6 +138,17 @@ export function formatDate(dateStr: string | null | undefined): string {
 	return date.toISOString().split("T")[0];
 }
 
+// Human label for a video/stream platform id (see cloud/src/video/). Known
+// platforms get a proper cased name; anything else is capitalized so a new
+// provider renders sensibly before this map is updated.
+const VIDEO_PLATFORM_LABELS: Record<string, string> = { youtube: "YouTube" };
+export function platformLabel(platform: string): string {
+	return (
+		VIDEO_PLATFORM_LABELS[platform] ??
+		platform.charAt(0).toUpperCase() + platform.slice(1)
+	);
+}
+
 /**
  * Whether an instant's year, read in the given timezone, differs from the
  * current year in that same zone. Schedule displays normally omit the year (it's

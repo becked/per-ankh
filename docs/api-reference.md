@@ -145,6 +145,28 @@ Update account settings.
 - **Response 200:** `{ default_game_public: boolean }`.
 - **Errors:** `401 UNAUTHORIZED`, `400 INVALID_JSON`, `400 INVALID_BODY`.
 
+### `GET /v1/auth/channels`
+List the signed-in user's linked video/stream channels.
+
+- **Auth:** Session.
+- **Response 200:** `{ channels: { platform, channel_url, channel_id }[] }`.
+- **Errors:** `401 UNAUTHORIZED`.
+
+### `POST /v1/auth/channels`
+Add or replace the user's channel for the platform the pasted URL belongs to. The Worker detects the platform from the URL and resolves it to a native channel id (YouTube: one Data API lookup for an `@handle` / legacy `/user/` URL; a `…/channel/UC…` URL resolves without a key). One channel per platform (upsert on `(user_id, platform)`).
+
+- **Auth:** Session.
+- **Body:** `AddChannelSchema` — `{ url: string }` (required, ≤500 chars).
+- **Response 200:** `{ channel: { platform, channel_url, channel_id } }`.
+- **Errors:** `401 UNAUTHORIZED`, `400 INVALID_JSON`, `400 INVALID_BODY`, `422 UNSUPPORTED_PLATFORM`, `400 INVALID_URL`, `422 UNRESOLVABLE_CUSTOM_URL`, `422 CHANNEL_NOT_FOUND`, `503 RESOLVE_UNAVAILABLE`, `502 RESOLVE_FAILED` / `RESOLVE_ERROR`.
+
+### `DELETE /v1/auth/channels/:platform`
+Remove the user's channel for a platform. Idempotent.
+
+- **Auth:** Session.
+- **Response 200:** `{ ok: true }`.
+- **Errors:** `401 UNAUTHORIZED`.
+
 ### `POST /v1/auth/logout`
 End the current session.
 
@@ -273,9 +295,9 @@ Public profile + all-time summary.
 
 - **Auth:** Public (owner extras) — the owner's summary includes private games; others/anon see public-only.
 - **Path:** `user_id` (21-char).
-- **Response 200:** `{ user_id, display_name, avatar_url, summary: { total_games, win_rate: number|null, favorite_nation: string|null, favorite_day_of_week: number|null } }`.
+- **Response 200:** `{ user_id, display_name, avatar_url, summary: { total_games, win_rate: number|null, favorite_nation: string|null, favorite_day_of_week: number|null }, channels: { platform, channel_url }[] }`.
 - **Errors:** `404 NOT_FOUND`.
-- **Notes:** Summary is all-time over all saves (ignores any scope selector).
+- **Notes:** Summary is all-time over all saves (ignores any scope selector). `channels` are the user's linked video/stream channels (public) — drives whether the profile shows the "Videos" tab.
 
 ### `GET /v1/users/:user_id/stats`
 User-corpus aggregate stats bundle.
@@ -286,6 +308,14 @@ User-corpus aggregate stats bundle.
 - **Response 200:** `ChartBundle` — `ChartBundleCore` (meta, summary, nations, win rates, yield curves, law/tech timing…) plus user-only `win_rate` and `games_with_outcome`.
 - **Errors:** `400 INVALID_USER_ID`, `404 NOT_FOUND`.
 - **Notes:** KV-cached, keyed on `{ user_id, viewerScope, scope, parser_version }`.
+
+### `GET /v1/users/:user_id/videos`
+Recent videos merged across the user's linked channels (newest first) — feeds the profile "Videos" tab.
+
+- **Auth:** Public — channels and their videos are user-published; no PII, same for every viewer.
+- **Path:** `user_id` (21-char).
+- **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform }[] }` (empty when the user has no linked channels).
+- **Notes:** Per-channel KV cache, stale-while-revalidate (serves cached instantly, refreshes in the background past a 1h soft TTL). YouTube videos come from the unauthenticated channel RSS feed.
 
 ---
 

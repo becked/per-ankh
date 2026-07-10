@@ -11,7 +11,7 @@ import type { UserScope } from "$lib/stats/types";
 import type { PageLoad } from "./$types";
 
 const FIRST_PAGE_SIZE = 50;
-const TABS = new Set(["overview", "stats", "games"]);
+const TABS = new Set(["overview", "stats", "games", "videos"]);
 const SCOPE_KEYWORDS = new Set(["public", "vs_ai", "mp", "tournament"]);
 
 export const load: PageLoad = async ({ fetch, url, params, parent }) => {
@@ -24,7 +24,7 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 	const isOwner = viewer?.user_id === targetUserId;
 
 	const tabRaw = url.searchParams.get("tab");
-	const tab = tabRaw && TABS.has(tabRaw) ? tabRaw : "overview";
+	let tab = tabRaw && TABS.has(tabRaw) ? tabRaw : "overview";
 
 	// Scope row: one selection feeding the bundle and the games list, so
 	// all tabs agree on the in-scope set.
@@ -54,6 +54,17 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 		if (!profile) {
 			throw error(404, "User not found");
 		}
+
+		// The Videos tab only exists when the user has linked channels; fall back
+		// to overview so a stale ?tab=videos link doesn't land on an empty tab.
+		const hasChannels = profile.channels.length > 0;
+		if (tab === "videos" && !hasChannels) tab = "overview";
+
+		// Fetch recent videos only when the Videos tab is active.
+		const videos =
+			tab === "videos"
+				? await cloudApi.getUserVideos(targetUserId, { fetch })
+				: [];
 
 		// Fetch the first games page only when the Games tab is active —
 		// Overview/Stats render entirely from the bundle.
@@ -85,6 +96,8 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 			scopeCounts: collectionsRes.scope_counts,
 			tab,
 			scope,
+			hasChannels,
+			videos,
 			category: url.searchParams.get("category"),
 			// Games-tab state.
 			games: gamesRes?.games ?? [],

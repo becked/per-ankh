@@ -109,6 +109,13 @@ ALLOWED_ORIGINS = "https://per-ankh.app,http://localhost:1420"
 DISCORD_CLIENT_ID = "1500901451034263604"
 # DISCORD_CLIENT_SECRET is set out-of-band:
 #   npx wrangler secret put DISCORD_CLIENT_SECRET
+# YOUTUBE_API_KEY (also a secret, set out-of-band) is used only to resolve an
+# @handle / legacy /user/ channel URL to its channel id when a user links a
+# YouTube channel (cloud/src/video/youtube.ts). Fetching recent videos uses the
+# unauthenticated RSS feed and needs no key. Set it in BOTH environments so the
+# secrets.parity preflight passes:
+#   npx wrangler secret put YOUTUBE_API_KEY
+#   npx wrangler secret put YOUTUBE_API_KEY --env staging
 # Session cookie name. A var (not a code const) so staging can use a distinct
 # name: both environments set Domain=per-ankh.app on the session cookie (the
 # only shared ancestor of their sibling subdomains), so a staging cookie named

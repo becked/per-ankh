@@ -180,7 +180,7 @@ export async function handleUserProfile(
 	// Visibility-scoped only: owner sees private+public, others public-only.
 	const session = await sessionFromRequest(env, request);
 	const vis = session?.data.user_id === userId ? "" : " AND is_public = 1";
-	const [countsRow, nationRow, dayRow] = await Promise.all([
+	const [countsRow, nationRow, dayRow, channelsRes] = await Promise.all([
 		env.SHARE_DB.prepare(
 			`SELECT COUNT(*) AS total,
 			        CAST(SUM(CASE WHEN user_won = 1 THEN 1 ELSE 0 END) AS REAL)
@@ -208,6 +208,15 @@ export async function handleUserProfile(
 		)
 			.bind(userId)
 			.first<{ weekday: number | null }>(),
+		// Linked video/stream channels — public, so the profile page can decide
+		// whether to render the "Videos" tab without a second request. Videos
+		// themselves load lazily via GET /v1/users/:id/videos when that tab opens.
+		env.SHARE_DB.prepare(
+			`SELECT platform, channel_url FROM user_video_channels
+			 WHERE user_id = ? ORDER BY platform`,
+		)
+			.bind(userId)
+			.all<{ platform: string; channel_url: string }>(),
 	]);
 
 	return jsonResponse(
@@ -221,6 +230,7 @@ export async function handleUserProfile(
 				favorite_nation: nationRow?.user_nation ?? null,
 				favorite_day_of_week: dayRow?.weekday ?? null,
 			},
+			channels: channelsRes.results ?? [],
 		},
 		200,
 		cors,
