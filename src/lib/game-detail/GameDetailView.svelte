@@ -600,6 +600,8 @@
 		<ImprovementsTab
 			players={resolvedPlayers}
 			{improvementData}
+			{units}
+			totalTurns={gameDetails.total_turns}
 			bind:tableState={tables.improvements}
 		/>
 	</Tabs.Content>

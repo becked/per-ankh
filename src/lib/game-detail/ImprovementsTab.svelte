@@ -1,7 +1,11 @@
 <script lang="ts">
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { UnitInfo } from "$lib/parser/types";
+	import type { EChartsOption } from "echarts";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
+	import { CHART_THEME } from "$lib/config";
+	import ChartContainer from "$lib/ChartContainer.svelte";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
@@ -19,6 +23,8 @@
 	let {
 		players,
 		improvementData,
+		units = [],
+		totalTurns,
 		tableState = $bindable<TableState>({
 			search: "",
 			sortColumn: "improvement",
@@ -28,8 +34,98 @@
 	}: {
 		players: DetailPlayer[];
 		improvementData: ImprovementData;
+		units?: UnitInfo[];
+		totalTurns: number;
 		tableState?: TableState;
 	} = $props();
+
+	const workerChartOption = $derived.by<EChartsOption | null>(() => {
+		const workers = units.filter(
+			(u) =>
+				u.unit_type === "UNIT_WORKER" &&
+				u.player_xml_id != null &&
+				u.create_turn != null,
+		);
+		if (workers.length === 0) return null;
+
+		const finalTurn = Math.max(
+			totalTurns,
+			...workers.map((w) => w.create_turn as number),
+		);
+
+		const series = players
+			.map((p) => {
+				const buildTurns = workers
+					.filter((w) => w.player_xml_id === p.playerId)
+					.map((w) => w.create_turn as number);
+				if (buildTurns.length === 0) return null;
+
+				const counts = new Array<number>(finalTurn + 1).fill(0);
+				for (const t of buildTurns) counts[Math.max(0, t)] += 1;
+				for (let i = 1; i <= finalTurn; i++) counts[i] += counts[i - 1];
+
+				return {
+					name: p.label,
+					type: "line" as const,
+					data: counts.map((c, turn) => [turn, c]),
+					showSymbol: false,
+					lineStyle: { width: 2 },
+					itemStyle: { color: p.color },
+				};
+			})
+			.filter((s): s is NonNullable<typeof s> => s != null);
+
+		if (series.length === 0) return null;
+
+		return {
+			...CHART_THEME,
+			title: {
+				...CHART_THEME.title,
+				text: "Workers Over Time",
+			},
+			tooltip: {
+				trigger: "axis",
+				formatter: (params: unknown) => {
+					const arr = params as Array<{
+						marker: string;
+						seriesName: string;
+						value: [number, number];
+					}>;
+					if (arr.length === 0) return "";
+					const rows = arr
+						.map((p) => ({
+							marker: p.marker,
+							name: p.seriesName,
+							count: p.value[1],
+						}))
+						.sort((a, b) => b.count - a.count)
+						.map((r) => `${r.marker}${r.name}: <b>${r.count}</b>`)
+						.join("<br/>");
+					return `Turn ${arr[0].value[0]}<br/>${rows}`;
+				},
+			},
+			grid: { left: 60, right: 40, top: 80, bottom: 60 },
+			xAxis: {
+				type: "value",
+				name: "Turn",
+				nameLocation: "middle",
+				nameGap: 30,
+				min: 0,
+				max: finalTurn,
+				minInterval: 1,
+				splitLine: { show: false },
+			},
+			yAxis: {
+				type: "value",
+				name: "Workers",
+				nameLocation: "middle",
+				nameGap: 40,
+				minInterval: 1,
+				splitLine: { show: false },
+			},
+			series,
+		} as EChartsOption;
+	});
 
 	// ─── Pivot table logic ────────────────────────────────────────────
 	// Columns are per player (mirror-match safe); filtering stays by nation.
@@ -134,6 +230,19 @@
 		return rows;
 	});
 </script>
+
+{#if workerChartOption}
+	<div
+		class="mb-4 rounded-lg p-4"
+		style="background-color: rgb(var(--color-surface));"
+	>
+		<ChartContainer
+			option={workerChartOption}
+			height="440px"
+			title="Workers Over Time"
+		/>
+	</div>
+{/if}
 
 {#if improvementData.improvements.length === 0}
 	<p class="p-8 text-center italic text-tan">No improvements found</p>
