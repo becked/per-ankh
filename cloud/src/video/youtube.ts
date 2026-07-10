@@ -164,6 +164,17 @@ async function resolveYouTube(
 	};
 }
 
+// Turn a numeric character-reference code point into its character, leaving
+// the original entity text untouched when it's outside the Unicode range.
+// String.fromCodePoint throws RangeError on such values; without this guard a
+// single bogus entity (e.g. "&#9999999999;") in one title would throw all the
+// way out of parseYouTubeFeed and blank the channel's entire video list.
+function fromCodePointSafe(cp: number, original: string): string {
+	return Number.isInteger(cp) && cp >= 0 && cp <= 0x10ffff
+		? String.fromCodePoint(cp)
+		: original;
+}
+
 // Decode the XML entities that appear in feed text (titles). &amp; is decoded
 // last so an escaped entity like "&amp;lt;" doesn't get double-decoded into
 // "<". Exported for unit tests.
@@ -173,10 +184,10 @@ export function decodeXmlEntities(s: string): string {
 		.replace(/&gt;/g, ">")
 		.replace(/&quot;/g, '"')
 		.replace(/&apos;/g, "'")
-		.replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) =>
-			String.fromCodePoint(parseInt(h, 16)),
+		.replace(/&#x([0-9a-fA-F]+);/g, (m, h: string) =>
+			fromCodePointSafe(parseInt(h, 16), m),
 		)
-		.replace(/&#(\d+);/g, (_, n: string) => String.fromCodePoint(Number(n)))
+		.replace(/&#(\d+);/g, (m, n: string) => fromCodePointSafe(Number(n), m))
 		.replace(/&amp;/g, "&");
 }
 
