@@ -57,6 +57,23 @@ async function checkManifest(
 			details: `Could not read ${manifestRelPath}`,
 		};
 	}
+	// A readable manifest that matched zero asset literals means the scan found
+	// nothing to verify — the manifest is empty or its emitted format changed
+	// (e.g. URLs built by concatenation rather than full string literals). Fail
+	// loudly rather than pass vacuously; a green check here would defeat the
+	// entire guard.
+	if (paths.length === 0) {
+		return {
+			name,
+			status: "fail",
+			blocking: true,
+			details:
+				`${manifestRelPath} referenced 0 assets — the manifest is empty or ` +
+				`its format changed so the scan matched nothing. Re-bake ` +
+				`(npm run bake:<name>) then \`npm run bake:finalize\`, and confirm ` +
+				`the manifest lists /atlases or /sprites paths.`,
+		};
+	}
 	const missing: string[] = [];
 	for (const p of paths) {
 		// "/atlases/resources.da084c25.webp" → static/atlases/resources.da084c25.webp

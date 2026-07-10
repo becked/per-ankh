@@ -2095,7 +2095,8 @@
 
 	// Unwrap one settled atlas load: keep the value on success, log and fall
 	// back to null on failure so a single stale/missing atlas doesn't reject
-	// the whole batch. buildLayers() renders whichever manifests are present.
+	// the whole batch. The caller decides which failures are fatal (structural
+	// atlases block render) vs. tolerable (the decorative resources atlas).
 	function settleAtlas<T>(
 		result: PromiseSettledResult<T>,
 		label: string,
@@ -2106,12 +2107,16 @@
 	}
 
 	onMount(() => {
-		// Load each atlas independently. A missing atlas degrades only its own
-		// layer instead of blanking the whole map (see the resource-icons
-		// incident). allSettled never rejects, so assetsLoaded always flips and
-		// the map renders whatever loaded. The deploy-time preflight
-		// (assets.atlas/assets.sprites) is the first line of defense against a
-		// manifest that references un-shipped hashes; this is the runtime net.
+		// Load each atlas independently so one stale/missing manifest doesn't
+		// reject the whole batch (see the resource-icons incident). terrain,
+		// improvements, and nation-aliases are STRUCTURAL — without terrain or
+		// improvements there is no map, and without aliases every city/capital
+		// silently vanishes — so render is gated on all three loading. resources
+		// is DECORATIVE: if it fails, only its own layer is dropped (see
+		// buildLayers) and the rest of the map still renders. The deploy-time
+		// preflight (assets.atlas/assets.sprites) is the first line of defense
+		// against a manifest that references un-shipped hashes; this is the
+		// runtime net.
 		void Promise.allSettled([
 			loadManifest("terrain-3d"),
 			loadManifest("improvements-base"),
@@ -2126,7 +2131,14 @@
 			resourcesManifest = settleAtlas(resources, "resources atlas");
 			const al = settleAtlas(aliases, "nation aliases");
 			if (al) nationAliases = al;
-			assetsLoaded = true;
+			// Gate render on the structural atlases. If any failed, leave
+			// assetsLoaded false so initDeck never builds a deck — an empty,
+			// inert canvas rather than a pannable map that's blank or missing
+			// every city with no signal that anything is wrong.
+			assetsLoaded =
+				terrain3dManifest != null &&
+				improvementsBaseManifest != null &&
+				al != null;
 		});
 
 		// Poll for canvas visibility (same pattern as HexMap)
