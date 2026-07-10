@@ -1,5 +1,13 @@
 # Changelog
 
+## [2026-07-10-38db13e] - 2026-07-10
+
+### Features
+
+- (tournament) atomic guarded slot-occupant swap — [b257a2f](https://github.com/becked/per-ankh/commit/b257a2ff30852dae830d070ecc646a900d11a4fa)
+- (tournament) swap-slot occupant UI in Swiss standings — [6480c3c](https://github.com/becked/per-ankh/commit/6480c3c72715f14fb898bbde0dd107b9d37cc625)
+- (tournament) anchor swap picker in a popover — [1ea3919](https://github.com/becked/per-ankh/commit/1ea39196e94dd038a2747f0cdf83eeda6dacf496)
+
 ## [2026-07-08-afa7ee2] - 2026-07-08
 
 ### Fixes
