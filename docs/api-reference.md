@@ -450,6 +450,13 @@ Renumber swiss seeds / reassign divisions.
 - **Response 200:** `{ slots: SlotRef[] }`.
 - **Errors:** `409 INVALID_PHASE` (status ≠ setup), `400 DUPLICATE_SLOT`, `400 INCOMPLETE_REORDER` (must list every swiss slot exactly once).
 
+### `POST /v1/tournaments/:id/slots/swap`
+Swap the occupants of two same-phase slots (identity moves; the seat — seed, division, match history — stays). Re-pairs the people in every pending match the seats are in, e.g. to unblock a round-1 match when one player is unavailable.
+
+- **Body:** `SwapSlotsSchema` — `{ slot_a_id, slot_b_id }`.
+- **Response 200:** `{ slots: [SlotRow, SlotRow] }` (the two updated slots).
+- **Errors:** `400 SAME_SLOT`, `404 SLOT_NOT_FOUND`, `409 PHASE_MISMATCH`, `409 SLOT_WITHDRAWN`, `409 TOURNAMENT_LOCKED` (cross-division after start), `409 SLOT_HAS_RESULTS` (either seat has a decided match — incl. a bye — so results can never be reattributed).
+
 ### `PATCH /v1/tournaments/:id/slots/:slot_id`
 Edit a slot.
 
