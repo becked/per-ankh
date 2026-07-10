@@ -27,8 +27,8 @@
 		formatEnum,
 		formatDate,
 		formatGameTitle,
-		formatMapClass,
 	} from "$lib/utils/formatting";
+	import { mapScriptLabel } from "$lib/map-settings";
 	import {
 		PLAYER_CHART_KEYS,
 		createDefaultChartFilters,
@@ -412,7 +412,7 @@
 					Map
 				</p>
 				<p class="text-lg font-bold" style="color: rgb(var(--color-bright));">
-					{formatMapClass(gameDetails.map_class)}
+					{mapScriptLabel(gameDetails.map_class)}
 				</p>
 			</div>
 		{/if}

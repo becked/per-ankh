@@ -104,8 +104,11 @@ export function toRomanNumeral(value: number): string {
 export function formatMapClass(value: string | null | undefined): string {
 	if (!value) return "Unknown";
 
-	// Remove the MAPCLASS_MapScript prefix (if present), or just MAPCLASS_ prefix
-	let withoutPrefix = value.replace(/^MAPCLASS_MapScript/, "");
+	// Remove the MAPCLASS_MapScript prefix (if present), or just MAPCLASS_ prefix.
+	// Case-insensitive: the Empires of the Indus DLC ships scripts spelled with a
+	// lowercase 's' (MAPCLASS_Mapscript…), which a case-sensitive match would miss,
+	// leaving a stray "Mapscript" word in the output.
+	let withoutPrefix = value.replace(/^MAPCLASS_MapScript/i, "");
 	if (withoutPrefix === value) {
 		// MapScript wasn't present, try removing just MAPCLASS_
 		withoutPrefix = value.replace(/^MAPCLASS_/, "");
