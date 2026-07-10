@@ -115,6 +115,21 @@
 		B: swissMatchesFor("B"),
 	});
 
+	// slot_id → its current pending-opponent slot_id across swiss pending
+	// matches. Feeds the SwissStandings swap picker ("vs <opponent>" labels,
+	// excluding a player's own opponent) and the swap confirm sentence. A bye
+	// has no slot_b, so a bye recipient never appears here.
+	const swissOpponentBySlot = $derived.by(() => {
+		const map: Record<string, string> = {};
+		for (const m of data.matches) {
+			if (m.phase !== "swiss" || m.status !== "pending" || !m.slot_b_id)
+				continue;
+			map[m.slot_a_id] = m.slot_b_id;
+			map[m.slot_b_id] = m.slot_a_id;
+		}
+		return map;
+	});
+
 	const hasAnyStandings = $derived(
 		data.standings.divisions.A.standings.length > 0 ||
 			data.standings.divisions.B.standings.length > 0,
@@ -531,6 +546,38 @@
 		await withBusy(
 			() => cloudApi.reinstateSlot(data.tournament.tournament_id, slotId),
 			"Reinstated player",
+		);
+	}
+
+	// Trade the occupants of two swiss slots (identity moves; each seat keeps its
+	// seed, division, and match history). The picker only surfaces eligible
+	// same-division partners, so the server's guards are pre-satisfied — but it's
+	// still authoritative on SLOT_HAS_RESULTS etc. if data changed under us.
+	async function swapSlots(slotId: string, otherSlotId: string) {
+		const aLabel = slotLabelFor(slotId);
+		const bLabel = slotLabelFor(otherSlotId);
+		const aOppId = swissOpponentBySlot[slotId];
+		const bOppId = swissOpponentBySlot[otherSlotId];
+		const aOpp = aOppId ? slotLabelFor(aOppId) : null;
+		const bOpp = bOppId ? slotLabelFor(bOppId) : null;
+		// Spell out the resulting matchups — the admin is really choosing who
+		// plays whom, so the pending pairings after the swap are the point.
+		const detail =
+			aOpp && bOpp
+				? ` ${aLabel}'s pending match (vs ${aOpp}) becomes ${bLabel} vs ${aOpp}; ${bLabel}'s (vs ${bOpp}) becomes ${aLabel} vs ${bOpp}.`
+				: "";
+		if (
+			!(await confirmDialog({
+				title: "Swap players",
+				message: `Swap ${aLabel} ⇄ ${bLabel}?${detail} Seeds, divisions, and match history stay with each seat.`,
+				confirmLabel: "Swap",
+			}))
+		)
+			return;
+		await withBusy(
+			() =>
+				cloudApi.swapSlots(data.tournament.tournament_id, slotId, otherSlotId),
+			`Swapped ${aLabel} ⇄ ${bLabel}`,
 		);
 	}
 
@@ -1074,6 +1121,10 @@ setup (no matches) and complete (bracket/standings tell that story). -->
 									onReinstate={data.tournament.status === "swiss"
 										? reinstateSlot
 										: undefined}
+									onSwap={data.tournament.status === "swiss"
+										? swapSlots
+										: undefined}
+									opponentBySlot={swissOpponentBySlot}
 								/>
 							{:else}
 								<div class="mb-3">

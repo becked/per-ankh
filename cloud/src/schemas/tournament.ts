@@ -252,6 +252,15 @@ export const PatchSlotSchema = v.object({
 // division and reassigns division for any slot that moved across. The caller
 // must include every swiss-phase slot exactly once across the two arrays —
 // the handler rejects partial reorder payloads to avoid leaving orphan seeds.
+// POST /v1/tournaments/:id/slots/swap body. Swaps the OCCUPANTS of two
+// same-phase slots (identity moves; the seat — seed, division, match history —
+// stays). The handler enforces that neither slot has any decided match, so a
+// swap can never reattribute results.
+export const SwapSlotsSchema = v.object({
+	slot_a_id: v.pipe(v.string(), v.regex(nanoid21Regex)),
+	slot_b_id: v.pipe(v.string(), v.regex(nanoid21Regex)),
+});
+
 export const ReorderSlotsSchema = v.object({
 	divisions: v.object({
 		A: v.pipe(

@@ -19,6 +19,7 @@ import {
 	PatchMatchMapSchema,
 	PatchMatchPartsSchema,
 	PatchSlotSchema,
+	SwapSlotsSchema,
 	PatchTournamentSchema,
 	ReorderSlotsSchema,
 	TransitionChampionshipSchema,
@@ -1592,6 +1593,132 @@ async function forfeitPendingMatchesForSlot(
 // across. Setup-only — once round 1 has paired against the old seeds,
 // reseeding would desync match history from the visible order.
 // ----------------------------------------------------------------------
+
+// POST /v1/tournaments/:id/slots/swap — swap the OCCUPANTS of two slots.
+//
+// Matches pair slots, not people, and pairings are immutable once a round is
+// generated — but the occupant of a seat is not. Swapping two occupants
+// re-pairs the PEOPLE without touching any match: every pending match either
+// seat is in simply reads with the other player in it. The classic use is a
+// blocked round-1 match (illness, no-show): swap the blocked player with a
+// same-division player from another pending match so a playable pairing can
+// proceed now.
+//
+// Identity travels; the seat stays. discord_username / discord_id / user_id /
+// signup_answer / claim_banner_dismissed_at swap; seeds, division, and match
+// history remain with the seat. That is exactly why the guard below exists:
+// once either seat has a DECIDED match (complete, forfeit, or a bye — a bye is
+// +1 win), swapping occupants would silently hand one player's record to the
+// other, so the swap refuses. While everything is pending there is nothing to
+// misattribute and the swap is safe.
+export async function handleSwapSlots(
+	tournamentId: string,
+	request: Request,
+	env: TournamentAdminEnv,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const a = await authedTournament(tournamentId, request, env);
+	if (!a.ok) return a.response;
+	const { tournament } = a;
+
+	const body = await parseJsonBody(request, SwapSlotsSchema, cors);
+	if (!body.ok) return body.response;
+	const { slot_a_id, slot_b_id } = body.body;
+	if (slot_a_id === slot_b_id) {
+		return errorResponse(
+			"Cannot swap a slot with itself",
+			400,
+			cors,
+			"SAME_SLOT",
+		);
+	}
+
+	const slotA = await loadSlot(env, slot_a_id);
+	const slotB = await loadSlot(env, slot_b_id);
+	if (
+		!slotA ||
+		!slotB ||
+		slotA.tournament_id !== tournamentId ||
+		slotB.tournament_id !== tournamentId
+	) {
+		return errorResponse("Slot not found", 404, cors, "SLOT_NOT_FOUND");
+	}
+	if (slotA.phase !== slotB.phase) {
+		return errorResponse(
+			"Slots must be in the same phase",
+			409,
+			cors,
+			"PHASE_MISMATCH",
+		);
+	}
+	// A withdrawn seat's forfeits belong to the player who withdrew; swapping
+	// someone else in would misattribute them (and resurrect the seat).
+	if (slotA.withdrawn_at !== null || slotB.withdrawn_at !== null) {
+		return errorResponse(
+			"Cannot swap a withdrawn slot",
+			409,
+			cors,
+			"SLOT_WITHDRAWN",
+		);
+	}
+	// Divisions are pairing pools: moving people across them mid-tournament
+	// would change who can meet whom. Same lock as handlePatchSlot's division
+	// edit — free during setup, frozen after start.
+	if (tournament.status !== "setup" && slotA.division !== slotB.division) {
+		return errorResponse(
+			"Cannot swap across divisions after the tournament has started",
+			409,
+			cors,
+			"TOURNAMENT_LOCKED",
+		);
+	}
+	// The core safety rule: neither seat may have a decided match. status
+	// covers complete/forfeit AND byes (a bye is a +1-win result the seat
+	// already banked).
+	const decided = await env.SHARE_DB.prepare(
+		`SELECT COUNT(*) AS n FROM tournament_matches
+		 WHERE (slot_a_id IN (?1, ?2) OR slot_b_id IN (?1, ?2))
+		   AND status != 'pending'`,
+	)
+		.bind(slot_a_id, slot_b_id)
+		.first<{ n: number }>();
+	if ((decided?.n ?? 0) > 0) {
+		return errorResponse(
+			"Cannot swap: a slot already has a decided match (results would be reattributed)",
+			409,
+			cors,
+			"SLOT_HAS_RESULTS",
+		);
+	}
+
+	// Swap the identity columns in one atomic batch; everything else stays
+	// with the seat.
+	const identity = (s: typeof slotA) =>
+		[
+			s.discord_username,
+			s.discord_id,
+			s.user_id,
+			s.signup_answer,
+			s.claim_banner_dismissed_at,
+		] as const;
+	const setSql = `UPDATE tournament_slots
+		 SET discord_username = ?, discord_id = ?, user_id = ?,
+		     signup_answer = ?, claim_banner_dismissed_at = ?
+		 WHERE slot_id = ?`;
+	await env.SHARE_DB.batch([
+		env.SHARE_DB.prepare(setSql).bind(...identity(slotB), slot_a_id),
+		env.SHARE_DB.prepare(setSql).bind(...identity(slotA), slot_b_id),
+	]);
+	await bumpTournamentUpdatedAt(env, tournamentId);
+	await logTournamentAdminAction(env, a.userId, tournamentId, "slots_swapped", {
+		slot_a_id,
+		slot_b_id,
+	});
+
+	const updatedA = await loadSlot(env, slot_a_id);
+	const updatedB = await loadSlot(env, slot_b_id);
+	return jsonResponse({ slots: [updatedA, updatedB] }, 200, cors);
+}
 
 export async function handleReorderSlots(
 	tournamentId: string,
