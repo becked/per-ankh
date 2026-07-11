@@ -51,13 +51,12 @@
 
 <a
 	href={resolve("/tournaments/[slug]", { slug: tournament.slug })}
-	class="block rounded transition-colors hover:bg-surface-hover {compact
-		? 'p-2'
-		: 'p-4'}"
-	style="background-color: rgb(var(--color-surface));"
+	class="block rounded bg-surface transition duration-150 hover:-translate-y-0.5 hover:shadow-lg {compact ? 'p-2' : 'p-4'}"
 >
 	<h3
-		class="truncate font-bold text-bright {compact ? 'text-xs' : 'text-base'}"
+		class="font-bold text-bright {compact
+			? 'line-clamp-2 text-xs'
+			: 'truncate text-base'}"
 	>
 		{tournament.name}
 	</h3>

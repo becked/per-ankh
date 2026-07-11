@@ -146,7 +146,7 @@
 </script>
 
 <div
-	class="relative rounded-lg p-3 transition-colors hover:bg-surface-hover"
+	class="relative rounded-lg p-3 transition duration-150 hover:-translate-y-0.5 hover:shadow-lg"
 	style="background-color: rgb(var(--color-surface-raised));"
 >
 	<!-- Stretched-link overlay: the whole card navigates to the game, but the

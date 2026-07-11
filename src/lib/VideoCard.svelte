@@ -20,7 +20,7 @@
 </script>
 
 <div
-	class="group relative rounded-lg p-3 transition-colors hover:bg-surface-hover"
+	class="relative rounded-lg p-3 transition duration-150 hover:-translate-y-0.5 hover:shadow-lg"
 	style="background-color: rgb(var(--color-surface-raised));"
 >
 	<!-- Stretched-link overlay: the whole card opens the video's external watch
@@ -67,7 +67,7 @@
 	</div>
 
 	<div
-		class="mb-2 line-clamp-2 text-lg font-bold text-tan group-hover:text-bright lg:text-sm"
+		class="mb-2 line-clamp-2 text-lg font-bold text-tan lg:text-sm"
 	>
 		{video.title}
 	</div>
