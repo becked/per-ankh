@@ -1,8 +1,9 @@
 <script lang="ts">
-	// The tournament's three top-level views as a segmented tab group. Lives in the
-	// centre of the tournament header — between the title and the action cluster —
-	// on the overview, matches, and stats surfaces, so "which view am I on" reads
-	// at a glance. These are cross-route links (not a bits-ui Tabs panel); the
+	// The tournament's top-level views as a segmented tab group (Overview, Matches,
+	// Stats, and — when a playlist is configured — Videos). Lives in the centre of
+	// the tournament header — between the title and the action cluster — on every
+	// tournament view surface, so "which view am I on" reads at a glance. These are
+	// cross-route links (not a bits-ui Tabs panel); the
 	// active tab is matched on the *exact* pathname, not a prefix, so Overview
 	// ("/tournaments/[slug]") doesn't also light up on its /matches and /stats pages.
 	import { resolve } from "$app/paths";
@@ -42,7 +43,7 @@
 
 	// Which tab the current route sits on, driving the sliding pill's position.
 	// -1 (no match) parks the pill hidden — defensive only: this control renders
-	// solely on the three view routes, so exactly one tab is normally active.
+	// solely on the tournament view routes, so exactly one tab is normally active.
 	const activeIndex = $derived(
 		navTabs.findIndex((tab) => page.url.pathname === tab.href),
 	);

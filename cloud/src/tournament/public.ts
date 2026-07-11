@@ -647,7 +647,11 @@ async function loadPlaylistUploaders(
 		 FROM user_video_channels c
 		 JOIN users u ON u.user_id = c.user_id
 		 WHERE c.platform = 'youtube'
-		   AND c.channel_id IN (${channelIds.map(() => "?").join(",")})`,
+		   AND c.channel_id IN (${channelIds.map(() => "?").join(",")})
+		 -- channel_id isn't unique (the table's PK is (user_id, platform)), so two
+		 -- users can each link the same channel. Order deterministically so the
+		 -- earliest linker wins the attribution rather than an arbitrary row.
+		 ORDER BY c.created_at, c.user_id`,
 	)
 		.bind(...channelIds)
 		.all<{
@@ -658,6 +662,8 @@ async function loadPlaylistUploaders(
 			avatar_hash: string | null;
 		}>();
 	for (const row of res.results ?? []) {
+		// First (earliest-linked) row for a channel wins; skip later duplicates.
+		if (map.has(row.channel_id)) continue;
 		map.set(row.channel_id, {
 			user_id: row.user_id,
 			display_name: row.display_name,

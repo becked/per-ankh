@@ -107,8 +107,9 @@
 	let youtubePlaylistUrl = $state(tournament.youtube_playlist_url ?? "");
 
 	// Empty → null clears the playlist (which hides the Videos tab). The server
-	// validates the URL; on rejection savePatch toasts the error and
-	// invalidateAll() restores the stored value.
+	// validates the URL; on rejection savePatch only toasts the error — the
+	// entered text stays in the field so the admin can fix it, matching the link
+	// rows, which likewise keep an uncommitted value rather than resetting.
 	function commitYoutubePlaylistUrl() {
 		if (!canEdit) return;
 		const next = youtubePlaylistUrl.trim() || null;

@@ -323,7 +323,15 @@ export async function fetchYouTubePlaylistVideos(
 		throw new Error(`youtube playlist feed responded ${res.status}`);
 	}
 	const xml = await res.text();
-	return parseYouTubePlaylistFeed(xml).slice(0, MAX_VIDEOS);
+	// A playlist feed comes back in playlist order, which isn't necessarily
+	// chronological (a curated or append-ordered playlist won't be) — so sort
+	// newest-first before capping, both to honor the "newest first" contract the
+	// Videos tab documents and so the cap keeps the newest entries, not whichever
+	// happen to sit first. Mirrors the home feed's ordering (mergeCreatorFeed);
+	// ISO timestamps sort lexically and entries missing a date fall to the end.
+	return parseYouTubePlaylistFeed(xml)
+		.sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
+		.slice(0, MAX_VIDEOS);
 }
 
 export const youtubeProvider: VideoProvider = {
