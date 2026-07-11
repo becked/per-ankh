@@ -217,30 +217,20 @@ export async function handleUserVideos(
 //
 // The home page shows the newest uploads ACROSS every user's linked channels
 // (multiple per creator allowed), merged newest-first and capped to fill a
-// two-row strip. Unlike the per-profile read above, this is cached as ONE
-// pre-assembled KV entry (not per channel), so a home-page request costs a
-// single KV read and NEVER fans out across every creator's feed on the request
-// path.
+// two-row strip.
 //
-// Stale-while-revalidate, mirroring getRecentVideosCached: a fresh entry is
-// served as-is; a stale entry is served immediately while a background refresh
-// (ctx.waitUntil) re-assembles it; a cold miss builds SYNCHRONOUSLY, caches the
-// result, and returns it, so the first request already gets the feed. Nothing
-// else populates this entry, so a non-blocking cold miss would leave the home
-// strip empty until some later visit happened to warm it. The synchronous cost
-// is bounded: the per-channel fetches run in parallel and mostly hit warm
-// caches, so a cold build is ~one RSS fetch of latency at worst. An empty feed
-// is never cached nor served from cache (see rebuildCreatorFeed / getCreatorFeed):
-// a transient all-fail can't blank the strip for the TTL, and a fresh upload
-// shows up without waiting one out.
+// Channel MEMBERSHIP is read from D1 on every request (mirroring the
+// per-profile read above), so adding or removing a channel is reflected
+// immediately — there is no aggregate cache to invalidate. Only the expensive
+// part — each channel's recent uploads — is cached: getRecentVideosCached
+// serves per-channel videos from KV (SWR, 1h soft / 24h hard), so a home
+// request fans out a D1 join plus a handful of mostly-warm KV reads, never a
+// live YouTube fetch per channel. A short edge cache on the response (see
+// handleCreatorVideos) sheds repeated origin hits without holding stale
+// membership.
 
-// Display cap — two rows of four on the desktop strip. Applied when building
-// the cached feed AND again at serve time (see handleCreatorVideos), so
-// lowering it takes effect immediately rather than after the cache expires.
+// Display cap — two rows of four on the desktop strip.
 const MAX_CREATOR_FEED_VIDEOS = 8;
-const CREATOR_FEED_KEY = "creator_feed:v1:all";
-const CREATOR_FEED_SOFT_TTL_MS = 60 * 60 * 1000; // 1h
-const CREATOR_FEED_HARD_TTL_S = 24 * 60 * 60; // 24h
 
 // A home-feed video: the normalized Video plus the creator it belongs to, so
 // the strip can attribute each upload and link to the uploader's profile.
@@ -248,11 +238,6 @@ export interface CreatorVideo extends Video {
 	user_id: string;
 	display_name: string;
 	avatar_url: string;
-}
-
-interface CachedCreatorFeed {
-	fetched_at: number; // epoch ms
-	videos: CreatorVideo[];
 }
 
 // Merge per-channel lists (each already attributed to its creator) into the
@@ -268,9 +253,9 @@ export function mergeCreatorFeed(
 		.slice(0, cap);
 }
 
-// Assemble the feed from scratch: every linked channel joined to its owner,
-// each channel's recent uploads (per-channel KV cache, SWR) tagged with the
-// creator, then merged/capped. Runs off the request path (see getCreatorFeed).
+// Assemble the feed: every linked channel joined to its owner, each channel's
+// recent uploads (per-channel KV cache, SWR) tagged with the creator, then
+// merged/capped. Runs on the request path (see handleCreatorVideos).
 async function buildCreatorFeed(
 	env: ChannelsEnv,
 	ctx: ExecutionContext,
@@ -311,64 +296,6 @@ async function buildCreatorFeed(
 	return mergeCreatorFeed(perChannel);
 }
 
-// Build the feed, cache it, and return it. Throws on failure so the cold-miss
-// path can swallow to [] while the stale path logs and keeps the prior entry.
-async function rebuildCreatorFeed(
-	env: ChannelsEnv,
-	ctx: ExecutionContext,
-): Promise<CreatorVideo[]> {
-	const videos = await buildCreatorFeed(env, ctx);
-	// Only cache a non-empty feed. An empty build is usually transient (a cold
-	// rebuild racing cold per-channel caches whose RSS fetch failed); caching it
-	// would blank the strip for the whole soft-TTL. A genuinely empty feed is
-	// cheap to rebuild and self-heals the moment an upload appears.
-	if (videos.length > 0) {
-		const payload: CachedCreatorFeed = { fetched_at: Date.now(), videos };
-		await env.SESSIONS_KV.put(CREATOR_FEED_KEY, JSON.stringify(payload), {
-			expirationTtl: CREATOR_FEED_HARD_TTL_S,
-		});
-	}
-	return videos;
-}
-
-// The assembled home feed via the aggregate SWR cache (see the block above).
-async function getCreatorFeed(
-	env: ChannelsEnv,
-	ctx: ExecutionContext,
-): Promise<CreatorVideo[]> {
-	const raw = await env.SESSIONS_KV.get(CREATOR_FEED_KEY);
-	if (raw) {
-		try {
-			const cached = JSON.parse(raw) as CachedCreatorFeed;
-			// Only trust a non-empty cache — writes never persist an empty feed
-			// (see rebuildCreatorFeed), so an empty/legacy entry falls through to a
-			// synchronous rebuild below instead of serving a blank strip.
-			if (cached.videos.length > 0) {
-				if (Date.now() - cached.fetched_at >= CREATOR_FEED_SOFT_TTL_MS) {
-					// Stale: serve now, repopulate in the background.
-					ctx.waitUntil(
-						rebuildCreatorFeed(env, ctx).catch((e: unknown) => {
-							logError("creator_feed_refresh_failed", e);
-						}),
-					);
-				}
-				return cached.videos;
-			}
-		} catch {
-			// Corrupt entry — treat as a cold miss below.
-		}
-	}
-	// Cold miss (or an empty/corrupt entry): build synchronously so the first
-	// request already gets the feed. Swallow transient errors to [] — the next
-	// request retries (nothing cached).
-	try {
-		return await rebuildCreatorFeed(env, ctx);
-	} catch (e) {
-		logError("creator_feed_fetch_failed", e);
-		return [];
-	}
-}
-
 // GET /v1/creator-videos — public. The cross-creator home feed (see above).
 // No auth, no PII: same public, user-published videos for every viewer.
 export async function handleCreatorVideos(
@@ -377,12 +304,27 @@ export async function handleCreatorVideos(
 	ctx: ExecutionContext,
 ): Promise<Response> {
 	const cors = cloudCorsHeaders(env, request);
-	// Re-apply the display cap at serve time: a cached entry built under a
-	// previous, higher cap must not over-fill the strip, so a lowered count
-	// takes effect immediately without waiting out the cache TTL.
-	const videos = (await getCreatorFeed(env, ctx)).slice(
-		0,
-		MAX_CREATOR_FEED_VIDEOS,
-	);
-	return jsonResponse({ videos }, 200, cors);
+	// Best-effort, mirroring the home load's own .catch(() => []): a D1 hiccup
+	// returns an empty strip rather than 500-ing the page. Per-channel fetches
+	// already swallow their own upstream failures to [] (getRecentVideosCached).
+	let videos: CreatorVideo[] = [];
+	try {
+		videos = await buildCreatorFeed(env, ctx);
+	} catch (e) {
+		logError("creator_feed_fetch_failed", e);
+	}
+	// Edge-cache 60s (s-maxage) so repeated home hits don't re-run the join +
+	// KV fan-out at the origin. No browser cache (max-age=0): a viewer who just
+	// added or removed a channel sees it on reload rather than waiting out a
+	// browser TTL — the freshness this rework is for. Vary: Origin because the
+	// CORS headers are origin-specific and the response is shared-cacheable.
+	return new Response(JSON.stringify({ videos }), {
+		status: 200,
+		headers: {
+			"Content-Type": "application/json",
+			"Cache-Control": "public, max-age=0, s-maxage=60",
+			...cors,
+			Vary: "Origin",
+		},
+	});
 }
