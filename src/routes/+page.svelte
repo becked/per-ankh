@@ -8,7 +8,6 @@
 	import TournamentCard from "$lib/tournament/TournamentCard.svelte";
 	import { cloudApi, ApiError } from "$lib/api-cloud";
 	import { resolveLoginNext } from "$lib/utils/safe-next";
-	import { formatEnum } from "$lib/utils/formatting";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -39,28 +38,6 @@
 		}
 	}
 
-	// All-time stats for the signed-in viewer's right-rail card. Mirrors the
-	// profile page's identity-card boxes; null when signed out or the
-	// best-effort profile fetch failed (boxes are simply hidden then).
-	const summary = $derived(data.profileSummary);
-	const DAY_NAMES = [
-		"Sunday",
-		"Monday",
-		"Tuesday",
-		"Wednesday",
-		"Thursday",
-		"Friday",
-		"Saturday",
-	];
-	const favoriteDay = $derived(
-		summary?.favorite_day_of_week != null
-			? DAY_NAMES[summary.favorite_day_of_week]
-			: null,
-	);
-	const winRatePct = $derived(
-		summary?.win_rate != null ? Math.round(summary.win_rate * 100) : null,
-	);
-
 	// "Active" on the home page = anything not complete. The tournaments
 	// listing already separates "Open for signups" + "Active" + "Past";
 	// here we collapse them so the home surfaces every in-flight bracket.
@@ -68,10 +45,10 @@
 		data.tournaments.filter((t) => t.status !== "complete").slice(0, 6),
 	);
 
-	// The right rail is signed-in only: it carries the viewer's profile card,
-	// the tournament banner, and the active-tournaments list. Signed-out
-	// (public) viewers get no rail — the discovery grid widens to fill the row,
-	// and the signed-out hero already surfaces the current tournament.
+	// The right rail is signed-in only: it carries the tournament banner and
+	// the active-tournaments list. Signed-out (public) viewers get no rail —
+	// the discovery grid widens to fill the row, and the signed-out hero
+	// already surfaces the current tournament.
 	const hasRail = $derived(!!user);
 
 	// The creator-videos column only exists when a creator has recent uploads
@@ -236,7 +213,7 @@
 
 			<!--
 			Discovery grid (desktop): recent saves (dominant, left) → creator
-			videos (middle) → right rail (profile card + active tournaments).
+			videos (middle) → right rail (tournament banner + active tournaments).
 			Columns that have no content drop out and their neighbours widen. No
 			wrapper panels — cards float directly on the page background, matching
 			the tournaments-listing pattern.
@@ -283,104 +260,17 @@
 					/>
 				{/if}
 
-				<!-- Right rail: profile card (signed-in only) + active tournaments. No
-				     top offset — with the column headings gone, its first card aligns
-				     with the first game/video card at the top of the grid. -->
+				<!-- Right rail: tournament banner (signed-in only) + active
+				     tournaments. No top offset — with the column headings gone, its
+				     first card aligns with the first game/video card at the top of
+				     the grid. -->
 				{#if hasRail}
 					<aside class="order-1 space-y-3 lg:order-3 lg:col-span-2">
 						{#if user}
-							<!-- Whole card links to the viewer's own profile/library. -->
-							<a
-								href={resolve(`/users/${user.user_id}`)}
-								class="block rounded-lg p-3 transition-colors hover:bg-surface-hover"
-								style="background-color: rgb(var(--color-surface-raised));"
-							>
-								<div class="flex items-center gap-2">
-									<img
-										src={user.avatar_url}
-										alt=""
-										class="h-8 w-8 shrink-0 rounded-full"
-										width="32"
-										height="32"
-									/>
-									<p class="min-w-0 flex-1 truncate text-sm font-bold text-tan">
-										{user.display_name}
-									</p>
-								</div>
-
-								{#if summary}
-									<!-- All-time stat boxes, mirroring the profile identity card. -->
-									<div class="mt-3 grid grid-cols-2 gap-1.5">
-										<div
-											class="rounded px-2 py-1"
-											style="background-color: rgb(var(--color-surface));"
-										>
-											<p class="mb-0.5 text-[10px] font-bold text-gray-400">
-												Saves
-											</p>
-											<p class="text-[10px] font-bold text-bright">
-												{summary.total_games}
-											</p>
-										</div>
-
-										<div
-											class="rounded px-2 py-1"
-											style="background-color: rgb(var(--color-surface));"
-										>
-											<p class="mb-0.5 text-[10px] font-bold text-gray-400">
-												Win Rate
-											</p>
-											<p class="text-[10px] font-bold text-bright">
-												{#if winRatePct != null}{winRatePct}%{:else}—{/if}
-											</p>
-										</div>
-
-										<div
-											class="rounded px-2 py-1"
-											style="background-color: rgb(var(--color-surface));"
-										>
-											<p
-												class="mb-0.5 flex items-center gap-1 text-[10px] font-bold text-gray-400"
-											>
-												{#if summary.favorite_nation}
-													<SpriteIcon
-														category="crests"
-														value={summary.favorite_nation}
-														size={10}
-														alt={formatEnum(summary.favorite_nation, "NATION_")}
-													/>
-												{/if}
-												Favorite Nation
-											</p>
-											<p class="text-[10px] font-bold text-bright">
-												{summary.favorite_nation
-													? formatEnum(summary.favorite_nation, "NATION_")
-													: "—"}
-											</p>
-										</div>
-
-										<div
-											class="rounded px-2 py-1"
-											style="background-color: rgb(var(--color-surface));"
-										>
-											<p class="mb-0.5 text-[10px] font-bold text-gray-400">
-												Favorite Day
-											</p>
-											<p class="text-[10px] font-bold text-bright">
-												{favoriteDay ?? "—"}
-											</p>
-										</div>
-									</div>
-								{/if}
-							</a>
-						{/if}
-
-						{#if user}
 							<!--
 								2026 tournament banner: signed-in viewers skip the signed-out
-								hero, so surface it here in the rail — beneath the profile card,
-								above the tournaments list. Shown at full rail width so the
-								title card isn't cropped.
+								hero, so surface it here in the rail — above the tournaments
+								list. Shown at full rail width so the title card isn't cropped.
 							-->
 							<a
 								href={resolve("/tournaments/2026-community-tournament")}
