@@ -70,9 +70,34 @@
 
 	// The right rail only carries content for signed-in viewers (profile card)
 	// or when there are active tournaments. With both absent — the common
-	// signed-out case — the recent-saves grid widens to the full row instead
-	// of leaving an empty column.
+	// signed-out case — the recent-saves grid widens instead of leaving an
+	// empty column.
 	const hasRail = $derived(!!user || activeTournaments.length > 0);
+
+	// The creator-videos column only exists when a creator has recent uploads
+	// (empty on a cold feed cache). When present it sits between the games feed
+	// and the rail; the games column narrows to make room.
+	const hasVideos = $derived(data.creatorVideos.length > 0);
+
+	// Desktop column widths (12-col grid). The games feed dominates and gives up
+	// width as the videos column and/or rail claim their 3-col slots; with both
+	// absent it spans the full row.
+	const gamesColClass = $derived(
+		hasVideos && hasRail
+			? "lg:col-span-6"
+			: hasVideos
+				? "lg:col-span-8"
+				: hasRail
+					? "lg:col-span-9"
+					: "lg:col-span-12",
+	);
+	// The videos column widens slightly when there's no rail to sit beside.
+	const videosColClass = $derived(hasRail ? "lg:col-span-3" : "lg:col-span-4");
+
+	// Two-up game cards only when the games column keeps its full desktop width
+	// — signed-out with no videos column narrowing it. Otherwise a single column
+	// (signed-in cards sit beside the rail; a videos column squeezes the feed).
+	const twoUpCards = $derived(!user && !hasVideos);
 </script>
 
 <main class="isolate flex flex-1 flex-col overflow-hidden">
@@ -209,36 +234,19 @@
 			{/if}
 
 			<!--
-			Latest-from-creators strip: newest uploads across every user's linked
-			channels, above the discovery grid so it reaches signed-in and
-			signed-out viewers alike. Hidden entirely when no creator has recent
-			uploads (or on a cold feed cache) rather than showing an empty band.
-		-->
-			{#if data.creatorVideos.length > 0}
-				<CreatorVideos videos={data.creatorVideos} />
-			{/if}
-
-			<!--
-			Discovery grid: recently shared saves (dominant, two-up) beside the
-			right rail (profile card + active tournaments). When the rail is
-			empty the saves span the full row. No wrapper panel — the
-			RecentSaveCards float directly on the page background, matching the
-			tournaments-listing pattern.
+			Discovery grid (desktop): recent saves (dominant, left) → creator
+			videos (middle) → right rail (profile card + active tournaments).
+			Columns that have no content drop out and their neighbours widen. No
+			wrapper panels — cards float directly on the page background, matching
+			the tournaments-listing pattern.
 		-->
 			<!--
-				On mobile the grid stacks in DOM order; `order` utilities float the
-				tournaments rail above the games feed there, while `lg:order-*`
-				restores the desktop left (games) → right (rail) arrangement.
+				On mobile the grid stacks in DOM order; `order` utilities lift the
+				rail and videos above the long games feed there, while `lg:order-*`
+				restores the desktop left→right (games → videos → rail) arrangement.
 			-->
 			<div class="grid gap-4 lg:grid-cols-12">
-				<section
-					class={hasRail
-						? "order-2 lg:order-1 lg:col-span-9"
-						: "lg:col-span-12"}
-				>
-					{#if !user}
-						<h2 class="mb-3 text-lg font-bold text-gray-200">Recent Games</h2>
-					{/if}
+				<section class={`order-3 lg:order-1 ${gamesColClass}`}>
 					{#if data.recentGames.length === 0}
 						<p class="text-sm text-tan opacity-70">
 							No public saves yet. Be the first — upload a save and toggle
@@ -246,12 +254,14 @@
 						</p>
 					{:else}
 						<!--
-							Signed-in viewers get a single column (their cards sit beside
-							the profile/tournaments rail and would compress two-up);
-							signed-out viewers get two columns to fill the wider row.
+							Single column whenever the feed is narrowed (beside the rail, or
+							squeezed by the videos column); two-up only when it keeps the
+							full-width row — see `twoUpCards`.
 						-->
 						<div
-							class={user ? "grid grid-cols-1 gap-3" : "grid grid-cols-2 gap-3"}
+							class={twoUpCards
+								? "grid grid-cols-2 gap-3"
+								: "grid grid-cols-1 gap-3"}
 						>
 							{#each data.recentGames as game (game.game_id)}
 								<RecentSaveCard {game} />
@@ -260,13 +270,23 @@
 					{/if}
 				</section>
 
-				<!-- Right rail: profile card (signed-in only) + active tournaments. `lg:mt-10` (signed-out only) drops the rail to clear the "Recent Games" heading in the games column, so it aligns with the first game card instead of the heading. -->
+				<!--
+				Creator videos: middle column on desktop, full-width strip on smaller
+				screens (the component handles the responsive grid). Omitted entirely
+				on a cold/empty feed rather than leaving a gap.
+			-->
+				{#if hasVideos}
+					<CreatorVideos
+						videos={data.creatorVideos}
+						class={`order-2 lg:order-2 ${videosColClass}`}
+					/>
+				{/if}
+
+				<!-- Right rail: profile card (signed-in only) + active tournaments. No
+				     top offset — with the column headings gone, its first card aligns
+				     with the first game/video card at the top of the grid. -->
 				{#if hasRail}
-					<aside
-						class={user
-							? "order-1 space-y-3 lg:order-2 lg:col-span-3"
-							: "order-1 space-y-3 lg:order-2 lg:col-span-3 lg:mt-10"}
-					>
+					<aside class="order-1 space-y-3 lg:order-3 lg:col-span-3">
 						{#if user}
 							<!-- Whole card links to the viewer's own profile/library. -->
 							<a
