@@ -30,7 +30,12 @@ import {
 	trunc,
 	warn,
 } from "../../lib/format";
-import { type CommandOpts, flagInt, parseFlags, printJson } from "../../lib/cli";
+import {
+	type CommandOpts,
+	flagInt,
+	parseFlags,
+	printJson,
+} from "../../lib/cli";
 import { readDotVars } from "../../lib/dotvars";
 import { d1Exec, d1Query, sqlStr } from "../wrangler";
 // cloud/ is a CJS package (no "type":"module") while scripts/ runs as ESM, so
@@ -188,9 +193,10 @@ export async function runAddChannel(
 		["Channel ID", identity.channel_id],
 		["Recent videos", recent],
 		...(prior
-			? ([
-					["Previous", `${prior.channel_url} (${prior.channel_id})`],
-				] as [string, string][])
+			? ([["Previous", `${prior.channel_url} (${prior.channel_id})`]] as [
+					string,
+					string,
+				][])
 			: []),
 	]);
 }

@@ -66,9 +66,7 @@
 		</span>
 	</div>
 
-	<div
-		class="mb-2 line-clamp-2 text-lg font-bold text-tan lg:text-sm"
-	>
+	<div class="mb-2 line-clamp-2 text-lg font-bold text-tan lg:text-sm">
 		{video.title}
 	</div>
 
