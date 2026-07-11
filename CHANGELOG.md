@@ -1,5 +1,31 @@
 # Changelog
 
+## [2026-07-10-f24d8d7] - 2026-07-10
+
+### Features
+
+- (map) guard against and degrade gracefully on atlas manifest desync — [9ba2f32](https://github.com/becked/per-ankh/commit/9ba2f323705d4281ce7c2e8dd7787470e802c3b6)
+- (game-detail) add workers-over-time chart to improvements tab — [7958ea3](https://github.com/becked/per-ankh/commit/7958ea30444d3759ba841d6efc33da5e07a4d3f2)
+- (profile) add creator video channels with recent YouTube videos — [25f3dfb](https://github.com/becked/per-ankh/commit/25f3dfbaa9a14e9240fa0c6c866633394c4945d9)
+- (home) add "Latest from creators" videos strip — [6736499](https://github.com/becked/per-ankh/commit/6736499e5ec49b05eb880fccbcffe6b1e0bd8d38)
+- (home) move creator videos into a middle column beside recent games — [ab5ca15](https://github.com/becked/per-ankh/commit/ab5ca150c4934f5dc151b3897b9f2d7a516000b7)
+- (admin) add creator video channel CLI commands — [a937af5](https://github.com/becked/per-ankh/commit/a937af5c3d29bbcc6e5da24872491a10e774a3f5)
+- (home) lift discovery cards on hover instead of recoloring — [d86ee1c](https://github.com/becked/per-ankh/commit/d86ee1cba07d722f36915a17049572ee7fd59481)
+
+### Fixes
+
+- (map) gate render on structural atlases; fail preflight on empty manifest — [25a4832](https://github.com/becked/per-ankh/commit/25a4832a20d7f779d81df49b5c6077f4a95cb2ce)
+- (game-detail) show curated map label in header for lowercase scripts — [909318f](https://github.com/becked/per-ankh/commit/909318f8df433d7d2c3f980638c9a4b58ee9237e)
+- (video) guard XML entity decode; correct YOUTUBE_API_KEY comment — [488d217](https://github.com/becked/per-ankh/commit/488d217b06e8fa21926d859b8afd05af29b4e554)
+- (home) reflect channel add/remove in creator feed immediately — [99e2b46](https://github.com/becked/per-ankh/commit/99e2b4664097a6bcf1ef5681355e1f6306d0ca46)
+
+### Other
+
+- (home) resize creator videos and rebalance the discovery grid — [3ddb6bb](https://github.com/becked/per-ankh/commit/3ddb6bbb02d0d91f52580784c6e722ad0064ba18)
+- (video) share one card between the home feed and profile tab — [b516f32](https://github.com/becked/per-ankh/commit/b516f3206a72bac54ffd9c1119b9d5dfcd68550a)
+- (home) remove the signed-in right-rail user panel — [1c1a150](https://github.com/becked/per-ankh/commit/1c1a15019ba98c8cc6d992d1c1ed3eeb61e36a67)
+- apply prettier formatting to channel/video/tournament files — [f24d8d7](https://github.com/becked/per-ankh/commit/f24d8d7f26b19e101916f49b0bc4271d477a1201)
+
 ## [2026-07-10-38db13e] - 2026-07-10
 
 ### Features
