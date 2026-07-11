@@ -2,8 +2,9 @@
 	// "Latest from creators": the newest uploads across every user's linked
 	// channels, merged newest-first (GET /v1/creator-videos via the home load).
 	// On the home page this is the middle column between the games feed and the
-	// right rail on desktop, collapsing to a full-width strip (2-up, then 4-up)
-	// on smaller screens. Each card mirrors RecentSaveCard's discovery header —
+	// right rail on desktop, where it lays out as a 2-up grid of compact
+	// (half-size) cards; below `lg` it collapses to a full-width strip (2-up,
+	// then 4-up). Each card mirrors RecentSaveCard's discovery header —
 	// uploader (top-left) + title + date pill (right) — with the video thumbnail
 	// as the media below, so videos read as the same visual family as the game
 	// cards beside them. The `class` prop supplies the parent grid's placement
@@ -19,7 +20,7 @@
 </script>
 
 <section class={className}>
-	<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-1">
+	<div class="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-2">
 		{#each videos as v (v.platform + ":" + v.id)}
 			<div
 				class="group relative rounded-lg p-3 transition-colors hover:bg-surface-hover"
@@ -56,7 +57,7 @@
 							height="20"
 							loading="lazy"
 						/>
-						<span class="truncate text-lg font-bold text-white">
+						<span class="truncate text-lg font-bold text-white lg:text-sm">
 							{v.display_name}
 						</span>
 					</a>
@@ -68,7 +69,7 @@
 				</div>
 
 				<div
-					class="mb-2 line-clamp-2 text-lg font-bold text-tan group-hover:text-bright"
+					class="mb-2 line-clamp-2 text-lg font-bold text-tan group-hover:text-bright lg:text-sm"
 				>
 					{v.title}
 				</div>

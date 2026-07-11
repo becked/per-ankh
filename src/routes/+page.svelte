@@ -68,11 +68,11 @@
 		data.tournaments.filter((t) => t.status !== "complete").slice(0, 6),
 	);
 
-	// The right rail only carries content for signed-in viewers (profile card)
-	// or when there are active tournaments. With both absent — the common
-	// signed-out case — the recent-saves grid widens instead of leaving an
-	// empty column.
-	const hasRail = $derived(!!user || activeTournaments.length > 0);
+	// The right rail is signed-in only: it carries the viewer's profile card,
+	// the tournament banner, and the active-tournaments list. Signed-out
+	// (public) viewers get no rail — the discovery grid widens to fill the row,
+	// and the signed-out hero already surfaces the current tournament.
+	const hasRail = $derived(!!user);
 
 	// The creator-videos column only exists when a creator has recent uploads
 	// (empty on a cold feed cache). When present it sits between the games feed
@@ -80,19 +80,20 @@
 	const hasVideos = $derived(data.creatorVideos.length > 0);
 
 	// Desktop column widths (12-col grid). The games feed dominates and gives up
-	// width as the videos column and/or rail claim their 3-col slots; with both
-	// absent it spans the full row.
+	// width to the videos column and/or the signed-in rail; with both absent it
+	// spans the full row.
 	const gamesColClass = $derived(
 		hasVideos && hasRail
-			? "lg:col-span-6"
+			? "lg:col-span-5"
 			: hasVideos
-				? "lg:col-span-8"
+				? "lg:col-span-6"
 				: hasRail
-					? "lg:col-span-9"
+					? "lg:col-span-10"
 					: "lg:col-span-12",
 	);
-	// The videos column widens slightly when there's no rail to sit beside.
-	const videosColClass = $derived(hasRail ? "lg:col-span-3" : "lg:col-span-4");
+	// Videos column: 5 beside the signed-in rail, 6 in the wider rail-less
+	// signed-out row.
+	const videosColClass = $derived(hasRail ? "lg:col-span-5" : "lg:col-span-6");
 
 	// Two-up game cards only when the games column keeps its full desktop width
 	// — signed-out with no videos column narrowing it. Otherwise a single column
@@ -286,7 +287,7 @@
 				     top offset — with the column headings gone, its first card aligns
 				     with the first game/video card at the top of the grid. -->
 				{#if hasRail}
-					<aside class="order-1 space-y-3 lg:order-3 lg:col-span-3">
+					<aside class="order-1 space-y-3 lg:order-3 lg:col-span-2">
 						{#if user}
 							<!-- Whole card links to the viewer's own profile/library. -->
 							<a
