@@ -42,6 +42,15 @@ export interface RecentVideo {
 	platform: string;
 }
 
+// One video in the cross-creator home feed: a RecentVideo plus the creator it
+// belongs to, so the home strip can attribute each upload and link to the
+// uploader's profile (GET /v1/creator-videos).
+export interface CreatorVideo extends RecentVideo {
+	user_id: string;
+	display_name: string;
+	avatar_url: string;
+}
+
 // Public profile fields returned by GET /v1/users/:user_id. No-auth read;
 // used by the /users/[user_id] page to render the chrome when a visitor
 // views someone else's library.
@@ -495,6 +504,14 @@ export const cloudApi = {
 	): Promise<RecentVideo[]> => {
 		const res = await request(`/users/${userId}/videos`, opts);
 		return (await (res.json() as Promise<{ videos: RecentVideo[] }>)).videos;
+	},
+
+	// Cross-creator home feed: newest uploads across all users' linked channels,
+	// merged newest-first. Public read; feeds the home page's "Latest from
+	// creators" strip.
+	getCreatorVideos: async (opts?: CallOpts): Promise<CreatorVideo[]> => {
+		const res = await request("/creator-videos", opts);
+		return (await (res.json() as Promise<{ videos: CreatorVideo[] }>)).videos;
 	},
 
 	// Owner GET — returns the blob with `is_public` and the uploader-identity

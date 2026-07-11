@@ -88,6 +88,7 @@ import { handleUserStats } from "./stats/handlers";
 import { handleUserProfile, handleUserSearch } from "./users";
 import {
 	handleAddChannel,
+	handleCreatorVideos,
 	handleDeleteChannel,
 	handleListMyChannels,
 	handleUserVideos,
@@ -716,6 +717,15 @@ const ROUTES: RouteSpec[] = [
 		},
 		route: "GET /v1/users/:user_id/videos",
 		handler: (r, e, m, c) => handleUserVideos(m![1], r, e, c),
+	},
+	// Cross-creator home feed — newest uploads across all users' linked
+	// channels, merged newest-first for the home page's "Latest from creators"
+	// strip. One pre-assembled KV entry (SWR); passes ctx for background refresh.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/creator-videos" },
+		route: "GET /v1/creator-videos",
+		handler: (r, e, _m, c) => handleCreatorVideos(r, e, c),
 	},
 	// User-facing tournament endpoints
 	{

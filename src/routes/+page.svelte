@@ -2,6 +2,7 @@
 	import { page } from "$app/state";
 	import { resolve } from "$app/paths";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
+	import CreatorVideos from "$lib/CreatorVideos.svelte";
 	import RecentSaveCard from "$lib/RecentSaveCard.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import TournamentCard from "$lib/tournament/TournamentCard.svelte";
@@ -205,6 +206,16 @@
 						/>
 					</a>
 				</div>
+			{/if}
+
+			<!--
+			Latest-from-creators strip: newest uploads across every user's linked
+			channels, above the discovery grid so it reaches signed-in and
+			signed-out viewers alike. Hidden entirely when no creator has recent
+			uploads (or on a cold feed cache) rather than showing an empty band.
+		-->
+			{#if data.creatorVideos.length > 0}
+				<CreatorVideos videos={data.creatorVideos} />
 			{/if}
 
 			<!--

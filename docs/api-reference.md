@@ -317,6 +317,13 @@ Recent videos merged across the user's linked channels (newest first) — feeds 
 - **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform }[] }` (empty when the user has no linked channels).
 - **Notes:** Per-channel KV cache, stale-while-revalidate (serves cached instantly, refreshes in the background past a 1h soft TTL). YouTube videos come from the unauthenticated channel RSS feed.
 
+### `GET /v1/creator-videos`
+Cross-creator home feed — the newest uploads across all users' linked channels, merged newest-first for the home page's "Latest from creators" strip.
+
+- **Auth:** Public — channels and their videos are user-published; no PII, same for every viewer.
+- **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform, user_id, display_name, avatar_url }[] }` (each video carries its creator; empty only when no channel has recent uploads).
+- **Notes:** Cached as one pre-assembled KV entry, stale-while-revalidate (mirrors the per-channel cache): fresh served as-is, stale served instantly while a background task re-assembles it, cold miss built synchronously and cached so the first request already returns the feed. The cold build's per-channel fetches run in parallel over mostly-warm caches (~one RSS fetch at worst). Capped at 8 (two rows of four). Underlying per-channel data is the same SWR RSS cache as `GET /v1/users/:user_id/videos`.
+
 ---
 
 ## Account
