@@ -60,12 +60,18 @@ import type { ChartBundleCore } from "../stats/types";
 import { getVideosCached } from "../video/cache";
 import {
 	fetchYouTubePlaylistVideos,
+	fetchYouTubePlaylistVideosViaApi,
 	parseYouTubePlaylistUrl,
 } from "../video/youtube";
 import type { PlaylistVideo } from "../video/types";
 
 export interface TournamentPublicEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
+	// Optional YouTube Data API key. When set, the Videos tab enumerates the
+	// whole playlist (so its search can reach every video); when unset, it falls
+	// back to the free RSS feed's most-recent entries. Same secret the channel
+	// resolver uses.
+	YOUTUBE_API_KEY?: string;
 }
 
 const LIST_LIMIT_MAX = 100;
@@ -557,6 +563,12 @@ export async function handleTournamentDetail(
 // Returns an empty list when no playlist is configured (or a stored value that
 // no longer parses) — the Videos tab is normally hidden in that case, but a
 // direct visit still gets a clean empty payload rather than an error.
+//
+// The whole (capped) playlist is returned so the tab's client-side search can
+// reach every video, not just the recent ones on screen: with a Data API key we
+// enumerate the full playlist; without one we fall back to the free RSS feed's
+// ~15 most-recent entries (search then only spans those). Both produce the same
+// PlaylistVideo shape, so the cache and attribution below are identical.
 export async function handleTournamentPlaylistVideos(
 	tournamentId: string,
 	request: Request,
@@ -577,11 +589,15 @@ export async function handleTournamentPlaylistVideos(
 		? parseYouTubePlaylistUrl(tournament.youtube_playlist_url)
 		: null;
 	if (!parsed) return jsonResponse({ videos: [] }, 200, cors);
+	const apiKey = env.YOUTUBE_API_KEY;
 	const videos = await getVideosCached(
 		env,
 		"youtube",
 		`playlist:${parsed.playlistId}`,
-		() => fetchYouTubePlaylistVideos(parsed.playlistId),
+		() =>
+			apiKey
+				? fetchYouTubePlaylistVideosViaApi(parsed.playlistId, apiKey)
+				: fetchYouTubePlaylistVideos(parsed.playlistId),
 		ctx,
 	);
 	// Attribute each video's uploader. A channel a Per-Ankh user has linked (via
@@ -622,8 +638,11 @@ interface PlaylistUploader {
 
 // Map each distinct uploading channel in a playlist to the Per-Ankh user who
 // linked it (user_video_channels), so matched uploads get Discord identity.
-// Channels no user has linked are simply absent from the map. The playlist feed
-// is capped at a dozen videos, so the IN (…) list stays well under D1's limit.
+// Channels no user has linked are simply absent from the map. A full playlist
+// enumerates up to MAX_PLAYLIST_VIDEOS videos and so up to that many distinct
+// channels, past D1's 100-param cap, so the lookup is chunked like the other
+// IN (…) reads here (chunk/CHUNK_SIZE). Each distinct channel sits in exactly
+// one chunk, so the earliest-linker dedup below stays correct across chunks.
 async function loadPlaylistUploaders(
 	env: TournamentPublicEnv,
 	videos: PlaylistVideo[],
@@ -640,35 +659,37 @@ async function loadPlaylistUploaders(
 	];
 	const map = new Map<string, PlaylistUploader>();
 	if (channelIds.length === 0) return map;
-	const res = await env.SHARE_DB.prepare(
-		`SELECT c.channel_id, c.user_id,
-		        ${displayNameSql("u")} AS display_name,
-		        u.discord_id, u.avatar_hash
-		 FROM user_video_channels c
-		 JOIN users u ON u.user_id = c.user_id
-		 WHERE c.platform = 'youtube'
-		   AND c.channel_id IN (${channelIds.map(() => "?").join(",")})
-		 -- channel_id isn't unique (the table's PK is (user_id, platform)), so two
-		 -- users can each link the same channel. Order deterministically so the
-		 -- earliest linker wins the attribution rather than an arbitrary row.
-		 ORDER BY c.created_at, c.user_id`,
-	)
-		.bind(...channelIds)
-		.all<{
-			channel_id: string;
-			user_id: string;
-			display_name: string;
-			discord_id: string;
-			avatar_hash: string | null;
-		}>();
-	for (const row of res.results ?? []) {
-		// First (earliest-linked) row for a channel wins; skip later duplicates.
-		if (map.has(row.channel_id)) continue;
-		map.set(row.channel_id, {
-			user_id: row.user_id,
-			display_name: row.display_name,
-			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
-		});
+	for (const ids of chunk(channelIds, CHUNK_SIZE)) {
+		const res = await env.SHARE_DB.prepare(
+			`SELECT c.channel_id, c.user_id,
+			        ${displayNameSql("u")} AS display_name,
+			        u.discord_id, u.avatar_hash
+			 FROM user_video_channels c
+			 JOIN users u ON u.user_id = c.user_id
+			 WHERE c.platform = 'youtube'
+			   AND c.channel_id IN (${ids.map(() => "?").join(",")})
+			 -- channel_id isn't unique (the table's PK is (user_id, platform)), so two
+			 -- users can each link the same channel. Order deterministically so the
+			 -- earliest linker wins the attribution rather than an arbitrary row.
+			 ORDER BY c.created_at, c.user_id`,
+		)
+			.bind(...ids)
+			.all<{
+				channel_id: string;
+				user_id: string;
+				display_name: string;
+				discord_id: string;
+				avatar_hash: string | null;
+			}>();
+		for (const row of res.results ?? []) {
+			// First (earliest-linked) row for a channel wins; skip later duplicates.
+			if (map.has(row.channel_id)) continue;
+			map.set(row.channel_id, {
+				user_id: row.user_id,
+				display_name: row.display_name,
+				avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
+			});
+		}
 	}
 	return map;
 }

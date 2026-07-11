@@ -16,7 +16,10 @@ import type { Video, VideoEnv, VideoProvider } from "./types";
 
 // Bump when the CachedVideos shape changes — old keys orphan and expire.
 // v2: playlist entries gained per-video uploader fields (PlaylistVideo).
-const CACHE_VERSION = 2;
+// v3: tournament playlists now enumerate the full playlist (Data API) instead
+//     of the RSS recent-only feed; orphan the truncated v2 entries so a
+//     warmed playlist doesn't keep serving a short list its search can't span.
+const CACHE_VERSION = 3;
 // Serve a cached entry without refetching under this age.
 const SOFT_TTL_MS = 60 * 60 * 1000; // 1h
 // KV hard expiry — a safety net far past the soft TTL.

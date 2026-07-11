@@ -7,7 +7,7 @@
 // (`/feeds/videos.xml?channel_id=UC…`) — so the recurring hot path needs no
 // key and costs no quota; only the one-time resolve does.
 
-import { logError } from "../log";
+import { logError, logWarn } from "../log";
 import {
 	ChannelResolutionError,
 	type ChannelIdentity,
@@ -26,6 +26,16 @@ const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
 const PLAYLIST_ID_RE = /^[A-Za-z0-9_-]{12,64}$/;
 // Most recent uploads to surface on the profile tab.
 const MAX_VIDEOS = 12;
+// Upper bound on how many videos a tournament playlist enumerates via the Data
+// API. The RSS feed only exposes the ~15 most recent, so the full-playlist path
+// (fetchYouTubePlaylistVideosViaApi) pages through playlistItems.list instead;
+// this caps the paging at MAX_PLAYLIST_VIDEOS / 50 = 10 requests (10 quota
+// units) and bounds the payload the Videos tab ships to the browser to search
+// over. Tournament playlists run to the low hundreds, so this is headroom, not
+// a routine ceiling — a playlist that exceeds it is logged, never silently cut.
+const MAX_PLAYLIST_VIDEOS = 500;
+// playlistItems.list returns at most 50 items per page.
+const PLAYLIST_PAGE_SIZE = 50;
 
 type ParsedYouTube =
 	| { kind: "id"; channelId: string }
@@ -332,6 +342,117 @@ export async function fetchYouTubePlaylistVideos(
 	return parseYouTubePlaylistFeed(xml)
 		.sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
 		.slice(0, MAX_VIDEOS);
+}
+
+// One item as returned by playlistItems.list (only the fields we read).
+interface PlaylistItemsResponse {
+	nextPageToken?: string;
+	items?: {
+		snippet?: {
+			title?: string;
+			resourceId?: { videoId?: string };
+			thumbnails?: Record<string, { url?: string } | undefined>;
+			videoOwnerChannelId?: string;
+			videoOwnerChannelTitle?: string;
+		};
+		contentDetails?: { videoId?: string; videoPublishedAt?: string };
+	}[];
+}
+
+// Normalize one playlistItems entry into a PlaylistVideo, or null when it isn't
+// a watchable video. A private/deleted/region-blocked entry keeps its playlist
+// slot but drops contentDetails.videoPublishedAt (and its owner/thumbnails), so
+// that field is both the "is this real" signal and the true publish instant we
+// sort by — mirroring the RSS path's <published>. Uploader channel id/name feed
+// the same attribution as parseYouTubePlaylistFeed.
+function playlistItemToVideo(
+	item: NonNullable<PlaylistItemsResponse["items"]>[number],
+): PlaylistVideo | null {
+	const snippet = item.snippet;
+	const id = item.contentDetails?.videoId ?? snippet?.resourceId?.videoId;
+	const published_at = item.contentDetails?.videoPublishedAt;
+	if (!id || !snippet || !published_at) return null;
+	const thumbs = snippet.thumbnails ?? {};
+	return {
+		id,
+		title: snippet.title ?? "",
+		url: `https://www.youtube.com/watch?v=${id}`,
+		thumbnail_url:
+			thumbs.high?.url ?? thumbs.medium?.url ?? thumbs.default?.url ?? null,
+		published_at,
+		platform: "youtube",
+		uploader_channel_id: snippet.videoOwnerChannelId ?? null,
+		uploader_name: snippet.videoOwnerChannelTitle ?? null,
+	};
+}
+
+// Parse one playlistItems.list page into its videos plus the token for the next
+// page (null when this is the last). Pure — exported for unit tests.
+export function parsePlaylistItemsPage(data: unknown): {
+	videos: PlaylistVideo[];
+	nextPageToken: string | null;
+} {
+	const page = (data ?? {}) as PlaylistItemsResponse;
+	const videos: PlaylistVideo[] = [];
+	for (const item of page.items ?? []) {
+		const video = playlistItemToVideo(item);
+		if (video) videos.push(video);
+	}
+	return { videos, nextPageToken: page.nextPageToken ?? null };
+}
+
+// Every video in a playlist, via the YouTube Data API (playlistItems.list) —
+// the full-playlist source behind the tournament Videos tab's search. Unlike the
+// free Atom feed (fetchYouTubePlaylistVideos), which only ever returns the ~15
+// most recent entries, this pages through the whole playlist, so it needs the
+// Data API key and spends quota (1 unit/page). Uncached (getVideosCached wraps
+// it). Returns [] for a missing/private playlist (404); THROWS on a transient
+// upstream failure so the cache keeps serving a prior good result. Sorted
+// newest-first and capped like the RSS path, for the same reasons.
+export async function fetchYouTubePlaylistVideosViaApi(
+	playlistId: string,
+	apiKey: string,
+): Promise<PlaylistVideo[]> {
+	const all: PlaylistVideo[] = [];
+	const maxPages = MAX_PLAYLIST_VIDEOS / PLAYLIST_PAGE_SIZE;
+	let pageToken: string | null = null;
+	let pages = 0;
+	do {
+		const url = new URL("https://www.googleapis.com/youtube/v3/playlistItems");
+		url.searchParams.set("part", "snippet,contentDetails");
+		url.searchParams.set("playlistId", playlistId);
+		url.searchParams.set("maxResults", String(PLAYLIST_PAGE_SIZE));
+		url.searchParams.set("key", apiKey);
+		if (pageToken) url.searchParams.set("pageToken", pageToken);
+		const res = await fetch(url);
+		if (!res.ok) {
+			// A missing/deleted playlist is a real "no videos" state, not a transient
+			// error — cache [] rather than throwing (mirrors the RSS 404 handling).
+			if (res.status === 404) return [];
+			const detail = await res.text().catch(() => "");
+			logError("youtube_playlist_api_failed", null, {
+				yt_status: res.status,
+				yt_detail: detail.slice(0, 500),
+			});
+			throw new Error(`youtube playlistItems responded ${res.status}`);
+		}
+		const { videos, nextPageToken } = parsePlaylistItemsPage(await res.json());
+		all.push(...videos);
+		pageToken = nextPageToken;
+		pages++;
+	} while (pageToken && pages < maxPages);
+	// Stopped with a page token still in hand ⇒ the playlist is longer than the
+	// cap; record what we dropped rather than silently truncating.
+	if (pageToken) {
+		logWarn("youtube_playlist_capped", {
+			playlist_id: playlistId,
+			kept: all.length,
+			cap: MAX_PLAYLIST_VIDEOS,
+		});
+	}
+	return all
+		.sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
+		.slice(0, MAX_PLAYLIST_VIDEOS);
 }
 
 export const youtubeProvider: VideoProvider = {

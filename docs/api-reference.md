@@ -416,7 +416,7 @@ Single match detail.
 - **Errors:** `404 MATCH_NOT_FOUND` (missing, or the match's round isn't in this tournament), `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 
 ### `GET /v1/tournaments/:id/videos`
-Uploads from the tournament's admin-set YouTube playlist (`youtube_playlist_url`) — feeds the Videos tab. Pulled from the free YouTube RSS feed and KV-cached (stale-while-revalidate), same as the profile videos read.
+Uploads from the tournament's admin-set YouTube playlist (`youtube_playlist_url`) — feeds the Videos tab, whose search filters the returned list client-side. KV-cached (stale-while-revalidate), same as the profile videos read. When `YOUTUBE_API_KEY` is configured the whole playlist is enumerated via the Data API (`playlistItems.list`, paged, capped at 500) so search can reach every video; without the key it falls back to the free RSS feed's ~15 most-recent entries.
 
 - **Response 200:** `{ videos: [{ id, title, url, thumbnail_url, published_at, platform, …uploader }] }`, newest first. Each video carries uploader attribution: a linked Per-Ankh uploader adds `{ user_id, display_name, avatar_url }` (Discord identity, like the creator feed); an unlinked YouTube uploader adds `{ uploader_name, uploader_url }`; a feed without an author adds neither. Empty when no playlist is configured or the stored value no longer parses.
 - **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.

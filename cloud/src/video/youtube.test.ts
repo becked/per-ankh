@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
 	decodeXmlEntities,
+	parsePlaylistItemsPage,
 	parseYouTubeChannelUrl,
 	parseYouTubeFeed,
 	parseYouTubePlaylistFeed,
@@ -215,5 +216,95 @@ describe("parseYouTubePlaylistFeed", () => {
 		const videos = parseYouTubePlaylistFeed(feed);
 		expect(videos[1].uploader_channel_id).toBeNull();
 		expect(videos[1].uploader_name).toBeNull();
+	});
+});
+
+describe("parsePlaylistItemsPage", () => {
+	// One playlistItems.list response with a normal video, a private one (no
+	// contentDetails.videoPublishedAt), and a next-page token.
+	const page = {
+		nextPageToken: "NEXT",
+		items: [
+			{
+				snippet: {
+					title: "Round 1: Carthage vs Rome",
+					resourceId: { videoId: "VID0000001" },
+					thumbnails: {
+						default: { url: "https://i.ytimg.com/default.jpg" },
+						medium: { url: "https://i.ytimg.com/medium.jpg" },
+						high: { url: "https://i.ytimg.com/high.jpg" },
+					},
+					videoOwnerChannelId: "UCsooa4yRKGN_zEE8iknghZA",
+					videoOwnerChannelTitle: "Some Caster",
+				},
+				contentDetails: {
+					videoId: "VID0000001",
+					videoPublishedAt: "2026-05-01T00:00:00Z",
+				},
+			},
+			{
+				snippet: {
+					title: "Private video",
+					resourceId: { videoId: "VID0000002" },
+				},
+				contentDetails: { videoId: "VID0000002" },
+			},
+		],
+	};
+
+	it("maps a live item to a PlaylistVideo, preferring the highest thumbnail", () => {
+		const { videos } = parsePlaylistItemsPage(page);
+		expect(videos).toHaveLength(1);
+		expect(videos[0]).toEqual({
+			id: "VID0000001",
+			title: "Round 1: Carthage vs Rome",
+			url: "https://www.youtube.com/watch?v=VID0000001",
+			thumbnail_url: "https://i.ytimg.com/high.jpg",
+			published_at: "2026-05-01T00:00:00Z",
+			platform: "youtube",
+			uploader_channel_id: "UCsooa4yRKGN_zEE8iknghZA",
+			uploader_name: "Some Caster",
+		});
+	});
+
+	it("skips private/deleted items (no videoPublishedAt)", () => {
+		const { videos } = parsePlaylistItemsPage(page);
+		expect(videos.map((v) => v.id)).toEqual(["VID0000001"]);
+	});
+
+	it("returns the next page token, or null on the last page", () => {
+		expect(parsePlaylistItemsPage(page).nextPageToken).toBe("NEXT");
+		expect(parsePlaylistItemsPage({ items: [] }).nextPageToken).toBeNull();
+		expect(parsePlaylistItemsPage({}).nextPageToken).toBeNull();
+	});
+
+	it("falls back to lower thumbnails and null uploader when fields are absent", () => {
+		const { videos } = parsePlaylistItemsPage({
+			items: [
+				{
+					snippet: {
+						title: "No owner",
+						resourceId: { videoId: "VID0000003" },
+						thumbnails: { default: { url: "https://i.ytimg.com/d.jpg" } },
+					},
+					contentDetails: {
+						videoId: "VID0000003",
+						videoPublishedAt: "2026-04-01T00:00:00Z",
+					},
+				},
+			],
+		});
+		expect(videos[0]).toMatchObject({
+			thumbnail_url: "https://i.ytimg.com/d.jpg",
+			uploader_channel_id: null,
+			uploader_name: null,
+		});
+	});
+
+	it("tolerates a malformed/empty response", () => {
+		expect(parsePlaylistItemsPage(null)).toEqual({
+			videos: [],
+			nextPageToken: null,
+		});
 	});
 });
