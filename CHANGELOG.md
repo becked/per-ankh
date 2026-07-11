@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-07-11-3b65ccb] - 2026-07-11
+
+### Features
+
+- (tournament) add YouTube playlist Videos tab — [c9a6d62](https://github.com/becked/per-ankh/commit/c9a6d620d7deb9208b611c677a40e470f5e1e427)
+- (tournament) search all playlist videos on the Videos tab — [3b65ccb](https://github.com/becked/per-ankh/commit/3b65ccb5b4191fb09d4fa6ecbd68b1ad261c5644)
+
+### Fixes
+
+- (tournament) sort playlist videos newest-first and make uploader attribution deterministic — [a35869f](https://github.com/becked/per-ankh/commit/a35869f3f1e5730293f4deebb9fef0e1534310c2)
+
 ## [2026-07-10-f24d8d7] - 2026-07-10
 
 ### Features
