@@ -60,6 +60,13 @@ interface OnlineIdRow {
 	last_seen_at: string;
 }
 
+interface ChannelDetailRow {
+	platform: string;
+	channel_url: string;
+	channel_id: string;
+	updated_at: string;
+}
+
 interface RecentGameRow {
 	game_id: string;
 	game_name: string | null;
@@ -190,6 +197,8 @@ export async function runDetail(
 		`SELECT event_type, game_id, share_id, ip_address, created_at
 		 FROM events WHERE user_id = ${idStr} ORDER BY created_at DESC LIMIT 10`,
 		`SELECT COUNT(*) AS cnt FROM games WHERE user_id = ${idStr}`,
+		`SELECT platform, channel_url, channel_id, updated_at FROM user_video_channels
+		 WHERE user_id = ${idStr} ORDER BY platform`,
 	]);
 	const [
 		userRows,
@@ -198,6 +207,7 @@ export async function runDetail(
 		gameRows,
 		eventRows,
 		gameCountRows,
+		channelRows,
 	] = [
 		batch[0] as UserRow[],
 		batch[1] as CollectionRow[],
@@ -205,6 +215,7 @@ export async function runDetail(
 		batch[3] as RecentGameRow[],
 		batch[4] as RecentEventRow[],
 		batch[5] as { cnt: number }[],
+		batch[6] as ChannelDetailRow[],
 	];
 	const totalGames = gameCountRows[0]?.cnt ?? 0;
 	const user = userRows[0];
@@ -217,6 +228,7 @@ export async function runDetail(
 			user,
 			collections: collectionRows,
 			online_ids: onlineIdRows,
+			channels: channelRows,
 			recent_games: gameRows,
 			recent_events: eventRows,
 		});
@@ -235,6 +247,7 @@ export async function runDetail(
 		["Games", String(totalGames)],
 		["Collections", String(collectionRows.length)],
 		["Online IDs", String(onlineIdRows.length)],
+		["Channels", String(channelRows.length)],
 	]);
 
 	if (collectionRows.length > 0) {
@@ -264,6 +277,24 @@ export async function runDetail(
 				o.online_id,
 				formatDate(o.first_seen_at),
 				formatDate(o.last_seen_at),
+			]),
+		);
+		process.stdout.write("\n");
+	}
+
+	if (channelRows.length > 0) {
+		printTable(
+			[
+				{ header: "PLATFORM", width: 8 },
+				{ header: "CHANNEL_ID", width: 26 },
+				{ header: "CHANNEL_URL", width: 34 },
+				{ header: "UPDATED", width: 16 },
+			],
+			channelRows.map((c) => [
+				c.platform,
+				c.channel_id,
+				c.channel_url,
+				formatDate(c.updated_at),
 			]),
 		);
 		process.stdout.write("\n");

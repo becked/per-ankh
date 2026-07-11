@@ -8,6 +8,7 @@ import { setTarget } from "./wrangler";
 
 import * as stats from "./commands/stats";
 import * as users from "./commands/users";
+import * as channels from "./commands/channels";
 import * as games from "./commands/games";
 import * as events from "./commands/events";
 import * as shares from "./commands/shares";
@@ -35,6 +36,11 @@ function printHelp(): void {
 			"  delete-game <game_id>            Delete one game (D1 + R2); account stays",
 			"  purge-games --user <user_id>     Delete all of a user's games; account stays",
 			"  events [--type T] [--user U] [--share S] [--limit N]   Audit log",
+			"",
+			"Creator video channels:",
+			"  add-channel <user_id> <url|@handle>   Link a user's YouTube channel (resolves + upserts)",
+			"  remove-channel <user_id> <platform>   Unlink a user's channel for a platform",
+			"  list-channels [--limit N]             List all linked creator channels",
 			"",
 			"Legacy shares (frozen-but-served):",
 			"  shares list [--limit N]          List legacy shares",
@@ -124,6 +130,12 @@ export async function main(argv: string[]): Promise<void> {
 			return users.runSetAlias(subArgs, opts);
 		case "clear-alias":
 			return users.runClearAlias(subArgs, opts);
+		case "add-channel":
+			return channels.runAddChannel(subArgs, opts);
+		case "remove-channel":
+			return channels.runRemoveChannel(subArgs, opts);
+		case "list-channels":
+			return channels.runListChannels(subArgs, opts);
 		case "games":
 			return games.runList(subArgs, opts);
 		case "game":

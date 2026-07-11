@@ -15,12 +15,15 @@ metadata:
 
 **Red line — read first.** `./per-ankh admin` defaults to **production**. Never run it against production or with `--staging`/`--remote` — including read-only reads — unless the user's current message explicitly asks for that exact command; ask first. It authenticates against the user's Cloudflare account (a 1Password prompt on this machine). Only the `--local` path (and the hard-local-only `dev-login` / `tournament seed`) is safe to run unprompted.
 
-`./per-ankh admin` is the operator CLI for the live app — covers both the cloud-rewrite world (users, games, events) and the frozen legacy share world. Implementation lives under `scripts/admin/`. Calls `wrangler` directly (no API key — relies on `wrangler login`). Run `./per-ankh admin --help` for the full list. The list below is illustrative, not exhaustive — `--help` groups the full surface (Stats, Users, Games, Events, Shares, Security, Tournaments, Dev).
+`./per-ankh admin` is the operator CLI for the live app — covers both the cloud-rewrite world (users, games, events) and the frozen legacy share world. Implementation lives under `scripts/admin/`. Calls `wrangler` directly (no API key — relies on `wrangler login`). Run `./per-ankh admin --help` for the full list. The list below is illustrative, not exhaustive — `--help` groups the full surface (Stats, Users, Creator channels, Games, Events, Shares, Security, Tournaments, Dev).
 
 ```bash
 ./per-ankh admin stats                       # Global counts + recent activity
 ./per-ankh admin users [--limit N] [--sort recent|uploads|created]
 ./per-ankh admin user <user_id>              # Detail (games, collections, online_ids)
+./per-ankh admin add-channel <user_id> <url|@handle>   # Link a creator's YouTube channel to a user (resolves + upserts)
+./per-ankh admin remove-channel <user_id> <platform>  # Unlink a user's channel
+./per-ankh admin list-channels [--limit N]            # All linked creator channels (roster for the home strip)
 ./per-ankh admin games [--limit N] [--user U]
 ./per-ankh admin events [--type T] [--user U]
 ./per-ankh admin shares list [--limit N]     # Legacy shares
