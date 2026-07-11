@@ -43,6 +43,10 @@
 		page.url.pathname ===
 			resolve("/tournaments/[slug]/stats", { slug: tournament.slug }),
 	);
+	const isVideos = $derived(
+		page.url.pathname ===
+			resolve("/tournaments/[slug]/videos", { slug: tournament.slug }),
+	);
 	const isOverview = $derived(page.url.pathname === overviewHref);
 
 	// Canonical trail. Overview: the name is the tail (no link). Matches/Stats:
@@ -63,6 +67,12 @@
 				...base,
 				{ label: tournament.name, href: overviewHref },
 				{ label: "Stats" },
+			];
+		if (isVideos)
+			return [
+				...base,
+				{ label: tournament.name, href: overviewHref },
+				{ label: "Videos" },
 			];
 		return [...base, { label: tournament.name }];
 	});

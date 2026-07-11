@@ -57,6 +57,12 @@ import { buildChartBundle, chunk, CHUNK_SIZE } from "../stats/aggregate";
 import { getCached, putCached } from "../stats/cache";
 import { resolveTournamentCorpus } from "../stats/resolve";
 import type { ChartBundleCore } from "../stats/types";
+import { getVideosCached } from "../video/cache";
+import {
+	fetchYouTubePlaylistVideos,
+	parseYouTubePlaylistUrl,
+} from "../video/youtube";
+import type { PlaylistVideo } from "../video/types";
 
 export interface TournamentPublicEnv extends TournamentEnv, SessionEnv {
 	ALLOWED_ORIGINS: string;
@@ -521,6 +527,10 @@ export async function handleTournamentDetail(
 			},
 			signups_open: tournament.signups_open === 1,
 			signup_question: tournament.signup_question,
+			// The raw admin-set playlist URL (public — it drives a public tab).
+			// Null hides the Videos tab; the videos themselves come from the
+			// separate /videos read.
+			youtube_playlist_url: tournament.youtube_playlist_url,
 			viewer_slot,
 			is_viewer_admin,
 			// Whether the viewer is the tournament's creator. Combined with the
@@ -539,6 +549,122 @@ export async function handleTournamentDetail(
 		200,
 		cors,
 	);
+}
+
+// GET /v1/tournaments/:id/videos — public. The uploads from the tournament's
+// admin-set YouTube playlist, newest first, KV-cached (SWR) like the profile
+// videos read. Same view gate + rate-limit as the other per-tournament reads.
+// Returns an empty list when no playlist is configured (or a stored value that
+// no longer parses) — the Videos tab is normally hidden in that case, but a
+// direct visit still gets a clean empty payload rather than an error.
+export async function handleTournamentPlaylistVideos(
+	tournamentId: string,
+	request: Request,
+	env: TournamentPublicEnv,
+	ctx: ExecutionContext,
+): Promise<Response> {
+	const cors = cloudCorsHeaders(env, request);
+	const session = await sessionFromRequest(env, request);
+	const tournament = await loadViewableTournament(
+		env,
+		request,
+		tournamentId,
+		cors,
+		session,
+	);
+	if (tournament instanceof Response) return tournament;
+	const parsed = tournament.youtube_playlist_url
+		? parseYouTubePlaylistUrl(tournament.youtube_playlist_url)
+		: null;
+	if (!parsed) return jsonResponse({ videos: [] }, 200, cors);
+	const videos = await getVideosCached(
+		env,
+		"youtube",
+		`playlist:${parsed.playlistId}`,
+		() => fetchYouTubePlaylistVideos(parsed.playlistId),
+		ctx,
+	);
+	// Attribute each video's uploader. A channel a Per-Ankh user has linked (via
+	// user_video_channels) renders with that user's Discord identity — the same
+	// shape as the home creator feed; unmatched uploaders fall back to the raw
+	// YouTube channel name + URL (no avatar, no profile link).
+	const usersByChannel = await loadPlaylistUploaders(env, videos);
+	const attributed = videos.map((v) => {
+		const base = {
+			id: v.id,
+			title: v.title,
+			url: v.url,
+			thumbnail_url: v.thumbnail_url,
+			published_at: v.published_at,
+			platform: v.platform,
+		};
+		const user = v.uploader_channel_id
+			? usersByChannel.get(v.uploader_channel_id)
+			: undefined;
+		if (user) return { ...base, ...user };
+		if (v.uploader_channel_id && v.uploader_name) {
+			return {
+				...base,
+				uploader_name: v.uploader_name,
+				uploader_url: `https://www.youtube.com/channel/${v.uploader_channel_id}`,
+			};
+		}
+		return base;
+	});
+	return jsonResponse({ videos: attributed }, 200, cors);
+}
+
+interface PlaylistUploader {
+	user_id: string;
+	display_name: string;
+	avatar_url: string;
+}
+
+// Map each distinct uploading channel in a playlist to the Per-Ankh user who
+// linked it (user_video_channels), so matched uploads get Discord identity.
+// Channels no user has linked are simply absent from the map. The playlist feed
+// is capped at a dozen videos, so the IN (…) list stays well under D1's limit.
+async function loadPlaylistUploaders(
+	env: TournamentPublicEnv,
+	videos: PlaylistVideo[],
+): Promise<Map<string, PlaylistUploader>> {
+	const channelIds = [
+		...new Set(
+			videos
+				.map((v) => v.uploader_channel_id)
+				// != null drops both null and undefined — a cache entry written before
+				// the uploader fields existed has no channel id on its videos, and
+				// binding undefined to D1 throws.
+				.filter((id): id is string => id != null),
+		),
+	];
+	const map = new Map<string, PlaylistUploader>();
+	if (channelIds.length === 0) return map;
+	const res = await env.SHARE_DB.prepare(
+		`SELECT c.channel_id, c.user_id,
+		        ${displayNameSql("u")} AS display_name,
+		        u.discord_id, u.avatar_hash
+		 FROM user_video_channels c
+		 JOIN users u ON u.user_id = c.user_id
+		 WHERE c.platform = 'youtube'
+		   AND c.channel_id IN (${channelIds.map(() => "?").join(",")})`,
+	)
+		.bind(...channelIds)
+		.all<{
+			channel_id: string;
+			user_id: string;
+			display_name: string;
+			discord_id: string;
+			avatar_hash: string | null;
+		}>();
+	for (const row of res.results ?? []) {
+		map.set(row.channel_id, {
+			user_id: row.user_id,
+			display_name: row.display_name,
+			avatar_url: buildAvatarUrl(row.discord_id, row.avatar_hash),
+		});
+	}
+	return map;
 }
 
 // Setup-phase tournaments are admin-only by default — every public read

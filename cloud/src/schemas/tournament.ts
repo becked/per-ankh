@@ -2,6 +2,7 @@
 
 import * as v from "valibot";
 import { CANONICAL_MAP_SCRIPTS_SET } from "../tournament/canonical-maps";
+import { parseYouTubePlaylistUrl } from "../video/youtube";
 
 const slugRegex = /^[a-z0-9][a-z0-9-]{0,63}$/;
 const nanoid21Regex = /^[A-Za-z0-9_-]{21}$/;
@@ -99,6 +100,22 @@ const LinkSchema = v.object({ label: LinkLabelSchema, url: LinkUrlSchema });
 // Capped to bound the stored blob. The whole list is replaced on each PATCH.
 const LinksSchema = v.pipe(v.array(LinkSchema), v.maxLength(16));
 
+// A YouTube playlist reference (full URL or bare list id) whose uploads feed a
+// tournament's Videos tab. Validated with the same parser the fetch path uses,
+// so what we accept here is always fetchable there. Trimmed + length-capped like
+// the other URL fields; the parser pins it to a youtube.com host + list id, so —
+// as with StreamUrlSchema — the host allowlist is the load-bearing guard even
+// though this value isn't itself rendered as an href.
+const YouTubePlaylistUrlSchema = v.pipe(
+	v.string(),
+	v.trim(),
+	v.maxLength(500),
+	v.check(
+		(s) => parseYouTubePlaylistUrl(s) !== null,
+		"must be a YouTube playlist URL",
+	),
+);
+
 export const CreateTournamentSchema = v.object({
 	// Optional. When absent, the handler derives a slug from `name` and
 	// disambiguates collisions with a short random suffix. The admin CLI
@@ -167,6 +184,10 @@ export const PatchTournamentSchema = v.object({
 	signup_question: v.optional(
 		v.nullable(v.pipe(v.string(), v.maxLength(2000))),
 	),
+	// Admin-set YouTube playlist whose uploads feed the Videos tab. `null` clears
+	// it (hiding the tab). Not phase-locked — like `links`, editable in every
+	// status (VODs get added mid- and post-tournament). See YouTubePlaylistUrlSchema.
+	youtube_playlist_url: v.optional(v.nullable(YouTubePlaylistUrlSchema)),
 });
 
 // Body for POST /v1/tournaments/:id/signup. The caller must be signed in

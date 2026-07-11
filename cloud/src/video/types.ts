@@ -30,6 +30,17 @@ export interface Video {
 	platform: VideoPlatform;
 }
 
+// A video from a playlist feed, which — unlike a channel feed — can mix
+// uploaders. Carries the per-entry uploading channel so the tournament videos
+// read can attribute each video (map a linked channel to its Per-Ankh user, or
+// fall back to the raw YouTube channel name). Both null when the feed omitted
+// the author. Kept off the base Video so the channel/profile feeds are
+// unaffected.
+export interface PlaylistVideo extends Video {
+	uploader_channel_id: string | null;
+	uploader_name: string | null;
+}
+
 // A resolved channel: the platform, the (canonicalized) URL we show the
 // user, and the native id the fetch path needs.
 export interface ChannelIdentity {

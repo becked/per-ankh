@@ -363,7 +363,7 @@ List tournaments.
 Tournament detail (the only read keyed by **slug**).
 
 - **Path:** `slug` (slug regex).
-- **Response 200:** `{ tournament_id, slug, name, description, status, division_a_name, division_b_name, swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds, map_pool, links, slot_counts: { swiss, championship, swiss_by_division: { A, B } }, signups_open, signup_question, viewer_slot: { slot_id, division, swiss_seed } | null, is_viewer_admin, is_viewer_creator, owner: { display_name, avatar_url } | null, admins: [...], starts_at, completed_at, created_at, updated_at }`.
+- **Response 200:** `{ tournament_id, slug, name, description, status, division_a_name, division_b_name, swiss_wins_to_advance, swiss_losses_to_eliminate, swiss_max_rounds, map_pool, links, slot_counts: { swiss, championship, swiss_by_division: { A, B } }, signups_open, signup_question, youtube_playlist_url, viewer_slot: { slot_id, division, swiss_seed } | null, is_viewer_admin, is_viewer_creator, owner: { display_name, avatar_url } | null, admins: [...], starts_at, completed_at, created_at, updated_at }`.
 - **Errors:** `404 TOURNAMENT_NOT_FOUND` (missing, or setup-phase to a non-admin), `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 - **Notes:** `viewer_slot`, `is_viewer_admin`, `is_viewer_creator` require a session (else null/false).
 
@@ -415,6 +415,12 @@ Single match detail.
 - **Response 200:** `{ ...serializeMatch, round_id, round_number, phase, division, tournament_id }`.
 - **Errors:** `404 MATCH_NOT_FOUND` (missing, or the match's round isn't in this tournament), `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
 
+### `GET /v1/tournaments/:id/videos`
+Uploads from the tournament's admin-set YouTube playlist (`youtube_playlist_url`) — feeds the Videos tab. Pulled from the free YouTube RSS feed and KV-cached (stale-while-revalidate), same as the profile videos read.
+
+- **Response 200:** `{ videos: [{ id, title, url, thumbnail_url, published_at, platform, …uploader }] }`, newest first. Each video carries uploader attribution: a linked Per-Ankh uploader adds `{ user_id, display_name, avatar_url }` (Discord identity, like the creator feed); an unlinked YouTube uploader adds `{ uploader_name, uploader_url }`; a feed without an author adds neither. Empty when no playlist is configured or the stored value no longer parses.
+- **Errors:** `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_VIEW`.
+
 ---
 
 ## Tournaments — lifecycle & configuration
@@ -433,10 +439,10 @@ Edit tournament configuration.
 
 - **Auth:** Tournament admin.
 - **Path:** `id` (21-char).
-- **Body:** `PatchTournamentSchema` (all optional) — `name`, `description`, `division_a_name`/`division_b_name`, `swiss_wins_to_advance`/`swiss_losses_to_eliminate`/`swiss_max_rounds`, `map_pool`, `links` (`LinksSchema`: ≤16 of `{ label, url }`), `signups_open` (boolean), `starts_at` (nullable ISO-8601), `signup_question` (nullable, ≤2000).
+- **Body:** `PatchTournamentSchema` (all optional) — `name`, `description`, `division_a_name`/`division_b_name`, `swiss_wins_to_advance`/`swiss_losses_to_eliminate`/`swiss_max_rounds`, `map_pool`, `links` (`LinksSchema`: ≤16 of `{ label, url }`), `signups_open` (boolean), `starts_at` (nullable ISO-8601), `signup_question` (nullable, ≤2000), `youtube_playlist_url` (nullable YouTube playlist URL, ≤500 — validated to a youtube.com host + list id).
 - **Response 200:** `{ tournament }` (the full row).
 - **Errors:** `409 TOURNAMENT_LOCKED` (swiss-config edit when status ≠ setup), `409 INVALID_PHASE` (`signups_open` while locked), `400 INVALID_THRESHOLDS`, `400 MAP_OPTIONS_INVALID`, `409 TOURNAMENT_COMPLETE` / `409 MAP_POOL_LOCKED` (map-pool edits), `500 MAP_CONFIG_INVALID`, plus auth/body codes.
-- **Notes:** Swiss config freezes once status ≠ setup. The map pool is append-only after setup (existing entries frozen; new ones may be added) and fully frozen when complete. `links` / `starts_at` / `signup_question` are never phase-locked.
+- **Notes:** Swiss config freezes once status ≠ setup. The map pool is append-only after setup (existing entries frozen; new ones may be added) and fully frozen when complete. `links` / `starts_at` / `signup_question` / `youtube_playlist_url` are never phase-locked.
 
 ### `DELETE /v1/tournaments/:id`
 Cancel (delete) a tournament.

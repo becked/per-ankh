@@ -51,6 +51,23 @@ export interface CreatorVideo extends RecentVideo {
 	avatar_url: string;
 }
 
+// A tournament-playlist video whose uploader is NOT a linked Per-Ankh user:
+// attributed by the raw YouTube channel name + URL (no avatar, no profile link).
+export interface YouTubeAttributedVideo extends RecentVideo {
+	uploader_name: string;
+	uploader_url: string;
+}
+
+// One entry in a tournament's Videos tab (GET /v1/tournaments/:id/videos). The
+// uploader is attributed three ways: a linked Per-Ankh user arrives as a
+// CreatorVideo (Discord identity, like the home feed); an unlinked YouTube
+// channel as a YouTubeAttributedVideo (raw channel name/link); a feed that
+// omitted the uploader as a plain RecentVideo.
+export type TournamentVideo =
+	| RecentVideo
+	| CreatorVideo
+	| YouTubeAttributedVideo;
+
 // Public profile fields returned by GET /v1/users/:user_id. No-auth read;
 // used by the /users/[user_id] page to render the chrome when a visitor
 // views someone else's library.
@@ -913,6 +930,19 @@ export const cloudApi = {
 		}>;
 	},
 
+	// The tournament's YouTube-playlist uploads (newest first), each with uploader
+	// attribution (Discord identity when the uploader is a linked Per-Ankh user,
+	// else the raw YouTube channel). Public read; feeds the tournament "Videos"
+	// tab. Empty when no playlist is configured.
+	getTournamentPlaylistVideos: async (
+		tournamentId: string,
+		opts?: CallOpts,
+	): Promise<TournamentVideo[]> => {
+		const res = await request(`/tournaments/${tournamentId}/videos`, opts);
+		return (await (res.json() as Promise<{ videos: TournamentVideo[] }>))
+			.videos;
+	},
+
 	getGameTournamentLink: async (
 		gameId: string,
 		opts?: CallOpts,
@@ -1498,6 +1528,9 @@ export interface TournamentDetail {
 	// Admin-curated external links shown in the header's "Links" menu (empty
 	// array when none configured).
 	links: TournamentLink[];
+	// Admin-set YouTube playlist URL whose uploads feed the Videos tab. Null when
+	// unset — the Videos tab is hidden entirely in that case.
+	youtube_playlist_url: string | null;
 	slot_counts: {
 		swiss: number;
 		championship: number;
@@ -1567,6 +1600,10 @@ export interface PatchTournamentBody {
 	starts_at?: string | null;
 	// Optional freeform signup prompt, or null to clear.
 	signup_question?: string | null;
+	// Admin-set YouTube playlist URL (or null to clear). Server validates it's a
+	// youtube.com playlist link; its uploads feed the Videos tab. Editable in
+	// every phase.
+	youtube_playlist_url?: string | null;
 }
 
 // A tournament admin as returned by listTournamentAdmins / grantTournamentAdmin.

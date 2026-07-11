@@ -58,6 +58,10 @@ export interface TournamentRow {
 	// Optional freeform prompt shown on the signup form. NULL when no question
 	// is configured. Set via the settings form (migration 0023).
 	signup_question: string | null;
+	// Admin-set YouTube playlist (full URL) whose uploads feed the tournament's
+	// Videos tab. NULL when unset — the tab is hidden entirely. Editable in every
+	// phase (like `links`, not frozen). Added in migration 0032.
+	youtube_playlist_url: string | null;
 	created_at: string;
 	updated_at: string;
 }

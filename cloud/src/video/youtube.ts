@@ -11,6 +11,7 @@ import { logError } from "../log";
 import {
 	ChannelResolutionError,
 	type ChannelIdentity,
+	type PlaylistVideo,
 	type Video,
 	type VideoEnv,
 	type VideoProvider,
@@ -19,6 +20,10 @@ import {
 const YT_HOSTS = new Set(["youtube.com", "www.youtube.com", "m.youtube.com"]);
 // UC + 22 url-safe base64 chars — the canonical channel id shape.
 const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
+// A playlist id: a 2-char kind prefix (PL/UU/FL/OL/…) + base64url body. Bounded
+// rather than pinned to one kind so real ids of every length are accepted while
+// the length cap keeps a stray query value from being treated as one.
+const PLAYLIST_ID_RE = /^[A-Za-z0-9_-]{12,64}$/;
 // Most recent uploads to surface on the profile tab.
 const MAX_VIDEOS = 12;
 
@@ -81,6 +86,37 @@ export function parseYouTubeChannelUrl(raw: string): ParsedYouTube | null {
 		return name ? { kind: "custom", name: safeDecode(name) } : null;
 	}
 	return null;
+}
+
+// Parse an admin-entered YouTube playlist reference into its list id. Accepts a
+// full playlist or watch URL carrying `?list=…` (the paste-friendly form) or a
+// bare playlist id — mirroring how parseYouTubeChannelUrl also takes a bare
+// @handle. Returns null when it isn't a recognizable YouTube playlist. Pure — no
+// network; exported for unit tests and reused by the schema's validation check
+// so "accepted on save" and "fetchable on read" can't drift.
+export function parseYouTubePlaylistUrl(
+	raw: string,
+): { playlistId: string } | null {
+	const trimmed = raw.trim();
+	if (!trimmed) return null;
+
+	// A bare id (no URL punctuation) — e.g. "PLabc…". Accepted like a bare handle.
+	if (!/[/.:?]/.test(trimmed)) {
+		return PLAYLIST_ID_RE.test(trimmed) ? { playlistId: trimmed } : null;
+	}
+
+	let url: URL;
+	try {
+		// Tolerate a missing scheme ("youtube.com/playlist?list=…").
+		url = new URL(
+			/^https?:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
+		);
+	} catch {
+		return null;
+	}
+	if (!YT_HOSTS.has(url.hostname.toLowerCase())) return null;
+	const list = url.searchParams.get("list");
+	return list && PLAYLIST_ID_RE.test(list) ? { playlistId: list } : null;
 }
 
 async function resolveYouTube(
@@ -196,25 +232,58 @@ function matchTag(entry: string, tag: string): string | null {
 	return m ? m[1] : null;
 }
 
+// Iterate the inner text of each <entry> in a feed. Shared by the channel and
+// playlist parsers so the entry extraction lives in one place.
+function* feedEntries(xml: string): Generator<string> {
+	const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
+	let m: RegExpExecArray | null;
+	while ((m = entryRe.exec(xml)) !== null) yield m[1];
+}
+
+// Normalize one <entry> into a Video, or null when it has no video id.
+function videoFromEntry(entry: string): Video | null {
+	const id = matchTag(entry, "yt:videoId");
+	if (!id) return null;
+	return {
+		id,
+		title: decodeXmlEntities(matchTag(entry, "title") ?? ""),
+		url: `https://www.youtube.com/watch?v=${id}`,
+		thumbnail_url:
+			entry.match(/<media:thumbnail\b[^>]*\burl="([^"]+)"/)?.[1] ?? null,
+		published_at: matchTag(entry, "published") ?? "",
+		platform: "youtube",
+	};
+}
+
 // Parse a YouTube channel Atom feed into normalized Video[]. Pure — regex over
 // the well-defined feed structure (Workers have no XML DOM parser). Entries
 // missing a video id are skipped. Exported for unit tests.
 export function parseYouTubeFeed(xml: string): Video[] {
 	const videos: Video[] = [];
-	const entryRe = /<entry>([\s\S]*?)<\/entry>/g;
-	let m: RegExpExecArray | null;
-	while ((m = entryRe.exec(xml)) !== null) {
-		const entry = m[1];
-		const id = matchTag(entry, "yt:videoId");
-		if (!id) continue;
+	for (const entry of feedEntries(xml)) {
+		const video = videoFromEntry(entry);
+		if (video) videos.push(video);
+	}
+	return videos;
+}
+
+// Parse a YouTube playlist Atom feed. Same as parseYouTubeFeed but also captures
+// each entry's uploading channel (id + name) — a playlist can mix channels, so
+// this is what lets the tournament videos read attribute each video. Exported
+// for unit tests.
+export function parseYouTubePlaylistFeed(xml: string): PlaylistVideo[] {
+	const videos: PlaylistVideo[] = [];
+	for (const entry of feedEntries(xml)) {
+		const video = videoFromEntry(entry);
+		if (!video) continue;
+		// Author name is nested in <author><name>…</name>; scope the match to the
+		// entry's <author> block so it can't pick up any other <name>.
+		const authorBlock = entry.match(/<author>([\s\S]*?)<\/author>/)?.[1] ?? "";
 		videos.push({
-			id,
-			title: decodeXmlEntities(matchTag(entry, "title") ?? ""),
-			url: `https://www.youtube.com/watch?v=${id}`,
-			thumbnail_url:
-				entry.match(/<media:thumbnail\b[^>]*\burl="([^"]+)"/)?.[1] ?? null,
-			published_at: matchTag(entry, "published") ?? "",
-			platform: "youtube",
+			...video,
+			uploader_channel_id: matchTag(entry, "yt:channelId"),
+			uploader_name:
+				decodeXmlEntities(matchTag(authorBlock, "name") ?? "") || null,
 		});
 	}
 	return videos;
@@ -235,6 +304,26 @@ async function fetchYouTubeRecent(
 	}
 	const xml = await res.text();
 	return parseYouTubeFeed(xml).slice(0, MAX_VIDEOS);
+}
+
+// Recent uploads for a playlist, from the same free, unauthenticated Atom feed
+// as the channel path — `?playlist_id=…` instead of `?channel_id=…` — so no key
+// and no quota. Uncached (the cache layer wraps this via getVideosCached).
+// Returns [] for a missing/private playlist (404); THROWS on a transient
+// upstream failure so the cache keeps serving a prior good result. Exported for
+// the tournament videos read.
+export async function fetchYouTubePlaylistVideos(
+	playlistId: string,
+): Promise<PlaylistVideo[]> {
+	const res = await fetch(
+		`https://www.youtube.com/feeds/videos.xml?playlist_id=${encodeURIComponent(playlistId)}`,
+	);
+	if (!res.ok) {
+		if (res.status === 404) return [];
+		throw new Error(`youtube playlist feed responded ${res.status}`);
+	}
+	const xml = await res.text();
+	return parseYouTubePlaylistFeed(xml).slice(0, MAX_VIDEOS);
 }
 
 export const youtubeProvider: VideoProvider = {

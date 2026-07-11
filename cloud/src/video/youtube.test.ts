@@ -3,10 +3,14 @@ import {
 	decodeXmlEntities,
 	parseYouTubeChannelUrl,
 	parseYouTubeFeed,
+	parseYouTubePlaylistFeed,
+	parseYouTubePlaylistUrl,
 } from "./youtube";
 
 // A syntactically valid channel id: UC + 22 url-safe chars.
 const CHANNEL_ID = "UCabcdefghijklmnopqrstuv";
+// A syntactically valid playlist id: PL + 32 url-safe chars.
+const PLAYLIST_ID = "PLabcdefghijklmnopqrstuvwxyz012345";
 
 describe("parseYouTubeChannelUrl", () => {
 	it("parses a bare @handle", () => {
@@ -59,6 +63,52 @@ describe("parseYouTubeChannelUrl", () => {
 		).toBeNull();
 		expect(parseYouTubeChannelUrl("")).toBeNull();
 		expect(parseYouTubeChannelUrl("just some text")).toBeNull();
+	});
+});
+
+describe("parseYouTubePlaylistUrl", () => {
+	it("parses a playlist URL, with or without scheme and extra params", () => {
+		expect(
+			parseYouTubePlaylistUrl(
+				`https://www.youtube.com/playlist?list=${PLAYLIST_ID}`,
+			),
+		).toEqual({ playlistId: PLAYLIST_ID });
+		expect(
+			parseYouTubePlaylistUrl(`youtube.com/playlist?list=${PLAYLIST_ID}`),
+		).toEqual({ playlistId: PLAYLIST_ID });
+		expect(
+			parseYouTubePlaylistUrl(
+				`  https://m.youtube.com/playlist?list=${PLAYLIST_ID}&foo=bar  `,
+			),
+		).toEqual({ playlistId: PLAYLIST_ID });
+	});
+
+	it("extracts the list id from a watch URL", () => {
+		expect(
+			parseYouTubePlaylistUrl(
+				`https://www.youtube.com/watch?v=VID0000001&list=${PLAYLIST_ID}`,
+			),
+		).toEqual({ playlistId: PLAYLIST_ID });
+	});
+
+	it("accepts a bare playlist id", () => {
+		expect(parseYouTubePlaylistUrl(PLAYLIST_ID)).toEqual({
+			playlistId: PLAYLIST_ID,
+		});
+	});
+
+	it("returns null for non-YouTube hosts or a missing/malformed list id", () => {
+		expect(
+			parseYouTubePlaylistUrl(`https://vimeo.com/playlist?list=${PLAYLIST_ID}`),
+		).toBeNull();
+		expect(
+			parseYouTubePlaylistUrl("https://www.youtube.com/playlist?list=short"),
+		).toBeNull();
+		expect(
+			parseYouTubePlaylistUrl("https://www.youtube.com/watch?v=VID0000001"),
+		).toBeNull();
+		expect(parseYouTubePlaylistUrl("PL nope")).toBeNull();
+		expect(parseYouTubePlaylistUrl("")).toBeNull();
 	});
 });
 
@@ -127,5 +177,43 @@ describe("parseYouTubeFeed", () => {
 
 	it("returns [] for an empty or entry-less feed", () => {
 		expect(parseYouTubeFeed("<feed></feed>")).toEqual([]);
+	});
+});
+
+describe("parseYouTubePlaylistFeed", () => {
+	const feed = `<feed xmlns:yt="http://www.youtube.com/xml/schemas/2015" xmlns:media="http://search.yahoo.com/mrss/" xmlns="http://www.w3.org/2005/Atom">
+  <entry>
+    <yt:videoId>VID0000010</yt:videoId>
+    <yt:channelId>UCsooa4yRKGN_zEE8iknghZA</yt:channelId>
+    <title>A Cast</title>
+    <author><name>Some &amp; Caster</name><uri>https://www.youtube.com/channel/UCsooa4yRKGN_zEE8iknghZA</uri></author>
+    <published>2026-05-01T00:00:00+00:00</published>
+    <media:group>
+      <media:thumbnail url="https://i.ytimg.com/vi/VID0000010/hqdefault.jpg" width="480" height="360"/>
+    </media:group>
+  </entry>
+  <entry>
+    <yt:videoId>VID0000011</yt:videoId>
+    <title>No author here</title>
+    <published>2026-04-01T00:00:00+00:00</published>
+  </entry>
+</feed>`;
+
+	it("captures each entry's uploader channel id and decoded name", () => {
+		const videos = parseYouTubePlaylistFeed(feed);
+		expect(videos).toHaveLength(2);
+		expect(videos[0]).toMatchObject({
+			id: "VID0000010",
+			title: "A Cast",
+			url: "https://www.youtube.com/watch?v=VID0000010",
+			uploader_channel_id: "UCsooa4yRKGN_zEE8iknghZA",
+			uploader_name: "Some & Caster",
+		});
+	});
+
+	it("yields null uploader fields when the entry omits the author", () => {
+		const videos = parseYouTubePlaylistFeed(feed);
+		expect(videos[1].uploader_channel_id).toBeNull();
+		expect(videos[1].uploader_name).toBeNull();
 	});
 });

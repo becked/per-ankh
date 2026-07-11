@@ -24,6 +24,20 @@
 			label: "Stats",
 			href: resolve("/tournaments/[slug]/stats", { slug: tournament.slug }),
 		},
+		// Videos appears only once an admin has set a playlist — otherwise the tab
+		// (and its route) would be empty for the vast majority of tournaments. The
+		// grid/pill geometry below is driven by navTabs.length, so the control
+		// stays correct whether there are three tabs or four.
+		...(tournament.youtube_playlist_url
+			? [
+					{
+						label: "Videos",
+						href: resolve("/tournaments/[slug]/videos", {
+							slug: tournament.slug,
+						}),
+					},
+				]
+			: []),
 	]);
 
 	// Which tab the current route sits on, driving the sliding pill's position.
@@ -39,12 +53,14 @@
      cross-route links (not buttons) — nav semantics, so aria-current, not
      aria-pressed. Text stays tan; the pill is the sole active indicator. -->
 <nav
-	class="relative grid grid-cols-3 overflow-hidden rounded-lg border-2 border-surface"
+	class="relative grid overflow-hidden rounded-lg border-2 border-surface"
 	style="background-color: rgb(var(--color-surface));"
+	style:grid-template-columns={`repeat(${navTabs.length}, minmax(0, 1fr))`}
 	aria-label="Tournament views"
 >
 	<div
-		class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
+		class="pointer-events-none absolute inset-y-0 left-0 transition-transform duration-200 ease-out"
+		style:width={`${100 / navTabs.length}%`}
 		style:background-color="rgb(var(--color-surface-raised))"
 		style:opacity={activeIndex < 0 ? "0" : "1"}
 		style:transform={`translateX(${(activeIndex < 0 ? 0 : activeIndex) * 100}%)`}

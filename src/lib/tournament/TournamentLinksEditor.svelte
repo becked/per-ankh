@@ -3,6 +3,7 @@
 	import {
 		ApiError,
 		cloudApi,
+		type PatchTournamentBody,
 		type TournamentDetail,
 		type TournamentLink,
 	} from "$lib/api-cloud";
@@ -63,12 +64,9 @@
 		);
 	}
 
-	async function commit() {
-		if (!canEdit) return;
-		const next = buildLinks();
-		if (sameAsServer(next)) return;
+	async function savePatch(body: PatchTournamentBody) {
 		try {
-			await cloudApi.patchTournament(tournament.tournament_id, { links: next });
+			await cloudApi.patchTournament(tournament.tournament_id, body);
 			await invalidateAll();
 			toast.info("Saved");
 		} catch (err) {
@@ -78,6 +76,13 @@
 			}
 			toast.error(message);
 		}
+	}
+
+	async function commit() {
+		if (!canEdit) return;
+		const next = buildLinks();
+		if (sameAsServer(next)) return;
+		await savePatch({ links: next });
 	}
 
 	function commitUrl(row: Row) {
@@ -95,9 +100,29 @@
 		rows.splice(i, 1);
 		commit();
 	}
+
+	// The tournament's YouTube playlist — kept in this section (it's a kind of
+	// link) but PATCHed as its own scalar; its uploads feed the Videos tab.
+	// svelte-ignore state_referenced_locally
+	let youtubePlaylistUrl = $state(tournament.youtube_playlist_url ?? "");
+
+	// Empty → null clears the playlist (which hides the Videos tab). The server
+	// validates the URL; on rejection savePatch toasts the error and
+	// invalidateAll() restores the stored value.
+	function commitYoutubePlaylistUrl() {
+		if (!canEdit) return;
+		const next = youtubePlaylistUrl.trim() || null;
+		if (next === tournament.youtube_playlist_url) return;
+		savePatch({ youtube_playlist_url: next });
+	}
+
+	function clearYoutubePlaylistUrl() {
+		youtubePlaylistUrl = "";
+		commitYoutubePlaylistUrl();
+	}
 </script>
 
-{#if canEdit || rows.length > 0}
+{#if canEdit || rows.length > 0 || tournament.youtube_playlist_url}
 	<div class="flex flex-col gap-2">
 		<span class="text-sm font-bold text-tan">Tournament Links</span>
 		{#if rows.length > 0}
@@ -143,9 +168,32 @@
 			>
 				Add link
 			</button>
-			<p class="text-[11px] opacity-60">
-				Shown in the Links menu next to Guide.
-			</p>
+		{/if}
+
+		{#if canEdit || tournament.youtube_playlist_url}
+			<div class="mt-1 flex flex-col gap-1">
+				<span class="text-xs text-tan opacity-70">YouTube playlist</span>
+				<div class="flex items-center gap-2">
+					<input
+						type="url"
+						bind:value={youtubePlaylistUrl}
+						onblur={commitYoutubePlaylistUrl}
+						disabled={!canEdit}
+						class="min-w-0 flex-1 rounded border border-input bg-surface-raised p-1.5 focus:border-input-focus focus:outline-none disabled:opacity-50"
+					/>
+					{#if canEdit && youtubePlaylistUrl}
+						<button
+							type="button"
+							class="rounded px-1.5 leading-none text-tan opacity-70 transition-colors hover:text-orange hover:opacity-100"
+							onclick={clearYoutubePlaylistUrl}
+							aria-label="Clear playlist"
+							title="Clear playlist"
+						>
+							✕
+						</button>
+					{/if}
+				</div>
+			</div>
 		{/if}
 	</div>
 {/if}
