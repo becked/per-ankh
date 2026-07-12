@@ -5,7 +5,7 @@
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { TECH_NAMES } from "$lib/generated/tech-names";
-	import { CHART_THEME } from "$lib/config";
+	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
@@ -18,6 +18,7 @@
 		TABLE_CELL_TD_CLASS,
 		ownedByPlayer,
 		toggleSort,
+		filledLineStyle,
 	} from "./helpers";
 
 	let {
@@ -109,22 +110,30 @@
 							nameLocation: "middle",
 							nameGap: 40,
 							max: maxTechCount + 2,
-							splitLine: { show: false },
 						},
-						series: histories.map((player) => ({
-							name:
-								playerById.get(player.player_id)?.label ??
-								formatEnum(player.nation, "NATION_"),
-							type: "line" as const,
-							data: player.data.map((d) => [d.turn, d.tech_count, d.tech_name]),
-							itemStyle: { color: playerById.get(player.player_id)?.color },
-							symbol: (value: [number, number, string | null]) =>
-								value[2] ? "circle" : "none",
-							symbolSize: 8,
-							emphasis: {
-								symbolSize: 12,
-							},
-						})),
+						series: histories.map((player, i) => {
+							const rp = playerById.get(player.player_id);
+							const color = rp?.color ?? getNationChartColor(player.nation, i);
+							return {
+								name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+								type: "line" as const,
+								data: player.data.map((d) => [
+									d.turn,
+									d.tech_count,
+									d.tech_name,
+								]),
+								itemStyle: { color },
+								// Milestone markers stay hidden until hover (per the shared
+								// look) but still name the discovered tech in the tooltip.
+								symbol: (value: [number, number, string | null]) =>
+									value[2] ? "circle" : "none",
+								symbolSize: 8,
+								emphasis: {
+									symbolSize: 12,
+								},
+								...filledLineStyle(color),
+							};
+						}),
 					} as EChartsOption;
 				})()
 			: null,

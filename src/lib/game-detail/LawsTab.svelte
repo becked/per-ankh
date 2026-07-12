@@ -4,7 +4,7 @@
 	import type { EChartsOption } from "echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { CHART_THEME } from "$lib/config";
+	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
@@ -18,6 +18,7 @@
 		TABLE_CELL_TD_CLASS,
 		ownedByPlayer,
 		toggleSort,
+		filledLineStyle,
 	} from "./helpers";
 
 	let {
@@ -137,37 +138,41 @@
 							nameLocation: "middle",
 							nameGap: 40,
 							max: maxLawCount + 2,
-							splitLine: { show: false },
 						},
-						series: histories.map((player, i) => ({
-							name:
-								playerById.get(player.player_id)?.label ??
-								formatEnum(player.nation, "NATION_"),
-							type: "line" as const,
-							data: player.data.map((d) => [d.turn, d.law_count, d.law_name]),
-							itemStyle: { color: playerById.get(player.player_id)?.color },
-							symbol: (value: [number, number, string | null]) =>
-								value[2] ? "circle" : "none",
-							symbolSize: 8,
-							emphasis: {
-								symbolSize: 12,
-							},
-							...(i === 0
-								? {
-										markLine: {
-											silent: true,
-											symbol: "none",
-											label: { show: false },
-											lineStyle: {
-												type: "dashed" as const,
-												color: "#666666",
-												width: 1,
+						series: histories.map((player, i) => {
+							const rp = playerById.get(player.player_id);
+							const color = rp?.color ?? getNationChartColor(player.nation, i);
+							return {
+								name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+								type: "line" as const,
+								data: player.data.map((d) => [d.turn, d.law_count, d.law_name]),
+								itemStyle: { color },
+								// Milestone markers stay hidden until hover (per the shared
+								// look) but still name the adopted law in the tooltip.
+								symbol: (value: [number, number, string | null]) =>
+									value[2] ? "circle" : "none",
+								symbolSize: 8,
+								emphasis: {
+									symbolSize: 12,
+								},
+								...filledLineStyle(color),
+								...(i === 0
+									? {
+											markLine: {
+												silent: true,
+												symbol: "none",
+												label: { show: false },
+												lineStyle: {
+													type: "dashed" as const,
+													color: "#666666",
+													width: 1,
+												},
+												data: [{ yAxis: 4 }, { yAxis: 7 }],
 											},
-											data: [{ yAxis: 4 }, { yAxis: 7 }],
-										},
-									}
-								: {}),
-						})),
+										}
+									: {}),
+							};
+						}),
 					} as EChartsOption;
 				})()
 			: null,

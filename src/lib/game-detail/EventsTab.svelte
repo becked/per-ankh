@@ -6,7 +6,7 @@
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
-	import { CHART_THEME } from "$lib/config";
+	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import {
 		type TableState,
@@ -16,6 +16,7 @@
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
 		toggleSort,
+		filledLineStyle,
 	} from "./helpers";
 
 	let {
@@ -46,54 +47,64 @@
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
 	// ─── Chart options ────────────────────────────────────────────────
-	const pointsChartOption = $derived<EChartsOption | null>(
-		playerHistory
-			? {
-					...CHART_THEME,
-					title: {
-						...CHART_THEME.title,
-						text: "Victory Points",
-					},
-					legend: {
-						show: false,
-						data: playerHistory.map(
-							(p) =>
-								playerById.get(p.player_id)?.label ??
-								formatEnum(p.nation, "NATION_"),
-						),
-						selected: chartFilter,
-					},
-					grid: {
-						left: 60,
-						right: 40,
-						top: 80,
-						bottom: 60,
-					},
-					xAxis: {
-						type: "category",
-						name: "Turn",
-						nameLocation: "middle",
-						nameGap: 30,
-						data: playerHistory[0]?.history.map((h) => h.turn) ?? [],
-					},
-					yAxis: {
-						type: "value",
-						name: "Points",
-						nameLocation: "middle",
-						nameGap: 40,
-					},
-					series: playerHistory.map((player) => {
-						const rp = playerById.get(player.player_id);
-						return {
-							name: rp?.label ?? formatEnum(player.nation, "NATION_"),
-							type: "line",
-							data: player.history.map((h) => h.points),
-							itemStyle: { color: rp?.color },
-						};
-					}),
-				}
-			: null,
-	);
+	const pointsChartOption = $derived.by<EChartsOption | null>(() => {
+		if (!playerHistory) return null;
+		// Value x-axis with a small pad so the area fill doesn't clip at the edges.
+		const turns = playerHistory[0]?.history.map((h) => h.turn) ?? [];
+		const minTurn = turns[0] ?? 0;
+		const maxTurn = turns[turns.length - 1] ?? 0;
+		const pad = Math.max(1, (maxTurn - minTurn) * 0.02);
+		return {
+			...CHART_THEME,
+			title: {
+				...CHART_THEME.title,
+				text: "Victory Points",
+			},
+			legend: {
+				show: false,
+				data: playerHistory.map(
+					(p) =>
+						playerById.get(p.player_id)?.label ??
+						formatEnum(p.nation, "NATION_"),
+				),
+				selected: chartFilter,
+			},
+			grid: {
+				left: 60,
+				right: 40,
+				top: 80,
+				bottom: 60,
+			},
+			xAxis: {
+				type: "value",
+				name: "Turn",
+				nameLocation: "middle",
+				nameGap: 30,
+				min: minTurn - pad,
+				max: maxTurn + pad,
+				minInterval: 1,
+				splitLine: { show: false },
+			},
+			yAxis: {
+				type: "value",
+				name: "Points",
+				nameLocation: "middle",
+				nameGap: 40,
+				axisLine: { onZero: false },
+			},
+			series: playerHistory.map((player, i) => {
+				const rp = playerById.get(player.player_id);
+				const color = rp?.color ?? getNationChartColor(player.nation, i);
+				return {
+					name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+					type: "line",
+					data: player.history.map((h) => [h.turn, h.points]),
+					itemStyle: { color },
+					...filledLineStyle(color),
+				};
+			}),
+		};
+	});
 
 	// ─── Event log processing ─────────────────────────────────────────
 	const processedEventLogs = $derived(

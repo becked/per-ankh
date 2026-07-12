@@ -8,7 +8,6 @@
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import Chart from "$lib/Chart.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { toRgba } from "$lib/utils/color";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
 	import { UNIT_STATS } from "$lib/generated/unit-stats";
@@ -30,6 +29,7 @@
 		classifyUnit,
 		getSpritePath,
 		UNIT_CLASS_COLORS,
+		filledLineStyle,
 	} from "./helpers";
 
 	let {
@@ -684,21 +684,7 @@
 					type: "line" as const,
 					data: player.history.map((h) => [h.turn, h.military_power]),
 					itemStyle: { color: rp?.color },
-					lineStyle: { width: 2 },
-					showSymbol: false,
-					areaStyle: {
-						color: {
-							type: "linear" as const,
-							x: 0,
-							y: 0,
-							x2: 0,
-							y2: 1,
-							colorStops: [
-								{ offset: 0, color: toRgba(fillColor, 0.22) },
-								{ offset: 1, color: toRgba(fillColor, 0) },
-							],
-						},
-					},
+					...filledLineStyle(fillColor),
 				};
 			}),
 		} as EChartsOption;

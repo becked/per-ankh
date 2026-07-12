@@ -8,8 +8,9 @@ import type {
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { PlayerInfo } from "$lib/types/PlayerInfo";
-import type { EChartsOption } from "echarts";
+import type { EChartsOption, LineSeriesOption } from "echarts";
 import { formatEnum } from "$lib/utils/formatting";
+import { toRgba } from "$lib/utils/color";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
@@ -857,6 +858,33 @@ export function toggleSort(table: TableState, columnKey: string): void {
 // identically.
 export const getPlayerColor = getNationChartColor;
 
+// Shared "filled trend line" styling for the game-detail time-series charts:
+// a 2px line over a vertical fade of the series color (22% → transparent) with
+// point symbols hidden except on hover. Every line chart on the game detail
+// page spreads this so they read as one family (mirrors the Military Power
+// plot). Pass the resolved series color.
+export function filledLineStyle(
+	color: string,
+): Pick<LineSeriesOption, "showSymbol" | "lineStyle" | "areaStyle"> {
+	return {
+		showSymbol: false,
+		lineStyle: { width: 2 },
+		areaStyle: {
+			color: {
+				type: "linear",
+				x: 0,
+				y: 0,
+				x2: 0,
+				y2: 1,
+				colorStops: [
+					{ offset: 0, color: toRgba(color, 0.22) },
+					{ offset: 1, color: toRgba(color, 0) },
+				],
+			},
+		},
+	};
+}
+
 // Chart selection is keyed by the resolved player label (unique per player,
 // mirror-match safe) — the same string used as the ECharts series name.
 export function createDefaultSelection(
@@ -918,6 +946,12 @@ export function createYieldChartOption(
 	const fullYAxisLabel =
 		mode === "rate" ? `${yAxisLabel} per Turn` : `Total ${yAxisLabel}`;
 
+	// Value x-axis with a small pad so the area fill doesn't clip at the edges.
+	const turns = yieldData[0]?.data.map((d: YieldDataPoint) => d.turn) ?? [];
+	const minTurn = turns[0] ?? 0;
+	const maxTurn = turns[turns.length - 1] ?? 0;
+	const pad = Math.max(1, (maxTurn - minTurn) * 0.02);
+
 	return {
 		...CHART_THEME,
 		title: {
@@ -936,29 +970,34 @@ export function createYieldChartOption(
 			bottom: 60,
 		},
 		xAxis: {
-			type: "category",
+			type: "value",
 			name: "Turn",
 			nameLocation: "middle",
 			nameGap: 30,
-			data: yieldData[0]?.data.map((d: YieldDataPoint) => d.turn) ?? [],
+			min: minTurn - pad,
+			max: maxTurn + pad,
+			minInterval: 1,
+			splitLine: { show: false },
 		},
 		yAxis: {
 			type: "value",
 			name: fullYAxisLabel,
 			nameLocation: "middle",
 			nameGap: 40,
+			axisLine: { onZero: false },
 		},
 		series: yieldData.map((playerYield, i) => {
 			const rp = byId.get(playerYield.player_id);
+			const color = rp?.color ?? getPlayerColor(playerYield.nation, i);
 			return {
 				name: rp?.label ?? formatEnum(playerYield.nation, "NATION_"),
 				type: "line",
-				data: playerYield.data.map((d: YieldDataPoint) =>
+				data: playerYield.data.map((d: YieldDataPoint) => [
+					d.turn,
 					mode === "rate" ? d.rate : d.cumulative,
-				),
-				itemStyle: {
-					color: rp?.color ?? getPlayerColor(playerYield.nation, i),
-				},
+				]),
+				itemStyle: { color },
+				...filledLineStyle(color),
 			};
 		}),
 	};

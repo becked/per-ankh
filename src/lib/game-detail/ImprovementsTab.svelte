@@ -18,6 +18,7 @@
 		TABLE_CELL_TD_CLASS,
 		ownedByPlayer,
 		toggleSort,
+		filledLineStyle,
 	} from "./helpers";
 
 	let {
@@ -68,9 +69,8 @@
 					name: p.label,
 					type: "line" as const,
 					data: counts.map((c, turn) => [turn, c]),
-					showSymbol: false,
-					lineStyle: { width: 2 },
 					itemStyle: { color: p.color },
+					...filledLineStyle(p.color),
 				};
 			})
 			.filter((s): s is NonNullable<typeof s> => s != null);
@@ -121,7 +121,6 @@
 				nameLocation: "middle",
 				nameGap: 40,
 				minInterval: 1,
-				splitLine: { show: false },
 			},
 			series,
 		} as EChartsOption;
