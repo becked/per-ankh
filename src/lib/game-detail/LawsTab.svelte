@@ -99,23 +99,36 @@
 							selected: chartFilter,
 						},
 						tooltip: {
-							trigger: "item",
-							formatter: (params: { data: unknown; seriesIndex: number }) => {
-								const data = params.data as
-									| [number, number, string | null]
-									| undefined;
-								if (!data) return "";
-								const [turn, count, lawName] = data;
-								if (lawName) {
-									const labels =
-										adoptionLabelsBySeries[params.seriesIndex]?.[turn];
-									const text =
-										labels && labels.length > 0
-											? labels.join("; ")
-											: `Adopted ${formatEnum(lawName, "LAW_")}`;
-									return `Turn ${turn}: ${text}`;
-								}
-								return `Turn ${turn}: ${count} law classes`;
+							trigger: "axis",
+							// Points are sparse (one per adoption), so snap the axis
+							// pointer to the nearest event and drive the tooltip off the
+							// axis — hovering anywhere works, matching the other charts.
+							axisPointer: { snap: true },
+							formatter: (params: unknown) => {
+								const arr = params as Array<{
+									marker: string;
+									seriesName: string;
+									seriesIndex: number;
+									data: [number, number, string | null];
+								}>;
+								if (arr.length === 0) return "";
+								const turn = arr[0].data[0];
+								const rows = arr
+									.map((p) => {
+										const [, count, lawName] = p.data;
+										let detail = "";
+										if (lawName) {
+											const labels =
+												adoptionLabelsBySeries[p.seriesIndex]?.[turn];
+											detail =
+												labels && labels.length > 0
+													? ` — ${labels.join("; ")}`
+													: ` — Adopted ${formatEnum(lawName, "LAW_")}`;
+										}
+										return `${p.marker}${p.seriesName}: <b>${count}</b>${detail}`;
+									})
+									.join("<br/>");
+								return `Turn ${turn}<br/>${rows}`;
 							},
 						},
 						grid: {

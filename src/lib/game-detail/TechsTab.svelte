@@ -75,19 +75,29 @@
 							selected: chartFilter,
 						},
 						tooltip: {
-							trigger: "item",
-							formatter: (params: { data: unknown }) => {
-								const data = params.data as
-									| [number, number, string | null]
-									| undefined;
-								if (!data) return "";
-								const [turn, count, techName] = data;
-								if (techName) {
-									const formattedTech =
-										TECH_NAMES[techName] ?? formatEnum(techName, "TECH_");
-									return `Turn ${turn}: Discovered ${formattedTech}`;
-								}
-								return `Turn ${turn}: ${count} technologies`;
+							trigger: "axis",
+							// Points are sparse (one per discovery), so snap the axis
+							// pointer to the nearest event and drive the tooltip off the
+							// axis — hovering anywhere works, matching the other charts.
+							axisPointer: { snap: true },
+							formatter: (params: unknown) => {
+								const arr = params as Array<{
+									marker: string;
+									seriesName: string;
+									data: [number, number, string | null];
+								}>;
+								if (arr.length === 0) return "";
+								const turn = arr[0].data[0];
+								const rows = arr
+									.map((p) => {
+										const [, count, techName] = p.data;
+										const tech = techName
+											? ` — ${TECH_NAMES[techName] ?? formatEnum(techName, "TECH_")}`
+											: "";
+										return `${p.marker}${p.seriesName}: <b>${count}</b>${tech}`;
+									})
+									.join("<br/>");
+								return `Turn ${turn}<br/>${rows}`;
 							},
 						},
 						grid: {
