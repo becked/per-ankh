@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-07-11-ab605e1] - 2026-07-11
+
+### Other
+
+- (game-detail) unify line-chart styling across tabs — [ab605e1](https://github.com/becked/per-ankh/commit/ab605e12bf0e1b56a8054895c88c51cccf42b440)
+
 ## [2026-07-11-3b65ccb] - 2026-07-11
 
 ### Features
