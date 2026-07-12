@@ -1,5 +1,11 @@
 # Changelog
 
+## [2026-07-11-a045baa] - 2026-07-11
+
+### Fixes
+
+- (game-detail) restore hover on the Tech and Law charts — [a045baa](https://github.com/becked/per-ankh/commit/a045baa57add7134351df2d16fc67cd4270c8463)
+
 ## [2026-07-11-ab605e1] - 2026-07-11
 
 ### Other
