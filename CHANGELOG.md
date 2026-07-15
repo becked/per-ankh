@@ -1,5 +1,16 @@
 # Changelog
 
+## [2026-07-14-b6d239c] - 2026-07-14
+
+### Fixes
+
+- (video) dedupe playlist videos by id before capping — [11b1607](https://github.com/becked/per-ankh/commit/11b1607df52e897f8a03e860173b006b0391546c)
+- (video) bump video cache version to 4 to orphan duplicate-laden entries — [b6d239c](https://github.com/becked/per-ankh/commit/b6d239ce0a2d6367417433df76ba6833fc77d0ca)
+
+### Other
+
+- list api-reference.md in CLAUDE.md key docs — [76dae9b](https://github.com/becked/per-ankh/commit/76dae9ba0f157306b0cc69f94ec37000bb02351d)
+
 ## [2026-07-11-a045baa] - 2026-07-11
 
 ### Fixes
