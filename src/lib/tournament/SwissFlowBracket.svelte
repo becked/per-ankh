@@ -183,12 +183,25 @@
 		finalWins: number;
 		finalLosses: number;
 	};
+	type SlotRecord = { wins: number; losses: number };
+
+	// Bucket rank order, mirroring compareForPairing in
+	// cloud/src/tournament/pairing.ts: more wins first, then fewer losses.
+	// "Worse" = the record the engine buckets lower, i.e. the one a floater
+	// drops into.
+	function isWorseRecord(a: SlotRecord, b: SlotRecord): boolean {
+		if (a.wins !== b.wins) return a.wins < b.wins;
+		return a.losses > b.losses;
+	}
 
 	// Walk matches in round order, tracking each slot's running record so we
 	// can bucket each match by the (W, L) the players carried INTO that
 	// round. Per-Ankh's Swiss pairs by exactly this bucket (see
-	// cloud/src/tournament/pairing.ts), so matches in a round always share
-	// an entering record between slot_a and slot_b.
+	// cloud/src/tournament/pairing.ts), so the two slots normally share an
+	// entering record — but not always: an odd bucket floats its lowest-ranked
+	// slot DOWN into the next one, which then pairs a better record against a
+	// worse one. The engine pairs that match inside the lower bucket, so we
+	// bucket by the worse of the two records to place it where it was paired.
 	const layout = $derived.by(() => {
 		const sorted = [...matches].sort(
 			(a, b) => (a.round_number ?? 0) - (b.round_number ?? 0),
@@ -209,13 +222,18 @@
 			if (r === 0) continue;
 			maxRoundSeen = Math.max(maxRoundSeen, r);
 			const aRec = record[m.slot_a_id] ?? { wins: 0, losses: 0 };
-			const key = `${r}|${aRec.wins}-${aRec.losses}`;
+			const bRec = m.slot_b_id
+				? (record[m.slot_b_id] ?? { wins: 0, losses: 0 })
+				: null;
+			// Byes have no slot_b, so they sit in the recipient's own bucket.
+			const pairRec = bRec !== null && isWorseRecord(bRec, aRec) ? bRec : aRec;
+			const key = `${r}|${pairRec.wins}-${pairRec.losses}`;
 			let bucket = buckets[key];
 			if (!bucket) {
 				bucket = {
 					round: r,
-					wins: aRec.wins,
-					losses: aRec.losses,
+					wins: pairRec.wins,
+					losses: pairRec.losses,
 					matches: [],
 				};
 				buckets[key] = bucket;
