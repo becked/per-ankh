@@ -118,11 +118,42 @@ const POOL_FULL_NAME_OVERRIDES: Record<string, string> = {
 // e.g. resource density or city sites, is deliberately omitted as noise). The
 // option is shown only when its value actually varies across the pool (see
 // distinguishingOptions), so single-variant scripts like Archipelago stay bare.
-const VARIANT_OPTION_BY_SCRIPT: Record<string, string> = {
-	[DOTA_SCRIPT]: "MAP_OPTIONS_MULTI_DOTA_BOUNDARY_TERRAIN",
-	MAPCLASS_MapScriptAridPlateau: "MAP_OPTIONS_MULTI_ARID_WATER_SIZE",
-	MAPCLASS_MapScriptDesert: "MAP_OPTIONS_DESERT_COAST",
+//
+// Listed current spelling first, superseded spellings after. The 2026-07-01
+// game patch renamed DOTA's terrain axis (BOUNDARY_TERRAIN → INNER_TERRAIN)
+// with a parallel rename of its values, but pools configured before the patch
+// still store the old key and can't be rewritten while a tournament is running
+// (issue #115). The label reads whichever spelling an instance actually carries
+// and maps both onto the same wording, so pre- and post-patch pools read alike
+// and resolve to the same atlas anchor.
+const VARIANT_OPTIONS_BY_SCRIPT: Record<string, readonly string[]> = {
+	[DOTA_SCRIPT]: [
+		"MAP_OPTIONS_MULTI_DOTA_INNER_TERRAIN",
+		"MAP_OPTIONS_MULTI_DOTA_BOUNDARY_TERRAIN",
+	],
+	MAPCLASS_MapScriptAridPlateau: ["MAP_OPTIONS_MULTI_ARID_WATER_SIZE"],
+	MAPCLASS_MapScriptDesert: ["MAP_OPTIONS_DESERT_COAST"],
 };
+
+// The option a script's variant is tracked under everywhere the label machinery
+// keys by it (the distinguishing set, labelConsumedOptions, atlasAnchor): the
+// current spelling, whichever one a given instance happens to store. Keying on
+// one spelling is what lets a pool that mixes pre- and post-patch instances
+// compare their variants against each other.
+function variantOptionFor(script: string): string | undefined {
+	return VARIANT_OPTIONS_BY_SCRIPT[script]?.[0];
+}
+
+// The option to read an instance's variant value from: whichever spelling the
+// instance actually carries, falling back to the current one (an instance that
+// leans on the XML default stores neither).
+function storedVariantOption(entry: MapPoolEntry): string | undefined {
+	const candidates = VARIANT_OPTIONS_BY_SCRIPT[entry.script];
+	if (!candidates) return undefined;
+	return (
+		candidates.find((o) => entry.options?.[o] !== undefined) ?? candidates[0]
+	);
+}
 
 // Label wording for variant-option values, per the atlas spec — terser than
 // the editor's choice labels ("Small Jagged Seas" → "Small Seas", "None" →
@@ -134,6 +165,15 @@ const VARIANT_VALUE_LABELS: Record<string, { full: string; short: string }> = {
 	MAP_OPTION_TERRAIN_SAND: { full: "Sand", short: "Sand" },
 	MAP_OPTION_TERRAIN_WATER: { full: "Water", short: "Water" },
 	MAP_OPTION_TERRAIN_MOUNTAINS: { full: "Mountain", short: "Mountain" },
+	// Post-2026-07-01 spellings of the four above. Deliberately the same wording
+	// as their pre-patch counterparts: the atlas kept its terrain vocabulary
+	// across the patch, so both spellings have to land on the same word for a
+	// mixed pool to read consistently and for atlasAnchor to stay stable.
+	MAP_OPTION_TERRAIN_INNER_JUNGLE: { full: "Jungle", short: "Jungle" },
+	MAP_OPTION_TERRAIN_INNER_SAND: { full: "Sand", short: "Sand" },
+	MAP_OPTION_TERRAIN_INNER_WATER: { full: "Water", short: "Water" },
+	MAP_OPTION_TERRAIN_INNER_MOUNTAINS: { full: "Mountain", short: "Mountain" },
+	MAP_OPTION_TERRAIN_INNER_RANDOM: { full: "Random", short: "Random" },
 	MAP_OPTION_ARID_WATER_SIZE_LARGE: { full: "Large Seas", short: "Lg Seas" },
 	MAP_OPTION_ARID_WATER_SIZE_SMALL: { full: "Small Seas", short: "Sm Seas" },
 	MAP_OPTION_DESERT_COAST_LUSH: { full: "Lush", short: "Lush" },
@@ -146,21 +186,24 @@ const VARIANT_VALUE_LABELS: Record<string, { full: string; short: string }> = {
 // settings that actually tell two maps in a script family apart. Computed over
 // the whole pool so a uniform tournament-wide choice stays out of the label
 // while a genuine per-map axis (DOTA terrain, Arid sea size, Desert coast)
-// shows up. Only the curated VARIANT_OPTION_BY_SCRIPT options are considered.
+// shows up. Only the curated VARIANT_OPTIONS_BY_SCRIPT options are considered.
+//
+// Variants are compared by their rendered wording rather than their raw zType,
+// so the two spellings of one terrain (pre- and post-2026-07-01) count as the
+// same variant instead of reading as a difference the player can't see.
 export function distinguishingOptions(
 	pool: readonly MapPoolEntry[],
 ): Set<string> {
 	const valuesByOption = new Map<string, Set<string>>();
 	for (const entry of pool) {
-		const opt = VARIANT_OPTION_BY_SCRIPT[entry.script];
+		const opt = variantOptionFor(entry.script);
 		if (!opt || !MAP_OPTION_DEFS[opt]) continue;
-		const value = String(effectiveOptionValue(entry.options, opt));
 		let seen = valuesByOption.get(opt);
 		if (!seen) {
 			seen = new Set();
 			valuesByOption.set(opt, seen);
 		}
-		seen.add(value);
+		seen.add(variantValueLabel(entry, false));
 	}
 	const out = new Set<string>();
 	for (const [opt, values] of valuesByOption) {
@@ -184,7 +227,7 @@ export function labelConsumedOptions(
 	) {
 		consumed.add(POINT_SYMMETRY_OPTION);
 	}
-	const variantOption = VARIANT_OPTION_BY_SCRIPT[entry.script];
+	const variantOption = variantOptionFor(entry.script);
 	if (variantOption && distinguishing.has(variantOption)) {
 		consumed.add(variantOption);
 	}
@@ -192,13 +235,12 @@ export function labelConsumedOptions(
 }
 
 // Label wording for a variant option's current value on an instance. `compact`
-// picks the trimmed form ("Large Seas" → "Lg Seas").
-function variantValueLabel(
-	options: Record<string, string | boolean> | undefined,
-	option: string,
-	compact: boolean,
-): string {
-	const value = effectiveOptionValue(options, option);
+// picks the trimmed form ("Large Seas" → "Lg Seas"). Reads whichever option
+// spelling the instance carries, so pre- and post-patch DOTA both resolve.
+function variantValueLabel(entry: MapPoolEntry, compact: boolean): string {
+	const option = storedVariantOption(entry);
+	if (!option) return "";
+	const value = effectiveOptionValue(entry.options, option);
 	if (typeof value === "string" && VARIANT_VALUE_LABELS[value]) {
 		const forms = VARIANT_VALUE_LABELS[value];
 		return compact ? forms.short : forms.full;
@@ -236,9 +278,9 @@ export function mapPoolLabel(
 	const parts: string[] = [aspect, size];
 	// Option (trait) sits before the script so the label reads as an adjective
 	// on the script noun: "Large Seas Arid Plateau", "Jungle DOTA".
-	const variantOption = VARIANT_OPTION_BY_SCRIPT[entry.script];
+	const variantOption = variantOptionFor(entry.script);
 	if (variantOption && distinguishing.has(variantOption)) {
-		parts.push(variantValueLabel(entry.options, variantOption, compact));
+		parts.push(variantValueLabel(entry, compact));
 	}
 	parts.push(script);
 	if (
@@ -261,7 +303,7 @@ export const ATLAS_BASE_URL = "https://alcaras.github.io/owtournamentatlas/";
 // elsewhere in the pool. slugify is the same function the map-caveat bake keys
 // its table with, so an anchor here and a baked key can't diverge on slugging.
 export function atlasAnchor(entry: MapPoolEntry): string {
-	const variant = VARIANT_OPTION_BY_SCRIPT[entry.script];
+	const variant = variantOptionFor(entry.script);
 	const forced = variant ? new Set([variant]) : new Set<string>();
 	return slugify(mapPoolLabel(entry, forced, true));
 }
