@@ -1,5 +1,12 @@
 # Changelog
 
+## [2026-07-15-1377120] - 2026-07-15
+
+### Fixes
+
+- (tournament) read DOTA's map variant from either option spelling — [1c397b2](https://github.com/becked/per-ankh/commit/1c397b24cc213acf524e04719b0964b389374584)
+- (tournament) bucket Swiss float-down matches by the record they were paired in — [1377120](https://github.com/becked/per-ankh/commit/13771209552d83769870a6d26eb1ae5574d2bc8a)
+
 ## [2026-07-14-b6d239c] - 2026-07-14
 
 ### Fixes
