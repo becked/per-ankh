@@ -21,6 +21,7 @@
 <script lang="ts">
 	import type { ECharts } from "echarts";
 	import SpriteIcon from "./SpriteIcon.svelte";
+	import { getSpritePath } from "./helpers";
 
 	// A DOM annotation rail below a game-detail chart: one tinted band per
 	// player, one row per event kind, each marker a real <SpriteIcon> at its
@@ -210,7 +211,14 @@
 					{/if}
 					{#each row.icons as icon, i (i)}
 						{#if icon.left != null}
-							{@const v = icon.iconValue}
+							<!-- A marker with no sprite (null iconValue, or a value the
+							     manifest doesn't cover) falls back to a colored dot so
+							     the event never renders invisible. -->
+							{@const v =
+								icon.iconValue &&
+								getSpritePath(icon.iconCategory, icon.iconValue)
+									? icon.iconValue
+									: null}
 							<div
 								class="absolute top-1/2 flex cursor-default items-center"
 								style="left: {icon.left}px; transform: translate(-50%, -50%);"

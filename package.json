@@ -28,6 +28,7 @@
 		"bake:specialists": "tsx scripts/bake-specialists.ts",
 		"bake:unit-stats": "tsx scripts/bake-unit-stats.ts",
 		"bake:owtt": "tsx scripts/bake-owtt.ts",
+		"bake:science-yields": "tsx scripts/bake-science-yields.ts",
 		"bake:finalize": "tsx scripts/build-manifests.ts",
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",

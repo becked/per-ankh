@@ -150,6 +150,10 @@
 					characters={game.characters}
 					characterTraits={game.character_traits}
 					playerGoals={game.player_goals}
+					families={game.families}
+					memoryData={game.memory_data}
+					storyEvents={game.story_events}
+					characterMarriages={game.character_marriages}
 					userNation={game.user_nation ?? null}
 					userDisplayName={game.user_display_name ?? null}
 					userWon={game.user_won ?? null}
