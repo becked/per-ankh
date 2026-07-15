@@ -8,12 +8,18 @@ import type {
 import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { PlayerInfo } from "$lib/types/PlayerInfo";
+import type { TechDiscoveryDataPoint } from "$lib/types/TechDiscoveryDataPoint";
 import type { EChartsOption, LineSeriesOption } from "echarts";
 import { formatEnum } from "$lib/utils/formatting";
 import { toRgba } from "$lib/utils/color";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
+import {
+	OWTT_BASE_URL,
+	OWTT_NATION_INDEX,
+	OWTT_TECH_ENC,
+} from "$lib/generated/owtt";
 
 // ─── Types ───────────────────────────────────────────────────────────
 
@@ -893,6 +899,37 @@ export function createDefaultSelection(
 	return Object.fromEntries(
 		resolvePlayers(players).map((p) => [p.label, true]),
 	);
+}
+
+/**
+ * Deep-link a player's research order into the owtt tech-tree planner
+ * (https://alcaras.github.io/owtt/): `?n=` selects the nation (the planner
+ * pre-grants its starting techs) and `?o=` carries the researched techs, in
+ * order, as planner-encoding ints (see `src/lib/generated/owtt.ts`).
+ *
+ * Turn-1 discoveries are the nation's free starting techs and are excluded;
+ * techs the planner doesn't know (nation-unique DLC techs) are skipped.
+ * Returns null when nothing encodes — the caller hides the link.
+ */
+export function buildOwttUrl(
+	nation: string | null,
+	discoveries: TechDiscoveryDataPoint[],
+): string | null {
+	const seen = new Set<string>();
+	const encs: number[] = [];
+	// `discoveries` is already turn-then-sequence ordered (see
+	// derive/tech-discovery-history.ts); dedupe because free-tech events can
+	// duplicate a normal research of the same tech.
+	for (const d of discoveries) {
+		if (d.tech_name == null || d.turn <= 1 || seen.has(d.tech_name)) continue;
+		seen.add(d.tech_name);
+		const enc = OWTT_TECH_ENC[d.tech_name];
+		if (enc != null) encs.push(enc);
+	}
+	if (encs.length === 0) return null;
+	const n = nation != null ? OWTT_NATION_INDEX[nation] : undefined;
+	const nationParam = n != null ? `n=${n}&` : "";
+	return `${OWTT_BASE_URL}?${nationParam}o=${encs.join(",")}`;
 }
 
 export function formatCityCell(column: CityColumn, city: CityRow): string {
