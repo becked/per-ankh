@@ -126,6 +126,7 @@ Authoritative references in `docs/` (it also holds historical analyses — trust
 - `docs/tournament-rules.md` — tournament rules & mechanics (source of truth).
 - `docs/tournament-implementation-notes.md` — tournament as-built record (design history archived at `docs/archive/tournament-feature-spec.md`).
 - `docs/c4-model.html` — C4 architecture overview.
+- `docs/api-reference.md` — the Worker's HTTP API: base URLs, every endpoint, auth, response shapes.
 - `docs/cloud-deploy-plan.md` — deploy runbook (the `deploy` skill automates it).
 - `docs/security-events.md` — `security_events` tee + Skiff drain (dedicated `SECURITY_DB`, retention).
 - `docs/dev-login.md` — local Discord-free auth bypass.
