@@ -316,6 +316,21 @@ async function fetchYouTubeRecent(
 	return parseYouTubeFeed(xml).slice(0, MAX_VIDEOS);
 }
 
+// A YouTube playlist can list the same video in more than one slot — a curator
+// re-adds a match recording, so it appears twice. Collapse to one entry per
+// video id, keeping the first occurrence. Applied before the cap so a duplicate
+// doesn't burn a slot, and so the tournament Videos read never emits two entries
+// with the same platform+id — which the page's keyed {#each} rejects with
+// each_key_duplicate. Order-preserving.
+function dedupeById<T extends { id: string }>(videos: T[]): T[] {
+	const seen = new Set<string>();
+	return videos.filter((v) => {
+		if (seen.has(v.id)) return false;
+		seen.add(v.id);
+		return true;
+	});
+}
+
 // Recent uploads for a playlist, from the same free, unauthenticated Atom feed
 // as the channel path — `?playlist_id=…` instead of `?channel_id=…` — so no key
 // and no quota. Uncached (the cache layer wraps this via getVideosCached).
@@ -339,9 +354,11 @@ export async function fetchYouTubePlaylistVideos(
 	// Videos tab documents and so the cap keeps the newest entries, not whichever
 	// happen to sit first. Mirrors the home feed's ordering (mergeCreatorFeed);
 	// ISO timestamps sort lexically and entries missing a date fall to the end.
-	return parseYouTubePlaylistFeed(xml)
-		.sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
-		.slice(0, MAX_VIDEOS);
+	return dedupeById(
+		parseYouTubePlaylistFeed(xml).sort((a, b) =>
+			a.published_at < b.published_at ? 1 : -1,
+		),
+	).slice(0, MAX_VIDEOS);
 }
 
 // One item as returned by playlistItems.list (only the fields we read).
@@ -450,9 +467,9 @@ export async function fetchYouTubePlaylistVideosViaApi(
 			cap: MAX_PLAYLIST_VIDEOS,
 		});
 	}
-	return all
-		.sort((a, b) => (a.published_at < b.published_at ? 1 : -1))
-		.slice(0, MAX_PLAYLIST_VIDEOS);
+	return dedupeById(
+		all.sort((a, b) => (a.published_at < b.published_at ? 1 : -1)),
+	).slice(0, MAX_PLAYLIST_VIDEOS);
 }
 
 export const youtubeProvider: VideoProvider = {
