@@ -875,7 +875,9 @@
 							>
 								<SpriteIcon category="techs" value={u.tech} size={13} />
 								{techName(u.tech)}
-								<span class="font-mono text-[10px] text-gray-400">(T{u.turn})</span>
+								<span class="font-mono text-[10px] text-gray-400"
+									>(T{u.turn})</span
+								>
 							</span>
 						{/each}
 					</span>

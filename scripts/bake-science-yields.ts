@@ -127,9 +127,14 @@ async function main(): Promise<void> {
 	// The court constants are single scalars rather than tables, so a silent
 	// 0 from a renamed tag would poison the breakdown rather than show up as
 	// a missing row. Fail the bake instead.
-	const findEntry = (entries: Entry[], zType: string, source: string): Entry => {
+	const findEntry = (
+		entries: Entry[],
+		zType: string,
+		source: string,
+	): Entry => {
 		const found = entries.find((e) => e.zType === zType);
-		if (!found) throw new Error(`bake-science-yields: ${zType} not in ${source}`);
+		if (!found)
+			throw new Error(`bake-science-yields: ${zType} not in ${source}`);
 		return found;
 	};
 	const requireInt = (raw: string | undefined, what: string): number => {
@@ -346,9 +351,7 @@ async function main(): Promise<void> {
 		`export const COMPETITIVE_EQUIVALENT_RATING = ${competitiveEquivalentRating};`,
 	);
 	lines.push("");
-	lines.push(
-		"// effectPlayer.xml EFFECTPLAYER_COMPETITIVE_MODE <aiYieldRate>",
-	);
+	lines.push("// effectPlayer.xml EFFECTPLAYER_COMPETITIVE_MODE <aiYieldRate>");
 	lines.push(
 		"// YIELD_SCIENCE, per turn: the flat stipend that compensates for the",
 	);
