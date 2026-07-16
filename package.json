@@ -34,7 +34,7 @@
 		"bake:og": "node scripts/make-og-default.mjs .",
 		"bake:screenshots": "node scripts/capture-home-screenshots.mjs",
 		"ux:review": "node scripts/capture-ux-review.mjs",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:difficulty-names && npm run bake:goal-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:map-caveats && npm run bake:specialists && npm run bake:finalize"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:difficulty-names && npm run bake:goal-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:map-caveats && npm run bake:specialists && npm run bake:science-yields && npm run bake:finalize"
 	},
 	"license": "MIT",
 	"dependencies": {
