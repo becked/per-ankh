@@ -25,21 +25,14 @@
 		type RailGroup,
 		type RailMarker,
 	} from "./EventRail.svelte";
-	import TableFilterColumn from "./TableFilterColumn.svelte";
-	import NationFilterSelect from "./NationFilterSelect.svelte";
 	import TechComparison from "./TechComparison.svelte";
 	import { specialistName } from "./specialists";
 	import {
-		type TableState,
 		type DetailPlayer,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
+		type SpriteCategory,
 		ownedByPlayer,
 		findByPlayer,
 		orderPlayersUploaderFirst,
-		toggleSort,
 		filledLineStyle,
 		getSpritePath,
 		improvementDisplayName,
@@ -75,12 +68,6 @@
 		gameOptions = null,
 		userNation = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
-		tableState = $bindable<TableState>({
-			search: "",
-			sortColumn: "nation",
-			sortDirection: "asc",
-			filters: [],
-		}),
 	}: {
 		players: DetailPlayer[];
 		techDiscoveryHistory: TechDiscoveryHistory[];
@@ -99,7 +86,6 @@
 		gameOptions?: Record<string, true> | null;
 		userNation?: string | null;
 		chartFilter?: Record<string, boolean>;
-		tableState?: TableState;
 	} = $props();
 
 	// Resolved identity lookup (stable label + color per player), keyed by the
@@ -533,7 +519,8 @@
 	// biggest first — ranked by one player when their header is clicked,
 	// by the best value anywhere otherwise.
 	const BREAKDOWN_SECTIONS = [
-		{ key: "specialists", label: "Specialists" },
+		{ key: "specialistsRural", label: "Rural specialists" },
+		{ key: "specialistsUrban", label: "Urban specialists" },
 		{ key: "buildings", label: "Buildings & resources" },
 		{ key: "laws", label: "Laws" },
 		{ key: "modifiers", label: "Modifiers" },
@@ -552,16 +539,25 @@
 	function breakdownRows(
 		key: (typeof BREAKDOWN_SECTIONS)[number]["key"],
 	): string[] {
+		// Default order is the source's unlocking-tech cost, so each section
+		// reads early-tech sources → late-tech sources. Clicking a player
+		// re-ranks by their contribution instead.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
+		const cost = new Map<string, number>();
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
+		const best = new Map<string, number>();
+		// Union over ALL players (so no row disappears), ranked by the sort set.
 		const ranked =
 			breakdownSortId != null
 				? scienceBreakdowns.filter((c) => c.player.playerId === breakdownSortId)
 				: scienceBreakdowns;
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
-		const best = new Map<string, number>();
-		// Union over ALL players (so no row disappears), ranked by the sort set.
 		for (const col of scienceBreakdowns) {
 			for (const item of col.b[key].items) {
 				if (!best.has(item.label)) best.set(item.label, 0);
+				cost.set(
+					item.label,
+					Math.min(cost.get(item.label) ?? Infinity, item.order),
+				);
 			}
 		}
 		for (const col of ranked) {
@@ -569,7 +565,25 @@
 				best.set(item.label, Math.max(best.get(item.label) ?? 0, item.science));
 			}
 		}
-		return [...best].sort((a, b) => b[1] - a[1]).map(([label]) => label);
+		return [...best]
+			.sort(
+				(a, b) =>
+					breakdownSortId != null
+						? b[1] - a[1] || (cost.get(a[0]) ?? 0) - (cost.get(b[0]) ?? 0)
+						: (cost.get(a[0]) ?? 0) - (cost.get(b[0]) ?? 0) || b[1] - a[1],
+			)
+			.map(([label]) => label);
+	}
+	// A row's icon: the first player's item that carries one.
+	function breakdownIcon(
+		key: (typeof BREAKDOWN_SECTIONS)[number]["key"],
+		label: string,
+	) {
+		for (const col of scienceBreakdowns) {
+			const icon = col.b[key].items.find((i) => i.label === label)?.icon;
+			if (icon) return icon;
+		}
+		return undefined;
 	}
 	function breakdownItem(
 		col: BreakdownColumn,
@@ -606,96 +620,6 @@
 		return c.convertToPixel({ xAxisIndex: 0 }, h.turn) as number;
 	});
 
-	// ─── Pivot table logic ────────────────────────────────────────────
-	// Columns are per player (mirror-match safe); filtering stays by nation.
-	const techColumnPlayers = $derived(
-		players.filter(
-			(p) =>
-				ownedByPlayer(
-					completedTechs,
-					p,
-					(t) => t.player_id,
-					(t) => t.nation,
-				).length > 0,
-		),
-	);
-
-	const uniqueTechNations = $derived(
-		[
-			...new Set(
-				techColumnPlayers
-					.map((p) => p.nation)
-					.filter((n): n is string => n != null),
-			),
-		].sort(),
-	);
-
-	const selectedTechNations = $derived(
-		tableState.filters
-			.filter((f) => f.startsWith("nation:"))
-			.map((f) => f.replace("nation:", "")),
-	);
-
-	const displayedTechPlayers = $derived(
-		selectedTechNations.length > 0
-			? techColumnPlayers.filter(
-					(p) => p.nation != null && selectedTechNations.includes(p.nation),
-				)
-			: techColumnPlayers,
-	);
-
-	type TechPivotRow = {
-		tech: string;
-		turns: Record<number, number | null>;
-	};
-
-	const techPivotData = $derived.by(() => {
-		if (completedTechs.length === 0) return [];
-
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const pivotMap = new Map<string, Record<number, number | null>>();
-
-		for (const p of techColumnPlayers) {
-			for (const t of ownedByPlayer(
-				completedTechs,
-				p,
-				(x) => x.player_id,
-				(x) => x.nation,
-			)) {
-				if (!pivotMap.has(t.tech)) {
-					pivotMap.set(t.tech, {});
-				}
-				pivotMap.get(t.tech)![p.playerId] = t.completed_turn;
-			}
-		}
-
-		const rows: TechPivotRow[] = [];
-		for (const [tech, turns] of pivotMap) {
-			if (tableState.search) {
-				const term = tableState.search.toLowerCase();
-				if (!tech.toLowerCase().includes(term)) {
-					continue;
-				}
-			}
-			rows.push({ tech, turns });
-		}
-
-		rows.sort((a, b) => {
-			if (tableState.sortColumn === "tech") {
-				const cmp = a.tech.localeCompare(b.tech);
-				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			} else if (tableState.sortColumn.startsWith("player:")) {
-				const id = Number(tableState.sortColumn.replace("player:", ""));
-				const aVal = a.turns[id] ?? Infinity;
-				const bVal = b.turns[id] ?? Infinity;
-				const cmp = aVal - bVal;
-				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			}
-			return a.tech.localeCompare(b.tech);
-		});
-
-		return rows;
-	});
 </script>
 
 {#if techDiscoveryChartOption}
@@ -821,8 +745,20 @@
 							{/each}
 						</tr>
 						{#each breakdownRows(section.key) as label (label)}
+							{@const icon = breakdownIcon(section.key, label)}
 							<tr>
-								<td class="py-0.5 pl-4 text-xs text-gray-400">{label}</td>
+								<td class="py-0.5 pl-4 text-xs text-gray-400">
+									<span class="inline-flex items-center gap-1.5">
+										{#if icon}
+											<SpriteIcon
+												category={icon.category as SpriteCategory}
+												value={icon.value}
+												size={14}
+											/>
+										{/if}
+										{label}
+									</span>
+								</td>
 								{#each scienceBreakdowns as col (col.player.playerId)}
 									{@const item = breakdownItem(col, section.key, label)}
 									<td class="py-0.5 pr-4">
@@ -871,118 +807,6 @@
 							</td>
 						{/each}
 					</tr>
-				</tbody>
-			</table>
-		</div>
-	</div>
-{/if}
-
-<!-- Completed Technologies Table -->
-{#if completedTechs.length === 0}
-	<div class="mt-8">
-		<p class="p-8 text-center italic text-tan">
-			No technologies data available
-		</p>
-	</div>
-{:else}
-	<div class={TABLE_FRAME_CLASS}>
-		<TableFilterColumn
-			bind:search={tableState.search}
-			count={`${techPivotData.length} technologies`}
-			chips={selectedTechNations.map((n) => formatEnum(n, "NATION_"))}
-		>
-			{#snippet filters()}
-				<NationFilterSelect
-					nations={uniqueTechNations}
-					bind:value={tableState.filters}
-				/>
-			{/snippet}
-		</TableFilterColumn>
-
-		<!-- Technologies pivot table -->
-		<div class="min-w-0 flex-1 overflow-x-auto">
-			<table class={TABLE_CLASS}>
-				<thead>
-					<tr>
-						<th
-							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedTechPlayers.length ===
-							0
-								? 'rounded-r-lg border-r'
-								: ''}"
-							onclick={() => toggleSort(tableState, "tech")}
-						>
-							<span class="inline-flex items-center gap-1">
-								Technology
-								{#if tableState.sortColumn === "tech"}
-									<span class="text-orange">
-										{tableState.sortDirection === "asc" ? "↑" : "↓"}
-									</span>
-								{/if}
-							</span>
-						</th>
-						{#each displayedTechPlayers as player, i (player.playerId)}
-							<th
-								class="{TABLE_HEADER_TH_CLASS} !text-center {i ===
-								displayedTechPlayers.length - 1
-									? 'rounded-r-lg border-r'
-									: ''}"
-								onclick={() =>
-									toggleSort(tableState, `player:${player.playerId}`)}
-							>
-								<span class="inline-flex items-center justify-center gap-1.5">
-									{#if player.nation}
-										<SpriteIcon
-											category="crests"
-											value={player.nation}
-											size={14}
-											alt={formatEnum(player.nation, "NATION_")}
-										/>
-									{/if}
-									{player.label}
-									{#if tableState.sortColumn === `player:${player.playerId}`}
-										<span class="text-orange">
-											{tableState.sortDirection === "asc" ? "↑" : "↓"}
-										</span>
-									{/if}
-								</span>
-							</th>
-						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					{#each techPivotData as row (row.tech)}
-						<tr class="group">
-							<td
-								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedTechPlayers.length ===
-								0
-									? 'rounded-r-lg'
-									: ''}"
-							>
-								{techName(row.tech)}
-							</td>
-							{#each displayedTechPlayers as player, i (player.playerId)}
-								<td
-									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-center {i ===
-									displayedTechPlayers.length - 1
-										? 'rounded-r-lg'
-										: ''}"
-								>
-									{row.turns[player.playerId] != null
-										? row.turns[player.playerId]
-										: "—"}
-								</td>
-							{/each}
-						</tr>
-					{:else}
-						<tr>
-							<td
-								colspan={displayedTechPlayers.length + 1}
-								class="p-8 text-center italic text-tan"
-							>
-								No technologies match search
-							</td>
-						</tr>
-					{/each}
 				</tbody>
 			</table>
 		</div>

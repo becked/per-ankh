@@ -3,7 +3,7 @@
 
 export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"crests/CREST_ARCHETYPE_ARTISANS":
-		"/sprites/crests/CREST_ARCHETYPE_ARTISANS.818bee1b.png",
+		"/sprites/crests/CREST_ARCHETYPE_ARTISANS.608b2432.png",
 	"crests/CREST_ARCHETYPE_ARTISANS_SEAT":
 		"/sprites/crests/CREST_ARCHETYPE_ARTISANS_SEAT.80d4fb01.png",
 	"crests/CREST_ARCHETYPE_CHAMPIONS":
@@ -11,13 +11,13 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"crests/CREST_ARCHETYPE_CHAMPIONS_SEAT":
 		"/sprites/crests/CREST_ARCHETYPE_CHAMPIONS_SEAT.358a924b.png",
 	"crests/CREST_ARCHETYPE_CLERICS":
-		"/sprites/crests/CREST_ARCHETYPE_CLERICS.8c588fc6.png",
+		"/sprites/crests/CREST_ARCHETYPE_CLERICS.5dace3d2.png",
 	"crests/CREST_ARCHETYPE_CLERICS_SEAT":
 		"/sprites/crests/CREST_ARCHETYPE_CLERICS_SEAT.b8b4822a.png",
 	"crests/CREST_ARCHETYPE_HUNTERS":
 		"/sprites/crests/CREST_ARCHETYPE_HUNTERS.e76a8020.png",
 	"crests/CREST_ARCHETYPE_HUNTERS_SEAT":
-		"/sprites/crests/CREST_ARCHETYPE_HUNTERS_SEAT.8f14663d.png",
+		"/sprites/crests/CREST_ARCHETYPE_HUNTERS_SEAT.a01e3add.png",
 	"crests/CREST_ARCHETYPE_LANDOWNERS":
 		"/sprites/crests/CREST_ARCHETYPE_LANDOWNERS.3aa0f436.png",
 	"crests/CREST_ARCHETYPE_LANDOWNERS_SEAT":
@@ -41,10 +41,10 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"crests/CREST_ARCHETYPE_TRADERS":
 		"/sprites/crests/CREST_ARCHETYPE_TRADERS.dc9d8cd9.png",
 	"crests/CREST_ARCHETYPE_TRADERS_SEAT":
-		"/sprites/crests/CREST_ARCHETYPE_TRADERS_SEAT.ecf59242.png",
+		"/sprites/crests/CREST_ARCHETYPE_TRADERS_SEAT.394a8866.png",
 	"crests/CREST_BATTERSEA": "/sprites/crests/CREST_BATTERSEA.348bba06.png",
 	"crests/CREST_FAMILY_ANTIGONUS":
-		"/sprites/crests/CREST_FAMILY_ANTIGONUS.9cb6c51e.png",
+		"/sprites/crests/CREST_FAMILY_ANTIGONUS.b6cd9de5.png",
 	"crests/CREST_FAMILY_ANTIPATER":
 		"/sprites/crests/CREST_FAMILY_ANTIPATER.e19bbfbc.png",
 	"crests/CREST_FAMILY_ANTIPATER_SEAT":
@@ -60,9 +60,9 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"crests/CREST_FAMILY_SELEUCID":
 		"/sprites/crests/CREST_FAMILY_SELEUCID.d7a8d5d4.png",
 	"crests/CREST_NATION_AKSUM":
-		"/sprites/crests/CREST_NATION_AKSUM.a63bc5a3.png",
+		"/sprites/crests/CREST_NATION_AKSUM.ffe34c62.png",
 	"crests/CREST_NATION_ASSYRIA":
-		"/sprites/crests/CREST_NATION_ASSYRIA.a99abcda.png",
+		"/sprites/crests/CREST_NATION_ASSYRIA.cca09d62.png",
 	"crests/CREST_NATION_BABYLONIA":
 		"/sprites/crests/CREST_NATION_BABYLONIA.1fbb570e.png",
 	"crests/CREST_NATION_CARTHAGE":
@@ -75,7 +75,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 		"/sprites/crests/CREST_NATION_HITTITE.42707d89.png",
 	"crests/CREST_NATION_HYKSOS":
 		"/sprites/crests/CREST_NATION_HYKSOS.1cba066e.png",
-	"crests/CREST_NATION_KUSH": "/sprites/crests/CREST_NATION_KUSH.dc26ae73.png",
+	"crests/CREST_NATION_KUSH": "/sprites/crests/CREST_NATION_KUSH.d0a05f68.png",
 	"crests/CREST_NATION_MAURYA":
 		"/sprites/crests/CREST_NATION_MAURYA.8e1f675e.png",
 	"crests/CREST_NATION_MITANNI":
@@ -90,32 +90,33 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"crests/CREST_TRIBE_DANES": "/sprites/crests/CREST_TRIBE_DANES.885e721f.png",
 	"crests/CREST_TRIBE_GAULS": "/sprites/crests/CREST_TRIBE_GAULS.e37722b3.png",
 	"crests/CREST_TRIBE_GENERIC":
-		"/sprites/crests/CREST_TRIBE_GENERIC.fae5159d.png",
+		"/sprites/crests/CREST_TRIBE_GENERIC.cad59cb5.png",
 	"crests/CREST_TRIBE_HUNS": "/sprites/crests/CREST_TRIBE_HUNS.7dbc4c40.png",
 	"crests/CREST_TRIBE_NUMIDIANS":
 		"/sprites/crests/CREST_TRIBE_NUMIDIANS.574ec1d3.png",
 	"crests/CREST_TRIBE_REBELS":
-		"/sprites/crests/CREST_TRIBE_REBELS.fae5159d.png",
+		"/sprites/crests/CREST_TRIBE_REBELS.cad59cb5.png",
 	"crests/CREST_TRIBE_SCYTHIANS":
-		"/sprites/crests/CREST_TRIBE_SCYTHIANS.4111d21c.png",
+		"/sprites/crests/CREST_TRIBE_SCYTHIANS.caeabd15.png",
 	"crests/CREST_TRIBE_THRACIANS":
 		"/sprites/crests/CREST_TRIBE_THRACIANS.874eeead.png",
 	"crests/CREST_TRIBE_VANDALS":
 		"/sprites/crests/CREST_TRIBE_VANDALS.9f24d9b7.png",
 	"icons/ACHIEVEMENT": "/sprites/icons/ACHIEVEMENT.45ee9971.png",
 	"icons/ACHIEVEMENT_WIN": "/sprites/icons/ACHIEVEMENT_WIN.5cff6493.png",
-	"icons/CITY_FOUNDED": "/sprites/icons/CITY_FOUNDED.beccf97f.png",
+	"icons/CITY_FOUNDED": "/sprites/icons/CITY_FOUNDED.9377d2e8.png",
 	"icons/CULTURE_DEVELOPING": "/sprites/icons/CULTURE_DEVELOPING.d90838b4.png",
 	"icons/CULTURE_LEGENDARY": "/sprites/icons/CULTURE_LEGENDARY.ec3dbeb2.png",
 	"icons/CULTURE_STRONG": "/sprites/icons/CULTURE_STRONG.b6179a95.png",
 	"icons/CULTURE_WEAK": "/sprites/icons/CULTURE_WEAK.20c371c7.png",
 	"icons/EFFECTUNIT_ENLIST_ICON":
-		"/sprites/icons/EFFECTUNIT_ENLIST_ICON.be3a8836.png",
+		"/sprites/icons/EFFECTUNIT_ENLIST_ICON.4f62ad02.png",
 	"icons/GAME_HELP": "/sprites/icons/GAME_HELP.113586dd.png",
-	"icons/GOAL_FAILED": "/sprites/icons/GOAL_FAILED.8b6e87c6.png",
+	"icons/GOAL_FAILED": "/sprites/icons/GOAL_FAILED.8fb29156.png",
 	"icons/GOAL_STARTED": "/sprites/icons/GOAL_STARTED.202fc07c.png",
 	"icons/IMPROVEMENT_FINISHED":
-		"/sprites/icons/IMPROVEMENT_FINISHED.f131e64d.png",
+		"/sprites/icons/IMPROVEMENT_FINISHED.302b621c.png",
+	"icons/LAWS": "/sprites/icons/LAWS.442998b8.png",
 	"icons/LAWS_Normal": "/sprites/icons/LAWS_Normal.bcd65937.png",
 	"icons/MAP_OVERVIEW": "/sprites/icons/MAP_OVERVIEW.5c63299a.png",
 	"icons/MILITARY": "/sprites/icons/MILITARY.cad1b950.png",
@@ -131,8 +132,272 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"icons/TOOL_SETTINGS": "/sprites/icons/TOOL_SETTINGS.cb187c2e.png",
 	"icons/TURN": "/sprites/icons/TURN.7b8cdd83.png",
 	"icons/TURN_SUMMARY_AMBITION":
-		"/sprites/icons/TURN_SUMMARY_AMBITION.552bc697.png",
+		"/sprites/icons/TURN_SUMMARY_AMBITION.b41227be.png",
 	"icons/VICTORY_NORMAL": "/sprites/icons/VICTORY_NORMAL.5f8bfc26.png",
+	"improvements/IMPROVEMENT_ACADEMY":
+		"/sprites/improvements/IMPROVEMENT_ACADEMY.2eae6650.png",
+	"improvements/IMPROVEMENT_AL_KHAZNEH":
+		"/sprites/improvements/IMPROVEMENT_AL_KHAZNEH.1720e579.png",
+	"improvements/IMPROVEMENT_AMPHITHEATER":
+		"/sprites/improvements/IMPROVEMENT_AMPHITHEATER.3995ddec.png",
+	"improvements/IMPROVEMENT_ANCIENT_RUINS":
+		"/sprites/improvements/IMPROVEMENT_ANCIENT_RUINS.a9d7c3a8.png",
+	"improvements/IMPROVEMENT_APADANA":
+		"/sprites/improvements/IMPROVEMENT_APADANA.8cc52e96.png",
+	"improvements/IMPROVEMENT_AQUEDUCT":
+		"/sprites/improvements/IMPROVEMENT_AQUEDUCT.9e380a63.png",
+	"improvements/IMPROVEMENT_BARRACKS":
+		"/sprites/improvements/IMPROVEMENT_BARRACKS.554df346.png",
+	"improvements/IMPROVEMENT_BASTION_RUINS":
+		"/sprites/improvements/IMPROVEMENT_BASTION_RUINS.86579bb1.png",
+	"improvements/IMPROVEMENT_BUDDHIST_CATHEDRAL":
+		"/sprites/improvements/IMPROVEMENT_BUDDHIST_CATHEDRAL.d9c22eab.png",
+	"improvements/IMPROVEMENT_BUDDHIST_HOLY_SITE":
+		"/sprites/improvements/IMPROVEMENT_BUDDHIST_HOLY_SITE.4c27f07f.png",
+	"improvements/IMPROVEMENT_BUDDHIST_MONASTERY":
+		"/sprites/improvements/IMPROVEMENT_BUDDHIST_MONASTERY.8fc2311d.png",
+	"improvements/IMPROVEMENT_BUDDHIST_TEMPLE":
+		"/sprites/improvements/IMPROVEMENT_BUDDHIST_TEMPLE.f71d66eb.png",
+	"improvements/IMPROVEMENT_CAMP":
+		"/sprites/improvements/IMPROVEMENT_CAMP.59384e1b.png",
+	"improvements/IMPROVEMENT_CATHEDRAL":
+		"/sprites/improvements/IMPROVEMENT_CATHEDRAL.b4f1d6ae.png",
+	"improvements/IMPROVEMENT_CHITTOR_FORT":
+		"/sprites/improvements/IMPROVEMENT_CHITTOR_FORT.bca8b3e1.png",
+	"improvements/IMPROVEMENT_CHRISTIANITY_CATHEDRAL":
+		"/sprites/improvements/IMPROVEMENT_CHRISTIANITY_CATHEDRAL.a521858d.png",
+	"improvements/IMPROVEMENT_CHRISTIANITY_MONASTERY":
+		"/sprites/improvements/IMPROVEMENT_CHRISTIANITY_MONASTERY.a13eb2a0.png",
+	"improvements/IMPROVEMENT_CHRISTIANITY_TEMPLE":
+		"/sprites/improvements/IMPROVEMENT_CHRISTIANITY_TEMPLE.c564893c.png",
+	"improvements/IMPROVEMENT_CIRCUS_MAXIMUS":
+		"/sprites/improvements/IMPROVEMENT_CIRCUS_MAXIMUS.9d8ab275.png",
+	"improvements/IMPROVEMENT_CITY":
+		"/sprites/improvements/IMPROVEMENT_CITY.1c97892d.png",
+	"improvements/IMPROVEMENT_CITY_SITE":
+		"/sprites/improvements/IMPROVEMENT_CITY_SITE.a9d7c3a8.png",
+	"improvements/IMPROVEMENT_COLD_BATHS":
+		"/sprites/improvements/IMPROVEMENT_COLD_BATHS.9a6e8cb2.png",
+	"improvements/IMPROVEMENT_COLOSSEUM":
+		"/sprites/improvements/IMPROVEMENT_COLOSSEUM.a910c5d1.png",
+	"improvements/IMPROVEMENT_COLOSSUS":
+		"/sprites/improvements/IMPROVEMENT_COLOSSUS.ebb81663.png",
+	"improvements/IMPROVEMENT_COTHON":
+		"/sprites/improvements/IMPROVEMENT_COTHON.b09d4920.png",
+	"improvements/IMPROVEMENT_COTTAGE":
+		"/sprites/improvements/IMPROVEMENT_COTTAGE.835d221a.png",
+	"improvements/IMPROVEMENT_COURTHOUSE":
+		"/sprites/improvements/IMPROVEMENT_COURTHOUSE.baa83fde.png",
+	"improvements/IMPROVEMENT_DEAD_SETTLEMENT":
+		"/sprites/improvements/IMPROVEMENT_DEAD_SETTLEMENT.a9d7c3a8.png",
+	"improvements/IMPROVEMENT_ENCAMPMENT_RUINS":
+		"/sprites/improvements/IMPROVEMENT_ENCAMPMENT_RUINS.ec3822f3.png",
+	"improvements/IMPROVEMENT_ESTATES":
+		"/sprites/improvements/IMPROVEMENT_ESTATES.b8f16466.png",
+	"improvements/IMPROVEMENT_FAIR":
+		"/sprites/improvements/IMPROVEMENT_FAIR.99d9828a.png",
+	"improvements/IMPROVEMENT_FARM":
+		"/sprites/improvements/IMPROVEMENT_FARM.58ac4261.png",
+	"improvements/IMPROVEMENT_FINISHED":
+		"/sprites/improvements/IMPROVEMENT_FINISHED.302b621c.png",
+	"improvements/IMPROVEMENT_FORT":
+		"/sprites/improvements/IMPROVEMENT_FORT.01154774.png",
+	"improvements/IMPROVEMENT_GARRISON_1":
+		"/sprites/improvements/IMPROVEMENT_GARRISON_1.44293093.png",
+	"improvements/IMPROVEMENT_GARRISON_2":
+		"/sprites/improvements/IMPROVEMENT_GARRISON_2.d87df516.png",
+	"improvements/IMPROVEMENT_GARRISON_3":
+		"/sprites/improvements/IMPROVEMENT_GARRISON_3.8a8cf1d4.png",
+	"improvements/IMPROVEMENT_GRANARY":
+		"/sprites/improvements/IMPROVEMENT_GRANARY.c1961670.png",
+	"improvements/IMPROVEMENT_GRAND_BAZAAR":
+		"/sprites/improvements/IMPROVEMENT_GRAND_BAZAAR.a459535a.png",
+	"improvements/IMPROVEMENT_GREATER_STELE":
+		"/sprites/improvements/IMPROVEMENT_GREATER_STELE.77822772.png",
+	"improvements/IMPROVEMENT_GREAT_ZIGGURAT":
+		"/sprites/improvements/IMPROVEMENT_GREAT_ZIGGURAT.46170a62.png",
+	"improvements/IMPROVEMENT_GROCER":
+		"/sprites/improvements/IMPROVEMENT_GROCER.c441a5a5.png",
+	"improvements/IMPROVEMENT_GROVE":
+		"/sprites/improvements/IMPROVEMENT_GROVE.874c8967.png",
+	"improvements/IMPROVEMENT_HAGIA_SOPHIA":
+		"/sprites/improvements/IMPROVEMENT_HAGIA_SOPHIA.c8fd6824.png",
+	"improvements/IMPROVEMENT_HAMLET":
+		"/sprites/improvements/IMPROVEMENT_HAMLET.aa29380e.png",
+	"improvements/IMPROVEMENT_HANGING_GARDENS":
+		"/sprites/improvements/IMPROVEMENT_HANGING_GARDENS.30b80708.png",
+	"improvements/IMPROVEMENT_HARBOR":
+		"/sprites/improvements/IMPROVEMENT_HARBOR.78926046.png",
+	"improvements/IMPROVEMENT_HEATED_BATHS":
+		"/sprites/improvements/IMPROVEMENT_HEATED_BATHS.ab565dae.png",
+	"improvements/IMPROVEMENT_HELIOPOLIS":
+		"/sprites/improvements/IMPROVEMENT_HELIOPOLIS.5a05ed5f.png",
+	"improvements/IMPROVEMENT_HINDU_CATHEDRAL":
+		"/sprites/improvements/IMPROVEMENT_HINDU_CATHEDRAL.03d38f28.png",
+	"improvements/IMPROVEMENT_HINDU_MONASTERY":
+		"/sprites/improvements/IMPROVEMENT_HINDU_MONASTERY.c663758f.png",
+	"improvements/IMPROVEMENT_HINDU_TEMPLE":
+		"/sprites/improvements/IMPROVEMENT_HINDU_TEMPLE.901fefdc.png",
+	"improvements/IMPROVEMENT_HOLY_SITE_CHRISTIANITY":
+		"/sprites/improvements/IMPROVEMENT_HOLY_SITE_CHRISTIANITY.a8b933b6.png",
+	"improvements/IMPROVEMENT_HOLY_SITE_JUDAISM":
+		"/sprites/improvements/IMPROVEMENT_HOLY_SITE_JUDAISM.966458f0.png",
+	"improvements/IMPROVEMENT_HOLY_SITE_MANICHAEISM":
+		"/sprites/improvements/IMPROVEMENT_HOLY_SITE_MANICHAEISM.e35d4a90.png",
+	"improvements/IMPROVEMENT_HOLY_SITE_ZOROASTRIANISM":
+		"/sprites/improvements/IMPROVEMENT_HOLY_SITE_ZOROASTRIANISM.39e2033d.png",
+	"improvements/IMPROVEMENT_HOVEL_RUINS":
+		"/sprites/improvements/IMPROVEMENT_HOVEL_RUINS.ec3822f3.png",
+	"improvements/IMPROVEMENT_ISHTAR_GATE":
+		"/sprites/improvements/IMPROVEMENT_ISHTAR_GATE.bcb10778.png",
+	"improvements/IMPROVEMENT_JEBEL_BARKAL":
+		"/sprites/improvements/IMPROVEMENT_JEBEL_BARKAL.f3daf8ac.png",
+	"improvements/IMPROVEMENT_JERWAN_AQUEDUCT":
+		"/sprites/improvements/IMPROVEMENT_JERWAN_AQUEDUCT.9e4b98b1.png",
+	"improvements/IMPROVEMENT_JUDAISM_CATHEDRAL":
+		"/sprites/improvements/IMPROVEMENT_JUDAISM_CATHEDRAL.83d88396.png",
+	"improvements/IMPROVEMENT_JUDAISM_MONASTERY":
+		"/sprites/improvements/IMPROVEMENT_JUDAISM_MONASTERY.5bdbcf1b.png",
+	"improvements/IMPROVEMENT_JUDAISM_TEMPLE":
+		"/sprites/improvements/IMPROVEMENT_JUDAISM_TEMPLE.0108d6ab.png",
+	"improvements/IMPROVEMENT_KUSH_PYRAMID":
+		"/sprites/improvements/IMPROVEMENT_KUSH_PYRAMID.5c43e07b.png",
+	"improvements/IMPROVEMENT_LIBRARY":
+		"/sprites/improvements/IMPROVEMENT_LIBRARY.d566e913.png",
+	"improvements/IMPROVEMENT_LIBRARY_TEMP":
+		"/sprites/improvements/IMPROVEMENT_LIBRARY_TEMP.57939860.png",
+	"improvements/IMPROVEMENT_LIGHTHOUSE":
+		"/sprites/improvements/IMPROVEMENT_LIGHTHOUSE.2f827c69.png",
+	"improvements/IMPROVEMENT_LUMBERMILL":
+		"/sprites/improvements/IMPROVEMENT_LUMBERMILL.7ab2c435.png",
+	"improvements/IMPROVEMENT_MANICHAEISM_CATHEDRAL":
+		"/sprites/improvements/IMPROVEMENT_MANICHAEISM_CATHEDRAL.86b1904a.png",
+	"improvements/IMPROVEMENT_MANICHAEISM_MONASTERY":
+		"/sprites/improvements/IMPROVEMENT_MANICHAEISM_MONASTERY.66ddacec.png",
+	"improvements/IMPROVEMENT_MANICHAEISM_TEMPLE":
+		"/sprites/improvements/IMPROVEMENT_MANICHAEISM_TEMPLE.8daed4c7.png",
+	"improvements/IMPROVEMENT_MARKET":
+		"/sprites/improvements/IMPROVEMENT_MARKET.21a6c896.png",
+	"improvements/IMPROVEMENT_MAUSOLEUM":
+		"/sprites/improvements/IMPROVEMENT_MAUSOLEUM.8108d1d3.png",
+	"improvements/IMPROVEMENT_MINE":
+		"/sprites/improvements/IMPROVEMENT_MINE.1b8c8d50.png",
+	"improvements/IMPROVEMENT_MINISTRIES":
+		"/sprites/improvements/IMPROVEMENT_MINISTRIES.98f5fb4e.png",
+	"improvements/IMPROVEMENT_MINOR_STELE":
+		"/sprites/improvements/IMPROVEMENT_MINOR_STELE.7994ff10.png",
+	"improvements/IMPROVEMENT_MONUMENTAL_BUDDHAS":
+		"/sprites/improvements/IMPROVEMENT_MONUMENTAL_BUDDHAS.86d90c4f.png",
+	"improvements/IMPROVEMENT_MUSAEUM":
+		"/sprites/improvements/IMPROVEMENT_MUSAEUM.3dc48fa8.png",
+	"improvements/IMPROVEMENT_NALANDA_MAHAVIHRA":
+		"/sprites/improvements/IMPROVEMENT_NALANDA_MAHAVIHRA.7c376cb0.png",
+	"improvements/IMPROVEMENT_NECROPOLIS":
+		"/sprites/improvements/IMPROVEMENT_NECROPOLIS.b1d689d4.png",
+	"improvements/IMPROVEMENT_NETS":
+		"/sprites/improvements/IMPROVEMENT_NETS.e8ea522d.png",
+	"improvements/IMPROVEMENT_OBELISK":
+		"/sprites/improvements/IMPROVEMENT_OBELISK.04cb173b.png",
+	"improvements/IMPROVEMENT_ODEON":
+		"/sprites/improvements/IMPROVEMENT_ODEON.4256978c.png",
+	"improvements/IMPROVEMENT_ORACLE":
+		"/sprites/improvements/IMPROVEMENT_ORACLE.fb931c70.png",
+	"improvements/IMPROVEMENT_OUTPOST_RUINS":
+		"/sprites/improvements/IMPROVEMENT_OUTPOST_RUINS.ec3822f3.png",
+	"improvements/IMPROVEMENT_PALACE":
+		"/sprites/improvements/IMPROVEMENT_PALACE.6c9f7033.png",
+	"improvements/IMPROVEMENT_PANTHEON":
+		"/sprites/improvements/IMPROVEMENT_PANTHEON.962e758d.png",
+	"improvements/IMPROVEMENT_PARTHENON":
+		"/sprites/improvements/IMPROVEMENT_PARTHENON.61951caa.png",
+	"improvements/IMPROVEMENT_PASTURE":
+		"/sprites/improvements/IMPROVEMENT_PASTURE.c098e604.png",
+	"improvements/IMPROVEMENT_PILLAGED":
+		"/sprites/improvements/IMPROVEMENT_PILLAGED.99967cdf.png",
+	"improvements/IMPROVEMENT_PILLAR_EDICT":
+		"/sprites/improvements/IMPROVEMENT_PILLAR_EDICT.6907e508.png",
+	"improvements/IMPROVEMENT_PYRAMIDS":
+		"/sprites/improvements/IMPROVEMENT_PYRAMIDS.0891dfd1.png",
+	"improvements/IMPROVEMENT_QUARRY":
+		"/sprites/improvements/IMPROVEMENT_QUARRY.e9514417.png",
+	"improvements/IMPROVEMENT_RANGE":
+		"/sprites/improvements/IMPROVEMENT_RANGE.dd14a602.png",
+	"improvements/IMPROVEMENT_ROYAL_LIBRARY":
+		"/sprites/improvements/IMPROVEMENT_ROYAL_LIBRARY.25c4222f.png",
+	"improvements/IMPROVEMENT_RUINS":
+		"/sprites/improvements/IMPROVEMENT_RUINS.95af1e19.png",
+	"improvements/IMPROVEMENT_RUINS_0":
+		"/sprites/improvements/IMPROVEMENT_RUINS_0.a9d7c3a8.png",
+	"improvements/IMPROVEMENT_RUINS_1":
+		"/sprites/improvements/IMPROVEMENT_RUINS_1.a9d7c3a8.png",
+	"improvements/IMPROVEMENT_RUINS_2":
+		"/sprites/improvements/IMPROVEMENT_RUINS_2.a9d7c3a8.png",
+	"improvements/IMPROVEMENT_RUINS_3":
+		"/sprites/improvements/IMPROVEMENT_RUINS_3.a9d7c3a8.png",
+	"improvements/IMPROVEMENT_RUINS_4":
+		"/sprites/improvements/IMPROVEMENT_RUINS_4.95af1e19.png",
+	"improvements/IMPROVEMENT_SANCHI'S_STUPPA":
+		"/sprites/improvements/IMPROVEMENT_SANCHI'S_STUPPA.af6b78fb.png",
+	"improvements/IMPROVEMENT_SETTLEMENT_1":
+		"/sprites/improvements/IMPROVEMENT_SETTLEMENT_1.6e881e81.png",
+	"improvements/IMPROVEMENT_SETTLEMENT_2":
+		"/sprites/improvements/IMPROVEMENT_SETTLEMENT_2.297664e2.png",
+	"improvements/IMPROVEMENT_SETTLEMENT_3":
+		"/sprites/improvements/IMPROVEMENT_SETTLEMENT_3.4071403a.png",
+	"improvements/IMPROVEMENT_SETTLEMENT_4":
+		"/sprites/improvements/IMPROVEMENT_SETTLEMENT_4.860cca7c.png",
+	"improvements/IMPROVEMENT_SHRINE_FIRE":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_FIRE.d05f30ee.png",
+	"improvements/IMPROVEMENT_SHRINE_HEALING":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_HEALING.9e347fc8.png",
+	"improvements/IMPROVEMENT_SHRINE_HEARTH":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_HEARTH.2c326506.png",
+	"improvements/IMPROVEMENT_SHRINE_HUNTING":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_HUNTING.636fcb4e.png",
+	"improvements/IMPROVEMENT_SHRINE_KINGSHIP":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_KINGSHIP.449c4677.png",
+	"improvements/IMPROVEMENT_SHRINE_LOVE":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_LOVE.8cf1bf79.png",
+	"improvements/IMPROVEMENT_SHRINE_SUN":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_SUN.7c5109f4.png",
+	"improvements/IMPROVEMENT_SHRINE_UNDERWORLD":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_UNDERWORLD.a1cdcf18.png",
+	"improvements/IMPROVEMENT_SHRINE_WAR":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_WAR.5db9c498.png",
+	"improvements/IMPROVEMENT_SHRINE_WATER":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_WATER.7d5e693a.png",
+	"improvements/IMPROVEMENT_SHRINE_WISDOM":
+		"/sprites/improvements/IMPROVEMENT_SHRINE_WISDOM.f294c31f.png",
+	"improvements/IMPROVEMENT_STELE":
+		"/sprites/improvements/IMPROVEMENT_STELE.de41fabb.png",
+	"improvements/IMPROVEMENT_TEMPLE":
+		"/sprites/improvements/IMPROVEMENT_TEMPLE.fe853eec.png",
+	"improvements/IMPROVEMENT_TEMPLE_OF_KARNAK":
+		"/sprites/improvements/IMPROVEMENT_TEMPLE_OF_KARNAK.8d10ee85.png",
+	"improvements/IMPROVEMENT_THEATER":
+		"/sprites/improvements/IMPROVEMENT_THEATER.e4e0522f.png",
+	"improvements/IMPROVEMENT_TOWN":
+		"/sprites/improvements/IMPROVEMENT_TOWN.f96e1bb4.png",
+	"improvements/IMPROVEMENT_UNIVERSITY":
+		"/sprites/improvements/IMPROVEMENT_UNIVERSITY.374bc5db.png",
+	"improvements/IMPROVEMENT_VILLA":
+		"/sprites/improvements/IMPROVEMENT_VILLA.d61cb144.png",
+	"improvements/IMPROVEMENT_VILLAGE":
+		"/sprites/improvements/IMPROVEMENT_VILLAGE.f5a98119.png",
+	"improvements/IMPROVEMENT_WARM_BATHS":
+		"/sprites/improvements/IMPROVEMENT_WARM_BATHS.dc107258.png",
+	"improvements/IMPROVEMENT_WATERMILL":
+		"/sprites/improvements/IMPROVEMENT_WATERMILL.b4632e1a.png",
+	"improvements/IMPROVEMENT_WINDMILL":
+		"/sprites/improvements/IMPROVEMENT_WINDMILL.bb09c552.png",
+	"improvements/IMPROVEMENT_YAZILIKAYA":
+		"/sprites/improvements/IMPROVEMENT_YAZILIKAYA.4e005e01.png",
+	"improvements/IMPROVEMENT_ZOROASTRIANISM_CATHEDRAL":
+		"/sprites/improvements/IMPROVEMENT_ZOROASTRIANISM_CATHEDRAL.0c9879f8.png",
+	"improvements/IMPROVEMENT_ZOROASTRIANISM_MONASTERY":
+		"/sprites/improvements/IMPROVEMENT_ZOROASTRIANISM_MONASTERY.cefc2cc0.png",
+	"improvements/IMPROVEMENT_ZOROASTRIANISM_TEMPLE":
+		"/sprites/improvements/IMPROVEMENT_ZOROASTRIANISM_TEMPLE.37ee7153.png",
 	"laws/LAW_ACADEMIA": "/sprites/laws/LAW_ACADEMIA.bf84bcfb.png",
 	"laws/LAW_ADOPTED": "/sprites/laws/LAW_ADOPTED.891b5020.png",
 	"laws/LAW_ASCETICISM": "/sprites/laws/LAW_ASCETICISM.51eca2de.png",
@@ -1178,11 +1443,11 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"religions/RELIGION_CHRISTIANITY_HOLY":
 		"/sprites/religions/RELIGION_CHRISTIANITY_HOLY.71151624.png",
 	"religions/RELIGION_FAMILY":
-		"/sprites/religions/RELIGION_FAMILY.a7ab5ad9.png",
+		"/sprites/religions/RELIGION_FAMILY.60bac39c.png",
 	"religions/RELIGION_FANATIC_PRIESTHOOD":
 		"/sprites/religions/RELIGION_FANATIC_PRIESTHOOD.81b85c66.png",
 	"religions/RELIGION_FOUNDED":
-		"/sprites/religions/RELIGION_FOUNDED.d7425065.png",
+		"/sprites/religions/RELIGION_FOUNDED.76c65344.png",
 	"religions/RELIGION_HINDUISM":
 		"/sprites/religions/RELIGION_HINDUISM.9faf68f8.png",
 	"religions/RELIGION_HINDUISM_HERESY":
@@ -1218,7 +1483,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"religions/RELIGION_PAGAN_CARTHAGE_HOLY":
 		"/sprites/religions/RELIGION_PAGAN_CARTHAGE_HOLY.728cefde.png",
 	"religions/RELIGION_PAGAN_EGYPT":
-		"/sprites/religions/RELIGION_PAGAN_EGYPT.50713b39.png",
+		"/sprites/religions/RELIGION_PAGAN_EGYPT.729907c5.png",
 	"religions/RELIGION_PAGAN_EGYPT_HOLY":
 		"/sprites/religions/RELIGION_PAGAN_EGYPT_HOLY.3c8a0488.png",
 	"religions/RELIGION_PAGAN_FANATIC_PRIESTHOOD":
@@ -1230,7 +1495,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"religions/RELIGION_PAGAN_FIRE_HOLY":
 		"/sprites/religions/RELIGION_PAGAN_FIRE_HOLY.8c6726a7.png",
 	"religions/RELIGION_PAGAN_GREECE":
-		"/sprites/religions/RELIGION_PAGAN_GREECE.7d42eed2.png",
+		"/sprites/religions/RELIGION_PAGAN_GREECE.97d13de9.png",
 	"religions/RELIGION_PAGAN_GREECE_HOLY":
 		"/sprites/religions/RELIGION_PAGAN_GREECE_HOLY.0346be24.png",
 	"religions/RELIGION_PAGAN_HEALING":
@@ -1246,7 +1511,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"religions/RELIGION_PAGAN_HITTITE_HOLY":
 		"/sprites/religions/RELIGION_PAGAN_HITTITE_HOLY.5ffb249f.png",
 	"religions/RELIGION_PAGAN_HUNTING":
-		"/sprites/religions/RELIGION_PAGAN_HUNTING.873ef676.png",
+		"/sprites/religions/RELIGION_PAGAN_HUNTING.f4915077.png",
 	"religions/RELIGION_PAGAN_HUNTING_HOLY":
 		"/sprites/religions/RELIGION_PAGAN_HUNTING_HOLY.63eeca3a.png",
 	"religions/RELIGION_PAGAN_HYKSOS":
@@ -1311,15 +1576,65 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 		"/sprites/religions/RELIGION_ZOROASTRIANISM_HERESY.84cf9fac.png",
 	"religions/RELIGION_ZOROASTRIANISM_HOLY":
 		"/sprites/religions/RELIGION_ZOROASTRIANISM_HOLY.a7cf0b1d.png",
-	"religions/Religion_Frame": "/sprites/religions/Religion_Frame.3357e066.png",
+	"religions/Religion_Frame": "/sprites/religions/Religion_Frame.5b1b488a.png",
+	"specialists/SPECIALIST_ACOLYTE":
+		"/sprites/specialists/SPECIALIST_ACOLYTE.3e9e8de8.png",
+	"specialists/SPECIALIST_ARTIST":
+		"/sprites/specialists/SPECIALIST_ARTIST.5c4c2647.png",
+	"specialists/SPECIALIST_BISHOP":
+		"/sprites/specialists/SPECIALIST_BISHOP.73714909.png",
+	"specialists/SPECIALIST_DOCTOR":
+		"/sprites/specialists/SPECIALIST_DOCTOR.47374997.png",
+	"specialists/SPECIALIST_FARMER":
+		"/sprites/specialists/SPECIALIST_FARMER.021c8e30.png",
+	"specialists/SPECIALIST_FISHER":
+		"/sprites/specialists/SPECIALIST_FISHER.2f839b9b.png",
+	"specialists/SPECIALIST_GARDENER":
+		"/sprites/specialists/SPECIALIST_GARDENER.a65ad92c.png",
+	"specialists/SPECIALIST_GOVERNOR":
+		"/sprites/specialists/SPECIALIST_GOVERNOR.6d1be0a7.png",
+	"specialists/SPECIALIST_LABORER":
+		"/sprites/specialists/SPECIALIST_LABORER.7089c9c2.png",
+	"specialists/SPECIALIST_MAGISTRATE":
+		"/sprites/specialists/SPECIALIST_MAGISTRATE.d0b54159.png",
+	"specialists/SPECIALIST_MINER":
+		"/sprites/specialists/SPECIALIST_MINER.d5cef7ee.png",
+	"specialists/SPECIALIST_MONARCH":
+		"/sprites/specialists/SPECIALIST_MONARCH.a67111a5.png",
+	"specialists/SPECIALIST_MONK":
+		"/sprites/specialists/SPECIALIST_MONK.9ff5a4ef.png",
+	"specialists/SPECIALIST_OFFICER":
+		"/sprites/specialists/SPECIALIST_OFFICER.c967d33c.png",
+	"specialists/SPECIALIST_OVERSEER":
+		"/sprites/specialists/SPECIALIST_OVERSEER.e5b3908a.png",
+	"specialists/SPECIALIST_PHILOSOPHER":
+		"/sprites/specialists/SPECIALIST_PHILOSOPHER.9e2442fc.png",
+	"specialists/SPECIALIST_POET":
+		"/sprites/specialists/SPECIALIST_POET.2b8fff36.png",
+	"specialists/SPECIALIST_PRIEST":
+		"/sprites/specialists/SPECIALIST_PRIEST.ee4ddccd.png",
+	"specialists/SPECIALIST_RANCHER":
+		"/sprites/specialists/SPECIALIST_RANCHER.53c2a970.png",
+	"specialists/SPECIALIST_SCRIBE":
+		"/sprites/specialists/SPECIALIST_SCRIBE.1f733675.png",
+	"specialists/SPECIALIST_SHOPKEEPER":
+		"/sprites/specialists/SPECIALIST_SHOPKEEPER.6103d3ff.png",
+	"specialists/SPECIALIST_STONECUTTER":
+		"/sprites/specialists/SPECIALIST_STONECUTTER.7f0b5f8b.png",
+	"specialists/SPECIALIST_TAXMAN":
+		"/sprites/specialists/SPECIALIST_TAXMAN.1ba8bc18.png",
+	"specialists/SPECIALIST_TRAPPER":
+		"/sprites/specialists/SPECIALIST_TRAPPER.ca22f203.png",
+	"specialists/SPECIALIST_WOODCUTTER":
+		"/sprites/specialists/SPECIALIST_WOODCUTTER.45d3cd8b.png",
 	"techs/TECH_ADMINISTRATION":
 		"/sprites/techs/TECH_ADMINISTRATION.9f7017ec.png",
 	"techs/TECH_ARCHITECTURE": "/sprites/techs/TECH_ARCHITECTURE.866d0ada.png",
-	"techs/TECH_ARISTOCRACY": "/sprites/techs/TECH_ARISTOCRACY.cd21c53d.png",
+	"techs/TECH_ARISTOCRACY": "/sprites/techs/TECH_ARISTOCRACY.c9ad8e24.png",
 	"techs/TECH_BALLISTICS": "/sprites/techs/TECH_BALLISTICS.1a9a8543.png",
 	"techs/TECH_BARDING": "/sprites/techs/TECH_BARDING.2d6936f9.png",
 	"techs/TECH_BATTLELINE": "/sprites/techs/TECH_BATTLELINE.681180cd.png",
-	"techs/TECH_BODKIN_ARROW": "/sprites/techs/TECH_BODKIN_ARROW.7ba0b4f4.png",
+	"techs/TECH_BODKIN_ARROW": "/sprites/techs/TECH_BODKIN_ARROW.19707c40.png",
 	"techs/TECH_CAMEL_LANCER": "/sprites/techs/TECH_CAMEL_LANCER.a9475b02.png",
 	"techs/TECH_CAMEL_RIDER": "/sprites/techs/TECH_CAMEL_RIDER.a9108304.png",
 	"techs/TECH_CARTOGRAPHY": "/sprites/techs/TECH_CARTOGRAPHY.d40cb017.png",
@@ -1330,8 +1645,8 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"techs/TECH_COMPOSITE_BOW": "/sprites/techs/TECH_COMPOSITE_BOW.2f3d51a6.png",
 	"techs/TECH_DISCOVERED": "/sprites/techs/TECH_DISCOVERED.d1e27276.png",
 	"techs/TECH_DIVINATION": "/sprites/techs/TECH_DIVINATION.5c776cd6.png",
-	"techs/TECH_DOCTRINE": "/sprites/techs/TECH_DOCTRINE.77f70064.png",
-	"techs/TECH_DRAMA": "/sprites/techs/TECH_DRAMA.a815f19a.png",
+	"techs/TECH_DOCTRINE": "/sprites/techs/TECH_DOCTRINE.d107a66e.png",
+	"techs/TECH_DRAMA": "/sprites/techs/TECH_DRAMA.c916489c.png",
 	"techs/TECH_EBONY": "/sprites/techs/TECH_EBONY.9cf5e1d6.png",
 	"techs/TECH_ECONOMIC_REFORM":
 		"/sprites/techs/TECH_ECONOMIC_REFORM.f9483200.png",
@@ -1350,17 +1665,17 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"techs/TECH_LAND_CONSOLIDATION":
 		"/sprites/techs/TECH_LAND_CONSOLIDATION.a4480a7f.png",
 	"techs/TECH_LATEEN_SAIL": "/sprites/techs/TECH_LATEEN_SAIL.e006a6e4.png",
-	"techs/TECH_MACHINERY": "/sprites/techs/TECH_MACHINERY.a1fcc839.png",
+	"techs/TECH_MACHINERY": "/sprites/techs/TECH_MACHINERY.d3bc9d2f.png",
 	"techs/TECH_MANOR": "/sprites/techs/TECH_MANOR.458ff990.png",
 	"techs/TECH_MARTIAL_CODE": "/sprites/techs/TECH_MARTIAL_CODE.e7599a90.png",
 	"techs/TECH_METAPHYSICS": "/sprites/techs/TECH_METAPHYSICS.b1fa7dff.png",
 	"techs/TECH_MILITARY_DRILL":
 		"/sprites/techs/TECH_MILITARY_DRILL.c3428c76.png",
 	"techs/TECH_MILITARY_PRESTIGE":
-		"/sprites/techs/TECH_MILITARY_PRESTIGE.5e91c4a4.png",
-	"techs/TECH_MONASTICISM": "/sprites/techs/TECH_MONASTICISM.30a2fc22.png",
+		"/sprites/techs/TECH_MILITARY_PRESTIGE.cdc77115.png",
+	"techs/TECH_MONASTICISM": "/sprites/techs/TECH_MONASTICISM.0135375a.png",
 	"techs/TECH_MOUNTED_ARCHERY":
-		"/sprites/techs/TECH_MOUNTED_ARCHERY.8535af3c.png",
+		"/sprites/techs/TECH_MOUNTED_ARCHERY.e38f1fa9.png",
 	"techs/TECH_NAVIGATION": "/sprites/techs/TECH_NAVIGATION.9c012ac0.png",
 	"techs/TECH_PERFUME": "/sprites/techs/TECH_PERFUME.00115084.png",
 	"techs/TECH_PHALANX": "/sprites/techs/TECH_PHALANX.89e9c225.png",
@@ -1377,13 +1692,13 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"techs/TECH_SOVEREIGNTY": "/sprites/techs/TECH_SOVEREIGNTY.517b21b3.png",
 	"techs/TECH_SPOKED_WHEEL": "/sprites/techs/TECH_SPOKED_WHEEL.20f13bd5.png",
 	"techs/TECH_STEEL": "/sprites/techs/TECH_STEEL.c1802d49.png",
-	"techs/TECH_STIRRUPS": "/sprites/techs/TECH_STIRRUPS.c5811d6e.png",
+	"techs/TECH_STIRRUPS": "/sprites/techs/TECH_STIRRUPS.4d7a43f0.png",
 	"techs/TECH_STONECUTTING": "/sprites/techs/TECH_STONECUTTING.eb19e002.png",
 	"techs/TECH_STRATEGY": "/sprites/techs/TECH_STRATEGY.be55ddda.png",
 	"techs/TECH_TORSION": "/sprites/techs/TECH_TORSION.259451da.png",
 	"techs/TECH_TRAPPING": "/sprites/techs/TECH_TRAPPING.106aed9b.png",
 	"techs/TECH_VAULTING": "/sprites/techs/TECH_VAULTING.9e5a6927.png",
-	"techs/TECH_WINDLASS": "/sprites/techs/TECH_WINDLASS.35dd4fd5.png",
+	"techs/TECH_WINDLASS": "/sprites/techs/TECH_WINDLASS.e97cc75d.png",
 	"traits-trimmed/TRAIT_BUILDER":
 		"/sprites/traits-trimmed/TRAIT_BUILDER.2c768072.png",
 	"traits-trimmed/TRAIT_BUILDER_SILVER":
@@ -1449,13 +1764,13 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"traits/TRAIT_ORATOR": "/sprites/traits/TRAIT_ORATOR.e386c09a.png",
 	"traits/TRAIT_ORATOR_SILVER":
 		"/sprites/traits/TRAIT_ORATOR_SILVER.151a12d9.png",
-	"traits/TRAIT_SCHEMER": "/sprites/traits/TRAIT_SCHEMER.7b421085.png",
+	"traits/TRAIT_SCHEMER": "/sprites/traits/TRAIT_SCHEMER.0e3c2cba.png",
 	"traits/TRAIT_SCHEMER_SILVER":
 		"/sprites/traits/TRAIT_SCHEMER_SILVER.cf08c07c.png",
 	"traits/TRAIT_SCHOLAR": "/sprites/traits/TRAIT_SCHOLAR.ba773cd6.png",
 	"traits/TRAIT_SCHOLAR_SILVER":
 		"/sprites/traits/TRAIT_SCHOLAR_SILVER.f28c8231.png",
-	"traits/TRAIT_STRENGTH": "/sprites/traits/TRAIT_STRENGTH.27cbfe68.png",
+	"traits/TRAIT_STRENGTH": "/sprites/traits/TRAIT_STRENGTH.76e7424f.png",
 	"traits/TRAIT_TACTICIAN": "/sprites/traits/TRAIT_TACTICIAN.73114e7e.png",
 	"traits/TRAIT_TACTICIAN_SILVER":
 		"/sprites/traits/TRAIT_TACTICIAN_SILVER.29d14a76.png",
@@ -1466,7 +1781,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_AFRICAN_ELEPHANT":
 		"/sprites/units/UNIT_AFRICAN_ELEPHANT.bb8ba0fa.png",
 	"units/UNIT_AKKADIAN_ARCHER":
-		"/sprites/units/UNIT_AKKADIAN_ARCHER.7213e29c.png",
+		"/sprites/units/UNIT_AKKADIAN_ARCHER.ac2d19b0.png",
 	"units/UNIT_AMAZON_CAVALRY":
 		"/sprites/units/UNIT_AMAZON_CAVALRY.e1681257.png",
 	"units/UNIT_AMUN_PRIEST": "/sprites/units/UNIT_AMUN_PRIEST.2a0303b2.png",
@@ -1492,7 +1807,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_CAMEL_ARCHER": "/sprites/units/UNIT_CAMEL_ARCHER.7905e1eb.png",
 	"units/UNIT_CAMEL_LANCER": "/sprites/units/UNIT_CAMEL_LANCER.c3b90f99.png",
 	"units/UNIT_CAMEL_RIDER": "/sprites/units/UNIT_CAMEL_RIDER.cb4748fc.png",
-	"units/UNIT_CARAVAN": "/sprites/units/UNIT_CARAVAN.f677c623.png",
+	"units/UNIT_CARAVAN": "/sprites/units/UNIT_CARAVAN.b826abe1.png",
 	"units/UNIT_CATAPHRACT": "/sprites/units/UNIT_CATAPHRACT.3eb82ecc.png",
 	"units/UNIT_CATAPHRACT_ARCHER":
 		"/sprites/units/UNIT_CATAPHRACT_ARCHER.dc99b5ea.png",
@@ -1511,13 +1826,13 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_ELITE_CLUBTHROWER":
 		"/sprites/units/UNIT_ELITE_CLUBTHROWER.23e977ed.png",
 	"units/UNIT_ELITE_GAESATA": "/sprites/units/UNIT_ELITE_GAESATA.51d5b946.png",
-	"units/UNIT_ELITE_HUSCARL": "/sprites/units/UNIT_ELITE_HUSCARL.59b74fed.png",
+	"units/UNIT_ELITE_HUSCARL": "/sprites/units/UNIT_ELITE_HUSCARL.57010499.png",
 	"units/UNIT_ELITE_JAVELINEER":
 		"/sprites/units/UNIT_ELITE_JAVELINEER.5f6aaf20.png",
 	"units/UNIT_ELITE_LIBYAN_CAVALRY":
-		"/sprites/units/UNIT_ELITE_LIBYAN_CAVALRY.330013cf.png",
+		"/sprites/units/UNIT_ELITE_LIBYAN_CAVALRY.a9dbe609.png",
 	"units/UNIT_ELITE_MARAUDER":
-		"/sprites/units/UNIT_ELITE_MARAUDER.e2fff406.png",
+		"/sprites/units/UNIT_ELITE_MARAUDER.382b51b1.png",
 	"units/UNIT_ELITE_NOMAD_MARAUDER":
 		"/sprites/units/UNIT_ELITE_NOMAD_MARAUDER.26458047.png",
 	"units/UNIT_ELITE_NOMAD_SKIRMISHER":
@@ -1532,7 +1847,7 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_FEMALE_SCOUT": "/sprites/units/UNIT_FEMALE_SCOUT.22adb2dd.png",
 	"units/UNIT_FEMALE_WORKER": "/sprites/units/UNIT_FEMALE_WORKER.d3ac6c45.png",
 	"units/UNIT_GAESATA": "/sprites/units/UNIT_GAESATA.3fe6a9ef.png",
-	"units/UNIT_GALLEY": "/sprites/units/UNIT_GALLEY.d1985a50.png",
+	"units/UNIT_GALLEY": "/sprites/units/UNIT_GALLEY.c7d03478.png",
 	"units/UNIT_HASTATUS": "/sprites/units/UNIT_HASTATUS.33a81668.png",
 	"units/UNIT_HEAVY_CHARIOT": "/sprites/units/UNIT_HEAVY_CHARIOT.412780ae.png",
 	"units/UNIT_HINDUISM_DISCIPLE":
@@ -1542,15 +1857,15 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_HOPLITE": "/sprites/units/UNIT_HOPLITE.d491e92a.png",
 	"units/UNIT_HORSEMAN": "/sprites/units/UNIT_HORSEMAN.ee73c084.png",
 	"units/UNIT_HORSE_ARCHER": "/sprites/units/UNIT_HORSE_ARCHER.c3baca1f.png",
-	"units/UNIT_HOWDAH": "/sprites/units/UNIT_HOWDAH.6d1c789d.png",
+	"units/UNIT_HOWDAH": "/sprites/units/UNIT_HOWDAH.04c356b0.png",
 	"units/UNIT_HUSCARL": "/sprites/units/UNIT_HUSCARL.52bb2fa1.png",
 	"units/UNIT_JAVELINEER": "/sprites/units/UNIT_JAVELINEER.43e139c9.png",
 	"units/UNIT_JAVELIN_ELEPHANT":
 		"/sprites/units/UNIT_JAVELIN_ELEPHANT.e1cb7a56.png",
 	"units/UNIT_JUDAISM_DISCIPLE":
-		"/sprites/units/UNIT_JUDAISM_DISCIPLE.e94b5615.png",
+		"/sprites/units/UNIT_JUDAISM_DISCIPLE.2fac5a5f.png",
 	"units/UNIT_KUSHAN_CAVALRY":
-		"/sprites/units/UNIT_KUSHAN_CAVALRY.59557bb2.png",
+		"/sprites/units/UNIT_KUSHAN_CAVALRY.57d26c6a.png",
 	"units/UNIT_KUSHAN_WARLORD":
 		"/sprites/units/UNIT_KUSHAN_WARLORD.919be174.png",
 	"units/UNIT_KUSHITE_CAVALRY":
@@ -1560,12 +1875,12 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_LIBYAN_CAVALRY":
 		"/sprites/units/UNIT_LIBYAN_CAVALRY.99c8a545.png",
 	"units/UNIT_LIGHT_CHARIOT": "/sprites/units/UNIT_LIGHT_CHARIOT.c1849101.png",
-	"units/UNIT_LONGBOWMAN": "/sprites/units/UNIT_LONGBOWMAN.3a90b293.png",
+	"units/UNIT_LONGBOWMAN": "/sprites/units/UNIT_LONGBOWMAN.0cc05a56.png",
 	"units/UNIT_MACEMAN": "/sprites/units/UNIT_MACEMAN.07bd7d61.png",
 	"units/UNIT_MAHOUT": "/sprites/units/UNIT_MAHOUT.89a42729.png",
 	"units/UNIT_MANGONEL": "/sprites/units/UNIT_MANGONEL.3f1c19aa.png",
 	"units/UNIT_MANICHAEISM_DISCIPLE":
-		"/sprites/units/UNIT_MANICHAEISM_DISCIPLE.88355f53.png",
+		"/sprites/units/UNIT_MANICHAEISM_DISCIPLE.bf4698e1.png",
 	"units/UNIT_MARAUDER": "/sprites/units/UNIT_MARAUDER.24cc63c5.png",
 	"units/UNIT_MEROITIC_ARCHER":
 		"/sprites/units/UNIT_MEROITIC_ARCHER.d43101a2.png",
@@ -1579,10 +1894,10 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_NOMAD_WARLORD": "/sprites/units/UNIT_NOMAD_WARLORD.fd87d80b.png",
 	"units/UNIT_ONAGER": "/sprites/units/UNIT_ONAGER.bb8294d8.png",
 	"units/UNIT_PALTON_CAVALRY":
-		"/sprites/units/UNIT_PALTON_CAVALRY.1129426f.png",
+		"/sprites/units/UNIT_PALTON_CAVALRY.4d16ed28.png",
 	"units/UNIT_PELTAST": "/sprites/units/UNIT_PELTAST.568148f1.png",
 	"units/UNIT_PHALANGITE": "/sprites/units/UNIT_PHALANGITE.90a681bb.png",
-	"units/UNIT_PIKEMAN": "/sprites/units/UNIT_PIKEMAN.158eddb0.png",
+	"units/UNIT_PIKEMAN": "/sprites/units/UNIT_PIKEMAN.6604ec38.png",
 	"units/UNIT_POLYBOLOS": "/sprites/units/UNIT_POLYBOLOS.2bc667b7.png",
 	"units/UNIT_SCOUT": "/sprites/units/UNIT_SCOUT.3f4eec8e.png",
 	"units/UNIT_SETTLER": "/sprites/units/UNIT_SETTLER.4ad4155d.png",
@@ -1590,38 +1905,38 @@ export const SPRITE_MANIFEST: Readonly<Record<string, string>> = {
 	"units/UNIT_SIEGE_TOWER": "/sprites/units/UNIT_SIEGE_TOWER.86169284.png",
 	"units/UNIT_SKIRMISHER": "/sprites/units/UNIT_SKIRMISHER.8b3bb800.png",
 	"units/UNIT_SLINGER": "/sprites/units/UNIT_SLINGER.dff8bb47.png",
-	"units/UNIT_SPEARMAN": "/sprites/units/UNIT_SPEARMAN.e33bd414.png",
-	"units/UNIT_STEPPE_RIDER": "/sprites/units/UNIT_STEPPE_RIDER.cee256a3.png",
+	"units/UNIT_SPEARMAN": "/sprites/units/UNIT_SPEARMAN.16847573.png",
+	"units/UNIT_STEPPE_RIDER": "/sprites/units/UNIT_STEPPE_RIDER.4d701f9c.png",
 	"units/UNIT_SWORDSMAN": "/sprites/units/UNIT_SWORDSMAN.bb41ae9e.png",
 	"units/UNIT_THREE_MEN_CHARIOT":
-		"/sprites/units/UNIT_THREE_MEN_CHARIOT.0490fa38.png",
+		"/sprites/units/UNIT_THREE_MEN_CHARIOT.7449c4b9.png",
 	"units/UNIT_TRIREME": "/sprites/units/UNIT_TRIREME.52f15799.png",
 	"units/UNIT_TURRETED_ELEPHANT":
 		"/sprites/units/UNIT_TURRETED_ELEPHANT.06bd1b4f.png",
-	"units/UNIT_WARLORD": "/sprites/units/UNIT_WARLORD.d3217c42.png",
+	"units/UNIT_WARLORD": "/sprites/units/UNIT_WARLORD.8d8a2e07.png",
 	"units/UNIT_WARRIOR": "/sprites/units/UNIT_WARRIOR.53a4b370.png",
 	"units/UNIT_WAR_ELEPHANT": "/sprites/units/UNIT_WAR_ELEPHANT.549a9c12.png",
 	"units/UNIT_WORKER": "/sprites/units/UNIT_WORKER.9c60370a.png",
 	"units/UNIT_ZOROASTRIANISM_DISCIPLE":
 		"/sprites/units/UNIT_ZOROASTRIANISM_DISCIPLE.5ae8fca1.png",
 	"yields/YIELD_CIVICS": "/sprites/yields/YIELD_CIVICS.265df4bc.png",
-	"yields/YIELD_CULTURE": "/sprites/yields/YIELD_CULTURE.0e7ee6fa.png",
-	"yields/YIELD_DISCONTENT": "/sprites/yields/YIELD_DISCONTENT.cd01afe6.png",
+	"yields/YIELD_CULTURE": "/sprites/yields/YIELD_CULTURE.306b3876.png",
+	"yields/YIELD_DISCONTENT": "/sprites/yields/YIELD_DISCONTENT.12ccb977.png",
 	"yields/YIELD_DIVINE_FAVOR":
 		"/sprites/yields/YIELD_DIVINE_FAVOR.e3ecf578.png",
-	"yields/YIELD_FOOD": "/sprites/yields/YIELD_FOOD.79d532b4.png",
+	"yields/YIELD_FOOD": "/sprites/yields/YIELD_FOOD.8639c64a.png",
 	"yields/YIELD_GROWTH": "/sprites/yields/YIELD_GROWTH.b8c9f060.png",
 	"yields/YIELD_HAPPINESS": "/sprites/yields/YIELD_HAPPINESS.14b3459f.png",
 	"yields/YIELD_INFLUENCE": "/sprites/yields/YIELD_INFLUENCE.3605f43d.png",
 	"yields/YIELD_INTRIGUE": "/sprites/yields/YIELD_INTRIGUE.014ade88.png",
 	"yields/YIELD_IRON": "/sprites/yields/YIELD_IRON.b5eb762d.png",
-	"yields/YIELD_LEGITIMACY": "/sprites/yields/YIELD_LEGITIMACY.03d7e63f.png",
+	"yields/YIELD_LEGITIMACY": "/sprites/yields/YIELD_LEGITIMACY.64959851.png",
 	"yields/YIELD_MAINTENANCE": "/sprites/yields/YIELD_MAINTENANCE.a86e9204.png",
 	"yields/YIELD_MONEY": "/sprites/yields/YIELD_MONEY.990f379b.png",
 	"yields/YIELD_ORDERS": "/sprites/yields/YIELD_ORDERS.c24adad7.png",
-	"yields/YIELD_SCIENCE": "/sprites/yields/YIELD_SCIENCE.12cd1dba.png",
-	"yields/YIELD_STONE": "/sprites/yields/YIELD_STONE.8223dd1f.png",
+	"yields/YIELD_SCIENCE": "/sprites/yields/YIELD_SCIENCE.5545e83d.png",
+	"yields/YIELD_STONE": "/sprites/yields/YIELD_STONE.196fc92d.png",
 	"yields/YIELD_TRAINING": "/sprites/yields/YIELD_TRAINING.6abef403.png",
 	"yields/YIELD_WOOD": "/sprites/yields/YIELD_WOOD.f118a24b.png",
-	"yields/YIELD_WRATH": "/sprites/yields/YIELD_WRATH.9f77c209.png",
+	"yields/YIELD_WRATH": "/sprites/yields/YIELD_WRATH.82accb20.png",
 };

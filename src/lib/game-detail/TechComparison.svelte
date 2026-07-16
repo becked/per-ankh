@@ -40,6 +40,8 @@
 		laws: readonly string[];
 		// Researched by every player in the game.
 		shared: boolean;
+		// Researched by this player alone.
+		unique: boolean;
 	};
 
 	// Per-player tech lists (id match, nation fallback — shared idiom).
@@ -81,6 +83,7 @@
 							bonus: t.tech.includes("_BONUS"),
 							laws: TECH_LAWS[t.tech] ?? [],
 							shared: (ownerCounts.get(t.tech) ?? 0) === players.length,
+							unique: (ownerCounts.get(t.tech) ?? 0) === 1,
 						}),
 					),
 			),
@@ -136,14 +139,39 @@
 				? ` · ${headline.shared} by everyone`
 				: ""}
 		</span>
-		<span class="text-xs italic text-gray-400">
-			<span style="color: rgb(var(--color-bright));">gold</span> = everyone
-			researched it · ◆ unlocks a law · outlined = bonus card · hover a tech to
-			spot it across nations
+		<!-- The key demonstrates each chip state instead of describing it —
+		     the exemplars carry the exact classes the real cells use. -->
+		<span class="inline-flex flex-wrap items-center gap-1.5 text-xs">
+			<span
+				class="inline-flex items-center rounded bg-orange/10 px-1 py-px font-semibold"
+				style="color: rgb(var(--color-orange));">everyone has it</span
+			>
+			{#each players as player (player.playerId)}
+				<span
+					class="inline-flex items-center rounded-r border-l-2 border-current px-1 py-px font-semibold"
+					style="color: {player.color};">only {player.label}</span
+				>
+			{/each}
+			<span
+				class="inline-flex items-center gap-1 rounded px-1 py-px font-semibold text-tan"
+				>unlocks a law <SpriteIcon
+					category="icons"
+					value="LAWS"
+					size={12}
+					alt="law"
+				/></span
+			>
+			<span
+				class="inline-flex items-center rounded border border-current px-1 py-px font-semibold text-tan"
+				>bonus card</span
+			>
+			<span class="italic text-gray-400"
+				>· hover a tech to spot it across nations</span
+			>
 		</span>
 	</div>
 	<div class="overflow-x-auto">
-		<table class="w-full border-separate border-spacing-0 text-sm">
+		<table class="w-full max-w-3xl border-separate border-spacing-0 text-sm">
 			<thead>
 				<tr>
 					<th class="{TABLE_HEADER_TH_CLASS} w-12 rounded-l-lg border-l"
@@ -205,12 +233,25 @@
 								{:else}
 									<div class="flex flex-col gap-0.5">
 										{#each cell as c (c.tech)}
+											<!-- Hue alone can't carry the encoding — Assyria/Kush/
+											     Yuezhi's nation colors sit on top of the shared gold —
+											     so each state also gets a shape/fill: shared = faint
+											     gold wash, unique = left accent bar, bonus card = full
+											     outline. -->
 											<span
-												class="inline-flex w-fit cursor-default items-center gap-1.5 rounded px-1 py-px text-xs font-semibold transition-colors
-													{c.bonus ? 'border border-current' : ''}
-													{hovered === c.tech ? 'bg-tan-hover' : ''}"
+												class="inline-flex w-fit cursor-default items-center gap-1.5 px-1 py-px text-xs font-semibold transition-colors
+													{c.bonus
+													? 'rounded border border-current'
+													: c.unique
+														? 'rounded-r border-l-2 border-current'
+														: 'rounded'}
+													{hovered === c.tech
+													? 'bg-tan-hover'
+													: c.shared && !c.bonus
+														? 'bg-orange/10'
+														: ''}"
 												style="color: {c.shared
-													? 'rgb(var(--color-bright))'
+													? 'rgb(var(--color-orange))'
 													: players[i].color};"
 												title={cellTitle(c, row.turn)}
 												role="img"
@@ -221,7 +262,12 @@
 												<SpriteIcon category="techs" value={c.tech} size={14} />
 												{techName(c.tech)}
 												{#if c.laws.length > 0}
-													<span class="text-[10px]">◆</span>
+													<SpriteIcon
+														category="icons"
+														value="LAWS"
+														size={12}
+														alt="unlocks a law"
+													/>
 												{/if}
 											</span>
 										{/each}
