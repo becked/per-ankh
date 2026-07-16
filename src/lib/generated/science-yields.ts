@@ -143,3 +143,25 @@ export const SHRINE_TYPE: Readonly<Record<string, string>> = {
 	IMPROVEMENT_SHRINE_YAMA: "Kingship",
 	IMPROVEMENT_SHRINE_ZEUS: "Kingship",
 };
+
+// ─── Court science (InfoHelpers.getRatingYieldRateCourt) ───────────
+
+// Science a court character earns per point of the rating curve, from
+// rating.xml RATING_WISDOM <aiYieldCourtRate>. Emitted RAW (×10 fixed
+// point), unlike the tables above: the curve it feeds is integer math,
+// so callers must divide by 10 only at the end.
+export const WISDOM_COURT_SCIENCE_RATE = 10;
+
+// yield.xml YIELD_SCIENCE <iTriangleOffset> — the offset the court
+// rating curve (Utils.triangleOffset) is evaluated at.
+export const SCIENCE_TRIANGLE_OFFSET = -2;
+
+// globalsInt.xml RATING_EQUIVALENT_LOWER_CHARACTER_YIELDS — under
+// Competitive Mode the court curve is linearized around this rating,
+// so high ratings pay far less than they do normally.
+export const COMPETITIVE_EQUIVALENT_RATING = 5;
+
+// effectPlayer.xml EFFECTPLAYER_COMPETITIVE_MODE <aiYieldRate>
+// YIELD_SCIENCE, per turn: the flat stipend that compensates for the
+// lowered character yields above.
+export const COMPETITIVE_SCIENCE_STIPEND = 4;

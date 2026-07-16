@@ -31,6 +31,7 @@ export function deriveGameDetails(
 			legitimacy: p.legitimacy,
 			state_religion: p.stateReligion,
 			difficulty: p.difficulty,
+			leader_character_xml_id: p.leaderCharacterXmlId,
 		}))
 		.sort((a, b) => strCmp(a.player_name, b.player_name));
 
@@ -45,6 +46,7 @@ export function deriveGameDetails(
 		map_class: metadata.map_class,
 		map_aspect_ratio: metadata.map_aspect_ratio,
 		map_options: metadata.map_options,
+		game_options: metadata.game_options,
 		game_mode: metadata.game_mode,
 		opponent_level: metadata.opponent_level,
 		difficulty: metadata.difficulty,

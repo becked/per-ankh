@@ -12,8 +12,17 @@
 //   Reference/XML/Infos/specialist.xml — <EffectCity> + <EffectCityExtra>
 //     (the Apprentice/Master/Elder extras carry the tier science) resolved
 //     through effectCity.xml the same way.
+//   Reference/XML/Infos/rating.xml — <aiYieldCourtRate> on RATING_WISDOM: the
+//     per-turn science a court character earns off their Wisdom.
+//   Reference/XML/Infos/yield.xml — YIELD_SCIENCE <iTriangleOffset>, the offset
+//     the court rating curve (Utils.triangleOffset) is evaluated at.
+//   Reference/XML/Infos/globalsInt.xml — RATING_EQUIVALENT_LOWER_CHARACTER_YIELDS,
+//     the rating Competitive Mode linearizes the court curve around.
+//   Reference/XML/Infos/effectPlayer.xml — EFFECTPLAYER_COMPETITIVE_MODE
+//     <aiYieldRate> YIELD_SCIENCE, Competitive Mode's flat science stipend.
 //
-// Values are the game's ×10 fixed-point; emitted ÷10 in display units.
+// Values are the game's ×10 fixed-point; emitted ÷10 in display units. The
+// one exception is WISDOM_COURT_SCIENCE_RATE — see its comment below.
 // Only science-positive entries are emitted. Shrines additionally get their
 // type — War/Fire/Sun/Wisdom/… — from the <AssetVariation> suffix (the same
 // source owreference's shrine page uses).
@@ -55,9 +64,12 @@ interface Entry {
 	AssetVariation?: string;
 	EffectCity?: string;
 	EffectCityExtra?: string;
+	iValue?: string;
+	iTriangleOffset?: string;
 	aiYieldOutput?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldRate?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldModifier?: { Pair?: YieldPair | YieldPair[] };
+	aiYieldCourtRate?: { Pair?: YieldPair | YieldPair[] };
 	aaiResourceYieldOutput?: { Pair?: ResourceYieldPair | ResourceYieldPair[] };
 }
 
@@ -90,15 +102,79 @@ function yieldValue(block: YieldPair[], yieldType: string): number {
 
 async function main(): Promise<void> {
 	const infosDir = resolve(resolveReferenceXml(), "Infos");
-	const [improvements, improvementClasses, specialists, effects] =
-		await Promise.all([
-			loadEntries(resolve(infosDir, "improvement.xml")),
-			loadEntries(resolve(infosDir, "improvementClass.xml")),
-			loadEntries(resolve(infosDir, "specialist.xml")),
-			loadEntries(resolve(infosDir, "effectCity.xml")),
-		]);
+	const [
+		improvements,
+		improvementClasses,
+		specialists,
+		effects,
+		ratings,
+		yields,
+		globalInts,
+		effectPlayers,
+	] = await Promise.all([
+		loadEntries(resolve(infosDir, "improvement.xml")),
+		loadEntries(resolve(infosDir, "improvementClass.xml")),
+		loadEntries(resolve(infosDir, "specialist.xml")),
+		loadEntries(resolve(infosDir, "effectCity.xml")),
+		loadEntries(resolve(infosDir, "rating.xml")),
+		loadEntries(resolve(infosDir, "yield.xml")),
+		loadEntries(resolve(infosDir, "globalsInt.xml")),
+		loadEntries(resolve(infosDir, "effectPlayer.xml")),
+	]);
 
 	const effectByType = new Map(effects.map((e) => [e.zType, e]));
+
+	// The court constants are single scalars rather than tables, so a silent
+	// 0 from a renamed tag would poison the breakdown rather than show up as
+	// a missing row. Fail the bake instead.
+	const findEntry = (entries: Entry[], zType: string, source: string): Entry => {
+		const found = entries.find((e) => e.zType === zType);
+		if (!found) throw new Error(`bake-science-yields: ${zType} not in ${source}`);
+		return found;
+	};
+	const requireInt = (raw: string | undefined, what: string): number => {
+		const n = Number(raw);
+		if (raw == null || Number.isNaN(n)) {
+			throw new Error(`bake-science-yields: ${what} missing or non-numeric`);
+		}
+		return n;
+	};
+
+	// RATING_WISDOM is the only rating with a science court rate (Charisma
+	// pays Civics, Courage Training, Discipline Money), so the leader's court
+	// science is this term alone.
+	const wisdomCourtScienceRate = yieldValue(
+		pairs(findEntry(ratings, "RATING_WISDOM", "rating.xml").aiYieldCourtRate),
+		"YIELD_SCIENCE",
+	);
+	if (wisdomCourtScienceRate === 0) {
+		throw new Error(
+			"bake-science-yields: RATING_WISDOM has no YIELD_SCIENCE aiYieldCourtRate",
+		);
+	}
+	const scienceTriangleOffset = requireInt(
+		findEntry(yields, "YIELD_SCIENCE", "yield.xml").iTriangleOffset,
+		"YIELD_SCIENCE iTriangleOffset",
+	);
+	const competitiveEquivalentRating = requireInt(
+		findEntry(
+			globalInts,
+			"RATING_EQUIVALENT_LOWER_CHARACTER_YIELDS",
+			"globalsInt.xml",
+		).iValue,
+		"RATING_EQUIVALENT_LOWER_CHARACTER_YIELDS iValue",
+	);
+	const competitiveScienceStipend =
+		yieldValue(
+			pairs(
+				findEntry(
+					effectPlayers,
+					"EFFECTPLAYER_COMPETITIVE_MODE",
+					"effectPlayer.xml",
+				).aiYieldRate,
+			),
+			"YIELD_SCIENCE",
+		) / 10;
 
 	// Per-resource science of resource-sited improvement classes (groves):
 	// class → { RESOURCE_* → display science }.
@@ -231,6 +307,54 @@ async function main(): Promise<void> {
 	);
 	lines.push(
 		`export const SHRINE_TYPE: Readonly<Record<string, string>> = ${JSON.stringify(sorted(shrineType))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// ─── Court science (InfoHelpers.getRatingYieldRateCourt) ───────────",
+	);
+	lines.push("");
+	lines.push(
+		"// Science a court character earns per point of the rating curve, from",
+	);
+	lines.push(
+		"// rating.xml RATING_WISDOM <aiYieldCourtRate>. Emitted RAW (×10 fixed",
+	);
+	lines.push(
+		"// point), unlike the tables above: the curve it feeds is integer math,",
+	);
+	lines.push("// so callers must divide by 10 only at the end.");
+	lines.push(
+		`export const WISDOM_COURT_SCIENCE_RATE = ${wisdomCourtScienceRate};`,
+	);
+	lines.push("");
+	lines.push(
+		"// yield.xml YIELD_SCIENCE <iTriangleOffset> — the offset the court",
+	);
+	lines.push("// rating curve (Utils.triangleOffset) is evaluated at.");
+	lines.push(
+		`export const SCIENCE_TRIANGLE_OFFSET = ${scienceTriangleOffset};`,
+	);
+	lines.push("");
+	lines.push(
+		"// globalsInt.xml RATING_EQUIVALENT_LOWER_CHARACTER_YIELDS — under",
+	);
+	lines.push(
+		"// Competitive Mode the court curve is linearized around this rating,",
+	);
+	lines.push("// so high ratings pay far less than they do normally.");
+	lines.push(
+		`export const COMPETITIVE_EQUIVALENT_RATING = ${competitiveEquivalentRating};`,
+	);
+	lines.push("");
+	lines.push(
+		"// effectPlayer.xml EFFECTPLAYER_COMPETITIVE_MODE <aiYieldRate>",
+	);
+	lines.push(
+		"// YIELD_SCIENCE, per turn: the flat stipend that compensates for the",
+	);
+	lines.push("// lowered character yields above.");
+	lines.push(
+		`export const COMPETITIVE_SCIENCE_STIPEND = ${competitiveScienceStipend};`,
 	);
 	lines.push("");
 

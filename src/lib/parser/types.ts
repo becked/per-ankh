@@ -90,6 +90,9 @@ export interface MatchMetadata {
 	map_class: string | null;
 	map_aspect_ratio: string | null;
 	map_options: Record<string, string | boolean>;
+	// Game-wide option flags that are set, as `zType → true`. PARENT options
+	// only — see parseGameOptions for why a sub-option never appears here.
+	game_options: Record<string, true>;
 	game_mode: string | null;
 	difficulty: string | null;
 	opponent_level: string | null;
@@ -370,4 +373,4 @@ export interface FullGameData {
  * fixes, MINOR for additive fields, MAJOR for breaking schema changes.
  * Initial value `2.0.0` mirrors `FullGameData.version: 2`.
  */
-export const PARSER_VERSION = "2.10.0";
+export const PARSER_VERSION = "2.11.0";

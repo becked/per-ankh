@@ -42,6 +42,10 @@ import {
 	IMPROVEMENT_RESOURCE_SCIENCE,
 	SPECIALIST_SCIENCE,
 	SHRINE_TYPE,
+	WISDOM_COURT_SCIENCE_RATE,
+	SCIENCE_TRIANGLE_OFFSET,
+	COMPETITIVE_EQUIVALENT_RATING,
+	COMPETITIVE_SCIENCE_STIPEND,
 } from "$lib/generated/science-yields";
 import { formatEnum } from "$lib/utils/formatting";
 
@@ -417,12 +421,21 @@ export type ScienceBreakdown = {
 	// reconstructed base (which, matching City.cs calculateBaseYield →
 	// :4682, includes the law yields above).
 	modifiers: { items: BreakdownItem[]; total: number };
-	// SIGNED remainder vs the actual rate: governors, court (ruler, spouse,
-	// successors, courtiers), Competitive Mode, Philosophy-via-Forums,
-	// religion, and every interaction the save doesn't itemize. Those need
-	// blob fields that don't exist yet (game_options, council, courtiers) —
-	// see the parser follow-up. A negative value means the itemized floor
-	// over-counted; it's deliberately not clamped so that shows.
+	// Player-level (not per-city) science from the ruling court, plus the
+	// Competitive Mode stipend that compensates for it. Only the LEADER is
+	// itemized: every other court contributor (spouses, successors,
+	// courtiers, council) is scaled by that character's opinion of the
+	// player, which the save doesn't store — it's recomputed on load from 26
+	// separate sources (PlayerOpinion.calculateCharacterOpinionRate). The
+	// leader is exempt by construction (a leader has no opinion of
+	// themselves — calculateCharacterOpinionRate returns null for them), so
+	// their contribution is exact. The rest stay in `other` below.
+	court: { items: BreakdownItem[]; total: number };
+	// SIGNED remainder vs the actual rate: governors, the non-leader court
+	// (spouses, successors, courtiers, council — all opinion-scaled),
+	// Philosophy-via-Forums, religion, connected-foreign-trade science, and
+	// every interaction the save doesn't itemize. A negative value means the
+	// itemized floor over-counted; it's deliberately not clamped so that shows.
 	other: number;
 	// The player's actual science/turn at game end.
 	total: number;
@@ -456,12 +469,93 @@ const CULTURE_LEVELS = [
 
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
+// ─── Court science ────────────────────────────────────────────────────
+//
+// Ported from the game, which computes every court character's yield through
+// InfoHelpers.getRatingYieldRateCourt. All of it is integer math on the ×10
+// fixed-point rate, so these mirror the C# exactly and divide only at the end
+// — rounding earlier drifts off the real value.
+
+/** `Utils.triangle` (Utils.cs:119) — the sign-preserving triangular number. */
+function triangle(n: number): number {
+	const abs = Math.abs(n);
+	// abs*(abs+1) is always even, so the game's integer divide is exact here.
+	return Math.sign(n) * ((abs * (abs + 1)) / 2);
+}
+
+/** `Utils.triangleOffset` (Utils.cs:132). */
+function triangleOffset(n: number, offset: number): number {
+	const value = Math.abs(n) + offset;
+	if (value <= 0) return n;
+	return Math.sign(n) * (triangle(value) - offset);
+}
+
+/**
+ * `InfoHelpers.modifyRating` (InfoHelpers.cs:1205) — bend a flat rate by a
+ * character's rating.
+ *
+ * Normally the rating runs through the triangular curve, so high ratings pay
+ * off steeply. Under Competitive Mode the curve is instead linearized around
+ * COMPETITIVE_EQUIVALENT_RATING, which is the whole point of the option
+ * ("high Rating values have a less dramatic effect"): the two agree at that
+ * rating and diverge sharply above it.
+ */
+function modifyRating(
+	value: number,
+	rating: number,
+	offset: number,
+	competitive: boolean,
+): number {
+	if (!competitive) return value * triangleOffset(rating, offset);
+	const equivalent = Math.max(1, COMPETITIVE_EQUIVALENT_RATING);
+	// C# integer division truncates toward zero.
+	return Math.trunc(
+		(value * rating * triangleOffset(equivalent, offset)) / equivalent,
+	);
+}
+
+/**
+ * The reigning leader's court science per turn, in display units.
+ *
+ * Exact, not an estimate. `getYieldRateLeader` (Character.cs:5268) sums
+ * getRatingYieldRateCourt over every rating, but RATING_WISDOM is the only
+ * one with a science court rate (Charisma pays Civics, Courage Training,
+ * Discipline Money), so the leader's science is that single term. The role
+ * modifier is 0 for a leader (InfoHelpers.cs:1263) and the opinion modifier
+ * is absent (a leader has no opinion of themselves), which is exactly why
+ * this one is computable and the rest of the court isn't.
+ *
+ * Wisdom can be negative, and a negative result is real — a foolish ruler
+ * costs the realm science — so it isn't clamped.
+ */
+function leaderCourtScience(wisdom: number, competitive: boolean): number {
+	// getRatingYieldRateCourt bails on a zero rating before touching the curve.
+	if (wisdom === 0) return 0;
+	return (
+		modifyRating(
+			WISDOM_COURT_SCIENCE_RATE,
+			wisdom,
+			SCIENCE_TRIANGLE_OFFSET,
+			competitive,
+		) / 10
+	);
+}
+
 /**
  * Decompose a player's end-of-game science rate into itemized sources.
  * `improvements` are the player's own tiles; `activeLaws` their laws still
  * active at game end; `capital` their capital's name + culture level (null
  * when unresolvable); `cityCount` scales the per-city law upkeep;
  * `finalRate` is the last non-null YIELD_SCIENCE rate.
+ *
+ * `leaderWisdom` is the reigning leader's RATING_WISDOM — null when there is
+ * no reigning leader (an eliminated realm, whose last leader died without a
+ * successor) or when the blob predates PARSER_VERSION 2.11.0. `competitive`
+ * is whether GAMEOPTION_COMPETITIVE_MODE is set, and null on those same older
+ * blobs: null means UNKNOWN, not "not competitive", so the court section is
+ * omitted entirely rather than priced against a guessed default (the two
+ * curves diverge sharply at high wisdom, so guessing wrong is worse than not
+ * itemizing).
  */
 export function scienceBreakdown(
 	improvements: ImprovementInfo[],
@@ -469,6 +563,8 @@ export function scienceBreakdown(
 	capital: { cityName: string; cultureLevel: string | null } | null,
 	cityCount: number,
 	finalRate: number,
+	leaderWisdom: number | null,
+	competitive: boolean | null,
 	specialistName: (zType: string) => string,
 	improvementLabel: (zType: string) => string,
 ): ScienceBreakdown {
@@ -598,19 +694,47 @@ export function scienceBreakdown(
 	const sum = (items: BreakdownItem[]) =>
 		round1(items.reduce((t, i) => t + i.science, 0));
 
+	// Court + Competitive stipend. These are PLAYER-level yields (Player.cs
+	// :18248 adds them to the player's total, not to any city), so unlike the
+	// sections above they're untouched by the cities' percent modifiers and
+	// are summed in flat.
+	//
+	// Labels are deliberately generic ("Leader", not the ruler's name): the
+	// table unions item labels across players to build shared rows, so a
+	// per-player name would split one row into N single-player rows.
+	const court = new Map<string, Acc>();
+	if (competitive != null) {
+		if (leaderWisdom != null) {
+			const science = leaderCourtScience(leaderWisdom, competitive);
+			if (science !== 0) {
+				court.set("Leader", { count: 1, science, pct: 0 });
+			}
+		}
+		if (competitive) {
+			court.set("Competitive Mode", {
+				count: 1,
+				science: COMPETITIVE_SCIENCE_STIPEND,
+				pct: 0,
+			});
+		}
+	}
+
 	const specialistItems = toItems(specialists, false);
 	const buildingItems = toItems(buildings, false);
 	const lawItems = toItems(laws, false);
 	const modifierItems = toItems(modifiers, true);
+	const courtItems = toItems(court, false);
 	const specialistsTotal = sum(specialistItems);
 	const buildingsTotal = sum(buildingItems);
 	const lawsTotal = sum(lawItems);
 	const modifiersTotal = sum(modifierItems);
+	const courtTotal = sum(courtItems);
 	return {
 		specialists: { items: specialistItems, total: specialistsTotal },
 		buildings: { items: buildingItems, total: buildingsTotal },
 		laws: { items: lawItems, total: lawsTotal },
 		modifiers: { items: modifierItems, total: modifiersTotal },
+		court: { items: courtItems, total: courtTotal },
 		// Signed on purpose — a negative remainder is the signal that the
 		// itemized floor over-counted somewhere.
 		other: round1(
@@ -618,7 +742,8 @@ export function scienceBreakdown(
 				specialistsTotal -
 				buildingsTotal -
 				lawsTotal -
-				modifiersTotal,
+				modifiersTotal -
+				courtTotal,
 		),
 		total: finalRate,
 	};

@@ -7,7 +7,11 @@
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { StoryEvent } from "$lib/types/StoryEvent";
-	import type { FamilyInfo, MemoryInfo } from "$lib/parser/types";
+	import type {
+		CharacterInfo,
+		FamilyInfo,
+		MemoryInfo,
+	} from "$lib/parser/types";
 	import type { EChartsOption, ECharts } from "echarts";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
@@ -67,6 +71,8 @@
 		families = [],
 		memoryData = [],
 		storyEvents = [],
+		characters = [],
+		gameOptions = null,
 		userNation = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
@@ -87,6 +93,10 @@
 		families?: FamilyInfo[];
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
+		characters?: CharacterInfo[];
+		// Set <GameOptions> flags. Null on pre-2.11.0 blobs (and from the frozen
+		// web/ viewer) — "unknown", not "none set".
+		gameOptions?: Record<string, true> | null;
 		userNation?: string | null;
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
@@ -452,11 +462,19 @@
 	// ─── Where the science comes from ─────────────────────────────────
 	// End-state itemized decomposition of each player's science/turn, side
 	// by side: specialists and buildings/resources by name, science laws,
-	// and the exact percent modifiers (libraries, Musaeum) with their points
-	// computed against each city's base. Governors, court, and the
-	// Competitive Mode stipend all hinge on GAMEOPTION_COMPETITIVE_MODE,
-	// which the blob doesn't carry yet — they stay in the signed "Other"
-	// remainder until the parser surfaces game_options.
+	// the exact percent modifiers (libraries, Musaeum) with their points
+	// computed against each city's base, and the leader's court science.
+	// Governors and the rest of the court (spouses, successors, courtiers,
+	// council) are scaled by each character's opinion of the player, which
+	// the save doesn't store — they stay in the signed "Other" remainder.
+
+	// Null when the blob predates 2.11.0: UNKNOWN, not "not competitive".
+	const competitive = $derived(
+		gameOptions == null
+			? null
+			: gameOptions.GAMEOPTION_COMPETITIVE_MODE === true,
+	);
+	const characterById = $derived(new Map(characters.map((c) => [c.xml_id, c])));
 
 	type BreakdownColumn = { player: DetailPlayer; b: ScienceBreakdown };
 	const scienceBreakdowns = $derived.by<BreakdownColumn[]>(() => {
@@ -480,6 +498,23 @@
 				(c) => c.owner_nation,
 			);
 			const capitalCity = cities.find((c) => c.is_capital);
+			// The reigning leader's Wisdom — the only court rating that pays
+			// science. Null on pre-2.11.0 blobs (no leader id) or when the
+			// character is missing, which keeps the leader out of the breakdown
+			// rather than pricing them at zero.
+			//
+			// A DEAD last leader means no reigning ruler: succession appends a
+			// new id on every handover, so the tail of <Leaders> is dead only
+			// for a realm that fell without anyone taking the throne. This is
+			// an END-STATE decomposition, so a ruler off the throne earns
+			// nothing — crediting them would invent science (and, for a fallen
+			// realm whose rate is 0, a negative Other) out of nothing.
+			const leaderId = player.leader_character_xml_id;
+			const leader = leaderId == null ? null : characterById.get(leaderId);
+			const leaderWisdom =
+				leader == null || leader.death_turn != null
+					? null
+					: (leader.wisdom ?? null);
 			return {
 				player,
 				b: scienceBreakdown(
@@ -493,6 +528,8 @@
 						: null,
 					cities.length,
 					finalRate,
+					leaderWisdom,
+					competitive,
 					specialistName,
 					improvementDisplayName,
 				),
@@ -509,6 +546,7 @@
 		{ key: "buildings", label: "Buildings & resources" },
 		{ key: "laws", label: "Laws" },
 		{ key: "modifiers", label: "Modifiers" },
+		{ key: "court", label: "Court" },
 	] as const;
 	// Only sections somebody has items in — an all-zero section is noise.
 	const visibleBreakdownSections = $derived(

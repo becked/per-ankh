@@ -580,6 +580,8 @@
 			{families}
 			{memoryData}
 			{storyEvents}
+			{characters}
+			gameOptions={gameDetails.game_options}
 			{userNation}
 			bind:chartFilter={chartFilters.techs}
 			bind:tableState={tables.techs}
