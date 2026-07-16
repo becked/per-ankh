@@ -169,25 +169,24 @@
 								return `Turn ${turn}<br/>${rows}`;
 							},
 						},
+						// No axis-name titles — the title + tooltip carry the meaning,
+						// matching the Military Power plot. containLabel reserves room
+						// for the tick numbers now that the fixed left/bottom gutters
+						// (which the axis names needed) are gone.
 						grid: {
-							left: 60,
-							right: 40,
-							top: 80,
-							bottom: 60,
+							top: 44,
+							left: 8,
+							right: 20,
+							bottom: 24,
+							containLabel: true,
 						},
 						xAxis: {
 							type: "value",
-							name: "Turn",
-							nameLocation: "middle",
-							nameGap: 30,
 							splitLine: { show: false },
 							max: finalTurn,
 						},
 						yAxis: {
 							type: "value",
-							name: "Number of Technologies",
-							nameLocation: "middle",
-							nameGap: 40,
 							max: maxTechCount + 2,
 						},
 						series: histories.map((player, i) => {
@@ -651,8 +650,16 @@
 				.sort((a, b) => a.turn - b.turn),
 		}));
 	});
-	// Unique techs are only meaningful with an opponent to differ from.
-	const showUniqueTechs = $derived(orderedPlayers.length > 1);
+	// Only players who actually have a tech no one else got — an empty row is
+	// noise, so it's dropped rather than shown as "— none —".
+	const visibleUniqueTechRows = $derived(
+		uniqueTechRows.filter((r) => r.uniqueTechs.length > 0),
+	);
+	// Unique techs are only meaningful with an opponent to differ from, and the
+	// section is only worth showing when someone actually has some.
+	const showUniqueTechs = $derived(
+		orderedPlayers.length > 1 && visibleUniqueTechRows.length > 0,
+	);
 
 	// ─── Pivot table logic ────────────────────────────────────────────
 	// Columns are per player (mirror-match safe); filtering stays by nation.
@@ -777,14 +784,14 @@
 			/>
 			{#if oneOffTotals.length > 0}
 				<div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
-					<span class="italic text-tan">One-off science gains:</span>
+					<span class="italic text-tan">Bonus science:</span>
 					{#each oneOffTotals as t (t.player.playerId)}
 						<span
 							class="inline-flex items-center gap-1 font-semibold"
 							style="color: {t.player.color};"
 							title="Sum of turns where the science total jumped by more than that turn's production rate (gains of 10+; from the save's per-turn yield history)"
 						>
-							{t.player.player_name || t.player.label}: +{t.total}
+							{t.player.label}: +{t.total}
 							<SpriteIcon category="yields" value="YIELD_SCIENCE" size={12} />
 							across {t.count} event{t.count === 1 ? "" : "s"}
 						</span>
@@ -804,7 +811,7 @@
 			     chips, so their scope reads right. -->
 			<div class="mt-2 flex flex-wrap items-center gap-2">
 				<span class="text-xs italic text-tan">
-					Full research order in the tech-tree planner:
+					Open in the tech-tree planner:
 				</span>
 				{#each owttLinks as link (link.player.playerId)}
 					<!-- External planner link (not an app route), so resolve()
@@ -825,9 +832,7 @@
 								alt={link.player.label}
 							/>
 						{/if}
-						<!-- The player's in-game handle, not the nation label — the
-						     crest + color already carry the nation. -->
-						{link.player.player_name || link.player.label} ↗
+						{link.player.label} ↗
 					</a>
 					<!-- eslint-enable svelte/no-navigation-without-resolve -->
 				{/each}
@@ -846,9 +851,9 @@
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
-		<h3 class="mb-3 font-bold text-tan">Techs Only One Player Got</h3>
+		<h3 class="mb-3 font-bold text-tan">Unique Techs</h3>
 		<div class="flex flex-col gap-2">
-			{#each uniqueTechRows as row (row.player.playerId)}
+			{#each visibleUniqueTechRows as row (row.player.playerId)}
 				<div class="flex flex-wrap items-center gap-2">
 					<span
 						class="inline-flex w-40 shrink-0 items-center gap-1.5 text-sm font-semibold"
@@ -877,8 +882,6 @@
 								<SpriteIcon category="techs" value={u.tech} size={13} />
 								{techName(u.tech)}
 							</span>
-						{:else}
-							<em class="text-xs italic text-gray-400">— none —</em>
 						{/each}
 					</span>
 				</div>
@@ -893,238 +896,106 @@
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
-		<h3 class="mb-3 font-bold text-tan">Where the Science Comes From</h3>
-		{#if scienceBreakdowns.length === 2}
-			<!-- Duel: Tufte-style butterfly — shared source labels down the
-			     center, each side's contribution as a mirrored bar on one common
-			     scale, values direct-labeled. Click a player to rank by them. -->
-			{@const [L, R] = scienceBreakdowns}
-			<div class="mx-auto max-w-3xl text-sm">
-				<div
-					class="grid grid-cols-[1fr_minmax(11rem,auto)_1fr] items-center gap-x-2"
-				>
-					{#each [L, R] as col, side (col.player.playerId)}
-						{#if side === 1}
-							<div
-								class="pb-2 text-center text-xs font-bold uppercase tracking-wide text-gray-400"
-							>
-								Source
-							</div>
-						{/if}
-						<button
-							type="button"
-							class="pb-2 {side === 0
-								? 'justify-self-end text-right'
-								: 'justify-self-start text-left'} cursor-pointer"
-							title="Rank sources by {col.player.label}"
-							onclick={() => toggleBreakdownSort(col.player.playerId)}
-						>
-							<span
-								class="inline-flex items-center gap-1.5 font-semibold"
-								style="color: {col.player.color};"
-							>
-								{#if col.player.nation}
-									<SpriteIcon
-										category="crests"
-										value={col.player.nation}
-										size={15}
-										alt={col.player.label}
-									/>
-								{/if}
-								{col.player.label}
-								{#if breakdownSortId === col.player.playerId}<span
-										class="text-orange">↓</span
-									>{/if}
-							</span>
-						</button>
-					{/each}
-
-					{#each visibleBreakdownSections as section (section.key)}
-						<div
-							class="border-t border-border-subtle py-1 text-right font-semibold text-tan"
-						>
-							{L.b[section.key].total}
-						</div>
-						<div
-							class="border-t border-border-subtle py-1 text-center font-semibold text-tan"
-						>
-							{section.label}
-						</div>
-						<div
-							class="border-t border-border-subtle py-1 font-semibold text-tan"
-						>
-							{R.b[section.key].total}
-						</div>
-						{#each breakdownRows(section.key) as label (label)}
-							{@const li = breakdownItem(L, section.key, label)}
-							{@const ri = breakdownItem(R, section.key, label)}
-							<div class="flex items-center justify-end gap-1.5 py-0.5">
-								{#if li}
-									<span class="text-xs text-tan"
-										>{#if li.count > 1}<span class="text-gray-400"
-												>({li.count}×)&nbsp;</span
-											>{/if}{li.science}</span
-									>
-									<div
-										class="h-2 rounded-sm"
-										style="width: {(Math.max(0, li.science) /
-											breakdownMaxItem) *
-											100}%; background: {L.player.color};"
-									></div>
-								{:else}
-									<span class="text-xs text-gray-500">—</span>
-								{/if}
-							</div>
-							<div class="px-1 text-center text-xs leading-tight text-gray-400">
-								{label}
-							</div>
-							<div class="flex items-center justify-start gap-1.5 py-0.5">
-								{#if ri}
-									<div
-										class="h-2 rounded-sm"
-										style="width: {(Math.max(0, ri.science) /
-											breakdownMaxItem) *
-											100}%; background: {R.player.color};"
-									></div>
-									<span class="text-xs text-tan"
-										>{ri.science}{#if ri.count > 1}<span class="text-gray-400"
-												>&nbsp;({ri.count}×)</span
-											>{/if}</span
-									>
-								{:else}
-									<span class="text-xs text-gray-500">—</span>
-								{/if}
-							</div>
+		<h3 class="mb-3 font-bold text-tan">Science Sources</h3>
+		<!-- One columnar layout for every game size (a mirrored butterfly can't
+		     hold 3+ players). Per-source rows carry an inline bar on the shared
+		     breakdownMaxItem scale; section/total rows stay number-only. Click a
+		     player header to rank the rows by them. -->
+		<div class="overflow-x-auto">
+			<table class="w-full max-w-3xl text-sm">
+				<thead>
+					<tr>
+						<th class="w-56 pb-2"></th>
+						{#each scienceBreakdowns as col (col.player.playerId)}
+							<th class="pb-2 pr-4 text-right">
+								<button
+									type="button"
+									class="inline-flex cursor-pointer items-center gap-1.5 font-semibold"
+									style="color: {col.player.color};"
+									title="Rank sources by {col.player.label}"
+									onclick={() => toggleBreakdownSort(col.player.playerId)}
+								>
+									{#if col.player.nation}
+										<SpriteIcon
+											category="crests"
+											value={col.player.nation}
+											size={15}
+											alt={col.player.label}
+										/>
+									{/if}
+									{col.player.label}
+									{#if breakdownSortId === col.player.playerId}<span
+											class="text-orange">↓</span
+										>{/if}
+								</button>
+							</th>
 						{/each}
-					{/each}
-
-					<div
-						class="border-t border-border-subtle py-1 text-right font-semibold text-tan"
-					>
-						{L.b.other}
-					</div>
-					<div
-						class="border-t border-border-subtle py-1 text-center font-semibold text-tan"
-					>
-						Other
-					</div>
-					<div
-						class="border-t border-border-subtle py-1 font-semibold text-tan"
-					>
-						{R.b.other}
-					</div>
-
-					<div
-						class="border-t border-border-subtle py-1.5 text-right font-bold text-tan"
-					>
-						{L.b.total}
-					</div>
-					<div
-						class="border-t border-border-subtle py-1.5 text-center font-bold text-tan"
-					>
-						<span class="inline-flex items-center gap-1">
-							Science per turn
-							<SpriteIcon category="yields" value="YIELD_SCIENCE" size={13} />
-						</span>
-					</div>
-					<div class="border-t border-border-subtle py-1.5 font-bold text-tan">
-						{R.b.total}
-					</div>
-				</div>
-			</div>
-		{:else}
-			<!-- N players: plain columns. Click a player to rank by them. -->
-			<div class="overflow-x-auto">
-				<table class="w-full max-w-3xl text-sm">
-					<thead>
-						<tr>
-							<th
-								class="w-56 pb-2 text-left text-xs font-bold uppercase tracking-wide text-gray-400"
-								>Source</th
-							>
+					</tr>
+				</thead>
+				<tbody>
+					{#each visibleBreakdownSections as section (section.key)}
+						<tr class="border-t border-border-subtle">
+							<td class="py-1.5 font-semibold text-tan">{section.label}</td>
 							{#each scienceBreakdowns as col (col.player.playerId)}
-								<th class="pb-2 pr-4 text-right">
-									<button
-										type="button"
-										class="inline-flex cursor-pointer items-center gap-1.5 font-semibold"
-										style="color: {col.player.color};"
-										title="Rank sources by {col.player.label}"
-										onclick={() => toggleBreakdownSort(col.player.playerId)}
-									>
-										{#if col.player.nation}
-											<SpriteIcon
-												category="crests"
-												value={col.player.nation}
-												size={15}
-												alt={col.player.label}
-											/>
-										{/if}
-										{col.player.label}
-										{#if breakdownSortId === col.player.playerId}<span
-												class="text-orange">↓</span
-											>{/if}
-									</button>
-								</th>
+								<td class="py-1.5 pr-4 text-right font-semibold text-tan">
+									{col.b[section.key].total}
+								</td>
 							{/each}
 						</tr>
-					</thead>
-					<tbody>
-						{#each visibleBreakdownSections as section (section.key)}
-							<tr class="border-t border-border-subtle">
-								<td class="py-1.5 font-semibold text-tan">{section.label}</td>
+						{#each breakdownRows(section.key) as label (label)}
+							<tr>
+								<td class="py-0.5 pl-4 text-xs text-gray-400">{label}</td>
 								{#each scienceBreakdowns as col (col.player.playerId)}
-									<td class="py-1.5 pr-4 text-right font-semibold text-tan">
-										{col.b[section.key].total}
+									{@const item = breakdownItem(col, section.key, label)}
+									<td class="py-0.5 pr-4">
+										{#if item}
+											<div class="flex items-center justify-end gap-1.5">
+												<div
+													class="h-1.5 shrink rounded-sm"
+													style="width: {(Math.max(0, item.science) /
+														breakdownMaxItem) *
+														100}%; max-width: 4rem; background: {col.player
+														.color};"
+												></div>
+												<span
+													class="shrink-0 whitespace-nowrap text-xs text-tan"
+													>{#if item.count > 1}<span class="text-gray-400"
+															>({item.count}×)&nbsp;</span
+														>{/if}{item.science}</span
+												>
+											</div>
+										{:else}
+											<div class="text-right text-xs text-gray-500">—</div>
+										{/if}
 									</td>
 								{/each}
 							</tr>
-							{#each breakdownRows(section.key) as label (label)}
-								<tr>
-									<td class="py-0.5 pl-4 text-xs text-gray-400">{label}</td>
-									{#each scienceBreakdowns as col (col.player.playerId)}
-										{@const item = breakdownItem(col, section.key, label)}
-										<td class="py-0.5 pr-4 text-right text-xs text-tan">
-											{#if item}
-												{#if item.count > 1}<span class="text-gray-400"
-														>({item.count}×)&nbsp;</span
-													>{/if}{item.science}
-											{:else}
-												<span class="text-gray-500">—</span>
-											{/if}
-										</td>
-									{/each}
-								</tr>
-							{/each}
 						{/each}
-						<tr class="border-t border-border-subtle">
-							<td class="py-1.5 font-semibold text-tan">Other</td>
-							{#each scienceBreakdowns as col (col.player.playerId)}
-								<td class="py-1.5 pr-4 text-right font-semibold text-tan">
-									{col.b.other}
-								</td>
-							{/each}
-						</tr>
-						<tr class="border-t border-border-subtle">
-							<td class="py-1.5 font-bold text-tan">
-								<span class="inline-flex items-center gap-1">
-									Science per turn
-									<SpriteIcon
-										category="yields"
-										value="YIELD_SCIENCE"
-										size={13}
-									/>
-								</span>
+					{/each}
+					<tr class="border-t border-border-subtle">
+						<td class="py-1.5 font-semibold text-tan">Other</td>
+						{#each scienceBreakdowns as col (col.player.playerId)}
+							<td class="py-1.5 pr-4 text-right font-semibold text-tan">
+								{col.b.other}
 							</td>
-							{#each scienceBreakdowns as col (col.player.playerId)}
-								<td class="py-1.5 pr-4 text-right font-bold text-tan">
-									{col.b.total}
-								</td>
-							{/each}
-						</tr>
-					</tbody>
-				</table>
-			</div>
-		{/if}
+						{/each}
+					</tr>
+					<tr class="border-t border-border-subtle">
+						<td class="py-1.5 font-bold text-tan">
+							<span class="inline-flex items-center gap-1">
+								Science per turn
+								<SpriteIcon category="yields" value="YIELD_SCIENCE" size={13} />
+							</span>
+						</td>
+						{#each scienceBreakdowns as col (col.player.playerId)}
+							<td class="py-1.5 pr-4 text-right font-bold text-tan">
+								{col.b.total}
+							</td>
+						{/each}
+					</tr>
+				</tbody>
+			</table>
+		</div>
 	</div>
 {/if}
 
