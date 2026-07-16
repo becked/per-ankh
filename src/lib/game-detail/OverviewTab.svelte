@@ -10,7 +10,6 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 	import {
 		type PlayerSummary,
 		type SpriteCategory,
@@ -20,6 +19,7 @@
 		findByPlayer,
 		classifyUnit,
 		UNIT_CLASS_COLORS,
+		improvementDisplayName,
 	} from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
@@ -455,11 +455,7 @@
 						<span class="font-bold text-gray-400">Wonders</span>
 						<span class="font-medium text-bright">
 							{player.wonders
-								.map(
-									(w) =>
-										IMPROVEMENT_NAMES[w.wonder] ??
-										formatEnum(w.wonder, "IMPROVEMENT_"),
-								)
+								.map((w) => improvementDisplayName(w.wonder))
 								.join(", ")}
 						</span>
 					{/if}

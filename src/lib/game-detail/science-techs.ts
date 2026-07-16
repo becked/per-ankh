@@ -14,10 +14,17 @@
 //     read as "standing at game end".
 //   - laws — `law_adoption_history`, which keeps laws later switched away.
 //   - agent missions — `MEMORYPLAYER_STEAL_RESEARCH` rows in `memory_data`.
-//     The memory's OWNER is the thief (verified against cached prod games:
-//     every owner had Portcullis + Cartography before the steal turn; targets
-//     often had neither). Memories can expire from the save, so this can
-//     undercount long games.
+//     The memory's OWNER (`player_xml_id`) is the THIEF and
+//     `target_player_xml_id` is the victim, per the game source:
+//     PlayerEvent.cs doMission runs on the acting player (`this` = the
+//     thief; the mission's SubjectCharacter is their Spymaster and the same
+//     doBonus pays the thief the stolen science) and its meMemory branch
+//     calls addMemory(eMemoryPlayer, ePlayer: eOtherPlayer /* victim */),
+//     appending to the THIEF's own list. The grudge direction comes from
+//     the read side: PlayerOpinion.cs calculatePlayerOpinionOfUsRate —
+//     "other player has this opinion of us" — scans a player's OWN memory
+//     list, so an entry on P's list targeting Q feeds Q's opinion of P.
+//     Memories can expire from the save, so this can undercount long games.
 //   - expeditions — `EVENTSTORY_EXPEDITION_*` entries in `story_events`
 //     (capped at 100 per blob, so coverage is best-effort).
 
@@ -173,9 +180,10 @@ export type ScienceTechMarker = {
 };
 
 // The player's steal-research mission turns. The memory's owner is the thief
-// (see header comment), so callers filter memory_data by player_xml_id ===
-// player id — there is no nation on memory rows, so no nation fallback exists
-// and pre-2.6.0-style blobs simply yield no espionage markers.
+// and its target the victim (source derivation in the header comment), so
+// callers filter memory_data by player_xml_id === player id — there is no
+// nation on memory rows, so no nation fallback exists and pre-2.6.0-style
+// blobs simply yield no espionage markers.
 export const STEAL_RESEARCH_MEMORY = "MEMORYPLAYER_STEAL_RESEARCH";
 
 // Display name for one standing building: the baked override when the game
@@ -194,15 +202,6 @@ function buildingName(zType: string, prefix: string): string {
 			: formatEnum(prefix, "IMPROVEMENT_"));
 	const domain = SHRINE_TYPE[zType];
 	return domain ? `${base} (${domain})` : base;
-}
-
-// General display name for an improvement zType, with a shrine's domain
-// appended: "Shrine of Nabu (Wisdom)". The baked IMPROVEMENT_NAMES overrides
-// cover the awkward enum names (monasteries, shrine-of-X, tiers).
-export function improvementDisplayName(zType: string): string {
-	const named = IMPROVEMENT_NAMES[zType] ?? formatEnum(zType, "IMPROVEMENT_");
-	const domain = SHRINE_TYPE[zType];
-	return domain ? `${named} (${domain})` : named;
 }
 
 // Base science of one standing improvement tile: the improvement's own flat
@@ -316,7 +315,8 @@ export function scienceTechMarkers(
 				});
 			} else if (c.kind === "law") {
 				const adopted = laws.find((d) => d.law_name === c.law);
-				if (adopted) usage.push({ kind: "law", law: c.law, turn: adopted.turn });
+				if (adopted)
+					usage.push({ kind: "law", law: c.law, turn: adopted.turn });
 			} else if (c.kind === "espionage") {
 				if (stealTurns.length > 0)
 					usage.push({
@@ -407,25 +407,22 @@ export type BreakdownItem = {
 export type ScienceBreakdown = {
 	specialists: { items: BreakdownItem[]; total: number };
 	buildings: { items: BreakdownItem[]; total: number };
-	// Flat conditional sources: science laws (Constitution per urban
-	// specialist, Centralization off capital culture), science law UPKEEP
-	// (negative, × city count), and the Competitive Mode stipend. Exact
-	// rates from law/effect XML; upkeep×cities per Player.getYieldUpkeepNet.
+	// Flat conditional law sources: Constitution per urban specialist,
+	// Centralization off capital culture, and science law UPKEEP (negative,
+	// × city count per Player.getYieldUpkeepNet). Exact rates from the
+	// law/effect XML.
 	laws: { items: BreakdownItem[]; total: number };
-	// Court members' Wisdom → science (InfoHelpers.getRatingYieldRateCourt):
-	// ruler at full rate, spouse at −50%. Successors (4, −50%) and courtiers
-	// (−67%) also count in-game but aren't derivable from the blob — no
-	// courtier flag is parsed and the succession list is recomputed at load —
-	// and character-opinion rate modifiers are likewise unavailable, so this
-	// is the identifiable floor.
-	court: { items: BreakdownItem[]; total: number };
 	// Percent modifiers — the percentages are exact game data (Library +10%,
-	// Musaeum +50%, governors by rating curve); their POINTS are computed
-	// against each city's reconstructed flat base.
+	// Musaeum +50%); their POINTS are computed against each city's
+	// reconstructed base (which, matching City.cs calculateBaseYield →
+	// :4682, includes the law yields above).
 	modifiers: { items: BreakdownItem[]; total: number };
-	// Remainder vs the actual rate: Philosophy (needs Forum counts the save
-	// lacks), court, religion, and every interaction the save doesn't
-	// itemize. Never negative.
+	// SIGNED remainder vs the actual rate: governors, court (ruler, spouse,
+	// successors, courtiers), Competitive Mode, Philosophy-via-Forums,
+	// religion, and every interaction the save doesn't itemize. Those need
+	// blob fields that don't exist yet (game_options, council, courtiers) —
+	// see the parser follow-up. A negative value means the itemized floor
+	// over-counted; it's deliberately not clamped so that shows.
 	other: number;
 	// The player's actual science/turn at game end.
 	total: number;
@@ -433,11 +430,9 @@ export type ScienceBreakdown = {
 
 // Science-law rates (law.xml → effectCity.xml, ÷10 display):
 // EFFECTCITY_LAW_CONSTITUTION aiYieldRateSpecialistUrban SCIENCE 10;
-// EFFECTCITY_LAW_CENTRALIZATION_CAPITAL aiYieldRateCulture SCIENCE 20;
-// EFFECTPLAYER_COMPETITIVE_MODE aiYieldRate SCIENCE 40.
+// EFFECTCITY_LAW_CENTRALIZATION_CAPITAL aiYieldRateCulture SCIENCE 20.
 const CONSTITUTION_SCIENCE_PER_URBAN_SPECIALIST = 1;
 const CENTRALIZATION_CAPITAL_SCIENCE_PER_CULTURE = 2;
-const COMPETITIVE_MODE_SCIENCE = 4;
 
 // Laws whose UPKEEP costs science, PER CITY (law.xml EffectPlayerUpkeep →
 // effectPlayer.xml UPKEEP_MEDIUM/HIGH/VERY_HIGH_SCIENCE ÷10;
@@ -448,51 +443,10 @@ const LAW_SCIENCE_UPKEEP_PER_CITY: Readonly<Record<string, number>> = {
 	LAW_AUTARKY: -2,
 };
 
-// Court science (game ints, ÷10 at display): rating.xml aiYieldCourtRate
-// Wisdom→science = 10, run through InfoHelpers.modifyRating with
-// YIELD_SCIENCE's iTriangleOffset (−2); the spouse rate is first cut by
-// LEADER_SPOUSE_YIELD_MODIFIER (−50%).
-const COURT_WISDOM_SCIENCE_RATE = 10;
-const SCIENCE_TRIANGLE_OFFSET = -2;
-export const SPOUSE_YIELD_MODIFIER = -50;
-
-function triangleOffset(n: number, off: number): number {
-	const v = Math.abs(n) + off;
-	if (v <= 0) return n;
-	return Math.sign(n) * (triangle(v) - off);
-}
-// InfoHelpers.modifyRating — flat-yield rating scaling (integer math).
-function modifyRating(
-	value: number,
-	rating: number,
-	off: number,
-	competitive: boolean,
-): number {
-	if (!competitive) return value * triangleOffset(rating, off);
-	return Math.floor(
-		(value * rating * triangleOffset(RATING_EQUIVALENT, off)) /
-			RATING_EQUIVALENT,
-	);
-}
-
-/**
- * One court member's science/turn from their Wisdom (display units).
- * `modifierPct` is the role's yield modifier (0 ruler, −50 spouse).
- * Character-opinion modifiers aren't in the blob and are ignored.
- */
-export function courtWisdomScience(
-	wisdom: number,
-	modifierPct: number,
-	competitive: boolean,
-): number {
-	const rate = Math.floor(
-		(COURT_WISDOM_SCIENCE_RATE * (100 + modifierPct)) / 100,
-	);
-	return modifyRating(rate, wisdom, SCIENCE_TRIANGLE_OFFSET, competitive) / 10;
-}
-
 // Culture levels in game order — index+1 is the level multiplier
-// aiYieldRateCulture uses.
+// aiYieldRateCulture uses (City.cs:11916 adds getCultureStep() on top for
+// post-Legendary growth, which the blob doesn't record, so Centralization
+// is a floor for long-lived Legendary capitals).
 const CULTURE_LEVELS = [
 	"CULTURE_WEAK",
 	"CULTURE_DEVELOPING",
@@ -500,53 +454,20 @@ const CULTURE_LEVELS = [
 	"CULTURE_LEGENDARY",
 ];
 
-// ── the game's rating math (InfoHelpers.boostRating; see owreference's
-// stat-scaling page). Governor yield % = rate.xml's 2 per Wisdom, run
-// through triangleBoost — or, in Competitive Mode ("Lower Character
-// Yields", the multiplayer standard), a linear curve through rating 5.
-const RATING_EQUIVALENT = 5; // RATING_EQUIVALENT_LOWER_CHARACTER_YIELDS
-const GOVERNOR_WISDOM_SCIENCE = 2; // rating.xml aiYieldGovernorModifier ÷10
-
-function triangle(n: number): number {
-	const a = Math.abs(n);
-	return Math.sign(n) * ((a * (a + 1)) / 2);
-}
-function triangleBoost(n: number): number {
-	return n === 0 ? 0 : Math.sign(n) * triangle(Math.abs(n) + 1);
-}
-function boostRating(
-	value: number,
-	rating: number,
-	competitive: boolean,
-): number {
-	if (!competitive) return value * triangleBoost(rating);
-	return Math.floor(
-		(value * rating * triangleBoost(RATING_EQUIVALENT)) / RATING_EQUIVALENT,
-	);
-}
-
 const round1 = (n: number) => Math.round(n * 10) / 10;
 
 /**
  * Decompose a player's end-of-game science rate into itemized sources.
- * `improvements` are the player's own tiles; `governorWisdomByCity` maps a
- * city name → its governor's Wisdom rating; `competitive` selects the
- * Competitive Mode rating curve (the multiplayer standard); `finalRate` is
- * the last non-null YIELD_SCIENCE rate.
+ * `improvements` are the player's own tiles; `activeLaws` their laws still
+ * active at game end; `capital` their capital's name + culture level (null
+ * when unresolvable); `cityCount` scales the per-city law upkeep;
+ * `finalRate` is the last non-null YIELD_SCIENCE rate.
  */
 export function scienceBreakdown(
 	improvements: ImprovementInfo[],
-	governorWisdomByCity: ReadonlyMap<string, number>,
-	// The player's ACTIVE laws at game end plus their capital's culture level
-	// (null when unknown), for the conditional law sources; cityCount scales
-	// the per-city law upkeep.
 	activeLaws: ReadonlySet<string>,
-	capitalCulture: string | null,
+	capital: { cityName: string; cultureLevel: string | null } | null,
 	cityCount: number,
-	// Court members with their Wisdom and role yield-modifier (ruler 0,
-	// spouse −50), pre-resolved by the caller from characters/marriages.
-	courtMembers: { label: string; wisdom: number; modifierPct: number }[],
-	competitive: boolean,
 	finalRate: number,
 	specialistName: (zType: string) => string,
 	improvementLabel: (zType: string) => string,
@@ -567,8 +488,10 @@ export function scienceBreakdown(
 
 	const specialists = new Map<string, Acc>();
 	const buildings = new Map<string, Acc>();
-	// Per-city flat base and per-city percent items, for modifier estimates.
+	// Per-city flat base, per-city urban-specialist counts, and per-city
+	// percent items, for the law and modifier passes below.
 	const cityFlat = new Map<string, number>();
+	const cityUrban = new Map<string, number>();
 	const cityPct = new Map<string, Map<string, Acc>>();
 	for (const i of improvements) {
 		const flat = IMPROVEMENT_SCIENCE[i.improvement]?.flat ?? 0;
@@ -589,6 +512,9 @@ export function scienceBreakdown(
 				i.city_name,
 				(cityFlat.get(i.city_name) ?? 0) + flat + lux + staff,
 			);
+			if (i.specialist != null && SPECIALISTS[i.specialist]?.kind === "urban") {
+				cityUrban.set(i.city_name, (cityUrban.get(i.city_name) ?? 0) + 1);
+			}
 			if (pct > 0) {
 				const m = cityPct.get(i.city_name) ?? new Map<string, Acc>();
 				// The exact per-building percentage goes in the label, so tiers
@@ -599,36 +525,21 @@ export function scienceBreakdown(
 		}
 	}
 
-	// Percent modifiers, estimated per city against that city's flat base.
-	const modifiers = new Map<string, Acc>();
-	for (const [city, mods] of cityPct) {
-		const base = cityFlat.get(city) ?? 0;
-		for (const [label, acc] of mods) {
-			const est = round1((base * acc.pct) / 100);
-			const out = modifiers.get(label) ?? { count: 0, science: 0, pct: 0 };
-			out.count += acc.count;
-			out.science += est;
-			out.pct += acc.pct;
-			modifiers.set(label, out);
-		}
-	}
-	for (const [city, wisdom] of governorWisdomByCity) {
-		if (wisdom === 0) continue;
-		const pct = boostRating(GOVERNOR_WISDOM_SCIENCE, wisdom, competitive);
-		const est = round1(((cityFlat.get(city) ?? 0) * pct) / 100);
-		const out = modifiers.get("Governors") ?? { count: 0, science: 0, pct: 0 };
-		out.count += 1;
-		out.science += est;
-		out.pct += pct;
-		modifiers.set("Governors", out);
-	}
-
-	// Conditional flat law sources + the Competitive Mode stipend.
+	// Conditional flat law sources. These are EffectCity yields — City.cs
+	// puts them in the city's BASE (calculateBaseYield), which the city's
+	// percent modifiers then multiply — so they also feed cityFlat before
+	// the modifier pass below.
 	const laws = new Map<string, Acc>();
 	if (activeLaws.has("LAW_CONSTITUTION")) {
-		const urban = improvements.filter(
-			(i) => i.specialist != null && SPECIALISTS[i.specialist]?.kind === "urban",
-		).length;
+		let urban = 0;
+		for (const [city, count] of cityUrban) {
+			urban += count;
+			cityFlat.set(
+				city,
+				(cityFlat.get(city) ?? 0) +
+					count * CONSTITUTION_SCIENCE_PER_URBAN_SPECIALIST,
+			);
+		}
 		if (urban > 0) {
 			laws.set("Constitution", {
 				count: urban,
@@ -637,22 +548,18 @@ export function scienceBreakdown(
 			});
 		}
 	}
-	if (activeLaws.has("LAW_CENTRALIZATION") && capitalCulture != null) {
-		const level = CULTURE_LEVELS.indexOf(capitalCulture) + 1;
+	if (activeLaws.has("LAW_CENTRALIZATION") && capital?.cultureLevel != null) {
+		// Floor: City.cs:11916 also adds getCultureStep() (post-Legendary
+		// culture growth), which the blob doesn't record.
+		const level = CULTURE_LEVELS.indexOf(capital.cultureLevel) + 1;
 		if (level > 0) {
-			laws.set("Centralization", {
-				count: 1,
-				science: level * CENTRALIZATION_CAPITAL_SCIENCE_PER_CULTURE,
-				pct: 0,
-			});
+			const science = level * CENTRALIZATION_CAPITAL_SCIENCE_PER_CULTURE;
+			laws.set("Centralization", { count: 1, science, pct: 0 });
+			cityFlat.set(
+				capital.cityName,
+				(cityFlat.get(capital.cityName) ?? 0) + science,
+			);
 		}
-	}
-	if (competitive) {
-		laws.set("Competitive Mode", {
-			count: 1,
-			science: COMPETITIVE_MODE_SCIENCE,
-			pct: 0,
-		});
 	}
 	for (const [lawId, cost] of Object.entries(LAW_SCIENCE_UPKEEP_PER_CITY)) {
 		if (activeLaws.has(lawId) && cityCount > 0) {
@@ -664,12 +571,19 @@ export function scienceBreakdown(
 		}
 	}
 
-	// Court: each resolved member's Wisdom at their role rate.
-	const court = new Map<string, Acc>();
-	for (const m of courtMembers) {
-		const science = courtWisdomScience(m.wisdom, m.modifierPct, competitive);
-		if (science !== 0)
-			court.set(m.label, { count: 1, science, pct: 0 });
+	// Percent modifiers, estimated per city against that city's base (flat
+	// tiles + staff + the law yields above).
+	const modifiers = new Map<string, Acc>();
+	for (const [city, mods] of cityPct) {
+		const base = cityFlat.get(city) ?? 0;
+		for (const [label, acc] of mods) {
+			const est = round1((base * acc.pct) / 100);
+			const out = modifiers.get(label) ?? { count: 0, science: 0, pct: 0 };
+			out.count += acc.count;
+			out.science += est;
+			out.pct += acc.pct;
+			modifiers.set(label, out);
+		}
 	}
 
 	const toItems = (m: Map<string, Acc>, withPct: boolean): BreakdownItem[] =>
@@ -687,29 +601,24 @@ export function scienceBreakdown(
 	const specialistItems = toItems(specialists, false);
 	const buildingItems = toItems(buildings, false);
 	const lawItems = toItems(laws, false);
-	const courtItems = toItems(court, false);
 	const modifierItems = toItems(modifiers, true);
 	const specialistsTotal = sum(specialistItems);
 	const buildingsTotal = sum(buildingItems);
 	const lawsTotal = sum(lawItems);
-	const courtTotal = sum(courtItems);
 	const modifiersTotal = sum(modifierItems);
 	return {
 		specialists: { items: specialistItems, total: specialistsTotal },
 		buildings: { items: buildingItems, total: buildingsTotal },
 		laws: { items: lawItems, total: lawsTotal },
-		court: { items: courtItems, total: courtTotal },
 		modifiers: { items: modifierItems, total: modifiersTotal },
+		// Signed on purpose — a negative remainder is the signal that the
+		// itemized floor over-counted somewhere.
 		other: round1(
-			Math.max(
-				0,
-				finalRate -
-					specialistsTotal -
-					buildingsTotal -
-					lawsTotal -
-					courtTotal -
-					modifiersTotal,
-			),
+			finalRate -
+				specialistsTotal -
+				buildingsTotal -
+				lawsTotal -
+				modifiersTotal,
 		),
 		total: finalRate,
 	};

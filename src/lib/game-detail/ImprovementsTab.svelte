@@ -3,7 +3,6 @@
 	import type { UnitInfo } from "$lib/parser/types";
 	import type { EChartsOption } from "echarts";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 	import { CHART_THEME } from "$lib/config";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import SpriteIcon from "./SpriteIcon.svelte";
@@ -19,6 +18,7 @@
 		ownedByPlayer,
 		toggleSort,
 		filledLineStyle,
+		improvementDisplayName,
 	} from "./helpers";
 
 	let {
@@ -334,8 +334,7 @@
 									? 'rounded-r-lg'
 									: ''}"
 							>
-								{IMPROVEMENT_NAMES[row.improvement] ??
-									formatEnum(row.improvement, "IMPROVEMENT_")}
+								{improvementDisplayName(row.improvement)}
 							</td>
 							{#each displayedImprovementPlayers as player (player.playerId)}
 								<td

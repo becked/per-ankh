@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { GameDetails } from "$lib/types/GameDetails";
 	import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
 	import type { PlayerTech } from "$lib/types/PlayerTech";
 	import type { YieldHistory } from "$lib/types/YieldHistory";
@@ -8,12 +7,7 @@
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { StoryEvent } from "$lib/types/StoryEvent";
-	import type {
-		FamilyInfo,
-		MemoryInfo,
-		CharacterInfo,
-		CharacterMarriageInfo,
-	} from "$lib/parser/types";
+	import type { FamilyInfo, MemoryInfo } from "$lib/parser/types";
 	import type { EChartsOption, ECharts } from "echarts";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
@@ -22,6 +16,8 @@
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import EventRail, {
+		TOOLTIP_TEXT,
+		TOOLTIP_MUTED,
 		type RailGroup,
 		type RailMarker,
 	} from "./EventRail.svelte";
@@ -37,10 +33,12 @@
 		TABLE_CELL_TD_CLASS,
 		ownedByPlayer,
 		findByPlayer,
+		orderPlayersUploaderFirst,
 		toggleSort,
 		filledLineStyle,
 		buildOwttUrl,
 		getSpritePath,
+		improvementDisplayName,
 	} from "./helpers";
 	import {
 		scienceTechMarkers,
@@ -48,9 +46,7 @@
 		sagesSeatFoundedTurn,
 		scienceSpikes,
 		scienceBreakdown,
-		improvementDisplayName,
 		expeditionEvents,
-		SPOUSE_YIELD_MODIFIER,
 		STEAL_RESEARCH_MEMORY,
 		type ScienceTechMarker,
 		type FreeTechMarker,
@@ -61,7 +57,6 @@
 
 	let {
 		players,
-		gameDetails,
 		techDiscoveryHistory,
 		completedTechs,
 		allYields,
@@ -72,8 +67,6 @@
 		families = [],
 		memoryData = [],
 		storyEvents = [],
-		characters = [],
-		characterMarriages = [],
 		userNation = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
 		tableState = $bindable<TableState>({
@@ -84,7 +77,6 @@
 		}),
 	}: {
 		players: DetailPlayer[];
-		gameDetails: GameDetails;
 		techDiscoveryHistory: TechDiscoveryHistory[];
 		completedTechs: PlayerTech[];
 		allYields: YieldHistory[];
@@ -95,8 +87,6 @@
 		families?: FamilyInfo[];
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
-		characters?: CharacterInfo[];
-		characterMarriages?: CharacterMarriageInfo[];
 		userNation?: string | null;
 		chartFilter?: Record<string, boolean>;
 		tableState?: TableState;
@@ -106,18 +96,14 @@
 	// player id every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
-	// Canonical player order: the save's uploader first, then the rest in their
-	// existing order (same rule as MilitaryTab). Observer/archival uploads (no
-	// userNation) keep the existing order.
+	// Canonical player order: uploader first (shared rule with MilitaryTab).
 	const orderedPlayers = $derived(
-		userNation
-			? [...players].sort(
-					(a, b) =>
-						(a.nation === userNation ? 0 : 1) -
-						(b.nation === userNation ? 0 : 1),
-				)
-			: players,
+		orderPlayersUploaderFirst(players, userNation),
 	);
+
+	// Tech display name — the baked override, else the generic formatter.
+	const techName = (tech: string) =>
+		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
 
 	// ─── Chart option ─────────────────────────────────────────────────
 	const techDiscoveryChartOption = $derived(
@@ -165,11 +151,9 @@
 								const turn = arr[0].data[0];
 								const rows = arr
 									.map((p) => {
-										const [, count, techName] = p.data;
-										const tech = techName
-											? ` — ${TECH_NAMES[techName] ?? formatEnum(techName, "TECH_")}`
-											: "";
-										return `${p.marker}${p.seriesName}: <b>${count}</b>${tech}`;
+										const [, count, tech] = p.data;
+										const suffix = tech ? ` — ${techName(tech)}` : "";
+										return `${p.marker}${p.seriesName}: <b>${count}</b>${suffix}`;
 									})
 									.join("<br/>");
 								return `Turn ${turn}<br/>${rows}`;
@@ -232,14 +216,6 @@
 	// Like the Military rail, the annotated variant renders for two-player
 	// matchups; other games get the plain chart.
 
-	// Secondary / muted text shades for the rail tooltips (hex literals are the
-	// norm inside chart/tooltip option objects in this codebase).
-	const TOOLTIP_TEXT = "#cfc9bd";
-	const TOOLTIP_MUTED = "#9b948a";
-
-	const techName = (tech: string) =>
-		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
-
 	// Per-player data slices for the rail (id match, nation fallback — the
 	// shared ownedByPlayer/findByPlayer idiom).
 	const techsFor = (p: DetailPlayer) =>
@@ -289,7 +265,9 @@
 				if (u.kind === "law")
 					return [`Adopted ${formatEnum(u.law, "LAW_")} on T${u.turn}`];
 				if (u.kind === "espionage")
-					return [`Steal Research ×${u.turns.length} (T${u.turns.join(", T")})`];
+					return [
+						`Steal Research ×${u.turns.length} (T${u.turns.join(", T")})`,
+					];
 				return u.events.map((e) => `Expedition: ${e.name} (T${e.turn})`);
 			})
 			.map((t) => `<div style="color:${TOOLTIP_TEXT}">${t}</div>`)
@@ -399,54 +377,64 @@
 	const scienceRailGroups = $derived.by<RailGroup[]>(() => {
 		if (orderedPlayers.length !== 2) return [];
 		return scienceRailData
-			.map(({ player, techs, improvements, laws, stealTurns, expeditions, spikes }) => {
-				const markers: Record<
-					(typeof SCIENCE_RAIL_KINDS)[number],
-					RailMarker[]
-				> = {
-					key: scienceTechMarkers(
-						techs,
-						improvements,
-						laws,
-						stealTurns,
-						expeditions,
-					).map((m) => ({
-						turn: m.turn,
-						iconCategory: "techs" as const,
-						iconValue: m.tech,
-						color: player.color,
-						tooltipHtml: keyTechTooltip(m, player.color),
-					})),
-					free: freeTechMarkers(
-						techs,
-						sagesSeatFoundedTurn(
-							player.playerId,
-							families,
-							cityStatistics.cities,
-						),
-					).map((m) => ({
-						turn: m.turn,
-						iconCategory: "techs" as const,
-						// The first granted tech's icon; the full list is in the tooltip.
-						iconValue: m.techs[0] ?? null,
-						color: player.color,
-						tooltipHtml: freeTechTooltip(m, player.color),
-					})),
-					event: spikes.map((s) => ({
-						turn: s.turn,
-						iconCategory: "yields" as const,
-						iconValue: "YIELD_SCIENCE",
-						color: player.color,
-						tooltipHtml: spikeTooltip(s, player.color),
-					})),
-				};
-				return {
+			.map(
+				({
 					player,
-					rows: SCIENCE_RAIL_KINDS.filter(
-						(kind) => markers[kind].length > 0,
-					).map((kind) => ({ kind, markers: markers[kind] })),
-				};
-			})
+					techs,
+					improvements,
+					laws,
+					stealTurns,
+					expeditions,
+					spikes,
+				}) => {
+					const markers: Record<
+						(typeof SCIENCE_RAIL_KINDS)[number],
+						RailMarker[]
+					> = {
+						key: scienceTechMarkers(
+							techs,
+							improvements,
+							laws,
+							stealTurns,
+							expeditions,
+						).map((m) => ({
+							turn: m.turn,
+							iconCategory: "techs" as const,
+							iconValue: m.tech,
+							color: player.color,
+							tooltipHtml: keyTechTooltip(m, player.color),
+						})),
+						free: freeTechMarkers(
+							techs,
+							sagesSeatFoundedTurn(
+								player.playerId,
+								families,
+								cityStatistics.cities,
+							),
+						).map((m) => ({
+							turn: m.turn,
+							iconCategory: "techs" as const,
+							// The first granted tech's icon; the full list is in the tooltip.
+							iconValue: m.techs[0] ?? null,
+							color: player.color,
+							tooltipHtml: freeTechTooltip(m, player.color),
+						})),
+						event: spikes.map((s) => ({
+							turn: s.turn,
+							iconCategory: "yields" as const,
+							iconValue: "YIELD_SCIENCE",
+							color: player.color,
+							tooltipHtml: spikeTooltip(s, player.color),
+						})),
+					};
+					return {
+						player,
+						rows: SCIENCE_RAIL_KINDS.filter(
+							(kind) => markers[kind].length > 0,
+						).map((kind) => ({ kind, markers: markers[kind] })),
+					};
+				},
+			)
 			.filter((g) => g.rows.length > 0);
 	});
 
@@ -463,102 +451,20 @@
 
 	// ─── Where the science comes from ─────────────────────────────────
 	// End-state itemized decomposition of each player's science/turn, side
-	// by side: specialists and buildings/resources by name, the exact
-	// percent modifiers (libraries, Musaeum, governors) with their points
-	// computed against each city's base, and an "other" remainder (laws,
-	// court, religion, interactions the save doesn't itemize).
-
-	// A city's governor's Wisdom: the player's living character whose first
-	// name matches the city's governor_name (max Wisdom on ambiguity).
-	function governorWisdom(
-		player: DetailPlayer,
-		governorName: string,
-	): number | null {
-		let best: number | null = null;
-		for (const c of characters) {
-			if (c.player_xml_id !== player.playerId) continue;
-			if (c.first_name !== governorName || c.death_turn != null) continue;
-			if (c.wisdom != null && (best == null || c.wisdom > best))
-				best = c.wisdom;
-		}
-		return best;
-	}
-
-	// Competitive Mode ("Lower Character Yields") flattens the governor
-	// rating curve; it's the multiplayer standard, so network games use it.
-	const competitiveScaling = $derived(gameDetails.game_mode === "NETWORK");
-
-	// The player's court members the blob can identify: the sitting ruler
-	// (full court rate) and their living spouse (−50%). Successors and
-	// courtiers also earn court yields in-game but aren't derivable — no
-	// courtier flag is parsed and the succession list is recomputed at load.
-	function courtMembersFor(
-		player: DetailPlayer,
-	): { label: string; wisdom: number; modifierPct: number }[] {
-		const ruler = characters
-			.filter(
-				(c) =>
-					c.player_xml_id === player.playerId &&
-					c.became_leader_turn != null &&
-					c.death_turn == null,
-			)
-			.sort(
-				(a, b) => (b.became_leader_turn ?? 0) - (a.became_leader_turn ?? 0),
-			)[0];
-		if (!ruler) return [];
-		const out: { label: string; wisdom: number; modifierPct: number }[] = [];
-		const name = (c: CharacterInfo) =>
-			c.first_name ? formatEnum(c.first_name, "NAME_") : "?";
-		if (ruler.wisdom != null && ruler.wisdom !== 0)
-			out.push({
-				label: `Ruler (${name(ruler)})`,
-				wisdom: ruler.wisdom,
-				modifierPct: 0,
-			});
-		const marriage = characterMarriages.find(
-			(m) =>
-				(m.character_xml_id === ruler.xml_id ||
-					m.spouse_xml_id === ruler.xml_id) &&
-				m.divorced_turn == null,
-		);
-		if (marriage) {
-			const spouseId =
-				marriage.character_xml_id === ruler.xml_id
-					? marriage.spouse_xml_id
-					: marriage.character_xml_id;
-			const spouse = characters.find(
-				(c) => c.xml_id === spouseId && c.death_turn == null,
-			);
-			if (spouse?.wisdom != null && spouse.wisdom !== 0)
-				out.push({
-					label: `Spouse (${name(spouse)})`,
-					wisdom: spouse.wisdom,
-					modifierPct: SPOUSE_YIELD_MODIFIER,
-				});
-		}
-		return out;
-	}
+	// by side: specialists and buildings/resources by name, science laws,
+	// and the exact percent modifiers (libraries, Musaeum) with their points
+	// computed against each city's base. Governors, court, and the
+	// Competitive Mode stipend all hinge on GAMEOPTION_COMPETITIVE_MODE,
+	// which the blob doesn't carry yet — they stay in the signed "Other"
+	// remainder until the parser surfaces game_options.
 
 	type BreakdownColumn = { player: DetailPlayer; b: ScienceBreakdown };
 	const scienceBreakdowns = $derived.by<BreakdownColumn[]>(() => {
 		const cols = scienceRailData.map(({ player, improvements, science }) => {
-			// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
-			const govWisdomByCity = new Map<string, number>();
-			for (const city of ownedByPlayer(
-				cityStatistics.cities,
-				player,
-				(c) => c.owner_player_xml_id,
-				(c) => c.owner_nation,
-			)) {
-				if (city.governor_name == null) continue;
-				const wisdom = governorWisdom(player, city.governor_name);
-				if (wisdom != null && wisdom !== 0)
-					govWisdomByCity.set(city.city_name, wisdom);
-			}
 			const finalRate =
 				[...science].reverse().find((d) => d.rate != null)?.rate ?? 0;
-			// The player's laws still active at game end, and their capital's
-			// culture level (both drive the conditional law sources).
+			// The player's laws still active at game end, and their capital
+			// (both drive the conditional law sources).
 			const activeLaws = new Set(
 				ownedByPlayer(
 					currentLaws,
@@ -567,29 +473,25 @@
 					(l) => l.nation,
 				).map((l) => l.law),
 			);
-			const capitalCulture =
-				findByPlayer(
-					cityStatistics.cities.filter((c) => c.is_capital),
-					player,
-					(c) => c.owner_player_xml_id,
-					(c) => c.owner_nation,
-				)?.culture_level ?? null;
-			const cityCount = ownedByPlayer(
+			const cities = ownedByPlayer(
 				cityStatistics.cities,
 				player,
 				(c) => c.owner_player_xml_id,
 				(c) => c.owner_nation,
-			).length;
+			);
+			const capitalCity = cities.find((c) => c.is_capital);
 			return {
 				player,
 				b: scienceBreakdown(
 					improvements,
-					govWisdomByCity,
 					activeLaws,
-					capitalCulture,
-					cityCount,
-					courtMembersFor(player),
-					competitiveScaling,
+					capitalCity
+						? {
+								cityName: capitalCity.city_name,
+								cultureLevel: capitalCity.culture_level,
+							}
+						: null,
+					cities.length,
 					finalRate,
 					specialistName,
 					improvementDisplayName,
@@ -605,10 +507,15 @@
 	const BREAKDOWN_SECTIONS = [
 		{ key: "specialists", label: "Specialists" },
 		{ key: "buildings", label: "Buildings & resources" },
-		{ key: "laws", label: "Laws & mode" },
-		{ key: "court", label: "Court" },
+		{ key: "laws", label: "Laws" },
 		{ key: "modifiers", label: "Modifiers" },
 	] as const;
+	// Only sections somebody has items in — an all-zero section is noise.
+	const visibleBreakdownSections = $derived(
+		BREAKDOWN_SECTIONS.filter((s) =>
+			scienceBreakdowns.some((c) => c.b[s.key].items.length > 0),
+		),
+	);
 	let breakdownSortId = $state<number | null>(null);
 	function toggleBreakdownSort(playerId: number) {
 		breakdownSortId = breakdownSortId === playerId ? null : playerId;
@@ -618,9 +525,7 @@
 	): string[] {
 		const ranked =
 			breakdownSortId != null
-				? scienceBreakdowns.filter(
-						(c) => c.player.playerId === breakdownSortId,
-					)
+				? scienceBreakdowns.filter((c) => c.player.playerId === breakdownSortId)
 				: scienceBreakdowns;
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
 		const best = new Map<string, number>();
@@ -957,16 +862,22 @@
 			     scale, values direct-labeled. Click a player to rank by them. -->
 			{@const [L, R] = scienceBreakdowns}
 			<div class="mx-auto max-w-3xl text-sm">
-				<div class="grid grid-cols-[1fr_minmax(11rem,auto)_1fr] items-center gap-x-2">
+				<div
+					class="grid grid-cols-[1fr_minmax(11rem,auto)_1fr] items-center gap-x-2"
+				>
 					{#each [L, R] as col, side (col.player.playerId)}
 						{#if side === 1}
-							<div class="pb-2 text-center text-xs font-bold uppercase tracking-wide text-gray-400">
+							<div
+								class="pb-2 text-center text-xs font-bold uppercase tracking-wide text-gray-400"
+							>
 								Source
 							</div>
 						{/if}
 						<button
 							type="button"
-							class="pb-2 {side === 0 ? 'justify-self-end text-right' : 'justify-self-start text-left'} cursor-pointer"
+							class="pb-2 {side === 0
+								? 'justify-self-end text-right'
+								: 'justify-self-start text-left'} cursor-pointer"
 							title="Rank sources by {col.player.label}"
 							onclick={() => toggleBreakdownSort(col.player.playerId)}
 						>
@@ -990,7 +901,7 @@
 						</button>
 					{/each}
 
-					{#each BREAKDOWN_SECTIONS as section (section.key)}
+					{#each visibleBreakdownSections as section (section.key)}
 						<div
 							class="border-t border-border-subtle py-1 text-right font-semibold text-tan"
 						>
@@ -1018,8 +929,9 @@
 									>
 									<div
 										class="h-2 rounded-sm"
-										style="width: {(Math.max(0, li.science) / breakdownMaxItem) * 100}%; background: {L
-											.player.color};"
+										style="width: {(Math.max(0, li.science) /
+											breakdownMaxItem) *
+											100}%; background: {L.player.color};"
 									></div>
 								{:else}
 									<span class="text-xs text-gray-500">—</span>
@@ -1032,8 +944,9 @@
 								{#if ri}
 									<div
 										class="h-2 rounded-sm"
-										style="width: {(Math.max(0, ri.science) / breakdownMaxItem) * 100}%; background: {R
-											.player.color};"
+										style="width: {(Math.max(0, ri.science) /
+											breakdownMaxItem) *
+											100}%; background: {R.player.color};"
 									></div>
 									<span class="text-xs text-tan"
 										>{ri.science}{#if ri.count > 1}<span class="text-gray-400"
@@ -1047,20 +960,30 @@
 						{/each}
 					{/each}
 
-					<div class="border-t border-border-subtle py-1 text-right font-semibold text-tan">
+					<div
+						class="border-t border-border-subtle py-1 text-right font-semibold text-tan"
+					>
 						{L.b.other}
 					</div>
-					<div class="border-t border-border-subtle py-1 text-center font-semibold text-tan">
+					<div
+						class="border-t border-border-subtle py-1 text-center font-semibold text-tan"
+					>
 						Other
 					</div>
-					<div class="border-t border-border-subtle py-1 font-semibold text-tan">
+					<div
+						class="border-t border-border-subtle py-1 font-semibold text-tan"
+					>
 						{R.b.other}
 					</div>
 
-					<div class="border-t border-border-subtle py-1.5 text-right font-bold text-tan">
+					<div
+						class="border-t border-border-subtle py-1.5 text-right font-bold text-tan"
+					>
 						{L.b.total}
 					</div>
-					<div class="border-t border-border-subtle py-1.5 text-center font-bold text-tan">
+					<div
+						class="border-t border-border-subtle py-1.5 text-center font-bold text-tan"
+					>
 						<span class="inline-flex items-center gap-1">
 							Science per turn
 							<SpriteIcon category="yields" value="YIELD_SCIENCE" size={13} />
@@ -1108,7 +1031,7 @@
 						</tr>
 					</thead>
 					<tbody>
-						{#each BREAKDOWN_SECTIONS as section (section.key)}
+						{#each visibleBreakdownSections as section (section.key)}
 							<tr class="border-t border-border-subtle">
 								<td class="py-1.5 font-semibold text-tan">{section.label}</td>
 								{#each scienceBreakdowns as col (col.player.playerId)}
@@ -1248,7 +1171,7 @@
 									? 'rounded-r-lg'
 									: ''}"
 							>
-								{TECH_NAMES[row.tech] ?? formatEnum(row.tech, "TECH_")}
+								{techName(row.tech)}
 							</td>
 							{#each displayedTechPlayers as player, i (player.playerId)}
 								<td

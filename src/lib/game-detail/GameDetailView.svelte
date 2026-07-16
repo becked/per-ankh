@@ -20,7 +20,6 @@
 		PlayerNationEntry,
 		CharacterInfo,
 		CharacterTraitInfo,
-		CharacterMarriageInfo,
 		PlayerGoalInfo,
 		UnitInfo,
 		FamilyInfo,
@@ -81,7 +80,6 @@
 		families = [],
 		memoryData = [],
 		storyEvents = [],
-		characterMarriages = [],
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -130,9 +128,6 @@
 		families?: FamilyInfo[];
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
-		// Marriages resolve the ruler's spouse for the Techs tab's court
-		// science line. Defaults to [] for legacy callers.
-		characterMarriages?: CharacterMarriageInfo[];
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -575,7 +570,6 @@
 	<Tabs.Content value="techs" class="tab-pane min-h-[400px]">
 		<TechsTab
 			players={resolvedPlayers}
-			{gameDetails}
 			{techDiscoveryHistory}
 			{completedTechs}
 			{allYields}
@@ -586,8 +580,6 @@
 			{families}
 			{memoryData}
 			{storyEvents}
-			{characters}
-			{characterMarriages}
 			{userNation}
 			bind:chartFilter={chartFilters.techs}
 			bind:tableState={tables.techs}

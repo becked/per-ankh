@@ -1,6 +1,12 @@
 <script lang="ts" module>
 	import type { DetailPlayer, SpriteCategory } from "./helpers";
 
+	// Text shades for the markers' rich tooltips, shared by every tab that
+	// builds tooltipHtml for a rail (hex literals are the norm inside
+	// chart/tooltip HTML in this codebase).
+	export const TOOLTIP_TEXT = "#cfc9bd";
+	export const TOOLTIP_MUTED = "#9b948a";
+
 	// One marker on the rail: an icon at its event's turn-x with a rich hover
 	// tooltip. A null iconValue renders a colored dot instead of a sprite.
 	export type RailMarker = {

@@ -15,6 +15,8 @@ import { toRgba } from "$lib/utils/color";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
+import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
+import { SHRINE_TYPE } from "$lib/generated/science-yields";
 import {
 	OWTT_BASE_URL,
 	OWTT_NATION_INDEX,
@@ -833,6 +835,22 @@ export function ownedByPlayer<T>(
 	});
 }
 
+/**
+ * Canonical per-player display order for the detail tabs: the save's
+ * uploader ("player") first, then the rest in their existing order.
+ * Observer/archival uploads (no userNation) keep the existing order.
+ */
+export function orderPlayersUploaderFirst(
+	players: DetailPlayer[],
+	userNation: string | null,
+): DetailPlayer[] {
+	if (!userNation) return players;
+	return [...players].sort(
+		(a, b) =>
+			(a.nation === userNation ? 0 : 1) - (b.nation === userNation ? 0 : 1),
+	);
+}
+
 /** Single-row variant of {@link ownedByPlayer} — id match, nation fallback. */
 export function findByPlayer<T>(
 	rows: T[],
@@ -930,6 +948,17 @@ export function buildOwttUrl(
 	const n = nation != null ? OWTT_NATION_INDEX[nation] : undefined;
 	const nationParam = n != null ? `n=${n}&` : "";
 	return `${OWTT_BASE_URL}?${nationParam}o=${encs.join(",")}`;
+}
+
+/**
+ * Display name for an improvement zType: the baked IMPROVEMENT_NAMES
+ * override (tiers, monasteries, shrine-of-X) with formatEnum as fallback,
+ * plus a pagan shrine's domain appended: "Shrine of Nabu (Wisdom)".
+ */
+export function improvementDisplayName(zType: string): string {
+	const named = IMPROVEMENT_NAMES[zType] ?? formatEnum(zType, "IMPROVEMENT_");
+	const domain = SHRINE_TYPE[zType];
+	return domain ? `${named} (${domain})` : named;
 }
 
 export function formatCityCell(column: CityColumn, city: CityRow): string {

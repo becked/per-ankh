@@ -12,7 +12,12 @@
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
 	import { UNIT_STATS } from "$lib/generated/unit-stats";
 	import SpriteIcon from "./SpriteIcon.svelte";
-	import EventRail from "./EventRail.svelte";
+	import EventRail, {
+		TOOLTIP_TEXT,
+		TOOLTIP_MUTED,
+		type RailGroup,
+		type RailMarker,
+	} from "./EventRail.svelte";
 	import BuildComparison, { type BuildItem } from "./BuildComparison.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
@@ -20,12 +25,12 @@
 		type TableState,
 		type UnitClass,
 		type DetailPlayer,
-		type SpriteCategory,
 		TABLE_FRAME_CLASS,
 		TABLE_CLASS,
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
 		ownedByPlayer,
+		orderPlayersUploaderFirst,
 		toggleSort,
 		classifyUnit,
 		getSpritePath,
@@ -62,27 +67,14 @@
 		tableState?: TableState;
 	} = $props();
 
-	// Secondary / muted text shades for the event tooltips (hex literals are the
-	// norm inside chart/tooltip option objects in this codebase).
-	const TOOLTIP_TEXT = "#cfc9bd";
-	const TOOLTIP_MUTED = "#9b948a";
-
 	// Resolved identity lookup (stable label + color per player), keyed by the
 	// player id that every per-player array carries. Mirror-match safe.
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
-	// Canonical player order: the save's uploader ("player") first, then the
-	// rest in their existing order. Used everywhere this tab lists the two
-	// sides (event bars + H2H blocks) so the ordering is consistent. Observer /
-	// archival uploads (no userNation) keep the existing order.
+	// Canonical player order: uploader first, used everywhere this tab lists
+	// the two sides (event bars + H2H blocks) so the ordering is consistent.
 	const orderedPlayers = $derived(
-		userNation
-			? [...players].sort(
-					(a, b) =>
-						(a.nation === userNation ? 0 : 1) -
-						(b.nation === userNation ? 0 : 1),
-				)
-			: players,
+		orderPlayersUploaderFirst(players, userNation),
 	);
 
 	// ─── Head-to-head build comparison ────────────────────────────────
@@ -306,17 +298,10 @@
 	// Per-player event rail: leader successions (incl. the starting ruler), law
 	// changes, and unit-tech unlocks. Each event's marker x is convertToPixel(turn)
 	// on the live chart, laid out in a horizontal per-nation band below the plot.
-	type RailEvent = {
-		kind: "leader" | "law" | "tech";
-		// The event's turn; its marker x is convertToPixel(turn) on the live chart.
-		turn: number;
-		// Sprite for the marker, drawn with <SpriteIcon> like every other tab.
-		// A null iconValue (e.g. a ruler with no archetype) renders a colored dot.
-		iconCategory: SpriteCategory;
-		iconValue: string | null;
-		color: string;
-		tooltipHtml: string;
-	};
+	// A rail marker plus this tab's row kind — everything else (turn,
+	// icon, color, tooltipHtml) is EventRail's shared marker shape.
+	type RailEventKind = "leader" | "law" | "tech";
+	type RailEvent = RailMarker & { kind: RailEventKind };
 
 	// Unit strength tiers worth flagging (displayed strength). Reaching the tech
 	// that first fields a 5/6/8/10-str unit is a military power spike.
@@ -472,7 +457,7 @@
 	});
 
 	// Row order within each nation's band: leaders, then laws, then techs.
-	const RAIL_KINDS: RailEvent["kind"][] = ["leader", "law", "tech"];
+	const RAIL_KINDS: RailEventKind[] = ["leader", "law", "tech"];
 
 	// The live ECharts instance (approach B). The rail is DOM (EventRail), but
 	// each marker's x-position comes from the chart via convertToPixel;
@@ -486,26 +471,23 @@
 	// so every icon type sits on its own line. Layout, marker merging, and the
 	// hover tooltip live in EventRail; this just shapes the data.
 
-	type RailRow = { kind: RailEvent["kind"]; markers: RailEvent[] };
-	const railGroups = $derived.by<{ player: DetailPlayer; rows: RailRow[] }[]>(
-		() => {
-			if (!matchup) return [];
-			return orderedPlayers
-				.map((player) => {
-					const evs = eventRail.get(player.playerId) ?? [];
-					const rows = RAIL_KINDS.filter((k) =>
-						evs.some((e) => e.kind === k),
-					).map((kind) => ({
-						kind,
-						markers: evs
-							.filter((e) => e.kind === kind)
-							.sort((a, b) => a.turn - b.turn),
-					}));
-					return { player, rows };
-				})
-				.filter((g) => g.rows.length > 0);
-		},
-	);
+	const railGroups = $derived.by<RailGroup[]>(() => {
+		if (!matchup) return [];
+		return orderedPlayers
+			.map((player) => {
+				const evs = eventRail.get(player.playerId) ?? [];
+				const rows = RAIL_KINDS.filter((k) =>
+					evs.some((e) => e.kind === k),
+				).map((kind) => ({
+					kind,
+					markers: evs
+						.filter((e) => e.kind === kind)
+						.sort((a, b) => a.turn - b.turn),
+				}));
+				return { player, rows };
+			})
+			.filter((g) => g.rows.length > 0);
+	});
 
 	// Hovering a rail marker (EventRail's onHighlight) drops a vertical guide
 	// line on the plot at that turn (x resolved from the live chart).
