@@ -29,6 +29,11 @@ export interface Player {
 	successionGender: string | null;
 	stateReligion: string | null;
 	founderCharacterXmlId: number | null;
+	// The player's CURRENT leader — the last id in <Leaders>, which is a
+	// succession list in reign order. Matches Player.leader()
+	// (Player.cs:11496 → `game().character(getLeaders().Last())`); null when
+	// the player has never had a leader.
+	leaderCharacterXmlId: number | null;
 	chosenHeirXmlId: number | null;
 	originalCapitalCityXmlId: number | null;
 	timeStockpile: number | null;
@@ -81,6 +86,7 @@ export function parsePlayers(
 			successionGender: optStr(node.SuccessionGender),
 			stateReligion: optStr(node.StateReligion),
 			founderCharacterXmlId: optInt(node.FounderCharacterID),
+			leaderCharacterXmlId: parseCurrentLeader(node),
 			chosenHeirXmlId: optInt(node.ChosenHeirID),
 			originalCapitalCityXmlId: optInt(node.OriginalCapitalCityID),
 			timeStockpile: optInt(node.TimeStockpile),
@@ -94,6 +100,34 @@ export function parsePlayers(
 
 	resolveSaveOwner(players, activePlayerIndex);
 	return players;
+}
+
+/**
+ * The player's current leader, from their `<Leaders><ID>…</ID></Leaders>`
+ * succession list:
+ *
+ *   <Leaders><ID>6</ID><ID>75</ID><ID>166</ID></Leaders>
+ *
+ * The list is in reign order and the LAST entry is the reigning leader —
+ * matching `Player.leader()` (Player.cs:11496), which is literally
+ * `game().character(getLeaders().Last())`. Deliberately reads the game's own
+ * ordering rather than re-deriving it by sorting characters on
+ * `became_leader_turn`, which would have to guess at ties and abdications.
+ *
+ * Returns null for a player who has never had a leader (the element is
+ * written empty). `<ID>` is a leaf, so a single-leader player yields a bare
+ * string and a multi-leader player an array; asArray normalizes both.
+ */
+function parseCurrentLeader(node: Record<string, unknown>): number | null {
+	const leaders = node.Leaders;
+	if (!isElement(leaders)) return null;
+
+	const ids = asArray(leaders.ID) as unknown[];
+	const last = ids[ids.length - 1];
+	if (typeof last !== "string") return null;
+
+	const id = parseInt(last, 10);
+	return Number.isNaN(id) ? null : id;
 }
 
 /**
@@ -162,6 +196,7 @@ export function playerToRow(p: Player): Record<string, unknown> {
 		succession_gender: p.successionGender,
 		state_religion: p.stateReligion,
 		founder_character_xml_id: p.founderCharacterXmlId,
+		leader_character_xml_id: p.leaderCharacterXmlId,
 		chosen_heir_xml_id: p.chosenHeirXmlId,
 		original_capital_city_xml_id: p.originalCapitalCityXmlId,
 		time_stockpile: p.timeStockpile,

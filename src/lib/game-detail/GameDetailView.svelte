@@ -12,6 +12,7 @@
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import type { GameReligion } from "$lib/types/GameReligion";
+	import type { StoryEvent } from "$lib/types/StoryEvent";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
 	import type { MapTile } from "$lib/types/MapTile";
 	import type {
@@ -21,6 +22,8 @@
 		CharacterTraitInfo,
 		PlayerGoalInfo,
 		UnitInfo,
+		FamilyInfo,
+		MemoryInfo,
 	} from "$lib/parser/types";
 	import { Tabs } from "bits-ui";
 	import {
@@ -74,6 +77,9 @@
 		characters = [],
 		characterTraits = [],
 		playerGoals = [],
+		families = [],
+		memoryData = [],
+		storyEvents = [],
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -115,6 +121,13 @@
 		characters?: CharacterInfo[];
 		characterTraits?: CharacterTraitInfo[];
 		playerGoals?: PlayerGoalInfo[];
+		// Family, diplomatic-memory, and story-event data for the Techs tab's
+		// science annotations (Sages seat founding, steal-research missions,
+		// expedition events / spike attribution). All default to [] for legacy
+		// callers (frozen web/ viewer) and older blobs.
+		families?: FamilyInfo[];
+		memoryData?: MemoryInfo[];
+		storyEvents?: StoryEvent[];
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -559,6 +572,17 @@
 			players={resolvedPlayers}
 			{techDiscoveryHistory}
 			{completedTechs}
+			{allYields}
+			{lawAdoptionHistory}
+			{currentLaws}
+			{improvementData}
+			{cityStatistics}
+			{families}
+			{memoryData}
+			{storyEvents}
+			{characters}
+			gameOptions={gameDetails.game_options}
+			{userNation}
 			bind:chartFilter={chartFilters.techs}
 			bind:tableState={tables.techs}
 		/>

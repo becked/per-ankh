@@ -76,6 +76,7 @@ export function parseMatchMetadata(
 		map_class: optAttrStr(root["@_MapClass"]),
 		map_aspect_ratio: optAttrStr(root["@_MapAspectRatio"]),
 		map_options: parseMapOptions(root),
+		game_options: parseGameOptions(root),
 		game_mode: optAttrStr(root["@_GameMode"]),
 		// Difficulty is per-player in the save (`<Difficulty><PlayerDifficulty>`);
 		// the match-level "Difficulty" stamp is the save owner's tier, set by
@@ -170,6 +171,37 @@ function parseMapOptions(
 		}
 	}
 
+	return out;
+}
+
+// ---------- Game options ----------
+
+/**
+ * The game-wide option flags the player turned on, as a `zType → true` map:
+ *
+ *   <GameOptions>
+ *     <GAMEOPTION_CUSTOM_LEADER />
+ *     <GAMEOPTION_COMPETITIVE_MODE />
+ *   </GameOptions>
+ *
+ * Presence is the value — the elements are empty — so an unset option is
+ * simply absent, and a default game yields `{}`.
+ *
+ * IMPORTANT: this is the set of *parent* options only. Old World writes an
+ * option to the save just when `meSubTypeOf == NONE` (GameParameters.cs:773),
+ * and resolves a sub-option's state by recursing to its parent instead of
+ * storing it (`IsGameOption`, same file :204). So a sub-option — e.g.
+ * GAMEOPTION_LOWER_CHARACTER_YIELDS, the one carrying Competitive Mode's
+ * character-yield effect — NEVER appears here, and a membership test for one
+ * silently reads false. Test the parent (GAMEOPTION_COMPETITIVE_MODE) instead.
+ */
+function parseGameOptions(root: Record<string, unknown>): Record<string, true> {
+	const out: Record<string, true> = {};
+
+	const options = root.GameOptions;
+	if (!isElement(options)) return out;
+
+	for (const [name] of getElementChildren(options)) out[name] = true;
 	return out;
 }
 

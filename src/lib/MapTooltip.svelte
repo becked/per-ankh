@@ -1,9 +1,9 @@
 <script lang="ts">
 	import type { MapTile } from "$lib/types/MapTile";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 	import { getCivilizationColor } from "$lib/config";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import { improvementDisplayName } from "$lib/game-detail/helpers";
 
 	let {
 		tile,
@@ -57,17 +57,8 @@
 
 	const improvementLabel = $derived.by(() => {
 		if (!tile.improvement) return null;
-		const override = IMPROVEMENT_NAMES[tile.improvement];
-		let imp = override ?? formatEnum(tile.improvement, "IMPROVEMENT_");
-		// Only the formatEnum fallback needs the deity-first rebrand (e.g. "Shrine
-		// Sol" → "Sol Shrine"); the override already carries the real in-game name
-		// ("Shrine of Sol"), so leave it verbatim.
-		if (!override) {
-			if (imp.startsWith("Shrine "))
-				imp = imp.replace("Shrine ", "") + " Shrine";
-			else if (imp.startsWith("Monastery "))
-				imp = imp.replace("Monastery ", "") + " Monastery";
-		}
+		// Shared label (baked name + shrine domain, e.g. "Shrine of Sol (Sun)").
+		let imp = improvementDisplayName(tile.improvement);
 		if (tile.improvement_pillaged) imp += " (pillaged)";
 		return imp;
 	});

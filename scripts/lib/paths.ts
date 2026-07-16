@@ -66,6 +66,21 @@ export function resolveAtlas(): string {
 	});
 }
 
+// owtt checkout (https://github.com/alcaras/owtt) — the tech-tree planner.
+// bake-owtt.ts reads its tech-data.js to snapshot the deep-link encoding.
+// A local checkout (not the live site) keeps the input diffable and pinnable,
+// and avoids executing remote JavaScript at bake time.
+export function resolveOwtt(): string {
+	return resolvePath({
+		envVar: "OWTT_DIR",
+		candidates: [
+			resolve(REPO_ROOT, "../owtt"),
+			resolve(REPO_ROOT, "../../../../owtt"),
+		],
+		label: "owtt",
+	});
+}
+
 // Old World reference XML — the OW install's XML/ directory (or a checkout of
 // it). bake-improvements.ts reads improvement.xml + nation.xml + mods/. The
 // env var points at the checkout root; we return the XML/ subdir to match

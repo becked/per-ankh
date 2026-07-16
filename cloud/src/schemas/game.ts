@@ -86,6 +86,13 @@ export const MAX_TILE_OWNERSHIP_ENTRIES = 200_000;
 //         their family, from <PlayerFamily>) + map_tiles[].owner_player_xml_id
 //         (per-turn owning player). Lets the map's turn slider show a captured
 //         city's founder family before the capture instead of the conqueror's.
+// 2.11.0 — game_details.game_options + match_metadata.game_options (set
+//         <GameOptions> flags as zType→true) and game_details.players[]
+//         .leader_character_xml_id (last id of <Leaders>, the reigning
+//         leader). Together they let the Techs tab price the leader's court
+//         science exactly: GAMEOPTION_COMPETITIVE_MODE selects the rating
+//         curve and grants a flat science stipend. A blob without
+//         game_options means "unknown", not "no options set".
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -103,13 +110,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.9.0",
 	"2.9.1",
 	"2.10.0",
+	"2.11.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.10.0";
+export const CURRENT_PARSER_VERSION = "2.11.0";
 
 // ----- Reusable atoms -----
 
@@ -136,6 +144,10 @@ const PlayerInfoSchema = v.object({
 	// still emits ≤2.4.1 blobs, and keeps older R2 blobs passing if they're
 	// ever re-validated.
 	difficulty: v.optional(v.nullable(v.string())),
+	// Added in PARSER_VERSION 2.11.0 — the player's reigning leader, joined to
+	// characters[].xml_id to price their court science. `v.optional` for the
+	// same deploy-gap reason as the fields above.
+	leader_character_xml_id: v.optional(v.nullable(v.number())),
 });
 
 const GameDetailsSchema = v.object({
@@ -157,6 +169,10 @@ const GameDetailsSchema = v.object({
 	map_options: v.optional(
 		v.nullable(v.record(v.string(), v.union([v.string(), v.boolean()]))),
 	),
+	// Added in parser_version 2.11.0; `optional` for the same reason. The value
+	// is always `true` — the save encodes a set option as an empty element, so
+	// presence IS the value and an unset option is simply absent.
+	game_options: v.optional(v.nullable(v.record(v.string(), v.literal(true)))),
 	game_mode: v.nullable(v.string()),
 	difficulty: v.nullable(v.string()),
 	opponent_level: v.nullable(v.string()),
@@ -198,6 +214,9 @@ const MatchMetadataSchema = v.object({
 	map_options: v.optional(
 		v.nullable(v.record(v.string(), v.union([v.string(), v.boolean()]))),
 	),
+	// Added in parser_version 2.11.0; `optional` for the same deploy-gap reason
+	// as in GameDetailsSchema above.
+	game_options: v.optional(v.nullable(v.record(v.string(), v.literal(true)))),
 	game_mode: v.nullable(v.string()),
 	difficulty: v.nullable(v.string()),
 	opponent_level: v.nullable(v.string()),

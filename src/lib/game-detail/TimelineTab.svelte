@@ -10,12 +10,12 @@
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
 	import { TECH_NAMES } from "$lib/generated/tech-names";
-	import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 	import {
 		type TimelineEvent,
 		type TimelineCategory,
 		type SpriteCategory,
 		getPlayerColor,
+		improvementDisplayName,
 	} from "./helpers";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
@@ -133,9 +133,7 @@
 				nation: wonder.nation,
 				playerName: wonder.player_name,
 				category: "wonder",
-				label:
-					IMPROVEMENT_NAMES[wonder.wonder] ??
-					formatEnum(wonder.wonder, "IMPROVEMENT_"),
+				label: improvementDisplayName(wonder.wonder),
 				enumValue: wonder.wonder,
 				spriteCategory: null,
 			});

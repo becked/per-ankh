@@ -15,4 +15,10 @@ export type PlayerInfo = {
 	legitimacy: number | null;
 	state_religion: string | null;
 	difficulty: string | null;
+	// The player's reigning leader at the end of the save — the last id in
+	// their <Leaders> succession list, matching Player.leader(). Joins to
+	// `characters[].xml_id`. Added in PARSER_VERSION 2.11.0; optional so the
+	// frontend can still read older blobs. Null for a player who never had
+	// a leader.
+	leader_character_xml_id?: number | null;
 };
