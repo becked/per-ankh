@@ -787,13 +787,13 @@
 					<span class="italic text-tan">Bonus science:</span>
 					{#each oneOffTotals as t (t.player.playerId)}
 						<span
-							class="inline-flex items-center gap-1 font-semibold"
-							style="color: {t.player.color};"
+							class="inline-flex items-center gap-1 font-semibold text-tan"
 							title="Sum of turns where the science total jumped by more than that turn's production rate (gains of 10+; from the save's per-turn yield history)"
 						>
-							{t.player.label}: +{t.total}
+							<span style="color: {t.player.color};">{t.player.label}</span>
+							+{t.total}
 							<SpriteIcon category="yields" value="YIELD_SCIENCE" size={12} />
-							across {t.count} event{t.count === 1 ? "" : "s"}
+							({t.count} event{t.count === 1 ? "" : "s"})
 						</span>
 					{/each}
 				</div>
@@ -810,9 +810,7 @@
 			     under the discovery chart (the full path), not the unique-techs
 			     chips, so their scope reads right. -->
 			<div class="mt-2 flex flex-wrap items-center gap-2">
-				<span class="text-xs italic text-tan">
-					Open in the tech-tree planner:
-				</span>
+				<span class="text-xs italic text-tan"> Tech-tree planner </span>
 				{#each owttLinks as link (link.player.playerId)}
 					<!-- External planner link (not an app route), so resolve()
 					     doesn't apply; rel guards tabnabbing + referrer leakage. -->
@@ -851,7 +849,7 @@
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
-		<h3 class="mb-3 font-bold text-tan">Unique Techs</h3>
+		<h3 class="mb-3 text-base font-bold text-tan">Unique Techs</h3>
 		<div class="flex flex-col gap-2">
 			{#each visibleUniqueTechRows as row (row.player.playerId)}
 				<div class="flex flex-wrap items-center gap-2">
@@ -868,19 +866,16 @@
 							/>
 						{/if}
 						<span class="truncate">{row.player.label}</span>
-						<b>{row.uniqueTechs.length}</b>
 					</span>
 					<span class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
 						{#each row.uniqueTechs as u (u.tech)}
 							<span
 								class="inline-flex items-center gap-1 rounded bg-surface-raised px-1.5 py-0.5 text-xs text-tan"
-								title="T{u.turn} · {techName(u.tech)}"
+								title="{techName(u.tech)} · T{u.turn}"
 							>
-								<span class="font-mono text-[10px] text-gray-400"
-									>T{u.turn}</span
-								>
 								<SpriteIcon category="techs" value={u.tech} size={13} />
 								{techName(u.tech)}
+								<span class="font-mono text-[10px] text-gray-400">(T{u.turn})</span>
 							</span>
 						{/each}
 					</span>
@@ -896,7 +891,7 @@
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
-		<h3 class="mb-3 font-bold text-tan">Science Sources</h3>
+		<h3 class="mb-3 text-base font-bold text-tan">Science Sources</h3>
 		<!-- One columnar layout for every game size (a mirrored butterfly can't
 		     hold 3+ players). Per-source rows carry an inline bar on the shared
 		     breakdownMaxItem scale; section/total rows stay number-only. Click a
@@ -965,7 +960,7 @@
 												>
 											</div>
 										{:else}
-											<div class="text-right text-xs text-gray-500">—</div>
+											<div class="text-right text-xs text-gray-400">—</div>
 										{/if}
 									</td>
 								{/each}
