@@ -1,5 +1,21 @@
 # Changelog
 
+## [2026-07-16-66af647] - 2026-07-16
+
+### Features
+
+- (techs) science event rail, source breakdown, and owtt planner links (#128) — [fa2b066](https://github.com/becked/per-ankh/commit/fa2b066eb247a6c08dfa5f8d5927d1208437a1fe)
+
+### Fixes
+
+- (tournament) read DOTA's map variant from either option spelling — [1c397b2](https://github.com/becked/per-ankh/commit/1c397b24cc213acf524e04719b0964b389374584)
+- (tournament) bucket Swiss float-down matches by the record they were paired in — [1377120](https://github.com/becked/per-ankh/commit/13771209552d83769870a6d26eb1ae5574d2bc8a)
+
+### Other
+
+- (release) deploy 2026-07-15-1377120 — [5f96f3e](https://github.com/becked/per-ankh/commit/5f96f3ef7633da0839732f7b9be5d9bd14ce2883)
+- apply prettier formatting — [66af647](https://github.com/becked/per-ankh/commit/66af647bc4b45e6b765137e5b39c31b797be6916)
+
 ## [2026-07-15-1377120] - 2026-07-15
 
 ### Fixes
