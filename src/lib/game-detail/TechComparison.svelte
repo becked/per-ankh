@@ -1,0 +1,237 @@
+<script lang="ts">
+	import type { PlayerTech } from "$lib/types/PlayerTech";
+	import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
+	import { formatEnum } from "$lib/utils/formatting";
+	import { TECH_NAMES } from "$lib/generated/tech-names";
+	import { TECH_LAWS } from "$lib/generated/science-yields";
+	import SpriteIcon from "./SpriteIcon.svelte";
+	import {
+		type DetailPlayer,
+		TABLE_HEADER_TH_CLASS,
+		ownedByPlayer,
+		findByPlayer,
+		buildOwttUrl,
+	} from "./helpers";
+
+	// Side-by-side tech timeline (owglick's "tech — turn by turn" view): one
+	// row per turn anyone completed a tech, one column per player, each cell
+	// stacking that turn's techs. Gold = everyone researched it; a player's
+	// color = they're (so far) alone in it; outlined chip = bonus card;
+	// ◆ = the tech unlocks a law pair. Hovering a tech spotlights it in every
+	// column, so pacing gaps on the same tech read at a glance.
+	let {
+		players,
+		completedTechs,
+		techDiscoveryHistory,
+	}: {
+		// Uploader-first ordered (the caller applies the shared rule).
+		players: DetailPlayer[];
+		completedTechs: PlayerTech[];
+		// Research order feeding each player's tech-tree planner deep link.
+		techDiscoveryHistory: TechDiscoveryHistory[];
+	} = $props();
+
+	const techName = (tech: string) =>
+		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
+
+	type Cell = {
+		tech: string;
+		bonus: boolean;
+		laws: readonly string[];
+		// Researched by every player in the game.
+		shared: boolean;
+	};
+
+	// Per-player tech lists (id match, nation fallback — shared idiom).
+	const byPlayer = $derived(
+		players.map((player) => ({
+			player,
+			techs: ownedByPlayer(
+				completedTechs,
+				player,
+				(t) => t.player_id,
+				(t) => t.nation,
+			),
+		})),
+	);
+
+	// How many players researched each tech — drives the shared (gold) flag.
+	const ownerCounts = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
+		const counts = new Map<string, number>();
+		for (const { techs } of byPlayer) {
+			for (const t of techs) counts.set(t.tech, (counts.get(t.tech) ?? 0) + 1);
+		}
+		return counts;
+	});
+
+	// One row per turn anyone completed a tech, cells per player in order.
+	const rows = $derived.by(() => {
+		const turns = [
+			...new Set(byPlayer.flatMap((b) => b.techs.map((t) => t.completed_turn))),
+		].sort((a, b) => a - b);
+		return turns.map((turn) => ({
+			turn,
+			cells: byPlayer.map(({ techs }) =>
+				techs
+					.filter((t) => t.completed_turn === turn)
+					.map(
+						(t): Cell => ({
+							tech: t.tech,
+							bonus: t.tech.includes("_BONUS"),
+							laws: TECH_LAWS[t.tech] ?? [],
+							shared: (ownerCounts.get(t.tech) ?? 0) === players.length,
+						}),
+					),
+			),
+		}));
+	});
+
+	// Headline: per-player tech counts and the everyone-researched overlap.
+	const headline = $derived.by(() => {
+		const counts = byPlayer.map((b) => b.techs.length);
+		const shared = [...ownerCounts.values()].filter(
+			(n) => n === players.length,
+		).length;
+		return { counts, shared };
+	});
+
+	// Planner deep link per player (their full research order).
+	const plannerUrls = $derived(
+		players.map((player) =>
+			buildOwttUrl(
+				player.nation,
+				findByPlayer(
+					techDiscoveryHistory,
+					player,
+					(h) => h.player_id,
+					(h) => h.nation,
+				)?.data ?? [],
+			),
+		),
+	);
+
+	// Hovered tech id — every cell holding it lights up across columns.
+	let hovered = $state<string | null>(null);
+
+	function cellTitle(cell: Cell, turn: number): string {
+		const parts = [`${techName(cell.tech)} · T${turn}`];
+		if (cell.laws.length > 0)
+			parts.push(
+				`unlocks ${cell.laws.map((l) => formatEnum(l, "LAW_")).join(" / ")}`,
+			);
+		if (cell.bonus) parts.push("bonus card");
+		return parts.join(" · ");
+	}
+</script>
+
+<div
+	class="mb-4 rounded-lg p-4"
+	style="background-color: rgb(var(--color-surface));"
+>
+	<div class="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+		<h3 class="text-base font-bold text-tan">Techs by Turn</h3>
+		<span class="text-xs text-tan">
+			{headline.counts.join(" vs ")}{players.length > 1
+				? ` · ${headline.shared} by everyone`
+				: ""}
+		</span>
+		<span class="text-xs italic text-gray-400">
+			<span style="color: rgb(var(--color-bright));">gold</span> = everyone
+			researched it · ◆ unlocks a law · outlined = bonus card · hover a tech to
+			spot it across nations
+		</span>
+	</div>
+	<div class="overflow-x-auto">
+		<table class="w-full border-separate border-spacing-0 text-sm">
+			<thead>
+				<tr>
+					<th class="{TABLE_HEADER_TH_CLASS} w-12 rounded-l-lg border-l"
+						>Turn</th
+					>
+					{#each players as player, i (player.playerId)}
+						<th
+							class="{TABLE_HEADER_TH_CLASS} {i === players.length - 1
+								? 'rounded-r-lg border-r'
+								: ''}"
+						>
+							<span class="inline-flex items-center gap-2 normal-case">
+								<span
+									class="inline-flex items-center gap-1.5 text-xs"
+									style="color: {player.color};"
+								>
+									{#if player.nation}
+										<SpriteIcon
+											category="crests"
+											value={player.nation}
+											size={15}
+											alt={player.label}
+										/>
+									{/if}
+									{player.label}
+								</span>
+								{#if plannerUrls[i]}
+									<!-- External planner link (not an app route), so resolve()
+									     doesn't apply; rel guards tabnabbing + referrer leakage. -->
+									<!-- eslint-disable svelte/no-navigation-without-resolve -->
+									<a
+										href={plannerUrls[i]}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-orange transition-colors hover:bg-tan-hover"
+										title="Open {player.label}'s full research order in the tech-tree planner"
+									>
+										planner ↗
+									</a>
+									<!-- eslint-enable svelte/no-navigation-without-resolve -->
+								{/if}
+							</span>
+						</th>
+					{/each}
+				</tr>
+			</thead>
+			<tbody>
+				{#each rows as row (row.turn)}
+					<tr class="odd:bg-surface-sunken/40">
+						<td
+							class="border-b border-border-subtle px-3 py-1 align-top font-mono text-[10px] text-gray-400"
+						>
+							T{row.turn}
+						</td>
+						{#each row.cells as cell, i (players[i].playerId)}
+							<td class="border-b border-border-subtle px-3 py-1 align-top">
+								{#if cell.length === 0}
+									<span class="text-gray-400">·</span>
+								{:else}
+									<div class="flex flex-col gap-0.5">
+										{#each cell as c (c.tech)}
+											<span
+												class="inline-flex w-fit cursor-default items-center gap-1.5 rounded px-1 py-px text-xs font-semibold transition-colors
+													{c.bonus ? 'border border-current' : ''}
+													{hovered === c.tech ? 'bg-tan-hover' : ''}"
+												style="color: {c.shared
+													? 'rgb(var(--color-bright))'
+													: players[i].color};"
+												title={cellTitle(c, row.turn)}
+												role="img"
+												aria-label={techName(c.tech)}
+												onmouseenter={() => (hovered = c.tech)}
+												onmouseleave={() => (hovered = null)}
+											>
+												<SpriteIcon category="techs" value={c.tech} size={14} />
+												{techName(c.tech)}
+												{#if c.laws.length > 0}
+													<span class="text-[10px]">◆</span>
+												{/if}
+											</span>
+										{/each}
+									</div>
+								{/if}
+							</td>
+						{/each}
+					</tr>
+				{/each}
+			</tbody>
+		</table>
+	</div>
+</div>

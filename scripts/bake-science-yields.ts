@@ -20,6 +20,9 @@
 //     the rating Competitive Mode linearizes the court curve around.
 //   Reference/XML/Infos/effectPlayer.xml — EFFECTPLAYER_COMPETITIVE_MODE
 //     <aiYieldRate> YIELD_SCIENCE, Competitive Mode's flat science stipend.
+//   Reference/XML/Infos/lawClass.xml + law.xml — each law class carries the
+//     <TechPrereq> and each law its <Class>; inverted into the tech →
+//     laws-it-unlocks table the tech-timeline ◆ markers use.
 //
 // Values are the game's ×10 fixed-point; emitted ÷10 in display units. The
 // one exception is WISDOM_COURT_SCIENCE_RATE — see its comment below.
@@ -64,6 +67,8 @@ interface Entry {
 	AssetVariation?: string;
 	EffectCity?: string;
 	EffectCityExtra?: string;
+	TechPrereq?: string;
+	LawClass?: string;
 	iValue?: string;
 	iTriangleOffset?: string;
 	aiYieldOutput?: { Pair?: YieldPair | YieldPair[] };
@@ -111,6 +116,8 @@ async function main(): Promise<void> {
 		yields,
 		globalInts,
 		effectPlayers,
+		laws,
+		lawClasses,
 	] = await Promise.all([
 		loadEntries(resolve(infosDir, "improvement.xml")),
 		loadEntries(resolve(infosDir, "improvementClass.xml")),
@@ -120,6 +127,8 @@ async function main(): Promise<void> {
 		loadEntries(resolve(infosDir, "yield.xml")),
 		loadEntries(resolve(infosDir, "globalsInt.xml")),
 		loadEntries(resolve(infosDir, "effectPlayer.xml")),
+		loadEntries(resolve(infosDir, "law.xml")),
+		loadEntries(resolve(infosDir, "lawClass.xml")),
 	]);
 
 	const effectByType = new Map(effects.map((e) => [e.zType, e]));
@@ -255,6 +264,21 @@ async function main(): Promise<void> {
 		if (flat > 0) specialistScience[sp.zType] = flat / 10;
 	}
 
+	// Tech → the laws it unlocks: the law CLASS carries the tech prereq
+	// (lawClass.xml) and each law names its class (law.xml), so a class's
+	// prereq fans out to its law pair (Sovereignty → Tyranny+Constitution).
+	const classTech = new Map<string, string>();
+	for (const cls of lawClasses) {
+		if (cls.zType && cls.TechPrereq) classTech.set(cls.zType, cls.TechPrereq);
+	}
+	const techLaws: Record<string, string[]> = {};
+	for (const law of laws) {
+		const tech = law.LawClass ? classTech.get(law.LawClass) : undefined;
+		if (!law.zType || !tech) continue;
+		(techLaws[tech] ??= []).push(law.zType);
+	}
+	for (const list of Object.values(techLaws)) list.sort();
+
 	const sorted = <T>(o: Record<string, T>): Record<string, T> =>
 		Object.fromEntries(
 			Object.keys(o)
@@ -312,6 +336,13 @@ async function main(): Promise<void> {
 	);
 	lines.push(
 		`export const SHRINE_TYPE: Readonly<Record<string, string>> = ${JSON.stringify(sorted(shrineType))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Tech → the LAW_* choices it unlocks (law.xml TechPrereq, inverted).",
+	);
+	lines.push(
+		`export const TECH_LAWS: Readonly<Record<string, readonly string[]>> = ${JSON.stringify(sorted(techLaws))};`,
 	);
 	lines.push("");
 	lines.push(
@@ -377,7 +408,7 @@ async function main(): Promise<void> {
 	}
 	await writeFile(OUTPUT_TS, formatted);
 	console.log(
-		`bake-science-yields: ${Object.keys(improvementScience).length} improvements, ${Object.keys(improvementResourceScience).length} resource-sited, ${Object.keys(specialistScience).length} specialists, ${Object.keys(shrineType).length} shrines → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
+		`bake-science-yields: ${Object.keys(improvementScience).length} improvements, ${Object.keys(improvementResourceScience).length} resource-sited, ${Object.keys(specialistScience).length} specialists, ${Object.keys(shrineType).length} shrines, ${Object.keys(techLaws).length} law techs → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
 	);
 }
 

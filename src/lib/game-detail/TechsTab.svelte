@@ -27,6 +27,7 @@
 	} from "./EventRail.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
 	import NationFilterSelect from "./NationFilterSelect.svelte";
+	import TechComparison from "./TechComparison.svelte";
 	import { specialistName } from "./specialists";
 	import {
 		type TableState,
@@ -40,7 +41,6 @@
 		orderPlayersUploaderFirst,
 		toggleSort,
 		filledLineStyle,
-		buildOwttUrl,
 		getSpritePath,
 		improvementDisplayName,
 	} from "./helpers";
@@ -234,14 +234,6 @@
 			(t) => t.player_id,
 			(t) => t.nation,
 		);
-	const discoveriesFor = (p: DetailPlayer) =>
-		findByPlayer(
-			techDiscoveryHistory,
-			p,
-			(h) => h.player_id,
-			(h) => h.nation,
-		)?.data ?? [];
-
 	const namedCounts = (items: NamedCount[]) =>
 		items.map((b) => `${b.count}× ${b.name}`).join(", ");
 
@@ -614,53 +606,6 @@
 		return c.convertToPixel({ xAxisIndex: 0 }, h.turn) as number;
 	});
 
-	// ─── Planner links + unique techs ─────────────────────────────────
-
-	// Per player: a deep-link of their FULL research order into the owtt
-	// tech-tree planner. Rendered under the Tech Discovery chart (the full
-	// path), not next to the unique-techs chips, so the link's scope is clear.
-	const owttLinks = $derived(
-		orderedPlayers
-			.map((player) => ({
-				player,
-				url: buildOwttUrl(player.nation, discoveriesFor(player)),
-			}))
-			.filter((l): l is { player: DetailPlayer; url: string } => l.url != null),
-	);
-
-	// Per player: the (non-bonus-card) techs only they researched.
-	type UniqueTechRow = {
-		player: DetailPlayer;
-		uniqueTechs: { tech: string; turn: number }[];
-	};
-	const uniqueTechRows = $derived.by<UniqueTechRow[]>(() => {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
-		const ownerCounts = new Map<string, number>();
-		const perPlayer = orderedPlayers.map((p) => {
-			const techs = techsFor(p).filter((t) => !t.tech.includes("_BONUS"));
-			for (const t of techs)
-				ownerCounts.set(t.tech, (ownerCounts.get(t.tech) ?? 0) + 1);
-			return { player: p, techs };
-		});
-		return perPlayer.map(({ player, techs }) => ({
-			player,
-			uniqueTechs: techs
-				.filter((t) => ownerCounts.get(t.tech) === 1)
-				.map((t) => ({ tech: t.tech, turn: t.completed_turn }))
-				.sort((a, b) => a.turn - b.turn),
-		}));
-	});
-	// Only players who actually have a tech no one else got — an empty row is
-	// noise, so it's dropped rather than shown as "— none —".
-	const visibleUniqueTechRows = $derived(
-		uniqueTechRows.filter((r) => r.uniqueTechs.length > 0),
-	);
-	// Unique techs are only meaningful with an opponent to differ from, and the
-	// section is only worth showing when someone actually has some.
-	const showUniqueTechs = $derived(
-		orderedPlayers.length > 1 && visibleUniqueTechRows.length > 0,
-	);
-
 	// ─── Pivot table logic ────────────────────────────────────────────
 	// Columns are per player (mirror-match safe); filtering stays by nation.
 	const techColumnPlayers = $derived(
@@ -805,37 +750,6 @@
 				title="Tech Discovery Over Time"
 			/>
 		{/if}
-		{#if owttLinks.length > 0}
-			<!-- The planner links open a player's FULL research order — they sit
-			     under the discovery chart (the full path), not the unique-techs
-			     chips, so their scope reads right. -->
-			<div class="mt-2 flex flex-wrap items-center gap-2">
-				<span class="text-xs italic text-tan"> Tech-tree planner </span>
-				{#each owttLinks as link (link.player.playerId)}
-					<!-- External planner link (not an app route), so resolve()
-					     doesn't apply; rel guards tabnabbing + referrer leakage. -->
-					<!-- eslint-disable svelte/no-navigation-without-resolve -->
-					<a
-						href={link.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="inline-flex items-center gap-1.5 rounded bg-surface-raised px-2 py-1 text-xs font-semibold transition-colors hover:bg-tan-hover"
-						style="color: {link.player.color};"
-					>
-						{#if link.player.nation}
-							<SpriteIcon
-								category="crests"
-								value={link.player.nation}
-								size={14}
-								alt={link.player.label}
-							/>
-						{/if}
-						{link.player.label} ↗
-					</a>
-					<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				{/each}
-			</div>
-		{/if}
 	</div>
 {:else if techDiscoveryHistory.length === 0}
 	<p class="p-8 text-center italic text-tan">
@@ -843,48 +757,15 @@
 	</p>
 {/if}
 
-<!-- Techs only one player researched, as per-player chip rows. -->
-{#if showUniqueTechs}
-	<div
-		class="mb-4 rounded-lg p-4"
-		style="background-color: rgb(var(--color-surface));"
-	>
-		<h3 class="mb-3 text-base font-bold text-tan">Unique Techs</h3>
-		<div class="flex flex-col gap-2">
-			{#each visibleUniqueTechRows as row (row.player.playerId)}
-				<div class="flex flex-wrap items-center gap-2">
-					<span
-						class="inline-flex w-40 shrink-0 items-center gap-1.5 text-sm font-semibold"
-						style="color: {row.player.color};"
-					>
-						{#if row.player.nation}
-							<SpriteIcon
-								category="crests"
-								value={row.player.nation}
-								size={16}
-								alt={row.player.label}
-							/>
-						{/if}
-						<span class="truncate">{row.player.label}</span>
-					</span>
-					<span class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-						{#each row.uniqueTechs as u (u.tech)}
-							<span
-								class="inline-flex items-center gap-1 rounded bg-surface-raised px-1.5 py-0.5 text-xs text-tan"
-								title="{techName(u.tech)} · T{u.turn}"
-							>
-								<SpriteIcon category="techs" value={u.tech} size={13} />
-								{techName(u.tech)}
-								<span class="font-mono text-[10px] text-gray-400"
-									>(T{u.turn})</span
-								>
-							</span>
-						{/each}
-					</span>
-				</div>
-			{/each}
-		</div>
-	</div>
+<!-- Side-by-side tech timeline: every tech at its turn, per player, with the
+     planner deep links in the column headers. Shared techs read gold, so a
+     tech only one player researched stands out in their color. -->
+{#if completedTechs.length > 0}
+	<TechComparison
+		players={orderedPlayers}
+		{completedTechs}
+		{techDiscoveryHistory}
+	/>
 {/if}
 
 <!-- End-state science-source decomposition, itemized, side by side. -->
