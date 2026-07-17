@@ -13,6 +13,7 @@
 		MemoryInfo,
 	} from "$lib/parser/types";
 	import type { EChartsOption, ECharts } from "echarts";
+	import { ToggleGroup } from "bits-ui";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -116,33 +117,102 @@
 		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
 
 	// ─── Chart option ─────────────────────────────────────────────────
-	// Cumulative science over time — the plot the science rail annotates (its
-	// spikes and key-tech markers are science events, so they read against the
-	// science curve, not a tech count). Same compact styling as the Military
-	// Power plot; per-tech detail lives in the Techs-by-Turn table below.
-	const scienceChartOption = $derived.by<EChartsOption | null>(() => {
+	// The plot the science rail annotates, in three switchable views:
+	// cumulative science (default — the rail's markers are science events, so
+	// they read against the science curve), per-turn science rate (small
+	// numbers, so a tech adoption's effect stays visible late-game), and the
+	// tech count over time (with the discovered tech named per point). Same
+	// compact styling as the Military Power plot in every mode.
+	type TechsChartMode = "cumulative" | "rate" | "techs";
+	let chartMode = $state<TechsChartMode>("cumulative");
+
+	const CHART_MODE_TITLES: Record<TechsChartMode, string> = {
+		cumulative: "Cumulative Science",
+		rate: "Science per Turn",
+		techs: "Techs Discovered",
+	};
+
+	// Shared toggle-item tokens (matches the Yields tab / YieldsStatsPanel).
+	const toggleItemClass =
+		"px-2.5 py-1 text-xs text-tan transition-colors data-[state=off]:bg-surface data-[state=on]:bg-surface-raised";
+
+	const chartOption = $derived.by<EChartsOption | null>(() => {
+		// Per-mode series: [turn, value] pairs (techs mode carries the discovered
+		// tech's name as a third element for its tooltip/markers).
 		const science = allYields.filter((y) => y.yield_type === "YIELD_SCIENCE");
-		if (science.length === 0) return null;
-		const turns = science[0].data.map((d) => d.turn);
-		const minTurn = turns[0] ?? 0;
-		const maxTurn = turns[turns.length - 1] ?? 0;
+		const perPlayer =
+			chartMode === "techs"
+				? techDiscoveryHistory.map((p) => ({
+						player_id: p.player_id,
+						nation: p.nation,
+						points: p.data.map(
+							(d): [number, number | null, string | null] => [
+								d.turn,
+								d.tech_count,
+								d.tech_name,
+							],
+						),
+					}))
+				: science.map((p) => ({
+						player_id: p.player_id,
+						nation: p.nation,
+						points: p.data.map(
+							(d): [number, number | null, string | null] => [
+								d.turn,
+								chartMode === "rate" ? d.rate : d.cumulative,
+								null,
+							],
+						),
+					}));
+		if (perPlayer.length === 0) return null;
+
+		const turns = perPlayer.flatMap((p) => p.points.map((d) => d[0]));
+		const minTurn = Math.min(...turns);
+		const maxTurn = Math.max(...turns);
 		const pad = Math.max(1, (maxTurn - minTurn) * 0.02);
+
 		return {
 			...CHART_THEME,
 			title: {
 				...CHART_THEME.title,
-				text: "Cumulative Science",
+				text: CHART_MODE_TITLES[chartMode],
 			},
 			legend: {
 				show: false,
-				data: science.map(
+				data: perPlayer.map(
 					(p) =>
 						playerById.get(p.player_id)?.label ??
 						formatEnum(p.nation, "NATION_"),
 				),
 				selected: chartFilter,
 			},
-			tooltip: { trigger: "axis" },
+			tooltip:
+				chartMode === "techs"
+					? {
+							trigger: "axis",
+							// Points are sparse (one per discovery), so snap the axis
+							// pointer to the nearest event and drive the tooltip off the
+							// axis — hovering anywhere works, matching the other charts.
+							axisPointer: { snap: true },
+							formatter: (params: unknown) => {
+								const arr = params as Array<{
+									marker: string;
+									seriesName: string;
+									data: [number, number | null, string | null];
+								}>;
+								if (arr.length === 0) return "";
+								const turn = arr[0].data[0];
+								const rows = arr
+									.map((p) => {
+										const [, count, tech] = p.data;
+										const suffix = tech ? ` — ${techName(tech)}` : "";
+										return `${p.marker}${p.seriesName}: <b>${count}</b>${suffix}`;
+									})
+									.join("<br/>");
+								return `Turn ${turn}<br/>${rows}`;
+							},
+						}
+					: { trigger: "axis" },
 			// No axis-name titles — the title + tooltip carry the meaning,
 			// matching the Military Power plot. containLabel reserves room
 			// for the tick numbers now that the fixed left/bottom gutters
@@ -167,14 +237,24 @@
 				// is negative, so onZero would float the axis inside the plot).
 				axisLine: { onZero: false },
 			},
-			series: science.map((player, i) => {
+			series: perPlayer.map((player, i) => {
 				const rp = playerById.get(player.player_id);
 				const color = rp?.color ?? getNationChartColor(player.nation, i);
 				return {
 					name: rp?.label ?? formatEnum(player.nation, "NATION_"),
 					type: "line" as const,
-					data: player.data.map((d) => [d.turn, d.cumulative]),
+					data: player.points,
 					itemStyle: { color },
+					// Techs mode: milestone markers stay hidden until hover (per the
+					// shared look) but still name the discovered tech in the tooltip.
+					...(chartMode === "techs"
+						? {
+								symbol: (value: [number, number | null, string | null]) =>
+									value[2] ? "circle" : "none",
+								symbolSize: 8,
+								emphasis: { symbolSize: 12 },
+							}
+						: {}),
 					...filledLineStyle(color),
 				};
 			}),
@@ -182,7 +262,7 @@
 	});
 
 	// ─── Science annotation rail ──────────────────────────────────────
-	// An <EventRail> under the Cumulative Science chart of science-relevant
+	// An <EventRail> under the science chart (any view mode) of science-relevant
 	// events per player: key science techs the player researched AND
 	// demonstrably used (see science-techs.ts), free-tech turns, and one-off
 	// science gains. (The per-turn science rate lives on the Yields tab.)
@@ -717,18 +797,38 @@
 	});
 </script>
 
-{#if scienceChartOption}
+{#if chartOption}
 	<div
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
+		<!-- View switch for the plot: science totals, per-turn rate (small
+		     numbers, so late-game tech effects stay visible), or tech count. -->
+		<ToggleGroup.Root
+			type="single"
+			value={chartMode}
+			onValueChange={(v) => {
+				if (v) chartMode = v as TechsChartMode;
+			}}
+			class="mb-2 flex w-fit overflow-hidden rounded border border-surface"
+		>
+			<ToggleGroup.Item value="cumulative" class="rounded-l {toggleItemClass}">
+				Cumulative
+			</ToggleGroup.Item>
+			<ToggleGroup.Item value="rate" class={toggleItemClass}>
+				Per Turn
+			</ToggleGroup.Item>
+			<ToggleGroup.Item value="techs" class="rounded-r {toggleItemClass}">
+				Number of Techs
+			</ToggleGroup.Item>
+		</ToggleGroup.Root>
 		{#if scienceRailGroups.length > 0}
 			<!-- Matchup variant: the plot plus the science event rail below it —
 			     key-tech payoffs, free techs, one-off science gains — each marker
 			     at its true turn-x on the live chart (mil-tab pattern). -->
 			<div class="relative">
 				<Chart
-					option={scienceChartOption}
+					option={chartOption}
 					height="360px"
 					onReady={(c) => (railChart = c)}
 					onLayout={() => (railLayoutTick += 1)}
@@ -764,9 +864,9 @@
 			{/if}
 		{:else}
 			<ChartContainer
-				option={scienceChartOption}
+				option={chartOption}
 				height="400px"
-				title="Cumulative Science"
+				title={CHART_MODE_TITLES[chartMode]}
 			/>
 		{/if}
 		{#if owttLinks.length > 0}

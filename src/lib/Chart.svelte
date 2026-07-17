@@ -14,7 +14,7 @@
 </script>
 
 <script lang="ts">
-	import { onMount, tick } from "svelte";
+	import { onMount, tick, untrack } from "svelte";
 	import type { ECElementEvent, EChartsOption } from "echarts";
 
 	let {
@@ -106,7 +106,13 @@
 			chart.setOption(currentOption, true);
 			// Force resize to handle tab visibility changes
 			chart.resize();
-			onLayout?.();
+			// untrack: the notify must not add the callback prop (or anything the
+			// handler touches) to this effect's dependencies. A parent's inline
+			// `onLayout` handler is recreated whenever its fragment re-renders —
+			// e.g. from the layout-tick state the handler itself bumps — so a
+			// tracked call re-runs this effect and loops (setOption → onLayout →
+			// tick++ → new handler → setOption …: effect_update_depth_exceeded).
+			untrack(() => onLayout?.());
 		}
 	});
 </script>
