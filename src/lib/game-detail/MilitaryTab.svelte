@@ -327,7 +327,7 @@
 		u: { unitType: string; strength: number; naval: boolean },
 		count?: number,
 	): string {
-		const url = getSpritePath("units", u.unitType);
+		const url = getSpritePath("units-icons", u.unitType);
 		const ic = url
 			? `<img src="${url}" alt="" style="width:15px;height:15px"/>`
 			: "";
@@ -467,7 +467,7 @@
 						events.push({
 							kind: "tech",
 							turn: d.turn,
-							iconCategory: "units",
+							iconCategory: "units-icons",
 							iconValue: granted[0].unitType,
 							color,
 							tooltipHtml: bonusEventTooltip(
@@ -495,10 +495,10 @@
 					events.push({
 						kind: "tech",
 						turn: d.turn,
-						// The sprite of the strongest unit this tech unlocks (`unlocked` is
-						// sorted by strength desc); the tech and the full unit list are in
-						// the hover tooltip.
-						iconCategory: "units",
+						// The flag glyph of the strongest unit this tech unlocks (`unlocked`
+						// is sorted by strength desc); the tech and the full unit list are
+						// in the hover tooltip.
+						iconCategory: "units-icons",
 						iconValue: unlocked[0].unitType,
 						color,
 						tooltipHtml: techEventTooltip(d.tech_name, d.turn, unlocked, color),

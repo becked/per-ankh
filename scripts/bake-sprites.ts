@@ -100,6 +100,14 @@ const UNITS_CATEGORY = "units";
 const IMPROVEMENTS_CATEGORY = "improvements";
 const SPECIALISTS_CATEGORY = "specialists";
 
+// The game's small white unit glyphs (the icons shown on in-game unit flags),
+// extracted to units_icons/. The game ships TWO sprites per unit name — the
+// painted portrait (128²) and this ~58² glyph — so pinacotheca's
+// first-write-wins extraction drops one; units_icons/ holds the small set.
+// Powers the Military rail's unit markers.
+const UNIT_ICONS_SRC = "units_icons";
+const UNIT_ICONS_CATEGORY = "units-icons";
+
 // Three icons sourced from disparate Pinacotheca subdirs, with renames where
 // the runtime expects a different name than Pinacotheca emits.
 interface IconMapping {
@@ -340,6 +348,27 @@ async function copyUnits(sidecar: SpriteSidecar): Promise<number> {
 	return pngs.length;
 }
 
+async function copyUnitIcons(sidecar: SpriteSidecar): Promise<number> {
+	const src = resolve(PINACOTHECA_SPRITES, UNIT_ICONS_SRC);
+	const dst = resolve(SPRITES_OUT, UNIT_ICONS_CATEGORY);
+	await wipeAndRecreate(dst);
+	const entries = await readdir(src);
+	const pngs = entries.filter(
+		(f) => f.startsWith("UNIT_") && f.endsWith(".png"),
+	);
+	for (const filename of pngs) {
+		const basename = filename.slice(0, -".png".length);
+		await bakeOne(
+			resolve(src, filename),
+			dst,
+			UNIT_ICONS_CATEGORY,
+			basename,
+			sidecar,
+		);
+	}
+	return pngs.length;
+}
+
 async function copyIcons(sidecar: SpriteSidecar): Promise<number> {
 	const dst = resolve(SPRITES_OUT, "icons");
 	await wipeAndRecreate(dst);
@@ -534,6 +563,7 @@ async function main(): Promise<void> {
 		"SPECIALIST_3D_",
 		sidecar,
 	);
+	counts[UNIT_ICONS_CATEGORY] = await copyUnitIcons(sidecar);
 	counts.icons = await copyIcons(sidecar);
 	counts.portraits = await copyPortraits(sidecar);
 

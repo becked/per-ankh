@@ -61,6 +61,7 @@
 		"traits-trimmed": 14,
 		laws: 14,
 		units: 14,
+		"units-icons": 14,
 		techs: 14,
 		yields: 14,
 	};

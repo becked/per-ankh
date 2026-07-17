@@ -441,6 +441,7 @@ export type SpriteCategory =
 	| "religions"
 	| "icons"
 	| "units"
+	| "units-icons"
 	| "traits"
 	| "traits-trimmed"
 	| "portraits"
@@ -547,6 +548,16 @@ export function getSpritePath(
 	}
 	if (category === "units") {
 		return SPRITE_MANIFEST[`units/${unitSpriteName(enumValue)}`] ?? null;
+	}
+	if (category === "units-icons") {
+		// The small white flag glyph; a handful of units ship only the painted
+		// portrait, so fall back to it rather than rendering nothing.
+		const name = unitSpriteName(enumValue);
+		return (
+			SPRITE_MANIFEST[`units-icons/${name}`] ??
+			SPRITE_MANIFEST[`units/${name}`] ??
+			null
+		);
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }
