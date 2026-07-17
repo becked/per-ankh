@@ -124,7 +124,7 @@ Exchange the OAuth code for a session.
 Current session's user profile.
 
 - **Auth:** Session.
-- **Response 200:** `{ user_id, discord_id, display_name, discord_username, avatar_url, is_beta: boolean, is_admin: boolean, default_game_public: boolean }`.
+- **Response 200:** `{ user_id, discord_id, display_name, discord_username, avatar_url, is_beta: boolean, is_admin: boolean, default_game_public: boolean, stream_url: string|null }`.
 - **Errors:** `401 UNAUTHORIZED` (also if the session points at a deleted user, which clears the cookie).
 - **Notes:** Re-claims pre-linked tournament slots on every call. `is_beta`/`is_admin` are advisory (frontend gating); the server re-checks per endpoint.
 
@@ -138,11 +138,11 @@ Local-only login bypass (no Discord).
 - **Notes:** Also grants tournament beta (note `dev-login`) and seeds the `Personal` collection. See `docs/dev-login.md`.
 
 ### `POST /v1/auth/settings`
-Update account settings.
+Update account settings (partial — only the fields sent are written).
 
 - **Auth:** Session.
-- **Body:** `UserSettingsSchema` — `{ default_game_public: boolean }` (required). Default visibility applied to newly uploaded saves.
-- **Response 200:** `{ default_game_public: boolean }`.
+- **Body:** `UserSettingsSchema` — `{ default_game_public?: boolean, stream_url?: string|null }`. `default_game_public` is the default visibility applied to newly uploaded saves. `stream_url` is the casting stream link (YouTube/Twitch allowlist, same as match-part streams), auto-attached when the user takes the streamer slot on a match part; `null` clears it.
+- **Response 200:** `{ default_game_public: boolean, stream_url: string|null }` (the full current settings, whichever subset was written).
 - **Errors:** `401 UNAUTHORIZED`, `400 INVALID_JSON`, `400 INVALID_BODY`.
 
 ### `GET /v1/auth/channels`
@@ -567,10 +567,10 @@ Add yourself as a caster on a match part.
 
 - **Auth:** Session (any logged-in user).
 - **Path:** `id`, `match_id` (21-char), `part_id` (1–40 chars).
-- **Body:** `CastMatchPartSchema` — `{ role?: "streamer" | "cocaster" }` (defaults: streamer if the part has no caster, else co-caster).
+- **Body:** `CastMatchPartSchema` — `{ role?: "streamer" | "cocaster", stream_url?: string }` (role defaults: streamer if the part has no caster, else co-caster). `stream_url` (YouTube/Twitch allowlist) is saved to the account (`users.stream_url`) before the cast applies — the one-time "remember my stream" path.
 - **Response:** `204 No Content` (refetch to see the result).
 - **Errors:** `400 INVALID_BODY`, `401 UNAUTHORIZED`, `404 MATCH_NOT_FOUND` / `PART_NOT_FOUND`, `409 MATCH_NOT_PENDING` / `TOO_MANY_CASTERS` / `CONFLICT`, `429 RATE_LIMIT_TOURNAMENT_SCHEDULE`.
-- **Notes:** Self-only (keyed by your `user_id`); the caster name is snapshotted from your Discord username. CAS on `parts_rev`; max 10 casters/part. Shares the `tournament_schedule` budget.
+- **Notes:** Self-only (keyed by your `user_id`); the caster name is snapshotted from your Discord username. Taking the streamer slot auto-attaches your stored stream link to the part's streams (skipped for co-casters, already-listed URLs, and at the 20-stream cap). CAS on `parts_rev`; max 10 casters/part. Shares the `tournament_schedule` budget.
 
 ### `DELETE /v1/tournaments/:id/matches/:match_id/parts/:part_id/casters/me`
 Remove yourself as a caster.
@@ -579,7 +579,7 @@ Remove yourself as a caster.
 - **Path:** `id`, `match_id` (21-char), `part_id` (1–40 chars).
 - **Response:** `204 No Content`.
 - **Errors:** `401 UNAUTHORIZED`, `404 MATCH_NOT_FOUND` / `PART_NOT_FOUND`, `409 MATCH_NOT_PENDING` (bye) / `CONFLICT`, `429 RATE_LIMIT_TOURNAMENT_SCHEDULE`.
-- **Notes:** Self-only. Allowed even on decided matches (byes still rejected).
+- **Notes:** Self-only. Allowed even on decided matches (byes still rejected). Also removes your stored stream link (matched by URL) from the part's streams, undoing the cast auto-attach.
 
 ---
 

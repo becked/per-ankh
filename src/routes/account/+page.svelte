@@ -30,6 +30,13 @@
 	let defaultPublic = $state(data.user.default_game_public);
 	let savingPref = $state(false);
 
+	// Casting stream link — plain save-on-submit (not optimistic: the worker
+	// validates the host allowlist, so the persisted value is what it echoes
+	// back, not what was typed).
+	// svelte-ignore state_referenced_locally
+	let streamUrl = $state(data.user.stream_url ?? "");
+	let savingStream = $state(false);
+
 	// Already filtered to out-of-date games server-side (see +page.ts), so the
 	// count and modal list cover the user's entire library, not just a page.
 	const outOfDateGames = $derived(data.outOfDateGames);
@@ -84,6 +91,31 @@
 			);
 		} finally {
 			savingPref = false;
+		}
+	}
+
+	async function saveStreamUrl() {
+		if (savingStream) return;
+		const trimmed = streamUrl.trim();
+		// A bare domain ("twitch.tv/sion") is the natural thing to paste; the
+		// worker requires a scheme, so add one instead of bouncing on a 400.
+		const next =
+			trimmed === ""
+				? null
+				: /^https?:\/\//i.test(trimmed)
+					? trimmed
+					: `https://${trimmed}`;
+		savingStream = true;
+		try {
+			const saved = await cloudApi.updateSettings({ stream_url: next });
+			streamUrl = saved.stream_url ?? "";
+			toast.info(saved.stream_url ? "Stream link saved" : "Stream link cleared");
+		} catch (err) {
+			toast.error(
+				`Settings update failed: ${err instanceof Error ? err.message : err}`,
+			);
+		} finally {
+			savingStream = false;
 		}
 	}
 
@@ -199,6 +231,37 @@
 										: 'translate-x-1'}"
 								></span>
 							</button>
+						</div>
+
+						<div class="mt-3 border-t border-border-subtle pt-3">
+							<div class="text-sm font-bold text-tan">Casting stream link</div>
+							<p class="mt-1 text-xs text-gray-400">
+								Your Twitch or YouTube link, attached to a match automatically
+								when you sign up to cast it. Clear the field to turn
+								auto-attach off.
+							</p>
+							<form
+								class="mt-2 flex items-center gap-2"
+								onsubmit={(e) => {
+									e.preventDefault();
+									saveStreamUrl();
+								}}
+							>
+								<input
+									type="text"
+									class="min-w-0 flex-1 rounded border border-input bg-surface-sunken px-2 py-1.5 text-sm text-tan placeholder:text-gray-500 focus:border-orange focus:outline-none"
+									placeholder="twitch.tv/you"
+									bind:value={streamUrl}
+									disabled={savingStream}
+								/>
+								<button
+									type="submit"
+									class="rounded border border-input px-3 py-1.5 text-sm text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+									disabled={savingStream}
+								>
+									Save
+								</button>
+							</form>
 						</div>
 					</div>
 				</div>

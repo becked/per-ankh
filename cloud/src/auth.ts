@@ -736,10 +736,10 @@ export async function handleMe(
 	}
 
 	const row = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, default_game_public FROM users WHERE user_id = ?`,
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, default_game_public, stream_url FROM users WHERE user_id = ?`,
 	)
 		.bind(session.data.user_id)
-		.first<UserRow & { default_game_public: number }>();
+		.first<UserRow & { default_game_public: number; stream_url: string | null }>();
 
 	if (!row) {
 		// Session points at a deleted user — clean up and 401.
@@ -788,6 +788,10 @@ export async function handleMe(
 			// D1; surfaced as a boolean so the account page can render the
 			// toggle without re-fetching.
 			default_game_public: row.default_game_public === 1,
+			// Casting stream link (twitch/youtube). Auto-attached when this user
+			// takes the streamer slot on a match part; the cast button reads it
+			// to decide whether to offer the one-time "remember my stream" input.
+			stream_url: row.stream_url,
 		},
 		200,
 		cors,
@@ -820,15 +824,44 @@ export async function handleSettings(
 			"INVALID_BODY",
 		);
 	}
-	const { default_game_public } = validation.output;
+	const { default_game_public, stream_url } = validation.output;
 
-	await env.SHARE_DB.prepare(
-		"UPDATE users SET default_game_public = ? WHERE user_id = ?",
+	// Partial update: only the fields the caller sent are written (every schema
+	// field is optional). stream_url: string sets, explicit null clears,
+	// omitted leaves untouched.
+	const sets: string[] = [];
+	const binds: (string | number | null)[] = [];
+	if (default_game_public !== undefined) {
+		sets.push("default_game_public = ?");
+		binds.push(default_game_public ? 1 : 0);
+	}
+	if (stream_url !== undefined) {
+		sets.push("stream_url = ?");
+		binds.push(stream_url);
+	}
+	if (sets.length > 0) {
+		await env.SHARE_DB.prepare(
+			`UPDATE users SET ${sets.join(", ")} WHERE user_id = ?`,
+		)
+			.bind(...binds, session.data.user_id)
+			.run();
+	}
+
+	// Echo the full current settings so the caller can refresh state without a
+	// second round-trip, whichever subset it wrote.
+	const row = await env.SHARE_DB.prepare(
+		"SELECT default_game_public, stream_url FROM users WHERE user_id = ?",
 	)
-		.bind(default_game_public ? 1 : 0, session.data.user_id)
-		.run();
-
-	return jsonResponse({ default_game_public }, 200, cors);
+		.bind(session.data.user_id)
+		.first<{ default_game_public: number; stream_url: string | null }>();
+	return jsonResponse(
+		{
+			default_game_public: row?.default_game_public === 1,
+			stream_url: row?.stream_url ?? null,
+		},
+		200,
+		cors,
+	);
 }
 
 export async function handleLogout(

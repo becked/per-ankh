@@ -114,6 +114,10 @@ export interface UserMe {
 	// private-by-default. Re-imports preserve the existing game's visibility
 	// and tournament uploads are forced public regardless.
 	default_game_public: boolean;
+	// Casting stream link (twitch/youtube), auto-attached to a match part when
+	// this user takes the streamer slot. null = not set; the cast button then
+	// offers a one-time input that remembers the link for later casts.
+	stream_url: string | null;
 }
 
 export interface GameListItem {
@@ -420,19 +424,23 @@ export const cloudApi = {
 		await request("/auth/logout", { ...opts, method: "POST" });
 	},
 
-	// Update account preferences. Currently just the default visibility for
-	// new uploads; returns the persisted value so callers can reconcile.
+	// Update account preferences — send only the fields to change (partial
+	// update). stream_url: string sets the casting link, null clears it.
+	// Returns the full persisted settings so callers can reconcile.
 	updateSettings: async (
-		settings: { default_game_public: boolean },
+		settings: { default_game_public?: boolean; stream_url?: string | null },
 		opts?: CallOpts,
-	): Promise<{ default_game_public: boolean }> => {
+	): Promise<{ default_game_public: boolean; stream_url: string | null }> => {
 		const res = await request("/auth/settings", {
 			...opts,
 			method: "POST",
 			headers: { "Content-Type": "application/json" },
 			body: JSON.stringify(settings),
 		});
-		return res.json() as Promise<{ default_game_public: boolean }>;
+		return res.json() as Promise<{
+			default_game_public: boolean;
+			stream_url: string | null;
+		}>;
 	},
 
 	// --- Video channels (self-service) ---
@@ -1342,13 +1350,16 @@ export const cloudApi = {
 	// Caster self-service: add/move the CURRENT USER on a part's caster list.
 	// role picks the slot ("streamer" takes index 0, bumping the current
 	// streamer to co-caster; "cocaster" appends); omitted → streamer when the
-	// part has no caster, else co-caster. Open to any logged-in user; pending
-	// matches only. Responds 204 — callers refresh via invalidateAll.
+	// part has no caster, else co-caster. streamUrl is the one-time "remember
+	// my stream" path — it's saved to the account and auto-attached on this
+	// and later streamer casts. Open to any logged-in user; pending matches
+	// only. Responds 204 — callers refresh via invalidateAll.
 	castMatchPart: async (
 		tournamentId: string,
 		matchId: string,
 		partId: string,
 		role?: "streamer" | "cocaster",
+		streamUrl?: string,
 		opts?: CallOpts,
 	): Promise<void> => {
 		await request(
@@ -1357,7 +1368,10 @@ export const cloudApi = {
 				...opts,
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify(role ? { role } : {}),
+				body: JSON.stringify({
+					...(role ? { role } : {}),
+					...(streamUrl ? { stream_url: streamUrl } : {}),
+				}),
 			},
 		);
 	},
