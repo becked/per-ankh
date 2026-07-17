@@ -470,6 +470,9 @@
 							iconCategory: "units-icons",
 							iconValue: granted[0].unitType,
 							color,
+							// Ringed in the player's color — the shared "bonus card"
+							// encoding (matches the outlined chips on the Techs tab).
+							outlined: true,
 							tooltipHtml: bonusEventTooltip(
 								d.tech_name,
 								d.turn,
