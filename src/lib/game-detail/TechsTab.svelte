@@ -116,112 +116,76 @@
 		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
 
 	// ─── Chart option ─────────────────────────────────────────────────
-	const techDiscoveryChartOption = $derived(
-		techDiscoveryHistory.length > 0
-			? (() => {
-					const histories = techDiscoveryHistory;
-					const maxTechCount = Math.max(
-						...histories.flatMap((player) =>
-							player.data.map((d) => d.tech_count),
-						),
-					);
-					const finalTurn = Math.max(
-						...histories.flatMap((player) => player.data.map((d) => d.turn)),
-					);
-					const seriesLabels = histories.map(
-						(p) =>
-							playerById.get(p.player_id)?.label ??
-							formatEnum(p.nation, "NATION_"),
-					);
-
-					return {
-						...CHART_THEME,
-						title: {
-							...CHART_THEME.title,
-							text: "Tech Discovery Over Time",
-						},
-						legend: {
-							show: false,
-							data: seriesLabels,
-							selected: chartFilter,
-						},
-						tooltip: {
-							trigger: "axis",
-							// Points are sparse (one per discovery), so snap the axis
-							// pointer to the nearest event and drive the tooltip off the
-							// axis — hovering anywhere works, matching the other charts.
-							axisPointer: { snap: true },
-							formatter: (params: unknown) => {
-								const arr = params as Array<{
-									marker: string;
-									seriesName: string;
-									data: [number, number, string | null];
-								}>;
-								if (arr.length === 0) return "";
-								const turn = arr[0].data[0];
-								const rows = arr
-									.map((p) => {
-										const [, count, tech] = p.data;
-										const suffix = tech ? ` — ${techName(tech)}` : "";
-										return `${p.marker}${p.seriesName}: <b>${count}</b>${suffix}`;
-									})
-									.join("<br/>");
-								return `Turn ${turn}<br/>${rows}`;
-							},
-						},
-						// No axis-name titles — the title + tooltip carry the meaning,
-						// matching the Military Power plot. containLabel reserves room
-						// for the tick numbers now that the fixed left/bottom gutters
-						// (which the axis names needed) are gone.
-						grid: {
-							top: 44,
-							left: 8,
-							right: 20,
-							bottom: 24,
-							containLabel: true,
-						},
-						xAxis: {
-							type: "value",
-							splitLine: { show: false },
-							max: finalTurn,
-						},
-						yAxis: {
-							type: "value",
-							max: maxTechCount + 2,
-						},
-						series: histories.map((player, i) => {
-							const rp = playerById.get(player.player_id);
-							const color = rp?.color ?? getNationChartColor(player.nation, i);
-							return {
-								name: rp?.label ?? formatEnum(player.nation, "NATION_"),
-								type: "line" as const,
-								data: player.data.map((d) => [
-									d.turn,
-									d.tech_count,
-									d.tech_name,
-								]),
-								itemStyle: { color },
-								// Milestone markers stay hidden until hover (per the shared
-								// look) but still name the discovered tech in the tooltip.
-								symbol: (value: [number, number, string | null]) =>
-									value[2] ? "circle" : "none",
-								symbolSize: 8,
-								emphasis: {
-									symbolSize: 12,
-								},
-								...filledLineStyle(color),
-							};
-						}),
-					} as EChartsOption;
-				})()
-			: null,
-	);
+	// Cumulative science over time — the plot the science rail annotates (its
+	// spikes and key-tech markers are science events, so they read against the
+	// science curve, not a tech count). Same compact styling as the Military
+	// Power plot; per-tech detail lives in the Techs-by-Turn table below.
+	const scienceChartOption = $derived.by<EChartsOption | null>(() => {
+		const science = allYields.filter((y) => y.yield_type === "YIELD_SCIENCE");
+		if (science.length === 0) return null;
+		const turns = science[0].data.map((d) => d.turn);
+		const minTurn = turns[0] ?? 0;
+		const maxTurn = turns[turns.length - 1] ?? 0;
+		const pad = Math.max(1, (maxTurn - minTurn) * 0.02);
+		return {
+			...CHART_THEME,
+			title: {
+				...CHART_THEME.title,
+				text: "Cumulative Science",
+			},
+			legend: {
+				show: false,
+				data: science.map(
+					(p) =>
+						playerById.get(p.player_id)?.label ??
+						formatEnum(p.nation, "NATION_"),
+				),
+				selected: chartFilter,
+			},
+			tooltip: { trigger: "axis" },
+			// No axis-name titles — the title + tooltip carry the meaning,
+			// matching the Military Power plot. containLabel reserves room
+			// for the tick numbers now that the fixed left/bottom gutters
+			// (which the axis names needed) are gone.
+			grid: {
+				top: 44,
+				left: 8,
+				right: 20,
+				bottom: 24,
+				containLabel: true,
+			},
+			xAxis: {
+				type: "value",
+				min: minTurn - pad,
+				max: maxTurn + pad,
+				minInterval: 1,
+				splitLine: { show: false },
+			},
+			yAxis: {
+				type: "value",
+				// Draw the y-axis at the left edge, not at x=0 (the turn axis min
+				// is negative, so onZero would float the axis inside the plot).
+				axisLine: { onZero: false },
+			},
+			series: science.map((player, i) => {
+				const rp = playerById.get(player.player_id);
+				const color = rp?.color ?? getNationChartColor(player.nation, i);
+				return {
+					name: rp?.label ?? formatEnum(player.nation, "NATION_"),
+					type: "line" as const,
+					data: player.data.map((d) => [d.turn, d.cumulative]),
+					itemStyle: { color },
+					...filledLineStyle(color),
+				};
+			}),
+		} as EChartsOption;
+	});
 
 	// ─── Science annotation rail ──────────────────────────────────────
-	// An <EventRail> under the Tech Discovery chart of science-relevant
+	// An <EventRail> under the Cumulative Science chart of science-relevant
 	// events per player: key science techs the player researched AND
 	// demonstrably used (see science-techs.ts), free-tech turns, and one-off
-	// science gains. (Cumulative science itself lives on the Yields tab.)
+	// science gains. (The per-turn science rate lives on the Yields tab.)
 	// Like the Military rail, the annotated variant renders for two-player
 	// matchups; other games get the plain chart.
 
@@ -617,7 +581,7 @@
 	// ─── Planner links + unique techs ─────────────────────────────────
 
 	// Per player: a deep-link of their FULL research order into the owtt
-	// tech-tree planner. Rendered under the Tech Discovery chart (the full
+	// tech-tree planner. Rendered under the science chart (the full
 	// path), not next to the unique-techs chips, so the link's scope is clear.
 	const owttLinks = $derived(
 		orderedPlayers
@@ -753,7 +717,7 @@
 	});
 </script>
 
-{#if techDiscoveryChartOption}
+{#if scienceChartOption}
 	<div
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
@@ -764,7 +728,7 @@
 			     at its true turn-x on the live chart (mil-tab pattern). -->
 			<div class="relative">
 				<Chart
-					option={techDiscoveryChartOption}
+					option={scienceChartOption}
 					height="360px"
 					onReady={(c) => (railChart = c)}
 					onLayout={() => (railLayoutTick += 1)}
@@ -800,9 +764,9 @@
 			{/if}
 		{:else}
 			<ChartContainer
-				option={techDiscoveryChartOption}
+				option={scienceChartOption}
 				height="400px"
-				title="Tech Discovery Over Time"
+				title="Cumulative Science"
 			/>
 		{/if}
 		{#if owttLinks.length > 0}
