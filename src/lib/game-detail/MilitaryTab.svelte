@@ -10,7 +10,8 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
-	import { UNIT_STATS } from "$lib/generated/unit-stats";
+	import { TECH_NAMES } from "$lib/generated/tech-names";
+	import { TECH_BONUS_UNITS, UNIT_STATS } from "$lib/generated/unit-stats";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import EventRail, {
 		TOOLTIP_TEXT,
@@ -317,6 +318,23 @@
 		);
 	}
 
+	const techName = (tech: string) =>
+		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
+
+	// One unit line inside a tech/bonus marker tooltip: icon, (count ×) name,
+	// strength.
+	function unitTooltipLine(
+		u: { unitType: string; strength: number; naval: boolean },
+		count?: number,
+	): string {
+		const url = getSpritePath("units", u.unitType);
+		const ic = url
+			? `<img src="${url}" alt="" style="width:15px;height:15px"/>`
+			: "";
+		const qty = count != null ? `${count}× ` : "";
+		return `<div style="display:flex;align-items:center;gap:6px;color:${TOOLTIP_TEXT}">${ic}<span>${qty}${formatEnum(u.unitType, "UNIT_")}</span><span style="color:${TOOLTIP_MUTED}">str ${u.strength}${u.naval ? " · sea" : ""}</span></div>`;
+	}
+
 	// Tooltip for a unit-tech-unlock marker: the tech + the qualifying units it
 	// unlocks (with strength).
 	function techEventTooltip(
@@ -325,20 +343,32 @@
 		unlocked: { unitType: string; strength: number; naval: boolean }[],
 		color: string,
 	): string {
-		const items = unlocked
-			.map((u) => {
-				const url = getSpritePath("units", u.unitType);
-				const ic = url
-					? `<img src="${url}" alt="" style="width:15px;height:15px"/>`
-					: "";
-				return `<div style="display:flex;align-items:center;gap:6px;color:${TOOLTIP_TEXT}">${ic}<span>${formatEnum(u.unitType, "UNIT_")}</span><span style="color:${TOOLTIP_MUTED}">str ${u.strength}${u.naval ? " · sea" : ""}</span></div>`;
-			})
-			.join("");
 		return (
 			`<div style="font-size:12px;line-height:1.55">` +
-			`<div style="font-weight:700;color:${color}">${formatEnum(tech, "TECH_")} · T${turn}</div>` +
+			`<div style="font-weight:700;color:${color}">${techName(tech)} · T${turn}</div>` +
 			`<div style="color:${TOOLTIP_MUTED};margin:3px 0 2px">Unlocks</div>` +
-			items +
+			unlocked.map((u) => unitTooltipLine(u)).join("") +
+			`</div>`
+		);
+	}
+
+	// Tooltip for a bonus-card marker: the card + the units it granted outright.
+	function bonusEventTooltip(
+		tech: string,
+		turn: number,
+		granted: {
+			unitType: string;
+			count: number;
+			strength: number;
+			naval: boolean;
+		}[],
+		color: string,
+	): string {
+		return (
+			`<div style="font-size:12px;line-height:1.55">` +
+			`<div style="font-weight:700;color:${color}">${techName(tech)} · T${turn}</div>` +
+			`<div style="color:${TOOLTIP_MUTED};margin:3px 0 2px">Bonus card · granted</div>` +
+			granted.map((u) => unitTooltipLine(u, u.count)).join("") +
 			`</div>`
 		);
 	}
@@ -415,12 +445,39 @@
 			// Unit-tech unlocks: techs that field a 5/6/8/10-str unit. One marker
 			// per qualifying tech-discovery turn; the tooltip lists every unit it
 			// unlocks. Naval units are included only when naval is relevant.
+			// Bonus cards that grant combat units outright (e.g. 2× a unique unit)
+			// get their own marker — the units materialize, so no strength or
+			// naval gate applies.
 			const techHist = techDiscoveryHistory.find(
 				(t) => t.player_id === player.player_id,
 			);
 			if (techHist) {
 				for (const d of techHist.data) {
 					if (d.tech_name == null) continue;
+					const granted = (TECH_BONUS_UNITS[d.tech_name] ?? [])
+						.filter((g) => classifyUnit(g.unit) != null)
+						.map((g) => ({
+							unitType: g.unit,
+							count: g.count,
+							strength: UNIT_STATS[g.unit]?.strength ?? 0,
+							naval: UNIT_STATS[g.unit]?.naval ?? false,
+						}))
+						.sort((x, y) => y.strength - x.strength);
+					if (granted.length > 0) {
+						events.push({
+							kind: "tech",
+							turn: d.turn,
+							iconCategory: "units",
+							iconValue: granted[0].unitType,
+							color,
+							tooltipHtml: bonusEventTooltip(
+								d.tech_name,
+								d.turn,
+								granted,
+								color,
+							),
+						});
+					}
 					const unlocked = Object.entries(UNIT_STATS)
 						.filter(
 							([, s]) =>

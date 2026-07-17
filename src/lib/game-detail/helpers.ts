@@ -452,6 +452,12 @@ const TECH_SPRITE_FIXES: Record<string, string> = {
 	TECH_SOVEREIGNITY: "TECH_SOVEREIGNTY",
 };
 
+// The sprite name a unit actually renders: some units ship no sprite of their
+// own and borrow another's (unit.xml <zIconName>, e.g. UNIT_HITTITE_CHARIOT_1
+// → UNIT_THREE_MEN_CHARIOT).
+const unitSpriteName = (unitType: string): string =>
+	UNIT_STATS[unitType]?.icon ?? unitType;
+
 /**
  * Resolve a tech enum value to its (category, filename) in the sprite
  * manifest, or null if no sprite ships. Handles game-data corner cases:
@@ -470,8 +476,9 @@ function resolveTechSprite(
 	if (SPRITE_MANIFEST[`techs/${tech}`] != null) {
 		return { category: "techs", filename: tech };
 	}
-	// Fallback: try unit sprite (TECH_HASTATUS -> UNIT_HASTATUS)
-	const unitName = tech.replace(/^TECH_/, "UNIT_");
+	// Fallback: try unit sprite (TECH_HASTATUS -> UNIT_HASTATUS), following a
+	// borrowed icon (TECH_HITTITE_CHARIOT_1 -> UNIT_THREE_MEN_CHARIOT).
+	const unitName = unitSpriteName(tech.replace(/^TECH_/, "UNIT_"));
 	if (SPRITE_MANIFEST[`units/${unitName}`] != null) {
 		return { category: "units", filename: unitName };
 	}
@@ -537,6 +544,9 @@ export function getSpritePath(
 		return (
 			SPRITE_MANIFEST[`specialists/${enumValue.replace(/_\d+$/, "")}`] ?? null
 		);
+	}
+	if (category === "units") {
+		return SPRITE_MANIFEST[`units/${unitSpriteName(enumValue)}`] ?? null;
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }
