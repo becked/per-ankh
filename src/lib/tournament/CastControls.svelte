@@ -47,8 +47,8 @@
 	async function cast() {
 		if (!part) return;
 		const partId = part.id;
-		// The URL field is a bare-domain magnet ("twitch.tv/sion"); the API
-		// requires a scheme, so add one rather than bounce the cast on a 400.
+		// The URL field is a bare-domain magnet ("youtube.com/@sion/live"); the
+		// API requires a scheme, so add one rather than bounce the cast on a 400.
 		const trimmed = streamUrl.trim();
 		const withUrl =
 			trimmed === ""
@@ -118,7 +118,7 @@
 					<input
 						type="text"
 						class="w-40 rounded border border-input bg-surface-sunken px-2 py-1 text-xs text-tan placeholder:text-gray-500 focus:border-orange focus:outline-none"
-						placeholder="twitch.tv/you (optional)"
+						placeholder="youtube.com/@you/live (optional)"
 						title="Your stream link — remembered for future casts. Leave empty to cast without one."
 						bind:value={streamUrl}
 						disabled={busy}

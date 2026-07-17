@@ -365,6 +365,41 @@ describe("caster stream auto-attach", () => {
 		);
 	});
 
+	it("the 0033 backfill infers a link from streamer history", async () => {
+		const { t, match, partId } = await setup();
+		const alice = await makeUser({ discordUsername: "alice_caster" });
+		await request.post({
+			path: castPath(t.tournamentId, match.match_id, partId),
+			as: alice,
+			body: { stream_url: TWITCH },
+		});
+		// Simulate a pre-0033 user: casting history exists, no stored link.
+		await env.SHARE_DB.prepare(
+			"UPDATE users SET stream_url = NULL WHERE user_id = ?",
+		)
+			.bind(alice.userId)
+			.run();
+
+		// The backfill statement from migrations/0033_user_stream_url.sql —
+		// keep in sync with the migration (it runs against empty tables in this
+		// harness's beforeAll, so its behavior is asserted here instead).
+		await env.SHARE_DB.prepare(
+			`UPDATE users SET stream_url = (
+				SELECT json_extract(p.value, '$.streams[0].url')
+				FROM tournament_matches m, json_each(m.parts) AS p
+				WHERE m.parts IS NOT NULL AND json_valid(m.parts)
+					AND json_extract(p.value, '$.casters[0].user_id') = users.user_id
+					AND json_extract(p.value, '$.streams[0].url') IS NOT NULL
+				ORDER BY m.rowid DESC LIMIT 1
+			) WHERE stream_url IS NULL`,
+		).run();
+
+		const me = await expectOk<{ stream_url: string | null }>(
+			await request.get({ path: "/v1/auth/me", as: alice }),
+		);
+		expect(me.stream_url).toBe(TWITCH);
+	});
+
 	it("settings can set and clear the stream link", async () => {
 		const alice = await makeUser({ discordUsername: "alice_caster" });
 		const set = await expectOk<{ stream_url: string | null }>(

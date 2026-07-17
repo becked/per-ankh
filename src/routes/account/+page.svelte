@@ -97,8 +97,8 @@
 	async function saveStreamUrl() {
 		if (savingStream) return;
 		const trimmed = streamUrl.trim();
-		// A bare domain ("twitch.tv/sion") is the natural thing to paste; the
-		// worker requires a scheme, so add one instead of bouncing on a 400.
+		// A bare domain ("youtube.com/@you/live") is the natural thing to paste;
+		// the worker requires a scheme, so add one instead of bouncing on a 400.
 		const next =
 			trimmed === ""
 				? null
@@ -236,7 +236,7 @@
 						<div class="mt-3 border-t border-border-subtle pt-3">
 							<div class="text-sm font-bold text-tan">Casting stream link</div>
 							<p class="mt-1 text-xs text-gray-400">
-								Your Twitch or YouTube link, attached to a match automatically
+								Your YouTube or Twitch link, attached to a match automatically
 								when you sign up to cast it. Clear the field to turn
 								auto-attach off.
 							</p>
@@ -250,7 +250,7 @@
 								<input
 									type="text"
 									class="min-w-0 flex-1 rounded border border-input bg-surface-sunken px-2 py-1.5 text-sm text-tan placeholder:text-gray-500 focus:border-orange focus:outline-none"
-									placeholder="twitch.tv/you"
+									placeholder="youtube.com/@you/live"
 									bind:value={streamUrl}
 									disabled={savingStream}
 								/>
