@@ -16,7 +16,7 @@
 	// Side-by-side tech timeline (owglick's "tech — turn by turn" view): one
 	// row per turn anyone completed a tech, one column per player, each cell
 	// stacking that turn's techs as plain text. A tech everyone researched (and
-	// any bonus-card tech) sits in the page's default color; a player's color =
+	// any bonus-card tech) sits in a muted gray; a player's color =
 	// not everyone has it (often solo). A trailing law icon marks a tech that
 	// unlocks a law pair. Hovering a shared tech turns it gold down every
 	// column, so pacing gaps on the same tech read at a glance.
@@ -173,13 +173,16 @@
 {/snippet}
 
 <div
-	class="mb-4 rounded-lg p-4"
+	class="rounded-lg p-4 lg:flex-1"
 	style="background-color: rgb(var(--color-surface));"
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Techs by Turn</h3>
 	<div class="overflow-x-auto">
 		<Tooltip.Provider delayDuration={200} disableHoverableContent>
-			<table class="w-full max-w-3xl text-sm">
+			<!-- No max-width: fill the card. Side by side, the flex-1 half already
+			     bounds it; stacked (5+ nations) it must spread across the full panel
+			     rather than cram every column into a fixed 48rem. -->
+			<table class="w-full text-sm">
 				<thead>
 					<tr>
 						<th class="w-12 px-3 pb-2 text-left font-semibold text-gray-400"
@@ -210,7 +213,7 @@
 											href={plannerUrls[i]}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="inline-flex items-center gap-1 whitespace-nowrap text-xs font-normal text-tan hover:underline"
+											class="inline-flex items-center gap-1 whitespace-nowrap pl-2 text-xs font-normal text-tan hover:underline"
 											title="Open {player.label}'s full research order in the tech-tree planner"
 										>
 											Tech path
@@ -254,8 +257,8 @@
 										<div class="flex flex-col gap-0.5">
 											{#each cell as c (c.tech)}
 												<!-- Plain text, colored by state: a bonus-card tech always
-											     sits in the page's default color (no state coloring). Else a
-											     shared tech sits in the default color and turns gold on hover
+											     sits in a muted gray (no state coloring). Else a
+											     shared tech sits in that gray and turns gold on hover
 											     (spotlighting the same tech down every column); a tech not
 											     everyone has stays in the player's color. Hovering also opens
 											     a styled panel with the tech's full ownership + pacing. -->
@@ -264,14 +267,14 @@
 														{#snippet child({ props })}
 															<span
 																{...props}
-																class="inline-flex cursor-default items-center gap-1.5 text-xs transition-colors"
-																style="color: {c.bonus
-																	? 'inherit'
+																class="inline-flex cursor-default items-center gap-1.5 text-xs text-gray-400 transition-colors"
+																style:color={c.bonus
+																	? undefined
 																	: c.shared
 																		? hovered === c.tech
-																			? 'rgb(var(--color-orange))'
-																			: 'inherit'
-																		: players[i].color};"
+																			? "rgb(var(--color-orange))"
+																			: undefined
+																		: players[i].color}
 																role="img"
 																aria-label={techName(c.tech)}
 																onmouseenter={() => (hovered = c.tech)}
