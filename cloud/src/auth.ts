@@ -739,7 +739,9 @@ export async function handleMe(
 		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, default_game_public, stream_url FROM users WHERE user_id = ?`,
 	)
 		.bind(session.data.user_id)
-		.first<UserRow & { default_game_public: number; stream_url: string | null }>();
+		.first<
+			UserRow & { default_game_public: number; stream_url: string | null }
+		>();
 
 	if (!row) {
 		// Session points at a deleted user — clean up and 401.

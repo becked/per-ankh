@@ -47,7 +47,10 @@
 	// and returns null for empty, which the url !== "" filter then drops.
 	function buildLinks(): TournamentLink[] {
 		return rows
-			.map((r) => ({ label: r.label.trim(), url: ensureUrlScheme(r.url) ?? "" }))
+			.map((r) => ({
+				label: r.label.trim(),
+				url: ensureUrlScheme(r.url) ?? "",
+			}))
 			.filter((l) => l.label !== "" && l.url !== "");
 	}
 
