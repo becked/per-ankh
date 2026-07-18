@@ -36,6 +36,7 @@
 		filledLineStyle,
 		getSpritePath,
 		improvementDisplayName,
+		createYieldChartOption,
 	} from "./helpers";
 	import {
 		scienceTechMarkers,
@@ -207,13 +208,53 @@
 			: null,
 	);
 
+	// ─── Chart view toggle ────────────────────────────────────────────
+	// The science plot the rail annotates, in three switchable views:
+	// cumulative science (the default — the rail's markers are science events,
+	// so they read against the science curve they affect), per-turn science
+	// rate (small numbers, so a single tech's adoption stays visible late in
+	// the game), and the tech count over time (the plot above, naming the tech
+	// discovered at each point). Cumulative/Per-Turn reuse the shared science
+	// yield-chart helper — the same one the Yields tab drives — in its compact,
+	// axis-name-free variant, so all three views share the Military-Power look
+	// the rail pairs under.
+	type TechsChartMode = "cumulative" | "rate" | "techs";
+	let chartMode = $state<TechsChartMode>("cumulative");
+
+	const CHART_MODE_TITLES: Record<TechsChartMode, string> = {
+		cumulative: "Cumulative Science",
+		rate: "Science per Turn",
+		techs: "Tech Discovery Over Time",
+	};
+
+	// Segmented-control button tokens for the sliding view toggle below,
+	// matching the tournament matches view switch. min-w keeps the three cells
+	// equal-width so the w-1/3 sliding thumb lines up, and wide enough for the
+	// longest label (this is a standalone, content-sized control; the tournament
+	// copy takes its width from a fixed grid cell instead).
+	const viewTriggerClass =
+		"relative z-10 min-w-[10rem] cursor-pointer whitespace-nowrap px-3 py-1.5 text-center text-xs font-bold text-tan transition-colors";
+
+	const chartOption = $derived(
+		chartMode === "techs"
+			? techDiscoveryChartOption
+			: createYieldChartOption(
+					allYields,
+					"YIELD_SCIENCE",
+					"Science",
+					"Science",
+					chartFilter,
+					chartMode,
+					true,
+				),
+	);
+
 	// ─── Science annotation rail ──────────────────────────────────────
-	// An <EventRail> under the Tech Discovery chart of science-relevant
-	// events per player: key science techs the player researched AND
-	// demonstrably used (see science-techs.ts), free-tech turns, and one-off
-	// science gains. (Cumulative science itself lives on the Yields tab.)
-	// Like the Military rail, the annotated variant renders for two-player
-	// matchups; other games get the plain chart.
+	// An <EventRail> under the science chart (in any of its view modes) of
+	// science-relevant events per player: key science techs the player
+	// researched AND demonstrably used (see science-techs.ts), free-tech turns,
+	// and one-off science gains. Like the Military rail, the annotated variant
+	// renders for two-player matchups; other games get the plain chart.
 
 	// Per-player data slices for the rail (id match, nation fallback — the
 	// shared ownedByPlayer/findByPlayer idiom).
@@ -629,52 +670,99 @@
 		class="mb-4 rounded-lg p-4"
 		style="background-color: rgb(var(--color-surface));"
 	>
-		{#if scienceRailGroups.length > 0}
-			<!-- Matchup variant: the plot plus the science event rail below it —
-			     key-tech payoffs, free techs, one-off science gains — each marker
-			     at its true turn-x on the live chart (mil-tab pattern). -->
-			<div class="relative">
-				<Chart
-					option={techDiscoveryChartOption}
-					height="360px"
-					onReady={(c) => (railChart = c)}
-					onLayout={() => (railLayoutTick += 1)}
-				/>
-				{#if railHighlight && railHighlightLeft != null}
-					<div
-						class="pointer-events-none absolute inset-y-0 z-10"
-						style="left: {railHighlightLeft}px; width: 0; border-left: 1px dashed {railHighlight.color};"
-					></div>
-				{/if}
-			</div>
-			<EventRail
-				chart={railChart}
-				layoutTick={railLayoutTick}
-				groups={scienceRailGroups}
-				onHighlight={(h) => (railHighlight = h)}
-			/>
-			{#if oneOffTotals.length > 0}
-				<div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
-					<span class="italic text-tan">Bonus science:</span>
-					{#each oneOffTotals as t (t.player.playerId)}
-						<span
-							class="inline-flex items-center gap-1 font-semibold text-tan"
-							title="Sum of turns where the science total jumped by more than that turn's production rate (gains of 10+; from the save's per-turn yield history)"
-						>
-							<span style="color: {t.player.color};">{t.player.label}</span>
-							+{t.total}
-							<SpriteIcon category="yields" value="YIELD_SCIENCE" size={12} />
-							({t.count} event{t.count === 1 ? "" : "s"})
-						</span>
-					{/each}
+		<!-- View switch for the science plot: cumulative science (default),
+		     per-turn science rate (small numbers keep a late-game tech adoption
+		     visible), or the tech count. Sliding segmented control matching the
+		     tournament matches view toggle — a w-1/3 thumb translated to the
+		     active cell. The rail below pairs under all three. -->
+		<div
+			class="relative mb-2 grid w-fit grid-cols-3 overflow-hidden rounded-lg border-2 border-surface-sunken"
+			style="background-color: rgb(var(--color-surface));"
+			role="group"
+			aria-label="Science chart view"
+		>
+			<div
+				class="pointer-events-none absolute inset-y-0 left-0 w-1/3 transition-transform duration-200 ease-out"
+				style:background-color="rgb(var(--color-surface-raised))"
+				style:transform={chartMode === "rate"
+					? "translateX(100%)"
+					: chartMode === "techs"
+						? "translateX(200%)"
+						: "translateX(0)"}
+			></div>
+			<button
+				type="button"
+				class={viewTriggerClass}
+				aria-pressed={chartMode === "cumulative"}
+				onclick={() => (chartMode = "cumulative")}
+			>
+				Science Cumulative
+			</button>
+			<button
+				type="button"
+				class={viewTriggerClass}
+				aria-pressed={chartMode === "rate"}
+				onclick={() => (chartMode = "rate")}
+			>
+				Science per Turn
+			</button>
+			<button
+				type="button"
+				class={viewTriggerClass}
+				aria-pressed={chartMode === "techs"}
+				onclick={() => (chartMode = "techs")}
+			>
+				Techs over Time
+			</button>
+		</div>
+		{#if chartOption}
+			{#if scienceRailGroups.length > 0}
+				<!-- Matchup variant: the plot plus the science event rail below it —
+				     key-tech payoffs, free techs, one-off science gains — each marker
+				     at its true turn-x on the live chart (mil-tab pattern). -->
+				<div class="relative">
+					<Chart
+						option={chartOption}
+						height="360px"
+						onReady={(c) => (railChart = c)}
+						onLayout={() => (railLayoutTick += 1)}
+					/>
+					{#if railHighlight && railHighlightLeft != null}
+						<div
+							class="pointer-events-none absolute inset-y-0 z-10"
+							style="left: {railHighlightLeft}px; width: 0; border-left: 1px dashed {railHighlight.color};"
+						></div>
+					{/if}
 				</div>
+				<EventRail
+					chart={railChart}
+					layoutTick={railLayoutTick}
+					groups={scienceRailGroups}
+					onHighlight={(h) => (railHighlight = h)}
+				/>
+				{#if oneOffTotals.length > 0}
+					<div class="mt-2 flex flex-wrap items-center gap-3 text-xs">
+						<span class="italic text-tan">Bonus science:</span>
+						{#each oneOffTotals as t (t.player.playerId)}
+							<span
+								class="inline-flex items-center gap-1 font-semibold text-tan"
+								title="Sum of turns where the science total jumped by more than that turn's production rate (gains of 10+; from the save's per-turn yield history)"
+							>
+								<span style="color: {t.player.color};">{t.player.label}</span>
+								+{t.total}
+								<SpriteIcon category="yields" value="YIELD_SCIENCE" size={12} />
+								({t.count} event{t.count === 1 ? "" : "s"})
+							</span>
+						{/each}
+					</div>
+				{/if}
+			{:else}
+				<ChartContainer
+					option={chartOption}
+					height="400px"
+					title={CHART_MODE_TITLES[chartMode]}
+				/>
 			{/if}
-		{:else}
-			<ChartContainer
-				option={techDiscoveryChartOption}
-				height="400px"
-				title="Tech Discovery Over Time"
-			/>
 		{/if}
 	</div>
 {:else if techDiscoveryHistory.length === 0}

@@ -1008,6 +1008,13 @@ export function createYieldChartOption(
 	yAxisLabel: string,
 	selectedNationsState: Record<string, boolean>,
 	mode: YieldMode = "rate",
+	// Compact variant: drop the "Turn"/y-axis-name titles and use the tight,
+	// containLabel grid of the game-detail time-series plots (the Military-Power
+	// look). The Techs tab opts in so its Cumulative/Per-Turn science views match
+	// the axis-name-free "Number of Techs" view they toggle against — and the
+	// science rail reads under all three the same way. The Yields tab leaves it
+	// off and keeps the labelled axes.
+	compact = false,
 ): EChartsOption | null {
 	if (allYields.length === 0) return null;
 
@@ -1041,15 +1048,12 @@ export function createYieldChartOption(
 			data: resolved.map((p) => p.label),
 			selected: selectedNationsState,
 		},
-		grid: {
-			left: 60,
-			right: 40,
-			top: 80,
-			bottom: 60,
-		},
+		grid: compact
+			? { top: 44, left: 8, right: 20, bottom: 24, containLabel: true }
+			: { left: 60, right: 40, top: 80, bottom: 60 },
 		xAxis: {
 			type: "value",
-			name: "Turn",
+			name: compact ? undefined : "Turn",
 			nameLocation: "middle",
 			nameGap: 30,
 			min: minTurn - pad,
@@ -1059,7 +1063,7 @@ export function createYieldChartOption(
 		},
 		yAxis: {
 			type: "value",
-			name: fullYAxisLabel,
+			name: compact ? undefined : fullYAxisLabel,
 			nameLocation: "middle",
 			nameGap: 40,
 			axisLine: { onZero: false },
