@@ -89,15 +89,6 @@
 		}));
 	});
 
-	// Headline: per-player tech counts and the everyone-researched overlap.
-	const headline = $derived.by(() => {
-		const counts = byPlayer.map((b) => b.techs.length);
-		const shared = [...ownerCounts.values()].filter(
-			(n) => n === players.length,
-		).length;
-		return { counts, shared };
-	});
-
 	// Planner deep link per player (their full research order).
 	const plannerUrls = $derived(
 		players.map((player) =>
@@ -131,44 +122,7 @@
 	class="mb-4 rounded-lg p-4"
 	style="background-color: rgb(var(--color-surface));"
 >
-	<div class="mb-3 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-		<h3 class="text-base font-bold text-tan">Techs by Turn</h3>
-		<span class="text-xs text-tan">
-			{headline.counts.join(" vs ")}{players.length > 1
-				? ` · ${headline.shared} by everyone`
-				: ""}
-		</span>
-		<!-- The key demonstrates each chip state instead of describing it —
-		     the exemplars carry the exact classes the real cells use. -->
-		<span class="inline-flex flex-wrap items-center gap-1.5 text-xs">
-			<span
-				class="inline-flex items-center rounded bg-orange/10 px-1 py-px font-semibold"
-				style="color: rgb(var(--color-orange));">everyone has it</span
-			>
-			{#each players as player (player.playerId)}
-				<span
-					class="inline-flex items-center rounded-r border-l-2 border-current px-1 py-px font-semibold"
-					style="color: {player.color};">only {player.label}</span
-				>
-			{/each}
-			<span
-				class="inline-flex items-center gap-1 rounded px-1 py-px font-semibold text-tan"
-				>unlocks a law <SpriteIcon
-					category="icons"
-					value="LAWS"
-					size={12}
-					alt="law"
-				/></span
-			>
-			<span
-				class="inline-flex items-center rounded border border-current px-1 py-px font-semibold text-tan"
-				>bonus card</span
-			>
-			<span class="italic text-gray-400"
-				>· hover a tech to spot it across nations</span
-			>
-		</span>
-	</div>
+	<h3 class="mb-3 text-base font-bold text-tan">Techs by Turn</h3>
 	<div class="overflow-x-auto">
 		<table class="w-full max-w-3xl text-sm">
 			<thead>
@@ -178,7 +132,7 @@
 					>
 					{#each players as player, i (player.playerId)}
 						<th class="px-3 pb-2 text-left">
-							<span class="inline-flex items-center gap-2">
+							<span class="inline-flex flex-col items-start gap-0.5">
 								<span
 									class="inline-flex items-center gap-1.5 font-semibold"
 									style="color: {player.color};"
@@ -201,10 +155,26 @@
 										href={plannerUrls[i]}
 										target="_blank"
 										rel="noopener noreferrer"
-										class="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold text-orange transition-colors hover:bg-tan-hover"
+										class="inline-flex items-center gap-1 whitespace-nowrap text-xs font-normal text-tan hover:underline"
 										title="Open {player.label}'s full research order in the tech-tree planner"
 									>
-										planner ↗
+										Tech path
+										<!-- External-link glyph (heroicons), sized to the text -->
+										<svg
+											xmlns="http://www.w3.org/2000/svg"
+											class="h-3 w-3"
+											fill="none"
+											viewBox="0 0 24 24"
+											stroke="currentColor"
+											stroke-width="2"
+											aria-hidden="true"
+										>
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
+											/>
+										</svg>
 									</a>
 									<!-- eslint-enable svelte/no-navigation-without-resolve -->
 								{/if}
