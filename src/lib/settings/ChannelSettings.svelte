@@ -65,10 +65,9 @@
 		class="rounded-lg p-3"
 		style="background-color: rgb(var(--color-surface-raised));"
 	>
-		<div class="text-sm font-bold text-tan">Streaming channels</div>
+		<div class="text-sm font-bold text-tan">Video channels</div>
 		<p class="mt-1 text-xs text-gray-400">
-			Link a channel to show your recent videos on your profile. Paste a channel
-			URL or @handle. YouTube is supported.
+			YouTube channel to show recent videos on your profile.
 		</p>
 
 		<form onsubmit={add} class="mt-3 flex items-center gap-2">

@@ -105,7 +105,9 @@
 		try {
 			const saved = await cloudApi.updateSettings({ stream_url: next });
 			streamUrl = saved.stream_url ?? "";
-			toast.info(saved.stream_url ? "Stream link saved" : "Stream link cleared");
+			toast.info(
+				saved.stream_url ? "Stream link saved" : "Stream link cleared",
+			);
 		} catch (err) {
 			toast.error(
 				`Settings update failed: ${err instanceof Error ? err.message : err}`,
@@ -132,9 +134,7 @@
 				<Tabs.Trigger value="preferences" class={triggerClass}>
 					Preferences
 				</Tabs.Trigger>
-				<Tabs.Trigger value="channels" class={triggerClass}>
-					Channels
-				</Tabs.Trigger>
+				<Tabs.Trigger value="video" class={triggerClass}>Video</Tabs.Trigger>
 				<Tabs.Trigger value="maintenance" class={triggerClass}>
 					Maintenance
 				</Tabs.Trigger>
@@ -228,13 +228,24 @@
 								></span>
 							</button>
 						</div>
+					</div>
+				</div>
+			</Tabs.Content>
 
-						<div class="mt-3 border-t border-border-subtle pt-3">
+			<Tabs.Content value="video">
+				<div class="space-y-3">
+					<div
+						class="rounded-lg p-4"
+						style="background-color: rgb(var(--color-surface));"
+					>
+						<div
+							class="rounded-lg p-3"
+							style="background-color: rgb(var(--color-surface-raised));"
+						>
 							<div class="text-sm font-bold text-tan">Casting stream link</div>
 							<p class="mt-1 text-xs text-gray-400">
-								Your YouTube or Twitch link, attached to a match automatically
-								when you sign up to cast it. Clear the field to turn
-								auto-attach off.
+								YouTube or Twitch stream link added to matches when you are a
+								caster.
 							</p>
 							<form
 								class="mt-2 flex items-center gap-2"
@@ -245,8 +256,8 @@
 							>
 								<input
 									type="text"
-									class="min-w-0 flex-1 rounded border border-input bg-surface-sunken px-2 py-1.5 text-sm text-tan placeholder:text-gray-500 focus:border-orange focus:outline-none"
-									placeholder="youtube.com/@you/live"
+									class="min-w-0 flex-1 rounded border border-input bg-surface-sunken px-2 py-1.5 text-sm text-tan focus:border-orange focus:outline-none"
+									aria-label="Casting stream link"
 									bind:value={streamUrl}
 									disabled={savingStream}
 								/>
@@ -260,11 +271,8 @@
 							</form>
 						</div>
 					</div>
+					<ChannelSettings initialChannels={data.channels} />
 				</div>
-			</Tabs.Content>
-
-			<Tabs.Content value="channels">
-				<ChannelSettings initialChannels={data.channels} />
 			</Tabs.Content>
 
 			<Tabs.Content value="maintenance">
