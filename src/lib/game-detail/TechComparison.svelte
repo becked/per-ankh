@@ -213,10 +213,10 @@
 											href={plannerUrls[i]}
 											target="_blank"
 											rel="noopener noreferrer"
-											class="inline-flex items-center gap-1 whitespace-nowrap pl-2 text-xs font-normal text-tan hover:underline"
+											class="inline-flex items-center gap-1 whitespace-nowrap pl-5 text-[10px] font-normal text-tan hover:underline"
 											title="Open {player.label}'s full research order in the tech-tree planner"
 										>
-											Tech path
+											Show tech path
 											<!-- External-link glyph (heroicons), sized to the text -->
 											<svg
 												xmlns="http://www.w3.org/2000/svg"
