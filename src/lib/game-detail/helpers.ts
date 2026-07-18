@@ -1008,12 +1008,13 @@ export function createYieldChartOption(
 	yAxisLabel: string,
 	selectedNationsState: Record<string, boolean>,
 	mode: YieldMode = "rate",
-	// Compact variant: drop the "Turn"/y-axis-name titles and use the tight,
-	// containLabel grid of the game-detail time-series plots (the Military-Power
-	// look). The Techs tab opts in so its Cumulative/Per-Turn science views match
-	// the axis-name-free "Number of Techs" view they toggle against — and the
-	// science rail reads under all three the same way. The Yields tab leaves it
-	// off and keeps the labelled axes.
+	// Compact variant: drop the chart title and the "Turn"/y-axis-name titles,
+	// and use the tight, containLabel grid of the game-detail time-series plots
+	// (the Military-Power look). The Techs tab opts in: its view toggle sits above
+	// the plot and already names it, so the Cumulative/Per-Turn science views drop
+	// the redundant in-canvas title and match the "Techs over Time" view they
+	// toggle against — and the science rail reads under all three the same way.
+	// The Yields tab leaves it off and keeps the title and labelled axes.
 	compact = false,
 ): EChartsOption | null {
 	if (allYields.length === 0) return null;
@@ -1039,10 +1040,11 @@ export function createYieldChartOption(
 
 	return {
 		...CHART_THEME,
-		title: {
-			...CHART_THEME.title,
-			text: fullTitle,
-		},
+		// Compact drops the chart title outright (the toggle above the plot names
+		// it); non-compact keeps the derived "Cumulative X" / "X per Turn" title.
+		title: compact
+			? { show: false }
+			: { ...CHART_THEME.title, text: fullTitle },
 		legend: {
 			show: false,
 			data: resolved.map((p) => p.label),

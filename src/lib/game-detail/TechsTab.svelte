@@ -111,11 +111,6 @@
 		techDiscoveryHistory.length > 0
 			? (() => {
 					const histories = techDiscoveryHistory;
-					const maxTechCount = Math.max(
-						...histories.flatMap((player) =>
-							player.data.map((d) => d.tech_count),
-						),
-					);
 					const finalTurn = Math.max(
 						...histories.flatMap((player) => player.data.map((d) => d.turn)),
 					);
@@ -127,10 +122,9 @@
 
 					return {
 						...CHART_THEME,
-						title: {
-							...CHART_THEME.title,
-							text: "Tech Discovery Over Time",
-						},
+						// No in-canvas title: the view toggle above the plot names it
+						// ("Techs over Time"), matching the compact science views.
+						title: { show: false },
 						legend: {
 							show: false,
 							data: seriesLabels,
@@ -178,7 +172,6 @@
 						},
 						yAxis: {
 							type: "value",
-							max: maxTechCount + 2,
 						},
 						series: histories.map((player, i) => {
 							const rp = playerById.get(player.player_id);
