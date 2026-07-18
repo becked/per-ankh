@@ -14,9 +14,10 @@
 
 	// Side-by-side tech timeline (owglick's "tech — turn by turn" view): one
 	// row per turn anyone completed a tech, one column per player, each cell
-	// stacking that turn's techs. Gold = everyone researched it; a player's
-	// color = they're (so far) alone in it; outlined chip = bonus card;
-	// ◆ = the tech unlocks a law pair. Hovering a tech spotlights it in every
+	// stacking that turn's techs as plain text. A tech everyone researched (and
+	// any bonus-card tech) sits in the page's default color; a player's color =
+	// not everyone has it (often solo). A trailing law icon marks a tech that
+	// unlocks a law pair. Hovering a shared tech turns it gold down every
 	// column, so pacing gaps on the same tech read at a glance.
 	let {
 		players,
@@ -39,8 +40,6 @@
 		laws: readonly string[];
 		// Researched by every player in the game.
 		shared: boolean;
-		// Researched by this player alone.
-		unique: boolean;
 	};
 
 	// Per-player tech lists (id match, nation fallback — shared idiom).
@@ -82,7 +81,6 @@
 							bonus: t.tech.includes("_BONUS"),
 							laws: TECH_LAWS[t.tech] ?? [],
 							shared: (ownerCounts.get(t.tech) ?? 0) === players.length,
-							unique: (ownerCounts.get(t.tech) ?? 0) === 1,
 						}),
 					),
 			),
@@ -198,26 +196,20 @@
 								{:else}
 									<div class="flex flex-col gap-0.5">
 										{#each cell as c (c.tech)}
-											<!-- Hue alone can't carry the encoding — Assyria/Kush/
-											     Yuezhi's nation colors sit on top of the shared gold —
-											     so each state also gets a shape/fill: shared = faint
-											     gold wash, unique = left accent bar, bonus card = full
-											     outline. -->
+											<!-- Plain text, colored by state: a bonus-card tech always
+											     sits in the page's default color (no state coloring). Else a
+											     shared tech sits in the default color and turns gold on hover
+											     (spotlighting the same tech down every column); a tech not
+											     everyone has stays in the player's color. -->
 											<span
-												class="inline-flex w-fit cursor-default items-center gap-1.5 px-1 py-px text-xs font-semibold transition-colors
-													{c.bonus
-													? 'rounded border border-current'
-													: c.unique
-														? 'rounded-r border-l-2 border-current'
-														: 'rounded'}
-													{hovered === c.tech
-													? 'bg-tan-hover'
-													: c.shared && !c.bonus
-														? 'bg-orange/10'
-														: ''}"
-												style="color: {c.shared
-													? 'rgb(var(--color-orange))'
-													: players[i].color};"
+												class="inline-flex cursor-default items-center gap-1.5 text-xs transition-colors"
+												style="color: {c.bonus
+													? 'inherit'
+													: c.shared
+														? hovered === c.tech
+															? 'rgb(var(--color-orange))'
+															: 'inherit'
+														: players[i].color};"
 												title={cellTitle(c, row.turn)}
 												role="img"
 												aria-label={techName(c.tech)}
