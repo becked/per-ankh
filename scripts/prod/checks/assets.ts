@@ -28,7 +28,14 @@ const STATIC_DIR = resolve(REPO_ROOT, "static");
 // Pull every "/atlases/..." or "/sprites/..." string literal out of a generated
 // manifest module. The generated files are pure data (quoted URL literals), so
 // a lexical scan is exact and avoids importing/evaluating the module.
-const ASSET_PATH_RE = /["'`](\/(?:atlases|sprites)\/[^"'`]+)["'`]/g;
+//
+// Group 1 captures the opening quote; \1 requires the same quote to close, and
+// the interior excludes only that matched delimiter — not all three quote
+// chars. Excluding all three would truncate a filename that legitimately
+// contains one of the others, e.g. the apostrophe in
+// "IMPROVEMENT_SANCHI'S_STUPPA.png" inside a double-quoted literal. Group 2 is
+// the path.
+const ASSET_PATH_RE = /(["'`])(\/(?:atlases|sprites)\/(?:(?!\1).)+)\1/g;
 
 async function referencedPaths(manifestPath: string): Promise<string[] | null> {
 	let text: string;
@@ -39,7 +46,7 @@ async function referencedPaths(manifestPath: string): Promise<string[] | null> {
 	}
 	const paths = new Set<string>();
 	for (const m of text.matchAll(ASSET_PATH_RE)) {
-		paths.add(m[1]);
+		paths.add(m[2]);
 	}
 	return [...paths];
 }
