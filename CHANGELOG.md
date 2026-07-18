@@ -1,5 +1,35 @@
 # Changelog
 
+## [2026-07-18-39a0549] - 2026-07-18
+
+### Features
+
+- (techs) side-by-side tech timeline with planner links in the header — [7cd421c](https://github.com/becked/per-ankh/commit/7cd421ca9c31af51e6c36805526ff64d826a24d3)
+- (techs) icons + unlock-cost ordering in Science Sources — [42cd997](https://github.com/becked/per-ankh/commit/42cd997b82414cf968c3d0e2046c6f7ad4d2d5d6)
+- (techs) slim the Techs by Turn header — [ee2a6cb](https://github.com/becked/per-ankh/commit/ee2a6cb13ab18de10bd793e3152f3e51c379e202)
+- (techs) flatten Techs by Turn cells to plain text — [69959d3](https://github.com/becked/per-ankh/commit/69959d3c7f3905392a7d6d2ea338b4e7148bee5f)
+- (techs) add styled hover panel to Techs by Turn cells — [e7047ab](https://github.com/becked/per-ankh/commit/e7047ab0d64dbd96c9542926a4a2c58354b8dd96)
+- (techs) pair Techs by Turn with Science Sources on wide screens — [7657da3](https://github.com/becked/per-ankh/commit/7657da3add5b99df6defab0e13b0111386b92238)
+- (techs) relabel the tech-path link to "Show tech path" — [33ccc56](https://github.com/becked/per-ankh/commit/33ccc562242536b4d80f8edac270549f2b1e85f7)
+- (tournament) remember casters' stream links and auto-attach on cast — [00ab780](https://github.com/becked/per-ankh/commit/00ab78077b9818a207eb3ecb9ffdb3d9c4fb992c)
+- (tournament) backfill stream links from casting history; YouTube-first copy — [b9a4d42](https://github.com/becked/per-ankh/commit/b9a4d42b498054115bb7e84299d916a54f1ff83f)
+- (techs) science chart view toggle on the Techs tab — [8276f34](https://github.com/becked/per-ankh/commit/8276f34eb8f19724d96db6680a4822b731448a61)
+- (techs) drop redundant in-chart titles and hard y-axis cap — [c2fcfef](https://github.com/becked/per-ankh/commit/c2fcfefca7744a2681d7885199d209ad415fb598)
+
+### Fixes
+
+- (techs) match Techs by Turn styling to the Science Sources card — [071e82c](https://github.com/becked/per-ankh/commit/071e82ca11ce2d99148fdeb5bf4ece010d29e4b3)
+- (preflight) don't truncate baked asset paths at embedded quotes — [39a0549](https://github.com/becked/per-ankh/commit/39a054977312671aba1e9e0a7a1e18285c2fdb8a)
+
+### Other
+
+- (techs) re-bake sprite manifest to local renders — [c643a86](https://github.com/becked/per-ankh/commit/c643a869db8aafb436f43b298c87fef45fb870df)
+- refresh drifted baked data tables — [53f78d4](https://github.com/becked/per-ankh/commit/53f78d4c14c9fe4aca9ff1167a7916e730996ef8)
+- fix prettier drift in bake-sprites and science-techs — [b95f0aa](https://github.com/becked/per-ankh/commit/b95f0aa4b073760600f386f607901f631968d7d6)
+- (tournament) extract shared ensureUrlScheme URL helper — [037024d](https://github.com/becked/per-ankh/commit/037024d27da53ac8954eed4284b5563ac895f362)
+- (account) group casting stream link with channels under a Video tab — [c0b04f2](https://github.com/becked/per-ankh/commit/c0b04f24787784bfb9be0cad2f26c834d6b9ffd9)
+- apply prettier formatting to auth and tournament links editor — [ee86f19](https://github.com/becked/per-ankh/commit/ee86f1915d9a0c8093d96365d24ca68f9f9d470b)
+
 ## [2026-07-16-66af647] - 2026-07-16
 
 ### Features
