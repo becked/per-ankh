@@ -9,6 +9,7 @@
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import { formatGameTitle } from "$lib/utils/formatting";
 	import { isNewer } from "$lib/utils/semver";
+	import { ensureUrlScheme } from "$lib/utils/url";
 	import { toast } from "$lib/ui/toast";
 	import type { PageData } from "./$types";
 
@@ -96,15 +97,10 @@
 
 	async function saveStreamUrl() {
 		if (savingStream) return;
-		const trimmed = streamUrl.trim();
 		// A bare domain ("youtube.com/@you/live") is the natural thing to paste;
 		// the worker requires a scheme, so add one instead of bouncing on a 400.
-		const next =
-			trimmed === ""
-				? null
-				: /^https?:\/\//i.test(trimmed)
-					? trimmed
-					: `https://${trimmed}`;
+		// Empty → null, which clears the stored link.
+		const next = ensureUrlScheme(streamUrl);
 		savingStream = true;
 		try {
 			const saved = await cloudApi.updateSettings({ stream_url: next });

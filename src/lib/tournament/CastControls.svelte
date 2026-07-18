@@ -15,6 +15,7 @@
 	import { cloudApi, type TournamentDetail, type UserMe } from "$lib/api-cloud";
 	import { rowPart, type MatchRow } from "$lib/tournament/matches-table";
 	import { runAction } from "$lib/tournament/async-action";
+	import { ensureUrlScheme } from "$lib/utils/url";
 
 	let {
 		row,
@@ -49,13 +50,8 @@
 		const partId = part.id;
 		// The URL field is a bare-domain magnet ("youtube.com/@sion/live"); the
 		// API requires a scheme, so add one rather than bounce the cast on a 400.
-		const trimmed = streamUrl.trim();
-		const withUrl =
-			trimmed === ""
-				? undefined
-				: /^https?:\/\//i.test(trimmed)
-					? trimmed
-					: `https://${trimmed}`;
+		// Empty stays undefined so the cast body omits stream_url entirely.
+		const withUrl = ensureUrlScheme(streamUrl) ?? undefined;
 		const ok = await runAction(
 			() =>
 				cloudApi.castMatchPart(
