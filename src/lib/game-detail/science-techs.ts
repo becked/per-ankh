@@ -231,9 +231,7 @@ function tileScience(
 			: 0);
 	if (base === 0 || specialist == null) return base;
 	const cls = IMPROVEMENT_CLASS[improvement];
-	const mod = cls
-		? (SPECIALIST_TILE_MODIFIER[specialist]?.[cls] ?? 0)
-		: 0;
+	const mod = cls ? (SPECIALIST_TILE_MODIFIER[specialist]?.[cls] ?? 0) : 0;
 	return (base * (100 + mod)) / 100;
 }
 
@@ -322,7 +320,8 @@ export function scienceTechMarkers(
 					// Base science these earn per turn (floor — modifiers stack).
 					flat:
 						standing.reduce(
-							(t, i) => t + tileScience(i.improvement, i.resource, i.specialist),
+							(t, i) =>
+								t + tileScience(i.improvement, i.resource, i.specialist),
 							0,
 						) +
 						staffed.reduce(
@@ -762,7 +761,13 @@ export function scienceBreakdown(
 			const est = round1((base * acc.pct) / 100);
 			const out =
 				modifiers.get(label) ??
-				({ count: 0, science: 0, pct: 0, icon: acc.icon, order: acc.order } as Acc);
+				({
+					count: 0,
+					science: 0,
+					pct: 0,
+					icon: acc.icon,
+					order: acc.order,
+				} as Acc);
 			out.count += acc.count;
 			out.science += est;
 			out.pct += acc.pct;

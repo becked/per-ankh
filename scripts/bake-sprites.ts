@@ -309,8 +309,7 @@ async function copyPrefixed(
 	await wipeAndRecreate(dst);
 	const entries = await readdir(src);
 	const pngs = entries.filter(
-		(f) =>
-			f.startsWith(prefix) && f.endsWith(".png") && !f.startsWith(exclude),
+		(f) => f.startsWith(prefix) && f.endsWith(".png") && !f.startsWith(exclude),
 	);
 	for (const filename of pngs) {
 		const basename = filename.slice(0, -".png".length);
@@ -349,10 +348,7 @@ async function copyIcons(sidecar: SpriteSidecar): Promise<number> {
 		const srcPath = resolve(PINACOTHECA_SPRITES, source);
 		if (trim) {
 			const input = await readFile(srcPath);
-			const buf = await sharp(input)
-				.trim({ threshold: trim })
-				.png()
-				.toBuffer();
+			const buf = await sharp(input).trim({ threshold: trim }).png().toBuffer();
 			const hash = contentHash(buf);
 			const outName = `${basename}.${hash}.png`;
 			await writeFile(resolve(dst, outName), buf);
