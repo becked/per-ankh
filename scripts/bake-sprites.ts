@@ -91,11 +91,24 @@ const MIRROR_CATEGORIES = [
 // (the 2D set) — the 3D variants are unused.
 const UNITS_CATEGORY = "units";
 
+// improvements/ likewise mixes the 2D icons (IMPROVEMENT_<NAME>.png, named by
+// the improvement's zIconName) with per-nation 3D renders
+// (IMPROVEMENT_3D_*.png + sidecar .json) — only the 2D set is baked.
+// specialists/ holds one class-level icon per specialist line
+// (SPECIALIST_POET.png — tiers share it) plus a lowercase border overlay
+// that isn't an icon.
+const IMPROVEMENTS_CATEGORY = "improvements";
+const SPECIALISTS_CATEGORY = "specialists";
+
 // Three icons sourced from disparate Pinacotheca subdirs, with renames where
 // the runtime expects a different name than Pinacotheca emits.
 interface IconMapping {
 	readonly source: string; // relative to extracted/sprites/
 	readonly target: string; // filename under static/sprites/icons/ (with .png suffix)
+	// Trim the transparent border to the glyph's content bounds (same
+	// treatment as traits-trimmed) — for sources whose glyph floats small
+	// inside a padded canvas and would be illegible at chip size.
+	readonly trim?: number; // sharp trim threshold
 }
 const ICON_MAPPINGS: readonly IconMapping[] = [
 	{
@@ -113,6 +126,15 @@ const ICON_MAPPINGS: readonly IconMapping[] = [
 	{
 		source: "other/MAP_OVERVIEW_Normal.png",
 		target: "MAP_OVERVIEW.png",
+	},
+	// The game's golden-scales laws glyph — marks law-unlocking techs on the
+	// tech timeline. The Highlighted variant (Normal is too dark to read at
+	// chip size on the app's dark surfaces), trimmed so the scales fill the
+	// render box instead of floating inside the source's padding.
+	{
+		source: "other/LAWS_Highlighted.png",
+		target: "LAWS.png",
+		trim: 120,
 	},
 	{
 		source: "other/Cycle_Normal_EndTurn.png",
@@ -273,6 +295,29 @@ async function copyTrimmedTraits(sidecar: SpriteSidecar): Promise<number> {
 	return pngs.length;
 }
 
+// The 2D improvement / specialist icon sets, filtered from their mixed
+// source dirs the same way copyUnits filters out the 3D renders.
+async function copyPrefixed(
+	sourceDir: string,
+	category: string,
+	prefix: string,
+	exclude: string,
+	sidecar: SpriteSidecar,
+): Promise<number> {
+	const src = resolve(PINACOTHECA_SPRITES, sourceDir);
+	const dst = resolve(SPRITES_OUT, category);
+	await wipeAndRecreate(dst);
+	const entries = await readdir(src);
+	const pngs = entries.filter(
+		(f) => f.startsWith(prefix) && f.endsWith(".png") && !f.startsWith(exclude),
+	);
+	for (const filename of pngs) {
+		const basename = filename.slice(0, -".png".length);
+		await bakeOne(resolve(src, filename), dst, category, basename, sidecar);
+	}
+	return pngs.length;
+}
+
 async function copyUnits(sidecar: SpriteSidecar): Promise<number> {
 	const src = resolve(PINACOTHECA_SPRITES, "units");
 	const dst = resolve(SPRITES_OUT, UNITS_CATEGORY);
@@ -298,15 +343,19 @@ async function copyUnits(sidecar: SpriteSidecar): Promise<number> {
 async function copyIcons(sidecar: SpriteSidecar): Promise<number> {
 	const dst = resolve(SPRITES_OUT, "icons");
 	await wipeAndRecreate(dst);
-	for (const { source, target } of ICON_MAPPINGS) {
+	for (const { source, target, trim } of ICON_MAPPINGS) {
 		const basename = target.slice(0, -".png".length);
-		await bakeOne(
-			resolve(PINACOTHECA_SPRITES, source),
-			dst,
-			"icons",
-			basename,
-			sidecar,
-		);
+		const srcPath = resolve(PINACOTHECA_SPRITES, source);
+		if (trim) {
+			const input = await readFile(srcPath);
+			const buf = await sharp(input).trim({ threshold: trim }).png().toBuffer();
+			const hash = contentHash(buf);
+			const outName = `${basename}.${hash}.png`;
+			await writeFile(resolve(dst, outName), buf);
+			sidecar[`icons/${basename}`] = `/sprites/icons/${outName}`;
+		} else {
+			await bakeOne(srcPath, dst, "icons", basename, sidecar);
+		}
 	}
 	return ICON_MAPPINGS.length;
 }
@@ -471,6 +520,20 @@ async function main(): Promise<void> {
 	}
 	counts["traits-trimmed"] = await copyTrimmedTraits(sidecar);
 	counts[UNITS_CATEGORY] = await copyUnits(sidecar);
+	counts[IMPROVEMENTS_CATEGORY] = await copyPrefixed(
+		"improvements",
+		IMPROVEMENTS_CATEGORY,
+		"IMPROVEMENT_",
+		"IMPROVEMENT_3D_",
+		sidecar,
+	);
+	counts[SPECIALISTS_CATEGORY] = await copyPrefixed(
+		"specialists",
+		SPECIALISTS_CATEGORY,
+		"SPECIALIST_",
+		"SPECIALIST_3D_",
+		sidecar,
+	);
 	counts.icons = await copyIcons(sidecar);
 	counts.portraits = await copyPortraits(sidecar);
 

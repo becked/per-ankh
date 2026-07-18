@@ -35,12 +35,17 @@ import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { CityInfo } from "$lib/types/CityInfo";
 import type { StoryEvent } from "$lib/types/StoryEvent";
 import type { FamilyInfo } from "$lib/parser/types";
-import { SPECIALISTS } from "$lib/generated/specialists";
+import { SPECIALISTS, SPECIALIST_CLASSES } from "$lib/generated/specialists";
 import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 import {
 	IMPROVEMENT_SCIENCE,
 	IMPROVEMENT_RESOURCE_SCIENCE,
+	IMPROVEMENT_UNLOCK_COST,
+	IMPROVEMENT_CLASS,
 	SPECIALIST_SCIENCE,
+	SPECIALIST_UNLOCK_COST,
+	SPECIALIST_TILE_MODIFIER,
+	LAW_UNLOCK_COST,
 	SHRINE_TYPE,
 	WISDOM_COURT_SCIENCE_RATE,
 	SCIENCE_TRIANGLE_OFFSET,
@@ -210,14 +215,24 @@ function buildingName(zType: string, prefix: string): string {
 
 // Base science of one standing improvement tile: the improvement's own flat
 // science plus what it earns off its resource (a grove's science comes
-// entirely from the luxury it sits on).
-function tileScience(improvement: string, resource: string | null): number {
-	return (
+// entirely from the luxury it sits on), multiplied by the staffing
+// specialist's tile modifier when one applies — a Gardener doubles the
+// Grove's whole output (Tile.yieldOutputForGovernor ×
+// specialist.aiImprovementClassModifier).
+function tileScience(
+	improvement: string,
+	resource: string | null,
+	specialist: string | null,
+): number {
+	const base =
 		(IMPROVEMENT_SCIENCE[improvement]?.flat ?? 0) +
 		(resource != null
 			? (IMPROVEMENT_RESOURCE_SCIENCE[improvement]?.[resource] ?? 0)
-			: 0)
-	);
+			: 0);
+	if (base === 0 || specialist == null) return base;
+	const cls = IMPROVEMENT_CLASS[improvement];
+	const mod = cls ? (SPECIALIST_TILE_MODIFIER[specialist]?.[cls] ?? 0) : 0;
+	return (base * (100 + mod)) / 100;
 }
 
 // Count rows into "n× Name" pairs, keeping first-seen name order.
@@ -305,7 +320,8 @@ export function scienceTechMarkers(
 					// Base science these earn per turn (floor — modifiers stack).
 					flat:
 						standing.reduce(
-							(t, i) => t + tileScience(i.improvement, i.resource),
+							(t, i) =>
+								t + tileScience(i.improvement, i.resource, i.specialist),
 							0,
 						) +
 						staffed.reduce(
@@ -398,18 +414,28 @@ export function sagesSeatFoundedTurn(
 
 // ─── End-state science-source breakdown ──────────────────────────────
 
+// Sprite for one breakdown row, resolved through getSpritePath by the view.
+export type BreakdownIcon = { category: string; value: string };
+
 // One itemized science source: "Elder Poet", "Grove (luxury)", "Library".
 // `pct` is set on percent-modifier items (libraries, Musaeum, governors),
-// where `science` is the estimated points (city base × pct).
+// where `science` is the estimated points (city base × pct). `order` is the
+// research cost of the source's unlocking tech (0 = no tech gate), so rows
+// read early-tech → late-tech.
 export type BreakdownItem = {
 	label: string;
 	count: number;
 	science: number;
 	pct?: number;
+	icon?: BreakdownIcon;
+	order: number;
 };
 
 export type ScienceBreakdown = {
-	specialists: { items: BreakdownItem[]; total: number };
+	// Split by workplace kind — rural staff (miners, farmers, gardeners) are
+	// a different economic decision than urban building staff.
+	specialistsRural: { items: BreakdownItem[]; total: number };
+	specialistsUrban: { items: BreakdownItem[]; total: number };
 	buildings: { items: BreakdownItem[]; total: number };
 	// Flat conditional law sources: Constitution per urban specialist,
 	// Centralization off capital culture, and science law UPKEEP (negative,
@@ -455,6 +481,15 @@ const LAW_SCIENCE_UPKEEP_PER_CITY: Readonly<Record<string, number>> = {
 	LAW_HOLY_WAR: -1,
 	LAW_AUTARKY: -2,
 };
+
+// Stable per-class disambiguator for the specialist row ordering, so classes
+// sharing an unlock cost sort as contiguous blocks (alphabetical by class id).
+const SPECIALIST_CLASS_ORDINAL: Readonly<Record<string, number>> =
+	Object.fromEntries(
+		Object.keys(SPECIALIST_CLASSES)
+			.sort()
+			.map((cls, i) => [cls, i]),
+	);
 
 // Culture levels in game order — index+1 is the level multiplier
 // aiYieldRateCulture uses (City.cs:11916 adds getCultureStep() on top for
@@ -568,21 +603,30 @@ export function scienceBreakdown(
 	specialistName: (zType: string) => string,
 	improvementLabel: (zType: string) => string,
 ): ScienceBreakdown {
-	type Acc = { count: number; science: number; pct: number };
+	type Acc = {
+		count: number;
+		science: number;
+		pct: number;
+		icon?: BreakdownIcon;
+		order: number;
+	};
 	const bump = (
 		m: Map<string, Acc>,
 		label: string,
 		science: number,
 		pct = 0,
+		icon?: BreakdownIcon,
+		order = 0,
 	) => {
-		const acc = m.get(label) ?? { count: 0, science: 0, pct: 0 };
+		const acc = m.get(label) ?? { count: 0, science: 0, pct: 0, icon, order };
 		acc.count += 1;
 		acc.science += science;
 		acc.pct += pct;
 		m.set(label, acc);
 	};
 
-	const specialists = new Map<string, Acc>();
+	const specialistsRural = new Map<string, Acc>();
+	const specialistsUrban = new Map<string, Acc>();
 	const buildings = new Map<string, Acc>();
 	// Per-city flat base, per-city urban-specialist counts, and per-city
 	// percent items, for the law and modifier passes below.
@@ -590,23 +634,47 @@ export function scienceBreakdown(
 	const cityUrban = new Map<string, number>();
 	const cityPct = new Map<string, Map<string, Acc>>();
 	for (const i of improvements) {
-		const flat = IMPROVEMENT_SCIENCE[i.improvement]?.flat ?? 0;
-		const lux =
-			i.resource != null
-				? (IMPROVEMENT_RESOURCE_SCIENCE[i.improvement]?.[i.resource] ?? 0)
-				: 0;
+		// The building row carries the tile's UNSTAFFED science (flat +
+		// luxury; one row per improvement name, since every grove resource
+		// yields the same +2). A staffing specialist's tile modifier — the
+		// Gardener doubling the Grove — is the specialist's doing, so that
+		// boost lands on THEIR row, on top of their own yield.
+		const tile = tileScience(i.improvement, i.resource, null);
+		const boost = tileScience(i.improvement, i.resource, i.specialist) - tile;
 		const pct = IMPROVEMENT_SCIENCE[i.improvement]?.pct ?? 0;
-		const staff = i.specialist ? (SPECIALIST_SCIENCE[i.specialist] ?? 0) : 0;
-		// Flat + luxury science under one name — every grove resource yields
-		// the same +2, so "Grove (Citrus)" rows would just be noise.
-		if (flat + lux > 0)
-			bump(buildings, improvementLabel(i.improvement), flat + lux);
-		if (staff > 0 && i.specialist)
-			bump(specialists, specialistName(i.specialist), staff);
+		const staff =
+			(i.specialist ? (SPECIALIST_SCIENCE[i.specialist] ?? 0) : 0) + boost;
+		if (tile > 0)
+			bump(
+				buildings,
+				improvementLabel(i.improvement),
+				tile,
+				0,
+				{ category: "improvements", value: i.improvement },
+				IMPROVEMENT_UNLOCK_COST[i.improvement] ?? 0,
+			);
+		if (staff > 0 && i.specialist) {
+			// Rows read by unlock cost with each CLASS contiguous — all of a
+			// line's tiers together, Apprentice → Master → Elder — so two
+			// classes sharing a cost (Officers and Poets, both 160) don't
+			// intermingle. Composite key: cost, then a stable class ordinal,
+			// then the tier.
+			const info = SPECIALISTS[i.specialist];
+			bump(
+				info?.kind === "rural" ? specialistsRural : specialistsUrban,
+				specialistName(i.specialist),
+				staff,
+				0,
+				{ category: "specialists", value: i.specialist },
+				(SPECIALIST_UNLOCK_COST[i.specialist] ?? 0) * 10_000 +
+					(SPECIALIST_CLASS_ORDINAL[info?.class ?? ""] ?? 99) * 10 +
+					(info?.level ?? 0),
+			);
+		}
 		if (i.city_name != null) {
 			cityFlat.set(
 				i.city_name,
-				(cityFlat.get(i.city_name) ?? 0) + flat + lux + staff,
+				(cityFlat.get(i.city_name) ?? 0) + tile + staff,
 			);
 			if (i.specialist != null && SPECIALISTS[i.specialist]?.kind === "urban") {
 				cityUrban.set(i.city_name, (cityUrban.get(i.city_name) ?? 0) + 1);
@@ -615,7 +683,14 @@ export function scienceBreakdown(
 				const m = cityPct.get(i.city_name) ?? new Map<string, Acc>();
 				// The exact per-building percentage goes in the label, so tiers
 				// stay distinct rows: "Library (+10%)", "Academy (+20%)".
-				bump(m, `${improvementLabel(i.improvement)} (+${pct}%)`, 0, pct);
+				bump(
+					m,
+					`${improvementLabel(i.improvement)} (+${pct}%)`,
+					0,
+					pct,
+					{ category: "improvements", value: i.improvement },
+					IMPROVEMENT_UNLOCK_COST[i.improvement] ?? 0,
+				);
 				cityPct.set(i.city_name, m);
 			}
 		}
@@ -641,6 +716,8 @@ export function scienceBreakdown(
 				count: urban,
 				science: urban * CONSTITUTION_SCIENCE_PER_URBAN_SPECIALIST,
 				pct: 0,
+				icon: { category: "laws", value: "LAW_CONSTITUTION" },
+				order: LAW_UNLOCK_COST["LAW_CONSTITUTION"] ?? 0,
 			});
 		}
 	}
@@ -650,7 +727,13 @@ export function scienceBreakdown(
 		const level = CULTURE_LEVELS.indexOf(capital.cultureLevel) + 1;
 		if (level > 0) {
 			const science = level * CENTRALIZATION_CAPITAL_SCIENCE_PER_CULTURE;
-			laws.set("Centralization", { count: 1, science, pct: 0 });
+			laws.set("Centralization", {
+				count: 1,
+				science,
+				pct: 0,
+				icon: { category: "laws", value: "LAW_CENTRALIZATION" },
+				order: LAW_UNLOCK_COST["LAW_CENTRALIZATION"] ?? 0,
+			});
 			cityFlat.set(
 				capital.cityName,
 				(cityFlat.get(capital.cityName) ?? 0) + science,
@@ -663,6 +746,8 @@ export function scienceBreakdown(
 				count: cityCount,
 				science: cost * cityCount,
 				pct: 0,
+				icon: { category: "laws", value: lawId },
+				order: LAW_UNLOCK_COST[lawId] ?? 0,
 			});
 		}
 	}
@@ -674,7 +759,15 @@ export function scienceBreakdown(
 		const base = cityFlat.get(city) ?? 0;
 		for (const [label, acc] of mods) {
 			const est = round1((base * acc.pct) / 100);
-			const out = modifiers.get(label) ?? { count: 0, science: 0, pct: 0 };
+			const out =
+				modifiers.get(label) ??
+				({
+					count: 0,
+					science: 0,
+					pct: 0,
+					icon: acc.icon,
+					order: acc.order,
+				} as Acc);
 			out.count += acc.count;
 			out.science += est;
 			out.pct += acc.pct;
@@ -682,15 +775,19 @@ export function scienceBreakdown(
 		}
 	}
 
+	// Early-tech sources first (unlock cost asc), biggest contribution as the
+	// tiebreak — so each section reads "early tech science → late tech science".
 	const toItems = (m: Map<string, Acc>, withPct: boolean): BreakdownItem[] =>
 		[...m]
 			.map(([label, a]) => ({
 				label,
 				count: a.count,
 				science: round1(a.science),
+				icon: a.icon,
+				order: a.order,
 				...(withPct ? { pct: a.pct } : {}),
 			}))
-			.sort((a, b) => b.science - a.science);
+			.sort((a, b) => a.order - b.order || b.science - a.science);
 	const sum = (items: BreakdownItem[]) =>
 		round1(items.reduce((t, i) => t + i.science, 0));
 
@@ -707,7 +804,13 @@ export function scienceBreakdown(
 		if (leaderWisdom != null) {
 			const science = leaderCourtScience(leaderWisdom, competitive);
 			if (science !== 0) {
-				court.set("Leader", { count: 1, science, pct: 0 });
+				court.set("Leader", {
+					count: 1,
+					science,
+					pct: 0,
+					icon: { category: "icons", value: "RATING_WISDOM" },
+					order: 0,
+				});
 			}
 		}
 		if (competitive) {
@@ -715,22 +818,27 @@ export function scienceBreakdown(
 				count: 1,
 				science: COMPETITIVE_SCIENCE_STIPEND,
 				pct: 0,
+				icon: { category: "yields", value: "YIELD_SCIENCE" },
+				order: 0,
 			});
 		}
 	}
 
-	const specialistItems = toItems(specialists, false);
+	const ruralItems = toItems(specialistsRural, false);
+	const urbanItems = toItems(specialistsUrban, false);
 	const buildingItems = toItems(buildings, false);
 	const lawItems = toItems(laws, false);
 	const modifierItems = toItems(modifiers, true);
 	const courtItems = toItems(court, false);
-	const specialistsTotal = sum(specialistItems);
+	const ruralTotal = sum(ruralItems);
+	const urbanTotal = sum(urbanItems);
 	const buildingsTotal = sum(buildingItems);
 	const lawsTotal = sum(lawItems);
 	const modifiersTotal = sum(modifierItems);
 	const courtTotal = sum(courtItems);
 	return {
-		specialists: { items: specialistItems, total: specialistsTotal },
+		specialistsRural: { items: ruralItems, total: ruralTotal },
+		specialistsUrban: { items: urbanItems, total: urbanTotal },
 		buildings: { items: buildingItems, total: buildingsTotal },
 		laws: { items: lawItems, total: lawsTotal },
 		modifiers: { items: modifierItems, total: modifiersTotal },
@@ -739,7 +847,8 @@ export function scienceBreakdown(
 		// itemized floor over-counted somewhere.
 		other: round1(
 			finalRate -
-				specialistsTotal -
+				ruralTotal -
+				urbanTotal -
 				buildingsTotal -
 				lawsTotal -
 				modifiersTotal -

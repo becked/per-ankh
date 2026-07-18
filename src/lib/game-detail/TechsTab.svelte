@@ -25,22 +25,15 @@
 		type RailGroup,
 		type RailMarker,
 	} from "./EventRail.svelte";
-	import TableFilterColumn from "./TableFilterColumn.svelte";
-	import NationFilterSelect from "./NationFilterSelect.svelte";
+	import TechComparison from "./TechComparison.svelte";
 	import { specialistName } from "./specialists";
 	import {
-		type TableState,
 		type DetailPlayer,
-		TABLE_FRAME_CLASS,
-		TABLE_CLASS,
-		TABLE_HEADER_TH_CLASS,
-		TABLE_CELL_TD_CLASS,
+		type SpriteCategory,
 		ownedByPlayer,
 		findByPlayer,
 		orderPlayersUploaderFirst,
-		toggleSort,
 		filledLineStyle,
-		buildOwttUrl,
 		getSpritePath,
 		improvementDisplayName,
 	} from "./helpers";
@@ -75,12 +68,6 @@
 		gameOptions = null,
 		userNation = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
-		tableState = $bindable<TableState>({
-			search: "",
-			sortColumn: "nation",
-			sortDirection: "asc",
-			filters: [],
-		}),
 	}: {
 		players: DetailPlayer[];
 		techDiscoveryHistory: TechDiscoveryHistory[];
@@ -99,7 +86,6 @@
 		gameOptions?: Record<string, true> | null;
 		userNation?: string | null;
 		chartFilter?: Record<string, boolean>;
-		tableState?: TableState;
 	} = $props();
 
 	// Resolved identity lookup (stable label + color per player), keyed by the
@@ -110,6 +96,10 @@
 	const orderedPlayers = $derived(
 		orderPlayersUploaderFirst(players, userNation),
 	);
+
+	// Side-by-side (Techs by Turn | Science Sources) only for ≤4-nation games;
+	// wider FFA tables would each be cramped at half width, so they stack.
+	const sideBySide = $derived(orderedPlayers.length <= 4);
 
 	// Tech display name — the baked override, else the generic formatter.
 	const techName = (tech: string) =>
@@ -234,14 +224,6 @@
 			(t) => t.player_id,
 			(t) => t.nation,
 		);
-	const discoveriesFor = (p: DetailPlayer) =>
-		findByPlayer(
-			techDiscoveryHistory,
-			p,
-			(h) => h.player_id,
-			(h) => h.nation,
-		)?.data ?? [];
-
 	const namedCounts = (items: NamedCount[]) =>
 		items.map((b) => `${b.count}× ${b.name}`).join(", ");
 
@@ -541,7 +523,8 @@
 	// biggest first — ranked by one player when their header is clicked,
 	// by the best value anywhere otherwise.
 	const BREAKDOWN_SECTIONS = [
-		{ key: "specialists", label: "Specialists" },
+		{ key: "specialistsRural", label: "Rural specialists" },
+		{ key: "specialistsUrban", label: "Urban specialists" },
 		{ key: "buildings", label: "Buildings & resources" },
 		{ key: "laws", label: "Laws" },
 		{ key: "modifiers", label: "Modifiers" },
@@ -560,16 +543,25 @@
 	function breakdownRows(
 		key: (typeof BREAKDOWN_SECTIONS)[number]["key"],
 	): string[] {
+		// Default order is the source's unlocking-tech cost, so each section
+		// reads early-tech sources → late-tech sources. Clicking a player
+		// re-ranks by their contribution instead.
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
+		const cost = new Map<string, number>();
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
+		const best = new Map<string, number>();
+		// Union over ALL players (so no row disappears), ranked by the sort set.
 		const ranked =
 			breakdownSortId != null
 				? scienceBreakdowns.filter((c) => c.player.playerId === breakdownSortId)
 				: scienceBreakdowns;
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
-		const best = new Map<string, number>();
-		// Union over ALL players (so no row disappears), ranked by the sort set.
 		for (const col of scienceBreakdowns) {
 			for (const item of col.b[key].items) {
 				if (!best.has(item.label)) best.set(item.label, 0);
+				cost.set(
+					item.label,
+					Math.min(cost.get(item.label) ?? Infinity, item.order),
+				);
 			}
 		}
 		for (const col of ranked) {
@@ -577,7 +569,24 @@
 				best.set(item.label, Math.max(best.get(item.label) ?? 0, item.science));
 			}
 		}
-		return [...best].sort((a, b) => b[1] - a[1]).map(([label]) => label);
+		return [...best]
+			.sort((a, b) =>
+				breakdownSortId != null
+					? b[1] - a[1] || (cost.get(a[0]) ?? 0) - (cost.get(b[0]) ?? 0)
+					: (cost.get(a[0]) ?? 0) - (cost.get(b[0]) ?? 0) || b[1] - a[1],
+			)
+			.map(([label]) => label);
+	}
+	// A row's icon: the first player's item that carries one.
+	function breakdownIcon(
+		key: (typeof BREAKDOWN_SECTIONS)[number]["key"],
+		label: string,
+	) {
+		for (const col of scienceBreakdowns) {
+			const icon = col.b[key].items.find((i) => i.label === label)?.icon;
+			if (icon) return icon;
+		}
+		return undefined;
 	}
 	function breakdownItem(
 		col: BreakdownColumn,
@@ -612,144 +621,6 @@
 		// `railLayoutTick < 0` is always false but reads the signal.
 		if (!c || !h || railLayoutTick < 0) return null;
 		return c.convertToPixel({ xAxisIndex: 0 }, h.turn) as number;
-	});
-
-	// ─── Planner links + unique techs ─────────────────────────────────
-
-	// Per player: a deep-link of their FULL research order into the owtt
-	// tech-tree planner. Rendered under the Tech Discovery chart (the full
-	// path), not next to the unique-techs chips, so the link's scope is clear.
-	const owttLinks = $derived(
-		orderedPlayers
-			.map((player) => ({
-				player,
-				url: buildOwttUrl(player.nation, discoveriesFor(player)),
-			}))
-			.filter((l): l is { player: DetailPlayer; url: string } => l.url != null),
-	);
-
-	// Per player: the (non-bonus-card) techs only they researched.
-	type UniqueTechRow = {
-		player: DetailPlayer;
-		uniqueTechs: { tech: string; turn: number }[];
-	};
-	const uniqueTechRows = $derived.by<UniqueTechRow[]>(() => {
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
-		const ownerCounts = new Map<string, number>();
-		const perPlayer = orderedPlayers.map((p) => {
-			const techs = techsFor(p).filter((t) => !t.tech.includes("_BONUS"));
-			for (const t of techs)
-				ownerCounts.set(t.tech, (ownerCounts.get(t.tech) ?? 0) + 1);
-			return { player: p, techs };
-		});
-		return perPlayer.map(({ player, techs }) => ({
-			player,
-			uniqueTechs: techs
-				.filter((t) => ownerCounts.get(t.tech) === 1)
-				.map((t) => ({ tech: t.tech, turn: t.completed_turn }))
-				.sort((a, b) => a.turn - b.turn),
-		}));
-	});
-	// Only players who actually have a tech no one else got — an empty row is
-	// noise, so it's dropped rather than shown as "— none —".
-	const visibleUniqueTechRows = $derived(
-		uniqueTechRows.filter((r) => r.uniqueTechs.length > 0),
-	);
-	// Unique techs are only meaningful with an opponent to differ from, and the
-	// section is only worth showing when someone actually has some.
-	const showUniqueTechs = $derived(
-		orderedPlayers.length > 1 && visibleUniqueTechRows.length > 0,
-	);
-
-	// ─── Pivot table logic ────────────────────────────────────────────
-	// Columns are per player (mirror-match safe); filtering stays by nation.
-	const techColumnPlayers = $derived(
-		players.filter(
-			(p) =>
-				ownedByPlayer(
-					completedTechs,
-					p,
-					(t) => t.player_id,
-					(t) => t.nation,
-				).length > 0,
-		),
-	);
-
-	const uniqueTechNations = $derived(
-		[
-			...new Set(
-				techColumnPlayers
-					.map((p) => p.nation)
-					.filter((n): n is string => n != null),
-			),
-		].sort(),
-	);
-
-	const selectedTechNations = $derived(
-		tableState.filters
-			.filter((f) => f.startsWith("nation:"))
-			.map((f) => f.replace("nation:", "")),
-	);
-
-	const displayedTechPlayers = $derived(
-		selectedTechNations.length > 0
-			? techColumnPlayers.filter(
-					(p) => p.nation != null && selectedTechNations.includes(p.nation),
-				)
-			: techColumnPlayers,
-	);
-
-	type TechPivotRow = {
-		tech: string;
-		turns: Record<number, number | null>;
-	};
-
-	const techPivotData = $derived.by(() => {
-		if (completedTechs.length === 0) return [];
-
-		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- Map used locally in function, not as reactive state
-		const pivotMap = new Map<string, Record<number, number | null>>();
-
-		for (const p of techColumnPlayers) {
-			for (const t of ownedByPlayer(
-				completedTechs,
-				p,
-				(x) => x.player_id,
-				(x) => x.nation,
-			)) {
-				if (!pivotMap.has(t.tech)) {
-					pivotMap.set(t.tech, {});
-				}
-				pivotMap.get(t.tech)![p.playerId] = t.completed_turn;
-			}
-		}
-
-		const rows: TechPivotRow[] = [];
-		for (const [tech, turns] of pivotMap) {
-			if (tableState.search) {
-				const term = tableState.search.toLowerCase();
-				if (!tech.toLowerCase().includes(term)) {
-					continue;
-				}
-			}
-			rows.push({ tech, turns });
-		}
-
-		rows.sort((a, b) => {
-			if (tableState.sortColumn === "tech") {
-				const cmp = a.tech.localeCompare(b.tech);
-				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			} else if (tableState.sortColumn.startsWith("player:")) {
-				const id = Number(tableState.sortColumn.replace("player:", ""));
-				const aVal = a.turns[id] ?? Infinity;
-				const bVal = b.turns[id] ?? Infinity;
-				const cmp = aVal - bVal;
-				return tableState.sortDirection === "asc" ? cmp : -cmp;
-			}
-			return a.tech.localeCompare(b.tech);
-		});
-
-		return rows;
 	});
 </script>
 
@@ -805,37 +676,6 @@
 				title="Tech Discovery Over Time"
 			/>
 		{/if}
-		{#if owttLinks.length > 0}
-			<!-- The planner links open a player's FULL research order — they sit
-			     under the discovery chart (the full path), not the unique-techs
-			     chips, so their scope reads right. -->
-			<div class="mt-2 flex flex-wrap items-center gap-2">
-				<span class="text-xs italic text-tan"> Tech-tree planner </span>
-				{#each owttLinks as link (link.player.playerId)}
-					<!-- External planner link (not an app route), so resolve()
-					     doesn't apply; rel guards tabnabbing + referrer leakage. -->
-					<!-- eslint-disable svelte/no-navigation-without-resolve -->
-					<a
-						href={link.url}
-						target="_blank"
-						rel="noopener noreferrer"
-						class="inline-flex items-center gap-1.5 rounded bg-surface-raised px-2 py-1 text-xs font-semibold transition-colors hover:bg-tan-hover"
-						style="color: {link.player.color};"
-					>
-						{#if link.player.nation}
-							<SpriteIcon
-								category="crests"
-								value={link.player.nation}
-								size={14}
-								alt={link.player.label}
-							/>
-						{/if}
-						{link.player.label} ↗
-					</a>
-					<!-- eslint-enable svelte/no-navigation-without-resolve -->
-				{/each}
-			</div>
-		{/if}
 	</div>
 {:else if techDiscoveryHistory.length === 0}
 	<p class="p-8 text-center italic text-tan">
@@ -843,267 +683,153 @@
 	</p>
 {/if}
 
-<!-- Techs only one player researched, as per-player chip rows. -->
-{#if showUniqueTechs}
-	<div
-		class="mb-4 rounded-lg p-4"
-		style="background-color: rgb(var(--color-surface));"
-	>
-		<h3 class="mb-3 text-base font-bold text-tan">Unique Techs</h3>
-		<div class="flex flex-col gap-2">
-			{#each visibleUniqueTechRows as row (row.player.playerId)}
-				<div class="flex flex-wrap items-center gap-2">
-					<span
-						class="inline-flex w-40 shrink-0 items-center gap-1.5 text-sm font-semibold"
-						style="color: {row.player.color};"
-					>
-						{#if row.player.nation}
-							<SpriteIcon
-								category="crests"
-								value={row.player.nation}
-								size={16}
-								alt={row.player.label}
-							/>
-						{/if}
-						<span class="truncate">{row.player.label}</span>
-					</span>
-					<span class="flex min-w-0 flex-1 flex-wrap items-center gap-1">
-						{#each row.uniqueTechs as u (u.tech)}
-							<span
-								class="inline-flex items-center gap-1 rounded bg-surface-raised px-1.5 py-0.5 text-xs text-tan"
-								title="{techName(u.tech)} · T{u.turn}"
-							>
-								<SpriteIcon category="techs" value={u.tech} size={13} />
-								{techName(u.tech)}
-								<span class="font-mono text-[10px] text-gray-400"
-									>(T{u.turn})</span
-								>
-							</span>
-						{/each}
-					</span>
-				</div>
-			{/each}
-		</div>
-	</div>
-{/if}
+<!-- Techs by Turn and Science Sources share the row as equal halves (lg:flex-1)
+     so the pair spans the full width of the chart card above. They stack below
+     lg, and for >4-nation games whose wider tables can't share the row. Flex
+     (not grid) because either card can be absent — pre-2.11.0 blobs carry no
+     science-source decomposition — and a lone flex-1 card grows to fill the
+     width instead of being stranded in a grid half. -->
+<div
+	class="mb-4 flex flex-col gap-4 {sideBySide
+		? 'lg:flex-row lg:items-start'
+		: ''}"
+>
+	<!-- Side-by-side tech timeline: every tech at its turn, per player, with the
+	     planner deep links in the column headers. Shared techs read gold, so a
+	     tech only one player researched stands out in their color. -->
+	{#if completedTechs.length > 0}
+		<TechComparison
+			players={orderedPlayers}
+			{completedTechs}
+			{techDiscoveryHistory}
+		/>
+	{/if}
 
-<!-- End-state science-source decomposition, itemized, side by side. -->
-{#if scienceBreakdowns.length > 0}
-	<div
-		class="mb-4 rounded-lg p-4"
-		style="background-color: rgb(var(--color-surface));"
-	>
-		<h3 class="mb-3 text-base font-bold text-tan">Science Sources</h3>
-		<!-- One columnar layout for every game size (a mirrored butterfly can't
+	<!-- End-state science-source decomposition, itemized, side by side. -->
+	{#if scienceBreakdowns.length > 0}
+		<div
+			class="rounded-lg p-4 lg:flex-1"
+			style="background-color: rgb(var(--color-surface));"
+		>
+			<h3 class="mb-3 text-base font-bold text-tan">Science Sources</h3>
+			<!-- One columnar layout for every game size (a mirrored butterfly can't
 		     hold 3+ players). Per-source rows carry an inline bar on the shared
 		     breakdownMaxItem scale; section/total rows stay number-only. Click a
 		     player header to rank the rows by them. -->
-		<div class="overflow-x-auto">
-			<table class="w-full max-w-3xl text-sm">
-				<thead>
-					<tr>
-						<th class="w-56 pb-2"></th>
-						{#each scienceBreakdowns as col (col.player.playerId)}
-							<th class="pb-2 pr-4 text-right">
-								<button
-									type="button"
-									class="inline-flex cursor-pointer items-center gap-1.5 font-semibold"
-									style="color: {col.player.color};"
-									title="Rank sources by {col.player.label}"
-									onclick={() => toggleBreakdownSort(col.player.playerId)}
-								>
-									{#if col.player.nation}
-										<SpriteIcon
-											category="crests"
-											value={col.player.nation}
-											size={15}
-											alt={col.player.label}
-										/>
-									{/if}
-									{col.player.label}
-									{#if breakdownSortId === col.player.playerId}<span
-											class="text-orange">↓</span
-										>{/if}
-								</button>
-							</th>
-						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					{#each visibleBreakdownSections as section (section.key)}
-						<tr class="border-t border-border-subtle">
-							<td class="py-1.5 font-semibold text-tan">{section.label}</td>
+			<div class="overflow-x-auto">
+				<!-- No max-width: fill the card (matches Techs by Turn). Side by side
+				     the flex-1 half bounds it; stacked (5+ nations) it spreads across
+				     the full panel rather than cram every column into a fixed 48rem. -->
+				<table class="w-full text-sm">
+					<thead>
+						<tr>
+							<th class="pb-2"></th>
 							{#each scienceBreakdowns as col (col.player.playerId)}
-								<td class="py-1.5 pr-4 text-right font-semibold text-tan">
-									{col.b[section.key].total}
-								</td>
+								<th class="pb-2 pr-4 text-right">
+									<button
+										type="button"
+										class="inline-flex cursor-pointer items-center gap-1.5 font-semibold"
+										style="color: {col.player.color};"
+										title="Rank sources by {col.player.label}"
+										onclick={() => toggleBreakdownSort(col.player.playerId)}
+									>
+										{#if col.player.nation}
+											<SpriteIcon
+												category="crests"
+												value={col.player.nation}
+												size={15}
+												alt={col.player.label}
+											/>
+										{/if}
+										{col.player.label}
+										{#if breakdownSortId === col.player.playerId}<span
+												class="text-orange">↓</span
+											>{/if}
+									</button>
+								</th>
 							{/each}
 						</tr>
-						{#each breakdownRows(section.key) as label (label)}
-							<tr>
-								<td class="py-0.5 pl-4 text-xs text-gray-400">{label}</td>
+					</thead>
+					<tbody>
+						{#each visibleBreakdownSections as section (section.key)}
+							<tr class="border-t border-border-subtle">
+								<td class="py-1.5 font-semibold text-tan">{section.label}</td>
 								{#each scienceBreakdowns as col (col.player.playerId)}
-									{@const item = breakdownItem(col, section.key, label)}
-									<td class="py-0.5 pr-4">
-										{#if item}
-											<div class="flex items-center justify-end gap-1.5">
-												<div
-													class="h-1.5 shrink rounded-sm"
-													style="width: {(Math.max(0, item.science) /
-														breakdownMaxItem) *
-														100}%; max-width: 4rem; background: {col.player
-														.color};"
-												></div>
-												<span
-													class="shrink-0 whitespace-nowrap text-xs text-tan"
-													>{#if item.count > 1}<span class="text-gray-400"
-															>({item.count}×)&nbsp;</span
-														>{/if}{item.science}</span
-												>
-											</div>
-										{:else}
-											<div class="text-right text-xs text-gray-400">—</div>
-										{/if}
+									<td class="py-1.5 pr-4 text-right font-semibold text-tan">
+										{col.b[section.key].total}
 									</td>
 								{/each}
 							</tr>
-						{/each}
-					{/each}
-					<tr class="border-t border-border-subtle">
-						<td class="py-1.5 font-semibold text-tan">Other</td>
-						{#each scienceBreakdowns as col (col.player.playerId)}
-							<td class="py-1.5 pr-4 text-right font-semibold text-tan">
-								{col.b.other}
-							</td>
-						{/each}
-					</tr>
-					<tr class="border-t border-border-subtle">
-						<td class="py-1.5 font-bold text-tan">
-							<span class="inline-flex items-center gap-1">
-								Science per turn
-								<SpriteIcon category="yields" value="YIELD_SCIENCE" size={13} />
-							</span>
-						</td>
-						{#each scienceBreakdowns as col (col.player.playerId)}
-							<td class="py-1.5 pr-4 text-right font-bold text-tan">
-								{col.b.total}
-							</td>
-						{/each}
-					</tr>
-				</tbody>
-			</table>
-		</div>
-	</div>
-{/if}
-
-<!-- Completed Technologies Table -->
-{#if completedTechs.length === 0}
-	<div class="mt-8">
-		<p class="p-8 text-center italic text-tan">
-			No technologies data available
-		</p>
-	</div>
-{:else}
-	<div class={TABLE_FRAME_CLASS}>
-		<TableFilterColumn
-			bind:search={tableState.search}
-			count={`${techPivotData.length} technologies`}
-			chips={selectedTechNations.map((n) => formatEnum(n, "NATION_"))}
-		>
-			{#snippet filters()}
-				<NationFilterSelect
-					nations={uniqueTechNations}
-					bind:value={tableState.filters}
-				/>
-			{/snippet}
-		</TableFilterColumn>
-
-		<!-- Technologies pivot table -->
-		<div class="min-w-0 flex-1 overflow-x-auto">
-			<table class={TABLE_CLASS}>
-				<thead>
-					<tr>
-						<th
-							class="{TABLE_HEADER_TH_CLASS} rounded-l-lg border-l {displayedTechPlayers.length ===
-							0
-								? 'rounded-r-lg border-r'
-								: ''}"
-							onclick={() => toggleSort(tableState, "tech")}
-						>
-							<span class="inline-flex items-center gap-1">
-								Technology
-								{#if tableState.sortColumn === "tech"}
-									<span class="text-orange">
-										{tableState.sortDirection === "asc" ? "↑" : "↓"}
-									</span>
-								{/if}
-							</span>
-						</th>
-						{#each displayedTechPlayers as player, i (player.playerId)}
-							<th
-								class="{TABLE_HEADER_TH_CLASS} !text-center {i ===
-								displayedTechPlayers.length - 1
-									? 'rounded-r-lg border-r'
-									: ''}"
-								onclick={() =>
-									toggleSort(tableState, `player:${player.playerId}`)}
-							>
-								<span class="inline-flex items-center justify-center gap-1.5">
-									{#if player.nation}
-										<SpriteIcon
-											category="crests"
-											value={player.nation}
-											size={14}
-											alt={formatEnum(player.nation, "NATION_")}
-										/>
-									{/if}
-									{player.label}
-									{#if tableState.sortColumn === `player:${player.playerId}`}
-										<span class="text-orange">
-											{tableState.sortDirection === "asc" ? "↑" : "↓"}
+							{#each breakdownRows(section.key) as label (label)}
+								{@const icon = breakdownIcon(section.key, label)}
+								<tr>
+									<td class="py-0.5 pl-2 text-xs text-gray-400">
+										<span class="inline-flex items-center gap-1.5">
+											{#if icon}
+												<SpriteIcon
+													category={icon.category as SpriteCategory}
+													value={icon.value}
+													size={14}
+												/>
+											{/if}
+											{label}
 										</span>
-									{/if}
-								</span>
-							</th>
+									</td>
+									{#each scienceBreakdowns as col (col.player.playerId)}
+										{@const item = breakdownItem(col, section.key, label)}
+										<td class="py-0.5 pr-4">
+											{#if item}
+												<div class="flex items-center justify-end gap-1.5">
+													<div
+														class="h-1.5 shrink rounded-sm"
+														style="width: {(Math.max(0, item.science) /
+															breakdownMaxItem) *
+															100}%; max-width: 4rem; background: {col.player
+															.color};"
+													></div>
+													<span
+														class="shrink-0 whitespace-nowrap text-xs text-tan"
+														>{#if item.count > 1}<span class="text-gray-400"
+																>({item.count}×)&nbsp;</span
+															>{/if}{item.science}</span
+													>
+												</div>
+											{:else}
+												<div class="text-right text-xs text-gray-400">—</div>
+											{/if}
+										</td>
+									{/each}
+								</tr>
+							{/each}
 						{/each}
-					</tr>
-				</thead>
-				<tbody>
-					{#each techPivotData as row (row.tech)}
-						<tr class="group">
-							<td
-								class="{TABLE_CELL_TD_CLASS} whitespace-nowrap rounded-l-lg {displayedTechPlayers.length ===
-								0
-									? 'rounded-r-lg'
-									: ''}"
-							>
-								{techName(row.tech)}
-							</td>
-							{#each displayedTechPlayers as player, i (player.playerId)}
-								<td
-									class="{TABLE_CELL_TD_CLASS} whitespace-nowrap !text-center {i ===
-									displayedTechPlayers.length - 1
-										? 'rounded-r-lg'
-										: ''}"
-								>
-									{row.turns[player.playerId] != null
-										? row.turns[player.playerId]
-										: "—"}
+						<tr class="border-t border-border-subtle">
+							<td class="py-1.5 font-semibold text-tan">Other</td>
+							{#each scienceBreakdowns as col (col.player.playerId)}
+								<td class="py-1.5 pr-4 text-right font-semibold text-tan">
+									{col.b.other}
 								</td>
 							{/each}
 						</tr>
-					{:else}
-						<tr>
-							<td
-								colspan={displayedTechPlayers.length + 1}
-								class="p-8 text-center italic text-tan"
-							>
-								No technologies match search
+						<tr class="border-t border-border-subtle">
+							<td class="py-1.5 font-bold text-tan">
+								<span class="inline-flex items-center gap-1">
+									Science per turn
+									<SpriteIcon
+										category="yields"
+										value="YIELD_SCIENCE"
+										size={13}
+									/>
+								</span>
 							</td>
+							{#each scienceBreakdowns as col (col.player.playerId)}
+								<td class="py-1.5 pr-4 text-right font-bold text-tan">
+									{col.b.total}
+								</td>
+							{/each}
 						</tr>
-					{/each}
-				</tbody>
-			</table>
+					</tbody>
+				</table>
+			</div>
 		</div>
-	</div>
-{/if}
+	{/if}
+</div>

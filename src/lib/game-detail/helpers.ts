@@ -16,7 +16,7 @@ import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
 import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
-import { SHRINE_TYPE } from "$lib/generated/science-yields";
+import { SHRINE_TYPE, IMPROVEMENT_ICON } from "$lib/generated/science-yields";
 import {
 	OWTT_BASE_URL,
 	OWTT_NATION_INDEX,
@@ -59,7 +59,6 @@ export type TableName =
 	| "improvements"
 	| "specialists"
 	| "laws"
-	| "techs"
 	| "units";
 
 // The display row for the cities table: a CityInfo augmented with the resolved
@@ -417,12 +416,6 @@ export function createDefaultTableStates(): Record<TableName, TableState> {
 			sortDirection: "asc",
 			filters: [],
 		},
-		techs: {
-			search: "",
-			sortColumn: "nation",
-			sortDirection: "asc",
-			filters: [],
-		},
 		units: {
 			search: "",
 			sortColumn: "nation",
@@ -450,7 +443,9 @@ export type SpriteCategory =
 	| "units"
 	| "traits"
 	| "traits-trimmed"
-	| "portraits";
+	| "portraits"
+	| "improvements"
+	| "specialists";
 
 // Known tech name corrections (game data typos or alternate names)
 const TECH_SPRITE_FIXES: Record<string, string> = {
@@ -525,6 +520,23 @@ export function getSpritePath(
 		// portraits — SpriteIcon renders nothing, so it degrades gracefully.
 		const base = enumValue.replace(/^CHARACTER_PORTRAIT_/, "");
 		return SPRITE_MANIFEST[`portraits/${base}`] ?? null;
+	}
+	if (category === "improvements") {
+		// The 2D icon set is named by zIconName, which tiers share
+		// (IMPROVEMENT_LIBRARY_2 → IMPROVEMENT_ACADEMY); same-named entries
+		// (watermill, groves) aren't in the baked override table.
+		return (
+			SPRITE_MANIFEST[
+				`improvements/${IMPROVEMENT_ICON[enumValue] ?? enumValue}`
+			] ?? null
+		);
+	}
+	if (category === "specialists") {
+		// One class-level icon per specialist line — tiers share it
+		// (SPECIALIST_POET_2 → SPECIALIST_POET).
+		return (
+			SPRITE_MANIFEST[`specialists/${enumValue.replace(/_\d+$/, "")}`] ?? null
+		);
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }

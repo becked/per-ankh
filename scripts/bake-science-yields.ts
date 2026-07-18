@@ -20,6 +20,12 @@
 //     the rating Competitive Mode linearizes the court curve around.
 //   Reference/XML/Infos/effectPlayer.xml — EFFECTPLAYER_COMPETITIVE_MODE
 //     <aiYieldRate> YIELD_SCIENCE, Competitive Mode's flat science stipend.
+//   Reference/XML/Infos/lawClass.xml + law.xml — each law class carries the
+//     <TechPrereq> and each law its <Class>; inverted into the tech →
+//     laws-it-unlocks table the tech-timeline ◆ markers use.
+//   Reference/XML/Infos/tech.xml — <iCost> per tech, resolved through each
+//     source's unlocking tech into the *_UNLOCK_COST tables that order the
+//     Science Sources rows early-tech → late-tech.
 //
 // Values are the game's ×10 fixed-point; emitted ÷10 in display units. The
 // one exception is WISDOM_COURT_SCIENCE_RATE — see its comment below.
@@ -64,12 +70,18 @@ interface Entry {
 	AssetVariation?: string;
 	EffectCity?: string;
 	EffectCityExtra?: string;
+	TechPrereq?: string;
+	LawClass?: string;
+	Specialist?: string;
+	zIconName?: string;
+	iCost?: string;
 	iValue?: string;
 	iTriangleOffset?: string;
 	aiYieldOutput?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldRate?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldModifier?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldCourtRate?: { Pair?: YieldPair | YieldPair[] };
+	aiImprovementClassModifier?: { Pair?: YieldPair | YieldPair[] };
 	aaiResourceYieldOutput?: { Pair?: ResourceYieldPair | ResourceYieldPair[] };
 }
 
@@ -111,6 +123,9 @@ async function main(): Promise<void> {
 		yields,
 		globalInts,
 		effectPlayers,
+		laws,
+		lawClasses,
+		techs,
 	] = await Promise.all([
 		loadEntries(resolve(infosDir, "improvement.xml")),
 		loadEntries(resolve(infosDir, "improvementClass.xml")),
@@ -120,6 +135,9 @@ async function main(): Promise<void> {
 		loadEntries(resolve(infosDir, "yield.xml")),
 		loadEntries(resolve(infosDir, "globalsInt.xml")),
 		loadEntries(resolve(infosDir, "effectPlayer.xml")),
+		loadEntries(resolve(infosDir, "law.xml")),
+		loadEntries(resolve(infosDir, "lawClass.xml")),
+		loadEntries(resolve(infosDir, "tech.xml")),
 	]);
 
 	const effectByType = new Map(effects.map((e) => [e.zType, e]));
@@ -218,6 +236,9 @@ async function main(): Promise<void> {
 
 	const improvementScience: Record<string, { flat: number; pct: number }> = {};
 	const improvementResourceScience: Record<string, Record<string, number>> = {};
+	// Improvement → its class, for science-relevant improvements only — the
+	// key the specialist tile modifiers above are looked up by.
+	const improvementClass: Record<string, string> = {};
 	const shrineType: Record<string, string> = {};
 	for (const imp of improvements) {
 		if (!imp.zType) continue;
@@ -233,6 +254,9 @@ async function main(): Promise<void> {
 			? classResourceScience.get(imp.Class)
 			: undefined;
 		if (byResource) improvementResourceScience[imp.zType] = byResource;
+		if (imp.Class && (flat > 0 || eff.pct > 0 || byResource)) {
+			improvementClass[imp.zType] = imp.Class;
+		}
 		if (imp.zType.startsWith("IMPROVEMENT_SHRINE_") && imp.AssetVariation) {
 			// "ASSET_VARIATION_IMPROVEMENT_SHRINE_WISDOM" → "Wisdom".
 			const raw = imp.AssetVariation.replace(
@@ -247,12 +271,98 @@ async function main(): Promise<void> {
 	}
 
 	const specialistScience: Record<string, number> = {};
+	// Specialists that multiply their tile's whole output — a staffed
+	// Gardener is +100% to the Grove's yields (Tile.yieldOutputForGovernor
+	// applies specialist.aiImprovementClassModifier to iOutput).
+	const specialistTileModifier: Record<string, Record<string, number>> = {};
 	for (const sp of specialists) {
 		if (!sp.zType) continue;
 		const flat =
 			effectScience(sp.EffectCity).flat +
 			effectScience(sp.EffectCityExtra).flat;
 		if (flat > 0) specialistScience[sp.zType] = flat / 10;
+		const mods: Record<string, number> = {};
+		for (const p of pairs(sp.aiImprovementClassModifier)) {
+			if (p.zIndex && Number(p.iValue ?? 0) !== 0) {
+				mods[p.zIndex] = Number(p.iValue);
+			}
+		}
+		if (Object.keys(mods).length > 0) {
+			specialistTileModifier[sp.zType] = mods;
+		}
+	}
+
+	// Tech → the laws it unlocks: the law CLASS carries the tech prereq
+	// (lawClass.xml) and each law names its class (law.xml), so a class's
+	// prereq fans out to its law pair (Sovereignty → Tyranny+Constitution).
+	const classTech = new Map<string, string>();
+	for (const cls of lawClasses) {
+		if (cls.zType && cls.TechPrereq) classTech.set(cls.zType, cls.TechPrereq);
+	}
+	const techLaws: Record<string, string[]> = {};
+	for (const law of laws) {
+		const tech = law.LawClass ? classTech.get(law.LawClass) : undefined;
+		if (!law.zType || !tech) continue;
+		(techLaws[tech] ??= []).push(law.zType);
+	}
+	for (const list of Object.values(techLaws)) list.sort();
+
+	// Unlock costs: each source's unlocking tech resolved to its research
+	// cost, so the Science Sources rows can order early-tech → late-tech.
+	// Sources with no tech gate (farms, succession laws) stay at 0.
+	const techCost = new Map<string, number>();
+	for (const t of techs) {
+		if (t.zType && t.iCost != null) techCost.set(t.zType, Number(t.iCost));
+	}
+	const improvementClassTech = new Map<string, string>();
+	for (const cls of improvementClasses) {
+		if (cls.zType && cls.TechPrereq)
+			improvementClassTech.set(cls.zType, cls.TechPrereq);
+	}
+	const improvementIcon: Record<string, string> = {};
+	const improvementUnlockCost: Record<string, number> = {};
+	const specialistUnlockCost: Record<string, number> = {};
+	for (const imp of improvements) {
+		if (!imp.zType) continue;
+		if (imp.zIconName && imp.zIconName !== imp.zType) {
+			improvementIcon[imp.zType] = imp.zIconName;
+		}
+		const tech =
+			imp.TechPrereq ??
+			(imp.Class ? improvementClassTech.get(imp.Class) : undefined);
+		const cost = tech ? (techCost.get(tech) ?? 0) : 0;
+		if (cost > 0) improvementUnlockCost[imp.zType] = cost;
+		// A specialist unlocks with its workplace improvement's tech.
+		if (imp.Specialist && cost > 0) {
+			specialistUnlockCost[imp.Specialist] = Math.min(
+				specialistUnlockCost[imp.Specialist] ?? Infinity,
+				cost,
+			);
+		}
+	}
+	// Higher tiers of specialists whose workplace is untiered (Elder Officer
+	// on the one Barracks) appear on no improvement entry — propagate the
+	// cheapest cost across each specialist CLASS so every tier inherits it.
+	const specialistClassCost = new Map<string, number>();
+	for (const sp of specialists) {
+		const cost = sp.zType ? specialistUnlockCost[sp.zType] : undefined;
+		if (sp.Class && cost != null) {
+			specialistClassCost.set(
+				sp.Class,
+				Math.min(specialistClassCost.get(sp.Class) ?? Infinity, cost),
+			);
+		}
+	}
+	for (const sp of specialists) {
+		if (!sp.zType || specialistUnlockCost[sp.zType] != null) continue;
+		const cost = sp.Class ? specialistClassCost.get(sp.Class) : undefined;
+		if (cost != null) specialistUnlockCost[sp.zType] = cost;
+	}
+	const lawUnlockCost: Record<string, number> = {};
+	for (const law of laws) {
+		const tech = law.LawClass ? classTech.get(law.LawClass) : undefined;
+		const cost = tech ? (techCost.get(tech) ?? 0) : 0;
+		if (law.zType && cost > 0) lawUnlockCost[law.zType] = cost;
 	}
 
 	const sorted = <T>(o: Record<string, T>): Record<string, T> =>
@@ -308,10 +418,62 @@ async function main(): Promise<void> {
 	);
 	lines.push("");
 	lines.push(
+		"// Specialist → % modifier applied to their tile's WHOLE output, keyed",
+	);
+	lines.push(
+		"// by the improvement class (a Gardener doubles the Grove's yields:",
+	);
+	lines.push("// Tile.yieldOutputForGovernor × aiImprovementClassModifier).");
+	lines.push(
+		`export const SPECIALIST_TILE_MODIFIER: Readonly<Record<string, Readonly<Record<string, number>>>> = ${JSON.stringify(sortedDeep(specialistTileModifier))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Improvement → its class, for the science-relevant improvements the",
+	);
+	lines.push("// tile modifiers above are looked up against.");
+	lines.push(
+		`export const IMPROVEMENT_CLASS: Readonly<Record<string, string>> = ${JSON.stringify(sorted(improvementClass))};`,
+	);
+	lines.push("");
+	lines.push(
 		"// Each pagan shrine's type (War/Fire/Sun/Wisdom/…), from AssetVariation.",
 	);
 	lines.push(
 		`export const SHRINE_TYPE: Readonly<Record<string, string>> = ${JSON.stringify(sorted(shrineType))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Tech → the LAW_* choices it unlocks (law.xml TechPrereq, inverted).",
+	);
+	lines.push(
+		`export const TECH_LAWS: Readonly<Record<string, readonly string[]>> = ${JSON.stringify(sorted(techLaws))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Improvement zType → its 2D icon name (zIconName), where they differ",
+	);
+	lines.push("// (tiers share a line icon: LIBRARY_2 → IMPROVEMENT_ACADEMY).");
+	lines.push(
+		`export const IMPROVEMENT_ICON: Readonly<Record<string, string>> = ${JSON.stringify(sorted(improvementIcon))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Research cost of each source's unlocking tech (0 / absent = no tech",
+	);
+	lines.push(
+		"// gate) — orders the Science Sources rows early-tech → late-tech.",
+	);
+	lines.push(
+		`export const IMPROVEMENT_UNLOCK_COST: Readonly<Record<string, number>> = ${JSON.stringify(sorted(improvementUnlockCost))};`,
+	);
+	lines.push("");
+	lines.push(
+		`export const SPECIALIST_UNLOCK_COST: Readonly<Record<string, number>> = ${JSON.stringify(sorted(specialistUnlockCost))};`,
+	);
+	lines.push("");
+	lines.push(
+		`export const LAW_UNLOCK_COST: Readonly<Record<string, number>> = ${JSON.stringify(sorted(lawUnlockCost))};`,
 	);
 	lines.push("");
 	lines.push(
@@ -377,7 +539,7 @@ async function main(): Promise<void> {
 	}
 	await writeFile(OUTPUT_TS, formatted);
 	console.log(
-		`bake-science-yields: ${Object.keys(improvementScience).length} improvements, ${Object.keys(improvementResourceScience).length} resource-sited, ${Object.keys(specialistScience).length} specialists, ${Object.keys(shrineType).length} shrines → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
+		`bake-science-yields: ${Object.keys(improvementScience).length} improvements, ${Object.keys(improvementResourceScience).length} resource-sited, ${Object.keys(specialistScience).length} specialists, ${Object.keys(shrineType).length} shrines, ${Object.keys(techLaws).length} law techs → ${OUTPUT_TS.replace(REPO_ROOT + "/", "")}`,
 	);
 }
 
