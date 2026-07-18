@@ -7,7 +7,6 @@
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import {
 		type DetailPlayer,
-		TABLE_HEADER_TH_CLASS,
 		ownedByPlayer,
 		findByPlayer,
 		buildOwttUrl,
@@ -171,21 +170,17 @@
 		</span>
 	</div>
 	<div class="overflow-x-auto">
-		<table class="w-full max-w-3xl border-separate border-spacing-0 text-sm">
+		<table class="w-full max-w-3xl text-sm">
 			<thead>
 				<tr>
-					<th class="{TABLE_HEADER_TH_CLASS} w-12 rounded-l-lg border-l"
+					<th class="w-12 px-3 pb-2 text-left font-semibold text-gray-400"
 						>Turn</th
 					>
 					{#each players as player, i (player.playerId)}
-						<th
-							class="{TABLE_HEADER_TH_CLASS} {i === players.length - 1
-								? 'rounded-r-lg border-r'
-								: ''}"
-						>
-							<span class="inline-flex items-center gap-2 normal-case">
+						<th class="px-3 pb-2 text-left">
+							<span class="inline-flex items-center gap-2">
 								<span
-									class="inline-flex items-center gap-1.5 text-xs"
+									class="inline-flex items-center gap-1.5 font-semibold"
 									style="color: {player.color};"
 								>
 									{#if player.nation}
@@ -206,7 +201,7 @@
 										href={plannerUrls[i]}
 										target="_blank"
 										rel="noopener noreferrer"
-										class="rounded bg-surface px-1.5 py-0.5 text-[10px] font-semibold tracking-normal text-orange transition-colors hover:bg-tan-hover"
+										class="rounded bg-surface-sunken px-1.5 py-0.5 text-[10px] font-semibold text-orange transition-colors hover:bg-tan-hover"
 										title="Open {player.label}'s full research order in the tech-tree planner"
 									>
 										planner ↗
@@ -220,16 +215,16 @@
 			</thead>
 			<tbody>
 				{#each rows as row (row.turn)}
-					<tr class="odd:bg-surface-sunken/40">
+					<tr>
 						<td
-							class="border-b border-border-subtle px-3 py-1 align-top font-mono text-[10px] text-gray-400"
+							class="border-t border-border-subtle px-3 py-1 align-top font-mono text-[10px] text-gray-400"
 						>
 							T{row.turn}
 						</td>
 						{#each row.cells as cell, i (players[i].playerId)}
-							<td class="border-b border-border-subtle px-3 py-1 align-top">
+							<td class="border-t border-border-subtle px-3 py-1 align-top">
 								{#if cell.length === 0}
-									<span class="text-gray-400">·</span>
+									<span class="text-gray-400">—</span>
 								{:else}
 									<div class="flex flex-col gap-0.5">
 										{#each cell as c (c.tech)}
