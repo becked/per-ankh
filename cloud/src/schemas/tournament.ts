@@ -326,8 +326,9 @@ const STREAM_HOSTS = new Set([
 
 // A stream URL for a part — a live stream or an after-the-fact recording, held to
 // the same youtube/twitch host allowlist as the single stream link used before
-// parts (migration 0025 → 0029).
-const StreamUrlSchema = v.pipe(
+// parts (migration 0025 → 0029). Also validates users.stream_url (the per-user
+// casting link, schemas/user.ts) so both fields accept exactly the same URLs.
+export const StreamUrlSchema = v.pipe(
 	v.string(),
 	v.trim(),
 	v.maxLength(500),
@@ -357,6 +358,10 @@ const MatchPartStreamSchema = v.object({
 // caster self-service endpoints both read it.
 export const MAX_CASTERS_PER_PART = 10;
 
+// Single source for the per-part stream cap: the schema's maxLength and the
+// cast auto-attach guard both read it.
+export const MAX_STREAMS_PER_PART = 20;
+
 const MatchPartCasterSchema = v.object({
 	user_id: v.nullable(v.pipe(v.string(), v.regex(nanoid21Regex))),
 	name: v.nullable(v.pipe(v.string(), v.trim(), v.maxLength(80))),
@@ -376,7 +381,10 @@ const MatchPartSchema = v.object({
 		v.array(MatchPartCasterSchema),
 		v.maxLength(MAX_CASTERS_PER_PART),
 	),
-	streams: v.pipe(v.array(MatchPartStreamSchema), v.maxLength(20)),
+	streams: v.pipe(
+		v.array(MatchPartStreamSchema),
+		v.maxLength(MAX_STREAMS_PER_PART),
+	),
 });
 
 // PATCH /v1/tournaments/:id/matches/:match_id/schedule body. Replace-all: the
@@ -396,8 +404,12 @@ export const PatchMatchPartsSchema = v.object({
 // A caster adds/moves THEMSELVES on a part. role picks their slot: "streamer"
 // takes index 0 (bumping the current streamer to co-caster); "cocaster"
 // appends. Omitted → streamer when the part has no caster yet, else co-caster.
+// stream_url is the one-time "remember my stream" path: provided, it's saved
+// to the caller's users.stream_url and used for this cast's auto-attach —
+// later casts need only the click.
 export const CastMatchPartSchema = v.object({
 	role: v.optional(v.picklist(["streamer", "cocaster"])),
+	stream_url: v.optional(StreamUrlSchema),
 });
 
 export const ReportMatchSchema = v.object({

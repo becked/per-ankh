@@ -9,6 +9,7 @@
 	import { PARSER_VERSION } from "$lib/parser/types";
 	import { formatGameTitle } from "$lib/utils/formatting";
 	import { isNewer } from "$lib/utils/semver";
+	import { ensureUrlScheme } from "$lib/utils/url";
 	import { toast } from "$lib/ui/toast";
 	import type { PageData } from "./$types";
 
@@ -29,6 +30,13 @@
 	// svelte-ignore state_referenced_locally
 	let defaultPublic = $state(data.user.default_game_public);
 	let savingPref = $state(false);
+
+	// Casting stream link — plain save-on-submit (not optimistic: the worker
+	// validates the host allowlist, so the persisted value is what it echoes
+	// back, not what was typed).
+	// svelte-ignore state_referenced_locally
+	let streamUrl = $state(data.user.stream_url ?? "");
+	let savingStream = $state(false);
 
 	// Already filtered to out-of-date games server-side (see +page.ts), so the
 	// count and modal list cover the user's entire library, not just a page.
@@ -87,6 +95,28 @@
 		}
 	}
 
+	async function saveStreamUrl() {
+		if (savingStream) return;
+		// A bare domain ("youtube.com/@you/live") is the natural thing to paste;
+		// the worker requires a scheme, so add one instead of bouncing on a 400.
+		// Empty → null, which clears the stored link.
+		const next = ensureUrlScheme(streamUrl);
+		savingStream = true;
+		try {
+			const saved = await cloudApi.updateSettings({ stream_url: next });
+			streamUrl = saved.stream_url ?? "";
+			toast.info(
+				saved.stream_url ? "Stream link saved" : "Stream link cleared",
+			);
+		} catch (err) {
+			toast.error(
+				`Settings update failed: ${err instanceof Error ? err.message : err}`,
+			);
+		} finally {
+			savingStream = false;
+		}
+	}
+
 	async function onReparseClose(didReparse: boolean) {
 		reparseGames = null;
 		if (didReparse) await invalidateAll();
@@ -104,9 +134,7 @@
 				<Tabs.Trigger value="preferences" class={triggerClass}>
 					Preferences
 				</Tabs.Trigger>
-				<Tabs.Trigger value="channels" class={triggerClass}>
-					Channels
-				</Tabs.Trigger>
+				<Tabs.Trigger value="video" class={triggerClass}>Video</Tabs.Trigger>
 				<Tabs.Trigger value="maintenance" class={triggerClass}>
 					Maintenance
 				</Tabs.Trigger>
@@ -204,8 +232,47 @@
 				</div>
 			</Tabs.Content>
 
-			<Tabs.Content value="channels">
-				<ChannelSettings initialChannels={data.channels} />
+			<Tabs.Content value="video">
+				<div class="space-y-3">
+					<div
+						class="rounded-lg p-4"
+						style="background-color: rgb(var(--color-surface));"
+					>
+						<div
+							class="rounded-lg p-3"
+							style="background-color: rgb(var(--color-surface-raised));"
+						>
+							<div class="text-sm font-bold text-tan">Casting stream link</div>
+							<p class="mt-1 text-xs text-gray-400">
+								YouTube or Twitch stream link added to matches when you are a
+								caster.
+							</p>
+							<form
+								class="mt-2 flex items-center gap-2"
+								onsubmit={(e) => {
+									e.preventDefault();
+									saveStreamUrl();
+								}}
+							>
+								<input
+									type="text"
+									class="min-w-0 flex-1 rounded border border-input bg-surface-sunken px-2 py-1.5 text-sm text-tan focus:border-orange focus:outline-none"
+									aria-label="Casting stream link"
+									bind:value={streamUrl}
+									disabled={savingStream}
+								/>
+								<button
+									type="submit"
+									class="rounded border border-input px-3 py-1.5 text-sm text-tan transition-colors hover:border-orange hover:text-orange disabled:opacity-50"
+									disabled={savingStream}
+								>
+									Save
+								</button>
+							</form>
+						</div>
+					</div>
+					<ChannelSettings initialChannels={data.channels} />
+				</div>
 			</Tabs.Content>
 
 			<Tabs.Content value="maintenance">

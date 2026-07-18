@@ -14,6 +14,7 @@ import { logError } from "../log";
 import {
 	CastMatchPartSchema,
 	MAX_CASTERS_PER_PART,
+	MAX_STREAMS_PER_PART,
 	TournamentSignupSchema,
 } from "../schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "../session";
@@ -435,11 +436,16 @@ export async function handleTournamentWithdraw(
 // Every attempt CASes on parts_rev and retries against fresh state.
 const CASTER_CAS_ATTEMPTS = 3;
 
-// Resolves the caller's own caster entry once, after the auth + rate-limit gate
-// (so a 429'd call does no extra work) and before the CAS loop (so a retry
-// doesn't re-query it). The cast path uses it to snapshot the caller's username;
-// the uncast path has nothing to prepare.
-type PrepareCasterEntry = (userId: string) => Promise<MatchPartCaster>;
+// Context resolved once per request, after the auth + rate-limit gate (so a
+// 429'd call does no extra work) and before the CAS loop (so a retry doesn't
+// re-query it): the caller's caster entry (cast path only) and their stored
+// stream link — attached when they take the streamer slot, detached again when
+// they drop.
+type CasterContext = {
+	me?: MatchPartCaster;
+	streamUrl: string | null;
+};
+type PrepareCasterContext = (userId: string) => Promise<CasterContext>;
 
 // Applies the caller's intended change to the part's caster list in place,
 // against freshly-loaded state on each CAS attempt. Returns an error Response to
@@ -447,7 +453,7 @@ type PrepareCasterEntry = (userId: string) => Promise<MatchPartCaster>;
 type ApplyCasterMutation = (
 	part: MatchPart,
 	userId: string,
-	me: MatchPartCaster | undefined,
+	ctx: CasterContext,
 ) => Response | null;
 
 async function mutateMyCasterEntry(
@@ -460,7 +466,7 @@ async function mutateMyCasterEntry(
 		// Casting requires a pending match; self-removal is also allowed on
 		// decided ones (byes rejected either way).
 		allowDecided: boolean;
-		prepare?: PrepareCasterEntry;
+		prepare: PrepareCasterContext;
 		mutate: ApplyCasterMutation;
 	},
 ): Promise<Response> {
@@ -483,7 +489,7 @@ async function mutateMyCasterEntry(
 			"RATE_LIMIT_TOURNAMENT_SCHEDULE",
 		);
 	}
-	const me = opts.prepare ? await opts.prepare(userId) : undefined;
+	const ctx = await opts.prepare(userId);
 
 	for (let attempt = 0; attempt < CASTER_CAS_ATTEMPTS; attempt++) {
 		const match = await loadMatch(env, matchId);
@@ -516,7 +522,7 @@ async function mutateMyCasterEntry(
 			return errorResponse("Part not found", 404, cors, "PART_NOT_FOUND");
 		}
 
-		const rejection = opts.mutate(part, userId, me);
+		const rejection = opts.mutate(part, userId, ctx);
 		if (rejection) return rejection;
 
 		const result = await env.SHARE_DB.prepare(
@@ -563,16 +569,36 @@ export async function handleCastMatchPart(
 	return mutateMyCasterEntry(tournamentId, matchId, partId, request, env, {
 		allowDecided: false,
 		// Snapshot the caller's canonical handle as the caster name, mirroring
-		// the admin schedule path (linked caster → canonical username).
+		// the admin schedule path (linked caster → canonical username), plus
+		// their stream link for the streamer auto-attach. A stream_url in the
+		// body is the one-time "remember my stream" path: persist it first so
+		// this and every later cast auto-attach it.
 		prepare: async (userId) => {
 			const u = await env.SHARE_DB.prepare(
-				"SELECT discord_username FROM users WHERE user_id = ?",
+				"SELECT discord_username, stream_url FROM users WHERE user_id = ?",
 			)
 				.bind(userId)
-				.first<{ discord_username: string | null }>();
-			return { user_id: userId, name: u?.discord_username ?? null };
+				.first<{
+					discord_username: string | null;
+					stream_url: string | null;
+				}>();
+			let streamUrl = u?.stream_url ?? null;
+			if (body.body.stream_url !== undefined) {
+				if (body.body.stream_url !== streamUrl) {
+					await env.SHARE_DB.prepare(
+						"UPDATE users SET stream_url = ? WHERE user_id = ?",
+					)
+						.bind(body.body.stream_url, userId)
+						.run();
+				}
+				streamUrl = body.body.stream_url;
+			}
+			return {
+				me: { user_id: userId, name: u?.discord_username ?? null },
+				streamUrl,
+			};
 		},
-		mutate: (part, userId, me) => {
+		mutate: (part, userId, ctx) => {
 			// Drop any existing self entry, then re-insert at the chosen slot.
 			const others = part.casters.filter((c) => c.user_id !== userId);
 			if (others.length + 1 > MAX_CASTERS_PER_PART) {
@@ -585,7 +611,20 @@ export async function handleCastMatchPart(
 			}
 			const asStreamer =
 				role === "streamer" || (role === undefined && others.length === 0);
-			part.casters = asStreamer ? [me!, ...others] : [...others, me!];
+			part.casters = asStreamer ? [ctx.me!, ...others] : [...others, ctx.me!];
+			// Auto-attach the streamer's stream link, so "I'll cast" never leaves
+			// the sitting streamless (the fix this feature exists for). Skipped
+			// for co-casters (the cast airs on the streamer's channel), when the
+			// URL is already listed, and at the stream cap (a later admin
+			// replace-all would fail validation past it).
+			if (
+				asStreamer &&
+				ctx.streamUrl &&
+				!part.streams.some((s) => s.url === ctx.streamUrl) &&
+				part.streams.length < MAX_STREAMS_PER_PART
+			) {
+				part.streams.push({ url: ctx.streamUrl, label: null });
+			}
 			return null;
 		},
 	});
@@ -602,8 +641,22 @@ export async function handleUncastMatchPart(
 		// A caster who signed up but never actually cast shouldn't stay credited
 		// on a decided match; removal of your OWN entry is always additive-safe.
 		allowDecided: true,
-		mutate: (part, userId) => {
+		prepare: async (userId) => {
+			const u = await env.SHARE_DB.prepare(
+				"SELECT stream_url FROM users WHERE user_id = ?",
+			)
+				.bind(userId)
+				.first<{ stream_url: string | null }>();
+			return { streamUrl: u?.stream_url ?? null };
+		},
+		mutate: (part, userId, ctx) => {
 			part.casters = part.casters.filter((c) => c.user_id !== userId);
+			// Symmetric cleanup: dropping also removes the caller's stream link
+			// (matched by URL), so an un-cast sitting isn't left pointing at a
+			// channel nobody is casting on. Other streams are untouched.
+			if (ctx.streamUrl) {
+				part.streams = part.streams.filter((s) => s.url !== ctx.streamUrl);
+			}
 			return null;
 		},
 	});

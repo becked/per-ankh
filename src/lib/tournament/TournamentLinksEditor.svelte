@@ -8,6 +8,7 @@
 		type TournamentLink,
 	} from "$lib/api-cloud";
 	import { toast } from "$lib/ui/toast";
+	import { ensureUrlScheme } from "$lib/utils/url";
 
 	interface Props {
 		tournament: TournamentDetail;
@@ -40,19 +41,13 @@
 		})),
 	);
 
-	// Prepend https:// when the user omits a scheme (so "old-world-map-pics.com"
-	// works). Anything already carrying a scheme is left for the server to vet.
-	function normalizeUrl(raw: string): string {
-		const trimmed = raw.trim();
-		if (!trimmed) return "";
-		return /:\/\//.test(trimmed) ? trimmed : `https://${trimmed}`;
-	}
-
 	// The payload: complete rows only (both fields filled), normalized. Incomplete
 	// rows stay in local state, uncommitted, so a half-typed link isn't dropped.
+	// ensureUrlScheme prepends https:// to a bare domain ("old-world-map-pics.com")
+	// and returns null for empty, which the url !== "" filter then drops.
 	function buildLinks(): TournamentLink[] {
 		return rows
-			.map((r) => ({ label: r.label.trim(), url: normalizeUrl(r.url) }))
+			.map((r) => ({ label: r.label.trim(), url: ensureUrlScheme(r.url) ?? "" }))
 			.filter((l) => l.label !== "" && l.url !== "");
 	}
 
@@ -88,7 +83,7 @@
 	function commitUrl(row: Row) {
 		// Reflect the normalized form back into the input so what's shown matches
 		// what was saved.
-		row.url = normalizeUrl(row.url);
+		row.url = ensureUrlScheme(row.url) ?? "";
 		commit();
 	}
 
