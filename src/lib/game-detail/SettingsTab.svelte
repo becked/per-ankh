@@ -9,6 +9,7 @@
 		mapAspectRatioLabel,
 		gameModeLabel,
 		nonDefaultMapOptions,
+		setGameOptions,
 	} from "$lib/map-settings";
 	import SpriteIcon from "./SpriteIcon.svelte";
 
@@ -53,6 +54,11 @@
 			gameDetails.map_aspect_ratio != null ||
 			mapOptions.length > 0,
 	);
+
+	// Game-wide option flags the save recorded. Null on pre-2.11.0 blobs (the
+	// parser didn't read <GameOptions> yet), so the card stays hidden until the
+	// game is reparsed — same as map options on pre-2.7.0 blobs above.
+	const gameOptions = $derived(setGameOptions(gameDetails.game_options));
 </script>
 
 <div
@@ -61,7 +67,7 @@
 >
 	<h3 class="mb-3 text-base font-bold text-tan">Game Settings</h3>
 	<div class="grid grid-cols-1 gap-3 md:grid-cols-3">
-		{#if gameDetails.game_mode || showDifficultySection}
+		{#if gameDetails.game_mode || showDifficultySection || gameDetails.opponent_level}
 			<div
 				class="flex flex-col gap-3 rounded-lg p-3"
 				style="background-color: rgb(var(--color-surface-raised));"
@@ -71,6 +77,16 @@
 						<span class="text-xs font-bold text-gray-400">Game Mode:</span>
 						<ul class="list-disc pl-5 text-sm text-bright">
 							<li>{gameModeLabel(gameDetails.game_mode)}</li>
+						</ul>
+					</div>
+				{/if}
+				{#if gameDetails.opponent_level}
+					<div class="flex flex-col gap-1">
+						<span class="text-xs font-bold text-gray-400">Opponent Level:</span>
+						<ul class="list-disc pl-5 text-sm text-bright">
+							<li>
+								{formatEnum(gameDetails.opponent_level, "OPPONENTLEVEL_")}
+							</li>
 						</ul>
 					</div>
 				{/if}
@@ -155,6 +171,19 @@
 						</ul>
 					</div>
 				{/if}
+			</div>
+		{/if}
+		{#if gameOptions.length > 0}
+			<div
+				class="flex flex-col gap-1 rounded-lg p-3"
+				style="background-color: rgb(var(--color-surface-raised));"
+			>
+				<span class="text-xs font-bold text-gray-400">Game Options:</span>
+				<ul class="list-disc pl-5 text-sm text-bright">
+					{#each gameOptions as opt (opt.option)}
+						<li>{opt.label}</li>
+					{/each}
+				</ul>
 			</div>
 		{/if}
 		{#if gameDetails.enabled_dlc}

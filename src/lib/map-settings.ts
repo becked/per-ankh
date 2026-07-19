@@ -1,9 +1,10 @@
 // Display helpers for map + game settings, built on the baked MAP_OPTION_DEFS
-// manifest ($lib/generated/map-option-defs). Shared by the game-detail Settings
-// tab, the save cards, and the tournament map-pool UI — the two generic label
-// helpers (mapOptionLabel / mapOptionChoiceLabel) are re-exported from
+// and GAME_OPTION_NAMES manifests ($lib/generated/). Shared by the game-detail
+// Settings tab, the save cards, and the tournament map-pool UI — the two generic
+// label helpers (mapOptionLabel / mapOptionChoiceLabel) are re-exported from
 // $lib/tournament/map-script-options so tournament call sites are unchanged.
 
+import { GAME_OPTION_NAMES } from "$lib/generated/game-option-names";
 import { MAP_OPTION_DEFS } from "$lib/generated/map-option-defs";
 import { formatEnum } from "$lib/utils/formatting";
 
@@ -96,4 +97,30 @@ export function nonDefaultMapOptions(
 		});
 	}
 	return out;
+}
+
+// In-game display name for a game-option zType. About half the options carry a
+// setup-screen label that diverges from their internal enum — sometimes naming a
+// different thing entirely (GAMEOPTION_NO_BONUS_IMPROVEMENTS is "No Ancient
+// Ruins") — so this resolves through the baked GAME_OPTION_NAMES overrides and
+// only falls back to formatEnum for the options whose names already agree.
+function gameOptionLabel(zType: string): string {
+	return GAME_OPTION_NAMES[zType] ?? formatEnum(zType, "GAMEOPTION_");
+}
+
+// The game-wide option flags a save recorded, as { option, label } pairs in save
+// order (which is gameOption.xml info-list order, so options stay grouped by
+// setup-screen category). A save writes only the options that are ON, so the map
+// is already the "non-default" set — unlike map options there's no default to
+// compare against. Unknown zTypes (a newer DLC than the current bake) are kept
+// and labelled by formatEnum rather than skipped: the flag is set either way, and
+// dropping it would silently understate the game's rules.
+export function setGameOptions(
+	options: Record<string, true> | null | undefined,
+): { option: string; label: string }[] {
+	if (!options) return [];
+	return Object.keys(options).map((opt) => ({
+		option: opt,
+		label: gameOptionLabel(opt),
+	}));
 }
