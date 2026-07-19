@@ -15,6 +15,7 @@ import { toRgba } from "$lib/utils/color";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
+import { TECH_NAMES } from "$lib/generated/tech-names";
 import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 import { SHRINE_TYPE, IMPROVEMENT_ICON } from "$lib/generated/science-yields";
 import {
@@ -441,7 +442,6 @@ export type SpriteCategory =
 	| "religions"
 	| "icons"
 	| "units"
-	| "units-icons"
 	| "traits"
 	| "traits-trimmed"
 	| "portraits"
@@ -458,6 +458,11 @@ const TECH_SPRITE_FIXES: Record<string, string> = {
 // → UNIT_THREE_MEN_CHARIOT).
 const unitSpriteName = (unitType: string): string =>
 	UNIT_STATS[unitType]?.icon ?? unitType;
+
+// Tech display name — the baked override, else the generic formatter. Shared by
+// the Military rail and the Techs tab (comparison table + science rail).
+export const techName = (tech: string): string =>
+	TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
 
 /**
  * Resolve a tech enum value to its (category, filename) in the sprite
@@ -502,6 +507,7 @@ function resolveTechSprite(
 export function getSpritePath(
 	category: SpriteCategory,
 	enumValue: string,
+	opts?: { glyph?: boolean },
 ): string | null {
 	if (category === "crests") {
 		return SPRITE_MANIFEST[`crests/CREST_${enumValue}`] ?? null;
@@ -547,15 +553,14 @@ export function getSpritePath(
 		);
 	}
 	if (category === "units") {
-		return SPRITE_MANIFEST[`units/${unitSpriteName(enumValue)}`] ?? null;
-	}
-	if (category === "units-icons") {
-		// The small white flag glyph ships as a __ICON sibling of the portrait
-		// (units/UNIT_X__ICON.png). Glyph-or-nothing: a unit with no glyph
-		// returns null so the rail renders its colored dot — never the painted
-		// portrait, which is a categorically different image in a glyph slot.
 		const name = unitSpriteName(enumValue);
-		return SPRITE_MANIFEST[`units/${name}__ICON`] ?? null;
+		// The `glyph` variant is the small white flag glyph shipped as a __ICON
+		// sibling of the portrait (units/UNIT_X__ICON.png) — the form the Military
+		// rail's unit markers use. Glyph-or-nothing: a unit with no glyph returns
+		// null so the rail renders its colored dot rather than the painted
+		// portrait, a categorically different image in a glyph slot.
+		if (opts?.glyph) return SPRITE_MANIFEST[`units/${name}__ICON`] ?? null;
+		return SPRITE_MANIFEST[`units/${name}`] ?? null;
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }

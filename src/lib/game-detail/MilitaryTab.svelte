@@ -10,7 +10,6 @@
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import { LAW_TO_CLASS } from "$lib/generated/law-classes";
-	import { TECH_NAMES } from "$lib/generated/tech-names";
 	import { TECH_BONUS_UNITS, UNIT_STATS } from "$lib/generated/unit-stats";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import EventRail, {
@@ -35,6 +34,7 @@
 		toggleSort,
 		classifyUnit,
 		getSpritePath,
+		techName,
 		UNIT_CLASS_COLORS,
 		filledLineStyle,
 	} from "./helpers";
@@ -318,16 +318,13 @@
 		);
 	}
 
-	const techName = (tech: string) =>
-		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
-
 	// One unit line inside a tech/bonus marker tooltip: icon, (count ×) name,
 	// strength.
 	function unitTooltipLine(
 		u: { unitType: string; strength: number; naval: boolean },
 		count?: number,
 	): string {
-		const url = getSpritePath("units-icons", u.unitType);
+		const url = getSpritePath("units", u.unitType, { glyph: true });
 		const ic = url
 			? `<img src="${url}" alt="" style="width:15px;height:15px"/>`
 			: "";
@@ -467,12 +464,10 @@
 						events.push({
 							kind: "tech",
 							turn: d.turn,
-							iconCategory: "units-icons",
+							iconCategory: "units",
 							iconValue: granted[0].unitType,
+							glyph: true,
 							color,
-							// Ringed in the player's color — the shared "bonus card"
-							// encoding (matches the outlined chips on the Techs tab).
-							outlined: true,
 							tooltipHtml: bonusEventTooltip(
 								d.tech_name,
 								d.turn,
@@ -501,8 +496,9 @@
 						// The flag glyph of the strongest unit this tech unlocks (`unlocked`
 						// is sorted by strength desc); the tech and the full unit list are
 						// in the hover tooltip.
-						iconCategory: "units-icons",
+						iconCategory: "units",
 						iconValue: unlocked[0].unitType,
+						glyph: true,
 						color,
 						tooltipHtml: techEventTooltip(d.tech_name, d.turn, unlocked, color),
 					});

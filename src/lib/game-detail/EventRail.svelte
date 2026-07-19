@@ -9,15 +9,14 @@
 
 	// One marker on the rail: an icon at its event's turn-x with a rich hover
 	// tooltip. A null iconValue renders a colored dot instead of a sprite.
-	// `outlined` rings the icon in the marker's color — the shared "bonus card"
-	// encoding (same as the outlined chips on the Techs tab).
+	// `glyph` renders the unit flag-glyph variant (units category only).
 	export type RailMarker = {
 		turn: number;
 		iconCategory: SpriteCategory;
 		iconValue: string | null;
 		color: string;
 		tooltipHtml: string;
-		outlined?: boolean;
+		glyph?: boolean;
 	};
 
 	// One row of same-kind markers inside a player's band (e.g. "law", "tech").
@@ -64,7 +63,6 @@
 		"traits-trimmed": 14,
 		laws: 14,
 		units: 14,
-		"units-icons": 14,
 		techs: 14,
 		yields: 14,
 	};
@@ -226,16 +224,14 @@
 							     the event never renders invisible. -->
 							{@const v =
 								icon.iconValue &&
-								getSpritePath(icon.iconCategory, icon.iconValue)
+								getSpritePath(icon.iconCategory, icon.iconValue, {
+									glyph: icon.glyph,
+								})
 									? icon.iconValue
 									: null}
 							<div
-								class="absolute top-1/2 flex cursor-default items-center {icon.outlined
-									? 'rounded border p-px'
-									: ''}"
-								style="left: {icon.left}px; transform: translate(-50%, -50%);{icon.outlined
-									? ` border-color: ${icon.color};`
-									: ''}"
+								class="absolute top-1/2 flex cursor-default items-center"
+								style="left: {icon.left}px; transform: translate(-50%, -50%);"
 								role="img"
 								aria-label={row.kind}
 								onmousemove={(e) => enterEvent(icon, e)}
@@ -245,6 +241,7 @@
 									<SpriteIcon
 										category={icon.iconCategory}
 										value={v}
+										glyph={icon.glyph}
 										size={RAIL_ICON_SIZE[icon.iconCategory] ??
 											RAIL_ICON_SIZE_DEFAULT}
 									/>
