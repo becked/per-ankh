@@ -63,16 +63,23 @@ The `./per-ankh` script at repo root is the project CLI (`scripts/per-ankh.ts`):
 Past contributions consistently *worked and had tests* but needed cleanup for **fit**: they built in isolation from the repo's existing patterns and parallel surfaces. Follow these, in priority order:
 
 1. **Reuse before you invent.** Grep the whole repo (and `main`) for an existing helper, component, or idiom before writing a new one — don't add a second or third way to do the same thing. Already present: `copyToClipboard` (`$lib/utils/clipboard`), `toRgba` (`$lib/utils/color`), `getNationChartColor`/`getChartColor` (`$lib/config`), `formatEnum` (`$lib/utils/formatting`), `goto(resolve(...))` for URL sync, and an annotate-then-filter idiom for request shaping.
-2. **Wire all N parallel surfaces.** When a prop/badge/gate/value lives on multiple sibling call sites or cards, update **every** one — uneven coverage is the single most-repeated defect.
-3. **Extract, don't copy-paste.** Duplicated SQL fragments and label/format helpers drift into divergent fallbacks and dropped guards. One shared helper.
-4. **No dead or speculative code.** No exported API without a consumer, no unused params/props/branches, no no-op `eslint-disable`.
-5. **Authoritative, user-visible values are persisted server-side**, not computed client-side per render.
-6. **Guards apply to every writer/reader of a shared field** — CAS/`_rev` on all writers, rate-limit budget recorded by all readers.
-7. **Use project helpers over literals** — series-color / enum / color helpers; the null-handling operators below. Never a hardcoded hex or a gray fallback where a helper exists.
-8. **PR hygiene.** Keep PRs small and split by risk profile; rebase on current `main` (a stale branch fails a since-tightened lint); run `npm run lint`, `svelte-check`/`tsc`, and `npm test` (in `cloud/`) before pushing; match existing naming and domain vocabulary.
-9. **Verify before you claim.** Don't assert a convention exists — or doesn't — from partial reading. Grep the whole repo and `main` first.
+2. **Speak the game's vocabulary.** Name domain things what Old World names them — `Reference/XML` (baked into `src/lib/generated/`) is the authority, and a term that appears nowhere else in the repo is a red flag.
+3. **Wire all N parallel surfaces.** When a prop/badge/gate/value lives on multiple sibling call sites or cards, update **every** one — uneven coverage is the single most-repeated defect.
+4. **Extract, don't copy-paste.** Duplicated SQL fragments and label/format helpers drift into divergent fallbacks and dropped guards. One shared helper.
+5. **No dead or speculative code.** No exported API without a consumer, no unused params/props/branches, no no-op `eslint-disable`.
+6. **Authoritative, user-visible values are persisted server-side**, not computed client-side per render.
+7. **Guards apply to every writer/reader of a shared field** — CAS/`_rev` on all writers, rate-limit budget recorded by all readers.
+8. **Use project helpers over literals** — series-color / enum / color helpers; the null-handling operators below. Never a hardcoded hex or a gray fallback where a helper exists.
+9. **PR hygiene.** Keep PRs small and split by risk profile; rebase on current `main` (a stale branch fails a since-tightened lint); run `npm run lint`, `svelte-check`/`tsc`, and `npm test` (in `cloud/`) before pushing.
+10. **Verify before you claim.** Don't assert a convention exists — or doesn't — from partial reading. Grep the whole repo and `main` first.
 
 Underlying principles: **optimize for the app, not developer time** (evaluate options on consistency, conceptual coherence, fewer special cases — never on "less work" or "smaller diff"); **YAGNI**; **DRY**; **atomic commits** (one logical change each, pragmatically); **comments explain WHY** (the code shows what).
+
+## Reviewing contributor PRs
+
+Checks to run against a contributor PR. Write each one so it's verifiable against the diff; vague guidance produces no review signal.
+
+- **Domain vocabulary.** Every domain noun the diff introduces must be the word Old World uses; `Reference/XML` is the authority. Grep the whole repo for the new term *and* its XML counterpart — a term appearing nowhere else is the finding. Known violation: `building` for `improvement` ([#143](https://github.com/becked/per-ankh/issues/143)).
 
 ## Coding Standards
 
