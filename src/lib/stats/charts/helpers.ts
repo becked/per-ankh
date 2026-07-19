@@ -27,6 +27,15 @@ export function fmtLaw(value: string): string {
 	return formatEnum(value, "LAW_");
 }
 
+// Win/loss series colors. Copper for wins and a muted dark tone for losses —
+// on-theme with the warm palette and distinct from each other without reading
+// as a civ color. Shared by every chart that splits a series by outcome (the
+// nation win-rate bar, the yields winner/loser split) so the two cohorts mean
+// the same thing everywhere. (The tournament standings bar deliberately colors
+// per-player instead, so it doesn't use these.)
+export const WIN_COLOR = "#C87941";
+export const LOSS_COLOR = "#5a4d3f";
+
 // Sentinel selector value for the cross-nation aggregate ("All nations")
 // option shared by the nation-selector panels (Families, Opening laws). Not a
 // real NATION_* enum, so it never collides with one.
