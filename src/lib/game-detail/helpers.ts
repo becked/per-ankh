@@ -550,14 +550,12 @@ export function getSpritePath(
 		return SPRITE_MANIFEST[`units/${unitSpriteName(enumValue)}`] ?? null;
 	}
 	if (category === "units-icons") {
-		// The small white flag glyph; a handful of units ship only the painted
-		// portrait, so fall back to it rather than rendering nothing.
+		// The small white flag glyph ships as a __ICON sibling of the portrait
+		// (units/UNIT_X__ICON.png). Glyph-or-nothing: a unit with no glyph
+		// returns null so the rail renders its colored dot — never the painted
+		// portrait, which is a categorically different image in a glyph slot.
 		const name = unitSpriteName(enumValue);
-		return (
-			SPRITE_MANIFEST[`units-icons/${name}`] ??
-			SPRITE_MANIFEST[`units/${name}`] ??
-			null
-		);
+		return SPRITE_MANIFEST[`units/${name}__ICON`] ?? null;
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }
