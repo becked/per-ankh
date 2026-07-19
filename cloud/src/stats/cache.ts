@@ -22,7 +22,7 @@ import type { UserScope, UserStatsScope } from "./types";
 // becomes a miss and recomputes. Use when the ChartBundle shape itself
 // changes in a backwards-incompatible way (e.g. dropping a field). For
 // data-only changes (a new chart, a new aggregation), no bump needed.
-export const BUNDLE_SCHEMA_VERSION = 4;
+export const BUNDLE_SCHEMA_VERSION = 5;
 
 export interface StatsCacheEnv extends SessionEnv {
 	// SESSIONS_KV is the existing KV binding; this module reuses it

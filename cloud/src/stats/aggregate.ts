@@ -16,7 +16,12 @@
 
 import { LAW_CLASSES } from "../generated/law-classes";
 import type { StatsCorpus } from "./resolve";
-import type { ChartBundle, ChartBundleCore, Nullable } from "./types";
+import type {
+	ChartBundle,
+	ChartBundleCore,
+	Nullable,
+	YieldCohort,
+} from "./types";
 
 export interface AggregateEnv {
 	SHARE_DB: D1Database;
@@ -70,8 +75,13 @@ interface BaseRow {
 
 // One raw game_player_turn row (a single game's focal player at one turn),
 // keyed by column name. We pull raw rows rather than SQL AVG so we can
-// compute per-turn percentile bands Worker-side.
-type YieldRawRow = { turn: number } & Record<string, number | null>;
+// compute per-turn percentile bands Worker-side. game_id/is_winner ride along
+// to cohort the row by outcome.
+type YieldRawRow = {
+	turn: number;
+	game_id: string;
+	is_winner: number;
+} & Record<string, number | string | null>;
 
 // Series key → (per-turn-rate column, cumulative column). The two stocks
 // (military_power, legitimacy) are levels with no cumulative column; their
@@ -213,16 +223,37 @@ async function loadBaseRows(
 	return out;
 }
 
+// Games with a decided winner. `player_summaries.is_winner` is NOT NULL
+// DEFAULT FALSE, so a game that never resolved is indistinguishable from one
+// everybody lost. Only games appearing here can be split by outcome.
+async function loadDecidedGames(
+	env: AggregateEnv,
+	gameIds: string[],
+): Promise<Set<string>> {
+	const decided = new Set<string>();
+	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
+		const res = await env.SHARE_DB.prepare(
+			`SELECT DISTINCT game_id FROM player_summaries
+			 WHERE is_winner = 1 AND game_id IN (${placeholders(ids.length)})`,
+		)
+			.bind(...ids)
+			.all<{ game_id: string }>();
+		for (const row of res.results ?? []) decided.add(row.game_id);
+	}
+	return decided;
+}
+
 // Per-turn yield distribution curves. Restricted to the corpus's focal rows so
 // the curves represent the focal players, not enemy AI. Returns the median +
 // P25/P75 band per turn for each series (rate and cumulative), plus the sample
-// size (n games) at each turn.
+// size (n games) at each turn — pooled, and split by outcome.
 async function loadYieldCurves(
 	env: AggregateEnv,
 	gameIds: string[],
 	focal: Focal,
 ): Promise<ChartBundleCore["yieldCurves"]> {
-	if (gameIds.length === 0) return { turns: [], counts: [], series: {} };
+	if (gameIds.length === 0)
+		return { turns: [], counts: [], series: {}, outcome: null };
 
 	// Columns to pull: each series' rate column plus its cumulative column
 	// (deduped — stocks share their single column).
@@ -244,11 +275,37 @@ async function loadYieldCurves(
 		rate: Map<string, number[]>;
 		cum: Map<string, number[]>;
 	};
-	const byTurn = new Map<number, Bucket>();
+	type Cohort = Map<number, Bucket>;
+	const pooled: Cohort = new Map();
+	const winners: Cohort = new Map();
+	const losers: Cohort = new Map();
+
+	const decided = await loadDecidedGames(env, gameIds);
+
+	// Fold one row into one cohort, creating the turn's bucket on first sight.
+	const accumulate = (cohort: Cohort, turn: number, row: YieldRawRow) => {
+		let bucket = cohort.get(turn);
+		if (!bucket) {
+			bucket = {
+				count: 0,
+				rate: new Map(YIELD_COLUMNS.map(([k]) => [k, []])),
+				cum: new Map(YIELD_COLUMNS.map(([k]) => [k, []])),
+			};
+			cohort.set(turn, bucket);
+		}
+		bucket.count += 1;
+		for (const [key, rateCol, cumCol] of YIELD_COLUMNS) {
+			const rateVal = row[rateCol];
+			if (typeof rateVal === "number") bucket.rate.get(key)!.push(rateVal);
+			// Stocks have no cumulative column → reuse the level.
+			const cumVal = cumCol ? row[cumCol] : row[rateCol];
+			if (typeof cumVal === "number") bucket.cum.get(key)!.push(cumVal);
+		}
+	};
 
 	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
 		const res = await env.SHARE_DB.prepare(
-			`SELECT gpt.turn, ${selectList}
+			`SELECT gpt.turn, gpt.game_id, ps.is_winner, ${selectList}
 			 FROM game_player_turn gpt
 			 JOIN player_summaries ps ON ps.game_id = gpt.game_id
 			                          AND ps.player_index = gpt.player_index
@@ -260,48 +317,50 @@ async function loadYieldCurves(
 
 		for (const row of (res.results ?? []) as YieldRawRow[]) {
 			const turn = row.turn;
-			let bucket = byTurn.get(turn);
-			if (!bucket) {
-				bucket = {
-					count: 0,
-					rate: new Map(YIELD_COLUMNS.map(([k]) => [k, []])),
-					cum: new Map(YIELD_COLUMNS.map(([k]) => [k, []])),
-				};
-				byTurn.set(turn, bucket);
-			}
-			bucket.count += 1;
-			for (const [key, rateCol, cumCol] of YIELD_COLUMNS) {
-				const rateVal = row[rateCol];
-				if (rateVal != null) bucket.rate.get(key)!.push(rateVal);
-				// Stocks have no cumulative column → reuse the level.
-				const cumVal = cumCol ? row[cumCol] : row[rateCol];
-				if (cumVal != null) bucket.cum.get(key)!.push(cumVal);
-			}
+			accumulate(pooled, turn, row);
+			// Undecided games stay pooled-only: their all-zero is_winner would
+			// read as a clean sweep of losses.
+			if (!decided.has(row.game_id)) continue;
+			accumulate(row.is_winner === 1 ? winners : losers, turn, row);
 		}
 	}
 
-	const turns = [...byTurn.keys()].sort((a, b) => a - b);
-	const counts = turns.map((t) => byTurn.get(t)!.count);
-	const series: ChartBundleCore["yieldCurves"]["series"] = {};
-	for (const [key] of YIELD_COLUMNS) {
-		const band = (which: "rate" | "cum") => {
-			const p25: Nullable<number>[] = [];
-			const p50: Nullable<number>[] = [];
-			const p75: Nullable<number>[] = [];
-			for (const t of turns) {
-				const sorted = [...byTurn.get(t)![which].get(key)!].sort(
-					(a, b) => a - b,
-				);
-				p25.push(percentile(sorted, 25));
-				p50.push(percentile(sorted, 50));
-				p75.push(percentile(sorted, 75));
-			}
-			return { p25, p50, p75 };
-		};
-		series[key] = { rate: band("rate"), cumulative: band("cum") };
-	}
+	// The pooled cohort is the superset, so its turns are the shared x-axis;
+	// the split cohorts index against it and carry nulls where they have no
+	// sample.
+	const turns = [...pooled.keys()].sort((a, b) => a - b);
 
-	return { turns, counts, series };
+	const bandsFor = (cohort: Cohort): YieldCohort => {
+		const series: YieldCohort["series"] = {};
+		for (const [key] of YIELD_COLUMNS) {
+			const band = (which: "rate" | "cum") => {
+				const p25: Nullable<number>[] = [];
+				const p50: Nullable<number>[] = [];
+				const p75: Nullable<number>[] = [];
+				for (const t of turns) {
+					const sample = cohort.get(t)?.[which].get(key) ?? [];
+					const sorted = [...sample].sort((a, b) => a - b);
+					p25.push(percentile(sorted, 25));
+					p50.push(percentile(sorted, 50));
+					p75.push(percentile(sorted, 75));
+				}
+				return { p25, p50, p75 };
+			};
+			series[key] = { rate: band("rate"), cumulative: band("cum") };
+		}
+		return { counts: turns.map((t) => cohort.get(t)?.count ?? 0), series };
+	};
+
+	const all = bandsFor(pooled);
+	return {
+		turns,
+		counts: all.counts,
+		series: all.series,
+		outcome:
+			decided.size === 0
+				? null
+				: { winners: bandsFor(winners), losers: bandsFor(losers) },
+	};
 }
 
 async function loadTechEvents(
@@ -858,7 +917,7 @@ function emptyCore(parserVersion: string): ChartBundleCore {
 		nationWinRate: [],
 		nationAvgPoints: [],
 		familyByNation: [],
-		yieldCurves: { turns: [], counts: [], series: {} },
+		yieldCurves: { turns: [], counts: [], series: {}, outcome: null },
 		lawTiming: [],
 		openingLaws: [],
 		expansionWinRate: [],

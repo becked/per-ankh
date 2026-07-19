@@ -21,6 +21,20 @@ export interface YieldBand {
 	p75: Array<Nullable<number>>;
 }
 
+// One cohort's per-turn yield curves, indexed against the shared `turns`
+// axis of the yieldCurves block it belongs to. A cohort with no sample at
+// a given turn carries nulls there, so every cohort stays index-aligned.
+export interface YieldCohort {
+	counts: number[];
+	series: Record<
+		string,
+		{
+			rate: YieldBand;
+			cumulative: YieldBand;
+		}
+	>;
+}
+
 export interface ChartBundleMeta {
 	// Number of games actually aggregated (after visibility / game-type
 	// filtering). The signal for whole-bundle "no data yet" empty states.
@@ -111,6 +125,12 @@ export interface ChartBundleCore {
 	// in the late game). Each series carries both the per-turn rate and the
 	// cumulative band; for the stock series (military_power, legitimacy)
 	// `cumulative` mirrors `rate`.
+	//
+	// `outcome` splits the same curves into winners and losers, both indexed
+	// against the shared `turns`. It is restricted to games with a decided
+	// winner: `is_winner` is NOT NULL DEFAULT FALSE, so an undecided game is
+	// all-zeros and would otherwise land wholesale in the loser cohort. Null
+	// when no in-corpus game has a winner row — nothing to split.
 	yieldCurves: {
 		turns: number[];
 		counts: number[];
@@ -121,6 +141,10 @@ export interface ChartBundleCore {
 				cumulative: YieldBand;
 			}
 		>;
+		outcome: Nullable<{
+			winners: YieldCohort;
+			losers: YieldCohort;
+		}>;
 	};
 
 	// --- Laws --------------------------------------------------------

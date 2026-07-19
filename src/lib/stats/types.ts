@@ -11,6 +11,12 @@ export interface YieldBand {
 	p75: Array<Nullable<number>>;
 }
 
+// One cohort's per-turn curves, index-aligned to `yieldCurves.turns`.
+export interface YieldCohort {
+	counts: number[];
+	series: Record<string, { rate: YieldBand; cumulative: YieldBand }>;
+}
+
 export interface ChartBundleMeta {
 	// Number of games aggregated (after visibility / scope filtering).
 	game_count: number;
@@ -72,10 +78,13 @@ export interface ChartBundleCore {
 		wins: number;
 	}>;
 
+	// `outcome` is the winner/loser split of the same curves, restricted to
+	// games with a decided winner; null when the corpus has none.
 	yieldCurves: {
 		turns: number[];
 		counts: number[];
 		series: Record<string, { rate: YieldBand; cumulative: YieldBand }>;
+		outcome: Nullable<{ winners: YieldCohort; losers: YieldCohort }>;
 	};
 
 	lawTiming: Array<{
