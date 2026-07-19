@@ -2266,12 +2266,16 @@ export async function handleGameDetail(
 // CSRF token is needed under that stance — if we ever loosen CORS or accept
 // POST mutations, revisit and add an `X-CSRF-Token` requirement.
 //
-// PATCH /v1/games/:id — owner-only mutation of two optional fields:
-//   { is_public?: boolean, collection_id?: number | null }
+// PATCH /v1/games/:id — owner-only mutation of three optional fields:
+//   { is_public?: boolean, collection_id?: number | null,
+//     display_name?: string | null }
 // At least one must be present. is_public toggles share visibility and is
 // rate-limited 60/hr/user via the 'visibility_change' audit event.
 // collection_id moves the game between collections owned by the same user;
 // not rate-limited (routine UX), audited as 'collection_change'.
+// display_name sets the owner-editable title; null clears it, letting the
+// client fall back to the save's own game_name and then the nation/turns
+// derivation. Not rate-limited, audited as 'name_change'.
 export async function handleGamePatch(
 	gameId: string,
 	request: Request,
