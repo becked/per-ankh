@@ -6,15 +6,19 @@
 		value,
 		size = 24,
 		alt = "",
+		glyph = false,
 	}: {
 		category: SpriteCategory;
 		value: string;
 		size?: number;
 		alt?: string;
+		// Render the unit flag-glyph variant (units/<name>__ICON) instead of the
+		// painted portrait. Only meaningful for the `units` category.
+		glyph?: boolean;
 	} = $props();
 
 	let failed = $state(false);
-	const spritePath = $derived(getSpritePath(category, value));
+	const spritePath = $derived(getSpritePath(category, value, { glyph }));
 </script>
 
 {#if spritePath && !failed}

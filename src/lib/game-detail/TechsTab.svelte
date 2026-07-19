@@ -16,7 +16,6 @@
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { TECH_NAMES } from "$lib/generated/tech-names";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import EventRail, {
@@ -35,6 +34,7 @@
 		orderPlayersUploaderFirst,
 		filledLineStyle,
 		getSpritePath,
+		techName,
 		improvementDisplayName,
 		createYieldChartOption,
 	} from "./helpers";
@@ -101,10 +101,6 @@
 	// Side-by-side (Techs by Turn | Science Sources) only for ≤4-nation games;
 	// wider FFA tables would each be cramped at half width, so they stack.
 	const sideBySide = $derived(orderedPlayers.length <= 4);
-
-	// Tech display name — the baked override, else the generic formatter.
-	const techName = (tech: string) =>
-		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
 
 	// ─── Chart option ─────────────────────────────────────────────────
 	const techDiscoveryChartOption = $derived(

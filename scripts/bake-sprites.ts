@@ -4,10 +4,12 @@
 // their own bytes for safe long-cache HTTP serving.
 //
 // SOURCES (all under <pinacotheca>/extracted/sprites/):
-//   crests/, techs/, laws/, religions/, yields/  → 1:1 copy by category dir
+//   crests/, techs/, laws/, religions/, yields/  → category dir minus __ICON
+//                                                  glyph siblings (see below)
 //   traits/ (2nd pass)                           → traits-trimmed/ content-
 //                                                  trimmed+squared, rail only
-//   units/                                       → UNIT_*.png minus UNIT_3D_*
+//   units/                                       → UNIT_*.png minus UNIT_3D_*,
+//                                                  incl. UNIT_*__ICON glyphs
 //   portraits/                                   → leader ADULT portraits, keyed
 //                                                  by portrait zType (see below)
 //   improvements/IMPROVEMENT_FINISHED.png        → icons/IMPROVEMENT_FINISHED.png
@@ -86,9 +88,13 @@ const MIRROR_CATEGORIES = [
 	"traits",
 ] as const;
 
-// Pinacotheca's units/ holds both 2D icons (UNIT_*.png) and 3D renders
-// (UNIT_3D_*.png). The runtime tech-fallback path requests UNIT_<NAME>.png
-// (the 2D set) — the 3D variants are unused.
+// Pinacotheca's units/ holds the 2D portrait icons (UNIT_*.png), the 3D
+// renders (UNIT_3D_*.png), and — co-named alongside each portrait — the small
+// white flag glyph shown on in-game unit flags (UNIT_*__ICON.png). We bake the
+// portraits and the __ICON glyphs (both keyed under this one category); the
+// runtime resolves the glyph via `units/<name>__ICON` for the Military rail's
+// unit markers and the portrait via `units/<name>` for tech fallbacks. Only the
+// 3D variants are dropped.
 const UNITS_CATEGORY = "units";
 
 // improvements/ likewise mixes the 2D icons (IMPROVEMENT_<NAME>.png, named by
@@ -99,6 +105,15 @@ const UNITS_CATEGORY = "units";
 // that isn't an icon.
 const IMPROVEMENTS_CATEGORY = "improvements";
 const SPECIALISTS_CATEGORY = "specialists";
+
+// Pinacotheca ships a co-named white flag glyph (UNIT_ARCHER__ICON.png) beside
+// each full-art tile across units/, crests/, religions/, traits/, … Only units
+// bakes its glyphs today — the Military rail's unit markers are the sole glyph
+// consumer — so every other category filters these out, keeping the manifest to
+// sprites something actually reads. Add a glyph consumer before baking a
+// category's __ICON set.
+const isGlyphSibling = (filename: string): boolean =>
+	filename.endsWith("__ICON.png");
 
 // Three icons sourced from disparate Pinacotheca subdirs, with renames where
 // the runtime expects a different name than Pinacotheca emits.
@@ -238,7 +253,7 @@ async function copyMirrorCategory(
 	const dst = resolve(SPRITES_OUT, category);
 	await wipeAndRecreate(dst);
 	const entries = await readdir(src);
-	const pngs = entries.filter((f) => f.endsWith(".png"));
+	const pngs = entries.filter((f) => f.endsWith(".png") && !isGlyphSibling(f));
 	for (const filename of pngs) {
 		const basename = filename.slice(0, -".png".length);
 		await bakeOne(resolve(src, filename), dst, category, basename, sidecar);
@@ -260,7 +275,7 @@ async function copyTrimmedTraits(sidecar: SpriteSidecar): Promise<number> {
 	const dst = resolve(SPRITES_OUT, "traits-trimmed");
 	await wipeAndRecreate(dst);
 	const entries = await readdir(src);
-	const pngs = entries.filter((f) => f.endsWith(".png"));
+	const pngs = entries.filter((f) => f.endsWith(".png") && !isGlyphSibling(f));
 	for (const filename of pngs) {
 		const basename = filename.slice(0, -".png".length);
 		const input = await readFile(resolve(src, filename));
@@ -323,6 +338,10 @@ async function copyUnits(sidecar: SpriteSidecar): Promise<number> {
 	const dst = resolve(SPRITES_OUT, UNITS_CATEGORY);
 	await wipeAndRecreate(dst);
 	const entries = await readdir(src);
+	// Keeps both the portraits (UNIT_ARCHER.png) and the co-named flag glyphs
+	// (UNIT_ARCHER__ICON.png) — unlike the other categories, units consumes its
+	// glyphs (the rail), so they're baked under the same `units/` keys. Only the
+	// 3D renders are dropped.
 	const pngs = entries.filter(
 		(f) =>
 			f.startsWith("UNIT_") && f.endsWith(".png") && !f.startsWith("UNIT_3D_"),

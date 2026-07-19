@@ -15,6 +15,7 @@ import { toRgba } from "$lib/utils/color";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import { UNIT_STATS } from "$lib/generated/unit-stats";
+import { TECH_NAMES } from "$lib/generated/tech-names";
 import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 import { SHRINE_TYPE, IMPROVEMENT_ICON } from "$lib/generated/science-yields";
 import {
@@ -452,6 +453,17 @@ const TECH_SPRITE_FIXES: Record<string, string> = {
 	TECH_SOVEREIGNITY: "TECH_SOVEREIGNTY",
 };
 
+// The sprite name a unit actually renders: some units ship no sprite of their
+// own and borrow another's (unit.xml <zIconName>, e.g. UNIT_HITTITE_CHARIOT_1
+// → UNIT_THREE_MEN_CHARIOT).
+const unitSpriteName = (unitType: string): string =>
+	UNIT_STATS[unitType]?.icon ?? unitType;
+
+// Tech display name — the baked override, else the generic formatter. Shared by
+// the Military rail and the Techs tab (comparison table + science rail).
+export const techName = (tech: string): string =>
+	TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
+
 /**
  * Resolve a tech enum value to its (category, filename) in the sprite
  * manifest, or null if no sprite ships. Handles game-data corner cases:
@@ -470,8 +482,9 @@ function resolveTechSprite(
 	if (SPRITE_MANIFEST[`techs/${tech}`] != null) {
 		return { category: "techs", filename: tech };
 	}
-	// Fallback: try unit sprite (TECH_HASTATUS -> UNIT_HASTATUS)
-	const unitName = tech.replace(/^TECH_/, "UNIT_");
+	// Fallback: try unit sprite (TECH_HASTATUS -> UNIT_HASTATUS), following a
+	// borrowed icon (TECH_HITTITE_CHARIOT_1 -> UNIT_THREE_MEN_CHARIOT).
+	const unitName = unitSpriteName(tech.replace(/^TECH_/, "UNIT_"));
 	if (SPRITE_MANIFEST[`units/${unitName}`] != null) {
 		return { category: "units", filename: unitName };
 	}
@@ -494,6 +507,7 @@ function resolveTechSprite(
 export function getSpritePath(
 	category: SpriteCategory,
 	enumValue: string,
+	opts?: { glyph?: boolean },
 ): string | null {
 	if (category === "crests") {
 		return SPRITE_MANIFEST[`crests/CREST_${enumValue}`] ?? null;
@@ -537,6 +551,16 @@ export function getSpritePath(
 		return (
 			SPRITE_MANIFEST[`specialists/${enumValue.replace(/_\d+$/, "")}`] ?? null
 		);
+	}
+	if (category === "units") {
+		const name = unitSpriteName(enumValue);
+		// The `glyph` variant is the small white flag glyph shipped as a __ICON
+		// sibling of the portrait (units/UNIT_X__ICON.png) — the form the Military
+		// rail's unit markers use. Glyph-or-nothing: a unit with no glyph returns
+		// null so the rail renders its colored dot rather than the painted
+		// portrait, a categorically different image in a glyph slot.
+		if (opts?.glyph) return SPRITE_MANIFEST[`units/${name}__ICON`] ?? null;
+		return SPRITE_MANIFEST[`units/${name}`] ?? null;
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
 }

@@ -9,12 +9,18 @@
 
 	// One marker on the rail: an icon at its event's turn-x with a rich hover
 	// tooltip. A null iconValue renders a colored dot instead of a sprite.
+	// `glyph` renders the unit flag-glyph variant (units category only).
+	// `gold` gives the marker a gold glow (the app's gold accent) — the
+	// bonus-card highlight on the Military rail; propagated across a proximity
+	// merge so a cluster stays gold when any of its markers is a bonus card.
 	export type RailMarker = {
 		turn: number;
 		iconCategory: SpriteCategory;
 		iconValue: string | null;
 		color: string;
 		tooltipHtml: string;
+		glyph?: boolean;
+		gold?: boolean;
 	};
 
 	// One row of same-kind markers inside a player's band (e.g. "law", "tech").
@@ -71,7 +77,9 @@
 	// Merge same-row markers whose resolved centers land within ~a marker width
 	// (markers are 14px, centered on their turn) so near-overlapping icons
 	// collapse into one — the first marker's icon/turn is kept and the rest are
-	// concatenated into its tooltip. This must run on pixel positions, not turn
+	// concatenated into its tooltip. The kept marker's `gold` flag is OR'd with
+	// the merged ones, so a bonus-card highlight survives collapsing into an
+	// adjacent unlock. This must run on pixel positions, not turn
 	// gaps: whether two events overlap depends on the live chart width (a turn gap
 	// that's clear on a 40-turn game collides on a 200-turn one), so it recomputes
 	// with the layout. Same-turn markers (identical x) are the degenerate case.
@@ -89,6 +97,7 @@
 				Math.abs(icon.left - last.left) < RAIL_MERGE_PX
 			) {
 				last.tooltipHtml += TOOLTIP_SEP + icon.tooltipHtml;
+				if (icon.gold) last.gold = true;
 			} else {
 				out.push({ ...icon });
 			}
@@ -222,12 +231,16 @@
 							     the event never renders invisible. -->
 							{@const v =
 								icon.iconValue &&
-								getSpritePath(icon.iconCategory, icon.iconValue)
+								getSpritePath(icon.iconCategory, icon.iconValue, {
+									glyph: icon.glyph,
+								})
 									? icon.iconValue
 									: null}
 							<div
 								class="absolute top-1/2 flex cursor-default items-center"
-								style="left: {icon.left}px; transform: translate(-50%, -50%);"
+								style="left: {icon.left}px; transform: translate(-50%, -50%);{icon.gold
+									? ' filter: drop-shadow(0 0 3px rgb(var(--color-orange) / 0.9)) drop-shadow(0 0 6px rgb(var(--color-orange) / 0.55));'
+									: ''}"
 								role="img"
 								aria-label={row.kind}
 								onmousemove={(e) => enterEvent(icon, e)}
@@ -237,6 +250,7 @@
 									<SpriteIcon
 										category={icon.iconCategory}
 										value={v}
+										glyph={icon.glyph}
 										size={RAIL_ICON_SIZE[icon.iconCategory] ??
 											RAIL_ICON_SIZE_DEFAULT}
 									/>

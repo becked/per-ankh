@@ -3,7 +3,6 @@
 	import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
 	import { Tooltip } from "bits-ui";
 	import { formatEnum } from "$lib/utils/formatting";
-	import { TECH_NAMES } from "$lib/generated/tech-names";
 	import { TECH_LAWS } from "$lib/generated/science-yields";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import {
@@ -11,6 +10,7 @@
 		ownedByPlayer,
 		findByPlayer,
 		buildOwttUrl,
+		techName,
 	} from "./helpers";
 
 	// Side-by-side tech timeline (owglick's "tech — turn by turn" view): one
@@ -31,9 +31,6 @@
 		// Research order feeding each player's tech-tree planner deep link.
 		techDiscoveryHistory: TechDiscoveryHistory[];
 	} = $props();
-
-	const techName = (tech: string) =>
-		TECH_NAMES[tech] ?? formatEnum(tech, "TECH_");
 
 	type Cell = {
 		tech: string;
