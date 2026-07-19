@@ -1,5 +1,33 @@
 # Changelog
 
+## [2026-07-19-f120101] - 2026-07-19
+
+### Features
+
+- (military) bonus-card unit grants on the event rail — [6b1f5e0](https://github.com/becked/per-ankh/commit/6b1f5e07f2585e56d1bb469bc4ef6cc3cc256a65)
+- (military) use the game's white flag glyphs for rail unit markers — [9e14889](https://github.com/becked/per-ankh/commit/9e14889fd3681d9215d997de7c55a26e37847fcd)
+- (military) ring bonus-card markers in the player's color — [8ff56b4](https://github.com/becked/per-ankh/commit/8ff56b489819a67361bbd94b5f76459119b8bdb3)
+- (military) read __ICON flag glyphs; drop the units_icons mirror — [1d0663d](https://github.com/becked/per-ankh/commit/1d0663d513dddce7c0e3b635f4746c3656d3c1e4)
+- (military) distinguish bonus-card markers with a gold glow — [16f2419](https://github.com/becked/per-ankh/commit/16f2419c570185f7be8a56d8ee8f35b55d07728c)
+- (stats) split yield curves by game outcome — [069afbd](https://github.com/becked/per-ankh/commit/069afbd066933a223648f5d608837b378068dfc9)
+- (tournament) add Yields tab with winners-vs-losers toggle — [b95e05c](https://github.com/becked/per-ankh/commit/b95e05c29018329eea915017cd46f7874798096e)
+- (bake) add the GAME_OPTION_NAMES display-name table — [1586ff1](https://github.com/becked/per-ankh/commit/1586ff1fd99a4aa3a96743335d068ef7aa0fde6c)
+- (game-detail) show game options and opponent level on the Settings tab — [03c98b2](https://github.com/becked/per-ankh/commit/03c98b25fb76785a57c66f50ed5d36b9bb21dc0f)
+
+### Fixes
+
+- (stats) keep the yield band attached to the median when P25 is negative — [9796185](https://github.com/becked/per-ankh/commit/9796185682c9bdda277aa0236108fb5097759dd6)
+
+### Other
+
+- (game-detail) unit glyph as a units variant; share techName — [9c1439a](https://github.com/becked/per-ankh/commit/9c1439ae47b86706bc7374a4fe7eb00e0569cfd3)
+- (stats) share WIN_COLOR/LOSS_COLOR from charts/helpers — [42ee3f7](https://github.com/becked/per-ankh/commit/42ee3f788887e288be7c388749c88dbb99a76b97)
+- (stats) drop the winners/losers legend from the yield charts — [6d216b5](https://github.com/becked/per-ankh/commit/6d216b504cd02ebf02fe61caf2410756379406dc)
+- (cloud) document display_name in the handleGamePatch header — [cdb1467](https://github.com/becked/per-ankh/commit/cdb146762e4a6cecbf1150cc693975fce224b580)
+- (save-format) document temporal fidelity tiers and LogData retention — [c537e96](https://github.com/becked/per-ankh/commit/c537e968c46fd03b09fa3b96c0eae4ee611259c6)
+- promote domain vocabulary to its own rule, add a PR review section — [201c121](https://github.com/becked/per-ankh/commit/201c12195fd2317c289e85d798d77426521b2dc0)
+- (bake) refresh the bake skill's command list and sidecar semantics — [f120101](https://github.com/becked/per-ankh/commit/f120101dbd980ab1f86dbd2910612b503c27f733)
+
 ## [2026-07-18-39a0549] - 2026-07-18
 
 ### Features
