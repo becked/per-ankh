@@ -364,7 +364,7 @@
 		return (
 			`<div style="font-size:12px;line-height:1.55">` +
 			`<div style="font-weight:700;color:${color}">${techName(tech)} · T${turn}</div>` +
-			`<div style="color:${TOOLTIP_MUTED};margin:3px 0 2px">Bonus card · granted</div>` +
+			`<div style="color:${TOOLTIP_MUTED};margin:3px 0 2px">Bonus card</div>` +
 			granted.map((u) => unitTooltipLine(u, u.count)).join("") +
 			`</div>`
 		);
@@ -467,6 +467,9 @@
 							iconCategory: "units",
 							iconValue: granted[0].unitType,
 							glyph: true,
+							// Gold glow to set bonus-card grants apart from ordinary
+							// unit-tech unlocks on the shared tech row.
+							gold: true,
 							color,
 							tooltipHtml: bonusEventTooltip(
 								d.tech_name,
