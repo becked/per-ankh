@@ -207,20 +207,9 @@ export function yieldChartOption(
 	return {
 		...CHART_THEME,
 		title: { ...CHART_THEME.title, text: label },
-		// Only split mode needs a legend (two cohorts to tell apart). Spread
-		// conditionally so pooled mode keeps CHART_THEME's `show: false` —
-		// setting `legend: undefined` would override it and let ECharts'
-		// default legend through.
-		...(split
-			? {
-					legend: {
-						show: true,
-						data: layers.map((l) => l.name),
-						top: 28,
-						textStyle: CHART_THEME.textStyle,
-					},
-				}
-			: {}),
+		// No legend even when split: CHART_THEME's `show: false` carries, and
+		// the win/loss colors plus the tooltip's per-cohort rows already name
+		// the two curves.
 		tooltip: {
 			trigger: "axis",
 			formatter: (params: unknown) => {
@@ -235,7 +224,7 @@ export function yieldChartOption(
 				return `Turn ${turns[i]}<br/>${rows.join("<br/>")}`;
 			},
 		},
-		grid: { ...COMMON_GRID, top: split ? 78 : 64 },
+		grid: { ...COMMON_GRID, top: 64 },
 		// Axis names omitted: the yield is in the title and the x-axis is
 		// turns. The count overlay keeps its name (a distinct axis).
 		xAxis: {
