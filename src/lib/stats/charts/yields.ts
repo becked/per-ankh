@@ -139,6 +139,12 @@ export function yieldChartOption(
 					return lo != null && hi != null ? hi - lo : null;
 				}),
 				stack,
+				// ECharts' default `samesign` only stacks a value onto a
+				// baseline of the same sign, so a negative P25 (Happiness, most
+				// visibly) drops the band to the zero line instead of sitting on
+				// P25 — the fill detaches from the median. The height is always
+				// >= 0, so `all` is unconditionally what we want here.
+				stackStrategy: "all",
 				smooth: true,
 				showSymbol: false,
 				silent: true,
