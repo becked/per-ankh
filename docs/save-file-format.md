@@ -657,8 +657,8 @@ Several elements track turn-by-turn history (typically one entry per turn):
 ## LogData (Event Logs)
 
 **Location:** `/Root/Player[@ID]/PermanentLogList/LogData`
-**Purpose:** Comprehensive turn-by-turn event history
-**Persistence:** Permanent log visible in game UI
+**Purpose:** Per-player event history, as surfaced in the game UI's log panel
+**Persistence:** **Varies by event type, despite the `PermanentLogList` name.** Some types are retained for the whole game; others are evicted and survive only for the last turn or two. Read [LogData retention](#logdata-retention-not-every-type-persists) before treating the log as a historical source — this is not a comprehensive turn-by-turn record.
 
 ### LogData Structure
 
@@ -718,6 +718,35 @@ Typical counts in a 69-turn game:
 - Player 1: 63 LogData entries
 
 The number of events varies based on gameplay activity.
+
+### LogData retention: not every type persists
+
+`PermanentLogList` is a misnomer. Retention is **per event type**, and several types are a rolling buffer holding only the current turn. Measured 2026-07-19 across all 12 saves in `test-data/saves` (versions 1.0.62443 → 1.0.83591, save turns 43–127) by tabulating, for each `<Type>`, the earliest turn it appears at relative to the save turn.
+
+**Retained for the whole game.** Earliest entry reaches turn 1 (or near it) in every save containing the type:
+
+| Type | Saves | Earliest entry reaches |
+| --- | --- | --- |
+| `TECH_DISCOVERED` | 12/12 | turn 1, always |
+| `CITY_FOUNDED` | 12/12 | turn 1, always |
+| `TRIBE_CONTACT` | 12/12 | ≥83% of the game |
+| `CHARACTER_BIRTH` | 12/12 | ≥81% |
+| `GOAL_STARTED` | 12/12 | ≥74% |
+| `TRIBE_DIPLOMACY` | 12/12 | ≥73% |
+| `RELIGION_FOUNDED` | 12/12 | ≥67% |
+| `TEAM_CONTACT` | 12/12 | ≥63% |
+
+**Rolling — current turn only.** These never reach further back than 2 turns in *any* of the 12 saves: `IMPROVEMENT_FINISHED`, `CITY_PRODUCTION`, `EVENT_TRIGGER`, `RESOURCE_SHORTFALL`, `CITY_WARNING`, `DO_BONUS`, `MAX_ORDERS`, `MAX_CIVICS`, `MAX_TRAINING`, `RELIGION_SPREAD`, `UNIT_DAMAGED`, `UNIT_CAPTURED`, `CITY_EVENT`, `CHARACTER_MARRIAGE`.
+
+`IMPROVEMENT_FINISHED` is the load-bearing example, and the eviction is provable rather than inferred: the Maurya save holds 627 improvements on its tiles but logs only 5 `IMPROVEMENT_FINISHED` events, all at turn 111 (the save turn). Hundreds of completions demonstrably occurred and were dropped. **There is therefore no way to date when an improvement was built.**
+
+**Indeterminate — do not assume either way.** Every other type sits in between, and turn spans alone cannot distinguish *eviction* from *the event genuinely not having happened yet*. A type whose earliest entry is turn 31 may have been truncated, or the player may simply not have done that thing until turn 31. Resolving one requires cross-checking against end-state ground truth.
+
+`LAW_ADOPTED` is the one such type that has been resolved, and it came out **complete**: across the 11 saves that have the type, every law class held in `<ActiveLaw>` at save time also has a corresponding `LAW_ADOPTED` event — with the sole exception of `LAWCLASS_ORDER` (10/10 saves), the succession law, which is a realm default rather than an adoption and which `deriveLawAdoptionHistory` deliberately skips. So law history is reliably reconstructable per turn on modern saves.
+
+**Version caveat:** the 2022 Rome save (1.0.62443) has **zero** `LAW_ADOPTED` entries while holding 14 law classes — the type did not exist in that build. Any log-derived series degrades to empty on old saves rather than failing loudly.
+
+**Spelling quirk:** both `OCCURRENCE` and the single-R `OCCURENCE` appear as distinct `<Type>` values across the corpus. Match both.
 
 ### Ownership and Player ID Mapping
 
@@ -1076,6 +1105,9 @@ Both use the `T.X` keyed form (team-level, not player-level):
 Older saves (2022) expose `<TeamDiscontentLevel>` instead of
 `<TeamHappinessLevel>` — fall back to it when the newer name is missing.
 
+The `T.X` key here is a **team index**, not a turn, and neither element has a
+history form — see [`T{n}` is not always a turn](#tn-is-not-always-a-turn--it-is-sometimes-a-team).
+
 #### `<Religion>` — religions present in the city
 
 ```xml
@@ -1333,6 +1365,26 @@ only turns whose value changed are recorded:
 Consumers (charts, deltas) must fill-forward: turn 37's value equals turn 36's
 recorded value, not zero.
 
+### `T{n}` is not always a turn — it is sometimes a team
+
+A `T`-prefixed child key means **turn** in the history elements above, but the same syntax is used for **team** indices elsewhere. Misreading one as the other silently invents history that isn't there.
+
+| Shape | Meaning | Elements |
+| --- | --- | --- |
+| `<T.{n}>` (with dot) | team index | `TeamCulture`, `TeamHappinessLevel`, `TeamCultureStep` |
+| `<T{n}>` (no dot) | turn index | `OwnerHistory`, `TerrainHistory`, `VegetationHistory`, `HeightHistory`, `CognomenHistory`, and every `*History` yield/opinion series |
+| `<T{n}>` (no dot) | **team index**, values are turns | `RevealedTurn` |
+
+So the dot is a reliable signal for team, but its **absence is not a reliable signal for turn** — `RevealedTurn` is the counterexample. The robust discriminator is the key range: turn-keyed elements have keys running up to the save turn, team-keyed elements top out at the team count (0–3 in every save examined).
+
+```xml
+<TeamCulture><T.1>CULTURE_STRONG</T.1></TeamCulture>   <!-- team 1's culture, NOT turn 1 -->
+<RevealedTurn><T0>4</T0><T2>12</T2></RevealedTurn>     <!-- team 0 revealed on turn 4 -->
+<OwnerHistory><T37>2</T37></OwnerHistory>              <!-- on turn 37, player 2 took it -->
+```
+
+Corollary: city **culture level has no history**. `TeamCulture` is the current value per team, so a city's culture level at an arbitrary past turn is not recoverable.
+
 ### Player-keyed elements: `<P.0>` format
 
 Per-player values appear as child elements whose tag name is literally
@@ -1367,6 +1419,55 @@ Current owner = value at max turn. The owner's _city_ is found via the
 City element's `CityTerritory` child, **not** on the Tile — this is why
 tile-city linkage requires either a two-pass parse or a pre-resolved
 tile→city map.
+
+### Temporal fidelity: what is recoverable at turn N
+
+Feature requests of the form *"show me this table/chart/map for any past turn, not just the final one"* recur often. Whether one is possible is decided entirely by **which of four fidelity tiers** the underlying data sits in. Check the tier before designing the feature; most of these requests die here, and it is cheaper to find out first.
+
+| Tier | Shape | Examples | State at turn N? |
+| --- | --- | --- | --- |
+| 1 | Dense per-turn scalar (`*History`) | yield rate/total, points, military power, legitimacy, family & religion opinion, yield price, tile owner/terrain/vegetation/height, cognomen | **Yes, exact** |
+| 2 | Retained milestone events | `TECH_DISCOVERED`, `CITY_FOUNDED`, `LAW_ADOPTED`, `CHARACTER_BIRTH`, `RELIGION_FOUNDED` | **Yes, reconstructable** |
+| 3 | Rolling event buffer (current turn only) | `IMPROVEMENT_FINISHED`, `CITY_PRODUCTION`, `RESOURCE_SHORTFALL` | **No** |
+| 4 | Current state only, no turn axis | `<Improvement>`, `<Specialist>`, `<ActiveLaw>`, `TeamCulture`, citizens, units | **No** |
+
+Tiers 2 and 3 are both event-log types — see [LogData retention](#logdata-retention-not-every-type-persists) for which is which, and for the large middle group that is genuinely indeterminate.
+
+The tier-1 vs tier-4 split is why the map turn-slider works and other replays don't: tile *ownership* is tier 1, so `reconstruct-map-tiles.ts` can project the final snapshot backwards. Improvements and specialists are tier 4 — a tile carries `<Improvement>IMPROVEMENT_PASTURE</Improvement>` and `<Specialist>SPECIALIST_RANCHER</Specialist>` as bare current values, with no build turn and no history. The save records when a tile changed *hands*, never when it was improved or staffed.
+
+**Worked example — per-turn science source breakdown (assessed 2026-07-19: not possible).** `scienceBreakdown()` in `src/lib/game-detail/science-techs.ts` is end-state by construction, not by omission. Its inputs are tier 4 (improvements, specialists, `<ActiveLaw>`, capital culture level) and it reconciles against the final turn's rate with a signed `other` residual. At turn N: specialist and improvement rows are unrecoverable (tier 4, and tier 3 for their completion events); Constitution needs the urban specialist census; Centralization needs capital culture level, which `TeamCulture` does not historise; Library/Musaeum percentages multiply a base built from those same rows. Only the per-turn science *total* (tier 1) and negative law-upkeep rows survive — so `other` would absorb nearly 100% of the rate and the table would read as a bug. Requesting more saves of the same game is the only real path.
+
+#### Verifying a tier claim
+
+Do not answer tier questions from this doc, from `src/lib/parser/`, or from what the parser happens to read — all three describe our *reading* of the save. Open a save. The corpus lives in `test-data/saves/` (12 saves spanning 1.0.62443 → 1.0.83591).
+
+```bash
+unzip -p test-data/saves/OW-Maurya-Year111-*.zip '*.xml' > /tmp/save.xml
+
+# Tier 1: which dense per-turn histories exist?
+grep -o '<[A-Za-z_]*History>' /tmp/save.xml | sort | uniq -c | sort -rn
+
+# Tier 4: is the field a bare current-state scalar? (dump a tile that has one)
+grep -c '<Specialist>' /tmp/save.xml
+
+# Tier 2 vs 3: turn SPAN per event type, not mere presence.
+# Presence proves nothing — IMPROVEMENT_FINISHED exists and looks usable
+# until you see every entry sits at the save turn.
+python3 -c "
+import re
+from collections import defaultdict
+d=open('/tmp/save.xml',encoding='utf-8',errors='replace').read()
+save_turn=int(re.search(r'<Game>.*?<Turn>(\d+)</Turn>',d,re.S).group(1))
+per=defaultdict(list)
+for b in re.finditer(r'<LogData>(.*?)</LogData>',d,re.S):
+    t=re.search(r'<Type>([^<]*)</Type>',b.group(1)); n=re.search(r'<Turn>(\d+)</Turn>',b.group(1))
+    if t and n: per[t.group(1)].append(int(n.group(1)))
+for k,v in sorted(per.items(), key=lambda kv: min(kv[1])):
+    print(f'{k:<28} n={len(v):<5} turns {min(v)}-{max(v)}  (save turn {save_turn})')
+"
+```
+
+A type whose `min` equals the save turn is tier 3. A type reaching back toward turn 1 is tier 2. Anything in between is indeterminate on turn spans alone — settle it by cross-checking the log against end-state ground truth, the way `LAW_ADOPTED` was checked against `<ActiveLaw>`.
 
 ### Greek Diadochi as separate nations
 
@@ -1737,4 +1838,4 @@ This document should be updated when:
 - New event types are discovered
 - Database schema changes require new XML field mappings
 
-**Current Version:** Based on Old World v1.0.79513 (September 2025)
+**Current Version:** Based on Old World v1.0.79513 (September 2025). The `test-data/saves/` corpus that the retention and temporal-fidelity sections were measured against spans v1.0.62443 (2022) → v1.0.83591 (2026); those two sections were verified 2026-07-19.
