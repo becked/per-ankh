@@ -9,6 +9,7 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import YieldsStatsPanel from "$lib/stats/YieldsStatsPanel.svelte";
 	import { barChartHeight } from "$lib/stats/charts/helpers";
 	import { nationWinLossStackedOption } from "$lib/stats/charts/nations";
 	import {
@@ -74,7 +75,7 @@
 	// The active tab lives in ?category (controlled: value derived from the
 	// URL, change → goto), mirroring the user-stats subtabs (StatsView) so a
 	// tab is deep-linkable and survives refresh.
-	const TABS = ["players", "nations", "casters"] as const;
+	const TABS = ["players", "nations", "yields", "casters"] as const;
 	type StatsTab = (typeof TABS)[number];
 	const tab = $derived.by<StatsTab>(() => {
 		const fromUrl = page.url.searchParams.get("category");
@@ -105,6 +106,7 @@
 		>
 			<Tabs.Trigger value="players" class={triggerClass}>Players</Tabs.Trigger>
 			<Tabs.Trigger value="nations" class={triggerClass}>Nations</Tabs.Trigger>
+			<Tabs.Trigger value="yields" class={triggerClass}>Yields</Tabs.Trigger>
 			<Tabs.Trigger value="casters" class={triggerClass}>Casters</Tabs.Trigger>
 		</Tabs.List>
 
@@ -157,6 +159,13 @@
 					</p>
 				{/if}
 			</section>
+		</Tabs.Content>
+
+		<!-- Yields — per-turn yield curves across the tournament's games
+		     (Plane B1). Focal is every human, so an unsplit sample is one
+		     player-game, not one game; the split cohorts are games. -->
+		<Tabs.Content value="yields">
+			<YieldsStatsPanel bundle={data.games} countLabel="Players" />
 		</Tabs.Content>
 
 		<!-- Casters — caster leaderboard (Plane A) -->

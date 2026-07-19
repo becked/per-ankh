@@ -6,18 +6,24 @@
 
 	import { Toolbar } from "bits-ui";
 	import ChartContainer from "$lib/ChartContainer.svelte";
-	import type { ChartBundle } from "./types";
+	import type { ChartBundleCore } from "./types";
 	import { YIELD_SERIES, yieldChartOption } from "./charts/yields";
 
-	let { bundle }: { bundle: ChartBundle } = $props();
+	// ChartBundleCore, not ChartBundle: the panel only reads yieldCurves, so
+	// it renders on the tournament bundle too (which has no Overview fields).
+	let { bundle, countLabel }: { bundle: ChartBundleCore; countLabel?: string } =
+		$props();
 
 	let mode = $state<"rate" | "cumulative">("rate");
 	let showBand = $state(true);
 	let showCount = $state(false);
+	let split = $state(false);
 
 	const hasData = $derived(bundle.yieldCurves.turns.length > 0);
+	// No decided games in the corpus → nothing to split by.
+	const canSplit = $derived(bundle.yieldCurves.outcome != null);
 
-	// The display toggles are one multi-select group; mirror them to the two
+	// The display toggles are one multi-select group; mirror them to the
 	// booleans the chart builder takes.
 	const displayValue = $derived([
 		...(showBand ? ["band"] : []),
@@ -68,6 +74,19 @@
 				Game count
 			</Toolbar.GroupItem>
 		</Toolbar.Group>
+
+		{#if canSplit}
+			<Toolbar.Group
+				type="multiple"
+				value={split ? ["split"] : []}
+				onValueChange={(v: string[]) => (split = v.includes("split"))}
+				class="flex gap-1"
+			>
+				<Toolbar.GroupItem value="split" class="rounded {itemClass}">
+					Winners vs losers
+				</Toolbar.GroupItem>
+			</Toolbar.Group>
+		{/if}
 	</Toolbar.Root>
 
 	{#each YIELD_SERIES as ys (ys.key)}
@@ -76,6 +95,8 @@
 				mode,
 				showBand,
 				showCount,
+				split,
+				countLabel,
 			})}
 			height="400px"
 			title={ys.label}
