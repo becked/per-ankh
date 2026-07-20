@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { type Snippet } from "svelte";
-	import type { ECElementEvent, EChartsOption } from "echarts";
+	import type { ECElementEvent, ChartOption } from "$lib/echarts";
 	import Chart from "$lib/Chart.svelte";
 
 	let {
@@ -10,7 +10,7 @@
 		controls,
 		onItemClick,
 	}: {
-		option: EChartsOption;
+		option: ChartOption;
 		height?: string;
 		title?: string;
 		controls?: Snippet;

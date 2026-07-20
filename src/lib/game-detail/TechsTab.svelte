@@ -12,7 +12,7 @@
 		FamilyInfo,
 		MemoryInfo,
 	} from "$lib/parser/types";
-	import type { EChartsOption, ECharts } from "echarts";
+	import type { ChartOption, ECharts } from "$lib/echarts";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -192,7 +192,7 @@
 								...filledLineStyle(color),
 							};
 						}),
-					} as EChartsOption;
+					} as ChartOption;
 				})()
 			: null,
 	);

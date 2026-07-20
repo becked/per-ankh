@@ -31,7 +31,7 @@
 </script>
 
 <script lang="ts">
-	import type { ECharts } from "echarts";
+	import type { ECharts } from "$lib/echarts";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import { getSpritePath } from "./helpers";
 

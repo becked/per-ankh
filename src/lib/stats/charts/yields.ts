@@ -8,7 +8,7 @@
 // unchanged at tournament scope, where the bundle has no Overview — same
 // reason nationWinLossStackedOption is.
 
-import type { EChartsOption, LineSeriesOption } from "echarts";
+import type { ChartOption, LineSeriesOption } from "$lib/echarts";
 import { getChartColor } from "$lib/config";
 import type { ChartBundleCore, YieldBand } from "../types";
 import {
@@ -77,7 +77,7 @@ export function yieldChartOption(
 	yieldKey: string,
 	label: string,
 	opts: YieldChartOpts,
-): EChartsOption {
+): ChartOption {
 	const { turns, counts, series: pooled, outcome } = bundle.yieldCurves;
 	const split = opts.split && outcome != null;
 	const bandAlpha = split ? BAND_ALPHA_SPLIT : BAND_ALPHA_POOLED;

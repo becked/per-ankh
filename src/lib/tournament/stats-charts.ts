@@ -4,7 +4,7 @@
 // rather than in $lib/stats. Both are simple bar charts; they render through
 // the shared ChartContainer, reusing the chart theme + grid helpers.
 
-import type { EChartsOption } from "echarts";
+import type { ChartOption } from "$lib/echarts";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
 import { toRgba } from "$lib/utils/color";
 import {
@@ -92,7 +92,7 @@ function avatarAxisLabel(
 export function standingsOption(
 	rows: StandingRow[],
 	avatarImages?: (string | undefined)[],
-): EChartsOption {
+): ChartOption {
 	// Same unclaimed-slot fallback as the overview standings table.
 	const labels = rows.map(
 		(r) => r.display_name ?? `slot ${r.slot_id.slice(0, 6)}`,
@@ -155,7 +155,7 @@ export function standingsOption(
 export function casterLeaderboardOption(
 	leaderboard: CasterLeaderboardEntry[],
 	avatarImages?: (string | undefined)[],
-): EChartsOption {
+): ChartOption {
 	const labels = leaderboard.map((c) => c.display_name ?? c.name ?? "Unknown");
 	const keys = leaderboard.map((_, i) => rowKey(i));
 	return {
@@ -199,7 +199,7 @@ export function casterLeaderboardOption(
 export function playerPicksOption(
 	players: PlayerPicksEntry[],
 	avatarImages?: (string | undefined)[],
-): EChartsOption {
+): ChartOption {
 	const labels = players.map((p) => p.display_name ?? p.name ?? "Unknown");
 	const keys = players.map((_, i) => rowKey(i));
 	// Union of nations across all players, ordered by total games fielded so

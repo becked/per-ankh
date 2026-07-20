@@ -1,6 +1,6 @@
 // Laws tab option builders.
 
-import type { EChartsOption } from "echarts";
+import type { ChartOption } from "$lib/echarts";
 import { getChartColor } from "$lib/config";
 import type { ChartBundle } from "../types";
 import {
@@ -26,7 +26,7 @@ export function lawNations(bundle: ChartBundle): string[] {
 export function lawTimingOption(
 	bundle: ChartBundle,
 	nation: string,
-): EChartsOption {
+): ChartOption {
 	const rows = bundle.lawTiming
 		.filter((r) => r.nation === nation)
 		.sort((a, b) => a.median_turn - b.median_turn)
@@ -76,7 +76,7 @@ export function lawTimingOption(
 export function openingLawsOption(
 	bundle: ChartBundle,
 	nation: string,
-): EChartsOption {
+): ChartOption {
 	const isAll = nation === ALL_NATIONS;
 	// "All nations": collapse the same four-law set across nations (order is
 	// already dropped) and sum counts. Otherwise restrict to the chosen nation.

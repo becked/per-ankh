@@ -12,7 +12,7 @@
 		type UserMe,
 		type UserSearchResult,
 	} from "$lib/api-cloud";
-	import type { EChartsOption } from "echarts";
+	import type { ChartOption } from "$lib/echarts";
 	import type { FullGameData } from "$lib/parser/types";
 	import Chart from "$lib/Chart.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
@@ -485,7 +485,7 @@
 	// Per-turn victory-points series per player — mirrors the home-page
 	// RecentSaveCard sparkline. Sourced directly from the blob's
 	// player_history (which carries `points`), so no reindex is needed here.
-	const sparklineOption = $derived<EChartsOption>({
+	const sparklineOption = $derived<ChartOption>({
 		animation: false,
 		backgroundColor: "transparent",
 		grid: { left: 4, right: 4, top: 4, bottom: 4 },

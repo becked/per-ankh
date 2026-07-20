@@ -1,6 +1,6 @@
 // Families tab option builders.
 
-import type { EChartsOption } from "echarts";
+import type { ChartOption } from "$lib/echarts";
 import { getChartColor } from "$lib/config";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import type { ChartBundle } from "../types";
@@ -36,7 +36,7 @@ export function familyNations(bundle: ChartBundle): string[] {
 export function familyNationPicksOption(
 	bundle: ChartBundle,
 	nation: string,
-): EChartsOption {
+): ChartOption {
 	const isAll = nation === ALL_NATIONS;
 	// "All nations": aggregate counts/wins per class across every nation; pick
 	// rate is over total games in the corpus. (Across-pool aggregate — handy as

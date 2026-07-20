@@ -1,5 +1,5 @@
 <script lang="ts">
-	import type { EChartsOption } from "echarts";
+	import type { ChartOption } from "$lib/echarts";
 	import type {
 		CharacterInfo,
 		CharacterTraitInfo,
@@ -119,7 +119,7 @@
 	});
 
 	// ─── Legitimacy chart (relocated from the Events tab) ─────────────
-	const legitimacyChartOption = $derived.by<EChartsOption | null>(() => {
+	const legitimacyChartOption = $derived.by<ChartOption | null>(() => {
 		if (!playerHistory) return null;
 		// Value x-axis with a small pad so the area fill doesn't clip at the edges.
 		const turns = playerHistory[0]?.history.map((h) => h.turn) ?? [];

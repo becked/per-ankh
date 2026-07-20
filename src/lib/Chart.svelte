@@ -1,11 +1,11 @@
 <script module lang="ts">
-	import * as echarts from "echarts";
+	import { registerTheme } from "$lib/echarts";
 
 	// Register once: ECharts' default axis-label color is a grey that's hard to
 	// read on our dark background, so default every axis's labels to white. The
 	// rest of the styling comes from CHART_THEME spread into each option.
 	const AXIS_LABEL = { axisLabel: { color: "#FFFFFF" } };
-	echarts.registerTheme("perankh", {
+	registerTheme("perankh", {
 		categoryAxis: AXIS_LABEL,
 		valueAxis: AXIS_LABEL,
 		logAxis: AXIS_LABEL,
@@ -15,7 +15,8 @@
 
 <script lang="ts">
 	import { onMount, tick, untrack } from "svelte";
-	import type { ECElementEvent, EChartsOption } from "echarts";
+	import { init } from "$lib/echarts";
+	import type { ChartOption, ECElementEvent, ECharts } from "$lib/echarts";
 
 	let {
 		option,
@@ -24,21 +25,21 @@
 		onReady,
 		onLayout,
 	}: {
-		option: EChartsOption;
+		option: ChartOption;
 		height?: string;
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
 		onItemClick?: (params: ECElementEvent) => void;
 		// Fired once with the ECharts instance (approach-B overlays use it to map
 		// data values to plot pixels via convertToPixel).
 		// eslint-disable-next-line no-unused-vars -- parameter in callback signature
-		onReady?: (chart: echarts.ECharts) => void;
+		onReady?: (chart: ECharts) => void;
 		// Fired whenever the chart (re-)lays out — init, option change, resize — so
 		// a parent can recompute DOM positions that track the plot.
 		onLayout?: () => void;
 	} = $props();
 
 	let chartContainer: HTMLDivElement;
-	let chart: echarts.ECharts | null = null;
+	let chart: ECharts | null = null;
 
 	onMount(() => {
 		let resizeObserver: ResizeObserver;
@@ -54,7 +55,7 @@
 
 			// Initialize chart if not already done
 			if (!chart) {
-				chart = echarts.init(chartContainer, "perankh");
+				chart = init(chartContainer, "perankh");
 				chart.setOption(option);
 				// Read onItemClick at click time so prop updates take effect
 				// without needing to rebind the listener.

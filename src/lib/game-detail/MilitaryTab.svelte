@@ -4,7 +4,7 @@
 	import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 	import type { TechDiscoveryHistory } from "$lib/types/TechDiscoveryHistory";
 	import type { CharacterInfo, UnitInfo } from "$lib/parser/types";
-	import type { EChartsOption, ECharts } from "echarts";
+	import type { ChartOption, ECharts } from "$lib/echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import Chart from "$lib/Chart.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -148,8 +148,8 @@
 		statB?: string;
 		a: BuildItem[];
 		b: BuildItem[];
-		donutA: EChartsOption | null;
-		donutB: EChartsOption | null;
+		donutA: ChartOption | null;
+		donutB: ChartOption | null;
 	};
 	const buildBlocks = $derived<BuildBlock[]>(
 		matchup
@@ -564,7 +564,7 @@
 	// positioned from this chart via convertToPixel — so nothing here reserves
 	// fixed pixel edges. A little turn-axis padding keeps the first/last event
 	// markers clear of the axis lines.
-	const militaryChartOption = $derived.by<EChartsOption | null>(() => {
+	const militaryChartOption = $derived.by<ChartOption | null>(() => {
 		if (!playerHistory) return null;
 		const turns = axisTurns;
 		const minTurn = turns[0] ?? 0;
@@ -610,7 +610,7 @@
 					...filledLineStyle(fillColor),
 				};
 			}),
-		} as EChartsOption;
+		} as ChartOption;
 	});
 
 	// ─── Army composition donuts ──────────────────────────────────────
@@ -622,7 +622,7 @@
 		label: string,
 		color: string,
 		items: BuildItem[],
-	): EChartsOption | null {
+	): ChartOption | null {
 		const classCounts: Partial<Record<UnitClass, number>> = {};
 		for (const it of items) {
 			const cls = classifyUnit(it.unitType);
@@ -679,7 +679,7 @@
 
 	// Standalone per-player donuts (units built), shown for FFA / non-matchup
 	// games where the per-block donuts below don't apply.
-	type ArmyPieData = { playerId: number; pieOption: EChartsOption };
+	type ArmyPieData = { playerId: number; pieOption: ChartOption };
 	const armyPieCharts = $derived<ArmyPieData[]>(
 		players
 			.map((p) => {

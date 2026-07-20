@@ -4,7 +4,7 @@
 	// single scoped ChartBundle. (The headline tiles live in the profile
 	// card, where they're intentionally unscoped.) No chart-click cross-filter.
 
-	import type { ECElementEvent, EChartsOption } from "echarts";
+	import type { ECElementEvent, ChartOption } from "$lib/echarts";
 	import { goto } from "$app/navigation";
 	import { resolve } from "$app/paths";
 	import ChartContainer from "$lib/ChartContainer.svelte";
@@ -83,7 +83,7 @@
 		pickerOpen = true;
 	}
 
-	const nationChartOption = $derived<EChartsOption>({
+	const nationChartOption = $derived<ChartOption>({
 		...CHART_THEME,
 		tooltip: {
 			...CHART_THEME.tooltip,
@@ -114,7 +114,7 @@
 	// the previous /users/[user_id] overview page; reads bundle.save_dates.
 	function buildCalendarChartOption(
 		dates: Array<{ date: string; nation: string | null }>,
-	): EChartsOption | null {
+	): ChartOption | null {
 		if (dates.length === 0) return null;
 
 		const today = new Date();
@@ -228,7 +228,7 @@
 					},
 				},
 			],
-		} as EChartsOption;
+		} as ChartOption;
 	}
 
 	const calendarChartOption = $derived(

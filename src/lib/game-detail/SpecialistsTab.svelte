@@ -1,6 +1,6 @@
 <script lang="ts">
 	import type { ImprovementData } from "$lib/types/ImprovementData";
-	import type { EChartsOption } from "echarts";
+	import type { ChartOption } from "$lib/echarts";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
@@ -191,7 +191,7 @@
 
 	// Breadth × depth: stacked specialist counts per player, split rural + the
 	// three urban tiers. Bar height = breadth; stack mix = maturity.
-	const levelStackOption: EChartsOption = $derived.by(() => {
+	const levelStackOption: ChartOption = $derived.by(() => {
 		const breakdowns = displayedPlayers.map((p) =>
 			levelBreakdownForPlayer(improvementData.improvements, p),
 		);
@@ -215,7 +215,7 @@
 
 	// Coverage: staffed share of specialist-eligible improvements built, per
 	// player, colored by nation.
-	const coverageOption: EChartsOption = $derived.by(() => {
+	const coverageOption: ChartOption = $derived.by(() => {
 		const data = displayedPlayers.map((p, i) => ({
 			value:
 				summaries[i].coverage != null

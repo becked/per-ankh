@@ -1,6 +1,6 @@
 // Cities tab: expansion-speed win-rate for the corpus.
 
-import type { EChartsOption } from "echarts";
+import type { ChartOption } from "$lib/echarts";
 import { getChartColor } from "$lib/config";
 import type { ChartBundle } from "../types";
 import { AXIS_NAME_X, AXIS_NAME_Y, CHART_THEME, COMMON_GRID } from "./helpers";
@@ -8,7 +8,7 @@ import { AXIS_NAME_X, AXIS_NAME_Y, CHART_THEME, COMMON_GRID } from "./helpers";
 // Win rate vs. expansion speed: win rate per 5th-city-founding-turn bucket,
 // ordered fastest → slowest (with "never" — fewer than 5 cities — last).
 // Empty buckets are dropped so a sparse corpus doesn't show gaps.
-export function expansionWinRateOption(bundle: ChartBundle): EChartsOption {
+export function expansionWinRateOption(bundle: ChartBundle): ChartOption {
 	const order = ["≤25", "26–50", "51–75", "76–100", "101–150", "151+", "never"];
 	const rows = order
 		.map((b) => bundle.expansionWinRate.find((x) => x.bucket === b))

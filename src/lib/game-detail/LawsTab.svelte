@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 	import type { PlayerLaw } from "$lib/types/PlayerLaw";
-	import type { EChartsOption } from "echarts";
+	import type { ChartOption } from "$lib/echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
@@ -186,7 +186,7 @@
 									: {}),
 							};
 						}),
-					} as EChartsOption;
+					} as ChartOption;
 				})()
 			: null,
 	);

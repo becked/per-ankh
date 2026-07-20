@@ -1,6 +1,6 @@
 // Nations tab option builders.
 
-import type { EChartsOption } from "echarts";
+import type { ChartOption } from "$lib/echarts";
 import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import type { ChartBundle, ChartBundleCore } from "../types";
 import {
@@ -22,7 +22,7 @@ function nationCrestUrl(nation: string): string | undefined {
 // so it renders unchanged at tournament scope, where the bundle has no Overview.
 export function nationWinLossStackedOption(
 	bundle: ChartBundleCore,
-): EChartsOption {
+): ChartOption {
 	const rows = [...bundle.nationWinRate].sort((a, b) => a.games - b.games);
 	const nations = rows.map((r) => r.nation);
 	return {
@@ -73,7 +73,7 @@ export function nationWinLossStackedOption(
 
 // Average final points by nation — horizontal bar sorted by points, best
 // at top (mirrors the win-rate bar's orientation, no rotated labels).
-export function nationAvgPointsOption(bundle: ChartBundle): EChartsOption {
+export function nationAvgPointsOption(bundle: ChartBundle): ChartOption {
 	const rows = [...bundle.nationAvgPoints].sort(
 		(a, b) => a.avg_points - b.avg_points,
 	);

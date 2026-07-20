@@ -2,7 +2,7 @@
 // carries an ALL_NATIONS aggregate row alongside the per-nation rows, so each
 // builder just filters to the selected nation.
 
-import type { EChartsOption } from "echarts";
+import type { ChartOption } from "$lib/echarts";
 import { getChartColor } from "$lib/config";
 import { TECH_NAMES } from "$lib/generated/tech-names";
 import type { ChartBundle } from "../types";
@@ -33,7 +33,7 @@ export function techNations(bundle: ChartBundle): string[] {
 export function techFirstOption(
 	bundle: ChartBundle,
 	nation: string,
-): EChartsOption {
+): ChartOption {
 	const rows = bundle.techFirst
 		.filter((r) => r.nation === nation)
 		.sort((a, b) => b.count - a.count)
@@ -67,7 +67,7 @@ export function techFirstOption(
 export function techTimingOption(
 	bundle: ChartBundle,
 	nation: string,
-): EChartsOption {
+): ChartOption {
 	const rows = bundle.techTiming
 		.filter((r) => r.nation === nation)
 		.sort((a, b) => a.median_turn - b.median_turn)

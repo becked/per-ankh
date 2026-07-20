@@ -9,7 +9,7 @@ import type { YieldHistory } from "$lib/types/YieldHistory";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { PlayerInfo } from "$lib/types/PlayerInfo";
 import type { TechDiscoveryDataPoint } from "$lib/types/TechDiscoveryDataPoint";
-import type { EChartsOption, LineSeriesOption } from "echarts";
+import type { ChartOption, LineSeriesOption } from "$lib/echarts";
 import { formatEnum } from "$lib/utils/formatting";
 import { toRgba } from "$lib/utils/color";
 import { CHART_THEME, getChartColor, getNationChartColor } from "$lib/config";
@@ -1040,7 +1040,7 @@ export function createYieldChartOption(
 	// toggle against — and the science rail reads under all three the same way.
 	// The Yields tab leaves it off and keeps the title and labelled axes.
 	compact = false,
-): EChartsOption | null {
+): ChartOption | null {
 	if (allYields.length === 0) return null;
 
 	const yieldData = allYields.filter((y) => y.yield_type === yieldType);

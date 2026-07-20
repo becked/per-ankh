@@ -2,7 +2,7 @@
 	import type { EventLog } from "$lib/types/EventLog";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { GameDetails } from "$lib/types/GameDetails";
-	import type { EChartsOption } from "echarts";
+	import type { ChartOption } from "$lib/echarts";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { Select } from "bits-ui";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
@@ -47,7 +47,7 @@
 	const playerById = $derived(new Map(players.map((p) => [p.playerId, p])));
 
 	// ─── Chart options ────────────────────────────────────────────────
-	const pointsChartOption = $derived.by<EChartsOption | null>(() => {
+	const pointsChartOption = $derived.by<ChartOption | null>(() => {
 		if (!playerHistory) return null;
 		// Value x-axis with a small pad so the area fill doesn't clip at the edges.
 		const turns = playerHistory[0]?.history.map((h) => h.turn) ?? [];

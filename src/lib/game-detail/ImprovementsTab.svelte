@@ -1,7 +1,7 @@
 <script lang="ts">
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import type { UnitInfo } from "$lib/parser/types";
-	import type { EChartsOption } from "echarts";
+	import type { ChartOption } from "$lib/echarts";
 	import { formatEnum } from "$lib/utils/formatting";
 	import { CHART_THEME } from "$lib/config";
 	import ChartContainer from "$lib/ChartContainer.svelte";
@@ -40,7 +40,7 @@
 		tableState?: TableState;
 	} = $props();
 
-	const workerChartOption = $derived.by<EChartsOption | null>(() => {
+	const workerChartOption = $derived.by<ChartOption | null>(() => {
 		const workers = units.filter(
 			(u) =>
 				u.unit_type === "UNIT_WORKER" &&
@@ -123,7 +123,7 @@
 				minInterval: 1,
 			},
 			series,
-		} as EChartsOption;
+		} as ChartOption;
 	});
 
 	// ─── Pivot table logic ────────────────────────────────────────────

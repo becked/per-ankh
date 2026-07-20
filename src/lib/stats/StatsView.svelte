@@ -6,7 +6,7 @@
 	// in ?category (controlled: value derived from the URL, change → goto).
 
 	import { Tabs } from "bits-ui";
-	import type { EChartsOption } from "echarts";
+	import type { ChartOption } from "$lib/echarts";
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
@@ -59,7 +59,7 @@
 		await goto(next, { replaceState: true, keepFocus: true, noScroll: true });
 	}
 
-	function buildOption(specId: string): EChartsOption | null {
+	function buildOption(specId: string): ChartOption | null {
 		switch (specId) {
 			case "nation-winloss-stacked":
 				return nationWinLossStackedOption(bundle);
@@ -76,9 +76,9 @@
 	// room for it in the grid — mirroring the game-detail charts, which
 	// title themselves inside the chart rather than via an HTML heading.
 	function titled(
-		option: EChartsOption | null,
+		option: ChartOption | null,
 		spec: { title: string; subtitle?: string },
-	): EChartsOption | null {
+	): ChartOption | null {
 		if (!option) return null;
 		const grid =
 			option.grid && !Array.isArray(option.grid)
