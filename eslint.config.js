@@ -55,6 +55,29 @@ export default [
 			},
 		},
 	},
+	{
+		// $lib/echarts registers only the ECharts pieces we draw with; the barrel
+		// would pull all of them back into the bundle. Its EChartsOption type is
+		// the subtler hazard — it describes every series ECharts ships, so an
+		// option this build can't render type-checks clean and paints nothing.
+		// Only the bare specifier is restricted: $lib/echarts imports the
+		// "echarts/*" subpaths, which is how the registration list is built.
+		files: ["**/*.{js,ts,svelte}"],
+		rules: {
+			"no-restricted-imports": [
+				"error",
+				{
+					paths: [
+						{
+							name: "echarts",
+							message:
+								"Import from $lib/echarts instead (ChartOption, init, ECharts). See the note there before reaching for a chart type we don't register.",
+						},
+					],
+				},
+			],
+		},
+	},
 	prettier,
 	{
 		ignores: [
