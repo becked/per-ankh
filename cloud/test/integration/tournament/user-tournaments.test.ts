@@ -24,6 +24,10 @@ beforeAll(async () => {
 	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
 });
 
+// Two sitting times for the split-match cast case below.
+const WHEN = "2026-08-01T18:00:00.000Z";
+const LATER = "2026-08-03T18:00:00.000Z";
+
 const ADMIN_ONLY_KEYS = [
 	"slot_a_discord_username",
 	"slot_a_discord_id",
@@ -319,6 +323,53 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 			expect(Object.keys(perTournament.matches[0])).toContain(key);
 			expect(perTournament.matches[0][key]).toBeNull();
 		}
+	});
+
+	it("lists a cast at part granularity for a caster who holds no slot", async () => {
+		// The union case: a cast can name a tournament the player has no seat in,
+		// so the tournament index is the union of all three sections rather than
+		// the enrollment set. The tab has a branch for exactly this shape — an
+		// entry with `slots: []` that still renders a Casts group.
+		const caster = await makeUser({ discordUsername: "slotless-caster" });
+		const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
+		const match = (await t.matches()).find((m) => m.status === "pending")!;
+
+		// Two sittings, so "one row per part the caster appears on" is a real
+		// claim rather than one that a single-part match would satisfy anyway.
+		const scheduled = await expectOk<{ match: { parts: { id: string }[] } }>(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/matches/${match.match_id}/schedule`,
+				as: t.admin,
+				body: {
+					parts: [
+						{ scheduled_at: WHEN, casters: [], streams: [] },
+						{ scheduled_at: LATER, casters: [], streams: [] },
+					],
+				},
+			}),
+		);
+		const partIds = scheduled.match.parts.map((p) => p.id);
+		expect(
+			(
+				await request.post({
+					path: `/v1/tournaments/${t.tournamentId}/matches/${match.match_id}/parts/${partIds[0]}/casters/me`,
+					as: caster,
+					body: {},
+				})
+			).status,
+		).toBe(204);
+
+		const body = await fetchRecord(caster.userId);
+		// The tournament is present for the cast alone, with an empty Enrollment.
+		expect(body.tournaments.map((x) => x.tournament_id)).toEqual([
+			t.tournamentId,
+		]);
+		expect(body.tournaments[0].slots).toEqual([]);
+		expect(body.matches).toEqual([]);
+		// One row, naming the sitting actually cast — not the other one.
+		expect(body.casts).toHaveLength(1);
+		expect(body.casts[0].match_id).toBe(match.match_id);
+		expect(body.casts[0].part_id).toBe(partIds[0]);
 	});
 
 	it("excludes byes and spans tournaments", async () => {

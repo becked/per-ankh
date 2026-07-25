@@ -1,8 +1,8 @@
 // Tournament access tiers. The private-beta gate has been lifted; the model
 // is now:
 //   * Reads (list / detail / standings / bracket / rounds / matches /
-//     match-detail) are public — 200 for anonymous and non-allowlisted
-//     callers alike.
+//     match-detail, plus the per-user record behind the profile's Tournaments
+//     tab) are public — 200 for anonymous and non-allowlisted callers alike.
 //   * Participation + "my" endpoints require a session — 401 when anonymous.
 //   * Admin endpoints require tournament admin — 401 anon, 403
 //     NOT_TOURNAMENT_ADMIN for a signed-in non-admin.
@@ -25,7 +25,15 @@ beforeAll(async () => {
 
 const VALID_MAP = "MAPCLASS_MapScriptDonut";
 
-type Ctx = { tournamentId: string; slug: string; matchId: string | null };
+type Ctx = {
+	tournamentId: string;
+	slug: string;
+	matchId: string | null;
+	// A player holding a slot in the tournament — the subject of the per-user
+	// read, which is keyed on a user rather than a tournament. Null (like
+	// matchId) in the blocks that have no case needing one.
+	playerId: string | null;
+};
 
 // ---------------------------------------------------------------------------
 // Reads — public
@@ -55,16 +63,28 @@ const READ_CASES: { label: string; path: (c: Ctx) => string | null }[] = [
 		path: ({ tournamentId, matchId }) =>
 			matchId ? `/v1/tournaments/${tournamentId}/matches/${matchId}` : null,
 	},
+	// Per-user rather than per-tournament, but the same tier: it serves the
+	// profile's Tournaments tab out of the same public tournament data.
+	{
+		label: "player tournament record",
+		path: ({ playerId }) =>
+			playerId ? `/v1/users/${playerId}/tournaments` : null,
+	},
 ];
 
 describe("tournament reads — public", () => {
 	it("200 for anonymous and non-allowlisted callers", async () => {
-		const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
+		const player = await makeUser();
+		const t = await makeTournament({
+			advanceTo: "swiss-round-1-generated",
+			slotOwners: { A: [player] },
+		});
 		const sampleMatch = (await t.matches())[0];
 		const ctx: Ctx = {
 			tournamentId: t.tournamentId,
 			slug: t.slug,
 			matchId: sampleMatch?.match_id ?? null,
+			playerId: player.userId,
 		};
 		const stranger = await makeUser({ omitBeta: true });
 		for (const c of READ_CASES) {
@@ -122,6 +142,7 @@ describe("participation + my endpoints — require a session", () => {
 			tournamentId: t.tournamentId,
 			slug: t.slug,
 			matchId: null,
+			playerId: null,
 		};
 		for (const c of SESSION_CASES) {
 			const res = await request[
@@ -202,6 +223,7 @@ describe("admin endpoints — require tournament admin", () => {
 			tournamentId: t.tournamentId,
 			slug: t.slug,
 			matchId: sampleMatch?.match_id ?? null,
+			playerId: null,
 		};
 		const stranger = await makeUser({ omitBeta: true });
 		for (const c of ADMIN_CASES) {
