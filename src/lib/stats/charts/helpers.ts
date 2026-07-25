@@ -105,11 +105,14 @@ export function crestAxisLabel(
 	};
 }
 
-// One category's outcome tally for a win/loss bar.
+// One category's outcome tally for a win/loss bar. `rate` is the aggregator's
+// wins/games (guarded against a zero-games row there), threaded through rather
+// than recomputed here so the bar renders the same value the server persists.
 export interface WinLossRow {
 	key: string;
 	games: number;
 	wins: number;
+	rate: number;
 }
 
 // Horizontal stacked wins/losses bar: bar length = games played, the split
@@ -139,7 +142,7 @@ export function winLossStackedOption(opts: {
 				const p = (params as { dataIndex: number }[])[0];
 				const row = sorted[p.dataIndex];
 				if (!row) return "";
-				return `${label(row.key)}<br/>Wins: ${row.wins} / ${row.games}<br/>Rate: ${Math.round((row.wins / row.games) * 100)}%`;
+				return `${label(row.key)}<br/>Wins: ${row.wins} / ${row.games}<br/>Rate: ${Math.round(row.rate * 100)}%`;
 			},
 		},
 		grid: { ...COMMON_GRID, left: labelWidth },

@@ -28,6 +28,7 @@ export function nationWinLossStackedOption(
 			key: r.nation,
 			games: r.games,
 			wins: r.wins,
+			rate: r.rate,
 		})),
 		label: fmtNation,
 		iconUrl: nationCrestUrl,

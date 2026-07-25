@@ -28,6 +28,7 @@ export function startingArchetypeWinLossOption(
 			key: r.archetype,
 			games: r.games,
 			wins: r.wins,
+			rate: r.rate,
 		})),
 		label: fmtArchetype,
 		iconUrl: archetypeIconUrl,
@@ -46,7 +47,12 @@ export function startingTraitWinLossOption(
 	const rows = [...bundle.startingTraitWinRate]
 		.sort((a, b) => b.games - a.games)
 		.slice(0, MAX_TRAIT_ROWS)
-		.map((r) => ({ key: r.trait, games: r.games, wins: r.wins }));
+		.map((r) => ({
+			key: r.trait,
+			games: r.games,
+			wins: r.wins,
+			rate: r.rate,
+		}));
 	return winLossStackedOption({
 		rows,
 		label: fmtTrait,
