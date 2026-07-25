@@ -1959,14 +1959,17 @@ export interface UserIdentity {
 }
 
 // Resolve avatar URL + display name for every distinct snapshot user_id
-// referenced by the supplied matches. One batched SELECT per call. Returns a
-// Map keyed by user_id; missing rows map to nothing (callers fall back), a
-// NULL discord_id maps to a null avatar (placeholder on the client). The
-// snapshot pins WHO played (user_id, substitution-proof); presentation —
-// avatar and display name — follows that user's current profile, matching
-// how the rest of the site renders people. For pending matches (snapshot
-// user_ids are NULL) callers can pass an empty match list — no users → no
-// query.
+// referenced by the supplied matches. Chunked at CHUNK_SIZE like every other
+// IN (…) read here — the distinct-user count is bounded by one tournament's
+// roster for the per-tournament callers, but the per-user read
+// (handleUserTournaments) spans every tournament a player has ever been in, so
+// it can exceed D1's ~100 bind-parameter cap. Returns a Map keyed by user_id;
+// missing rows map to nothing (callers fall back), a NULL discord_id maps to a
+// null avatar (placeholder on the client). The snapshot pins WHO played
+// (user_id, substitution-proof); presentation — avatar and display name —
+// follows that user's current profile, matching how the rest of the site
+// renders people. For pending matches (snapshot user_ids are NULL) callers can
+// pass an empty match list — no users → no query.
 export async function loadUserIdentitiesForMatches(
 	env: TournamentEnv,
 	matches: MatchRow[],
@@ -1986,27 +1989,26 @@ export async function loadUserIdentitiesForMatches(
 		}
 	}
 	const map = new Map<string, UserIdentity>();
-	if (userIds.size === 0) return map;
-	const ids = [...userIds];
-	const placeholders = ids.map(() => "?").join(",");
-	const res = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash
-		 FROM users WHERE user_id IN (${placeholders})`,
-	)
-		.bind(...ids)
-		.all<{
-			user_id: string;
-			discord_id: string | null;
-			display_name: string | null;
-			avatar_hash: string | null;
-		}>();
-	for (const row of res.results ?? []) {
-		map.set(row.user_id, {
-			avatar_url: row.discord_id
-				? buildAvatarUrl(row.discord_id, row.avatar_hash)
-				: null,
-			display_name: row.display_name,
-		});
+	for (const ids of chunk([...userIds], CHUNK_SIZE)) {
+		const res = await env.SHARE_DB.prepare(
+			`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash
+			 FROM users WHERE user_id IN (${ids.map(() => "?").join(",")})`,
+		)
+			.bind(...ids)
+			.all<{
+				user_id: string;
+				discord_id: string | null;
+				display_name: string | null;
+				avatar_hash: string | null;
+			}>();
+		for (const row of res.results ?? []) {
+			map.set(row.user_id, {
+				avatar_url: row.discord_id
+					? buildAvatarUrl(row.discord_id, row.avatar_hash)
+					: null,
+				display_name: row.display_name,
+			});
+		}
 	}
 	return map;
 }
