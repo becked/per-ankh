@@ -3,6 +3,7 @@
 	// ChampionshipBracketTree. Rows are the bracket seeds in seed order; the Round
 	// column reports where each participant currently stands in the knockout.
 	import type { BracketResponse } from "$lib/api-cloud";
+	import { matchSlotOutcome } from "./match-occupant";
 	import PlayerAvatar from "./PlayerAvatar.svelte";
 
 	let {
@@ -38,15 +39,13 @@
 		const prog: Record<string, { lastRound: number; outcome: Outcome }> = {};
 		for (const r of bracket.rounds) {
 			for (const m of r.matches) {
-				for (const sid of [m.slot_a_id, m.slot_b_id]) {
-					if (!sid) continue;
+				for (const side of ["a", "b"] as const) {
+					const sid = side === "a" ? m.slot_a_id : m.slot_b_id;
+					const outcome = matchSlotOutcome(m, side);
+					// null slot (a bye's empty side B) — nothing to record.
+					if (!sid || outcome === null) continue;
 					const cur = prog[sid];
 					if (cur && cur.lastRound >= r.round_number) continue;
-					const outcome: Outcome = !m.winner_slot_id
-						? "pending"
-						: m.winner_slot_id === sid
-							? "won"
-							: "lost";
 					prog[sid] = { lastRound: r.round_number, outcome };
 				}
 			}

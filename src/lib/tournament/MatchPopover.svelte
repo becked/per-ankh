@@ -38,6 +38,7 @@
 		matchSlotAvatarUrl,
 		matchSlotNation,
 		matchSlotDisplayName,
+		matchSlotOutcome,
 	} from "$lib/tournament/match-occupant";
 	import { upcomingScheduledParts } from "$lib/tournament/parts";
 	import { seshMatchLine, seshVersus } from "$lib/tournament/sesh";
@@ -254,11 +255,11 @@
 	});
 
 	const winnerSide = $derived<"a" | "b" | null>(
-		match.winner_slot_id === null
-			? null
-			: match.winner_slot_id === match.slot_a_id
-				? "a"
-				: "b",
+		matchSlotOutcome(match, "a") === "won"
+			? "a"
+			: matchSlotOutcome(match, "b") === "won"
+				? "b"
+				: null,
 	);
 	const loserSide = $derived<"a" | "b" | null>(
 		winnerSide === null ? null : winnerSide === "a" ? "b" : "a",
@@ -282,19 +283,19 @@
 			? matchSlotAvatarUrl(match, "b", slotAvatars)
 			: null,
 	);
-	const winnerAvatar = $derived.by(() => {
-		if (match.winner_slot_id === null) return null;
-		const side = match.winner_slot_id === match.slot_a_id ? "a" : "b";
-		return matchSlotAvatarUrl(match, side, slotAvatars);
-	});
-	const loserAvatar = $derived.by(() => {
-		if (match.winner_slot_id === null) return null;
-		const loserSide: "a" | "b" =
-			match.winner_slot_id === match.slot_a_id ? "b" : "a";
-		const loserId = loserSide === "a" ? match.slot_a_id : match.slot_b_id;
-		if (loserId === null) return null;
-		return matchSlotAvatarUrl(match, loserSide, slotAvatars);
-	});
+	// Both resolve off the sides above rather than re-deriving the outcome.
+	// matchSlotAvatarUrl already yields null for a side with no slot (a bye's
+	// empty half), so the loser needs no extra guard.
+	const winnerAvatar = $derived(
+		winnerSide !== null
+			? matchSlotAvatarUrl(match, winnerSide, slotAvatars)
+			: null,
+	);
+	const loserAvatar = $derived(
+		loserSide !== null
+			? matchSlotAvatarUrl(match, loserSide, slotAvatars)
+			: null,
+	);
 
 	// The map_pool instance this match was assigned, resolved from its id.
 	const matchEntry = $derived(

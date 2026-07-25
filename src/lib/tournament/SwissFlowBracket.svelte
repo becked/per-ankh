@@ -13,6 +13,7 @@
 		matchSlotAvatarUrl,
 		matchSlotDisplayName,
 		matchSlotNation,
+		matchSlotOutcome,
 	} from "$lib/tournament/match-occupant";
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
@@ -241,7 +242,7 @@
 			bucket.matches.push(m);
 
 			if (m.status === "complete" || m.status === "forfeit") {
-				const aWon = m.winner_slot_id === m.slot_a_id;
+				const aWon = matchSlotOutcome(m, "a") === "won";
 				record[m.slot_a_id] = {
 					wins: aRec.wins + (aWon ? 1 : 0),
 					losses: aRec.losses + (aWon ? 0 : 1),
@@ -374,8 +375,8 @@
 						<div class="record-label">{b.wins}-{b.losses}</div>
 						<div class="match-list">
 							{#each b.matches as m (m.match_id)}
-								{@const aWon = m.winner_slot_id === m.slot_a_id}
-								{@const bWon = m.winner_slot_id === m.slot_b_id}
+								{@const aWon = matchSlotOutcome(m, "a") === "won"}
+								{@const bWon = matchSlotOutcome(m, "b") === "won"}
 								{@const dstatus = matchDisplayStatus(m)}
 								{@const aOnPath =
 									highlightedSlot !== null && m.slot_a_id === highlightedSlot}

@@ -9,6 +9,7 @@
 		matchSlotAvatarUrl,
 		matchSlotDisplayName,
 		matchSlotNation,
+		matchSlotOutcome,
 	} from "$lib/tournament/match-occupant";
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
@@ -412,8 +413,8 @@
 {/if}
 
 {#snippet matchBody(m: PositionedMatch)}
-	{@const aWon = m.winner_slot_id === m.slot_a_id && m.winner_slot_id !== null}
-	{@const bWon = m.winner_slot_id === m.slot_b_id && m.winner_slot_id !== null}
+	{@const aWon = matchSlotOutcome(m, "a") === "won"}
+	{@const bWon = matchSlotOutcome(m, "b") === "won"}
 	{@const aNation = matchSlotNation(m, "a")}
 	{@const bNation = matchSlotNation(m, "b")}
 	{#if m.match_number != null}

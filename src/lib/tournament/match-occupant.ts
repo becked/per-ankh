@@ -24,6 +24,31 @@ interface MatchNationLike {
 	slot_b_nation: string | null;
 }
 
+interface MatchOutcomeLike {
+	slot_a_id: string | null;
+	slot_b_id: string | null;
+	winner_slot_id: string | null;
+}
+
+// How one side of a match ended, from `winner_slot_id` — the tournament's own
+// record of the result, defined for forfeits and byes where the linked save says
+// nothing (see #113 on save `is_winner` vs `winner_slot_id`). Simpler than its
+// snapshot-aware neighbours below: `winner_slot_id` compares against the stable
+// `slot_a/b_id`, so a substitution never changes the answer and there's no
+// snapshot-vs-live branch.
+//   "pending" — no winner recorded yet.
+//   null      — the side has no slot at all: a bye's empty side B, or an
+//               unresolved feeder cell in a synthesized bracket placeholder.
+export function matchSlotOutcome(
+	match: MatchOutcomeLike,
+	side: "a" | "b",
+): "won" | "lost" | "pending" | null {
+	const slotId = side === "a" ? match.slot_a_id : match.slot_b_id;
+	if (slotId === null || slotId === "") return null;
+	if (match.winner_slot_id === null) return "pending";
+	return match.winner_slot_id === slotId ? "won" : "lost";
+}
+
 // Nation each side played, resolved server-side via the slot↔player_index
 // mapping against the linked game. Null when unknown (no save, bye, forfeit,
 // admin-set, or legacy match) — callers render the crest only when non-null.

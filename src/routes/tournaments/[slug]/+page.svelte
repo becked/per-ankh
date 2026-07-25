@@ -22,6 +22,7 @@
 	import SlotUsernameCell from "$lib/tournament/SlotUsernameCell.svelte";
 	import SwissFlowBracket from "$lib/tournament/SwissFlowBracket.svelte";
 	import SwissStandings from "$lib/tournament/SwissStandings.svelte";
+	import { matchSlotOutcome } from "$lib/tournament/match-occupant";
 	import TournamentHeader from "$lib/tournament/TournamentHeader.svelte";
 	import TournamentUpNextPanel from "$lib/tournament/TournamentUpNextPanel.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
@@ -285,7 +286,7 @@
 				null;
 			if (!finalMatch?.winner_slot_id) return empty;
 			const loserId =
-				finalMatch.slot_a_id === finalMatch.winner_slot_id
+				matchSlotOutcome(finalMatch, "a") === "won"
 					? finalMatch.slot_b_id
 					: finalMatch.slot_a_id;
 
