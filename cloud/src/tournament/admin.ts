@@ -65,6 +65,7 @@ import {
 	parseMapPool,
 	parseParts,
 	slotRowToRef,
+	syncMatchCasters,
 	tournamentConfig,
 	type MatchPart,
 	type MatchPartCaster,
@@ -2224,6 +2225,11 @@ export async function handlePatchMatchSchedule(
 			"CONFLICT",
 		);
 	}
+	// Keep the derived caster index (migration 0034) in step with the blob we
+	// just wrote. Same shared helper the self-service caster path calls, and it
+	// re-derives from the stored value rather than from `parts` above, so a
+	// removal is reflected as surely as an add.
+	await syncMatchCasters(env, matchId);
 	await bumpTournamentUpdatedAt(env, tournamentId);
 	// Rate-limit ledger: this is what makes the shared per-user schedule budget
 	// (read above via authedMatchScheduler) actually count PATCH edits. The

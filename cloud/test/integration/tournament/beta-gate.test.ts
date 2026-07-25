@@ -96,7 +96,6 @@ const SESSION_CASES: {
 		method: "GET",
 		path: () => "/v1/users/me/admin-tournaments",
 	},
-	{ label: "my matches", method: "GET", path: () => "/v1/users/me/matches" },
 	{
 		label: "dismiss banner",
 		method: "POST",
@@ -142,9 +141,6 @@ describe("participation + my endpoints — require a session", () => {
 				path: "/v1/users/me/admin-tournaments",
 				as: stranger,
 			}),
-		);
-		await expectOk(
-			await request.get({ path: "/v1/users/me/matches", as: stranger }),
 		);
 	});
 });

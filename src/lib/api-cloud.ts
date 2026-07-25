@@ -87,6 +87,11 @@ export interface UserProfile {
 	// Linked channels — drives whether the profile renders the "Videos" tab.
 	// Empty when the user has linked none.
 	channels: { platform: string; channel_url: string }[];
+	// True iff the user holds a tournament slot OR has cast a match sitting —
+	// drives whether the profile renders the "Tournaments" tab (the same role
+	// `channels` plays for Videos). A dedicated caster who never plays still
+	// gets the tab.
+	tournament_participant: boolean;
 }
 
 export interface UserMe {
@@ -529,6 +534,17 @@ export const cloudApi = {
 	): Promise<RecentVideo[]> => {
 		const res = await request(`/users/${userId}/videos`, opts);
 		return (await (res.json() as Promise<{ videos: RecentVideo[] }>)).videos;
+	},
+
+	// The target user's tournament record — enrollment, played + upcoming
+	// matches, and cast appearances. Public read; feeds the profile
+	// "Tournaments" tab, loaded lazily when that tab opens.
+	getUserTournaments: async (
+		userId: string,
+		opts?: CallOpts,
+	): Promise<UserTournamentsResponse> => {
+		const res = await request(`/users/${userId}/tournaments`, opts);
+		return res.json() as Promise<UserTournamentsResponse>;
 	},
 
 	// Cross-creator home feed: newest uploads across all users' linked channels,
@@ -984,13 +1000,6 @@ export const cloudApi = {
 	): Promise<{ tournaments: MyAdminTournamentEntry[] }> => {
 		const res = await request("/users/me/admin-tournaments", opts);
 		return res.json() as Promise<{ tournaments: MyAdminTournamentEntry[] }>;
-	},
-
-	getMyMatches: async (
-		opts?: CallOpts,
-	): Promise<{ matches: MyMatchEntry[] }> => {
-		const res = await request("/users/me/matches", opts);
-		return res.json() as Promise<{ matches: MyMatchEntry[] }>;
 	},
 
 	// --- Tournaments (create — allowlisted users only) ---
@@ -1928,27 +1937,56 @@ export interface MyAdminTournamentEntry {
 	status: TournamentStatus;
 }
 
-// Hand-rolled to match the SELECT in cloud handleMyMatches exactly. Does NOT
-// extend TournamentMatch — that endpoint returns a narrower projection (no
-// pick_order_winner_slot_id, reported_by_user_id, notes) and pretending
-// otherwise would surface undefined under non-optional fields.
-export interface MyMatchEntry {
-	match_id: string;
-	round_id: string;
-	slot_a_id: string;
-	slot_b_id: string | null;
-	map_script: string | null;
-	status: "pending" | "complete" | "forfeit" | "bye";
-	winner_slot_id: string | null;
-	game_id: string | null;
-	reported_at: string | null;
-	tournament_id: string;
-	phase: TournamentPhase;
-	division: Division | null;
-	round_number: number;
-	round_status: "pending" | "in_progress" | "complete";
-	tournament_slug: string;
-	tournament_name: string;
+// --- GET /v1/users/:user_id/tournaments — one player's tournament record ---
+//
+// Public, and match-shaped rather than save-shaped: a tournament match links
+// exactly one save, so a player's own library holds at most half their
+// tournament games, pending matches have no save at all, and a cast isn't a
+// game. Everything the profile's Tournaments tab renders arrives in this one
+// lazy fetch (the Videos-tab precedent), including the compact per-tournament
+// context the shared match table needs — the tab groups rows by tournament and
+// hands each group its own, instead of fetching a TournamentDetail per group.
+
+// One tournament in the player's record, doubling as the match table's context.
+// `slots` is the Enrollment row: empty when the player holds no seat here (they
+// only cast, or they were substituted out and only their played matches remain).
+// A championship participant holds both a swiss and a championship slot, hence a
+// list rather than one division/seed.
+export interface UserTournamentEntry extends MatchTableTournament {
+	slug: string;
+	name: string;
+	status: TournamentStatus;
+	// Paired with `status` for the shared status chip (headerStatusMeta).
+	signups_open: boolean;
+	slots: {
+		slot_id: string;
+		phase: TournamentPhase;
+		division: Division | null;
+		swiss_seed: number | null;
+		championship_seed: number | null;
+	}[];
+}
+
+// A match row: the shared TournamentMatch shape plus the tournament it groups
+// under. The four admin-only slot_a/b_discord_* keys are ABSENT here (not null)
+// — see the note on TournamentMatch.
+export type UserTournamentMatch = TournamentMatch & { tournament_id: string };
+
+// A cast row. Part-granularity: `part_id` names the sitting the player cast, so
+// a single sitting of a two-sitting match is one row.
+export type UserTournamentCast = UserTournamentMatch & { part_id: string };
+
+export interface UserTournamentsResponse {
+	user_id: string;
+	tournaments: UserTournamentEntry[];
+	matches: UserTournamentMatch[];
+	casts: UserTournamentCast[];
+	// Live slot occupant identity keyed by slot_id — the same two maps the
+	// per-tournament pages build client-side from standings + bracket. Load-
+	// bearing for pending (upcoming) rows, whose display names the match payload
+	// deliberately leaves null.
+	slot_labels: Record<string, string>;
+	slot_avatars: Record<string, string | null>;
 }
 
 export interface GameTournamentLink {

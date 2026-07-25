@@ -272,8 +272,11 @@ const MATCH_COLUMN_NAMES = [
 ] as const;
 const MATCH_COLUMNS = MATCH_COLUMN_NAMES.join(", ");
 // Qualified for JOIN queries where round columns would shadow (round_id,
-// status exist on both tables).
-const MATCH_COLUMNS_M = MATCH_COLUMN_NAMES.map((c) => `m.${c}`).join(", ");
+// status exist on both tables). Exported for the match+round projections in
+// public.ts, which join rounds (and, per user, slots) on top of these.
+export const MATCH_COLUMNS_M = MATCH_COLUMN_NAMES.map((c) => `m.${c}`).join(
+	", ",
+);
 
 export async function loadMatches(
 	env: TournamentEnv,
@@ -367,7 +370,12 @@ export async function bumpTournamentUpdatedAt(
 // once discord_id is present — falling back to Discord's default avatar when
 // the user has no custom one — so null here means "show the unclaimed
 // fallback" (the EFFECTUNIT_ENLIST_ICON sprite) on the client.
-export function slotAvatarUrl(row: SlotRow): string | null {
+//
+// Takes only the columns it reads so callers that project a narrow slot row
+// (the per-user tournaments read) can reuse it instead of re-inlining the rule.
+export function slotAvatarUrl(
+	row: Pick<SlotRow, "discord_id" | "user_avatar_hash">,
+): string | null {
 	return row.discord_id
 		? buildAvatarUrl(row.discord_id, row.user_avatar_hash)
 		: null;
@@ -378,8 +386,11 @@ export function slotAvatarUrl(row: SlotRow): string | null {
 // slots (for free-text admin adds that's whatever name the admin typed, so
 // the fallback shows it verbatim). The site labels people by display_name
 // everywhere; the raw @handle stays storage-level (claim matching, pre-link
-// canonicalization) and is never the rendered label.
-export function slotDisplayName(row: SlotRow): string | null {
+// canonicalization) and is never the rendered label. Narrow param, same reason
+// as slotAvatarUrl above.
+export function slotDisplayName(
+	row: Pick<SlotRow, "user_display_name" | "discord_username">,
+): string | null {
 	return row.user_display_name ?? row.discord_username;
 }
 
@@ -507,6 +518,45 @@ export function parseLinks(t: TournamentRow): { label: string; url: string }[] {
 		out.push({ label: e.label, url: e.url });
 	}
 	return out;
+}
+
+// Rebuild one match's rows in tournament_match_casters (migration 0034) from
+// the match's STORED `parts` blob — never from the array a writer happens to
+// hold in memory. Deriving from the persisted value is what makes this
+// idempotent and self-healing: re-running it can't drift from the blob, and
+// player.ts's CAS retry loop can re-enter it safely.
+//
+// Call it from EVERY `parts` writer, immediately after that writer's
+// `parts_rev` CAS lands (there are exactly two: the admin schedule PATCH and
+// caster self-service). The delete + re-insert pair goes through one batch so a
+// reader can't observe the match mid-rebuild.
+//
+// Joining `users` both filters out free-text casters (null user_id — only
+// linked casters can be attributed to a profile) and guarantees the FK, so a
+// corrupt blob naming an unknown user degrades to a missing row rather than
+// failing the write that already committed. OR IGNORE absorbs a blob that lists
+// the same user twice on one part.
+export async function syncMatchCasters(
+	env: TournamentEnv,
+	matchId: string,
+): Promise<void> {
+	await env.SHARE_DB.batch([
+		env.SHARE_DB.prepare(
+			"DELETE FROM tournament_match_casters WHERE match_id = ?",
+		).bind(matchId),
+		env.SHARE_DB.prepare(
+			`INSERT OR IGNORE INTO tournament_match_casters (match_id, part_id, user_id)
+			 SELECT m.match_id, json_extract(p.value, '$.id'), u.user_id
+			 FROM tournament_matches m,
+			      json_each(m.parts) AS p,
+			      json_each(p.value, '$.casters') AS c,
+			      users u
+			 WHERE m.match_id = ?
+			   AND json_valid(m.parts)
+			   AND json_extract(p.value, '$.id') IS NOT NULL
+			   AND u.user_id = json_extract(c.value, '$.user_id')`,
+		).bind(matchId),
+	]);
 }
 
 // Parse the JSON-encoded parts column (migration 0029) into MatchPart[].

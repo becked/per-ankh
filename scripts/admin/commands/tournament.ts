@@ -289,6 +289,11 @@ async function runSeed(argv: string[], opts: CommandOpts): Promise<void> {
 	const slugLit = sqlStr(slug);
 	const childOf = `tournament_id IN (SELECT tournament_id FROM tournaments WHERE slug = ${slugLit})`;
 	const cleanup = [
+		// Cast appearances hang off matches (migration 0034). Deleted first, for
+		// the same reason as everything else here — this path doesn't lean on the
+		// FK cascade, so an orphan row would outlive its match and could block the
+		// fixture-user delete below.
+		`DELETE FROM tournament_match_casters WHERE match_id IN (SELECT match_id FROM tournament_matches WHERE round_id IN (SELECT round_id FROM tournament_rounds WHERE ${childOf}))`,
 		`DELETE FROM tournament_matches WHERE round_id IN (SELECT round_id FROM tournament_rounds WHERE ${childOf})`,
 		`DELETE FROM tournament_rounds WHERE ${childOf}`,
 		`DELETE FROM tournament_slots WHERE ${childOf}`,

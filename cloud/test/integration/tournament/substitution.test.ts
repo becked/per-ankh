@@ -1,8 +1,10 @@
 // End-to-end substitution flow. The pieces (admin slot edit, login claim,
-// my-matches by slot.user_id) are tested in isolation elsewhere; this pins the
+// per-user match attribution) are tested in isolation elsewhere; this pins the
 // composition: an admin substitutes a claimed slot → the original occupant
-// loses it → the new occupant logs in and claims → match participation
-// (what standings key off — the slot's live user_id) follows the slot.
+// loses it → the new occupant logs in and claims → participation in the
+// still-PENDING match (what standings key off — the slot's live user_id)
+// follows the slot. Decided matches deliberately do NOT follow it; that half of
+// the rule lives in user-tournaments.test.ts.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -15,13 +17,12 @@ beforeAll(async () => {
 	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
 });
 
-interface MyMatch {
-	match_id: string;
-}
-
-async function myMatchIds(user: TestUser): Promise<string[]> {
-	const res = await request.get({ path: "/v1/users/me/matches", as: user });
-	const body = await expectOk<{ matches: MyMatch[] }>(res);
+// The match ids attributed to a user by the public per-user tournaments read.
+async function matchIdsFor(user: TestUser): Promise<string[]> {
+	const res = await request.get({
+		path: `/v1/users/${user.userId}/tournaments`,
+	});
+	const body = await expectOk<{ matches: { match_id: string }[] }>(res);
 	return body.matches.map((m) => m.match_id);
 }
 
@@ -68,7 +69,7 @@ describe("end-to-end slot substitution", () => {
 		const origMatch = (await t.matches()).find(
 			(m) => m.slot_a_id === slot.slotId || m.slot_b_id === slot.slotId,
 		)!;
-		expect(await myMatchIds(original)).toContain(origMatch.match_id);
+		expect(await matchIdsFor(original)).toContain(origMatch.match_id);
 
 		// Admin substitutes a new free-text occupant — clears the prior link.
 		const newUsername = "subbed-occupant";
@@ -81,7 +82,7 @@ describe("end-to-end slot substitution", () => {
 		);
 		expect(await loadSlotUserId(slot.slotId)).toBeNull();
 		// Original occupant no longer participates in the match.
-		expect(await myMatchIds(original)).not.toContain(origMatch.match_id);
+		expect(await matchIdsFor(original)).not.toContain(origMatch.match_id);
 
 		// The original user logging back in cannot reclaim (username changed,
 		// discord_id pin cleared).
@@ -94,7 +95,7 @@ describe("end-to-end slot substitution", () => {
 		// The new occupant logs in and claims. Using makeUser for the session
 		// first, then devLogin with the SAME discord_id, means the claim links
 		// to a user we hold a session for (devLogin's ON CONFLICT(discord_id)
-		// upsert keeps the same user_id) so we can read their my-matches.
+		// upsert keeps the same user_id) so we can read their attributed matches.
 		const replacement = await makeUser({ discordUsername: newUsername });
 		await devLogin({
 			discordId: replacement.discordId,
@@ -104,8 +105,8 @@ describe("end-to-end slot substitution", () => {
 
 		// Participation followed the slot: the new occupant now sees the match,
 		// the original still does not.
-		expect(await myMatchIds(replacement)).toContain(origMatch.match_id);
-		expect(await myMatchIds(original)).not.toContain(origMatch.match_id);
+		expect(await matchIdsFor(replacement)).toContain(origMatch.match_id);
+		expect(await matchIdsFor(original)).not.toContain(origMatch.match_id);
 	});
 });
 

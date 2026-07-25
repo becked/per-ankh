@@ -175,7 +175,7 @@ describe("tournament flow", () => {
 		});
 	});
 
-	it("returns the caller's pending matches across multiple tournaments via /v1/users/me/matches", async () => {
+	it("returns a player's pending matches across multiple tournaments via /v1/users/:user_id/tournaments", async () => {
 		// Arrange — same user owns a slot in two separate tournaments. (A
 		// single user can't own multiple slots in one tournament — slot
 		// discord_username is unique per bulk-create batch.)
@@ -193,15 +193,14 @@ describe("tournament flow", () => {
 
 		// Act
 		const res = await request.get({
-			path: "/v1/users/me/matches",
-			as: player,
+			path: `/v1/users/${player.userId}/tournaments`,
 		});
 		const body = await expectOk<{ matches: Array<Record<string, unknown>> }>(
 			res,
 		);
 
-		// Assert — one match per tournament, both pending. Tournament context
-		// is denormalized into each row.
+		// Assert — one match per tournament, both pending. Each row carries the
+		// tournament it groups under.
 		expect(body.matches).toHaveLength(2);
 		const tournamentIds = new Set(body.matches.map((m) => m.tournament_id));
 		expect(tournamentIds).toEqual(new Set([t1.tournamentId, t2.tournamentId]));

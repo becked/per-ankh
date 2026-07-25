@@ -92,13 +92,13 @@ describe("security_events tee — reason classification", () => {
 	it("auth_fail for a 401 on a matched route", async () => {
 		const row = await emitOne({
 			method: "GET",
-			path: "/v1/users/me/matches",
-			route: "GET /v1/users/me/matches",
+			path: "/v1/users/me/tournaments",
+			route: "GET /v1/users/me/tournaments",
 			status: 401,
 		});
 		expect(row.reason).toBe("auth_fail");
 		expect(row.status).toBe(401);
-		expect(row.route).toBe("GET /v1/users/me/matches");
+		expect(row.route).toBe("GET /v1/users/me/tournaments");
 		expect(row.meta).toBeNull();
 	});
 

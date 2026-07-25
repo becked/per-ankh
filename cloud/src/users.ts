@@ -180,44 +180,65 @@ export async function handleUserProfile(
 	// Visibility-scoped only: owner sees private+public, others public-only.
 	const session = await sessionFromRequest(env, request);
 	const vis = session?.data.user_id === userId ? "" : " AND is_public = 1";
-	const [countsRow, nationRow, dayRow, channelsRes] = await Promise.all([
-		env.SHARE_DB.prepare(
-			`SELECT COUNT(*) AS total,
-			        CAST(SUM(CASE WHEN user_won = 1 THEN 1 ELSE 0 END) AS REAL)
-			          / NULLIF(SUM(CASE WHEN user_won IS NOT NULL THEN 1 ELSE 0 END), 0)
-			          AS win_rate
-			 FROM games WHERE user_id = ?${vis}`,
-		)
-			.bind(userId)
-			.first<{ total: number; win_rate: number | null }>(),
-		env.SHARE_DB.prepare(
-			`SELECT user_nation FROM games
-			 WHERE user_id = ? AND user_nation IS NOT NULL${vis}
-			 GROUP BY user_nation
-			 ORDER BY COUNT(*) DESC, user_nation ASC
-			 LIMIT 1`,
-		)
-			.bind(userId)
-			.first<{ user_nation: string }>(),
-		env.SHARE_DB.prepare(
-			`SELECT CAST(strftime('%w', save_date) AS INTEGER) AS weekday
-			 FROM games WHERE user_id = ? AND save_date IS NOT NULL${vis}
-			 GROUP BY weekday
-			 ORDER BY COUNT(*) DESC, weekday ASC
-			 LIMIT 1`,
-		)
-			.bind(userId)
-			.first<{ weekday: number | null }>(),
-		// Linked video/stream channels — public, so the profile page can decide
-		// whether to render the "Videos" tab without a second request. Videos
-		// themselves load lazily via GET /v1/users/:id/videos when that tab opens.
-		env.SHARE_DB.prepare(
-			`SELECT platform, channel_url FROM user_video_channels
-			 WHERE user_id = ? ORDER BY platform`,
-		)
-			.bind(userId)
-			.all<{ platform: string; channel_url: string }>(),
-	]);
+	const [countsRow, nationRow, dayRow, channelsRes, participationRow] =
+		await Promise.all([
+			env.SHARE_DB.prepare(
+				`SELECT COUNT(*) AS total,
+				        CAST(SUM(CASE WHEN user_won = 1 THEN 1 ELSE 0 END) AS REAL)
+				          / NULLIF(SUM(CASE WHEN user_won IS NOT NULL THEN 1 ELSE 0 END), 0)
+				          AS win_rate
+				 FROM games WHERE user_id = ?${vis}`,
+			)
+				.bind(userId)
+				.first<{ total: number; win_rate: number | null }>(),
+			env.SHARE_DB.prepare(
+				`SELECT user_nation FROM games
+				 WHERE user_id = ? AND user_nation IS NOT NULL${vis}
+				 GROUP BY user_nation
+				 ORDER BY COUNT(*) DESC, user_nation ASC
+				 LIMIT 1`,
+			)
+				.bind(userId)
+				.first<{ user_nation: string }>(),
+			env.SHARE_DB.prepare(
+				`SELECT CAST(strftime('%w', save_date) AS INTEGER) AS weekday
+				 FROM games WHERE user_id = ? AND save_date IS NOT NULL${vis}
+				 GROUP BY weekday
+				 ORDER BY COUNT(*) DESC, weekday ASC
+				 LIMIT 1`,
+			)
+				.bind(userId)
+				.first<{ weekday: number | null }>(),
+			// Linked video/stream channels — public, so the profile page can decide
+			// whether to render the "Videos" tab without a second request. Videos
+			// themselves load lazily via GET /v1/users/:id/videos when that tab opens.
+			env.SHARE_DB.prepare(
+				`SELECT platform, channel_url FROM user_video_channels
+				 WHERE user_id = ? ORDER BY platform`,
+			)
+				.bind(userId)
+				.all<{ platform: string; channel_url: string }>(),
+			// Does this user appear in tournaments at all — same "render the tab?"
+			// role `channels` plays for Videos, with the payload itself loading
+			// lazily via GET /v1/users/:id/tournaments when the tab opens.
+			//
+			// "Has a slot OR has cast", so a dedicated caster who never plays still
+			// gets a tab. Both halves are indexed lookups: idx_slots_user (0006) and
+			// idx_match_casters_user (0034). The cast half is why that join table
+			// exists — the equivalent question against the `parts` blob is a nested
+			// json_each fan-out with no possible index, and it would run on every
+			// profile view WITHOUT a slot, which is most of them. A rate limit is
+			// deliberately NOT the answer here: it would add an `events` INSERT to
+			// the site's hottest public read (and newly 429 an endpoint every SSR
+			// page load hits) to avoid one indexed read.
+			env.SHARE_DB.prepare(
+				`SELECT EXISTS (SELECT 1 FROM tournament_slots WHERE user_id = ?)
+				     OR EXISTS (SELECT 1 FROM tournament_match_casters WHERE user_id = ?)
+				        AS participates`,
+			)
+				.bind(userId, userId)
+				.first<{ participates: number }>(),
+		]);
 
 	return jsonResponse(
 		{
@@ -231,6 +252,7 @@ export async function handleUserProfile(
 				favorite_day_of_week: dayRow?.weekday ?? null,
 			},
 			channels: channelsRes.results ?? [],
+			tournament_participant: (participationRow?.participates ?? 0) === 1,
 		},
 		200,
 		cors,

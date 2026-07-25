@@ -31,6 +31,7 @@ import {
 	loadRound,
 	loadTournamentById,
 	parseParts,
+	syncMatchCasters,
 	type MatchPart,
 	type MatchPartCaster,
 	type TournamentEnv,
@@ -113,38 +114,6 @@ export async function handleMyAdminTournaments(
 			status: string;
 		}>();
 	return jsonResponse({ tournaments: res.results ?? [] }, 200, cors);
-}
-
-export async function handleMyMatches(
-	request: Request,
-	env: TournamentPlayerEnv,
-): Promise<Response> {
-	const cors = cloudCorsHeaders(env, request);
-	const gate = await authedSession(env, request, cors);
-	if (!gate.ok) return gate.response;
-	// Match by slot.user_id (after slot claim). Returns all matches a
-	// caller's slots have participated in, across all tournaments. DISTINCT
-	// guards against an edge case where the caller owns both slots of one
-	// match — no DB constraint prevents that and the OR-join would
-	// otherwise return two rows for the same match.
-	const res = await env.SHARE_DB.prepare(
-		`SELECT DISTINCT m.match_id, m.round_id, m.slot_a_id, m.slot_b_id, m.map_script,
-		        m.status, m.winner_slot_id, m.game_id, m.reported_at,
-		        m.slot_a_username, m.slot_a_user_id, m.slot_b_username, m.slot_b_user_id,
-		        r.tournament_id, r.phase, r.division, r.round_number,
-		        r.status AS round_status,
-		        t.slug AS tournament_slug, t.name AS tournament_name
-		 FROM tournament_matches m
-		 JOIN tournament_rounds r ON r.round_id = m.round_id
-		 JOIN tournaments t ON t.tournament_id = r.tournament_id
-		 JOIN tournament_slots s ON s.slot_id = m.slot_a_id OR s.slot_id = m.slot_b_id
-		 WHERE s.user_id = ?
-		 ORDER BY m.created_at DESC
-		 LIMIT 200`,
-	)
-		.bind(gate.userId)
-		.all();
-	return jsonResponse({ matches: res.results ?? [] }, 200, cors);
 }
 
 export async function handleDismissBanner(
@@ -532,6 +501,10 @@ async function mutateMyCasterEntry(
 			.run();
 		if (result.meta.changes === 0) continue; // raced another writer — retry
 
+		// Keep the derived caster index in step with the blob we just wrote. It
+		// re-derives from the stored value, so re-entering it on a CAS retry (or
+		// after the admin PATCH writer runs it) can't drift.
+		await syncMatchCasters(env, matchId);
 		await bumpTournamentUpdatedAt(env, tournamentId);
 		// Rate-limit ledger (24h retention bucket; the budget reads a 1h window).
 		await env.SHARE_DB.prepare(

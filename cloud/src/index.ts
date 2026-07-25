@@ -72,6 +72,7 @@ import {
 	handleTournamentRounds,
 	handleTournamentStandings,
 	handleTournamentStats,
+	handleUserTournaments,
 } from "./tournament/public";
 import type { TournamentPublicEnv } from "./tournament/public";
 import { handleTournamentExport } from "./tournament/export";
@@ -79,7 +80,6 @@ import {
 	handleCastMatchPart,
 	handleDismissBanner,
 	handleMyAdminTournaments,
-	handleMyMatches,
 	handleMyTournaments,
 	handleTournamentSignup,
 	handleTournamentWithdraw,
@@ -729,6 +729,19 @@ const ROUTES: RouteSpec[] = [
 		route: "GET /v1/users/:user_id/videos",
 		handler: (r, e, m, c) => handleUserVideos(m![1], r, e, c),
 	},
+	// Public tournament record for one player — enrollment + played/upcoming
+	// matches + cast appearances, in one lazy fetch for the profile's
+	// Tournaments tab. The 21-char user_id can't collide with the
+	// /v1/users/me/tournaments path route registered further down.
+	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/users\/([A-Za-z0-9_-]{21})\/tournaments$/,
+		},
+		route: "GET /v1/users/:user_id/tournaments",
+		handler: (r, e, m) => handleUserTournaments(m![1], r, e),
+	},
 	// Cross-creator home feed — newest uploads across all users' linked
 	// channels, merged newest-first for the home page's "Latest from creators"
 	// strip. One pre-assembled KV entry (SWR); passes ctx for background refresh.
@@ -750,12 +763,6 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/users/me/admin-tournaments" },
 		route: "GET /v1/users/me/admin-tournaments",
 		handler: (r, e) => handleMyAdminTournaments(r, e),
-	},
-	{
-		method: "GET",
-		match: { kind: "path", path: "/v1/users/me/matches" },
-		route: "GET /v1/users/me/matches",
-		handler: (r, e) => handleMyMatches(r, e),
 	},
 	{
 		method: "POST",

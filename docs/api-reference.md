@@ -317,6 +317,15 @@ Recent videos merged across the user's linked channels (newest first) — feeds 
 - **Response 200:** `{ videos: { id, title, url, thumbnail_url: string|null, published_at, platform }[] }` (empty when the user has no linked channels).
 - **Notes:** Per-channel KV cache, stale-while-revalidate (serves cached instantly, refreshes in the background past a 1h soft TTL). YouTube videos come from the unauthenticated channel RSS feed.
 
+### `GET /v1/users/:user_id/tournaments`
+One player's whole tournament record — enrollment, played + upcoming matches, and cast appearances — for the profile "Tournaments" tab.
+
+- **Auth:** Public — tournament reads already are, tournament-linked saves are forced public, and casters are already credited publicly on the tournament stats page.
+- **Path:** `user_id` (21-char).
+- **Response 200:** `{ user_id, tournaments: [{ tournament_id, slug, name, status, division_a_name, division_b_name, map_pool, slots: [{ slot_id, phase, division, swiss_seed, championship_seed }] }], matches: TournamentMatch[], casts: (TournamentMatch & { part_id })[], slot_labels, slot_avatars }`.
+- **Errors:** `429 RATE_LIMIT_TOURNAMENT_VIEW` (shares the per-IP tournament-view budget).
+- **Notes:** Match attribution prefers the report-time occupant snapshot for decided matches and falls through to the live slot only for pending ones, so a substitution never reassigns a played match to the substitute. `tournaments[].slots` is the Enrollment section (empty for a caster-only or substituted-out appearance) and setup-phase tournaments with signups closed are hidden from non-admins, same as every per-tournament read. Byes are excluded. The four admin-only `slot_a/b_discord_*` fields are **absent** from every match here, not null. `slot_labels`/`slot_avatars` carry live per-slot identity, which the pending (upcoming) rows render from.
+
 ### `GET /v1/creator-videos`
 Cross-creator home feed — the newest uploads across all users' linked channels, merged newest-first for the home page's "Latest from creators" strip.
 
@@ -645,12 +654,6 @@ Tournaments you have a slot in.
 Tournaments you administer.
 
 - **Response 200:** `{ tournaments: [{ tournament_id, slug, name, status }] }`.
-- **Errors:** `401 UNAUTHORIZED`.
-
-### `GET /v1/users/me/matches`
-Your matches across all tournaments.
-
-- **Response 200:** `{ matches: [...] }` (up to 200; each row carries match, slot, round, and tournament identity fields).
 - **Errors:** `401 UNAUTHORIZED`.
 
 ### `POST /v1/users/me/tournaments/:id/dismiss-banner`
