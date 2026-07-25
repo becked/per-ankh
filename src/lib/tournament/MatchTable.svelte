@@ -22,6 +22,7 @@
 		matchSlotAvatarUrl,
 		matchSlotDisplayName,
 		matchSlotNation,
+		matchSlotOutcome,
 	} from "$lib/tournament/match-occupant";
 	import {
 		atlasMapUrl,
@@ -129,7 +130,11 @@
 </script>
 
 <!-- One player's cell: crest + avatar + name. Side B collapses to "Bye" when
-     there's no opponent slot; an unresolved side-A feeder reads "TBD". -->
+     there's no opponent slot; an unresolved side-A feeder reads "TBD".
+     A decided match emphasizes its winner (bold orange, as the Swiss and
+     championship bracket cards already do) and dims the loser — the outcome
+     lives here rather than in a `result` column, which would be
+     perspective-dependent ("W" for whom?) where every other column is not. -->
 {#snippet playerCell(m: TournamentMatch, side: "a" | "b")}
 	{@const slotId = side === "a" ? m.slot_a_id : m.slot_b_id}
 	{#if slotId === null}
@@ -137,7 +142,11 @@
 	{:else}
 		{@const nation = matchSlotNation(m, side)}
 		{@const name = matchSlotDisplayName(m, side, slotLabels) ?? "—"}
-		<span class="inline-flex min-w-0 items-center gap-1">
+		{@const outcome = matchSlotOutcome(m, side)}
+		<span
+			class="inline-flex min-w-0 items-center gap-1"
+			class:opacity-60={outcome === "lost"}
+		>
 			{#if nation}
 				<SpriteIcon
 					category="crests"
@@ -150,7 +159,11 @@
 				avatarUrl={matchSlotAvatarUrl(m, side, slotAvatars)}
 				size={16}
 			/>
-			<span class="truncate text-bright">{name}</span>
+			<span
+				class="truncate {outcome === 'won'
+					? 'font-bold text-orange'
+					: 'text-bright'}">{name}</span
+			>
 		</span>
 	{/if}
 {/snippet}
