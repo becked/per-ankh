@@ -153,6 +153,36 @@ export interface MatchSortContext {
 	slotLabels: Record<string, string>;
 }
 
+// ─── Table chrome ────────────────────────────────────────────────────
+//
+// The framed-box table treatment MatchTable defines and its host surfaces
+// reuse: a raised header bar (surface-raised-hover, deliberately *lighter* than
+// both zebra tones so it reads as chrome and never blends into a stripe — the
+// page itself is the ramp's darkest tone), a contiguous zebra body with no
+// per-cell rounding, and transparent cells so the row's stripe shows through.
+//
+// Exported because the profile's Tournaments tab stacks its own Enrollment
+// table directly above a MatchTable, and two tables in one panel with
+// independently-maintained header styling drift on the first edit to either.
+// MatchTable layers its sticky/sortable modifiers on top of these; a plain
+// table uses them as-is.
+export const MATCH_TABLE_TH_CLASS =
+	"select-none whitespace-nowrap border-b border-black bg-surface-raised-hover px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100 shadow-lg";
+
+// align-top so the multi-line Match/Time/Casters cells don't vertically center
+// the shorter cells beside them.
+export const MATCH_TABLE_TD_CLASS =
+	"whitespace-nowrap px-3 py-2 text-left align-top text-tan";
+
+// The <tr> carries the stripe + hover background (the cells stay transparent).
+export const MATCH_TABLE_ROW_CLASS =
+	"transition-colors odd:bg-surface even:bg-surface-raised hover:bg-surface-hover";
+
+// The framed box the table sits in — rounded border on the wrapper, scroll
+// contained so a wide table never widens the page.
+export const MATCH_TABLE_FRAME_CLASS =
+	"overflow-x-auto rounded-lg border border-black";
+
 // Column identity + sort value only; the bespoke cell markup (crests, avatars,
 // caster chips, stream links, action buttons) lives in MatchTable.svelte, keyed
 // off `key`. Mirrors how the Cities tab splits column config from rendering.

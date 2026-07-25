@@ -37,6 +37,10 @@
 		pickColumns,
 		sortMatchRows,
 		toMatchRows,
+		MATCH_TABLE_FRAME_CLASS,
+		MATCH_TABLE_ROW_CLASS,
+		MATCH_TABLE_TD_CLASS,
+		MATCH_TABLE_TH_CLASS,
 		type MatchRow,
 	} from "$lib/tournament/matches-table";
 	import { matchParts } from "$lib/tournament/parts";
@@ -146,9 +150,6 @@
 	const panelStyle = "background-color: rgb(var(--color-surface-sunken));";
 	const headingClass =
 		"mb-3 text-sm font-bold uppercase tracking-wide text-tan";
-	const thClass =
-		"whitespace-nowrap border-b border-black bg-surface-raised-hover px-3 py-2 text-left text-[10px] font-bold uppercase tracking-wide text-gray-100";
-	const tdClass = "whitespace-nowrap px-3 py-2 text-left align-top text-tan";
 </script>
 
 <!-- The tournament name + status chip that heads each match/cast group, and
@@ -182,24 +183,25 @@
 	{#if enrolled.length > 0}
 		<section class={panelClass} style={panelStyle}>
 			<h3 class={headingClass}>Enrollment</h3>
-			<div class="overflow-x-auto rounded-lg border border-black">
+			<!-- Same framed-box chrome as the MatchTable it stacks above, from the
+			     shared constants so the two can't drift apart. -->
+			<div class={MATCH_TABLE_FRAME_CLASS}>
 				<table class="w-full border-collapse text-sm">
 					<thead>
 						<tr>
-							<th class={thClass}>Tournament</th>
-							<th class={thClass}>Bracket</th>
-							<th class={thClass}>Seed</th>
+							<th class={MATCH_TABLE_TH_CLASS}>Tournament</th>
+							<th class={MATCH_TABLE_TH_CLASS}>Bracket</th>
+							<th class={MATCH_TABLE_TH_CLASS}>Seed</th>
 						</tr>
 					</thead>
 					<tbody>
 						{#each enrolled as t (t.tournament_id)}
-							<tr
-								class="transition-colors odd:bg-surface even:bg-surface-raised hover:bg-surface-hover"
-							>
-								<td class={tdClass}>{@render tournamentLink(t)}</td>
+							<tr class={MATCH_TABLE_ROW_CLASS}>
+								<td class={MATCH_TABLE_TD_CLASS}>{@render tournamentLink(t)}</td
+								>
 								<!-- Both cells walk `slots` in the same order, so a
 								     championship participant's two lines stay aligned. -->
-								<td class={tdClass}>
+								<td class={MATCH_TABLE_TD_CLASS}>
 									{#each t.slots as slot (slot.slot_id)}
 										<div>
 											{matchBracketLabel(t, {
@@ -209,7 +211,7 @@
 										</div>
 									{/each}
 								</td>
-								<td class={tdClass}>
+								<td class={MATCH_TABLE_TD_CLASS}>
 									{#each t.slots as slot (slot.slot_id)}
 										{@const seed = slotSeed(slot)}
 										<div>{seed ?? "—"}</div>
