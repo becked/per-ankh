@@ -1,6 +1,6 @@
 # Tournament UI (`src/lib/tournament/`)
 
-Bracket / standings / match components for the tournament subsystem, consumed by routes under `src/routes/tournaments/` (`/[slug]`, `/guide`). This is the most actively developed — and historically the highest-friction — area of the app. Most past contributions worked and had tests but needed cleanup for *fit*. Read the rules below before adding a component.
+Bracket / standings / match components for the tournament subsystem, consumed mainly by routes under `src/routes/tournaments/` (`/[slug]`, `/guide`) — plus `UserTournamentsTab.svelte`, which the player profile (`/users/[user_id]`) mounts as its Tournaments tab. This is the most actively developed — and historically the highest-friction — area of the app. Most past contributions worked and had tests but needed cleanup for *fit*. Read the rules below before adding a component.
 
 ## Fit before you write
 

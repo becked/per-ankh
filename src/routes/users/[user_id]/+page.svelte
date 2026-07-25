@@ -12,10 +12,10 @@
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import Breadcrumb, { type Crumb } from "$lib/Breadcrumb.svelte";
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
+	import UserTournamentsTab from "$lib/tournament/UserTournamentsTab.svelte";
 	import GamesTable from "$lib/users/GamesTable.svelte";
 	import OverviewTab from "$lib/users/OverviewTab.svelte";
 	import ScopeRow from "$lib/users/ScopeRow.svelte";
-	import TournamentsTab from "$lib/users/TournamentsTab.svelte";
 	import VideosTab from "$lib/users/VideosTab.svelte";
 	import StatsView from "$lib/stats/StatsView.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -224,7 +224,7 @@
 								<!-- Payload loads lazily with the tab (mirrors Videos), so it's
 								     null until then. -->
 								{#if data.tournamentRecord}
-									<TournamentsTab record={data.tournamentRecord} />
+									<UserTournamentsTab record={data.tournamentRecord} />
 								{/if}
 							</Tabs.Content>
 						{/if}

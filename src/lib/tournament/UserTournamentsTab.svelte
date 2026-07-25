@@ -1,9 +1,14 @@
 <script lang="ts">
-	// One player's tournament record (issue #154) — match-shaped, not save-shaped.
-	// A tournament match links exactly one save, so the Games tab (keyed on the
-	// uploader) holds at most half a player's tournament games and none of their
-	// upcoming ones; a cast isn't a game at all. Two sections, from one lazy
-	// fetch of GET /v1/users/:user_id/tournaments (the Videos-tab precedent):
+	// One player's tournament record (issue #154), mounted as the "Tournaments"
+	// tab by routes/users/[user_id]/+page.svelte — it lives here, with the rest of
+	// the tournament UI it's built from, the way StatsView lives in $lib/stats/
+	// rather than in $lib/users/.
+	//
+	// Match-shaped, not save-shaped. A tournament match links exactly one save, so
+	// the Games tab (keyed on the uploader) holds at most half a player's
+	// tournament games and none of their upcoming ones; a cast isn't a game at
+	// all. Two sections, from one lazy fetch of
+	// GET /v1/users/:user_id/tournaments (the Videos-tab precedent):
 	//
 	//   Matches — played and upcoming in one list, grouped by tournament.
 	//   Casts   — separate, because the grain differs: casting is per-sitting,
