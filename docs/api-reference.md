@@ -295,9 +295,9 @@ Public profile + all-time summary.
 
 - **Auth:** Public (owner extras) — the owner's summary includes private games; others/anon see public-only.
 - **Path:** `user_id` (21-char).
-- **Response 200:** `{ user_id, display_name, avatar_url, summary: { total_games, win_rate: number|null, favorite_nation: string|null, favorite_day_of_week: number|null }, channels: { platform, channel_url }[] }`.
+- **Response 200:** `{ user_id, display_name, avatar_url, summary: { total_games, win_rate: number|null, favorite_nation: string|null, favorite_day_of_week: number|null }, channels: { platform, channel_url }[], tournament_participant: boolean }`.
 - **Errors:** `404 NOT_FOUND`.
-- **Notes:** Summary is all-time over all saves (ignores any scope selector). `channels` are the user's linked video/stream channels (public) — drives whether the profile shows the "Videos" tab.
+- **Notes:** Summary is all-time over all saves (ignores any scope selector). `channels` are the user's linked video/stream channels (public) — drives whether the profile shows the "Videos" tab. `tournament_participant` plays the same role for the "Tournaments" tab: true when the user holds a tournament slot **or** has cast a match sitting, so a dedicated caster who never plays still gets the tab. Both are flags only; the tabs' payloads load lazily from their own endpoints.
 
 ### `GET /v1/users/:user_id/stats`
 User-corpus aggregate stats bundle.
@@ -322,9 +322,9 @@ One player's whole tournament record — enrollment, played + upcoming matches, 
 
 - **Auth:** Public — tournament reads already are, tournament-linked saves are forced public, and casters are already credited publicly on the tournament stats page.
 - **Path:** `user_id` (21-char).
-- **Response 200:** `{ user_id, tournaments: [{ tournament_id, slug, name, status, division_a_name, division_b_name, map_pool, slots: [{ slot_id, phase, division, swiss_seed, championship_seed }] }], matches: TournamentMatch[], casts: (TournamentMatch & { part_id })[], slot_labels, slot_avatars }`.
+- **Response 200:** `{ user_id, tournaments: [{ tournament_id, slug, name, status, signups_open, division_a_name, division_b_name, map_pool, slots: [{ slot_id, phase, division, swiss_seed, championship_seed }] }], matches: TournamentMatch[], casts: (TournamentMatch & { part_id })[], slot_labels, slot_avatars }`.
 - **Errors:** `429 RATE_LIMIT_TOURNAMENT_VIEW` (shares the per-IP tournament-view budget).
-- **Notes:** Match attribution prefers the report-time occupant snapshot for decided matches and falls through to the live slot only for pending ones, so a substitution never reassigns a played match to the substitute. `tournaments[].slots` is the Enrollment section (empty for a caster-only or substituted-out appearance) and setup-phase tournaments with signups closed are hidden from non-admins, same as every per-tournament read. Byes are excluded. The four admin-only `slot_a/b_discord_*` fields are **absent** from every match here, not null. `slot_labels`/`slot_avatars` carry live per-slot identity, which the pending (upcoming) rows render from.
+- **Notes:** Match attribution prefers the report-time occupant snapshot for decided matches, so a substitution never reassigns a played match to the substitute; it falls through to the live slot per side when the match is still pending **or** when that side's snapshot is null (the occupant hadn't claimed their slot at report time), matching the render layer's rule. `tournaments[].slots` is the Enrollment section (empty for a caster-only or substituted-out appearance) and setup-phase tournaments with signups closed are hidden from non-admins, same as every per-tournament read. `status` + `signups_open` are the pair every tournament surface renders its status chip from. Byes are excluded. The four admin-only `slot_a/b_discord_*` fields are **absent** from every match here, not null. `slot_labels`/`slot_avatars` carry live per-slot identity, which the pending (upcoming) rows render from.
 
 ### `GET /v1/creator-videos`
 Cross-creator home feed — the newest uploads across all users' linked channels, merged newest-first for the home page's "Latest from creators" strip.
