@@ -1,4 +1,6 @@
-// Header status derivation for the tournament detail page.
+// Tournament status → display state, for the tournament detail page's header and
+// for the status chip on any surface that names a tournament (the player
+// profile's Tournaments tab groups).
 //
 // The four mockup states collapse our status FSM + the signups_open flag into
 // one of four display states, each with its own chip label/color and a "hero

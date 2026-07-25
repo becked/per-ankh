@@ -232,10 +232,14 @@ export async function handleUserProfile(
 			// later change to attribution can't leave the tab reachable-but-empty or
 			// hidden-but-populated.
 			//
-			// Five index-backed EXISTS legs, all short-circuiting: idx_matches_slot_a/
-			// b_user (0035) for the snapshot halves, idx_slots_user (0006) + idx_
-			// matches_slot_a/b (0006) for the live halves, idx_match_casters_user
-			// (0034) for the cast. The cast half is why that join table exists — the
+			// Two EXISTS, five index-backed legs, no table scan (verified with
+			// EXPLAIN QUERY PLAN): idx_matches_slot_a/b_user (0035) for the snapshot
+			// halves, idx_slots_user (0006) + idx_matches_slot_a/b (0006) for the live
+			// halves, idx_match_casters_user (0034) for the cast. The four attribution
+			// legs materialize as a UNION temp b-tree rather than short-circuiting,
+			// which the outer EXISTS then probes through the matches PK — bounded by
+			// one player's match count, so the cost is the id list, not a scan. The
+			// cast half is why that join table exists — the
 			// equivalent question against the `parts` blob is a nested json_each
 			// fan-out with no possible index, and it would run on every profile view
 			// WITHOUT a slot, which is most of them. A rate limit is deliberately NOT
