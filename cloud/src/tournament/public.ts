@@ -1504,23 +1504,37 @@ function serializeMatch(
 		slot_a_user_id: m.slot_a_user_id,
 		slot_a_avatar_url: slotAIdentity?.avatar_url ?? null,
 		slot_a_nation: slotANation,
-		// Admin-only — raw handle + numeric Discord id of the live slot occupant
-		// (null for public viewers, pending/bye sides, and unclaimed slots with
-		// no linked account). The handle seeds the substitute editor; the id backs
-		// `<@id>` mentions in the sesh export.
-		slot_a_discord_username:
-			handleBySlotId?.get(m.slot_a_id)?.discord_username ?? null,
-		slot_a_discord_id: handleBySlotId?.get(m.slot_a_id)?.discord_id ?? null,
 		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_avatar_url: slotBIdentity?.avatar_url ?? null,
 		slot_b_nation: slotBNation,
-		slot_b_discord_username: m.slot_b_id
-			? (handleBySlotId?.get(m.slot_b_id)?.discord_username ?? null)
-			: null,
-		slot_b_discord_id: m.slot_b_id
-			? (handleBySlotId?.get(m.slot_b_id)?.discord_id ?? null)
-			: null,
+		// Admin-only — raw handle + numeric Discord id of each side's live slot
+		// occupant (null for non-admin viewers of the per-tournament endpoints,
+		// for pending/bye sides, and for unclaimed slots with no linked account).
+		// The handle seeds the substitute editor; the id backs `<@id>` mentions in
+		// the sesh export.
+		//
+		// The four keys are present (as nulls) whenever a caller supplies a map at
+		// all — the per-tournament reads pass an empty one for non-admins, which is
+		// their established public shape. A caller that passes NO map gets the keys
+		// OMITTED instead: the public per-user endpoint takes that path so these
+		// admin-only fields are absent by construction rather than null-valued,
+		// which would leave them in its contract for a later change to quietly
+		// populate (the #110 leak shape).
+		...(handleBySlotId
+			? {
+					slot_a_discord_username:
+						handleBySlotId.get(m.slot_a_id)?.discord_username ?? null,
+					slot_a_discord_id:
+						handleBySlotId.get(m.slot_a_id)?.discord_id ?? null,
+					slot_b_discord_username: m.slot_b_id
+						? (handleBySlotId.get(m.slot_b_id)?.discord_username ?? null)
+						: null,
+					slot_b_discord_id: m.slot_b_id
+						? (handleBySlotId.get(m.slot_b_id)?.discord_id ?? null)
+						: null,
+				}
+			: {}),
 		// Scheduled parts (migration 0029). Each carries its own time, caster
 		// (rendered by display name when linked, else caster_name), and stream
 		// links. An empty array means the match has no scheduled sittings yet.

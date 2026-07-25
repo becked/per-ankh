@@ -1864,13 +1864,22 @@ export interface TournamentMatch {
 	// pending/bye sides). The substitute editor seeds and compares against this
 	// so opening it on a claimed slot can't rewrite the handle to the display
 	// name and unlink the slot.
-	slot_a_discord_username: string | null;
-	slot_b_discord_username: string | null;
+	//
+	// OPTIONAL because the public per-user endpoint
+	// (GET /v1/users/:user_id/tournaments) omits all four keys outright rather
+	// than emitting them as null: a null-valued key would leave these
+	// admin-only fields in that endpoint's contract, so a later change that
+	// threaded the admin map through it would start populating real handles with
+	// no type error and no failing test — the #110 leak shape. Absent-by-
+	// construction can't regress that way.
+	slot_a_discord_username?: string | null;
+	slot_b_discord_username?: string | null;
 	// Numeric Discord id of each side's LIVE slot occupant. Admin-only (null
 	// otherwise, for pending/bye sides, and for unclaimed slots with no linked
-	// account). Backs real `<@id>` mentions in the sesh export.
-	slot_a_discord_id: string | null;
-	slot_b_discord_id: string | null;
+	// account). Backs real `<@id>` mentions in the sesh export. Optional for the
+	// same reason as the handles above.
+	slot_a_discord_id?: string | null;
+	slot_b_discord_id?: string | null;
 	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
 	// pending matches (no snapshot) and for slots whose occupant had no
 	// claimed discord_id at report time — frontend falls through to live
