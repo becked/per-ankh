@@ -1874,21 +1874,23 @@ export interface TournamentMatch {
 	// so opening it on a claimed slot can't rewrite the handle to the display
 	// name and unlink the slot.
 	//
-	// OPTIONAL because the public per-user endpoint
-	// (GET /v1/users/:user_id/tournaments) omits all four keys outright rather
-	// than emitting them as null: a null-valued key would leave these
-	// admin-only fields in that endpoint's contract, so a later change that
-	// threaded the admin map through it would start populating real handles with
-	// no type error and no failing test — the #110 leak shape. Absent-by-
-	// construction can't regress that way.
-	slot_a_discord_username?: string | null;
-	slot_b_discord_username?: string | null;
+	// REQUIRED, including on the public per-user endpoint's rows, even though
+	// that endpoint omits all four keys outright rather than emitting them as
+	// null (so these admin-only fields aren't in its contract at all for a later
+	// change to quietly populate — the #110 leak shape). That absence is a
+	// server-side guarantee, asserted for every viewer by
+	// cloud/test/integration/tournament/user-tournaments.test.ts, which is where
+	// it can actually be enforced. Mirroring it here as `?` would cost every
+	// admin surface the guarantee that the fields are present in exchange for a
+	// second copy of a rule the boundary test already holds — and the only two
+	// readers (MatchPopover, sesh.ts) are unreachable from that endpoint.
+	slot_a_discord_username: string | null;
+	slot_b_discord_username: string | null;
 	// Numeric Discord id of each side's LIVE slot occupant. Admin-only (null
 	// otherwise, for pending/bye sides, and for unclaimed slots with no linked
-	// account). Backs real `<@id>` mentions in the sesh export. Optional for the
-	// same reason as the handles above.
-	slot_a_discord_id?: string | null;
-	slot_b_discord_id?: string | null;
+	// account). Backs real `<@id>` mentions in the sesh export.
+	slot_a_discord_id: string | null;
+	slot_b_discord_id: string | null;
 	// Avatar URLs resolved server-side from the snapshot user_ids. Null for
 	// pending matches (no snapshot) and for slots whose occupant had no
 	// claimed discord_id at report time — frontend falls through to live
@@ -1957,8 +1959,9 @@ export interface UserTournamentEntry extends MatchTableTournament {
 }
 
 // A match row: the shared TournamentMatch shape plus the tournament it groups
-// under. The four admin-only slot_a/b_discord_* keys are ABSENT here (not null)
-// — see the note on TournamentMatch.
+// under. The wire payload omits the four admin-only slot_a/b_discord_* keys —
+// see the note on TournamentMatch for why that stays a server-side guarantee
+// rather than a hole in this type.
 export type UserTournamentMatch = TournamentMatch & { tournament_id: string };
 
 // A cast row. Part-granularity: `part_id` names the sitting the player cast, so
