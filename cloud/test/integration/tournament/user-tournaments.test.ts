@@ -9,8 +9,8 @@
 //      player's played matches to the substitute.
 //   2. Pending rows resolve their occupants from the live slot — those are the
 //      tab's "upcoming" rows, and they have no snapshot to read.
-//   3. The setup gate: a setup-phase tournament with signups closed is hidden
-//      from non-admins, per tournament (not one global admin check).
+//   3. The tournament index is the union of both sections, so a seat alone
+//      never puts a tournament (or its slug) on the record.
 //   4. The four admin-only slot_a/b_discord_* keys are ABSENT, not null.
 
 import { applyD1Migrations, env } from "cloudflare:test";
@@ -45,13 +45,6 @@ interface UserTournamentsBody {
 		division_a_name: string;
 		division_b_name: string;
 		map_pool: { id: string; script: string }[];
-		slots: {
-			slot_id: string;
-			phase: string;
-			division: string | null;
-			swiss_seed: number | null;
-			championship_seed: number | null;
-		}[];
 	}[];
 	matches: Record<string, unknown>[];
 	casts: Record<string, unknown>[];
@@ -81,30 +74,25 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 		expect(body.casts).toEqual([]);
 	});
 
-	it("lists enrollment with division and seed, plus the match table's context", async () => {
-		const player = await makeUser({ discordUsername: "enrolled-player" });
+	it("carries the match table's per-tournament context on the index", async () => {
+		// The tab groups rows by tournament and hands each group its own context
+		// instead of fetching a TournamentDetail per group, so these fields are
+		// the reason `tournaments` exists at all.
+		const player = await makeUser({ discordUsername: "context-player" });
 		const t = await makeTournament({
-			name: "Enrollment Cup",
+			name: "Context Cup",
 			slotsPerDivision: 4,
 			slotOwners: { B: [player] },
+			advanceTo: "swiss-round-1-generated",
 		});
-		// Signups open, so the setup-phase tournament is publicly visible — the
-		// state this section exists for: enrolled, but no round generated yet.
-		await expectOk(
-			await request.patch({
-				path: `/v1/tournaments/${t.tournamentId}`,
-				as: t.admin,
-				body: { signups_open: true },
-			}),
-		);
 
 		const body = await fetchRecord(player.userId);
 		expect(body.tournaments).toHaveLength(1);
 		const entry = body.tournaments[0];
 		expect(entry.tournament_id).toBe(t.tournamentId);
 		expect(entry.slug).toBe(t.slug);
-		expect(entry.name).toBe("Enrollment Cup");
-		expect(entry.status).toBe("setup");
+		expect(entry.name).toBe("Context Cup");
+		expect(entry.status).toBe("swiss");
 		// The four fields the shared match table reads off its tournament.
 		expect(entry.division_a_name).toBeTypeOf("string");
 		expect(entry.division_b_name).toBeTypeOf("string");
@@ -112,16 +100,7 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 			"MAP_SEASIDE",
 			"MAP_RIVER",
 		]);
-		expect(entry.slots).toHaveLength(1);
-		expect(entry.slots[0]).toMatchObject({
-			slot_id: t.slotsByDivision.B[0].slotId,
-			phase: "swiss",
-			division: "B",
-			swiss_seed: 1,
-		});
-		// Setup tournaments have no rounds, so nothing to play yet — the whole
-		// point of the Enrollment section.
-		expect(body.matches).toEqual([]);
+		expect(body.matches.length).toBeGreaterThan(0);
 	});
 
 	it("attributes a pending match to the live slot occupant and fills their name", async () => {
@@ -199,12 +178,11 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 		expect(afterReplacement.matches.map((m) => m.match_id)).not.toContain(
 			match.match_id,
 		);
-		// The original no longer holds a seat, so they drop out of Enrollment while
-		// keeping the match; the substitute is the reverse.
-		expect(afterOriginal.tournaments[0].slots).toEqual([]);
-		expect(afterReplacement.tournaments[0].slots.map((s) => s.slot_id)).toEqual(
-			[slot.slotId],
-		);
+		// The original keeps the match despite holding no seat, so the tournament
+		// stays on their index — the index follows the rows, not the seat.
+		expect(afterOriginal.tournaments.map((x) => x.tournament_id)).toEqual([
+			t.tournamentId,
+		]);
 	});
 
 	it("attributes a match decided BEFORE the player claimed their slot", async () => {
@@ -243,47 +221,51 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 
 		const body = await fetchRecord(latecomer.userId);
 		expect(body.matches.map((m) => m.match_id)).toContain(match.match_id);
-		expect(body.tournaments[0].slots.map((s) => s.slot_id)).toEqual([
-			slot.slotId,
-		]);
 	});
 
-	it("hides a setup-phase tournament with signups closed from non-admins", async () => {
+	it("omits a tournament the player only holds a seat in, for every viewer", async () => {
+		// The index is the union of the two sections, so a seat with nothing to
+		// render puts no tournament — and no slug — on a public profile. A setup
+		// tournament has no rounds, so it can never reach either section.
 		const player = await makeUser({ discordUsername: "secret-signup" });
-		const t = await makeTournament({
+		const seatOnly = await makeTournament({
 			name: "Unannounced Cup",
 			slotsPerDivision: 4,
 			slotOwners: { A: [player] },
 		});
 		// makeTournament leaves signups_open at its default 0.
-		expect((await t.refresh()).signups_open).toBe(0);
+		expect((await seatOnly.refresh()).signups_open).toBe(0);
 
-		// Anonymous and a signed-in stranger see nothing — not even the name/slug,
-		// which would link to a 404.
+		// Not for anonymous, a signed-in stranger, or the tournament's own admin —
+		// this isn't the setup gate, there is simply nothing to group under it.
 		const stranger = await makeUser();
-		for (const viewer of [undefined, stranger]) {
+		for (const viewer of [undefined, stranger, seatOnly.admin]) {
 			const body = await fetchRecord(player.userId, viewer);
 			expect(body.tournaments).toEqual([]);
 		}
 
-		// The tournament's own admin sees it: the gate is per tournament.
-		const asAdmin = await fetchRecord(player.userId, t.admin);
-		expect(asAdmin.tournaments.map((x) => x.tournament_id)).toEqual([
-			t.tournamentId,
-		]);
-
-		// Opening signups makes it public, same as every per-tournament read.
+		// Opening signups doesn't change that: visibility isn't what was missing.
 		await expectOk(
 			await request.patch({
-				path: `/v1/tournaments/${t.tournamentId}`,
-				as: t.admin,
+				path: `/v1/tournaments/${seatOnly.tournamentId}`,
+				as: seatOnly.admin,
 				body: { signups_open: true },
 			}),
 		);
-		const reopened = await fetchRecord(player.userId);
-		expect(reopened.tournaments.map((x) => x.tournament_id)).toEqual([
-			t.tournamentId,
-		]);
+		expect((await fetchRecord(player.userId)).tournaments).toEqual([]);
+
+		// A round's worth of matches is what puts one on the record.
+		const played = await makeTournament({
+			name: "Played Cup",
+			slotsPerDivision: 4,
+			slotOwners: { A: [player] },
+			advanceTo: "swiss-round-1-generated",
+		});
+		expect(
+			(await fetchRecord(player.userId)).tournaments.map(
+				(x) => x.tournament_id,
+			),
+		).toEqual([played.tournamentId]);
 	});
 
 	it("omits the admin-only slot_a/b_discord_* keys entirely, for every viewer", async () => {
@@ -327,9 +309,8 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 
 	it("lists a cast at part granularity for a caster who holds no slot", async () => {
 		// The union case: a cast can name a tournament the player has no seat in,
-		// so the tournament index is the union of all three sections rather than
-		// the enrollment set. The tab has a branch for exactly this shape — an
-		// entry with `slots: []` that still renders a Casts group.
+		// so the tournament index is the union of both sections rather than the
+		// set they play in.
 		const caster = await makeUser({ discordUsername: "slotless-caster" });
 		const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
 		const match = (await t.matches()).find((m) => m.status === "pending")!;
@@ -360,11 +341,10 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 		).toBe(204);
 
 		const body = await fetchRecord(caster.userId);
-		// The tournament is present for the cast alone, with an empty Enrollment.
+		// The tournament is present for the cast alone.
 		expect(body.tournaments.map((x) => x.tournament_id)).toEqual([
 			t.tournamentId,
 		]);
-		expect(body.tournaments[0].slots).toEqual([]);
 		expect(body.matches).toEqual([]);
 		// One row, naming the sitting actually cast — not the other one.
 		expect(body.casts).toHaveLength(1);

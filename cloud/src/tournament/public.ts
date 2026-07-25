@@ -36,6 +36,7 @@ import {
 	slotDisplayName,
 	slotRowToRef,
 	tournamentConfig,
+	USER_MATCHES_WHERE,
 	type MatchPart,
 	type MatchRow,
 	type RoundRow,
@@ -1351,9 +1352,9 @@ export async function handleTournamentMatchDetail(
 // match-shaped rather than save-shaped: a match links exactly one save, so half
 // of a player's tournament games are in their opponent's library (and an admin
 // observer upload is in neither), pending matches have no save at all, and a
-// cast isn't a game. Three sections in one lazy fetch (the Videos-tab
-// precedent), so `tournaments` carries both the enrollment rows and the compact
-// per-tournament context the shared match table needs.
+// cast isn't a game. Two sections in one lazy fetch (the Videos-tab precedent),
+// with `tournaments` carrying the compact per-tournament context the shared
+// match table needs.
 //
 // Public: tournament reads already are, tournament-linked saves are forced
 // public by linkTournamentMatch, and the caster leaderboard already credits
@@ -1367,18 +1368,6 @@ export async function handleTournamentMatchDetail(
 // matches read, idx_match_casters_user for the casts read).
 const USER_MATCHES_LIMIT = 400;
 const USER_CASTS_LIMIT = 400;
-
-// One tournament_slots row of the player's, for the Enrollment section. A
-// player in the championship holds both a swiss and a championship slot, so
-// this is a list per tournament rather than a single division/seed.
-interface UserSlotRow {
-	slot_id: string;
-	tournament_id: string;
-	phase: SlotRow["phase"];
-	division: SlotRow["division"];
-	swiss_seed: number | null;
-	championship_seed: number | null;
-}
 
 // Live occupant identity (display label + avatar) per slot_id — the same two
 // maps the per-tournament pages build client-side via buildSlotMaps(standings,
@@ -1441,80 +1430,15 @@ export async function handleUserTournaments(
 	if (rl) return rl;
 	const session = await sessionFromRequest(env, request);
 
-	// --- Enrollment: every slot the player currently holds. Indexed by
-	// idx_slots_user. A substituted-out player has no slot, so they appear here
-	// only while they still hold a seat — their played matches still surface
-	// below via the report-time snapshot.
-	const slotRes = await env.SHARE_DB.prepare(
-		`SELECT slot_id, tournament_id, phase, division, swiss_seed, championship_seed
-		 FROM tournament_slots
-		 WHERE user_id = ?
-		 -- Swiss seat before championship seat (a championship participant holds
-		 -- both), so a tournament's slots read in the order they were earned.
-		 ORDER BY CASE phase WHEN 'swiss' THEN 0 ELSE 1 END,
-		          division, swiss_seed, championship_seed`,
-	)
-		.bind(userId)
-		.all<UserSlotRow>();
-	const slotRows = slotRes.results ?? [];
-
-	// --- Matches. The predicate mirrors the rule the render layer applies in
-	// src/lib/tournament/match-occupant.ts: prefer the report-time occupant
-	// snapshot (migration 0024) for a decided match, and fall through to the LIVE
-	// slot exactly where the render layer does. Both halves are load-bearing —
-	// the snapshot is what keeps a substitution from retroactively reassigning
-	// played matches to the substitute, and it doesn't exist for pending matches,
-	// which are exactly the tab's upcoming rows.
-	//
-	// The fallthrough is PER SIDE and has two triggers, mirroring
-	// matchSlotDisplayName's `status !== "pending" && snap != null` branch:
-	//   • the match is still pending — no snapshot has been taken yet; or
-	//   • it decided with a NULL snapshot on that side, which happens whenever
-	//     the occupant hadn't claimed their slot at report time (the snapshot
-	//     writers store `slot?.user_id ?? null`, and the login auto-claim in
-	//     auth.ts never backfills it). Without this the match would be
-	//     unattributable to anyone: the render layer already shows that side's
-	//     live occupant, so keying selection off the live slot agrees with it.
-	// A decided match with a non-null snapshot never takes the fallthrough, so
-	// the substitute still can't inherit a game they didn't play.
-	//
-	// Written as a UNION of four single-table legs rather than one OR'd
-	// predicate, because an OR that spans tables can't be indexed: SQLite's
-	// MULTI-INDEX OR optimization only fires when every branch searches the SAME
-	// table, and the live halves sit on the joined tournament_slots row. The
-	// combined form plans as a full `SCAN m` even with the snapshot columns
-	// indexed (see migration 0035); as a UNION each leg takes an index and the
-	// outer query resolves the id list through the matches PK.
-	//
-	// Each leg is one side of one rule, in the order stated above. UNION (not
-	// UNION ALL) de-duplicates, which covers a player owning both sides of one
-	// match — the case the old live-only OR-join needed a DISTINCT for.
-	//
-	// Byes are excluded: they auto-resolve, were never played or scheduled, and
-	// the shared table filters them out anyway (matchStatusGroup → null), so
-	// including them would only produce empty table groups. That filter lives on
-	// the outer query so it isn't repeated in all four legs.
+	// --- Matches. USER_MATCHES_WHERE is the attribution rule (snapshot for a
+	// decided match, live slot per side where the render layer falls through)
+	// plus the bye exclusion, shared with the `tournament_participant` flag that
+	// gates this tab — see the rationale on the fragment. Four binds of userId.
 	const matchRes = await env.SHARE_DB.prepare(
 		`SELECT ${MATCH_WITH_ROUND_COLUMNS}
 		 FROM tournament_matches m
 		 JOIN tournament_rounds r ON r.round_id = m.round_id
-		 WHERE m.status != 'bye'
-		   AND m.match_id IN (
-		        SELECT match_id FROM tournament_matches
-		         WHERE slot_a_user_id = ? AND status != 'pending'
-		        UNION
-		        SELECT match_id FROM tournament_matches
-		         WHERE slot_b_user_id = ? AND status != 'pending'
-		        UNION
-		        SELECT lm.match_id FROM tournament_slots s
-		          JOIN tournament_matches lm ON lm.slot_a_id = s.slot_id
-		         WHERE s.user_id = ?
-		           AND (lm.status = 'pending' OR lm.slot_a_user_id IS NULL)
-		        UNION
-		        SELECT lm.match_id FROM tournament_slots s
-		          JOIN tournament_matches lm ON lm.slot_b_id = s.slot_id
-		         WHERE s.user_id = ?
-		           AND (lm.status = 'pending' OR lm.slot_b_user_id IS NULL))
+		 WHERE ${USER_MATCHES_WHERE}
 		 ORDER BY m.created_at DESC
 		 LIMIT ?`,
 	)
@@ -1544,12 +1468,11 @@ export async function handleUserTournaments(
 		partId: row.part_id,
 	}));
 
-	// --- Tournaments referenced by any of the three sections. A cast or a
-	// snapshot-attributed match can name a tournament the player holds no slot
-	// in, so the index is the union, not just the enrollment set.
+	// --- Tournaments referenced by either section. A cast names a tournament the
+	// player may hold no slot in, so the index is the union of both rather than
+	// the set they play in.
 	const tournamentIds = [
 		...new Set([
-			...slotRows.map((s) => s.tournament_id),
 			...matchesWithRound.map(({ round }) => round.tournament_id),
 			...castsWithRound.map(({ round }) => round.tournament_id),
 		]),
@@ -1565,13 +1488,13 @@ export async function handleUserTournaments(
 		tournamentRows.push(...(res.results ?? []));
 	}
 	// The same setup gate every per-tournament public read applies: a setup
-	// tournament with signups closed is invisible to non-admins. Without it the
-	// Enrollment section would name one (with a slug linking to a 404) on a
-	// public profile — the leak class of #110, landing on the very section that
-	// exists to keep the tab from being contentless before round one. Per
-	// tournament, not one global admin check, since admin rights are per
-	// tournament. Only Enrollment is affected in practice: a setup tournament
-	// has no rounds, so it can have no matches or casts.
+	// tournament with signups closed is invisible to non-admins, so a public
+	// profile can't name one (with a slug linking to a 404) — the leak class of
+	// #110. Per tournament, not one global admin check, since admin rights are
+	// per tournament. Belt-and-braces now that both sections are match-derived:
+	// rounds only exist from the setup → swiss transition on and status never
+	// moves backwards, so a setup tournament reaches neither section. Free when
+	// it doesn't fire — setupGateHides short-circuits on status before querying.
 	const visible: TournamentRow[] = [];
 	for (const t of tournamentRows) {
 		if (!(await setupGateHides(env, session, t))) visible.push(t);
@@ -1631,14 +1554,6 @@ export async function handleUserTournaments(
 		division: round.division,
 	});
 
-	const slotsByTournament = new Map<string, UserSlotRow[]>();
-	for (const s of slotRows) {
-		if (!visibleIds.has(s.tournament_id)) continue;
-		const list = slotsByTournament.get(s.tournament_id) ?? [];
-		list.push(s);
-		slotsByTournament.set(s.tournament_id, list);
-	}
-
 	const slotLabels: Record<string, string> = {};
 	const slotAvatars: Record<string, string | null> = {};
 	for (const [slotId, identity] of liveBySlotId) {
@@ -1651,9 +1566,7 @@ export async function handleUserTournaments(
 		{
 			user_id: userId,
 			// Index + per-group context: the shared match table reads
-			// division_a/b_name and map_pool off this, and `slots` (empty when the
-			// player only appears as a caster, or was substituted out) is the
-			// Enrollment section.
+			// division_a/b_name and map_pool off this.
 			tournaments: visible.map((t) => ({
 				tournament_id: t.tournament_id,
 				slug: t.slug,
@@ -1666,13 +1579,6 @@ export async function handleUserTournaments(
 				division_a_name: t.division_a_name,
 				division_b_name: t.division_b_name,
 				map_pool: parseMapPoolLenient(t),
-				slots: (slotsByTournament.get(t.tournament_id) ?? []).map((s) => ({
-					slot_id: s.slot_id,
-					phase: s.phase,
-					division: s.division,
-					swiss_seed: s.swiss_seed,
-					championship_seed: s.championship_seed,
-				})),
 			})),
 			matches: shownMatches.map(({ match, round }) => serialize(match, round)),
 			// Part-granularity rows: `part_id` names which sitting the player cast.

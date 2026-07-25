@@ -72,7 +72,7 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 				: [];
 
 		// Same lazy load for the tournament record — one request covering
-		// enrollment, matches, and casts, only when that tab is open.
+		// matches and casts, only when that tab is open.
 		const tournamentRecord =
 			tab === "tournaments"
 				? await cloudApi.getUserTournaments(targetUserId, { fetch })

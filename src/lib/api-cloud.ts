@@ -536,9 +536,9 @@ export const cloudApi = {
 		return (await (res.json() as Promise<{ videos: RecentVideo[] }>)).videos;
 	},
 
-	// The target user's tournament record — enrollment, played + upcoming
-	// matches, and cast appearances. Public read; feeds the profile
-	// "Tournaments" tab, loaded lazily when that tab opens.
+	// The target user's tournament record — played + upcoming matches, and cast
+	// appearances. Public read; feeds the profile "Tournaments" tab, loaded
+	// lazily when that tab opens.
 	getUserTournaments: async (
 		userId: string,
 		opts?: CallOpts,
@@ -1948,23 +1948,12 @@ export interface MyAdminTournamentEntry {
 // hands each group its own, instead of fetching a TournamentDetail per group.
 
 // One tournament in the player's record, doubling as the match table's context.
-// `slots` is the Enrollment row: empty when the player holds no seat here (they
-// only cast, or they were substituted out and only their played matches remain).
-// A championship participant holds both a swiss and a championship slot, hence a
-// list rather than one division/seed.
 export interface UserTournamentEntry extends MatchTableTournament {
 	slug: string;
 	name: string;
 	status: TournamentStatus;
 	// Paired with `status` for the shared status chip (headerStatusMeta).
 	signups_open: boolean;
-	slots: {
-		slot_id: string;
-		phase: TournamentPhase;
-		division: Division | null;
-		swiss_seed: number | null;
-		championship_seed: number | null;
-	}[];
 }
 
 // A match row: the shared TournamentMatch shape plus the tournament it groups
