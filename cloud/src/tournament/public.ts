@@ -1362,8 +1362,9 @@ export async function handleTournamentMatchDetail(
 // ----------------------------------------------------------------------
 
 // Per-player caps. Generous: a busy player across a decade of tournaments is
-// well under either, and both queries are indexed (snapshot user_id / live
-// slot.user_id, and idx_match_casters_user).
+// well under either, and every leg of both queries takes an index
+// (idx_matches_slot_a/b_user + idx_slots_user + idx_matches_slot_a/b for the
+// matches read, idx_match_casters_user for the casts read).
 const USER_MATCHES_LIMIT = 400;
 const USER_CASTS_LIMIT = 400;
 
@@ -1459,30 +1460,61 @@ export async function handleUserTournaments(
 
 	// --- Matches. The predicate mirrors the rule the render layer applies in
 	// src/lib/tournament/match-occupant.ts: prefer the report-time occupant
-	// snapshot (migration 0024) for a decided match, fall through to the LIVE
-	// slot only for pending ones. Both halves are load-bearing — the snapshot is
-	// what keeps a substitution from retroactively reassigning played matches to
-	// the substitute, and it doesn't exist yet for pending matches, which are
-	// exactly the tab's upcoming rows.
+	// snapshot (migration 0024) for a decided match, and fall through to the LIVE
+	// slot exactly where the render layer does. Both halves are load-bearing —
+	// the snapshot is what keeps a substitution from retroactively reassigning
+	// played matches to the substitute, and it doesn't exist for pending matches,
+	// which are exactly the tab's upcoming rows.
 	//
-	// The slot joins are on slot_id (the slots PK), so neither can multiply rows:
-	// a player owning both sides of one match still yields a single row, without
-	// the DISTINCT the live-only OR-join needed.
+	// The fallthrough is PER SIDE and has two triggers, mirroring
+	// matchSlotDisplayName's `status !== "pending" && snap != null` branch:
+	//   • the match is still pending — no snapshot has been taken yet; or
+	//   • it decided with a NULL snapshot on that side, which happens whenever
+	//     the occupant hadn't claimed their slot at report time (the snapshot
+	//     writers store `slot?.user_id ?? null`, and the login auto-claim in
+	//     auth.ts never backfills it). Without this the match would be
+	//     unattributable to anyone: the render layer already shows that side's
+	//     live occupant, so keying selection off the live slot agrees with it.
+	// A decided match with a non-null snapshot never takes the fallthrough, so
+	// the substitute still can't inherit a game they didn't play.
+	//
+	// Written as a UNION of four single-table legs rather than one OR'd
+	// predicate, because an OR that spans tables can't be indexed: SQLite's
+	// MULTI-INDEX OR optimization only fires when every branch searches the SAME
+	// table, and the live halves sit on the joined tournament_slots row. The
+	// combined form plans as a full `SCAN m` even with the snapshot columns
+	// indexed (see migration 0035); as a UNION each leg takes an index and the
+	// outer query resolves the id list through the matches PK.
+	//
+	// Each leg is one side of one rule, in the order stated above. UNION (not
+	// UNION ALL) de-duplicates, which covers a player owning both sides of one
+	// match — the case the old live-only OR-join needed a DISTINCT for.
 	//
 	// Byes are excluded: they auto-resolve, were never played or scheduled, and
 	// the shared table filters them out anyway (matchStatusGroup → null), so
-	// including them would only produce empty table groups.
+	// including them would only produce empty table groups. That filter lives on
+	// the outer query so it isn't repeated in all four legs.
 	const matchRes = await env.SHARE_DB.prepare(
 		`SELECT ${MATCH_WITH_ROUND_COLUMNS}
 		 FROM tournament_matches m
 		 JOIN tournament_rounds r ON r.round_id = m.round_id
-		 LEFT JOIN tournament_slots sa ON sa.slot_id = m.slot_a_id
-		 LEFT JOIN tournament_slots sb ON sb.slot_id = m.slot_b_id
 		 WHERE m.status != 'bye'
-		   AND ((m.status != 'pending'
-		         AND (m.slot_a_user_id = ? OR m.slot_b_user_id = ?))
-		     OR (m.status = 'pending'
-		         AND (sa.user_id = ? OR sb.user_id = ?)))
+		   AND m.match_id IN (
+		        SELECT match_id FROM tournament_matches
+		         WHERE slot_a_user_id = ? AND status != 'pending'
+		        UNION
+		        SELECT match_id FROM tournament_matches
+		         WHERE slot_b_user_id = ? AND status != 'pending'
+		        UNION
+		        SELECT lm.match_id FROM tournament_slots s
+		          JOIN tournament_matches lm ON lm.slot_a_id = s.slot_id
+		         WHERE s.user_id = ?
+		           AND (lm.status = 'pending' OR lm.slot_a_user_id IS NULL)
+		        UNION
+		        SELECT lm.match_id FROM tournament_slots s
+		          JOIN tournament_matches lm ON lm.slot_b_id = s.slot_id
+		         WHERE s.user_id = ?
+		           AND (lm.status = 'pending' OR lm.slot_b_user_id IS NULL))
 		 ORDER BY m.created_at DESC
 		 LIMIT ?`,
 	)

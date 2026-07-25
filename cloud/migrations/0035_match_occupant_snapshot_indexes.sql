@@ -1,0 +1,27 @@
+-- Index the report-time occupant snapshot (migration 0024).
+--
+-- Why: GET /v1/users/:user_id/tournaments asks "which matches did this user
+-- play?", and the answer spans two sources — the snapshot columns for a decided
+-- match, the live tournament_slots row for a pending one. 0024 added the
+-- snapshot columns with no index at all, so that read scanned
+-- tournament_matches in full and sorted the result in a temp B-tree.
+--
+-- Indexes alone were NOT enough to fix it, which is why this migration lands
+-- alongside a query rewrite. The predicate ORs across two tables (snapshot
+-- columns on tournament_matches, user_id on the joined tournament_slots), and
+-- SQLite's MULTI-INDEX OR optimization only fires when every branch of the OR
+-- indexes the SAME table — EXPLAIN QUERY PLAN reports `SCAN m` with these
+-- indexes present. public.ts now issues the branches as a UNION of four
+-- single-table legs instead, at which point each leg takes an index: these two
+-- for the snapshot halves, idx_slots_user + idx_matches_slot_a/b (0006) for the
+-- live halves.
+--
+-- Two single-column indexes rather than one composite: the two halves are
+-- queried independently (a player is side A of some matches and side B of
+-- others), and neither column is ever a prefix of a lookup on the other.
+--
+-- No index on `status`, which appears in the same legs: it has four values
+-- across the whole table, so it earns nothing as an index and works fine as a
+-- filter applied after the user_id search.
+CREATE INDEX idx_matches_slot_a_user ON tournament_matches(slot_a_user_id);
+CREATE INDEX idx_matches_slot_b_user ON tournament_matches(slot_b_user_id);

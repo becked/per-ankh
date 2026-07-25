@@ -203,6 +203,47 @@ describe("GET /v1/users/:user_id/tournaments", () => {
 		);
 	});
 
+	it("attributes a match decided BEFORE the player claimed their slot", async () => {
+		// The other half of the snapshot rule. The snapshot writers store
+		// `slot?.user_id ?? null`, so a match reported while its occupant hadn't
+		// yet logged in pins a NULL user_id — and the login auto-claim never
+		// backfills it. Reading the snapshot alone would drop the match from that
+		// player's record forever, even though the tournament page renders their
+		// name on it. The per-side live fallthrough is what keeps it visible.
+		const t = await makeTournament({
+			slotsPerDivision: 4,
+			advanceTo: "swiss-round-1-generated",
+		});
+		const slot = t.slotsByDivision.A[0];
+		const match = (await t.matches()).find(
+			(m) => m.slot_a_id === slot.slotId || m.slot_b_id === slot.slotId,
+		)!;
+
+		// Decide it while the slot is still unclaimed → NULL snapshot user_id.
+		await expectOk(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/matches/${match.match_id}`,
+				as: t.admin,
+				body: { winner_slot_id: slot.slotId, status: "complete" },
+			}),
+		);
+
+		// The occupant logs in for the first time and auto-claims the seat.
+		const latecomer = await makeUser({
+			discordUsername: slot.discordUsername,
+		});
+		await devLogin({
+			discordId: latecomer.discordId,
+			username: slot.discordUsername,
+		});
+
+		const body = await fetchRecord(latecomer.userId);
+		expect(body.matches.map((m) => m.match_id)).toContain(match.match_id);
+		expect(body.tournaments[0].slots.map((s) => s.slot_id)).toEqual([
+			slot.slotId,
+		]);
+	});
+
 	it("hides a setup-phase tournament with signups closed from non-admins", async () => {
 		const player = await makeUser({ discordUsername: "secret-signup" });
 		const t = await makeTournament({
