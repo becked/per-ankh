@@ -9,7 +9,7 @@
 	//
 	// Columns are keyed off the shared registry (matches-table.ts).
 	import type {
-		TournamentDetail,
+		MatchTableTournament,
 		TournamentMatch,
 		TournamentMatchPartStream,
 		UserMe,
@@ -66,7 +66,10 @@
 		columns: MatchColumn[];
 		rows: MatchRow[];
 		zone: ScheduleZone;
-		tournament: TournamentDetail;
+		// Only the four fields the cells (and the cast controls) actually read —
+		// not a whole TournamentDetail, so a cross-tournament surface can group
+		// rows and hand each group its own compact context.
+		tournament: MatchTableTournament;
 		// The signed-in viewer (null when anonymous), for the inline cast controls
 		// in the Casters & Streams cell. Reads only; anonymous viewers still see the
 		// "needs a caster" flag but no action buttons.

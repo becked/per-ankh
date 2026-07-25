@@ -12,7 +12,11 @@
 	// editable in account preferences). A first-time streamer with no stored
 	// link gets a one-time inline input — whatever they enter is remembered
 	// server-side, so every later cast is again a single click.
-	import { cloudApi, type TournamentDetail, type UserMe } from "$lib/api-cloud";
+	import {
+		cloudApi,
+		type MatchTableTournament,
+		type UserMe,
+	} from "$lib/api-cloud";
 	import { rowPart, type MatchRow } from "$lib/tournament/matches-table";
 	import { runAction } from "$lib/tournament/async-action";
 	import { ensureUrlScheme } from "$lib/utils/url";
@@ -23,7 +27,9 @@
 		user,
 	}: {
 		row: MatchRow;
-		tournament: TournamentDetail;
+		// Same compact context the host table takes; only `tournament_id` (the
+		// cast endpoints' path segment) is read here.
+		tournament: MatchTableTournament;
 		user: UserMe | null;
 	} = $props();
 

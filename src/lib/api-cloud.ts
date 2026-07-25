@@ -1587,6 +1587,20 @@ export interface TournamentDetail {
 	updated_at: string;
 }
 
+// Everything the shared match table (MatchTable + CastControls) reads off the
+// tournament a row belongs to: the two division names (matchBracketLabel), the
+// map pool (the map label under the matchup), and the id the inline cast controls
+// post to. `TournamentDetail` structurally satisfies it, so the per-tournament
+// surfaces keep passing their whole tournament; the player-profile Tournaments
+// tab spans tournaments and gets this compact context per group from
+// GET /v1/users/:user_id/tournaments instead of a TournamentDetail each.
+export interface MatchTableTournament {
+	tournament_id: string;
+	division_a_name: string;
+	division_b_name: string;
+	map_pool: MapPoolEntry[];
+}
+
 // Mirrors cloud/src/schemas/tournament.ts:PatchTournamentSchema. Narrower
 // than Partial<TournamentDetail> on purpose: PATCH only accepts
 // metadata/config edits, not the derived fields (slot_counts,

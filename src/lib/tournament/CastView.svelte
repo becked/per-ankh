@@ -5,7 +5,7 @@
 	// shared MatchTable's Casters & Streams cell (CastControls), so this view is
 	// just the upcoming-parts filter + the needs-a-caster toggle around it.
 	import {
-		type TournamentDetail,
+		type MatchTableTournament,
 		type TournamentMatch,
 		type UserMe,
 	} from "$lib/api-cloud";
@@ -30,7 +30,9 @@
 		onOpenMatch,
 	}: {
 		matches: TournamentMatch[];
-		tournament: TournamentDetail;
+		// Passed straight through to the shared table, so it needs no more than
+		// the table itself does.
+		tournament: MatchTableTournament;
 		zone: ScheduleZone;
 		user: UserMe | null;
 		slotLabels: Record<string, string>;
