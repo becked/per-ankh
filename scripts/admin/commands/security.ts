@@ -209,11 +209,15 @@ export async function runNukeKey(
 //
 // Tournament tables ALSO reference users(user_id) but WITHOUT ON DELETE CASCADE
 // (tournament_admins, tournament_slots, tournament_matches.reported_by_user_id,
-// tournament_beta_users.user_id/granted_by_user_id). D1 enforces FKs, so a bare
-// DELETE FROM users throws for anyone who ever touched a tournament — we clear
-// those references first (null the nullable ones, delete the NOT NULL / own
-// rows). The 0024/0025 slot_a/b_user_id and caster_user_id columns are plain
-// TEXT with no FK, so they don't block and are left as a historical snapshot.
+// tournament_beta_users.user_id/granted_by_user_id,
+// tournament_match_casters.user_id). D1 enforces FKs, so a bare DELETE FROM
+// users throws for anyone who ever touched a tournament — we clear those
+// references first (null the nullable ones, delete the NOT NULL / own rows).
+// The 0024/0025 slot_a/b_user_id and caster_user_id columns are plain TEXT
+// with no FK, so they don't block and are left as a historical snapshot.
+//
+// Any new table that FK-references users(user_id) has to be added to the batch
+// below, or nuke-user starts failing for everyone who appears in it.
 
 export async function runNukeUser(
 	argv: string[],
@@ -246,8 +250,8 @@ export async function runNukeUser(
 		const yes = await confirmNuke(
 			`NUKE USER: ${user.display_name} (${userId})\n` +
 				`  1. Delete ${gameCount} game(s) + their R2 blobs (json.gz + zip)\n` +
-				`  2. Clear tournament references (admin grants + own beta grant removed;\n` +
-				`     slot claims, reported-by, and granted-by nulled)\n` +
+				`  2. Clear tournament references (admin grants, own beta grant, and cast\n` +
+				`     appearances removed; slot claims, reported-by, and granted-by nulled)\n` +
 				`  3. Delete the user record + collections + online_ids\n` +
 				`  4. KV sessions are NOT cleared — stale tokens will 401 on next call`,
 		);
@@ -274,6 +278,13 @@ export async function runNukeUser(
 		`UPDATE tournament_beta_users SET granted_by_user_id = NULL WHERE granted_by_user_id = ${sqlStr(userId)}`,
 		`UPDATE tournament_slots SET user_id = NULL WHERE user_id = ${sqlStr(userId)}`,
 		`UPDATE tournament_matches SET reported_by_user_id = NULL WHERE reported_by_user_id = ${sqlStr(userId)}`,
+		// Cast appearances (migration 0034). user_id is NOT NULL and part of the
+		// primary key, so these are deleted rather than nulled — like the admin
+		// grants above. The `parts` blob keeps the caster entry, so the cast is
+		// still credited by name on the match; only the profile-attribution index
+		// drops. Nothing re-derives it afterwards (syncMatchCasters only runs on a
+		// parts write), which is the intended end state for a nuked user.
+		`DELETE FROM tournament_match_casters WHERE user_id = ${sqlStr(userId)}`,
 	]);
 
 	info("Deleting user record...");
