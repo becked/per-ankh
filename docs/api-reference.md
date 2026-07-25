@@ -297,7 +297,7 @@ Public profile + all-time summary.
 - **Path:** `user_id` (21-char).
 - **Response 200:** `{ user_id, display_name, avatar_url, summary: { total_games, win_rate: number|null, favorite_nation: string|null, favorite_day_of_week: number|null }, channels: { platform, channel_url }[], tournament_participant: boolean }`.
 - **Errors:** `404 NOT_FOUND`.
-- **Notes:** Summary is all-time over all saves (ignores any scope selector). `channels` are the user's linked video/stream channels (public) — drives whether the profile shows the "Videos" tab. `tournament_participant` plays the same role for the "Tournaments" tab: true when the user holds a tournament slot **or** has cast a match sitting, so a dedicated caster who never plays still gets the tab. Both are flags only; the tabs' payloads load lazily from their own endpoints.
+- **Notes:** Summary is all-time over all saves (ignores any scope selector). `channels` are the user's linked video/stream channels (public) — drives whether the profile shows the "Videos" tab. `tournament_participant` plays the same role for the "Tournaments" tab: true when the user has a match attributable to them (same rule `GET /v1/users/:user_id/tournaments` uses — report-time snapshot for a decided match, live slot per side otherwise, byes excluded) **or** has cast a match sitting, so a dedicated caster who never plays still gets the tab. Holding a slot is deliberately not the test: a seat before round one renders nothing, and a substituted-out player holds no slot yet keeps every match they played. Both are flags only; the tabs' payloads load lazily from their own endpoints.
 
 ### `GET /v1/users/:user_id/stats`
 User-corpus aggregate stats bundle.

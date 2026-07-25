@@ -21,7 +21,7 @@ import { displayNameSql } from "./identity";
 import { logError } from "./log";
 import { UserSearchQuerySchema } from "./schemas/tournament";
 import { sessionFromRequest, type SessionEnv } from "./session";
-import type { TournamentEnv } from "./tournament/data";
+import { USER_MATCHES_WHERE, type TournamentEnv } from "./tournament/data";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "./util";
 
 // Generous ceiling — typing 5 chars to find someone, picking from the
@@ -222,21 +222,33 @@ export async function handleUserProfile(
 			// role `channels` plays for Videos, with the payload itself loading
 			// lazily via GET /v1/users/:id/tournaments when the tab opens.
 			//
-			// "Has a slot OR has cast", so a dedicated caster who never plays still
-			// gets a tab. Both halves are indexed lookups: idx_slots_user (0006) and
-			// idx_match_casters_user (0034). The cast half is why that join table
-			// exists — the equivalent question against the `parts` blob is a nested
-			// json_each fan-out with no possible index, and it would run on every
-			// profile view WITHOUT a slot, which is most of them. A rate limit is
-			// deliberately NOT the answer here: it would add an `events` INSERT to
-			// the site's hottest public read (and newly 429 an endpoint every SSR
-			// page load hits) to avoid one indexed read.
+			// "Has an attributable match OR has cast": exactly the two sections that
+			// endpoint returns, so the flag can't disagree with the payload in either
+			// direction. Holding a slot is deliberately NOT the test — it's neither
+			// sufficient (a seat before round one, or one whose only match was a bye,
+			// renders nothing) nor necessary (a substituted-out player holds no slot
+			// yet keeps every match they played, via the report-time snapshot). The
+			// match half reuses USER_MATCHES_WHERE for that reason: one rule, so a
+			// later change to attribution can't leave the tab reachable-but-empty or
+			// hidden-but-populated.
+			//
+			// Five index-backed EXISTS legs, all short-circuiting: idx_matches_slot_a/
+			// b_user (0035) for the snapshot halves, idx_slots_user (0006) + idx_
+			// matches_slot_a/b (0006) for the live halves, idx_match_casters_user
+			// (0034) for the cast. The cast half is why that join table exists — the
+			// equivalent question against the `parts` blob is a nested json_each
+			// fan-out with no possible index, and it would run on every profile view
+			// WITHOUT a slot, which is most of them. A rate limit is deliberately NOT
+			// the answer here: it would add an `events` INSERT to the site's hottest
+			// public read (and newly 429 an endpoint every SSR page load hits) to
+			// avoid indexed reads.
 			env.SHARE_DB.prepare(
-				`SELECT EXISTS (SELECT 1 FROM tournament_slots WHERE user_id = ?)
+				`SELECT EXISTS (
+				          SELECT 1 FROM tournament_matches m WHERE ${USER_MATCHES_WHERE})
 				     OR EXISTS (SELECT 1 FROM tournament_match_casters WHERE user_id = ?)
 				        AS participates`,
 			)
-				.bind(userId, userId)
+				.bind(userId, userId, userId, userId, userId)
 				.first<{ participates: number }>(),
 		]);
 

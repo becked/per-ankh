@@ -11,7 +11,7 @@ import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
 import { expectOk } from "../../helpers/assertions";
 import { makeTournament, makeUser } from "../../helpers/builders";
-import { request } from "../../helpers/requests";
+import { devLogin, request } from "../../helpers/requests";
 
 beforeAll(async () => {
 	await applyD1Migrations(env.SHARE_DB, env.TEST_MIGRATIONS);
@@ -276,10 +276,86 @@ describe("profile tournament_participant flag", () => {
 		expect(await participatesFlag(nobody.userId)).toBe(false);
 	});
 
-	it("is true for a slot holder", async () => {
+	it("tracks matches, not seats — false for a seat alone, true once paired", async () => {
+		// The flag answers "would the tab have anything in it", so a seat before
+		// round one is false: the tab would render its empty state.
 		const player = await makeUser({ discordUsername: "flag-player" });
 		await makeTournament({ slotsPerDivision: 4, slotOwners: { A: [player] } });
-		expect(await participatesFlag(player.userId)).toBe(true);
+		expect(await participatesFlag(player.userId)).toBe(false);
+
+		const paired = await makeUser({ discordUsername: "flag-paired" });
+		await makeTournament({
+			slotsPerDivision: 4,
+			slotOwners: { A: [paired] },
+			advanceTo: "swiss-round-1-generated",
+		});
+		expect(await participatesFlag(paired.userId)).toBe(true);
+	});
+
+	it("stays true for a player substituted out after playing", async () => {
+		// The substitution rewrites the slot's identity columns, so the original
+		// holds no tournament_slots row afterwards — but the report-time snapshot
+		// keeps their played match on their record. A seat-based flag would hide a
+		// tab that still has content.
+		const original = await makeUser({ discordUsername: "played-then-subbed" });
+		const t = await makeTournament({
+			slotsPerDivision: 4,
+			slotOwners: { A: [original] },
+			advanceTo: "swiss-round-1-generated",
+		});
+		const slot = t.slotsByDivision.A[0];
+		const match = (await t.matches()).find(
+			(m) => m.slot_a_id === slot.slotId || m.slot_b_id === slot.slotId,
+		)!;
+		await expectOk(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/matches/${match.match_id}`,
+				as: t.admin,
+				body: { winner_slot_id: slot.slotId, status: "complete" },
+			}),
+		);
+		await expectOk(
+			await request.patch({
+				path: `/v1/tournaments/${t.tournamentId}/slots/${slot.slotId}`,
+				as: t.admin,
+				body: { discord_username: "the-substitute" },
+			}),
+		);
+
+		// No slot row left for them, and the flag is still true.
+		const slotCount = await env.SHARE_DB.prepare(
+			"SELECT COUNT(*) AS n FROM tournament_slots WHERE user_id = ?",
+		)
+			.bind(original.userId)
+			.first<{ n: number }>();
+		expect(slotCount?.n).toBe(0);
+		expect(await participatesFlag(original.userId)).toBe(true);
+	});
+
+	it("is false when the only match is a bye", async () => {
+		// 5 slots per division → one bye per round. The tab filters byes out, so a
+		// bye alone leaves it empty and the flag has to agree.
+		const t = await makeTournament({
+			slotsPerDivision: 5,
+			advanceTo: "swiss-round-1-generated",
+		});
+		const bye = (await t.matches()).find((m) => m.status === "bye")!;
+		const byeSlot = t.slotsByDivision.A.concat(t.slotsByDivision.B).find(
+			(s) => s.slotId === bye.slot_a_id,
+		)!;
+		const byePlayer = await makeUser({
+			discordUsername: byeSlot.discordUsername,
+		});
+		await devLogin({
+			discordId: byePlayer.discordId,
+			username: byeSlot.discordUsername,
+		});
+
+		const record = await expectOk<{ matches: unknown[] }>(
+			await request.get({ path: `/v1/users/${byePlayer.userId}/tournaments` }),
+		);
+		expect(record.matches).toEqual([]);
+		expect(await participatesFlag(byePlayer.userId)).toBe(false);
 	});
 
 	it("is true for a dedicated caster who holds no slot", async () => {
