@@ -9,7 +9,6 @@
 	//
 	// Columns are keyed off the shared registry (matches-table.ts).
 	import type {
-		MatchTableTournament,
 		TournamentMatch,
 		TournamentMatchPartStream,
 		UserMe,
@@ -44,6 +43,7 @@
 		MATCH_TABLE_TH_CLASS,
 		type MatchColumn,
 		type MatchRow,
+		type MatchTableTournament,
 	} from "$lib/tournament/matches-table";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
 	import {

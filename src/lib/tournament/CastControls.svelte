@@ -12,12 +12,12 @@
 	// editable in account preferences). A first-time streamer with no stored
 	// link gets a one-time inline input — whatever they enter is remembered
 	// server-side, so every later cast is again a single click.
+	import { cloudApi, type UserMe } from "$lib/api-cloud";
 	import {
-		cloudApi,
+		rowPart,
+		type MatchRow,
 		type MatchTableTournament,
-		type UserMe,
-	} from "$lib/api-cloud";
-	import { rowPart, type MatchRow } from "$lib/tournament/matches-table";
+	} from "$lib/tournament/matches-table";
 	import { runAction } from "$lib/tournament/async-action";
 	import { ensureUrlScheme } from "$lib/utils/url";
 

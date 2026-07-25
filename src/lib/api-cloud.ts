@@ -1596,20 +1596,6 @@ export interface TournamentDetail {
 	updated_at: string;
 }
 
-// Everything the shared match table (MatchTable + CastControls) reads off the
-// tournament a row belongs to: the two division names (matchBracketLabel), the
-// map pool (the map label under the matchup), and the id the inline cast controls
-// post to. `TournamentDetail` structurally satisfies it, so the per-tournament
-// surfaces keep passing their whole tournament; the player-profile Tournaments
-// tab spans tournaments and gets this compact context per group from
-// GET /v1/users/:user_id/tournaments instead of a TournamentDetail each.
-export interface MatchTableTournament {
-	tournament_id: string;
-	division_a_name: string;
-	division_b_name: string;
-	map_pool: MapPoolEntry[];
-}
-
 // Mirrors cloud/src/schemas/tournament.ts:PatchTournamentSchema. Narrower
 // than Partial<TournamentDetail> on purpose: PATCH only accepts
 // metadata/config edits, not the derived fields (slot_counts,
@@ -1949,13 +1935,21 @@ export interface MyAdminTournamentEntry {
 // context the shared match table needs — the tab groups rows by tournament and
 // hands each group its own, instead of fetching a TournamentDetail per group.
 
-// One tournament in the player's record, doubling as the match table's context.
-export interface UserTournamentEntry extends MatchTableTournament {
+// One tournament in the player's record. The last three fields are there to
+// satisfy the shared match table's MatchTableTournament context (declared in
+// $lib/tournament/matches-table) structurally — the tab hands each group its own
+// instead of fetching a TournamentDetail per group. Listed rather than inherited
+// so this response shape stays independent of the table's prop contract.
+export interface UserTournamentEntry {
+	tournament_id: string;
 	slug: string;
 	name: string;
 	status: TournamentStatus;
 	// Paired with `status` for the shared status chip (headerStatusMeta).
 	signups_open: boolean;
+	division_a_name: string;
+	division_b_name: string;
+	map_pool: MapPoolEntry[];
 }
 
 // A match row: the shared TournamentMatch shape plus the tournament it groups

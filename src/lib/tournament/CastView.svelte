@@ -4,16 +4,13 @@
 	// many still need a caster; the sign-up controls themselves live inline in the
 	// shared MatchTable's Casters & Streams cell (CastControls), so this view is
 	// just the upcoming-parts filter + the needs-a-caster toggle around it.
-	import {
-		type MatchTableTournament,
-		type TournamentMatch,
-		type UserMe,
-	} from "$lib/api-cloud";
+	import { type TournamentMatch, type UserMe } from "$lib/api-cloud";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import {
 		pickColumns,
 		matchRowMatchesSearch,
 		type MatchRow,
+		type MatchTableTournament,
 	} from "$lib/tournament/matches-table";
 	import { upcomingScheduledParts, CAST_GRACE_MS } from "$lib/tournament/parts";
 	import type { ScheduleZone } from "$lib/tournament/schedule";
