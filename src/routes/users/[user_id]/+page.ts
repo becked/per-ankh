@@ -11,7 +11,7 @@ import type { UserScope } from "$lib/stats/types";
 import type { PageLoad } from "./$types";
 
 const FIRST_PAGE_SIZE = 50;
-const TABS = new Set(["overview", "stats", "games", "videos"]);
+const TABS = new Set(["overview", "stats", "games", "videos", "tournaments"]);
 const SCOPE_KEYWORDS = new Set(["public", "vs_ai", "mp", "tournament"]);
 
 export const load: PageLoad = async ({ fetch, url, params, parent }) => {
@@ -60,11 +60,23 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 		const hasChannels = profile.channels.length > 0;
 		if (tab === "videos" && !hasChannels) tab = "overview";
 
+		// Same rule for Tournaments: the flag is "holds a slot OR has cast", so a
+		// dedicated caster who never plays still gets the tab.
+		const isTournamentParticipant = profile.tournament_participant;
+		if (tab === "tournaments" && !isTournamentParticipant) tab = "overview";
+
 		// Fetch recent videos only when the Videos tab is active.
 		const videos =
 			tab === "videos"
 				? await cloudApi.getUserVideos(targetUserId, { fetch })
 				: [];
+
+		// Same lazy load for the tournament record — one request covering
+		// enrollment, matches, and casts, only when that tab is open.
+		const tournamentRecord =
+			tab === "tournaments"
+				? await cloudApi.getUserTournaments(targetUserId, { fetch })
+				: null;
 
 		// Fetch the first games page only when the Games tab is active —
 		// Overview/Stats render entirely from the bundle.
@@ -98,6 +110,8 @@ export const load: PageLoad = async ({ fetch, url, params, parent }) => {
 			scope,
 			hasChannels,
 			videos,
+			isTournamentParticipant,
+			tournamentRecord,
 			category: url.searchParams.get("category"),
 			// Games-tab state.
 			games: gamesRes?.games ?? [],

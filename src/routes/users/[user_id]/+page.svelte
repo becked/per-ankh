@@ -15,6 +15,7 @@
 	import GamesTable from "$lib/users/GamesTable.svelte";
 	import OverviewTab from "$lib/users/OverviewTab.svelte";
 	import ScopeRow from "$lib/users/ScopeRow.svelte";
+	import TournamentsTab from "$lib/users/TournamentsTab.svelte";
 	import VideosTab from "$lib/users/VideosTab.svelte";
 	import StatsView from "$lib/stats/StatsView.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -185,6 +186,11 @@
 							<Tabs.Trigger value="stats" class={triggerClass}
 								>Stats</Tabs.Trigger
 							>
+							{#if data.isTournamentParticipant}
+								<Tabs.Trigger value="tournaments" class={triggerClass}
+									>Tournaments</Tabs.Trigger
+								>
+							{/if}
 							{#if data.hasChannels}
 								<Tabs.Trigger value="videos" class={triggerClass}
 									>Videos</Tabs.Trigger
@@ -216,6 +222,16 @@
 						<Tabs.Content value="stats">
 							<StatsView {bundle} />
 						</Tabs.Content>
+
+						{#if data.isTournamentParticipant}
+							<Tabs.Content value="tournaments">
+								<!-- Payload loads lazily with the tab (mirrors Videos), so it's
+								     null until then. -->
+								{#if data.tournamentRecord}
+									<TournamentsTab record={data.tournamentRecord} />
+								{/if}
+							</Tabs.Content>
+						{/if}
 
 						{#if data.hasChannels}
 							<Tabs.Content value="videos">
