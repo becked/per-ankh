@@ -47,6 +47,10 @@ export interface City {
 	growthCount: number;
 	unitProductionCount: number;
 	buyTileCount: number;
+	// Per-city project completions from <ProjectCount> (PROJECT_X → count) —
+	// city projects like Archives and Forums that carry city effects.
+	// (Religion presence is parsed separately — parseCityReligions.)
+	projectCounts: { project: string; count: number }[];
 }
 
 export interface CityProductionItem {
@@ -162,6 +166,10 @@ export function parseCities(root: Record<string, unknown>): City[] {
 			}
 		}
 
+		const projectCounts = [...parseNameKeyedIntMap(node.ProjectCount)].map(
+			([project, count]) => ({ project, count }),
+		);
+
 		cities.push({
 			xmlId,
 			cityName,
@@ -184,6 +192,7 @@ export function parseCities(root: Record<string, unknown>): City[] {
 			growthCount: optInt(node.GrowthCount) ?? 0,
 			unitProductionCount,
 			buyTileCount: optInt(node.BuyTileCount) ?? 0,
+			projectCounts,
 		});
 	}
 
