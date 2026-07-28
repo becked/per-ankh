@@ -399,6 +399,9 @@
 			...CHART_THEME,
 			tooltip: {
 				trigger: "axis",
+				// The decomposition makes this a tall tooltip; confine keeps it
+				// inside the chart instead of spilling over the tab bar.
+				confine: true,
 				backgroundColor: TOOLTIP_SURFACE,
 				borderColor: TOOLTIP_BORDER,
 				textStyle: { color: TOOLTIP_TEXT },
