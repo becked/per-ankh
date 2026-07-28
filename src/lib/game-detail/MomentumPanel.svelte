@@ -161,6 +161,42 @@
 	const fmtStat = (v: number, dp: number): string =>
 		dp ? v.toFixed(1) : Math.round(v).toLocaleString("en-US");
 
+	// Battles aren't in the event log — derive them the owglick way, from
+	// military-power drops across the window. Both sides bleeding hard is a
+	// trade (named for who lost less); one side collapsing alone is an army
+	// destroyed.
+	const battleEvents = $derived.by(() => {
+		if (!prev) return [];
+		const da = pt.sa[4] - prev.sa[4];
+		const db = pt.sb[4] - prev.sb[4];
+		const out: { kind: string; who: string | null; text: string }[] = [];
+		const f = (v: number): string => `${v > 0 ? "+" : ""}${Math.round(v)}`;
+		if (da < -25 && db < -25) {
+			if (Math.abs(da - db) < 15) {
+				out.push({
+					kind: "battle",
+					who: null,
+					text: `battle, even trade (${a.label} ${f(da)} · ${b.label} ${f(db)} power)`,
+				});
+			} else {
+				const [winner, wl, ll] =
+					da > db ? [a.label, da, db] : [b.label, db, da];
+				out.push({
+					kind: "battle",
+					who: winner,
+					text: `won the trade (${f(wl)} vs ${f(ll)} power)`,
+				});
+			}
+		} else if (da < -60 || db < -60) {
+			out.push({
+				kind: "battle",
+				who: da < db ? a.label : b.label,
+				text: `army destroyed (${f(Math.min(da, db))} power)`,
+			});
+		}
+		return out;
+	});
+
 	// Events logged in the window since the previous scored turn — data, not
 	// attribution.
 	const KIND: Record<string, string> = {
@@ -183,13 +219,18 @@
 			.slice(0, 4)
 			.map((e) => ({
 				kind: KIND[e.log_type],
-				who: e.player_name,
+				who: e.player_name as string | null,
 				text: stripMarkup(e.description) || formatEnum(e.log_type, ""),
 			}));
 	});
+	const shownEvents = $derived([...battleEvents, ...windowEvents]);
 
 	const playerFor = (name: string | null): DetailPlayer | null =>
-		name === a.player_name ? a : name === b.player_name ? b : null;
+		name === a.player_name || name === a.label
+			? a
+			: name === b.player_name || name === b.label
+				? b
+				: null;
 </script>
 
 {#snippet barRows(rows: BarRow[], max: number, own: string, other: string)}
@@ -333,13 +374,13 @@
 						)}
 					{/if}
 				{/if}
-				{#if windowEvents.length > 0}
+				{#if shownEvents.length > 0}
 					<div
 						class="mb-1 mt-2 text-[11px] font-bold uppercase tracking-wide text-tan"
 					>
 						Logged this window
 					</div>
-					{#each windowEvents as ev, i (i)}
+					{#each shownEvents as ev, i (i)}
 						<div class="py-0.5 text-xs text-bright">
 							<span
 								class="mr-1 rounded-sm px-1 text-[9px] uppercase text-tan"
