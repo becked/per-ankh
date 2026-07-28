@@ -9,6 +9,18 @@
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
+	import type { MapTile } from "$lib/types/MapTile";
+	import type { TileOwnershipEntry } from "$lib/parser/types";
+	import type { ChartOption } from "$lib/echarts";
+	import ChartContainer from "$lib/ChartContainer.svelte";
+	import { CHART_THEME } from "$lib/config";
+	import {
+		TOOLTIP_BORDER,
+		TOOLTIP_MUTED,
+		TOOLTIP_SURFACE,
+		TOOLTIP_TEXT,
+	} from "./EventRail.svelte";
+	import { momentumCurve, type MomentumCurve } from "./momentum";
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
 		type PlayerSummary,
@@ -36,6 +48,8 @@
 		improvementData,
 		gameReligions,
 		playerWonders,
+		staticMapTiles = null,
+		tileOwnershipHistory = [],
 		userNation = null,
 		userDisplayName = null,
 	}: {
@@ -51,6 +65,11 @@
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
 		playerWonders: PlayerWonder[];
+		// End-state map tiles for the momentum chart's city reconstruction —
+		// deliberately NOT the turn-slider's reconstructed tiles, whose
+		// properties reflect the selected turn. Null for legacy callers.
+		staticMapTiles?: MapTile[] | null;
+		tileOwnershipHistory?: TileOwnershipEntry[];
 		// Uploader's picked nation (cloud-only). When set, drives the
 		// save-owner flag below; otherwise falls back to the alphabetical-
 		// first-human heuristic (correct for single-human legacy shares
@@ -330,7 +349,143 @@
 		if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
 		return value.toString();
 	}
+
+	// ─── Momentum ─────────────────────────────────────────────────────
+	// The fitted win-probability curve for duels: who was winning, turn by
+	// turn, with the exact decomposition of why in the tooltip. Retrospective
+	// by construction (weights fitted on the corpus, buckets keyed on the
+	// final turn) — worded as a reading of the match, never a forecast.
+	const duelists = $derived.by(() => {
+		const humans = players.filter((p) => p.is_human);
+		if (humans.length !== 2) return null;
+		// Uploader-first, so the plotted line is "my side" when there is one.
+		const ordered = [...humans].sort(
+			(a, b) =>
+				(a.nation === userNation ? 0 : 1) - (b.nation === userNation ? 0 : 1),
+		);
+		return ordered as [DetailPlayer, DetailPlayer];
+	});
+
+	const momentum = $derived.by<MomentumCurve | null>(() => {
+		const duo = duelists;
+		if (!duo || !staticMapTiles || staticMapTiles.length === 0) return null;
+		if (duo[0].player_id == null || duo[1].player_id == null) return null;
+		return momentumCurve({
+			a: duo[0].player_id,
+			b: duo[1].player_id,
+			finalTurn: gameDetails.total_turns,
+			yieldHistory: allYields,
+			playerHistory,
+			mapTiles: staticMapTiles,
+			tileOwnership: tileOwnershipHistory,
+		});
+	});
+
+	const DIM_LABELS: Record<string, string> = {
+		cities: "Cities",
+		orders: "Orders",
+		science: "Science",
+		eco: "Economy",
+		mil: "Military",
+	};
+
+	const momentumOption = $derived.by<ChartOption | null>(() => {
+		const curve = momentum;
+		const duo = duelists;
+		if (!curve || !duo) return null;
+		const [a, b] = duo;
+		return {
+			...CHART_THEME,
+			tooltip: {
+				trigger: "axis",
+				backgroundColor: TOOLTIP_SURFACE,
+				borderColor: TOOLTIP_BORDER,
+				textStyle: { color: TOOLTIP_TEXT },
+				formatter: (params: unknown) => {
+					const arr = params as { dataIndex: number }[];
+					const pt = curve.points[arr[0]?.dataIndex ?? 0];
+					if (!pt) return "";
+					// Flip contributions toward whoever they favour — positive must
+					// always mean "helped the named player" (leader here).
+					const aLeads = pt.p >= 0.5;
+					const leader = aLeads ? a : b;
+					const pct = Math.round((aLeads ? pt.p : 1 - pt.p) * 100);
+					const rows = curve.dims
+						.map((dim, j) => ({
+							dim,
+							v: aLeads ? pt.lv[j] : -pt.lv[j],
+						}))
+						.sort((x, y) => Math.abs(y.v) - Math.abs(x.v));
+					const helps = rows.filter((r) => r.v > 0.005);
+					const drags = rows.filter((r) => r.v < -0.005);
+					const line = (r: { dim: string; v: number }) =>
+						`<div>${DIM_LABELS[r.dim]} <b>${r.v > 0 ? "+" : ""}${r.v.toFixed(2)}</b></div>`;
+					return (
+						`<div style="font-weight:700;color:${leader.color}">Turn ${pt.turn} — ${leader.label} ${pct}%</div>` +
+						(helps.length
+							? `<div style="color:${TOOLTIP_MUTED};font-size:11px;margin-top:3px">Driving the lead</div>` +
+								helps.map(line).join("")
+							: "") +
+						(drags.length
+							? `<div style="color:${TOOLTIP_MUTED};font-size:11px;margin-top:3px">Dragging</div>` +
+								drags.map(line).join("")
+							: "") +
+						`<div style="color:${TOOLTIP_MUTED};font-size:10px;margin-top:4px">Model reading of the finished match, not a forecast</div>`
+					);
+				},
+			},
+			grid: { left: 48, right: 24, top: 20, bottom: 40 },
+			xAxis: {
+				type: "category",
+				data: curve.points.map((pt) => pt.turn),
+				name: "Turn",
+				nameLocation: "middle",
+				nameGap: 24,
+			},
+			yAxis: {
+				type: "value",
+				min: 0,
+				max: 100,
+				axisLabel: { formatter: "{value}%" },
+			},
+			series: [
+				{
+					name: a.label,
+					type: "line",
+					showSymbol: false,
+					data: curve.points.map((pt) => Math.round(pt.p * 1000) / 10),
+					lineStyle: { color: a.color, width: 2 },
+					itemStyle: { color: a.color },
+					areaStyle: { color: a.color, opacity: 0.08 },
+					markLine: {
+						silent: true,
+						symbol: "none",
+						label: { show: false },
+						lineStyle: { color: "#6b6459", type: "dashed" },
+						data: [{ yAxis: 50 }],
+					},
+				},
+				{
+					name: b.label,
+					type: "line",
+					showSymbol: false,
+					data: curve.points.map((pt) => Math.round((1 - pt.p) * 1000) / 10),
+					lineStyle: { color: b.color, width: 2, opacity: 0.7 },
+					itemStyle: { color: b.color },
+				},
+			],
+		} as ChartOption;
+	});
 </script>
+
+{#if momentumOption}
+	<div
+		class="mb-4 rounded-lg p-4"
+		style="background-color: rgb(var(--color-surface));"
+	>
+		<ChartContainer option={momentumOption} height="300px" title="Momentum" />
+	</div>
+{/if}
 
 <!-- Nation cards -->
 <div

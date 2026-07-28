@@ -41,6 +41,7 @@ import { isSiteAdmin } from "./admin";
 import { buildAvatarUrl } from "./auth";
 import { displayNameSql } from "./identity";
 import { captureOnlineIds } from "./online-ids";
+import { momentumCurve } from "./momentum";
 import { beginR2Op, logError, logWarn, setLogField } from "./log";
 import { isTournamentAdmin } from "./tournament/authz";
 import { maybeAdvanceAfterMatchReport } from "./tournament/admin";
@@ -592,6 +593,46 @@ function buildGamePlayerTurnStatements(
 
 	if (rowsByKey.size === 0) return [];
 
+	// Momentum: score the fitted win-probability model for finished duels —
+	// exactly two humans, known winner — and attach p to each player's turn
+	// rows (p and 1 − p; the model is antisymmetric by construction). Left
+	// NULL for everything else, which is what the feed's fallback keys on.
+	const roster = (blob.player_roster ?? []) as Array<{
+		player_index: number;
+		is_human?: boolean;
+	}>;
+	const humans = roster.filter((r) => r.is_human);
+	const winner = (
+		blob.match_metadata as
+			| { winner?: { winner_player_xml_id?: number | null } | null }
+			| undefined
+	)?.winner?.winner_player_xml_id;
+	const finalTurn = (blob.game_details as { total_turns?: number } | undefined)
+		?.total_turns;
+	if (humans.length === 2 && winner != null && finalTurn != null) {
+		const curve = momentumCurve({
+			a: humans[0].player_index,
+			b: humans[1].player_index,
+			finalTurn,
+			yieldHistory: yieldHistory,
+			playerHistory: blob.player_history as never,
+			mapTiles: (blob.map_tiles ?? []) as { is_city_center?: boolean }[],
+			tileOwnership: (blob.tile_ownership_history ?? []) as {
+				tile_xml_id: number;
+				turn: number;
+				owner_player_xml_id: number | null;
+			}[],
+		});
+		if (curve) {
+			for (const pt of curve.points) {
+				ensureRow(humans[0].player_index, pt.turn).momentum =
+					Math.round(pt.p * 1000) / 1000;
+				ensureRow(humans[1].player_index, pt.turn).momentum =
+					Math.round((1 - pt.p) * 1000) / 1000;
+			}
+		}
+	}
+
 	// Stable column order matches table definition.
 	const columns = [
 		"game_id",
@@ -628,6 +669,7 @@ function buildGamePlayerTurnStatements(
 		"military_power",
 		"legitimacy",
 		"points",
+		"momentum",
 	];
 
 	const allRows = Array.from(rowsByKey.values());
@@ -2229,7 +2271,7 @@ export async function handlePublicRecentGames(
 
 	// Per-turn victory points for every player — humans and AI.
 	const seriesRows = await env.SHARE_DB.prepare(
-		`SELECT game_id, player_index, turn, points
+		`SELECT game_id, player_index, turn, points, momentum
 		 FROM game_player_turn
 		 WHERE game_id IN (${placeholders})
 		 ORDER BY game_id, player_index, turn`,
@@ -2240,6 +2282,7 @@ export async function handlePublicRecentGames(
 			player_index: number;
 			turn: number;
 			points: number | null;
+			momentum: number | null;
 		}>();
 
 	// Index series rows by (game_id, player_index) so the assembly loop
@@ -2249,15 +2292,30 @@ export async function handlePublicRecentGames(
 	// line. Dropping them leaves vp_series empty so the card's hasSparkline
 	// guard hides the chart until the game is backfilled.
 	const seriesByPlayer = new Map<string, Array<{ turn: number; vp: number }>>();
+	// Momentum rides the same rows; NULL everywhere for FFA / not-yet-reindexed
+	// games, which leaves the card on its VP fallback.
+	const momentumByPlayer = new Map<
+		string,
+		Array<{ turn: number; p: number }>
+	>();
 	for (const r of seriesRows.results ?? []) {
-		if (r.points === null) continue;
 		const key = `${r.game_id}:${r.player_index}`;
-		let arr = seriesByPlayer.get(key);
-		if (!arr) {
-			arr = [];
-			seriesByPlayer.set(key, arr);
+		if (r.points !== null) {
+			let arr = seriesByPlayer.get(key);
+			if (!arr) {
+				arr = [];
+				seriesByPlayer.set(key, arr);
+			}
+			arr.push({ turn: r.turn, vp: r.points });
 		}
-		arr.push({ turn: r.turn, vp: r.points });
+		if (r.momentum !== null) {
+			let arr = momentumByPlayer.get(key);
+			if (!arr) {
+				arr = [];
+				momentumByPlayer.set(key, arr);
+			}
+			arr.push({ turn: r.turn, p: r.momentum });
+		}
 	}
 
 	const playersByGame = new Map<
@@ -2274,6 +2332,7 @@ export async function handlePublicRecentGames(
 			techs_completed: number | null;
 			laws_count: number | null;
 			vp_series: Array<{ turn: number; vp: number | null }>;
+			momentum_series: Array<{ turn: number; p: number }>;
 		}>
 	>();
 	for (const r of playerRows.results ?? []) {
@@ -2294,6 +2353,8 @@ export async function handlePublicRecentGames(
 			techs_completed: r.techs_completed,
 			laws_count: r.laws_count,
 			vp_series: seriesByPlayer.get(`${r.game_id}:${r.player_index}`) ?? [],
+			momentum_series:
+				momentumByPlayer.get(`${r.game_id}:${r.player_index}`) ?? [],
 		});
 	}
 

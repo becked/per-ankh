@@ -270,6 +270,10 @@ export interface PublicRecentPlayer {
 	techs_completed: number | null;
 	laws_count: number | null;
 	vp_series: Array<{ turn: number; vp: number | null }>;
+	// Per-turn P(this player wins) from the fitted momentum model. Empty for
+	// FFA games, unknown winners, and rows not yet reindexed — the card falls
+	// back to the VP sparkline then.
+	momentum_series: Array<{ turn: number; p: number }>;
 }
 
 export interface PublicRecentGame {

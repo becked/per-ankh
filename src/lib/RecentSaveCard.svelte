@@ -75,6 +75,62 @@
 		return "—";
 	});
 
+	// Momentum takes over for duels: both humans carry a fitted per-turn win
+	// probability, so the sparkline shows who was winning rather than raw VP.
+	// Anything without it (FFA, unknown winner, not yet reindexed) falls back
+	// to the VP sparkline below.
+	const momentumPlayers = $derived(
+		orderedPlayers.filter((p) => p.momentum_series.length > 0),
+	);
+	const hasMomentum = $derived(momentumPlayers.length === 2);
+
+	const momentumOption = $derived<ChartOption>({
+		animation: false,
+		grid: { left: 2, right: 2, top: 4, bottom: 2 },
+		xAxis: { type: "value", show: false, min: 1 },
+		yAxis: { type: "value", show: false, min: 0, max: 100 },
+		tooltip: {
+			trigger: "axis",
+			confine: true,
+			formatter: (params: unknown) => {
+				const arr = params as Array<{
+					seriesName: string;
+					value: [number, number];
+					color: string;
+				}>;
+				if (arr.length === 0) return "";
+				const turn = arr[0].value[0];
+				const rows = arr
+					.map(
+						(p) =>
+							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${escapeHtml(p.seriesName)}: ${Math.round(p.value[1])}%`,
+					)
+					.join("<br/>");
+				return `Momentum<br/>Turn ${turn}<br/>${rows}`;
+			},
+		},
+		series: momentumPlayers.map((p, i) => ({
+			name: `${p.player_name}${p.nation ? ` (${formatEnum(p.nation, "NATION_")})` : ""}`,
+			type: "line",
+			showSymbol: false,
+			smooth: true,
+			sampling: "lttb",
+			lineStyle: { width: 1.5, color: playerColor(p.nation, i) },
+			data: p.momentum_series.map((pt) => [pt.turn, pt.p * 100]),
+			...(i === 0
+				? {
+						markLine: {
+							silent: true,
+							symbol: "none",
+							label: { show: false },
+							lineStyle: { color: "#6b6459", type: "dashed", width: 1 },
+							data: [{ yAxis: 50 }],
+						},
+					}
+				: {}),
+		})),
+	});
+
 	const sparklineOption = $derived<ChartOption>({
 		animation: false,
 		backgroundColor: "transparent",
@@ -335,15 +391,19 @@
 		</div>
 	{/if}
 
-	{#if hasSparkline}
+	{#if hasMomentum || hasSparkline}
 		<!-- Dark chart background matches CHART_THEME.backgroundColor used
 		     by the game-detail charts, so this sparkline reads as the same
-		     visual family. -->
+		     visual family. Momentum (who was winning) for duels; VP fallback
+		     for everything else. -->
 		<div
 			class="rounded p-1"
 			style="background-color: rgb(var(--color-surface-sunken));"
 		>
-			<Chart option={sparklineOption} height="60px" />
+			<Chart
+				option={hasMomentum ? momentumOption : sparklineOption}
+				height="60px"
+			/>
 		</div>
 	{/if}
 </div>
