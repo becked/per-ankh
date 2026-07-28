@@ -383,6 +383,7 @@
 
 	const DIM_LABELS: Record<string, string> = {
 		cities: "Cities",
+		growth: "Growth",
 		orders: "Orders",
 		science: "Science",
 		eco: "Economy",

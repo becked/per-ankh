@@ -3,7 +3,7 @@
 //
 // Fitted on 396 finished duels (419 blobs scanned).
 // Gotcha-5 tile-index validation: 7232/7243 city centres matched.
-// In-sample AUC at 30/50/70% of game: 0.673 / 0.751 / 0.812.
+// In-sample AUC at 30/50/70% of game: 0.709 / 0.764 / 0.820.
 
 // Bump MODEL_VERSION in the bake when the model FORM changes; a refit
 // on new data keeps the version and changes the numbers.
@@ -12,6 +12,7 @@ export const MOMENTUM_MODEL_VERSION = 1;
 /** Dimension order every weights row follows. */
 export const MOMENTUM_DIMS = [
 	"cities",
+	"growth",
 	"orders",
 	"science",
 	"eco",
@@ -29,11 +30,11 @@ export const MOMENTUM_BUCKETS: readonly [number, number][] = [
 
 /** Per-bucket weights (null = bucket too thin on this corpus). */
 export const MOMENTUM_WEIGHTS: readonly (readonly number[] | null)[] = [
-	[0.2124, 0.0422, -0.1323, 0.1632, -0.0731],
-	[0.5833, 0.3223, 0.2055, 0.2978, -0.2101],
-	[0.3927, 0.7433, 0.6293, 0.2828, 0.0232],
-	[0.2621, 0.8441, 0.9077, 0.4937, 0.7574],
-	[0.1619, 0.9297, 0.7745, 0.5723, 1.3909],
+	[-0.0417, 0.3362, 0.0695, -0.1306, 0.1431, -0.0339],
+	[0.207, 0.5814, 0.3302, 0.1638, 0.2508, -0.2014],
+	[0.1322, 0.4235, 0.7179, 0.601, 0.2557, 0.0346],
+	[-0.0384, 0.5001, 0.8271, 0.8719, 0.4195, 0.7954],
+	[-0.181, 0.5712, 0.9295, 0.7081, 0.5422, 1.4465],
 ];
 
 // Smoothed corpus SD of each dimension at each turn — the standardiser.
@@ -43,6 +44,7 @@ export const MOMENTUM_SD: Readonly<
 > = {
 	"2": {
 		cities: 0.1005,
+		growth: 2.6149,
 		orders: 1.0799,
 		science: 5.1772,
 		eco: 1.4067,
@@ -50,6 +52,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"3": {
 		cities: 0.2948,
+		growth: 3.3302,
 		orders: 1.2261,
 		science: 5.2495,
 		eco: 1.4344,
@@ -57,6 +60,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"4": {
 		cities: 0.4267,
+		growth: 4.19,
 		orders: 1.3851,
 		science: 5.3262,
 		eco: 1.4824,
@@ -64,6 +68,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"5": {
 		cities: 0.4266,
+		growth: 4.4635,
 		orders: 1.4999,
 		science: 5.4405,
 		eco: 1.5216,
@@ -71,6 +76,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"6": {
 		cities: 0.4048,
+		growth: 4.8997,
 		orders: 1.7198,
 		science: 5.6077,
 		eco: 1.5773,
@@ -78,6 +84,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"7": {
 		cities: 0.3839,
+		growth: 5.3468,
 		orders: 1.9258,
 		science: 5.7962,
 		eco: 1.6332,
@@ -85,6 +92,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"8": {
 		cities: 0.3871,
+		growth: 6.0197,
 		orders: 2.1372,
 		science: 5.9833,
 		eco: 1.6948,
@@ -92,6 +100,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"9": {
 		cities: 0.4539,
+		growth: 6.817,
 		orders: 2.3668,
 		science: 6.1999,
 		eco: 1.7493,
@@ -99,6 +108,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"10": {
 		cities: 0.4831,
+		growth: 7.3703,
 		orders: 2.5518,
 		science: 6.4644,
 		eco: 1.7971,
@@ -106,6 +116,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"11": {
 		cities: 0.4876,
+		growth: 7.6131,
 		orders: 2.7277,
 		science: 6.7706,
 		eco: 1.8224,
@@ -113,6 +124,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"12": {
 		cities: 0.5278,
+		growth: 8.2438,
 		orders: 2.9369,
 		science: 7.0904,
 		eco: 1.8524,
@@ -120,6 +132,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"13": {
 		cities: 0.5899,
+		growth: 9.0673,
 		orders: 3.1645,
 		science: 7.4642,
 		eco: 1.8762,
@@ -127,6 +140,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"14": {
 		cities: 0.6648,
+		growth: 9.9769,
 		orders: 3.4101,
 		science: 7.8429,
 		eco: 1.9028,
@@ -134,6 +148,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"15": {
 		cities: 0.7299,
+		growth: 10.7453,
 		orders: 3.6452,
 		science: 8.2561,
 		eco: 1.9373,
@@ -141,6 +156,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"16": {
 		cities: 0.779,
+		growth: 11.3327,
 		orders: 3.8598,
 		science: 8.6564,
 		eco: 1.9601,
@@ -148,6 +164,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"17": {
 		cities: 0.8186,
+		growth: 11.8025,
 		orders: 4.0609,
 		science: 9.0385,
 		eco: 1.9657,
@@ -155,6 +172,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"18": {
 		cities: 0.8544,
+		growth: 12.3265,
 		orders: 4.2198,
 		science: 9.3742,
 		eco: 1.9676,
@@ -162,6 +180,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"19": {
 		cities: 0.902,
+		growth: 12.9666,
 		orders: 4.365,
 		science: 9.7012,
 		eco: 1.9672,
@@ -169,6 +188,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"20": {
 		cities: 0.9405,
+		growth: 13.5379,
 		orders: 4.4615,
 		science: 10.0738,
 		eco: 1.9758,
@@ -176,6 +196,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"21": {
 		cities: 0.9742,
+		growth: 14.0873,
 		orders: 4.5383,
 		science: 10.4911,
 		eco: 1.9834,
@@ -183,6 +204,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"22": {
 		cities: 1.0103,
+		growth: 14.6629,
 		orders: 4.5996,
 		science: 10.9268,
 		eco: 1.9927,
@@ -190,6 +212,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"23": {
 		cities: 1.0479,
+		growth: 15.369,
 		orders: 4.6475,
 		science: 11.327,
 		eco: 2.0024,
@@ -197,6 +220,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"24": {
 		cities: 1.0846,
+		growth: 16.0626,
 		orders: 4.7032,
 		science: 11.7475,
 		eco: 2.022,
@@ -204,6 +228,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"25": {
 		cities: 1.1219,
+		growth: 16.7666,
 		orders: 4.7646,
 		science: 12.2024,
 		eco: 2.0394,
@@ -211,6 +236,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"26": {
 		cities: 1.146,
+		growth: 17.3514,
 		orders: 4.8136,
 		science: 12.7063,
 		eco: 2.059,
@@ -218,6 +244,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"27": {
 		cities: 1.1783,
+		growth: 18.0222,
 		orders: 4.9092,
 		science: 13.1538,
 		eco: 2.0796,
@@ -225,6 +252,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"28": {
 		cities: 1.2127,
+		growth: 18.6291,
 		orders: 5.0329,
 		science: 13.6033,
 		eco: 2.1144,
@@ -232,6 +260,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"29": {
 		cities: 1.2399,
+		growth: 19.1695,
 		orders: 5.1928,
 		science: 14.0815,
 		eco: 2.1292,
@@ -239,6 +268,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"30": {
 		cities: 1.2585,
+		growth: 19.6668,
 		orders: 5.365,
 		science: 14.6516,
 		eco: 2.1568,
@@ -246,6 +276,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"31": {
 		cities: 1.2774,
+		growth: 20.2122,
 		orders: 5.5496,
 		science: 15.2765,
 		eco: 2.1851,
@@ -253,6 +284,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"32": {
 		cities: 1.3037,
+		growth: 20.7384,
 		orders: 5.7483,
 		science: 15.9386,
 		eco: 2.2182,
@@ -260,6 +292,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"33": {
 		cities: 1.3423,
+		growth: 21.4319,
 		orders: 5.9718,
 		science: 16.5784,
 		eco: 2.2458,
@@ -267,6 +300,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"34": {
 		cities: 1.3819,
+		growth: 22.184,
 		orders: 6.1889,
 		science: 17.2192,
 		eco: 2.2643,
@@ -274,6 +308,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"35": {
 		cities: 1.419,
+		growth: 22.8775,
 		orders: 6.429,
 		science: 17.8712,
 		eco: 2.2753,
@@ -281,6 +316,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"36": {
 		cities: 1.461,
+		growth: 23.6047,
 		orders: 6.6262,
 		science: 18.5166,
 		eco: 2.2842,
@@ -288,6 +324,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"37": {
 		cities: 1.5076,
+		growth: 24.3352,
 		orders: 6.8364,
 		science: 19.1178,
 		eco: 2.2889,
@@ -295,6 +332,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"38": {
 		cities: 1.5515,
+		growth: 25.1168,
 		orders: 7.029,
 		science: 19.7203,
 		eco: 2.2925,
@@ -302,6 +340,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"39": {
 		cities: 1.5957,
+		growth: 26.0356,
 		orders: 7.2246,
 		science: 20.2953,
 		eco: 2.3041,
@@ -309,6 +348,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"40": {
 		cities: 1.6323,
+		growth: 26.9149,
 		orders: 7.3956,
 		science: 20.8132,
 		eco: 2.3105,
@@ -316,6 +356,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"41": {
 		cities: 1.6728,
+		growth: 27.7078,
 		orders: 7.546,
 		science: 21.2957,
 		eco: 2.3093,
@@ -323,6 +364,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"42": {
 		cities: 1.7186,
+		growth: 28.5795,
 		orders: 7.6922,
 		science: 21.7185,
 		eco: 2.3189,
@@ -330,6 +372,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"43": {
 		cities: 1.757,
+		growth: 29.4666,
 		orders: 7.8895,
 		science: 22.128,
 		eco: 2.3309,
@@ -337,6 +380,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"44": {
 		cities: 1.7965,
+		growth: 30.3573,
 		orders: 8.0829,
 		science: 22.6431,
 		eco: 2.3281,
@@ -344,6 +388,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"45": {
 		cities: 1.836,
+		growth: 31.1787,
 		orders: 8.2534,
 		science: 23.1042,
 		eco: 2.3299,
@@ -351,6 +396,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"46": {
 		cities: 1.8692,
+		growth: 31.92,
 		orders: 8.4454,
 		science: 23.5747,
 		eco: 2.3108,
@@ -358,6 +404,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"47": {
 		cities: 1.9165,
+		growth: 32.6516,
 		orders: 8.6207,
 		science: 24.0987,
 		eco: 2.2924,
@@ -365,6 +412,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"48": {
 		cities: 1.9574,
+		growth: 33.4688,
 		orders: 8.7753,
 		science: 24.6799,
 		eco: 2.2944,
@@ -372,6 +420,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"49": {
 		cities: 1.9893,
+		growth: 34.2904,
 		orders: 8.8401,
 		science: 25.2796,
 		eco: 2.2759,
@@ -379,6 +428,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"50": {
 		cities: 2.0183,
+		growth: 35.1668,
 		orders: 8.8627,
 		science: 25.8763,
 		eco: 2.2557,
@@ -386,6 +436,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"51": {
 		cities: 2.045,
+		growth: 36.0117,
 		orders: 8.8971,
 		science: 26.4252,
 		eco: 2.2536,
@@ -393,6 +444,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"52": {
 		cities: 2.0752,
+		growth: 36.9328,
 		orders: 8.9471,
 		science: 27.0973,
 		eco: 2.2392,
@@ -400,6 +452,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"53": {
 		cities: 2.1076,
+		growth: 37.7256,
 		orders: 8.9507,
 		science: 27.7628,
 		eco: 2.2464,
@@ -407,6 +460,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"54": {
 		cities: 2.1201,
+		growth: 38.3179,
 		orders: 8.9641,
 		science: 28.566,
 		eco: 2.251,
@@ -414,6 +468,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"55": {
 		cities: 2.132,
+		growth: 38.8458,
 		orders: 9.0657,
 		science: 29.4872,
 		eco: 2.255,
@@ -421,6 +476,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"56": {
 		cities: 2.1401,
+		growth: 39.3938,
 		orders: 9.2143,
 		science: 30.5438,
 		eco: 2.2512,
@@ -428,6 +484,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"57": {
 		cities: 2.1595,
+		growth: 39.9303,
 		orders: 9.4164,
 		science: 31.4878,
 		eco: 2.2517,
@@ -435,6 +492,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"58": {
 		cities: 2.1779,
+		growth: 40.5995,
 		orders: 9.5801,
 		science: 32.482,
 		eco: 2.2567,
@@ -442,6 +500,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"59": {
 		cities: 2.1856,
+		growth: 41.3738,
 		orders: 9.7263,
 		science: 33.5748,
 		eco: 2.2818,
@@ -449,6 +508,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"60": {
 		cities: 2.2089,
+		growth: 42.2964,
 		orders: 9.9397,
 		science: 34.8713,
 		eco: 2.2953,
@@ -456,6 +516,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"61": {
 		cities: 2.2187,
+		growth: 43.1675,
 		orders: 10.1913,
 		science: 35.7834,
 		eco: 2.3032,
@@ -463,6 +524,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"62": {
 		cities: 2.2248,
+		growth: 43.92,
 		orders: 10.4078,
 		science: 36.8001,
 		eco: 2.3103,
@@ -470,6 +532,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"63": {
 		cities: 2.2475,
+		growth: 44.7075,
 		orders: 10.6582,
 		science: 37.8534,
 		eco: 2.328,
@@ -477,6 +540,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"64": {
 		cities: 2.2737,
+		growth: 45.6358,
 		orders: 10.8603,
 		science: 39.0409,
 		eco: 2.3355,
@@ -484,6 +548,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"65": {
 		cities: 2.3053,
+		growth: 46.5963,
 		orders: 11.2006,
 		science: 40.4185,
 		eco: 2.344,
@@ -491,6 +556,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"66": {
 		cities: 2.3485,
+		growth: 47.2803,
 		orders: 11.5665,
 		science: 41.8127,
 		eco: 2.3302,
@@ -498,6 +564,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"67": {
 		cities: 2.377,
+		growth: 47.8648,
 		orders: 11.866,
 		science: 43.5711,
 		eco: 2.3339,
@@ -505,6 +572,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"68": {
 		cities: 2.4208,
+		growth: 48.6528,
 		orders: 12.2095,
 		science: 45.3951,
 		eco: 2.3484,
@@ -512,6 +580,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"69": {
 		cities: 2.4646,
+		growth: 49.6095,
 		orders: 12.6043,
 		science: 47.4976,
 		eco: 2.3553,
@@ -519,6 +588,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"70": {
 		cities: 2.508,
+		growth: 50.6251,
 		orders: 12.9927,
 		science: 49.4276,
 		eco: 2.3526,
@@ -526,6 +596,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"71": {
 		cities: 2.5431,
+		growth: 51.5928,
 		orders: 13.4117,
 		science: 51.5594,
 		eco: 2.3611,
@@ -533,6 +604,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"72": {
 		cities: 2.575,
+		growth: 52.4729,
 		orders: 13.7374,
 		science: 53.5342,
 		eco: 2.3522,
@@ -540,6 +612,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"73": {
 		cities: 2.5819,
+		growth: 53.2618,
 		orders: 13.953,
 		science: 55.7522,
 		eco: 2.3571,
@@ -547,6 +620,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"74": {
 		cities: 2.602,
+		growth: 54.1601,
 		orders: 14.2206,
 		science: 57.9208,
 		eco: 2.3393,
@@ -554,6 +628,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"75": {
 		cities: 2.626,
+		growth: 55.1932,
 		orders: 14.3463,
 		science: 60.4169,
 		eco: 2.3325,
@@ -561,6 +636,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"76": {
 		cities: 2.6631,
+		growth: 56.0236,
 		orders: 14.3731,
 		science: 62.3535,
 		eco: 2.3184,
@@ -568,6 +644,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"77": {
 		cities: 2.696,
+		growth: 56.9944,
 		orders: 14.5258,
 		science: 64.7285,
 		eco: 2.3135,
@@ -575,6 +652,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"78": {
 		cities: 2.7349,
+		growth: 57.7863,
 		orders: 14.6348,
 		science: 66.5541,
 		eco: 2.3062,
@@ -582,6 +660,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"79": {
 		cities: 2.7647,
+		growth: 58.4923,
 		orders: 14.7821,
 		science: 68.5083,
 		eco: 2.2914,
@@ -589,6 +668,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"80": {
 		cities: 2.8263,
+		growth: 59.5871,
 		orders: 15.1232,
 		science: 69.7407,
 		eco: 2.2912,
@@ -596,6 +676,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"81": {
 		cities: 2.8881,
+		growth: 60.7296,
 		orders: 15.4256,
 		science: 70.6358,
 		eco: 2.2993,
@@ -603,6 +684,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"82": {
 		cities: 2.9602,
+		growth: 61.5414,
 		orders: 15.8455,
 		science: 71.7233,
 		eco: 2.26,
@@ -610,6 +692,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"83": {
 		cities: 2.9967,
+		growth: 62.4385,
 		orders: 16.1972,
 		science: 72.7225,
 		eco: 2.236,
@@ -617,6 +700,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"84": {
 		cities: 3.0514,
+		growth: 63.3755,
 		orders: 16.4487,
 		science: 73.5724,
 		eco: 2.2202,
@@ -624,6 +708,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"85": {
 		cities: 3.1035,
+		growth: 64.8203,
 		orders: 16.856,
 		science: 74.9826,
 		eco: 2.2319,
@@ -631,6 +716,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"86": {
 		cities: 3.1826,
+		growth: 66.6855,
 		orders: 17.3156,
 		science: 76.545,
 		eco: 2.2583,
@@ -638,6 +724,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"87": {
 		cities: 3.2653,
+		growth: 68.9126,
 		orders: 17.809,
 		science: 78.694,
 		eco: 2.2725,
@@ -645,6 +732,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"88": {
 		cities: 3.35,
+		growth: 71.812,
 		orders: 18.4025,
 		science: 81.1089,
 		eco: 2.2843,
@@ -652,6 +740,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"89": {
 		cities: 3.4469,
+		growth: 75.3387,
 		orders: 19.0851,
 		science: 83.1372,
 		eco: 2.3322,
@@ -659,6 +748,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"90": {
 		cities: 3.5956,
+		growth: 79.0607,
 		orders: 20.0421,
 		science: 85.618,
 		eco: 2.3997,
@@ -666,6 +756,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"91": {
 		cities: 3.6616,
+		growth: 81.9982,
 		orders: 20.7912,
 		science: 88.0364,
 		eco: 2.4431,
@@ -673,6 +764,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"92": {
 		cities: 3.7408,
+		growth: 84.77,
 		orders: 21.3484,
 		science: 90.9156,
 		eco: 2.4696,
@@ -680,6 +772,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"93": {
 		cities: 3.8307,
+		growth: 87.4143,
 		orders: 21.7926,
 		science: 93.8637,
 		eco: 2.5147,
@@ -687,6 +780,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"94": {
 		cities: 3.8972,
+		growth: 89.1722,
 		orders: 22.3159,
 		science: 95.8021,
 		eco: 2.5282,
@@ -694,6 +788,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"95": {
 		cities: 3.9702,
+		growth: 90.2655,
 		orders: 22.3979,
 		science: 96.9238,
 		eco: 2.5214,
@@ -701,6 +796,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"96": {
 		cities: 4.0358,
+		growth: 91.0719,
 		orders: 22.4543,
 		science: 99.2574,
 		eco: 2.5585,
@@ -708,6 +804,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"97": {
 		cities: 4.0327,
+		growth: 91.9106,
 		orders: 22.5552,
 		science: 100.5956,
 		eco: 2.5727,
@@ -715,6 +812,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"98": {
 		cities: 4.14,
+		growth: 93.7928,
 		orders: 22.9667,
 		science: 103.0727,
 		eco: 2.6326,
@@ -722,6 +820,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"99": {
 		cities: 4.2472,
+		growth: 95.8565,
 		orders: 23.6526,
 		science: 105.0283,
 		eco: 2.6359,
@@ -729,6 +828,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"100": {
 		cities: 4.341,
+		growth: 98.0609,
 		orders: 24.4681,
 		science: 107.2924,
 		eco: 2.6013,
@@ -736,6 +836,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"101": {
 		cities: 4.2374,
+		growth: 98.1332,
 		orders: 24.4703,
 		science: 107.8414,
 		eco: 2.5637,
@@ -743,6 +844,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"102": {
 		cities: 4.0881,
+		growth: 98.165,
 		orders: 24.7791,
 		science: 109.9271,
 		eco: 2.5329,
@@ -750,6 +852,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"103": {
 		cities: 3.9493,
+		growth: 97.0133,
 		orders: 24.9278,
 		science: 112.0832,
 		eco: 2.4753,
@@ -757,6 +860,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"104": {
 		cities: 3.8553,
+		growth: 96.3182,
 		orders: 24.7072,
 		science: 114.8167,
 		eco: 2.4521,
@@ -764,6 +868,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"105": {
 		cities: 3.6953,
+		growth: 94.773,
 		orders: 24.4216,
 		science: 115.9309,
 		eco: 2.399,
@@ -771,6 +876,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"106": {
 		cities: 3.541,
+		growth: 93.4486,
 		orders: 24.155,
 		science: 117.966,
 		eco: 2.4001,
@@ -778,6 +884,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"107": {
 		cities: 3.3547,
+		growth: 91.9846,
 		orders: 23.9643,
 		science: 118.6403,
 		eco: 2.4152,
@@ -785,6 +892,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"108": {
 		cities: 3.3831,
+		growth: 93.314,
 		orders: 24.839,
 		science: 125.3797,
 		eco: 2.4497,
@@ -792,6 +900,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"109": {
 		cities: 3.449,
+		growth: 94.5477,
 		orders: 26.1594,
 		science: 128.4104,
 		eco: 2.4875,
@@ -799,6 +908,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"110": {
 		cities: 3.5137,
+		growth: 95.9413,
 		orders: 27.1449,
 		science: 129.7787,
 		eco: 2.5001,
@@ -806,6 +916,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"111": {
 		cities: 3.5241,
+		growth: 97.3798,
 		orders: 28.3233,
 		science: 131.762,
 		eco: 2.5618,
@@ -813,6 +924,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"112": {
 		cities: 3.5846,
+		growth: 99.3174,
 		orders: 29.7611,
 		science: 135.4694,
 		eco: 2.625,
@@ -820,6 +932,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"113": {
 		cities: 3.6151,
+		growth: 99.3935,
 		orders: 30.9212,
 		science: 138.0658,
 		eco: 2.6755,
@@ -827,6 +940,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"114": {
 		cities: 3.6669,
+		growth: 101.4563,
 		orders: 32.0988,
 		science: 139.9064,
 		eco: 2.7536,
@@ -834,6 +948,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"115": {
 		cities: 3.7376,
+		growth: 103.1057,
 		orders: 32.4053,
 		science: 138.076,
 		eco: 2.8269,
@@ -841,6 +956,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"116": {
 		cities: 3.7965,
+		growth: 104.7802,
 		orders: 32.1068,
 		science: 139.3054,
 		eco: 2.9345,
@@ -848,6 +964,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"117": {
 		cities: 3.8825,
+		growth: 108.4351,
 		orders: 32.5301,
 		science: 134.4229,
 		eco: 3.0265,
@@ -855,6 +972,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"118": {
 		cities: 4.0069,
+		growth: 110.9517,
 		orders: 32.8719,
 		science: 129.7728,
 		eco: 3.0266,
@@ -862,6 +980,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"119": {
 		cities: 4.1176,
+		growth: 113.8885,
 		orders: 33.3749,
 		science: 123.828,
 		eco: 3.0428,
@@ -869,6 +988,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"120": {
 		cities: 4.2679,
+		growth: 121.1089,
 		orders: 34.188,
 		science: 119.8838,
 		eco: 3.1068,
@@ -876,6 +996,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"121": {
 		cities: 4.3035,
+		growth: 124.0521,
 		orders: 32.5354,
 		science: 115.131,
 		eco: 3.1537,
@@ -883,6 +1004,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"122": {
 		cities: 4.3821,
+		growth: 128.159,
 		orders: 31.6578,
 		science: 109.8008,
 		eco: 3.1767,
@@ -890,6 +1012,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"123": {
 		cities: 4.4534,
+		growth: 131.7909,
 		orders: 31.2742,
 		science: 103.7101,
 		eco: 3.1413,
@@ -897,6 +1020,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"124": {
 		cities: 4.4454,
+		growth: 133.995,
 		orders: 31.1668,
 		science: 104.3102,
 		eco: 3.2573,
@@ -904,6 +1028,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"125": {
 		cities: 4.5309,
+		growth: 137.882,
 		orders: 30.6311,
 		science: 103.7762,
 		eco: 3.2242,
@@ -911,6 +1036,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"126": {
 		cities: 4.5934,
+		growth: 141.1768,
 		orders: 29.5863,
 		science: 103.8576,
 		eco: 3.2066,
@@ -918,6 +1044,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"127": {
 		cities: 4.4595,
+		growth: 141.232,
 		orders: 28.6176,
 		science: 103.2739,
 		eco: 3.0639,
@@ -925,6 +1052,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"128": {
 		cities: 4.4908,
+		growth: 143.8817,
 		orders: 30.042,
 		science: 105.2485,
 		eco: 2.8855,
@@ -932,6 +1060,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"129": {
 		cities: 4.4979,
+		growth: 149.0883,
 		orders: 31.2997,
 		science: 108.6502,
 		eco: 2.6826,
@@ -939,6 +1068,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"130": {
 		cities: 4.5688,
+		growth: 154.9032,
 		orders: 32.3996,
 		science: 112.057,
 		eco: 2.5046,
@@ -946,6 +1076,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"131": {
 		cities: 4.6026,
+		growth: 157.8977,
 		orders: 32.3989,
 		science: 113.893,
 		eco: 2.2867,
@@ -953,6 +1084,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"132": {
 		cities: 4.5337,
+		growth: 160.2934,
 		orders: 33.0038,
 		science: 116.9209,
 		eco: 2.1902,
@@ -960,6 +1092,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"133": {
 		cities: 4.4304,
+		growth: 163.7118,
 		orders: 33.8892,
 		science: 119.9811,
 		eco: 1.9925,
@@ -967,6 +1100,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"134": {
 		cities: 4.6318,
+		growth: 169.3805,
 		orders: 34.5196,
 		science: 121.8226,
 		eco: 1.8566,
@@ -974,6 +1108,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"135": {
 		cities: 4.8264,
+		growth: 178.3333,
 		orders: 35.1757,
 		science: 123.815,
 		eco: 1.6952,
@@ -981,6 +1116,7 @@ export const MOMENTUM_SD: Readonly<
 	},
 	"136": {
 		cities: 5.0498,
+		growth: 179.13,
 		orders: 35.7219,
 		science: 123.2182,
 		eco: 1.6583,

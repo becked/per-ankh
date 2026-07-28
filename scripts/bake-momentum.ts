@@ -4,13 +4,14 @@
 //
 // The model, its maths, and the six data gotchas it must respect are specified
 // in owglick's docs/momentum-model.md; this script is that spec rebuilt for
-// per-ankh's blobs. In brief: five per-turn dimensions (cities, orders,
-// science, eco, military), each stored as the A−B difference (kills the
-// bigger-empire-has-more-of-everything collinearity), standardised by the
+// per-ankh's blobs. In brief: six per-turn dimensions (cities, growth,
+// orders, science, eco, military), each stored as the A−B difference (kills
+// the bigger-empire-has-more-of-everything collinearity), standardised by the
 // corpus SD at that turn (smoothed ±3 turns), scored by an antisymmetric
 // no-intercept logistic fitted separately per game-progress bucket — because
-// cities front-load and military back-loads, one fixed weighting misreads
-// both ends of every match.
+// growth front-loads and military back-loads, one fixed weighting misreads
+// both ends of every match. Cities is retained despite being ~redundant with
+// growth (r ≈ +0.65) because it is independently interpretable.
 //
 // SOURCES (local-only): a directory of per-ankh game blobs (the JSON the
 // /v1/games/:id endpoint serves), pointed at by MOMENTUM_CORPUS_DIR in .env.
@@ -27,7 +28,7 @@
 //     via founded_turn + 1 against each city centre's first ownership entry).
 //   - Coverage: the median first scored turn must be early (Gotcha 1 — an
 //     absent eco yield is zero income, not missing data).
-//   - Shape: cities' weight must peak in an earlier bucket than military's
+//   - Shape: growth's weight must peak in an earlier bucket than military's
 //     (the front-load/back-load signature; a corpus that fails this is
 //     mis-parsed, not differently balanced).
 //
@@ -52,7 +53,7 @@ const OUTPUTS = [
 // refits on a new corpus keep the version and change the fitted numbers.
 const MODEL_VERSION = 1;
 
-const DIMS = ["cities", "orders", "science", "eco", "mil"] as const;
+const DIMS = ["cities", "growth", "orders", "science", "eco", "mil"] as const;
 const ECO5 = [
 	"YIELD_MONEY",
 	"YIELD_FOOD",
@@ -97,7 +98,10 @@ interface Blob {
 		owner_player_xml_id: number | null;
 	}[];
 	city_statistics?: {
-		cities: { founded_turn: number; first_owner_player_xml_id: number | null }[];
+		cities: {
+			founded_turn: number;
+			first_owner_player_xml_id: number | null;
+		}[];
 	};
 }
 
@@ -175,6 +179,11 @@ function featsAt(
 	if (ca == null || cb == null) return null;
 	const out: Record<string, number> = {
 		cities: ca - cb,
+		// Growth (the food→population engine) is the strongest single dimension
+		// and a leading indicator of the others. Absent = zero income, like eco.
+		growth:
+			(Y.get(a)?.get("YIELD_GROWTH")?.get(T) ?? 0) -
+			(Y.get(b)?.get("YIELD_GROWTH")?.get(T) ?? 0),
 		// Relative, because absolute power grows ~20× over a match.
 		mil: (pa - pb) / Math.max(1, (pa + pb) / 2),
 	};
@@ -394,7 +403,8 @@ async function main(): Promise<void> {
 	const goodTurns = [...sdTable.keys()].sort((x, y) => x - y);
 	const sdAt = (T: number): Record<string, number> => {
 		let best = goodTurns[0];
-		for (const t of goodTurns) if (Math.abs(t - T) < Math.abs(best - T)) best = t;
+		for (const t of goodTurns)
+			if (Math.abs(t - T) < Math.abs(best - T)) best = t;
 		return sdTable.get(best)!;
 	};
 	const zOf = (f: Record<string, number>, T: number): number[] => {
@@ -428,8 +438,9 @@ async function main(): Promise<void> {
 		weights.push(fitLogistic(Xa, ya).map((v) => Math.round(v * 10000) / 10000));
 	}
 
-	// Shape check: cities must peak earlier than military, or the corpus is
-	// mis-parsed (front-load/back-load is the model's signature).
+	// Shape check: growth must peak earlier than military, or the corpus is
+	// mis-parsed (front-load/back-load is the model's signature; cities is
+	// retained but redundant with growth, so it no longer anchors the check).
 	const peak = (dim: number): number => {
 		let best = 0;
 		let bestV = -Infinity;
@@ -441,11 +452,11 @@ async function main(): Promise<void> {
 		});
 		return best;
 	};
-	const cityPeak = peak(DIMS.indexOf("cities"));
+	const growthPeak = peak(DIMS.indexOf("growth"));
 	const milPeak = peak(DIMS.indexOf("mil"));
-	if (!(cityPeak < milPeak)) {
+	if (!(growthPeak < milPeak)) {
 		throw new Error(
-			`bake-momentum: shape check failed — cities peak in bucket ${cityPeak}, military in ${milPeak}; expected cities to front-load and military to back-load.`,
+			`bake-momentum: shape check failed — growth peaks in bucket ${growthPeak}, military in ${milPeak}; expected growth to front-load and military to back-load.`,
 		);
 	}
 
@@ -502,10 +513,16 @@ async function main(): Promise<void> {
 	lines.push("/** Dimension order every weights row follows. */");
 	lines.push(`export const MOMENTUM_DIMS = ${JSON.stringify(DIMS)} as const;`);
 	lines.push("");
-	lines.push("/** Progress buckets over T / final turn, half-open [lo, hi). */");
-	lines.push(`export const MOMENTUM_BUCKETS: readonly [number, number][] = ${JSON.stringify(BUCKETS)};`);
+	lines.push(
+		"/** Progress buckets over T / final turn, half-open [lo, hi). */",
+	);
+	lines.push(
+		`export const MOMENTUM_BUCKETS: readonly [number, number][] = ${JSON.stringify(BUCKETS)};`,
+	);
 	lines.push("");
-	lines.push("/** Per-bucket weights (null = bucket too thin on this corpus). */");
+	lines.push(
+		"/** Per-bucket weights (null = bucket too thin on this corpus). */",
+	);
 	lines.push(
 		`export const MOMENTUM_WEIGHTS: readonly (readonly number[] | null)[] = ${JSON.stringify(weights)};`,
 	);
@@ -513,7 +530,9 @@ async function main(): Promise<void> {
 	lines.push(
 		"// Smoothed corpus SD of each dimension at each turn — the standardiser.",
 	);
-	lines.push("// Sparse over turns; consumers snap to the nearest present turn.");
+	lines.push(
+		"// Sparse over turns; consumers snap to the nearest present turn.",
+	);
 	const sdObj: Record<string, Record<string, number>> = {};
 	for (const t of goodTurns) {
 		const row = sdTable.get(t)!;

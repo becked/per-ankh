@@ -31,6 +31,8 @@ function fixture(): MomentumInput {
 			{ player_id: 1, yield_type: "YIELD_SCIENCE", data: data(12) },
 			{ player_id: 0, yield_type: "YIELD_MONEY", data: data(5) },
 			{ player_id: 1, yield_type: "YIELD_MONEY", data: data(4) },
+			{ player_id: 0, yield_type: "YIELD_GROWTH", data: data(20) },
+			{ player_id: 1, yield_type: "YIELD_GROWTH", data: data(15) },
 		],
 		playerHistory: [
 			{

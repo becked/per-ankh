@@ -155,6 +155,10 @@ function featsAt(
 	// Orders and science exist from T2 — genuinely absent means no data.
 	if (ordersA == null || ordersB == null || sciA == null || sciB == null)
 		return null;
+	// Growth: absent = zero income, like the eco resources.
+	const growth =
+		(ya.get("YIELD_GROWTH")?.get(T) ?? 0) -
+		(yb.get("YIELD_GROWTH")?.get(T) ?? 0);
 	let eco = 0;
 	for (const key of ECO5) {
 		// Absent eco yield = zero income, not missing data; ties contribute 0.
@@ -162,9 +166,10 @@ function featsAt(
 		const vb = yb.get(key)?.get(T) ?? 0;
 		eco += va > vb ? 1 : va < vb ? -1 : 0;
 	}
-	// MOMENTUM_DIMS order: cities, orders, science, eco, mil.
+	// MOMENTUM_DIMS order: cities, growth, orders, science, eco, mil.
 	return [
 		citiesA - citiesB,
+		growth,
 		ordersA - ordersB,
 		sciA - sciB,
 		eco,
