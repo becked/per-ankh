@@ -10,6 +10,7 @@
 	import type {
 		CharacterInfo,
 		FamilyInfo,
+		GameReligion,
 		MemoryInfo,
 	} from "$lib/parser/types";
 	import type { ChartOption, ECharts } from "$lib/echarts";
@@ -45,12 +46,16 @@
 		scienceSpikes,
 		scienceBreakdown,
 		expeditionEvents,
+		leaderChangeMarkers,
+		knowledgeFlipMarkers,
 		STEAL_RESEARCH_MEMORY,
 		type ScienceTechMarker,
 		type FreeTechMarker,
 		type ScienceSpike,
 		type ScienceBreakdown,
 		type NamedCount,
+		type LeaderChangeMarker,
+		type KnowledgeFlipMarker,
 	} from "./science-techs";
 
 	let {
@@ -66,6 +71,7 @@
 		memoryData = [],
 		storyEvents = [],
 		characters = [],
+		gameReligions = [],
 		gameOptions = null,
 		userNation = null,
 		chartFilter = $bindable<Record<string, boolean>>({}),
@@ -82,6 +88,9 @@
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
 		characters?: CharacterInfo[];
+		// Founded religions with their theologies (2.14.0+) — the science
+		// breakdown's Dualism rows. Defaults to [] for legacy callers.
+		gameReligions?: GameReligion[];
 		// Set <GameOptions> flags. Null on pre-2.11.0 blobs (and from the frozen
 		// web/ viewer) — "unknown", not "none set".
 		gameOptions?: Record<string, true> | null;
@@ -338,8 +347,49 @@
 		);
 	}
 
-	// Row order within each player's band: key techs, free techs, one-off gains.
-	const SCIENCE_RAIL_KINDS = ["key", "free", "event"] as const;
+	function leaderChangeTooltip(m: LeaderChangeMarker, color: string): string {
+		const wis = (w: number | null) => (w == null ? "" : ` — Wisdom ${w}`);
+		const lines: string[] = [];
+		if (m.prev) lines.push(`${m.prev.name} ${m.prev.end}${wis(m.prev.wisdom)}`);
+		lines.push(
+			m.next
+				? `Succeeded by ${m.next.name}${wis(m.next.wisdom)}`
+				: "No successor took the throne",
+		);
+		return (
+			`<div style="font-size:12px;line-height:1.55">` +
+			`<div style="font-weight:700;color:${color}">Leader change · T${m.turn}</div>` +
+			lines
+				.map((t) => `<div style="color:${TOOLTIP_TEXT}">${t}</div>`)
+				.join("") +
+			`</div>`
+		);
+	}
+
+	function knowledgeFlipTooltip(
+		m: KnowledgeFlipMarker,
+		opponent: string,
+		color: string,
+	): string {
+		const tier = (t: string) => formatEnum(t, "KNOWLEDGE_");
+		return (
+			`<div style="font-size:12px;line-height:1.55">` +
+			`<div style="font-weight:700;color:${color}">${tier(m.from)} → ${tier(m.to)} · T${m.turn}</div>` +
+			`<div style="color:${TOOLTIP_TEXT}">Science total at ${m.pct}% of ${opponent}'s</div>` +
+			`<div style="color:${TOOLTIP_MUTED};margin-top:3px">The game's knowledge rating (cumulative science, knowledge.xml thresholds)</div>` +
+			`</div>`
+		);
+	}
+
+	// Row order within each player's band: key techs, free techs, one-off
+	// gains, leader changes, knowledge-standing flips.
+	const SCIENCE_RAIL_KINDS = [
+		"key",
+		"free",
+		"event",
+		"leader",
+		"knowledge",
+	] as const;
 
 	// Per-player slices feeding both the rail markers and the one-off totals.
 	const scienceRailData = $derived.by(() =>
@@ -392,15 +442,22 @@
 		if (orderedPlayers.length !== 2) return [];
 		return scienceRailData
 			.map(
-				({
-					player,
-					techs,
-					improvements,
-					laws,
-					stealTurns,
-					expeditions,
-					spikes,
-				}) => {
+				(
+					{
+						player,
+						techs,
+						improvements,
+						laws,
+						stealTurns,
+						expeditions,
+						science,
+						spikes,
+					},
+					index,
+				) => {
+					// The knowledge standing is vs the one opponent (the rail
+					// only renders for two-player matchups).
+					const opponent = scienceRailData[1 - index];
 					const markers: Record<
 						(typeof SCIENCE_RAIL_KINDS)[number],
 						RailMarker[]
@@ -440,6 +497,31 @@
 							color: player.color,
 							tooltipHtml: spikeTooltip(s, player.color),
 						})),
+						leader: leaderChangeMarkers(player.playerId, characters).map(
+							(m) => ({
+								turn: m.turn,
+								iconCategory: "icons" as const,
+								iconValue: "RATING_WISDOM",
+								color: player.color,
+								tooltipHtml: leaderChangeTooltip(m, player.color),
+							}),
+						),
+						knowledge: knowledgeFlipMarkers(
+							science,
+							opponent?.science ?? [],
+						).map((m) => ({
+							turn: m.turn,
+							// No knowledge sprite exists — null renders the
+							// player-coloured fallback dot.
+							iconCategory: "icons" as const,
+							iconValue: null,
+							color: player.color,
+							tooltipHtml: knowledgeFlipTooltip(
+								m,
+								opponent?.player.label ?? "the opponent",
+								player.color,
+							),
+						})),
 					};
 					return {
 						player,
@@ -466,11 +548,12 @@
 	// ─── Where the science comes from ─────────────────────────────────
 	// End-state itemized decomposition of each player's science/turn, side
 	// by side: specialists and buildings/resources by name, science laws,
-	// the exact percent modifiers (libraries, Musaeum) with their points
-	// computed against each city's base, and the leader's court science.
-	// Governors and the rest of the court (spouses, successors, courtiers,
-	// council) are scaled by each character's opinion of the player, which
-	// the save doesn't store — they stay in the signed "Other" remainder.
+	// per-city effects (Sages, Babylonia, Dualism, Archives), the exact
+	// percent modifiers (libraries, Musaeum, governors' Wisdom) with their
+	// points computed against each city's base, and the leader's court
+	// science. The rest of the court (spouses, successors, courtiers,
+	// council) is scaled by each character's opinion of the player, which
+	// the save doesn't store — it stays in the signed "Other" remainder.
 
 	// Null when the blob predates 2.11.0: UNKNOWN, not "not competitive".
 	const competitive = $derived(
@@ -479,6 +562,11 @@
 			: gameOptions.GAMEOPTION_COMPETITIVE_MODE === true,
 	);
 	const characterById = $derived(new Map(characters.map((c) => [c.xml_id, c])));
+	// religion → theologies established, for the breakdown's Dualism rows.
+	// Empty lists on pre-2.14.0 blobs, which simply produce no rows.
+	const theologiesByReligion = $derived(
+		new Map(gameReligions.map((r) => [r.religion_name, r.theologies ?? []])),
+	);
 
 	type BreakdownColumn = { player: DetailPlayer; b: ScienceBreakdown };
 	const scienceBreakdowns = $derived.by<BreakdownColumn[]>(() => {
@@ -534,6 +622,13 @@
 					finalRate,
 					leaderWisdom,
 					competitive,
+					{
+						cities,
+						nation: player.nation,
+						theologiesByReligion,
+						governorWisdom: (xmlId) =>
+							characterById.get(xmlId)?.wisdom ?? null,
+					},
 					specialistName,
 					improvementDisplayName,
 				),
@@ -550,6 +645,7 @@
 		{ key: "specialistsUrban", label: "Urban specialists" },
 		{ key: "buildings", label: "Buildings & resources" },
 		{ key: "laws", label: "Laws" },
+		{ key: "cityEffects", label: "Nation, family & religion" },
 		{ key: "modifiers", label: "Modifiers" },
 		{ key: "court", label: "Court" },
 	] as const;

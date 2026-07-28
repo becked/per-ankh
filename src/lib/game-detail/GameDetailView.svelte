@@ -580,6 +580,7 @@
 			{memoryData}
 			{storyEvents}
 			{characters}
+			{gameReligions}
 			gameOptions={gameDetails.game_options}
 			{userNation}
 			bind:chartFilter={chartFilters.techs}
