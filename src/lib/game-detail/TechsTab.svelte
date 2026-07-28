@@ -19,6 +19,7 @@
 	import {
 		archetypeSpriteKey,
 		deathReasonLabel,
+		formatArchetype,
 		formatEnum,
 		nationName,
 	} from "$lib/utils/formatting";
@@ -40,10 +41,12 @@
 		orderPlayersUploaderFirst,
 		filledLineStyle,
 		getSpritePath,
+		ratingChipsRowHtml,
 		techName,
 		improvementDisplayName,
 		createYieldChartOption,
 		rulerName,
+		rulerCognomen,
 	} from "./helpers";
 	import {
 		scienceTechMarkers,
@@ -353,66 +356,51 @@
 		);
 	}
 
-	// Inline Wisdom glyph for the leader-change lines, same trick as SCI_ICON.
-	const WIS_ICON = (() => {
-		const url = getSpritePath("icons", "RATING_WISDOM");
-		return url
-			? `<img src="${url}" alt="wisdom" style="display:inline;width:12px;height:12px;vertical-align:-1px"/>`
-			: "Wisdom";
-	})();
-
-	// Inline archetype glyph (the `traits` sprite the Leaders tab uses).
-	function archetypeIconHtml(c: CharacterInfo): string {
-		const url = c.archetype
-			? getSpritePath("traits", archetypeSpriteKey(c.archetype))
-			: null;
-		return url
-			? `<img src="${url}" alt="" style="display:inline;width:13px;height:13px;vertical-align:-2px;margin-right:2px"/>`
-			: "";
-	}
-
-	// "[archetype] Name — 6 [wisdom]" — the shared ruler line fragment.
-	// `rulerName` returns null for a character the save left unnamed, so each
-	// line supplies the subject its sentence needs: the incoming ruler borrows
-	// the Military rail's "New ruler", the departing one reads "The ruler".
-	function rulerHtml(c: CharacterInfo): string {
-		const wis = c.wisdom != null ? ` ${c.wisdom} ${WIS_ICON}` : "";
-		return `${archetypeIconHtml(c)}<b>${rulerName(c) ?? "New ruler"}</b>${wis}`;
+	// Leader-change tooltip, in the Military rail's leader-marker style: bold
+	// name (+ cognomen) header, "Archetype · <event> T<n>" line, and the full
+	// four-rating stat row — one block per ruler, the outgoing one first with
+	// its death/reign detail.
+	function rulerBlockHtml(
+		c: CharacterInfo,
+		color: string,
+		eventLine: string,
+	): string {
+		const cognomen = rulerCognomen(c);
+		const cog = cognomen ? ` ‘${cognomen}’` : "";
+		const arch = c.archetype ? formatArchetype(c.archetype) : null;
+		// "Unknown" for a character the save left unnamed, as LeaderCard does —
+		// this header names a ruler who existed, not a vacant seat.
+		return (
+			`<div style="font-weight:700;color:${color}">${rulerName(c) ?? "Unknown"}${cog}</div>` +
+			`<div style="color:${TOOLTIP_TEXT}">${arch ? `${arch} · ` : ""}${eventLine}</div>` +
+			ratingChipsRowHtml(c)
+		);
 	}
 
 	function leaderChangeTooltip(m: LeaderChangeMarker, color: string): string {
-		const lines: string[] = [];
+		const parts: string[] = [];
 		if (m.prev) {
 			const c = m.prev.character;
-			const verb =
-				m.prev.end === "died"
-					? `died, aged ${m.prev.age},`
-					: `${m.prev.end}, aged ${m.prev.age},`;
-			// "[archetype] Name died, aged 25, 6 [wisdom]" — the wisdom trails
-			// the line, per the rail's compact ruler format.
-			lines.push(
-				`${archetypeIconHtml(c)}<b>${rulerName(c) ?? "The ruler"}</b> ${verb}${c.wisdom != null ? ` ${c.wisdom} ${WIS_ICON}` : ""}`,
+			const years = `reigned ${m.prev.reignYears} ${m.prev.reignYears === 1 ? "year" : "years"}`;
+			parts.push(
+				rulerBlockHtml(
+					c,
+					color,
+					`${m.prev.end} T${m.turn}, aged ${m.prev.age} · ${years}`,
+				),
 			);
 			if (m.prev.end === "died" && c.death_reason) {
-				lines.push(`Cause of death: ${deathReasonLabel(c.death_reason)}`);
+				parts.push(
+					`<div style="color:${TOOLTIP_MUTED}">Cause of death: ${deathReasonLabel(c.death_reason)}</div>`,
+				);
 			}
-			lines.push(
-				`Reigned for ${m.prev.reignYears} ${m.prev.reignYears === 1 ? "year" : "years"}`,
-			);
 		}
-		lines.push(
+		parts.push(
 			m.next
-				? `Succeeded by ${rulerHtml(m.next.character)}`
-				: "No successor took the throne",
+				? `<div style="margin-top:6px">${rulerBlockHtml(m.next.character, color, `crowned T${m.turn}`)}</div>`
+				: `<div style="margin-top:6px;color:${TOOLTIP_TEXT}">No successor took the throne</div>`,
 		);
-		return (
-			`<div style="font-size:12px;line-height:1.55">` +
-			`<div style="font-weight:700;color:${color}">Leader change · T${m.turn}</div>` +
-			lines
-				.map((t) => `<div style="color:${TOOLTIP_TEXT}">${t}</div>`)
-				.join("") +
-			`</div>`
-		);
+		return `<div style="font-size:12px;line-height:1.5">${parts.join("")}</div>`;
 	}
 
 	const knowledgeName = (t: string) => formatEnum(t, "KNOWLEDGE_");
@@ -547,13 +535,21 @@
 							tooltipHtml: spikeTooltip(s, player.color),
 						})),
 						leader: leaderChangeMarkers(player.playerId, characters).map(
-							(m) => ({
-								turn: m.turn,
-								iconCategory: "icons" as const,
-								iconValue: "RATING_WISDOM",
-								color: player.color,
-								tooltipHtml: leaderChangeTooltip(m, player.color),
-							}),
+							(m) => {
+								// The incoming ruler's archetype glyph (the Military
+								// rail's leader-marker icon); the fall-of-the-line
+								// marker shows the outgoing ruler's.
+								const face = (m.next ?? m.prev)?.character;
+								return {
+									turn: m.turn,
+									iconCategory: "traits-trimmed" as const,
+									iconValue: face?.archetype
+										? archetypeSpriteKey(face.archetype)
+										: null,
+									color: player.color,
+									tooltipHtml: leaderChangeTooltip(m, player.color),
+								};
+							},
 						),
 						// Knowledge shifts render as text chips — "N→C", the tier
 						// initials — since neither a sprite nor a bare dot can say

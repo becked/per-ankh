@@ -633,6 +633,38 @@ export function familyForOwner(
 	};
 }
 
+// One rating chip for a character tooltip: the in-game stat icon + value.
+function ratingChipHtml(
+	label: string,
+	key: string,
+	value: number | null,
+): string {
+	if (value == null) return "";
+	const url = getSpritePath("icons", key);
+	const ic = url
+		? `<img src="${url}" alt="${label}" style="width:13px;height:13px"/>`
+		: `${label}`;
+	return `<span style="display:inline-flex;align-items:center;gap:3px">${ic}${value}</span>`;
+}
+
+/**
+ * The four-rating stat line for a character tooltip (Wis/Cha/Cou/Dis, each
+ * with its in-game icon), or "" when no rating is known — the row the
+ * Military rail's leader markers show, shared with the Techs rail's
+ * leader-change markers.
+ */
+export function ratingChipsRowHtml(c: CharacterInfo): string {
+	const chips = [
+		ratingChipHtml("Wis", "RATING_WISDOM", c.wisdom),
+		ratingChipHtml("Cha", "RATING_CHARISMA", c.charisma),
+		ratingChipHtml("Cou", "RATING_COURAGE", c.courage),
+		ratingChipHtml("Dis", "RATING_DISCIPLINE", c.discipline),
+	].join("");
+	return chips
+		? `<div style="display:flex;gap:11px;margin-top:4px">${chips}</div>`
+		: "";
+}
+
 // ─── Unit Classification ────────────────────────────────────────────
 //
 // Chart labels follow the game's own military UnitCycle names: Infantry,
