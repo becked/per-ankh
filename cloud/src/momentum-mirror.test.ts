@@ -4,15 +4,8 @@
 // source text and their behaviour on a synthetic duel; helper drift shows up
 // in the behavioural comparison.
 import { describe, expect, it } from "vitest";
-import {
-	momentumCurve as cloudCurve,
-	momentumDrama as cloudDrama,
-	type MomentumInput,
-} from "./momentum";
-import {
-	momentumCurve as frontCurve,
-	momentumDrama as frontDrama,
-} from "../../src/lib/game-detail/momentum";
+import { momentumCurve as cloudCurve, type MomentumInput } from "./momentum";
+import { momentumCurve as frontCurve } from "../../src/lib/game-detail/momentum";
 
 function fixture(): MomentumInput {
 	const data = (base: number) =>
@@ -61,7 +54,6 @@ function fixture(): MomentumInput {
 describe("momentum mirror", () => {
 	it("exports byte-identical function source", () => {
 		expect(cloudCurve.toString()).toBe(frontCurve.toString());
-		expect(cloudDrama.toString()).toBe(frontDrama.toString());
 	});
 
 	it("scores a synthetic duel identically", () => {

@@ -64,7 +64,7 @@ export interface MomentumPoint {
 	 * drift and invents phantom changes).
 	 */
 	ch: number[];
-	/** Raw A−B leads, MOMENTUM_DIMS order — for tooltips. */
+	/** Raw A−B leads, MOMENTUM_DIMS order — for the detail panel. */
 	raw: number[];
 	/**
 	 * Each side's own numbers at this turn — cities, growth, orders, science,
@@ -277,48 +277,4 @@ export function momentumCurve(input: MomentumInput): MomentumCurve | null {
 		});
 	}
 	return points.length >= 5 ? { points, dims: MOMENTUM_DIMS } : null;
-}
-
-/**
- * Drama metrics over a curve, from the eventual winner's perspective.
- * `lead_changes` uses 55/45 hysteresis — counting bare 50% crossings
- * inflates hovering-at-even matches past genuine comebacks.
- */
-export function momentumDrama(
-	points: MomentumPoint[],
-	aWon: boolean,
-): {
-	low: number;
-	behind: number;
-	move: number;
-	swing: number;
-	leadChanges: number;
-} {
-	const ps = points.map((pt) => pt.p);
-	const pw = ps.map((p) => (aWon ? p : 1 - p));
-	let flips = 0;
-	let state: "a" | "b" | null = null;
-	for (const p of ps) {
-		if (p > 0.55 && state !== "a") {
-			if (state !== null) flips++;
-			state = "a";
-		} else if (p < 0.45 && state !== "b") {
-			if (state !== null) flips++;
-			state = "b";
-		}
-	}
-	let move = 0;
-	let swing = 0;
-	for (let i = 1; i < ps.length; i++) {
-		const d = Math.abs(ps[i] - ps[i - 1]);
-		move += d;
-		swing = Math.max(swing, d);
-	}
-	return {
-		low: Math.min(...pw),
-		behind: pw.filter((v) => v < 0.5).length / pw.length,
-		move,
-		swing,
-		leadChanges: flips,
-	};
 }
