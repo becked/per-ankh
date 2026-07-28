@@ -66,6 +66,13 @@ export interface MomentumPoint {
 	ch: number[];
 	/** Raw A−B leads, MOMENTUM_DIMS order — for tooltips. */
 	raw: number[];
+	/**
+	 * Each side's own numbers at this turn — cities, growth, orders, science,
+	 * military power — for the "key stats" table. Not model inputs (the model
+	 * sees only differences); kept raw so the reader can check the arithmetic.
+	 */
+	sa: number[];
+	sb: number[];
 }
 
 export interface MomentumCurve {
@@ -216,16 +223,35 @@ export function momentumCurve(input: MomentumInput): MomentumCurve | null {
 	const ca = cities.get(input.a);
 	const cb = cities.get(input.b);
 
-	const pts: { turn: number; raw: number[] }[] = [];
+	const side = (
+		y: Map<string, ByTurn>,
+		m: ByTurn,
+		c: ByTurn | undefined,
+		t: number,
+	): number[] => [
+		c?.get(t) ?? 0,
+		y.get("YIELD_GROWTH")?.get(t) ?? 0,
+		y.get("YIELD_ORDERS")?.get(t) ?? 0,
+		y.get("YIELD_SCIENCE")?.get(t) ?? 0,
+		m.get(t) ?? 0,
+	];
+	const pts: { turn: number; raw: number[]; sa: number[]; sb: number[] }[] =
+		[];
 	for (let t = 2; t <= input.finalTurn; t++) {
 		const raw = featsAt(ya, yb, ma, mb, ca, cb, t);
-		if (raw) pts.push({ turn: t, raw });
+		if (raw)
+			pts.push({
+				turn: t,
+				raw,
+				sa: side(ya, ma, ca, t),
+				sb: side(yb, mb, cb, t),
+			});
 	}
 	if (pts.length < 5) return null;
 
 	const points: MomentumPoint[] = [];
 	for (let i = 0; i < pts.length; i++) {
-		const { turn, raw } = pts[i];
+		const { turn, raw, sa, sb } = pts[i];
 		const w = weightsAt(turn / input.finalTurn);
 		if (!w) continue;
 		const z = zOf(raw, turn);
@@ -246,6 +272,8 @@ export function momentumCurve(input: MomentumInput): MomentumCurve | null {
 			lv: lv.map((v) => Math.round(v * 100) / 100 + 0),
 			ch: ch.map((v) => Math.round(v * 100) / 100 + 0),
 			raw,
+			sa,
+			sb,
 		});
 	}
 	return points.length >= 5 ? { points, dims: MOMENTUM_DIMS } : null;

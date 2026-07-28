@@ -98,9 +98,10 @@
 					value: [number, number];
 					color: string;
 				}>;
-				if (arr.length === 0) return "";
-				const turn = arr[0].value[0];
-				const rows = arr
+				const main = arr.filter((x) => x.seriesName !== "");
+				if (main.length === 0) return "";
+				const turn = main[0].value[0];
+				const rows = main
 					.map(
 						(p) =>
 							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${escapeHtml(p.seriesName)}: ${Math.round(p.value[1])}%`,
@@ -109,26 +110,60 @@
 				return `Momentum<br/>Turn ${turn}<br/>${rows}`;
 			},
 		},
-		series: momentumPlayers.map((p, i) => ({
-			name: `${p.player_name}${p.nation ? ` (${formatEnum(p.nation, "NATION_")})` : ""}`,
-			type: "line",
-			showSymbol: false,
-			smooth: true,
-			sampling: "lttb",
-			lineStyle: { width: 1.5, color: playerColor(p.nation, i) },
-			data: p.momentum_series.map((pt) => [pt.turn, pt.p * 100]),
-			...(i === 0
-				? {
-						markLine: {
-							silent: true,
-							symbol: "none",
-							label: { show: false },
-							lineStyle: { color: "#6b6459", type: "dashed", width: 1 },
-							data: [{ yAxis: 50 }],
-						},
-					}
-				: {}),
-		})),
+		// The momentum look: one line for the first player, the area between it
+		// and the 50% midline filled in whoever-leads' colour (two silent
+		// clamped series carry the fills).
+		series: [
+			...([0, 1] as const).map((side) => ({
+				name: "",
+				type: "line" as const,
+				silent: true,
+				showSymbol: false,
+				lineStyle: { opacity: 0 },
+				areaStyle: {
+					origin: 50,
+					color: playerColor(momentumPlayers[side]?.nation ?? null, side),
+					opacity: 0.25,
+				},
+				data: (momentumPlayers[0]?.momentum_series ?? []).map((pt) => [
+					pt.turn,
+					side === 0 ? Math.max(50, pt.p * 100) : Math.min(50, pt.p * 100),
+				]),
+			})),
+			{
+				name: `${momentumPlayers[0]?.player_name ?? ""}${momentumPlayers[0]?.nation ? ` (${formatEnum(momentumPlayers[0].nation, "NATION_")})` : ""}`,
+				type: "line" as const,
+				showSymbol: false,
+				sampling: "lttb" as const,
+				lineStyle: {
+					width: 1.5,
+					color: playerColor(momentumPlayers[0]?.nation ?? null, 0),
+				},
+				data: (momentumPlayers[0]?.momentum_series ?? []).map((pt) => [
+					pt.turn,
+					pt.p * 100,
+				]),
+				markLine: {
+					silent: true,
+					symbol: "none",
+					label: { show: false },
+					lineStyle: { color: "#6b6459", type: "dashed", width: 1 },
+					data: [{ yAxis: 50 }],
+				},
+			},
+			{
+				name: `${momentumPlayers[1]?.player_name ?? ""}${momentumPlayers[1]?.nation ? ` (${formatEnum(momentumPlayers[1].nation, "NATION_")})` : ""}`,
+				type: "line" as const,
+				showSymbol: false,
+				// Invisible mirror so the tooltip names both sides; the visual is
+				// the single line + fills above.
+				lineStyle: { opacity: 0 },
+				data: (momentumPlayers[1]?.momentum_series ?? []).map((pt) => [
+					pt.turn,
+					pt.p * 100,
+				]),
+			},
+		],
 	});
 
 	const sparklineOption = $derived<ChartOption>({
