@@ -50,6 +50,11 @@ export interface City {
 	// city projects like Archives and Forums that carry city effects.
 	// (Religion presence is parsed separately — parseCityReligions.)
 	projectCounts: { project: string; count: number }[];
+	// Per-team happiness level (<T.X>N, signed — negative levels are
+	// discontent and modify the city's yields). Current saves write
+	// <TeamHappinessLevel>; older ones <TeamDiscontentLevel> with the sign
+	// flipped (City.cs:1748 loads it negated), normalized here.
+	teamHappinessLevels: { teamId: number; level: number }[];
 }
 
 export interface CityProductionItem {
@@ -167,6 +172,13 @@ export function parseCities(root: Record<string, unknown>): City[] {
 		const projectCounts = [...parseNameKeyedIntMap(node.ProjectCount)].map(
 			([project, count]) => ({ project, count }),
 		);
+		const teamHappinessLevels = isElement(node.TeamHappinessLevel)
+			? [...parsePrefixedKeyedIntMap(node.TeamHappinessLevel, "T.")].map(
+					([teamId, level]) => ({ teamId, level }),
+				)
+			: [...parsePrefixedKeyedIntMap(node.TeamDiscontentLevel, "T.")].map(
+					([teamId, level]) => ({ teamId, level: -level }),
+				);
 
 		cities.push({
 			xmlId,
@@ -191,6 +203,7 @@ export function parseCities(root: Record<string, unknown>): City[] {
 			unitProductionCount,
 			buyTileCount: optInt(node.BuyTileCount) ?? 0,
 			projectCounts,
+			teamHappinessLevels,
 		});
 	}
 

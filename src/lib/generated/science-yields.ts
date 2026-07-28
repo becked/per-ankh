@@ -517,6 +517,11 @@ export const COMPETITIVE_SCIENCE_STIPEND = 4;
 // around COMPETITIVE_EQUIVALENT_RATING — to get the city's %.
 export const WISDOM_GOVERNOR_SCIENCE_MODIFIER = 2;
 
+// Percent city science PER DISCONTENT LEVEL (yield.xml
+// iNegativeHappinessModifier ×|level| — getHappinessLevelYieldModifier).
+// Negative: an unhappy city genuinely earns less.
+export const SCIENCE_DISCONTENT_MODIFIER = -5;
+
 // Family class → flat science per placed specialist in its cities
 // (effectCity <aiYieldRateSpecialist>, any specialist — Sages).
 export const FAMILY_CLASS_SCIENCE_PER_SPECIALIST: Readonly<

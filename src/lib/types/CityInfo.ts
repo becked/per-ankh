@@ -50,6 +50,15 @@ religions?: Array<string>,
  */
 project_counts?: Array<{ project: string, count: number }>,
 /**
+ * The owner team's happiness level in this city, signed — negative levels
+ * are discontent, each a negative yield modifier
+ * (getHappinessLevelYieldModifier). 0 = neutral, null = unowned city.
+ * Normalized from either save tag (TeamHappinessLevel, or the legacy
+ * TeamDiscontentLevel negated). Optional: absent on blobs before
+ * PARSER_VERSION 2.15.0.
+ */
+happiness_level?: number | null,
+/**
  * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
  */
 culture_level: string | null, growth_count: number, unit_production_count: number, specialist_count: number, buy_tile_count: number, hurry_civics_count: number, hurry_money_count: number, hurry_training_count: number, hurry_population_count: number, };

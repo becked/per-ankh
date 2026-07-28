@@ -51,6 +51,7 @@ import {
 	WISDOM_COURT_SCIENCE_RATE,
 	WISDOM_GOVERNOR_SCIENCE_MODIFIER,
 	SCIENCE_TRIANGLE_OFFSET,
+	SCIENCE_DISCONTENT_MODIFIER,
 	COMPETITIVE_EQUIVALENT_RATING,
 	COMPETITIVE_SCIENCE_STIPEND,
 	KNOWLEDGE_TIERS,
@@ -472,11 +473,10 @@ export type ScienceBreakdown = {
 	// SIGNED remainder vs the actual rate: the non-leader court (spouses,
 	// successors, courtiers, council — all opinion-scaled),
 	// Philosophy-via-Forums, connected-foreign-trade science, and every
-	// interaction the save doesn't itemize. The main NEGATIVE components are
-	// the city percent modifiers we can't price — angry/furious family
-	// opinion and discontent — so a science-heavy realm with unhappy
-	// families reads as a visibly negative remainder. Deliberately not
-	// clamped so that shows.
+	// interaction the save doesn't itemize. The main remaining NEGATIVE
+	// component is angry/furious family opinion (a city percent modifier the
+	// save doesn't let us price per family) — discontent IS priced, in the
+	// Modifiers section. Deliberately not clamped so over-counting shows.
 	other: number;
 	// The player's actual science/turn at game end.
 	total: number;
@@ -956,6 +956,27 @@ export function scienceBreakdown(
 		}
 	}
 
+	// Discontent: −5% science per NEGATIVE happiness level in the city
+	// (getHappinessLevelYieldModifier: -(level) × the negative modifier;
+	// positive levels pay nothing for science), estimated against the same
+	// city base. The big legitimate NEGATIVE modifier — with it priced, a
+	// negative Other genuinely means over-counting.
+	for (const city of cityContext.cities) {
+		const level = city.happiness_level;
+		if (level == null || level >= 0) continue;
+		const pct = -level * SCIENCE_DISCONTENT_MODIFIER;
+		const m = cityPct.get(city.city_name) ?? new Map<string, Acc>();
+		bump(
+			m,
+			"Discontent",
+			0,
+			pct,
+			{ category: "yields", value: "YIELD_DISCONTENT" },
+			0,
+		);
+		cityPct.set(city.city_name, m);
+	}
+
 	// Percent modifiers, estimated per city against that city's base (flat
 	// tiles + staff + the law and city-effect yields above).
 	const modifiers = new Map<string, Acc>();
@@ -1230,7 +1251,7 @@ export type KnowledgeFlipMarker = {
 // The game's bucketing (InfoHelpers.getBestPercentValue): the tier with the
 // smallest threshold ≥ pct wins; no threshold (Erudite) is the catch-all.
 function knowledgeTier(pct: number): string {
-	let best: string | null = null;
+	let best = KNOWLEDGE_TIERS[KNOWLEDGE_TIERS.length - 1].type;
 	let min = Infinity;
 	for (const t of KNOWLEDGE_TIERS) {
 		const p = t.percent ?? Infinity;
@@ -1239,17 +1260,24 @@ function knowledgeTier(pct: number): string {
 			best = t.type;
 		}
 	}
-	return best ?? KNOWLEDGE_TIERS[KNOWLEDGE_TIERS.length - 1].type;
+	return best;
 }
 
+// A new tier must hold this many consecutive turns to count as a shift.
+// Sitting exactly on a threshold flip-flops the raw classification every
+// turn (and the blob's ÷10 rounding adds its own jitter) — a burst of
+// C→N / N→C chips at one boundary says nothing a single shift doesn't.
+const KNOWLEDGE_MIN_RUN = 3;
+
 /**
- * Turns where the player's knowledge standing vs the opponent flipped tier —
+ * Turns where the player's knowledge standing vs the opponent shifted tier —
  * Primitive/Naive/Competent/Learned/Erudite, the exact classification the
  * game computes in Player.calculateKnowledgeOf: the player's cumulative
  * science as an integer percent of the opponent's, bucketed by
- * knowledge.xml's thresholds. (The blob's cumulatives are the save's ×10
- * totals ÷10 with rounding, so a flip landing exactly on a threshold can be
- * off by a turn.) No marker for the initial classification — only changes.
+ * knowledge.xml's thresholds. Runs shorter than {@link KNOWLEDGE_MIN_RUN}
+ * are folded into their predecessor (boundary churn, not a real shift); the
+ * final run always stands, so the last chip agrees with the end state. No
+ * marker for the initial classification — only changes.
  */
 export function knowledgeFlipMarkers(
 	mine: YieldDataPoint[],
@@ -1258,18 +1286,36 @@ export function knowledgeFlipMarkers(
 	const other = new Map<number, number>();
 	for (const d of theirs)
 		if (d.cumulative != null) other.set(d.turn, d.cumulative);
-	const flips: KnowledgeFlipMarker[] = [];
-	let current: string | null = null;
+	const perTurn: { turn: number; tier: string; pct: number }[] = [];
 	for (const d of mine) {
 		const ours = d.cumulative;
 		const opp = other.get(d.turn);
 		if (ours == null || opp == null || opp <= 0) continue;
 		const pct = Math.trunc((ours * 100) / opp);
-		const tier = knowledgeTier(pct);
-		if (current != null && tier !== current) {
-			flips.push({ turn: d.turn, from: current, to: tier, pct });
-		}
-		current = tier;
+		perTurn.push({ turn: d.turn, tier: knowledgeTier(pct), pct });
 	}
-	return flips;
+	// Group into runs, then fold sub-minimum runs into their predecessor.
+	type Run = { tier: string; first: (typeof perTurn)[number]; length: number };
+	const runs: Run[] = [];
+	for (const p of perTurn) {
+		const last = runs[runs.length - 1];
+		if (last && last.tier === p.tier) last.length++;
+		else runs.push({ tier: p.tier, first: p, length: 1 });
+	}
+	const kept: Run[] = [];
+	for (let i = 0; i < runs.length; i++) {
+		const isLast = i === runs.length - 1;
+		if (!isLast && runs[i].length < KNOWLEDGE_MIN_RUN && kept.length > 0) {
+			continue;
+		}
+		const prev = kept[kept.length - 1];
+		if (prev && prev.tier === runs[i].tier) continue;
+		kept.push(runs[i]);
+	}
+	return kept.slice(1).map((r, i) => ({
+		turn: r.first.turn,
+		from: kept[i].tier,
+		to: r.tier,
+		pct: r.first.pct,
+	}));
 }

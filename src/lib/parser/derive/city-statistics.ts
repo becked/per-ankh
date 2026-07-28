@@ -95,6 +95,14 @@ export function deriveCityStatistics(
 			governor_xml_id: c.governorXmlId,
 			religions: religionsByCity.get(c.xmlId) ?? [],
 			project_counts: c.projectCounts,
+			// The owner team's happiness level (same team resolution as
+			// culture above); negative = discontent. Null for unowned cities,
+			// 0 when neutral.
+			happiness_level:
+				teamForCulture !== null
+					? (c.teamHappinessLevels.find((t) => t.teamId === teamForCulture)
+							?.level ?? 0)
+					: null,
 			culture_level: culture?.cultureLevel ?? null,
 			growth_count: c.growthCount,
 			unit_production_count: c.unitProductionCount,
