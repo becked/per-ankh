@@ -366,23 +366,23 @@
 		);
 	}
 
+	const knowledgeName = (t: string) => formatEnum(t, "KNOWLEDGE_");
+
 	function knowledgeFlipTooltip(
 		m: KnowledgeFlipMarker,
 		opponent: string,
 		color: string,
 	): string {
-		const tier = (t: string) => formatEnum(t, "KNOWLEDGE_");
 		return (
 			`<div style="font-size:12px;line-height:1.55">` +
-			`<div style="font-weight:700;color:${color}">${tier(m.from)} → ${tier(m.to)} · T${m.turn}</div>` +
+			`<div style="font-weight:700;color:${color}">${knowledgeName(m.from)} → ${knowledgeName(m.to)} · T${m.turn}</div>` +
 			`<div style="color:${TOOLTIP_TEXT}">Science total at ${m.pct}% of ${opponent}'s</div>` +
-			`<div style="color:${TOOLTIP_MUTED};margin-top:3px">The game's knowledge rating (cumulative science, knowledge.xml thresholds)</div>` +
 			`</div>`
 		);
 	}
 
 	// Row order within each player's band: key techs, free techs, one-off
-	// gains, leader changes, knowledge-standing flips.
+	// gains, leader changes, knowledge-standing shifts.
 	const SCIENCE_RAIL_KINDS = [
 		"key",
 		"free",
@@ -506,15 +506,17 @@
 								tooltipHtml: leaderChangeTooltip(m, player.color),
 							}),
 						),
+						// Knowledge shifts render as text chips — "N→C", the tier
+						// initials — since neither a sprite nor a bare dot can say
+						// which of the five states the player moved between.
 						knowledge: knowledgeFlipMarkers(
 							science,
 							opponent?.science ?? [],
 						).map((m) => ({
 							turn: m.turn,
-							// No knowledge sprite exists — null renders the
-							// player-coloured fallback dot.
 							iconCategory: "icons" as const,
 							iconValue: null,
+							label: `${knowledgeName(m.from)[0]}→${knowledgeName(m.to)[0]}`,
 							color: player.color,
 							tooltipHtml: knowledgeFlipTooltip(
 								m,

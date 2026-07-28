@@ -15,16 +15,19 @@
 
 	// One marker on the rail: an icon at its event's turn-x with a rich hover
 	// tooltip. A null iconValue renders a colored dot instead of a sprite.
-	// `glyph` renders the unit flag-glyph variant (units category only).
-	// `gold` gives the marker a gold glow (the app's gold accent) — the
-	// bonus-card highlight on the Military rail; propagated across a proximity
-	// merge so a cluster stays gold when any of its markers is a bonus card.
+	// `label` renders a small text chip instead of either (the Techs rail's
+	// knowledge shifts, "N→C"). `glyph` renders the unit flag-glyph variant
+	// (units category only). `gold` gives the marker a gold glow (the app's
+	// gold accent) — the bonus-card highlight on the Military rail; propagated
+	// across a proximity merge so a cluster stays gold when any of its markers
+	// is a bonus card.
 	export type RailMarker = {
 		turn: number;
 		iconCategory: SpriteCategory;
 		iconValue: string | null;
 		color: string;
 		tooltipHtml: string;
+		label?: string;
 		glyph?: boolean;
 		gold?: boolean;
 	};
@@ -254,7 +257,13 @@
 								onmousemove={(e) => enterEvent(icon, e)}
 								onmouseleave={leaveEvent}
 							>
-								{#if v}
+								{#if icon.label}
+									<span
+										class="whitespace-nowrap rounded-sm px-0.5 text-[9px] font-bold leading-tight"
+										style="color: {icon.color}; background-color: rgb(var(--color-surface));"
+										>{icon.label}</span
+									>
+								{:else if v}
 									<SpriteIcon
 										category={icon.iconCategory}
 										value={v}
