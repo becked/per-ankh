@@ -6,7 +6,7 @@
 	// click pins. No tooltip, no commentary: the panel is the data.
 	import type { ChartOption, ECharts } from "$lib/echarts";
 	import type { EventLog } from "$lib/types/EventLog";
-	import { CHART_THEME } from "$lib/config";
+	import { CHART_THEME, CHART_REFERENCE_LINE_COLOR } from "$lib/config";
 	import Chart from "$lib/Chart.svelte";
 	import { formatEnum, stripMarkup } from "$lib/utils/formatting";
 	import type { MomentumCurve } from "./momentum";
@@ -94,7 +94,7 @@
 					silent: true,
 					symbol: "none",
 					label: { show: false },
-					lineStyle: { color: "#6b6459", type: "dashed" },
+					lineStyle: { color: CHART_REFERENCE_LINE_COLOR, type: "dashed" },
 					data: [{ yAxis: 50 }],
 				},
 			},

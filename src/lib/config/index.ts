@@ -7,7 +7,12 @@
  */
 
 // Re-export chart configuration
-export { CHART_COLORS, CHART_THEME, getChartColor } from "./charts";
+export {
+	CHART_COLORS,
+	CHART_THEME,
+	CHART_REFERENCE_LINE_COLOR,
+	getChartColor,
+} from "./charts";
 
 // Re-export nation and tribe colors
 export {

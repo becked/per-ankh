@@ -70,3 +70,10 @@ export const CHART_THEME = {
 export function getChartColor(index: number): string {
 	return CHART_COLORS[index % CHART_COLORS.length];
 }
+
+/**
+ * Subdued dashed reference line (e.g. the momentum chart's 50% midline):
+ * warm gray between the theme's surface browns and its text creams, so the
+ * line reads as furniture rather than another data series.
+ */
+export const CHART_REFERENCE_LINE_COLOR = "#6b6459";

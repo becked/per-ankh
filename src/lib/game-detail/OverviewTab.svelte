@@ -347,9 +347,9 @@
 
 	// ─── Momentum ─────────────────────────────────────────────────────
 	// The fitted win-probability curve for duels: who was winning, turn by
-	// turn, with the exact decomposition of why in the tooltip. Retrospective
-	// by construction (weights fitted on the corpus, buckets keyed on the
-	// final turn) — worded as a reading of the match, never a forecast.
+	// turn, with the exact decomposition of why in the detail panel below the
+	// chart. Retrospective by construction — weights are fitted on the corpus
+	// and the progress buckets key on the final turn.
 	const duelists = $derived.by(() => {
 		const humans = players.filter((p) => p.is_human);
 		if (humans.length !== 2) return null;

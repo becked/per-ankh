@@ -16,6 +16,7 @@
 	import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
 	import {
 		CHART_THEME,
+		CHART_REFERENCE_LINE_COLOR,
 		getChartColor,
 		getCivilizationColor,
 	} from "$lib/config";
@@ -147,7 +148,11 @@
 					silent: true,
 					symbol: "none",
 					label: { show: false },
-					lineStyle: { color: "#6b6459", type: "dashed", width: 1 },
+					lineStyle: {
+						color: CHART_REFERENCE_LINE_COLOR,
+						type: "dashed",
+						width: 1,
+					},
 					data: [{ yAxis: 50 }],
 				},
 			},
