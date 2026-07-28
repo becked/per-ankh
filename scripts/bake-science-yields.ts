@@ -79,6 +79,7 @@ interface Entry {
 	iValue?: string;
 	iPercent?: string;
 	iTriangleOffset?: string;
+	iNegativeHappinessModifier?: string;
 	aiYieldOutput?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldRate?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldModifier?: { Pair?: YieldPair | YieldPair[] };
@@ -194,6 +195,18 @@ async function main(): Promise<void> {
 		findEntry(yields, "YIELD_SCIENCE", "yield.xml").iTriangleOffset,
 		"YIELD_SCIENCE iTriangleOffset",
 	);
+	// Percent science per city discontent level (yield.xml
+	// <iNegativeHappinessModifier>, applied ×|happiness level| when the level
+	// is negative — InfoHelpers.getHappinessLevelYieldModifier). Negative.
+	const scienceDiscontentModifier = requireInt(
+		findEntry(yields, "YIELD_SCIENCE", "yield.xml").iNegativeHappinessModifier,
+		"YIELD_SCIENCE iNegativeHappinessModifier",
+	);
+	if (scienceDiscontentModifier >= 0) {
+		throw new Error(
+			"bake-science-yields: YIELD_SCIENCE iNegativeHappinessModifier is not negative",
+		);
+	}
 	const competitiveEquivalentRating = requireInt(
 		findEntry(
 			globalInts,
@@ -648,6 +661,17 @@ async function main(): Promise<void> {
 	lines.push("// around COMPETITIVE_EQUIVALENT_RATING — to get the city's %.");
 	lines.push(
 		`export const WISDOM_GOVERNOR_SCIENCE_MODIFIER = ${wisdomGovernorScienceModifier};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Percent city science PER DISCONTENT LEVEL (yield.xml",
+	);
+	lines.push(
+		"// iNegativeHappinessModifier ×|level| — getHappinessLevelYieldModifier).",
+	);
+	lines.push("// Negative: an unhappy city genuinely earns less.");
+	lines.push(
+		`export const SCIENCE_DISCONTENT_MODIFIER = ${scienceDiscontentModifier};`,
 	);
 	lines.push("");
 	lines.push(
