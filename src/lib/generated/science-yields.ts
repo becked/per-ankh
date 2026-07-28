@@ -508,3 +508,59 @@ export const COMPETITIVE_EQUIVALENT_RATING = 5;
 // YIELD_SCIENCE, per turn: the flat stipend that compensates for the
 // lowered character yields above.
 export const COMPETITIVE_SCIENCE_STIPEND = 4;
+
+// ─── Governor / city-effect science (City.cs yield derivation) ──────
+
+// Percent city science per boosted point of the governor's Wisdom
+// (rating.xml <aiYieldGovernorModifier>). RAW percent: multiply by
+// Utils.triangleBoost(wisdom) — or the Competitive linearization
+// around COMPETITIVE_EQUIVALENT_RATING — to get the city's %.
+export const WISDOM_GOVERNOR_SCIENCE_MODIFIER = 2;
+
+// Family class → flat science per placed specialist in its cities
+// (effectCity <aiYieldRateSpecialist>, any specialist — Sages).
+export const FAMILY_CLASS_SCIENCE_PER_SPECIALIST: Readonly<
+	Record<string, number>
+> = { FAMILYCLASS_SAGES: 1 };
+
+// Nation → flat science per city from its player effect (Babylonia).
+export const NATION_CITY_SCIENCE: Readonly<Record<string, number>> = {
+	NATION_BABYLONIA: 1,
+};
+
+// Theology → science per religion present, in each city where a
+// religion holding the theology is present (City.cs ×getReligionCount).
+export const THEOLOGY_SCIENCE_PER_RELIGION: Readonly<Record<string, number>> = {
+	THEOLOGY_DUALISM: 1,
+};
+
+// City project → flat science: `single` effects (bSingle — Archives)
+// pay once regardless of count; the rest multiply (Convoys).
+export const PROJECT_SCIENCE: Readonly<
+	Record<string, { readonly science: number; readonly single: boolean }>
+> = {
+	PROJECT_ARCHIVE_1: { science: 1, single: true },
+	PROJECT_ARCHIVE_2: { science: 2, single: true },
+	PROJECT_ARCHIVE_3: { science: 4, single: true },
+	PROJECT_ARCHIVE_4: { science: 8, single: true },
+	PROJECT_CONVOY: { science: 1, single: false },
+	PROJECT_GOVERNOR: { science: 2, single: true },
+};
+
+// ─── Knowledge tiers (Player.calculateKnowledgeOf) ──────────────────
+
+// knowledge.xml in file order. A player's knowledge OF another is
+// bucketed by percent = theirScienceTotal × 100 / ourScienceTotal
+// (integer division): the tier with the smallest percent ≥ that value
+// wins (InfoHelpers.getBestPercentValue); `percent: null` (Erudite) is
+// the catch-all — InfoPercentBase defaults to int.MaxValue.
+export const KNOWLEDGE_TIERS: readonly {
+	readonly type: string;
+	readonly percent: number | null;
+}[] = [
+	{ type: "KNOWLEDGE_PRIMITIVE", percent: 67 },
+	{ type: "KNOWLEDGE_NAIVE", percent: 83 },
+	{ type: "KNOWLEDGE_COMPETENT", percent: 120 },
+	{ type: "KNOWLEDGE_LEARNED", percent: 150 },
+	{ type: "KNOWLEDGE_ERUDITE", percent: null },
+];

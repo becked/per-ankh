@@ -70,17 +70,22 @@ interface Entry {
 	AssetVariation?: string;
 	EffectCity?: string;
 	EffectCityExtra?: string;
+	EffectPlayer?: string;
 	TechPrereq?: string;
 	LawClass?: string;
 	Specialist?: string;
 	zIconName?: string;
 	iCost?: string;
 	iValue?: string;
+	iPercent?: string;
 	iTriangleOffset?: string;
 	aiYieldOutput?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldRate?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldModifier?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldCourtRate?: { Pair?: YieldPair | YieldPair[] };
+	aiYieldGovernorModifier?: { Pair?: YieldPair | YieldPair[] };
+	aiYieldRateSpecialist?: { Pair?: YieldPair | YieldPair[] };
+	aiYieldRateReligion?: { Pair?: YieldPair | YieldPair[] };
 	aiImprovementClassModifier?: { Pair?: YieldPair | YieldPair[] };
 	aaiResourceYieldOutput?: { Pair?: ResourceYieldPair | ResourceYieldPair[] };
 }
@@ -126,6 +131,11 @@ async function main(): Promise<void> {
 		laws,
 		lawClasses,
 		techs,
+		familyClasses,
+		nations,
+		theologies,
+		projects,
+		knowledges,
 	] = await Promise.all([
 		loadEntries(resolve(infosDir, "improvement.xml")),
 		loadEntries(resolve(infosDir, "improvementClass.xml")),
@@ -138,6 +148,11 @@ async function main(): Promise<void> {
 		loadEntries(resolve(infosDir, "law.xml")),
 		loadEntries(resolve(infosDir, "lawClass.xml")),
 		loadEntries(resolve(infosDir, "tech.xml")),
+		loadEntries(resolve(infosDir, "familyClass.xml")),
+		loadEntries(resolve(infosDir, "nation.xml")),
+		loadEntries(resolve(infosDir, "theology.xml")),
+		loadEntries(resolve(infosDir, "project.xml")),
+		loadEntries(resolve(infosDir, "knowledge.xml")),
 	]);
 
 	const effectByType = new Map(effects.map((e) => [e.zType, e]));
@@ -198,6 +213,101 @@ async function main(): Promise<void> {
 			),
 			"YIELD_SCIENCE",
 		) / 10;
+
+	// Percent city science per boosted point of the governor's Wisdom
+	// (rating.xml <aiYieldGovernorModifier>). RAW percent — the consumer
+	// multiplies by Utils.triangleBoost(wisdom) (or the Competitive
+	// linearization), so this is NOT ÷10 fixed point.
+	const wisdomGovernorScienceModifier = yieldValue(
+		pairs(
+			findEntry(ratings, "RATING_WISDOM", "rating.xml")
+				.aiYieldGovernorModifier,
+		),
+		"YIELD_SCIENCE",
+	);
+	if (wisdomGovernorScienceModifier === 0) {
+		throw new Error(
+			"bake-science-yields: RATING_WISDOM has no YIELD_SCIENCE aiYieldGovernorModifier",
+		);
+	}
+
+	// Family classes whose city effect pays flat science per placed specialist
+	// (effectCity <aiYieldRateSpecialist> — any specialist, unlike
+	// Constitution's urban-only tag). Sages is the only one today; baking the
+	// whole table keeps the authority in the XML.
+	const familyClassSciencePerSpecialist: Record<string, number> = {};
+	for (const fc of familyClasses) {
+		if (!fc.zType) continue;
+		const e = fc.EffectCity ? effectByType.get(fc.EffectCity) : undefined;
+		const v = e
+			? yieldValue(pairs(e.aiYieldRateSpecialist), "YIELD_SCIENCE")
+			: 0;
+		if (v > 0) familyClassSciencePerSpecialist[fc.zType] = v / 10;
+	}
+
+	// Nations whose player effect grants flat city science (nation.xml
+	// EffectPlayer → effectPlayer.xml EffectCity → effectCity <aiYieldRate>,
+	// applied to every city). Babylonia is the only one today.
+	const effectPlayerByType = new Map(effectPlayers.map((e) => [e.zType, e]));
+	const nationCityScience: Record<string, number> = {};
+	for (const n of nations) {
+		if (!n.zType) continue;
+		const ep = n.EffectPlayer
+			? effectPlayerByType.get(n.EffectPlayer)
+			: undefined;
+		const e = ep?.EffectCity ? effectByType.get(ep.EffectCity) : undefined;
+		const v = e ? yieldValue(pairs(e.aiYieldRate), "YIELD_SCIENCE") : 0;
+		if (v > 0) nationCityScience[n.zType] = v / 10;
+	}
+
+	// Theologies whose city effect pays science per religion PRESENT in the
+	// city (effectCity <aiYieldRateReligion> × City.getReligionCount()). The
+	// effect lands on every city where a religion holding the theology is
+	// present. Dualism is the only one today.
+	const theologySciencePerReligion: Record<string, number> = {};
+	for (const t of theologies) {
+		if (!t.zType) continue;
+		const e = t.EffectCity ? effectByType.get(t.EffectCity) : undefined;
+		const v = e ? yieldValue(pairs(e.aiYieldRateReligion), "YIELD_SCIENCE") : 0;
+		if (v > 0) theologySciencePerReligion[t.zType] = v / 10;
+	}
+
+	// City projects whose effect pays flat science (project.xml EffectCity +
+	// EffectCityExtra → effectCity <aiYieldRate>): the Archive tiers
+	// (+1/+2/+4/+8) and friends. City.cs:5058 keeps both effect counts equal
+	// to the project count, but a <bSingle> effect pays once no matter the
+	// count — `single` tells the consumer to cap the count at 1 (Archives,
+	// the no-characters Governor project) vs. multiply (Convoys).
+	const projectScience: Record<string, { science: number; single: boolean }> =
+		{};
+	for (const p of projects) {
+		if (!p.zType) continue;
+		let science = 0;
+		let single = false;
+		for (const name of [p.EffectCity, p.EffectCityExtra]) {
+			const e = name ? effectByType.get(name) : undefined;
+			const v = e ? yieldValue(pairs(e.aiYieldRate), "YIELD_SCIENCE") : 0;
+			if (v > 0) {
+				science += v;
+				single ||= (e as { bSingle?: string } | undefined)?.bSingle === "1";
+			}
+		}
+		if (science > 0) projectScience[p.zType] = { science: science / 10, single };
+	}
+
+	// Knowledge tiers (knowledge.xml), in file order. `percent` is the tier's
+	// inclusive upper bound on (their science total × 100 / ours), integer
+	// division; the entry with no iPercent (Erudite) is the catch-all —
+	// InfoPercentBase defaults miPercent to int.MaxValue.
+	const knowledgeTiers = knowledges
+		.filter((k) => k.zType)
+		.map((k) => ({
+			type: k.zType!,
+			percent: k.iPercent != null ? Number(k.iPercent) : null,
+		}));
+	if (knowledgeTiers.length === 0) {
+		throw new Error("bake-science-yields: knowledge.xml yielded no tiers");
+	}
 
 	// Per-resource science of resource-sited improvement classes (groves):
 	// class → { RESOURCE_* → display science }.
@@ -520,6 +630,82 @@ async function main(): Promise<void> {
 	lines.push("// lowered character yields above.");
 	lines.push(
 		`export const COMPETITIVE_SCIENCE_STIPEND = ${competitiveScienceStipend};`,
+	);
+	lines.push("");
+	lines.push(
+		"// ─── Governor / city-effect science (City.cs yield derivation) ──────",
+	);
+	lines.push("");
+	lines.push(
+		"// Percent city science per boosted point of the governor's Wisdom",
+	);
+	lines.push(
+		"// (rating.xml <aiYieldGovernorModifier>). RAW percent: multiply by",
+	);
+	lines.push(
+		"// Utils.triangleBoost(wisdom) — or the Competitive linearization",
+	);
+	lines.push("// around COMPETITIVE_EQUIVALENT_RATING — to get the city's %.");
+	lines.push(
+		`export const WISDOM_GOVERNOR_SCIENCE_MODIFIER = ${wisdomGovernorScienceModifier};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Family class → flat science per placed specialist in its cities",
+	);
+	lines.push(
+		"// (effectCity <aiYieldRateSpecialist>, any specialist — Sages).",
+	);
+	lines.push(
+		`export const FAMILY_CLASS_SCIENCE_PER_SPECIALIST: Readonly<Record<string, number>> = ${JSON.stringify(sorted(familyClassSciencePerSpecialist))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Nation → flat science per city from its player effect (Babylonia).",
+	);
+	lines.push(
+		`export const NATION_CITY_SCIENCE: Readonly<Record<string, number>> = ${JSON.stringify(sorted(nationCityScience))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Theology → science per religion present, in each city where a",
+	);
+	lines.push(
+		"// religion holding the theology is present (City.cs ×getReligionCount).",
+	);
+	lines.push(
+		`export const THEOLOGY_SCIENCE_PER_RELIGION: Readonly<Record<string, number>> = ${JSON.stringify(sorted(theologySciencePerReligion))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// City project → flat science: `single` effects (bSingle — Archives)",
+	);
+	lines.push(
+		"// pay once regardless of count; the rest multiply (Convoys).",
+	);
+	lines.push(
+		`export const PROJECT_SCIENCE: Readonly<Record<string, { readonly science: number; readonly single: boolean }>> = ${JSON.stringify(sorted(projectScience))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// ─── Knowledge tiers (Player.calculateKnowledgeOf) ──────────────────",
+	);
+	lines.push("");
+	lines.push(
+		"// knowledge.xml in file order. A player's knowledge OF another is",
+	);
+	lines.push(
+		"// bucketed by percent = theirScienceTotal × 100 / ourScienceTotal",
+	);
+	lines.push(
+		"// (integer division): the tier with the smallest percent ≥ that value",
+	);
+	lines.push(
+		"// wins (InfoHelpers.getBestPercentValue); `percent: null` (Erudite) is",
+	);
+	lines.push("// the catch-all — InfoPercentBase defaults to int.MaxValue.");
+	lines.push(
+		`export const KNOWLEDGE_TIERS: readonly { readonly type: string; readonly percent: number | null }[] = ${JSON.stringify(knowledgeTiers)};`,
 	);
 	lines.push("");
 
