@@ -181,6 +181,7 @@ export function extractAllGameData(
 	const cityStatistics = deriveCityStatistics(
 		cities,
 		cityCulture,
+		cityReligions,
 		families,
 		characters,
 		players,

@@ -9,10 +9,11 @@
 	import Popover from "$lib/ui/Popover.svelte";
 	import {
 		archetypeSpriteKey,
+		deathReasonLabel,
 		formatArchetype,
 		formatEnum,
 		isArchetypeTrait,
-		toRomanNumeral,
+		rulerDisplayName,
 	} from "$lib/utils/formatting";
 	import { getCivilizationColor } from "$lib/config";
 	import { GOAL_NAMES } from "$lib/generated/goal-names";
@@ -38,14 +39,8 @@
 	);
 
 	// ─── Display helpers ──────────────────────────────────────────────
-	// First name plus the regnal numeral when the leader shares a name with an
-	// earlier ruler (suffix > 1). The first of a name carries no numeral, matching
-	// Old World. The numeral is appended after formatEnum so its trailing-digit
-	// strip can't eat it (and it's Roman letters anyway).
-	const rulerName = (c: CharacterInfo): string => {
-		const name = formatEnum(c.first_name, "NAME_") || "Unknown";
-		return c.suffix > 1 ? `${name} ${toRomanNumeral(c.suffix)}` : name;
-	};
+	const rulerName = (c: CharacterInfo): string =>
+		rulerDisplayName(c.first_name, c.suffix);
 
 	const cognomen = (c: CharacterInfo): string | null =>
 		c.cognomen ? formatEnum(c.cognomen, "COGNOMEN_") : null;
@@ -58,12 +53,7 @@
 		c.archetype ? archetypeSpriteKey(c.archetype) : null;
 
 	const deathLabel = (reason: string | null): string | null =>
-		reason
-			? formatEnum(
-					reason.replace(/^TEXT_(TRAIT_)?/, "").replace(/_(F|M)$/, ""),
-					"",
-				)
-			: null;
+		reason ? deathReasonLabel(reason) : null;
 
 	// Age at death, or at game end if the ruler outlived the save — using the
 	// same turn-as-year convention as the reign length. birth_turn can be

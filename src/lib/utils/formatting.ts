@@ -490,3 +490,30 @@ export function formatArchetype(archetype: string): string {
 export function archetypeSpriteKey(archetype: string): string {
 	return archetype.replace(ARCHETYPE_SUFFIX, "");
 }
+
+/**
+ * A ruler's display name: the NAME_* first name plus the regnal numeral when
+ * they share a name with an earlier ruler (suffix > 1). The first of a name
+ * carries no numeral, matching Old World. The numeral is appended after
+ * formatEnum so its trailing-digit strip can't eat it (and it's Roman
+ * letters anyway).
+ */
+export function rulerDisplayName(
+	firstName: string | null,
+	suffix: number,
+): string {
+	const name = formatEnum(firstName ?? "", "NAME_") || "Unknown";
+	return suffix > 1 ? `${name} ${toRomanNumeral(suffix)}` : name;
+}
+
+/**
+ * Display label for a character's death_reason: the save writes localization
+ * keys like TEXT_TRAIT_SEVERELY_ILL_M, so strip the TEXT_/TRAIT_ prefix and
+ * the gendered _F/_M suffix before formatting ("Severely Ill").
+ */
+export function deathReasonLabel(reason: string): string {
+	return formatEnum(
+		reason.replace(/^TEXT_(TRAIT_)?/, "").replace(/_(F|M)$/, ""),
+		"",
+	);
+}
