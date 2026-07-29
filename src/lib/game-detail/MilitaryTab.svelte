@@ -21,6 +21,7 @@
 		TOOLTIP_MUTED,
 		type RailGroup,
 		type RailMarker,
+		type RailRow,
 	} from "./EventRail.svelte";
 	import BuildComparison, { type BuildItem } from "./BuildComparison.svelte";
 	import TableFilterColumn from "./TableFilterColumn.svelte";
@@ -34,6 +35,7 @@
 		TABLE_HEADER_TH_CLASS,
 		TABLE_CELL_TD_CLASS,
 		ownedByPlayer,
+		findByPlayer,
 		orderPlayersUploaderFirst,
 		toggleSort,
 		classifyUnit,
@@ -43,6 +45,12 @@
 		UNIT_CLASS_COLORS,
 		filledLineStyle,
 	} from "./helpers";
+	import {
+		standingShiftMarkers,
+		standingShiftLabel,
+		type StandingShift,
+	} from "./standings";
+	import { POWER_TIERS } from "$lib/generated/power-tiers";
 
 	let {
 		players,
@@ -497,6 +505,69 @@
 	// Row order within each nation's band: leaders, then laws, then techs.
 	const RAIL_KINDS: RailEventKind[] = ["leader", "law", "tech"];
 
+	// ─── Power standing (Player.calculatePowerOf) ─────────────────────
+	// The game's Much Weaker/Weaker/Similar/Stronger/Much Stronger
+	// classification of a player's military power vs the opponent — bucketed
+	// exactly as InfoHelpers.getStrength does, over the same value the chart
+	// plots (MilitaryPowerHistory IS calculateTotalStrength, Player.cs:16952).
+	// Shifts render as tier-initial chips ("MW→W"), like the Techs rail's
+	// knowledge standing.
+	const POWER_MIN_RUN = 3;
+	const powerName = (t: string) => formatEnum(t, "POWER_");
+	// Chip shorthand. Initials alone are ambiguous here (Similar/Stronger both
+	// start with S), so Similar gets the evenly-matched glyph.
+	const POWER_ABBREV: Record<string, string> = {
+		POWER_MUCH_WEAKER: "MW",
+		POWER_WEAKER: "W",
+		POWER_SIMILAR: "≈",
+		POWER_STRONGER: "S",
+		POWER_MUCH_STRONGER: "MS",
+	};
+	const powerAbbrev = (t: string) => POWER_ABBREV[t] ?? powerName(t)[0];
+
+	function powerShiftTooltip(
+		m: StandingShift,
+		opponent: string,
+		color: string,
+	): string {
+		return (
+			`<div style="font-size:12px;line-height:1.55">` +
+			`<div style="font-weight:700;color:${color}">${powerName(m.from)} → ${powerName(m.to)} · T${m.turn}</div>` +
+			`<div style="color:${TOOLTIP_TEXT}">Military power at ${m.pct}% of ${opponent}'s</div>` +
+			`</div>`
+		);
+	}
+
+	function powerShiftMarkers(
+		player: DetailPlayer,
+		opponent: DetailPlayer,
+	): RailMarker[] {
+		const series = (p: DetailPlayer) =>
+			(
+				findByPlayer(
+					playerHistory,
+					p,
+					(h) => h.player_id,
+					(h) => h.nation,
+				)?.history ?? []
+			)
+				.filter((h) => h.military_power != null)
+				.map((h) => ({ turn: h.turn, value: h.military_power! }));
+		return standingShiftMarkers(
+			series(player),
+			series(opponent),
+			POWER_TIERS,
+			POWER_MIN_RUN,
+		).map((m) => ({
+			turn: m.turn,
+			iconCategory: "icons" as const,
+			iconValue: null,
+			label: standingShiftLabel(m.from, m.to, powerAbbrev),
+			color: player.color,
+			tooltipHtml: powerShiftTooltip(m, opponent.label, player.color),
+		}));
+	}
+
 	// The live ECharts instance (approach B). The rail is DOM (EventRail), but
 	// each marker's x-position comes from the chart via convertToPixel;
 	// `layoutTick` bumps on every chart re-layout (init / option change /
@@ -512,9 +583,9 @@
 	const railGroups = $derived.by<RailGroup[]>(() => {
 		if (!matchup) return [];
 		return orderedPlayers
-			.map((player) => {
+			.map((player, i) => {
 				const evs = eventRail.get(player.playerId) ?? [];
-				const rows = RAIL_KINDS.filter((k) =>
+				const rows: RailRow[] = RAIL_KINDS.filter((k) =>
 					evs.some((e) => e.kind === k),
 				).map((kind) => ({
 					kind,
@@ -522,6 +593,10 @@
 						.filter((e) => e.kind === kind)
 						.sort((a, b) => a.turn - b.turn),
 				}));
+				// Power-standing shifts vs the one opponent (the rail only
+				// renders for two-player matchups).
+				const power = powerShiftMarkers(player, orderedPlayers[1 - i]);
+				if (power.length > 0) rows.push({ kind: "power", markers: power });
 				return { player, rows };
 			})
 			.filter((g) => g.rows.length > 0);

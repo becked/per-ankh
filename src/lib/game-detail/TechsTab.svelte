@@ -33,6 +33,7 @@
 	} from "./EventRail.svelte";
 	import TechComparison from "./TechComparison.svelte";
 	import { specialistName } from "./specialists";
+	import { standingShiftLabel } from "./standings";
 	import {
 		type DetailPlayer,
 		type SpriteCategory,
@@ -563,7 +564,9 @@
 							turn: m.turn,
 							iconCategory: "icons" as const,
 							iconValue: null,
-							label: `${knowledgeName(m.from)[0]}→${knowledgeName(m.to)[0]}`,
+							// Knowledge initials are unique (P/N/C/L/E), so plain
+							// initials are the shorthand.
+							label: standingShiftLabel(m.from, m.to, (t) => knowledgeName(t)[0]),
 							color: player.color,
 							tooltipHtml: knowledgeFlipTooltip(
 								m,

@@ -60,6 +60,7 @@ import {
 	PROJECT_SCIENCE,
 } from "$lib/generated/science-yields";
 import { formatEnum } from "$lib/utils/formatting";
+import { standingShiftMarkers, type StandingShift } from "./standings";
 
 // ─── Key-science-tech conditions ─────────────────────────────────────
 
@@ -1229,83 +1230,31 @@ export function leaderChangeMarkers(
 
 // ─── Knowledge standing (Player.calculateKnowledgeOf) ────────────────
 
-export type KnowledgeFlipMarker = {
-	turn: number;
-	from: string; // KNOWLEDGE_* the player was
-	to: string; // KNOWLEDGE_* they became
-	// The player's science total as a percent of the opponent's that turn —
-	// the exact quantity the game buckets.
-	pct: number;
-};
-
-// The game's bucketing (InfoHelpers.getBestPercentValue): the tier with the
-// smallest threshold ≥ pct wins; no threshold (Erudite) is the catch-all.
-function knowledgeTier(pct: number): string {
-	let best = KNOWLEDGE_TIERS[KNOWLEDGE_TIERS.length - 1].type;
-	let min = Infinity;
-	for (const t of KNOWLEDGE_TIERS) {
-		const p = t.percent ?? Infinity;
-		if (p >= pct && p <= min) {
-			min = p;
-			best = t.type;
-		}
-	}
-	return best;
-}
-
-// A new tier must hold this many consecutive turns to count as a shift.
-// Sitting exactly on a threshold flip-flops the raw classification every
-// turn (and the blob's ÷10 rounding adds its own jitter) — a burst of
-// C→N / N→C chips at one boundary says nothing a single shift doesn't.
+// A new tier must hold this many consecutive turns to count as a shift
+// (see standings.ts).
 const KNOWLEDGE_MIN_RUN = 3;
+
+export type KnowledgeFlipMarker = StandingShift;
 
 /**
  * Turns where the player's knowledge standing vs the opponent shifted tier —
  * Primitive/Naive/Competent/Learned/Erudite, the exact classification the
  * game computes in Player.calculateKnowledgeOf: the player's cumulative
  * science as an integer percent of the opponent's, bucketed by
- * knowledge.xml's thresholds. Runs shorter than {@link KNOWLEDGE_MIN_RUN}
- * are folded into their predecessor (boundary churn, not a real shift); the
- * final run always stands, so the last chip agrees with the end state. No
- * marker for the initial classification — only changes.
+ * knowledge.xml's thresholds (shared standings machinery).
  */
 export function knowledgeFlipMarkers(
 	mine: YieldDataPoint[],
 	theirs: YieldDataPoint[],
 ): KnowledgeFlipMarker[] {
-	const other = new Map<number, number>();
-	for (const d of theirs)
-		if (d.cumulative != null) other.set(d.turn, d.cumulative);
-	const perTurn: { turn: number; tier: string; pct: number }[] = [];
-	for (const d of mine) {
-		const ours = d.cumulative;
-		const opp = other.get(d.turn);
-		if (ours == null || opp == null || opp <= 0) continue;
-		const pct = Math.trunc((ours * 100) / opp);
-		perTurn.push({ turn: d.turn, tier: knowledgeTier(pct), pct });
-	}
-	// Group into runs, then fold sub-minimum runs into their predecessor.
-	type Run = { tier: string; first: (typeof perTurn)[number]; length: number };
-	const runs: Run[] = [];
-	for (const p of perTurn) {
-		const last = runs[runs.length - 1];
-		if (last && last.tier === p.tier) last.length++;
-		else runs.push({ tier: p.tier, first: p, length: 1 });
-	}
-	const kept: Run[] = [];
-	for (let i = 0; i < runs.length; i++) {
-		const isLast = i === runs.length - 1;
-		if (!isLast && runs[i].length < KNOWLEDGE_MIN_RUN && kept.length > 0) {
-			continue;
-		}
-		const prev = kept[kept.length - 1];
-		if (prev && prev.tier === runs[i].tier) continue;
-		kept.push(runs[i]);
-	}
-	return kept.slice(1).map((r, i) => ({
-		turn: r.first.turn,
-		from: kept[i].tier,
-		to: r.tier,
-		pct: r.first.pct,
-	}));
+	const series = (data: YieldDataPoint[]) =>
+		data
+			.filter((d) => d.cumulative != null)
+			.map((d) => ({ turn: d.turn, value: d.cumulative! }));
+	return standingShiftMarkers(
+		series(mine),
+		series(theirs),
+		KNOWLEDGE_TIERS,
+		KNOWLEDGE_MIN_RUN,
+	);
 }
