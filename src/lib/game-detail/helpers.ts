@@ -271,12 +271,7 @@ export const CITY_COLUMNS: CityColumn[] = [
 		iconCategory: "crests",
 		// Per-family crest art ships for only a few families; fall back to the
 		// always-available archetype crest derived from family_class.
-		iconValue: (c) =>
-			c.family && getSpritePath("crests", c.family)
-				? c.family
-				: c.family_class
-					? c.family_class.replace("FAMILYCLASS_", "ARCHETYPE_")
-					: null,
+		iconValue: (c) => familyCrestKey(c.family, c.family_class),
 	},
 	{
 		key: "founded_turn",
@@ -563,6 +558,30 @@ export function getSpritePath(
 		return SPRITE_MANIFEST[`units/${name}`] ?? null;
 	}
 	return SPRITE_MANIFEST[`${category}/${enumValue}`] ?? null;
+}
+
+/**
+ * Crest sprite key (for the `crests` category) of a family: the per-family
+ * crest when we ship the art, else the family-class archetype crest —
+ * which always exists for non-null family_class values. Null when neither
+ * resolves, so callers can degrade (the map omits the crest, the rail
+ * renders its colored dot).
+ */
+export function familyCrestKey(
+	family: string | null | undefined,
+	familyClass: string | null | undefined,
+): string | null {
+	// Family values already carry the FAMILY_ prefix (FAMILY_ANTIGONUS), and
+	// the crest art ships as CREST_FAMILY_ANTIGONUS — so the value is used
+	// as-is, no re-prefixing.
+	if (family && SPRITE_MANIFEST[`crests/CREST_${family}`] != null) {
+		return family;
+	}
+	if (familyClass) {
+		// FAMILYCLASS_CHAMPIONS → ARCHETYPE_CHAMPIONS
+		return familyClass.replace(/^FAMILYCLASS_/, "ARCHETYPE_");
+	}
+	return null;
 }
 
 // ─── Unit Classification ────────────────────────────────────────────

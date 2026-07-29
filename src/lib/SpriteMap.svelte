@@ -11,6 +11,7 @@
 		NATION_ALIASES_URL,
 	} from "$lib/generated/atlas-manifest";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
+	import { familyCrestKey } from "$lib/game-detail/helpers";
 	import MapTooltip from "$lib/MapTooltip.svelte";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 
@@ -303,10 +304,8 @@
 	});
 
 	// city_name → resolved crest sprite key (or null when no crest is
-	// renderable). Resolution prefers a per-family crest when we ship the
-	// art; otherwise falls back to the family-class archetype crest, which
-	// always exists for non-null family_class values. Existence is checked
-	// against the SPRITE_MANIFEST baked from static/sprites/crests/CREST_FAMILY_*.png.
+	// renderable), via the shared familyCrestKey rule (per-family crest when
+	// we ship the art, else the family-class archetype crest).
 	//
 	// The family is resolved for whoever owns the city at the represented turn:
 	// a city's family only changes when another nation conquers it, so
@@ -322,16 +321,10 @@
 				ownerAtTurn != null
 					? c.player_families?.find((f) => f.player_xml_id === ownerAtTurn)
 					: undefined;
-			const family = pf?.family ?? c.family;
-			const familyClass = pf?.family_class ?? c.family_class;
-			let key: string | null = null;
-			if (family && SPRITE_MANIFEST[`crests/CREST_FAMILY_${family}`] != null) {
-				key = family;
-			} else if (familyClass) {
-				// FAMILYCLASS_CHAMPIONS → ARCHETYPE_CHAMPIONS
-				key = familyClass.replace(/^FAMILYCLASS_/, "ARCHETYPE_");
-			}
-			map.set(c.city_name, key);
+			map.set(
+				c.city_name,
+				familyCrestKey(pf?.family ?? c.family, pf?.family_class ?? c.family_class),
+			);
 		}
 		return map;
 	});

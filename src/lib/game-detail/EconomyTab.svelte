@@ -58,6 +58,7 @@
 		type DetailPlayer,
 		ownedByPlayer,
 		type TableState,
+		familyCrestKey,
 		filledLineStyle,
 		getSpritePath,
 		improvementDisplayName,
@@ -379,19 +380,47 @@
 	const railGroups = $derived.by<RailGroup[]>(() =>
 		orderedPlayers
 			.map((player) => {
-				const cityMarkers: RailMarker[] = cityStatistics.cities
+				// Each city marker wears its family crest (the family during the
+				// FOUNDER's tenure — a captured city's current family is the
+				// conqueror's), and the tooltip counts the founding ordinals:
+				// this player's Nth city of that family, and Nth city overall.
+				const founded = cityStatistics.cities
 					.filter((c) => c.first_owner_player_xml_id === player.playerId)
-					.sort((a, b) => a.founded_turn - b.founded_turn)
-					.map((c) => ({
+					.sort((a, b) => a.founded_turn - b.founded_turn);
+				// eslint-disable-next-line svelte/prefer-svelte-reactivity -- local, not reactive state
+				const familySeen = new Map<string, number>();
+				const cityMarkers: RailMarker[] = founded.map((c, i) => {
+					const pf = c.player_families?.find(
+						(f) => f.player_xml_id === player.playerId,
+					);
+					const family = pf?.family ?? c.family;
+					const familyClass = pf?.family_class ?? c.family_class;
+					const crest = familyCrestKey(family, familyClass);
+					const familyLabel = familyClass
+						? formatEnum(familyClass, "FAMILYCLASS_")
+						: null;
+					const nthOfFamily = familyClass
+						? (familySeen.get(familyClass) ?? 0) + 1
+						: null;
+					if (familyClass) familySeen.set(familyClass, nthOfFamily!);
+					const crestUrl = crest ? getSpritePath("crests", crest) : null;
+					const title =
+						(crestUrl
+							? `<img src="${crestUrl}" alt="" style="display:inline;width:14px;height:14px;vertical-align:-2px;margin-right:3px"/>`
+							: "") + formatEnum(c.city_name, "CITYNAME_");
+					const lines = [
+						`Founded on turn ${c.founded_turn}`,
+						...(familyLabel ? [`${familyLabel} city #${nthOfFamily}`] : []),
+						`Overall city #${i + 1}`,
+					];
+					return {
 						turn: c.founded_turn,
-						iconCategory: "icons" as const,
-						iconValue: "CITY_FOUNDED",
+						iconCategory: "crests" as const,
+						iconValue: crest,
 						color: player.color,
-						tooltipHtml: tooltip(
-							formatEnum(c.city_name, "CITYNAME_"),
-							`Founded turn ${c.founded_turn}`,
-						),
-					}));
+						tooltipHtml: tooltip(title, lines.join("<br/>")),
+					};
+				});
 				const wonderMarkers: RailMarker[] = playerWonders
 					.filter((w) => w.player_id === player.playerId)
 					.sort((a, b) => a.completed_turn - b.completed_turn)

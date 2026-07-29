@@ -64,12 +64,14 @@
 		onHighlight?: (h: { turn: number; color: string } | null) => void;
 	} = $props();
 
-	// Per-marker render sizes (bare icons, no tile). The nation crest reads as
-	// the row label at 24; event icons sit at 14 so every marker kind reads at
-	// the same weight. Unmapped categories fall back to the default.
+	// Per-marker render sizes (bare icons, no tile). Event icons sit at 14 so
+	// every marker kind reads at the same weight; unmapped categories fall
+	// back to the default. The nation crest labelling each band is not a
+	// marker and gets its own larger size (crest markers — the Economy rail's
+	// family crests — stay at the default).
 	const RAIL_ICON_SIZE_DEFAULT = 16;
+	const RAIL_GUTTER_CREST_SIZE = 24;
 	const RAIL_ICON_SIZE: Partial<Record<SpriteCategory, number>> = {
-		crests: 24,
 		"traits-trimmed": 14,
 		laws: 14,
 		units: 14,
@@ -210,7 +212,7 @@
 					<SpriteIcon
 						category="crests"
 						value={group.player.nation}
-						size={RAIL_ICON_SIZE.crests ?? RAIL_ICON_SIZE_DEFAULT}
+						size={RAIL_GUTTER_CREST_SIZE}
 						alt={group.player.label}
 					/>
 				{:else}
