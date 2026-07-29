@@ -16,6 +16,7 @@
 		UnitInfo,
 	} from "$lib/parser/types";
 	import { FAMILY_OPINION_BANDS } from "$lib/generated/family-opinion";
+	import { FAMILY_COLORS } from "$lib/generated/family-colors";
 	import { CHART_THEME, getChartColor } from "$lib/config";
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
@@ -174,18 +175,24 @@
 				nameLocation: "middle",
 				nameGap: 38,
 			},
-			series: mine.map((s, i) => ({
-				name: formatEnum(s.family, "FAMILY_"),
-				type: "line" as const,
-				data: s.points,
-				// No symbol at all rather than one that's merely hidden on the
-				// plot: the legend draws the series symbol too, and a marker
-				// punched through the middle of each swatch reads as noise when
-				// the colour of the line is the whole key.
-				symbol: "none" as const,
-				lineStyle: { color: getChartColor(i), width: 2 },
-				itemStyle: { color: getChartColor(i) },
-			})),
+			series: mine.map((s, i) => {
+				// The game's own colour for the family (unique per family ×
+				// nation, baked from the family palette); indexed fallback for
+				// a family the bake doesn't know (mods).
+				const color = FAMILY_COLORS[s.family] ?? getChartColor(i);
+				return {
+					name: formatEnum(s.family, "FAMILY_"),
+					type: "line" as const,
+					data: s.points,
+					// No symbol at all rather than one that's merely hidden on the
+					// plot: the legend draws the series symbol too, and a marker
+					// punched through the middle of each swatch reads as noise when
+					// the colour of the line is the whole key.
+					symbol: "none" as const,
+					lineStyle: { color, width: 2 },
+					itemStyle: { color },
+				};
+			}),
 		} as ChartOption;
 	}
 
@@ -229,8 +236,9 @@
 			`${value > 0 ? "+" : ""}${value.toFixed(1)}% upkeep`;
 		// A row reads left to right: the indent that puts a family under its
 		// nation, its crest, then the name. A nation heading stays in the axis
-		// white; its families take its colour, which is what ties a run of rows
-		// to the heading above them once the list is several nations long.
+		// white; each family's name takes the game's own family colour (the
+		// same one its opinion line uses above), falling back to the player
+		// colour for a family the bake doesn't know (mods).
 		const rich: Record<string, object> = {
 			// An empty fragment reserving its width, the same mechanism that
 			// draws the crests. The indent can't ride on the crest's own padding:
@@ -239,22 +247,22 @@
 			indent: { width: 14 },
 			nation: { fontWeight: "bold", fontSize: 12 },
 		};
-		orderedPlayers.forEach((p, i) => {
-			rich[`family${i}`] = { color: p.color, fontSize: 11 };
-		});
 		ordered.forEach((t, i) => {
 			const url =
 				t.family == null ? nationCrest(t.player.nation) : familyCrest(t.family);
 			if (url != null) rich[`crest${i}`] = crestStyle(url, CREST_SIZE);
+			if (t.family != null) {
+				rich[`family${i}`] = {
+					color: FAMILY_COLORS[t.family] ?? t.player.color,
+					fontSize: 11,
+				};
+			}
 		});
 		const styleOf = (t: (typeof ordered)[number], i: number) => {
 			const crest = rich[`crest${i}`] != null ? `{crest${i}|} ` : "";
 			if (t.family == null) return `${crest}{nation|${t.player.label}}`;
-			const owner = orderedPlayers.findIndex(
-				(p) => p.playerId === t.player.playerId,
-			);
 			const name = formatEnum(t.family, "FAMILY_");
-			return `{indent|}${crest}{family${owner}|${name}}`;
+			return `{indent|}${crest}{family${i}|${name}}`;
 		};
 		return {
 			...CHART_THEME,
