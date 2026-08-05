@@ -162,6 +162,20 @@ export const LIVE_WINDOW_MS = 4 * 60 * 60 * 1000;
 // Reads the shared reactive clock (nowMs), like its sibling helpers here, so a
 // $derived that lists these (the Cast view, the popover's caster post) drops a
 // sitting as its time passes instead of waiting for the next data refetch.
+export function upcomingScheduledParts(
+	matches: TournamentMatch[],
+	graceMs = 0,
+): NumberedPart[] {
+	const cutoff = nowMs() - graceMs;
+	const pending = matches.filter(
+		(m) => m.status === "pending" && m.slot_b_id != null,
+	);
+	return scheduledParts(pending).filter((np) => {
+		const t = Date.parse(np.part.scheduled_at as string);
+		return !Number.isNaN(t) && t >= cutoff;
+	});
+}
+
 // A pending match whose every sitting is timed and has aged out (started
 // more than LIVE_WINDOW_MS ago) did not finish in its last session — a
 // finished match gets its save uploaded and reported promptly, so a still-
@@ -182,18 +196,4 @@ export function owesNextSitting(m: TournamentMatch): number | null {
 		if (Number.isNaN(t) || t > cutoff) return null;
 	}
 	return parts.length + 1;
-}
-
-export function upcomingScheduledParts(
-	matches: TournamentMatch[],
-	graceMs = 0,
-): NumberedPart[] {
-	const cutoff = nowMs() - graceMs;
-	const pending = matches.filter(
-		(m) => m.status === "pending" && m.slot_b_id != null,
-	);
-	return scheduledParts(pending).filter((np) => {
-		const t = Date.parse(np.part.scheduled_at as string);
-		return !Number.isNaN(t) && t >= cutoff;
-	});
 }
