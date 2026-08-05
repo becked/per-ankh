@@ -9,6 +9,11 @@
 	import type { ImprovementData } from "$lib/types/ImprovementData";
 	import type { GameReligion } from "$lib/types/GameReligion";
 	import type { PlayerWonder } from "$lib/types/PlayerWonder";
+	import type { MapTile } from "$lib/types/MapTile";
+	import type { TileOwnershipEntry } from "$lib/parser/types";
+	import type { EventLog } from "$lib/types/EventLog";
+	import { momentumCurve, type MomentumCurve } from "./momentum";
+	import MomentumPanel from "./MomentumPanel.svelte";
 	import { formatEnum } from "$lib/utils/formatting";
 	import {
 		type PlayerSummary,
@@ -36,6 +41,9 @@
 		improvementData,
 		gameReligions,
 		playerWonders,
+		staticMapTiles = null,
+		tileOwnershipHistory = [],
+		eventLogs = [],
 		userNation = null,
 		userDisplayName = null,
 	}: {
@@ -51,6 +59,12 @@
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
 		playerWonders: PlayerWonder[];
+		// End-state map tiles for the momentum chart's city reconstruction —
+		// deliberately NOT the turn-slider's reconstructed tiles, whose
+		// properties reflect the selected turn. Null for legacy callers.
+		staticMapTiles?: MapTile[] | null;
+		tileOwnershipHistory?: TileOwnershipEntry[];
+		eventLogs?: EventLog[];
 		// Uploader's picked nation (cloud-only). When set, drives the
 		// save-owner flag below; otherwise falls back to the alphabetical-
 		// first-human heuristic (correct for single-human legacy shares
@@ -330,7 +344,49 @@
 		if (value >= 1000) return `${(value / 1000).toFixed(1)}k`;
 		return value.toString();
 	}
+
+	// ─── Momentum ─────────────────────────────────────────────────────
+	// The fitted win-probability curve for duels: who was winning, turn by
+	// turn, with the exact decomposition of why in the detail panel below the
+	// chart. Retrospective by construction — weights are fitted on the corpus
+	// and the progress buckets key on the final turn.
+	const duelists = $derived.by(() => {
+		const humans = players.filter((p) => p.is_human);
+		if (humans.length !== 2) return null;
+		// Uploader-first, so the plotted line is "my side" when there is one.
+		const ordered = [...humans].sort(
+			(a, b) =>
+				(a.nation === userNation ? 0 : 1) - (b.nation === userNation ? 0 : 1),
+		);
+		return ordered as [DetailPlayer, DetailPlayer];
+	});
+
+	const momentum = $derived.by<MomentumCurve | null>(() => {
+		const duo = duelists;
+		if (!duo || !staticMapTiles || staticMapTiles.length === 0) return null;
+		if (duo[0].player_id == null || duo[1].player_id == null) return null;
+		return momentumCurve({
+			a: duo[0].player_id,
+			b: duo[1].player_id,
+			finalTurn: gameDetails.total_turns,
+			yieldHistory: allYields,
+			playerHistory,
+			mapTiles: staticMapTiles,
+			tileOwnership: tileOwnershipHistory,
+		});
+	});
 </script>
+
+{#if momentum && duelists}
+	<div class="mb-4">
+		<MomentumPanel
+			curve={momentum}
+			a={duelists[0]}
+			b={duelists[1]}
+			{eventLogs}
+		/>
+	</div>
+{/if}
 
 <!-- Nation cards -->
 <div
