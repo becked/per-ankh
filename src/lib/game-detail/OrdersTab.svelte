@@ -183,8 +183,8 @@
 	// the larger value; a source only one side has shows "—" for the other.
 	const isDuel = $derived(players.length === 2);
 	// eslint-disable-next-line no-unused-vars -- param name documentary
-	type Pick = (b: (typeof breakdowns)[number]) => EndBreakdown | null;
-	function unionRows(pick: Pick): { label: string; detail?: string }[] {
+	type PickFn = (b: (typeof breakdowns)[number]) => EndBreakdown | null;
+	function unionRows(pick: PickFn): { label: string; detail?: string }[] {
 		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and consumed inside one call, never mutated after
 		const best = new Map<string, { max: number; detail?: string }>();
 		for (const b of breakdowns) {
@@ -200,7 +200,7 @@
 			.map(([label, v]) => ({ label, detail: v.detail }));
 	}
 	const valueFor = (
-		pick: Pick,
+		pick: PickFn,
 		b: (typeof breakdowns)[number],
 		label: string,
 	): number | null =>
@@ -261,7 +261,7 @@
 
 	{#if isDuel}
 		<!-- Duel: one table per metric, both players in facing columns. -->
-		{#each [{ title: "Orders per turn, at end", pick: ((b) => b.orders) as Pick, dp: 1, note: "Everything the save can't itemize: council and court ratings, city yields (shrines, cathedrals), agents, trade and tribute. The save records gross production — orders spent by working or fortifying units are not deducted here." }, { title: "Legitimacy, at end", pick: ((b) => b.legitimacy) as Pick, dp: 0, note: "Bonuses without a same-turn story event, legacy-ambition differences, cathedrals and shrines, and jumps on succession turns (the dynasty term reshuffles)." }] as section (section.title)}
+		{#each [{ title: "Orders per turn, at end", pick: ((b) => b.orders) as PickFn, dp: 1, note: "Everything the save can't itemize: council and court ratings, city yields (shrines, cathedrals), agents, trade and tribute. The save records gross production — orders spent by working or fortifying units are not deducted here. MP advantage compensation is also unrecorded per player." }, { title: "Legitimacy, at end", pick: ((b) => b.legitimacy) as PickFn, dp: 0, note: "Bonuses without a same-turn story event, legacy-ambition differences, cathedrals and shrines, and jumps on succession turns (the dynasty term reshuffles). A cognomen earned mid-reign is counted both in its ruler's row and inside a timed jump — this signed row nets the overlap out." }] as section (section.title)}
 			<div
 				class="rounded-lg p-4"
 				style="background-color: rgb(var(--color-surface));"
@@ -350,7 +350,7 @@
 								{@render breakdownTable(
 									b.orders,
 									1,
-									"Everything the save can't itemize: council and court ratings, city yields (shrines, cathedrals), agents, trade and tribute. The save records gross production — orders spent by working or fortifying units are not deducted here.",
+									"Everything the save can't itemize: council and court ratings, city yields (shrines, cathedrals), agents, trade and tribute. The save records gross production — orders spent by working or fortifying units are not deducted here. MP advantage compensation is also unrecorded per player.",
 								)}
 							{:else}
 								<div class="text-xs text-tan opacity-70">no orders data</div>
@@ -364,7 +364,7 @@
 								{@render breakdownTable(
 									b.legitimacy,
 									0,
-									"Bonuses without a same-turn story event, legacy-ambition differences, cathedrals and shrines, and jumps on succession turns (the dynasty term reshuffles).",
+									"Bonuses without a same-turn story event, legacy-ambition differences, cathedrals and shrines, and jumps on succession turns (the dynasty term reshuffles). A cognomen earned mid-reign is counted both in its ruler's row and inside a timed jump — this signed row nets the overlap out.",
 								)}
 							{:else}
 								<div class="text-xs text-tan opacity-70">

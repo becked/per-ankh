@@ -167,12 +167,14 @@ export function legitimacyEndBreakdown(opts: {
 
 	const completed = opts.goals.filter((g) => g.completed_turn != null);
 	if (completed.length > 0) {
+		// Constant label (count in the detail line), so the duel face-off
+		// table merges both players' ambition rows even at different counts.
 		rows.push({
-			label: `Ambitions finished (${completed.length})`,
+			label: "Ambitions finished",
 			value: completed.length * AMBITION_LEGITIMACY,
-			detail: completed
+			detail: `${completed.length} × ${AMBITION_LEGITIMACY}: ${completed
 				.map((g) => GOAL_NAMES[g.goal_type] ?? formatEnum(g.goal_type, "GOAL_"))
-				.join(" · "),
+				.join(" · ")}`,
 		});
 	}
 
