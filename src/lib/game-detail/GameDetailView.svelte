@@ -54,6 +54,7 @@
 	import LeadersTab from "./LeadersTab.svelte";
 	import LawsTab from "./LawsTab.svelte";
 	import TechsTab from "./TechsTab.svelte";
+	import OrdersTab from "./OrdersTab.svelte";
 	import YieldsTab from "./YieldsTab.svelte";
 	import MilitaryTab from "./MilitaryTab.svelte";
 	import CitiesTab from "./CitiesTab.svelte";
@@ -502,6 +503,8 @@
 
 		<Tabs.Trigger value="techs" class={triggerClass}>Techs</Tabs.Trigger>
 
+		<Tabs.Trigger value="orders" class={triggerClass}>Orders</Tabs.Trigger>
+
 		<Tabs.Trigger value="economics" class={triggerClass}>Yields</Tabs.Trigger>
 
 		<Tabs.Trigger value="military" class={triggerClass}>Military</Tabs.Trigger>
@@ -620,6 +623,20 @@
 			gameOptions={gameDetails.game_options}
 			{userNation}
 			bind:chartFilter={chartFilters.techs}
+		/>
+	</Tabs.Content>
+
+	<!-- Tab Content: Orders -->
+	<Tabs.Content value="orders" class="tab-pane min-h-[400px]">
+		<OrdersTab
+			players={resolvedPlayers}
+			{gameDetails}
+			{allYields}
+			{playerHistory}
+			{characters}
+			{characterTraits}
+			{currentLaws}
+			{playerGoals}
 		/>
 	</Tabs.Content>
 
