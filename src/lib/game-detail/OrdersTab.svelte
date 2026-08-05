@@ -11,6 +11,7 @@
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { YieldHistory } from "$lib/types/YieldHistory";
 	import type { PlayerLaw } from "$lib/types/PlayerLaw";
+	import type { StoryEvent } from "$lib/types/StoryEvent";
 	import type {
 		CharacterInfo,
 		CharacterTraitInfo,
@@ -33,6 +34,7 @@
 		characterTraits = [],
 		currentLaws,
 		playerGoals = [],
+		storyEvents = [],
 	}: {
 		players: DetailPlayer[];
 		gameDetails: GameDetails;
@@ -42,6 +44,7 @@
 		characterTraits?: CharacterTraitInfo[];
 		currentLaws: PlayerLaw[];
 		playerGoals?: PlayerGoalInfo[];
+		storyEvents?: StoryEvent[];
 	} = $props();
 
 	const colorOf = (p: DetailPlayer, i: number) =>
@@ -161,6 +164,10 @@
 							finalLegitimacy,
 							leaders,
 							goals: playerGoals.filter((g) => g.player_xml_id === p.player_id),
+							series: history,
+							storyEvents: storyEvents.filter(
+								(e) => e.player_name === p.player_name,
+							),
 						})
 					: null;
 			return { player: p, color: colorOf(p, i), orders, legitimacy };
@@ -169,6 +176,35 @@
 
 	const fmt = (v: number, dp: number): string =>
 		(v < 0 ? "−" : "") + Math.abs(v).toFixed(dp);
+
+	// ─── Duel side-by-side ────────────────────────────────────────────
+	// Two players read best as one table — every source row, both values in
+	// facing columns. Rows are the union of both sides' labels, ordered by
+	// the larger value; a source only one side has shows "—" for the other.
+	const isDuel = $derived(players.length === 2);
+	// eslint-disable-next-line no-unused-vars -- param name documentary
+	type Pick = (b: (typeof breakdowns)[number]) => EndBreakdown | null;
+	function unionRows(pick: Pick): { label: string; detail?: string }[] {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- built and consumed inside one call, never mutated after
+		const best = new Map<string, { max: number; detail?: string }>();
+		for (const b of breakdowns) {
+			for (const r of pick(b)?.rows ?? []) {
+				const prev = best.get(r.label);
+				if (!prev || r.value > prev.max) {
+					best.set(r.label, { max: r.value, detail: r.detail });
+				}
+			}
+		}
+		return [...best.entries()]
+			.sort((a, b) => b[1].max - a[1].max)
+			.map(([label, v]) => ({ label, detail: v.detail }));
+	}
+	const valueFor = (
+		pick: Pick,
+		b: (typeof breakdowns)[number],
+		label: string,
+	): number | null =>
+		pick(b)?.rows.find((r) => r.label === label)?.value ?? null;
 </script>
 
 {#snippet breakdownTable(b: EndBreakdown, dp: number, otherNote: string)}
@@ -223,48 +259,122 @@
 		<Chart option={legitimacyChart} height="300px" />
 	</div>
 
-	<!-- End-of-game itemization, one card per player: where the orders come
-	     from, and where the legitimacy powering them came from. -->
-	<div class="grid gap-4 md:grid-cols-2">
-		{#each breakdowns as b (b.player.label)}
+	{#if isDuel}
+		<!-- Duel: one table per metric, both players in facing columns. -->
+		{#each [{ title: "Orders per turn, at end", pick: ((b) => b.orders) as Pick, dp: 1, note: "Everything the save can't itemize: council and court ratings, city yields (shrines, cathedrals), agents, trade and tribute. The save records gross production — orders spent by working or fortifying units are not deducted here." }, { title: "Legitimacy, at end", pick: ((b) => b.legitimacy) as Pick, dp: 0, note: "Bonuses without a same-turn story event, legacy-ambition differences, cathedrals and shrines, and jumps on succession turns (the dynasty term reshuffles)." }] as section (section.title)}
 			<div
 				class="rounded-lg p-4"
 				style="background-color: rgb(var(--color-surface));"
 			>
-				<h3 class="mb-3 text-sm font-bold" style="color: {b.color};">
-					{b.player.label}
-				</h3>
-				<div class="grid gap-4 sm:grid-cols-2">
-					<div>
-						<div class="mb-1 text-[10px] uppercase tracking-wide text-tan">
-							Orders per turn, at end
-						</div>
-						{#if b.orders}
-							{@render breakdownTable(
-								b.orders,
-								1,
-								"Everything the save can't itemize: council and court ratings, wonders and city yields, agents, trade and tribute, events, and the orders tied up in fortifying or tile-improving units (which can pull this negative).",
-							)}
-						{:else}
-							<div class="text-xs text-tan opacity-70">no orders data</div>
-						{/if}
-					</div>
-					<div>
-						<div class="mb-1 text-[10px] uppercase tracking-wide text-tan">
-							Legitimacy, at end
-						</div>
-						{#if b.legitimacy}
-							{@render breakdownTable(
-								b.legitimacy,
-								0,
-								"Event and bonus rewards, legacy-ambition differences, and anything else the save doesn't itemize.",
-							)}
-						{:else}
-							<div class="text-xs text-tan opacity-70">no legitimacy data</div>
-						{/if}
-					</div>
+				<div class="mb-2 text-[10px] uppercase tracking-wide text-tan">
+					{section.title}
 				</div>
+				<table class="w-full text-xs">
+					<thead>
+						<tr>
+							<td></td>
+							{#each breakdowns as b (b.player.label)}
+								<td class="pb-1 text-right font-bold" style="color: {b.color};"
+									>{b.player.label}</td
+								>
+							{/each}
+						</tr>
+					</thead>
+					<tbody>
+						{#each unionRows(section.pick) as row (row.label)}
+							<tr>
+								<td class="py-0.5 pr-2 text-tan" title={row.detail}>
+									{row.label}
+								</td>
+								{#each breakdowns as b (b.player.label)}
+									{@const v = valueFor(section.pick, b, row.label)}
+									<td
+										class="py-0.5 text-right font-mono tabular-nums text-gray-200"
+									>
+										{#if v != null}+{fmt(v, section.dp)}{:else}<span
+												class="opacity-40">—</span
+											>{/if}
+									</td>
+								{/each}
+							</tr>
+						{/each}
+						<tr>
+							<td class="py-0.5 pr-2 text-tan" title={section.note}>
+								Other <span class="text-[10px] opacity-60">(?)</span>
+							</td>
+							{#each breakdowns as b (b.player.label)}
+								{@const bd = section.pick(b)}
+								<td
+									class="py-0.5 text-right font-mono tabular-nums {bd &&
+									bd.other < 0
+										? 'text-red-400'
+										: 'text-gray-200'}"
+								>
+									{#if bd}{bd.other >= 0 ? "+" : ""}{fmt(
+											bd.other,
+											section.dp,
+										)}{:else}<span class="opacity-40">—</span>{/if}
+								</td>
+							{/each}
+						</tr>
+						<tr class="border-t border-border-subtle font-bold">
+							<td class="py-1 pr-2 text-gray-200">Total</td>
+							{#each breakdowns as b (b.player.label)}
+								{@const bd = section.pick(b)}
+								<td class="py-1 text-right font-mono tabular-nums text-white">
+									{#if bd}{fmt(bd.total, section.dp)}{:else}—{/if}
+								</td>
+							{/each}
+						</tr>
+					</tbody>
+				</table>
 			</div>
 		{/each}
-	</div>
+	{:else}
+		<!-- FFA: one card per player. -->
+		<div class="grid gap-4 md:grid-cols-2">
+			{#each breakdowns as b (b.player.label)}
+				<div
+					class="rounded-lg p-4"
+					style="background-color: rgb(var(--color-surface));"
+				>
+					<h3 class="mb-3 text-sm font-bold" style="color: {b.color};">
+						{b.player.label}
+					</h3>
+					<div class="grid gap-4 sm:grid-cols-2">
+						<div>
+							<div class="mb-1 text-[10px] uppercase tracking-wide text-tan">
+								Orders per turn, at end
+							</div>
+							{#if b.orders}
+								{@render breakdownTable(
+									b.orders,
+									1,
+									"Everything the save can't itemize: council and court ratings, city yields (shrines, cathedrals), agents, trade and tribute. The save records gross production — orders spent by working or fortifying units are not deducted here.",
+								)}
+							{:else}
+								<div class="text-xs text-tan opacity-70">no orders data</div>
+							{/if}
+						</div>
+						<div>
+							<div class="mb-1 text-[10px] uppercase tracking-wide text-tan">
+								Legitimacy, at end
+							</div>
+							{#if b.legitimacy}
+								{@render breakdownTable(
+									b.legitimacy,
+									0,
+									"Bonuses without a same-turn story event, legacy-ambition differences, cathedrals and shrines, and jumps on succession turns (the dynasty term reshuffles).",
+								)}
+							{:else}
+								<div class="text-xs text-tan opacity-70">
+									no legitimacy data
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+			{/each}
+		</div>
+	{/if}
 </div>

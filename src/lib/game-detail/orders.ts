@@ -33,6 +33,7 @@ import type {
 	PlayerGoalInfo,
 } from "$lib/parser/types";
 import type { PlayerLaw } from "$lib/types/PlayerLaw";
+import type { StoryEvent } from "$lib/types/StoryEvent";
 
 export interface SourceRow {
 	label: string;
@@ -128,11 +129,20 @@ export function ordersEndBreakdown(opts: {
 
 // ─── Legitimacy at end of game ────────────────────────────────────────
 
+// Story-event names worth attributing a legitimacy jump to. Terminal
+// bookkeeping events fire on the final turn of every game and explain
+// nothing.
+const EVENT_IGNORE = /VICTORY|GAME_LOSS|GAME_WIN/;
+
 export function legitimacyEndBreakdown(opts: {
 	finalLegitimacy: number;
 	leaders: CharacterInfo[];
 	/** The player's goals; completed ones price at AMBITION_LEGITIMACY. */
 	goals: PlayerGoalInfo[];
+	/** Per-turn legitimacy, for jump attribution. */
+	series: { turn: number; legitimacy: number | null }[];
+	/** The player's story events, matched to jumps by turn. */
+	storyEvents: StoryEvent[];
 }): EndBreakdown {
 	const rows: SourceRow[] = [];
 
@@ -163,6 +173,55 @@ export function legitimacyEndBreakdown(opts: {
 			detail: completed
 				.map((g) => GOAL_NAMES[g.goal_type] ?? formatEnum(g.goal_type, "GOAL_"))
 				.join(" · "),
+		});
+	}
+
+	// Event attribution: a legitimacy jump not explained by that turn's
+	// ambitions, on a turn a story event fired for this player, is credited
+	// to the event by name — timing-based, so it's labelled with its turn
+	// rather than presented as an exact price. Succession turns are skipped
+	// (the dynasty term reshuffles and would mislabel the reshuffle as an
+	// event), as are sub-2 leftovers (noise).
+	const successionTurns = new Set(
+		opts.leaders.map((c) => c.became_leader_turn),
+	);
+	const goalsByTurn = new Map<number, number>();
+	for (const g of completed) {
+		goalsByTurn.set(
+			g.completed_turn!,
+			(goalsByTurn.get(g.completed_turn!) ?? 0) + 1,
+		);
+	}
+	const eventsByTurn = new Map<number, Set<string>>();
+	for (const e of opts.storyEvents) {
+		// The same event appears under several prefixes ("P.1.", the family's
+		// copy, the religion's copy) — normalise to the EVENTSTORY_ core so
+		// each event names itself once.
+		const idx = e.event_type.lastIndexOf("EVENTSTORY_");
+		if (idx < 0) continue;
+		const name = e.event_type.slice(idx);
+		if (EVENT_IGNORE.test(name)) continue;
+		const set = eventsByTurn.get(e.occurred_turn) ?? new Set<string>();
+		set.add(formatEnum(name, "EVENTSTORY_"));
+		eventsByTurn.set(e.occurred_turn, set);
+	}
+	const pts = opts.series.filter((d) => d.legitimacy != null);
+	for (let i = 1; i < pts.length; i++) {
+		const turn = pts[i].turn;
+		if (successionTurns.has(turn)) continue;
+		const jump = pts[i].legitimacy! - pts[i - 1].legitimacy!;
+		const leftover = jump - (goalsByTurn.get(turn) ?? 0) * AMBITION_LEGITIMACY;
+		const names = eventsByTurn.get(turn);
+		if (leftover < 2 || !names || names.size === 0) continue;
+		const list = [...names];
+		const label =
+			list.length > 2
+				? `${list.slice(0, 2).join(" + ")} +${list.length - 2} more`
+				: list.join(" + ");
+		rows.push({
+			label,
+			value: leftover,
+			detail: `event on turn ${turn}`,
 		});
 	}
 
