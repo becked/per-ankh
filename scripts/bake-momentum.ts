@@ -7,7 +7,7 @@
 // per-ankh's blobs. In brief: six per-turn dimensions (cities, growth,
 // orders, science, eco, military), each stored as the A−B difference (kills
 // the bigger-empire-has-more-of-everything collinearity), standardised by the
-// corpus SD at that turn (smoothed ±3 turns), scored by an antisymmetric
+// corpus SD at that turn (smoothed ±7 turns), scored by an antisymmetric
 // no-intercept logistic fitted separately per game-progress bucket — because
 // growth front-loads and military back-loads, one fixed weighting misreads
 // both ends of every match. Cities is retained despite being ~redundant with
@@ -15,7 +15,14 @@
 //
 // SOURCES (local-only): a directory of per-ankh game blobs (the JSON the
 // /v1/games/:id endpoint serves), pointed at by MOMENTUM_CORPUS_DIR in .env.
-// Only finished duels — exactly two humans, known winner — are used.
+// Only finished duels — exactly two humans, known winner — are used, deduped
+// on the save's xml_game_id (a match both players uploaded must count once,
+// not twice). ALL balance eras are kept, deliberately: a 2x2 held-out test
+// on current-era games showed the extra ~170 old-era duels beat era purity
+// (AUC 0.782 vs 0.773; confident-wrong rate at 50-85% progress halves) —
+// the features are per-turn-standardised A−B differences, which are era-
+// robust, and at n≈200 modern duels sample size binds harder than balance
+// drift. Revisit the cutoff when the modern corpus alone reaches ~350.
 //
 // OUTPUT: src/lib/generated/momentum.ts AND cloud/src/generated/momentum.ts
 // (identical, the law-classes dual-emit pattern): bucket weights, the
@@ -80,6 +87,8 @@ interface Blob {
 	match_metadata?: {
 		winner?: { winner_player_xml_id?: number | null } | null;
 		total_turns?: number;
+		save_date?: string;
+		xml_game_id?: string;
 	};
 	game_details?: { total_turns?: number };
 	yield_history?: {
@@ -300,6 +309,9 @@ async function main(): Promise<void> {
 	const dir = corpusDir();
 	const files = (await readdir(dir)).filter((f) => f.endsWith(".json"));
 	const duels: Duel[] = [];
+	// A match both players uploaded appears as two blobs with one
+	// xml_game_id — keep the longer upload so each match counts once.
+	const byMatch = new Map<string, { turns: number; duel: Duel }>();
 	let tileChecksOk = 0;
 	let tileChecksTotal = 0;
 	let read = 0;
@@ -334,8 +346,20 @@ async function main(): Promise<void> {
 		});
 
 		const duel = prepGame(d);
-		if (duel) duels.push(duel);
+		if (!duel) continue;
+		const xid = d.match_metadata?.xml_game_id;
+		const turns = duel.end;
+		if (xid == null) {
+			duels.push(duel);
+		} else {
+			const prev = byMatch.get(xid);
+			if (!prev || turns > prev.turns) byMatch.set(xid, { turns, duel });
+		}
 	}
+	duels.push(...[...byMatch.values()].map((v) => v.duel));
+	console.log(
+		`bake-momentum: ${read} blobs read, ${duels.length} deduped duels`,
+	);
 
 	if (tileChecksTotal > 0 && tileChecksOk / tileChecksTotal < 0.9) {
 		throw new Error(
@@ -355,7 +379,9 @@ async function main(): Promise<void> {
 		);
 	}
 
-	// Per-turn SD, smoothed ±3 (Gotcha 4: raw per-turn jitter invents changes).
+	// Per-turn SD, smoothed ±7 (Gotcha 4: raw per-turn jitter invents changes;
+	// ±7 over the original ±3 cuts the Σch−Δlog-odds residual p95 ~13% with no
+	// CV cost — owglick momentum-model.md §11.4).
 	const atTurn = new Map<number, Map<string, number[]>>();
 	for (const g of duels)
 		for (const { turn, f } of g.pts) {
@@ -388,7 +414,7 @@ async function main(): Promise<void> {
 		let complete = true;
 		for (const k of DIMS) {
 			const vals: number[] = [];
-			for (let t = turn - 3; t <= turn + 3; t++) {
+			for (let t = turn - 7; t <= turn + 7; t++) {
 				const v = rawSd.get(t)?.get(k);
 				if (v) vals.push(v);
 			}
