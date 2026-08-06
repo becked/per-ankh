@@ -51,8 +51,9 @@ async function linkGame(opts: {
 				idx,
 				`Player ${idx}`,
 				opts.nations[idx],
-				// Distinct per side so the serializer's index mapping is observable.
-				idx === 0 ? "ARCHETYPE_HERO" : "ARCHETYPE_SCHEMER",
+				// Distinct per side so the serializer's index mapping is observable;
+				// real enum shape (TRAIT_<name>_ARCHETYPE), as the parser stores it.
+				idx === 0 ? "TRAIT_HERO_ARCHETYPE" : "TRAIT_SCHEMER_ARCHETYPE",
 				idx === 0 ? 1 : 0, // uploader = slot_a
 				idx === 0 ? 1 : 0, // slot_a won
 				100 + idx * 10,
@@ -209,9 +210,9 @@ describe("GET /v1/tournaments/:id/stats (Plane A)", () => {
 
 		const linked = body.matches.find((m) => m.match_id === matches[0].match_id);
 		expect(linked?.slot_a_nation).toBe("NATION_ROME");
-		expect(linked?.slot_a_archetype).toBe("ARCHETYPE_HERO");
+		expect(linked?.slot_a_archetype).toBe("TRAIT_HERO_ARCHETYPE");
 		expect(linked?.slot_b_nation).toBe("NATION_PERSIA");
-		expect(linked?.slot_b_archetype).toBe("ARCHETYPE_SCHEMER");
+		expect(linked?.slot_b_archetype).toBe("TRAIT_SCHEMER_ARCHETYPE");
 		// An unlinked (pending) match resolves all four to null, not undefined —
 		// the keys are part of the payload shape.
 		const pending = body.matches.find(
