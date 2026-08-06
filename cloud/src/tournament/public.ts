@@ -1293,7 +1293,10 @@ export async function handleTournamentBracket(
 		matches,
 		partsByMatchId,
 	);
-	const nationByGamePlayer = await loadNationsForMatches(env, matches);
+	const summaryByGamePlayer = await loadPlayerSummaryFieldsForMatches(
+		env,
+		matches,
+	);
 	const viewerIsAdmin = await isTournamentAdmin(
 		env,
 		session?.data ?? null,
@@ -1328,7 +1331,7 @@ export async function handleTournamentBracket(
 				...serializeMatch(
 					m,
 					identityByUserId,
-					nationByGamePlayer,
+					summaryByGamePlayer,
 					handleBySlotId,
 					partsByMatchId.get(m.match_id),
 				),
@@ -1404,7 +1407,7 @@ export async function handleTournamentMatches(
 		filtered.map(({ match }) => match),
 		partsByMatchId,
 	);
-	const nationByGamePlayer = await loadNationsForMatches(
+	const summaryByGamePlayer = await loadPlayerSummaryFieldsForMatches(
 		env,
 		filtered.map(({ match }) => match),
 	);
@@ -1431,7 +1434,7 @@ export async function handleTournamentMatches(
 				...serializeMatch(
 					match,
 					identityByUserId,
-					nationByGamePlayer,
+					summaryByGamePlayer,
 					handleBySlotId,
 					partsByMatchId.get(match.match_id),
 				),
@@ -1482,7 +1485,9 @@ export async function handleTournamentMatchDetail(
 		[match],
 		partsByMatchId,
 	);
-	const nationByGamePlayer = await loadNationsForMatches(env, [match]);
+	const summaryByGamePlayer = await loadPlayerSummaryFieldsForMatches(env, [
+		match,
+	]);
 	const viewerIsAdmin = await isTournamentAdmin(
 		env,
 		session?.data ?? null,
@@ -1503,7 +1508,7 @@ export async function handleTournamentMatchDetail(
 			...serializeMatch(
 				match,
 				identityByUserId,
-				nationByGamePlayer,
+				summaryByGamePlayer,
 				handleBySlotId,
 				parts,
 			),
@@ -1719,7 +1724,10 @@ export async function handleUserTournaments(
 		allMatches,
 		partsByMatchId,
 	);
-	const nationByGamePlayer = await loadNationsForMatches(env, allMatches);
+	const summaryByGamePlayer = await loadPlayerSummaryFieldsForMatches(
+		env,
+		allMatches,
+	);
 	const slotIds = new Set<string>();
 	for (const m of allMatches) {
 		slotIds.add(m.slot_a_id);
@@ -1734,7 +1742,7 @@ export async function handleUserTournaments(
 		...serializeMatch(
 			match,
 			identityByUserId,
-			nationByGamePlayer,
+			summaryByGamePlayer,
 			undefined,
 			partsByMatchId.get(match.match_id),
 		),
@@ -1891,7 +1899,7 @@ export async function handleGameTournamentLink(
 function serializeMatch(
 	m: MatchRow,
 	identityByUserId?: Map<string, UserIdentity>,
-	nationByGamePlayer?: Map<string, string>,
+	summaryByGamePlayer?: Map<string, PickSummary>,
 	// Admin-only map slot_id → raw discord handle + numeric id for the LIVE slots
 	// (not the frozen snapshot). Populated only for admin viewers: the handle
 	// seeds the substitute editor with the real handle (the display name would
@@ -1935,19 +1943,18 @@ function serializeMatch(
 		}),
 		streams: p.streams,
 	}));
-	// Nation each slot played, resolved via the slot↔player_index mapping
-	// (migration 0007) against player_summaries. Null when no save is linked
-	// or the index/nation is unknown (bye, forfeit, admin-set, legacy match).
-	const slotANation =
-		m.game_id && m.slot_a_player_index !== null && nationByGamePlayer
-			? (nationByGamePlayer.get(`${m.game_id}:${m.slot_a_player_index}`) ??
-				null)
-			: null;
-	const slotBNation =
-		m.game_id && m.slot_b_player_index !== null && nationByGamePlayer
-			? (nationByGamePlayer.get(`${m.game_id}:${m.slot_b_player_index}`) ??
-				null)
-			: null;
+	// Nation + starting-ruler archetype each slot played, resolved via the
+	// slot↔player_index mapping (migration 0007) against player_summaries. Null
+	// when no save is linked or the index/field is unknown (bye, forfeit,
+	// admin-set, legacy match).
+	const slotASummary =
+		m.game_id && m.slot_a_player_index !== null
+			? summaryByGamePlayer?.get(`${m.game_id}:${m.slot_a_player_index}`)
+			: undefined;
+	const slotBSummary =
+		m.game_id && m.slot_b_player_index !== null
+			? summaryByGamePlayer?.get(`${m.game_id}:${m.slot_b_player_index}`)
+			: undefined;
 	return {
 		match_id: m.match_id,
 		slot_a_id: m.slot_a_id,
@@ -1976,12 +1983,14 @@ function serializeMatch(
 		// which the id-URL fallback covers.
 		slot_a_slug: slotAIdentity?.slug ?? null,
 		slot_a_avatar_url: slotAIdentity?.avatar_url ?? null,
-		slot_a_nation: slotANation,
+		slot_a_nation: slotASummary?.nation ?? null,
+		slot_a_archetype: slotASummary?.archetype ?? null,
 		slot_b_display_name: slotBIdentity?.display_name ?? m.slot_b_username,
 		slot_b_user_id: m.slot_b_user_id,
 		slot_b_slug: slotBIdentity?.slug ?? null,
 		slot_b_avatar_url: slotBIdentity?.avatar_url ?? null,
-		slot_b_nation: slotBNation,
+		slot_b_nation: slotBSummary?.nation ?? null,
+		slot_b_archetype: slotBSummary?.archetype ?? null,
 		// Admin-only — raw handle + numeric Discord id of each side's live slot
 		// occupant (null for non-admin viewers of the per-tournament endpoints,
 		// for pending/bye sides, and for unclaimed slots with no linked account).
@@ -2019,14 +2028,13 @@ function serializeMatch(
 	};
 }
 
-// Resolve the nation each slot played for every match with a linked game.
-// Keyed by `${game_id}:${player_index}` → nation enum (e.g. "NATION_ROME").
-// Batch-load (nation, is_winner) for every roster row of every game a match set
-// links, keyed `${game_id}:${player_index}`. Chunked under D1's 100-param cap.
-// The shared loader behind both loadNationsForMatches (match serialization) and
-// the competition stats' per-player picks — two columns per game, so the cost
-// stays in the /standings class even at full-tournament scale. Matches without a
-// linked game contribute no game_ids — empty list → no query.
+// Batch-load (nation, starting-ruler archetype, is_winner) for every roster
+// row of every game a match set links, keyed `${game_id}:${player_index}`.
+// Chunked under D1's 100-param cap. The shared loader behind both match
+// serialization (slot_a/b_nation + slot_a/b_archetype) and the competition
+// stats' per-player picks — a few columns per game, so the cost stays in the
+// /standings class even at full-tournament scale. Matches without a linked
+// game contribute no game_ids — empty list → no query.
 async function loadPlayerSummaryFieldsForMatches(
 	env: TournamentEnv,
 	matches: MatchRow[],
@@ -2039,7 +2047,8 @@ async function loadPlayerSummaryFieldsForMatches(
 	const out = new Map<string, PickSummary>();
 	for (const ids of chunk(gameIds, CHUNK_SIZE)) {
 		const res = await env.SHARE_DB.prepare(
-			`SELECT game_id, player_index, nation, is_winner FROM player_summaries
+			`SELECT game_id, player_index, nation, starting_ruler_archetype, is_winner
+			 FROM player_summaries
 			 WHERE game_id IN (${ids.map(() => "?").join(",")})`,
 		)
 			.bind(...ids)
@@ -2047,32 +2056,18 @@ async function loadPlayerSummaryFieldsForMatches(
 				game_id: string;
 				player_index: number;
 				nation: string | null;
+				starting_ruler_archetype: string | null;
 				is_winner: number | null;
 			}>();
 		for (const r of res.results ?? []) {
 			out.set(`${r.game_id}:${r.player_index}`, {
 				nation: r.nation,
+				archetype: r.starting_ruler_archetype,
 				is_winner: r.is_winner,
 			});
 		}
 	}
 	return out;
-}
-
-// Nation per (game_id, player_index) for a match set, keyed
-// `${game_id}:${player_index}`; a projection of loadPlayerSummaryFieldsForMatches
-// that drops the win flag and skips NULL nations, so a missing key resolves to
-// "unknown" at serialize time.
-async function loadNationsForMatches(
-	env: TournamentEnv,
-	matches: MatchRow[],
-): Promise<Map<string, string>> {
-	const fields = await loadPlayerSummaryFieldsForMatches(env, matches);
-	const map = new Map<string, string>();
-	for (const [key, { nation }] of fields) {
-		if (nation != null) map.set(key, nation);
-	}
-	return map;
 }
 
 export interface UserIdentity {

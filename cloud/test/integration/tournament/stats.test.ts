@@ -42,15 +42,17 @@ async function linkGame(opts: {
 	for (const idx of [0, 1] as const) {
 		await env.SHARE_DB.prepare(
 			`INSERT INTO player_summaries
-			   (game_id, player_index, player_name, nation, is_human, is_uploader,
-			    is_winner, final_points)
-			 VALUES (?, ?, ?, ?, 1, ?, ?, ?)`,
+			   (game_id, player_index, player_name, nation, starting_ruler_archetype,
+			    is_human, is_uploader, is_winner, final_points)
+			 VALUES (?, ?, ?, ?, ?, 1, ?, ?, ?)`,
 		)
 			.bind(
 				gameId,
 				idx,
 				`Player ${idx}`,
 				opts.nations[idx],
+				// Distinct per side so the serializer's index mapping is observable.
+				idx === 0 ? "ARCHETYPE_HERO" : "ARCHETYPE_SCHEMER",
 				idx === 0 ? 1 : 0, // uploader = slot_a
 				idx === 0 ? 1 : 0, // slot_a won
 				100 + idx * 10,
@@ -173,6 +175,50 @@ describe("GET /v1/tournaments/:id/stats (Plane A)", () => {
 			{ nation: "NATION_PERSIA", games: 1, wins: 0 },
 		]);
 		expect(bob?.total_wins).toBe(0);
+	});
+
+	// Same linkGame fixture, read back through the matches payload: the
+	// serializer resolves each side's nation + starting-ruler archetype from
+	// player_summaries via the slot↔player_index bridge (the stats page's
+	// match list renders both). Colocated here with the harness that seeds
+	// the roster rows.
+	it("resolves slot nations + starting-ruler archetypes on the matches payload", async () => {
+		const t = await makeTournament({ advanceTo: "swiss-round-1-generated" });
+		const matches = await t.matches();
+		await linkGame({
+			matchId: matches[0].match_id,
+			status: "complete",
+			ownerId: t.admin.userId,
+			nations: ["NATION_ROME", "NATION_PERSIA"],
+		});
+
+		const body = await expectOk<{
+			matches: Array<{
+				match_id: string;
+				slot_a_nation: string | null;
+				slot_a_archetype: string | null;
+				slot_b_nation: string | null;
+				slot_b_archetype: string | null;
+			}>;
+		}>(
+			await request.get({
+				path: `/v1/tournaments/${t.tournamentId}/matches`,
+				as: t.admin,
+			}),
+		);
+
+		const linked = body.matches.find((m) => m.match_id === matches[0].match_id);
+		expect(linked?.slot_a_nation).toBe("NATION_ROME");
+		expect(linked?.slot_a_archetype).toBe("ARCHETYPE_HERO");
+		expect(linked?.slot_b_nation).toBe("NATION_PERSIA");
+		expect(linked?.slot_b_archetype).toBe("ARCHETYPE_SCHEMER");
+		// An unlinked (pending) match resolves all four to null, not undefined —
+		// the keys are part of the payload shape.
+		const pending = body.matches.find(
+			(m) => m.match_id !== matches[0].match_id,
+		);
+		expect(pending?.slot_a_nation).toBeNull();
+		expect(pending?.slot_a_archetype).toBeNull();
 	});
 
 	it("404s during setup for a non-admin, but serves the admin", async () => {

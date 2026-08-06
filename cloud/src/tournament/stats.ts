@@ -107,9 +107,15 @@ export interface PlayerPicksEntry {
 	total_wins: number;
 }
 
-// A roster row's nation + win flag, keyed `${game_id}:${player_index}` — the
-// save-content half of a pick (loaded by loadPlayerSummaryFieldsForMatches).
-export type PickSummary = { nation: string | null; is_winner: number | null };
+// A roster row's nation, starting-ruler archetype and win flag, keyed
+// `${game_id}:${player_index}` — the save-content half of a pick (loaded by
+// loadPlayerSummaryFieldsForMatches). The archetype rides along for
+// serializeMatch's slot_a/b_archetype; the picks below don't read it.
+export type PickSummary = {
+	nation: string | null;
+	archetype: string | null;
+	is_winner: number | null;
+};
 
 // Per-participant nation picks across the completed, game-linked matches. Each
 // match side maps to a person via the 0024 snapshot (slot_x_user_id/username)
