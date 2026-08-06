@@ -39,6 +39,11 @@ interface MatchNationLike {
 	slot_b_nation: string | null;
 }
 
+interface MatchArchetypeLike {
+	slot_a_archetype: string | null;
+	slot_b_archetype: string | null;
+}
+
 interface MatchOutcomeLike {
 	slot_a_id: string | null;
 	slot_b_id: string | null;
@@ -74,6 +79,17 @@ export function matchSlotNation(
 	side: "a" | "b",
 ): string | null {
 	return side === "a" ? match.slot_a_nation : match.slot_b_nation;
+}
+
+// Starting-ruler archetype each side was dealt, from the same
+// player_summaries row the nation resolves from and null in the same cases.
+// Like the nation, it's a property of the game that was played — no live
+// fallback, so a substitution never changes it.
+export function matchSlotArchetype(
+	match: MatchArchetypeLike,
+	side: "a" | "b",
+): string | null {
+	return side === "a" ? match.slot_a_archetype : match.slot_b_archetype;
 }
 
 // Returns the display name for one side of a match. For non-pending matches

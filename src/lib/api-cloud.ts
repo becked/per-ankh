@@ -2093,6 +2093,11 @@ export interface TournamentMatch {
 	// the crest is shown only when this is present.
 	slot_a_nation: string | null;
 	slot_b_nation: string | null;
+	// Starting-ruler archetype each slot was dealt (e.g. "ARCHETYPE_HERO"),
+	// resolved from the same player_summaries row as the nation and null in
+	// the same cases — the glyph is shown only when this is present.
+	slot_a_archetype: string | null;
+	slot_b_archetype: string | null;
 	// Scheduled parts (migration 0029). A match is one game played across one or
 	// more sittings; each part carries its own time, caster, and stream links.
 	// Empty until the match is scheduled. Editable by an admin or (while the

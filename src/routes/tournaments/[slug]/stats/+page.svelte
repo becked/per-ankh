@@ -1,8 +1,9 @@
 <script lang="ts">
-	// Tournament stats page. Seven tabs — Players (standings + nation picks),
-	// Nations (nation win rate), Leaders (starting archetype and traits),
-	// Wonders (build timing and builder win rate), Families (capital family +
-	// per-nation picks), Yields (per-turn curves) and Casters (caster
+	// Tournament stats page. Eight tabs — Matches (the sortable match list,
+	// each row linking to its uploaded game), Players (standings + nation
+	// picks), Nations (nation win rate), Leaders (starting archetype and
+	// traits), Wonders (build timing and builder win rate), Families (capital
+	// family + per-nation picks), Yields (per-turn curves) and Casters (caster
 	// leaderboard) — spanning both stats
 	// subsystems: Plane A tournament-native (standings + casters) and Plane B1
 	// (the ChartBundle pointed at the tournament's games). Renders the charts
@@ -12,6 +13,19 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import MatchTable from "$lib/tournament/MatchTable.svelte";
+	import {
+		filterMatchRows,
+		matchStatusGroup,
+		pickColumns,
+		sortMatchRows,
+		toMatchRows,
+		toggleMatchSort,
+		type MatchStatusGroup,
+		type MatchTableState,
+	} from "$lib/tournament/matches-table";
+	import { MATCH_STATUS_LABEL } from "$lib/tournament/parts";
+	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import FamilyStatsPanel from "$lib/stats/FamilyStatsPanel.svelte";
 	import YieldsStatsPanel from "$lib/stats/YieldsStatsPanel.svelte";
 	import { barChartHeight } from "$lib/stats/charts/helpers";
@@ -51,6 +65,53 @@
 	);
 	const casters = $derived(data.competition.caster_leaderboard);
 	const playerPicks = $derived(data.competition.player_picks);
+
+	// Match list — the shared match table pointed at the layout's match load
+	// (all matches, byes filtered by toMatchRows), with the game facts columns.
+	// Default order is the global match number; headers re-sort. The live slot
+	// maps back the pending rows' names (completed rows carry their snapshot).
+	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
+	const matchColumns = pickColumns(["number", "matchup", "time", "game"]);
+	// Status chips facet the list through MatchTableState.filters. Completed-only
+	// by default — the list's job is finding played games — with the other
+	// buckets a toggle away; an empty selection shows everything (see
+	// filterMatchRows), so switching off the last chip widens rather than
+	// emptying the table.
+	let matchesTableState = $state<MatchTableState>({
+		sortColumn: "number",
+		sortDirection: "asc",
+		filters: ["completed"],
+	});
+	const allMatchRows = $derived(toMatchRows(data.matches));
+	// Chip labels reuse the shared status wording; unscheduled has no badge
+	// label (deliberately — see MATCH_STATUS_LABEL), so it's named here.
+	const STATUS_CHIPS: Array<{ key: MatchStatusGroup; label: string }> = [
+		{ key: "completed", label: MATCH_STATUS_LABEL.completed },
+		{ key: "in_progress", label: MATCH_STATUS_LABEL.in_progress },
+		{ key: "scheduled", label: MATCH_STATUS_LABEL.scheduled },
+		{ key: "unscheduled", label: "Unscheduled" },
+	];
+	const statusCounts = $derived.by(() => {
+		const counts: Partial<Record<MatchStatusGroup, number>> = {};
+		for (const row of allMatchRows) {
+			const group = matchStatusGroup(row.match);
+			if (group !== null) counts[group] = (counts[group] ?? 0) + 1;
+		}
+		return counts;
+	});
+	function toggleStatusChip(key: MatchStatusGroup) {
+		matchesTableState.filters = matchesTableState.filters.includes(key)
+			? matchesTableState.filters.filter((f) => f !== key)
+			: [...matchesTableState.filters, key];
+	}
+	const matchRows = $derived(
+		sortMatchRows(
+			filterMatchRows(allMatchRows, matchesTableState.filters),
+			matchesTableState.sortColumn,
+			matchesTableState.sortDirection,
+			{ slotLabels: slotMaps.labels },
+		),
+	);
 	const nationWinRate = $derived(data.games.nationWinRate);
 	const startingArchetypes = $derived(data.games.startingArchetypeWinRate);
 	const startingTraits = $derived(data.games.startingTraitWinRate);
@@ -94,6 +155,7 @@
 	// URL, change → goto), mirroring the user-stats subtabs (StatsView) so a
 	// tab is deep-linkable and survives refresh.
 	const TABS = [
+		"matches",
 		"players",
 		"nations",
 		"leaders",
@@ -105,7 +167,7 @@
 	type StatsTab = (typeof TABS)[number];
 	const tab = $derived.by<StatsTab>(() => {
 		const fromUrl = page.url.searchParams.get("category");
-		return TABS.find((t) => t === fromUrl) ?? "players";
+		return TABS.find((t) => t === fromUrl) ?? "matches";
 	});
 
 	async function onTabChange(value: string) {
@@ -130,6 +192,7 @@
 		<Tabs.List
 			class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 		>
+			<Tabs.Trigger value="matches" class={triggerClass}>Matches</Tabs.Trigger>
 			<Tabs.Trigger value="players" class={triggerClass}>Players</Tabs.Trigger>
 			<Tabs.Trigger value="nations" class={triggerClass}>Nations</Tabs.Trigger>
 			<Tabs.Trigger value="leaders" class={triggerClass}>Leaders</Tabs.Trigger>
@@ -139,6 +202,53 @@
 			<Tabs.Trigger value="yields" class={triggerClass}>Yields</Tabs.Trigger>
 			<Tabs.Trigger value="casters" class={triggerClass}>Casters</Tabs.Trigger>
 		</Tabs.List>
+
+		<!-- Matches — every match as a sortable list (default: match-number
+		     order, completed-only via the status chips), each side showing its
+		     nation crest + starting-ruler archetype glyph and the winner
+		     emphasized, with a per-row link to the uploaded game. The list form
+		     of the brackets, for finding and opening games. -->
+		<Tabs.Content value="matches">
+			<section class="mb-8">
+				<h2 class="mb-3 text-base font-bold text-tan">Matches</h2>
+				<!-- Status facet chips: multi-toggle, counts per bucket. Completed
+				     is on by default; deselecting every chip shows all matches. -->
+				<div class="mb-3 flex flex-wrap items-center gap-1.5">
+					{#each STATUS_CHIPS as chip (chip.key)}
+						{@const active = matchesTableState.filters.includes(chip.key)}
+						{@const count = statusCounts[chip.key] ?? 0}
+						<button
+							type="button"
+							class="cursor-pointer rounded px-3 py-1.5 text-sm font-bold transition-colors hover:bg-tan-hover {active
+								? 'bg-surface-raised text-tan'
+								: 'bg-surface text-tan opacity-60'}"
+							aria-pressed={active}
+							onclick={() => toggleStatusChip(chip.key)}
+						>
+							{chip.label}
+							<span class="ml-1 text-xs opacity-60">{count}</span>
+						</button>
+					{/each}
+				</div>
+				<MatchTable
+					columns={matchColumns}
+					rows={matchRows}
+					zone="local"
+					tournament={data.tournament}
+					user={null}
+					slotLabels={slotMaps.labels}
+					slotUserIds={slotMaps.userIds}
+					slotSlugs={slotMaps.slugs}
+					slotAvatars={slotMaps.avatars}
+					sortColumn={matchesTableState.sortColumn}
+					sortDirection={matchesTableState.sortDirection}
+					onSort={(key) => toggleMatchSort(matchesTableState, key)}
+					emptyMessage={matchesTableState.filters.length > 0
+						? "No matches with the selected status."
+						: "No matches yet."}
+				/>
+			</section>
+		</Tabs.Content>
 
 		<!-- Players — standings + per-player nation picks (Plane A) -->
 		<Tabs.Content value="players">

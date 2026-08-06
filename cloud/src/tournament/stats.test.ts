@@ -184,7 +184,7 @@ function summaries(
 	return new Map(
 		rows.map(([g, pi, nation, is_winner]) => [
 			`${g}:${pi}`,
-			{ nation, is_winner },
+			{ nation, archetype: null, is_winner },
 		]),
 	);
 }
