@@ -15,12 +15,16 @@
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import MatchTable from "$lib/tournament/MatchTable.svelte";
 	import {
+		filterMatchRows,
+		matchStatusGroup,
 		pickColumns,
 		sortMatchRows,
 		toMatchRows,
 		toggleMatchSort,
+		type MatchStatusGroup,
 		type MatchTableState,
 	} from "$lib/tournament/matches-table";
+	import { MATCH_STATUS_LABEL } from "$lib/tournament/parts";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import FamilyStatsPanel from "$lib/stats/FamilyStatsPanel.svelte";
 	import YieldsStatsPanel from "$lib/stats/YieldsStatsPanel.svelte";
@@ -68,14 +72,41 @@
 	// maps back the pending rows' names (completed rows carry their snapshot).
 	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
 	const matchColumns = pickColumns(["number", "matchup", "time", "game"]);
+	// Status chips facet the list through MatchTableState.filters. Completed-only
+	// by default — the list's job is finding played games — with the other
+	// buckets a toggle away; an empty selection shows everything (see
+	// filterMatchRows), so switching off the last chip widens rather than
+	// emptying the table.
 	let matchesTableState = $state<MatchTableState>({
 		sortColumn: "number",
 		sortDirection: "asc",
-		filters: [],
+		filters: ["completed"],
 	});
+	const allMatchRows = $derived(toMatchRows(data.matches));
+	// Chip labels reuse the shared status wording; unscheduled has no badge
+	// label (deliberately — see MATCH_STATUS_LABEL), so it's named here.
+	const STATUS_CHIPS: Array<{ key: MatchStatusGroup; label: string }> = [
+		{ key: "completed", label: MATCH_STATUS_LABEL.completed },
+		{ key: "in_progress", label: MATCH_STATUS_LABEL.in_progress },
+		{ key: "scheduled", label: MATCH_STATUS_LABEL.scheduled },
+		{ key: "unscheduled", label: "Unscheduled" },
+	];
+	const statusCounts = $derived.by(() => {
+		const counts: Partial<Record<MatchStatusGroup, number>> = {};
+		for (const row of allMatchRows) {
+			const group = matchStatusGroup(row.match);
+			if (group !== null) counts[group] = (counts[group] ?? 0) + 1;
+		}
+		return counts;
+	});
+	function toggleStatusChip(key: MatchStatusGroup) {
+		matchesTableState.filters = matchesTableState.filters.includes(key)
+			? matchesTableState.filters.filter((f) => f !== key)
+			: [...matchesTableState.filters, key];
+	}
 	const matchRows = $derived(
 		sortMatchRows(
-			toMatchRows(data.matches),
+			filterMatchRows(allMatchRows, matchesTableState.filters),
 			matchesTableState.sortColumn,
 			matchesTableState.sortDirection,
 			{ slotLabels: slotMaps.labels },
@@ -173,13 +204,32 @@
 		</Tabs.List>
 
 		<!-- Matches — every match as a sortable list (default: match-number
-		     order), each side showing its nation crest + starting-ruler
-		     archetype glyph and the winner emphasized, with a per-row link to
-		     the uploaded game. The list form of the brackets, for finding and
-		     opening games. -->
+		     order, completed-only via the status chips), each side showing its
+		     nation crest + starting-ruler archetype glyph and the winner
+		     emphasized, with a per-row link to the uploaded game. The list form
+		     of the brackets, for finding and opening games. -->
 		<Tabs.Content value="matches">
 			<section class="mb-8">
 				<h2 class="mb-3 text-base font-bold text-tan">Matches</h2>
+				<!-- Status facet chips: multi-toggle, counts per bucket. Completed
+				     is on by default; deselecting every chip shows all matches. -->
+				<div class="mb-3 flex flex-wrap items-center gap-1.5">
+					{#each STATUS_CHIPS as chip (chip.key)}
+						{@const active = matchesTableState.filters.includes(chip.key)}
+						{@const count = statusCounts[chip.key] ?? 0}
+						<button
+							type="button"
+							class="cursor-pointer rounded px-3 py-1.5 text-sm font-bold transition-colors hover:bg-tan-hover {active
+								? 'bg-surface-raised text-tan'
+								: 'bg-surface text-tan opacity-60'}"
+							aria-pressed={active}
+							onclick={() => toggleStatusChip(chip.key)}
+						>
+							{chip.label}
+							<span class="ml-1 text-xs opacity-60">{count}</span>
+						</button>
+					{/each}
+				</div>
 				<MatchTable
 					columns={matchColumns}
 					rows={matchRows}
@@ -193,7 +243,9 @@
 					sortColumn={matchesTableState.sortColumn}
 					sortDirection={matchesTableState.sortDirection}
 					onSort={(key) => toggleMatchSort(matchesTableState, key)}
-					emptyMessage="No matches yet."
+					emptyMessage={matchesTableState.filters.length > 0
+						? "No matches with the selected status."
+						: "No matches yet."}
 				/>
 			</section>
 		</Tabs.Content>

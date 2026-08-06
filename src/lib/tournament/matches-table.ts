@@ -316,6 +316,22 @@ export function matchRowMatchesSearch(
 	);
 }
 
+// Status faceting for MatchTableState.filters: keep rows whose display-status
+// bucket is among the active keys. An empty selection means "no filter" — every
+// row shows (the same convention the game-detail tables give the field), so
+// toggling the last chip off widens to everything rather than emptying the
+// table.
+export function filterMatchRows(
+	rows: MatchRow[],
+	filters: string[],
+): MatchRow[] {
+	if (filters.length === 0) return rows;
+	return rows.filter((row) => {
+		const group = matchStatusGroup(row.match);
+		return group !== null && filters.includes(group);
+	});
+}
+
 // The matches table comparator: nulls last (applied before the asc/desc flip so
 // they stay pinned to the bottom in either direction), localeCompare for
 // strings, numeric diff otherwise.
