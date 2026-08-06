@@ -213,6 +213,15 @@ export interface MatchColumn {
 // The full column registry. Each surface picks the subset it shows (in order)
 // via pickColumns; the shared component renders whatever it's handed.
 export const MATCH_COLUMN_DEFS: Record<string, MatchColumn> = {
+	// The global "Match N" handle as its own sortable column (the stats page's
+	// match list defaults to it). When present, the Match cell drops its inline
+	// number so the handle isn't shown twice. Unnumbered matches (legacy)
+	// pin last via the comparator's nulls-last rule.
+	number: {
+		key: "number",
+		label: "#",
+		sortValue: (row) => row.match.match_number,
+	},
 	matchup: {
 		key: "matchup",
 		label: "Match",
@@ -249,6 +258,16 @@ export const MATCH_COLUMN_DEFS: Record<string, MatchColumn> = {
 			const name = c?.display_name ?? c?.name;
 			return name ? name.toLowerCase() : null;
 		},
+	},
+	// Link to the uploaded save's game page — the row's clickable access to the
+	// game itself. Sorts by when the result landed (reported_at), most useful
+	// descending; game-less rows (pending, forfeit without a save) pin last via
+	// the comparator's nulls-last rule.
+	game: {
+		key: "game",
+		label: "Game",
+		sortValue: (row) =>
+			row.match.game_id != null ? (row.match.reported_at ?? "") : null,
 	},
 	// Trailing, header-less column for the inline cast buttons (CastControls),
 	// right-aligned so they line up across rows. Empty label → its header isn't

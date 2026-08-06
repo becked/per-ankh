@@ -1,8 +1,9 @@
 <script lang="ts">
-	// Tournament stats page. Seven tabs — Players (standings + nation picks),
-	// Nations (nation win rate), Leaders (starting archetype and traits),
-	// Wonders (build timing and builder win rate), Families (capital family +
-	// per-nation picks), Yields (per-turn curves) and Casters (caster
+	// Tournament stats page. Eight tabs — Matches (the sortable match list,
+	// each row linking to its uploaded game), Players (standings + nation
+	// picks), Nations (nation win rate), Leaders (starting archetype and
+	// traits), Wonders (build timing and builder win rate), Families (capital
+	// family + per-nation picks), Yields (per-turn curves) and Casters (caster
 	// leaderboard) — spanning both stats
 	// subsystems: Plane A tournament-native (standings + casters) and Plane B1
 	// (the ChartBundle pointed at the tournament's games). Renders the charts
@@ -12,6 +13,15 @@
 	import { goto } from "$app/navigation";
 	import { page } from "$app/state";
 	import ChartContainer from "$lib/ChartContainer.svelte";
+	import MatchTable from "$lib/tournament/MatchTable.svelte";
+	import {
+		pickColumns,
+		sortMatchRows,
+		toMatchRows,
+		toggleMatchSort,
+		type MatchTableState,
+	} from "$lib/tournament/matches-table";
+	import { buildSlotMaps } from "$lib/tournament/slot-identity";
 	import FamilyStatsPanel from "$lib/stats/FamilyStatsPanel.svelte";
 	import YieldsStatsPanel from "$lib/stats/YieldsStatsPanel.svelte";
 	import { barChartHeight } from "$lib/stats/charts/helpers";
@@ -51,6 +61,26 @@
 	);
 	const casters = $derived(data.competition.caster_leaderboard);
 	const playerPicks = $derived(data.competition.player_picks);
+
+	// Match list — the shared match table pointed at the layout's match load
+	// (all matches, byes filtered by toMatchRows), with the game facts columns.
+	// Default order is the global match number; headers re-sort. The live slot
+	// maps back the pending rows' names (completed rows carry their snapshot).
+	const slotMaps = $derived(buildSlotMaps(data.standings, data.bracket));
+	const matchColumns = pickColumns(["number", "matchup", "time", "game"]);
+	let matchesTableState = $state<MatchTableState>({
+		sortColumn: "number",
+		sortDirection: "asc",
+		filters: [],
+	});
+	const matchRows = $derived(
+		sortMatchRows(
+			toMatchRows(data.matches),
+			matchesTableState.sortColumn,
+			matchesTableState.sortDirection,
+			{ slotLabels: slotMaps.labels },
+		),
+	);
 	const nationWinRate = $derived(data.games.nationWinRate);
 	const startingArchetypes = $derived(data.games.startingArchetypeWinRate);
 	const startingTraits = $derived(data.games.startingTraitWinRate);
@@ -94,6 +124,7 @@
 	// URL, change → goto), mirroring the user-stats subtabs (StatsView) so a
 	// tab is deep-linkable and survives refresh.
 	const TABS = [
+		"matches",
 		"players",
 		"nations",
 		"leaders",
@@ -105,7 +136,7 @@
 	type StatsTab = (typeof TABS)[number];
 	const tab = $derived.by<StatsTab>(() => {
 		const fromUrl = page.url.searchParams.get("category");
-		return TABS.find((t) => t === fromUrl) ?? "players";
+		return TABS.find((t) => t === fromUrl) ?? "matches";
 	});
 
 	async function onTabChange(value: string) {
@@ -130,6 +161,7 @@
 		<Tabs.List
 			class="mb-4 flex w-fit flex-wrap items-center gap-1 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
 		>
+			<Tabs.Trigger value="matches" class={triggerClass}>Matches</Tabs.Trigger>
 			<Tabs.Trigger value="players" class={triggerClass}>Players</Tabs.Trigger>
 			<Tabs.Trigger value="nations" class={triggerClass}>Nations</Tabs.Trigger>
 			<Tabs.Trigger value="leaders" class={triggerClass}>Leaders</Tabs.Trigger>
@@ -139,6 +171,32 @@
 			<Tabs.Trigger value="yields" class={triggerClass}>Yields</Tabs.Trigger>
 			<Tabs.Trigger value="casters" class={triggerClass}>Casters</Tabs.Trigger>
 		</Tabs.List>
+
+		<!-- Matches — every match as a sortable list (default: match-number
+		     order), each side showing its nation crest + starting-ruler
+		     archetype glyph and the winner emphasized, with a per-row link to
+		     the uploaded game. The list form of the brackets, for finding and
+		     opening games. -->
+		<Tabs.Content value="matches">
+			<section class="mb-8">
+				<h2 class="mb-3 text-base font-bold text-tan">Matches</h2>
+				<MatchTable
+					columns={matchColumns}
+					rows={matchRows}
+					zone="local"
+					tournament={data.tournament}
+					user={null}
+					slotLabels={slotMaps.labels}
+					slotUserIds={slotMaps.userIds}
+					slotSlugs={slotMaps.slugs}
+					slotAvatars={slotMaps.avatars}
+					sortColumn={matchesTableState.sortColumn}
+					sortDirection={matchesTableState.sortDirection}
+					onSort={(key) => toggleMatchSort(matchesTableState, key)}
+					emptyMessage="No matches yet."
+				/>
+			</section>
+		</Tabs.Content>
 
 		<!-- Players — standings + per-player nation picks (Plane A) -->
 		<Tabs.Content value="players">
