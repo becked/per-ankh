@@ -154,6 +154,18 @@ export const CAST_GRACE_MS = 2 * 60 * 60 * 1000;
 // yet. Bounds how long a finished-but-unreported match can linger as "live".
 export const LIVE_WINDOW_MS = 4 * 60 * 60 * 1000;
 
+// True once a sitting has aged out of LIVE_WINDOW_MS — its broadcast window
+// has closed, so the session was plausibly played to completion. The
+// complement of the live/upcoming windows above, kept beside them so every
+// surface that groups a match's past sessions draws the same boundary.
+// Reactive: reads the shared clock (nowMs), so a session slides into the
+// played group as it ages out.
+export function partPlayed(part: TournamentMatchPart): boolean {
+	if (part.scheduled_at == null) return false;
+	const t = Date.parse(part.scheduled_at);
+	return !Number.isNaN(t) && t <= nowMs() - LIVE_WINDOW_MS;
+}
+
 // Upcoming scheduled parts of still-pending, non-bye matches, soonest first.
 // graceMs keeps a just-started sitting visible (e.g. the cast surfaces pass
 // CAST_GRACE_MS so a match that began 20 minutes ago is still claimable); 0
