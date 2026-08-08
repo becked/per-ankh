@@ -94,7 +94,10 @@ import {
 	handleTournamentWithdraw,
 	handleUncastMatchPart,
 } from "./tournament/player";
-import { handleUserStats } from "./stats/handlers";
+import {
+	handleUserStats,
+	handlePlayerLeaderboard,
+} from "./stats/handlers";
 import {
 	handlePublicUserSearch,
 	handleReleaseSlug,
@@ -297,6 +300,12 @@ const ROUTES: RouteSpec[] = [
 		match: { kind: "path", path: "/v1/games/public-recent" },
 		route: "GET /v1/games/public-recent",
 		handler: (r, e) => handlePublicRecentGames(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/stats/players" },
+		route: "GET /v1/stats/players",
+		handler: (r, e) => handlePlayerLeaderboard(r, e),
 	},
 	{
 		method: "GET",
