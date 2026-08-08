@@ -175,3 +175,25 @@ export function upcomingScheduledParts(
 		return !Number.isNaN(t) && t >= cutoff;
 	});
 }
+
+// A pending match whose every sitting is timed and has aged out (started
+// more than LIVE_WINDOW_MS ago) did not finish in its last session — a
+// finished match gets its save uploaded and reported promptly, so a still-
+// open one is between sittings and owes the schedule its next part. Returns
+// that next part's number, or null when the match doesn't owe one: no
+// sittings yet (a different "to be scheduled" case), an explicitly open
+// part (the TO already added the blank sitting by hand), or a sitting
+// still ahead or plausibly live. Reads the shared reactive clock like its
+// sibling helpers, so a match starts owing as its last sitting ages out.
+export function owesNextSitting(m: TournamentMatch): number | null {
+	if (m.status !== "pending" || m.slot_b_id == null) return null;
+	const parts = matchParts(m);
+	if (parts.length === 0) return null;
+	const cutoff = nowMs() - LIVE_WINDOW_MS;
+	for (const p of parts) {
+		if (p.scheduled_at == null) return null;
+		const t = Date.parse(p.scheduled_at);
+		if (Number.isNaN(t) || t > cutoff) return null;
+	}
+	return parts.length + 1;
+}
