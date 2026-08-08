@@ -480,8 +480,8 @@ function buildSummaryStatements(
 			cities_total, cities_founded, best_culture_level,
 			techs_completed, laws_count,
 			fifth_city_turn, tenth_city_turn, fourth_law_turn, seventh_law_turn,
-			is_winner, vp_margin
-		) VALUES (?,?,?,?,?, ?, ?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?)`,
+			is_winner, vp_margin, online_id
+		) VALUES (?,?,?,?,?, ?, ?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?, ?)`,
 	);
 
 	return roster.map((p) => {
@@ -513,6 +513,10 @@ function buildSummaryStatements(
 			s.seventh_law_turn,
 			winnerIndex !== null && p.player_index === winnerIndex ? 1 : 0,
 			s.vp_margin,
+			// The seat's multiplayer online id — linking data for the
+			// played-games leaderboard (matched against user_online_ids),
+			// never exposed via any API response.
+			p.online_id ?? null,
 		);
 	});
 }

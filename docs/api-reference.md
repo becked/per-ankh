@@ -222,6 +222,15 @@ Most-recent public games across all users (home-page feed).
 - **Errors:** `429 RATE_LIMIT`.
 - **Notes:** `anon_read` bucket (200/hr per IP; scraper UAs exempt). Only `display_name`/`player_name` exposed — no `online_id`/email. Cached `public, max-age=300, s-maxage=60`.
 
+### `GET /v1/stats/players`
+Public site-wide leaderboard of games **played** per user, by category.
+
+- **Auth:** Public.
+- **Query:** `since` / `until` (optional, `YYYY-MM-DD`, `until` exclusive) — counts only games uploaded in the window (`created_at`, server-authoritative); the Season page's season views, past seasons included. Invalid values are `400 INVALID_QUERY`. A closed window (`until` in the past) is immutable and caches for a day.
+- **Response 200:** `{ players: [{ user_id, display_name, duels_network, duels_cloud, ffas, total }] }`, ordered by total desc. Playing is counted, not uploading: anyone's upload credits every human seat — the uploader via their claimed seat, others by matching the seat's online id (`player_summaries.online_id`, migration 0042) against `user_online_ids`. Matches double-uploaded by both players count once per player (deduped on `xml_game_id`). Duel = exactly two humans, split by game mode (`NETWORK` / `PLAY_BY_CLOUD`); FFA = 3+ humans; the remainder is derived client-side.
+- **Errors:** `429 RATE_LIMIT`.
+- **Notes:** `anon_read` bucket (200/hr per IP; scraper UAs exempt). Exposes only display names and counts — never online ids. Cached `public, max-age=300, s-maxage=60`. Backfill for pre-0042 rows is the admin reindex sweep (no re-uploads).
+
 ### `GET /v1/games/out-of-date`
 The caller's games whose `parser_version` differs from a target (drives bulk reparse).
 
