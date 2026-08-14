@@ -16,6 +16,7 @@
 	import { mapScriptLabel, mapSizeLabel } from "$lib/map-settings";
 	import {
 		CHART_THEME,
+		CHART_REFERENCE_LINE_COLOR,
 		getChartColor,
 		getCivilizationColor,
 	} from "$lib/config";
@@ -73,6 +74,101 @@
 		}
 		if (game.winner_nation) return formatEnum(game.winner_nation, "NATION_");
 		return "—";
+	});
+
+	// Momentum takes over for duels: both humans carry a fitted per-turn win
+	// probability, so the sparkline shows who was winning rather than raw VP.
+	// Anything without it (FFA, unknown winner, not yet reindexed) falls back
+	// to the VP sparkline below.
+	const momentumPlayers = $derived(
+		orderedPlayers.filter((p) => p.momentum_series.length > 0),
+	);
+	const hasMomentum = $derived(momentumPlayers.length === 2);
+
+	const momentumOption = $derived<ChartOption>({
+		animation: false,
+		grid: { left: 2, right: 2, top: 4, bottom: 2 },
+		xAxis: { type: "value", show: false, min: 1 },
+		yAxis: { type: "value", show: false, min: 0, max: 100 },
+		tooltip: {
+			trigger: "axis",
+			confine: true,
+			formatter: (params: unknown) => {
+				const arr = params as Array<{
+					seriesName: string;
+					value: [number, number];
+					color: string;
+				}>;
+				const main = arr.filter((x) => x.seriesName !== "");
+				if (main.length === 0) return "";
+				const turn = main[0].value[0];
+				const rows = main
+					.map(
+						(p) =>
+							`<span style="display:inline-block;width:8px;height:8px;background:${p.color};margin-right:4px;"></span>${escapeHtml(p.seriesName)}: ${Math.round(p.value[1])}%`,
+					)
+					.join("<br/>");
+				return `Momentum<br/>Turn ${turn}<br/>${rows}`;
+			},
+		},
+		// The momentum look: one line for the first player, the area between it
+		// and the 50% midline filled in whoever-leads' colour (two silent
+		// clamped series carry the fills).
+		series: [
+			...([0, 1] as const).map((side) => ({
+				name: "",
+				type: "line" as const,
+				silent: true,
+				showSymbol: false,
+				lineStyle: { opacity: 0 },
+				areaStyle: {
+					origin: 50,
+					color: playerColor(momentumPlayers[side]?.nation ?? null, side),
+					opacity: 0.25,
+				},
+				data: (momentumPlayers[0]?.momentum_series ?? []).map((pt) => [
+					pt.turn,
+					side === 0 ? Math.max(50, pt.p * 100) : Math.min(50, pt.p * 100),
+				]),
+			})),
+			{
+				name: `${momentumPlayers[0]?.player_name ?? ""}${momentumPlayers[0]?.nation ? ` (${formatEnum(momentumPlayers[0].nation, "NATION_")})` : ""}`,
+				type: "line" as const,
+				showSymbol: false,
+				sampling: "lttb" as const,
+				lineStyle: {
+					width: 1.5,
+					color: playerColor(momentumPlayers[0]?.nation ?? null, 0),
+				},
+				data: (momentumPlayers[0]?.momentum_series ?? []).map((pt) => [
+					pt.turn,
+					pt.p * 100,
+				]),
+				markLine: {
+					silent: true,
+					symbol: "none",
+					label: { show: false },
+					lineStyle: {
+						color: CHART_REFERENCE_LINE_COLOR,
+						type: "dashed",
+						width: 1,
+					},
+					data: [{ yAxis: 50 }],
+				},
+			},
+			{
+				name: `${momentumPlayers[1]?.player_name ?? ""}${momentumPlayers[1]?.nation ? ` (${formatEnum(momentumPlayers[1].nation, "NATION_")})` : ""}`,
+				type: "line" as const,
+				showSymbol: false,
+				// Invisible mirror so the tooltip names both sides; the visual is
+				// the single line + fills above.
+				lineStyle: { opacity: 0 },
+				data: (momentumPlayers[1]?.momentum_series ?? []).map((pt) => [
+					pt.turn,
+					pt.p * 100,
+				]),
+			},
+		],
 	});
 
 	const sparklineOption = $derived<ChartOption>({
@@ -335,15 +431,19 @@
 		</div>
 	{/if}
 
-	{#if hasSparkline}
+	{#if hasMomentum || hasSparkline}
 		<!-- Dark chart background matches CHART_THEME.backgroundColor used
 		     by the game-detail charts, so this sparkline reads as the same
-		     visual family. -->
+		     visual family. Momentum (who was winning) for duels; VP fallback
+		     for everything else. -->
 		<div
 			class="rounded p-1"
 			style="background-color: rgb(var(--color-surface-sunken));"
 		>
-			<Chart option={sparklineOption} height="60px" />
+			<Chart
+				option={hasMomentum ? momentumOption : sparklineOption}
+				height="60px"
+			/>
 		</div>
 	{/if}
 </div>

@@ -35,6 +35,7 @@
 		"bake:science-yields": "tsx scripts/bake-science-yields.ts",
 		"bake:family-colors": "tsx scripts/bake-family-colors.ts",
 		"bake:wonders": "tsx scripts/bake-wonders.ts",
+		"bake:momentum": "tsx scripts/bake-momentum.ts",
 		"bake:finalize": "tsx scripts/build-manifests.ts",
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",

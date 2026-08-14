@@ -88,6 +88,7 @@
 		playerResources = [],
 		familyOpinionHistory = [],
 		projectsProduced = [],
+		rawMapTiles = null,
 		mapTiles,
 		onMapTurnChange,
 		selectedMapTurn = null,
@@ -135,8 +136,9 @@
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
 		// Sparse per-tile ownership transitions — the Economy tab's territory
-		// curve. Defaults to [] for legacy callers (frozen web/ viewer), which
-		// hides that one view.
+		// curve and the momentum chart's per-turn city reconstruction.
+		// Defaults to [] for legacy callers (frozen web/ viewer), which hides
+		// those views.
 		tileOwnershipHistory?: TileOwnershipEntry[];
 		// Game-level market prices per turn — the Economy tab's GDP basket.
 		// Defaults to [] for legacy callers (frozen web/ viewer), which drops
@@ -151,6 +153,9 @@
 		// Whole-game project counts per player (2.13.0+ blobs). Defaults to []
 		// for legacy callers and older blobs, which hide the Economy panel.
 		projectsProduced?: ProjectProducedInfo[];
+		// End-state map tiles, untouched by the map turn slider — the momentum
+		// chart's city reconstruction needs final-state is_city_center flags.
+		rawMapTiles?: MapTile[] | null;
 		mapTiles: MapTile[] | null;
 		// eslint-disable-next-line no-unused-vars -- Callback type signature
 		onMapTurnChange?: ((turn: number) => Promise<void>) | null;
@@ -491,6 +496,9 @@
 	<Tabs.Content value="overview" class="tab-pane min-h-[400px]">
 		<OverviewTab
 			{gameDetails}
+			staticMapTiles={rawMapTiles}
+			{tileOwnershipHistory}
+			{eventLogs}
 			players={resolvedPlayers}
 			{playerHistory}
 			{allYields}
