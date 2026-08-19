@@ -28,6 +28,7 @@
 	import TournamentNextMatchPanel from "$lib/tournament/TournamentNextMatchPanel.svelte";
 	import TournamentUpNextPanel from "$lib/tournament/TournamentUpNextPanel.svelte";
 	import { buildSlotMaps } from "$lib/tournament/slot-identity";
+	import { projectSwissDivision } from "$lib/tournament/projected-totals";
 	import {
 		headerStatusMeta,
 		type HeaderHero,
@@ -415,35 +416,6 @@
 		},
 	);
 
-	// Rounds-completed measure for a phase: fully-finished rounds count 1 each,
-	// plus the reported fraction of the first still-open round. Rounds generate
-	// progressively, so the first incomplete round is the current one and there
-	// are no later rounds to count. Used to fill each half of the overall bar.
-	function effectiveRoundsDone(
-		matches: { round_number?: number | null; status: string }[],
-	): number {
-		const byRound: Record<number, { total: number; done: number }> = {};
-		for (const m of matches) {
-			const r = m.round_number ?? 0;
-			const e = (byRound[r] ??= { total: 0, done: 0 });
-			e.total++;
-			if (m.status !== "pending") e.done++;
-		}
-		let done = 0;
-		for (const r of Object.keys(byRound)
-			.map(Number)
-			.sort((a, b) => a - b)) {
-			const e = byRound[r];
-			if (e.total > 0 && e.done === e.total) {
-				done += 1;
-			} else {
-				done += e.total > 0 ? e.done / e.total : 0;
-				break;
-			}
-		}
-		return done;
-	}
-
 	const hero = $derived.by((): HeaderHero => {
 		const t = data.tournament;
 		switch (statusMeta.key) {
@@ -465,60 +437,169 @@
 					fieldSize: data.bracket.slots.length,
 				};
 			case "in-progress": {
-				// Championship: progress walks the generated bracket rounds; total
-				// rounds is the bracket depth (ceil log2 of the bracket size). The
-				// overall bar starts at 0.5 (Swiss done) and fills its back half by
-				// bracket-round completion.
+				// Whole-tournament tally: every generated match across both phases
+				// (the matches load spans them), byes excluded — they auto-resolve
+				// and were never played.
+				const playable = data.matches.filter((m) => m.status !== "bye");
+				const playedOverall = playable.filter(
+					(m) => m.status !== "pending",
+				).length;
+				// Projected eventual total: existing matches + a census-walk of the
+				// remaining Swiss rounds per division + the single-elimination
+				// championship over every qualifier (Q − 1 matches). The walk
+				// returns a min/max envelope (a cross-record floater game can swing
+				// later rounds by one match); the display marks an open envelope
+				// with "~".
+				let remainingMin = 0;
+				let remainingMax = 0;
+				let qualifiersMin = 0;
+				let qualifiersMax = 0;
+				for (const div of ["A", "B"] as const) {
+					const rows = data.standings.divisions[div].standings;
+					const recBySlot = new Map(rows.map((r) => [r.slot_id, r]));
+					const swissDiv = data.matches.filter(
+						(m) => m.phase === "swiss" && m.division === div,
+					);
+					const currentRound = swissDiv.reduce(
+						(acc, m) => Math.max(acc, m.round_number ?? 0),
+						0,
+					);
+					const p = projectSwissDivision(
+						rows
+							.filter((r) => r.status === "active" && !r.withdrawn)
+							.map((r) => ({ wins: r.wins, losses: r.losses })),
+						swissDiv
+							.filter((m) => m.status === "pending" && m.slot_b_id != null)
+							.flatMap((m) => {
+								const a = recBySlot.get(m.slot_a_id);
+								const b = recBySlot.get(m.slot_b_id!);
+								if (!a || !b) return [];
+								return [
+									[
+										{ wins: a.wins, losses: a.losses },
+										{ wins: b.wins, losses: b.losses },
+									] as [
+										{ wins: number; losses: number },
+										{ wins: number; losses: number },
+									],
+								];
+							}),
+						Math.max(0, t.swiss_max_rounds - currentRound),
+						{
+							winsToAdvance: t.swiss_wins_to_advance,
+							lossesToEliminate: t.swiss_losses_to_eliminate,
+						},
+						rows.filter((r) => r.status === "advanced").length,
+					);
+					remainingMin += p.remainingMin;
+					remainingMax += p.remainingMax;
+					qualifiersMin += p.qualifiersMin;
+					qualifiersMax += p.qualifiersMax;
+				}
+				// Championship matches not yet generated: Q − 1 minus whatever the
+				// bracket already holds (zero during Swiss).
+				const champExisting = playable.filter(
+					(m) => m.phase === "championship",
+				).length;
+				const champMin = Math.max(0, qualifiersMin - 1 - champExisting);
+				const champMax = Math.max(0, qualifiersMax - 1 - champExisting);
+				const champMid = Math.round((champMin + champMax) / 2);
+				const projectedMin = playable.length + remainingMin + champMin;
+				const projectedMax = playable.length + remainingMax + champMax;
+				// "~N" reads as "about N", so show the middle of the envelope
+				// rather than its ceiling: a 28/28 field opens at 141–147, and
+				// naming the max would run the denominator 6 high and leave
+				// progress reading behind for most of the tournament. It can
+				// never read past 100% — projectedMin already counts every
+				// match that exists, so the midpoint is >= playedOverall.
+				const projectedTotal = Math.round((projectedMin + projectedMax) / 2);
+
+				// Swiss rounds generate per division, so the two can be split — one
+				// division finishing round N and starting N+1 while the other is
+				// still playing N. Each division gets its own lane: a cell per
+				// Swiss round, its OWN open round rendered as per-match pills, the
+				// rest as fills. The lanes merge into the single championship bar.
+				const swiss = data.matches.filter((m) => m.phase === "swiss");
+				const inSwiss = t.status === "swiss";
+				const divisions = (["A", "B"] as const).map((div) => {
+					const divMatches = swiss.filter((m) => m.division === div);
+					const open = divMatches.reduce(
+						(acc, m) => Math.max(acc, m.round_number ?? 0),
+						0,
+					);
+					const rounds = Array.from({ length: t.swiss_max_rounds }, (_, i) => {
+						const inRound = divMatches.filter(
+							(m) => m.round_number === i + 1 && m.status !== "bye",
+						);
+						return {
+							done: inRound.filter((m) => m.status !== "pending").length,
+							total: inRound.length,
+							current: inSwiss && i + 1 === open,
+						};
+					});
+					const openRound = rounds[open - 1];
+					const name = div === "A" ? t.division_a_name : t.division_b_name;
+					return {
+						label: inSwiss && open > 0 ? `${name} · Round ${open}` : name,
+						reported: inSwiss ? (openRound?.done ?? 0) : 0,
+						total: inSwiss ? (openRound?.total ?? 0) : 0,
+						rounds,
+						open,
+					};
+				});
+				const champPlayable = playable.filter(
+					(m) => m.phase === "championship",
+				);
+				const championship = {
+					reported: champPlayable.filter((m) => m.status !== "pending").length,
+					// Until the bracket exists, size the merged bar by the projection
+					// so it renders as a stage-to-come rather than a done 0/0.
+					// Midpoint of the envelope, for the same reason the overall
+					// tally uses one — this renders under the same "~N".
+					total: Math.max(champPlayable.length, champMid + champExisting),
+					active: t.status === "championship",
+					exact: champMin === champMax,
+				};
 				if (t.status === "championship") {
 					const rounds = data.bracket.rounds;
 					const current = rounds.reduce(
 						(a, b) => (b.round_number > a.round_number ? b : a),
 						rounds[0],
 					);
-					const matches = current?.matches ?? [];
 					const slotCount = data.bracket.slots.length;
 					const depth =
 						slotCount > 1 ? Math.ceil(Math.log2(slotCount)) : rounds.length;
 					const round = current?.round_number ?? 1;
-					const champMatches = rounds.flatMap((rd) =>
-						rd.matches.map((m) => ({
-							round_number: rd.round_number,
-							status: m.status,
-						})),
-					);
-					const champFraction =
-						depth > 0
-							? Math.min(1, effectiveRoundsDone(champMatches) / depth)
-							: 0;
 					return {
 						kind: "in-progress",
 						phaseLabel: "Championship",
-						round,
+						roundLabel: `Round ${round}`,
 						totalRounds: Math.max(depth, round),
-						reported: matches.filter((m) => m.status !== "pending").length,
-						total: matches.length,
-						overall: 0.5 + champFraction * 0.5,
+						divisions,
+						championship,
+						playedOverall,
+						projectedTotal,
+						projectedExact: projectedMin === projectedMax,
 					};
 				}
-				// Swiss: both divisions advance in lockstep, so the current round is
-				// the highest round number present across either division. The overall
-				// bar fills its front half (0–0.5) by Swiss-round completion.
-				const swiss = data.matches.filter((m) => m.phase === "swiss");
-				const round =
-					swiss.reduce((acc, m) => Math.max(acc, m.round_number ?? 0), 0) || 1;
-				const inRound = swiss.filter((m) => m.round_number === round);
-				const swissFraction =
-					t.swiss_max_rounds > 0
-						? Math.min(1, effectiveRoundsDone(swiss) / t.swiss_max_rounds)
-						: 0;
+				const openRounds = divisions
+					.filter((d) => d.open > 0)
+					.map((d) => d.open);
+				const loRound = Math.min(...openRounds);
+				const hiRound = Math.max(...openRounds);
 				return {
 					kind: "in-progress",
 					phaseLabel: "Swiss",
-					round,
+					roundLabel:
+						loRound !== hiRound
+							? `Rounds ${loRound}–${hiRound}`
+							: `Round ${hiRound}`,
 					totalRounds: t.swiss_max_rounds,
-					reported: inRound.filter((m) => m.status !== "pending").length,
-					total: inRound.length,
-					overall: swissFraction * 0.5,
+					divisions,
+					championship,
+					playedOverall,
+					projectedTotal,
+					projectedExact: projectedMin === projectedMax,
 				};
 			}
 		}

@@ -222,17 +222,132 @@
 					</p>
 					<p class="whitespace-nowrap text-sm text-tan">
 						<span class="opacity-70">{hero.phaseLabel} ·</span>
-						<span class="font-bold">Round {hero.round}</span>
+						<span class="font-bold">{hero.roundLabel}</span>
 						<span class="opacity-70">of {hero.totalRounds}</span>
 					</p>
 				</div>
-				<div class="min-w-[8rem] flex-1">
-					<Progress value={hero.overall} max={1} indicatorClass="bg-orange" />
+				<!-- Two-row grid with a shared auto-sized label column, so both bars
+				     span exactly the same width regardless of label length. -->
+				<div
+					class="grid min-w-[16rem] flex-1 grid-cols-[1fr_auto] items-center gap-x-3 gap-y-2"
+				>
+					<!-- Shared Swiss round labels, lit while some division is playing
+					     that round. Beside them, matches played so far against the
+					     projected eventual total ("~" while results in flight can
+					     still swing it — see projected-totals.ts). -->
+					<div class="flex gap-1">
+						{#each Array.from({ length: hero.divisions[0]?.rounds.length ?? 0 }, (_, i) => i) as i (i)}
+							<span
+								class="flex-1 text-center text-[10px] uppercase tracking-wide {hero.divisions.some(
+									(d) => d.rounds[i].current,
+								)
+									? 'font-bold text-orange'
+									: 'text-tan opacity-50'}">Swiss {i + 1}</span
+							>
+						{/each}
+					</div>
+					<span
+						class="justify-self-end whitespace-nowrap text-xs italic text-tan opacity-70"
+					>
+						{hero.playedOverall} of {hero.projectedExact
+							? ""
+							: "~"}{hero.projectedTotal} matches
+					</span>
+					<!-- One Swiss lane per division: a cell per round, the division's
+					     open round as per-match pills (filled as reports land), played
+					     rounds as solid fills, future rounds empty. The lanes merge
+					     into the single championship bar below. -->
+					{#each hero.divisions as d (d.label)}
+						<div class="flex flex-col gap-0.5">
+							<div class="flex items-center gap-1">
+								{#each d.rounds as r, i (i)}
+									{#if r.current}
+										<div
+											class="flex flex-1 gap-0.5"
+											role="progressbar"
+											aria-valuemin={0}
+											aria-valuemax={r.total}
+											aria-valuenow={r.done}
+											aria-label="Matches reported — {d.label}"
+										>
+											{#each Array.from({ length: r.total }, (_, p) => p < r.done) as reported, p (p)}
+												<span
+													class="h-1.5 flex-1 rounded-full {reported
+														? 'bg-orange'
+														: 'bg-input'}"
+												></span>
+											{/each}
+										</div>
+									{:else}
+										<div class="flex-1">
+											<Progress
+												value={r.done}
+												max={Math.max(r.total, 1)}
+												indicatorClass="bg-orange"
+											/>
+										</div>
+									{/if}
+								{/each}
+							</div>
+							<span
+								class="truncate text-center text-[10px] uppercase tracking-wide text-tan opacity-50"
+							>
+								{d.label}
+							</span>
+						</div>
+						<span
+							class="justify-self-end whitespace-nowrap text-xs italic text-tan opacity-70"
+						>
+							{#if d.total > 0}{d.reported} of {d.total} reported{/if}
+						</span>
+					{/each}
+					<!-- The merged championship bar — the divisions reunite in one
+					     bracket. Pills once it's live; sized by the projected bracket
+					     until then. -->
+					<div class="flex flex-col gap-0.5">
+						{#if hero.championship.active}
+							<div
+								class="flex gap-0.5"
+								role="progressbar"
+								aria-valuemin={0}
+								aria-valuemax={hero.championship.total}
+								aria-valuenow={hero.championship.reported}
+								aria-label="Matches reported — Championship"
+							>
+								{#each Array.from({ length: hero.championship.total }, (_, p) => p < hero.championship.reported) as reported, p (p)}
+									<span
+										class="h-1.5 flex-1 rounded-full {reported
+											? 'bg-orange'
+											: 'bg-input'}"
+									></span>
+								{/each}
+							</div>
+						{:else}
+							<Progress
+								value={hero.championship.reported}
+								max={Math.max(hero.championship.total, 1)}
+								indicatorClass="bg-orange"
+							/>
+						{/if}
+						<span
+							class="text-center text-[10px] uppercase tracking-wide {hero
+								.championship.active
+								? 'font-bold text-orange'
+								: 'text-tan opacity-50'}">Championship</span
+						>
+					</div>
+					<span
+						class="justify-self-end whitespace-nowrap text-xs italic text-tan opacity-70"
+					>
+						{#if hero.championship.active}
+							{hero.championship.reported} of {hero.championship.total} reported
+						{:else if hero.championship.total > 0}
+							{hero.championship.exact ? "" : "~"}{hero.championship.total}
+							matches · awaiting Swiss
+						{/if}
+					</span>
 				</div>
 				<div class="flex flex-shrink-0 items-center gap-3">
-					<span class="whitespace-nowrap text-xs italic text-tan opacity-70">
-						{hero.reported} of {hero.total} matches reported
-					</span>
 					{#if isAdmin && transitionReady && combined}
 						<TransitionPopover
 							{tournament}

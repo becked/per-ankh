@@ -76,16 +76,46 @@ export type HeaderHero =
 	| {
 			kind: "in-progress";
 			phaseLabel: string;
-			round: number;
+			// "Round 2" — or "Rounds 2–3" while the divisions' independently
+			// generated rounds are split (one finishes its round and starts the
+			// next before the other catches up).
+			roundLabel: string;
 			totalRounds: number;
-			// Current-round match reporting (the actionable detail shown as text).
-			reported: number;
-			total: number;
-			// Whole-tournament progress (0–1) for the header bar. Swiss occupies
-			// 0–0.5 and the championship 0.5–1, each filled by completed rounds plus
-			// partial credit for the in-progress round, so reaching the bracket
-			// reads as half-done regardless of the current round's reporting.
-			overall: number;
+			// One Swiss lane per division: a cell per Swiss round, the division's
+			// OPEN round rendered as per-match pills and the others as solid
+			// fills (full for played rounds, empty for ungenerated ones). Byes
+			// are excluded throughout. `label` renders beneath the lane;
+			// reported/total are the open round's counts for the side column.
+			divisions: Array<{
+				label: string;
+				reported: number;
+				total: number;
+				rounds: Array<{ done: number; total: number; current: boolean }>;
+			}>;
+			// The single bar both lanes merge into — the divisions play Swiss
+			// apart and reunite in one championship bracket. Pills once the
+			// bracket is live; until then `total` is the PROJECTED bracket size
+			// (every advancer, single-elim → qualifiers − 1) at the midpoint of
+			// its envelope, surfaced as "N matches · awaiting Swiss". `exact` is
+			// false while Swiss results still in flight can change the qualifier
+			// count.
+			championship: {
+				reported: number;
+				total: number;
+				active: boolean;
+				exact: boolean;
+			};
+			// Whole-tournament tally (byes excluded): matches played so far vs the
+			// PROJECTED eventual total — existing matches plus a census-walk
+			// projection of the remaining Swiss rounds and the qualifiers-sized
+			// championship bracket (see projected-totals.ts). The projection is a
+			// min/max envelope and this is its MIDPOINT — "~N" reads as "about
+			// N", so naming the ceiling would keep the denominator high and
+			// progress reading behind. `projectedExact` is false while results
+			// still in flight can swing the total (shown as "~N").
+			playedOverall: number;
+			projectedTotal: number;
+			projectedExact: boolean;
 	  }
 	| {
 			kind: "complete";
