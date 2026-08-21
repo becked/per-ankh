@@ -38,7 +38,7 @@
 //
 // Run: npm run bake:science-yields
 
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -80,6 +80,10 @@ interface Entry {
 	iPercent?: string;
 	iTriangleOffset?: string;
 	iNegativeHappinessModifier?: string;
+	iCityHP?: string;
+	bNoDamage?: string;
+	bNoAssimilate?: string;
+	LeaderEffectPlayer?: string;
 	aiYieldOutput?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldRate?: { Pair?: YieldPair | YieldPair[] };
 	aiYieldModifier?: { Pair?: YieldPair | YieldPair[] };
@@ -89,6 +93,9 @@ interface Entry {
 	aiYieldRateReligion?: { Pair?: YieldPair | YieldPair[] };
 	aiImprovementClassModifier?: { Pair?: YieldPair | YieldPair[] };
 	aaiResourceYieldOutput?: { Pair?: ResourceYieldPair | ResourceYieldPair[] };
+	// "when effect <zIndex> is present in this city, pay <SubPair>" — the shape
+	// Philosophy's Forum science and the Scholar archetype's Archive science use.
+	aaiEffectCityYieldRate?: { Pair?: ResourceYieldPair | ResourceYieldPair[] };
 }
 
 const parser = new XMLParser({
@@ -106,6 +113,23 @@ async function loadEntries(path: string): Promise<Entry[]> {
 	return Array.isArray(entry) ? entry : [entry];
 }
 
+// The project-definition files: the base table plus the event projects, whose
+// DLC variants are hyphenated (project-event-eoti.xml, …). Same predicate
+// bake-project-icons.ts uses — the event projects carry science of their own
+// (PROJECT_LOCAL_ASCETIC, PROJECT_NEIGHBORS_FEAST_PERSIA both pay +2), so a
+// sweep of project.xml alone silently drops them.
+function isProjectDefFile(name: string): boolean {
+	return name === "project.xml" || /^project-event(-.*)?\.xml$/.test(name);
+}
+
+async function loadProjects(infosDir: string): Promise<Entry[]> {
+	const files = (await readdir(infosDir)).filter(isProjectDefFile).sort();
+	const loaded = await Promise.all(
+		files.map((f) => loadEntries(resolve(infosDir, f))),
+	);
+	return loaded.flat();
+}
+
 function pairs(block?: { Pair?: YieldPair | YieldPair[] }): YieldPair[] {
 	const p = block?.Pair;
 	if (p == null) return [];
@@ -116,6 +140,32 @@ function yieldValue(block: YieldPair[], yieldType: string): number {
 	return block
 		.filter((p) => p.zIndex === yieldType)
 		.reduce((t, p) => t + Number(p.iValue ?? 0), 0);
+}
+
+// The per-index science of an `aai*` two-level table ({ zIndex → { zSubIndex →
+// iValue } }), in the game's raw ×10 units. Two tables share the shape:
+// <aaiResourceYieldOutput> (improvement class → resource) and
+// <aaiEffectCityYieldRate> (effect → the city effect whose presence pays it).
+function nestedScience(block?: {
+	Pair?: ResourceYieldPair | ResourceYieldPair[];
+}): Record<string, number> {
+	const p = block?.Pair;
+	const rows = p == null ? [] : Array.isArray(p) ? p : [p];
+	const out: Record<string, number> = {};
+	for (const row of rows) {
+		if (!row.zIndex) continue;
+		const subs =
+			row.SubPair == null
+				? []
+				: Array.isArray(row.SubPair)
+					? row.SubPair
+					: [row.SubPair];
+		const science = subs
+			.filter((sub) => sub.zSubIndex === "YIELD_SCIENCE")
+			.reduce((total, sub) => total + Number(sub.iValue ?? 0), 0);
+		if (science !== 0) out[row.zIndex] = science;
+	}
+	return out;
 }
 
 async function main(): Promise<void> {
@@ -137,6 +187,7 @@ async function main(): Promise<void> {
 		theologies,
 		projects,
 		knowledges,
+		traits,
 	] = await Promise.all([
 		loadEntries(resolve(infosDir, "improvement.xml")),
 		loadEntries(resolve(infosDir, "improvementClass.xml")),
@@ -152,8 +203,9 @@ async function main(): Promise<void> {
 		loadEntries(resolve(infosDir, "familyClass.xml")),
 		loadEntries(resolve(infosDir, "nation.xml")),
 		loadEntries(resolve(infosDir, "theology.xml")),
-		loadEntries(resolve(infosDir, "project.xml")),
+		loadProjects(infosDir),
 		loadEntries(resolve(infosDir, "knowledge.xml")),
+		loadEntries(resolve(infosDir, "trait.xml")),
 	]);
 
 	const effectByType = new Map(effects.map((e) => [e.zType, e]));
@@ -207,6 +259,39 @@ async function main(): Promise<void> {
 			"bake-science-yields: YIELD_SCIENCE iNegativeHappinessModifier is not negative",
 		);
 	}
+	// Damage and assimilation are the other two terms of
+	// City.calculateTotalYieldModifier (governor + happiness + damage +
+	// assimilate). A yield opts out of either with <bNoDamage>/<bNoAssimilate>;
+	// YIELD_SCIENCE sets neither, so both apply to science. Assert it rather
+	// than assume — a patch that opts science out would otherwise leave the
+	// breakdown quietly charging a penalty the game stopped applying.
+	const scienceYield = findEntry(yields, "YIELD_SCIENCE", "yield.xml");
+	if (scienceYield.bNoDamage === "1" || scienceYield.bNoAssimilate === "1") {
+		throw new Error(
+			"bake-science-yields: YIELD_SCIENCE now sets bNoDamage/bNoAssimilate — " +
+				"the damage and assimilation rows in the science breakdown must go",
+		);
+	}
+	// Percent yield per point of city damage is (damage × modifier) / HPMax,
+	// and assimilation is max(-turns, modifier) — both negative, both capped
+	// by the same globals.
+	const cityDamageYieldModifier = requireInt(
+		findEntry(globalInts, "CITY_DAMAGE_YIELD_MODIFIER", "globalsInt.xml")
+			.iValue,
+		"CITY_DAMAGE_YIELD_MODIFIER iValue",
+	);
+	const cityAssimilateYieldModifier = requireInt(
+		findEntry(globalInts, "CITY_ASSIMILATE_YIELD_MODIFIER", "globalsInt.xml")
+			.iValue,
+		"CITY_ASSIMILATE_YIELD_MODIFIER iValue",
+	);
+	// The damage denominator's base: getHPMax() is CITY_HP + the HP a city's
+	// own effects add (City.cs:2311).
+	const cityHpBase = requireInt(
+		findEntry(globalInts, "CITY_HP", "globalsInt.xml").iValue,
+		"CITY_HP iValue",
+	);
+
 	const competitiveEquivalentRating = requireInt(
 		findEntry(
 			globalInts,
@@ -233,8 +318,7 @@ async function main(): Promise<void> {
 	// linearization), so this is NOT ÷10 fixed point.
 	const wisdomGovernorScienceModifier = yieldValue(
 		pairs(
-			findEntry(ratings, "RATING_WISDOM", "rating.xml")
-				.aiYieldGovernorModifier,
+			findEntry(ratings, "RATING_WISDOM", "rating.xml").aiYieldGovernorModifier,
 		),
 		"YIELD_SCIENCE",
 	);
@@ -285,27 +369,118 @@ async function main(): Promise<void> {
 		if (v > 0) theologySciencePerReligion[t.zType] = v / 10;
 	}
 
+	// Every city effect a completed project puts in the city — its <EffectCity>
+	// and <EffectCityExtra>. Both the conditional-grant tables and the city-HP
+	// table below key on these, because the XML expresses "a city holding an
+	// Archive" as the effect, not the project.
+	const projectEffects = new Map<string, string[]>();
+	for (const p of projects) {
+		if (!p.zType) continue;
+		const names = [p.EffectCity, p.EffectCityExtra].filter(
+			(n): n is string => n != null && n !== "",
+		);
+		if (names.length > 0) projectEffects.set(p.zType, names);
+	}
+	// Effect → the projects that grant it, the inversion the conditional
+	// grants need (they name the effect; the blob records the project).
+	const projectsByEffect = new Map<string, string[]>();
+	for (const [project, names] of projectEffects) {
+		for (const name of names) {
+			projectsByEffect.set(name, [
+				...(projectsByEffect.get(name) ?? []),
+				project,
+			]);
+		}
+	}
+
 	// City projects whose effect pays flat science (project.xml EffectCity +
 	// EffectCityExtra → effectCity <aiYieldRate>): the Archive tiers
 	// (+1/+2/+4/+8) and friends. City.cs:5058 keeps both effect counts equal
 	// to the project count, but a <bSingle> effect pays once no matter the
 	// count — `single` tells the consumer to cap the count at 1 (Archives,
 	// the no-characters Governor project) vs. multiply (Convoys).
+	//
+	// Tiers don't stack, but bSingle is not why: each tier is its own project
+	// with its own effect, and <abInvalidBy> + City.finishProject
+	// (City.cs:8589) zero the count of every tier a new one invalidates, so a
+	// save only ever carries the top tier of a line. Summing the tiers a city
+	// reports is therefore safe.
 	const projectScience: Record<string, { science: number; single: boolean }> =
 		{};
 	for (const p of projects) {
 		if (!p.zType) continue;
 		let science = 0;
 		let single = false;
-		for (const name of [p.EffectCity, p.EffectCityExtra]) {
-			const e = name ? effectByType.get(name) : undefined;
+		for (const name of projectEffects.get(p.zType) ?? []) {
+			const e = effectByType.get(name);
 			const v = e ? yieldValue(pairs(e.aiYieldRate), "YIELD_SCIENCE") : 0;
 			if (v > 0) {
 				science += v;
 				single ||= (e as { bSingle?: string } | undefined)?.bSingle === "1";
 			}
 		}
-		if (science > 0) projectScience[p.zType] = { science: science / 10, single };
+		if (science > 0)
+			projectScience[p.zType] = { science: science / 10, single };
+	}
+
+	// Conditional grants: "pay science in every city holding effect X", the
+	// <aaiEffectCityYieldRate> shape. Two sources reach it with data the blob
+	// records — a law the player has active, and their leader's archetype —
+	// and both land on projects: Philosophy pays +1 per Forum city,
+	// the Scholar archetype +2 per Archive city. Resolved here down to
+	// source → project → science so the consumer needs no effect graph.
+	const grantsFromEffects = (names: (string | undefined)[]) => {
+		const byProject: Record<string, number> = {};
+		for (const name of names) {
+			const effect = name ? effectByType.get(name) : undefined;
+			if (!effect) continue;
+			for (const [target, science] of Object.entries(
+				nestedScience(effect.aaiEffectCityYieldRate),
+			)) {
+				if (science <= 0) continue;
+				for (const project of projectsByEffect.get(target) ?? []) {
+					byProject[project] = (byProject[project] ?? 0) + science / 10;
+				}
+			}
+		}
+		return byProject;
+	};
+	// A law's or trait's effects reach the city through its player effect:
+	// law.xml <EffectPlayer> / trait.xml <LeaderEffectPlayer> → effectPlayer
+	// .xml <EffectCity> + <EffectCityExtra>.
+	const cityEffectsOfPlayerEffect = (name?: string): (string | undefined)[] => {
+		const ep = name ? effectPlayerByType.get(name) : undefined;
+		return ep ? [ep.EffectCity, ep.EffectCityExtra] : [];
+	};
+	const lawProjectScience: Record<string, Record<string, number>> = {};
+	for (const law of laws) {
+		if (!law.zType) continue;
+		const grants = grantsFromEffects(
+			cityEffectsOfPlayerEffect(law.EffectPlayer),
+		);
+		if (Object.keys(grants).length > 0) lawProjectScience[law.zType] = grants;
+	}
+	const archetypeProjectScience: Record<string, Record<string, number>> = {};
+	for (const trait of traits) {
+		if (!trait.zType) continue;
+		const grants = grantsFromEffects(
+			cityEffectsOfPlayerEffect(trait.LeaderEffectPlayer),
+		);
+		if (Object.keys(grants).length > 0) {
+			archetypeProjectScience[trait.zType] = grants;
+		}
+	}
+
+	// City HP a completed project adds (effectCity <iCityHP>), the denominator
+	// of the damage yield modifier. All four are <bSingle>, so a project pays
+	// its HP once however many times it was completed.
+	const projectCityHp: Record<string, number> = {};
+	for (const [project, names] of projectEffects) {
+		let hp = 0;
+		for (const name of names) {
+			hp += Number(effectByType.get(name)?.iCityHP ?? 0);
+		}
+		if (hp > 0) projectCityHp[project] = hp;
 	}
 
 	// Knowledge tiers (knowledge.xml), in file order. `percent` is the tier's
@@ -327,21 +502,11 @@ async function main(): Promise<void> {
 	const classResourceScience = new Map<string, Record<string, number>>();
 	for (const cls of improvementClasses) {
 		if (!cls.zType) continue;
-		const p = cls.aaiResourceYieldOutput?.Pair;
-		const rows = p == null ? [] : Array.isArray(p) ? p : [p];
 		const byResource: Record<string, number> = {};
-		for (const row of rows) {
-			if (!row.zIndex) continue;
-			const subs =
-				row.SubPair == null
-					? []
-					: Array.isArray(row.SubPair)
-						? row.SubPair
-						: [row.SubPair];
-			const sci = subs
-				.filter((s) => s.zSubIndex === "YIELD_SCIENCE")
-				.reduce((t, s) => t + Number(s.iValue ?? 0), 0);
-			if (sci > 0) byResource[row.zIndex] = sci / 10;
+		for (const [resource, science] of Object.entries(
+			nestedScience(cls.aaiResourceYieldOutput),
+		)) {
+			if (science > 0) byResource[resource] = science / 10;
 		}
 		if (Object.keys(byResource).length > 0) {
 			classResourceScience.set(cls.zType, byResource);
@@ -663,9 +828,7 @@ async function main(): Promise<void> {
 		`export const WISDOM_GOVERNOR_SCIENCE_MODIFIER = ${wisdomGovernorScienceModifier};`,
 	);
 	lines.push("");
-	lines.push(
-		"// Percent city science PER DISCONTENT LEVEL (yield.xml",
-	);
+	lines.push("// Percent city science PER DISCONTENT LEVEL (yield.xml");
 	lines.push(
 		"// iNegativeHappinessModifier ×|level| — getHappinessLevelYieldModifier).",
 	);
@@ -704,11 +867,75 @@ async function main(): Promise<void> {
 	lines.push(
 		"// City project → flat science: `single` effects (bSingle — Archives)",
 	);
-	lines.push(
-		"// pay once regardless of count; the rest multiply (Convoys).",
-	);
+	lines.push("// pay once regardless of count; the rest multiply (Convoys).");
 	lines.push(
 		`export const PROJECT_SCIENCE: Readonly<Record<string, { readonly science: number; readonly single: boolean }>> = ${JSON.stringify(sorted(projectScience))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Law → project → flat science per city holding that project, while the",
+	);
+	lines.push(
+		"// law is active (effectCity <aaiEffectCityYieldRate>: Philosophy pays",
+	);
+	lines.push("// +1 science in every city with a Forum).");
+	lines.push(
+		`export const LAW_PROJECT_SCIENCE: Readonly<Record<string, Readonly<Record<string, number>>>> = ${JSON.stringify(sortedDeep(lawProjectScience))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// Leader archetype trait → project → flat science per city holding that",
+	);
+	lines.push(
+		"// project (the same <aaiEffectCityYieldRate> shape, reached through the",
+	);
+	lines.push(
+		"// trait's <LeaderEffectPlayer>: a Scholar pays +2 per Archive city).",
+	);
+	lines.push(
+		`export const ARCHETYPE_PROJECT_SCIENCE: Readonly<Record<string, Readonly<Record<string, number>>>> = ${JSON.stringify(sortedDeep(archetypeProjectScience))};`,
+	);
+	lines.push("");
+	lines.push(
+		"// ─── City damage & assimilation (City.calculateTotalYieldModifier) ──",
+	);
+	lines.push("");
+	lines.push(
+		"// Both are percent city-yield modifiers science does not opt out of.",
+	);
+	lines.push(
+		"// Damage is (damage × CITY_DAMAGE_YIELD_MODIFIER) / getHPMax();",
+	);
+	lines.push(
+		"// assimilation is max(-assimilateTurns, CITY_ASSIMILATE_YIELD_MODIFIER).",
+	);
+	lines.push(
+		`export const CITY_DAMAGE_YIELD_MODIFIER = ${cityDamageYieldModifier};`,
+	);
+	lines.push(
+		`export const CITY_ASSIMILATE_YIELD_MODIFIER = ${cityAssimilateYieldModifier};`,
+	);
+	lines.push("");
+	lines.push(
+		"// getHPMax() = CITY_HP + the HP the city's own effects add. The save",
+	);
+	lines.push(
+		"// never writes the extra (it is network state only), so the damage",
+	);
+	lines.push(
+		"// denominator is rebuilt from the projects a city reports below.",
+	);
+	lines.push(`export const CITY_HP_BASE = ${cityHpBase};`);
+	lines.push("");
+	lines.push(
+		"// City project → the max HP its effect adds (effectCity <iCityHP>).",
+	);
+	lines.push(
+		"// All are <bSingle>, so a project pays its HP once however often it",
+	);
+	lines.push("// was completed.");
+	lines.push(
+		`export const PROJECT_CITY_HP: Readonly<Record<string, number>> = ${JSON.stringify(sorted(projectCityHp))};`,
 	);
 	lines.push("");
 	lines.push(

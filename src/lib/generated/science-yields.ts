@@ -550,6 +550,59 @@ export const PROJECT_SCIENCE: Readonly<
 	PROJECT_ARCHIVE_4: { science: 8, single: true },
 	PROJECT_CONVOY: { science: 1, single: false },
 	PROJECT_GOVERNOR: { science: 2, single: true },
+	PROJECT_LOCAL_ASCETIC: { science: 2, single: false },
+	PROJECT_NEIGHBORS_FEAST_PERSIA: { science: 2, single: false },
+};
+
+// Law → project → flat science per city holding that project, while the
+// law is active (effectCity <aaiEffectCityYieldRate>: Philosophy pays
+// +1 science in every city with a Forum).
+export const LAW_PROJECT_SCIENCE: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = {
+	LAW_PHILOSOPHY: {
+		PROJECT_FORUM_1: 1,
+		PROJECT_FORUM_2: 1,
+		PROJECT_FORUM_3: 1,
+		PROJECT_FORUM_4: 1,
+	},
+};
+
+// Leader archetype trait → project → flat science per city holding that
+// project (the same <aaiEffectCityYieldRate> shape, reached through the
+// trait's <LeaderEffectPlayer>: a Scholar pays +2 per Archive city).
+export const ARCHETYPE_PROJECT_SCIENCE: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = {
+	TRAIT_SCHOLAR_ARCHETYPE: {
+		PROJECT_ARCHIVE_1: 2,
+		PROJECT_ARCHIVE_2: 2,
+		PROJECT_ARCHIVE_3: 2,
+		PROJECT_ARCHIVE_4: 2,
+	},
+};
+
+// ─── City damage & assimilation (City.calculateTotalYieldModifier) ──
+
+// Both are percent city-yield modifiers science does not opt out of.
+// Damage is (damage × CITY_DAMAGE_YIELD_MODIFIER) / getHPMax();
+// assimilation is max(-assimilateTurns, CITY_ASSIMILATE_YIELD_MODIFIER).
+export const CITY_DAMAGE_YIELD_MODIFIER = -50;
+export const CITY_ASSIMILATE_YIELD_MODIFIER = -50;
+
+// getHPMax() = CITY_HP + the HP the city's own effects add. The save
+// never writes the extra (it is network state only), so the damage
+// denominator is rebuilt from the projects a city reports below.
+export const CITY_HP_BASE = 20;
+
+// City project → the max HP its effect adds (effectCity <iCityHP>).
+// All are <bSingle>, so a project pays its HP once however often it
+// was completed.
+export const PROJECT_CITY_HP: Readonly<Record<string, number>> = {
+	PROJECT_IMPROVISED_DEFENCES: 5,
+	PROJECT_MOAT: 10,
+	PROJECT_TOWERS: 10,
+	PROJECT_WALLS: 10,
 };
 
 // ─── Knowledge tiers (Player.calculateKnowledgeOf) ──────────────────
