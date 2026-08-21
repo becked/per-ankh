@@ -97,7 +97,7 @@
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
 		characters?: CharacterInfo[];
-		// Founded religions with their theologies (2.14.0+) — the science
+		// Founded religions with their theologies (2.15.0+) — the science
 		// breakdown's Dualism rows. Defaults to [] for legacy callers.
 		gameReligions?: GameReligion[];
 		// Set <GameOptions> flags. Null on pre-2.11.0 blobs (and from the frozen
@@ -610,7 +610,7 @@
 	);
 	const characterById = $derived(new Map(characters.map((c) => [c.xml_id, c])));
 	// religion → theologies established, for the breakdown's Dualism rows.
-	// Empty lists on pre-2.14.0 blobs, which simply produce no rows.
+	// Empty lists on pre-2.15.0 blobs, which simply produce no rows.
 	const theologiesByReligion = $derived(
 		new Map(gameReligions.map((r) => [r.religion_name, r.theologies ?? []])),
 	);
@@ -654,6 +654,12 @@
 				leader == null || leader.death_turn != null
 					? null
 					: (leader.wisdom ?? null);
+			// Same reigning-leader rule for the archetype, which pays per-city
+			// science off the projects it favours (a Scholar's Archives).
+			const leaderArchetype =
+				leader == null || leader.death_turn != null
+					? null
+					: (leader.archetype ?? null);
 			return {
 				player,
 				b: scienceBreakdown(
@@ -672,9 +678,9 @@
 					{
 						cities,
 						nation: player.nation,
+						leaderArchetype,
 						theologiesByReligion,
-						governorWisdom: (xmlId) =>
-							characterById.get(xmlId)?.wisdom ?? null,
+						governorWisdom: (xmlId) => characterById.get(xmlId)?.wisdom ?? null,
 					},
 					specialistName,
 					improvementDisplayName,

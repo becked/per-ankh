@@ -59,8 +59,14 @@ import {
 	NATION_CITY_SCIENCE,
 	THEOLOGY_SCIENCE_PER_RELIGION,
 	PROJECT_SCIENCE,
+	LAW_PROJECT_SCIENCE,
+	ARCHETYPE_PROJECT_SCIENCE,
 } from "$lib/generated/science-yields";
-import { formatEnum } from "$lib/utils/formatting";
+import {
+	archetypeSpriteKey,
+	formatArchetype,
+	formatEnum,
+} from "$lib/utils/formatting";
 import {
 	storyEventType,
 	storyEventsFor,
@@ -453,7 +459,7 @@ export type ScienceBreakdown = {
 	// × city count per Player.getYieldUpkeepNet). Exact rates from the
 	// law/effect XML.
 	laws: { items: BreakdownItem[]; total: number };
-	// Flat per-city effect sources (2.14.0+ blobs, empty before): the Sages
+	// Flat per-city effect sources (2.15.0+ blobs, empty before): the Sages
 	// family (+1/specialist in their cities), Babylonia's nation bonus
 	// (+1/city), Dualism (+1 × religions present, in each city holding a
 	// Dualism religion), and science city projects (Archives, Convoys). All
@@ -638,14 +644,19 @@ function leaderCourtScience(wisdom: number, competitive: boolean): number {
 }
 
 // Per-city context for the city-effect and governor rows: the player's own
-// CityInfo rows plus game-level lookups. The 2.14.0 city fields (religions,
-// project_counts, governor_xml_id) are optional on older blobs — absent
-// fields simply produce no rows, and those sources stay in `other`.
+// CityInfo rows plus game-level lookups. The 2.15.0 city fields (religions,
+// project_counts, governor_xml_id, happiness_level, damage,
+// assimilate_turns) are optional on older blobs — absent fields simply
+// produce no rows, and those sources stay in `other`.
 export interface CityEffectContext {
 	cities: CityInfo[];
 	// The player's nation (Babylonia's bonus keys on it).
 	nation: string | null;
-	// religion → theologies it established, from game_religions (2.14.0+).
+	// The reigning leader's archetype trait (TRAIT_*_ARCHETYPE), which pays
+	// science in every city holding the project it favours — a Scholar's
+	// Archives. Null when there is no reigning leader or none is recorded.
+	leaderArchetype: string | null;
+	// religion → theologies it established, from game_religions (2.15.0+).
 	theologiesByReligion: ReadonlyMap<string, readonly string[]>;
 	// Governor character xml_id → their Wisdom rating (null = unknown).
 	governorWisdom: (xmlId: number) => number | null;
@@ -863,6 +874,34 @@ export function scienceBreakdown(
 		cityContext.nation != null
 			? (NATION_CITY_SCIENCE[cityContext.nation] ?? 0)
 			: 0;
+	// The player-level sources that pay per-city science off a project the
+	// city holds, resolved once: every active law that grants, plus the
+	// reigning leader's archetype.
+	const cityGrants: {
+		label: string;
+		icon: BreakdownIcon;
+		byProject: Readonly<Record<string, number>>;
+	}[] = [];
+	for (const law of activeLaws) {
+		const byProject = LAW_PROJECT_SCIENCE[law];
+		if (byProject) {
+			cityGrants.push({
+				label: formatEnum(law, "LAW_"),
+				icon: { category: "laws", value: law },
+				byProject,
+			});
+		}
+	}
+	const archetype = cityContext.leaderArchetype;
+	const archetypeGrant =
+		archetype != null ? ARCHETYPE_PROJECT_SCIENCE[archetype] : undefined;
+	if (archetype != null && archetypeGrant) {
+		cityGrants.push({
+			label: formatArchetype(archetype),
+			icon: { category: "traits", value: archetypeSpriteKey(archetype) },
+			byProject: archetypeGrant,
+		});
+	}
 	for (const city of cityContext.cities) {
 		// Sages: +1 science per placed specialist in the family's cities
 		// (effectCity aiYieldRateSpecialist — any specialist, unlike
@@ -925,6 +964,21 @@ export function scienceBreakdown(
 				effective * info.science,
 				effective,
 			);
+		}
+		// Conditional grants: a law the player still holds, or their leader's
+		// archetype, paying science in every city holding a given project —
+		// Philosophy per Forum city, a Scholar leader per Archive city. The
+		// grant is on the project effect being present, so it pays once per
+		// city however many completions the city reports.
+		for (const grant of cityGrants) {
+			const science = (city.project_counts ?? []).reduce(
+				(total, pc) =>
+					pc.count > 0 ? total + (grant.byProject[pc.project] ?? 0) : total,
+				0,
+			);
+			if (science > 0) {
+				addEffect(grant.label, city.city_name, science, 1, grant.icon);
+			}
 		}
 	}
 
