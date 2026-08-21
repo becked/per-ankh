@@ -61,7 +61,12 @@ import {
 	PROJECT_SCIENCE,
 } from "$lib/generated/science-yields";
 import { formatEnum } from "$lib/utils/formatting";
-import { storyEventType, storyEventsFor, type DetailPlayer } from "./helpers";
+import {
+	storyEventType,
+	storyEventsFor,
+	projectDisplayName,
+	type DetailPlayer,
+} from "./helpers";
 
 // ─── Key-science-tech conditions ─────────────────────────────────────
 
@@ -854,15 +859,6 @@ export function scienceBreakdown(
 		cityEffects.set(label, acc);
 		cityFlat.set(city, (cityFlat.get(city) ?? 0) + science);
 	};
-	// Project zTypes tier like improvements ("PROJECT_ARCHIVE_2"), and
-	// formatEnum drops the trailing digit — re-add it as the game's roman
-	// numeral ("Archive II").
-	const ROMAN = ["", "I", "II", "III", "IV", "V"];
-	const projectLabel = (zType: string): string => {
-		const base = formatEnum(zType, "PROJECT_");
-		const tier = /_(\d)$/.exec(zType);
-		return tier ? `${base} ${ROMAN[Number(tier[1])] ?? tier[1]}` : base;
-	};
 	const nationScience =
 		cityContext.nation != null
 			? (NATION_CITY_SCIENCE[cityContext.nation] ?? 0)
@@ -924,7 +920,7 @@ export function scienceBreakdown(
 			if (!info || pc.count <= 0) continue;
 			const effective = info.single ? 1 : pc.count;
 			addEffect(
-				projectLabel(pc.project),
+				projectDisplayName(pc.project),
 				city.city_name,
 				effective * info.science,
 				effective,
@@ -1201,9 +1197,7 @@ export function leaderChangeMarkers(
 	characters: CharacterInfo[],
 ): LeaderChangeMarker[] {
 	const reigns = characters
-		.filter(
-			(c) => c.player_xml_id === playerId && c.became_leader_turn != null,
-		)
+		.filter((c) => c.player_xml_id === playerId && c.became_leader_turn != null)
 		.sort((a, b) => a.became_leader_turn! - b.became_leader_turn!);
 	const outgoing = (
 		c: CharacterInfo,

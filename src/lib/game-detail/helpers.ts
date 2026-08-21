@@ -26,6 +26,7 @@ import { TECH_NAMES } from "$lib/generated/tech-names";
 import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 import { SHRINE_TYPE, IMPROVEMENT_ICON } from "$lib/generated/science-yields";
 import { PROJECT_ICON } from "$lib/generated/project-icons";
+import { PROJECT_NAMES } from "$lib/generated/project-names";
 import {
 	OWTT_BASE_URL,
 	OWTT_NATION_INDEX,
@@ -1223,6 +1224,16 @@ export function improvementDisplayName(zType: string): string {
 	const named = IMPROVEMENT_NAMES[zType] ?? formatEnum(zType, "IMPROVEMENT_");
 	const domain = SHRINE_TYPE[zType];
 	return domain ? `${named} (${domain})` : named;
+}
+
+/**
+ * Display name for a project zType: the baked PROJECT_NAMES override with
+ * formatEnum as fallback. The override matters most for the tiered lines —
+ * the game names them "Archive II", and formatEnum's trailing-digit strip
+ * would otherwise collapse all four Archive tiers to "Archive".
+ */
+export function projectDisplayName(zType: string): string {
+	return PROJECT_NAMES[zType] ?? formatEnum(zType, "PROJECT_");
 }
 
 export function formatCityCell(column: CityColumn, city: CityRow): string {

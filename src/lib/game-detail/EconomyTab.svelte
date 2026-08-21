@@ -66,6 +66,7 @@
 		getSpritePath,
 		improvementDisplayName,
 		orderPlayersUploaderFirst,
+		projectDisplayName,
 	} from "./helpers";
 
 	let {
@@ -598,14 +599,10 @@
 	// Projects are the third thing a city builds besides units and (via
 	// workers) improvements, and the save's ProjectsProduced map is the
 	// whole-game record. Rows are keyed by PROJECT_* zType.
-	// formatEnum strips trailing digits ("Garrison 1" → "Garrison"), which is
-	// right where tiers aggregate — but project tiers are distinct rows here
-	// (Council 1/2/3 are separate accomplishments), so put the tier back.
-	const projectLabel = (key: string): string => {
-		const label = formatEnum(key, "PROJECT_");
-		const tier = /_(\d+)$/.exec(key)?.[1];
-		return tier != null ? `${label} ${tier}` : label;
-	};
+	// Tiers stay distinct rows here (Council I/II/III are separate
+	// accomplishments), which is why the labels come from the baked
+	// project-name table — formatEnum alone strips the trailing digit and
+	// collapses the whole line onto one name.
 
 	// Per-nation project counts — the shared source for both surfaces below:
 	// the duel's comparison panel and the per-nation cards that stand in for it
@@ -642,7 +639,8 @@
 		return comparisonRowKeys(
 			projectItems,
 			(a, b) =>
-				total(b) - total(a) || projectLabel(a).localeCompare(projectLabel(b)),
+				total(b) - total(a) ||
+				projectDisplayName(a).localeCompare(projectDisplayName(b)),
 		);
 	});
 
@@ -669,7 +667,7 @@
 	// per-card column would hand each nation a different amount of bar. The
 	// 20px covers the icon slot and its gap, which share the column.
 	const projectLabelWidth = $derived(
-		`calc(${Math.max(0, ...projectKeys.map((key) => projectLabel(key).length))}ch + 20px)`,
+		`calc(${Math.max(0, ...projectKeys.map((key) => projectDisplayName(key).length))}ch + 20px)`,
 	);
 
 	// Each nation's ledger lists only what that nation built, biggest first.
@@ -683,7 +681,7 @@
 				const counts = projectsByPlayer[i];
 				return (
 					(counts.get(b) ?? 0) - (counts.get(a) ?? 0) ||
-					projectLabel(a).localeCompare(projectLabel(b))
+					projectDisplayName(a).localeCompare(projectDisplayName(b))
 				);
 			}),
 		})),
@@ -906,7 +904,7 @@
 							max={projectMax}
 							labelWidth={projectLabelWidth}
 							iconCategory="projects"
-							labelOf={projectLabel}
+							labelOf={projectDisplayName}
 						/>
 					</div>
 				{/each}
@@ -974,7 +972,7 @@
 						keys={projectKeys}
 						labelWidth={projectLabelWidth}
 						iconCategory="projects"
-						labelOf={projectLabel}
+						labelOf={projectDisplayName}
 						showDiff
 					/>
 				</div>
