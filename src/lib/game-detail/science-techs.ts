@@ -61,6 +61,10 @@ import {
 	PROJECT_SCIENCE,
 	LAW_PROJECT_SCIENCE,
 	ARCHETYPE_PROJECT_SCIENCE,
+	PROJECT_CITY_HP,
+	CITY_HP_BASE,
+	CITY_DAMAGE_YIELD_MODIFIER,
+	CITY_ASSIMILATE_YIELD_MODIFIER,
 } from "$lib/generated/science-yields";
 import {
 	archetypeSpriteKey,
@@ -1024,6 +1028,43 @@ export function scienceBreakdown(
 			{ category: "yields", value: "YIELD_DISCONTENT" },
 			0,
 		);
+		cityPct.set(city.city_name, m);
+	}
+
+	// Damage and assimilation: the other two negative terms of
+	// City.calculateTotalYieldModifier (governor + happiness + damage +
+	// assimilate), which YIELD_SCIENCE opts out of neither.
+	//
+	// Damage is (damage × CITY_DAMAGE_YIELD_MODIFIER) / getHPMax(), and
+	// getHPMax() is CITY_HP plus the HP the city's own effects add. The save
+	// writes no HP total, so the denominator is rebuilt from the defensive
+	// projects the city reports. Walls, Moat, Towers and Improvised Defences
+	// are all of them the blob can see; a Hill Fort or a Paranoid ruler's
+	// capital raise it too and don't appear here, so a city with those reads
+	// slightly harsher than the game charged it.
+	for (const city of cityContext.cities) {
+		const damage = city.damage ?? 0;
+		if (damage <= 0) continue;
+		const hpMax = (city.project_counts ?? []).reduce(
+			(hp, pc) => (pc.count > 0 ? hp + (PROJECT_CITY_HP[pc.project] ?? 0) : hp),
+			CITY_HP_BASE,
+		);
+		// Integer division, as the game does it.
+		const pct = Math.trunc((damage * CITY_DAMAGE_YIELD_MODIFIER) / hpMax);
+		if (pct === 0) continue;
+		const m = cityPct.get(city.city_name) ?? new Map<string, Acc>();
+		bump(m, "Damage", 0, pct, undefined, 0);
+		cityPct.set(city.city_name, m);
+	}
+	// Assimilation runs down a turn at a time after a capture, and the
+	// modifier is max(-turns, CITY_ASSIMILATE_YIELD_MODIFIER) — one percent
+	// per remaining turn, floored at the global cap.
+	for (const city of cityContext.cities) {
+		const turns = city.assimilate_turns ?? 0;
+		if (turns <= 0) continue;
+		const pct = Math.max(-turns, CITY_ASSIMILATE_YIELD_MODIFIER);
+		const m = cityPct.get(city.city_name) ?? new Map<string, Acc>();
+		bump(m, "Assimilating", 0, pct, undefined, 0);
 		cityPct.set(city.city_name, m);
 	}
 
