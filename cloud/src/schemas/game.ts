@@ -136,11 +136,15 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         genuinely global plague carries them all and still lands
 //         everywhere. player_name is unchanged, and is what blobs below
 //         2.14.0 still join on.
-// 2.15.0 — per-city religion presence, project counts, governor xml_id and
-//         happiness_level on city_statistics.cities, plus theologies on
-//         game_religions — the Techs tab's science-source breakdown reads
-//         all five. Purely additive; older blobs lack the fields and the
-//         new breakdown rows are omitted.
+// 2.15.0 — per-city religion presence, project counts, governor xml_id,
+//         happiness_level, damage and assimilate_turns on
+//         city_statistics.cities, plus theologies on game_religions — the
+//         Techs tab's science-source breakdown reads all seven. The last
+//         three are the terms of City.calculateTotalYieldModifier the
+//         breakdown could not price: discontent, damage and assimilation
+//         are all negative percent modifiers science does not opt out of.
+//         Purely additive; older blobs lack the fields and the new
+//         breakdown rows are omitted.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",

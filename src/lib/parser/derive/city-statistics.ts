@@ -103,6 +103,8 @@ export function deriveCityStatistics(
 					? (c.teamHappinessLevels.find((t) => t.teamId === teamForCulture)
 							?.level ?? 0)
 					: null,
+			damage: c.damage,
+			assimilate_turns: c.assimilateTurns,
 			culture_level: culture?.cultureLevel ?? null,
 			growth_count: c.growthCount,
 			unit_production_count: c.unitProductionCount,

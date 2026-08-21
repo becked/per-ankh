@@ -59,6 +59,20 @@ project_counts?: Array<{ project: string, count: number }>,
  */
 happiness_level?: number | null,
 /**
+ * Damage standing on the city at game end, in HP. Costs the city
+ * CITY_DAMAGE_YIELD_MODIFIER × damage / max HP percent of every yield
+ * science included (getDamageYieldModifier). 0 when undamaged. Optional:
+ * absent on blobs before PARSER_VERSION 2.15.0.
+ */
+damage?: number,
+/**
+ * Turns of assimilation left after a capture. Costs the city
+ * max(-turns, CITY_ASSIMILATE_YIELD_MODIFIER) percent of every yield
+ * (getAssimilateYieldModifier). 0 once assimilated. Optional: absent on
+ * blobs before PARSER_VERSION 2.15.0.
+ */
+assimilate_turns?: number,
+/**
  * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
  */
 culture_level: string | null, growth_count: number, unit_production_count: number, specialist_count: number, buy_tile_count: number, hurry_civics_count: number, hurry_money_count: number, hurry_training_count: number, hurry_population_count: number, };
