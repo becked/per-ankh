@@ -525,3 +525,15 @@ export function formatArchetype(archetype: string): string {
 export function archetypeSpriteKey(archetype: string): string {
 	return archetype.replace(ARCHETYPE_SUFFIX, "");
 }
+
+/**
+ * Display label for a character's death_reason: the save writes localization
+ * keys like TEXT_TRAIT_SEVERELY_ILL_M, so strip the TEXT_/TRAIT_ prefix and
+ * the gendered _F/_M suffix before formatting ("Severely Ill").
+ */
+export function deathReasonLabel(reason: string): string {
+	return formatEnum(
+		reason.replace(/^TEXT_(TRAIT_)?/, "").replace(/_(F|M)$/, ""),
+		"",
+	);
+}

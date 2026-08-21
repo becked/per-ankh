@@ -3,7 +3,7 @@
 // city_culture; team_id falls back to player.xmlId per the Rust COALESCE.
 
 import type { Character } from "../parsers/characters.js";
-import type { City, CityCulture } from "../parsers/cities.js";
+import type { City, CityCulture, CityReligion } from "../parsers/cities.js";
 import type { Family } from "../parsers/families.js";
 import type { Player } from "../parsers/players.js";
 import type { CityInfo, CityStatistics } from "../types.js";
@@ -12,6 +12,7 @@ import { playerByXmlId, strCmp } from "./_helpers.js";
 export function deriveCityStatistics(
 	cities: City[],
 	cityCulture: CityCulture[],
+	cityReligions: CityReligion[],
 	families: Family[],
 	characters: Character[],
 	players: Player[],
@@ -33,6 +34,14 @@ export function deriveCityStatistics(
 	const cultureByKey = new Map<string, CityCulture>();
 	for (const cc of cityCulture) {
 		cultureByKey.set(cultureKey(cc.cityXmlId, cc.teamId), cc);
+	}
+
+	// Religion presence per city (the same parse the map tiles consume).
+	const religionsByCity = new Map<number, string[]>();
+	for (const cr of cityReligions) {
+		const list = religionsByCity.get(cr.cityXmlId) ?? [];
+		list.push(cr.religion);
+		religionsByCity.set(cr.cityXmlId, list);
 	}
 
 	const out: CityInfo[] = cities.map((c) => {
@@ -83,6 +92,19 @@ export function deriveCityStatistics(
 			is_capital: c.isCapital,
 			citizens: c.citizens,
 			governor_name: governor?.firstName ?? null,
+			governor_xml_id: c.governorXmlId,
+			religions: religionsByCity.get(c.xmlId) ?? [],
+			project_counts: c.projectCounts,
+			// The owner team's happiness level (same team resolution as
+			// culture above); negative = discontent. Null for unowned cities,
+			// 0 when neutral.
+			happiness_level:
+				teamForCulture !== null
+					? (c.teamHappinessLevels.find((t) => t.teamId === teamForCulture)
+							?.level ?? 0)
+					: null,
+			damage: c.damage,
+			assimilate_turns: c.assimilateTurns,
 			culture_level: culture?.cultureLevel ?? null,
 			growth_count: c.growthCount,
 			unit_production_count: c.unitProductionCount,

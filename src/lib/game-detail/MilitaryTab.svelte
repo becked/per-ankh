@@ -41,6 +41,7 @@
 		toggleSort,
 		classifyUnit,
 		getSpritePath,
+		ratingChipsRowHtml,
 		techName,
 		UNIT_CLASS_COLORS,
 		filledLineStyle,
@@ -224,23 +225,9 @@
 		playerHistory[0]?.history.map((h) => h.turn) ?? [],
 	);
 
-	// Rating chip for the leader tooltip: the in-game stat icon + value.
-	function ratingChip(
-		label: string,
-		key: string,
-		value: number | null,
-	): string {
-		if (value == null) return "";
-		const url = getSpritePath("icons", key);
-		const ic = url
-			? `<img src="${url}" alt="${label}" style="width:13px;height:13px"/>`
-			: `${label}`;
-		return `<span style="display:inline-flex;align-items:center;gap:3px">${ic}${value}</span>`;
-	}
-
 	// Rich tooltip for a leader marker, borrowing LeaderCard's field set: name
 	// (+ cognomen), archetype, crowned turn, and the four character ratings,
-	// each shown with its in-game stat icon.
+	// each shown with its in-game stat icon (the shared ratingChipsRowHtml).
 	function leaderTooltip(
 		c: CharacterInfo,
 		turn: number,
@@ -250,19 +237,11 @@
 		const cognomen = rulerCognomen(c);
 		const cog = cognomen ? ` ‘${cognomen}’` : "";
 		const arch = c.archetype ? formatArchetype(c.archetype) : null;
-		const ratings = [
-			ratingChip("Wis", "RATING_WISDOM", c.wisdom),
-			ratingChip("Cha", "RATING_CHARISMA", c.charisma),
-			ratingChip("Cou", "RATING_COURAGE", c.courage),
-			ratingChip("Dis", "RATING_DISCIPLINE", c.discipline),
-		].join("");
 		return (
 			`<div style="font-size:12px;line-height:1.5">` +
 			`<div style="font-weight:700;color:${color}">${name}${cog}</div>` +
 			`<div style="color:${TOOLTIP_TEXT}">${arch ? `${arch} · ` : ""}crowned T${turn}</div>` +
-			(ratings
-				? `<div style="display:flex;gap:11px;margin-top:4px">${ratings}</div>`
-				: "") +
+			ratingChipsRowHtml(c) +
 			`</div>`
 		);
 	}

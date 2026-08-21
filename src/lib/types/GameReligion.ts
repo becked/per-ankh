@@ -9,4 +9,10 @@ export type GameReligion = { religion_name: string, founded_turn: number | null,
  * founders in mirror matches, where founder_nation collides. Optional:
  * absent on blobs parsed before PARSER_VERSION 2.6.0.
  */
-founder_player_xml_id?: number | null, };
+founder_player_xml_id?: number | null,
+/**
+ * Theologies the religion established (THEOLOGY_X enums, from the save's
+ * ReligionTheology list). Optional: absent on blobs before PARSER_VERSION
+ * 2.15.0.
+ */
+theologies?: Array<string>, };

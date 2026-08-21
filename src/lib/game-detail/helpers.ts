@@ -26,6 +26,7 @@ import { TECH_NAMES } from "$lib/generated/tech-names";
 import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 import { SHRINE_TYPE, IMPROVEMENT_ICON } from "$lib/generated/science-yields";
 import { PROJECT_ICON } from "$lib/generated/project-icons";
+import { PROJECT_NAMES } from "$lib/generated/project-names";
 import {
 	OWTT_BASE_URL,
 	OWTT_NATION_INDEX,
@@ -633,6 +634,38 @@ export function familyForOwner(
 	};
 }
 
+// One rating chip for a character tooltip: the in-game stat icon + value.
+function ratingChipHtml(
+	label: string,
+	key: string,
+	value: number | null,
+): string {
+	if (value == null) return "";
+	const url = getSpritePath("icons", key);
+	const ic = url
+		? `<img src="${url}" alt="${label}" style="width:13px;height:13px"/>`
+		: `${label}`;
+	return `<span style="display:inline-flex;align-items:center;gap:3px">${ic}${value}</span>`;
+}
+
+/**
+ * The four-rating stat line for a character tooltip (Wis/Cha/Cou/Dis, each
+ * with its in-game icon), or "" when no rating is known — the row the
+ * Military rail's leader markers show, shared with the Techs rail's
+ * leader-change markers.
+ */
+export function ratingChipsRowHtml(c: CharacterInfo): string {
+	const chips = [
+		ratingChipHtml("Wis", "RATING_WISDOM", c.wisdom),
+		ratingChipHtml("Cha", "RATING_CHARISMA", c.charisma),
+		ratingChipHtml("Cou", "RATING_COURAGE", c.courage),
+		ratingChipHtml("Dis", "RATING_DISCIPLINE", c.discipline),
+	].join("");
+	return chips
+		? `<div style="display:flex;gap:11px;margin-top:4px">${chips}</div>`
+		: "";
+}
+
 // ─── Unit Classification ────────────────────────────────────────────
 //
 // Chart labels follow the game's own military UnitCycle names: Infantry,
@@ -1191,6 +1224,16 @@ export function improvementDisplayName(zType: string): string {
 	const named = IMPROVEMENT_NAMES[zType] ?? formatEnum(zType, "IMPROVEMENT_");
 	const domain = SHRINE_TYPE[zType];
 	return domain ? `${named} (${domain})` : named;
+}
+
+/**
+ * Display name for a project zType: the baked PROJECT_NAMES override with
+ * formatEnum as fallback. The override matters most for the tiered lines —
+ * the game names them "Archive II", and formatEnum's trailing-digit strip
+ * would otherwise collapse all four Archive tiers to "Archive".
+ */
+export function projectDisplayName(zType: string): string {
+	return PROJECT_NAMES[zType] ?? formatEnum(zType, "PROJECT_");
 }
 
 export function formatCityCell(column: CityColumn, city: CityRow): string {

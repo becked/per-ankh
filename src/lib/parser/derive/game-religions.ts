@@ -20,6 +20,7 @@ export function deriveGameReligions(
 				? (playerMap.get(r.founderPlayerXmlId)?.nation ?? null)
 				: null,
 		founder_player_xml_id: r.founderPlayerXmlId,
+		theologies: r.theologies,
 	}));
 
 	// `NULLS LAST` on founded_turn — null entries sort after everything else.

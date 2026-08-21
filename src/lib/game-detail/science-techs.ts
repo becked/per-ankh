@@ -35,7 +35,7 @@ import type { PlayerTech } from "$lib/types/PlayerTech";
 import type { YieldDataPoint } from "$lib/types/YieldDataPoint";
 import type { CityInfo } from "$lib/types/CityInfo";
 import type { StoryEvent } from "$lib/types/StoryEvent";
-import type { FamilyInfo } from "$lib/parser/types";
+import type { CharacterInfo, FamilyInfo } from "$lib/parser/types";
 import { SPECIALISTS, SPECIALIST_CLASSES } from "$lib/generated/specialists";
 import { IMPROVEMENT_NAMES } from "$lib/generated/improvement-names";
 import {
@@ -49,12 +49,34 @@ import {
 	LAW_UNLOCK_COST,
 	SHRINE_TYPE,
 	WISDOM_COURT_SCIENCE_RATE,
+	WISDOM_GOVERNOR_SCIENCE_MODIFIER,
 	SCIENCE_TRIANGLE_OFFSET,
+	SCIENCE_DISCONTENT_MODIFIER,
 	COMPETITIVE_EQUIVALENT_RATING,
 	COMPETITIVE_SCIENCE_STIPEND,
+	KNOWLEDGE_TIERS,
+	FAMILY_CLASS_SCIENCE_PER_SPECIALIST,
+	NATION_CITY_SCIENCE,
+	THEOLOGY_SCIENCE_PER_RELIGION,
+	PROJECT_SCIENCE,
+	LAW_PROJECT_SCIENCE,
+	ARCHETYPE_PROJECT_SCIENCE,
+	PROJECT_CITY_HP,
+	CITY_HP_BASE,
+	CITY_DAMAGE_YIELD_MODIFIER,
+	CITY_ASSIMILATE_YIELD_MODIFIER,
 } from "$lib/generated/science-yields";
-import { formatEnum } from "$lib/utils/formatting";
-import { storyEventType, storyEventsFor, type DetailPlayer } from "./helpers";
+import {
+	archetypeSpriteKey,
+	formatArchetype,
+	formatEnum,
+} from "$lib/utils/formatting";
+import {
+	storyEventType,
+	storyEventsFor,
+	projectDisplayName,
+	type DetailPlayer,
+} from "./helpers";
 
 // ─── Key-science-tech conditions ─────────────────────────────────────
 
@@ -441,10 +463,17 @@ export type ScienceBreakdown = {
 	// × city count per Player.getYieldUpkeepNet). Exact rates from the
 	// law/effect XML.
 	laws: { items: BreakdownItem[]; total: number };
+	// Flat per-city effect sources (2.15.0+ blobs, empty before): the Sages
+	// family (+1/specialist in their cities), Babylonia's nation bonus
+	// (+1/city), Dualism (+1 × religions present, in each city holding a
+	// Dualism religion), and science city projects (Archives, Convoys). All
+	// are EffectCity base yields, so they feed the modifier estimates below.
+	cityEffects: { items: BreakdownItem[]; total: number };
 	// Percent modifiers — the percentages are exact game data (Library +10%,
-	// Musaeum +50%); their POINTS are computed against each city's
-	// reconstructed base (which, matching City.cs calculateBaseYield →
-	// :4682, includes the law yields above).
+	// Musaeum +50%, a governor's Wisdom curve); their POINTS are computed
+	// against each city's reconstructed base (which, matching City.cs
+	// calculateBaseYield → :4682, includes the law and city-effect yields
+	// above).
 	modifiers: { items: BreakdownItem[]; total: number };
 	// Player-level (not per-city) science from the ruling court, plus the
 	// Competitive Mode stipend that compensates for it. Only the LEADER is
@@ -456,11 +485,13 @@ export type ScienceBreakdown = {
 	// themselves — calculateCharacterOpinionRate returns null for them), so
 	// their contribution is exact. The rest stay in `other` below.
 	court: { items: BreakdownItem[]; total: number };
-	// SIGNED remainder vs the actual rate: governors, the non-leader court
-	// (spouses, successors, courtiers, council — all opinion-scaled),
-	// Philosophy-via-Forums, religion, connected-foreign-trade science, and
-	// every interaction the save doesn't itemize. A negative value means the
-	// itemized floor over-counted; it's deliberately not clamped so that shows.
+	// SIGNED remainder vs the actual rate: the non-leader court (spouses,
+	// successors, courtiers, council — all opinion-scaled),
+	// Philosophy-via-Forums, connected-foreign-trade science, and every
+	// interaction the save doesn't itemize. The main remaining NEGATIVE
+	// component is angry/furious family opinion (a city percent modifier the
+	// save doesn't let us price per family) — discontent IS priced, in the
+	// Modifiers section. Deliberately not clamped so over-counting shows.
 	other: number;
 	// The player's actual science/turn at game end.
 	total: number;
@@ -540,6 +571,31 @@ function triangleOffset(n: number, offset: number): number {
 	return Math.sign(n) * (triangle(value) - offset);
 }
 
+/** `Utils.triangleBoost` (Utils.cs:124) — the governor rating curve. */
+function triangleBoost(n: number): number {
+	if (n === 0) return 0;
+	return Math.sign(n) * triangle(Math.abs(n) + 1);
+}
+
+/**
+ * A governor's percent science modifier on their city —
+ * `InfoHelpers.boostRating` over rating.xml's aiYieldGovernorModifier. Same
+ * Competitive Mode linearization as the court curve, but WITHOUT the
+ * triangle offset (boostRating uses the plain triangleBoost). Signed: a
+ * negative-Wisdom governor genuinely costs the city science.
+ */
+function governorSciencePct(wisdom: number, competitive: boolean): number {
+	if (!competitive) {
+		return WISDOM_GOVERNOR_SCIENCE_MODIFIER * triangleBoost(wisdom);
+	}
+	const equivalent = Math.max(1, COMPETITIVE_EQUIVALENT_RATING);
+	// C# integer division truncates toward zero.
+	return Math.trunc(
+		(WISDOM_GOVERNOR_SCIENCE_MODIFIER * wisdom * triangleBoost(equivalent)) /
+			equivalent,
+	);
+}
+
 /**
  * `InfoHelpers.modifyRating` (InfoHelpers.cs:1205) — bend a flat rate by a
  * character's rating.
@@ -591,12 +647,32 @@ function leaderCourtScience(wisdom: number, competitive: boolean): number {
 	);
 }
 
+// Per-city context for the city-effect and governor rows: the player's own
+// CityInfo rows plus game-level lookups. The 2.15.0 city fields (religions,
+// project_counts, governor_xml_id, happiness_level, damage,
+// assimilate_turns) are optional on older blobs — absent fields simply
+// produce no rows, and those sources stay in `other`.
+export interface CityEffectContext {
+	cities: CityInfo[];
+	// The player's nation (Babylonia's bonus keys on it).
+	nation: string | null;
+	// The reigning leader's archetype trait (TRAIT_*_ARCHETYPE), which pays
+	// science in every city holding the project it favours — a Scholar's
+	// Archives. Null when there is no reigning leader or none is recorded.
+	leaderArchetype: string | null;
+	// religion → theologies it established, from game_religions (2.15.0+).
+	theologiesByReligion: ReadonlyMap<string, readonly string[]>;
+	// Governor character xml_id → their Wisdom rating (null = unknown).
+	governorWisdom: (xmlId: number) => number | null;
+}
+
 /**
  * Decompose a player's end-of-game science rate into itemized sources.
  * `improvements` are the player's own tiles; `activeLaws` their laws still
  * active at game end; `capital` their capital's name + culture level (null
  * when unresolvable); `cityCount` scales the per-city law upkeep;
- * `finalRate` is the last non-null YIELD_SCIENCE rate.
+ * `finalRate` is the last non-null YIELD_SCIENCE rate; `cityContext` the
+ * per-city data for the city-effect and governor rows.
  *
  * `leaderWisdom` is the reigning leader's RATING_WISDOM — null when there is
  * no reigning leader (an eliminated realm, whose last leader died without a
@@ -615,6 +691,7 @@ export function scienceBreakdown(
 	finalRate: number,
 	leaderWisdom: number | null,
 	competitive: boolean | null,
+	cityContext: CityEffectContext,
 	specialistName: (zType: string) => string,
 	improvementLabel: (zType: string) => string,
 ): ScienceBreakdown {
@@ -643,9 +720,11 @@ export function scienceBreakdown(
 	const specialistsRural = new Map<string, Acc>();
 	const specialistsUrban = new Map<string, Acc>();
 	const buildings = new Map<string, Acc>();
-	// Per-city flat base, per-city urban-specialist counts, and per-city
-	// percent items, for the law and modifier passes below.
+	// Per-city flat base, per-city specialist counts (all / urban-only), and
+	// per-city percent items, for the law, city-effect, and modifier passes
+	// below.
 	const cityFlat = new Map<string, number>();
+	const citySpecialists = new Map<string, number>();
 	const cityUrban = new Map<string, number>();
 	const cityPct = new Map<string, Map<string, Acc>>();
 	for (const i of improvements) {
@@ -689,6 +768,12 @@ export function scienceBreakdown(
 				i.city_name,
 				(cityFlat.get(i.city_name) ?? 0) + tile + staff,
 			);
+			if (i.specialist != null) {
+				citySpecialists.set(
+					i.city_name,
+					(citySpecialists.get(i.city_name) ?? 0) + 1,
+				);
+			}
 			if (i.specialist != null && SPECIALISTS[i.specialist]?.kind === "urban") {
 				cityUrban.set(i.city_name, (cityUrban.get(i.city_name) ?? 0) + 1);
 			}
@@ -765,8 +850,226 @@ export function scienceBreakdown(
 		}
 	}
 
+	// Flat city-effect sources (all EffectCity base yields, so each feeds
+	// cityFlat for the modifier estimates below). Rows are built directly —
+	// their counts mean different things (specialists for Sages, cities for
+	// Babylonia/Dualism, completions for projects).
+	const cityEffects = new Map<string, Acc>();
+	const addEffect = (
+		label: string,
+		city: string,
+		science: number,
+		countDelta: number,
+		icon?: BreakdownIcon,
+	) => {
+		const acc = cityEffects.get(label) ?? {
+			count: 0,
+			science: 0,
+			pct: 0,
+			icon,
+			order: 0,
+		};
+		acc.count += countDelta;
+		acc.science += science;
+		cityEffects.set(label, acc);
+		cityFlat.set(city, (cityFlat.get(city) ?? 0) + science);
+	};
+	const nationScience =
+		cityContext.nation != null
+			? (NATION_CITY_SCIENCE[cityContext.nation] ?? 0)
+			: 0;
+	// The player-level sources that pay per-city science off a project the
+	// city holds, resolved once: every active law that grants, plus the
+	// reigning leader's archetype.
+	const cityGrants: {
+		label: string;
+		icon: BreakdownIcon;
+		byProject: Readonly<Record<string, number>>;
+	}[] = [];
+	for (const law of activeLaws) {
+		const byProject = LAW_PROJECT_SCIENCE[law];
+		if (byProject) {
+			cityGrants.push({
+				label: formatEnum(law, "LAW_"),
+				icon: { category: "laws", value: law },
+				byProject,
+			});
+		}
+	}
+	const archetype = cityContext.leaderArchetype;
+	const archetypeGrant =
+		archetype != null ? ARCHETYPE_PROJECT_SCIENCE[archetype] : undefined;
+	if (archetype != null && archetypeGrant) {
+		cityGrants.push({
+			label: formatArchetype(archetype),
+			icon: { category: "traits", value: archetypeSpriteKey(archetype) },
+			byProject: archetypeGrant,
+		});
+	}
+	for (const city of cityContext.cities) {
+		// Sages: +1 science per placed specialist in the family's cities
+		// (effectCity aiYieldRateSpecialist — any specialist, unlike
+		// Constitution's urban-only rate).
+		const familyRate =
+			city.family_class != null
+				? (FAMILY_CLASS_SCIENCE_PER_SPECIALIST[city.family_class] ?? 0)
+				: 0;
+		const specialists = citySpecialists.get(city.city_name) ?? 0;
+		if (familyRate > 0 && specialists > 0 && city.family_class != null) {
+			addEffect(
+				`${formatEnum(city.family_class, "FAMILYCLASS_")} cities`,
+				city.city_name,
+				familyRate * specialists,
+				specialists,
+				{
+					category: "crests",
+					value: `ARCHETYPE_${city.family_class.slice("FAMILYCLASS_".length)}`,
+				},
+			);
+		}
+		// Babylonia: flat science in every city, from the nation's player
+		// effect.
+		if (nationScience > 0 && cityContext.nation != null) {
+			addEffect(
+				formatEnum(cityContext.nation, "NATION_"),
+				city.city_name,
+				nationScience,
+				1,
+			);
+		}
+		// Theologies (Dualism): a city holding a religion that established the
+		// theology earns its rate × ALL religions present
+		// (City.cs ×getReligionCount, effect once per holding religion).
+		const religions = city.religions ?? [];
+		for (const [theology, rate] of Object.entries(
+			THEOLOGY_SCIENCE_PER_RELIGION,
+		)) {
+			const holders = religions.filter((r) =>
+				cityContext.theologiesByReligion.get(r)?.includes(theology),
+			).length;
+			if (holders > 0 && religions.length > 0) {
+				addEffect(
+					formatEnum(theology, "THEOLOGY_"),
+					city.city_name,
+					holders * rate * religions.length,
+					1,
+				);
+			}
+		}
+		// Science city projects (Archives, Convoys). bSingle effects pay once
+		// regardless of the completion count.
+		for (const pc of city.project_counts ?? []) {
+			const info = PROJECT_SCIENCE[pc.project];
+			if (!info || pc.count <= 0) continue;
+			const effective = info.single ? 1 : pc.count;
+			addEffect(
+				projectDisplayName(pc.project),
+				city.city_name,
+				effective * info.science,
+				effective,
+			);
+		}
+		// Conditional grants: a law the player still holds, or their leader's
+		// archetype, paying science in every city holding a given project —
+		// Philosophy per Forum city, a Scholar leader per Archive city. The
+		// grant is on the project effect being present, so it pays once per
+		// city however many completions the city reports.
+		for (const grant of cityGrants) {
+			const science = (city.project_counts ?? []).reduce(
+				(total, pc) =>
+					pc.count > 0 ? total + (grant.byProject[pc.project] ?? 0) : total,
+				0,
+			);
+			if (science > 0) {
+				addEffect(grant.label, city.city_name, science, 1, grant.icon);
+			}
+		}
+	}
+
+	// Governors: a percent city-science modifier off the governor's Wisdom
+	// (City.cs getYieldModifierForGovernor), estimated per city like the
+	// building modifiers. Gated on a known Competitive flag — the two curves
+	// diverge sharply at high Wisdom, same rationale as the court section.
+	if (competitive != null) {
+		for (const city of cityContext.cities) {
+			if (city.governor_xml_id == null) continue;
+			const wisdom = cityContext.governorWisdom(city.governor_xml_id);
+			if (wisdom == null) continue;
+			const pct = governorSciencePct(wisdom, competitive);
+			if (pct === 0) continue;
+			const m = cityPct.get(city.city_name) ?? new Map<string, Acc>();
+			bump(
+				m,
+				"Governors",
+				0,
+				pct,
+				{ category: "icons", value: "RATING_WISDOM" },
+				0,
+			);
+			cityPct.set(city.city_name, m);
+		}
+	}
+
+	// Discontent: −5% science per NEGATIVE happiness level in the city
+	// (getHappinessLevelYieldModifier: -(level) × the negative modifier;
+	// positive levels pay nothing for science), estimated against the same
+	// city base. The big legitimate NEGATIVE modifier — with it priced, a
+	// negative Other genuinely means over-counting.
+	for (const city of cityContext.cities) {
+		const level = city.happiness_level;
+		if (level == null || level >= 0) continue;
+		const pct = -level * SCIENCE_DISCONTENT_MODIFIER;
+		const m = cityPct.get(city.city_name) ?? new Map<string, Acc>();
+		bump(
+			m,
+			"Discontent",
+			0,
+			pct,
+			{ category: "yields", value: "YIELD_DISCONTENT" },
+			0,
+		);
+		cityPct.set(city.city_name, m);
+	}
+
+	// Damage and assimilation: the other two negative terms of
+	// City.calculateTotalYieldModifier (governor + happiness + damage +
+	// assimilate), which YIELD_SCIENCE opts out of neither.
+	//
+	// Damage is (damage × CITY_DAMAGE_YIELD_MODIFIER) / getHPMax(), and
+	// getHPMax() is CITY_HP plus the HP the city's own effects add. The save
+	// writes no HP total, so the denominator is rebuilt from the defensive
+	// projects the city reports. Walls, Moat, Towers and Improvised Defences
+	// are all of them the blob can see; a Hill Fort or a Paranoid ruler's
+	// capital raise it too and don't appear here, so a city with those reads
+	// slightly harsher than the game charged it.
+	for (const city of cityContext.cities) {
+		const damage = city.damage ?? 0;
+		if (damage <= 0) continue;
+		const hpMax = (city.project_counts ?? []).reduce(
+			(hp, pc) => (pc.count > 0 ? hp + (PROJECT_CITY_HP[pc.project] ?? 0) : hp),
+			CITY_HP_BASE,
+		);
+		// Integer division, as the game does it.
+		const pct = Math.trunc((damage * CITY_DAMAGE_YIELD_MODIFIER) / hpMax);
+		if (pct === 0) continue;
+		const m = cityPct.get(city.city_name) ?? new Map<string, Acc>();
+		bump(m, "Damage", 0, pct, undefined, 0);
+		cityPct.set(city.city_name, m);
+	}
+	// Assimilation runs down a turn at a time after a capture, and the
+	// modifier is max(-turns, CITY_ASSIMILATE_YIELD_MODIFIER) — one percent
+	// per remaining turn, floored at the global cap.
+	for (const city of cityContext.cities) {
+		const turns = city.assimilate_turns ?? 0;
+		if (turns <= 0) continue;
+		const pct = Math.max(-turns, CITY_ASSIMILATE_YIELD_MODIFIER);
+		const m = cityPct.get(city.city_name) ?? new Map<string, Acc>();
+		bump(m, "Assimilating", 0, pct, undefined, 0);
+		cityPct.set(city.city_name, m);
+	}
+
 	// Percent modifiers, estimated per city against that city's base (flat
-	// tiles + staff + the law yields above).
+	// tiles + staff + the law and city-effect yields above).
 	const modifiers = new Map<string, Acc>();
 	for (const [city, mods] of cityPct) {
 		const base = cityFlat.get(city) ?? 0;
@@ -841,12 +1144,14 @@ export function scienceBreakdown(
 	const urbanItems = toItems(specialistsUrban, false);
 	const buildingItems = toItems(buildings, false);
 	const lawItems = toItems(laws, false);
+	const cityEffectItems = toItems(cityEffects, false);
 	const modifierItems = toItems(modifiers, true);
 	const courtItems = toItems(court, false);
 	const ruralTotal = sum(ruralItems);
 	const urbanTotal = sum(urbanItems);
 	const buildingsTotal = sum(buildingItems);
 	const lawsTotal = sum(lawItems);
+	const cityEffectsTotal = sum(cityEffectItems);
 	const modifiersTotal = sum(modifierItems);
 	const courtTotal = sum(courtItems);
 	return {
@@ -854,6 +1159,7 @@ export function scienceBreakdown(
 		specialistsUrban: { items: urbanItems, total: urbanTotal },
 		buildings: { items: buildingItems, total: buildingsTotal },
 		laws: { items: lawItems, total: lawsTotal },
+		cityEffects: { items: cityEffectItems, total: cityEffectsTotal },
 		modifiers: { items: modifierItems, total: modifiersTotal },
 		court: { items: courtItems, total: courtTotal },
 		// Signed on purpose — a negative remainder is the signal that the
@@ -864,6 +1170,7 @@ export function scienceBreakdown(
 				urbanTotal -
 				buildingsTotal -
 				lawsTotal -
+				cityEffectsTotal -
 				modifiersTotal -
 				courtTotal,
 		),
@@ -934,4 +1241,172 @@ export function scienceSpikes(
 		});
 	}
 	return spikes;
+}
+
+// ─── Leader changes ──────────────────────────────────────────────────
+
+// How a reign ended, for the marker's headline verb.
+export type ReignEnd = "died" | "abdicated" | "deposed";
+
+export type LeaderChangeMarker = {
+	turn: number;
+	// The outgoing leader — null when a leaderless realm crowned someone.
+	// `age` and `reignYears` use the game's turn-as-year convention (the
+	// same one the Leaders tab's reign windows use); `age` is at the reign's
+	// end. Ratings freeze at death, so a dead ruler's stored Wisdom IS their
+	// Wisdom when the reign ended; a LIVING character's is their end-of-game
+	// value.
+	prev: {
+		character: CharacterInfo;
+		end: ReignEnd;
+		age: number;
+		reignYears: number;
+	} | null;
+	// The incoming leader — null when the last leader died unsucceeded.
+	next: { character: CharacterInfo } | null;
+};
+
+function reignEndOf(
+	c: CharacterInfo,
+	successionTurn: number | null,
+): { end: ReignEnd; endTurn: number | null } {
+	if (
+		c.abdicated_turn != null &&
+		(c.death_turn == null || c.abdicated_turn < c.death_turn) &&
+		(successionTurn == null || c.abdicated_turn <= successionTurn)
+	) {
+		return { end: "abdicated", endTurn: c.abdicated_turn };
+	}
+	if (c.death_turn != null) return { end: "died", endTurn: c.death_turn };
+	return { end: "deposed", endTurn: successionTurn };
+}
+
+/**
+ * A player's leader transitions: every succession (with the outgoing and
+ * incoming rulers — Wisdom is the court's only science rating), plus a final
+ * marker when the last leader died with no successor. The first accession
+ * (game start) is not a change and isn't marked.
+ */
+export function leaderChangeMarkers(
+	playerId: number,
+	characters: CharacterInfo[],
+): LeaderChangeMarker[] {
+	const reigns = characters
+		.filter((c) => c.player_xml_id === playerId && c.became_leader_turn != null)
+		.sort((a, b) => a.became_leader_turn! - b.became_leader_turn!);
+	const outgoing = (
+		c: CharacterInfo,
+		successionTurn: number | null,
+	): NonNullable<LeaderChangeMarker["prev"]> => {
+		const { end, endTurn } = reignEndOf(c, successionTurn);
+		const at = endTurn ?? successionTurn ?? c.became_leader_turn!;
+		return {
+			character: c,
+			end,
+			age: Math.max(0, at - c.birth_turn),
+			reignYears: Math.max(0, at - c.became_leader_turn!),
+		};
+	};
+	const markers: LeaderChangeMarker[] = [];
+	for (let i = 1; i < reigns.length; i++) {
+		const next = reigns[i];
+		markers.push({
+			turn: next.became_leader_turn!,
+			prev: outgoing(reigns[i - 1], next.became_leader_turn),
+			next: { character: next },
+		});
+	}
+	// The fall of the line: last leader died, nobody took the throne.
+	const last = reigns[reigns.length - 1];
+	if (last != null && last.death_turn != null) {
+		markers.push({
+			turn: last.death_turn,
+			prev: outgoing(last, null),
+			next: null,
+		});
+	}
+	return markers;
+}
+
+// ─── Knowledge standing (Player.calculateKnowledgeOf) ────────────────
+
+export type KnowledgeFlipMarker = {
+	turn: number;
+	from: string; // KNOWLEDGE_* the player was
+	to: string; // KNOWLEDGE_* they became
+	// The player's science total as a percent of the opponent's that turn —
+	// the exact quantity the game buckets.
+	pct: number;
+};
+
+// The game's bucketing (InfoHelpers.getBestPercentValue): the tier with the
+// smallest threshold ≥ pct wins; no threshold (Erudite) is the catch-all.
+function knowledgeTier(pct: number): string {
+	let best = KNOWLEDGE_TIERS[KNOWLEDGE_TIERS.length - 1].type;
+	let min = Infinity;
+	for (const t of KNOWLEDGE_TIERS) {
+		const p = t.percent ?? Infinity;
+		if (p >= pct && p <= min) {
+			min = p;
+			best = t.type;
+		}
+	}
+	return best;
+}
+
+// A new tier must hold this many consecutive turns to count as a shift.
+// Sitting exactly on a threshold flip-flops the raw classification every
+// turn (and the blob's ÷10 rounding adds its own jitter) — a burst of
+// C→N / N→C chips at one boundary says nothing a single shift doesn't.
+const KNOWLEDGE_MIN_RUN = 3;
+
+/**
+ * Turns where the player's knowledge standing vs the opponent shifted tier —
+ * Primitive/Naive/Competent/Learned/Erudite, the exact classification the
+ * game computes in Player.calculateKnowledgeOf: the player's cumulative
+ * science as an integer percent of the opponent's, bucketed by
+ * knowledge.xml's thresholds. Runs shorter than {@link KNOWLEDGE_MIN_RUN}
+ * are folded into their predecessor (boundary churn, not a real shift); the
+ * final run always stands, so the last chip agrees with the end state. No
+ * marker for the initial classification — only changes.
+ */
+export function knowledgeFlipMarkers(
+	mine: YieldDataPoint[],
+	theirs: YieldDataPoint[],
+): KnowledgeFlipMarker[] {
+	const other = new Map<number, number>();
+	for (const d of theirs)
+		if (d.cumulative != null) other.set(d.turn, d.cumulative);
+	const perTurn: { turn: number; tier: string; pct: number }[] = [];
+	for (const d of mine) {
+		const ours = d.cumulative;
+		const opp = other.get(d.turn);
+		if (ours == null || opp == null || opp <= 0) continue;
+		const pct = Math.trunc((ours * 100) / opp);
+		perTurn.push({ turn: d.turn, tier: knowledgeTier(pct), pct });
+	}
+	// Group into runs, then fold sub-minimum runs into their predecessor.
+	type Run = { tier: string; first: (typeof perTurn)[number]; length: number };
+	const runs: Run[] = [];
+	for (const p of perTurn) {
+		const last = runs[runs.length - 1];
+		if (last && last.tier === p.tier) last.length++;
+		else runs.push({ tier: p.tier, first: p, length: 1 });
+	}
+	const kept: Run[] = [];
+	for (let i = 0; i < runs.length; i++) {
+		const isLast = i === runs.length - 1;
+		if (!isLast && runs[i].length < KNOWLEDGE_MIN_RUN && kept.length > 0) {
+			continue;
+		}
+		const prev = kept[kept.length - 1];
+		if (prev && prev.tier === runs[i].tier) continue;
+		kept.push(runs[i]);
+	}
+	return kept.slice(1).map((r, i) => ({
+		turn: r.first.turn,
+		from: kept[i].tier,
+		to: r.tier,
+		pct: r.first.pct,
+	}));
 }
