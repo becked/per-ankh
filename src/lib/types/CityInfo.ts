@@ -31,7 +31,24 @@ player_families?: Array<{ player_xml_id: number, family: string | null, family_c
  * cross-game milestones (cities_founded, fifth_city_turn, ...) attribute
  * to the founder rather than the current owner.
  */
-first_owner_player_xml_id: number | null, founded_turn: number, is_capital: boolean, citizens: number, governor_name: string | null, 
+first_owner_player_xml_id: number | null, founded_turn: number, is_capital: boolean, citizens: number, governor_name: string | null,
+/**
+ * xml_id of the governing character, matching CharacterInfo.xml_id — the
+ * science breakdown reads the governor's Wisdom through it (name matching
+ * is ambiguous). Optional: absent on blobs before PARSER_VERSION 2.15.0.
+ */
+governor_xml_id?: number | null,
+/**
+ * Religions present in the city (the save's <Religion> presence list).
+ * Optional: absent on blobs before PARSER_VERSION 2.15.0.
+ */
+religions?: Array<string>,
+/**
+ * Per-city project completions (<ProjectCount>): Archives, Forums, Treasury
+ * and other repeat-effect city projects. Optional: absent on blobs before
+ * PARSER_VERSION 2.15.0.
+ */
+project_counts?: Array<{ project: string, count: number }>,
 /**
  * Culture level as string enum (CULTURE_WEAK, CULTURE_DEVELOPING, CULTURE_STRONG, CULTURE_ESTABLISHED, CULTURE_LEGENDARY)
  */

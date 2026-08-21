@@ -136,6 +136,11 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         genuinely global plague carries them all and still lands
 //         everywhere. player_name is unchanged, and is what blobs below
 //         2.14.0 still join on.
+// 2.15.0 — per-city religion presence, project counts, and governor xml_id
+//         on city_statistics.cities, plus theologies on game_religions —
+//         the Techs tab's science-source breakdown reads all four. Purely
+//         additive; older blobs lack the fields and the new breakdown rows
+//         are omitted.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -157,13 +162,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.12.0",
 	"2.13.0",
 	"2.14.0",
+	"2.15.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.14.0";
+export const CURRENT_PARSER_VERSION = "2.15.0";
 
 // ----- Reusable atoms -----
 
