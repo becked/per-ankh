@@ -1154,47 +1154,45 @@ export function scienceSpikes(
 
 // ─── Leader changes ──────────────────────────────────────────────────
 
+// How a reign ended, for the marker's headline verb.
+export type ReignEnd = "died" | "abdicated" | "deposed";
+
 export type LeaderChangeMarker = {
 	turn: number;
 	// The outgoing leader — null when a leaderless realm crowned someone.
+	// `age` and `reignYears` use the game's turn-as-year convention (the
+	// same one the Leaders tab's reign windows use); `age` is at the reign's
+	// end. Ratings freeze at death, so a dead ruler's stored Wisdom IS their
+	// Wisdom when the reign ended; a LIVING character's is their end-of-game
+	// value.
 	prev: {
-		name: string;
-		wisdom: number | null;
-		// "died (plague)", "abdicated" — how the reign ended, when known.
-		end: string;
+		character: CharacterInfo;
+		end: ReignEnd;
+		age: number;
+		reignYears: number;
 	} | null;
 	// The incoming leader — null when the last leader died unsucceeded.
-	next: { name: string; wisdom: number | null } | null;
+	next: { character: CharacterInfo } | null;
 };
 
-// Character ratings freeze at death, so a dead leader's stored Wisdom IS
-// their Wisdom when the reign ended. A LIVING successor's rating is their
-// end-of-game value — a floor/ceiling on what they had at accession, which
-// the save doesn't record.
-function wisdomOf(c: CharacterInfo): number | null {
-	return c.wisdom ?? null;
-}
-
-function reignEnd(c: CharacterInfo, successionTurn: number | null): string {
+function reignEndOf(
+	c: CharacterInfo,
+	successionTurn: number | null,
+): { end: ReignEnd; endTurn: number | null } {
 	if (
 		c.abdicated_turn != null &&
 		(c.death_turn == null || c.abdicated_turn < c.death_turn) &&
 		(successionTurn == null || c.abdicated_turn <= successionTurn)
 	) {
-		return "abdicated";
+		return { end: "abdicated", endTurn: c.abdicated_turn };
 	}
-	if (c.death_turn != null) {
-		const reason = c.death_reason
-			? ` (${formatEnum(c.death_reason, "DEATH_").toLowerCase()})`
-			: "";
-		return `died${reason}`;
-	}
-	return "deposed";
+	if (c.death_turn != null) return { end: "died", endTurn: c.death_turn };
+	return { end: "deposed", endTurn: successionTurn };
 }
 
 /**
  * A player's leader transitions: every succession (with the outgoing and
- * incoming rulers' Wisdom — the court's only science rating), plus a final
+ * incoming rulers — Wisdom is the court's only science rating), plus a final
  * marker when the last leader died with no successor. The first accession
  * (game start) is not a change and isn't marked.
  */
@@ -1207,18 +1205,26 @@ export function leaderChangeMarkers(
 			(c) => c.player_xml_id === playerId && c.became_leader_turn != null,
 		)
 		.sort((a, b) => a.became_leader_turn! - b.became_leader_turn!);
+	const outgoing = (
+		c: CharacterInfo,
+		successionTurn: number | null,
+	): NonNullable<LeaderChangeMarker["prev"]> => {
+		const { end, endTurn } = reignEndOf(c, successionTurn);
+		const at = endTurn ?? successionTurn ?? c.became_leader_turn!;
+		return {
+			character: c,
+			end,
+			age: Math.max(0, at - c.birth_turn),
+			reignYears: Math.max(0, at - c.became_leader_turn!),
+		};
+	};
 	const markers: LeaderChangeMarker[] = [];
 	for (let i = 1; i < reigns.length; i++) {
-		const prev = reigns[i - 1];
 		const next = reigns[i];
 		markers.push({
 			turn: next.became_leader_turn!,
-			prev: {
-				name: prev.first_name ?? "Unknown",
-				wisdom: wisdomOf(prev),
-				end: reignEnd(prev, next.became_leader_turn),
-			},
-			next: { name: next.first_name ?? "Unknown", wisdom: wisdomOf(next) },
+			prev: outgoing(reigns[i - 1], next.became_leader_turn),
+			next: { character: next },
 		});
 	}
 	// The fall of the line: last leader died, nobody took the throne.
@@ -1226,11 +1232,7 @@ export function leaderChangeMarkers(
 	if (last != null && last.death_turn != null) {
 		markers.push({
 			turn: last.death_turn,
-			prev: {
-				name: last.first_name ?? "Unknown",
-				wisdom: wisdomOf(last),
-				end: reignEnd(last, null),
-			},
+			prev: outgoing(last, null),
 			next: null,
 		});
 	}

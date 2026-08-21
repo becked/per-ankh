@@ -16,7 +16,12 @@
 	import type { ChartOption, ECharts } from "$lib/echarts";
 	import Chart from "$lib/Chart.svelte";
 	import ChartContainer from "$lib/ChartContainer.svelte";
-	import { formatEnum, nationName } from "$lib/utils/formatting";
+	import {
+		archetypeSpriteKey,
+		deathReasonLabel,
+		formatEnum,
+		nationName,
+	} from "$lib/utils/formatting";
 	import { CHART_THEME, getNationChartColor } from "$lib/config";
 	import SpriteIcon from "./SpriteIcon.svelte";
 	import EventRail, {
@@ -38,6 +43,7 @@
 		techName,
 		improvementDisplayName,
 		createYieldChartOption,
+		rulerName,
 	} from "./helpers";
 	import {
 		scienceTechMarkers,
@@ -347,13 +353,56 @@
 		);
 	}
 
+	// Inline Wisdom glyph for the leader-change lines, same trick as SCI_ICON.
+	const WIS_ICON = (() => {
+		const url = getSpritePath("icons", "RATING_WISDOM");
+		return url
+			? `<img src="${url}" alt="wisdom" style="display:inline;width:12px;height:12px;vertical-align:-1px"/>`
+			: "Wisdom";
+	})();
+
+	// Inline archetype glyph (the `traits` sprite the Leaders tab uses).
+	function archetypeIconHtml(c: CharacterInfo): string {
+		const url = c.archetype
+			? getSpritePath("traits", archetypeSpriteKey(c.archetype))
+			: null;
+		return url
+			? `<img src="${url}" alt="" style="display:inline;width:13px;height:13px;vertical-align:-2px;margin-right:2px"/>`
+			: "";
+	}
+
+	// "[archetype] Name — 6 [wisdom]" — the shared ruler line fragment.
+	// `rulerName` returns null for a character the save left unnamed, so each
+	// line supplies the subject its sentence needs: the incoming ruler borrows
+	// the Military rail's "New ruler", the departing one reads "The ruler".
+	function rulerHtml(c: CharacterInfo): string {
+		const wis = c.wisdom != null ? ` ${c.wisdom} ${WIS_ICON}` : "";
+		return `${archetypeIconHtml(c)}<b>${rulerName(c) ?? "New ruler"}</b>${wis}`;
+	}
+
 	function leaderChangeTooltip(m: LeaderChangeMarker, color: string): string {
-		const wis = (w: number | null) => (w == null ? "" : ` — Wisdom ${w}`);
 		const lines: string[] = [];
-		if (m.prev) lines.push(`${m.prev.name} ${m.prev.end}${wis(m.prev.wisdom)}`);
+		if (m.prev) {
+			const c = m.prev.character;
+			const verb =
+				m.prev.end === "died"
+					? `died, aged ${m.prev.age},`
+					: `${m.prev.end}, aged ${m.prev.age},`;
+			// "[archetype] Name died, aged 25, 6 [wisdom]" — the wisdom trails
+			// the line, per the rail's compact ruler format.
+			lines.push(
+				`${archetypeIconHtml(c)}<b>${rulerName(c) ?? "The ruler"}</b> ${verb}${c.wisdom != null ? ` ${c.wisdom} ${WIS_ICON}` : ""}`,
+			);
+			if (m.prev.end === "died" && c.death_reason) {
+				lines.push(`Cause of death: ${deathReasonLabel(c.death_reason)}`);
+			}
+			lines.push(
+				`Reigned for ${m.prev.reignYears} ${m.prev.reignYears === 1 ? "year" : "years"}`,
+			);
+		}
 		lines.push(
 			m.next
-				? `Succeeded by ${m.next.name}${wis(m.next.wisdom)}`
+				? `Succeeded by ${rulerHtml(m.next.character)}`
 				: "No successor took the throne",
 		);
 		return (

@@ -10,6 +10,7 @@
 	import Popover from "$lib/ui/Popover.svelte";
 	import {
 		archetypeSpriteKey,
+		deathReasonLabel,
 		formatArchetype,
 		formatEnum,
 		isArchetypeTrait,
@@ -52,12 +53,7 @@
 		c.archetype ? archetypeSpriteKey(c.archetype) : null;
 
 	const deathLabel = (reason: string | null): string | null =>
-		reason
-			? formatEnum(
-					reason.replace(/^TEXT_(TRAIT_)?/, "").replace(/_(F|M)$/, ""),
-					"",
-				)
-			: null;
+		reason ? deathReasonLabel(reason) : null;
 
 	// Age at death, or at game end if the ruler outlived the save — using the
 	// same turn-as-year convention as the reign length. birth_turn can be
