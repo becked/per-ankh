@@ -158,8 +158,8 @@ Local-only login bypass (no Discord).
 Update account settings (partial — only the fields sent are written).
 
 - **Auth:** Session.
-- **Body:** `UserSettingsSchema` — `{ default_game_public?: boolean, stream_url?: string|null }`. `default_game_public` is the default visibility applied to newly uploaded saves. `stream_url` is the casting stream link (YouTube/Twitch allowlist, same as match-part streams), auto-attached when the user takes the streamer slot on a match part; `null` clears it.
-- **Response 200:** `{ default_game_public: boolean, stream_url: string|null }` (the full current settings, whichever subset was written).
+- **Body:** `UserSettingsSchema` — `{ default_game_public?: boolean, stream_url?: string|null, open_to_matches?: boolean }`. `default_game_public` is the default visibility applied to newly uploaded saves. `stream_url` is the casting stream link (YouTube/Twitch allowlist, same as match-part streams), auto-attached when the user takes the streamer slot on a match part; `null` clears it. `open_to_matches` is whether other players may be shown this user as a suggested opponent — `false` removes them from everyone's list without stopping them getting their own.
+- **Response 200:** `{ default_game_public: boolean, stream_url: string|null, open_to_matches: boolean }` (the full current settings, whichever subset was written).
 - **Errors:** `401 UNAUTHORIZED`, `400 INVALID_JSON`, `400 INVALID_BODY`.
 
 ### `GET /v1/auth/channels`
@@ -733,6 +733,14 @@ Tournaments you administer.
 - **Response 200:** `{ tournaments: [{ tournament_id, slug, name, status }] }`.
 - **Errors:** `401 UNAUTHORIZED`.
 
+### `GET /v1/users/me/opponents`
+Your ten suggested opponents — players you should get a close game against.
+
+- **Auth:** Session.
+- **Response 200:** `{ opponents: [{ user_id, display_name, slug, avatar_url, discord_url, meetings, badges }], rated }`. `discord_url` is their Discord profile, built from the snowflake `avatar_url` already carries — no `discord_*` field is serialized, and the handle never is. `meetings` is how many rated games the pair has already played; `badges` is a subset of `active_this_week` / `new_here` / `bridges_circles`; `rated` is whether the viewer has any rated multiplayer game at all, which is what separates "nothing yet" from "nothing this week".
+- **Errors:** `401 UNAUTHORIZED`.
+- **Notes:** There is no by-user-id form of this route, by design — a player sees only their own list. The response carries no rating, win probability or score, and neither does the table behind it (migration 0045); the model runs entirely inside the Worker. The list is rebuilt by the nightly cron and shuffled, so its order is not a ranking. An empty list is a normal answer.
+
 ### `POST /v1/users/me/tournaments/:id/dismiss-banner`
 Dismiss the "claim your slot" banner.
 
@@ -841,6 +849,14 @@ Unfeature.
 - **Response 200:** `{ ok: true }`.
 - **Errors:** `404 NOT_FOUND` (non-admin only).
 - **Notes:** Idempotent — deleting a video that isn't featured still succeeds, so the card star and the Featured tab's Remove don't have to agree on which got there first.
+
+### `POST /v1/admin/ratings/rebuild`
+Rebuild the rating cache and every player's suggested-opponent list now, instead of waiting for the nightly cron.
+
+- **Auth:** Session + **site admin**.
+- **Response 200:** `{ users, ratableDuels, recommended, stats }` — how many players were rated, how many duels the model could reconstruct, how many ended up with a list, and the extraction diagnostics (`tournament`, `casual`, `deduped`, `casualGamesScanned`, `unresolvedOpponent`, `ambiguousOnlineId`).
+- **Errors:** `404 NOT_FOUND` (non-admin), `500 REBUILD_FAILED`.
+- **Notes:** Idempotent and full-replace; takes no body. Run it after the reindex sweep has backfilled `player_summaries.online_id`, which is what lets a casual game's opponent be identified at all. Audited as `ratings_rebuild`. The nightly cron runs the same job unaudited — the audit trail records people, not schedules.
 
 ---
 

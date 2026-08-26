@@ -19,9 +19,13 @@ import {
 //   - stream_url: the user's casting stream link (twitch/youtube, same
 //     allowlist as match-part streams). Auto-attached when they take the
 //     streamer slot on a match part; null clears it (no auto-attach).
+//   - open_to_matches: whether other players may be shown this user as a
+//     suggested opponent (cloud/src/ratings/recommend.ts). Off removes them
+//     from everyone's list; it does not stop them getting their own.
 export const UserSettingsSchema = v.object({
 	default_game_public: v.optional(v.boolean()),
 	stream_url: v.optional(v.nullable(StreamUrlSchema)),
+	open_to_matches: v.optional(v.boolean()),
 });
 
 export type UserSettings = v.InferOutput<typeof UserSettingsSchema>;

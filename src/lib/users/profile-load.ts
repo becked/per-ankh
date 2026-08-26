@@ -18,7 +18,14 @@ import { loginBounce } from "$lib/utils/safe-next";
 import type { ChartBundle, UserScope } from "$lib/stats/types";
 
 const FIRST_PAGE_SIZE = 50;
-const TABS = new Set(["overview", "stats", "games", "videos", "tournaments"]);
+const TABS = new Set([
+	"overview",
+	"stats",
+	"games",
+	"videos",
+	"tournaments",
+	"opponents",
+]);
 const SCOPE_KEYWORDS = new Set(["public", "vs_ai", "mp", "tournament"]);
 
 // The shape a stored slug has. Mirrors the Worker's by-slug route regex
@@ -79,6 +86,9 @@ export async function buildProfilePage(args: {
 	// "tournaments" when that tab exists.
 	if (tab === "videos" && !hasChannels) tab = defaultTab;
 	if (tab === "tournaments" && !isTournamentParticipant) tab = defaultTab;
+	// ?tab=opponents on someone else's profile — a shared link, or a guess —
+	// lands on their Overview rather than on a tab that isn't theirs to see.
+	if (tab === "opponents" && !isOwner) tab = defaultTab;
 
 	// Games-tab filters (only meaningful when tab === "games").
 	const q = url.searchParams.get("q")?.trim() || "";
@@ -103,6 +113,12 @@ export async function buildProfilePage(args: {
 		tab === "tournaments"
 			? await cloudApi.getUserTournaments(targetUserId, { fetch })
 			: null;
+
+	// And for the owner's suggested opponents. The endpoint is /users/me/… —
+	// there is no by-id form, which is what makes this tab impossible to serve
+	// for anyone but its owner however the URL is written.
+	const suggestions =
+		tab === "opponents" ? await cloudApi.getMyOpponents({ fetch }) : null;
 
 	// Fetch the first games page only when the Games tab is active —
 	// Overview/Stats render entirely from the bundle.
@@ -138,6 +154,7 @@ export async function buildProfilePage(args: {
 		videos,
 		isTournamentParticipant,
 		tournamentRecord,
+		suggestions,
 		category: url.searchParams.get("category"),
 		// Games-tab state.
 		games: gamesRes?.games ?? [],

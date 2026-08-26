@@ -186,6 +186,11 @@ export interface UserMe {
 	// this user takes the streamer slot. null = not set; the cast button then
 	// offers a one-time input that remembers the link for later casts.
 	stream_url: string | null;
+	// Whether other players may be shown this user as a suggested opponent
+	// (the product default; a user can opt out in Preferences). Read by that
+	// toggle and by the Opponents tab, which tells an opted-out viewer that
+	// the suggesting runs both ways.
+	open_to_matches: boolean;
 }
 
 export interface GameListItem {
@@ -531,9 +536,17 @@ export const cloudApi = {
 	// update). stream_url: string sets the casting link, null clears it.
 	// Returns the full persisted settings so callers can reconcile.
 	updateSettings: async (
-		settings: { default_game_public?: boolean; stream_url?: string | null },
+		settings: {
+			default_game_public?: boolean;
+			stream_url?: string | null;
+			open_to_matches?: boolean;
+		},
 		opts?: CallOpts,
-	): Promise<{ default_game_public: boolean; stream_url: string | null }> => {
+	): Promise<{
+		default_game_public: boolean;
+		stream_url: string | null;
+		open_to_matches: boolean;
+	}> => {
 		const res = await request("/auth/settings", {
 			...opts,
 			method: "POST",
@@ -543,6 +556,7 @@ export const cloudApi = {
 		return res.json() as Promise<{
 			default_game_public: boolean;
 			stream_url: string | null;
+			open_to_matches: boolean;
 		}>;
 	},
 
@@ -674,6 +688,25 @@ export const cloudApi = {
 	): Promise<CreatorVideo[]> => {
 		const res = await request(`/users/${userId}/videos`, opts);
 		return (await (res.json() as Promise<{ videos: CreatorVideo[] }>)).videos;
+	},
+
+	// Site-admin: rebuild the rating cache and every player's suggested-opponent
+	// list now rather than at the next nightly cron. Idempotent, no body.
+	rebuildRatings: async (opts?: CallOpts): Promise<RatingsRebuildSummary> => {
+		const res = await request("/admin/ratings/rebuild", {
+			...opts,
+			method: "POST",
+		});
+		return res.json() as Promise<RatingsRebuildSummary>;
+	},
+
+	// The signed-in viewer's suggested opponents — the whole of the profile's
+	// Opponents tab.
+	// There is no by-user-id form: a player sees only their own list, which the
+	// Worker enforces by having no route that takes one.
+	getMyOpponents: async (opts?: CallOpts): Promise<RecommendedOpponents> => {
+		const res = await request("/users/me/opponents", opts);
+		return res.json() as Promise<RecommendedOpponents>;
 	},
 
 	// The target user's tournament record — played + upcoming matches, and cast
@@ -2239,6 +2272,49 @@ export type UserTournamentMatch = TournamentMatch & { tournament_id: string };
 // A cast row. Part-granularity: `part_id` names the sitting the player cast, so
 // a single sitting of a two-sitting match is one row.
 export type UserTournamentCast = UserTournamentMatch & { part_id: string };
+
+// One suggested opponent. Everything here is either identity or a fact the
+// viewer could have established by reading the profile — the rating model that
+// picked them never leaves the Worker, so there is no probability, gap or
+// score to render and none arrives.
+export interface RecommendedOpponent {
+	user_id: string;
+	display_name: string;
+	slug: string | null;
+	avatar_url: string;
+	// Their Discord profile, where the Message button is. Built by the Worker
+	// from the snowflake it already puts inside avatar_url, so the page can
+	// offer a DM without a discord_* field ever being on the wire.
+	discord_url: string;
+	// Rated games the pair has already played against each other.
+	meetings: number;
+	badges: OpponentBadge[];
+}
+
+export type OpponentBadge = "active_this_week" | "new_here" | "bridges_circles";
+
+// What a rebuild did. Counts only — the ratings themselves never leave the
+// Worker, not even for an admin.
+export interface RatingsRebuildSummary {
+	users: number;
+	ratableDuels: number;
+	recommended: number;
+	stats: {
+		tournament: number;
+		casual: number;
+		deduped: number;
+		casualGamesScanned: number;
+		unresolvedOpponent: number;
+		ambiguousOnlineId: number;
+	};
+}
+
+export interface RecommendedOpponents {
+	opponents: RecommendedOpponent[];
+	// Whether the viewer has any rated multiplayer game at all — what separates
+	// "you have not played one yet" from "nothing to suggest this week".
+	rated: boolean;
+}
 
 export interface UserTournamentsResponse {
 	user_id: string;

@@ -772,11 +772,15 @@ export async function handleMe(
 	}
 
 	const row = await env.SHARE_DB.prepare(
-		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url FROM users WHERE user_id = ?`,
+		`SELECT user_id, discord_id, ${displayNameSql("users")} AS display_name, avatar_hash, slug, default_game_public, stream_url, open_to_matches FROM users WHERE user_id = ?`,
 	)
 		.bind(session.data.user_id)
 		.first<
-			UserRow & { default_game_public: number; stream_url: string | null }
+			UserRow & {
+				default_game_public: number;
+				stream_url: string | null;
+				open_to_matches: number;
+			}
 		>();
 
 	if (!row) {
@@ -854,6 +858,10 @@ export async function handleMe(
 			// takes the streamer slot on a match part; the cast button reads it
 			// to decide whether to offer the one-time "remember my stream" input.
 			stream_url: row.stream_url,
+			// Whether other players may be suggested this user as an opponent.
+			// Read by the preferences toggle and by the profile's Opponents tab,
+			// which tells a hidden viewer that the suggesting runs both ways.
+			open_to_matches: row.open_to_matches === 1,
 		},
 		200,
 		cors,
@@ -886,7 +894,8 @@ export async function handleSettings(
 			"INVALID_BODY",
 		);
 	}
-	const { default_game_public, stream_url } = validation.output;
+	const { default_game_public, stream_url, open_to_matches } =
+		validation.output;
 
 	// Partial update: only the fields the caller sent are written (every schema
 	// field is optional). stream_url: string sets, explicit null clears,
@@ -901,6 +910,10 @@ export async function handleSettings(
 		sets.push("stream_url = ?");
 		binds.push(stream_url);
 	}
+	if (open_to_matches !== undefined) {
+		sets.push("open_to_matches = ?");
+		binds.push(open_to_matches ? 1 : 0);
+	}
 	if (sets.length > 0) {
 		await env.SHARE_DB.prepare(
 			`UPDATE users SET ${sets.join(", ")} WHERE user_id = ?`,
@@ -912,14 +925,19 @@ export async function handleSettings(
 	// Echo the full current settings so the caller can refresh state without a
 	// second round-trip, whichever subset it wrote.
 	const row = await env.SHARE_DB.prepare(
-		"SELECT default_game_public, stream_url FROM users WHERE user_id = ?",
+		"SELECT default_game_public, stream_url, open_to_matches FROM users WHERE user_id = ?",
 	)
 		.bind(session.data.user_id)
-		.first<{ default_game_public: number; stream_url: string | null }>();
+		.first<{
+			default_game_public: number;
+			stream_url: string | null;
+			open_to_matches: number;
+		}>();
 	return jsonResponse(
 		{
 			default_game_public: row?.default_game_public === 1,
 			stream_url: row?.stream_url ?? null,
+			open_to_matches: row?.open_to_matches === 1,
 		},
 		200,
 		cors,

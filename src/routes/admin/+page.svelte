@@ -3,12 +3,17 @@
 	import { goto, invalidateAll } from "$app/navigation";
 	import { page } from "$app/state";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
-	import type { AdminGameFilterParams, UserSearchResult } from "$lib/api-cloud";
+	import {
+		cloudApi,
+		type AdminGameFilterParams,
+		type UserSearchResult,
+	} from "$lib/api-cloud";
 	import BulkReparseModal from "$lib/BulkReparseModal.svelte";
 	import BulkReindexModal from "$lib/BulkReindexModal.svelte";
 	import FeaturedVideosTable from "$lib/FeaturedVideosTable.svelte";
 	import { syncFeatured } from "$lib/featured-videos.svelte";
 	import Select from "$lib/ui/Select.svelte";
+	import { toast } from "$lib/ui/toast";
 	import UserAutocomplete from "$lib/ui/UserAutocomplete.svelte";
 	import type { PageData } from "./$types";
 
@@ -16,6 +21,7 @@
 
 	let reparseOpen = $state(false);
 	let reindexOpen = $state(false);
+	let rebuildingRatings = $state(false);
 
 	// Client-side, like /account's — the two tabs are different jobs, not
 	// different views of one thing, and neither is worth linking to. (The
@@ -47,6 +53,26 @@
 	async function onReindexClose(didReindex: boolean) {
 		reindexOpen = false;
 		if (didReindex) await invalidateAll();
+	}
+
+	// No modal and no confirm: the rebuild replaces two caches that are wholly
+	// derived from games and tournament results, so the worst a stray click
+	// costs is the seconds it takes to run again.
+	async function rebuildRatings() {
+		if (rebuildingRatings) return;
+		rebuildingRatings = true;
+		try {
+			const r = await cloudApi.rebuildRatings();
+			toast.info(
+				`Rated ${r.users} players from ${r.ratableDuels} duels; ${r.recommended} got a list.`,
+			);
+		} catch (err) {
+			toast.error(
+				`Rebuild failed: ${err instanceof Error ? err.message : err}`,
+			);
+		} finally {
+			rebuildingRatings = false;
+		}
 	}
 
 	// --- Section ------------------------------------------------------
@@ -139,6 +165,8 @@
 				>
 				<Tabs.Trigger value="featured" class={triggerClass}
 					>Featured</Tabs.Trigger
+				>
+				<Tabs.Trigger value="ratings" class={triggerClass}>Ratings</Tabs.Trigger
 				>
 			</Tabs.List>
 
@@ -300,6 +328,39 @@
 
 			<Tabs.Content value="featured">
 				<FeaturedVideosTable videos={data.featuredVideos} />
+			</Tabs.Content>
+
+			<Tabs.Content value="ratings">
+				<div
+					class="rounded-lg p-4"
+					style="background-color: rgb(var(--color-surface));"
+				>
+					<h3 class="mb-3 text-base font-bold text-tan">
+						Admin — Recommended opponents
+					</h3>
+					<div
+						class="rounded-lg p-3"
+						style="background-color: rgb(var(--color-surface-raised));"
+					>
+						<p class="mb-3 text-xs text-tan">
+							Re-fit the rating model over every duel D1 can reconstruct, and
+							re-pick each player's ten suggested opponents. This runs on its
+							own in the nightly cron; the button is for the first run after a
+							deploy, and for after a reindex sweep has backfilled
+							<code class="text-orange">player_summaries.online_id</code> — which
+							is what lets a casual game's opponent be identified at all. Full replace,
+							safe to repeat.
+						</p>
+						<button
+							type="button"
+							onclick={rebuildRatings}
+							disabled={rebuildingRatings}
+							class="rounded bg-orange px-3 py-1 text-xs font-bold text-white hover:bg-orange/80 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:bg-orange"
+						>
+							{rebuildingRatings ? "Rebuilding…" : "Rebuild now"}
+						</button>
+					</div>
+				</div>
 			</Tabs.Content>
 		</Tabs.Root>
 	</div>

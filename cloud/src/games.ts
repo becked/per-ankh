@@ -458,7 +458,7 @@ interface SummaryRowInputs {
 	winnerIndex: number | null;
 }
 
-// Insert one row per roster entry. 24 columns × 1 row = 24 binds per stmt,
+// Insert one row per roster entry. 27 columns × 1 row = 27 binds per stmt,
 // well under D1's 100-param cap. All statements bundle into the same
 // db.batch() call as the rest of the upload writes (single transaction).
 function buildSummaryStatements(
@@ -473,7 +473,7 @@ function buildSummaryStatements(
 		`INSERT INTO player_summaries (
 			game_id, player_index, player_name, nation, family_classes,
 			capital_family_class,
-			is_human, is_uploader,
+			is_human, is_uploader, online_id,
 			starting_ruler_archetype, starting_ruler_traits,
 			starting_ruler_reign_turns, succession_count,
 			final_points, final_military_power, final_legitimacy,
@@ -481,7 +481,7 @@ function buildSummaryStatements(
 			techs_completed, laws_count,
 			fifth_city_turn, tenth_city_turn, fourth_law_turn, seventh_law_turn,
 			is_winner, vp_margin
-		) VALUES (?,?,?,?,?, ?, ?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?)`,
+		) VALUES (?,?,?,?,?, ?, ?,?,?, ?,?,?,?, ?,?,?,?,?,?, ?,?, ?,?,?,?, ?,?)`,
 	);
 
 	return roster.map((p) => {
@@ -495,6 +495,11 @@ function buildSummaryStatements(
 			s.capital_family_class,
 			p.is_human ? 1 : 0,
 			uploaderIndex !== null && p.player_index === uploaderIndex ? 1 : 0,
+			// Every human's OnlineID, not just the uploader's — this is the
+			// column the opponent recommender resolves a duel's other side
+			// through (migration 0043). An AI slot has none, and neither does a
+			// human on a blob from before parser 2.2.0.
+			p.is_human ? (p.online_id ?? null) : null,
 			s.starting_ruler_archetype,
 			s.starting_ruler_traits,
 			s.starting_ruler_reign_turns,
