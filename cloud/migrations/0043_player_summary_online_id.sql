@@ -1,0 +1,28 @@
+-- Per-player OnlineID on the game summary rows.
+--
+-- The parser already extracts every human player's `online_id` (Steam/GOG/Epic)
+-- into the R2 blob's player_roster, but until now only the *uploader's* own id
+-- was persisted — into user_online_ids, via captureOnlineIds. The opponent's id
+-- lived only in the blob, so D1 alone could not say who the other player was.
+--
+-- Storing every roster slot's id here is what lets a duel be reconstructed from
+-- D1: look the slot's online_id up in user_online_ids and you have the
+-- registered user who played it, with no R2 read and no name matching. That is
+-- the input the opponent recommender's rating model runs on (cloud/src/ratings).
+--
+-- Backfilled by the existing admin reindex sweep, which rebuilds
+-- player_summaries from the stored blob — same path that backfilled
+-- capital_family_class (0037) and best_culture_level (0036). Rows whose blob
+-- predates parser 2.2.0 (before online_id was extracted) stay NULL and simply
+-- don't resolve.
+--
+-- PII: online_id is the one blob field stripped for anonymous share viewers
+-- (stripOnlineIds in cloud/src/games.ts). Nothing selects this column into a
+-- response — it is internal resolution only, exactly like user_online_ids.
+ALTER TABLE player_summaries ADD COLUMN online_id TEXT;
+
+-- Deliberately unindexed, for the same reason as capital_family_class (0037):
+-- the only reader is the nightly rating rebuild, which scans human slots
+-- game-by-game and resolves them against an in-memory index of
+-- user_online_ids. Nothing looks a row up *by* online_id, so an index here
+-- would be write cost on every upload and reindex for no read.

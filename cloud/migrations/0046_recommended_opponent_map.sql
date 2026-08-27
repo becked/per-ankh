@@ -1,0 +1,15 @@
+-- A suggested map for each recommended pairing.
+--
+-- The recommender picks one from the community atlas' published pool
+-- (cloud/src/generated/atlas-pool.ts) whose script neither player has played in
+-- the last six months, so a suggestion comes with somewhere to play it rather
+-- than leaving the pair to negotiate a map before they can start. Same rule the
+-- tournament engine's round-generation map assignment follows, and the same
+-- unit: the script, not the exact configuration.
+--
+-- Stored as the map's atlas URL anchor — the slug that addresses it on the
+-- atlas site, which is also its identity in the baked pool. A label and a link
+-- are derived from it at read time, so a re-baked pool corrects every stored
+-- row rather than leaving a stale name behind. NULL when there was no pool to
+-- pick from.
+ALTER TABLE user_recommended_opponents ADD COLUMN map_anchor TEXT;

@@ -61,6 +61,10 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			"reimport",
 			"admin_reimport",
 			"admin_reindex",
+			// Site-admin rebuild of the rating cache and every player's
+			// suggested-opponent list (cloud/src/ratings/handlers.ts). Rare and
+			// site-wide, so worth the same 90 days as the other admin sweeps.
+			"ratings_rebuild",
 			"delete",
 			"download",
 			"visibility_change",

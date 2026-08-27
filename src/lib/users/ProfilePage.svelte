@@ -18,6 +18,7 @@
 	import SpriteIcon from "$lib/game-detail/SpriteIcon.svelte";
 	import UserTournamentsTab from "$lib/tournament/UserTournamentsTab.svelte";
 	import GamesTable from "$lib/users/GamesTable.svelte";
+	import OpponentsTab from "$lib/users/OpponentsTab.svelte";
 	import OverviewTab from "$lib/users/OverviewTab.svelte";
 	import ScopeRow from "$lib/users/ScopeRow.svelte";
 	import VideosTab from "$lib/users/VideosTab.svelte";
@@ -79,6 +80,10 @@
 				next.searchParams.delete(k);
 			}
 		}
+		// The scope selector applies to the save-backed tabs; suggested opponents
+		// come from the whole rated corpus and ignore it. Dropping it keeps the
+		// URL honest about what the page is filtered by.
+		if (value === "opponents") next.searchParams.delete("scope");
 		// eslint-disable-next-line svelte/no-navigation-without-resolve -- search-param-only update on the current route; URL objects are SvelteKit's documented dynamic-nav API
 		await goto(next, { keepFocus: true, noScroll: true });
 	}
@@ -215,6 +220,34 @@
 							<Tabs.Trigger value="stats" class={triggerClass}
 								>Stats</Tabs.Trigger
 							>
+							<!-- Owner-only, and the padlock says so — every other tab on this
+						     bar is the same for whoever is looking, so a tab that isn't
+						     needs to announce itself rather than leave the owner wondering
+						     who else can read it. -->
+							{#if data.isOwner}
+								<Tabs.Trigger
+									value="opponents"
+									class="{triggerClass} flex items-center gap-1.5"
+									title="Only you can see this"
+								>
+									<svg
+										xmlns="http://www.w3.org/2000/svg"
+										class="h-3.5 w-3.5"
+										fill="none"
+										viewBox="0 0 24 24"
+										stroke="currentColor"
+										stroke-width="2"
+										aria-hidden="true"
+									>
+										<path
+											stroke-linecap="round"
+											stroke-linejoin="round"
+											d="M16.5 10.5V6.75a4.5 4.5 0 10-9 0v3.75m-.75 11.25h10.5a2.25 2.25 0 002.25-2.25v-6.75a2.25 2.25 0 00-2.25-2.25H6.75a2.25 2.25 0 00-2.25 2.25v6.75a2.25 2.25 0 002.25 2.25z"
+										/>
+									</svg>
+									Opponents
+								</Tabs.Trigger>
+							{/if}
 						</Tabs.List>
 
 						<Tabs.Content value="overview">
@@ -267,6 +300,19 @@
 								<StatsView {bundle} />
 							{/if}
 						</Tabs.Content>
+
+						{#if data.isOwner}
+							<Tabs.Content value="opponents">
+								<!-- Payload loads lazily with the tab (mirrors Videos and
+								     Tournaments), so it's null until then. -->
+								{#if data.suggestions}
+									<OpponentsTab
+										suggestions={data.suggestions}
+										openToMatches={page.data.user?.open_to_matches ?? true}
+									/>
+								{/if}
+							</Tabs.Content>
+						{/if}
 					</div>
 				</Tabs.Root>
 			</div>

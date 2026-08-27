@@ -13,6 +13,8 @@
 	import { isNewer } from "$lib/utils/semver";
 	import { ensureUrlScheme } from "$lib/utils/url";
 	import { toast } from "$lib/ui/toast";
+	import { profileHref } from "$lib/utils/profile-href";
+	import type { Snippet } from "svelte";
 	import type { PageData } from "./$types";
 
 	let { data }: { data: PageData } = $props();
@@ -25,13 +27,26 @@
 	// reuses the same download → parse → upload pipeline.
 	let reparseGames = $state<GameListItem[] | null>(null);
 
-	// Default upload visibility — optimistic toggle backed by the worker,
+	// The reader's own Opponents tab, so "their Opponents tab" below links to
+	// the thing it names. profileHref decides slug-vs-permalink; the tab is a
+	// search param on whichever it picks.
+	const opponentsHref = $derived(
+		`${profileHref({ user_id: data.user.user_id, slug: data.user.slug })}?tab=opponents`,
+	);
+
+	// The boolean preferences — optimistic toggles backed by the worker,
 	// mirroring the lock toggle in GameActions: flip immediately, revert on
 	// failure. Initialised at construction from the server value; nothing
 	// re-fetches /me on this page, so no re-sync effect is needed.
 	// svelte-ignore state_referenced_locally
 	let defaultPublic = $state(data.user.default_game_public);
-	let savingPref = $state(false);
+	// svelte-ignore state_referenced_locally
+	let openToMatches = $state(data.user.open_to_matches);
+	// Which write is in flight, so both switches disable together while one
+	// saves — the endpoint is a single partial update over the same row.
+	let savingPref = $state<"default_game_public" | "open_to_matches" | null>(
+		null,
+	);
 
 	// Casting stream link — plain save-on-submit (not optimistic: the worker
 	// validates the host allowlist, so the persisted value is what it echoes
@@ -102,21 +117,27 @@
 		await goto(resolve("/"), { replaceState: true });
 	}
 
-	async function toggleDefaultPublic() {
+	// Both switches are the same write with a different field name, so they are
+	// the same function — a second hand-rolled copy is where the revert and the
+	// error toast drift apart.
+	async function toggleBooleanPref(
+		field: "default_game_public" | "open_to_matches",
+		next: boolean,
+		// eslint-disable-next-line no-unused-vars -- documentary param name
+		set: (value: boolean) => void,
+	) {
 		if (savingPref) return;
-		const next = !defaultPublic;
-		const prev = defaultPublic;
-		defaultPublic = next;
-		savingPref = true;
+		set(next);
+		savingPref = field;
 		try {
-			await cloudApi.updateSettings({ default_game_public: next });
+			await cloudApi.updateSettings({ [field]: next });
 		} catch (err) {
-			defaultPublic = prev;
+			set(!next);
 			toast.error(
 				`Settings update failed: ${err instanceof Error ? err.message : err}`,
 			);
 		} finally {
-			savingPref = false;
+			savingPref = null;
 		}
 	}
 
@@ -208,6 +229,64 @@
 		if (didReparse) await invalidateAll();
 	}
 </script>
+
+<!-- One preference row: title, explanation, switch. Both preferences render
+     through it so the pair can't drift into two slightly different switches
+     the way two copies of the markup would. -->
+{#snippet preference(
+	field: "default_game_public" | "open_to_matches",
+	title: string,
+	checked: boolean,
+	// eslint-disable-next-line no-unused-vars -- documentary param name
+	set: (value: boolean) => void,
+	copy: Snippet,
+)}
+	<div
+		class="rounded-lg p-3"
+		style="background-color: rgb(var(--color-surface-raised));"
+	>
+		<div class="flex items-center justify-between gap-4">
+			<div class="min-w-0">
+				<div class="text-sm font-bold text-tan">{title}</div>
+				<p class="mt-1 text-xs text-gray-400">{@render copy()}</p>
+			</div>
+			<button
+				type="button"
+				role="switch"
+				aria-checked={checked}
+				aria-label={title}
+				onclick={() => toggleBooleanPref(field, !checked, set)}
+				disabled={savingPref !== null}
+				class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 {checked
+					? 'bg-orange'
+					: 'bg-input'}"
+			>
+				<span
+					class="inline-block h-3.5 w-3.5 transform rounded-full bg-tan transition-transform {checked
+						? 'translate-x-[18px]'
+						: 'translate-x-1'}"
+				></span>
+			</button>
+		</div>
+	</div>
+{/snippet}
+
+{#snippet uploadVisibilityCopy()}
+	Newly uploaded saves are visible to anyone with the link. Turn this off to
+	keep new uploads private until you share them. You can change any game's
+	visibility individually at any time.
+{/snippet}
+
+{#snippet openToMatchesCopy()}
+	Other players looking for a game may see you suggested as an opponent on their
+	<!-- profileHref returns a resolve() result, and the tab is a search param on
+	     it; the rule can't see through the call. -->
+	<!-- eslint-disable-next-line svelte/no-navigation-without-resolve -->
+	<a href={opponentsHref} class="text-orange transition-colors hover:text-tan"
+		>Opponents</a
+	> tab. Turn this off to be left out of everyone's suggestions — you'll still get
+	your own.
+{/snippet}
 
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<div class="mx-auto max-w-xl">
@@ -355,43 +434,23 @@
 
 			<Tabs.Content value="preferences">
 				<div
-					class="rounded-lg p-4"
+					class="space-y-3 rounded-lg p-4"
 					style="background-color: rgb(var(--color-surface));"
 				>
-					<div
-						class="rounded-lg p-3"
-						style="background-color: rgb(var(--color-surface-raised));"
-					>
-						<div class="flex items-center justify-between gap-4">
-							<div class="min-w-0">
-								<div class="text-sm font-bold text-tan">
-									New uploads are public by default
-								</div>
-								<p class="mt-1 text-xs text-gray-400">
-									Newly uploaded saves are visible to anyone with the link. Turn
-									this off to keep new uploads private until you share them. You
-									can change any game's visibility individually at any time.
-								</p>
-							</div>
-							<button
-								type="button"
-								role="switch"
-								aria-checked={defaultPublic}
-								aria-label="New uploads are public by default"
-								onclick={toggleDefaultPublic}
-								disabled={savingPref}
-								class="relative inline-flex h-5 w-9 shrink-0 cursor-pointer items-center rounded-full transition-colors disabled:opacity-50 {defaultPublic
-									? 'bg-orange'
-									: 'bg-input'}"
-							>
-								<span
-									class="inline-block h-3.5 w-3.5 transform rounded-full bg-tan transition-transform {defaultPublic
-										? 'translate-x-[18px]'
-										: 'translate-x-1'}"
-								></span>
-							</button>
-						</div>
-					</div>
+					{@render preference(
+						"default_game_public",
+						"New uploads are public by default",
+						defaultPublic,
+						(v) => (defaultPublic = v),
+						uploadVisibilityCopy,
+					)}
+					{@render preference(
+						"open_to_matches",
+						"Open to match suggestions",
+						openToMatches,
+						(v) => (openToMatches = v),
+						openToMatchesCopy,
+					)}
 				</div>
 			</Tabs.Content>
 

@@ -51,3 +51,25 @@ export const CANONICAL_MAP_SCRIPTS: readonly string[] = [
 export const CANONICAL_MAP_SCRIPTS_SET: ReadonlySet<string> = new Set(
 	CANONICAL_MAP_SCRIPTS,
 );
+
+// Compare two map-script values that mean the same script.
+//
+// Old World spells the same script two ways depending on where it was read
+// from, and per-ankh records both: a tournament match stores the value an admin
+// picked from CANONICAL_MAP_SCRIPTS above ("MAPCLASS_MapScriptCoastalRainBasin"),
+// while a game indexed from a save stores what the save says
+// ("MAPCLASS_CoastalRainBasin"). The Empires of the Indus scripts add a third
+// wrinkle — "MAPCLASS_MapscriptWetlands", with a lowercase s.
+//
+// So anything comparing a script across those two sources — which is what the
+// opponent recommender's map suggestion does — has to compare canonical forms,
+// or it silently decides a player has never played a map they play constantly.
+// formatMapClass() in the frontend already strips the same infix for display;
+// this is the comparison half, and it lives here rather than there because
+// cloud/ is a separate package (see the note at the top of this file).
+//
+// The result is a lookup key, not a display value: lowercased, so no residual
+// difference in casing can split one script into two.
+export function canonicalMapScript(value: string): string {
+	return value.replace(/^MAPCLASS_MapScript/i, "MAPCLASS_").toLowerCase();
+}
