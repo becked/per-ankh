@@ -40,8 +40,46 @@ export interface ChartBundleSummary extends ChartBundleSummaryCore {
 
 // Chart-fields core, returned by both the user and tournament stats endpoints.
 // ChartBundle (user) extends it with the Overview fields.
+// One family class, over the player-games where its nation's pool contained it.
+// Mirrors cloud/src/stats/family-keeps.ts.
+export interface FamilyKeepRow {
+	family_class: string;
+	eligible: number;
+	kept: number;
+	kept_pct: number;
+	// What indifference alone produces: a player fields three of the pool, so a
+	// four-family nation keeps three of four by chance. Accumulated per game
+	// because pools differ in size, which is why it isn't a constant.
+	baseline_pct: number;
+	// Above zero is kept more often than chance; below is a family refused.
+	delta: number;
+	z: number;
+	// Survives Benjamini-Hochberg at q=0.05 across the classes in this table.
+	significant: boolean;
+}
+
+export interface FamilyKeepTable {
+	rows: FamilyKeepRow[];
+	player_games: number;
+	// Rosters that couldn't say what was chosen at setup, nations that field
+	// their whole pool, and rows whose nation or classes aren't in the baked
+	// pool. Rendered, not hidden.
+	skipped_incomplete: number;
+	skipped_forced_pool: number;
+	skipped_unknown_pool: number;
+}
+
+// The overall table plus one per nation, each with its own false-discovery
+// gate — looking at one nation is four tests, not ten.
+export interface FamilyKeeps {
+	overall: FamilyKeepTable;
+	byNation: Array<{ nation: string } & FamilyKeepTable>;
+}
+
 export interface ChartBundleCore {
 	meta: ChartBundleMeta;
+
+	familyKeeps: FamilyKeeps;
 
 	summary: ChartBundleSummaryCore;
 
@@ -206,6 +244,7 @@ export type StatsCategory =
 	| "leaders"
 	| "wonders"
 	| "families"
+	| "family-fielded"
 	| "yields"
 	| "laws"
 	| "cities"

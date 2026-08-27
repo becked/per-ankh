@@ -2,6 +2,10 @@
 	// Families category: which family class ran the capital (nation-agnostic —
 	// the earliest of the family decisions), then a nation selector for which
 	// classes that nation's players pick and whether some win more.
+	//
+	// Both are outcome stats. Which families a corpus refuses to field is a
+	// choice stat measured against chance, and lives in its own category —
+	// FamilyKeepsPanel.
 
 	import ChartContainer from "$lib/ChartContainer.svelte";
 	import NationSelect from "./NationSelect.svelte";

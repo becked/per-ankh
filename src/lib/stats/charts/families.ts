@@ -5,11 +5,15 @@ import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 import type { ChartBundleCore } from "../types";
 import {
 	ALL_NATIONS,
+	COMMON_GRID,
 	type WinLossRow,
+	crestAxisLabel,
 	fmtClass,
 	nationLabel,
 	winLossStackedOption,
 } from "./helpers";
+import { CHART_THEME } from "$lib/config";
+import type { FamilyKeepRow } from "../types";
 
 // Founding-order slots, in order. A player runs three families; which one
 // seeded the first city is a different commitment from the third.
@@ -178,4 +182,155 @@ export function capitalFamilyWinLossOption(
 		title: "Capital family",
 		labelWidth: 150,
 	});
+}
+
+// The ECharts rendering of Families fielded.
+//
+// The numbers sit in a column on the right rather than riding the end of each
+// bar: on the bar they start at a different x on every row, so reading "which
+// gaps are big" means tracking a ragged edge instead of scanning a column. A
+// second category axis pinned right, sharing the series' categories, is how
+// ECharts does an aligned column — the rich-text segments give it fixed widths
+// and let Δ take its colour per row.
+export function familyKeepsOption(rows: FamilyKeepRow[]): ChartOption {
+	// Category axes run bottom-up, so ascending puts the most-kept at the top.
+	const sorted = [...rows].sort((a, b) => a.kept_pct - b.kept_pct);
+	const keys = sorted.map((r) => r.family_class);
+	const labelWidth = 150;
+	// Colour means the gap cleared the significance gate, and which colour means
+	// which way — the same rule the bar follows, so the two can't disagree.
+	const KEPT_MORE = "#8cc878";
+	const KEPT_LESS = "#c86e5a";
+	const NEUTRAL = "#6b6257";
+
+	return {
+		...CHART_THEME,
+		title: {
+			...CHART_THEME.title,
+			text: "Families fielded",
+			// The columns name themselves, from the right axis — see its `name`.
+		},
+		tooltip: {
+			...CHART_THEME.tooltip,
+			axisPointer: { type: "shadow" },
+			formatter: (params: unknown) => {
+				const p = (params as { dataIndex: number }[])[0];
+				const r = sorted[p.dataIndex];
+				if (!r) return "";
+				return (
+					`${fmtClass(r.family_class)}<br/>` +
+					`Fielded in ${r.kept} of ${r.eligible} games where it was available<br/>` +
+					`Chance alone: ${r.baseline_pct.toFixed(0)}%<br/>` +
+					(r.significant
+						? "Further from chance than luck explains"
+						: "Not distinguishable from chance")
+				);
+			},
+		},
+		grid: { ...COMMON_GRID, left: labelWidth, top: 78, right: 162 },
+		xAxis: { type: "value", max: 100, axisLabel: { formatter: "{value}%" } },
+		yAxis: [
+			{
+				type: "category",
+				data: keys,
+				axisLabel: crestAxisLabel(
+					keys,
+					classCrestUrl,
+					fmtClass,
+					labelWidth - 8,
+					20,
+					14,
+				),
+			},
+			{
+				// The value column. Same categories, pinned right, chrome off — it
+				// is a label track, not an axis anyone reads as one.
+				type: "category",
+				position: "right",
+				data: keys,
+				// Column headings, sat at the top of the value column. The axis
+				// `name` is the only thing ECharts anchors to the end of an axis,
+				// and giving it the same rich-text widths as the labels below is
+				// what lines the three headings up over the three columns instead
+				// of floating them somewhere near.
+				name: "{hk|fielded}{hc|vs chance}{hg|games}",
+				nameLocation: "end",
+				nameGap: 16,
+				nameTextStyle: {
+					rich: {
+						// Widths match the value columns below exactly, so the
+						// headings sit over what they name. A point smaller than the
+						// values, because "vs chance" is the widest string here and
+						// at 10px it spills out of its cell into "kept".
+						hk: { width: 48, align: "right", color: "#7a6a55", fontSize: 9 },
+						hc: { width: 52, align: "right", color: "#7a6a55", fontSize: 9 },
+						hg: { width: 40, align: "right", color: "#7a6a55", fontSize: 9 },
+					},
+				},
+				axisTick: { show: false },
+				axisLine: { show: false },
+				axisLabel: {
+					formatter: (_value: string, index: number) => {
+						const r = sorted[index];
+						if (!r) return "";
+						const tone = !r.significant ? "dim" : r.delta >= 0 ? "up" : "down";
+						const sign = r.delta >= 0 ? "+" : "";
+						return `{pct|${r.kept_pct.toFixed(0)}%}{${tone}|${sign}${r.delta.toFixed(0)}}{n|${r.eligible}g}`;
+					},
+					rich: {
+						// Widths are shared with the headings above (nameTextStyle
+						// .rich) so the two line up; "vs chance" is the widest string
+						// in the block and sets the middle column.
+						pct: { width: 48, align: "right", color: "#FFFFFF" },
+						up: { width: 52, align: "right", color: KEPT_MORE },
+						down: { width: 52, align: "right", color: KEPT_LESS },
+						dim: { width: 52, align: "right", color: "#7a6a55" },
+						n: { width: 40, align: "right", color: "#7a6a55" },
+					},
+				},
+			},
+		],
+		series: [
+			{
+				type: "bar",
+				yAxisIndex: 0,
+				data: sorted.map((r) => ({
+					value: r.kept_pct,
+					itemStyle: {
+						color: r.significant
+							? r.delta >= 0
+								? KEPT_MORE
+								: KEPT_LESS
+							: NEUTRAL,
+					},
+				})),
+				barWidth: 18,
+			},
+			{
+				// The chance notch, one per row at that row's own level.
+				//
+				// z above the bars, explicitly. Both series default to the same z
+				// and fall back to declaration order, which is a thin thing to rest
+				// on for the one mark the whole chart is read against — and when a
+				// bar runs past its own chance level, the notch sits inside the
+				// fill, which is exactly where losing the tie makes it vanish.
+				type: "custom",
+				z: 10,
+				yAxisIndex: 0,
+				silent: true,
+				data: sorted.map((r, i) => [r.baseline_pct, i]),
+				renderItem: (_params, api) => {
+					const [x, y] = api.coord([api.value(0), api.value(1)]);
+					// Taller than the 18px bar so it reads as a mark laid across it
+					// rather than a gap in it.
+					const height = (api.size?.([0, 1]) as number[])[1] * 0.85;
+					return {
+						type: "rect",
+						shape: { x: x - 1.5, y: y - height / 2, width: 3, height },
+						style: { fill: "#FFFFFF" },
+					};
+				},
+			},
+		],
+	};
 }

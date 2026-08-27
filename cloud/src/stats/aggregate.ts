@@ -16,6 +16,7 @@
 
 import { LAW_CLASSES } from "../generated/law-classes";
 import { WONDER_CULTURE_PREREQ, cultureRank } from "../generated/wonders";
+import { buildFamilyKeeps } from "./family-keeps";
 import type { StatsCorpus } from "./resolve";
 import type {
 	ChartBundle,
@@ -183,6 +184,19 @@ function parseJsonArray(raw: string | null): string[] {
 // The corpus's focal (game_id, player_index) tuples, encoded as
 // `${game_id}|${player_index}` strings for quick membership checks. "uploader"
 // keeps only the uploader's own row per game; "humans" keeps every human row
+// player_summaries.family_classes is a JSON array written by the indexer. A row
+// whose column is null or unparseable contributes no families, which the cut
+// table then skips as an unreadable roster rather than counting as three.
+function parseFamilyClasses(raw: string | null): string[] | null {
+	if (!raw) return null;
+	try {
+		const parsed: unknown = JSON.parse(raw);
+		return Array.isArray(parsed) ? (parsed as string[]) : null;
+	} catch {
+		return null;
+	}
+}
+
 // (baseRows are already is_human=1, so that's all of them).
 function buildSelfMembership(baseRows: BaseRow[], focal: Focal): Set<string> {
 	const self = new Set<string>();
@@ -1180,6 +1194,21 @@ export async function buildChartBundle(
 		rate: s.games > 0 ? s.wins / s.games : 0,
 	}));
 
+	// Which families this corpus keeps. selfRows, not baseRows: on a
+	// profile the focal player is the owner, so the table is that player's own
+	// choices rather than their opponents'; on a tournament the focal set is
+	// every human, so it is the event's field. Same abstraction the sibling
+	// family stats use, and it happens to be exactly the right split here.
+	//
+	// A cut is a setup decision, so the corpus is player-games, and no query is
+	// needed — nation and family_classes are already on the base rows.
+	const familyKeeps = buildFamilyKeeps(
+		selfRows.map((r) => ({
+			nation: r.nation,
+			family_classes: parseFamilyClasses(r.family_classes),
+		})),
+	);
+
 	const core: ChartBundleCore = {
 		meta: {
 			game_count: totalGames,
@@ -1189,6 +1218,7 @@ export async function buildChartBundle(
 			total_games: totalGames,
 			avg_total_turns: avgTotalTurns,
 		},
+		familyKeeps,
 		save_dates: saveDates,
 		favorite_day_of_week: favoriteDayOfWeek,
 		nations,
@@ -1266,6 +1296,9 @@ function emptyCore(parserVersion: string): ChartBundleCore {
 			total_games: 0,
 			avg_total_turns: null,
 		},
+		// Built from the empty corpus rather than hand-written, so the shape can
+		// only be the one the real path produces.
+		familyKeeps: buildFamilyKeeps([]),
 		save_dates: [],
 		favorite_day_of_week: null,
 		nations: [],

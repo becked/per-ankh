@@ -32,6 +32,7 @@
 		"bake:map-options": "tsx scripts/bake-map-options.ts",
 		"bake:law-classes": "tsx scripts/bake-law-classes.ts",
 		"bake:map-caveats": "tsx scripts/bake-map-caveats.ts",
+		"bake:family-pools": "tsx scripts/bake-family-pools.ts",
 		"bake:specialists": "tsx scripts/bake-specialists.ts",
 		"bake:unit-stats": "tsx scripts/bake-unit-stats.ts",
 		"bake:owtt": "tsx scripts/bake-owtt.ts",
@@ -44,7 +45,7 @@
 		"bake:og": "node scripts/make-og-default.mjs .",
 		"bake:screenshots": "node scripts/capture-home-screenshots.mjs",
 		"ux:review": "node scripts/capture-ux-review.mjs",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:improvement-builds && npm run bake:family-opinion && npm run bake:difficulty-names && npm run bake:game-option-names && npm run bake:goal-names && npm run bake:name-text && npm run bake:nation-names && npm run bake:project-icons && npm run bake:project-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:map-caveats && npm run bake:specialists && npm run bake:science-yields && npm run bake:family-colors && npm run bake:orders-sources && npm run bake:wonders && npm run bake:finalize"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:improvement-builds && npm run bake:family-opinion && npm run bake:difficulty-names && npm run bake:game-option-names && npm run bake:goal-names && npm run bake:name-text && npm run bake:nation-names && npm run bake:project-icons && npm run bake:project-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:map-caveats && npm run bake:family-pools && npm run bake:specialists && npm run bake:science-yields && npm run bake:family-colors && npm run bake:orders-sources && npm run bake:wonders && npm run bake:finalize"
 	},
 	"license": "MIT",
 	"dependencies": {

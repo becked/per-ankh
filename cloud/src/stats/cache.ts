@@ -38,6 +38,7 @@ const BUNDLE_SCHEMA_CHANGELOG: Record<number, string> = {
 	6: "starting-leader archetype + trait win rates",
 	7: "per-wonder build rate, builder win rate, and build-turn distribution",
 	8: "capital family class win rate, plus avg_share / share_samples / slot_counts on familyByNation (per-class city footprint and founding order)",
+	9: "familyKeeps — per-family-class keep rate against the pool's chance baseline, overall and per nation",
 };
 
 export const BUNDLE_SCHEMA_VERSION = Math.max(

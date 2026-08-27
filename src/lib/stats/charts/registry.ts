@@ -19,6 +19,7 @@ export const CATEGORIES: Array<{ id: StatsCategory; label: string }> = [
 	{ id: "leaders", label: "Leaders" },
 	{ id: "wonders", label: "Wonders" },
 	{ id: "families", label: "Families" },
+	{ id: "family-fielded", label: "Families fielded" },
 	{ id: "laws", label: "Laws" },
 	{ id: "cities", label: "Cities" },
 	{ id: "tech", label: "Tech" },
@@ -76,6 +77,15 @@ export const CHART_SPECS: ChartSpec[] = [
 		category: "families",
 		title: "Families",
 		hasData: (b) => b.familyByNation.length > 0,
+	},
+	// Families fielded — category anchor only; rendered by FamilyKeepsPanel. A
+	// separate category from Families because it is a choice measured against
+	// the pool's chance level, not an outcome measured against a win rate.
+	{
+		id: "family-fielded",
+		category: "family-fielded",
+		title: "Families fielded",
+		hasData: (b) => b.familyKeeps.overall.rows.length > 0,
 	},
 	// Yields — category anchor only. The Yields tab is rendered by
 	// YieldsStatsPanel (one chart per series), not the generic spec loop,
