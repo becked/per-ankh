@@ -209,6 +209,10 @@ export type UserScope =
 // with an optional nation facet — see $lib/stats/global-facets.
 export type GlobalSlice = "all" | "duel" | "ffa" | "single_player";
 
+// How recently a game was PLAYED (games.save_date), ANDed with the slice.
+// "all" applies no window and is the default.
+export type GlobalPeriod = "all" | "12m" | "6m";
+
 export type StatsCategory =
 	| "nations"
 	| "leaders"

@@ -26,7 +26,11 @@ import {
 	getCached,
 } from "../../../src/stats/cache";
 import { GLOBAL_STATS_VIEW_PER_HOUR } from "../../../src/stats/handlers";
-import type { ChartBundleCore, GlobalSlice } from "../../../src/stats/types";
+import type {
+	ChartBundleCore,
+	GlobalPeriod,
+	GlobalSlice,
+} from "../../../src/stats/types";
 import { makeUser, type TestUser } from "../../helpers/builders";
 import { postMultipart } from "../../helpers/requests";
 import {
@@ -112,7 +116,10 @@ const globalKey = (
 	slice: GlobalSlice,
 	nations: string[],
 	parser_version = CURRENT_PARSER_VERSION,
-) => ({ kind: "global", slice, nations, parser_version }) as const;
+	// The nightly and the request path both key on the all-time window;
+	// a narrowed one is only ever built on demand (precompute.ts).
+	period: GlobalPeriod = "all",
+) => ({ kind: "global", slice, nations, period, parser_version }) as const;
 
 const cachedBundle = (
 	slice: GlobalSlice,

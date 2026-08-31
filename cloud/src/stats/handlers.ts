@@ -11,6 +11,7 @@ import type { SessionEnv } from "../session";
 import { cloudCorsHeaders, errorResponse, jsonResponse } from "../util";
 import {
 	parseNationParam,
+	parsePeriodParam,
 	parseScopeParam,
 	parseSliceParam,
 } from "../games-scope";
@@ -223,6 +224,7 @@ export async function handleGlobalStats(
 	const url = new URL(request.url);
 	const slice = parseSliceParam(url.searchParams.get("slice"));
 	const nation = parseNationParam(url.searchParams.get("nation"));
+	const period = parsePeriodParam(url.searchParams.get("period"));
 	// The resolver and the cache key both take a set, even though the UI is
 	// single-select, so widening the facet to multi-select later costs the
 	// nightly precompute table rather than this call chain.
@@ -232,6 +234,7 @@ export async function handleGlobalStats(
 		kind: "global" as const,
 		slice,
 		nations,
+		period,
 		parser_version: CURRENT_PARSER_VERSION,
 	};
 	const cached = await getCached<ChartBundleCore>(env, cacheKey);
@@ -254,9 +257,16 @@ export async function handleGlobalStats(
 	// written under any parser version, so there is no stale entry to find. The
 	// cost is one D1 query ahead of a stale response, which already pays for the
 	// walk itself.
-	const corpus = await resolveGlobalCorpus(env, slice, { nations });
+	const corpus = await resolveGlobalCorpus(env, slice, { nations, period });
 	const build = () =>
-		buildGlobalSelection(env, slice, nations, CURRENT_PARSER_VERSION, corpus);
+		buildGlobalSelection(
+			env,
+			slice,
+			nations,
+			CURRENT_PARSER_VERSION,
+			corpus,
+			period,
+		);
 
 	if (corpus.gameIds.length === 0) {
 		return globalStatsResponse(await build(), cors);
@@ -272,6 +282,7 @@ export async function handleGlobalStats(
 				logError("global_stats_refresh_failed", e, {
 					slice,
 					nation: nation ?? "",
+					period,
 				});
 			}),
 		);

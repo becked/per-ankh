@@ -1,6 +1,6 @@
 // Shared "what's in scope" predicates over the games table.
 //
-// Three selections live here:
+// Four selections live here:
 //
 //   * buildUserScopeWhere — which of one user's saves a viewer sees. The
 //     Games tab (handleGameList) and the Stats/Overview ChartBundle
@@ -12,6 +12,10 @@
 //     slice covers. Composition only: the global corpus has no owner, so
 //     its is_public=1 visibility is the resolver's base clause, not the
 //     slice's.
+//   * periodCutoff — how recently a public /stats game was played. A second
+//     facet ANDed with the slice, filtering games.save_date; it returns the
+//     window's opening date rather than a fragment, because the resolver
+//     binds it.
 //   * buildAdminGameFilterWhere — which slice of the whole corpus an admin
 //     sweep acts on. Shared by both admin list endpoints.
 //
@@ -19,7 +23,7 @@
 // row presents it as one dropdown. Identity visibility (visitors only
 // ever see is_public=1) composes on top.
 
-import type { GlobalSlice, UserScope } from "./stats/types";
+import type { GlobalPeriod, GlobalSlice, UserScope } from "./stats/types";
 
 export interface UserScopeOpts {
 	scope: UserScope;
@@ -169,6 +173,53 @@ export function parseSliceParam(raw: string | null): GlobalSlice {
 		return raw;
 	}
 	return DEFAULT_GLOBAL_SLICE;
+}
+
+// ---------- Recency window ----------
+//
+// A second facet ANDed with the slice: how recently the game was PLAYED, from
+// games.save_date, not how recently it was uploaded. An eight-year-old save
+// dragged in last week is old-meta evidence whatever its created_at says, and
+// the question the window answers is "what does the game look like now".
+//
+// save_date is an ISO date string, so the comparison is a plain string one —
+// lexicographic order is chronological. A game with no save_date (three of the
+// 816 in the local corpus) is not datable and drops out of every window; the
+// all-time view is where it still counts.
+export const DEFAULT_GLOBAL_PERIOD: GlobalPeriod = "all";
+
+export function parsePeriodParam(raw: string | null): GlobalPeriod {
+	if (raw === "all" || raw === "12m" || raw === "6m") return raw;
+	return DEFAULT_GLOBAL_PERIOD;
+}
+
+// The window's opening date, or null for "all time".
+//
+// Resolved per build rather than baked into the cache key, which keys on the
+// token instead. Keying on the date would roll the key daily and so defeat
+// serve-stale — the suffix walk would never match yesterday's entry — for the
+// sake of an edge that moves by one day. Entries live 24h, so the window's
+// start can trail the clock by that much, which is not a distinction "the last
+// six months" is making.
+//
+// The day is clamped to the target month's length. Setting the month alone
+// would land on a date the target month does not have and JS would roll it
+// forward: six months before 31 August is 31 February, which normalizes to
+// 3 March, silently opening the window three days late. `now` is a parameter
+// so that edge is testable rather than only reachable on the ~10 days a month
+// it occurs.
+export function periodCutoff(
+	period: GlobalPeriod,
+	now: Date = new Date(),
+): string | null {
+	if (period === "all") return null;
+	const months = period === "6m" ? 6 : 12;
+	const year = now.getUTCFullYear();
+	const month = now.getUTCMonth() - months;
+	// Day 0 of the following month is the last day of this one.
+	const lastDay = new Date(Date.UTC(year, month + 1, 0)).getUTCDate();
+	const day = Math.min(now.getUTCDate(), lastDay);
+	return new Date(Date.UTC(year, month, day)).toISOString().slice(0, 10);
 }
 
 // ---------- Admin sweep filters ----------

@@ -1,14 +1,16 @@
 <script lang="ts">
-	// The /stats facet row — the two controls that name the global corpus: a
-	// composition slice, and optionally one nation ANDed with it. Sibling of
+	// The /stats facet row — the three controls that name the global corpus: a
+	// composition slice, optionally one nation ANDed with it, and how recently
+	// the games were played. Sibling of
 	// $lib/users/ScopeRow.svelte and built to the same shape: hand-rolled
 	// popovers (not native <select>) matching the game-detail action popups,
 	// each writing its selection to the URL so the load re-runs and the view
 	// stays linkable.
 	//
-	// Single-select on both, which is what keeps the whole selection space —
-	// four slices × the nation roster — small enough for the nightly
-	// precompute to hold all of it.
+	// Single-select throughout. The nightly precompute holds the slice × nation
+	// space; it deliberately warms the all-time window only, so a narrowed
+	// window is a cache miss the first time it is asked for and then a 24h
+	// entry with serve-stale behind it (stats/precompute.ts).
 	//
 	// Controlled: the selection comes from the load (which parsed it out of
 	// the URL), never from local state, so the lit option and the rendered
@@ -18,18 +20,25 @@
 	import { page } from "$app/state";
 	import { ALL_NATIONS, nationLabel } from "./charts/helpers";
 	import {
+		DEFAULT_GLOBAL_PERIOD,
 		DEFAULT_GLOBAL_SLICE,
+		GLOBAL_PERIODS,
 		GLOBAL_SLICES,
+		globalPeriodLabel,
 		globalSliceLabel,
 		NATION_FACET_OPTIONS,
 	} from "./global-facets";
-	import type { GlobalSlice } from "./types";
+	import type { GlobalPeriod, GlobalSlice } from "./types";
 
-	let { slice, nation }: { slice: GlobalSlice; nation: string | null } =
+	let {
+		slice,
+		nation,
+		period,
+	}: { slice: GlobalSlice; nation: string | null; period: GlobalPeriod } =
 		$props();
 
 	// The URL param each control writes, which is also its identity in the row.
-	type Facet = "slice" | "nation";
+	type Facet = "slice" | "nation" | "period";
 	type Option = { value: string; label: string };
 	type FacetMenu = {
 		facet: Facet;
@@ -74,9 +83,20 @@
 			currentLabel: nationLabel(nationValue),
 			defaultValue: ALL_NATIONS,
 		},
+		{
+			facet: "period",
+			ariaLabel: "Played",
+			options: GLOBAL_PERIODS.map((p) => ({
+				value: p,
+				label: globalPeriodLabel(p),
+			})),
+			current: period,
+			currentLabel: globalPeriodLabel(period),
+			defaultValue: DEFAULT_GLOBAL_PERIOD,
+		},
 	]);
 
-	// The row has two menus; one is open at a time.
+	// The row has three menus; one is open at a time.
 	let openMenu = $state<Facet | null>(null);
 
 	async function select(menu: FacetMenu, value: string) {

@@ -327,6 +327,10 @@ export type UserScope =
 // The predicates live in games-scope.ts.
 export type GlobalSlice = "all" | "duel" | "ffa" | "single_player";
 
+// How recently a game was PLAYED (games.save_date), ANDed with the slice.
+// "all" applies no window and is the default.
+export type GlobalPeriod = "all" | "12m" | "6m";
+
 // Visibility scope for user corpus — owner sees private+public, others
 // see public only. Embedded in the cache key.
 export type UserStatsScope = "self" | "public";

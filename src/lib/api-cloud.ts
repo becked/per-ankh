@@ -5,10 +5,14 @@
 // Configure via VITE_API_URL (see .env.example).
 
 import type { FullGameData } from "$lib/parser/types";
-import { DEFAULT_GLOBAL_SLICE } from "$lib/stats/global-facets";
+import {
+	DEFAULT_GLOBAL_PERIOD,
+	DEFAULT_GLOBAL_SLICE,
+} from "$lib/stats/global-facets";
 import type {
 	ChartBundle,
 	ChartBundleCore,
+	GlobalPeriod,
 	GlobalSlice,
 	UserScope,
 } from "$lib/stats/types";
@@ -1042,13 +1046,22 @@ export const cloudApi = {
 	// Served from the nightly precompute in the steady state; a miss computes
 	// in the request, so a cold key is slower and never a failure.
 	getGlobalStats: async (
-		opts?: CallOpts & { slice?: GlobalSlice; nation?: string | null },
+		opts?: CallOpts & {
+			slice?: GlobalSlice;
+			nation?: string | null;
+			period?: GlobalPeriod;
+		},
 	): Promise<ChartBundleCore> => {
+		// Each default drops its param, so the default view has one canonical
+		// URL and so one edge-cache entry.
 		const params = new URLSearchParams();
 		if (opts?.slice != null && opts.slice !== DEFAULT_GLOBAL_SLICE) {
 			params.set("slice", opts.slice);
 		}
 		if (opts?.nation) params.set("nation", opts.nation);
+		if (opts?.period != null && opts.period !== DEFAULT_GLOBAL_PERIOD) {
+			params.set("period", opts.period);
+		}
 		const qs = params.toString();
 		const res = await request(`/stats${qs ? `?${qs}` : ""}`, opts);
 		return res.json() as Promise<ChartBundleCore>;

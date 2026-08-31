@@ -10,7 +10,7 @@
 
 import { NATION_COLORS } from "$lib/config";
 import { nationName } from "$lib/utils/formatting";
-import type { GlobalSlice } from "./types";
+import type { GlobalPeriod, GlobalSlice } from "./types";
 
 // How each slice names itself. A total map rather than a lookup with a
 // fallback, so adding a slice to GlobalSlice is a type error here until it
@@ -50,6 +50,35 @@ export function parseGlobalSlice(raw: string | null): GlobalSlice {
 		: DEFAULT_GLOBAL_SLICE;
 }
 
+// The recency window: how recently the game was PLAYED, from games.save_date
+// rather than from the upload date — an old save uploaded last week is
+// old-meta evidence whatever its created_at says. Mirrors parsePeriodParam /
+// DEFAULT_GLOBAL_PERIOD in cloud/src/games-scope.ts, for the same reason the
+// slice parse is mirrored.
+//
+// A total map, like the slice labels above and for the same reason: adding a
+// window to GlobalPeriod is a type error here until it has a label.
+const GLOBAL_PERIOD_LABELS: Readonly<Record<GlobalPeriod, string>> = {
+	all: "All time",
+	"12m": "Last 12 months",
+	"6m": "Last 6 months",
+};
+
+// Widest first, like the slices.
+export const GLOBAL_PERIODS: readonly GlobalPeriod[] = ["all", "12m", "6m"];
+
+export const DEFAULT_GLOBAL_PERIOD: GlobalPeriod = "all";
+
+export function globalPeriodLabel(period: GlobalPeriod): string {
+	return GLOBAL_PERIOD_LABELS[period];
+}
+
+export function parseGlobalPeriod(raw: string | null): GlobalPeriod {
+	return raw !== null && GLOBAL_PERIODS.includes(raw as GlobalPeriod)
+		? (raw as GlobalPeriod)
+		: DEFAULT_GLOBAL_PERIOD;
+}
+
 // The nations the facet offers: the playable roster, read off the same table
 // the nation colors come from.
 //
@@ -83,7 +112,14 @@ export function parseNationFacet(raw: string | null): string | null {
 export function globalSelectionLabel(
 	slice: GlobalSlice,
 	nation: string | null,
+	period: GlobalPeriod,
 ): string {
-	const label = globalSliceLabel(slice);
-	return nation === null ? label : `${nationName(nation)} · ${label}`;
+	const parts = [globalSliceLabel(slice)];
+	if (nation !== null) parts.unshift(nationName(nation));
+	// The default window is the whole corpus, which the slice label already
+	// describes — naming it would read as a narrowing that isn't there.
+	if (period !== DEFAULT_GLOBAL_PERIOD) {
+		parts.push(globalPeriodLabel(period).toLowerCase());
+	}
+	return parts.join(" · ");
 }
