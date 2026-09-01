@@ -44,6 +44,7 @@
 		ratingChipsRowHtml,
 		techName,
 		improvementDisplayName,
+		projectDisplayName,
 		createYieldChartOption,
 		rulerName,
 		rulerCognomen,
@@ -53,6 +54,8 @@
 		freeTechMarkers,
 		sagesSeatFoundedTurn,
 		scienceSpikes,
+		oneOffProjectScience,
+		type OneOffProject,
 		scienceBreakdown,
 		expeditionEvents,
 		leaderChangeMarkers,
@@ -462,6 +465,18 @@
 					(y) => y.nation,
 				)?.data ?? [];
 			const expeditions = expeditionEvents(player, storyEvents);
+			// Repeatable projects that paid a lump of science — Inquiries. The
+			// count is exact; what they were worth is a band, because the save
+			// records neither the tier nor the turn.
+			const oneOff = oneOffProjectScience(
+				ownedByPlayer(
+					cityStatistics.cities,
+					player,
+					(c) => c.owner_player_xml_id,
+					(c) => c.owner_nation,
+				),
+				projectDisplayName,
+			);
 			return {
 				player,
 				techs,
@@ -470,6 +485,7 @@
 				stealTurns,
 				expeditions,
 				science,
+				oneOff,
 				spikes: scienceSpikes(science, player, stealTurns, storyEvents),
 			};
 		}),
@@ -691,6 +707,41 @@
 		});
 		return cols.every((c) => c.b.total === 0) ? [] : cols;
 	});
+
+	// One-off science: the repeatable projects that pay a LUMP on completion
+	// (Inquiries, Archives), beside the total one-off gain the yield history
+	// actually shows. The counts are exact; what each was worth is a band,
+	// because a save records neither the tier nor the turn — so this is a
+	// separate table under the rate breakdown rather than a row inside it.
+	type OneOffColumn = {
+		player: DetailPlayer;
+		projects: OneOffProject[];
+		measured: number;
+		events: number;
+	};
+	const oneOffColumns = $derived.by<OneOffColumn[]>(() => {
+		const cols = scienceRailData.map(({ player, oneOff, spikes }) => ({
+			player,
+			projects: oneOff,
+			measured: spikes.reduce((t, s) => t + s.amount, 0),
+			events: spikes.length,
+		}));
+		return cols.some((c) => c.projects.length > 0) ? cols : [];
+	});
+	// Union of project labels across players, dearest first, so a row exists
+	// wherever any player ran one.
+	const oneOffRows = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- built once per derivation, never mutated after
+		const best = new Map<string, number>();
+		for (const col of oneOffColumns) {
+			for (const p of col.projects) {
+				best.set(p.label, Math.max(best.get(p.label) ?? 0, p.max));
+			}
+		}
+		return [...best].sort((a, b) => b[1] - a[1]).map(([label]) => label);
+	});
+	const oneOffBand = (p: OneOffProject) =>
+		p.min === p.max ? `+${p.min}` : `+${p.min}–${p.max}`;
 
 	// Row layout: per section, the union of item labels across players,
 	// biggest first — ranked by one player when their header is clicked,
@@ -1051,6 +1102,65 @@
 					</tbody>
 				</table>
 			</div>
+
+			<!-- One-off science: lumps paid on completing a repeatable project,
+			     which the rate decomposition above deliberately excludes. The
+			     counts are exact; each completion's worth is a band, because the
+			     save records neither the tier nor the turn it landed on. -->
+			{#if oneOffColumns.length > 0}
+				<h4 class="mb-1 mt-5 text-sm font-bold text-tan">One-off science</h4>
+				<p class="mb-2 text-xs italic text-gray-400">
+					Paid once, on completing the project — not part of the per-turn rate
+					above. A save records how many a city finished, never which tier or
+					which turn, so the science is a range.
+				</p>
+				<div class="overflow-x-auto">
+					<table class="w-full text-sm">
+						<tbody>
+							{#each oneOffRows as label (label)}
+								<tr>
+									<td class="py-0.5 text-xs text-gray-400">{label}</td>
+									{#each oneOffColumns as col (col.player.playerId)}
+										{@const p = col.projects.find((x) => x.label === label)}
+										<td class="py-0.5 pr-4 text-right text-xs">
+											{#if p}
+												<span
+													class="text-tan"
+													title={p.byCity
+														.map(
+															(c) =>
+																`${formatEnum(c.name, "CITYNAME_")} ×${c.count}`,
+														)
+														.join(", ")}
+												>
+													{p.count}× &nbsp;{oneOffBand(p)}
+												</span>
+											{:else}
+												<span class="text-gray-400">—</span>
+											{/if}
+										</td>
+									{/each}
+								</tr>
+							{/each}
+							<tr class="border-t border-border-subtle">
+								<td class="py-1.5 font-semibold text-tan">
+									<span
+										title="Turns where the science total rose by more than that turn's rate — every one-off gain the save shows, whatever its source (events, ruins, missions, these projects)."
+										>Measured one-off gains</span
+									>
+								</td>
+								{#each oneOffColumns as col (col.player.playerId)}
+									<td class="py-1.5 pr-4 text-right font-semibold text-tan">
+										+{col.measured}
+										<span class="font-normal text-gray-400">({col.events})</span
+										>
+									</td>
+								{/each}
+							</tr>
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
