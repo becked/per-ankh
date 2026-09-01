@@ -577,10 +577,12 @@
 			{currentLaws}
 			{improvementData}
 			{cityStatistics}
+			mapTiles={mapTiles ?? []}
 			{families}
 			{memoryData}
 			{storyEvents}
 			{characters}
+			{characterTraits}
 			{gameReligions}
 			gameOptions={gameDetails.game_options}
 			{userNation}

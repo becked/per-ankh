@@ -5,10 +5,12 @@
 	import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 	import type { PlayerLaw } from "$lib/types/PlayerLaw";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { MapTile } from "$lib/types/MapTile";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { StoryEvent } from "$lib/types/StoryEvent";
 	import type {
 		CharacterInfo,
+		CharacterTraitInfo,
 		FamilyInfo,
 		GameReligion,
 		MemoryInfo,
@@ -76,10 +78,12 @@
 		currentLaws,
 		improvementData,
 		cityStatistics,
+		mapTiles = [],
 		families = [],
 		memoryData = [],
 		storyEvents = [],
 		characters = [],
+		characterTraits = [],
 		gameReligions = [],
 		gameOptions = null,
 		userNation = null,
@@ -93,10 +97,17 @@
 		currentLaws: PlayerLaw[];
 		improvementData: ImprovementData;
 		cityStatistics: CityStatistics;
+		// The final-turn map, which carries the tile coordinates the science
+		// breakdown's adjacency rows need. Defaults to [] — a blob with no map
+		// simply gets no adjacency section.
+		mapTiles?: MapTile[];
 		families?: FamilyInfo[];
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
 		characters?: CharacterInfo[];
+		// Traits with the turn they were acquired and lost — the science
+		// breakdown reads the ones a ruler or governor still holds.
+		characterTraits?: CharacterTraitInfo[];
 		// Founded religions with their theologies (2.15.0+) — the science
 		// breakdown's Dualism rows. Defaults to [] for legacy callers.
 		gameReligions?: GameReligion[];
@@ -611,6 +622,19 @@
 			: gameOptions.GAMEOPTION_COMPETITIVE_MODE === true,
 	);
 	const characterById = $derived(new Map(characters.map((c) => [c.xml_id, c])));
+	// Character → the traits they still hold at game end (a removed trait
+	// stops paying), for the breakdown's city-bonus rows.
+	const traitsByCharacter = $derived.by(() => {
+		// eslint-disable-next-line svelte/prefer-svelte-reactivity -- built once per derivation, never mutated after
+		const byId = new Map<number, string[]>();
+		for (const t of characterTraits) {
+			if (t.removed_turn != null) continue;
+			const held = byId.get(t.character_xml_id) ?? [];
+			held.push(t.trait_name);
+			byId.set(t.character_xml_id, held);
+		}
+		return byId;
+	});
 	// religion → theologies established, for the breakdown's Dualism rows.
 	// Empty lists on pre-2.15.0 blobs, which simply produce no rows.
 	const theologiesByReligion = $derived(
@@ -637,6 +661,15 @@
 				player,
 				(c) => c.owner_player_xml_id,
 				(c) => c.owner_nation,
+			);
+			// The player's own tiles as the map records them: the breakdown's
+			// adjacency terms need coordinates, which live only here, and only
+			// a player's OWN neighbours grant them (the game's same-team test).
+			const tiles = ownedByPlayer(
+				mapTiles,
+				player,
+				(t) => t.owner_player_xml_id,
+				(t) => t.owner_nation,
 			);
 			const capitalCity = cities.find((c) => c.is_capital);
 			// The reigning leader's Wisdom — the only court rating that pays
@@ -666,6 +699,7 @@
 				player,
 				b: scienceBreakdown(
 					improvements,
+					tiles,
 					activeLaws,
 					capitalCity
 						? {
@@ -683,6 +717,13 @@
 						leaderArchetype,
 						theologiesByReligion,
 						governorWisdom: (xmlId) => characterById.get(xmlId)?.wisdom ?? null,
+						governorTraits: (xmlId) => traitsByCharacter.get(xmlId) ?? [],
+						// Same reigning-leader rule as the archetype above: a ruler
+						// off the throne grants nothing.
+						leaderTraits:
+							leader == null || leader.death_turn != null
+								? []
+								: (traitsByCharacter.get(leader.xml_id) ?? []),
 					},
 					specialistName,
 					improvementDisplayName,
@@ -699,6 +740,8 @@
 		{ key: "specialistsRural", label: "Rural specialists" },
 		{ key: "specialistsUrban", label: "Urban specialists" },
 		{ key: "buildings", label: "Buildings & resources" },
+		{ key: "adjacency", label: "Adjacency" },
+		{ key: "cityBonuses", label: "City bonuses" },
 		{ key: "laws", label: "Laws" },
 		{ key: "cityEffects", label: "Nation, family & religion" },
 		{ key: "modifiers", label: "Modifiers" },

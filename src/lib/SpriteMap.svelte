@@ -12,6 +12,7 @@
 	} from "$lib/generated/atlas-manifest";
 	import { SPRITE_MANIFEST } from "$lib/generated/sprite-manifest";
 	import { familyCrestKey, familyForOwner } from "$lib/game-detail/helpers";
+	import { hexNeighbors } from "$lib/utils/hex";
 	import MapTooltip from "$lib/MapTooltip.svelte";
 	import Checkbox from "$lib/ui/Checkbox.svelte";
 
@@ -610,32 +611,6 @@
 	function hexToRgb(hex: string): [number, number, number] {
 		const n = parseInt(hex.slice(1), 16);
 		return [(n >> 16) & 255, (n >> 8) & 255, n & 255];
-	}
-
-	// Pointy-top even-r neighbors. hexToPixel shifts even rows right by half-spacing,
-	// so even/odd rows have different diagonal neighbor offsets. Returned in the
-	// order [NE, E, SE, SW, W, NW] to match hexPolygon's edge index — edge i
-	// connects vertex i to vertex i+1 and faces neighbor i. Note: hexToPixel
-	// negates Y, so game y+1 renders as "north" (top of screen).
-	function hexNeighbors(x: number, y: number): [number, number][] {
-		if (y % 2 === 0) {
-			return [
-				[x + 1, y + 1], // NE
-				[x + 1, y], // E
-				[x + 1, y - 1], // SE
-				[x, y - 1], // SW
-				[x - 1, y], // W
-				[x, y + 1], // NW
-			];
-		}
-		return [
-			[x, y + 1], // NE
-			[x + 1, y], // E
-			[x, y - 1], // SE
-			[x - 1, y - 1], // SW
-			[x - 1, y], // W
-			[x - 1, y + 1], // NW
-		];
 	}
 
 	async function loadManifest(name: string): Promise<AtlasManifest> {

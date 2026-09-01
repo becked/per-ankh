@@ -103,6 +103,92 @@ export const SPECIALIST_TILE_MODIFIER: Readonly<
 	SPECIALIST_WOODCUTTER: { IMPROVEMENTCLASS_LUMBERMILL: 50 },
 };
 
+// ─── Tile modifiers (Tile.yieldModifierNoSpecialist) ────────────────
+
+// Every table below keys by improvement zType OR improvement class,
+// exactly as the XML writes each rule; the two token spaces can't
+// collide, so a lookup sums whichever of the two hit.
+
+// What a NEIGHBOUR grants this tile: granting improvement/class → the
+// improvement/class it lifts → percent. Read as "a Monastery next door
+// is +60% to this Grove" — the game looks the rule up on the neighbour
+// (InfoHelpers.adjacentYieldOutputImprovementModifier), and percentages
+// from several neighbours sum.
+export const IMPROVEMENT_ADJACENT_MODIFIER: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = {
+	IMPROVEMENTCLASS_MONASTERY: { IMPROVEMENTCLASS_GROVE: 60 },
+	IMPROVEMENT_TEMPLE_BUDDHISM: { IMPROVEMENT_MONASTERY_BUDDHISM: 20 },
+	IMPROVEMENT_TEMPLE_CHRISTIANITY: { IMPROVEMENT_MONASTERY_CHRISTIANITY: 20 },
+	IMPROVEMENT_TEMPLE_HINDUISM: { IMPROVEMENT_MONASTERY_HINDUISM: 20 },
+	IMPROVEMENT_TEMPLE_JUDAISM: { IMPROVEMENT_MONASTERY_JUDAISM: 20 },
+	IMPROVEMENT_TEMPLE_MANICHAEISM: { IMPROVEMENT_MONASTERY_MANICHAEISM: 20 },
+	IMPROVEMENT_TEMPLE_ZOROASTRIANISM: {
+		IMPROVEMENT_MONASTERY_ZOROASTRIANISM: 20,
+	},
+};
+
+// Improvement → science per adjacent resource tile the same team owns
+// (Tile.countTeamAdjacentResources), per turn. Part of the tile's BASE,
+// so the percent modifiers here multiply it.
+export const IMPROVEMENT_ADJACENT_RESOURCE_SCIENCE: Readonly<
+	Record<string, number>
+> = {
+	IMPROVEMENT_LIBRARY_1: 1,
+	IMPROVEMENT_LIBRARY_2: 1,
+	IMPROVEMENT_LIBRARY_3: 1,
+};
+
+// What the CITY grants a tile standing in it (City.getImprovement
+// ModifierForGovernor), by the source a save actually records. Scope
+// differs per table — see each one's comment.
+
+// The city's ruling family class: Clerics double monasteries.
+export const FAMILY_CLASS_IMPROVEMENT_MODIFIER: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = { FAMILYCLASS_CLERICS: { IMPROVEMENTCLASS_MONASTERY: 100 } };
+
+// A project the city completed. All are <bSingle>, so the modifier
+// lands once however many completions the city reports.
+export const PROJECT_IMPROVEMENT_MODIFIER: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = {
+	PROJECT_IMPROVED_HYDRAULICS: { IMPROVEMENT_WATERMILL: 50 },
+	PROJECT_MONASTIC_TRADITIONS: { IMPROVEMENTCLASS_MONASTERY: 50 },
+};
+
+// The player's nation, through its player effect — every city of theirs.
+export const NATION_IMPROVEMENT_MODIFIER: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = { NATION_KUSH: { IMPROVEMENTCLASS_SHRINE: 50 } };
+
+// A trait on the character GOVERNING the city (<GovernorEffectCity>) —
+// that city only.
+export const GOVERNOR_TRAIT_IMPROVEMENT_MODIFIER: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = {
+	TRAIT_CULTIVATOR: { IMPROVEMENT_GROVE: 50 },
+	TRAIT_PLANTERS_CLOAK: { IMPROVEMENTCLASS_GROVE: 100 },
+};
+
+// The same trait on the RULER, through <LeaderEffectPlayer> — every
+// city. A Cultivator ruler who also governs gets both, as the game
+// sums the two effects.
+export const LEADER_TRAIT_IMPROVEMENT_MODIFIER: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = { TRAIT_CULTIVATOR: { IMPROVEMENT_GROVE: 20 } };
+
+// A wonder that pays a percent of city science only while the city's
+// ruling family is of the right class (<aeEffectCityEffectCity>): the
+// Aksum Stele tiers, +10/25/50% in a Clerics city.
+export const IMPROVEMENT_FAMILY_CLASS_SCIENCE_MODIFIER: Readonly<
+	Record<string, Readonly<Record<string, number>>>
+> = {
+	IMPROVEMENT_AKSUM_STELE_1: { FAMILYCLASS_CLERICS: 10 },
+	IMPROVEMENT_AKSUM_STELE_2: { FAMILYCLASS_CLERICS: 25 },
+	IMPROVEMENT_AKSUM_STELE_3: { FAMILYCLASS_CLERICS: 50 },
+};
+
 // Improvement → its class, for the science-relevant improvements the
 // tile modifiers above are looked up against.
 export const IMPROVEMENT_CLASS: Readonly<Record<string, string>> = {
@@ -120,6 +206,12 @@ export const IMPROVEMENT_CLASS: Readonly<Record<string, string>> = {
 	IMPROVEMENT_SHRINE_INDRA: "IMPROVEMENTCLASS_SHRINE",
 	IMPROVEMENT_SHRINE_MAYON: "IMPROVEMENTCLASS_SHRINE",
 	IMPROVEMENT_SHRINE_NABU: "IMPROVEMENTCLASS_SHRINE",
+	IMPROVEMENT_TEMPLE_BUDDHISM: "IMPROVEMENTCLASS_TEMPLE",
+	IMPROVEMENT_TEMPLE_CHRISTIANITY: "IMPROVEMENTCLASS_TEMPLE",
+	IMPROVEMENT_TEMPLE_HINDUISM: "IMPROVEMENTCLASS_TEMPLE",
+	IMPROVEMENT_TEMPLE_JUDAISM: "IMPROVEMENTCLASS_TEMPLE",
+	IMPROVEMENT_TEMPLE_MANICHAEISM: "IMPROVEMENTCLASS_TEMPLE",
+	IMPROVEMENT_TEMPLE_ZOROASTRIANISM: "IMPROVEMENTCLASS_TEMPLE",
 	IMPROVEMENT_WATERMILL: "IMPROVEMENTCLASS_WATERMILL",
 	IMPROVEMENT_WINDMILL: "IMPROVEMENTCLASS_WINDMILL",
 };
