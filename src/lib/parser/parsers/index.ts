@@ -38,6 +38,8 @@ import {
 	playerGoalToRow,
 	playerResourceToRow,
 	projectProducedToRow,
+	parseTechChoices,
+	techChoiceToRow,
 } from "./player-data.js";
 import { parsePlayers } from "./players.js";
 import { parseReligions } from "./religions.js";
@@ -102,6 +104,7 @@ import {
 	type PlayerRosterEntry,
 	type PlayerResourceInfo,
 	type ProjectProducedInfo,
+	type TechChoiceInfo,
 	type ReligionOpinionEntry,
 	type TileOwnershipEntry,
 	type TileVisibilityInfo,
@@ -134,6 +137,7 @@ export function extractAllGameData(
 	const playerGoals = parsePlayerGoals(root);
 	const playerResources = parsePlayerResources(root);
 	const projectsProduced = parseProjectsProduced(root);
+
 	const religions = parseReligions(root);
 	const religionOpinionHistory = parseReligionOpinionHistory(root);
 	const yieldPriceHistory = parseYieldPriceHistory(root);
@@ -250,6 +254,9 @@ export function extractAllGameData(
 	const playerResourcesWire: PlayerResourceInfo[] = playerResources.map(
 		(r) => playerResourceToRow(r) as unknown as PlayerResourceInfo,
 	);
+	const techChoicesWire: TechChoiceInfo[] = parseTechChoices(root).map(
+		(c) => techChoiceToRow(c) as unknown as TechChoiceInfo,
+	);
 	const projectsProducedWire: ProjectProducedInfo[] = projectsProduced.map(
 		(r) => projectProducedToRow(r) as unknown as ProjectProducedInfo,
 	);
@@ -294,6 +301,7 @@ export function extractAllGameData(
 		current_laws: currentLaws,
 		tech_discovery_history: techDiscoveryHistory,
 		completed_techs: completedTechs,
+		tech_choices: techChoicesWire,
 		units_produced: unitsProduced,
 		city_statistics: cityStatistics,
 		improvement_data: improvementData,

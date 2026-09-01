@@ -145,6 +145,15 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         are all negative percent modifiers science does not opt out of.
 //         Purely additive; older blobs lack the fields and the new
 //         breakdown rows are omitted.
+// 2.16.0 — tech_choices, the Player node's TechPathHistory: for every tech a
+//         player CHOSE, the cards passed over in the same draw. A tech they
+//         hold with no row here was never drafted — a nation starting tech, a
+//         Sages seat's random tech, an event reward — which is the only signal
+//         the save gives for a free tech. No turn is recorded against a
+//         choice; row order is draw order. Purely additive, and empty for
+//         saves from Old World builds before it started recording the
+//         history, so the Techs tab hides the card rather than showing a
+//         half-answer.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -167,13 +176,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.13.0",
 	"2.14.0",
 	"2.15.0",
+	"2.16.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.15.0";
+export const CURRENT_PARSER_VERSION = "2.16.0";
 
 // ----- Reusable atoms -----
 
@@ -332,6 +342,10 @@ export const FullGameDataSchema = v.looseObject({
 		v.maxLength(MAX_HISTORY_ENTRIES),
 	),
 	completed_techs: v.pipe(v.array(v.unknown()), v.maxLength(MAX_TECHS)),
+	// One row per tech chosen, so the tech bound covers it.
+	tech_choices: v.optional(
+		v.pipe(v.array(v.unknown()), v.maxLength(MAX_TECHS)),
+	),
 	units_produced: v.pipe(v.array(v.unknown()), v.maxLength(MAX_UNITS)),
 	city_statistics: v.unknown(),
 	improvement_data: v.unknown(),

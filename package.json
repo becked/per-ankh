@@ -36,6 +36,7 @@
 		"bake:unit-stats": "tsx scripts/bake-unit-stats.ts",
 		"bake:owtt": "tsx scripts/bake-owtt.ts",
 		"bake:science-yields": "tsx scripts/bake-science-yields.ts",
+		"bake:starting-techs": "tsx scripts/bake-starting-techs.ts",
 		"bake:family-colors": "tsx scripts/bake-family-colors.ts",
 		"bake:yield-colors": "tsx scripts/bake-yield-colors.ts",
 		"bake:wonders": "tsx scripts/bake-wonders.ts",
@@ -46,7 +47,7 @@
 		"bake:favicon": "node scripts/bake-favicon.mjs .",
 		"bake:og": "node scripts/make-og-default.mjs .",
 		"bake:screenshots": "node scripts/capture-home-screenshots.mjs",
-		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:improvement-builds && npm run bake:family-opinion && npm run bake:difficulty-names && npm run bake:game-option-names && npm run bake:goal-names && npm run bake:name-text && npm run bake:nation-names && npm run bake:project-icons && npm run bake:project-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:map-caveats && npm run bake:specialists && npm run bake:science-yields && npm run bake:family-colors && npm run bake:yield-colors && npm run bake:orders-sources && npm run bake:power-tiers && npm run bake:wonders && npm run bake:finalize"
+		"bake:all": "npm run bake:terrain-3d && npm run bake:improvements && npm run bake:resources && npm run bake:sprites && npm run bake:tech-names && npm run bake:improvement-names && npm run bake:improvement-builds && npm run bake:family-opinion && npm run bake:difficulty-names && npm run bake:game-option-names && npm run bake:goal-names && npm run bake:name-text && npm run bake:nation-names && npm run bake:project-icons && npm run bake:project-names && npm run bake:victory-ordering && npm run bake:map-options && npm run bake:law-classes && npm run bake:map-caveats && npm run bake:specialists && npm run bake:science-yields && npm run bake:starting-techs && npm run bake:family-colors && npm run bake:yield-colors && npm run bake:orders-sources && npm run bake:power-tiers && npm run bake:wonders && npm run bake:finalize"
 	},
 	"license": "MIT",
 	"dependencies": {

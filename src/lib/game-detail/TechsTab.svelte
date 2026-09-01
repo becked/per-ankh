@@ -5,6 +5,7 @@
 	import type { LawAdoptionHistory } from "$lib/types/LawAdoptionHistory";
 	import type { PlayerLaw } from "$lib/types/PlayerLaw";
 	import type { ImprovementData } from "$lib/types/ImprovementData";
+	import type { TechChoiceInfo } from "$lib/parser/types";
 	import type { CityStatistics } from "$lib/types/CityStatistics";
 	import type { StoryEvent } from "$lib/types/StoryEvent";
 	import type {
@@ -32,6 +33,7 @@
 		type RailMarker,
 	} from "./EventRail.svelte";
 	import TechComparison from "./TechComparison.svelte";
+	import TechChoices from "./TechChoices.svelte";
 	import { specialistName } from "./specialists";
 	import {
 		type DetailPlayer,
@@ -76,6 +78,7 @@
 		currentLaws,
 		improvementData,
 		cityStatistics,
+		techChoices = [],
 		families = [],
 		memoryData = [],
 		storyEvents = [],
@@ -93,6 +96,10 @@
 		currentLaws: PlayerLaw[];
 		improvementData: ImprovementData;
 		cityStatistics: CityStatistics;
+		// Per tech chosen, the cards passed over in that draw (2.16.0+).
+		// Empty for older blobs and for saves that predate the game recording
+		// the history — the card hides itself either way.
+		techChoices?: TechChoiceInfo[];
 		families?: FamilyInfo[];
 		memoryData?: MemoryInfo[];
 		storyEvents?: StoryEvent[];
@@ -1054,3 +1061,7 @@
 		</div>
 	{/if}
 </div>
+
+<!-- Last on the tab: one long row per tech, so it sits under the charts
+     and the tables rather than pushing them down. -->
+<TechChoices players={orderedPlayers} {techChoices} {completedTechs} />

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { Snippet } from "svelte";
 	import type { GameDetails } from "$lib/types/GameDetails";
+	import type { TechChoiceInfo } from "$lib/parser/types";
 	import type { PlayerHistory } from "$lib/types/PlayerHistory";
 	import type { YieldHistory } from "$lib/types/YieldHistory";
 	import type { EventLog } from "$lib/types/EventLog";
@@ -75,6 +76,7 @@
 		cityStatistics,
 		improvementData,
 		gameReligions,
+		techChoices = [],
 		playerWonders,
 		playerRoster = [],
 		playerNations = [],
@@ -115,6 +117,9 @@
 		cityStatistics: CityStatistics;
 		improvementData: ImprovementData;
 		gameReligions: GameReligion[];
+		// Per tech chosen, the cards passed over in that draw. Optional: absent
+		// on blobs parsed before PARSER_VERSION 2.16.0.
+		techChoices?: TechChoiceInfo[];
 		playerWonders: PlayerWonder[];
 		// Canonical roster (player_index = the per-player join key). Present in
 		// every blob; used to recover player ids for pre-2.6.0 game_details
@@ -577,6 +582,7 @@
 			{currentLaws}
 			{improvementData}
 			{cityStatistics}
+			{techChoices}
 			{families}
 			{memoryData}
 			{storyEvents}

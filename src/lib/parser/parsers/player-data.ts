@@ -32,6 +32,14 @@ export interface TechnologyCompleted {
 	completedTurn: number | null;
 }
 
+// One tech a player chose, with the others that were on offer in the same
+// draw. See parseTechChoices.
+export interface TechChoice {
+	playerXmlId: number;
+	tech: string;
+	alternates: string[];
+}
+
 export interface TechnologyState {
 	playerXmlId: number;
 	tech: string;
@@ -191,6 +199,54 @@ export function parseTechnologyStates(
 			for (const [tech] of getElementChildren(stateNode)) {
 				out.push({ playerXmlId, tech, state });
 			}
+		}
+	}
+	return out;
+}
+
+// ---------- Tech choices (Player.TechPathHistory) ----------
+//
+// Old World deals a hand of techs and the player takes one; the rest stay in
+// the deck. <TechPathHistory> is the record of those draws, one child element
+// per (chosen, passed-over) pair, named for the pair itself:
+//
+//   <TechPathHistory>
+//     <TECH_IRONWORKING.TECH_DRAMA />
+//     <TECH_IRONWORKING.TECH_MILITARY_DRILL />
+//
+// reading as "when Ironworking was taken, Drama and Military Drill were the
+// other cards". Element ORDER is the order the draws happened in, and is
+// preserved — it is the only ordering the save gives, since no turn is
+// recorded against a choice.
+//
+// A tech the player holds that appears as no key here was never drafted: it
+// was granted (a nation's starting techs, a Sages seat's random tech, an event
+// reward). The consumer separates those using the baked starting-tech table.
+//
+// The dot in the element name is what makes this parseable at all — tech
+// zTypes never contain one, so a single split recovers both halves. A name
+// that doesn't split in two is skipped rather than guessed at.
+
+export function parseTechChoices(root: Record<string, unknown>): TechChoice[] {
+	const out: TechChoice[] = [];
+	for (const [playerXmlId, node] of eachPlayer(root)) {
+		const history = node.TechPathHistory;
+		if (!isElement(history)) continue;
+		// Keyed by chosen tech, insertion-ordered — the draws come out in the
+		// order they happened.
+		const byTech = new Map<string, string[]>();
+		for (const [name] of getElementChildren(history)) {
+			const dot = name.indexOf(".");
+			if (dot <= 0 || dot === name.length - 1) continue;
+			const chosen = name.slice(0, dot);
+			const alternate = name.slice(dot + 1);
+			if (alternate.includes(".")) continue;
+			const alternates = byTech.get(chosen) ?? [];
+			alternates.push(alternate);
+			byTech.set(chosen, alternates);
+		}
+		for (const [tech, alternates] of byTech) {
+			out.push({ playerXmlId, tech, alternates });
 		}
 	}
 	return out;
@@ -357,6 +413,14 @@ export function playerResourceToRow(
 		player_xml_id: r.playerXmlId,
 		yield_type: r.yieldType,
 		amount: r.amount,
+	};
+}
+
+export function techChoiceToRow(c: TechChoice): Record<string, unknown> {
+	return {
+		player_xml_id: c.playerXmlId,
+		tech: c.tech,
+		alternates: c.alternates,
 	};
 }
 

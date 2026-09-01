@@ -145,6 +145,7 @@
 					cityStatistics={game.city_statistics}
 					improvementData={game.improvement_data}
 					gameReligions={game.game_religions}
+					techChoices={game.tech_choices ?? []}
 					playerWonders={game.player_wonders}
 					playerRoster={game.player_roster}
 					playerNations={game.player_nations}
