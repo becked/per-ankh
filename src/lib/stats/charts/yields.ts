@@ -11,6 +11,7 @@
 import type { ChartOption, LineSeriesOption } from "$lib/echarts";
 import { getChartColor } from "$lib/config";
 import {
+	GDP_COLOR,
 	MILITARY_POWER_COLOR,
 	YIELD_COLORS,
 } from "$lib/generated/yield-colors";
@@ -37,6 +38,11 @@ export const YIELD_SERIES = [
 		label: "Science",
 		color: YIELD_COLORS.YIELD_SCIENCE,
 	},
+	// Not a yield — per-ankh's own series over money income plus commodity
+	// income at that turn's market price, the one number that puts the rest of
+	// this list on a common scale. Sits with the economic block rather than at
+	// the head of it: it is an aggregate of these, not a replacement for them.
+	{ key: "gdp_per_turn", label: "GDP", color: GDP_COLOR },
 	{ key: "money_per_turn", label: "Money", color: YIELD_COLORS.YIELD_MONEY },
 	{
 		key: "training_per_turn",
