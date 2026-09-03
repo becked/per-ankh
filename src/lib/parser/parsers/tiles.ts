@@ -163,7 +163,12 @@ export function parseTiles(root: Record<string, unknown>): Tile[] {
 			improvement: optStr(node.Improvement),
 			improvementPillaged: optStr(node.ImprovementPillaged) === "true",
 			improvementDisabled: optStr(node.ImprovementDisabled) === "true",
-			improvementTurnsLeft: optInt(node.ImprovementTurnsLeft),
+			// Turns of construction remaining; absent once the improvement stands.
+			// The game writes <ImprovementBuildTurnsLeft>; the bare name is kept
+			// for the saves that carried it before.
+			improvementTurnsLeft:
+				optInt(node.ImprovementBuildTurnsLeft) ??
+				optInt(node.ImprovementTurnsLeft),
 			specialist: optStr(node.Specialist),
 			// fast-xml-parser represents <Road/> as `Road: ""`, so the key
 			// presence check correctly distinguishes "has road" from "no road".

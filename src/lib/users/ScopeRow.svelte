@@ -43,6 +43,10 @@
 					value: "tournament",
 					label: `Tournament (${scopeCounts.tournament})`,
 				},
+				{
+					value: "challenge",
+					label: `Challenge (${scopeCounts.challenge})`,
+				},
 			],
 		},
 		...(isOwner && collections.length > 0

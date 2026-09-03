@@ -58,6 +58,15 @@ import {
 	handleGameUpload,
 } from "./games";
 import type { GamesEnv } from "./games";
+import {
+	handleChallengeDetail,
+	handleChallengeList,
+	handleChallengeMap,
+	handleCreateChallenge,
+	handleDeleteChallenge,
+	handleGameChallengeLink,
+	handlePatchChallenge,
+} from "./challenges/handlers";
 import { handleCollectionCreate, handleCollectionsList } from "./collections";
 import type { CollectionsEnv } from "./collections";
 import { handleListOnlineIds, handleRemoveOnlineId } from "./online-ids";
@@ -340,6 +349,15 @@ const ROUTES: RouteSpec[] = [
 		handler: (r, e, m) => handleGameTournamentLink(m![1], r, e),
 	},
 	{
+		method: "GET",
+		match: {
+			kind: "regex",
+			regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})\/challenge-link$/,
+		},
+		route: "GET /v1/games/:id/challenge-link",
+		handler: (r, e, m) => handleGameChallengeLink(m![1], r, e),
+	},
+	{
 		method: "PATCH",
 		match: { kind: "regex", regex: /^\/v1\/games\/([A-Za-z0-9_-]{21})$/ },
 		route: "PATCH /v1/games/:id",
@@ -478,6 +496,45 @@ const ROUTES: RouteSpec[] = [
 	},
 
 	// Cloud rewrite: /v1/tournaments/* — more-specific patterns first
+	// Challenge maps (challenges/handlers.ts). Public reads; create/patch/
+	// delete are creator-only; the map download is session-gated.
+	{
+		method: "GET",
+		match: { kind: "path", path: "/v1/challenges" },
+		route: "GET /v1/challenges",
+		handler: (r, e) => handleChallengeList(r, e),
+	},
+	{
+		method: "POST",
+		match: { kind: "path", path: "/v1/challenges" },
+		route: "POST /v1/challenges",
+		handler: (r, e) => handleCreateChallenge(r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/challenges\/(\d{1,6})$/ },
+		route: "GET /v1/challenges/:number",
+		handler: (r, e, m) => handleChallengeDetail(m![1], r, e),
+	},
+	{
+		method: "PATCH",
+		match: { kind: "regex", regex: /^\/v1\/challenges\/(\d{1,6})$/ },
+		route: "PATCH /v1/challenges/:number",
+		handler: (r, e, m) => handlePatchChallenge(m![1], r, e),
+	},
+	{
+		method: "DELETE",
+		match: { kind: "regex", regex: /^\/v1\/challenges\/(\d{1,6})$/ },
+		route: "DELETE /v1/challenges/:number",
+		handler: (r, e, m) => handleDeleteChallenge(m![1], r, e),
+	},
+	{
+		method: "GET",
+		match: { kind: "regex", regex: /^\/v1\/challenges\/(\d{1,6})\/map$/ },
+		route: "GET /v1/challenges/:number/map",
+		handler: (r, e, m) => handleChallengeMap(m![1], r, e),
+	},
+
 	{
 		method: "GET",
 		match: { kind: "path", path: "/v1/tournaments" },

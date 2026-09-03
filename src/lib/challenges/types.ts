@@ -1,0 +1,185 @@
+// Challenge maps — the shapes shared by the create form, the scorer, the
+// Worker and the leaderboard. Dependency-free (no `$lib` aliases): the
+// Worker's copy at cloud/src/challenges/types.ts is GENERATED from this file
+// (`npm run bake:challenge-mirror`), the momentum-mirror pattern.
+//
+// Design: docs/challenge-maps-design.md (§3 objectives/criteria, §4 identity,
+// §5 the scorer).
+
+/** Community numbering continues from the Discord-era challenges (#1–#26). */
+export const FIRST_CHALLENGE_NUMBER = 27;
+
+/** Default open window when the creator doesn't pick one. */
+export const DEFAULT_CHALLENGE_DAYS = 30;
+
+/** `build.target` that means "any wonder the map has enabled". */
+export const ANY_WONDER = "ANY_WONDER";
+
+/** `religion.target` that means "any religion". */
+export const ANY_RELIGION = "ANY";
+
+// ---------------------------------------------------------------------------
+// Objectives (§3.2)
+// ---------------------------------------------------------------------------
+
+export type YieldMeasure = "rate" | "cumulative";
+
+export type Objective =
+	| { kind: "tech"; target: string; by_turn?: number }
+	| {
+			kind: "build";
+			target: string;
+			state?: "completed" | "started";
+			count?: number;
+			/** Only a completed wonder can be dated (the WONDER_ACTIVITY log). */
+			by_turn?: number;
+	  }
+	| { kind: "unit"; target: string; count?: number }
+	| {
+			kind: "army";
+			count: number;
+			/** Unit types that count; absent means any. */
+			types?: string[];
+			min_strength?: number;
+			unique_only?: boolean;
+			land_only?: boolean;
+			/** At least this many distinct unit types among the counted units. */
+			min_types?: number;
+			/** A type counts toward `min_types` only with this many units; needs `min_types`. */
+			min_per_type?: number;
+			trained_only?: boolean;
+	  }
+	| {
+			kind: "city";
+			count?: number;
+			culture?: string;
+			capital?: boolean;
+			min_happiness?: number;
+			improvements?: Record<string, number>;
+			specialists?: Record<string, number>;
+	  }
+	| { kind: "capture"; capital?: boolean; count?: number; by_turn?: number }
+	| {
+			kind: "religion";
+			target: string;
+			state_religion?: boolean;
+			min_theology_tier?: number;
+			by_turn?: number;
+	  }
+	| { kind: "cognomen"; target: string }
+	| {
+			kind: "metric";
+			metric: string;
+			measure?: YieldMeasure;
+			value: number;
+			by_turn?: number;
+	  }
+	| { kind: "victory"; by_turn?: number };
+
+export type ObjectiveKind = Objective["kind"];
+
+/** Metrics outside `yield_history` (which is addressed as `YIELD_*`). */
+export const SCALAR_METRICS = [
+	"points",
+	"military_power",
+	"legitimacy",
+	"tech_count",
+	"law_count",
+	"cities_founded",
+] as const;
+
+// ---------------------------------------------------------------------------
+// Criteria (§3.3)
+// ---------------------------------------------------------------------------
+
+export type Criterion =
+	| {
+			kind: "families";
+			min_opinion: number;
+			scope: "seated" | "all";
+			count?: { min?: number; max?: number };
+	  }
+	| { kind: "cities"; scope: "founded" | "all" }
+	| {
+			kind: "leader";
+			standard_traits_only: boolean;
+			required_traits?: string[];
+	  }
+	| { kind: "economy"; min_rates: Record<string, number> }
+	| { kind: "max_cities"; n: number };
+
+export type CriterionKind = Criterion["kind"];
+
+/** The posted standard criteria, pre-filled on the create page. */
+export const STANDARD_CRITERIA: readonly Criterion[] = [
+	{ kind: "families", min_opinion: -100, scope: "seated" },
+	{ kind: "cities", scope: "founded" },
+	{ kind: "leader", standard_traits_only: true },
+];
+
+// ---------------------------------------------------------------------------
+// Setup (§4) — what the creator's turn-1 map fixes for every run
+// ---------------------------------------------------------------------------
+
+export interface ChallengeSetup {
+	xml_game_id: string;
+	/** The human seat's `player_index` / `player_xml_id`. */
+	player_index: number;
+	nation: string | null;
+	leader_character_xml_id: number | null;
+	leader_name: string | null;
+	/** Traits the map's leader already carries (turn ≤ 1); the `leader` criterion diffs against these. */
+	leader_traits: string[];
+	/** True when the map plays with `GAMEOPTION_CUSTOM_LEADER` — the leader is built on turn 1. */
+	leader_is_custom: boolean;
+	ai_count: number;
+	map_size: string | null;
+	map_class: string | null;
+	map_aspect_ratio: string | null;
+	map_width: number | null;
+	map_height: number | null;
+	difficulty: string | null;
+	opponent_level: string | null;
+	game_options: Record<string, true> | null;
+	disabled_improvements: string[] | null;
+	game_version: string | null;
+	enabled_dlc: string | null;
+	/** Wonders the map has enabled — the `ANY_WONDER` prefill. */
+	wonders: string[];
+}
+
+// ---------------------------------------------------------------------------
+// Verdict (§5)
+// ---------------------------------------------------------------------------
+
+export interface ObjectiveVerdict {
+	met: boolean;
+	/** Turn the objective was first met; the save turn for snapshot objectives; null when unmet. */
+	met_turn: number | null;
+	/** What the scorer saw, in words — the line the modal and the leaderboard show. */
+	observed: string;
+}
+
+export interface CriterionVerdict {
+	kind: CriterionKind;
+	met: boolean;
+	detail: string;
+}
+
+export interface Verdict {
+	identity: { ok: boolean; reason: string | null };
+	objectives: ObjectiveVerdict[];
+	criteria: CriterionVerdict[];
+	/** Identity, every objective and every criterion. */
+	met: boolean;
+	/** The save's turn when met, else null. */
+	score_turn: number | null;
+	/** The latest of the objectives' `met_turn`s — the turn the run could have been saved at. */
+	earliest_turn: number | null;
+}
+
+export interface ChallengeRules {
+	setup: ChallengeSetup;
+	objectives: Objective[];
+	criteria: Criterion[];
+}

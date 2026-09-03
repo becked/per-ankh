@@ -32,8 +32,12 @@
 		type PlayerChoice,
 	} from "$lib/parser/upload-helpers";
 	import { cloudApi, ApiError, DuplicateUploadError } from "$lib/api-cloud";
+	import RulesList from "$lib/challenges/RulesList.svelte";
+	import { asScorable, scoreChallenge } from "$lib/challenges/scoring";
+	import type { ChallengeRules, Verdict } from "$lib/challenges/types";
 	import { nationName } from "$lib/utils/formatting";
 	import { profileHref } from "$lib/utils/profile-href";
+	import { PRIMARY_BTN } from "$lib/ui/classes";
 	import RadioGroup from "$lib/ui/RadioGroup.svelte";
 	import RadioItem from "$lib/ui/RadioItem.svelte";
 
@@ -67,11 +71,21 @@
 				// before upload can proceed.
 				slotAPlayerIndex: number | null;
 				slotBPlayerIndex: number | null;
+				// Challenge mode only: the browser's own scoring of this save
+				// against the challenge rules, shown before upload so a run that
+				// doesn't meet them never leaves the machine. The Worker re-scores
+				// on receipt; its verdict is the one that counts.
+				verdict: Verdict | null;
 				rawZip: Blob;
 				gzippedData: Blob;
 		  }
 		| { kind: "uploading" }
-		| { kind: "uploaded"; gameId: string; reimported: boolean }
+		| {
+				kind: "uploaded";
+				gameId: string;
+				reimported: boolean;
+				challengeSubmitted: boolean;
+		  }
 		| { kind: "duplicate"; existingGameId: string }
 		| {
 				kind: "error";
@@ -86,6 +100,7 @@
 					selected: number | null;
 					slotAPlayerIndex: number | null;
 					slotBPlayerIndex: number | null;
+					verdict: Verdict | null;
 					rawZip: Blob;
 					gzippedData: Blob;
 				} | null;
@@ -106,6 +121,7 @@
 		slotALabel,
 		slotBLabel,
 		doneRedirect,
+		challenge = null,
 	}: {
 		// Fires when the modal enters or leaves an active parse/upload phase.
 		// Hosts use this to drive the HieroglyphParade — marching while busy,
@@ -130,6 +146,11 @@
 		// pass the match page so the admin/player returns to the match
 		// they were on.
 		doneRedirect?: string;
+		// Optional challenge-run link. The save is scored against the rules
+		// here first (an unmet run can't be uploaded), the seat is fixed to
+		// the map's human seat instead of asked, and the form carries
+		// `challenge_id` so the Worker scores and ranks it.
+		challenge?: { challenge_id: string; rules: ChallengeRules } | null;
 	} = $props();
 
 	let rows = $state<Row[]>([]);
@@ -205,7 +226,13 @@
 							r.status = { kind: "parsing", phase: p, percent: pct };
 						}
 					},
+					// A challenge run is scored from wherever it was saved — the
+					// completed-game rule doesn't apply.
+					{ requireCompleted: !challenge },
 				);
+				const verdict = challenge
+					? scoreChallenge(challenge.rules, asScorable(data))
+					: null;
 
 				const gzippedData = await gzipJson(data);
 				const rawZipBlob = new Blob([rawZip], { type: "application/zip" });
@@ -221,10 +248,16 @@
 					suggested,
 					// In observer mode the uploader doesn't claim a slot for
 					// themselves; slot mappings are entered explicitly via the
-					// per-slot pickers below.
-					selected: observerMode ? null : suggested,
+					// per-slot pickers below. A challenge run is always the map's
+					// human seat.
+					selected: challenge
+						? challenge.rules.setup.player_index
+						: observerMode
+							? null
+							: suggested,
 					slotAPlayerIndex: null,
 					slotBPlayerIndex: null,
+					verdict,
 					rawZip: rawZipBlob,
 					gzippedData,
 				};
@@ -271,6 +304,7 @@
 	// holds (`selected` can be a roster index or null/observer).
 	function rowReadyToUpload(row: Row): boolean {
 		if (row.status.kind !== "ready") return false;
+		if (challenge) return row.status.verdict?.met === true;
 		if (!observerMode) return true;
 		const { slotAPlayerIndex, slotBPlayerIndex } = row.status;
 		return (
@@ -350,6 +384,9 @@
 				"uploader_player_index",
 				JSON.stringify(observerMode ? null : ready.selected),
 			);
+			if (challenge) {
+				form.append("challenge_id", challenge.challenge_id);
+			}
 			if (tournamentMatchId) {
 				form.append("tournament_match_id", tournamentMatchId);
 				if (observerMode) {
@@ -375,6 +412,7 @@
 				kind: "uploaded",
 				gameId: res.game_id,
 				reimported: res.reimported === true,
+				challengeSubmitted: res.challenge_submitted === true,
 			};
 		} catch (err) {
 			if (err instanceof DuplicateUploadError) {
@@ -387,6 +425,13 @@
 					: err instanceof Error
 						? err.message
 						: "Upload failed";
+			// The Worker's verdict overrides the browser's when they disagree —
+			// it's the one the leaderboard is built from.
+			const serverVerdict =
+				err instanceof ApiError && err.code === "CHALLENGE_NOT_MET"
+					? ((err.payload as { verdict?: Verdict } | undefined)?.verdict ??
+						null)
+					: null;
 			row.status = {
 				kind: "error",
 				message,
@@ -397,6 +442,7 @@
 					selected: ready.selected,
 					slotAPlayerIndex: ready.slotAPlayerIndex,
 					slotBPlayerIndex: ready.slotBPlayerIndex,
+					verdict: serverVerdict ?? ready.verdict,
 					rawZip: ready.rawZip,
 					gzippedData: ready.gzippedData,
 				},
@@ -446,6 +492,7 @@
 			selected: retry.selected,
 			slotAPlayerIndex: retry.slotAPlayerIndex,
 			slotBPlayerIndex: retry.slotBPlayerIndex,
+			verdict: retry.verdict,
 			rawZip: retry.rawZip,
 			gzippedData: retry.gzippedData,
 		};
@@ -487,8 +534,6 @@
 
 	// Dark UI scheme (mirrors the game-detail tabs): tan text on dark surfaces,
 	// selected = a lighter-dark fill with a faint tan border — no bright accents.
-	const PRIMARY_BTN =
-		"rounded bg-surface-raised px-4 py-2 text-sm font-bold text-tan transition-colors hover:bg-surface-raised-hover disabled:cursor-not-allowed disabled:opacity-50";
 	function optionCardClass(selected: boolean): string {
 		return `flex cursor-pointer items-center gap-3 rounded-lg border px-3 py-2 transition-colors ${
 			selected
@@ -497,6 +542,39 @@
 		}`;
 	}
 </script>
+
+<!--
+	A run's verdict. A save of some other game gets the one line that
+	matters and nothing else — the objective ticks would be noise, and
+	"play on" would be wrong advice.
+-->
+{#snippet challengeVerdict(rules: ChallengeRules, verdict: Verdict)}
+	{#if !verdict.identity.ok}
+		<p class="mt-3 text-xs font-bold text-danger">
+			Not a run of this challenge's map: {verdict.identity.reason}. Download the
+			map from the challenge page and play from that.
+		</p>
+	{:else}
+		<div class="mt-3">
+			<RulesList
+				objectives={rules.objectives}
+				criteria={rules.criteria}
+				{verdict}
+			/>
+		</div>
+		{#if verdict.met && verdict.score_turn != null}
+			<p class="mt-2 text-xs text-success">
+				This save scores T{verdict.score_turn}{#if verdict.earliest_turn != null && verdict.earliest_turn < verdict.score_turn}
+					— every objective was met by turn {verdict.earliest_turn}, so a save
+					from that turn would score T{verdict.earliest_turn}{/if}.
+			</p>
+		{:else}
+			<p class="mt-2 text-xs text-danger">
+				This save doesn't meet the challenge yet — play on and save again.
+			</p>
+		{/if}
+	{/if}
+{/snippet}
 
 <div class="rounded-lg border border-border-subtle bg-surface p-3">
 	{#if rows.length === 0}
@@ -516,11 +594,11 @@
 					d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M7.5 7.5L12 3m0 0l4.5 4.5M12 3v13.5"
 				/>
 			</svg>
-			Choose files
+			{challenge ? "Choose a save" : "Choose files"}
 			<input
 				type="file"
 				accept=".zip"
-				multiple
+				multiple={!challenge}
 				onchange={onPick}
 				class="sr-only"
 			/>
@@ -562,7 +640,11 @@
 								<span class="text-gray-400">Uploading</span>
 							{:else if row.status.kind === "uploaded"}
 								<span class="text-success">
-									{row.status.reimported ? "Updated" : "Uploaded"}
+									{row.status.challengeSubmitted
+										? "Submitted"
+										: row.status.reimported
+											? "Updated"
+											: "Uploaded"}
 								</span>
 							{:else if row.status.kind === "duplicate"}
 								<span class="text-gray-400">Duplicate</span>
@@ -580,7 +662,9 @@
 						></progress>
 					{:else if row.status.kind === "ready"}
 						{@const ready = row.status}
-						{#if observerMode}
+						{#if challenge && ready.verdict}
+							{@render challengeVerdict(challenge.rules, ready.verdict)}
+						{:else if observerMode}
 							{#if ready.humans.length !== 2}
 								<p class="mb-2 mt-2 text-xs text-danger">
 									Tournament matches require exactly 2 humans in the save; got
@@ -724,6 +808,12 @@
 						<p class="mt-2 break-words text-xs text-danger">
 							{row.status.message}
 						</p>
+						{#if challenge && row.status.retry?.verdict}
+							{@render challengeVerdict(
+								challenge.rules,
+								row.status.retry.verdict,
+							)}
+						{/if}
 						{#if row.status.retry !== null && phase !== "uploading"}
 							<button
 								type="button"

@@ -3,7 +3,13 @@
 /**
  * City information for the Cities tab
  */
-export type CityInfo = { city_id: number, city_name: string, owner_nation: string | null,
+export type CityInfo = { city_id: number,
+/**
+ * The city's tile (City.TileID), which is what tile_ownership_history is
+ * keyed on — the join that dates a capture. Optional: absent on blobs
+ * parsed before PARSER_VERSION 2.16.0.
+ */
+tile_xml_id?: number, city_name: string, owner_nation: string | null,
 /**
  * xml_id of the city's CURRENT owner (Player.xmlId). Distinguishes
  * same-nation players in mirror matches, where owner_nation collides.

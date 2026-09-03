@@ -4,6 +4,7 @@
 	import { resolve } from "$app/paths";
 	import { page } from "$app/state";
 	import { cloudApi } from "$lib/api-cloud";
+	import type { ChallengeRules } from "$lib/challenges/types";
 	import { autohideScroll } from "$lib/actions/autohideScroll";
 	import { safeNext } from "$lib/utils/safe-next";
 	import BulkUploadModal from "$lib/BulkUploadModal.svelte";
@@ -17,6 +18,10 @@
 	let slotALabel = $state<string | null>(null);
 	let slotBLabel = $state<string | null>(null);
 	let tournamentContextError = $state<string | null>(null);
+	// Challenge context: the rules the modal scores the save against before
+	// upload. Resolved from ?challenge_id=X&return_number=N.
+	let challengeRules = $state<ChallengeRules | null>(null);
+	let challengeContextError = $state<string | null>(null);
 
 	// Optional tournament-match link. When the upload page is reached via
 	// /upload?tournament_match_id=X&return_slug=Y, the upload is forwarded
@@ -27,7 +32,18 @@
 		page.url.searchParams.get("tournament_match_id"),
 	);
 	const returnSlug = $derived(page.url.searchParams.get("return_slug"));
-	const observerMode = $derived(page.url.searchParams.get("observer") === "1");
+	// A challenge run is always played from the map's own seat, so observer
+	// mode is meaningless there — the flag is ignored rather than honoured.
+	const observerMode = $derived(
+		page.url.searchParams.get("challenge_id") === null &&
+			page.url.searchParams.get("observer") === "1",
+	);
+	// Optional challenge-run link (/upload?challenge_id=X&return_number=N):
+	// the upload is scored against the challenge and lands on its leaderboard.
+	const challengeId = $derived(page.url.searchParams.get("challenge_id"));
+	const returnNumber = $derived(
+		Number(page.url.searchParams.get("return_number")) || null,
+	);
 	// The page the upload was launched from (set by the header Upload link).
 	// Sanitized to a same-origin path so Done returns the user where they came
 	// from rather than always to their profile. Null when absent.
@@ -77,8 +93,35 @@
 					err instanceof Error ? err.message : "Failed to load match info";
 			}
 		}
+		// Challenge mode needs the rules up front — without them the modal
+		// can't score the save, so this one is a hard requirement.
+		if (challengeId && !returnNumber) {
+			challengeContextError = "Challenge link is incomplete.";
+		} else if (challengeId && returnNumber) {
+			try {
+				const { challenge } = await cloudApi.getChallenge(returnNumber);
+				if (challenge.challenge_id !== challengeId) {
+					challengeContextError = "Challenge link doesn't match.";
+				} else {
+					challengeRules = {
+						setup: challenge.setup,
+						objectives: challenge.objectives,
+						criteria: challenge.criteria,
+					};
+				}
+			} catch (err) {
+				challengeContextError =
+					err instanceof Error ? err.message : "Failed to load challenge";
+			}
+		}
 		ready = true;
 	});
+
+	const challenge = $derived(
+		challengeId && challengeRules
+			? { challenge_id: challengeId, rules: challengeRules }
+			: null,
+	);
 </script>
 
 <svelte:head>
@@ -88,23 +131,33 @@
 <main class="cloud-scroll flex-1 overflow-y-auto px-4 py-8" use:autohideScroll>
 	<div class="mx-auto max-w-xl">
 		<HieroglyphParade active={paradeActive} />
-		<h1 class="mb-8 mt-4 text-3xl font-bold text-gray-200">Upload</h1>
+		<h1 class="mb-8 mt-4 text-3xl font-bold text-gray-200">
+			{challenge ? "Submit run" : "Upload"}
+		</h1>
+		{#if challengeContextError}
+			<p class="mb-3 text-xs text-danger">
+				Couldn't load the challenge: {challengeContextError}
+			</p>
+		{/if}
 		{#if showBackLink && tournamentContextError}
 			<p class="mb-3 text-xs text-orange">
 				Couldn't load match info: {tournamentContextError}. The upload may still
 				work — proceed and the worker will validate.
 			</p>
 		{/if}
-		{#if ready}
+		{#if ready && !challengeContextError}
 			<BulkUploadModal
 				onBusyChange={(busy) => (paradeActive = busy)}
 				{tournamentMatchId}
 				{observerMode}
+				{challenge}
 				slotALabel={slotALabel ?? undefined}
 				slotBLabel={slotBLabel ?? undefined}
 				doneRedirect={tournamentMatchId && returnSlug
 					? `${resolve("/tournaments/[slug]", { slug: returnSlug })}?match=${encodeURIComponent(tournamentMatchId)}`
-					: (fromPath ?? undefined)}
+					: challenge && returnNumber
+						? resolve("/challenges/[number]", { number: String(returnNumber) })
+						: (fromPath ?? undefined)}
 			/>
 		{:else}
 			<p class="text-sm text-gray-400">Loading…</p>

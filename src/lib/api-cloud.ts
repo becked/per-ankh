@@ -4,6 +4,11 @@
 //
 // Configure via VITE_API_URL (see .env.example).
 
+import type {
+	ChallengeSetup,
+	Criterion,
+	Objective,
+} from "$lib/challenges/types";
 import type { FullGameData } from "$lib/parser/types";
 import { DEFAULT_GLOBAL_SLICE } from "$lib/stats/global-facets";
 import type {
@@ -233,6 +238,7 @@ export interface ScopeCounts {
 	vs_ai: number;
 	mp: number;
 	tournament: number;
+	challenge: number;
 }
 
 export interface CollectionsListResponse {
@@ -354,6 +360,9 @@ export interface UploadGameResponse {
 	reimported?: boolean;
 	from_version?: string;
 	to_version?: string;
+	// Set when the upload carried `challenge_id` and the run was accepted
+	// onto the challenge's leaderboard.
+	challenge_submitted?: boolean;
 }
 
 export class ApiError extends Error {
@@ -405,7 +414,7 @@ export interface ListGamesOpts extends CallOpts {
 	limit?: number;
 	offset?: number;
 	// Scope row: a single selection ("all"/"public"/"vs_ai"/"mp"/
-	// "tournament"/<collection_id>). The same scope drives the stats
+	// "tournament"/"challenge"/<collection_id>). The same scope drives the stats
 	// bundle, so the Games tab and the charts stay in sync. Omitted → "all".
 	scope?: UserScope;
 	q?: string;
@@ -497,6 +506,31 @@ function adminFilterParams(filter?: AdminGameFilterParams): URLSearchParams {
 	if (filter.from) qs.set("from", filter.from);
 	if (filter.to) qs.set("to", filter.to);
 	return qs;
+}
+
+// A streamed ZIP download as `{ blob, filename }`, the filename taken from
+// Content-Disposition. RFC 6266: prefer filename*=UTF-8'' over plain
+// filename when both are present so non-ASCII game names land correctly.
+// Shared by the game, admin, and challenge-map downloads.
+async function downloadResponse(
+	res: Response,
+	fallbackFilename: string,
+): Promise<{ blob: Blob; filename: string }> {
+	const blob = await res.blob();
+	const cd = res.headers.get("content-disposition") ?? "";
+	const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
+	const asciiMatch = cd.match(/filename="([^"]+)"/);
+	let filename = fallbackFilename;
+	if (utf8Match) {
+		try {
+			filename = decodeURIComponent(utf8Match[1]);
+		} catch {
+			if (asciiMatch) filename = asciiMatch[1];
+		}
+	} else if (asciiMatch) {
+		filename = asciiMatch[1];
+	}
+	return { blob, filename };
 }
 
 export const cloudApi = {
@@ -850,23 +884,7 @@ export const cloudApi = {
 		opts?: CallOpts,
 	): Promise<{ blob: Blob; filename: string }> => {
 		const res = await request(`/games/${id}/download`, opts);
-		const blob = await res.blob();
-		const cd = res.headers.get("content-disposition") ?? "";
-		// RFC 6266: prefer filename*=UTF-8'' over plain filename when both
-		// are present so non-ASCII game names land correctly.
-		const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
-		const asciiMatch = cd.match(/filename="([^"]+)"/);
-		let filename = `${id}.zip`;
-		if (utf8Match) {
-			try {
-				filename = decodeURIComponent(utf8Match[1]);
-			} catch {
-				if (asciiMatch) filename = asciiMatch[1];
-			}
-		} else if (asciiMatch) {
-			filename = asciiMatch[1];
-		}
-		return { blob, filename };
+		return downloadResponse(res, `${id}.zip`);
 	},
 
 	uploadGame: async (
@@ -908,21 +926,7 @@ export const cloudApi = {
 		opts?: CallOpts,
 	): Promise<{ blob: Blob; filename: string }> => {
 		const res = await request(`/admin/games/${id}/download`, opts);
-		const blob = await res.blob();
-		const cd = res.headers.get("content-disposition") ?? "";
-		const utf8Match = cd.match(/filename\*=UTF-8''([^;]+)/i);
-		const asciiMatch = cd.match(/filename="([^"]+)"/);
-		let filename = `${id}.zip`;
-		if (utf8Match) {
-			try {
-				filename = decodeURIComponent(utf8Match[1]);
-			} catch {
-				if (asciiMatch) filename = asciiMatch[1];
-			}
-		} else if (asciiMatch) {
-			filename = asciiMatch[1];
-		}
-		return { blob, filename };
+		return downloadResponse(res, `${id}.zip`);
 	},
 
 	adminReparseUpload: async (
@@ -1211,6 +1215,73 @@ export const cloudApi = {
 	): Promise<{ link: GameTournamentLink | null }> => {
 		const res = await request(`/games/${gameId}/tournament-link`, opts);
 		return res.json() as Promise<{ link: GameTournamentLink | null }>;
+	},
+
+	// --- Challenge maps (docs/challenge-maps-design.md) ---
+	// Every challenge, open and closed — the list page splits them itself.
+	listChallenges: async (
+		opts?: CallOpts,
+	): Promise<{ challenges: ChallengeListItem[] }> => {
+		const res = await request(`/challenges?status=all`, opts);
+		return res.json() as Promise<{ challenges: ChallengeListItem[] }>;
+	},
+
+	getChallenge: async (
+		number: number,
+		opts?: CallOpts,
+	): Promise<ChallengeDetailResponse> => {
+		const res = await request(`/challenges/${number}`, opts);
+		return res.json() as Promise<ChallengeDetailResponse>;
+	},
+
+	// Multipart like uploadGame: `meta` (the rules JSON), `data` (gzipped
+	// parsed blob), `save` (the map ZIP). Don't set Content-Type.
+	createChallenge: async (
+		formData: FormData,
+		opts?: CallOpts,
+	): Promise<{ challenge: Challenge }> => {
+		const res = await request("/challenges", {
+			...opts,
+			method: "POST",
+			body: formData,
+		});
+		return res.json() as Promise<{ challenge: Challenge }>;
+	},
+
+	patchChallenge: async (
+		number: number,
+		body: PatchChallengeBody,
+		opts?: CallOpts,
+	): Promise<{ challenge: Challenge }> => {
+		const res = await request(`/challenges/${number}`, {
+			...opts,
+			method: "PATCH",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(body),
+		});
+		return res.json() as Promise<{ challenge: Challenge }>;
+	},
+
+	deleteChallenge: async (number: number, opts?: CallOpts): Promise<void> => {
+		await request(`/challenges/${number}`, { ...opts, method: "DELETE" });
+	},
+
+	// The map ZIP. Session required (the raw save carries the creator's
+	// online_id); shares the game-download rate limits.
+	downloadChallengeMap: async (
+		number: number,
+		opts?: CallOpts,
+	): Promise<{ blob: Blob; filename: string }> => {
+		const res = await request(`/challenges/${number}/map`, opts);
+		return downloadResponse(res, `challenge-${number}.zip`);
+	},
+
+	getGameChallengeLink: async (
+		gameId: string,
+		opts?: CallOpts,
+	): Promise<{ link: GameChallengeLink | null }> => {
+		const res = await request(`/games/${gameId}/challenge-link`, opts);
+		return res.json() as Promise<{ link: GameChallengeLink | null }>;
 	},
 
 	getTournamentMatch: async (
@@ -2287,6 +2358,78 @@ export interface UserTournamentsResponse {
 	// Prefixed: this payload's `tournaments[]` carry their own slugs.
 	slot_slugs: Record<string, string | null>;
 	slot_avatars: Record<string, string | null>;
+}
+
+// --- Challenge maps ---
+
+export interface ChallengeUser {
+	user_id: string;
+	display_name: string;
+	avatar_url: string;
+	slug: string | null;
+}
+
+export interface Challenge {
+	challenge_id: string;
+	number: number;
+	title: string;
+	description: string | null;
+	status: "open" | "closed";
+	closes_at: string;
+	created_at: string;
+	updated_at: string;
+	creator: ChallengeUser;
+	setup: ChallengeSetup;
+	objectives: Objective[];
+	criteria: Criterion[];
+	map_size_bytes: number;
+	submission_count: number;
+	runner_count: number;
+}
+
+export interface ChallengeLeaderboardEntry {
+	rank: number;
+	submission_id: string;
+	game_id: string;
+	game_name: string | null;
+	score_turn: number;
+	earliest_turn: number | null;
+	submitted_at: string;
+	user: ChallengeUser;
+}
+
+export interface ChallengeListItem extends Challenge {
+	// The top of the leaderboard — "leader" is the ruling character here.
+	best: ChallengeLeaderboardEntry | null;
+}
+
+export interface ChallengeDetailResponse {
+	challenge: Challenge;
+	leaderboard: ChallengeLeaderboardEntry[];
+	// Null for anonymous viewers.
+	viewer: {
+		// Creator or site admin — what the edit/delete affordances key on.
+		can_manage: boolean;
+		runs: ChallengeLeaderboardEntry[];
+	} | null;
+}
+
+// The `meta` part of POST /v1/challenges (CreateChallengeSchema).
+export interface CreateChallengeMeta {
+	title: string;
+	description?: string;
+	duration_days?: number;
+	objectives: Objective[];
+	criteria: Criterion[];
+}
+
+export type PatchChallengeBody = Partial<CreateChallengeMeta>;
+
+export interface GameChallengeLink {
+	number: number;
+	title: string;
+	score_turn: number;
+	rank: number;
 }
 
 export interface GameTournamentLink {

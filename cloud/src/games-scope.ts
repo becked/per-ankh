@@ -30,6 +30,34 @@ export interface UserScopeOpts {
 	viewerOwnsTarget: boolean;
 }
 
+// The game-type buckets a user's library is cut into. One fragment each,
+// shared with the scope-count SQL in collections.ts so the dropdown's counts
+// and its filter can't disagree on what a bucket holds.
+//
+// A game is a tournament match, a challenge run, or neither; the neither
+// bucket splits by human count into vs_ai / mp. Challenge runs are excluded
+// from vs_ai even though they are single-human by construction — they're
+// played to a rule set, not to the end, and belong on their own shelf.
+export const TOURNAMENT_LINKED_GAME_IDS_SQL =
+	"SELECT game_id FROM tournament_matches WHERE game_id IS NOT NULL";
+export const CHALLENGE_GAME_IDS_SQL =
+	"SELECT game_id FROM challenge_submissions";
+const SOLO_GAME_IDS_SQL =
+	"SELECT game_id FROM player_summaries WHERE is_human = 1 GROUP BY game_id HAVING COUNT(*) = 1";
+const MULTI_HUMAN_GAME_IDS_SQL =
+	"SELECT game_id FROM player_summaries WHERE is_human = 1 GROUP BY game_id HAVING COUNT(*) > 1";
+
+// The predicate for each game-type bucket, over a bare `game_id` column.
+export const GAME_TYPE_PREDICATES: Record<
+	Extract<UserScope, "tournament" | "challenge" | "vs_ai" | "mp">,
+	string
+> = {
+	tournament: `game_id IN (${TOURNAMENT_LINKED_GAME_IDS_SQL})`,
+	challenge: `game_id IN (${CHALLENGE_GAME_IDS_SQL})`,
+	vs_ai: `game_id NOT IN (${TOURNAMENT_LINKED_GAME_IDS_SQL}) AND game_id NOT IN (${CHALLENGE_GAME_IDS_SQL}) AND game_id IN (${SOLO_GAME_IDS_SQL})`,
+	mp: `game_id NOT IN (${TOURNAMENT_LINKED_GAME_IDS_SQL}) AND game_id NOT IN (${CHALLENGE_GAME_IDS_SQL}) AND game_id IN (${MULTI_HUMAN_GAME_IDS_SQL})`,
+};
+
 // Returns the SQL fragment to append after `user_id = ?` (begins with
 // " AND " when non-empty, else "") plus the positional binds it adds
 // (only a numeric collection_id; game-type subqueries are constant SQL).
@@ -56,26 +84,8 @@ export function buildUserScopeWhere(opts: UserScopeOpts): {
 			parts.push("collection_id = ?");
 			binds.push(scope);
 		}
-	} else if (scope === "tournament") {
-		parts.push(
-			"game_id IN (SELECT game_id FROM tournament_matches WHERE game_id IS NOT NULL)",
-		);
-	} else if (scope === "vs_ai") {
-		// Not tournament-linked AND exactly one human.
-		parts.push(
-			"game_id NOT IN (SELECT game_id FROM tournament_matches WHERE game_id IS NOT NULL)",
-		);
-		parts.push(
-			"game_id IN (SELECT game_id FROM player_summaries WHERE is_human = 1 GROUP BY game_id HAVING COUNT(*) = 1)",
-		);
-	} else if (scope === "mp") {
-		// Not tournament-linked AND ≥2 humans (freeform multiplayer).
-		parts.push(
-			"game_id NOT IN (SELECT game_id FROM tournament_matches WHERE game_id IS NOT NULL)",
-		);
-		parts.push(
-			"game_id IN (SELECT game_id FROM player_summaries WHERE is_human = 1 GROUP BY game_id HAVING COUNT(*) > 1)",
-		);
+	} else if (scope !== "all") {
+		parts.push(GAME_TYPE_PREDICATES[scope]);
 	}
 	// scope === "all" → no additional predicate.
 
@@ -90,7 +100,8 @@ export function parseScopeParam(raw: string | null): UserScope {
 		raw === "public" ||
 		raw === "vs_ai" ||
 		raw === "mp" ||
-		raw === "tournament"
+		raw === "tournament" ||
+		raw === "challenge"
 	) {
 		return raw;
 	}
@@ -143,9 +154,14 @@ const COMPOSITION_GAME_IDS_SQL: Record<Exclude<GlobalSlice, "all">, string> = {
 // Returns the SQL fragment to append after the global corpus's base clause
 // (begins with " AND " when non-empty, else ""). No binds — every fragment is
 // constant SQL.
+//
+// Challenge runs are out of every slice, "all" included: they're played to a
+// rule set on a fixed map and stop when it's met, so their yields, techs and
+// turn counts describe the challenge, not how the game is played.
 export function buildGlobalSliceWhere(slice: GlobalSlice): string {
-	if (slice === "all") return "";
-	return ` AND game_id IN (${COMPOSITION_GAME_IDS_SQL[slice]})`;
+	const noRuns = ` AND game_id NOT IN (${CHALLENGE_GAME_IDS_SQL})`;
+	if (slice === "all") return noRuns;
+	return `${noRuns} AND game_id IN (${COMPOSITION_GAME_IDS_SQL[slice]})`;
 }
 
 // Parse the ?slice= query param into a GlobalSlice, the /stats sibling of

@@ -113,6 +113,14 @@
 					slug: data.tournamentLink.tournament.slug,
 				}),
 			});
+		} else if (data.challengeLink) {
+			trail.push({ label: "Challenges", href: resolve("/challenges") });
+			trail.push({
+				label: `#${data.challengeLink.number} ${data.challengeLink.title}`,
+				href: resolve("/challenges/[number]", {
+					number: String(data.challengeLink.number),
+				}),
+			});
 		} else if (game.user_id && game.user_display_name) {
 			trail.push({
 				label: game.user_display_name,
@@ -186,6 +194,25 @@
 						/>
 					{/snippet}
 					{#snippet preTabs()}
+						{#if data.challengeLink}
+							<div
+								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"
+							>
+								<p class="rounded bg-surface px-2.5 py-1 text-xs text-tan">
+									<a
+										href={resolve("/challenges/[number]", {
+											number: String(data.challengeLink.number),
+										})}
+										class="font-bold hover:text-orange"
+									>
+										Challenge #{data.challengeLink.number}: {data.challengeLink
+											.title}
+									</a>
+									— scores T{data.challengeLink.score_turn} · rank #{data
+										.challengeLink.rank}
+								</p>
+							</div>
+						{/if}
 						{#if isReimportAvailable || adminReparseTarget}
 							<div
 								class="mb-4 flex w-fit flex-wrap items-center gap-3 rounded-lg border border-surface bg-surface-sunken p-2 shadow-lg"

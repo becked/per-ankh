@@ -201,6 +201,7 @@ export type UserScope =
 	| "vs_ai"
 	| "mp"
 	| "tournament"
+	| "challenge"
 	| string;
 
 // The composition slice the public /stats corpus is cut by (mirrors the

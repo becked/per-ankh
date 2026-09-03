@@ -9,4 +9,17 @@ export type ImprovementInfo = { nation: string | null,
  * owners in mirror matches, where nation collides. Optional: absent on
  * blobs parsed before PARSER_VERSION 2.6.0.
  */
-owner_player_xml_id?: number | null, city_name: string | null, improvement: string, specialist: string | null, resource: string | null, };
+owner_player_xml_id?: number | null, city_name: string | null,
+/**
+ * xml_id of the city whose territory the tile sits in. Optional: absent on
+ * blobs parsed before PARSER_VERSION 2.16.0.
+ */
+city_xml_id?: number | null,
+improvement: string, specialist: string | null, resource: string | null,
+/**
+ * Turns of construction still to go, or null once the improvement stands
+ * (the tile's <ImprovementBuildTurnsLeft>). A tile carries its improvement
+ * from the turn work starts, so without this a half-built wonder counts as
+ * built. Optional: absent on blobs parsed before PARSER_VERSION 2.16.0.
+ */
+build_turns_left?: number | null, };

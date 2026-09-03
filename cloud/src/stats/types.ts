@@ -318,6 +318,7 @@ export type UserScope =
 	| "vs_ai"
 	| "mp"
 	| "tournament"
+	| "challenge"
 	| number;
 
 // The single slice selection for the global corpus — one composition of the

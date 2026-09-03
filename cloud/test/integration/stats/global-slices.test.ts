@@ -5,9 +5,15 @@
 // the public corpus actually holds, run through the real upload path so
 // player_summaries carries the seats the predicates group over.
 //
-// The case the shared helper exists for is the last of the four — a two-human
-// game with an AI seat. It is a duel to a predicate that filters humans and
-// then counts, and it is not one here.
+// The case the shared helper exists for is the fourth — a two-human game with
+// an AI seat. It is a duel to a predicate that filters humans and then
+// counts, and it is not one here.
+//
+// The fifth is a challenge run: single-human like `single_player`, and out of
+// every slice ("all" included) because it was played to a rule set, not to
+// the end. Its submission row is inserted directly — the real submit path
+// needs a challenge and a scorable save, and what's under test here is the
+// predicate, not the scorer.
 
 import { applyD1Migrations, env } from "cloudflare:test";
 import { beforeAll, describe, expect, it } from "vitest";
@@ -21,14 +27,15 @@ import {
 } from "../../helpers/save-blob";
 
 // One game per composition. The first three are named for the slice they
-// belong to; `duel_with_ai` belongs to none of the three, which is the point
-// of seeding it. 3 players / 2 humans is one of the four such compositions
-// the public corpus holds (the others seat 4, 5 and 6 players).
+// belong to; `duel_with_ai` and `challenge_run` belong to none, which is the
+// point of seeding them. 3 players / 2 humans is one of the four such
+// compositions the public corpus holds (the others seat 4, 5 and 6 players).
 const CORPUS = {
 	duel: { winnerIndex: 0, humans: 2 },
 	ffa: { winnerIndex: 0, humans: 3 },
 	single_player: { winnerIndex: 0, humans: 1, aiPlayer: true },
 	duel_with_ai: { winnerIndex: 0, humans: 2, aiPlayer: true },
+	challenge_run: { winnerIndex: 0, humans: 1, aiPlayer: true },
 } satisfies Record<string, UploadFixtureOpts>;
 
 type Label = keyof typeof CORPUS;
@@ -51,6 +58,18 @@ beforeAll(async () => {
 		const body = (await res.json()) as { game_id: string };
 		gameIds.set(label, body.game_id);
 	}
+	await env.SHARE_DB.prepare(
+		`INSERT INTO challenges (challenge_id, number, title, created_by, closes_at, setup, objectives, criteria, map_r2_key, map_file_hash, map_size_bytes)
+		 VALUES ('ch_test', 27, 'Slice fixture', ?, datetime('now', '+30 days'), '{}', '[]', '[]', 'challenges/ch_test/map.zip', 'hash', 1)`,
+	)
+		.bind(uploader.userId)
+		.run();
+	await env.SHARE_DB.prepare(
+		`INSERT INTO challenge_submissions (submission_id, challenge_id, game_id, user_id, score_turn, verdict)
+		 VALUES ('sub_test', 'ch_test', ?, ?, 50, '{}')`,
+	)
+		.bind(gameIds.get("challenge_run"), uploader.userId)
+		.run();
 });
 
 // The query shape a global resolver runs: a base clause the fragment appends
@@ -75,8 +94,10 @@ const idOf = (label: Label): string => {
 const expected = (...labels: Label[]): Set<string> => new Set(labels.map(idOf));
 
 describe("global composition slices", () => {
-	it("filters nothing for the all slice", async () => {
-		expect(buildGlobalSliceWhere("all")).toBe("");
+	it("filters only challenge runs for the all slice", async () => {
+		expect(buildGlobalSliceWhere("all")).toBe(
+			" AND game_id NOT IN (SELECT game_id FROM challenge_submissions)",
+		);
 		expect(await slice("all")).toEqual(
 			expected("duel", "ffa", "single_player", "duel_with_ai"),
 		);

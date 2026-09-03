@@ -53,6 +53,22 @@ import {
 } from "./derive-player-summary";
 import { invalidateStatsCache } from "./stats/cache";
 import { getBlobCached, invalidateBlob, readBlob } from "./blob-cache";
+import {
+	challengeSubmissionInsert,
+	linkChallengeSubmission,
+	loadChallengeForUpload,
+	loadSubmissionForGame,
+	isRunOnOpenChallenge,
+	submissionRow,
+	type ChallengeSubmissionRow,
+	type ChallengeUploadContext,
+} from "./challenges/link";
+import {
+	asScorable,
+	CHALLENGE_MIN_PARSER_VERSION,
+	scoreChallenge,
+} from "./challenges/scoring";
+import type { Verdict } from "./challenges/types";
 import type { QueryableD1, EventsEnv } from "./d1";
 
 export interface GamesEnv extends SessionEnv, EventsEnv {
@@ -65,12 +81,23 @@ export interface GamesEnv extends SessionEnv, EventsEnv {
 	PER_USER_UPLOADS_PER_HOUR: string;
 	PER_IP_UPLOADS_PER_HOUR: string;
 	GLOBAL_UPLOADS_PER_HOUR: string;
+	// Challenge read ceilings (challenges/handlers.ts) — optional vars, the
+	// constants there are the defaults.
+	CHALLENGE_VIEW_PER_HOUR?: string;
+	CHALLENGE_LINK_VIEW_PER_HOUR?: string;
 }
 
-// Size limits (spec §4)
-const MAX_BLOB_COMPRESSED = 10 * 1024 * 1024; // 10 MB
-const MAX_BLOB_DECOMPRESSED = 50 * 1024 * 1024; // 50 MB
-const MAX_ZIP_BYTES = 50 * 1024 * 1024; // 50 MB
+// Size limits (spec §4). The challenge-map upload shares them — the map is
+// a save and its blob is a parse, same as any other upload.
+export const MAX_BLOB_COMPRESSED = 10 * 1024 * 1024; // 10 MB
+export const MAX_BLOB_DECOMPRESSED = 50 * 1024 * 1024; // 50 MB
+export const MAX_ZIP_BYTES = 50 * 1024 * 1024; // 50 MB
+
+// A multipart part that carries bytes (a File, or anything Blob-shaped).
+export const isBlobLike = (v: unknown): v is Blob =>
+	!!v &&
+	typeof v === "object" &&
+	typeof (v as { arrayBuffer?: unknown }).arrayBuffer === "function";
 
 // Anonymous public-game read limit (per-IP, global via D1 `events` table).
 // Exported so the integration test pins the gate against the real cap rather
@@ -148,7 +175,10 @@ export type RateLimitedEventType =
 	| "global_stats_view"
 	| "user_search"
 	| "user_search_public"
-	| "slug_claim_attempt";
+	| "slug_claim_attempt"
+	| "challenge_view"
+	| "challenge_link_view"
+	| "challenge_create";
 
 // Upload rate limits cover both first-time uploads and re-imports — both
 // hit the same R2 puts + D1 batch, so they cost the same.
@@ -237,7 +267,7 @@ function stripOnlineIdsDeep(node: unknown): unknown {
 // names like "Caesar Civil War" survive into the filename* UTF-8 form),
 // strips path separators and control chars, collapses whitespace, trims
 // to a sensible length. Falls back to the gameId on null/empty/all-junk.
-function buildSaveFilename(name: string | null, gameId: string): string {
+export function buildSaveFilename(name: string | null, gameId: string): string {
 	if (!name) return `${gameId}.zip`;
 	// Strip path separators, drive colons, quotes, control chars, and shell
 	// glob metacharacters. Replace runs of whitespace with a single space.
@@ -292,7 +322,7 @@ function buildMultiRowInsert(
 // Strict numeric semver compare. Returns -1, 0, or 1 for a < b, a == b, a > b.
 // Three-segment "X.Y.Z" only — no pre-release/build suffix support, since
 // PARSER_VERSION never carries one. Non-numeric segments compare as 0.
-function compareSemver(a: string, b: string): number {
+export function compareSemver(a: string, b: string): number {
 	const pa = a.split(".").map((s) => parseInt(s, 10) || 0);
 	const pb = b.split(".").map((s) => parseInt(s, 10) || 0);
 	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
@@ -302,6 +332,59 @@ function compareSemver(a: string, b: string): number {
 		if (da > db) return 1;
 	}
 	return 0;
+}
+
+// A challenge map or run parsed before CHALLENGE_MIN_PARSER_VERSION — a tab
+// left open across a deploy — would be scored on fields it doesn't carry
+// (see the constant), and the verdict is persisted; refuse it instead.
+// The audit row for a dedup hit that still did something — relinked a
+// tournament match or rescored a challenge run against the save already on
+// file. The storage side was a no-op, so this is the only record of it.
+async function auditDedupRelink(
+	env: GamesEnv,
+	gameId: string,
+	userId: string,
+	ip: string | null,
+	metadata: Record<string, unknown>,
+): Promise<void> {
+	try {
+		await env.EVENTS_DB.prepare(
+			`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
+			 VALUES (?, ?, ?, ?, ?)`,
+		)
+			.bind("upload", gameId, userId, ip, JSON.stringify(metadata))
+			.run();
+	} catch (e) {
+		logError("audit_event_log_failed", e, {
+			event_type: "upload",
+			game_id: gameId,
+		});
+	}
+}
+
+// The 409 both game writers return for a run on an open challenge.
+function openChallengeRunResponse(cors: Record<string, string>): Response {
+	return errorResponse(
+		"Game is a run on an open challenge",
+		409,
+		cors,
+		"LINKED_TO_OPEN_CHALLENGE",
+	);
+}
+
+export function staleParserResponse(
+	parserVersion: string,
+	cors: Record<string, string>,
+): Response | null {
+	if (compareSemver(parserVersion, CHALLENGE_MIN_PARSER_VERSION) >= 0) {
+		return null;
+	}
+	return errorResponse(
+		`This save was parsed by an older Per-Ankh (${parserVersion}); reload the page and upload it again.`,
+		400,
+		cors,
+		"STALE_PARSER",
+	);
 }
 
 // ---------- Field extractors (FullGameData → DB rows) ----------
@@ -988,6 +1071,38 @@ interface TournamentUploadContext {
 	is_admin_override: boolean;
 }
 
+// Find-or-create the user's `{name}` collection, move the game into it and
+// force it public. The shared shape behind tournament matches ("Tournament:
+// {name}") and challenge runs ("Challenge #N"): both publish a save into a
+// named shelf that anonymous viewers must be able to open from the event
+// page. INSERT OR IGNORE keyed on (user_id, name) UNIQUE — safe to re-run.
+export async function assignToNamedCollection(
+	db: QueryableD1,
+	gameId: string,
+	userId: string,
+	name: string,
+): Promise<void> {
+	await db
+		.prepare(
+			"INSERT OR IGNORE INTO collections (user_id, name, is_default) VALUES (?, ?, 0)",
+		)
+		.bind(userId, name)
+		.run();
+	const collRow = await db
+		.prepare(
+			"SELECT collection_id FROM collections WHERE user_id = ? AND name = ?",
+		)
+		.bind(userId, name)
+		.first<{ collection_id: number }>();
+	await db
+		.prepare(
+			`UPDATE games SET collection_id = ?, is_public = 1, updated_at = datetime('now')
+			 WHERE game_id = ?`,
+		)
+		.bind(collRow?.collection_id ?? null, gameId)
+		.run();
+}
+
 // Tournament-linked uploads: move the game into the user's
 // `Tournament: {name}` collection (find-or-create), force is_public=TRUE,
 // and stamp the match row with the result. Used by both fresh uploads and
@@ -1004,26 +1119,12 @@ async function linkTournamentMatch(
 	tournamentContext: TournamentUploadContext,
 ): Promise<void> {
 	try {
-		let tournamentCollectionId: number | null = null;
-		const collectionName = `Tournament: ${tournamentContext.tournament_name}`;
-		// INSERT OR IGNORE keyed on (user_id, name) UNIQUE — safe to re-run.
-		await env.SHARE_DB.prepare(
-			"INSERT OR IGNORE INTO collections (user_id, name, is_default) VALUES (?, ?, 0)",
-		)
-			.bind(userId, collectionName)
-			.run();
-		const collRow = await env.SHARE_DB.prepare(
-			"SELECT collection_id FROM collections WHERE user_id = ? AND name = ?",
-		)
-			.bind(userId, collectionName)
-			.first<{ collection_id: number }>();
-		if (collRow) tournamentCollectionId = collRow.collection_id;
-		await env.SHARE_DB.prepare(
-			`UPDATE games SET collection_id = ?, is_public = 1, updated_at = datetime('now')
-			 WHERE game_id = ?`,
-		)
-			.bind(tournamentCollectionId, gameId)
-			.run();
+		await assignToNamedCollection(
+			env.SHARE_DB,
+			gameId,
+			userId,
+			`Tournament: ${tournamentContext.tournament_name}`,
+		);
 	} catch (e) {
 		logError("tournament_link_failed", e, {
 			game_id: gameId,
@@ -1197,10 +1298,12 @@ export async function handleGameUpload(
 	// + elimination). See handleGameUpload tournament block below.
 	const tournamentSlotARaw = form.get("tournament_slot_a_player_index");
 	const tournamentSlotBRaw = form.get("tournament_slot_b_player_index");
-	const isBlobLike = (v: unknown): v is Blob =>
-		!!v &&
-		typeof v === "object" &&
-		typeof (v as { arrayBuffer?: unknown }).arrayBuffer === "function";
+	// Optional: submit this upload as a run of a challenge map. The run is
+	// scored server-side against the challenge's rules before anything is
+	// stored; an unmet run is refused with the verdict. Accepted runs land in
+	// the user's `Challenge #N` collection, forced public, with a
+	// challenge_submissions row. Exclusive with tournament_match_id.
+	const challengeIdRaw = form.get("challenge_id");
 
 	if (!isBlobLike(dataPart)) {
 		return errorResponse("Missing 'data' part", 400, cors, "MISSING_DATA");
@@ -1230,6 +1333,29 @@ export async function handleGameUpload(
 			);
 		}
 		tournamentMatchId = tournamentMatchIdRaw;
+	}
+	let challengeId: string | null = null;
+	if (challengeIdRaw !== null) {
+		if (
+			typeof challengeIdRaw !== "string" ||
+			!/^[A-Za-z0-9_-]{21}$/.test(challengeIdRaw)
+		) {
+			return errorResponse(
+				"Invalid challenge_id",
+				400,
+				cors,
+				"INVALID_CHALLENGE_ID",
+			);
+		}
+		if (tournamentMatchId !== null) {
+			return errorResponse(
+				"An upload is a tournament match or a challenge run, not both",
+				400,
+				cors,
+				"INVALID_FORM",
+			);
+		}
+		challengeId = challengeIdRaw;
 	}
 	const dataBlob = dataPart;
 	const saveBlob = savePart;
@@ -1367,6 +1493,42 @@ export async function handleGameUpload(
 		};
 	}
 
+	// Challenge-run validation: resolve the challenge before the parser work
+	// so a closed or unknown one fails fast. Same admin-reparse exclusion as
+	// the tournament field — the reparse path refreshes blobs, it doesn't
+	// create submissions (the existing row is restored by the re-import
+	// branch below).
+	let challengeContext: ChallengeUploadContext | null = null;
+	if (challengeId !== null) {
+		if (adminOverride) {
+			return errorResponse(
+				"challenge_id not allowed on admin reparse",
+				400,
+				cors,
+				"INVALID_FORM",
+			);
+		}
+		challengeContext = await loadChallengeForUpload(env.SHARE_DB, challengeId);
+		if (!challengeContext) {
+			return errorResponse(
+				"Challenge not found",
+				404,
+				cors,
+				"CHALLENGE_NOT_FOUND",
+			);
+		}
+		// 409 like TOURNAMENT_COMPLETE — the request is well-formed; the
+		// challenge's state refuses it.
+		if (challengeContext.closed) {
+			return errorResponse(
+				`Challenge #${challengeContext.number} is closed to new runs`,
+				409,
+				cors,
+				"CHALLENGE_CLOSED",
+			);
+		}
+	}
+
 	// Decompress + parse blob
 	const compressedData = await dataBlob.arrayBuffer();
 	let decompressed: Uint8Array;
@@ -1415,7 +1577,10 @@ export async function handleGameUpload(
 	// completion via GameOver but no winner element exists in the XML.
 	// The frontend's `validateCompletedGame` already enforces this; the
 	// duplicate check here is defense-in-depth against a hand-crafted blob.
-	if (blob.match_metadata.game_over !== true) {
+	// Challenge runs are the one exception: a run ends when the objectives
+	// are met, not when the game does (§7 of the challenge design), and the
+	// scorer below is the gate instead.
+	if (!challengeContext && blob.match_metadata.game_over !== true) {
 		return errorResponse(
 			"Save is not a completed game — only completed games can be uploaded.",
 			400,
@@ -1461,6 +1626,37 @@ export async function handleGameUpload(
 			cors,
 			"UNKNOWN_PLAYER_INDEX",
 		);
+	}
+
+	// Challenge runs: the uploader must be sitting in the map's seat, and the
+	// run must meet every objective and criterion. The verdict is computed
+	// once here and persisted with the submission — the leaderboard never
+	// rescores.
+	let challengeVerdict: Verdict | null = null;
+	if (challengeContext) {
+		const stale = staleParserResponse(blob.parser_version, cors);
+		if (stale) return stale;
+		const seat = challengeContext.rules.setup.player_index;
+		if (uploaderIndex !== seat) {
+			return errorResponse(
+				`A challenge run is uploaded as the map's player (seat ${seat})`,
+				400,
+				cors,
+				"CHALLENGE_WRONG_SEAT",
+			);
+		}
+		challengeVerdict = scoreChallenge(challengeContext.rules, asScorable(blob));
+		if (!challengeVerdict.met) {
+			return errorResponse(
+				challengeVerdict.identity.ok
+					? "This run doesn't meet the challenge yet"
+					: `Not a run of this challenge's map: ${challengeVerdict.identity.reason}`,
+				400,
+				cors,
+				"CHALLENGE_NOT_MET",
+				{ verdict: challengeVerdict },
+			);
+		}
 	}
 
 	// Tournament slot↔player mapping + winner derivation. Done now that the
@@ -1633,6 +1829,10 @@ export async function handleGameUpload(
 	// batch below can restore game_id on each match after the BEFORE DELETE
 	// trigger from migration 0013 nulls them out via INSERT OR REPLACE.
 	let linkedMatchIds: { match_id: string }[] = [];
+	// Likewise the challenge submission: ON DELETE CASCADE drops it with the
+	// REPLACEd games row, so it's re-inserted inside the batch (rescored when
+	// this upload is a run, verbatim otherwise).
+	let existingSubmission: ChallengeSubmissionRow | null = null;
 	if (existing) {
 		const cmp = compareSemver(blob.parser_version, existing.parser_version);
 		if (cmp <= 0) {
@@ -1649,33 +1849,39 @@ export async function handleGameUpload(
 					userId,
 					tournamentContext,
 				);
-				try {
-					await env.EVENTS_DB.prepare(
-						`INSERT INTO events (event_type, game_id, user_id, ip_address, metadata)
-						 VALUES (?, ?, ?, ?, ?)`,
-					)
-						.bind(
-							"upload",
-							existing.game_id,
-							userId,
-							ip,
-							JSON.stringify({
-								tournament_match_relinked: true,
-								match_id: tournamentContext.match_id,
-							}),
-						)
-						.run();
-				} catch (e) {
-					logError("audit_event_log_failed", e, {
-						event_type: "upload",
-						game_id: existing.game_id,
-					});
-				}
+				await auditDedupRelink(env, existing.game_id, userId, ip, {
+					tournament_match_relinked: true,
+					match_id: tournamentContext.match_id,
+				});
 				return jsonResponse(
 					{
 						game_id: existing.game_id,
 						url: `/games/${existing.game_id}`,
 						tournament_match_reported: true,
+					},
+					200,
+					cors,
+				);
+			}
+			// Same shape for a challenge run: the save is already on file, so
+			// record (or refresh) the submission against it.
+			if (challengeContext && challengeVerdict) {
+				await linkChallengeSubmission(
+					env.SHARE_DB,
+					existing.game_id,
+					userId,
+					challengeContext,
+					challengeVerdict,
+				);
+				await auditDedupRelink(env, existing.game_id, userId, ip, {
+					challenge_relinked: true,
+					challenge_id: challengeContext.challenge_id,
+				});
+				return jsonResponse(
+					{
+						game_id: existing.game_id,
+						url: `/games/${existing.game_id}`,
+						challenge_submitted: true,
 					},
 					200,
 					cors,
@@ -1716,6 +1922,8 @@ export async function handleGameUpload(
 					.bind(gameId)
 					.all<{ match_id: string }>()
 			).results ?? [];
+
+		existingSubmission = await loadSubmissionForGame(env.SHARE_DB, gameId);
 
 		if (linkedMatchIds.length > 0) {
 			const newUploaderNation =
@@ -1866,6 +2074,27 @@ export async function handleGameUpload(
 			).bind(gameId, m.match_id),
 		);
 	}
+	if (existingSubmission) {
+		// The batch is the atomic unit, so the row it restores carries the
+		// verdict this upload was scored to — not the old one for the
+		// post-batch link to overwrite (it re-runs the same upsert, and a
+		// failure there is logged, not raised).
+		const restored =
+			challengeContext && challengeVerdict
+				? submissionRow(
+						challengeContext,
+						gameId,
+						userId,
+						challengeVerdict,
+						existingSubmission,
+					)
+				: existingSubmission;
+		allStatements.push(
+			env.SHARE_DB.prepare(challengeSubmissionInsert.sql).bind(
+				...challengeSubmissionInsert.bindings(restored),
+			),
+		);
+	}
 
 	try {
 		await env.SHARE_DB.batch(allStatements);
@@ -1918,6 +2147,15 @@ export async function handleGameUpload(
 	if (tournamentContext) {
 		await linkTournamentMatch(env, gameId, userId, tournamentContext);
 	}
+	if (challengeContext && challengeVerdict) {
+		await linkChallengeSubmission(
+			env.SHARE_DB,
+			gameId,
+			userId,
+			challengeContext,
+			challengeVerdict,
+		);
+	}
 
 	// Audit log — distinct event_type for re-imports so admin tooling
 	// (./per-ankh admin events --type reimport) can filter cleanly. Both
@@ -1943,6 +2181,9 @@ export async function handleGameUpload(
 					decompressed_size: decompressed.byteLength,
 					zip_size: rawZip.byteLength,
 					uploader_index: uploaderIndex,
+					...(challengeContext
+						? { challenge_id: challengeContext.challenge_id }
+						: {}),
 					...(isReimport
 						? {
 								from_version: existingParserVersion,
@@ -1978,7 +2219,15 @@ export async function handleGameUpload(
 			cors,
 		);
 	}
-	return jsonResponse({ game_id: gameId, url: `/games/${gameId}` }, 201, cors);
+	return jsonResponse(
+		{
+			game_id: gameId,
+			url: `/games/${gameId}`,
+			...(challengeContext ? { challenge_submitted: true } : {}),
+		},
+		201,
+		cors,
+	);
 }
 
 // Whitelist of Games-tab sort orders → ORDER BY clause. Never interpolate
@@ -2701,6 +2950,10 @@ export async function handleGamePatch(
 				"LINKED_TO_ACTIVE_TOURNAMENT",
 			);
 		}
+		// Same for a run on an open challenge: the leaderboard links to it.
+		if (await isRunOnOpenChallenge(env.SHARE_DB, gameId)) {
+			return openChallengeRunResponse(cors);
+		}
 	}
 
 	// Ownership check on collection_id: prevent moving a game into another
@@ -2844,6 +3097,12 @@ export async function handleGameDelete(
 			"LINKED_TO_ACTIVE_TOURNAMENT",
 		);
 	}
+	// A run on an open challenge holds a place on a live leaderboard (the
+	// submission row would cascade away with the game); once the challenge
+	// closes the board is final and the game is the owner's to remove.
+	if (await isRunOnOpenChallenge(env.SHARE_DB, gameId)) {
+		return openChallengeRunResponse(cors);
+	}
 
 	// R2 cleanup first (hardest to undo); D1 cascade handles dependents.
 	const endDeletes = beginR2Op();
@@ -2927,31 +3186,9 @@ export async function handleGameDownload(
 		return errorResponse("Not found", 404, cors, "NOT_FOUND");
 	}
 
-	// Per-user limit (meaningful — auth-bound) + per-IP backstop.
-	if (
-		(await countEventsSince(env.EVENTS_DB, "download", "user_id", userId)) >=
-		PER_USER_DOWNLOADS_PER_HOUR
-	) {
-		return errorResponse(
-			"Per-user download limit exceeded",
-			429,
-			cors,
-			"RATE_LIMIT_USER",
-		);
-	}
 	const ip = getClientIp(request);
-	if (
-		ip &&
-		(await countEventsSince(env.EVENTS_DB, "download", "ip_address", ip)) >=
-			PER_IP_DOWNLOADS_PER_HOUR
-	) {
-		return errorResponse(
-			"Per-IP download limit exceeded",
-			429,
-			cors,
-			"RATE_LIMIT_IP",
-		);
-	}
+	const rl = await enforceDownloadRateLimit(env, userId, ip, cors);
+	if (rl) return rl;
 
 	// Deliberately NOT routed through the blob cache (unlike the parsed blob in
 	// handleGameDetail). Caching means buffering or teeing the body, which
@@ -2987,11 +3224,56 @@ export async function handleGameDownload(
 			});
 		});
 
-	// Stream R2 body straight through. obj.body is a ReadableStream — no
-	// buffering, memory-safe even at the 50MB R2 ceiling.
-	// Access-Control-Expose-Headers is set per-response (not in the global
-	// CORS helper) so cross-origin JS in the browser can read
-	// Content-Disposition to pick the filename.
+	return zipStreamResponse(obj, filename, cors);
+}
+
+// The download budget: per-user limit (meaningful — auth-bound) + per-IP
+// backstop. Shared by the save download and the challenge-map download
+// (challenges/handlers.ts), which both stream a ZIP from R2 and both record
+// a `download` event.
+export async function enforceDownloadRateLimit(
+	env: GamesEnv,
+	userId: string,
+	ip: string | null,
+	cors: Record<string, string>,
+): Promise<Response | null> {
+	if (
+		(await countEventsSince(env.EVENTS_DB, "download", "user_id", userId)) >=
+		PER_USER_DOWNLOADS_PER_HOUR
+	) {
+		return errorResponse(
+			"Per-user download limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_USER",
+		);
+	}
+	if (
+		ip &&
+		(await countEventsSince(env.EVENTS_DB, "download", "ip_address", ip)) >=
+			PER_IP_DOWNLOADS_PER_HOUR
+	) {
+		return errorResponse(
+			"Per-IP download limit exceeded",
+			429,
+			cors,
+			"RATE_LIMIT_IP",
+		);
+	}
+	return null;
+}
+
+// Stream an R2 ZIP straight through as an attachment. obj.body is a
+// ReadableStream — no buffering, memory-safe even at the 50MB R2 ceiling.
+// Access-Control-Expose-Headers is set per-response (not in the global CORS
+// helper) so cross-origin JS in the browser can read Content-Disposition to
+// pick the filename. Shared by the save download and the challenge-map
+// download (challenges/handlers.ts).
+export function zipStreamResponse(
+	obj: R2ObjectBody,
+	filename: string,
+	cors: Record<string, string>,
+): Response {
 	return new Response(obj.body, {
 		status: 200,
 		headers: {

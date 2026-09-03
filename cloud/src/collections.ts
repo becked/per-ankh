@@ -13,6 +13,7 @@ import { cloudCorsHeaders, errorResponse, jsonResponse } from "./util";
 import { sessionFromRequest } from "./session";
 import type { SessionEnv } from "./session";
 import type { QueryableD1 } from "./d1";
+import { GAME_TYPE_PREDICATES } from "./games-scope";
 
 export interface CollectionsEnv extends SessionEnv {
 	SHARE_DB: QueryableD1;
@@ -57,23 +58,20 @@ export async function handleCollectionsList(
 	}
 
 	// Per-scope game counts for the home-page scope selector — one count
-	// per built-in slice (all / public / vs_ai / mp / tournament), shown
-	// on each option like collections show theirs. Computed in one pass;
-	// the visibility clause keeps a visitor's counts to public games only.
-	// The game-type predicates mirror buildUserScopeWhere.
+	// per built-in slice (all / public / vs_ai / mp / tournament /
+	// challenge), shown on each option like collections show theirs.
+	// Computed in one pass; the visibility clause keeps a visitor's counts
+	// to public games only. The game-type predicates are the ones
+	// buildUserScopeWhere filters on.
 	const visClause = viewerOwnsTarget ? "" : " AND is_public = 1";
 	const countsRow = await env.SHARE_DB.prepare(
 		`SELECT
 		   COUNT(*) AS all_count,
 		   SUM(CASE WHEN is_public = 1 THEN 1 ELSE 0 END) AS public_count,
-		   SUM(CASE WHEN game_id IN (SELECT game_id FROM tournament_matches WHERE game_id IS NOT NULL)
-		            THEN 1 ELSE 0 END) AS tournament_count,
-		   SUM(CASE WHEN game_id NOT IN (SELECT game_id FROM tournament_matches WHERE game_id IS NOT NULL)
-		             AND game_id IN (SELECT game_id FROM player_summaries WHERE is_human = 1 GROUP BY game_id HAVING COUNT(*) = 1)
-		            THEN 1 ELSE 0 END) AS vs_ai_count,
-		   SUM(CASE WHEN game_id NOT IN (SELECT game_id FROM tournament_matches WHERE game_id IS NOT NULL)
-		             AND game_id IN (SELECT game_id FROM player_summaries WHERE is_human = 1 GROUP BY game_id HAVING COUNT(*) > 1)
-		            THEN 1 ELSE 0 END) AS mp_count
+		   SUM(CASE WHEN ${GAME_TYPE_PREDICATES.tournament} THEN 1 ELSE 0 END) AS tournament_count,
+		   SUM(CASE WHEN ${GAME_TYPE_PREDICATES.challenge} THEN 1 ELSE 0 END) AS challenge_count,
+		   SUM(CASE WHEN ${GAME_TYPE_PREDICATES.vs_ai} THEN 1 ELSE 0 END) AS vs_ai_count,
+		   SUM(CASE WHEN ${GAME_TYPE_PREDICATES.mp} THEN 1 ELSE 0 END) AS mp_count
 		 FROM games WHERE user_id = ?${visClause}`,
 	)
 		.bind(userId)
@@ -81,6 +79,7 @@ export async function handleCollectionsList(
 			all_count: number;
 			public_count: number | null;
 			tournament_count: number | null;
+			challenge_count: number | null;
 			vs_ai_count: number | null;
 			mp_count: number | null;
 		}>();
@@ -91,6 +90,7 @@ export async function handleCollectionsList(
 		vs_ai: countsRow?.vs_ai_count ?? 0,
 		mp: countsRow?.mp_count ?? 0,
 		tournament: countsRow?.tournament_count ?? 0,
+		challenge: countsRow?.challenge_count ?? 0,
 	};
 
 	if (!viewerOwnsTarget) {

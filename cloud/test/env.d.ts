@@ -29,6 +29,8 @@ declare global {
 			TOURNAMENT_LIST_VIEW_PER_HOUR: string;
 			TOURNAMENT_LINK_VIEW_PER_HOUR: string;
 			GLOBAL_STATS_VIEW_PER_HOUR: string;
+			CHALLENGE_VIEW_PER_HOUR: string;
+			CHALLENGE_LINK_VIEW_PER_HOUR: string;
 			// Shared key for trusted SSR requests, bound in vitest.config.mts.
 			// Declared so a test can clear it and prove forwarding goes dark
 			// (see integration/ssr-trust.test.ts).

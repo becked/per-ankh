@@ -19,7 +19,13 @@ import type { ChartBundle, UserScope } from "$lib/stats/types";
 
 const FIRST_PAGE_SIZE = 50;
 const TABS = new Set(["overview", "stats", "games", "videos", "tournaments"]);
-const SCOPE_KEYWORDS = new Set(["public", "vs_ai", "mp", "tournament"]);
+const SCOPE_KEYWORDS = new Set([
+	"public",
+	"vs_ai",
+	"mp",
+	"tournament",
+	"challenge",
+]);
 
 // The shape a stored slug has. Mirrors the Worker's by-slug route regex
 // (cloud/src/index.ts) — which is the claim format from

@@ -30,6 +30,8 @@ export interface Unit {
 	createTurn: number | null;
 	facing: string | null;
 	originalPlayerXmlId: number | null;
+	// The tribe a mercenary was hired from; null for a unit the player trained.
+	originalTribe: string | null;
 	turnsSinceLastMove: number | null;
 	gender: string | null;
 	isSleeping: boolean;
@@ -145,6 +147,7 @@ export function parseUnits(root: Record<string, unknown>): Unit[] {
 			createTurn: optInt(node.CreateTurn),
 			facing: optStr(node.Facing),
 			originalPlayerXmlId,
+			originalTribe: optStr(node.OriginalTribe),
 			turnsSinceLastMove: optInt(node.TurnsSinceLastMove),
 			gender: optStr(node.Gender),
 			isSleeping: "Sleep" in node,
@@ -288,6 +291,7 @@ export function unitToRow(u: Unit): Record<string, unknown> {
 		create_turn: u.createTurn,
 		facing: u.facing,
 		original_player_xml_id: u.originalPlayerXmlId,
+		original_tribe: u.originalTribe,
 		turns_since_last_move: u.turnsSinceLastMove,
 		gender: u.gender,
 		is_sleeping: u.isSleeping,

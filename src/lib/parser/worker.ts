@@ -5,7 +5,8 @@
 // `FullGameData` blob along with the original ZIP bytes (transferable).
 //
 // Protocol (typed message union):
-//   parent → worker: { type: "parse", file: ArrayBuffer, fileName: string }
+//   parent → worker: { type: "parse", file: ArrayBuffer, fileName: string,
+//                      requireCompleted?: boolean }
 //   worker → parent: { type: "progress", phase: string, percent: number }
 //   worker → parent: { type: "result", data: FullGameData, rawZip: ArrayBuffer }
 //   worker → parent: { type: "error",    message: string, code: string }
@@ -26,6 +27,12 @@ export type ParseRequest = {
 	type: "parse";
 	file: ArrayBuffer;
 	fileName: string;
+	/**
+	 * Reject a save whose game is not over (the default). Challenge maps and
+	 * challenge runs are in-progress games by definition, so those callers
+	 * turn it off; the Worker applies the matching exemption on upload.
+	 */
+	requireCompleted?: boolean;
 };
 
 export type ParseProgress = {
@@ -76,7 +83,7 @@ ctx.onmessage = (e: MessageEvent<ParseRequest>) => {
 		} satisfies ParseProgress);
 		const gameData = extractAllGameData(root, activePlayerIndex);
 
-		validateCompletedGame(gameData);
+		if (e.data.requireCompleted ?? true) validateCompletedGame(gameData);
 
 		// Transfer rawZip (zero-copy). gameData is structured-cloned. By this
 		// point the parser must not retain Uint8Array views into e.data.file

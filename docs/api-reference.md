@@ -22,6 +22,7 @@ This reference is drift-guarded: `cloud/src/routes-doc.test.ts` asserts it docum
 - [Tournaments — admins](#tournaments--admins)
 - [Tournaments — player self-service](#tournaments--player-self-service)
 - [Tournament export](#tournament-export)
+- [Challenge maps](#challenge-maps----v1challenges) — `/v1/challenges/*`
 - [Site admin: games](#site-admin-games) — `/v1/admin/games/*`
 - [Site admin: featured videos](#site-admin-featured-videos) — `/v1/admin/featured-videos*`
 - [Diagnostics](#diagnostics) — `/v1/csp-report`
@@ -102,6 +103,9 @@ The three tournament read buckets are split by the *surface that spends them*, n
 | `tournament_admin` | 30 / hr per user | tournament admin mutations |
 | `tournament_schedule` | 60 / hr per user | match schedule + caster self-service |
 | `tournament_create` | 5 / hr per user | `POST /v1/tournaments` |
+| `challenge_view` | 600 reads / hr per IP | the challenge pages: `GET /v1/challenges` and `GET /v1/challenges/:number`. Own ceiling var (`CHALLENGE_VIEW_PER_HOUR`), retuned like the tournament ones |
+| `challenge_link_view` | 600 reads / hr per IP | `GET /v1/games/:id/challenge-link`. Its own budget for the `tournament_link_view` reason: every game-page render calls it, and sharing would let a `/games/*` crawl 429 the challenge pages. Own ceiling var (`CHALLENGE_LINK_VIEW_PER_HOUR`) |
+| `challenge_create` | 5 / hr per user | `POST /v1/challenges` (a map is a 1–50 MB R2 put, the same reason `tournament_create` is 5) |
 | user search | 60 / hr per user | `GET /v1/users/search` |
 | `user_search_public` | 300 / hr per user | `GET /v1/users/public-search` |
 | `slug_claim_attempt` | 15 / hr per user | `POST` + `DELETE /v1/users/me/slug` (counts attempts, not successes) |
@@ -201,10 +205,10 @@ End the current session.
 Upload (or re-import) a parsed save.
 
 - **Auth:** Session.
-- **Body:** `multipart/form-data` — `data` (gzipped `FullGameData` JSON, ≤10 MB compressed / ≤50 MB decompressed, validated against `FullGameDataSchema`: `version` literal `2`, `parser_version` in `KNOWN_PARSER_VERSIONS`), `save` (raw ZIP, ≤50 MB), `uploader_player_index` (JSON `number | null`; `null` = observer mode). Optional: `tournament_match_id` (21-char), `tournament_slot_a_player_index` / `tournament_slot_b_player_index` (required for observer/admin tournament uploads).
-- **Response:** `201 { game_id, url }` on first upload; `200 { game_id, url, reimported: true, from_version, to_version }` on re-import; `200 { game_id, url, tournament_match_reported: true }` when a dedup-hit relinks a match.
-- **Errors:** `400` (many: `INVALID_FORM`, `MISSING_DATA`, `MISSING_SAVE`, `MISSING_INDEX`, `INVALID_BLOB`, `NOT_COMPLETED`, `UNKNOWN_PLAYER_INDEX`, observer/slot-mapping codes…), `401 UNAUTHORIZED`, `403 NOT_MATCH_PARTICIPANT`, `404 MATCH_NOT_FOUND`, `409` (`DUPLICATE`, `TOURNAMENT_COMPLETE`, `WRONG_HUMAN_COUNT`, `NO_WINNER`, `WINNER_NOT_IN_MATCH`, `UPLOADER_LOCKED_TOURNAMENT`), `413` (`BLOB_TOO_LARGE`, `ZIP_TOO_LARGE`, `DECOMPRESSED_TOO_LARGE`), `429` (`RATE_LIMIT_USER` / `_IP` / `_GLOBAL`), `500` (`R2_FAILED`, `D1_FAILED`).
-- **Notes:** Unknown `parser_version` → `400 INVALID_BLOB` (deploy Worker before frontend). Only completed games (`game_over`) accepted. Dedup keyed on SHA-256 of the raw ZIP per `(user_id, file_hash)`: same/older parser version → `409 DUPLICATE`, newer → re-import. Observer mode records `user_nation`/`user_won` NULL and captures no `online_id`. Tournament-linked uploads are forced `is_public=1` and moved to a `Tournament: {name}` collection.
+- **Body:** `multipart/form-data` — `data` (gzipped `FullGameData` JSON, ≤10 MB compressed / ≤50 MB decompressed, validated against `FullGameDataSchema`: `version` literal `2`, `parser_version` in `KNOWN_PARSER_VERSIONS`), `save` (raw ZIP, ≤50 MB), `uploader_player_index` (JSON `number | null`; `null` = observer mode). Optional: `tournament_match_id` (21-char), `tournament_slot_a_player_index` / `tournament_slot_b_player_index` (required for observer/admin tournament uploads); or `challenge_id` (21-char, exclusive with `tournament_match_id`) to submit the save as a run of a [challenge map](#challenge-maps----v1challenges).
+- **Response:** `201 { game_id, url }` on first upload; `200 { game_id, url, reimported: true, from_version, to_version }` on re-import; `200 { game_id, url, tournament_match_reported: true }` when a dedup-hit relinks a match; `201`/`200 { …, challenge_submitted: true }` when the upload carried `challenge_id`.
+- **Errors:** `400` (many: `INVALID_FORM`, `MISSING_DATA`, `MISSING_SAVE`, `MISSING_INDEX`, `INVALID_BLOB`, `NOT_COMPLETED`, `UNKNOWN_PLAYER_INDEX`, observer/slot-mapping codes, `INVALID_CHALLENGE_ID`, `STALE_PARSER`, `CHALLENGE_WRONG_SEAT`, `CHALLENGE_NOT_MET` — carries `{ verdict }`), `401 UNAUTHORIZED`, `403 NOT_MATCH_PARTICIPANT`, `404` (`MATCH_NOT_FOUND`, `CHALLENGE_NOT_FOUND`), `409` (`DUPLICATE`, `TOURNAMENT_COMPLETE`, `CHALLENGE_CLOSED`, `WRONG_HUMAN_COUNT`, `NO_WINNER`, `WINNER_NOT_IN_MATCH`, `UPLOADER_LOCKED_TOURNAMENT`), `413` (`BLOB_TOO_LARGE`, `ZIP_TOO_LARGE`, `DECOMPRESSED_TOO_LARGE`), `429` (`RATE_LIMIT_USER` / `_IP` / `_GLOBAL`), `500` (`R2_FAILED`, `D1_FAILED`).
+- **Notes:** Unknown `parser_version` → `400 INVALID_BLOB` (deploy Worker before frontend). Only completed games (`game_over`) accepted. Dedup keyed on SHA-256 of the raw ZIP per `(user_id, file_hash)`: same/older parser version → `409 DUPLICATE`, newer → re-import. Observer mode records `user_nation`/`user_won` NULL and captures no `online_id`. Tournament-linked uploads are forced `is_public=1` and moved to a `Tournament: {name}` collection. A `challenge_id` upload skips the `game_over` gate (a run ends when its objectives are met, not when the game does), must be parsed by `CHALLENGE_MIN_PARSER_VERSION` or newer (`400 STALE_PARSER` — the scorer reads fields older parses lack, and the verdict is persisted), must be uploaded from the challenge's seat (`uploader_player_index` = `setup.player_index`), and is scored server-side with the shared `scoreChallenge` — an unmet run is refused with `400 CHALLENGE_NOT_MET` and the full verdict so the client can show why. An accepted run is forced `is_public=1`, moved to a `Challenge #N` collection, and written to `challenge_submissions` with its verdict; a dedup hit on an already-uploaded save links that game instead (`200 { game_id, url, challenge_submitted: true }`), and a re-import keeps the submission row (and its `created_at`, the first-to-finish tiebreak). Not allowed on an admin reparse.
 
 ### `GET /v1/games`
 List a user's games (search + filters + scope).
@@ -257,6 +261,15 @@ Whether a game is linked to a tournament match.
 - **Errors:** `429 RATE_LIMIT_TOURNAMENT_LINK`.
 - **Notes:** `tournament_link_view` bucket (600/hr per IP; scraper UAs exempt) — its own, deliberately not the `tournament_view` one the tournament pages draw on. The budget is charged before the link is looked up, so an unlinked game costs a slot too.
 
+### `GET /v1/games/:id/challenge-link`
+Whether a game is a submitted run of a challenge map.
+
+- **Auth:** Public (IP rate-limited).
+- **Path:** `id` (21-char).
+- **Response 200:** `{ link: { number, title, score_turn, rank } | null }` — `rank` is the run's position on the challenge leaderboard (best run per user).
+- **Errors:** `429 RATE_LIMIT_CHALLENGE_LINK`.
+- **Notes:** `challenge_link_view` bucket (600/hr per IP; scraper UAs exempt; `429 RATE_LIMIT_CHALLENGE_LINK`) — its own, not the challenge pages' `challenge_view`, for the same reason `tournament-link` has one. Charged before the lookup, so an unlinked game costs a slot too.
+
 ### `PATCH /v1/games/:id`
 Update a game's visibility, collection, or display name.
 
@@ -264,8 +277,8 @@ Update a game's visibility, collection, or display name.
 - **Path:** `id` (21-char).
 - **Body:** `GamePatchSchema` (all optional, ≥1 required) — `is_public` (boolean), `collection_id` (`number | null`, ≥1), `display_name` (`string | null`, 1–120 trimmed).
 - **Response 200:** echoes only the supplied fields — `{ game_id, is_public?, collection_id?, display_name? }`.
-- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND` (non-owner / missing / non-owned `collection_id`), `400` (`INVALID_JSON`, `INVALID_BODY`), `409 LINKED_TO_ACTIVE_TOURNAMENT`, `429 RATE_LIMIT_USER`.
-- **Notes:** `is_public` toggle rate-limited (`visibility_change`, 60/hr). Cannot set `is_public=false` while the game is linked to a non-`complete` tournament match.
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND` (non-owner / missing / non-owned `collection_id`), `400` (`INVALID_JSON`, `INVALID_BODY`), `409` (`LINKED_TO_ACTIVE_TOURNAMENT`, `LINKED_TO_OPEN_CHALLENGE`), `429 RATE_LIMIT_USER`.
+- **Notes:** `is_public` toggle rate-limited (`visibility_change`, 60/hr). Cannot set `is_public=false` while the game is linked to a non-`complete` tournament match, or is a submitted run of a challenge that hasn't closed (the leaderboard links to it).
 
 ### `DELETE /v1/games/:id`
 Delete a game and its blobs.
@@ -273,8 +286,8 @@ Delete a game and its blobs.
 - **Auth:** Session + owner. Missing game → `404`; non-owner → `403 FORBIDDEN` (note: leaks existence, unlike PATCH).
 - **Path:** `id` (21-char).
 - **Response:** `204 No Content`.
-- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND`, `403 FORBIDDEN`, `409 LINKED_TO_ACTIVE_TOURNAMENT`.
-- **Notes:** Blocked while linked to any tournament whose status ≠ `complete`. Deletes R2 objects then the D1 row (child tables cascade).
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND`, `403 FORBIDDEN`, `409` (`LINKED_TO_ACTIVE_TOURNAMENT`, `LINKED_TO_OPEN_CHALLENGE`).
+- **Notes:** Blocked while linked to any tournament whose status ≠ `complete`, and while the game is a run on a challenge that has not closed (the submission row would cascade away with it). Deletes R2 objects then the D1 row (child tables cascade).
 
 ---
 
@@ -769,6 +782,64 @@ Download standings + matches as CSVs.
 - **Response 200:** `application/zip` (`standings.csv` + `matches.csv`), `Content-Disposition: attachment; filename="<slug>-export.zip"`.
 - **Errors:** `401 UNAUTHORIZED`, `403 NOT_TOURNAMENT_ADMIN`, `404 TOURNAMENT_NOT_FOUND`, `429 RATE_LIMIT_TOURNAMENT_EXPORT` (30/hr per user).
 - **Notes:** Standings CSV uses the full admin shape. Not behind the per-IP view limit.
+
+---
+
+## Challenge maps — `/v1/challenges/*`
+
+A **challenge map** is a turn-1 single-player save (one human, at most one AI) uploaded by its creator with a set of objectives; anyone downloads it, plays, and uploads the run through [`POST /v1/games`](#post-v1games) with `challenge_id`. The run is scored server-side against the stored rules (`src/lib/challenges/scoring.ts`, shared with the client's preview); the score is the turn every objective is met, lower is better. Challenges are addressed by their public `number` (starting at 27, continuing the Discord series) — the 21-char `challenge_id` only travels in the upload form. Design: `docs/challenge-maps-design.md`.
+
+Reads are **Public** and per-IP rate-limited via `challenge_view` (600/hr; `429 RATE_LIMIT_CHALLENGE_VIEW`; scraper UAs exempt). A session only unlocks the `viewer` block. Challenge shape — `{ challenge_id, number, title, description, status: "open" | "closed", closes_at, created_at, updated_at, creator: { user_id, display_name, avatar_url, slug }, setup, objectives, criteria, map_size_bytes, submission_count, runner_count }`, where `setup` is the `ChallengeSetup` extracted from the map (seat, nation, leader, starting traits, AI count, enabled wonders, map metadata) and `objectives` / `criteria` are the rule arrays validated by `CreateChallengeSchema`. `status` is computed in SQL from `closes_at` against `datetime('now')`.
+
+### `GET /v1/challenges`
+List challenges, newest number first.
+
+- **Auth:** Public (IP rate-limited).
+- **Query:** `status` — `open`, `closed`, or `all` (default; anything else reads as `all`).
+- **Response 200:** `{ challenges: [{ …challenge, best: LeaderboardEntry | null }] }` — `best` is the top of the leaderboard.
+- **Errors:** `429 RATE_LIMIT_CHALLENGE_VIEW`.
+
+### `POST /v1/challenges`
+Create a challenge from a turn-1 save.
+
+- **Auth:** Session.
+- **Body:** `multipart/form-data` — `meta` (JSON, `CreateChallengeSchema`: `title` 1–120, `description` ≤4000, `duration_days` 1–365 (default 30), `objectives` 1–20, `criteria` ≤10 with each kind at most once), `data` (gzipped `FullGameData` JSON, same caps and parser-version check as the game upload), `save` (the map ZIP, ≤50 MB).
+- **Response 201:** `{ challenge }`.
+- **Errors:** `400` (`INVALID_FORM`, `MISSING_META`, `MISSING_DATA`, `MISSING_SAVE`, `INVALID_JSON`, `INVALID_META`, `EMPTY_PAYLOAD`, `INVALID_BLOB`, `STALE_PARSER`, `INVALID_MAP` — carries `{ problems: string[] }`), `401 UNAUTHORIZED`, `413` (`BLOB_TOO_LARGE`, `ZIP_TOO_LARGE`, `DECOMPRESSED_TOO_LARGE`), `429 RATE_LIMIT_CHALLENGE_CREATE` (5/hr per user), `500` (`R2_FAILED`, `D1_FAILED`).
+- **Notes:** A blob parsed before `CHALLENGE_MIN_PARSER_VERSION` is refused (`STALE_PARSER`), same floor as the run upload. `validateChallengeMap` refuses a save that isn't turn 1, is over, has more than one human, or more than one AI — every problem is listed. The setup is extracted from the blob, not supplied by the client. The number is assigned as `MAX(number) + 1` (floor 27) in the insert. The map goes to R2 at `challenges/{challenge_id}/map.zip`; the parsed blob is not kept. Writes a `challenge_create` audit event (kept forever).
+
+### `GET /v1/challenges/:number`
+One challenge with its leaderboard.
+
+- **Auth:** Public (owner extras).
+- **Path:** `number` (1–6 digits).
+- **Response 200:** `{ challenge, leaderboard: LeaderboardEntry[], viewer: { can_manage, runs: LeaderboardEntry[] } | null }` — `leaderboard` is the best run per user ranked by `score_turn` then `submitted_at`; `LeaderboardEntry` = `{ rank, submission_id, game_id, game_name, score_turn, earliest_turn, submitted_at, user: { user_id, display_name, avatar_url, slug } }`. `viewer` is `null` anonymously; `can_manage` is true for the creator and for a site admin.
+- **Errors:** `404 NOT_FOUND`, `429 RATE_LIMIT_CHALLENGE_VIEW`.
+
+### `PATCH /v1/challenges/:number`
+Edit a challenge.
+
+- **Auth:** Session + creator (or site admin). Non-creator or missing challenge → `404` (does not distinguish).
+- **Body:** `PatchChallengeSchema` — any subset of the create `meta` fields, ≥1 required. `duration_days` re-derives `closes_at` from `created_at` — extending a quiet challenge or closing one early — and is refused on a closed one (`409 CHALLENGE_CLOSED`): a final leaderboard stays final.
+- **Response 200:** `{ challenge }`.
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND`, `400` (`INVALID_JSON`, `INVALID_BODY`), `409` (`CHALLENGE_RULES_LOCKED`, `CHALLENGE_CLOSED`).
+- **Notes:** `objectives` and `criteria` lock once a run has been submitted — every run on the board was scored against them. Title and description stay editable. Writes a `challenge_admin` audit event (kept forever).
+
+### `DELETE /v1/challenges/:number`
+Delete a challenge, its submissions, and its map.
+
+- **Auth:** Session + creator (or site admin); `404` otherwise. The creator only while no run has been submitted; an admin always.
+- **Response 200:** `{ deleted: true }`.
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND`, `409 CHALLENGE_HAS_RUNS`.
+- **Notes:** Submission rows go with the challenge; the runs themselves stay in their owners' libraries (still public, still in their `Challenge #N` collection). The R2 map is deleted after the row. Writes a `challenge_admin` audit event.
+
+### `GET /v1/challenges/:number/map`
+Download the map ZIP.
+
+- **Auth:** Session (the raw save carries the creator's `online_id`, the same reason `GET /v1/games/:id/download` requires one).
+- **Response 200:** streamed `application/zip`, `Content-Disposition: attachment; filename="Challenge N title.zip"` (via `buildSaveFilename`).
+- **Errors:** `401 UNAUTHORIZED`, `404 NOT_FOUND`, `429` (`RATE_LIMIT_USER` / `_IP`).
+- **Notes:** Shares the game download budgets (50/hr per user, 100/hr per IP) and records a `download` event, so a map download and a save download draw on one allowance.
 
 ---
 

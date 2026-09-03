@@ -196,6 +196,18 @@
 				>
 					{#if user}
 						<!--
+							Challenges is public, so it sits outside the session gate in
+							both branches — the same link either side of the divider.
+						-->
+						<a
+							href={resolve("/challenges")}
+							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
+							onclick={closeMenu}
+						>
+							Challenges
+						</a>
+						<div class="border-t border-black"></div>
+						<!--
 							Global stats leads the signed-in branch: it's a destination rather
 							than an account action, and the divider keeps it read that way. It
 							sits inside the gate because /stats requires a session — the route
@@ -243,6 +255,14 @@
 							{signingOut ? "Logging out…" : "Log out"}
 						</button>
 					{:else}
+						<a
+							href={resolve("/challenges")}
+							class="block w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
+							onclick={closeMenu}
+						>
+							Challenges
+						</a>
+						<div class="border-t border-black"></div>
 						<button
 							class="w-full px-3 py-1.5 text-left text-xs text-tan transition-colors hover:bg-surface-raised"
 							type="button"

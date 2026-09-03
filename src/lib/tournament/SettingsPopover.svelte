@@ -11,6 +11,7 @@
 	import { confirmDialog } from "$lib/ui/confirm";
 	import Popover from "$lib/ui/Popover.svelte";
 	import { toast } from "$lib/ui/toast";
+	import { saveBlobAs } from "$lib/utils/download";
 	import TournamentAdminManager from "./TournamentAdminManager.svelte";
 	import TournamentMapPoolAdder from "./TournamentMapPoolAdder.svelte";
 	import TournamentMapPoolSummary from "./TournamentMapPoolSummary.svelte";
@@ -39,14 +40,7 @@
 		exporting = true;
 		try {
 			const blob = await cloudApi.exportTournament(tournament.tournament_id);
-			const url = URL.createObjectURL(blob);
-			const a = document.createElement("a");
-			a.href = url;
-			a.download = `${tournament.slug}-export.zip`;
-			document.body.appendChild(a);
-			a.click();
-			a.remove();
-			URL.revokeObjectURL(url);
+			saveBlobAs(blob, `${tournament.slug}-export.zip`);
 		} catch (err) {
 			let message = "Couldn't export tournament";
 			if (err instanceof ApiError) {

@@ -59,6 +59,14 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 			// Caster self-service ledger (player.ts): inserted per cast/uncast,
 			// read only by the 1h schedule budget. Metadata-free by design.
 			"tournament_schedule",
+			// Challenge page reads (challenges/handlers.ts): list and detail.
+			// Same 1h counter role, metadata-free.
+			"challenge_view",
+			// Game→challenge link reads (challenges/handlers.ts): its own
+			// budget for the tournament_link_view reason — every /games/[id]
+			// render calls it, so on the page budget a game crawl would take
+			// /challenges down with it. Same 1h counter role, metadata-free.
+			"challenge_link_view",
 		],
 	},
 	{
@@ -109,6 +117,11 @@ export const RETENTION_BUCKETS: readonly RetentionBucket[] = [
 export const KEEP_FOREVER: readonly string[] = [
 	"tournament_admin",
 	"tournament_create",
+	// Challenge lifecycle (challenges/handlers.ts): create/patch/delete each
+	// write one row — the rules a leaderboard was scored against, and who
+	// changed them, are an accountability record like tournament_admin.
+	"challenge_create",
+	"challenge_admin",
 	"tournament_system",
 	"tournament_slot_substituted",
 	"tournament_self_signup",

@@ -14,20 +14,26 @@
 //   Reference/XML/Infos/tech.xml  — <Entry> with <zType>, <BonusDiscover>
 //   Reference/XML/Infos/bonus.xml — <Entry> with <zType>, <aiUnits>
 //
-// Output: src/lib/generated/unit-stats.ts (committed; regenerate on Reference
-// refresh). Deterministic — re-running with the same XML is byte-identical.
+// Output: src/lib/generated/unit-stats.ts (frontend) and cloud/src/generated/
+// unit-stats.ts (Worker — the challenge scorer's generated mirror reads it; the
+// wonders dual-emit pattern). Committed; regenerate on Reference refresh.
+// Deterministic — re-running with the same XML is byte-identical.
 
 import { readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { XMLParser } from "fast-xml-parser";
+import { format as prettierFormat, resolveConfig } from "prettier";
 
 import { resolveReferenceXml } from "./lib/paths.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = resolve(__dirname, "..");
-const OUT = resolve(REPO_ROOT, "src/lib/generated/unit-stats.ts");
+const OUTPUTS = [
+	resolve(REPO_ROOT, "src/lib/generated/unit-stats.ts"),
+	resolve(REPO_ROOT, "cloud/src/generated/unit-stats.ts"),
+];
 
 interface UnitEntry {
 	zType?: string;
@@ -35,6 +41,8 @@ interface UnitEntry {
 	// fast-xml-parser collapses a single <TechPrereq> to a string but yields an
 	// array if the tag ever repeats; take the first prereq in that case.
 	TechPrereq?: string | string[];
+	// Set on a nation's unique units (Hoplite → NATION_GREECE); absent otherwise.
+	NationPrereq?: string;
 	zAudioMovementType?: string;
 	// The game's own unit grouping (UNITCYCLE_MILITARY_INFANTRY / _RANGED /
 	// _MOUNTED / _SIEGE / _WATER for combat units, plus civilian cycles).
@@ -75,6 +83,15 @@ async function loadEntries<T>(path: string): Promise<T[]> {
 	return Array.isArray(entry) ? entry : [entry];
 }
 
+// Emit through Prettier so the committed file matches `npm run format`.
+async function formatTs(path: string, source: string): Promise<string> {
+	return prettierFormat(source, {
+		...(await resolveConfig(path)),
+		parser: "typescript",
+		filepath: path,
+	});
+}
+
 async function main(): Promise<void> {
 	const infos = resolve(resolveReferenceXml(), "Infos");
 	const entries = await loadEntries<UnitEntry>(resolve(infos, "unit.xml"));
@@ -85,6 +102,7 @@ async function main(): Promise<void> {
 			strength: number;
 			tech: string | null;
 			naval: boolean;
+			nation: string | null;
 			cycle: string | null;
 			icon: string | null;
 		}
@@ -101,6 +119,7 @@ async function main(): Promise<void> {
 			tech:
 				(Array.isArray(u.TechPrereq) ? u.TechPrereq[0] : u.TechPrereq) ?? null,
 			naval: u.zAudioMovementType === "NAVAL",
+			nation: u.NationPrereq ?? null,
 			// Raw <UnitCycle>; classifyUnit maps the military cycles to chart
 			// classes and treats civilian cycles as non-combat.
 			cycle: u.UnitCycle ?? null,
@@ -133,7 +152,8 @@ async function main(): Promise<void> {
 			const tech = s.tech == null ? "null" : JSON.stringify(s.tech);
 			const cycle = s.cycle == null ? "null" : JSON.stringify(s.cycle);
 			const icon = s.icon == null ? "null" : JSON.stringify(s.icon);
-			return `\t${JSON.stringify(k)}: { strength: ${s.strength}, tech: ${tech}, naval: ${s.naval}, cycle: ${cycle}, icon: ${icon} },`;
+			const nation = s.nation == null ? "null" : JSON.stringify(s.nation);
+			return `\t${JSON.stringify(k)}: { strength: ${s.strength}, tech: ${tech}, naval: ${s.naval}, nation: ${nation}, cycle: ${cycle}, icon: ${icon} },`;
 		})
 		.join("\n");
 
@@ -154,12 +174,14 @@ async function main(): Promise<void> {
 		`//\n` +
 		`// strength = displayed unit strength (military power per unit = strength × 10).\n` +
 		`// tech = the unit's unlocking tech (TechPrereq), or null. naval = sea unit.\n` +
+		`// nation = the nation whose unique unit this is (NationPrereq), or null.\n` +
 		`// cycle = the game's <UnitCycle> grouping (UNITCYCLE_*), or null.\n` +
 		`// icon = another unit whose sprite this unit renders (zIconName), or null.\n\n` +
 		`export interface UnitStat {\n` +
 		`\tstrength: number;\n` +
 		`\ttech: string | null;\n` +
 		`\tnaval: boolean;\n` +
+		`\tnation: string | null;\n` +
 		`\tcycle: string | null;\n` +
 		`\ticon: string | null;\n` +
 		`}\n\n` +
@@ -179,9 +201,10 @@ async function main(): Promise<void> {
 		`> = {\n` +
 		`${bonusBody}\n};\n`;
 
-	await writeFile(OUT, out, "utf-8");
+	for (const out_ of OUTPUTS)
+		await writeFile(out_, await formatTs(out_, out), "utf-8");
 	console.log(
-		`[unit-stats] wrote ${keys.length} units, ${Object.keys(bonusUnits).length} bonus-card grants → ${OUT}`,
+		`[unit-stats] wrote ${keys.length} units, ${Object.keys(bonusUnits).length} bonus-card grants → ${OUTPUTS.map((o) => o.replace(REPO_ROOT + "/", "")).join(", ")}`,
 	);
 }
 

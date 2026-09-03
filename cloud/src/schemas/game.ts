@@ -145,6 +145,13 @@ export const MAX_DISABLED_IMPROVEMENTS = 1_000;
 //         are all negative percent modifiers science does not opt out of.
 //         Purely additive; older blobs lack the fields and the new
 //         breakdown rows are omitted.
+// 2.16.0 — build_turns_left and city_xml_id on improvement_data.improvements
+//         (a tile carries its improvement from the turn work starts, so a
+//         half-built wonder was indistinguishable from a built one) and
+//         original_tribe on units (a hired mercenary vs a trained unit) and
+//         tile_xml_id on city_statistics.cities (dates a capture through
+//         tile_ownership_history). Read by the challenge scorer; purely
+//         additive.
 export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.0.0",
 	"2.1.0",
@@ -167,13 +174,14 @@ export const KNOWN_PARSER_VERSIONS = new Set([
 	"2.13.0",
 	"2.14.0",
 	"2.15.0",
+	"2.16.0",
 ]);
 
 // The latest accepted version. Echoed back on stats responses and
 // embedded in stats cache keys so a parser bump (after the matching
 // extraction code lands) naturally orphans every old entry. Bump in
 // lockstep with the `KNOWN_PARSER_VERSIONS` addition above.
-export const CURRENT_PARSER_VERSION = "2.15.0";
+export const CURRENT_PARSER_VERSION = "2.16.0";
 
 // ----- Reusable atoms -----
 

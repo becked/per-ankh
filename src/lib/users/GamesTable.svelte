@@ -149,6 +149,7 @@
 				scopeRaw === "vs_ai" ||
 				scopeRaw === "mp" ||
 				scopeRaw === "tournament" ||
+				scopeRaw === "challenge" ||
 				/^\d+$/.test(scopeRaw))
 				? scopeRaw
 				: undefined;

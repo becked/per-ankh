@@ -172,6 +172,15 @@ export interface UploadFixtureOpts {
 	// build has to be visible to the eligibility gate — a wonder it finished is
 	// off the board for the humans in that game.
 	readonly aiPlayer?: boolean;
+	// The save's identity and progress, for challenge-map tests: a map is a
+	// turn-1 save that isn't over, and a run of it carries the map's
+	// xml_game_id at a later turn. Defaults model a finished 100-turn match
+	// with a fresh GameId per fixture.
+	readonly match?: {
+		readonly xmlGameId?: string;
+		readonly totalTurns?: number;
+		readonly gameOver?: boolean;
+	};
 }
 
 export async function buildUploadFormData(
@@ -287,14 +296,17 @@ function buildMinimalGameBlob(
 	const rulers = opts.rulers ?? [];
 
 	const saveDate = opts.saveDate ?? DEFAULT_SAVE_DATE;
+	const xmlGameId = opts.match?.xmlGameId ?? nanoid(12);
+	const totalTurns = opts.match?.totalTurns ?? 100;
+	const gameOver = opts.match?.gameOver ?? true;
 
 	return {
 		version: 2,
 		parser_version: parserVersion ?? PARSER_VERSION,
 		created_at: new Date().toISOString(),
 		match_metadata: {
-			xml_game_id: nanoid(12),
-			total_turns: 100,
+			xml_game_id: xmlGameId,
+			total_turns: totalTurns,
 			game_name: "Test Match",
 			save_date: saveDate,
 			game_version: "1.0.0",
@@ -308,7 +320,7 @@ function buildMinimalGameBlob(
 			victory_conditions: null,
 			enabled_mods: null,
 			enabled_dlc: null,
-			game_over: true,
+			game_over: gameOver,
 			winner:
 				winnerIndex === null
 					? null
@@ -322,7 +334,7 @@ function buildMinimalGameBlob(
 			match_id: 1,
 			game_name: "Test Match",
 			save_date: saveDate,
-			total_turns: 100,
+			total_turns: totalTurns,
 			map_size: "MAPSIZE_DUEL",
 			map_class: "MAPCLASS_OPEN",
 			game_mode: "GAMEMODE_NORMAL",

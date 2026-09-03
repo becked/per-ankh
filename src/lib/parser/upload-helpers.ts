@@ -92,6 +92,7 @@ export function parseSaveFile(
 	fileName: string,
 	worker: Worker,
 	onProgress?: ParseProgressCb,
+	{ requireCompleted = true }: { requireCompleted?: boolean } = {},
 ): Promise<{ data: FullGameData; rawZip: ArrayBuffer }> {
 	return new Promise((resolve, reject) => {
 		worker.onmessage = (ev: MessageEvent<WorkerMessage>) => {
@@ -105,7 +106,7 @@ export function parseSaveFile(
 			}
 		};
 		worker.postMessage(
-			{ type: "parse", file: buffer, fileName },
+			{ type: "parse", file: buffer, fileName, requireCompleted },
 			{ transfer: [buffer] },
 		);
 	});

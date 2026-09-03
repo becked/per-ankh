@@ -34,9 +34,11 @@ export function deriveImprovementData(
 			nation: owner?.nation ?? null,
 			owner_player_xml_id: city?.playerXmlId ?? null,
 			city_name: city?.cityName ?? null,
+			city_xml_id: city?.xmlId ?? null,
 			improvement: t.improvement,
 			specialist: t.specialist,
 			resource: t.resource,
+			build_turns_left: t.improvementTurnsLeft,
 		});
 	}
 
