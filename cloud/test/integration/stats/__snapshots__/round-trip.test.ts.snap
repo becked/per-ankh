@@ -405,6 +405,1925 @@ exports[`chart bundle round-trip > builds the all-humans bundle from the same co
       "nation": "NATION_ROME",
     },
   ],
+  "recordCounts": {
+    "final": 6,
+    "peak": 6,
+  },
+  "recordGames": {
+    "game#0": {
+      "seats": {
+        "0": {
+          "name": "Player 0",
+          "nation": "NATION_EGYPT",
+        },
+        "1": {
+          "name": "Player 1",
+          "nation": "NATION_ROME",
+        },
+      },
+      "turns": 100,
+    },
+    "game#1": {
+      "seats": {
+        "0": {
+          "name": "Player 0",
+          "nation": "NATION_EGYPT",
+        },
+        "1": {
+          "name": "Player 1",
+          "nation": "NATION_ROME",
+        },
+      },
+      "turns": 100,
+    },
+    "game#2": {
+      "seats": {
+        "0": {
+          "name": "Player 0",
+          "nation": "NATION_EGYPT",
+        },
+        "1": {
+          "name": "Player 1",
+          "nation": "NATION_ROME",
+        },
+      },
+      "turns": 100,
+    },
+  },
+  "records": {
+    "civics_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 11,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 9,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 6,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 21,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 11,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 9,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 6,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 21,
+        },
+      ],
+    },
+    "civics_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 30,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 63,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 30,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 63,
+        },
+      ],
+    },
+    "culture_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 12,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 19,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 9,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 24,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 12,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 19,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 9,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 24,
+        },
+      ],
+    },
+    "culture_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 72,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 72,
+        },
+      ],
+    },
+    "food_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 12,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 27,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 12,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 27,
+        },
+      ],
+    },
+    "food_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 81,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 81,
+        },
+      ],
+    },
+    "growth_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 13,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 11,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 8,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 23,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 13,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 11,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 8,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 23,
+        },
+      ],
+    },
+    "growth_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 30,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 69,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 30,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 69,
+        },
+      ],
+    },
+    "iron_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 25,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 30,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 25,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 30,
+        },
+      ],
+    },
+    "iron_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 66,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 69,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 90,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 66,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 69,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 90,
+        },
+      ],
+    },
+    "legitimacy": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 214,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 210,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 208,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 215,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 205,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 220,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 214,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 210,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 208,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 215,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 205,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 220,
+        },
+      ],
+    },
+    "military_power": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 114,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 110,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 108,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 115,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 105,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 120,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 114,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 110,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 108,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 115,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 105,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 120,
+        },
+      ],
+    },
+    "money_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 23,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 13,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 28,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 23,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 13,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 28,
+        },
+      ],
+    },
+    "money_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 63,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 84,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 63,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 84,
+        },
+      ],
+    },
+    "orders_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 11,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 26,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 11,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 26,
+        },
+      ],
+    },
+    "orders_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 78,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 78,
+        },
+      ],
+    },
+    "science_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 10,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 8,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 5,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 20,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 10,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 8,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 5,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 20,
+        },
+      ],
+    },
+    "science_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 60,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 60,
+        },
+      ],
+    },
+    "stone_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 25,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 19,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 26,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 31,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 25,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 19,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 26,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 16,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 31,
+        },
+      ],
+    },
+    "stone_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 69,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 72,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 93,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 69,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 72,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 93,
+        },
+      ],
+    },
+    "training_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 12,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 10,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 7,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 22,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 12,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 10,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 7,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 22,
+        },
+      ],
+    },
+    "training_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 66,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 66,
+        },
+      ],
+    },
+    "wood_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 26,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 32,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 26,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 17,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 1,
+          "value": 32,
+        },
+      ],
+    },
+    "wood_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 72,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 63,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 75,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 96,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 72,
+        },
+        {
+          "game_id": "game#0",
+          "player_index": 1,
+          "turn": 3,
+          "value": 63,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 1,
+          "turn": 3,
+          "value": 75,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 1,
+          "turn": 3,
+          "value": 96,
+        },
+      ],
+    },
+  },
   "startingArchetypeWinRate": [
     {
       "archetype": "TRAIT_BUILDER_ARCHETYPE",
@@ -2601,6 +4520,1061 @@ exports[`chart bundle round-trip > builds the user bundle from the fixture corpu
       "nation": "NATION_EGYPT",
     },
   ],
+  "recordCounts": {
+    "final": 3,
+    "peak": 3,
+  },
+  "recordGames": {
+    "game#0": {
+      "seats": {
+        "0": {
+          "name": "Player 0",
+          "nation": "NATION_EGYPT",
+        },
+        "1": {
+          "name": "Player 1",
+          "nation": "NATION_ROME",
+        },
+      },
+      "turns": 100,
+    },
+    "game#1": {
+      "seats": {
+        "0": {
+          "name": "Player 0",
+          "nation": "NATION_EGYPT",
+        },
+        "1": {
+          "name": "Player 1",
+          "nation": "NATION_ROME",
+        },
+      },
+      "turns": 100,
+    },
+    "game#2": {
+      "seats": {
+        "0": {
+          "name": "Player 0",
+          "nation": "NATION_EGYPT",
+        },
+        "1": {
+          "name": "Player 1",
+          "nation": "NATION_ROME",
+        },
+      },
+      "turns": 100,
+    },
+  },
+  "records": {
+    "civics_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 9,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 6,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 9,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 6,
+        },
+      ],
+    },
+    "civics_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+      ],
+    },
+    "culture_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 12,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 9,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 12,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 9,
+        },
+      ],
+    },
+    "culture_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+      ],
+    },
+    "food_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 12,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 12,
+        },
+      ],
+    },
+    "food_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+      ],
+    },
+    "growth_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 11,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 8,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 17,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 11,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 8,
+        },
+      ],
+    },
+    "growth_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 30,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 30,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+      ],
+    },
+    "iron_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 24,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 18,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 15,
+        },
+      ],
+    },
+    "iron_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 66,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 66,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+      ],
+    },
+    "legitimacy": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 214,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 208,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 205,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 214,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 208,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 205,
+        },
+      ],
+    },
+    "military_power": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 114,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 108,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 105,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 114,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 108,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 105,
+        },
+      ],
+    },
+    "money_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 13,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 22,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 13,
+        },
+      ],
+    },
+    "money_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 60,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 45,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+      ],
+    },
+    "orders_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 11,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 11,
+        },
+      ],
+    },
+    "orders_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 39,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 33,
+        },
+      ],
+    },
+    "science_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 8,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 5,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 14,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 8,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 5,
+        },
+      ],
+    },
+    "science_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 36,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 15,
+        },
+      ],
+    },
+    "stone_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 25,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 19,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 25,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 19,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 16,
+        },
+      ],
+    },
+    "stone_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 69,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 69,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 54,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 48,
+        },
+      ],
+    },
+    "training_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 10,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 7,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 16,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 10,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 7,
+        },
+      ],
+    },
+    "training_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 42,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 27,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 21,
+        },
+      ],
+    },
+    "wood_per_turn": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 26,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 17,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 26,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 20,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 1,
+          "value": 17,
+        },
+      ],
+    },
+    "wood_per_turn:cum": {
+      "final": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 72,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+      ],
+      "peak": [
+        {
+          "game_id": "game#0",
+          "player_index": 0,
+          "turn": 3,
+          "value": 72,
+        },
+        {
+          "game_id": "game#1",
+          "player_index": 0,
+          "turn": 3,
+          "value": 57,
+        },
+        {
+          "game_id": "game#2",
+          "player_index": 0,
+          "turn": 3,
+          "value": 51,
+        },
+      ],
+    },
+  },
   "save_dates": [
     {
       "date": "2026-01-05",

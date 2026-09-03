@@ -40,6 +40,7 @@ const BUNDLE_SCHEMA_CHANGELOG: Record<number, string> = {
 	7: "per-wonder build rate, builder win rate, and build-turn distribution",
 	8: "capital family class win rate, plus avg_share / share_samples / slot_counts on familyByNation (per-class city footprint and founding order)",
 	9: "favorite_day_of_week dropped (no consumer — the profile card reads its own copy from GET /v1/users/:user_id), and save_dates moved from ChartBundleCore to the user-only ChartBundle: only the profile Overview calendar renders it, and it was the one field whose size grew with the corpus rather than with the turn axis",
+	10: "records — per yield series, the top player-games on each of seven boards (peak, end-of-game, and the T20/T40/T60/T80/T100 checkpoints), for both the rate and the cumulative column. Folded into the pass that already builds the bands, so no new query",
 };
 
 export const BUNDLE_SCHEMA_VERSION = Math.max(
